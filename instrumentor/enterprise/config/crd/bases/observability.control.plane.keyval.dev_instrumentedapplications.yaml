@@ -37,6 +37,8 @@ spec:
             description: InstrumentedApplicationSpec defines the desired state of
               InstrumentedApplication
             properties:
+              collectorAddr:
+                type: string
               instrumented:
                 type: boolean
               languages:
