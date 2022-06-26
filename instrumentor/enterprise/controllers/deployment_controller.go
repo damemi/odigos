@@ -18,10 +18,7 @@ package controllers
 
 import (
 	"context"
-	"errors"
 	v1 "github.com/keyval-dev/odigos/api/v1alpha1"
-	"github.com/keyval-dev/odigos/common/consts"
-	"github.com/keyval-dev/odigos/instrumentor/patch"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,9 +29,7 @@ import (
 )
 
 var (
-	instAppOwnerKey   = ".metadata.controller"
-	IgnoredNamespaces = []string{"kube-system", "local-path-storage", consts.DefaultNamespace}
-	SkipAnnotation    = "odigos.io/skip"
+	instAppDepOwnerKey = ".metadata.deployment.controller"
 )
 
 // DeploymentReconciler reconciles a Deployment object
@@ -67,132 +62,24 @@ func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
-	if r.shouldSkipDeployment(&dep) {
+	if shouldSkip(dep.Annotations, dep.Namespace) {
 		logger.V(5).Info("skipped deployment")
 		return ctrl.Result{}, nil
 	}
 
-	instApps, err := r.getInstrumentedApps(ctx, &req)
+	err = syncInstrumentedApps(ctx, &req, r.Client, r.Scheme, dep.Status.ReadyReplicas, &dep, &dep.Spec.Template, instAppDepOwnerKey)
 	if err != nil {
-		logger.Error(err, "error finding InstrumentedApp objects")
+		logger.Error(err, "error syncing instrumented apps with deployments")
 		return ctrl.Result{}, err
-	}
-
-	if len(instApps.Items) == 0 {
-		if dep.Status.ReadyReplicas == 0 {
-			logger.V(0).Info("not enough ready replicas, waiting for pods to be ready")
-			return ctrl.Result{}, nil
-		}
-
-		instrumentedApp := v1.InstrumentedApplication{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      req.Name,
-				Namespace: req.Namespace,
-			},
-		}
-
-		err = ctrl.SetControllerReference(&dep, &instrumentedApp, r.Scheme)
-		if err != nil {
-			logger.Error(err, "error creating InstrumentedApp object")
-			return ctrl.Result{}, err
-		}
-
-		err = r.Create(ctx, &instrumentedApp)
-		if err != nil {
-			logger.Error(err, "error creating InstrumentedApp object")
-			return ctrl.Result{}, err
-		}
-
-		instrumentedApp.Status = v1.InstrumentedApplicationStatus{
-			LangDetection: v1.LangDetectionStatus{
-				Phase: v1.PendingLangDetectionPhase,
-			},
-		}
-		err = r.Status().Update(ctx, &instrumentedApp)
-		if err != nil {
-			logger.Error(err, "error creating InstrumentedApp object")
-		}
-
-		return ctrl.Result{}, nil
-	}
-
-	if len(instApps.Items) > 1 {
-		return ctrl.Result{}, errors.New("found more than one InstrumentedApp per deployment")
-	}
-
-	// If lang not detected yet - nothing to do
-	instApp := instApps.Items[0]
-	if len(instApp.Spec.Languages) == 0 || instApp.Status.LangDetection.Phase != v1.CompletedLangDetectionPhase {
-		return ctrl.Result{}, nil
-	}
-
-	// if scheduled
-	if instApp.Spec.CollectorAddr != "" {
-		// Compute .status.instrumented field
-		instrumneted, err := patch.IsInstrumented(&dep.Spec.Template, &instApp)
-		if err != nil {
-			logger.Error(err, "error computing instrumented status")
-			return ctrl.Result{}, err
-		}
-		if instrumneted != instApp.Status.Instrumented {
-			logger.V(0).Info("updating .status.instrumented", "instrumented", instrumneted)
-			instApp.Status.Instrumented = instrumneted
-			err = r.Status().Update(ctx, &instApp)
-			if err != nil {
-				logger.Error(err, "error computing instrumented status")
-				return ctrl.Result{}, err
-			}
-		}
-
-		// If not instrumented - patch deployment
-		if !instrumneted {
-			err = patch.ModifyObject(&dep.Spec.Template, &instApp)
-			if err != nil {
-				logger.Error(err, "error patching deployment")
-				return ctrl.Result{}, err
-			}
-
-			err = r.Update(ctx, &dep)
-			if err != nil {
-				logger.Error(err, "error instrumenting application")
-				return ctrl.Result{}, err
-			}
-		}
 	}
 
 	return ctrl.Result{}, nil
 }
 
-func (r *DeploymentReconciler) shouldSkipDeployment(dep *appsv1.Deployment) bool {
-	for k, v := range dep.Annotations {
-		if k == SkipAnnotation && v == "true" {
-			return true
-		}
-	}
-
-	for _, ns := range IgnoredNamespaces {
-		if dep.Namespace == ns {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (r *DeploymentReconciler) getInstrumentedApps(ctx context.Context, req *ctrl.Request) (*v1.InstrumentedApplicationList, error) {
-	var instrumentedApps v1.InstrumentedApplicationList
-	err := r.List(ctx, &instrumentedApps, client.InNamespace(req.Namespace), client.MatchingFields{instAppOwnerKey: req.Name})
-	if err != nil {
-		return nil, err
-	}
-
-	return &instrumentedApps, nil
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *DeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Index InstrumentedApps by owner for fast lookup
-	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1.InstrumentedApplication{}, instAppOwnerKey, func(rawObj client.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &v1.InstrumentedApplication{}, instAppDepOwnerKey, func(rawObj client.Object) []string {
 		instApp := rawObj.(*v1.InstrumentedApplication)
 		owner := metav1.GetControllerOf(instApp)
 		if owner == nil {
