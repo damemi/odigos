@@ -1,20 +1,24 @@
 import type { NextPage } from "next";
-import Head from "next/head";
-import Header from "@/components/Header";
-import Topology from "@/components/Topology";
-import Image from "next/image";
+import { getConfiguration } from "@/utils/config";
 
 const Home: NextPage = () => {
-  return (
-    <div className="flex h-screen flex-col">
-      <Head>
-        <title>Observability Control Plane - UI</title>
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
-      <Header />
-      <Topology />
-    </div>
-  );
+  return <div className="text-3xl">This is the Overview Screen</div>;
+};
+
+export const getServerSideProps = async () => {
+  const config = await getConfiguration();
+  if (!config) {
+    return {
+      redirect: {
+        destination: "/setup",
+        permanent: false,
+      },
+    };
+  }
+
+  return {
+    props: {},
+  };
 };
 
 export default Home;
