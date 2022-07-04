@@ -17,7 +17,11 @@ export default function DestCard({
             <div className="font-medium">{displayName}</div>
             <ul>
               {supportedSignals.map((signal) => {
-                return <li className="text-sm">{signal}</li>;
+                return (
+                  <li key={signal} className="text-sm">
+                    {signal}
+                  </li>
+                );
               })}
             </ul>
           </div>
@@ -26,20 +30,3 @@ export default function DestCard({
     </div>
   );
 }
-
-// function getLangIcon(lang: string, classes: string) {
-//   switch (lang) {
-//     case "go":
-//       return <GolangLogo className={classes} />;
-//     case "python":
-//       return <PythonLogo className={classes} />;
-//     case "java":
-//       return <JavaLogo className={classes} />;
-//     case "javascript":
-//       return <JavascriptLogo className={classes} />;
-//     case "dotnet":
-//       return <DotNetLogo className={classes} />;
-//     default:
-//       return null;
-//   }
-// }
