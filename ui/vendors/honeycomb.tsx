@@ -10,7 +10,6 @@ export class Honeycomb implements ObservabilityVendor {
   name = "honeycomb";
   displayName = "Honeycomb";
   supportedSignals = [
-    ObservabilitySignals.Metrics,
     ObservabilitySignals.Traces,
   ];
 
