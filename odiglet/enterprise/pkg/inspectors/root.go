@@ -2,7 +2,7 @@ package inspectors
 
 import (
 	"github.com/keyval-dev/odigos/common"
-	"github.com/keyval-dev/odigos/langDetector/process"
+	"github.com/keyval-dev/odigos/odiglet/pkg/process"
 )
 
 type inspector interface {

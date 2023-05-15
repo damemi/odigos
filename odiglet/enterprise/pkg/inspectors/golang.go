@@ -3,8 +3,8 @@ package inspectors
 import (
 	"fmt"
 	"github.com/keyval-dev/odigos/common"
-	"github.com/keyval-dev/odigos/langDetector/inspectors/goversion"
-	"github.com/keyval-dev/odigos/langDetector/process"
+	"github.com/keyval-dev/odigos/odiglet/pkg/inspectors/goversion"
+	"github.com/keyval-dev/odigos/odiglet/pkg/process"
 	"os"
 )
 
