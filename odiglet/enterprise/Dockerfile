@@ -17,15 +17,15 @@ RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetr
 FROM fedora:38 as builder
 ARG TARGETARCH
 RUN dnf install clang llvm make libbpf-devel -y
-RUN curl -LO https://go.dev/dl/go1.20.linux-${TARGETARCH}.tar.gz && tar -C /usr/local -xzf go*.linux-${TARGETARCH}.tar.gz
+RUN curl -LO https://go.dev/dl/go1.21.0.linux-${TARGETARCH}.tar.gz && tar -C /usr/local -xzf go*.linux-${TARGETARCH}.tar.gz
 ENV PATH="/usr/local/go/bin:${PATH}"
-WORKDIR /go/src/github.com/keyval-dev/odigos
+WORKDIR /go/src/github.com/keyval-dev/odigos-enterprise
 COPY . .
 WORKDIR ./odiglet/
 RUN go mod download
 # Go does not call go generate on dependencies, so we need to do it manually
 RUN cd $(go list -m -f '{{.Dir}}' "go.opentelemetry.io/auto") && make generate
-RUN GOOS=linux go build -o odiglet cmd/main.go
+RUN GOOS=linux go build -o odiglet ./cmd/enterprise
 
 WORKDIR /instrumentations
 
@@ -44,7 +44,7 @@ COPY --from=nodejs-builder /nodejs-instrumentation/build/workspace /instrumentat
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
 
 FROM registry.fedoraproject.org/fedora-minimal:38
-COPY --from=builder /go/src/github.com/keyval-dev/odigos/odiglet/odiglet /root/odiglet
+COPY --from=builder /go/src/github.com/keyval-dev/odigos-enterprise/odiglet/odiglet /root/odiglet
 WORKDIR /instrumentations/
 COPY --from=builder /instrumentations/ .
 CMD ["/root/odiglet"]
