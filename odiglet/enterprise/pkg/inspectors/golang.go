@@ -2,10 +2,11 @@ package inspectors
 
 import (
 	"fmt"
-	"github.com/keyval-dev/odigos/common"
-	"github.com/keyval-dev/odigos/odiglet/pkg/inspectors/goversion"
-	"github.com/keyval-dev/odigos/odiglet/pkg/process"
 	"os"
+
+	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/inspectors/goversion"
+	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/process"
+	"github.com/keyval-dev/odigos/common"
 )
 
 type golangInspector struct{}

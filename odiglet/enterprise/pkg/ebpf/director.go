@@ -6,13 +6,13 @@ import (
 	"os"
 	"sync"
 
-	"github.com/keyval-dev/odigos/odiglet/pkg/env"
+	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/env"
 
 	"github.com/keyval-dev/odigos/common/consts"
 
 	"go.opentelemetry.io/auto/pkg/instrumentors"
 
-	"github.com/keyval-dev/odigos/odiglet/pkg/log"
+	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/log"
 	log2 "go.opentelemetry.io/auto/pkg/log"
 	"go.opentelemetry.io/auto/pkg/process"
 	"k8s.io/apimachinery/pkg/types"

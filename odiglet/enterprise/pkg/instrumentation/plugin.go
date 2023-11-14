@@ -2,8 +2,9 @@ package instrumentation
 
 import (
 	"context"
-	"github.com/keyval-dev/odigos/odiglet/pkg/instrumentation/devices"
-	"github.com/keyval-dev/odigos/odiglet/pkg/log"
+
+	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/instrumentation/devices"
+	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/log"
 	"github.com/kubevirt/device-plugin-manager/pkg/dpm"
 	"k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )

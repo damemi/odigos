@@ -3,8 +3,8 @@ package instrumentlang
 import (
 	"fmt"
 
-	"github.com/keyval-dev/odigos/odiglet/pkg/env"
-	"github.com/keyval-dev/odigos/odiglet/pkg/instrumentation/consts"
+	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/env"
+	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/instrumentation/consts"
 	"k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 

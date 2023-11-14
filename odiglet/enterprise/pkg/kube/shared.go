@@ -2,15 +2,16 @@ package kube
 
 import (
 	"context"
+
 	"github.com/go-logr/logr"
+	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/env"
+	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/inspectors"
+	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/log"
+	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/process"
 	odigosv1 "github.com/keyval-dev/odigos/api/odigos/v1alpha1"
 	"github.com/keyval-dev/odigos/common"
 	"github.com/keyval-dev/odigos/common/consts"
 	"github.com/keyval-dev/odigos/common/utils"
-	"github.com/keyval-dev/odigos/odiglet/pkg/env"
-	"github.com/keyval-dev/odigos/odiglet/pkg/inspectors"
-	"github.com/keyval-dev/odigos/odiglet/pkg/log"
-	"github.com/keyval-dev/odigos/odiglet/pkg/process"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"

@@ -1,4 +1,4 @@
-module github.com/keyval-dev/odigos/odiglet
+module github.com/keyval-dev/odigos-enterprise/odiglet
 
 go 1.20
 

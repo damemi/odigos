@@ -3,10 +3,10 @@ package kube
 import (
 	"context"
 
+	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/ebpf"
+	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/log"
 	odigosv1 "github.com/keyval-dev/odigos/api/odigos/v1alpha1"
 	"github.com/keyval-dev/odigos/common/consts"
-	"github.com/keyval-dev/odigos/odiglet/pkg/ebpf"
-	"github.com/keyval-dev/odigos/odiglet/pkg/log"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"

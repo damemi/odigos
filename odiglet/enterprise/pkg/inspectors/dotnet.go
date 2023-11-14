@@ -2,10 +2,11 @@ package inspectors
 
 import (
 	"fmt"
-	"github.com/keyval-dev/odigos/common"
-	"github.com/keyval-dev/odigos/odiglet/pkg/process"
 	"io/ioutil"
 	"strings"
+
+	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/process"
+	"github.com/keyval-dev/odigos/common"
 )
 
 type dotnetInspector struct{}
