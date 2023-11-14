@@ -25,7 +25,7 @@ WORKDIR ./odiglet/
 RUN go mod download
 # Go does not call go generate on dependencies, so we need to do it manually
 RUN cd $(go list -m -f '{{.Dir}}' "go.opentelemetry.io/auto") && make generate
-RUN GOOS=linux go build -o odiglet cmd/main.go
+RUN GOOS=linux go build -o odiglet ./cmd/enterprise
 
 WORKDIR /instrumentations
 
