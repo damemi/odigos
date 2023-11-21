@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.3
+
 FROM python:3.11 AS python-builder
 WORKDIR /python-instrumentation
 ADD odiglet/agents/python/requirements.txt .
@@ -16,13 +18,18 @@ RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetr
 
 FROM fedora:38 as builder
 ARG TARGETARCH
-RUN dnf install clang llvm make libbpf-devel -y
+RUN dnf install clang llvm make libbpf-devel git -y
+RUN git config --global url."git@github.com:".insteadOf "https://github.com/"
+# Add GitHub's host key to known_hosts
+RUN mkdir -p -m 0700 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
 RUN curl -LO https://go.dev/dl/go1.21.0.linux-${TARGETARCH}.tar.gz && tar -C /usr/local -xzf go*.linux-${TARGETARCH}.tar.gz
+# Forward SSH agent for Git operations
 ENV PATH="/usr/local/go/bin:${PATH}"
+ENV GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation
 WORKDIR /go/src/github.com/keyval-dev/odigos-enterprise
 COPY . .
 WORKDIR ./odiglet/
-RUN go mod download
+RUN --mount=type=ssh go mod download
 # Go does not call go generate on dependencies, so we need to do it manually
 RUN cd $(go list -m -f '{{.Dir}}' "go.opentelemetry.io/auto") && make generate
 RUN GOOS=linux go build -o odiglet ./cmd/enterprise
