@@ -4,8 +4,10 @@ import (
 	"context"
 	"os"
 
+	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/ebpf"
+	enterprisekube "github.com/keyval-dev/odigos-enterprise/odiglet/pkg/kube"
 	"github.com/keyval-dev/odigos/common"
-	"github.com/keyval-dev/odigos/odiglet/pkg/ebpf"
+	odigosebpf "github.com/keyval-dev/odigos/odiglet/pkg/ebpf"
 	"github.com/keyval-dev/odigos/odiglet/pkg/env"
 	"github.com/keyval-dev/odigos/odiglet/pkg/instrumentation"
 	"github.com/keyval-dev/odigos/odiglet/pkg/kube"
@@ -13,6 +15,7 @@ import (
 	"github.com/kubevirt/device-plugin-manager/pkg/dpm"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
 
@@ -20,7 +23,7 @@ func main() {
 	if err := log.Init(); err != nil {
 		panic(err)
 	}
-	log.Logger.V(0).Info("Starting odiglet")
+	log.Logger.V(0).Info("Starting odiglet enterprise")
 
 	// Load env
 	if err := env.Load(); err != nil {
@@ -40,18 +43,46 @@ func main() {
 		os.Exit(-1)
 	}
 
-	ebpfDirectors, err := initEbpf()
+	go startDeviceManager(clientset)
+
+	mgr, err := kube.CreateManager()
+	if err != nil {
+		log.Logger.Error(err, "Failed to create controller-runtime manager")
+		os.Exit(-1)
+	}
+
+	ebpfDirectors, err := initEbpf(mgr.GetClient())
 	if err != nil {
 		log.Logger.Error(err, "Failed to init eBPF director")
 		os.Exit(-1)
 	}
 
-	go startDeviceManager(clientset)
+	plainDirectors := make(map[common.ProgrammingLanguage]odigosebpf.Director)
+	for k, v := range ebpfDirectors {
+		plainDirectors[k] = v
+	}
+
+	// odigos reconcilers
+	err = kube.SetupWithManager(mgr, plainDirectors)
+	if err != nil {
+		log.Logger.Error(err, "Failed to setup controller-runtime manager")
+		os.Exit(-1)
+	}
+
+	// enterprise reconcilers
+	if err = (&enterprisekube.InstrumentationConfigReconciler{
+		Client:    mgr.GetClient(),
+		Scheme:    mgr.GetScheme(),
+		Directors: ebpfDirectors,
+	}).SetupWithManager(mgr); err != nil {
+		log.Logger.Error(err, "unable to create controller", "controller", "InstrumentationConfig")
+		os.Exit(1)
+	}
 
 	ctx := signals.SetupSignalHandler()
-	err = kube.StartReconciling(ctx, ebpfDirectors)
+	err = kube.StartManager(ctx, mgr)
 	if err != nil {
-		log.Logger.Error(err, "Failed to start reconciling")
+		log.Logger.Error(err, "Failed to start controller-runtime manager")
 		os.Exit(-1)
 	}
 
@@ -76,13 +107,11 @@ func startDeviceManager(clientset *kubernetes.Clientset) {
 	manager.Run()
 }
 
-func initEbpf() (map[common.ProgrammingLanguage]ebpf.Director, error) {
-	goDirector, err := ebpf.NewInstrumentationDirectorGo()
-	if err != nil {
-		return nil, err
-	}
+func initEbpf(kubeclient client.Client) (map[common.ProgrammingLanguage]ebpf.DirectorEnterprise, error) {
+	goInstrumentationFactory := ebpf.NewGoInstrumentationFactoryEnterprise(kubeclient)
+	goDirector := ebpf.NewEbpfDirectorEnterprise(common.GoProgrammingLanguage, goInstrumentationFactory)
 
-	return map[common.ProgrammingLanguage]ebpf.Director{
+	return map[common.ProgrammingLanguage]ebpf.DirectorEnterprise{
 		common.GoProgrammingLanguage: goDirector,
 	}, nil
 }

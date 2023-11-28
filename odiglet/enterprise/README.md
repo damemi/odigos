@@ -26,3 +26,9 @@ Now you can run `go mod tidy` in `odiglet` directory and it should work.
 
 ### Docker Build
 
+1. Start the SSH Agent:
+Ensure that your SSH agent is running and has the necessary keys added. You can check with ssh-add -l. If your key is not listed, add it with `ssh-add ~/.ssh/id_ed25519`.
+
+2. Build the Image with SSH Agent Forwarding:
+Build your Docker image using the --ssh flag to forward the SSH agent:
+

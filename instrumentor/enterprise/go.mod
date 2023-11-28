@@ -73,7 +73,5 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-replace (
-	github.com/keyval-dev/odigos/api => ../api
-	github.com/keyval-dev/odigos/common => ../common
-)
+replace github.com/keyval-dev/odigos/api => github.com/blumamir/odigos/api v0.0.0-20231127152036-b661e75e06cb
+replace github.com/keyval-dev/odigos/common => github.com/blumamir/odigos/common v0.0.0-20231127152036-b661e75e06cb
