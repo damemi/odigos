@@ -1,30 +1,13 @@
 package ebpf
 
 import (
-	"context"
 	"fmt"
 
 	odigosv1 "github.com/keyval-dev/odigos/api/odigos/v1alpha1"
 	"github.com/keyval-dev/odigos/common"
 	odigosebpf "github.com/keyval-dev/odigos/odiglet/pkg/ebpf"
 	"github.com/keyval-dev/odigos/odiglet/pkg/log"
-	apitrace "go.opentelemetry.io/otel/trace"
 )
-
-type ConfigOption struct {
-	OptionKey string
-	SpanKind  apitrace.SpanKind
-}
-
-type OtelEbpfSdkEnterprise interface {
-	odigosebpf.OtelEbpfSdk
-	ConfigBool(instrumentedModuleName string, optionKey string, spanKind apitrace.SpanKind, optionValue bool) error
-	GetConfigOptions() map[string][]ConfigOption
-}
-
-type InstrumentationFactoryEnterprise[T OtelEbpfSdkEnterprise] interface {
-	CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload) (T, error)
-}
 
 type DirectorEnterprise interface {
 	odigosebpf.Director
