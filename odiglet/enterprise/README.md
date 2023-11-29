@@ -22,7 +22,7 @@ Shell shortcut (copy and paste):
 git config --global url."ssh://git@github.com/".insteadOf "https://github.com/"
 ```
 
-Now you can run `go mod tidy` in `odiglet` directory and it should work.
+Now you can run `go mod tidy`/`go build ./cmd/enterprise` in `odiglet` directory and it should work.
 
 ### Docker Build
 
@@ -32,3 +32,8 @@ Ensure that your SSH agent is running and has the necessary keys added. You can 
 2. Build the Image with SSH Agent Forwarding:
 Build your Docker image using the --ssh flag to forward the SSH agent:
 
+The command I use is:
+```sh
+export TAG=v1.0.0
+DOCKER_BUILDKIT=1 docker build --ssh default -t keyval/odigos-odiglet:$TAG . -f odiglet/Dockerfile && kind load docker-image keyval/odigos-odiglet:$TAG
+```
