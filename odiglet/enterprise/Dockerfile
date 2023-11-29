@@ -16,9 +16,9 @@ ARG DOTNET_OTEL_VERSION=v0.7.0
 ADD https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/$DOTNET_OTEL_VERSION/opentelemetry-dotnet-instrumentation-linux-musl.zip .
 RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetry-dotnet-instrumentation-linux-musl.zip
 
-FROM fedora:38 as builder
+FROM keyval/odiglet-base:v1.0 as builder
 ARG TARGETARCH
-RUN dnf install clang llvm make libbpf-devel git -y
+RUN dnf install git -y
 RUN git config --global url."git@github.com:".insteadOf "https://github.com/"
 # Add GitHub's host key to known_hosts
 RUN mkdir -p -m 0700 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
