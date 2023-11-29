@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.3
-
 FROM python:3.11 AS python-builder
 WORKDIR /python-instrumentation
 ADD odiglet/agents/python/requirements.txt .
@@ -17,19 +15,15 @@ ADD https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/relea
 RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetry-dotnet-instrumentation-linux-musl.zip
 
 FROM keyval/odiglet-base:v1.0 as builder
-ARG TARGETARCH
 RUN dnf install git -y
-RUN git config --global url."git@github.com:".insteadOf "https://github.com/"
-# Add GitHub's host key to known_hosts
-RUN mkdir -p -m 0700 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
-RUN curl -LO https://go.dev/dl/go1.21.0.linux-${TARGETARCH}.tar.gz && tar -C /usr/local -xzf go*.linux-${TARGETARCH}.tar.gz
-# Forward SSH agent for Git operations
-ENV PATH="/usr/local/go/bin:${PATH}"
+ARG GITHUB_TOKEN
+ARG GITHUB_USERNAME
+RUN git config --global url."https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+WORKDIR /go/src/github.com/keyval-dev/odigos
 ENV GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation
-WORKDIR /go/src/github.com/keyval-dev/odigos-enterprise
 COPY . .
 WORKDIR ./odiglet/
-RUN --mount=type=ssh go mod download
+RUN go mod download
 # Go does not call go generate on dependencies, so we need to do it manually
 RUN cd $(go list -m -f '{{.Dir}}' "go.opentelemetry.io/auto") && make generate
 RUN GOOS=linux go build -o odiglet ./cmd/enterprise
@@ -51,7 +45,7 @@ COPY --from=nodejs-builder /nodejs-instrumentation/build/workspace /instrumentat
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
 
 FROM registry.fedoraproject.org/fedora-minimal:38
-COPY --from=builder /go/src/github.com/keyval-dev/odigos-enterprise/odiglet/odiglet /root/odiglet
+COPY --from=builder /go/src/github.com/keyval-dev/odigos/odiglet/odiglet /root/odiglet
 WORKDIR /instrumentations/
 COPY --from=builder /instrumentations/ .
 CMD ["/root/odiglet"]
