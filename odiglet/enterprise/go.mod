@@ -3,11 +3,11 @@ module github.com/keyval-dev/odigos-enterprise/odiglet
 go 1.21.0
 
 require (
-	github.com/keyval-dev/odigos/api v0.0.0-00010101000000-000000000000
-	github.com/keyval-dev/odigos/common v0.0.0
-	github.com/keyval-dev/odigos/odiglet v1.0.1
+	github.com/keyval-dev/odigos/api v1.0.3-0.20231129090914-fab872fa3ccb
+	github.com/keyval-dev/odigos/common v1.0.3-0.20231129090914-fab872fa3ccb
+	github.com/keyval-dev/odigos/odiglet v1.0.3-0.20231129090914-fab872fa3ccb
 	github.com/kubevirt/device-plugin-manager v1.19.5
-	go.opentelemetry.io/auto v0.8.0-alpha.0.20231123130439-13e469315282
+	go.opentelemetry.io/auto v0.0.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.21.0
 	go.opentelemetry.io/otel/trace v1.21.0
 	k8s.io/apimachinery v0.28.4
@@ -103,10 +103,8 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231129073816-4f39c48a33bd
-
-replace github.com/keyval-dev/odigos/api => github.com/blumamir/odigos/api v0.0.0-20231127152036-b661e75e06cb
-
-replace github.com/keyval-dev/odigos/common => github.com/blumamir/odigos/common v0.0.0-20231129072435-c3f9af7c8556
-
-replace github.com/keyval-dev/odigos/odiglet => github.com/blumamir/odigos/odiglet v1.0.1-0.20231129072435-c3f9af7c8556
+// currently, enterprise-go-instrumentation has no versioning or releases, so we pin it to main here.
+// it would be better to import "github.com/keyval-dev/enterprise-go-instrumentation" directly,
+// but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
+// for it's name, which needs to be changed first.
+replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231129091809-80077b0270a7
