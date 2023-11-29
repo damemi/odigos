@@ -11,9 +11,15 @@ import (
 	apitrace "go.opentelemetry.io/otel/trace"
 )
 
+type ConfigOption struct {
+	OptionKey string
+	SpanKind  apitrace.SpanKind
+}
+
 type OtelEbpfSdkEnterprise interface {
 	odigosebpf.OtelEbpfSdk
 	ConfigBool(instrumentedModuleName string, optionKey string, spanKind apitrace.SpanKind, optionValue bool) error
+	GetConfigOptions() map[string][]ConfigOption
 }
 
 type InstrumentationFactoryEnterprise[T OtelEbpfSdkEnterprise] interface {
@@ -23,7 +29,7 @@ type InstrumentationFactoryEnterprise[T OtelEbpfSdkEnterprise] interface {
 type DirectorEnterprise interface {
 	odigosebpf.Director
 
-	ApplyInstrumentationConfig(instrumentationConfig *odigosv1.InstrumentationConfig) error
+	ApplyInstrumentationConfig(workload *common.PodWorkload, instrumentationConfig *odigosv1.InstrumentationConfig) error
 }
 
 type EbpfDirectorEnterprise[T OtelEbpfSdkEnterprise] struct {
@@ -36,27 +42,21 @@ func NewEbpfDirectorEnterprise[T OtelEbpfSdkEnterprise](language common.Programm
 	}
 }
 
-func (d *EbpfDirectorEnterprise[T]) ApplyInstrumentationConfig(instrumentationConfig *odigosv1.InstrumentationConfig) error {
-
-	log.Logger.V(0).Info("Applying instrumentation config", "instrumentationConfig", instrumentationConfig)
-
-	if len(instrumentationConfig.OwnerReferences) != 1 {
-		return fmt.Errorf("expected instrumentation config object to have exactly 1 owner reference, got %d", len(instrumentationConfig.OwnerReferences))
-	}
-
-	workload := common.PodWorkload{
-		Namespace: instrumentationConfig.Namespace,
-		Kind:      instrumentationConfig.OwnerReferences[0].Kind,
-		Name:      instrumentationConfig.OwnerReferences[0].Name,
-	}
+func (d *EbpfDirectorEnterprise[T]) ApplyInstrumentationConfig(workload *common.PodWorkload, instrumentationConfig *odigosv1.InstrumentationConfig) error {
 
 	insts := d.GetWorkloadInstrumentations(workload)
 
-	log.Logger.V(0).Info("Applying instrumentation config", "num insts", len(insts))
+	log.Logger.V(3).Info("Applying config to instrumentations after CRD change", "instrumentationConfig", instrumentationConfig, "workload", workload, "SDKs count", len(insts))
 
 	var retErr []error
 	for _, inst := range insts {
-		err := applyConfigToInst(&instrumentationConfig.Spec, inst, d.Language())
+
+		var spec *odigosv1.InstrumentationConfigSpec
+		if instrumentationConfig != nil {
+			spec = &instrumentationConfig.Spec
+		}
+
+		err := applyConfigToInst(spec, inst, d.Language())
 		if err != nil {
 			retErr = append(retErr, err)
 		}

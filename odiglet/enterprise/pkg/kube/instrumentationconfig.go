@@ -6,10 +6,11 @@ import (
 	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/ebpf"
 	odigosv1 "github.com/keyval-dev/odigos/api/odigos/v1alpha1"
 	"github.com/keyval-dev/odigos/common"
+	"github.com/keyval-dev/odigos/common/utils"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type InstrumentationConfigReconciler struct {
@@ -19,23 +20,34 @@ type InstrumentationConfigReconciler struct {
 }
 
 func (i *InstrumentationConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
+	workloadName, workloadKind, err := utils.GetTargetFromRuntimeName(req.Name)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	podWorkload := &common.PodWorkload{
+		Namespace: req.Namespace,
+		Kind:      workloadKind,
+		Name:      workloadName,
+	}
 
 	// Fetch the InstrumentationConfig instrumentationConfig
 	instrumentationConfig := &odigosv1.InstrumentationConfig{}
-	err := i.Get(ctx, req.NamespacedName, instrumentationConfig)
+	err = i.Get(ctx, req.NamespacedName, instrumentationConfig)
 	if err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-
-	for _, director := range i.Directors {
-		err = director.ApplyInstrumentationConfig(instrumentationConfig)
-		if err != nil {
+		if apierrors.IsNotFound(err) {
+			instrumentationConfig = nil
+		} else {
 			return ctrl.Result{}, err
 		}
 	}
 
-	logger.Info("Reconciling InstrumentationConfig", "instance", instrumentationConfig)
+	for _, director := range i.Directors {
+		err = director.ApplyInstrumentationConfig(podWorkload, instrumentationConfig)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+	}
 
 	return ctrl.Result{}, nil
 }

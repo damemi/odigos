@@ -74,4 +74,4 @@ require (
 )
 
 replace github.com/keyval-dev/odigos/api => github.com/blumamir/odigos/api v0.0.0-20231127152036-b661e75e06cb
-replace github.com/keyval-dev/odigos/common => github.com/blumamir/odigos/common v0.0.0-20231127152036-b661e75e06cb
+replace github.com/keyval-dev/odigos/common => github.com/blumamir/odigos/common v0.0.0-20231129072435-c3f9af7c8556

@@ -41,10 +41,10 @@ github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6r
 github.com/blang/semver v3.5.0+incompatible/go.mod h1:kRBLl5iJ+tD4TcOOxsy/0fnwebNt5EWlYSAyrTnjyyk=
 github.com/blumamir/odigos/api v0.0.0-20231127152036-b661e75e06cb h1:84r1+JOk+YG15RJW7klhHgjtvt8sW7Uxp//WqUFPuE8=
 github.com/blumamir/odigos/api v0.0.0-20231127152036-b661e75e06cb/go.mod h1:CEeUXlu8qYRDiIhvARoA2sqDsuUTxYM8dGQk3Fo1lo0=
-github.com/blumamir/odigos/common v0.0.0-20231127152036-b661e75e06cb h1:OeEN1ViBpxkugEcTD31si6uIJPPChUyKiPBN68d1Jos=
-github.com/blumamir/odigos/common v0.0.0-20231127152036-b661e75e06cb/go.mod h1:nX/kcBbRD7oW2ymSNfqX/5LIxuYspeHaZcu/fG2rScc=
-github.com/blumamir/odigos/odiglet v1.0.1-0.20231128094421-74c2f3d5a8d9 h1:CM422kq7jgZDVJ1DlPP1W75J58A3Tg6KaPXGOCtJ2eM=
-github.com/blumamir/odigos/odiglet v1.0.1-0.20231128094421-74c2f3d5a8d9/go.mod h1:RHePFTkVjNwV+DZ6XA2PkBF6jASqVvr0w7eOvBShO9Q=
+github.com/blumamir/odigos/common v0.0.0-20231129072435-c3f9af7c8556 h1:V/qO47rNM9/8ErLbpGHYrQhwrf9xTBAw/L6hgjb8zkw=
+github.com/blumamir/odigos/common v0.0.0-20231129072435-c3f9af7c8556/go.mod h1:nX/kcBbRD7oW2ymSNfqX/5LIxuYspeHaZcu/fG2rScc=
+github.com/blumamir/odigos/odiglet v1.0.1-0.20231129072435-c3f9af7c8556 h1:JA5Qv1a+bMdtMvLfNwSMTvbPP2rY03s4mK2AqSIb2XM=
+github.com/blumamir/odigos/odiglet v1.0.1-0.20231129072435-c3f9af7c8556/go.mod h1:RHePFTkVjNwV+DZ6XA2PkBF6jASqVvr0w7eOvBShO9Q=
 github.com/cenkalti/backoff/v4 v4.2.1 h1:y4OZtCnogmCPw98Zjyt5a6+QwPLGkiQsYW5oUqylYbM=
 github.com/cenkalti/backoff/v4 v4.2.1/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyYozVcomhLiZE=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
@@ -194,8 +194,8 @@ github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHm
 github.com/jstemmer/go-junit-report v0.0.0-20190106144839-af01ea7f8024/go.mod h1:6v2b51hI/fHJwM22ozAgKL4VKDeJcHhJFhtBdhmNjmU=
 github.com/jstemmer/go-junit-report v0.9.1/go.mod h1:Brl9GWCQeLvo8nXZwPNNblvFj/XSXhF0NWZEnDohbsk=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
-github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231128123229-c91906596084 h1:qVJxIgYkuMkJlHfc+xli15bJKekbWrCRxfTPyiyfCRE=
-github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231128123229-c91906596084/go.mod h1:AIIH9iDEJczv7WcPuMdkncNg/O5oMSaP3Zyy25wKiLk=
+github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231129073816-4f39c48a33bd h1:Il+5ozkLU0nQr5x/M9WzEPqBwYz5afFBctiHVurq0d4=
+github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231129073816-4f39c48a33bd/go.mod h1:AIIH9iDEJczv7WcPuMdkncNg/O5oMSaP3Zyy25wKiLk=
 github.com/keyval-dev/opentelemetry-zap-bridge v0.0.3 h1:Sk5x8GK2y0KlYUzii/Mn01guRMKFVQN8HMtADI6DB+o=
 github.com/keyval-dev/opentelemetry-zap-bridge v0.0.3/go.mod h1:j+F6AHEnS4rKEfx9kAGwPn6lFWJI+tfddErFMvaeqSM=
 github.com/kisielk/errcheck v1.2.0/go.mod h1:/BMXB+zMLi60iA8Vv6Ksmxu/1UDYcXs4uQLJ+jE2L00=

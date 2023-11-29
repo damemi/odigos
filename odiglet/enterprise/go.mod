@@ -103,10 +103,10 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231128123229-c91906596084
+replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231129073816-4f39c48a33bd
 
 replace github.com/keyval-dev/odigos/api => github.com/blumamir/odigos/api v0.0.0-20231127152036-b661e75e06cb
 
-replace github.com/keyval-dev/odigos/common => github.com/blumamir/odigos/common v0.0.0-20231127152036-b661e75e06cb
+replace github.com/keyval-dev/odigos/common => github.com/blumamir/odigos/common v0.0.0-20231129072435-c3f9af7c8556
 
-replace github.com/keyval-dev/odigos/odiglet => github.com/blumamir/odigos/odiglet v1.0.1-0.20231128094421-74c2f3d5a8d9
+replace github.com/keyval-dev/odigos/odiglet => github.com/blumamir/odigos/odiglet v1.0.1-0.20231129072435-c3f9af7c8556
