@@ -23,7 +23,7 @@ RUN echo "GitHub Username: $GITHUB_USERNAME"
 
 # Print the first few characters of the GitHub token
 RUN echo "GitHub Token (partial): ${GITHUB_TOKEN:0:4}"
-RUN git config --global url."https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+RUN git config --global url."https://edenfed:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
 WORKDIR /go/src/github.com/keyval-dev/odigos
 ENV GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation
 COPY . .
