@@ -18,6 +18,11 @@ FROM keyval/odiglet-base:v1.0 as builder
 RUN dnf install git -y
 ARG GITHUB_TOKEN
 ARG GITHUB_USERNAME
+# Print the GitHub username
+RUN echo "GitHub Username: $GITHUB_USERNAME"
+
+# Print the first few characters of the GitHub token
+RUN echo "GitHub Token (partial): ${GITHUB_TOKEN:0:4}"
 RUN git config --global url."https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
 WORKDIR /go/src/github.com/keyval-dev/odigos
 ENV GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation
