@@ -23,6 +23,6 @@ jobs:
           push: false
           tags: odiglet:pr-${{ github.event.number }}
           secrets: |
-            GITHUB_USERNAME=${{ secrets.GITHUB_USERNAME }}
-            GITHUB_TOKEN=edenfed
+            GITHUB_USERNAME=endenfed
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
 
