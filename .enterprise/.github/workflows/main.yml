@@ -37,3 +37,6 @@ jobs:
           tags: |
             keyval/odigos-odiglet-enterprise:${{ steps.vars.outputs.tag }}
           platforms: linux/amd64,linux/arm64
+          secrets: |
+            "github_token=${{ secrets.RELEASE_BOT_TOKEN }}"
+            "github_username=keyval-release-bot"

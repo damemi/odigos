@@ -16,7 +16,6 @@ RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetr
 
 FROM keyval/odiglet-base:v1.0 as builder
 RUN dnf install git -y
-ENV GOPRIVATE="github.com/keyval-dev/enterprise-go-instrumentation"
 ARG GITHUB_TOKEN
 ARG GITHUB_USERNAME
 # Print the GitHub username
@@ -27,12 +26,9 @@ RUN --mount=type=secret,id=github_token \
     # Use the secret
     export GITHUB_TOKEN=$(cat /run/secrets/github_token) && \
     # Your build steps here
-    echo "GitHub Token (partial): ${GITHUB_TOKEN:0:4}"
+    git config --global url."https://blumamir:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
 
-RUN --mount=type=secret,id=github_token \
-    # Use the secret
-    export GITHUB_TOKEN=$(cat /run/secrets/github_token) && \
-    git config --global url."https://edenfed:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+# RUN git config --get url."https://github.com/".insteadOf
 
 WORKDIR /go/src/github.com/keyval-dev/odigos
 ENV GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation
