@@ -1,4 +1,4 @@
-name: Prepare Proxy Release
+name: Prepare Odigos Enterprise Release
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Release with release-please
-        uses: google-github-actions/release-please-action@v2
+        uses: google-github-actions/release-please-action@v4
         with:
           token: ${{ secrets.RELEASE_BOT_TOKEN }}
           release-type: go
