@@ -17,7 +17,7 @@ RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetr
 FROM keyval/odiglet-base:v1.1 as builder
 
 RUN --mount=type=secret,id=github_token \
-    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
+    git config --global url."https://keyval-release-bot:$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
 
 WORKDIR /go/src/github.com/keyval-dev/odigos
 COPY . .
