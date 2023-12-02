@@ -19,5 +19,7 @@ jobs:
           context: .
           push: false
           tags: odiglet:pr-${{ github.event.number }}
+          build-args: |
+            GITHUB_USER=keyval-release-bot
           secrets: |
-            github_token=${{ secrets.GITHUB_TOKEN }}
+            github_token=${{ secrets.RELEASE_BOT_TOKEN }}
