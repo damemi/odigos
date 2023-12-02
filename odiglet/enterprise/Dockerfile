@@ -19,7 +19,7 @@ FROM keyval/odiglet-base:v1.1 as builder
 RUN --mount=type=secret,id=github_token \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
 
-WORKDIR /go/src/github.com/keyval-dev/odigos
+WORKDIR /go/src/github.com/keyval-dev/odigos-enterprise
 COPY . .
 WORKDIR ./odiglet/
 ENV GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation
