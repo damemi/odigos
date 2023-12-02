@@ -1,0 +1,25 @@
+name: Tag for Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "New odigos enterprise version for release"
+        required: true
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repository
+            uses: actions/checkout@v4
+        
+          - name: Add tag to repository
+            run: |
+              git tag ${{ github.event.inputs.image_tag }}
+
+          - name: Push new tag
+            run: |
+              git push origin --tags
+      
+          
