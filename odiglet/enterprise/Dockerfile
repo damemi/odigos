@@ -14,15 +14,15 @@ ARG DOTNET_OTEL_VERSION=v0.7.0
 ADD https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/$DOTNET_OTEL_VERSION/opentelemetry-dotnet-instrumentation-linux-musl.zip .
 RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetry-dotnet-instrumentation-linux-musl.zip
 
-FROM keyval/odiglet-base:v1.0 as builder
-RUN dnf install git -y
-ARG GITHUB_TOKEN
-ARG GITHUB_USERNAME
-RUN git config --global url."https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
-WORKDIR /go/src/github.com/keyval-dev/odigos
-ENV GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation
+FROM keyval/odiglet-base:v1.1 as builder
+
+RUN --mount=type=secret,id=github_token \
+    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
+
+WORKDIR /go/src/github.com/keyval-dev/odigos-enterprise
 COPY . .
 WORKDIR ./odiglet/
+ENV GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation
 RUN go mod download
 # Go does not call go generate on dependencies, so we need to do it manually
 RUN cd $(go list -m -f '{{.Dir}}' "go.opentelemetry.io/auto") && make generate
@@ -45,7 +45,7 @@ COPY --from=nodejs-builder /nodejs-instrumentation/build/workspace /instrumentat
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
 
 FROM registry.fedoraproject.org/fedora-minimal:38
-COPY --from=builder /go/src/github.com/keyval-dev/odigos/odiglet/odiglet /root/odiglet
+COPY --from=builder /go/src/github.com/keyval-dev/odigos-enterprise/odiglet/odiglet /root/odiglet
 WORKDIR /instrumentations/
 COPY --from=builder /instrumentations/ .
 CMD ["/root/odiglet"]

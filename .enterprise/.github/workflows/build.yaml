@@ -9,16 +9,18 @@ jobs:
   build-odiglet:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
+
       - name: Build Odiglet Image
         uses: docker/build-push-action@v4
-        env:
-          GITHUB_USERNAME: edenfed
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           file: odiglet/Dockerfile
           context: .
           push: false
           tags: odiglet:pr-${{ github.event.number }}
+          secrets: |
+            github_token=${{ secrets.RELEASE_BOT_TOKEN }}
+          cache-from: type=registry,ref=odiglet:pr-${{ github.event.number }}
+          cache-to: type=inline
