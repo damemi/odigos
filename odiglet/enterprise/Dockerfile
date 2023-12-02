@@ -14,26 +14,15 @@ ARG DOTNET_OTEL_VERSION=v0.7.0
 ADD https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/$DOTNET_OTEL_VERSION/opentelemetry-dotnet-instrumentation-linux-musl.zip .
 RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetry-dotnet-instrumentation-linux-musl.zip
 
-FROM keyval/odiglet-base:v1.0 as builder
-RUN dnf install git -y
-ARG GITHUB_TOKEN
-ARG GITHUB_USERNAME
-# Print the GitHub username
-RUN echo "GitHub Username: $GITHUB_USERNAME"
+FROM keyval/odiglet-base:v1.1 as builder
 
-# Print the first few characters of the GitHub token
 RUN --mount=type=secret,id=github_token \
-    # Use the secret
-    export GITHUB_TOKEN=$(cat /run/secrets/github_token) && \
-    # Your build steps here
-    git config --global url."https://blumamir:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
-
-# RUN git config --get url."https://github.com/".insteadOf
+    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
 
 WORKDIR /go/src/github.com/keyval-dev/odigos
-ENV GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation
 COPY . .
 WORKDIR ./odiglet/
+ENV GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation
 RUN go mod download
 # Go does not call go generate on dependencies, so we need to do it manually
 RUN cd $(go list -m -f '{{.Dir}}' "go.opentelemetry.io/auto") && make generate

@@ -1,23 +1,19 @@
 .PHONY: build-images
 build-images:
-	docker build -t ghcr.io/keyval-dev/odigos/autoscaler:$(TAG) . --build-arg SERVICE_NAME=autoscaler
-	docker build -t ghcr.io/keyval-dev/odigos/scheduler:$(TAG) . --build-arg SERVICE_NAME=scheduler
-	docker build -t ghcr.io/keyval-dev/odigos/ui:$(TAG) ui/ -f ui/Dockerfile
-	docker build -t ghcr.io/keyval-dev/odigos/odiglet:$(TAG) . -f odiglet/Dockerfile
-	docker build -t ghcr.io/keyval-dev/odigos/instrumentor:$(TAG) . --build-arg SERVICE_NAME=instrumentor
+	docker build -t keyval/odigos-enterprise-odiglet:$(TAG) . -f odiglet/Dockerfile --secret id=github_token,env=GITHUB_TOKEN
 
 .PHONY: push-images
 push-images:
-	docker push ghcr.io/keyval-dev/odigos/autoscaler:$(TAG)
-	docker push ghcr.io/keyval-dev/odigos/scheduler:$(TAG)
-	docker push ghcr.io/keyval-dev/odigos/ui:$(TAG)
-	docker push ghcr.io/keyval-dev/odigos/instrumentor:$(TAG)
-	docker push ghcr.io/keyval-dev/odigos/odiglet:$(TAG)
+	docker push keyval/odigos-enterprise-odiglet:$(TAG)
 
 .PHONY: load-to-kind
 load-to-kind:
-	kind load docker-image ghcr.io/keyval-dev/odigos/autoscaler:$(TAG)
-	kind load docker-image ghcr.io/keyval-dev/odigos/scheduler:$(TAG)
-	kind load docker-image ghcr.io/keyval-dev/odigos/ui:$(TAG)
-	kind load docker-image ghcr.io/keyval-dev/odigos/odiglet:$(TAG)
-	kind load docker-image ghcr.io/keyval-dev/odigos/instrumentor:$(TAG)
+	kind load docker-image keyval/odigos-enterprise-odiglet:$(TAG)
+
+.PHONY: restart-odiglet
+restart-odiglet:
+	kubectl rollout restart daemonset odiglet -n odigos-system
+
+.PHONY: deploy
+deploy:
+	make build-images TAG=$(TAG) && make load-to-kind TAG=$(TAG) && make restart-odiglet

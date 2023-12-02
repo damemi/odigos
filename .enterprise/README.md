@@ -1,99 +1,23 @@
-<p align="center">
-    <a href="https://github.com/keyval-dev/odigos/actions/workflows/main.yml" target="_blank">
-    <img src="https://github.com/keyval-dev/odigos/actions/workflows/main.yml/badge.svg" />
-    </a>
-    <a href="https://goreportcard.com/report/github.com/keyval-dev/odigos/cli" target="_blank">
-    <img src="https://goreportcard.com/badge/github.com/keyval-dev/odigos/cli">
-    </a>
-    <a href="https://godoc.org/github.com/keyval-dev/odigos/cli" target="_blank">
-    <img src="https://godoc.org/istio.io/istio?status.svg">
-    </a>
-</p>
-<p align="center">
-<img src="assets/logo.png" width="350" /></br>
-Generate distributed traces for any application without code changes
-</p>
-<h2 align="center">
-    <a href="https://www.youtube.com/watch?v=nynyV7FC4VI">Demo Video</a> • <a href="https://docs.odigos.io">Documentation</a> • <a href="https://join.slack.com/t/odigos/shared_invite/zt-1d7egaz29-Rwv2T8kyzc3mWP8qKobz~A">Join Slack Community</a>
-</h2>
+# Odigos Enterprise
 
-### ✨ Language Agnostic Auto-instrumentation
+Here are components that replace or add to the Odigoes Open Source project.
 
-Odigos supports any application written in Java, Python, .NET, Node.js and **Go**.  
-Historically, compiled languages like Go have been difficult to instrument without code changes. Odigos solves this problem by uniquely leveraging [eBPF](https://ebpf.io).
+## Odiglet
 
-![Works on any application](assets/choose_apps.png)
+The enterprise odiglet uses the opensource odiglet as a library, and extends it by using a custom `main.go` function 
+that adds the enterprise go auto instrumentation and instrumentation config capabilities.
 
+To develop Odiglet enterprise, and test it from code, you will need:
 
-### 🤝 Keep your existing observability tools
-Odigos currently supports all the popular managed and open source destinations.  
-By producing data in the [OpenTelemetry](https://opentelemetry.io) format, Odigos can be used with any observability tool that supports OTLP.
+1. GITHUB_TOKEN environment variables set to so you can pull private keyval repositories from github. You can create a personal access token in github website under setting -> developer settings -> personal access tokens. You will need to give it access to private repos. Set the environment variables in your shell, and store them in ~/.zshrc or ~/.bashrc so you don't have to set them every time you open a new shell.
 
-For a complete list of supported destinations see [here](#supported-destinations).
+2. Update the `replace` directive in `./doiglet/go.mod` to point to any git branch and commit hash you want to run and test.
 
-![Works with any observability tool](assets/choose_dest.png)
-
-### 🎛️ Collectors Management 
-Odigos automatically scales OpenTelemetry collectors based on observability data volume.  
-Manage and configure collectors via a convenient web UI.
-
-![Collectors Management](assets/overview_page.png)
-
-## Installation
-
-Installing Odigos takes less than 5 minutes, and requires no code changes.
-Download our [CLI](https://docs.odigos.io/installation) and run the following command:
-
-
-```bash
-odigos install
+for example, you can point to your own fork of odiglet open source, and use a branch commit hash from there:
+```
+replace github.com/keyval-dev/odigos/odiglet => github.com/<YOUR-USERNAME>/odigos/odiglet <COMMIT-HASH>
 ```
 
-For more details see our [quickstart guide](https://docs.odigos.io/intro).
+3. Run `TAG=<CURRENT-ODIGOS-VERSION> make deploy` to build and upload the images to kind. The TAG should match the current version of odigos you are using. e.g. what you get back from `odigos version`. 
 
-## Supported Destinations
-
-**For step by step instructions detailed for every destination see these [docs](https://docs.odigos.io/backends).**
-
-### Managed
-
-|                         | Traces | Metrics | Logs |
-|-------------------------| ------ | ------- |------|
-| New Relic               | ✅      | ✅      | ✅    |
-| Datadog                 | ✅      | ✅      | ✅    |
-| Grafana Cloud           | ✅      | ✅      | ✅    |
-| Honeycomb               | ✅      | ✅      | ✅    |
-| Chronosphere            | ✅      | ✅      |       |
-| Logz.io                 | ✅      | ✅      | ✅    |
-| qryn.cloud              | ✅      | ✅      | ✅    |
-| OpsVerse                | ✅      | ✅      | ✅    |
-| Dynatrace               | ✅      | ✅      | ✅    |
-| Google Cloud Monitoring | ✅      |         | ✅    |
-| Google Cloud Storage    | ✅      |         | ✅    |
-| Azure Blob Storage      | ✅      |         | ✅    |
-| AWS S3                  | ✅      |         | ✅    |
-| Splunk                  | ✅      |         |      |
-| Lightstep               | ✅      |         |      |
-| Sentry                  | ✅      |         |      |
-
-### Open Source
-
-|               | Traces | Metrics | Logs |
-| ------------- | ------ | ------- | ---- |
-| Prometheus    |        | ✅      |      |
-| Tempo         | ✅     |         |      |
-| Loki          |        |         | ✅   |
-| Jaeger        | ✅     |         |      |
-| SigNoz        | ✅     | ✅      | ✅   |
-| qryn          | ✅     | ✅      | ✅   |
-| Elasticsearch | ✅     |         | ✅   |
-
-Can't find the destination you need? Help us by following our quick [adding new destination](https://docs.odigos.io/adding-new-dest) guide and submit a PR.
-
-## Contributing
-
-Please refer to the [CONTRIBUTING.md](CONTRIBUTING.md) file for information about how to get involved. We welcome issues, questions, and pull requests. You are welcome to join our active [Slack Community](https://join.slack.com/t/odigos/shared_invite/zt-1d7egaz29-Rwv2T8kyzc3mWP8qKobz~A).
-
-## License
-
-This project is licensed under the terms of the Apache 2.0 open source license. Please refer to [LICENSE](LICENSE) for the full terms.
+When you run `odigos install` it applied a manifest file for the odiglet daemonset. the docker image built from code should use the same image tag so it will be pulled by k8s and used in your cluster.

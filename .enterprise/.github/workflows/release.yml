@@ -1,13 +1,13 @@
-name: Release Enterprise
+name: Release
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
 permissions:
   contents: write
   packages: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -18,25 +18,24 @@ jobs:
       - run: git fetch --force --tags
       - name: Set env
         id: vars
-        run: |
-          echo "tag=v0.0.1" >> $GITHUB_OUTPUT
-      - uses: actions/setup-go@v4
-        with:
-          go-version: '1.21.0'
+        run: echo ::set-output name=tag::${GITHUB_REF#refs/*/}
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
-    #   - name: Login to Docker Hub
-    #     uses: docker/login-action@v2
-    #     with:
-    #       username: ${{ secrets.DOCKERHUB_USERNAME }}
-    #       password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build Odiglet Image
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push Odiglet Image
         uses: docker/build-push-action@v4
         with:
           file: odiglet/Dockerfile
           push: true
           tags: |
-            keyval/odigos-odiglet-enterprise:${{ steps.vars.outputs.tag }}
+            keyval/odigos-enterprise-odiglet:${{ steps.vars.outputs.tag }}
           platforms: linux/amd64,linux/arm64
+          secrets: |
+            "github_token=${{ secrets.RELEASE_BOT_TOKEN }}"
