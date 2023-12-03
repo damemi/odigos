@@ -28,6 +28,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
         run: |
+            git config --global user.email "bot@keyval.dev"
+            git config --global user.name "Odigos Release Bot"
             git checkout -b release
             git add .
             git commit -m "release"
