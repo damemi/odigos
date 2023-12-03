@@ -30,10 +30,10 @@ jobs:
         run: |
             git config --global user.email "bot@keyval.dev"
             git config --global user.name "Odigos Release Bot"
-            git checkout -b release
+            git checkout -b release-${{ github.event.inputs.tag }}
             git add .
-            git commit -m "release"
-            git push origin release
-            gh pr create --title "release" --body "release" --base main --head release
+            git commit -m "release ${{ github.event.inputs.tag }}"
+            git push origin release-${{ github.event.inputs.tag }}
+            gh pr create --title "release ${{ github.event.inputs.tag }}" --body "release" --base main --head release-${{ github.event.inputs.tag }} --repo odigos/odigos
         
 
