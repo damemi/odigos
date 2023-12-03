@@ -20,9 +20,12 @@ jobs:
         with:
           go-version: '1.21.0'
 
-      - name: test change files
+      - name: update odigos dependencies
+        working-directory: ./odiglet
         run: |
-          echo "test" > test.txt
+            go get -u github.com/keyval-dev/odigos/api@${{ github.event.inputs.tag }}
+            go get -u github.com/keyval-dev/odigos/common@${{ github.event.inputs.tag }}
+            go get -u github.com/keyval-dev/odigos/odiglet@${{ github.event.inputs.tag }}
 
       - name: create release pr
         env:
