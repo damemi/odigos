@@ -108,3 +108,5 @@ require (
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231129091809-80077b0270a7
+
+replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.4
