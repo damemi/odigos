@@ -55,4 +55,11 @@ jobs:
           git add .
           git commit -m "release ${{ github.event.inputs.tag }}"
           git push origin release-${{ github.event.inputs.tag }}
-          gh pr create --title "release ${{ github.event.inputs.tag }}" --body "release" --base main --head release-${{ github.event.inputs.tag }}
+          PR_LINK=$(gh pr create --title "release ${{ github.event.inputs.tag }}" --body "release" --base main --head release-${{ github.event.inputs.tag }} -w)
+          echo "PR_LINK=$PR_LINK" >> $GITHUB_ENV
+
+      - name: Notify Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data '{"link":"${PR_LINK}", "description":"ODigos enterprise PR created. Approve to continue:", "tag":"${{ github.event.inputs.tag }}"}' ${SLACK_WEBHOOK_URL}
