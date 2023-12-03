@@ -25,9 +25,9 @@ jobs:
         run: |
             git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
             go env -w GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation
-            # go get -u github.com/keyval-dev/odigos/odiglet@${{ github.event.inputs.tag }}
-            go get -u github.com/keyval-dev/odigos/api@${{ github.event.inputs.tag }}
-            go get -u github.com/keyval-dev/odigos/common@${{ github.event.inputs.tag }}
+            go get -u github.com/keyval-dev/odigos/odiglet@${{ github.event.inputs.tag }}
+            # go get -u github.com/keyval-dev/odigos/api@${{ github.event.inputs.tag }}
+            # go get -u github.com/keyval-dev/odigos/common@${{ github.event.inputs.tag }}
 
       - name: create release pr
         env:
