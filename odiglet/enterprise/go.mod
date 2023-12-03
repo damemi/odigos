@@ -3,11 +3,11 @@ module github.com/keyval-dev/odigos-enterprise/odiglet
 go 1.21.0
 
 require (
-	github.com/keyval-dev/odigos/api v1.0.3-0.20231129090914-fab872fa3ccb
-	github.com/keyval-dev/odigos/common v1.0.3-0.20231129090914-fab872fa3ccb
-	github.com/keyval-dev/odigos/odiglet v1.0.3-0.20231129090914-fab872fa3ccb
+	github.com/keyval-dev/odigos/api v1.0.4
+	github.com/keyval-dev/odigos/common v1.0.4
+	github.com/keyval-dev/odigos/odiglet v1.0.4
 	github.com/kubevirt/device-plugin-manager v1.19.5
-	go.opentelemetry.io/auto v0.0.0
+	go.opentelemetry.io/auto v0.8.0-alpha.0.20231123130439-13e469315282
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.21.0
 	go.opentelemetry.io/otel/trace v1.21.0
 	k8s.io/apimachinery v0.28.4
