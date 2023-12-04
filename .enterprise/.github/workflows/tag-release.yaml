@@ -1,0 +1,32 @@
+name: Tag Release
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  release-job:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release-bot')
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Extract Version from PR Comment
+      id: extract-version
+      run: |
+        PR_COMMENT="${{ github.event.pull_request.body }}"
+        VERSION=$(echo "$PR_COMMENT" | grep -oP 'Version:\K.*')
+        echo "Extracted version: $VERSION"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Configure Git
+      run: |
+        git config --global user.email "bot@keyval.dev"
+        git config --global user.name "Odigos Release Bot"
+
+    - name: Tag Current Commit
+      run: |
+        VERSION=${{ steps.extract-version.outputs.version }}
+        git tag $VERSION
+        git push --tags
