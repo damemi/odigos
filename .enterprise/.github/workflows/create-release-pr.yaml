@@ -53,9 +53,11 @@ jobs:
           git config --global user.email "bot@keyval.dev"
           git config --global user.name "Odigos Release Bot"
 
-          echo "branch_name=auto-release-${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          BRANCH_PREFIX="release-bot-"
+          echo "branch_prefix=${BRANCH_PREFIX}-" >> $GITHUB_OUTPUT
+          echo "branch_name=${BRANCH_PREFIX}${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
 
-      - name: delete previous branch
+      - name: delete existing branch
         env:
             GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
         run: |
