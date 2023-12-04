@@ -32,6 +32,8 @@ jobs:
           fi
 
       - uses: actions/checkout@v4
+
+      # we are using go commands later on, so need go installed
       - uses: actions/setup-go@v4
         with:
           go-version: "1.21.0"
@@ -56,7 +58,7 @@ jobs:
           git commit -m "release ${{ github.event.inputs.tag }}"
           git push origin release-${{ github.event.inputs.tag }}
           sleep 3
-          gh pr create --title "release ${{ github.event.inputs.tag }}" --body "release" --base main --head release-${{ github.event.inputs.tag }} -w
+          gh pr create --title "release ${{ github.event.inputs.tag }}" --body "release" --base main --head release-${{ github.event.inputs.tag }}
         #   echo "PR_LINK=$PR_LINK" >> $GITHUB_ENV
 
     #   - name: Notify Slack
