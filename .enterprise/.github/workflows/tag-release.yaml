@@ -1,5 +1,9 @@
 name: Tag Release
 
+permissions:
+  contents: read
+  actions: write
+
 on:
   pull_request:
     types: [closed]
@@ -26,8 +30,6 @@ jobs:
         git config --global user.name "Odigos Release Bot"
 
     - name: Tag Current Commit
-      env:
-        GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
       run: |
           VERSION=${{ steps.extract-version.outputs.version }}
           git tag $VERSION
