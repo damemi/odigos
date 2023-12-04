@@ -68,11 +68,11 @@ jobs:
 
       # we want to save as many clicks as possible, so we mark the PR as auto mergeable.
       # Thus, when the PR is approved and build succeeds, it will be merged automatically.
-      - name: Enable Auto Merge on PR
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
-        run: |
-          gh pr merge ${{ env.PR_LINK }} --auto --squash
+    #   - name: Enable Auto Merge on PR
+    #     env:
+    #       GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+    #     run: |
+    #       gh pr merge ${{ env.PR_LINK }} --auto --squash
 
       - name: Echo Length of Slack Webhook URL
         run: |
