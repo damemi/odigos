@@ -49,11 +49,24 @@ jobs:
       - name: github preperation
         id: github_preperation
         run: |
-            # Set global Git configurations
-            git config --global user.email "bot@keyval.dev"
-            git config --global user.name "Odigos Release Bot"
+          # Set global Git configurations
+          git config --global user.email "bot@keyval.dev"
+          git config --global user.name "Odigos Release Bot"
 
-            echo "branch_name=auto-release-${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          echo "branch_name=auto-release-${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+
+      - name: delete previous branch
+        run: |
+          # Check if the branch already exists on the remote and delete it if it does
+          if git ls-remote --heads origin ${{ steps.github_preperation.outputs.branch_name }}; then
+              git push origin --delete ${{ steps.github_preperation.outputs.branch_name }}
+          fi
+
+          # Check if a pull request already exists for the branch and close it if it does
+          EXISTING_PR=$(gh pr list --head ${{ steps.github_preperation.outputs.branch_name }} --base main --state open --json number --jq '.[0].number')
+          if [ ! -z "$EXISTING_PR" ]; then
+              gh pr close $EXISTING_PR --delete-branch
+          fi
 
       - name: create release pr
         env:
@@ -68,11 +81,11 @@ jobs:
 
       # we want to save as many clicks as possible, so we mark the PR as auto mergeable.
       # Thus, when the PR is approved and build succeeds, it will be merged automatically.
-    #   - name: Enable Auto Merge on PR
-    #     env:
-    #       GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
-    #     run: |
-    #       gh pr merge ${{ env.PR_LINK }} --auto --squash
+      #   - name: Enable Auto Merge on PR
+      #     env:
+      #       GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+      #     run: |
+      #       gh pr merge ${{ env.PR_LINK }} --auto --squash
 
       - name: Echo Length of Slack Webhook URL
         run: |
