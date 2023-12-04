@@ -67,6 +67,11 @@ jobs:
               gh pr close $EXISTING_PR --delete-branch
           fi
 
+          BRANCH_EXISTS=$(git ls-remote --heads origin ${{ steps.github_preperation.outputs.branch_name }})
+          if [ ! -z "$BRANCH_EXISTS" ]; then
+              git push origin --delete ${{ steps.github_preperation.outputs.branch_name }}
+          fi          
+
       - name: create release pr
         env:
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
