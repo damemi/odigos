@@ -12,6 +12,13 @@ jobs:
   release:
     runs-on: large-runner
     steps:
+
+      - name: Notify Slack Start
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data '{"description":"Start releasing Odigos enterprise components. This should take few minutes", "tag":"${{ steps.vars.outputs.tag }}"}' ${{ env.SLACK_WEBHOOK_URL }}
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -42,7 +49,7 @@ jobs:
           secrets: |
             "github_token=${{ secrets.RELEASE_BOT_TOKEN }}"
 
-      - name: Notify Slack
+      - name: Notify Slack End
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
         run: |
