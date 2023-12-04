@@ -46,19 +46,28 @@ jobs:
           sed -i "s|replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v.*|replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common ${TAG}|g" go.mod
           go mod tidy
 
+      - name: github preperation
+        id: github_preperation
+        run: |
+            # Set global Git configurations
+            git config --global user.email "bot@keyval.dev"
+            git config --global user.name "Odigos Release Bot"
+
+            echo "branch_name=auto-release-${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+
       - name: create release pr
         env:
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
         run: |
-          git config --global user.email "bot@keyval.dev"
-          git config --global user.name "Odigos Release Bot"
-          git checkout -b auto-release-${{ github.event.inputs.tag }}
+          git checkout -b ${{ steps.github_preperation.outputs.branch_name }}
           git add .
           git commit -m "bump odigos dependencise to use ${{ github.event.inputs.tag }}"
-          git push origin auto-release-${{ github.event.inputs.tag }}
-          PR_LINK=$(gh pr create --title "chore: automatic release ${{ github.event.inputs.tag }}" --body "follow up PR for odigos release ${{ github.event.inputs.tag }} to upgrade enterprise components" --base main --head auto-release-${{ github.event.inputs.tag }})
+          git push origin ${{ steps.github_preperation.outputs.branch_name }}
+          PR_LINK=$(gh pr create --title "chore: automatic release ${{ github.event.inputs.tag }}" --body "follow up PR for odigos release ${{ github.event.inputs.tag }} to upgrade enterprise components" --base main --head ${{ steps.github_preperation.outputs.branch_name }})
           echo "PR_LINK=$PR_LINK" >> $GITHUB_ENV
 
+      # we want to save as many clicks as possible, so we mark the PR as auto mergeable.
+      # Thus, when the PR is approved and build succeeds, it will be merged automatically.
       - name: Enable Auto Merge on PR
         env:
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
