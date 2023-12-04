@@ -61,11 +61,21 @@ jobs:
         env:
             GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
         run: |
-          # Check if a pull request already exists for the branch and close it if it does
-          EXISTING_PR=$(gh pr list --head ${{ steps.github_preperation.outputs.branch_name }} --base main --state open --json number --jq '.[0].number')
-          if [ ! -z "$EXISTING_PR" ]; then
-              gh pr close $EXISTING_PR --delete-branch
-          fi
+            # Get list of all branches starting with branch prefix
+            BRANCHES=$(git branch -r | grep 'origin/${{ steps.github_preperation.outputs.branch_prefix }}')
+            for branch in $BRANCHES; do
+                # Trim 'origin/' from the branch name
+                branch=${branch#origin/}
+        
+                # Check if a pull request exists for the branch and close it if it does
+                EXISTING_PR=$(gh pr list --head "$branch" --base main --state open --json number --jq '.[0].number')
+                if [ ! -z "$EXISTING_PR" ]; then
+                    gh pr close "$EXISTING_PR" --delete-branch
+                else
+                    # Delete the branch directly if no open PR is found
+                    git push origin --delete "$branch"
+                fi
+            done
 
       - name: create release pr
         env:
