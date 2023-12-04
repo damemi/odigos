@@ -102,8 +102,8 @@ jobs:
       # we want to save as many clicks as possible, so we mark the PR as auto mergeable.
       # Thus, when the PR is approved and build succeeds, it will be merged automatically.
       - name: Enable Auto Merge on PR
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+        # env:
+        #   GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
         run: |
           gh pr merge ${{ env.PR_LINK }} --auto --squash
 
@@ -111,4 +111,14 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"link":"${{ env.PR_LINK }}", "description":"ODigos enterprise PR created. Approve to continue:", "tag":"${{ github.event.inputs.tag }}"}' ${{ env.SLACK_WEBHOOK_URL }}
+          curl -X POST -H 'Content-type: application/json' --data '{"link":"${{ env.PR_LINK }}/files", "description":"ODigos enterprise PR created. Approve to continue:", "tag":"${{ github.event.inputs.tag }}"}' ${{ env.SLACK_WEBHOOK_URL }}
+
+      - name: Notify Slack on Failure
+        if: failure()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+            SLACK_WEBHOOK: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+            SLACK_CHANNEL: odigos-release-status
+            SLACK_COLOR: '#FF0000'
+            SLACK_MESSAGE: 'Create Odigos Enterprise releae PR failed :x:'
+            SLACK_TITLE: 'Failure in GitHub Actions'          
