@@ -30,6 +30,16 @@ jobs:
             exit 1
           fi
 
+      # Debugging Step: Echo TAG Environment Variable
+      - name: Echo TAG Environment Variable
+        run: |
+            echo "TAG Value: $TAG"
+
+      # Debugging Step: Echo github.event.client_payload Object
+      - name: Echo GitHub Event Client Payload
+        run: |
+            echo "Client Payload: ${{ toJson(github.event.client_payload) }}"
+
       - uses: actions/checkout@v4
 
       # we are using go commands later on, so need go installed
