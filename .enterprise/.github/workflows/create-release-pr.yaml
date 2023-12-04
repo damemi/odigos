@@ -88,7 +88,7 @@ jobs:
           PR_NUMBER=$(echo "$PR_LINK" | awk -F '/' '{print $NF}')
           echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
 
-      - name: Add metadata comment to PR
+      - name: Add bot label to PR
         env:
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
         run: |
