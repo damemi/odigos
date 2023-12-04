@@ -59,7 +59,7 @@ jobs:
 
       - name: delete existing branch
         env:
-            GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
         run: |
           # Check if a pull request already exists for the branch and close it if it does
           EXISTING_PR=$(gh pr list --head ${{ steps.github_preperation.outputs.branch_name }} --base main --state open --json number --jq '.[0].number')
@@ -77,6 +77,17 @@ jobs:
           git push origin ${{ steps.github_preperation.outputs.branch_name }}
           PR_LINK=$(gh pr create --title "chore: automatic release ${{ github.event.inputs.tag }}" --body "follow up PR for odigos release ${{ github.event.inputs.tag }} to upgrade enterprise components" --base main --head ${{ steps.github_preperation.outputs.branch_name }})
           echo "PR_LINK=$PR_LINK" >> $GITHUB_ENV
+
+          # Extract PR number from PR_LINK
+          PR_NUMBER=$(echo "$PR_LINK" | awk -F '/' '{print $NF}')
+          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
+
+      - name: Add metadata comment to PR
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+        run: |
+          curl -X POST -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/labels -d '{"labels": ["release-bot"]}'
+          gh pr comment $PR_NUMBER --body "Version: ${{ github.event.inputs.tag }}"
 
       # we want to save as many clicks as possible, so we mark the PR as auto mergeable.
       # Thus, when the PR is approved and build succeeds, it will be merged automatically.
