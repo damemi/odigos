@@ -63,6 +63,7 @@ jobs:
         run: |
             # Get list of all branches starting with branch prefix
             BRANCHES=$(git branch -r | grep 'origin/${{ steps.github_preperation.outputs.branch_prefix }}')
+            echo ${BRANCHES}
             for branch in $BRANCHES; do
                 # Trim 'origin/' from the branch name
                 branch=${branch#origin/}
