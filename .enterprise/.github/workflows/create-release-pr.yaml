@@ -55,6 +55,7 @@ jobs:
           git add .
           git commit -m "release ${{ github.event.inputs.tag }}"
           git push origin release-${{ github.event.inputs.tag }}
+          sleep 3
           gh pr create --title "release ${{ github.event.inputs.tag }}" --body "release" --base main --head release-${{ github.event.inputs.tag }} -w
         #   echo "PR_LINK=$PR_LINK" >> $GITHUB_ENV
 
