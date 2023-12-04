@@ -26,18 +26,18 @@ jobs:
         git config --global user.name "Odigos Release Bot"
 
     - name: Tag Current Commit
-      run: |
-        VERSION=${{ steps.extract-version.outputs.version }}
-        git tag $VERSION
-        git push --tags
       env:
-        GITHUB_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+        GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+      run: |
+          VERSION=${{ steps.extract-version.outputs.version }}
+          git tag $VERSION
+          git push --tags
 
     - name: Notify Slack
       env:
         SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
       run: |
-        curl -X POST -H 'Content-type: application/json' --data '{"description":"Tagged odigos enterprise. Release shouls follow", "tag":"${{ github.event.inputs.tag }}"}' ${{ env.SLACK_WEBHOOK_URL }}
+        curl -X POST -H 'Content-type: application/json' --data '{"description":"Tagged odigos enterprise. Release shouls follow", "tag":"${{ steps.extract-version.outputs.version }}"}' ${{ env.SLACK_WEBHOOK_URL }}
 
     - name: Notify Slack on Failure
       if: failure()
@@ -46,5 +46,5 @@ jobs:
         GITHUB_REPOSITORY: ${{ github.repository }}
         GITHUB_RUN_ID: ${{ github.run_id }}
       run: |
-        curl -X POST -H 'Content-type: application/json' --data '{"link":"https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}", "description":"ERROR: odigos enterprise not able to tag release", "tag":"${{ github.event.inputs.tag }}"}' ${{ env.SLACK_WEBHOOK_URL }}
+        curl -X POST -H 'Content-type: application/json' --data '{"link":"https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}", "description":"ERROR: odigos enterprise not able to tag release", "tag":"${{ steps.extract-version.outputs.version }}"}' ${{ env.SLACK_WEBHOOK_URL }}
 
