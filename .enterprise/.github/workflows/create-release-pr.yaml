@@ -75,10 +75,11 @@ jobs:
           git add .
           git commit -m "bump odigos dependencise to use ${{ github.event.inputs.tag }}"
           git push origin ${{ steps.github_preperation.outputs.branch_name }}
-          
+
           PR_LINK=$(gh pr create \
             --title "chore: automatic release ${{ github.event.inputs.tag }}" \
-            --body "follow up PR for odigos release to upgrade enterprise components.$'\n'Version:${{ github.event.inputs.tag }}" \
+            --body "follow up PR for odigos release to upgrade enterprise components.
+            Version:${{ github.event.inputs.tag }}" \
             --base main \
             --head ${{ steps.github_preperation.outputs.branch_name }})
           echo "PR_LINK=$PR_LINK" >> $GITHUB_ENV
