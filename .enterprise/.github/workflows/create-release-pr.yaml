@@ -30,16 +30,6 @@ jobs:
             exit 1
           fi
 
-      # Debugging Step: Echo TAG Environment Variable
-      - name: Echo TAG Environment Variable
-        run: |
-            echo "TAG Value: $TAG"
-
-      # Debugging Step: Echo github.event.client_payload Object
-      - name: Echo GitHub Event Client Payload
-        run: |
-            echo "Client Payload: ${{ toJson(github.event.client_payload) }}"
-
       - uses: actions/checkout@v4
 
       # we are using go commands later on, so need go installed
@@ -65,7 +55,7 @@ jobs:
 
           BRANCH_PREFIX="release-bot-"
           echo "branch_prefix=${BRANCH_PREFIX}-" >> $GITHUB_OUTPUT
-          echo "branch_name=${BRANCH_PREFIX}${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          echo "branch_name=${BRANCH_PREFIX}${{ env.TAG }}" >> $GITHUB_OUTPUT
 
       - name: delete existing branch
         env:
@@ -88,13 +78,13 @@ jobs:
         run: |
           git checkout -b ${{ steps.github_preperation.outputs.branch_name }}
           git add .
-          git commit -m "bump odigos dependencise to use ${{ github.event.inputs.tag }}"
+          git commit -m "bump odigos dependencise to use ${{ env.TAG }}"
           git push origin ${{ steps.github_preperation.outputs.branch_name }}
 
           PR_LINK=$(gh pr create \
-            --title "chore: automatic release ${{ github.event.inputs.tag }}" \
+            --title "chore: automatic release ${{ env.TAG }}" \
             --body "follow up PR for odigos release to upgrade enterprise components.
-            Version:${{ github.event.inputs.tag }}" \
+            Version:${{ env.TAG }}" \
             --base main \
             --head ${{ steps.github_preperation.outputs.branch_name }})
           echo "PR_LINK=$PR_LINK" >> $GITHUB_ENV
@@ -121,7 +111,7 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"link":"${{ env.PR_LINK }}/files", "description":"Odigos enterprise PR created. Approve to continue:", "tag":"${{ github.event.inputs.tag }}"}' ${{ env.SLACK_WEBHOOK_URL }}
+          curl -X POST -H 'Content-type: application/json' --data '{"link":"${{ env.PR_LINK }}/files", "description":"Odigos enterprise PR created. Approve to continue:", "tag":"${{ env.TAG }}"}' ${{ env.SLACK_WEBHOOK_URL }}
 
       - name: Notify Slack on Failure
         if: failure()
@@ -130,4 +120,4 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"link":"https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}", "description":"ERROR: odigos enterprise PR not created", "tag":"${{ github.event.inputs.tag }}"}' ${{ env.SLACK_WEBHOOK_URL }}
+          curl -X POST -H 'Content-type: application/json' --data '{"link":"https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}", "description":"ERROR: odigos enterprise PR not created", "tag":"${{ env.TAG }}"}' ${{ env.SLACK_WEBHOOK_URL }}
