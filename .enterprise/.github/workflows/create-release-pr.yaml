@@ -56,12 +56,9 @@ jobs:
           echo "branch_name=auto-release-${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
 
       - name: delete previous branch
+        env:
+            GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
         run: |
-          # Check if the branch already exists on the remote and delete it if it does
-          if git ls-remote --heads origin ${{ steps.github_preperation.outputs.branch_name }}; then
-              git push origin --delete ${{ steps.github_preperation.outputs.branch_name }}
-          fi
-
           # Check if a pull request already exists for the branch and close it if it does
           EXISTING_PR=$(gh pr list --head ${{ steps.github_preperation.outputs.branch_name }} --base main --state open --json number --jq '.[0].number')
           if [ ! -z "$EXISTING_PR" ]; then
