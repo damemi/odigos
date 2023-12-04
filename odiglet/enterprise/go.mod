@@ -3,9 +3,9 @@ module github.com/keyval-dev/odigos-enterprise/odiglet
 go 1.21.0
 
 require (
-	github.com/keyval-dev/odigos/api v1.0.4
-	github.com/keyval-dev/odigos/common v1.0.4
-	github.com/keyval-dev/odigos/odiglet v1.0.4
+	github.com/keyval-dev/odigos/api v1.0.5
+	github.com/keyval-dev/odigos/common v1.0.5
+	github.com/keyval-dev/odigos/odiglet v1.0.5
 	github.com/kubevirt/device-plugin-manager v1.19.5
 	go.opentelemetry.io/auto v0.8.0-alpha.0.20231123130439-13e469315282
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.21.0
@@ -109,4 +109,4 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231129091809-80077b0270a7
 
-replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.4
+replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.5
