@@ -64,4 +64,4 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"link":"${PR_LINK}", "description":"ODigos enterprise PR created. Approve to continue:", "tag":"${{ github.event.inputs.tag }}"}' ${SLACK_WEBHOOK_URL}
+          curl -X POST -H 'Content-type: application/json' --data '{"link":"${PR_LINK}", "description":"ODigos enterprise PR created. Approve to continue:", "tag":"${{ github.event.inputs.tag }}"}' ${{ env.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
