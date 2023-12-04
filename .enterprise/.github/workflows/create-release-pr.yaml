@@ -52,12 +52,18 @@ jobs:
         run: |
           git config --global user.email "bot@keyval.dev"
           git config --global user.name "Odigos Release Bot"
-          git checkout -b release-${{ github.event.inputs.tag }}
+          git checkout -b auto-release-${{ github.event.inputs.tag }}
           git add .
-          git commit -m "release ${{ github.event.inputs.tag }}"
-          git push origin release-${{ github.event.inputs.tag }}
-          PR_LINK=$(gh pr create --title "release ${{ github.event.inputs.tag }}" --body "release" --base main --head release-${{ github.event.inputs.tag }})
+          git commit -m "bump odigos dependencise to use ${{ github.event.inputs.tag }}"
+          git push origin auto-release-${{ github.event.inputs.tag }}
+          PR_LINK=$(gh pr create --title "chore: automatic release ${{ github.event.inputs.tag }}" --body "follow up PR for odigos release ${{ github.event.inputs.tag }} to upgrade enterprise components" --base main --head auto-release-${{ github.event.inputs.tag }})
           echo "PR_LINK=$PR_LINK" >> $GITHUB_ENV
+
+      - name: Enable Auto Merge on PR
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+        run: |
+          gh pr merge ${{ env.PR_LINK }} --auto --squash
 
       - name: Echo Length of Slack Webhook URL
         run: |
