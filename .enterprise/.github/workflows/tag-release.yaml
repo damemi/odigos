@@ -1,9 +1,5 @@
 name: Tag Release
 
-permissions:
-  contents: write
-  actions: write
-
 on:
   pull_request:
     types: [closed]
@@ -15,6 +11,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.RELEASE_BOT_TOKEN }}
 
     - name: Extract Version from PR Comment
       id: extract-version
@@ -30,6 +28,8 @@ jobs:
         git config --global user.name "Odigos Release Bot"
 
     - name: Tag Current Commit
+      env:
+        GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
       run: |
           VERSION=${{ steps.extract-version.outputs.version }}
           git tag $VERSION
