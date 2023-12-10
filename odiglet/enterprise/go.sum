@@ -188,8 +188,8 @@ github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHm
 github.com/jstemmer/go-junit-report v0.0.0-20190106144839-af01ea7f8024/go.mod h1:6v2b51hI/fHJwM22ozAgKL4VKDeJcHhJFhtBdhmNjmU=
 github.com/jstemmer/go-junit-report v0.9.1/go.mod h1:Brl9GWCQeLvo8nXZwPNNblvFj/XSXhF0NWZEnDohbsk=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
-github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231203080306-7ed7c59dab1b h1:iK686wicYX3PY+VAbMa5ziFMW+DNnB7LkXkt3SWFZQU=
-github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231203080306-7ed7c59dab1b/go.mod h1:AIIH9iDEJczv7WcPuMdkncNg/O5oMSaP3Zyy25wKiLk=
+github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231209172011-b9ad4c5214ba h1:DcEnAJRJ9+7SRw6TXaFNkyvnnsnmC33fs17sOSLXA5Y=
+github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231209172011-b9ad4c5214ba/go.mod h1:cv3Em8XenZgAdxD2XDqNPFY+dP+QYefbA3pEi3uG+Ks=
 github.com/keyval-dev/odigos/api v1.0.9 h1:fEfRlG6Caj+qq9qwwauEJp8xAa/B0EhzAwSik2SrtiM=
 github.com/keyval-dev/odigos/api v1.0.9/go.mod h1:CEeUXlu8qYRDiIhvARoA2sqDsuUTxYM8dGQk3Fo1lo0=
 github.com/keyval-dev/odigos/common v1.0.9 h1:yAgy45EL5hrAo5I3GP9hoz9zdS9BRCypbxsOSbNMbKM=
