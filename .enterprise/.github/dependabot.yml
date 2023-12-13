@@ -7,27 +7,7 @@ updates:
       day: sunday
       interval: weekly
   - package-ecosystem: gomod
-    directory: /autoscaler
-    schedule:
-      day: sunday
-      interval: weekly
-  - package-ecosystem: gomod
     directory: /odiglet
-    schedule:
-      day: sunday
-      interval: weekly
-  - package-ecosystem: gomod
-    directory: /scheduler
-    schedule:
-      day: sunday
-      interval: weekly
-  - package-ecosystem: gomod
-    directory: /cli
-    schedule:
-      day: sunday
-      interval: weekly
-  - package-ecosystem: gomod
-    directory: /instrumentor
     schedule:
       day: sunday
       interval: weekly
