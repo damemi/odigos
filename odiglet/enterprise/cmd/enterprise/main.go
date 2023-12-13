@@ -108,10 +108,15 @@ func startDeviceManager(clientset *kubernetes.Clientset) {
 }
 
 func initEbpf(kubeclient client.Client) (map[common.ProgrammingLanguage]ebpf.DirectorEnterprise, error) {
+
 	goInstrumentationFactory := ebpf.NewGoInstrumentationFactoryEnterprise(kubeclient)
 	goDirector := ebpf.NewEbpfDirectorEnterprise(common.GoProgrammingLanguage, goInstrumentationFactory)
 
+	javaInstrumentationFactory := ebpf.NewJavaInstrumentationFactoryEnterprise(kubeclient)
+	javaDirector := ebpf.NewEbpfDirectorEnterprise(common.JavaProgrammingLanguage, javaInstrumentationFactory)
+
 	return map[common.ProgrammingLanguage]ebpf.DirectorEnterprise{
-		common.GoProgrammingLanguage: goDirector,
+		common.GoProgrammingLanguage:   goDirector,
+		common.JavaProgrammingLanguage: javaDirector,
 	}, nil
 }

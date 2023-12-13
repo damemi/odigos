@@ -3,9 +3,10 @@ module github.com/keyval-dev/odigos-enterprise/odiglet
 go 1.21.0
 
 require (
+	github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20231213072247-79e468a1b429
 	github.com/keyval-dev/odigos/api v1.0.10
 	github.com/keyval-dev/odigos/common v1.0.10
-	github.com/keyval-dev/odigos/odiglet v1.0.10
+	github.com/keyval-dev/odigos/odiglet v1.0.11-0.20231212144507-461cdde83ae2
 	github.com/kubevirt/device-plugin-manager v1.19.5
 	go.opentelemetry.io/auto v0.8.0-alpha.0.20231208024151-d01c5fb4cd35
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.21.0

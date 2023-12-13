@@ -87,7 +87,7 @@ func (g *GoOtelEbpfSdkEnterprise) Run(ctx context.Context) error {
 	return g.inst.Run(ctx)
 }
 
-func (g *GoOtelEbpfSdkEnterprise) Close() error {
+func (g *GoOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 	return g.inst.Close()
 }
 

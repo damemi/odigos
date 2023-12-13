@@ -14,6 +14,21 @@ ARG DOTNET_OTEL_VERSION=v0.7.0
 ADD https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/$DOTNET_OTEL_VERSION/opentelemetry-dotnet-instrumentation-linux-musl.zip .
 RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetry-dotnet-instrumentation-linux-musl.zip
 
+# Jattach - TODO: use native Go code instead of this
+FROM ubuntu:23.04 AS jattach-builder
+RUN apt-get update && apt-get install -y jattach
+
+# Dtrace injector
+FROM openjdk:8 AS java-builder
+RUN apt update -y && apt install -y g++ systemtap-sdt-dev make maven
+WORKDIR /dtrace-injector
+RUN --mount=type=secret,id=github_token \
+    git clone https://$(cat /run/secrets/github_token)@github.com/keyval-dev/ebpf-java-instrumentation.git
+WORKDIR /dtrace-injector/ebpf-java-instrumentation/dtrace-injector
+ENV JAVA_HOME=/usr/local/openjdk-8
+RUN make generate-headers
+RUN make build-jni && mvn package -DskipTests
+
 FROM keyval/odiglet-base:v1.1 as builder
 
 RUN --mount=type=secret,id=github_token \
@@ -22,10 +37,11 @@ RUN --mount=type=secret,id=github_token \
 WORKDIR /go/src/github.com/keyval-dev/odigos-enterprise
 COPY . .
 WORKDIR ./odiglet/
-ENV GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation
+ENV GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation,github.com/keyval-dev/ebpf-java-instrumentation
 RUN go mod download
 # Go does not call go generate on dependencies, so we need to do it manually
 RUN cd $(go list -m -f '{{.Dir}}' "go.opentelemetry.io/auto") && make generate
+RUN cd $(go list -m -f '{{.Dir}}' "github.com/keyval-dev/ebpf-java-instrumentation") && make generate
 RUN GOOS=linux go build -o odiglet ./cmd/enterprise
 
 WORKDIR /instrumentations
@@ -43,6 +59,11 @@ COPY --from=nodejs-builder /nodejs-instrumentation/build/workspace /instrumentat
 
 # .NET
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
+
+# Java eBPF
+COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injector/tracing_probes.so /instrumentations/java-ebpf/tracing_probes.so
+COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injector/target/dtrace-injector-1.0-SNAPSHOT-full.jar /instrumentations/java-ebpf/dtrace-injector.jar
+COPY --from=jattach-builder /usr/bin/jattach /instrumentations/java-ebpf/jattach
 
 FROM registry.fedoraproject.org/fedora-minimal:38
 COPY --from=builder /go/src/github.com/keyval-dev/odigos-enterprise/odiglet/odiglet /root/odiglet
