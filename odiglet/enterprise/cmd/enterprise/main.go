@@ -25,6 +25,8 @@ func main() {
 	}
 	log.Logger.V(0).Info("Starting odiglet enterprise")
 
+	assertProOdigletToken()
+
 	// Load env
 	if err := env.Load(); err != nil {
 		log.Logger.Error(err, "Failed to load env")

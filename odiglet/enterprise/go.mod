@@ -4,6 +4,7 @@ go 1.21.0
 
 require (
 	github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20231213072247-79e468a1b429
+	github.com/keyval-dev/odigos-enterprise/odigosauth v0.0.0
 	github.com/keyval-dev/odigos/api v1.0.10
 	github.com/keyval-dev/odigos/common v1.0.10
 	github.com/keyval-dev/odigos/odiglet v1.0.11-0.20231212144507-461cdde83ae2
@@ -34,6 +35,7 @@ require (
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/golang/glog v1.1.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
@@ -111,3 +113,5 @@ require (
 replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231209172011-b9ad4c5214ba
 
 replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.10
+
+replace github.com/keyval-dev/odigos-enterprise/odigosauth => ../odigosauth
