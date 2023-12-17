@@ -1,4 +1,4 @@
 
 .PHONY: generate-token
 generate-token:
-	go run .
+	PRIVATE_KEY=$$(aws ssm get-parameter --name onprem-jwts-private-key --with-decryption --query Parameter.Value --output text) go run .
