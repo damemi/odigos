@@ -6,14 +6,15 @@ require (
 	github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20231213072247-79e468a1b429
 	github.com/keyval-dev/odigos-enterprise/odigosauth v0.0.0
 	github.com/keyval-dev/odigos/api v1.0.10
-	github.com/keyval-dev/odigos/common v1.0.10
-	github.com/keyval-dev/odigos/odiglet v1.0.11-0.20231212144507-461cdde83ae2
+	github.com/keyval-dev/odigos/common v1.0.11-0.20231219094442-fc3f41777cc4
+	github.com/keyval-dev/odigos/odiglet v1.0.11-0.20231219094442-fc3f41777cc4
 	github.com/kubevirt/device-plugin-manager v1.19.5
 	go.opentelemetry.io/auto v0.8.0-alpha.0.20231208024151-d01c5fb4cd35
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.21.0
 	go.opentelemetry.io/otel/trace v1.21.0
 	k8s.io/apimachinery v0.28.4
 	k8s.io/client-go v0.28.4
+	k8s.io/kubelet v0.28.4
 	sigs.k8s.io/controller-runtime v0.16.3
 )
 
@@ -79,17 +80,17 @@ require (
 	golang.org/x/arch v0.6.0 // indirect
 	golang.org/x/exp v0.0.0-20230224173230-c95f2b4c22f2 // indirect
 	golang.org/x/net v0.18.0 // indirect
-	golang.org/x/oauth2 v0.11.0 // indirect
-	golang.org/x/sync v0.3.0 // indirect
+	golang.org/x/oauth2 v0.13.0 // indirect
+	golang.org/x/sync v0.4.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect
 	golang.org/x/term v0.14.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
-	google.golang.org/appengine v1.6.7 // indirect
+	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20231002182017-d307bd883b97 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231002182017-d307bd883b97 // indirect
-	google.golang.org/grpc v1.59.0 // indirect
+	google.golang.org/grpc v1.60.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -99,7 +100,6 @@ require (
 	k8s.io/component-base v0.28.4 // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230717233707-2695361300d9 // indirect
-	k8s.io/kubelet v0.28.4 // indirect
 	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
@@ -110,8 +110,10 @@ require (
 // it would be better to import "github.com/keyval-dev/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231209172011-b9ad4c5214ba
+replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231218170557-719ead1ef347
 
-replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.10
+replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.11-0.20231219094442-fc3f41777cc4
+
+// replace github.com/keyval-dev/odigos/odiglet => github.com/blumamir/odigos/odiglet v1.0.1-0.20231219054119-26a4cc5d7a55
 
 replace github.com/keyval-dev/odigos-enterprise/odigosauth => ../odigosauth

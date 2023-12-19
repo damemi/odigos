@@ -5,11 +5,13 @@ import (
 	"os"
 
 	"github.com/keyval-dev/odigos-enterprise/odiglet/pkg/ebpf"
+	enterpriseinstrumentlang "github.com/keyval-dev/odigos-enterprise/odiglet/pkg/instrumentation/instrumentlang"
 	enterprisekube "github.com/keyval-dev/odigos-enterprise/odiglet/pkg/kube"
 	"github.com/keyval-dev/odigos/common"
 	odigosebpf "github.com/keyval-dev/odigos/odiglet/pkg/ebpf"
 	"github.com/keyval-dev/odigos/odiglet/pkg/env"
 	"github.com/keyval-dev/odigos/odiglet/pkg/instrumentation"
+	communityinstrumentlang "github.com/keyval-dev/odigos/odiglet/pkg/instrumentation/instrumentlang"
 	"github.com/keyval-dev/odigos/odiglet/pkg/kube"
 	"github.com/keyval-dev/odigos/odiglet/pkg/log"
 	"github.com/kubevirt/device-plugin-manager/pkg/dpm"
@@ -99,9 +101,31 @@ func startDeviceManager(clientset *kubernetes.Clientset) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	lister, err := instrumentation.NewLister(ctx, clientset)
+	otelSdkEbpfEnterprise := common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier}
+	otelSdkNativeCommunity := common.OtelSdk{SdkType: common.NativeOtelSdkType, SdkTier: common.CommunityOtelSdkTier}
+
+	otelSdkLsf := map[common.ProgrammingLanguage]map[common.OtelSdk]instrumentation.LangSpecificFunc{
+		common.GoProgrammingLanguage: {
+			otelSdkEbpfEnterprise: enterpriseinstrumentlang.EnterpriseGo,
+		},
+		common.JavaProgrammingLanguage: {
+			otelSdkNativeCommunity: communityinstrumentlang.Java,
+			otelSdkEbpfEnterprise:  enterpriseinstrumentlang.EnterpriseJava,
+		},
+		common.PythonProgrammingLanguage: {
+			otelSdkNativeCommunity: communityinstrumentlang.Python,
+		},
+		common.JavascriptProgrammingLanguage: {
+			otelSdkNativeCommunity: communityinstrumentlang.NodeJS,
+		},
+		common.DotNetProgrammingLanguage: {
+			otelSdkNativeCommunity: communityinstrumentlang.DotNet,
+		},
+	}
+
+	lister, err := instrumentation.NewLister(ctx, clientset, otelSdkLsf)
 	if err != nil {
-		log.Logger.Error(err, "Failed to create new lister")
+		log.Logger.Error(err, "Failed to create new enterprise lister")
 		os.Exit(-1)
 	}
 

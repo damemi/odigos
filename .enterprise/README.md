@@ -20,4 +20,4 @@ replace github.com/keyval-dev/odigos/odiglet => github.com/<YOUR-USERNAME>/odigo
 
 3. Run `TAG=<CURRENT-ODIGOS-VERSION> make deploy` to build and upload the images to kind. The TAG should match the current version of odigos you are using. e.g. what you get back from `odigos version`. 
 
-When you run `odigos install` it applied a manifest file for the odiglet daemonset. the docker image built from code should use the same image tag so it will be pulled by k8s and used in your cluster.
+When you run `odigos install` it applies a manifest file for the odiglet daemonset. the docker image built from code should use the same image tag so it will be pulled by k8s and used in your cluster.
