@@ -5,11 +5,11 @@ go 1.21.0
 require (
 	github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20231213072247-79e468a1b429
 	github.com/keyval-dev/odigos-enterprise/odigosauth v0.0.0
-	github.com/keyval-dev/odigos/api v1.0.10
-	github.com/keyval-dev/odigos/common v1.0.11-0.20231219094442-fc3f41777cc4
-	github.com/keyval-dev/odigos/odiglet v1.0.11-0.20231219094442-fc3f41777cc4
+	github.com/keyval-dev/odigos/api v1.0.11
+	github.com/keyval-dev/odigos/common v1.0.11
+	github.com/keyval-dev/odigos/odiglet v1.0.11
 	github.com/kubevirt/device-plugin-manager v1.19.5
-	go.opentelemetry.io/auto v0.8.0-alpha.0.20231208024151-d01c5fb4cd35
+	go.opentelemetry.io/auto v0.9.0-alpha
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.21.0
 	go.opentelemetry.io/otel/trace v1.21.0
 	k8s.io/apimachinery v0.28.4
@@ -43,7 +43,7 @@ require (
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
-	github.com/google/uuid v1.4.0 // indirect
+	github.com/google/uuid v1.5.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/imdario/mergo v0.3.6 // indirect
@@ -112,7 +112,7 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231218170557-719ead1ef347
 
-replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.11-0.20231219094442-fc3f41777cc4
+replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.11
 
 // replace github.com/keyval-dev/odigos/odiglet => github.com/blumamir/odigos/odiglet v1.0.1-0.20231219054119-26a4cc5d7a55
 
