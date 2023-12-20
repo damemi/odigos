@@ -49,6 +49,14 @@ jobs:
           secrets: |
             "github_token=${{ secrets.RELEASE_BOT_TOKEN }}"
 
+      - name: Trigger CLI Release in Odigos Main Repo
+        run: |
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.RELEASE_BOT_TOKEN }}" \
+            https://api.github.com/repos/keyval-dev/odigos/dispatches \
+            -d '{"event_type": "release_cli", "client_payload": {"tag": "${{ steps.vars.outputs.tag }}"}}'
+
       - name: Notify Slack End
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}

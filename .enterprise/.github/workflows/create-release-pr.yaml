@@ -30,6 +30,13 @@ jobs:
             exit 1
           fi
 
+      - name: Notify Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+        run: |
+          curl -X POST -H 'Content-type: application/json' --data '{"description":"Detected new tag, creating PR in enterprise", "tag":"${{ env.TAG }}"}' ${{ env.SLACK_WEBHOOK_URL }}
+  
+
       - uses: actions/checkout@v4
 
       # we are using go commands later on, so need go installed
