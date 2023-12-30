@@ -5,11 +5,11 @@ go 1.21.0
 require (
 	github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20231213072247-79e468a1b429
 	github.com/keyval-dev/odigos-enterprise/odigosauth v0.0.0
-	github.com/keyval-dev/odigos/api v1.0.12
-	github.com/keyval-dev/odigos/common v1.0.12
-	github.com/keyval-dev/odigos/odiglet v1.0.12
+	github.com/keyval-dev/odigos/api v1.0.13
+	github.com/keyval-dev/odigos/common v1.0.13
+	github.com/keyval-dev/odigos/odiglet v1.0.13
 	github.com/kubevirt/device-plugin-manager v1.19.5
-	go.opentelemetry.io/auto v0.9.0-alpha
+	go.opentelemetry.io/auto v0.9.0-alpha.0.20231228155001-5b5ae31cd711
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.21.0
 	go.opentelemetry.io/otel/trace v1.21.0
 	k8s.io/apimachinery v0.29.0
@@ -49,6 +49,7 @@ require (
 	github.com/imdario/mergo v0.3.6 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/keyval-dev/odigos/procdiscovery v0.0.0 // indirect
 	github.com/keyval-dev/opentelemetry-zap-bridge v0.0.3 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
@@ -112,7 +113,9 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231218170557-719ead1ef347
 
-replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.12
+replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.13
+
+replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery v1.0.13
 
 // replace github.com/keyval-dev/odigos/odiglet => github.com/blumamir/odigos/odiglet v1.0.1-0.20231219054119-26a4cc5d7a55
 
