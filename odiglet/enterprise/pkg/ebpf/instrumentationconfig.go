@@ -1,9 +1,13 @@
 package ebpf
 
 import (
+	"context"
+
 	odigosv1 "github.com/keyval-dev/odigos/api/odigos/v1alpha1"
 	"github.com/keyval-dev/odigos/common"
+	commonutils "github.com/keyval-dev/odigos/common/utils"
 	"github.com/keyval-dev/odigos/odiglet/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func applyConfigToInst(spec *odigosv1.InstrumentationConfigSpec, inst OtelEbpfSdkEnterprise, sdkLanguage common.ProgrammingLanguage) error {
@@ -57,4 +61,76 @@ func unsetWorkloadInstrumentationConfig(inst OtelEbpfSdkEnterprise) error {
 		}
 	}
 	return nil
+}
+
+
+
+func convertToInstrumentationLibraries(configOptions map[string][]ConfigOption) []odigosv1.InstrumentationLibraryOptions {
+	instrumentationLibraries := make([]odigosv1.InstrumentationLibraryOptions, 0, len(configOptions))
+
+	for instrumentationLibraryName, options := range configOptions {
+
+		commonOptions := convertConfigOptions(options)
+		instrumentationLibrary := odigosv1.InstrumentationLibraryOptions{
+			LibraryName:    instrumentationLibraryName,
+			Options: commonOptions,
+		}
+		instrumentationLibraries = append(instrumentationLibraries, instrumentationLibrary)
+	}
+	return instrumentationLibraries
+}
+
+
+
+func convertConfigOptions(options []ConfigOption) []odigosv1.ConfigOption {
+	commonOptions := make([]odigosv1.ConfigOption, len(options))
+	for i, option := range options {
+		commonOptions[i] = odigosv1.ConfigOption{
+			OptionKey: option.OptionKey,
+			SpanKind:  common.ConvertSpanKindToString(option.SpanKind),
+		}
+	}
+	return commonOptions
+}
+
+func findOptionByContainer(options []odigosv1.OptionByContainer, containerName string) bool {
+    for _, option := range options {
+        if option.ContainerName == containerName {
+            return true
+        }
+    }
+    return false
+}
+
+
+
+func updateInstrumentedApplication(ctx context.Context, kubeclient client.Client, podWorkload *common.PodWorkload, containerName string, configOptions map[string][]ConfigOption) error {
+    // Check if the InstrumentedApplication already exists
+    instrumentedApplicationCrd := &odigosv1.InstrumentedApplication{}
+    instrumentedApplicationKey := client.ObjectKey{
+        Namespace: podWorkload.Namespace,
+        Name:      commonutils.GetRuntimeObjectName(podWorkload.Name, podWorkload.Kind),
+    }
+
+    err := kubeclient.Get(ctx, instrumentedApplicationKey, instrumentedApplicationCrd)
+    if err != nil {
+        return err
+    }
+
+    if existingOption := findOptionByContainer(instrumentedApplicationCrd.Spec.Options, containerName); !existingOption  {
+        return nil
+	} 
+
+	newOption := odigosv1.OptionByContainer{
+		ContainerName:           containerName,
+		InstrumentationLibraries: convertToInstrumentationLibraries(configOptions),
+	}
+	instrumentedApplicationCrd.Spec.Options = append(instrumentedApplicationCrd.Spec.Options, newOption)
+
+    if err := kubeclient.Update(ctx, instrumentedApplicationCrd); err != nil {
+        log.Logger.Error(err, "failed to update InstrumentedApplication")
+        return err
+    }
+
+    return nil
 }

@@ -54,7 +54,7 @@ func main() {
 		log.Logger.Error(err, "Failed to create controller-runtime manager")
 		os.Exit(-1)
 	}
-
+	
 	ebpfDirectors, err := initEbpf(mgr.GetClient())
 	if err != nil {
 		log.Logger.Error(err, "Failed to init eBPF director")
@@ -134,7 +134,6 @@ func startDeviceManager(clientset *kubernetes.Clientset) {
 }
 
 func initEbpf(kubeclient client.Client) (map[common.ProgrammingLanguage]ebpf.DirectorEnterprise, error) {
-
 	goInstrumentationFactory := ebpf.NewGoInstrumentationFactoryEnterprise(kubeclient)
 	goDirector := ebpf.NewEbpfDirectorEnterprise(common.GoProgrammingLanguage, goInstrumentationFactory)
 

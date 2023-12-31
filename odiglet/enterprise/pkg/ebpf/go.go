@@ -33,7 +33,8 @@ func NewGoInstrumentationFactoryEnterprise(kubeclient client.Client) Instrumenta
 	}
 }
 
-func (g *GoInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload) (*GoOtelEbpfSdkEnterprise, error) {
+func (g *GoInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string) (*GoOtelEbpfSdkEnterprise, error) {
+
 	defaultExporter, err := otlptracegrpc.New(
 		ctx,
 		otlptracegrpc.WithInsecure(),
@@ -61,6 +62,12 @@ func (g *GoInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx conte
 		inst: inst,
 	}
 
+	configOptions := goInstWrapper.GetConfigOptions()
+
+	if err := updateInstrumentedApplication(ctx, g.kubeclient, podWorkload, containerName, configOptions); err != nil {
+        return nil, err
+    }
+
 	// Fetch the InstrumentationConfig instrumentationConfig
 	instrumentationConfig := &odigosv1.InstrumentationConfig{}
 	instrumentationConfigKey := client.ObjectKey{
@@ -74,6 +81,8 @@ func (g *GoInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx conte
 		}
 		return nil, err
 	}
+
+
 
 	err = applyConfigToInst(&instrumentationConfig.Spec, goInstWrapper, common.GoProgrammingLanguage)
 	if err != nil {

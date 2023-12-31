@@ -5,9 +5,9 @@ go 1.21.0
 require (
 	github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20231213072247-79e468a1b429
 	github.com/keyval-dev/odigos-enterprise/odigosauth v0.0.0
-	github.com/keyval-dev/odigos/api v1.0.13
-	github.com/keyval-dev/odigos/common v1.0.13
-	github.com/keyval-dev/odigos/odiglet v1.0.13
+	github.com/keyval-dev/odigos/api v1.0.14-0.20231231093622-48e5d1696c07
+	github.com/keyval-dev/odigos/common v1.0.14-0.20231231093622-48e5d1696c07
+	github.com/keyval-dev/odigos/odiglet v1.0.14-0.20231231093622-48e5d1696c07
 	github.com/kubevirt/device-plugin-manager v1.19.5
 	go.opentelemetry.io/auto v0.9.0-alpha.0.20231228155001-5b5ae31cd711
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.21.0
@@ -113,7 +113,7 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231218170557-719ead1ef347
 
-replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.13
+replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.14-0.20231231093622-48e5d1696c07
 
 replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery v1.0.13
 
