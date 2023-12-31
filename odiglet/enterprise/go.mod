@@ -5,11 +5,11 @@ go 1.21.0
 require (
 	github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20231213072247-79e468a1b429
 	github.com/keyval-dev/odigos-enterprise/odigosauth v0.0.0
-	github.com/keyval-dev/odigos/api v1.0.14-0.20231231093622-48e5d1696c07
-	github.com/keyval-dev/odigos/common v1.0.14-0.20231231093622-48e5d1696c07
-	github.com/keyval-dev/odigos/odiglet v1.0.14-0.20231231093622-48e5d1696c07
+	github.com/keyval-dev/odigos/api v1.0.14
+	github.com/keyval-dev/odigos/common v1.0.14
+	github.com/keyval-dev/odigos/odiglet v1.0.14
 	github.com/kubevirt/device-plugin-manager v1.19.5
-	go.opentelemetry.io/auto v0.9.0-alpha.0.20231228155001-5b5ae31cd711
+	go.opentelemetry.io/auto v0.9.0-alpha.0.20231231131925-da00d2e95e56
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.21.0
 	go.opentelemetry.io/otel/trace v1.21.0
 	k8s.io/apimachinery v0.29.0
@@ -29,7 +29,7 @@ require (
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
 	github.com/fntlnz/mountinfo v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
-	github.com/go-logr/logr v1.3.0 // indirect
+	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
@@ -113,7 +113,7 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20231218170557-719ead1ef347
 
-replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.14-0.20231231093622-48e5d1696c07
+replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.14
 
 replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery v1.0.13
 
