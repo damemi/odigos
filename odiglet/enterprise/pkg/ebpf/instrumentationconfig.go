@@ -93,13 +93,13 @@ func convertConfigOptions(options []ConfigOption) []odigosv1.ConfigOption {
 	return commonOptions
 }
 
-func findOptionByContainer(options []odigosv1.OptionByContainer, containerName string) bool {
-    for _, option := range options {
+func findContainerIndex(options []odigosv1.OptionByContainer, containerName string) int {
+    for i, option := range options {
         if option.ContainerName == containerName {
-            return true
+            return i
         }
     }
-    return false
+    return -1
 }
 
 
@@ -117,15 +117,17 @@ func updateInstrumentedApplication(ctx context.Context, kubeclient client.Client
         return err
     }
 
-    if existingOption := findOptionByContainer(instrumentedApplicationCrd.Spec.Options, containerName); !existingOption  {
-        return nil
-	} 
+    if containerIndex := findContainerIndex(instrumentedApplicationCrd.Spec.Options, containerName); containerIndex >= 0  {
+		instrumentedApplicationCrd.Spec.Options[containerIndex].InstrumentationLibraries = convertToInstrumentationLibraries(configOptions)
 
-	newOption := odigosv1.OptionByContainer{
-		ContainerName:           containerName,
-		InstrumentationLibraries: convertToInstrumentationLibraries(configOptions),
+	} else {
+		newOption := odigosv1.OptionByContainer{
+			ContainerName:           containerName,
+			InstrumentationLibraries: convertToInstrumentationLibraries(configOptions),
+		}
+		instrumentedApplicationCrd.Spec.Options = append(instrumentedApplicationCrd.Spec.Options, newOption)
 	}
-	instrumentedApplicationCrd.Spec.Options = append(instrumentedApplicationCrd.Spec.Options, newOption)
+
 
     if err := kubeclient.Update(ctx, instrumentedApplicationCrd); err != nil {
         log.Logger.Error(err, "failed to update InstrumentedApplication")
