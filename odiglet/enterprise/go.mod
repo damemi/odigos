@@ -5,9 +5,9 @@ go 1.21.0
 require (
 	github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20231213072247-79e468a1b429
 	github.com/keyval-dev/odigos-enterprise/odigosauth v0.0.0
-	github.com/keyval-dev/odigos/api v1.0.19
-	github.com/keyval-dev/odigos/common v1.0.19
-	github.com/keyval-dev/odigos/odiglet v1.0.19
+	github.com/keyval-dev/odigos/api v1.0.20
+	github.com/keyval-dev/odigos/common v1.0.20
+	github.com/keyval-dev/odigos/odiglet v1.0.20
 	github.com/kubevirt/device-plugin-manager v1.19.5
 	go.opentelemetry.io/auto v0.10.0-alpha
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.21.0
@@ -81,7 +81,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
-	golang.org/x/arch v0.6.0 // indirect
+	golang.org/x/arch v0.7.0 // indirect
 	golang.org/x/exp v0.0.0-20230224173230-c95f2b4c22f2 // indirect
 	golang.org/x/net v0.18.0 // indirect
 	golang.org/x/oauth2 v0.13.0 // indirect
@@ -114,11 +114,11 @@ require (
 // it would be better to import "github.com/keyval-dev/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240111122252-5c0580bd36c7
+replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240113102153-178ed1e7c747
 
-replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.19
+replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.20
 
-replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery v1.0.19
+replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery v1.0.20
 
 // replace github.com/keyval-dev/odigos/odiglet => github.com/blumamir/odigos/odiglet v1.0.1-0.20231219054119-26a4cc5d7a55
 
