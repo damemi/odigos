@@ -44,11 +44,6 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx con
 
 	inst, err := auto.NewInstrumentation(
 		ctx,
-		auto.JavaAssets{
-			TracingProbesFile: "/instrumentations/java-ebpf/tracing_probes.so",
-			InjectorJar:       "/instrumentations/java-ebpf/dtrace-injector.jar",
-			JAttachExe:        "/instrumentations/java-ebpf/jattach",
-		},
 		auto.WithPID(pid),
 		auto.WithResourceAttributes(utils.GetResourceAttributes(podWorkload)...),
 		auto.WithServiceName(serviceName),

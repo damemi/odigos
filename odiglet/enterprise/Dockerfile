@@ -14,16 +14,16 @@ ARG DOTNET_OTEL_VERSION=v0.7.0
 ADD https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/$DOTNET_OTEL_VERSION/opentelemetry-dotnet-instrumentation-linux-musl.zip .
 RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetry-dotnet-instrumentation-linux-musl.zip
 
-# Jattach - TODO: use native Go code instead of this
-FROM ubuntu:23.04 AS jattach-builder
-RUN apt-get update && apt-get install -y jattach
-
 # Dtrace injector
 FROM openjdk:8 AS java-builder
 RUN apt update -y && apt install -y g++ systemtap-sdt-dev make maven
 WORKDIR /dtrace-injector
+# TODO: remove the branch once the PR is merged
 RUN --mount=type=secret,id=github_token \
     git clone https://$(cat /run/secrets/github_token)@github.com/keyval-dev/ebpf-java-instrumentation.git
+WORKDIR /dtrace-injector/ebpf-java-instrumentation/utils
+RUN mvn clean package -DskipTests
+RUN mkdir -p ../dtrace-injector/target && cp ./target/utils.jar ../dtrace-injector/target/
 WORKDIR /dtrace-injector/ebpf-java-instrumentation/dtrace-injector
 ENV JAVA_HOME=/usr/local/openjdk-8
 RUN make generate-headers
@@ -63,7 +63,7 @@ COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
 # Java eBPF
 COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injector/tracing_probes.so /instrumentations/java-ebpf/tracing_probes.so
 COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injector/target/dtrace-injector-1.0-SNAPSHOT-full.jar /instrumentations/java-ebpf/dtrace-injector.jar
-COPY --from=jattach-builder /usr/bin/jattach /instrumentations/java-ebpf/jattach
+COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injector/target/utils.jar /instrumentations/java-ebpf/utils.jar
 
 FROM registry.fedoraproject.org/fedora-minimal:38
 COPY --from=builder /go/src/github.com/keyval-dev/odigos-enterprise/odiglet/odiglet /root/odiglet

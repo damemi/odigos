@@ -203,8 +203,8 @@ github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHm
 github.com/jstemmer/go-junit-report v0.0.0-20190106144839-af01ea7f8024/go.mod h1:6v2b51hI/fHJwM22ozAgKL4VKDeJcHhJFhtBdhmNjmU=
 github.com/jstemmer/go-junit-report v0.9.1/go.mod h1:Brl9GWCQeLvo8nXZwPNNblvFj/XSXhF0NWZEnDohbsk=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
-github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20231213072247-79e468a1b429 h1:gKgHOCiccanE1HMStpLW67LIRyEJo3HgX8G7/jCSt2o=
-github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20231213072247-79e468a1b429/go.mod h1:L3igNUkZQfOGx3B+Pk2mndnxYypCGSb+ox9XfHeIjh0=
+github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240124074926-ec022eb16e11 h1:V9hppIl+ucPgK7mMm7HQEDLvuW5u45Q3VSQ9HM9U0OQ=
+github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240124074926-ec022eb16e11/go.mod h1:L3igNUkZQfOGx3B+Pk2mndnxYypCGSb+ox9XfHeIjh0=
 github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240118094615-fe2a608bf3fb h1:L+DVkFIGPG53gfsabqZiV69CAfBscERttLermaAjS3A=
 github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240118094615-fe2a608bf3fb/go.mod h1:/nR07SPuzh1UhQ2qolNQlIlDFSWNBvp7CZYJhVk8H0c=
 github.com/keyval-dev/odigos/api v1.0.21 h1:N/k2fieFKdM8g/OYztLwksugvjDQstJEZFKmNpNsN0g=

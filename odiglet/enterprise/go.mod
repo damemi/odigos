@@ -3,7 +3,7 @@ module github.com/keyval-dev/odigos-enterprise/odiglet
 go 1.21.0
 
 require (
-	github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20231213072247-79e468a1b429
+	github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240124074926-ec022eb16e11
 	github.com/keyval-dev/odigos-enterprise/odigosauth v0.0.0
 	github.com/keyval-dev/odigos/api v1.0.21
 	github.com/keyval-dev/odigos/common v1.0.21
