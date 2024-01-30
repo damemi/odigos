@@ -15,10 +15,8 @@ ADD https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/relea
 RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetry-dotnet-instrumentation-linux-musl.zip
 
 # Dtrace injector
-FROM openjdk:8 AS java-builder
-RUN apt update -y && apt install -y g++ systemtap-sdt-dev make maven
+FROM keyval/javabuilder-base:v1.0 AS java-builder
 WORKDIR /dtrace-injector
-# TODO: remove the branch once the PR is merged
 RUN --mount=type=secret,id=github_token \
     git clone https://$(cat /run/secrets/github_token)@github.com/keyval-dev/ebpf-java-instrumentation.git
 WORKDIR /dtrace-injector/ebpf-java-instrumentation/utils
@@ -29,20 +27,27 @@ ENV JAVA_HOME=/usr/local/openjdk-8
 RUN make generate-headers
 RUN make build-jni && mvn package -DskipTests
 
-FROM keyval/odiglet-base:v1.1 as builder
+FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.3 as builder
 
 RUN --mount=type=secret,id=github_token \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
 
 WORKDIR /go/src/github.com/keyval-dev/odigos-enterprise
-COPY . .
+# Copyy local modules required by the build
+COPY odigosauth/ odigosauth/
 WORKDIR ./odiglet/
 ENV GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation,github.com/keyval-dev/ebpf-java-instrumentation
+# Pre-copy/cache go.mod for pre-downloading dependencies and only redownloading
+COPY odiglet/go.mod odiglet/go.sum ./
 RUN go mod download
+# Copy rest of source code for odiglet
+COPY odiglet/ .
+
+ARG TARGETARCH
 # Go does not call go generate on dependencies, so we need to do it manually
 RUN cd $(go list -m -f '{{.Dir}}' "go.opentelemetry.io/auto") && make generate
 RUN cd $(go list -m -f '{{.Dir}}' "github.com/keyval-dev/ebpf-java-instrumentation") && make generate
-RUN GOOS=linux go build -o odiglet ./cmd/enterprise
+RUN GOOS=linux GOARCH=$TARGETARCH go build -o odiglet ./cmd/enterprise
 
 WORKDIR /instrumentations
 
