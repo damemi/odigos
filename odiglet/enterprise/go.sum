@@ -204,8 +204,8 @@ github.com/jstemmer/go-junit-report v0.9.1/go.mod h1:Brl9GWCQeLvo8nXZwPNNblvFj/X
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
 github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240124074926-ec022eb16e11 h1:V9hppIl+ucPgK7mMm7HQEDLvuW5u45Q3VSQ9HM9U0OQ=
 github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240124074926-ec022eb16e11/go.mod h1:L3igNUkZQfOGx3B+Pk2mndnxYypCGSb+ox9XfHeIjh0=
-github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240214091632-9c3366d3d57e h1:k+8X3kDgSFXNSq8qfxrEuwvXum6sJFQ1AVtD6bo3viQ=
-github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240214091632-9c3366d3d57e/go.mod h1:JaMwOVvy7JUywc4tFVFvnPJTnAbRA7fU57jqldpKqy4=
+github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240214140853-6112bafd9657 h1:V/ZccDAlHJohKa0+xS2A1iVE8XYILD5LfhbyMmkZalw=
+github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240214140853-6112bafd9657/go.mod h1:JaMwOVvy7JUywc4tFVFvnPJTnAbRA7fU57jqldpKqy4=
 github.com/keyval-dev/odigos/api v1.0.32 h1:I5tAlXvGj6+OOs48lFNCEtbJP2y8CHljxZFQH+t0pkg=
 github.com/keyval-dev/odigos/api v1.0.32/go.mod h1:CEeUXlu8qYRDiIhvARoA2sqDsuUTxYM8dGQk3Fo1lo0=
 github.com/keyval-dev/odigos/common v1.0.32 h1:COzlyAVfaKC4Z0120utpREXVkM4XxdpWGtIpnz61WnY=
