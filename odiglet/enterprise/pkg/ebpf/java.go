@@ -31,7 +31,6 @@ func NewJavaInstrumentationFactoryEnterprise(kubeclient client.Client) Instrumen
 }
 
 func (g *JavaInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string) (*JavaOtelEbpfSdkEnterprise, error) {
-
 	defaultExporter, err := otlptracegrpc.New(
 		ctx,
 		otlptracegrpc.WithInsecure(),

@@ -52,6 +52,7 @@ require (
 	github.com/imdario/mergo v0.3.6 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240219150048-69a4bc7c1087 // indirect
 	github.com/keyval-dev/odigos/procdiscovery v0.0.0 // indirect
 	github.com/keyval-dev/opentelemetry-zap-bridge v0.0.3 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect

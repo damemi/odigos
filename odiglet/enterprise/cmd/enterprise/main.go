@@ -54,7 +54,7 @@ func main() {
 		log.Logger.Error(err, "Failed to create controller-runtime manager")
 		os.Exit(-1)
 	}
-	
+
 	ebpfDirectors, err := initEbpf(mgr.GetClient())
 	if err != nil {
 		log.Logger.Error(err, "Failed to init eBPF director")
@@ -114,6 +114,7 @@ func startDeviceManager(clientset *kubernetes.Clientset) {
 		},
 		common.PythonProgrammingLanguage: {
 			otelSdkNativeCommunity: communityinstrumentlang.Python,
+			otelSdkEbpfEnterprise:  enterpriseinstrumentlang.EnterprisePython,
 		},
 		common.JavascriptProgrammingLanguage: {
 			otelSdkNativeCommunity: communityinstrumentlang.NodeJS,
@@ -140,8 +141,12 @@ func initEbpf(kubeclient client.Client) (map[common.ProgrammingLanguage]ebpf.Dir
 	javaInstrumentationFactory := ebpf.NewJavaInstrumentationFactoryEnterprise(kubeclient)
 	javaDirector := ebpf.NewEbpfDirectorEnterprise(common.JavaProgrammingLanguage, javaInstrumentationFactory)
 
+	pythonInstrumentationFactory := ebpf.NewPythonInstrumentationFactoryEnterprise(kubeclient)
+	pythonDirector := ebpf.NewEbpfDirectorEnterprise(common.PythonProgrammingLanguage, pythonInstrumentationFactory)
+
 	return map[common.ProgrammingLanguage]ebpf.DirectorEnterprise{
-		common.GoProgrammingLanguage:   goDirector,
-		common.JavaProgrammingLanguage: javaDirector,
+		common.GoProgrammingLanguage:     goDirector,
+		common.JavaProgrammingLanguage:   javaDirector,
+		common.PythonProgrammingLanguage: pythonDirector,
 	}, nil
 }

@@ -3,6 +3,12 @@ WORKDIR /python-instrumentation
 ADD odiglet/agents/python/requirements.txt .
 RUN mkdir workspace && pip install --target workspace -r requirements.txt
 
+# Enterprise version of ebpf-python-instrumentation
+RUN apt update -y && apt install -y systemtap-sdt-dev
+RUN --mount=type=secret,id=github_token \
+    git clone https://$(cat /run/secrets/github_token)@github.com/keyval-dev/ebpf-python-instrumentation.git
+RUN mkdir enterprise-workspace && pip install --target enterprise-workspace ./ebpf-python-instrumentation/dtrace-injector
+
 FROM node:16 AS nodejs-builder
 WORKDIR /nodejs-instrumentation
 COPY odiglet/agents/nodejs .
@@ -47,6 +53,7 @@ ARG TARGETARCH
 # Go does not call go generate on dependencies, so we need to do it manually
 RUN cd $(go list -m -f '{{.Dir}}' "go.opentelemetry.io/auto") && make generate
 RUN cd $(go list -m -f '{{.Dir}}' "github.com/keyval-dev/ebpf-java-instrumentation") && make generate
+RUN cd $(go list -m -f '{{.Dir}}' "github.com/keyval-dev/ebpf-generic-instrumentation") && make generate
 RUN GOOS=linux GOARCH=$TARGETARCH go build -o odiglet ./cmd/enterprise
 
 WORKDIR /instrumentations
@@ -58,6 +65,9 @@ RUN chmod 644 /instrumentations/java/javaagent.jar
 
 # Python
 COPY --from=python-builder /python-instrumentation/workspace /instrumentations/python
+
+# Python eBPF
+COPY --from=python-builder /python-instrumentation/enterprise-workspace /instrumentations/python-ebpf
 
 # NodeJS
 COPY --from=nodejs-builder /nodejs-instrumentation/build/workspace /instrumentations/nodejs
