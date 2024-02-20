@@ -202,6 +202,8 @@ github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHm
 github.com/jstemmer/go-junit-report v0.0.0-20190106144839-af01ea7f8024/go.mod h1:6v2b51hI/fHJwM22ozAgKL4VKDeJcHhJFhtBdhmNjmU=
 github.com/jstemmer/go-junit-report v0.9.1/go.mod h1:Brl9GWCQeLvo8nXZwPNNblvFj/XSXhF0NWZEnDohbsk=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
+github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240220063307-c66645f7ab9b h1:EPapLQDwOdA2KstEA50Ex+tXoIeRpfmmkIRqGjwP9ys=
+github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240220063307-c66645f7ab9b/go.mod h1:L3igNUkZQfOGx3B+Pk2mndnxYypCGSb+ox9XfHeIjh0=
 github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240212153618-dce774ddaa82 h1:ADNwRhzasNQhbGI1mawP3BU9KmYwAPS5SQapp9uQAms=
 github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240212153618-dce774ddaa82/go.mod h1:B/LqMqHORjzsEQC9BcSXTHT/+7vnMi9EJUi2wtnTA2A=
 github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240218080136-3c892d002e30 h1:7gG9pZbWEVcrRlW/18ODKHj+Z86DnbRhM/Y33k6VzVw=
