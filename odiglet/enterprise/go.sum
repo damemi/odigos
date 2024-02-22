@@ -206,6 +206,8 @@ github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240219150048-69a4bc7
 github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240219150048-69a4bc7c1087/go.mod h1:B/LqMqHORjzsEQC9BcSXTHT/+7vnMi9EJUi2wtnTA2A=
 github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240220063307-c66645f7ab9b h1:EPapLQDwOdA2KstEA50Ex+tXoIeRpfmmkIRqGjwP9ys=
 github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240220063307-c66645f7ab9b/go.mod h1:L3igNUkZQfOGx3B+Pk2mndnxYypCGSb+ox9XfHeIjh0=
+github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240222062245-b7ba3bf720b7 h1:Jp05FJPtgC1nMiM6v+yttON7C3vx/rL/XJaoWKsBSbM=
+github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240222062245-b7ba3bf720b7/go.mod h1:8Qo8XRH0rhXUtwvTmF6tJ5Mv/db9657M4RZVIO346Dc=
 github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240219121455-ae030883b07f h1:chm16D+KOf0l8SqowqI7F+4YwS6PnX/8wbL92nDQHV4=
 github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240219121455-ae030883b07f/go.mod h1:DD7IOFxLT3jr/TTrZO3dc0ReEorPdFK9ehjR7qi10PQ=
 github.com/keyval-dev/odigos/api v1.0.36 h1:HMEAMeMk9IwAiVFhjmdFnCp4qUaT5MGJ3TmkC+KCxNA=
@@ -344,6 +346,8 @@ go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.23.1 h1:o8iWeVFa1BcLtVEV0Lz
 go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.23.1/go.mod h1:SEVfdK4IoBnbT2FXNM/k8yC08MrfbhWk3U4ljM8B3HE=
 go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.23.0 h1:VZrBiTXzP3FErizsdF1JQj0qf0yA8Ktt6LAcjUhZqbc=
 go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.23.0/go.mod h1:xkkwo777b9MEfsyD1yUZa4g+7MCqqWAP3r2tTSZePRc=
+go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.23.1 h1:p3A5+f5l9e/kuEBwLOrnpkIDHQFlHmbiVxMURWRK6gQ=
+go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.23.1/go.mod h1:OClrnXUjBqQbInvjJFjYSnMxBSCXBF8r3b34WqjiIrQ=
 go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.23.1 h1:cfuy3bXmLJS7M1RZmAL6SuhGtKUp2KEsrm00OlAXkq4=
 go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.23.1/go.mod h1:22jr92C6KwlwItJmQzfixzQM3oyyuYLCfHiMY+rpsPU=
 go.opentelemetry.io/otel/exporters/prometheus v0.45.1 h1:R/bW3afad6q6VGU+MFYpnEdo0stEARMCdhWu6+JI6aI=
@@ -371,6 +375,8 @@ go.uber.org/multierr v1.11.0/go.mod h1:20+QtiLqy0Nd6FdQB9TLXag12DsQkrbs3htMFfDN8
 go.uber.org/zap v1.10.0/go.mod h1:vwi/ZaCAaUcBkycHslxD9B2zi4UTXhF60s6SWpuDF0Q=
 go.uber.org/zap v1.26.0 h1:sI7k6L95XOKS281NhVKOFCUNIvv9e0w4BF8N3u+tCRo=
 go.uber.org/zap v1.26.0/go.mod h1:dtElttAiwGvoJ/vj4IwHBS/gXsEu/pZ50mUIRWuG0so=
+go.uber.org/zap v1.27.0 h1:aJMhYGrd5QSmlpLMr2MftRKl7t8J8PTZPA732ud/XR8=
+go.uber.org/zap v1.27.0/go.mod h1:GB2qFLM7cTU87MWRP2mPIjqfIDnGu+VIO4V/SdhGo2E=
 golang.org/x/arch v0.7.0 h1:pskyeJh/3AmoQ8CPE95vxHLqp1G1GfGNXTmcl9NEKTc=
 golang.org/x/arch v0.7.0/go.mod h1:FEVrYAQjsQXMVJ1nsMoVVXPZg6p2JE2mx8psSWTDQys=
 golang.org/x/crypto v0.0.0-20180904163835-0709b304e793/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=

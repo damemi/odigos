@@ -11,7 +11,7 @@ require (
 	github.com/keyval-dev/odigos/odiglet v1.0.36
 	github.com/kubevirt/device-plugin-manager v1.19.5
 	go.opentelemetry.io/auto v0.10.1-alpha.0.20240208095535-e0f933be3877
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.23.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.23.1
 	go.opentelemetry.io/otel/trace v1.23.1
 	k8s.io/apimachinery v0.29.2
 	k8s.io/client-go v0.29.2
@@ -53,6 +53,7 @@ require (
 	github.com/imdario/mergo v0.3.6 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240222062245-b7ba3bf720b7 // indirect
 	github.com/keyval-dev/odigos/procdiscovery v0.0.0 // indirect
 	github.com/keyval-dev/opentelemetry-zap-bridge v0.0.3 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
@@ -81,7 +82,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.23.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.1.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.26.0 // indirect
+	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/arch v0.7.0 // indirect
 	golang.org/x/exp v0.0.0-20230224173230-c95f2b4c22f2 // indirect
 	golang.org/x/net v0.21.0 // indirect

@@ -30,7 +30,7 @@ func NewPythonInstrumentationFactoryEnterprise(kubeclient client.Client) Instrum
 	}
 }
 
-func (p PythonInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string) (*PythonOtelEbpfSdkEnterprise, error) {
+func (p *PythonInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string) (*PythonOtelEbpfSdkEnterprise, error) {
 	c := otlptracegrpc.NewClient(otlptracegrpc.WithInsecure(),
 		otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%d", env.Current.NodeIP, consts.OTLPPort)))
 	exporter, err := opentelemetry.New(ctx, c)
@@ -60,18 +60,18 @@ func (p PythonInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx co
 	return pythonInstWrapper, nil
 }
 
-func (p PythonOtelEbpfSdkEnterprise) Run(ctx context.Context) error {
+func (p *PythonOtelEbpfSdkEnterprise) Run(ctx context.Context) error {
 	return p.inst.Run(ctx)
 }
 
-func (p PythonOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
+func (p *PythonOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 	return p.inst.Close()
 }
 
-func (p PythonOtelEbpfSdkEnterprise) ConfigBool(instrumentedModuleName string, optionKey string, spanKind apitrace.SpanKind, optionValue bool) error {
+func (p *PythonOtelEbpfSdkEnterprise) ConfigBool(instrumentedModuleName string, optionKey string, spanKind apitrace.SpanKind, optionValue bool) error {
 	return nil
 }
 
-func (p PythonOtelEbpfSdkEnterprise) GetConfigOptions() map[string][]ConfigOption {
+func (p *PythonOtelEbpfSdkEnterprise) GetConfigOptions() map[string][]ConfigOption {
 	return map[string][]ConfigOption{}
 }

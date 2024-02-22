@@ -11,8 +11,11 @@ RUN mkdir enterprise-workspace && pip install --target enterprise-workspace ./eb
 
 FROM node:16 AS nodejs-builder
 WORKDIR /nodejs-instrumentation
-COPY odiglet/agents/nodejs .
-RUN npm install
+RUN apt update -y && apt install -y systemtap-sdt-dev
+RUN --mount=type=secret,id=github_token \
+    git clone https://$(cat /run/secrets/github_token)@github.com/keyval-dev/ebpf-nodejs-instrumentation.git \
+    && cd ebpf-nodejs-instrumentation/dtrace-injector \
+    && make build
 
 FROM busybox AS dotnet-builder
 WORKDIR /dotnet-instrumentation
@@ -54,6 +57,7 @@ ARG TARGETARCH
 RUN cd $(go list -m -f '{{.Dir}}' "go.opentelemetry.io/auto") && make generate
 RUN cd $(go list -m -f '{{.Dir}}' "github.com/keyval-dev/ebpf-java-instrumentation") && make generate
 RUN cd $(go list -m -f '{{.Dir}}' "github.com/keyval-dev/ebpf-generic-instrumentation") && make generate
+RUN cd $(go list -m -f '{{.Dir}}' "github.com/keyval-dev/ebpf-nodejs-instrumentation") && make generate
 RUN GOOS=linux GOARCH=$TARGETARCH go build -gcflags "all=-N -l" -o odiglet ./cmd/enterprise
 
 # Install delve
@@ -72,8 +76,11 @@ COPY --from=python-builder /python-instrumentation/workspace /instrumentations/p
 # Python eBPF
 COPY --from=python-builder /python-instrumentation/enterprise-workspace /instrumentations/python-ebpf
 
-# NodeJS
-COPY --from=nodejs-builder /nodejs-instrumentation/build/workspace /instrumentations/nodejs
+# NodeJS eBPF
+COPY --from=nodejs-builder /nodejs-instrumentation/ebpf-nodejs-instrumentation/dtrace-injector/dist /instrumentations/nodejs-ebpf/dist
+COPY --from=nodejs-builder /nodejs-instrumentation/ebpf-nodejs-instrumentation/dtrace-injector/lib /instrumentations/nodejs-ebpf/lib
+COPY --from=nodejs-builder /nodejs-instrumentation/ebpf-nodejs-instrumentation/dtrace-injector/build/Release/ /instrumentations/nodejs-ebpf/build/Release/
+COPY --from=nodejs-builder /nodejs-instrumentation/ebpf-nodejs-instrumentation/dtrace-injector/node_modules /instrumentations/nodejs-ebpf/node_modules
 
 # .NET
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
