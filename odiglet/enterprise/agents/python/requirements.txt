@@ -35,9 +35,6 @@ opentelemetry-api==1.22.0
     #   opentelemetry-instrumentation-aiopg
     #   opentelemetry-instrumentation-asgi
     #   opentelemetry-instrumentation-asyncpg
-    #   opentelemetry-instrumentation-boto
-    #   opentelemetry-instrumentation-boto3sqs
-    #   opentelemetry-instrumentation-botocore
     #   opentelemetry-instrumentation-celery
     #   opentelemetry-instrumentation-confluent-kafka
     #   opentelemetry-instrumentation-dbapi
@@ -91,9 +88,6 @@ opentelemetry-instrumentation==0.43b0
     #   opentelemetry-instrumentation-aiopg
     #   opentelemetry-instrumentation-asgi
     #   opentelemetry-instrumentation-asyncpg
-    #   opentelemetry-instrumentation-boto
-    #   opentelemetry-instrumentation-boto3sqs
-    #   opentelemetry-instrumentation-botocore
     #   opentelemetry-instrumentation-celery
     #   opentelemetry-instrumentation-dbapi
     #   opentelemetry-instrumentation-django
@@ -137,12 +131,6 @@ opentelemetry-instrumentation-asgi==0.43b0
     #   opentelemetry-instrumentation-fastapi
     #   opentelemetry-instrumentation-starlette
 opentelemetry-instrumentation-asyncpg==0.43b0
-    # via -r requirements.in
-opentelemetry-instrumentation-boto==0.43b0
-    # via -r requirements.in
-opentelemetry-instrumentation-boto3sqs==0.43b0
-    # via -r requirements.in
-opentelemetry-instrumentation-botocore==0.43b0
     # via -r requirements.in
 opentelemetry-instrumentation-celery==0.43b0
     # via -r requirements.in
@@ -225,9 +213,7 @@ opentelemetry-instrumentation-wsgi==0.43b0
     #   opentelemetry-instrumentation-flask
     #   opentelemetry-instrumentation-pyramid
 opentelemetry-propagator-aws-xray==1.0.1
-    # via
-    #   -r requirements.in
-    #   opentelemetry-instrumentation-botocore
+    # via -r requirements.in
 opentelemetry-propagator-b3==1.22.0
     # via -r requirements.in
 opentelemetry-propagator-jaeger==1.22.0
@@ -250,9 +236,6 @@ opentelemetry-semantic-conventions==0.43b0
     #   opentelemetry-instrumentation-aiohttp-client
     #   opentelemetry-instrumentation-asgi
     #   opentelemetry-instrumentation-asyncpg
-    #   opentelemetry-instrumentation-boto
-    #   opentelemetry-instrumentation-boto3sqs
-    #   opentelemetry-instrumentation-botocore
     #   opentelemetry-instrumentation-celery
     #   opentelemetry-instrumentation-dbapi
     #   opentelemetry-instrumentation-django
@@ -319,7 +302,6 @@ wrapt==1.15.0
     #   opentelemetry-instrumentation-aio-pika
     #   opentelemetry-instrumentation-aiohttp-client
     #   opentelemetry-instrumentation-aiopg
-    #   opentelemetry-instrumentation-boto3sqs
     #   opentelemetry-instrumentation-confluent-kafka
     #   opentelemetry-instrumentation-dbapi
     #   opentelemetry-instrumentation-elasticsearch

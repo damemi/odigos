@@ -17,9 +17,10 @@ opentelemetry-instrumentation-aiohttp-client==0.43b0
 opentelemetry-instrumentation-aiopg==0.43b0
 opentelemetry-instrumentation-asgi==0.43b0
 opentelemetry-instrumentation-asyncpg==0.43b0
-opentelemetry-instrumentation-boto==0.43b0
-opentelemetry-instrumentation-boto3sqs==0.43b0
-opentelemetry-instrumentation-botocore==0.43b0
+# Disabled due to: https://github.com/open-telemetry/opentelemetry-operator/issues/1774
+# opentelemetry-instrumentation-boto==0.43b0
+# opentelemetry-instrumentation-boto3sqs==0.43b0
+# opentelemetry-instrumentation-botocore==0.43b0
 opentelemetry-instrumentation-celery==0.43b0
 opentelemetry-instrumentation-confluent-kafka==0.43b0
 opentelemetry-instrumentation-dbapi==0.43b0
