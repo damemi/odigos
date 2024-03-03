@@ -30,7 +30,7 @@ func NewJavaInstrumentationFactoryEnterprise(kubeclient client.Client) Instrumen
 	}
 }
 
-func (g *JavaInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string) (*JavaOtelEbpfSdkEnterprise, error) {
+func (g *JavaInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string, podName string) (*JavaOtelEbpfSdkEnterprise, error) {
 	defaultExporter, err := otlptracegrpc.New(
 		ctx,
 		otlptracegrpc.WithInsecure(),
@@ -44,7 +44,7 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx con
 	inst, err := auto.NewInstrumentation(
 		ctx,
 		auto.WithPID(pid),
-		auto.WithResourceAttributes(utils.GetResourceAttributes(podWorkload)...),
+		auto.WithResourceAttributes(utils.GetResourceAttributes(podWorkload, podName)...),
 		auto.WithServiceName(serviceName),
 		auto.WithTraceExporter(defaultExporter),
 	)

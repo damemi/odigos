@@ -25,5 +25,5 @@ type OtelEbpfSdkEnterprise interface {
 }
 
 type InstrumentationFactoryEnterprise[T OtelEbpfSdkEnterprise] interface {
-	CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string) (T, error)
+	CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string, podName string) (T, error)
 }

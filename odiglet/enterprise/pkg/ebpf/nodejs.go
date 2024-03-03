@@ -3,6 +3,7 @@ package ebpf
 import (
 	"context"
 	"fmt"
+
 	auto "github.com/keyval-dev/ebpf-nodejs-instrumentation"
 	"github.com/keyval-dev/ebpf-nodejs-instrumentation/pkg/opentelemetry"
 	"github.com/keyval-dev/odigos/common"
@@ -30,7 +31,7 @@ func NewNodeJSInstrumentationFactoryEnterprise(kubeclient client.Client) Instrum
 	}
 }
 
-func (n *NodeJSInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string) (*NodeJSOtelEbpfSdkEnterprise, error) {
+func (n *NodeJSInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string, podName string) (*NodeJSOtelEbpfSdkEnterprise, error) {
 	c := otlptracegrpc.NewClient(otlptracegrpc.WithInsecure(),
 		otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%d", env.Current.NodeIP, consts.OTLPPort)))
 	exporter, err := opentelemetry.New(ctx, c)
@@ -42,7 +43,7 @@ func (n *NodeJSInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx c
 	inst, err := auto.NewInstrumentation(
 		ctx,
 		auto.WithPID(pid),
-		auto.WithResourceAttributes(utils.GetResourceAttributes(podWorkload)...),
+		auto.WithResourceAttributes(utils.GetResourceAttributes(podWorkload, podName)...),
 		auto.WithServiceName(serviceName),
 		auto.WithTraceExporter(exporter),
 	)

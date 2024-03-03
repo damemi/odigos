@@ -9,7 +9,7 @@ require (
 	github.com/keyval-dev/odigos-enterprise/odigosauth v0.0.0
 	github.com/keyval-dev/odigos/api v1.0.41
 	github.com/keyval-dev/odigos/common v1.0.41
-	github.com/keyval-dev/odigos/odiglet v1.0.41
+	github.com/keyval-dev/odigos/odiglet v1.0.42-0.20240303132921-64be5a986e1d
 	github.com/kubevirt/device-plugin-manager v1.19.5
 	go.opentelemetry.io/auto v0.10.1-alpha.0.20240229132106-93aa6b83e8bc
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.24.0
@@ -122,6 +122,6 @@ replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/comm
 
 replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery v1.0.41
 
-// replace github.com/keyval-dev/odigos/odiglet => github.com/blumamir/odigos/odiglet v1.0.1-0.20231219054119-26a4cc5d7a55
+// replace github.com/keyval-dev/odigos/odiglet => github.com/blumamir/odigos/odiglet v1.0.1-0.20240303113259-5cb82d04bda8
 
 replace github.com/keyval-dev/odigos-enterprise/odigosauth => ../odigosauth

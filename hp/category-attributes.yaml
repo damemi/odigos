@@ -1,0 +1,22 @@
+apiVersion: odigos.io/v1alpha1
+kind: Processor
+metadata:
+  name: category-attributes
+  namespace: odigos-system
+spec:
+  type: transform
+  processorConfig:
+    trace_statements:
+      - context: span
+        statements:
+        # js
+        - set(attributes["category"], "http") where instrumentation_scope.name == "@opentelemetry/instrumentation-http"
+        - set(attributes["subcategory"], "example") where instrumentation_scope.name == "@opentelemetry/instrumentation-http"
+        # go
+        - set(attributes["category"], "http") where instrumentation_scope.name == "go.opentelemetry.io/auto/net/http"
+        - set(attributes["subcategory"], "example") where instrumentation_scope.name == "go.opentelemetry.io/auto/net/http"
+  signals:
+    - TRACES
+  collectorRoles:
+    - CLUSTER_GATEWAY
+    
