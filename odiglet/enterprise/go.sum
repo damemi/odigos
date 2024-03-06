@@ -210,6 +210,8 @@ github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240220063307-c66645f7ab
 github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240220063307-c66645f7ab9b/go.mod h1:L3igNUkZQfOGx3B+Pk2mndnxYypCGSb+ox9XfHeIjh0=
 github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240301113717-7c2944e8d871 h1:CoL7foIw7I94WX7MOybHgYCE7WpMDZb4hbOcp2oSclw=
 github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240301113717-7c2944e8d871/go.mod h1:8Qo8XRH0rhXUtwvTmF6tJ5Mv/db9657M4RZVIO346Dc=
+github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240306085006-871b9999f46f h1:WOkzSpAq+idtB0TDoB9WvSmzV7DHhiJAxorCjYt08oc=
+github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240306085006-871b9999f46f/go.mod h1:8Qo8XRH0rhXUtwvTmF6tJ5Mv/db9657M4RZVIO346Dc=
 github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240304145645-4921ae07f7f4 h1:QQIWP/jWUofGU9cDLTqPdX7K0Qc28C/rSLMPke592fY=
 github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240304145645-4921ae07f7f4/go.mod h1:WxGPXdVCnnfjVZfN8c29zmowlpfz+jKJNFvGk7G1dVQ=
 github.com/keyval-dev/odigos/api v1.0.43 h1:usUrwGBw4+BAHXNw8pZhOACwccYu5uFwNcmDfM7m99U=

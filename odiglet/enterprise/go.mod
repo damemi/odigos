@@ -5,7 +5,7 @@ go 1.21.0
 require (
 	github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240306071354-fd813a143dc4
 	github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240220063307-c66645f7ab9b
-	github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240301113717-7c2944e8d871
+	github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240306085006-871b9999f46f
 	github.com/keyval-dev/odigos-enterprise/odigosauth v0.0.0
 	github.com/keyval-dev/odigos/api v1.0.43
 	github.com/keyval-dev/odigos/common v1.0.43
