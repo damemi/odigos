@@ -49,9 +49,13 @@ opentelemetry-instrumentation-sklearn==0.43b0
 opentelemetry-instrumentation-sqlalchemy==0.43b0
 opentelemetry-instrumentation-sqlite3==0.43b0
 opentelemetry-instrumentation-starlette==0.43b0
-opentelemetry-instrumentation-system-metrics==0.43b0
+# Disabled due to: https://github.com/open-telemetry/opentelemetry-python-contrib/issues/1968
+# opentelemetry-instrumentation-system-metrics==0.43b0
 opentelemetry-instrumentation-tornado==0.43b0
 opentelemetry-instrumentation-tortoiseorm==0.43b0
 opentelemetry-instrumentation-urllib==0.43b0
 opentelemetry-instrumentation-urllib3==0.43b0
 opentelemetry-instrumentation-wsgi==0.43b0
+
+# Due to: https://github.com/open-telemetry/opentelemetry-operator/issues/1774
+urllib3<2
