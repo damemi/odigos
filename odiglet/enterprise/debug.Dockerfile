@@ -48,7 +48,8 @@ WORKDIR ./odiglet/
 ENV GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation,github.com/keyval-dev/ebpf-java-instrumentation
 # Pre-copy/cache go.mod for pre-downloading dependencies and only redownloading
 COPY odiglet/go.mod odiglet/go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg \
+    go mod download
 # Copy rest of source code for odiglet
 COPY odiglet/ .
 

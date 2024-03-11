@@ -45,21 +45,13 @@ WORKDIR /go/src/github.com/keyval-dev/odigos-enterprise
 # Copyy local modules required by the build
 COPY odigosauth/ odigosauth/
 WORKDIR ./odiglet/
-ENV GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation,github.com/keyval-dev/ebpf-java-instrumentation
-# Pre-copy/cache go.mod for pre-downloading dependencies and only redownloading
-COPY odiglet/go.mod odiglet/go.sum ./
-RUN go mod download
 # Copy rest of source code for odiglet
 COPY odiglet/ .
 
 ARG TARGETARCH
-# Go does not call go generate on dependencies, so we need to do it manually
-RUN cd $(go list -m -f '{{.Dir}}' "go.opentelemetry.io/auto") && make generate
-RUN cd $(go list -m -f '{{.Dir}}' "github.com/keyval-dev/ebpf-java-instrumentation") && make generate
-RUN cd $(go list -m -f '{{.Dir}}' "github.com/keyval-dev/ebpf-generic-instrumentation") && make generate
-RUN cd $(go list -m -f '{{.Dir}}' "github.com/keyval-dev/ebpf-nodejs-instrumentation") && make generate
-
-RUN GOOS=linux GOARCH=$TARGETARCH go build -o odiglet ./cmd/enterprise
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg \
+    GOOS=linux GOARCH=$TARGETARCH make build-odiglet
 
 WORKDIR /instrumentations
 
