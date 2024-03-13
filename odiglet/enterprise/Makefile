@@ -3,7 +3,8 @@
 LIBRARIES := go.opentelemetry.io/auto \
 			github.com/keyval-dev/ebpf-java-instrumentation \
 			github.com/keyval-dev/ebpf-generic-instrumentation \
-			github.com/keyval-dev/ebpf-nodejs-instrumentation
+			github.com/keyval-dev/ebpf-nodejs-instrumentation \
+			github.com/keyval-dev/mysql-instrumentation
 
 # Convert spaces to commas to create a comma-separated list of libraries
 space := $(subst ,, )

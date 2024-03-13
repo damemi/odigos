@@ -210,6 +210,8 @@ github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240306085006-871b9999
 github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240306085006-871b9999f46f/go.mod h1:8Qo8XRH0rhXUtwvTmF6tJ5Mv/db9657M4RZVIO346Dc=
 github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240311072536-6e2b22876187 h1:TY+pq/WV7Mw/0xlMEzcnKjS2TILwnLubaw2aZZhPPV0=
 github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240311072536-6e2b22876187/go.mod h1:8thYfodyCUNakiZQ27/eSsBEfM+TFLuAykuS5BGFtj4=
+github.com/keyval-dev/mysql-instrumentation v0.0.0-20240312092726-5fc2c5839d43 h1:6i5lLGhAs8BVZVficNVWSJ4dKscdrWIL+WGj508Tciw=
+github.com/keyval-dev/mysql-instrumentation v0.0.0-20240312092726-5fc2c5839d43/go.mod h1:AQ3Mf2pRXQsbBMJbBg645aYvWcyAQdg9K/ytCZoyVdw=
 github.com/keyval-dev/odigos/api v1.0.47 h1:aONMtt9o0naxXu+STT/8VC4EOzetTK3ESuz85WgeQAo=
 github.com/keyval-dev/odigos/api v1.0.47/go.mod h1:CEeUXlu8qYRDiIhvARoA2sqDsuUTxYM8dGQk3Fo1lo0=
 github.com/keyval-dev/odigos/common v1.0.47 h1:SP0cMJ81+cfVKY4+aFtCFBsxKzLU2wBCYjYNN9PzxfE=

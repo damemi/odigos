@@ -123,6 +123,9 @@ func startDeviceManager(clientset *kubernetes.Clientset) {
 		common.DotNetProgrammingLanguage: {
 			otelSdkNativeCommunity: communityinstrumentlang.DotNet,
 		},
+		common.MySQLProgrammingLanguage: {
+			otelSdkEbpfEnterprise: enterpriseinstrumentlang.EnterpriseMySQL,
+		},
 	}
 
 	lister, err := instrumentation.NewLister(ctx, clientset, otelSdkLsf)
@@ -148,10 +151,14 @@ func initEbpf(kubeclient client.Client) (map[common.ProgrammingLanguage]ebpf.Dir
 	nodeJSInstrumentationFactory := ebpf.NewNodeJSInstrumentationFactoryEnterprise(kubeclient)
 	nodeJSDirector := ebpf.NewEbpfDirectorEnterprise(common.JavascriptProgrammingLanguage, nodeJSInstrumentationFactory)
 
+	mySQLInstrumentationFactory := ebpf.NewMySQLInstrumentationFactoryEnterprise(kubeclient)
+	mySQLDirector := ebpf.NewEbpfDirectorEnterprise(common.MySQLProgrammingLanguage, mySQLInstrumentationFactory)
+
 	return map[common.ProgrammingLanguage]ebpf.DirectorEnterprise{
 		common.GoProgrammingLanguage:         goDirector,
 		common.JavaProgrammingLanguage:       javaDirector,
 		common.PythonProgrammingLanguage:     pythonDirector,
 		common.JavascriptProgrammingLanguage: nodeJSDirector,
+		common.MySQLProgrammingLanguage:      mySQLDirector,
 	}, nil
 }
