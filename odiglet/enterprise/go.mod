@@ -8,11 +8,11 @@ require (
 	github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240306085006-871b9999f46f
 	github.com/keyval-dev/mysql-instrumentation v0.0.0-20240312092726-5fc2c5839d43
 	github.com/keyval-dev/odigos-enterprise/odigosauth v0.0.0
-	github.com/keyval-dev/odigos/api v1.0.47
-	github.com/keyval-dev/odigos/common v1.0.47
-	github.com/keyval-dev/odigos/odiglet v1.0.47
+	github.com/keyval-dev/odigos/api v1.0.48
+	github.com/keyval-dev/odigos/common v1.0.48
+	github.com/keyval-dev/odigos/odiglet v1.0.48
 	github.com/kubevirt/device-plugin-manager v1.19.5
-	go.opentelemetry.io/auto v0.10.1-alpha.0.20240229132106-93aa6b83e8bc
+	go.opentelemetry.io/auto v0.10.1-alpha.0.20240311152122-02686f0a149b
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.24.0
 	go.opentelemetry.io/otel/trace v1.24.0
 	k8s.io/apimachinery v0.29.2
@@ -89,7 +89,7 @@ require (
 	golang.org/x/net v0.21.0 // indirect
 	golang.org/x/oauth2 v0.16.0 // indirect
 	golang.org/x/sync v0.6.0 // indirect
-	golang.org/x/sys v0.17.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/term v0.17.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
@@ -97,7 +97,7 @@ require (
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240123012728-ef4313101c80 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240123012728-ef4313101c80 // indirect
-	google.golang.org/grpc v1.62.0 // indirect
+	google.golang.org/grpc v1.62.1 // indirect
 	google.golang.org/protobuf v1.32.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -117,11 +117,11 @@ require (
 // it would be better to import "github.com/keyval-dev/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240311072536-6e2b22876187
+replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240314074602-a0ceef3f03e2
 
-replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.47
+replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.48
 
-replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery v1.0.47
+replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery v1.0.48
 
 // replace github.com/keyval-dev/odigos/odiglet => github.com/blumamir/odigos/odiglet v1.0.1-0.20240303113259-5cb82d04bda8
 
