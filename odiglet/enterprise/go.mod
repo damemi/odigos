@@ -4,13 +4,13 @@ go 1.21.0
 
 require (
 	github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240306071354-fd813a143dc4
-	github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240311152027-9a0ada5db6af
+	github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240314155611-51c9db1bdadd
 	github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240306085006-871b9999f46f
 	github.com/keyval-dev/mysql-instrumentation v0.0.0-20240312092726-5fc2c5839d43
 	github.com/keyval-dev/odigos-enterprise/odigosauth v0.0.0
-	github.com/keyval-dev/odigos/api v1.0.48
-	github.com/keyval-dev/odigos/common v1.0.48
-	github.com/keyval-dev/odigos/odiglet v1.0.48
+	github.com/keyval-dev/odigos/api v1.0.49
+	github.com/keyval-dev/odigos/common v1.0.49
+	github.com/keyval-dev/odigos/odiglet v1.0.49
 	github.com/kubevirt/device-plugin-manager v1.19.5
 	go.opentelemetry.io/auto v0.10.1-alpha.0.20240311152122-02686f0a149b
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.24.0
@@ -117,11 +117,11 @@ require (
 // it would be better to import "github.com/keyval-dev/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240314074602-a0ceef3f03e2
+replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240320084451-28235e1e9f41
 
-replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.48
+replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.49
 
-replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery v1.0.48
+replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery v1.0.49
 
 // replace github.com/keyval-dev/odigos/odiglet => github.com/blumamir/odigos/odiglet v1.0.1-0.20240303113259-5cb82d04bda8
 
