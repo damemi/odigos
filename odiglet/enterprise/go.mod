@@ -4,7 +4,7 @@ go 1.21.0
 
 require (
 	github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240306071354-fd813a143dc4
-	github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240314155611-51c9db1bdadd
+	github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240327111711-d2be7563aad9
 	github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240306085006-871b9999f46f
 	github.com/keyval-dev/mysql-instrumentation v0.0.0-20240312092726-5fc2c5839d43
 	github.com/keyval-dev/odigos-enterprise/odigosauth v0.0.0

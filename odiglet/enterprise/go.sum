@@ -206,6 +206,10 @@ github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240306071354-fd813a1
 github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240306071354-fd813a143dc4/go.mod h1:B/LqMqHORjzsEQC9BcSXTHT/+7vnMi9EJUi2wtnTA2A=
 github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240314155611-51c9db1bdadd h1:/XOasRO+f7TUTgl3tN+S8igQOXFNsckJh/dxKJSGew0=
 github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240314155611-51c9db1bdadd/go.mod h1:L3igNUkZQfOGx3B+Pk2mndnxYypCGSb+ox9XfHeIjh0=
+github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240326152252-b9c570b3bfad h1:cCmmRGRsZRyyw0wX/u2Rd9xWOnLK0ubh9IJtvVb3AlQ=
+github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240326152252-b9c570b3bfad/go.mod h1:L3igNUkZQfOGx3B+Pk2mndnxYypCGSb+ox9XfHeIjh0=
+github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240327111711-d2be7563aad9 h1:e0xSYTb2Y5aGeB92R9ZY3HtN4O9GjlJSpcFVhCG3mdc=
+github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240327111711-d2be7563aad9/go.mod h1:L3igNUkZQfOGx3B+Pk2mndnxYypCGSb+ox9XfHeIjh0=
 github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240306085006-871b9999f46f h1:WOkzSpAq+idtB0TDoB9WvSmzV7DHhiJAxorCjYt08oc=
 github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240306085006-871b9999f46f/go.mod h1:8Qo8XRH0rhXUtwvTmF6tJ5Mv/db9657M4RZVIO346Dc=
 github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240320084451-28235e1e9f41 h1:pMIsQWSlSR02CHzQ7vKOg6U/pW3U1vZ9EKIfyV+fklk=
