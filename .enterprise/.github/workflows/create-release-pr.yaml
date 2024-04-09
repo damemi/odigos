@@ -48,7 +48,7 @@ jobs:
         working-directory: ./odiglet
         run: |
           git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          go env -w GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation
+          go env -w GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation,github.com/keyval-dev/ebpf-java-instrumentation
           sed -i "s|replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v.*|replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common ${TAG}|g" go.mod
           sed -i "s|replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery v.*|replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery ${TAG}|g" go.mod
           sed -i "s|replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation .*|replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation main|g" go.mod
