@@ -8,9 +8,9 @@ require (
 	github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240306085006-871b9999f46f
 	github.com/keyval-dev/mysql-instrumentation v0.0.0-20240312092726-5fc2c5839d43
 	github.com/keyval-dev/odigos-enterprise/odigosauth v0.0.0
-	github.com/keyval-dev/odigos/api v1.0.53
-	github.com/keyval-dev/odigos/common v1.0.53
-	github.com/keyval-dev/odigos/odiglet v1.0.53
+	github.com/keyval-dev/odigos/api v1.0.54
+	github.com/keyval-dev/odigos/common v1.0.54
+	github.com/keyval-dev/odigos/odiglet v1.0.54
 	github.com/kubevirt/device-plugin-manager v1.19.5
 	go.opentelemetry.io/auto v0.11.0-alpha
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.24.0
@@ -117,11 +117,11 @@ require (
 // it would be better to import "github.com/keyval-dev/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240409065715-13ec21ef51d2
+replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240410123429-dc1e9d97bbc7
 
-replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.53
+replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.54
 
-replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery v1.0.53
+replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery v1.0.54
 
 // replace github.com/keyval-dev/odigos/odiglet => github.com/blumamir/odigos/odiglet v1.0.1-0.20240303113259-5cb82d04bda8
 
