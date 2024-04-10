@@ -1,0 +1,19 @@
+apiVersion: odigos.io/v1alpha1
+kind: Processor
+metadata:
+  name: filter-logs-by-ns
+  namespace: odigos-system
+spec:
+  type: filter
+  processorConfig:
+    error_mode: ignore
+    logs:
+      exclude:
+        match_type: strict
+        record_attributes:
+          - key: k8s.namespace.name
+            value: default
+  signals:
+    - LOGS
+  collectorRoles:
+    - CLUSTER_GATEWAY

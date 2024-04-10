@@ -1,0 +1,18 @@
+apiVersion: odigos.io/v1alpha1
+kind: Processor
+metadata:
+  name: rename-attributes
+  namespace: odigos-system
+spec:
+  type: attributes
+  processorConfig:
+    actions:
+      - key: some.new.attribute
+        from_attribute: db.statement
+        action: insert
+      - key: db.statement
+        action: delete
+  signals:
+    - TRACES
+  collectorRoles:
+    - CLUSTER_GATEWAY
