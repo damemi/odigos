@@ -59,3 +59,8 @@ opentelemetry-instrumentation-wsgi==0.43b0
 
 # Due to: https://github.com/open-telemetry/opentelemetry-operator/issues/1774
 urllib3<2
+
+# Opentelemetry can handle version of protobuf from 3.19 to 5
+# Some applications still require 3.20.x (for example some version of tensorflow)
+# https://stackoverflow.com/questions/72441758/typeerror-descriptors-cannot-not-be-created-directly
+protobuf==3.20.3
