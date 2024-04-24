@@ -15,6 +15,8 @@ type DirectorEnterprise interface {
 	ApplyInstrumentationConfig(workload *common.PodWorkload, instrumentationConfig *odigosv1.InstrumentationConfig) error
 }
 
+type DirectorsEnterpriseMap map[odigosebpf.DirectorKey]DirectorEnterprise 
+
 type EbpfDirectorEnterprise[T OtelEbpfSdkEnterprise] struct {
 	*odigosebpf.EbpfDirector[T]
 }

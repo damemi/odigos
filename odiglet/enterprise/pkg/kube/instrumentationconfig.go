@@ -16,7 +16,7 @@ import (
 type InstrumentationConfigReconciler struct {
 	client.Client
 	Scheme    *runtime.Scheme
-	Directors map[common.ProgrammingLanguage]ebpf.DirectorEnterprise
+	Directors ebpf.DirectorsEnterpriseMap
 }
 
 func (i *InstrumentationConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

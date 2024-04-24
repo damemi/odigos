@@ -24,7 +24,7 @@ ADD https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/relea
 RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetry-dotnet-instrumentation-linux-musl.zip
 
 # Dtrace injector
-FROM keyval/javabuilder-base:v1.0 AS java-builder
+FROM keyval/javabuilder-base:v3.0 AS java-builder
 WORKDIR /dtrace-injector
 RUN --mount=type=secret,id=github_token \
     git clone https://$(cat /run/secrets/github_token)@github.com/keyval-dev/ebpf-java-instrumentation.git
@@ -32,9 +32,13 @@ WORKDIR /dtrace-injector/ebpf-java-instrumentation/utils
 RUN mvn clean package -DskipTests
 RUN mkdir -p ../dtrace-injector/target && cp ./target/utils.jar ../dtrace-injector/target/
 WORKDIR /dtrace-injector/ebpf-java-instrumentation/dtrace-injector
-ENV JAVA_HOME=/usr/local/openjdk-8
+ENV JAVA_HOME=/usr/local/openjdk-11
 RUN make generate-headers
 RUN make build-jni && mvn package -DskipTests
+# build extension
+WORKDIR /dtrace-injector/ebpf-java-instrumentation/otel_agent_extension
+RUN make gradle-build
+RUN make build-jni
 
 FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.3 as builder
 
@@ -56,7 +60,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 WORKDIR /instrumentations
 
 # Java
-ARG JAVA_OTEL_VERSION=v1.29.0
+ARG JAVA_OTEL_VERSION=v2.3.0
 ADD https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/$JAVA_OTEL_VERSION/opentelemetry-javaagent.jar /instrumentations/java/javaagent.jar
 RUN chmod 644 /instrumentations/java/javaagent.jar
 
@@ -79,6 +83,11 @@ COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
 COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injector/tracing_probes.so /instrumentations/java-ebpf/tracing_probes.so
 COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injector/target/dtrace-injector-1.0-SNAPSHOT-full.jar /instrumentations/java-ebpf/dtrace-injector.jar
 COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injector/target/utils.jar /instrumentations/java-ebpf/utils.jar
+
+# Java Agent Extension
+COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/otel_agent_extension/extension/build/libs/odigos-opentelemetry-java-extension-1.0.jar /instrumentations/java-ext-ebpf/otel_agent_extension.jar
+COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/otel_agent_extension/extension/end_span_usdt.so /instrumentations/java-ext-ebpf/end_span_usdt.so
+RUN cp /instrumentations/java/javaagent.jar /instrumentations/java-ext-ebpf/javaagent.jar
 
 FROM registry.fedoraproject.org/fedora-minimal:38
 COPY --from=builder /go/src/github.com/keyval-dev/odigos-enterprise/odiglet/odiglet /root/odiglet

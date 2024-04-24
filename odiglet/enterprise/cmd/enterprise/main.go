@@ -61,7 +61,7 @@ func main() {
 		os.Exit(-1)
 	}
 
-	plainDirectors := make(map[common.ProgrammingLanguage]odigosebpf.Director)
+	plainDirectors := make(odigosebpf.DirectorsMap)
 	for k, v := range ebpfDirectors {
 		plainDirectors[k] = v
 	}
@@ -103,14 +103,25 @@ func startDeviceManager(clientset *kubernetes.Clientset) {
 
 	otelSdkEbpfEnterprise := common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier}
 	otelSdkNativeCommunity := common.OtelSdk{SdkType: common.NativeOtelSdkType, SdkTier: common.CommunityOtelSdkTier}
+	otelSdkNativeEnterprise := common.OtelSdk{SdkType: common.NativeOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier}
 
 	otelSdkLsf := map[common.ProgrammingLanguage]map[common.OtelSdk]instrumentation.LangSpecificFunc{
 		common.GoProgrammingLanguage: {
 			otelSdkEbpfEnterprise: enterpriseinstrumentlang.EnterpriseGo,
 		},
+		// For Java there are currently 3 different directors:
+		// 1. native-community: regular otel java agent.
+		// 2. ebpf-enterprise: our custom ebpf java agent with our written instrumentations.
+		// 3. native-enterprise: using the otel java agent extension mechanism, to export the spans
+		//   to ebpf.
+		// 2 and 3 should not be kept together for the long run and we should decide on one of them.
+		// Once we decide, the implementation we use should be called ebpf-enterprise.
+		// The third SDK is identical concept to the JS and Python SDKs (which are called ebpf-enterprise),
+		// we called it native-enterprise for backward compatibility, and the need to use both of them if we need to.
 		common.JavaProgrammingLanguage: {
 			otelSdkNativeCommunity: communityinstrumentlang.Java,
 			otelSdkEbpfEnterprise:  enterpriseinstrumentlang.EnterpriseJava,
+			otelSdkNativeEnterprise: enterpriseinstrumentlang.NativeEnterpriseJava,
 		},
 		common.PythonProgrammingLanguage: {
 			otelSdkNativeCommunity: communityinstrumentlang.Python,
@@ -138,27 +149,62 @@ func startDeviceManager(clientset *kubernetes.Clientset) {
 	manager.Run()
 }
 
-func initEbpf(kubeclient client.Client) (map[common.ProgrammingLanguage]ebpf.DirectorEnterprise, error) {
+func initEbpf(kubeclient client.Client) (ebpf.DirectorsEnterpriseMap, error) {
 	goInstrumentationFactory := ebpf.NewGoInstrumentationFactoryEnterprise(kubeclient)
 	goDirector := ebpf.NewEbpfDirectorEnterprise(common.GoProgrammingLanguage, goInstrumentationFactory)
+	goDirectorKey := odigosebpf.DirectorKey{
+		Language: common.GoProgrammingLanguage,
+		OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
+	}
 
 	javaInstrumentationFactory := ebpf.NewJavaInstrumentationFactoryEnterprise(kubeclient)
 	javaDirector := ebpf.NewEbpfDirectorEnterprise(common.JavaProgrammingLanguage, javaInstrumentationFactory)
+	javaDirectorKey := odigosebpf.DirectorKey{
+		Language: common.JavaProgrammingLanguage,
+		OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
+	}
+
+	// Utilizing the Otel Java Agent extension mechanism
+	// We define it as a native-enterprise director but it also requires ebpf initialization.
+	// TODO: this is a similar implementation to what we have for JS and Python,
+	// so maybe should consider defining them as native-enterprise as well.
+	// On the other hand, if we'll choose to use this instrumentation without keeping the original ebpf-enterprise for Java,
+	// we might consider defining this one as ebpf-enterprise instead of the old one.
+	// Currently we can't define this as ebpf-enterprise because it will conflict with the old Java ebpf director.
+	javaExtensionInstrumentationFactory := ebpf.NewJavaExtensionInstrumentationFactoryEnterprise(kubeclient)
+	javaExtensionDirector := ebpf.NewEbpfDirectorEnterprise(common.JavaProgrammingLanguage, javaExtensionInstrumentationFactory)
+	javaExtensionDirectorKey := odigosebpf.DirectorKey{
+		Language: common.JavaProgrammingLanguage,
+		OtelSdk:  common.OtelSdk{SdkType: common.NativeOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
+	}
 
 	pythonInstrumentationFactory := ebpf.NewPythonInstrumentationFactoryEnterprise(kubeclient)
 	pythonDirector := ebpf.NewEbpfDirectorEnterprise(common.PythonProgrammingLanguage, pythonInstrumentationFactory)
+	pythonDirectorKey := odigosebpf.DirectorKey{
+		Language: common.PythonProgrammingLanguage,
+		OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
+	}
 
 	nodeJSInstrumentationFactory := ebpf.NewNodeJSInstrumentationFactoryEnterprise(kubeclient)
 	nodeJSDirector := ebpf.NewEbpfDirectorEnterprise(common.JavascriptProgrammingLanguage, nodeJSInstrumentationFactory)
+	nodeJSDirectorKey := odigosebpf.DirectorKey{
+		Language: common.JavascriptProgrammingLanguage,
+		OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
+	}
 
 	mySQLInstrumentationFactory := ebpf.NewMySQLInstrumentationFactoryEnterprise(kubeclient)
 	mySQLDirector := ebpf.NewEbpfDirectorEnterprise(common.MySQLProgrammingLanguage, mySQLInstrumentationFactory)
+	mySQLDirectorKey := odigosebpf.DirectorKey{
+		Language: common.MySQLProgrammingLanguage,
+		OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
+	}
 
-	return map[common.ProgrammingLanguage]ebpf.DirectorEnterprise{
-		common.GoProgrammingLanguage:         goDirector,
-		common.JavaProgrammingLanguage:       javaDirector,
-		common.PythonProgrammingLanguage:     pythonDirector,
-		common.JavascriptProgrammingLanguage: nodeJSDirector,
-		common.MySQLProgrammingLanguage:      mySQLDirector,
+	return ebpf.DirectorsEnterpriseMap{
+		goDirectorKey:            goDirector,
+		javaDirectorKey:          javaDirector,
+		javaExtensionDirectorKey: javaExtensionDirector,
+		pythonDirectorKey:        pythonDirector,
+		nodeJSDirectorKey:        nodeJSDirector,
+		mySQLDirectorKey:         mySQLDirector,
 	}, nil
 }

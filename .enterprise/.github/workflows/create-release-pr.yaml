@@ -53,6 +53,7 @@ jobs:
           sed -i "s|replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery v.*|replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery ${TAG}|g" go.mod
           sed -i "s|replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation .*|replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation main|g" go.mod
           sed -i "s|github.com/keyval-dev/ebpf-java-instrumentation.*|github.com/keyval-dev/ebpf-java-instrumentation main|g" go.mod
+          sed -i "s|github.com/keyval-dev/ebpf-java-instrumentation/otel_agent_extension.*|github.com/keyval-dev/ebpf-java-instrumentation/otel_agent_extension main|g" go.mod
           go get -u github.com/keyval-dev/odigos/odiglet@${TAG} github.com/keyval-dev/odigos/api@${TAG} github.com/keyval-dev/odigos/common@${TAG}
           go mod tidy
 
