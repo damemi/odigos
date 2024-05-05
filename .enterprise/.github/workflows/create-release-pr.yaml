@@ -42,7 +42,7 @@ jobs:
       # we are using go commands later on, so need go installed
       - uses: actions/setup-go@v4
         with:
-          go-version: "1.21.0"
+          go-version: "1.22.0"
 
       - name: update odigos dependencies
         working-directory: ./odiglet

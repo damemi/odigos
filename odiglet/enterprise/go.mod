@@ -1,6 +1,6 @@
 module github.com/keyval-dev/odigos-enterprise/odiglet
 
-go 1.21.0
+go 1.22.0
 
 require (
 	github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240306071354-fd813a143dc4
