@@ -203,6 +203,8 @@ github.com/jstemmer/go-junit-report v0.9.1/go.mod h1:Brl9GWCQeLvo8nXZwPNNblvFj/X
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
 github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240306071354-fd813a143dc4 h1:mweMuCk/s94DodLmPpmdDmgY36smNdExogAZ1Bry5Pk=
 github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240306071354-fd813a143dc4/go.mod h1:B/LqMqHORjzsEQC9BcSXTHT/+7vnMi9EJUi2wtnTA2A=
+github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240506113317-c23f005daf7e h1:0xvgu2z9m6+2SEx49PY2VCHQg9PfTOrKDRnhOcLFvuY=
+github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240506113317-c23f005daf7e/go.mod h1:B/LqMqHORjzsEQC9BcSXTHT/+7vnMi9EJUi2wtnTA2A=
 github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240424075947-fc1b6029a312 h1:h6WinMsvNdocqyuG4DsHA8kfvDZACtlpw0GgtTimIHc=
 github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240424075947-fc1b6029a312/go.mod h1:XcBVbAlYBpMumiN2lEnWTvYvS0mNtUV8RuvT2opPnNQ=
 github.com/keyval-dev/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20240424075947-fc1b6029a312 h1:5Fa0uBy30Slq/8V9uFMQtkIZwxxNvAr7ZenuM7xcNDg=

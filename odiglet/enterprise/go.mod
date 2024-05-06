@@ -3,7 +3,7 @@ module github.com/keyval-dev/odigos-enterprise/odiglet
 go 1.22.0
 
 require (
-	github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240306071354-fd813a143dc4
+	github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240506113317-c23f005daf7e
 	github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240424075947-fc1b6029a312
 	github.com/keyval-dev/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20240424075947-fc1b6029a312
 	github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240306085006-871b9999f46f
