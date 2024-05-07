@@ -4,7 +4,7 @@ go 1.22.0
 
 require (
 	github.com/kubevirt/device-plugin-manager v1.19.5
-	github.com/odigos-io/ebpf-generic-instrumentation v0.0.0-20240506143148-f89f7fbc8399
+	github.com/odigos-io/ebpf-generic-instrumentation v0.0.0-20240507113311-9964f7c99c36
 	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20240506143221-738c470423bb
 	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20240506143221-738c470423bb
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20240507052149-b6157ec78dc9
