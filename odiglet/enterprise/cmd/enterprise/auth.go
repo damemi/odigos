@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/keyval-dev/odigos-enterprise/odigosauth"
-	"github.com/keyval-dev/odigos/odiglet/pkg/log"
+	"github.com/odigos-io/odigos-enterprise/odigosauth"
+	"github.com/odigos-io/odigos/odiglet/pkg/log"
 )
 
 // verify that this pro odiglet is authorized to run.

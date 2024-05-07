@@ -48,13 +48,13 @@ jobs:
         working-directory: ./odiglet
         run: |
           git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          go env -w GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation,github.com/keyval-dev/ebpf-java-instrumentation
-          sed -i "s|replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v.*|replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common ${TAG}|g" go.mod
-          sed -i "s|replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery v.*|replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery ${TAG}|g" go.mod
-          sed -i "s|replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation .*|replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation main|g" go.mod
-          sed -i "s|github.com/keyval-dev/ebpf-java-instrumentation.*|github.com/keyval-dev/ebpf-java-instrumentation main|g" go.mod
-          sed -i "s|github.com/keyval-dev/ebpf-java-instrumentation/otel_agent_extension.*|github.com/keyval-dev/ebpf-java-instrumentation/otel_agent_extension main|g" go.mod
-          go get -u github.com/keyval-dev/odigos/odiglet@${TAG} github.com/keyval-dev/odigos/api@${TAG} github.com/keyval-dev/odigos/common@${TAG}
+          go env -w GOPRIVATE=github.com/odigos-io/enterprise-go-instrumentation,github.com/odigos-io/ebpf-java-instrumentation
+          sed -i "s|replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v.*|replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common ${TAG}|g" go.mod
+          sed -i "s|replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v.*|replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery ${TAG}|g" go.mod
+          sed -i "s|replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation .*|replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation main|g" go.mod
+          sed -i "s|github.com/odigos-io/ebpf-java-instrumentation.*|github.com/odigos-io/ebpf-java-instrumentation main|g" go.mod
+          sed -i "s|github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension.*|github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension main|g" go.mod
+          go get -u github.com/odigos-io/odigos/odiglet@${TAG} github.com/odigos-io/odigos/api@${TAG} github.com/odigos-io/odigos/common@${TAG}
           go mod tidy
 
       - name: github preperation

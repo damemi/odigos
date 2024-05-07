@@ -3,8 +3,8 @@ package ebpf
 import (
 	"context"
 
-	"github.com/keyval-dev/odigos/common"
-	odigosebpf "github.com/keyval-dev/odigos/odiglet/pkg/ebpf"
+	"github.com/odigos-io/odigos/common"
+	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	apitrace "go.opentelemetry.io/otel/trace"
 )
 

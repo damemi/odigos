@@ -3,17 +3,17 @@ WORKDIR /python-instrumentation
 ADD odiglet/agents/python/requirements.txt .
 RUN mkdir workspace && pip install --target workspace -r requirements.txt
 
-# Enterprise version of ebpf-python-instrumentation
+# Enterprise version of ebpf-generic-instrumentation
 RUN apt update -y && apt install -y systemtap-sdt-dev
 RUN --mount=type=secret,id=github_token \
-    git clone https://$(cat /run/secrets/github_token)@github.com/keyval-dev/ebpf-python-instrumentation.git
-RUN mkdir enterprise-workspace && pip install --target enterprise-workspace ./ebpf-python-instrumentation/dtrace-injector
+    git clone https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-generic-instrumentation.git
+RUN mkdir enterprise-workspace && pip install --target enterprise-workspace ./ebpf-generic-instrumentation/dtrace-injector
 
 FROM node:21.6.2-bullseye AS nodejs-builder
 WORKDIR /nodejs-instrumentation
 RUN apt update -y && apt install -y systemtap-sdt-dev
 RUN --mount=type=secret,id=github_token \
-    git clone https://$(cat /run/secrets/github_token)@github.com/keyval-dev/ebpf-nodejs-instrumentation.git \
+    git clone https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-nodejs-instrumentation.git \
     && cd ebpf-nodejs-instrumentation/dtrace-injector \
     && make build
 
@@ -27,7 +27,7 @@ RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetr
 FROM keyval/javabuilder-base:v3.0 AS java-builder
 WORKDIR /dtrace-injector
 RUN --mount=type=secret,id=github_token \
-    git clone https://$(cat /run/secrets/github_token)@github.com/keyval-dev/ebpf-java-instrumentation.git
+    git clone https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-java-instrumentation.git
 WORKDIR /dtrace-injector/ebpf-java-instrumentation/utils
 RUN mvn clean package -DskipTests
 RUN mkdir -p ../dtrace-injector/target && cp ./target/utils.jar ../dtrace-injector/target/
@@ -45,7 +45,7 @@ FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.4 as builder
 RUN --mount=type=secret,id=github_token \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
 
-WORKDIR /go/src/github.com/keyval-dev/odigos-enterprise
+WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
 # Copyy local modules required by the build
 COPY odigosauth/ odigosauth/
 WORKDIR ./odiglet/
@@ -90,7 +90,7 @@ COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/otel_agent_e
 RUN cp /instrumentations/java/javaagent.jar /instrumentations/java-ext-ebpf/javaagent.jar
 
 FROM registry.fedoraproject.org/fedora-minimal:38
-COPY --from=builder /go/src/github.com/keyval-dev/odigos-enterprise/odiglet/odiglet /root/odiglet
+COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
 WORKDIR /instrumentations/
 COPY --from=builder /instrumentations/ .
 CMD ["/root/odiglet"]

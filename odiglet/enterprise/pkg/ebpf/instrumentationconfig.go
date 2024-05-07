@@ -3,10 +3,10 @@ package ebpf
 import (
 	"context"
 
-	odigosv1 "github.com/keyval-dev/odigos/api/odigos/v1alpha1"
-	"github.com/keyval-dev/odigos/common"
-	commonutils "github.com/keyval-dev/odigos/common/utils"
-	"github.com/keyval-dev/odigos/odiglet/pkg/log"
+	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	"github.com/odigos-io/odigos/common"
+	commonutils "github.com/odigos-io/odigos/common/utils"
+	"github.com/odigos-io/odigos/odiglet/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 

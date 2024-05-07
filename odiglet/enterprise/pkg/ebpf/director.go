@@ -3,10 +3,10 @@ package ebpf
 import (
 	"fmt"
 
-	odigosv1 "github.com/keyval-dev/odigos/api/odigos/v1alpha1"
-	"github.com/keyval-dev/odigos/common"
-	odigosebpf "github.com/keyval-dev/odigos/odiglet/pkg/ebpf"
-	"github.com/keyval-dev/odigos/odiglet/pkg/log"
+	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	"github.com/odigos-io/odigos/common"
+	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
+	"github.com/odigos-io/odigos/odiglet/pkg/log"
 )
 
 type DirectorEnterprise interface {

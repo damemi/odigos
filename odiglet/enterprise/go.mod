@@ -1,18 +1,18 @@
-module github.com/keyval-dev/odigos-enterprise/odiglet
+module github.com/odigos-io/odigos-enterprise/odiglet
 
 go 1.22.0
 
 require (
-	github.com/keyval-dev/ebpf-generic-instrumentation v0.0.0-20240506113317-c23f005daf7e
-	github.com/keyval-dev/ebpf-java-instrumentation v0.0.0-20240424075947-fc1b6029a312
-	github.com/keyval-dev/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20240424075947-fc1b6029a312
-	github.com/keyval-dev/ebpf-nodejs-instrumentation v0.0.0-20240306085006-871b9999f46f
-	github.com/keyval-dev/mysql-instrumentation v0.0.0-20240312092726-5fc2c5839d43
-	github.com/keyval-dev/odigos-enterprise/odigosauth v0.0.0
-	github.com/keyval-dev/odigos/api v1.0.58
-	github.com/keyval-dev/odigos/common v1.0.58
-	github.com/keyval-dev/odigos/odiglet v1.0.58
 	github.com/kubevirt/device-plugin-manager v1.19.5
+	github.com/odigos-io/ebpf-generic-instrumentation v0.0.0-20240506143148-f89f7fbc8399
+	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20240506143221-738c470423bb
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20240506143221-738c470423bb
+	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20240507052149-b6157ec78dc9
+	github.com/odigos-io/mysql-instrumentation v0.0.0-20240507052211-73bdbece56c8
+	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
+	github.com/odigos-io/odigos/api v1.0.59-0.20240506123445-60d9063ef0cb
+	github.com/odigos-io/odigos/common v1.0.59-0.20240506123445-60d9063ef0cb
+	github.com/odigos-io/odigos/odiglet v1.0.59-0.20240506123445-60d9063ef0cb
 	go.opentelemetry.io/auto v0.12.0-alpha
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.26.0
 	go.opentelemetry.io/otel/trace v1.26.0
@@ -56,12 +56,12 @@ require (
 	github.com/imdario/mergo v0.3.6 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/keyval-dev/odigos/procdiscovery v0.0.0 // indirect
-	github.com/keyval-dev/opentelemetry-zap-bridge v0.0.3 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/odigos-io/odigos/procdiscovery v0.0.0 // indirect
+	github.com/odigos-io/opentelemetry-zap-bridge v0.0.4 // indirect
 	github.com/otiai10/copy v1.14.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.19.0 // indirect
@@ -113,16 +113,16 @@ require (
 )
 
 // currently, enterprise-go-instrumentation has no versioning or releases, so we pin it to main here.
-// it would be better to import "github.com/keyval-dev/enterprise-go-instrumentation" directly,
+// it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/keyval-dev/enterprise-go-instrumentation v0.0.0-20240501143524-ea09040b44fc
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20240501143524-ea09040b44fc
 
-replace github.com/keyval-dev/odigos/common => github.com/keyval-dev/odigos/common v1.0.58
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.59-0.20240506123445-60d9063ef0cb
 
-replace github.com/keyval-dev/odigos/procdiscovery => github.com/keyval-dev/odigos/procdiscovery v1.0.58
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.59-0.20240506123445-60d9063ef0cb
 
 // Used for testing purposes
-// replace github.com/keyval-dev/odigos/odiglet => github.com/RonFed/odigos_fork/odiglet v0.0.0-20240421111529-2a509db1b6e6
+// replace github.com/odigos-io/odigos/odiglet => github.com/RonFed/odigos_fork/odiglet v0.0.0-20240421111529-2a509db1b6e6
 
-replace github.com/keyval-dev/odigos-enterprise/odigosauth => ../odigosauth
+replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth

@@ -3,17 +3,17 @@ WORKDIR /python-instrumentation
 ADD odiglet/agents/python/requirements.txt .
 RUN mkdir workspace && pip install --target workspace -r requirements.txt
 
-# Enterprise version of ebpf-python-instrumentation
+# Enterprise version of ebpf-generic-instrumentation
 RUN apt update -y && apt install -y systemtap-sdt-dev
 RUN --mount=type=secret,id=github_token \
-    git clone https://$(cat /run/secrets/github_token)@github.com/keyval-dev/ebpf-python-instrumentation.git
-RUN mkdir enterprise-workspace && pip install --target enterprise-workspace ./ebpf-python-instrumentation/dtrace-injector
+    git clone https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-generic-instrumentation.git
+RUN mkdir enterprise-workspace && pip install --target enterprise-workspace ./ebpf-generic-instrumentation/dtrace-injector
 
 FROM node:16 AS nodejs-builder
 WORKDIR /nodejs-instrumentation
 RUN apt update -y && apt install -y systemtap-sdt-dev
 RUN --mount=type=secret,id=github_token \
-    git clone https://$(cat /run/secrets/github_token)@github.com/keyval-dev/ebpf-nodejs-instrumentation.git \
+    git clone https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-nodejs-instrumentation.git \
     && cd ebpf-nodejs-instrumentation/dtrace-injector \
     && make build
 
@@ -27,7 +27,7 @@ RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetr
 FROM keyval/javabuilder-base:v1.0 AS java-builder
 WORKDIR /dtrace-injector
 RUN --mount=type=secret,id=github_token \
-    git clone https://$(cat /run/secrets/github_token)@github.com/keyval-dev/ebpf-java-instrumentation.git
+    git clone https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-java-instrumentation.git
 WORKDIR /dtrace-injector/ebpf-java-instrumentation/utils
 RUN mvn clean package -DskipTests
 RUN mkdir -p ../dtrace-injector/target && cp ./target/utils.jar ../dtrace-injector/target/
@@ -41,11 +41,11 @@ FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.3 as builder
 RUN --mount=type=secret,id=github_token \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
 
-WORKDIR /go/src/github.com/keyval-dev/odigos-enterprise
+WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
 # Copyy local modules required by the build
 COPY odigosauth/ odigosauth/
 WORKDIR ./odiglet/
-ENV GOPRIVATE=github.com/keyval-dev/enterprise-go-instrumentation,github.com/keyval-dev/ebpf-java-instrumentation
+ENV GOPRIVATE=github.com/odigos-io/enterprise-go-instrumentation,github.com/odigos-io/ebpf-java-instrumentation
 # Pre-copy/cache go.mod for pre-downloading dependencies and only redownloading
 COPY odiglet/go.mod odiglet/go.sum ./
 RUN --mount=type=cache,target=/go/pkg \
@@ -56,9 +56,9 @@ COPY odiglet/ .
 ARG TARGETARCH
 # Go does not call go generate on dependencies, so we need to do it manually
 RUN cd $(go list -m -f '{{.Dir}}' "go.opentelemetry.io/auto") && make generate
-RUN cd $(go list -m -f '{{.Dir}}' "github.com/keyval-dev/ebpf-java-instrumentation") && make generate
-RUN cd $(go list -m -f '{{.Dir}}' "github.com/keyval-dev/ebpf-generic-instrumentation") && make generate
-RUN cd $(go list -m -f '{{.Dir}}' "github.com/keyval-dev/ebpf-nodejs-instrumentation") && make generate
+RUN cd $(go list -m -f '{{.Dir}}' "github.com/odigos-io/ebpf-java-instrumentation") && make generate
+RUN cd $(go list -m -f '{{.Dir}}' "github.com/odigos-io/ebpf-generic-instrumentation") && make generate
+RUN cd $(go list -m -f '{{.Dir}}' "github.com/odigos-io/ebpf-nodejs-instrumentation") && make generate
 RUN GOOS=linux GOARCH=$TARGETARCH go build -gcflags "all=-N -l" -o odiglet ./cmd/enterprise
 
 # Install delve
@@ -92,7 +92,7 @@ COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injec
 COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injector/target/utils.jar /instrumentations/java-ebpf/utils.jar
 
 FROM registry.fedoraproject.org/fedora-minimal:38
-COPY --from=builder /go/src/github.com/keyval-dev/odigos-enterprise/odiglet/odiglet /root/odiglet
+COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
 COPY --from=builder /go/bin/dlv /root/dlv
 WORKDIR /instrumentations/
 COPY --from=builder /instrumentations/ .

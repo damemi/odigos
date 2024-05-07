@@ -15,7 +15,7 @@ To develop Odiglet enterprise, and test it from code, you will need:
 
 for example, you can point to your own fork of odiglet open source, and use a branch commit hash from there:
 ```
-replace github.com/keyval-dev/odigos/odiglet => github.com/<YOUR-USERNAME>/odigos/odiglet <COMMIT-HASH>
+replace github.com/odigos-io/odigos/odiglet => github.com/<YOUR-USERNAME>/odigos/odiglet <COMMIT-HASH>
 ```
 
 3. Run `TAG=<CURRENT-ODIGOS-VERSION> make deploy` to build and upload the images to kind. The TAG should match the current version of odigos you are using. e.g. what you get back from `odigos version`. 
@@ -32,7 +32,7 @@ for example, you can point to your own branch of `ebpf-java-instrumentation`, un
 ```
 require (
     ...
-	github.com/keyval-dev/ebpf-java-instrumentation <your branch name>
+	github.com/odigos-io/ebpf-java-instrumentation <your branch name>
     ...
 )
 ```
