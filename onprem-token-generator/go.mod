@@ -1,4 +1,4 @@
-module github.com/keyval-dev/odigos-enterprise/onprem-token-generator
+module github.com/odigos-io/odigos-enterprise/onprem-token-generator
 
 go 1.22.0
 
