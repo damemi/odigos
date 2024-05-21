@@ -6,7 +6,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common"
-	"github.com/odigos-io/odigos/common/utils"
+	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -20,7 +20,7 @@ type InstrumentationConfigReconciler struct {
 }
 
 func (i *InstrumentationConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	workloadName, workloadKind, err := utils.GetTargetFromRuntimeName(req.Name)
+	workloadName, workloadKind, err := workload.GetWorkloadInfoRuntimeName(req.Name)
 	if err != nil {
 		return ctrl.Result{}, err
 	}

@@ -5,7 +5,7 @@ import (
 
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common"
-	commonutils "github.com/odigos-io/odigos/common/utils"
+	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -63,8 +63,6 @@ func unsetWorkloadInstrumentationConfig(inst OtelEbpfSdkEnterprise) error {
 	return nil
 }
 
-
-
 func convertToInstrumentationLibraries(configOptions map[string][]ConfigOption) []odigosv1.InstrumentationLibraryOptions {
 	instrumentationLibraries := make([]odigosv1.InstrumentationLibraryOptions, 0, len(configOptions))
 
@@ -72,15 +70,13 @@ func convertToInstrumentationLibraries(configOptions map[string][]ConfigOption) 
 
 		commonOptions := convertConfigOptions(options)
 		instrumentationLibrary := odigosv1.InstrumentationLibraryOptions{
-			LibraryName:    instrumentationLibraryName,
-			Options: commonOptions,
+			LibraryName: instrumentationLibraryName,
+			Options:     commonOptions,
 		}
 		instrumentationLibraries = append(instrumentationLibraries, instrumentationLibrary)
 	}
 	return instrumentationLibraries
 }
-
-
 
 func convertConfigOptions(options []ConfigOption) []odigosv1.ConfigOption {
 	commonOptions := make([]odigosv1.ConfigOption, len(options))
@@ -94,45 +90,42 @@ func convertConfigOptions(options []ConfigOption) []odigosv1.ConfigOption {
 }
 
 func findContainerIndex(options []odigosv1.OptionByContainer, containerName string) int {
-    for i, option := range options {
-        if option.ContainerName == containerName {
-            return i
-        }
-    }
-    return -1
+	for i, option := range options {
+		if option.ContainerName == containerName {
+			return i
+		}
+	}
+	return -1
 }
 
-
-
 func updateInstrumentedApplication(ctx context.Context, kubeclient client.Client, podWorkload *common.PodWorkload, containerName string, configOptions map[string][]ConfigOption) error {
-    // Check if the InstrumentedApplication already exists
-    instrumentedApplicationCrd := &odigosv1.InstrumentedApplication{}
-    instrumentedApplicationKey := client.ObjectKey{
-        Namespace: podWorkload.Namespace,
-        Name:      commonutils.GetRuntimeObjectName(podWorkload.Name, podWorkload.Kind),
-    }
+	// Check if the InstrumentedApplication already exists
+	instrumentedApplicationCrd := &odigosv1.InstrumentedApplication{}
+	instrumentedApplicationKey := client.ObjectKey{
+		Namespace: podWorkload.Namespace,
+		Name:      workload.GetRuntimeObjectName(podWorkload.Name, podWorkload.Kind),
+	}
 
-    err := kubeclient.Get(ctx, instrumentedApplicationKey, instrumentedApplicationCrd)
-    if err != nil {
-        return err
-    }
+	err := kubeclient.Get(ctx, instrumentedApplicationKey, instrumentedApplicationCrd)
+	if err != nil {
+		return err
+	}
 
-    if containerIndex := findContainerIndex(instrumentedApplicationCrd.Spec.Options, containerName); containerIndex >= 0  {
+	if containerIndex := findContainerIndex(instrumentedApplicationCrd.Spec.Options, containerName); containerIndex >= 0 {
 		instrumentedApplicationCrd.Spec.Options[containerIndex].InstrumentationLibraries = convertToInstrumentationLibraries(configOptions)
 
 	} else {
 		newOption := odigosv1.OptionByContainer{
-			ContainerName:           containerName,
+			ContainerName:            containerName,
 			InstrumentationLibraries: convertToInstrumentationLibraries(configOptions),
 		}
 		instrumentedApplicationCrd.Spec.Options = append(instrumentedApplicationCrd.Spec.Options, newOption)
 	}
 
+	if err := kubeclient.Update(ctx, instrumentedApplicationCrd); err != nil {
+		log.Logger.Error(err, "failed to update InstrumentedApplication")
+		return err
+	}
 
-    if err := kubeclient.Update(ctx, instrumentedApplicationCrd); err != nil {
-        log.Logger.Error(err, "failed to update InstrumentedApplication")
-        return err
-    }
-
-    return nil
+	return nil
 }

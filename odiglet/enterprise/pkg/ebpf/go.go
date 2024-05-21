@@ -9,7 +9,7 @@ import (
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/consts"
-	commonutils "github.com/odigos-io/odigos/common/utils"
+	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 	"github.com/odigos-io/odigos/odiglet/pkg/env"
 	"github.com/odigos-io/odigos/odiglet/pkg/kube/utils"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
@@ -72,7 +72,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx conte
 	instrumentationConfig := &odigosv1.InstrumentationConfig{}
 	instrumentationConfigKey := client.ObjectKey{
 		Namespace: podWorkload.Namespace,
-		Name:      commonutils.GetRuntimeObjectName(podWorkload.Name, podWorkload.Kind),
+		Name:      workload.GetRuntimeObjectName(podWorkload.Name, podWorkload.Kind),
 	}
 	err = g.kubeclient.Get(ctx, instrumentationConfigKey, instrumentationConfig)
 	if err != nil {
