@@ -4,7 +4,7 @@ go 1.22.0
 
 require (
 	github.com/kubevirt/device-plugin-manager v1.19.5
-	github.com/odigos-io/ebpf-generic-instrumentation v0.0.0-20240507113311-9964f7c99c36
+	github.com/odigos-io/ebpf-generic-instrumentation v0.0.0-20240519114451-512cb6ce5d02
 	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20240506143221-738c470423bb
 	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20240506143221-738c470423bb
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20240507052149-b6157ec78dc9
@@ -125,7 +125,7 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20240512131925-fd266b10a101
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20240521121605-cb06edaa488d
 
 replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.61
 
