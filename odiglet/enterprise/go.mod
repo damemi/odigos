@@ -10,10 +10,10 @@ require (
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20240507052149-b6157ec78dc9
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20240507052211-73bdbece56c8
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.0.61
-	github.com/odigos-io/odigos/common v1.0.61
-	github.com/odigos-io/odigos/k8sutils v1.0.61
-	github.com/odigos-io/odigos/odiglet v1.0.61
+	github.com/odigos-io/odigos/api v1.0.62
+	github.com/odigos-io/odigos/common v1.0.62
+	github.com/odigos-io/odigos/k8sutils v1.0.62
+	github.com/odigos-io/odigos/odiglet v1.0.62
 	go.opentelemetry.io/auto v0.12.0-alpha.0.20240520104443-25e96b9e3b97
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.26.0
 	go.opentelemetry.io/otel/trace v1.26.0
@@ -127,11 +127,11 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20240521121605-cb06edaa488d
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.61
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.62
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.61
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.62
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.61
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.62
 
 // Used for testing purposes
 // replace github.com/odigos-io/odigos/odiglet => github.com/RonFed/odigos_fork/odiglet v0.0.0-20240421111529-2a509db1b6e6
