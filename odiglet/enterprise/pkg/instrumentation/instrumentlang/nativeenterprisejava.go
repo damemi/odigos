@@ -1,6 +1,10 @@
 package instrumentlang
 
-import "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
+import (
+	"github.com/odigos-io/odigos/common"
+	"github.com/odigos-io/odigos/common/envOverwrite"
+	"k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
+)
 
 const (
 	javaOtelLogsExporterEnvVar   = "OTEL_LOGS_EXPORTER"
@@ -11,10 +15,11 @@ const (
 )
 
 func NativeEnterpriseJava(deviceId string) *v1beta1.ContainerAllocateResponse {
+	javaOptionsVal, _ := envOverwrite.ValToAppend(javaToolOptionsEnvVar, common.OtelSdkNativeEnterprise)
 	return &v1beta1.ContainerAllocateResponse{
 		Envs: map[string]string{
-			javaToolOptionsEnvVar:        javaToolOptionsPatternNativeEnterprise,
-			javaOptsEnvVar:               javaToolOptionsPatternNativeEnterprise,
+			javaToolOptionsEnvVar:        javaOptionsVal,
+			javaOptsEnvVar:               javaOptionsVal,
 			// The extension jar will take care of exporting
 			javaOtelLogsExporterEnvVar: "none",
 			javaOtelMetricsExporter:    "none",

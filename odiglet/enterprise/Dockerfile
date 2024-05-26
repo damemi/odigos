@@ -10,12 +10,17 @@ RUN --mount=type=secret,id=github_token \
 RUN mkdir enterprise-workspace && pip install --target enterprise-workspace ./ebpf-generic-instrumentation/dtrace-injector
 
 FROM node:21.6.2-bullseye AS nodejs-builder
+# NodeJS eBPF
 WORKDIR /nodejs-instrumentation
 RUN apt update -y && apt install -y systemtap-sdt-dev
 RUN --mount=type=secret,id=github_token \
     git clone https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-nodejs-instrumentation.git \
     && cd ebpf-nodejs-instrumentation/dtrace-injector \
     && make build
+# Opentelemetry nodejs instrumentation
+WORKDIR /nodejs-instrumentation/native
+COPY odiglet/agents/nodejs .
+RUN npm install
 
 FROM busybox AS dotnet-builder
 WORKDIR /dotnet-instrumentation
@@ -71,10 +76,13 @@ COPY --from=python-builder /python-instrumentation/workspace /instrumentations/p
 COPY --from=python-builder /python-instrumentation/enterprise-workspace /instrumentations/python-ebpf
 
 # NodeJS eBPF
-COPY --from=nodejs-builder /nodejs-instrumentation/ebpf-nodejs-instrumentation/dtrace-injector/dist /instrumentations/nodejs/
-COPY --from=nodejs-builder /nodejs-instrumentation/ebpf-nodejs-instrumentation/dtrace-injector/lib /instrumentations/nodejs/lib
-COPY --from=nodejs-builder /nodejs-instrumentation/ebpf-nodejs-instrumentation/dtrace-injector/build/Release/ /instrumentations/nodejs/build/Release/
-COPY --from=nodejs-builder /nodejs-instrumentation/ebpf-nodejs-instrumentation/dtrace-injector/node_modules /instrumentations/nodejs/node_modules
+COPY --from=nodejs-builder /nodejs-instrumentation/ebpf-nodejs-instrumentation/dtrace-injector/dist /instrumentations/nodejs-ebpf/
+COPY --from=nodejs-builder /nodejs-instrumentation/ebpf-nodejs-instrumentation/dtrace-injector/lib /instrumentations/nodejs-ebpf/lib
+COPY --from=nodejs-builder /nodejs-instrumentation/ebpf-nodejs-instrumentation/dtrace-injector/build/Release/ /instrumentations/nodejs-ebpf/build/Release/
+COPY --from=nodejs-builder /nodejs-instrumentation/ebpf-nodejs-instrumentation/dtrace-injector/node_modules /instrumentations/nodejs-ebpf/node_modules
+
+# NodeJS native
+COPY --from=nodejs-builder /nodejs-instrumentation/native/build/workspace /instrumentations/nodejs
 
 # .NET
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
