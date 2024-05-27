@@ -24,13 +24,16 @@ type JavaInstrumentationFactoryEnterprise struct {
 	kubeclient client.Client
 }
 
+// compile time check
+var _ OtelEbpfSdkEnterprise = &JavaOtelEbpfSdkEnterprise{}
+
 func NewJavaInstrumentationFactoryEnterprise(kubeclient client.Client) InstrumentationFactoryEnterprise[*JavaOtelEbpfSdkEnterprise] {
 	return &JavaInstrumentationFactoryEnterprise{
 		kubeclient: kubeclient,
 	}
 }
 
-func (g *JavaInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string, podName string) (*JavaOtelEbpfSdkEnterprise, error) {
+func (g *JavaInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string, podName string, loadedIndicator chan struct {}) (*JavaOtelEbpfSdkEnterprise, error) {
 	defaultExporter, err := otlptracegrpc.New(
 		ctx,
 		otlptracegrpc.WithInsecure(),

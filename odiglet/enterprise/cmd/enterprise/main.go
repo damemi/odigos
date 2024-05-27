@@ -55,7 +55,9 @@ func main() {
 		os.Exit(-1)
 	}
 
-	ebpfDirectors, err := initEbpf(mgr.GetClient())
+	ctx := signals.SetupSignalHandler()
+
+	ebpfDirectors, err := initEbpf(ctx, mgr.GetClient())
 	if err != nil {
 		log.Logger.Error(err, "Failed to init eBPF director")
 		os.Exit(-1)
@@ -83,7 +85,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx := signals.SetupSignalHandler()
 	err = kube.StartManager(ctx, mgr)
 	if err != nil {
 		log.Logger.Error(err, "Failed to start controller-runtime manager")
@@ -149,16 +150,16 @@ func startDeviceManager(clientset *kubernetes.Clientset) {
 	manager.Run()
 }
 
-func initEbpf(kubeclient client.Client) (ebpf.DirectorsEnterpriseMap, error) {
+func initEbpf(ctx context.Context, kubeclient client.Client) (ebpf.DirectorsEnterpriseMap, error) {
 	goInstrumentationFactory := ebpf.NewGoInstrumentationFactoryEnterprise(kubeclient)
-	goDirector := ebpf.NewEbpfDirectorEnterprise(common.GoProgrammingLanguage, goInstrumentationFactory)
+	goDirector := ebpf.NewEbpfDirectorEnterprise(ctx, kubeclient, common.GoProgrammingLanguage, goInstrumentationFactory)
 	goDirectorKey := odigosebpf.DirectorKey{
 		Language: common.GoProgrammingLanguage,
 		OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
 	}
 
 	javaInstrumentationFactory := ebpf.NewJavaInstrumentationFactoryEnterprise(kubeclient)
-	javaDirector := ebpf.NewEbpfDirectorEnterprise(common.JavaProgrammingLanguage, javaInstrumentationFactory)
+	javaDirector := ebpf.NewEbpfDirectorEnterprise(ctx, kubeclient, common.JavaProgrammingLanguage, javaInstrumentationFactory)
 	javaDirectorKey := odigosebpf.DirectorKey{
 		Language: common.JavaProgrammingLanguage,
 		OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
@@ -172,28 +173,28 @@ func initEbpf(kubeclient client.Client) (ebpf.DirectorsEnterpriseMap, error) {
 	// we might consider defining this one as ebpf-enterprise instead of the old one.
 	// Currently we can't define this as ebpf-enterprise because it will conflict with the old Java ebpf director.
 	javaExtensionInstrumentationFactory := ebpf.NewJavaExtensionInstrumentationFactoryEnterprise(kubeclient)
-	javaExtensionDirector := ebpf.NewEbpfDirectorEnterprise(common.JavaProgrammingLanguage, javaExtensionInstrumentationFactory)
+	javaExtensionDirector := ebpf.NewEbpfDirectorEnterprise(ctx, kubeclient, common.JavaProgrammingLanguage, javaExtensionInstrumentationFactory)
 	javaExtensionDirectorKey := odigosebpf.DirectorKey{
 		Language: common.JavaProgrammingLanguage,
 		OtelSdk:  common.OtelSdk{SdkType: common.NativeOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
 	}
 
 	pythonInstrumentationFactory := ebpf.NewPythonInstrumentationFactoryEnterprise(kubeclient)
-	pythonDirector := ebpf.NewEbpfDirectorEnterprise(common.PythonProgrammingLanguage, pythonInstrumentationFactory)
+	pythonDirector := ebpf.NewEbpfDirectorEnterprise(ctx, kubeclient, common.PythonProgrammingLanguage, pythonInstrumentationFactory)
 	pythonDirectorKey := odigosebpf.DirectorKey{
 		Language: common.PythonProgrammingLanguage,
 		OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
 	}
 
 	nodeJSInstrumentationFactory := ebpf.NewNodeJSInstrumentationFactoryEnterprise(kubeclient)
-	nodeJSDirector := ebpf.NewEbpfDirectorEnterprise(common.JavascriptProgrammingLanguage, nodeJSInstrumentationFactory)
+	nodeJSDirector := ebpf.NewEbpfDirectorEnterprise(ctx, kubeclient, common.JavascriptProgrammingLanguage, nodeJSInstrumentationFactory)
 	nodeJSDirectorKey := odigosebpf.DirectorKey{
 		Language: common.JavascriptProgrammingLanguage,
 		OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
 	}
 
 	mySQLInstrumentationFactory := ebpf.NewMySQLInstrumentationFactoryEnterprise(kubeclient)
-	mySQLDirector := ebpf.NewEbpfDirectorEnterprise(common.MySQLProgrammingLanguage, mySQLInstrumentationFactory)
+	mySQLDirector := ebpf.NewEbpfDirectorEnterprise(ctx, kubeclient, common.MySQLProgrammingLanguage, mySQLInstrumentationFactory)
 	mySQLDirectorKey := odigosebpf.DirectorKey{
 		Language: common.MySQLProgrammingLanguage,
 		OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},

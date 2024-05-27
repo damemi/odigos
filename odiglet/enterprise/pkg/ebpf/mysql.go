@@ -24,13 +24,16 @@ type MySQLInstrumentationFactoryEnterprise struct {
 	kubeclient client.Client
 }
 
+// compile time check
+var _ OtelEbpfSdkEnterprise = &MySQLOtelEbpfSdkEnterprise{}
+
 func NewMySQLInstrumentationFactoryEnterprise(kubeclient client.Client) InstrumentationFactoryEnterprise[*MySQLOtelEbpfSdkEnterprise] {
 	return &MySQLInstrumentationFactoryEnterprise{
 		kubeclient: kubeclient,
 	}
 }
 
-func (g *MySQLInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string, podName string) (*MySQLOtelEbpfSdkEnterprise, error) {
+func (g *MySQLInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string, podName string, loadedIndicator chan struct {}) (*MySQLOtelEbpfSdkEnterprise, error) {
 	defaultExporter, err := otlptracegrpc.New(
 		ctx,
 		otlptracegrpc.WithInsecure(),

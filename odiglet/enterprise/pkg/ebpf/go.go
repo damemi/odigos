@@ -27,13 +27,16 @@ type GoInstrumentationFactoryEnterprise struct {
 	kubeclient client.Client
 }
 
+// compile time check
+var _ OtelEbpfSdkEnterprise = &GoOtelEbpfSdkEnterprise{}
+
 func NewGoInstrumentationFactoryEnterprise(kubeclient client.Client) InstrumentationFactoryEnterprise[*GoOtelEbpfSdkEnterprise] {
 	return &GoInstrumentationFactoryEnterprise{
 		kubeclient: kubeclient,
 	}
 }
 
-func (g *GoInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string, podName string) (*GoOtelEbpfSdkEnterprise, error) {
+func (g *GoInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string, podName string, loadedIndicator chan struct {}) (*GoOtelEbpfSdkEnterprise, error) {
 
 	defaultExporter, err := otlptracegrpc.New(
 		ctx,
@@ -52,6 +55,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx conte
 		auto.WithServiceName(serviceName),
 		auto.WithTraceExporter(defaultExporter),
 		auto.WithGlobal(),
+		auto.WithLoadedIndicator(loadedIndicator),
 	)
 	if err != nil {
 		log.Logger.Error(err, "instrumentation setup failed")

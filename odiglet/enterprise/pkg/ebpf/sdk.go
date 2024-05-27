@@ -1,9 +1,6 @@
 package ebpf
 
 import (
-	"context"
-
-	"github.com/odigos-io/odigos/common"
 	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	apitrace "go.opentelemetry.io/otel/trace"
 )
@@ -25,5 +22,5 @@ type OtelEbpfSdkEnterprise interface {
 }
 
 type InstrumentationFactoryEnterprise[T OtelEbpfSdkEnterprise] interface {
-	CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string, podName string) (T, error)
+	odigosebpf.InstrumentationFactory[T]
 }

@@ -25,13 +25,15 @@ type NodeJSInstrumentationFactoryEnterprise struct {
 	kubeclient client.Client
 }
 
+var _ OtelEbpfSdkEnterprise = &NodeJSOtelEbpfSdkEnterprise{}
+
 func NewNodeJSInstrumentationFactoryEnterprise(kubeclient client.Client) InstrumentationFactoryEnterprise[*NodeJSOtelEbpfSdkEnterprise] {
 	return &NodeJSInstrumentationFactoryEnterprise{
 		kubeclient: kubeclient,
 	}
 }
 
-func (n *NodeJSInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string, podName string) (*NodeJSOtelEbpfSdkEnterprise, error) {
+func (n *NodeJSInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string, podName string, loadedIndicator chan struct {}) (*NodeJSOtelEbpfSdkEnterprise, error) {
 	c := otlptracegrpc.NewClient(otlptracegrpc.WithInsecure(),
 		otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%d", env.Current.NodeIP, consts.OTLPPort)))
 	exporter, err := opentelemetry.New(ctx, c)

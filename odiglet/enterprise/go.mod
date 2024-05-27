@@ -11,10 +11,10 @@ require (
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20240507052211-73bdbece56c8
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
 	github.com/odigos-io/odigos/api v1.0.63
-	github.com/odigos-io/odigos/common v1.0.63-0.20240526121041-f8b368659309
-	github.com/odigos-io/odigos/k8sutils v1.0.63-0.20240526121041-f8b368659309
-	github.com/odigos-io/odigos/odiglet v1.0.63-0.20240526121041-f8b368659309
-	go.opentelemetry.io/auto v0.12.0-alpha.0.20240520104443-25e96b9e3b97
+	github.com/odigos-io/odigos/common v1.0.63-0.20240527075118-839908a09a6a
+	github.com/odigos-io/odigos/k8sutils v1.0.63-0.20240527075118-839908a09a6a
+	github.com/odigos-io/odigos/odiglet v1.0.63-0.20240527075118-839908a09a6a
+	go.opentelemetry.io/auto v0.12.0-alpha.0.20240523062926-f9ad92d875aa
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.26.0
 	go.opentelemetry.io/otel/trace v1.26.0
 	k8s.io/apimachinery v0.30.1
@@ -63,7 +63,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
-	github.com/mattn/go-isatty v0.0.12 // indirect
+	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
@@ -125,13 +125,13 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20240521121605-cb06edaa488d
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20240526081558-615c04813d5a
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.63-0.20240526121041-f8b368659309
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.63-0.20240527075118-839908a09a6a
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.63-0.20240526121041-f8b368659309
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.63-0.20240527075118-839908a09a6a
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.63-0.20240526121041-f8b368659309
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.63-0.20240527075118-839908a09a6a
 
 // Used for testing purposes
 // replace github.com/odigos-io/odigos/odiglet => github.com/RonFed/odigos_fork/odiglet add_java_envs_to_envOverwrite

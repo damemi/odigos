@@ -25,13 +25,16 @@ type PythonInstrumentationFactoryEnterprise struct {
 	kubeclient client.Client
 }
 
+// compile time check
+var _ OtelEbpfSdkEnterprise = &PythonOtelEbpfSdkEnterprise{}
+
 func NewPythonInstrumentationFactoryEnterprise(kubeclient client.Client) InstrumentationFactoryEnterprise[*PythonOtelEbpfSdkEnterprise] {
 	return &PythonInstrumentationFactoryEnterprise{
 		kubeclient: kubeclient,
 	}
 }
 
-func (p *PythonInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string, podName string) (*PythonOtelEbpfSdkEnterprise, error) {
+func (p *PythonInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string, podName string, loadedIndicator chan struct {}) (*PythonOtelEbpfSdkEnterprise, error) {
 	c := otlptracegrpc.NewClient(otlptracegrpc.WithInsecure(),
 		otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%d", env.Current.NodeIP, consts.OTLPPort)))
 	exporter, err := opentelemetry.New(ctx, c)

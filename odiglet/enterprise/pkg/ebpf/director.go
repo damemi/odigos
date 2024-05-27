@@ -1,12 +1,14 @@
 package ebpf
 
 import (
+	"context"
 	"fmt"
 
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common"
 	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type DirectorEnterprise interface {
@@ -21,9 +23,9 @@ type EbpfDirectorEnterprise[T OtelEbpfSdkEnterprise] struct {
 	*odigosebpf.EbpfDirector[T]
 }
 
-func NewEbpfDirectorEnterprise[T OtelEbpfSdkEnterprise](language common.ProgrammingLanguage, instrumentationFactory InstrumentationFactoryEnterprise[T]) DirectorEnterprise {
+func NewEbpfDirectorEnterprise[T OtelEbpfSdkEnterprise](ctx context.Context, client client.Client, language common.ProgrammingLanguage, instrumentationFactory InstrumentationFactoryEnterprise[T]) DirectorEnterprise {
 	return &EbpfDirectorEnterprise[T]{
-		EbpfDirector: odigosebpf.NewEbpfDirector[T](language, instrumentationFactory),
+		EbpfDirector: odigosebpf.NewEbpfDirector[T](ctx, client, language, instrumentationFactory),
 	}
 }
 
