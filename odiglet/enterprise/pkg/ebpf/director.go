@@ -8,6 +8,7 @@ import (
 	"github.com/odigos-io/odigos/common"
 	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -23,9 +24,9 @@ type EbpfDirectorEnterprise[T OtelEbpfSdkEnterprise] struct {
 	*odigosebpf.EbpfDirector[T]
 }
 
-func NewEbpfDirectorEnterprise[T OtelEbpfSdkEnterprise](ctx context.Context, client client.Client, language common.ProgrammingLanguage, instrumentationFactory InstrumentationFactoryEnterprise[T]) DirectorEnterprise {
+func NewEbpfDirectorEnterprise[T OtelEbpfSdkEnterprise](ctx context.Context, client client.Client, scheme *runtime.Scheme, language common.ProgrammingLanguage, instrumentationFactory InstrumentationFactoryEnterprise[T]) DirectorEnterprise {
 	return &EbpfDirectorEnterprise[T]{
-		EbpfDirector: odigosebpf.NewEbpfDirector[T](ctx, client, language, instrumentationFactory),
+		EbpfDirector: odigosebpf.NewEbpfDirector[T](ctx, client, scheme, language, instrumentationFactory),
 	}
 }
 
