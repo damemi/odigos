@@ -9,12 +9,277 @@ spec:
     trace_statements:
       - context: span
         statements:
-        # js
-        - set(attributes["category"], "http") where instrumentation_scope.name == "@opentelemetry/instrumentation-http"
-        - set(attributes["subcategory"], "example") where instrumentation_scope.name == "@opentelemetry/instrumentation-http"
-        # go
-        - set(attributes["category"], "http") where instrumentation_scope.name == "go.opentelemetry.io/auto/net/http"
-        - set(attributes["subcategory"], "example") where instrumentation_scope.name == "go.opentelemetry.io/auto/net/http"
+
+        ######## Node.js
+
+        # HTTP
+        - set(attributes["odigos.category"], "HTTP") where 
+            instrumentation_scope.name == "@opentelemetry/instrumentation-connect" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-express" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-fastify" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-hapi" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-http" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-koa" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-restify" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-router" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-nestjs-core" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-undici"
+        - set(attributes["odigos.sub_category"], attributes["http.request.method"]) where 
+            instrumentation_scope.name == "@opentelemetry/instrumentation-connect" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-express" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-fastify" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-hapi" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-http" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-koa" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-restify" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-router" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-nestjs-core" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-undici"
+        - set(attributes["odigos.sub_category"], attributes["http.method"]) where 
+            instrumentation_scope.name == "@opentelemetry/instrumentation-connect" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-express" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-fastify" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-hapi" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-http" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-koa" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-restify" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-router" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-nestjs-core" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-undici"
+
+        # Database
+        - set(attributes["odigos.category"], "Database") where 
+            instrumentation_scope.name == "@opentelemetry/instrumentation-cassandra-driver" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-ioredis" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-knex" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-mongodb" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-mongoose" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-mysql" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-mysql2" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-pg" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-redis" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-redis-4" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-tedious"
+        - set(attributes["odigos.sub_category"], attributes["db.system"]) where 
+            instrumentation_scope.name == "@opentelemetry/instrumentation-cassandra-driver" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-ioredis" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-knex" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-mongodb" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-mongoose" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-mysql" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-mysql2" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-pg" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-redis" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-redis-4" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-tedious"
+
+        # Messaging queues
+        - set(attributes["odigos.category"], "Messaging queues") where 
+            instrumentation_scope.name == "@opentelemetry/instrumentation-amqplib" or 
+            instrumentation_scope.name == "@opentelemetry/instrumentation-socket.io"
+        - set(attributes["odigos.sub_category"], attributes["messaging.system"]) where 
+            instrumentation_scope.name == "@opentelemetry/instrumentation-amqplib" or 
+            instrumentation_scope.name == "@opentelemetry/instrumentation-socket.io"
+
+        # RPC Systems
+        - set(attributes["odigos.category"], "RPC Systems") where 
+            instrumentation_scope.name == "@opentelemetry/instrumentation-aws-sdk" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-grpc"
+        - set(attributes["odigos.sub_category"], attributes["rpc.system"]) where 
+            instrumentation_scope.name == "@opentelemetry/instrumentation-aws-sdk" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-grpc"
+
+        # Programming Language
+        - set(attributes["odigos.category"], "Programming Language") where 
+            instrumentation_scope.name == "@opentelemetry/instrumentation-dataloader" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-dns" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-fs" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-generic-pool" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-graphql" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-lru-memoizer" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-net"
+        - set(attributes["odigos.sub_category"], attributes["telemetry.sdk.language"]) where 
+            instrumentation_scope.name == "@opentelemetry/instrumentation-dataloader" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-dns" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-fs" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-generic-pool" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-graphql" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-lru-memoizer" or
+            instrumentation_scope.name == "@opentelemetry/instrumentation-net"
+
+        ######## golang
+
+        # HTTP
+        - set(attributes["odigos.category"], "HTTP") where 
+            instrumentation_scope.name == "go.opentelemetry.io/auto/net/http" or
+            instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/gin-gonic/gin"
+        - set(attributes["odigos.sub_category"], attributes["http.request.method"]) where
+            instrumentation_scope.name == "go.opentelemetry.io/auto/net/http" or
+            instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/gin-gonic/gin"
+
+        # Database
+        - set(attributes["odigos.category"], "Database") where 
+            instrumentation_scope.name == "go.opentelemetry.io/auto/database/sql" or
+            instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/bradfitz/gomemcache/memcache" or
+            instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/elastic/go-elasticsearch" or
+            instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/gocql/gocql"
+        - set(attributes["odigos.sub_category"], attributes["db.system"]) where
+            instrumentation_scope.name == "go.opentelemetry.io/auto/database/sql" or
+            instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/bradfitz/gomemcache/memcache" or
+            instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/elastic/go-elasticsearch" or
+            instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/gocql/gocql"
+
+        # Messaging queues
+        - set(attributes["odigos.category"], "Messaging queues") where 
+            instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/segmentio/kafka-go" or 
+            instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/IBM/sarama" or 
+            instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/rabbitmq/amqp091-go" or 
+            instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/apache/pulsar-client-go/pulsar"
+        - set(attributes["odigos.sub_category"], attributes["messaging.system"]) where
+            instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/segmentio/kafka-go" or 
+            instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/IBM/sarama" or 
+            instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/rabbitmq/amqp091-go" or 
+            instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/apache/pulsar-client-go/pulsar"
+
+        # RPC Systems
+        - set(attributes["odigos.category"], "RPC Systems") where 
+            instrumentation_scope.name == "go.opentelemetry.io/auto/google.golang.org/grpc"
+        - set(attributes["odigos.sub_category"], attributes["rpc.system"]) where
+            instrumentation_scope.name == "go.opentelemetry.io/auto/google.golang.org/grpc"
+        
+
+        ######## Python
+
+        # HTTP
+        - set(attributes["odigos.category"], "HTTP") where 
+            instrumentation_scope.name == "opentelemetry.instrumentation.aiohttp_client" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.asgi" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.boto" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.django" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.falcon" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.fastapi" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.flask" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.httpx" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.pyramid" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.starlette" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.tornado" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.urllib" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.urllib3" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.wsgi"
+        - set(attributes["odigos.sub_category"], attributes["http.method"]) where 
+            instrumentation_scope.name == "opentelemetry.instrumentation.aiohttp_client" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.asgi" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.boto" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.django" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.falcon" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.fastapi" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.flask" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.httpx" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.pyramid" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.starlette" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.tornado" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.urllib" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.urllib3" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.wsgi" 
+        - set(attributes["odigos.sub_category"], attributes["http.request.method"]) where
+            instrumentation_scope.name == "opentelemetry.instrumentation.aiohttp_client" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.asgi" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.boto" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.django" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.falcon" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.fastapi" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.flask" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.httpx" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.pyramid" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.starlette" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.tornado" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.urllib" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.urllib3" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.wsgi"
+
+        # Database
+        - set(attributes["odigos.category"], "Database") where 
+            instrumentation_scope.name == "opentelemetry.instrumentation.aiopg" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.asyncpg" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.cassandra" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.dbapi" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.elasticsearch" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.mysql" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.mysqlclient" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.psycopg2" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.pymemcache" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.pymongo" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.pymysql" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.redis" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.requests" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.sqlalchemy" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.sqlite3" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.tortoiseorm"
+        - set(attributes["odigos.sub_category"], attributes["db.system"]) where
+            instrumentation_scope.name == "opentelemetry.instrumentation.aiopg" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.asyncpg" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.cassandra" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.dbapi" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.elasticsearch" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.mysql" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.mysqlclient" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.psycopg2" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.pymemcache" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.pymongo" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.pymysql" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.redis" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.requests" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.sqlalchemy" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.sqlite3" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.tortoiseorm"
+
+
+        # Messaging queues
+        - set(attributes["odigos.category"], "Messaging queues") where 
+            instrumentation_scope.name == "opentelemetry.instrumentation.aio_pika" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.boto3sqs" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.celery" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.confluent_kafka" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.kafka" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.pika" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.remoulade"
+        - set(attributes["odigos.sub_category"], attributes["messaging.system"]) where
+            instrumentation_scope.name == "opentelemetry.instrumentation.aio_pika" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.boto3sqs" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.celery" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.confluent_kafka" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.kafka" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.pika" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.remoulade"
+
+        # RPC Systems
+        - set(attributes["odigos.category"], "RPC Systems") where 
+            instrumentation_scope.name == "opentelemetry.instrumentation.botocore" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.grpc"
+        - set(attributes["odigos.sub_category"], attributes["rpc.system"]) where
+            instrumentation_scope.name == "opentelemetry.instrumentation.botocore" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.grpc"
+
+        # Programming Language
+        - set(attributes["odigos.category"], "Programming Language") where 
+            instrumentation_scope.name == "opentelemetry.instrumentation.asyncio" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.jinja2" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.sklearn"
+        - set(attributes["odigos.sub_category"], attributes["telemetry.sdk.language"]) where
+            instrumentation_scope.name == "opentelemetry.instrumentation.asyncio" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.jinja2" or
+            instrumentation_scope.name == "opentelemetry.instrumentation.sklearn"
+
+        ######## Java
+
+        # HTTP
+        - set(attributes["odigos.category"], "HTTP") where 
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.tomcat-*")
+        - set(attributes["odigos.sub_category"], attributes["http.method"]) where
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.tomcat-*")
+        - set(attributes["odigos.sub_category"], attributes["http.request.method"]) where
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.tomcat-*")
+
   signals:
     - TRACES
   collectorRoles:
