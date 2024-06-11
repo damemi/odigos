@@ -7,16 +7,16 @@ import (
 )
 
 const (
-	javaToolOptionsEnvVar        = "JAVA_TOOL_OPTIONS"
-	javaOptsEnvVar               = "JAVA_OPTS"
+	javaToolOptionsEnvVar = "JAVA_TOOL_OPTIONS"
+	javaOptsEnvVar        = "JAVA_OPTS"
 )
 
-func EnterpriseJava(deviceId string) *v1beta1.ContainerAllocateResponse {
+func EnterpriseJava(deviceId string, uniqueDestinationSignals map[common.ObservabilitySignal]struct{}) *v1beta1.ContainerAllocateResponse {
 	javaToolOptionsPattern, _ := envOverwrite.ValToAppend(javaToolOptionsEnvVar, common.OtelSdkEbpfEnterprise)
 	return &v1beta1.ContainerAllocateResponse{
 		Envs: map[string]string{
-			javaToolOptionsEnvVar:        javaToolOptionsPattern,
-			javaOptsEnvVar:               javaToolOptionsPattern,
+			javaToolOptionsEnvVar: javaToolOptionsPattern,
+			javaOptsEnvVar:        javaToolOptionsPattern,
 		},
 		Mounts: []*v1beta1.Mount{
 			{

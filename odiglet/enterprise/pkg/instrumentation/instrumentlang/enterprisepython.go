@@ -1,9 +1,9 @@
 package instrumentlang
 
 import (
-	"k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/envOverwrite"
+	"k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 const (
@@ -12,7 +12,7 @@ const (
 	pythonConfiguratorValue  = "ebpf"
 )
 
-func EnterprisePython(deviceId string) *v1beta1.ContainerAllocateResponse {
+func EnterprisePython(deviceId string, uniqueDestinationSignals map[common.ObservabilitySignal]struct{}) *v1beta1.ContainerAllocateResponse {
 	pythonPathValue, _ := envOverwrite.ValToAppend(pythonPathEnvVar, common.OtelSdkEbpfEnterprise)
 	return &v1beta1.ContainerAllocateResponse{
 		Envs: map[string]string{

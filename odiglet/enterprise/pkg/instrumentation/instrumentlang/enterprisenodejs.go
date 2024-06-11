@@ -10,7 +10,7 @@ const (
 	nodeOptionsEnvVar = "NODE_OPTIONS"
 )
 
-func EnterpriseNodeJS(deviceId string) *v1beta1.ContainerAllocateResponse {
+func EnterpriseNodeJS(deviceId string, uniqueDestinationSignals map[common.ObservabilitySignal]struct{}) *v1beta1.ContainerAllocateResponse {
 	nodeOptionsValue, _ := envOverwrite.ValToAppend(nodeOptionsEnvVar, common.OtelSdkEbpfEnterprise)
 	return &v1beta1.ContainerAllocateResponse{
 		Envs: map[string]string{

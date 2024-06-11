@@ -10,17 +10,17 @@ require (
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20240507052149-b6157ec78dc9
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20240507052211-73bdbece56c8
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.0.67
-	github.com/odigos-io/odigos/common v1.0.67
-	github.com/odigos-io/odigos/k8sutils v1.0.67
-	github.com/odigos-io/odigos/odiglet v1.0.67
+	github.com/odigos-io/odigos/api v1.0.68
+	github.com/odigos-io/odigos/common v1.0.68
+	github.com/odigos-io/odigos/k8sutils v1.0.68
+	github.com/odigos-io/odigos/odiglet v1.0.68
 	go.opentelemetry.io/auto v0.12.0-alpha.0.20240523062926-f9ad92d875aa
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.27.0
 	go.opentelemetry.io/otel/trace v1.27.0
 	k8s.io/apimachinery v0.30.1
 	k8s.io/client-go v0.30.1
 	k8s.io/kubelet v0.30.1
-	sigs.k8s.io/controller-runtime v0.18.2
+	sigs.k8s.io/controller-runtime v0.18.4
 )
 
 require (
@@ -125,13 +125,13 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20240605071048-00b010ce85a0
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20240610100340-6388ce587b76
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.67
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.68
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.67
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.68
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.67
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.68
 
 // Used for testing purposes
 // replace github.com/odigos-io/odigos/odiglet => github.com/RonFed/odigos_fork/odiglet add_java_envs_to_envOverwrite
