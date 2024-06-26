@@ -20,6 +20,8 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+
+	_ "net/http/pprof"
 )
 
 func main() {
@@ -35,6 +37,8 @@ func main() {
 		log.Logger.Error(err, "Failed to load env")
 		os.Exit(1)
 	}
+
+	go common.StartPprofServer(log.Logger)
 
 	// Init Kubernetes API client
 	cfg, err := rest.InClusterConfig()

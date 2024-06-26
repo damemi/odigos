@@ -268,8 +268,8 @@ github.com/odigos-io/mysql-instrumentation v0.0.0-20240507052211-73bdbece56c8 h1
 github.com/odigos-io/mysql-instrumentation v0.0.0-20240507052211-73bdbece56c8/go.mod h1:k549AWlew8sNJ4ekDdqGSLq4/2NPgP/aL/fZZZt2kC4=
 github.com/odigos-io/odigos/api v1.0.70 h1:yyA5H+fxRkulq9TKDG9NXxr//x6bp0UIKBWG9m3O6BI=
 github.com/odigos-io/odigos/api v1.0.70/go.mod h1:fsEhXx/iEE0c1aIO3jm82IZkA3pxoJgtwrqScmY9sxc=
-github.com/odigos-io/odigos/common v1.0.70 h1:MsVswq8sELiCvkZJSA0w/F6PBXCBbVUXOA/qiLfq+7A=
-github.com/odigos-io/odigos/common v1.0.70/go.mod h1:ab+iH/sTKO9n4Mv614lAt6/fQnzNcoWLrc6uDSuZNxU=
+github.com/odigos-io/odigos/common v1.0.71-0.20240624095513-4b9c013d8cab h1:PLWzJWjvpjcFVEaVb8LJsAmrp2dJbjVsT1+pRqlZUcg=
+github.com/odigos-io/odigos/common v1.0.71-0.20240624095513-4b9c013d8cab/go.mod h1:8Mi60CokZiY+fhwxravNNLH2bfEAwRaGQAEoi500+9U=
 github.com/odigos-io/odigos/k8sutils v1.0.70 h1:xyJzBpPoAJasGadCna/YYdxm7l05bK+BBKtIjTr7/As=
 github.com/odigos-io/odigos/k8sutils v1.0.70/go.mod h1:7RKDcVA1Ip7ZL9wPP/Vr6XIYBTLA6XArjYsYuo1KcQM=
 github.com/odigos-io/odigos/odiglet v1.0.70 h1:fGnoBGrY/R6TQ4g1g73m75iTrr6//SCfcnT+3TSA33Q=

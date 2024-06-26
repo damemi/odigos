@@ -127,7 +127,7 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20240616083248-797c9d230a36
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.70
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.71-0.20240624095513-4b9c013d8cab
 
 replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.70
 
