@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/odigos-io/odigos/odiglet/pkg/instrumentation/fs"
 	"os"
 
 	"github.com/kubevirt/device-plugin-manager/pkg/dpm"
@@ -18,13 +19,26 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	_ "net/http/pprof"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
-
-	_ "net/http/pprof"
 )
 
+func odigletInitPhase() {
+	err := fs.CopyAgentsDirectoryToHost()
+	if err != nil {
+		log.Logger.Error(err, "Failed to copy agents directory to host")
+		os.Exit(-1)
+	}
+	os.Exit(0)
+}
+
 func main() {
+	// If started in init mode
+	if len(os.Args) == 2 && os.Args[1] == "init" {
+		odigletInitPhase()
+	}
+
 	if err := log.Init(); err != nil {
 		panic(err)
 	}
@@ -125,8 +139,8 @@ func startDeviceManager(clientset *kubernetes.Clientset) {
 		// The third SDK is identical concept to the JS and Python SDKs (which are called ebpf-enterprise),
 		// we called it native-enterprise for backward compatibility, and the need to use both of them if we need to.
 		common.JavaProgrammingLanguage: {
-			otelSdkNativeCommunity: communityinstrumentlang.Java,
-			otelSdkEbpfEnterprise:  enterpriseinstrumentlang.EnterpriseJava,
+			otelSdkNativeCommunity:  communityinstrumentlang.Java,
+			otelSdkEbpfEnterprise:   enterpriseinstrumentlang.EnterpriseJava,
 			otelSdkNativeEnterprise: enterpriseinstrumentlang.NativeEnterpriseJava,
 		},
 		common.PythonProgrammingLanguage: {
