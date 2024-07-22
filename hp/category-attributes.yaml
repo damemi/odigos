@@ -270,15 +270,167 @@ spec:
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/jinja2" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/sklearn"
 
-        ######## Java
+          ######## Java
 
-        # HTTP
-        - set(attributes["odigos.category"], "HTTP") where 
-            IsMatch(instrumentation_scope.name, "io.opentelemetry.tomcat-*")
+          # HTTP
+        - set(attributes["odigos.category"], "HTTP") where
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.tomcat-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.akka*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.apache-httpclient*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.apache-httpasyncclient*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.armeria*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.google-http-client-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.grizzly-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.http-url-connection*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.java-http-client*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jetty-httpclient-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.okhttp-*")
+
         - set(attributes["odigos.sub_category"], attributes["http.method"]) where
-            IsMatch(instrumentation_scope.name, "io.opentelemetry.tomcat-*")
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.tomcat-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.akka*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.apache-httpclient*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.apache-httpasyncclient*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.armeria*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.google-http-client-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.grizzly-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.http-url-connection*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.java-http-client*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jetty-httpclient-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.okhttp-*")
+
         - set(attributes["odigos.sub_category"], attributes["http.request.method"]) where
-            IsMatch(instrumentation_scope.name, "io.opentelemetry.tomcat-*")
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.tomcat-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.akka*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.apache-httpclient*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.apache-httpasyncclient*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.armeria*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.google-http-client-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.grizzly-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.http-url-connection*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.java-http-client*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jetty-httpclient-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.okhttp-*")
+
+          # RPC Systems
+        - set(attributes["odigos.category"], "RPC Systems") where
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.apache-dubbo-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.grpc-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.rmi*")
+
+        - set(attributes["odigos.sub_category"], attributes["rpc.system"]) where
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.apache-dubbo-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.grpc-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.rmi*")
+
+          # SOAP
+        - set(attributes["odigos.category"], "SOAP") where
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.apache-dubbo-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jaxws-*")
+
+          # REST
+        - set(attributes["odigos.category"], "REST") where
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jaxrs-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.quarkus-resteasy-reactive*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.restlet-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.opensearch-rest-*")
+
+          # Messaging queues
+        - set(attributes["odigos.category"], "Messaging queues") where
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.rocketmq-client-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.spring-jms-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jms-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.kafka-clients-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.kafka-streams-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.reactor-kafka-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.spring-kafka-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.vertx-kafka-client-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.rabbitmq-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.spring-rabbit-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.netty-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.reactor-netty-*")
+
+        - set(attributes["odigos.sub_category"], attributes["messaging.system"]) where
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.rocketmq-client-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.spring-jms-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jms-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.kafka-clients-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.kafka-streams-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.reactor-kafka-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.spring-kafka-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.vertx-kafka-client-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.rabbitmq-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.spring-rabbit-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.netty-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.reactor-netty-*")
+
+
+          # Web Framework
+        - set(attributes["odigos.category"], "Web Framework") where
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.wicket-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.tapestry-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.dropwizard-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.finatra-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.grails-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.gwt-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jsp-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jsf-mojarra-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jsf-myfaces-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.play-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.ratpack-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.servlet-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.spark-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.spring-web*")
+
+          # Serverless
+        - set(attributes["odigos.category"], "Serverless") where
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.aws-lambda-*")
+
+          # Database
+        - set(attributes["odigos.category"], "Database") where
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.cassandra-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.couchbase-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.geode-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.mongo-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jdbc*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.lettuce-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jedis-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.Rediscala-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.redisson-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.vertx-redis-client-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.hibernate-*")
+
+        - set(attributes["odigos.sub_category"], attributes["db.system"]) where
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.cassandra-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.couchbase-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.geode-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.mongo-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jdbc*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.lettuce-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jedis-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.Rediscala-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.redisson-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.vertx-redis-client-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.hibernate-*")
+
+          # Logging
+        - set(attributes["odigos.category"], "Log") where
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.log4j-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.logback-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.internal-application-logger") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.java-util-logging") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jboss-logmanager-*")
+
+
+          # Kubernetes
+        - set(attributes["odigos.category"], "Kubernetes") where
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.kubernetes-client-*")
+
+
+          # Search Engine
+        - set(attributes["odigos.category"], "Search Engine") where
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.elasticsearch-*")
+
 
   signals:
     - TRACES
