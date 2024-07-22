@@ -17,6 +17,15 @@ To change the default SDK:
 kubectl patch odigosconfigurations.odigos.io odigos-config -n odigos-system --type='json' -p='[{"op": "replace", "path": "/spec/defaultSDKs/java/sdkType", "value": "native"}]'
 ```
 
+## Enabling go code attributes
+
+HPE need us to populate code attributes. In go this is done in eBPF, and need to be enabled:
+
+```bash
+kubectl patch odigosconfigurations.odigos.io odigos-config -n odigos-system --type='json' -p='[{"op": "add", "path": "/spec/goAutoIncludeCodeAttributes", "value": true}]'
+odigos upgrade --yes
+```
+
 ## categories and sub-categories
 HP needs non-standard span attributes for category and sub-category, for compatibility with their system.
 The way to do it is with a custom processor.
