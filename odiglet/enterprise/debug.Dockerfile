@@ -36,7 +36,7 @@ ENV JAVA_HOME=/usr/local/openjdk-8
 RUN make generate-headers
 RUN make build-jni && mvn package -DskipTests
 
-FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.3 as builder
+FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.5 as builder
 
 RUN --mount=type=secret,id=github_token \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
