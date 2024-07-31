@@ -54,12 +54,9 @@ RUN --mount=type=cache,target=/go/pkg \
 COPY odiglet/ .
 
 ARG TARGETARCH
-# Go does not call go generate on dependencies, so we need to do it manually
-RUN cd $(go list -m -f '{{.Dir}}' "go.opentelemetry.io/auto") && make generate
-RUN cd $(go list -m -f '{{.Dir}}' "github.com/odigos-io/ebpf-java-instrumentation") && make generate
-RUN cd $(go list -m -f '{{.Dir}}' "github.com/odigos-io/ebpf-generic-instrumentation") && make generate
-RUN cd $(go list -m -f '{{.Dir}}' "github.com/odigos-io/ebpf-nodejs-instrumentation") && make generate
-RUN GOOS=linux GOARCH=$TARGETARCH go build -gcflags "all=-N -l" -o odiglet ./cmd/enterprise
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg \
+    GOOS=linux GOARCH=$TARGETARCH make debug-build-odiglet
 
 # Install delve
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
