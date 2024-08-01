@@ -19,9 +19,19 @@ RUN --mount=type=secret,id=github_token \
 
 FROM busybox AS dotnet-builder
 WORKDIR /dotnet-instrumentation
-ARG DOTNET_OTEL_VERSION=v0.7.0
-ADD https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/$DOTNET_OTEL_VERSION/opentelemetry-dotnet-instrumentation-linux-musl.zip .
-RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetry-dotnet-instrumentation-linux-musl.zip
+ARG DOTNET_OTEL_VERSION=v1.7.0
+ARG TARGETARCH
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        echo "arm64" > /tmp/arch_suffix; \
+    else \
+        echo "x64" > /tmp/arch_suffix; \
+    fi
+
+# TODO(edenfed): Support both glibc and musl.
+RUN ARCH_SUFFIX=$(cat /tmp/arch_suffix) && \
+    wget https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/${DOTNET_OTEL_VERSION}/opentelemetry-dotnet-instrumentation-linux-glibc-${ARCH_SUFFIX}.zip && \
+    unzip opentelemetry-dotnet-instrumentation-linux-glibc-${ARCH_SUFFIX}.zip && \
+    rm opentelemetry-dotnet-instrumentation-linux-glibc-${ARCH_SUFFIX}.zip
 
 # Dtrace injector
 FROM keyval/javabuilder-base:v1.0 AS java-builder
