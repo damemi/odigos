@@ -5,10 +5,10 @@ go 1.22.0
 require (
 	github.com/kubevirt/device-plugin-manager v1.19.5
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.0-20240723105257-baafa0aceb19
-	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20240723122612-ffc76fe199d6
-	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20240723122612-ffc76fe199d6
+	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20240731105355-d9ee4e7b6a53
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20240731105355-d9ee4e7b6a53
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20240507052149-b6157ec78dc9
-	github.com/odigos-io/mysql-instrumentation v0.0.0-20240507052211-73bdbece56c8
+	github.com/odigos-io/mysql-instrumentation v0.0.0-20240801061800-241ec87ae161
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
 	github.com/odigos-io/odigos/api v1.0.86
 	github.com/odigos-io/odigos/common v1.0.86
