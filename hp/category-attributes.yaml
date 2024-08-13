@@ -163,21 +163,21 @@ spec:
             instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/bradfitz/gomemcache/memcache" or
             instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/elastic/go-elasticsearch" or
             instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/gocql/gocql" or
-            IsMatch(instrumentation_scope.name, "go.opentelemetry.io/github.com/ClickHouse/clickhouse-go/*")            
+            IsMatch(instrumentation_scope.name, "go.opentelemetry.io/auto/github.com/ClickHouse/clickhouse-go/*")
 
         - set(attributes["odigos.sub_category"], attributes["db.system"]) where
             instrumentation_scope.name == "go.opentelemetry.io/auto/database/sql" or
             instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/bradfitz/gomemcache/memcache" or
             instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/elastic/go-elasticsearch" or
             instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/gocql/gocql" or 
-            IsMatch(instrumentation_scope.name, "go.opentelemetry.io/github.com/ClickHouse/clickhouse-go/*")
+            IsMatch(instrumentation_scope.name, "go.opentelemetry.io/auto/github.com/ClickHouse/clickhouse-go/*")
 
         - set(attributes["odigos.transaction.type"], "non-web") where
             instrumentation_scope.name == "go.opentelemetry.io/auto/database/sql" or
             instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/bradfitz/gomemcache/memcache" or
             instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/elastic/go-elasticsearch" or
             instrumentation_scope.name == "go.opentelemetry.io/auto/github.com/gocql/gocql" or 
-            IsMatch(instrumentation_scope.name, "go.opentelemetry.io/github.com/ClickHouse/clickhouse-go/*")
+            IsMatch(instrumentation_scope.name, "go.opentelemetry.io/auto/github.com/ClickHouse/clickhouse-go/*")
 
         # Messaging queues
         - set(attributes["odigos.category"], "Messaging queues") where 
