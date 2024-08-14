@@ -25,6 +25,9 @@ import (
 )
 
 func odigletInitPhase() {
+	if err := log.Init(); err != nil {
+		panic(err)
+	}
 	err := fs.CopyAgentsDirectoryToHost()
 	if err != nil {
 		log.Logger.Error(err, "Failed to copy agents directory to host")
