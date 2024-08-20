@@ -98,12 +98,12 @@ func findContainerIndex(options []odigosv1.OptionByContainer, containerName stri
 	return -1
 }
 
-func updateInstrumentedApplication(ctx context.Context, kubeclient client.Client, podWorkload *common.PodWorkload, containerName string, configOptions map[string][]ConfigOption) error {
+func updateInstrumentedApplication(ctx context.Context, kubeclient client.Client, podWorkload *workload.PodWorkload, containerName string, configOptions map[string][]ConfigOption) error {
 	// Check if the InstrumentedApplication already exists
 	instrumentedApplicationCrd := &odigosv1.InstrumentedApplication{}
 	instrumentedApplicationKey := client.ObjectKey{
 		Namespace: podWorkload.Namespace,
-		Name:      workload.GetRuntimeObjectName(podWorkload.Name, podWorkload.Kind),
+		Name:      workload.CalculateWorkloadRuntimeObjectName(podWorkload.Name, podWorkload.Kind),
 	}
 
 	err := kubeclient.Get(ctx, instrumentedApplicationKey, instrumentedApplicationCrd)

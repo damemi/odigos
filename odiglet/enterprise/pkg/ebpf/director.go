@@ -6,6 +6,7 @@ import (
 
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common"
+	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -15,10 +16,10 @@ import (
 type DirectorEnterprise interface {
 	odigosebpf.Director
 
-	ApplyInstrumentationConfig(workload *common.PodWorkload, instrumentationConfig *odigosv1.InstrumentationConfig) error
+	ApplyInstrumentationConfig(workload *workload.PodWorkload, instrumentationConfig *odigosv1.InstrumentationConfig) error
 }
 
-type DirectorsEnterpriseMap map[odigosebpf.DirectorKey]DirectorEnterprise 
+type DirectorsEnterpriseMap map[odigosebpf.DirectorKey]DirectorEnterprise
 
 type EbpfDirectorEnterprise[T OtelEbpfSdkEnterprise] struct {
 	*odigosebpf.EbpfDirector[T]
@@ -30,7 +31,7 @@ func NewEbpfDirectorEnterprise[T OtelEbpfSdkEnterprise](ctx context.Context, cli
 	}
 }
 
-func (d *EbpfDirectorEnterprise[T]) ApplyInstrumentationConfig(workload *common.PodWorkload, instrumentationConfig *odigosv1.InstrumentationConfig) error {
+func (d *EbpfDirectorEnterprise[T]) ApplyInstrumentationConfig(workload *workload.PodWorkload, instrumentationConfig *odigosv1.InstrumentationConfig) error {
 
 	insts := d.GetWorkloadInstrumentations(workload)
 

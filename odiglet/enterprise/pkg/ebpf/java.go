@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	auto "github.com/odigos-io/ebpf-java-instrumentation"
-	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/consts"
+	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 	"github.com/odigos-io/odigos/odiglet/pkg/env"
 	"github.com/odigos-io/odigos/odiglet/pkg/kube/utils"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
@@ -33,7 +33,7 @@ func NewJavaInstrumentationFactoryEnterprise(kubeclient client.Client) Instrumen
 	}
 }
 
-func (g *JavaInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string, podName string, loadedIndicator chan struct {}) (*JavaOtelEbpfSdkEnterprise, error) {
+func (g *JavaInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *workload.PodWorkload, containerName string, podName string, loadedIndicator chan struct{}) (*JavaOtelEbpfSdkEnterprise, error) {
 	defaultExporter, err := otlptracegrpc.New(
 		ctx,
 		otlptracegrpc.WithInsecure(),

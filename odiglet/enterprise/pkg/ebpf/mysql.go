@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	auto "github.com/odigos-io/mysql-instrumentation"
-	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/consts"
+	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 	"github.com/odigos-io/odigos/odiglet/pkg/env"
 	"github.com/odigos-io/odigos/odiglet/pkg/kube/utils"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
@@ -33,7 +33,7 @@ func NewMySQLInstrumentationFactoryEnterprise(kubeclient client.Client) Instrume
 	}
 }
 
-func (g *MySQLInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string, podName string, loadedIndicator chan struct {}) (*MySQLOtelEbpfSdkEnterprise, error) {
+func (g *MySQLInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *workload.PodWorkload, containerName string, podName string, loadedIndicator chan struct{}) (*MySQLOtelEbpfSdkEnterprise, error) {
 	defaultExporter, err := otlptracegrpc.New(
 		ctx,
 		otlptracegrpc.WithInsecure(),

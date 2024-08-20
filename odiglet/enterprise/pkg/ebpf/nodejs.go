@@ -6,8 +6,8 @@ import (
 
 	auto "github.com/odigos-io/ebpf-nodejs-instrumentation"
 	"github.com/odigos-io/ebpf-nodejs-instrumentation/pkg/opentelemetry"
-	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/consts"
+	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 	"github.com/odigos-io/odigos/odiglet/pkg/env"
 	"github.com/odigos-io/odigos/odiglet/pkg/kube/utils"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
@@ -33,7 +33,7 @@ func NewNodeJSInstrumentationFactoryEnterprise(kubeclient client.Client) Instrum
 	}
 }
 
-func (n *NodeJSInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *common.PodWorkload, containerName string, podName string, loadedIndicator chan struct {}) (*NodeJSOtelEbpfSdkEnterprise, error) {
+func (n *NodeJSInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *workload.PodWorkload, containerName string, podName string, loadedIndicator chan struct{}) (*NodeJSOtelEbpfSdkEnterprise, error) {
 	c := otlptracegrpc.NewClient(otlptracegrpc.WithInsecure(),
 		otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%d", env.Current.NodeIP, consts.OTLPPort)))
 	exporter, err := opentelemetry.New(ctx, c)

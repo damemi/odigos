@@ -5,7 +5,6 @@ import (
 
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
-	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -20,12 +19,12 @@ type InstrumentationConfigReconciler struct {
 }
 
 func (i *InstrumentationConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	workloadName, workloadKind, err := workload.GetWorkloadInfoRuntimeName(req.Name)
+	workloadName, workloadKind, err := workload.ExtractWorkloadInfoFromRuntimeObjectName(req.Name)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	podWorkload := &common.PodWorkload{
+	podWorkload := &workload.PodWorkload{
 		Namespace: req.Namespace,
 		Kind:      workloadKind,
 		Name:      workloadName,
@@ -55,5 +54,6 @@ func (i *InstrumentationConfigReconciler) Reconcile(ctx context.Context, req ctr
 func (i *InstrumentationConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&odigosv1.InstrumentationConfig{}).
+		Named("odigletenterprise-instrumentationconfig").
 		Complete(i)
 }
