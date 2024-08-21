@@ -525,6 +525,22 @@ spec:
             IsMatch(instrumentation_scope.name, "io.opentelemetry.spark-*") or
             IsMatch(instrumentation_scope.name, "io.opentelemetry.spring-web*")
 
+        - set(attributes["odigos.sub_category"], "framework-core-components") where
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.wicket-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.tapestry-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.dropwizard-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.finatra-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.grails-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.gwt-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jsp-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jsf-mojarra-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.jsf-myfaces-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.play-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.ratpack-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.servlet-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.spark-*") or
+            IsMatch(instrumentation_scope.name, "io.opentelemetry.spring-web*")
+
         - set(attributes["odigos.transaction.type"], "web") where
             IsMatch(instrumentation_scope.name, "io.opentelemetry.wicket-*") or
             IsMatch(instrumentation_scope.name, "io.opentelemetry.tapestry-*") or
