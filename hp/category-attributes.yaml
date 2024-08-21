@@ -220,6 +220,7 @@ spec:
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/starlette" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/tornado" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/urllib" or
+            instrumentation_scope.name == "instrumentation.odigos.io/ebpf/requests" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/urllib3" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/wsgi"
         - set(attributes["odigos.sub_category"], attributes["http.method"]) where 
@@ -235,6 +236,7 @@ spec:
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/starlette" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/tornado" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/urllib" or
+            instrumentation_scope.name == "instrumentation.odigos.io/ebpf/requests" or            
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/urllib3" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/wsgi" 
         - set(attributes["odigos.sub_category"], attributes["http.request.method"]) where
@@ -250,6 +252,7 @@ spec:
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/starlette" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/tornado" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/urllib" or
+            instrumentation_scope.name == "instrumentation.odigos.io/ebpf/requests" or            
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/urllib3" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/wsgi"
         - set(attributes["odigos.transaction.type"], "web") where
@@ -266,6 +269,7 @@ spec:
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/tornado" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/urllib" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/urllib3" or
+            instrumentation_scope.name == "instrumentation.odigos.io/ebpf/requests" or            
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/wsgi"            
 
         # Database
@@ -282,7 +286,6 @@ spec:
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/pymongo" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/pymysql" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/redis" or
-            instrumentation_scope.name == "instrumentation.odigos.io/ebpf/requests" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/sqlalchemy" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/sqlite3" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/tortoiseorm"
@@ -299,7 +302,6 @@ spec:
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/pymongo" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/pymysql" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/redis" or
-            instrumentation_scope.name == "instrumentation.odigos.io/ebpf/requests" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/sqlalchemy" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/sqlite3" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/tortoiseorm"
@@ -316,7 +318,6 @@ spec:
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/pymongo" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/pymysql" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/redis" or
-            instrumentation_scope.name == "instrumentation.odigos.io/ebpf/requests" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/sqlalchemy" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/sqlite3" or
             instrumentation_scope.name == "instrumentation.odigos.io/ebpf/tortoiseorm"
