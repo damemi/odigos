@@ -5,18 +5,18 @@ go 1.22.0
 require (
 	github.com/kubevirt/device-plugin-manager v1.19.5
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.0-20240723105257-baafa0aceb19
-	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20240731105355-d9ee4e7b6a53
-	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20240731105355-d9ee4e7b6a53
+	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20240825102850-1eb10bfb2b29
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20240825102850-1eb10bfb2b29
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20240507052149-b6157ec78dc9
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20240801061800-241ec87ae161
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.0.93
-	github.com/odigos-io/odigos/common v1.0.93
-	github.com/odigos-io/odigos/k8sutils v1.0.93
-	github.com/odigos-io/odigos/odiglet v1.0.93
+	github.com/odigos-io/odigos/api v1.0.94
+	github.com/odigos-io/odigos/common v1.0.94
+	github.com/odigos-io/odigos/k8sutils v1.0.94
+	github.com/odigos-io/odigos/odiglet v1.0.94
 	go.opentelemetry.io/auto v0.14.0-alpha
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.28.0
-	go.opentelemetry.io/otel/trace v1.28.0
+	go.opentelemetry.io/otel/trace v1.29.0
 	k8s.io/apimachinery v0.31.0
 	k8s.io/client-go v0.31.0
 	k8s.io/kubelet v0.31.0
@@ -81,7 +81,7 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/contrib/bridges/prometheus v0.53.0 // indirect
 	go.opentelemetry.io/contrib/exporters/autoexport v0.53.0 // indirect
-	go.opentelemetry.io/otel v1.28.0 // indirect
+	go.opentelemetry.io/otel v1.29.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.4.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.28.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.28.0 // indirect
@@ -92,7 +92,7 @@ require (
 	go.opentelemetry.io/otel/exporters/stdout/stdoutmetric v1.28.0 // indirect
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.28.0 // indirect
 	go.opentelemetry.io/otel/log v0.4.0 // indirect
-	go.opentelemetry.io/otel/metric v1.28.0 // indirect
+	go.opentelemetry.io/otel/metric v1.29.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.28.0 // indirect
 	go.opentelemetry.io/otel/sdk/log v0.4.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.28.0 // indirect
@@ -131,15 +131,15 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20240821141004-cc8c331b1b79
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20240826064359-585427760da0
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.93
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.94
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.93
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.94
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.93
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.94
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.93
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.94
 
 // Used for testing purposes
 // replace github.com/odigos-io/odigos/odiglet => github.com/RonFed/odigos_fork/odiglet add_java_envs_to_envOverwrite
