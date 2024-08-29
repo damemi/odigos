@@ -24,9 +24,8 @@ debug-build-odiglet: generate
 	go build -gcflags "all=-N -l" -o odiglet ./cmd/enterprise
 
 generate:
+	go mod download
 	@for lib in $(LIBRARIES); do \
-		go get $$lib; \
-		GO_AUTO_PATH=$$(go list -m -f '{{.Dir}}' $${lib%@*}) && \
-		cd $$GO_AUTO_PATH && \
-		make generate; \
+		LIB_PATH=$$(go list -m -f '{{.Dir}}' $${lib%@*}) && \
+		make -C "$$LIB_PATH" generate; \
 	done
