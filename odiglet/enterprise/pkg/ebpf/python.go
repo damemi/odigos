@@ -79,3 +79,4 @@ func (p *PythonOtelEbpfSdkEnterprise) ConfigBool(instrumentedModuleName string, 
 func (p *PythonOtelEbpfSdkEnterprise) GetConfigOptions() map[string][]ConfigOption {
 	return map[string][]ConfigOption{}
 }
+

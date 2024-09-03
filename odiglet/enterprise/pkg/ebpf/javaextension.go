@@ -71,10 +71,13 @@ func (p *JavaExtensionOtelEbpfSdk) Close(ctx context.Context) error {
 	return p.inst.Close()
 }
 
+// Deprecated: this will be removed in the future once we will move to the generic config provider
 func (p *JavaExtensionOtelEbpfSdk) ConfigBool(instrumentedModuleName string, optionKey string, spanKind apitrace.SpanKind, optionValue bool) error {
 	return nil
 }
 
+// Deprecated: this might be removed/renamed in the future once we will move to the generic config provider
 func (p *JavaExtensionOtelEbpfSdk) GetConfigOptions() map[string][]ConfigOption {
 	return map[string][]ConfigOption{}
 }
+

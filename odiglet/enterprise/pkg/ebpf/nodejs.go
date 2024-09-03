@@ -71,10 +71,13 @@ func (n *NodeJSOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 	return n.inst.Close()
 }
 
+// Deprecated: this will be removed in the future once we will move to the generic config provider
 func (n *NodeJSOtelEbpfSdkEnterprise) ConfigBool(instrumentedModuleName string, optionKey string, spanKind apitrace.SpanKind, optionValue bool) error {
 	return nil
 }
 
+// Deprecated: this might be removed/renamed in the future once we will move to the generic config provider
 func (n *NodeJSOtelEbpfSdkEnterprise) GetConfigOptions() map[string][]ConfigOption {
 	return map[string][]ConfigOption{}
 }
+

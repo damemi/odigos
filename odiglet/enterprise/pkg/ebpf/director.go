@@ -16,6 +16,9 @@ import (
 type DirectorEnterprise interface {
 	odigosebpf.Director
 
+	// This should be removed once the migration of instrumentation config to open-source project is complete.
+	//
+	// Deprecated: This method is moving to the open-source Odigos project.
 	ApplyInstrumentationConfig(workload *workload.PodWorkload, instrumentationConfig *odigosv1.InstrumentationConfig) error
 }
 

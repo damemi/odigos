@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/consts"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
+	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	"github.com/odigos-io/odigos/odiglet/pkg/env"
 	"github.com/odigos-io/odigos/odiglet/pkg/kube/utils"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
 	"go.opentelemetry.io/auto"
+	goAutoConfig "go.opentelemetry.io/auto/config"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	apitrace "go.opentelemetry.io/otel/trace"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -21,6 +21,7 @@ import (
 
 type GoOtelEbpfSdkEnterprise struct {
 	inst *auto.Instrumentation
+	cp   *odigosebpf.ConfigProvider[goAutoConfig.InstrumentationConfig]
 }
 
 type GoInstrumentationFactoryEnterprise struct {
@@ -30,6 +31,9 @@ type GoInstrumentationFactoryEnterprise struct {
 // compile time check
 var _ OtelEbpfSdkEnterprise = &GoOtelEbpfSdkEnterprise{}
 
+// compile time check that Go enterprise Sdk is implementing the configurable SDK interface
+var _ odigosebpf.ConfigurableOtelEbpfSdk = &GoOtelEbpfSdkEnterprise{}
+
 func NewGoInstrumentationFactoryEnterprise(kubeclient client.Client) InstrumentationFactoryEnterprise[*GoOtelEbpfSdkEnterprise] {
 	return &GoInstrumentationFactoryEnterprise{
 		kubeclient: kubeclient,
@@ -37,7 +41,6 @@ func NewGoInstrumentationFactoryEnterprise(kubeclient client.Client) Instrumenta
 }
 
 func (g *GoInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *workload.PodWorkload, containerName string, podName string, loadedIndicator chan struct{}) (*GoOtelEbpfSdkEnterprise, error) {
-
 	defaultExporter, err := otlptracegrpc.New(
 		ctx,
 		otlptracegrpc.WithInsecure(),
@@ -48,6 +51,23 @@ func (g *GoInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx conte
 		return nil, err
 	}
 
+	// Fetch initial config based on the InstrumentationConfig CR
+	instrumentationConfig := &odigosv1.InstrumentationConfig{}
+	initialConfig := goAutoConfig.InstrumentationConfig{}
+	foundInstrumentationConfig := false
+	instrumentationConfigKey := client.ObjectKey{
+		Namespace: podWorkload.Namespace,
+		Name:      workload.CalculateWorkloadRuntimeObjectName(podWorkload.Name, podWorkload.Kind),
+	}
+	if err := g.kubeclient.Get(ctx, instrumentationConfigKey, instrumentationConfig); err == nil {
+		initialConfig = convertToGoInstrumentationConfig(instrumentationConfig)
+		foundInstrumentationConfig = true
+	}
+
+	cp := odigosebpf.NewConfigProvider(initialConfig)
+
+	// TODO: once we have all the desired functionality in the generic config provider this code should
+	// be refactored to call the OSS Odiglet factory
 	inst, err := auto.NewInstrumentation(
 		ctx,
 		auto.WithEnv(), // for OTEL_LOG_LEVEL
@@ -57,6 +77,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx conte
 		auto.WithTraceExporter(defaultExporter),
 		auto.WithGlobal(),
 		auto.WithLoadedIndicator(loadedIndicator),
+		auto.WithConfigProvider(cp),
 	)
 	if err != nil {
 		log.Logger.Error(err, "instrumentation setup failed")
@@ -65,6 +86,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx conte
 
 	goInstWrapper := &GoOtelEbpfSdkEnterprise{
 		inst: inst,
+		cp:   cp,
 	}
 
 	configOptions := goInstWrapper.GetConfigOptions()
@@ -73,23 +95,11 @@ func (g *GoInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx conte
 		return nil, err
 	}
 
-	// Fetch the InstrumentationConfig instrumentationConfig
-	instrumentationConfig := &odigosv1.InstrumentationConfig{}
-	instrumentationConfigKey := client.ObjectKey{
-		Namespace: podWorkload.Namespace,
-		Name:      workload.CalculateWorkloadRuntimeObjectName(podWorkload.Name, podWorkload.Kind),
-	}
-	err = g.kubeclient.Get(ctx, instrumentationConfigKey, instrumentationConfig)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return goInstWrapper, nil
+	if foundInstrumentationConfig {
+		err = applyConfigToInst(&instrumentationConfig.Spec, goInstWrapper, common.GoProgrammingLanguage)
+		if err != nil {
+			return nil, err
 		}
-		return nil, err
-	}
-
-	err = applyConfigToInst(&instrumentationConfig.Spec, goInstWrapper, common.GoProgrammingLanguage)
-	if err != nil {
-		return nil, err
 	}
 
 	return goInstWrapper, nil
@@ -103,10 +113,12 @@ func (g *GoOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 	return g.inst.Close()
 }
 
+// Deprecated: this function will be removed in the future once we'll move to the generic config provider
 func (g *GoOtelEbpfSdkEnterprise) ConfigBool(instrumentedModuleName string, optionKey string, spanKind apitrace.SpanKind, optionValue bool) error {
 	return g.inst.ConfigBool(instrumentedModuleName, optionKey, spanKind, optionValue)
 }
 
+// Deprecated: this function might be removed/changed in the future once we'll move to the generic config provider
 func (g *GoOtelEbpfSdkEnterprise) GetConfigOptions() map[string][]ConfigOption {
 
 	// we need to transform the go internal structures to the ones we expose.
@@ -124,4 +136,38 @@ func (g *GoOtelEbpfSdkEnterprise) GetConfigOptions() map[string][]ConfigOption {
 	}
 
 	return normalizedOptions
+}
+
+// Deprecated: this is a duplication of the OSS odiglet code, used to avoid breaking the enterprise odiglet
+// Once the enterprise odiglet is updated to use the generic config provider, this function will be removed
+func (g *GoOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, instConfig *odigosv1.InstrumentationConfig) error {
+	return g.cp.SendConfig(ctx, convertToGoInstrumentationConfig(instConfig))
+}
+
+// Deprecated: this is a duplication of the OSS odiglet code, used to avoid breaking the enterprise odiglet
+// Once the enterprise odiglet is updated to use the generic config provider, this function will be removed
+func convertToGoInstrumentationConfig(instConfig *odigosv1.InstrumentationConfig) goAutoConfig.InstrumentationConfig {
+	ic := goAutoConfig.InstrumentationConfig{}
+	ic.InstrumentationLibraryConfigs = make(map[goAutoConfig.InstrumentationLibraryID]goAutoConfig.InstrumentationLibrary)
+	for _, sdkConfig := range instConfig.Spec.SdkConfigs {
+		if sdkConfig.Language != common.GoProgrammingLanguage {
+			continue
+		}
+		for _, ilc := range sdkConfig.InstrumentationLibraryConfigs {
+			libID := goAutoConfig.InstrumentationLibraryID{
+				InstrumentedPkg: ilc.InstrumentationLibraryId.InstrumentationLibraryName,
+				SpanKind:        common.SpanKindOdigosToOtel(ilc.InstrumentationLibraryId.SpanKind),
+			}
+			var tracesEnabled *bool
+			if ilc.TraceConfig != nil {
+				tracesEnabled = ilc.TraceConfig.Enabled
+			}
+			ic.InstrumentationLibraryConfigs[libID] = goAutoConfig.InstrumentationLibrary{
+				TracesEnabled: tracesEnabled,
+			}
+		}
+
+		// TODO: sampling config
+	}
+	return ic
 }

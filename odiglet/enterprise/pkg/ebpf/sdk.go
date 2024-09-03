@@ -17,7 +17,11 @@ type ConfigOption struct {
 // so it can be extended to support any SDK in the future (java, python, nodejs, etc.)
 type OtelEbpfSdkEnterprise interface {
 	odigosebpf.OtelEbpfSdk
+
+	// Deprecated: this will be removed in the future once we will move to the generic config provider
+	// once the transition is complete, configuration updates will be done via the ApplyConfig function in the OSS Odiglet.
 	ConfigBool(instrumentedModuleName string, optionKey string, spanKind apitrace.SpanKind, optionValue bool) error
+	// Deprecated: this might be removed/renamed in the future once we will move to the generic config provider
 	GetConfigOptions() map[string][]ConfigOption
 }
 

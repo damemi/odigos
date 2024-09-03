@@ -12,6 +12,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// This should be removed once the migration of instrumentation config to open-source project is complete.
+//
+// Deprecated: This reconciler is moving to the open-source Odigos project.
 type InstrumentationConfigReconciler struct {
 	client.Client
 	Scheme    *runtime.Scheme
