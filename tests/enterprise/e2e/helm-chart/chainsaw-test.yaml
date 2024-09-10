@@ -30,15 +30,15 @@ spec:
     - script:
         content: |
           # use the helm chart from main repo which is expected to be in a sibling directory to this repo
-          cp -r ../../../odigos/api/config/crd/bases/* ../../../odigos/helm/odigos/templates/crds/
-          helm upgrade --install odigos  ../../../odigos/helm/odigos --create-namespace --namespace odigos-test-ns --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY
+          cp -r ../../../../odigos/api/config/crd/bases/* ../../../../odigos/helm/odigos/templates/crds/
+          helm upgrade --install odigos  ../../../../odigos/helm/odigos --create-namespace --namespace odigos-test-ns --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY
           kubectl label namespace odigos-test-ns odigos.io/system-object="true"
         timeout: 60s
   - name: Verify Odigos Installation
     try:
     - script:
         content: |
-          export ACTUAL_VERSION=$(../../../odigos/cli/odigos version --cluster)
+          export ACTUAL_VERSION=$(../../../../odigos/cli/odigos version --cluster)
           if [ "$ACTUAL_VERSION" != "$IMAGE_TAG" ]; then
             echo "Odigos version is not $IMAGE_TAG, got $ACTUAL_VERSION"
             exit 1

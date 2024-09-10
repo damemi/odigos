@@ -57,6 +57,11 @@ jobs:
             kind-image: "kindest/node:v1.30.0@sha256:047357ac0cfea04663786a612ba1eaba9702bef25227a794b52890dd8bcd692e"
     steps:
       - uses: actions/checkout@v4
+        with:
+          # we need the enterprise and oss to be siblings.
+          # when using the default path and try to checkout the oss to be sibling, we get this:
+          # Error: Repository path '/home/runner/work/odigos-enterprise/odigos' is not under '/home/runner/work/odigos-enterprise/odigos-enterprise'
+          path: odigos-enterprise 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Set up Go
@@ -75,7 +80,7 @@ jobs:
         with:
           repository: odigos-io/odigos
           ref: main
-          path: odigos
+          path: odigos # Checkout as a sibling to the current repository
       - name: Create Kind Cluster
         uses: helm/kind-action@v1.10.0
         with:
@@ -108,4 +113,4 @@ jobs:
           IMAGE_TAG: pr-${{ github.event.number }}
           ODIGOS_API_KEY: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
         run: |
-          chainsaw test tests/e2e/${{ matrix.test-scenario }}
+          chainsaw test odigos-enterprise/tests/e2e/${{ matrix.test-scenario }}

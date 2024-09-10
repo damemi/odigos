@@ -1,40 +1,49 @@
 # Odigos End to End Testing
+
 In addition to unit tests, Odigos has a suite of end-to-end tests that are run on every pull request.
 These tests are installing multiple microservices, instrument with Odigos, generate traffic, and validate the results.
 
-## Tools
-- [Kubernetes In Docker (KinD)](https://kind.sigs.k8s.io/) - a tool for running local Kubernetes clusters using Docker container “nodes”.
-- [Chainsaw](https://kyverno.github.io/chainsaw/) - To orchestrate the different Kubernetes actions.
-- [Tempo](https://github.com/grafana/tempo) - Distributed tracing backend. Chosen due to its query language that allows for easy querying of traces.
+## Tools - Prerequisites
 
-## Running e2e locally
-To run the end-to-end tests you need to have the following:
-- kubectl configured to a fresh Kubernetes cluster. For local development, you can use KinD but also managed clusters like EKS should work.
-- yq and jq installed. You can install it via:
-```bash
-brew install yq
-brew install jq
-```
-- Odigos cli compiled at `cli` folder. Compile via:
-```bash
-go build -tags=embed_manifests -o ./cli/odigos ./cli
-```
-- Odigos images tagged with `e2e-test` preloaded to the cluster. If you are using KinD you can run:
-```bash
-TAG=e2e-test make build-images load-to-kind 
-```
-- Chainsaw binary, installed via one of the following methods:
+- [Kubernetes In Docker (KinD)](https://kind.sigs.k8s.io/) - a tool for running local Kubernetes clusters using Docker container “nodes”.
+
+- [Chainsaw](https://kyverno.github.io/chainsaw/) - To orchestrate the different Kubernetes actions.
   - Hombrew:
+
   ```bash
   brew tap kyverno/chainsaw https://github.com/kyverno/chainsaw
   brew install kyverno/chainsaw/chainsaw
   ```
+
   - Go:
+
   ```bash
   go install github.com/kyverno/chainsaw@latest
   ```
 
-**For Enterprise Tests:** Chainsaw scenarios are expecting a valid Odigos Enterprise API Key to be set in the `ODIGOS_API_KEY` environment variable.
+- [Tempo](https://github.com/grafana/tempo) - Distributed tracing backend. Chosen due to its query language that allows for easy querying of traces.
+- yq and jq installed:
+
+```bash
+brew install yq
+brew install jq
+```
+
+## Assumptions
+
+- The test relies on the `odigos` OSS project to be cloned in a directory named `odigos` in the same directory as the `odigos-enterprise` repository.
+
+## Running e2e locally
+
+### Preparation
+
+- Fresh Kubernetes cluster in kubectl context. For local development, you can use KinD but also managed clusters like EKS should work.
+- Odigos CLI compiled at the `cli` directory in odigos OSS repo (which is expected to be cloned as sibling of the current repo). To compile the cli executable, go to the OSS repository and run: `cd cli && go build -tags=embed_manifests -o odigos .`
+- Odigos OSS images (instrumentor, autoscaler etc) tagged with `e2e-test` preloaded to the cluster. If you are using KinD you can cd to the OSS repo and run: `TAG=e2e-test make build-images load-to-kind`
+- Odiglet enterprise images tagged with `e2e-test` preloaded to the cluster. If you are using KinD you can run `TAG=e2e-test make build-images load-to-kind`
+- valid Odigos Enterprise API Key to be set in the `ODIGOS_API_KEY` environment variable.
+
+### Running the Tests
 
 To run specific scenarios, for example `multi-apps` run from Odigos root directory:
 ```bash
