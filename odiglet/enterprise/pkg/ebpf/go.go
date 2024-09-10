@@ -115,7 +115,21 @@ func (g *GoOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 
 // Deprecated: this function will be removed in the future once we'll move to the generic config provider
 func (g *GoOtelEbpfSdkEnterprise) ConfigBool(instrumentedModuleName string, optionKey string, spanKind apitrace.SpanKind, optionValue bool) error {
-	return g.inst.ConfigBool(instrumentedModuleName, optionKey, spanKind, optionValue)
+
+	// temporary workaround to avoid setting a config option that is not supported with this instance
+	supportedConfigOptions := g.inst.GetConfigOptions()
+	if _, ok := supportedConfigOptions[instrumentedModuleName]; !ok {
+		// noop, in case the instrumentation library has not been loaded
+		return nil
+	}
+	for _, option := range supportedConfigOptions[instrumentedModuleName] {
+		if option.OptionKey == optionKey && option.SpanKind == spanKind {
+			return g.inst.ConfigBool(instrumentedModuleName, optionKey, spanKind, optionValue)
+		}
+	}
+	// if we get here, it means none of the options matched thus this config is not supported
+	// make it a silent noop
+	return nil
 }
 
 // Deprecated: this function might be removed/changed in the future once we'll move to the generic config provider
