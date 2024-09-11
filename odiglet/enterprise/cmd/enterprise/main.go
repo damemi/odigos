@@ -2,24 +2,28 @@ package main
 
 import (
 	"context"
-	"github.com/odigos-io/odigos/odiglet/pkg/instrumentation/fs"
 	"os"
+
+	"github.com/odigos-io/odigos/odiglet/pkg/instrumentation/fs"
+
+	_ "net/http/pprof"
 
 	"github.com/kubevirt/device-plugin-manager/pkg/dpm"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf"
 	enterpriseinstrumentlang "github.com/odigos-io/odigos-enterprise/odiglet/pkg/instrumentation/instrumentlang"
 	enterprisekube "github.com/odigos-io/odigos-enterprise/odiglet/pkg/kube"
 	"github.com/odigos-io/odigos/common"
+	k8senv "github.com/odigos-io/odigos/k8sutils/pkg/env"
 	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	"github.com/odigos-io/odigos/odiglet/pkg/env"
 	"github.com/odigos-io/odigos/odiglet/pkg/instrumentation"
 	communityinstrumentlang "github.com/odigos-io/odigos/odiglet/pkg/instrumentation/instrumentlang"
 	"github.com/odigos-io/odigos/odiglet/pkg/kube"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
+	"github.com/odigos-io/odigos/opampserver/pkg/server"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	_ "net/http/pprof"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
@@ -78,6 +82,12 @@ func main() {
 	}
 
 	ctx := signals.SetupSignalHandler()
+
+	odigosNs := k8senv.GetCurrentNamespace()
+	err = server.StartOpAmpServer(ctx, log.Logger, mgr, clientset, env.Current.NodeName, odigosNs)
+	if err != nil {
+		log.Logger.Error(err, "Failed to start opamp server")
+	}
 
 	ebpfDirectors, err := initEbpf(ctx, mgr.GetClient(), mgr.GetScheme())
 	if err != nil {

@@ -1,7 +1,7 @@
 FROM python:3.11 AS python-builder
 WORKDIR /python-instrumentation
 ADD odiglet/agents/python/requirements.txt .
-RUN mkdir workspace && pip install --target workspace -r requirements.txt
+RUN mkdir workspace && pip install -r requirements.txt --target workspace
 
 # Enterprise version of ebpf-generic-instrumentation
 RUN apt update -y && apt install -y systemtap-sdt-dev

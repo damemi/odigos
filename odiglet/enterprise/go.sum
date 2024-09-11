@@ -291,6 +291,8 @@ github.com/odigos-io/odigos/k8sutils v1.0.100-0.20240909062111-3c63617610ae h1:z
 github.com/odigos-io/odigos/k8sutils v1.0.100-0.20240909062111-3c63617610ae/go.mod h1:A00mG2+IVOlXIocwMzCAIXYrGfqFqkAbkkchTyFGJYU=
 github.com/odigos-io/odigos/odiglet v1.0.100-0.20240909062111-3c63617610ae h1:JNNgBRuf1zmuRsqYGJg4c4/7k9esW+rc4XDlEhSXFLo=
 github.com/odigos-io/odigos/odiglet v1.0.100-0.20240909062111-3c63617610ae/go.mod h1:gbAhE1rR3jdQmqIYPJccTf+NLkRpIjgCxqZfLDdbrP4=
+github.com/odigos-io/odigos/opampserver v1.0.100-0.20240909062111-3c63617610ae h1:PRHvT3GAVwDELxkmLXpJFtCvm0XVC5wRejfLSAS9Ek0=
+github.com/odigos-io/odigos/opampserver v1.0.100-0.20240909062111-3c63617610ae/go.mod h1:gsyhw1dYex1s1ix/3hRKxnAHdMZF6wFlFDxGEmjmxg4=
 github.com/odigos-io/odigos/procdiscovery v1.0.100-0.20240909062111-3c63617610ae h1:6wifCo4da5OPta3jPMmQ8ox76icVfTXyUSF7FQ0c5dw=
 github.com/odigos-io/odigos/procdiscovery v1.0.100-0.20240909062111-3c63617610ae/go.mod h1:Uye28SvL8lmtEPglp6CZOTNAt6hYdV9pH5gBzEJG76Y=
 github.com/odigos-io/opentelemetry-zap-bridge v0.0.5 h1:UDEKtgab42nGVSvA/F3lLKUYFPETtpl7kpxM9BKBlWk=
