@@ -85,47 +85,59 @@ func applyWorkloadInstrumentationConfig(inst OtelEbpfSdkEnterprise, spec *odigos
 		// specific instructions for the go libraries:
 
 		// net/http server
-		payloadCollection := getPayloadCollectionConfig(&sdkConfig, odigosv1.InstrumentationLibraryId{
+		payloadCollectionNetHttpServer := getPayloadCollectionConfig(&sdkConfig, odigosv1.InstrumentationLibraryId{
 			InstrumentationLibraryName: "net/http",
 			SpanKind:                   common.ServerSpanKind,
 		})
-		collectResponse := payloadCollection.HttpResponse != nil
-		log.Logger.V(0).Info("Applying config to golang net/http server", "collectResponse", collectResponse)
-		err := inst.ConfigBool("net/http", "http.response.body", trace.SpanKindServer, collectResponse)
+		collectResponseNetHttpServer := payloadCollectionNetHttpServer.HttpResponse != nil
+		log.Logger.V(0).Info("Applying config to golang net/http server", "collectResponse", collectResponseNetHttpServer)
+		err := inst.ConfigBool("net/http", "http.response.body", trace.SpanKindServer, collectResponseNetHttpServer)
 		if err != nil {
 			return err
 		}
-		err = inst.ConfigBool("net/http", "http.response.header.content-length", trace.SpanKindServer, collectResponse)
+		err = inst.ConfigBool("net/http", "http.response.header.content-length", trace.SpanKindServer, collectResponseNetHttpServer)
 		if err != nil {
 			return err
 		}
 
 		// net/http client
-		payloadCollection = getPayloadCollectionConfig(&sdkConfig, odigosv1.InstrumentationLibraryId{
+		payloadCollectionNetHttpClient := getPayloadCollectionConfig(&sdkConfig, odigosv1.InstrumentationLibraryId{
 			InstrumentationLibraryName: "net/http",
 			SpanKind:                   common.ClientSpanKind,
 		})
-		collectRequest := payloadCollection.HttpRequest != nil
-		collectResponse = payloadCollection.HttpResponse != nil
+		collectRequestNetHttpClient := payloadCollectionNetHttpClient.HttpRequest != nil
+		collectResponseNetHttpClient := payloadCollectionNetHttpClient.HttpResponse != nil
 
-		log.Logger.V(0).Info("Applying config to golang net/http client", "collectResponse", collectResponse, "collectRequest", collectRequest)
-		err = inst.ConfigBool("net/http", "http.request.body", trace.SpanKindClient, collectRequest)
+		log.Logger.V(0).Info("Applying config to golang net/http client", "collectResponse", collectResponseNetHttpClient, "collectRequest", collectRequestNetHttpClient)
+		err = inst.ConfigBool("net/http", "http.request.body", trace.SpanKindClient, collectRequestNetHttpClient)
 		if err != nil {
 			return err
 		}
-		err = inst.ConfigBool("net/http", "http.response.header.content-length", trace.SpanKindClient, collectRequest)
+		err = inst.ConfigBool("net/http", "http.response.header.content-length", trace.SpanKindClient, collectResponseNetHttpClient)
 		if err != nil {
 			return err
 		}
 
 		// database/sql
-		payloadCollection = getPayloadCollectionConfig(&sdkConfig, odigosv1.InstrumentationLibraryId{
+		payloadCollectionNetDatabaseSql := getPayloadCollectionConfig(&sdkConfig, odigosv1.InstrumentationLibraryId{
 			InstrumentationLibraryName: "database/sql",
 			SpanKind:                   common.ClientSpanKind,
 		})
-		collectDbQuery := payloadCollection.DbQuery != nil
-		log.Logger.V(0).Info("Applying config to golang database/sql", "collectDbQuery", collectDbQuery)
-		err = inst.ConfigBool("database/sql", "db.query.text", trace.SpanKindClient, collectDbQuery)
+		collectDbQueryDatabaseSql := payloadCollectionNetDatabaseSql.DbQuery != nil
+		log.Logger.V(0).Info("Applying config to golang database/sql", "collectDbQuery", collectDbQueryDatabaseSql)
+		err = inst.ConfigBool("database/sql", "db.query.text", trace.SpanKindClient, collectDbQueryDatabaseSql)
+		if err != nil {
+			return err
+		}
+
+		// github.com/ClickHouse/clickhouse-go/v2
+		payloadCollectionClickhouse := getPayloadCollectionConfig(&sdkConfig, odigosv1.InstrumentationLibraryId{
+			InstrumentationLibraryName: "github.com/ClickHouse/clickhouse-go/v2",
+			SpanKind:                   common.ClientSpanKind,
+		})
+		collectDbQueryClickhouse := payloadCollectionClickhouse.DbQuery != nil
+		log.Logger.V(0).Info("Applying config to golang github.com/ClickHouse/clickhouse-go/v2", "collectDbQuery", collectDbQueryClickhouse)
+		err = inst.ConfigBool("github.com/ClickHouse/clickhouse-go/v2", "db.query.text", trace.SpanKindClient, collectDbQueryClickhouse)
 		if err != nil {
 			return err
 		}
