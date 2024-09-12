@@ -5,15 +5,15 @@ go 1.22.0
 require (
 	github.com/kubevirt/device-plugin-manager v1.19.5
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.0-20240911120043-a3cf7eaf7d82
-	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20240911104834-f5b2622cc6d9
-	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20240911104834-f5b2622cc6d9
+	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20240912120736-4ca82ac2806f
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20240912120736-4ca82ac2806f
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20240901114706-73f007947ac0
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20240801061800-241ec87ae161
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.0.101
-	github.com/odigos-io/odigos/common v1.0.101
-	github.com/odigos-io/odigos/k8sutils v1.0.101
-	github.com/odigos-io/odigos/odiglet v1.0.101
+	github.com/odigos-io/odigos/api v1.0.102
+	github.com/odigos-io/odigos/common v1.0.102
+	github.com/odigos-io/odigos/k8sutils v1.0.102
+	github.com/odigos-io/odigos/odiglet v1.0.102
 	github.com/odigos-io/odigos/opampserver v1.0.99
 	go.opentelemetry.io/auto v0.14.0-alpha.0.20240825151512-46ef49139923
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.29.0
@@ -113,7 +113,7 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240822170219-fc7c04adadcd // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240822170219-fc7c04adadcd // indirect
-	google.golang.org/grpc v1.65.0 // indirect
+	google.golang.org/grpc v1.66.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -135,13 +135,13 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20240902114827-5bdd64f666e8
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.101
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.102
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.101
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.102
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.101
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.102
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.101
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.102
 
 // Used for testing purposes
 // replace github.com/odigos-io/odigos/odiglet => github.com/RonFed/odigos_fork/odiglet add_java_envs_to_envOverwrite
