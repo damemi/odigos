@@ -49,6 +49,7 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx con
 		auto.WithPID(pid),
 		auto.WithResourceAttributes(utils.GetResourceAttributes(podWorkload, podName)...),
 		auto.WithServiceName(serviceName),
+		auto.WithLoadedIndicator(loadedIndicator),
 		auto.WithTraceExporter(defaultExporter),
 	)
 	if err != nil {
@@ -81,4 +82,3 @@ func (g *JavaOtelEbpfSdkEnterprise) ConfigBool(instrumentedModuleName string, op
 func (g *JavaOtelEbpfSdkEnterprise) GetConfigOptions() map[string][]ConfigOption {
 	return map[string][]ConfigOption{}
 }
-

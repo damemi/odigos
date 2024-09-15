@@ -48,6 +48,7 @@ func (p *JavaExtensionInstrumentationFactoryEnterprise) CreateEbpfInstrumentatio
 		auto.WithResourceAttributes(utils.GetResourceAttributes(podWorkload, podName)...),
 		auto.WithServiceName(serviceName),
 		auto.WithTraceExporter(exporter),
+		auto.WithLoadedIndicator(loadedIndicator),
 	)
 
 	if err != nil {
@@ -80,4 +81,3 @@ func (p *JavaExtensionOtelEbpfSdk) ConfigBool(instrumentedModuleName string, opt
 func (p *JavaExtensionOtelEbpfSdk) GetConfigOptions() map[string][]ConfigOption {
 	return map[string][]ConfigOption{}
 }
-
