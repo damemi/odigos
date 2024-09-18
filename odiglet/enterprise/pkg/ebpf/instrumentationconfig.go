@@ -154,6 +154,30 @@ func applyWorkloadInstrumentationConfig(inst OtelEbpfSdkEnterprise, spec *odigos
 			return err
 		}
 
+		// kafka producer
+		payloadCollectionKafka := getPayloadCollectionConfig(&sdkConfig, odigosv1.InstrumentationLibraryId{
+			InstrumentationLibraryName: "github.com/segmentio/kafka-go",
+			SpanKind:                   common.ProducerSpanKind,
+		})
+		collectKafkaMessageKafka := payloadCollectionKafka.Messaging != nil
+		log.Logger.V(0).Info("Applying config to golang github.com/segmentio/kafka-go producer", "collectKafkaMessage", collectKafkaMessageKafka)
+		err = inst.ConfigBool("github.com/segmentio/kafka-go", "messaging.message.body", trace.SpanKindProducer, collectKafkaMessageKafka)
+		if err != nil {
+			return err
+		}
+
+		// kafka consumer
+		payloadCollectionKafkaConsumer := getPayloadCollectionConfig(&sdkConfig, odigosv1.InstrumentationLibraryId{
+			InstrumentationLibraryName: "github.com/segmentio/kafka-go",
+			SpanKind:                   common.ConsumerSpanKind,
+		})
+		collectKafkaMessageKafkaConsumer := payloadCollectionKafkaConsumer.Messaging != nil
+		log.Logger.V(0).Info("Applying config to golang github.com/segmentio/kafka-go consumer", "collectKafkaMessage", collectKafkaMessageKafkaConsumer)
+		err = inst.ConfigBool("github.com/segmentio/kafka-go", "messaging.message.body", trace.SpanKindConsumer, collectKafkaMessageKafkaConsumer)
+		if err != nil {
+			return err
+		}
+
 	}
 
 	return nil
