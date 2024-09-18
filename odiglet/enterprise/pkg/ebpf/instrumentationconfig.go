@@ -141,6 +141,19 @@ func applyWorkloadInstrumentationConfig(inst OtelEbpfSdkEnterprise, spec *odigos
 		if err != nil {
 			return err
 		}
+
+		// casandra
+		payloadCollectionCassandra := getPayloadCollectionConfig(&sdkConfig, odigosv1.InstrumentationLibraryId{
+			InstrumentationLibraryName: "github.com/gocql/gocql",
+			SpanKind:                   common.ClientSpanKind,
+		})
+		collectDbQueryCassandra := payloadCollectionCassandra.DbQuery != nil
+		log.Logger.V(0).Info("Applying config to golang github.com/gocql/gocql", "collectDbQuery", collectDbQueryCassandra)
+		err = inst.ConfigBool("github.com/gocql/gocql", "db.query.text", trace.SpanKindClient, collectDbQueryCassandra)
+		if err != nil {
+			return err
+		}
+
 	}
 
 	return nil
