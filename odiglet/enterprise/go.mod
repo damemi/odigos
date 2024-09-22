@@ -10,10 +10,10 @@ require (
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20240901114706-73f007947ac0
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20240801061800-241ec87ae161
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.0.107
+	github.com/odigos-io/odigos/api v1.0.108-0.20240922121657-e504bc4c6f36
 	github.com/odigos-io/odigos/common v1.0.107
 	github.com/odigos-io/odigos/k8sutils v1.0.107
-	github.com/odigos-io/odigos/odiglet v1.0.107
+	github.com/odigos-io/odigos/odiglet v1.0.108-0.20240922133738-75cc5df3fcda
 	github.com/odigos-io/odigos/opampserver v1.0.107-0.20240918123634-abc489b82f25
 	go.opentelemetry.io/auto v0.14.0-alpha.0.20240825151512-46ef49139923
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.29.0
@@ -139,7 +139,7 @@ replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common
 
 replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.107
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.107
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.108-0.20240922133738-75cc5df3fcda
 
 replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.107
 
