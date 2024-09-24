@@ -17,10 +17,6 @@ RUN --mount=type=secret,id=github_token \
     git clone https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-nodejs-instrumentation.git \
     && cd ebpf-nodejs-instrumentation/dtrace-injector \
     && make build
-# Opentelemetry nodejs instrumentation
-WORKDIR /nodejs-instrumentation/native
-COPY odiglet/agents/nodejs .
-RUN npm install
 
 FROM --platform=$BUILDPLATFORM busybox:1.36.1 AS dotnet-builder
 WORKDIR /dotnet-instrumentation
@@ -90,9 +86,6 @@ COPY --from=nodejs-builder /nodejs-instrumentation/ebpf-nodejs-instrumentation/d
 COPY --from=nodejs-builder /nodejs-instrumentation/ebpf-nodejs-instrumentation/dtrace-injector/lib /instrumentations/nodejs-ebpf/lib
 COPY --from=nodejs-builder /nodejs-instrumentation/ebpf-nodejs-instrumentation/dtrace-injector/build/Release/ /instrumentations/nodejs-ebpf/build/Release/
 COPY --from=nodejs-builder /nodejs-instrumentation/ebpf-nodejs-instrumentation/dtrace-injector/node_modules /instrumentations/nodejs-ebpf/node_modules
-
-# NodeJS native
-COPY --from=nodejs-builder /nodejs-instrumentation/native/build/workspace /instrumentations/nodejs
 
 # .NET
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet

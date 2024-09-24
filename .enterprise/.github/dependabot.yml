@@ -11,11 +11,6 @@ updates:
     schedule:
       day: sunday
       interval: weekly
-  - package-ecosystem: npm
-    directory: /odiglet/agents/nodejs
-    schedule:
-      day: sunday
-      interval: weekly
   - package-ecosystem: pip
     directory: /odiglet/agents/python
     schedule:
