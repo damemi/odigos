@@ -57,6 +57,7 @@ jobs:
           sed -i "s|github.com/odigos-io/ebpf-java-instrumentation.*|github.com/odigos-io/ebpf-java-instrumentation main|g" go.mod
           sed -i "s|github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension.*|github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension main|g" go.mod
           sed -i "s|github.com/odigos-io/ebpf-generic-instrumentation.*|github.com/odigos-io/ebpf-generic-instrumentation main|g" go.mod
+          sed -i "s|github.com/odigos-io/ebpf-nodejs-instrumentation.*|github.com/odigos-io/ebpf-nodejs-instrumentation main|g" go.mod
           go get -u github.com/odigos-io/odigos/odiglet@${TAG} github.com/odigos-io/odigos/api@${TAG} github.com/odigos-io/odigos/common@${TAG} github.com/odigos-io/odigos/k8sutils@${TAG}
           go mod tidy
 
