@@ -8,7 +8,7 @@ query: |
     span.http.request.method = "POST" && span.http.route = "/buy" && span:kind = server &&
     span.http.response.status_code = 200 }
   >> (
-    { resource.service.name = "pricing" && resource.telemetry.sdk.language = "dotnet" && span:kind = server } &&
+    { resource.telemetry.sdk.language = "dotnet" && span:kind = server } &&
     { resource.service.name = "inventory" && resource.telemetry.sdk.language = "python" && span:kind = server } &&
     ({ resource.service.name = "coupon" && resource.telemetry.sdk.language = "nodejs" && span:kind = server }
     >> { resource.service.name = "membership" && resource.telemetry.sdk.language = "go" &&

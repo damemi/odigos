@@ -10,10 +10,10 @@ require (
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20240925115718-655318c485fb
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20240801061800-241ec87ae161
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.0.111
-	github.com/odigos-io/odigos/common v1.0.111
-	github.com/odigos-io/odigos/k8sutils v1.0.111
-	github.com/odigos-io/odigos/odiglet v1.0.111
+	github.com/odigos-io/odigos/api v1.0.112
+	github.com/odigos-io/odigos/common v1.0.112
+	github.com/odigos-io/odigos/k8sutils v1.0.112
+	github.com/odigos-io/odigos/odiglet v1.0.112
 	github.com/odigos-io/odigos/opampserver v1.0.107-0.20240918123634-abc489b82f25
 	go.opentelemetry.io/auto v0.14.0-alpha.0.20240825151512-46ef49139923
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.29.0
@@ -124,7 +124,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
 	k8s.io/utils v0.0.0-20240921022957-49e7df575cb6 // indirect
 	rsc.io/binaryregexp v0.2.0 // indirect
-	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
+	sigs.k8s.io/json v0.0.0-20241009153224-e386a8af8d30 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
@@ -133,15 +133,15 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20241006143546-07c370bb15e3
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20241010062705-dd27b7b77435
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.111
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.112
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.111
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.112
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.111
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.112
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.111
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.112
 
 // Used for testing purposes
 // replace github.com/odigos-io/odigos/odiglet => github.com/RonFed/odigos_fork/odiglet add_java_envs_to_envOverwrite
