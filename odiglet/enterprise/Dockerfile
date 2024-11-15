@@ -1,4 +1,4 @@
-FROM python:3.11 AS python-builder
+FROM python:3.11.9 AS python-builder
 WORKDIR /python-instrumentation
 ADD odiglet/agents/python/requirements.txt .
 RUN mkdir workspace && pip install -r requirements.txt --target workspace
