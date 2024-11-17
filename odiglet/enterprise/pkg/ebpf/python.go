@@ -49,6 +49,7 @@ func (p *PythonInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx c
 		auto.WithResourceAttributes(utils.GetResourceAttributes(podWorkload, podName)...),
 		auto.WithServiceName(serviceName),
 		auto.WithTraceExporter(exporter),
+		auto.WithLoadedIndicator(loadedIndicator),
 	)
 
 	if err != nil {
