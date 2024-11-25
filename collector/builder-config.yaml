@@ -107,6 +107,10 @@ connectors:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector v0.106.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/spanmetricsconnector v0.106.0
 
+providers:
+  - gomod: go.opentelemetry.io/collector/odigos/providers/odigosfileprovider v0.106.0
+  - gomod: go.opentelemetry.io/collector/confmap/provider/envprovider v1.18.0
+
 replaces:
   - github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigosresourcenameprocessor => ../processors/odigosresourcenameprocessor
   - github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigossamplingprocessor => ../processors/odigossamplingprocessor
@@ -116,3 +120,4 @@ replaces:
   - github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/googlecloudstorageexporter => ../exporters/googlecloudstorageexporter
   - github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigostrafficmetrics => ../processors/odigostrafficmetrics
   - github.com/open-telemetry/opentelemetry-collector-contrib/odigos/extension/configreload => ../extensions/configreloadextension
+  - go.opentelemetry.io/collector/odigos/providers/odigosfileprovider => ../providers/odigosfileprovider

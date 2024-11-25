@@ -15,12 +15,7 @@ exporters:
     tls:
       insecure: true
 
-extensions:
-  configreload:
-    file: ../examples/test-config.yaml
-
 service:
-  extensions: [configreload]
   pipelines:
     traces:
       receivers: [otlp]

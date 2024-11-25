@@ -86,13 +86,9 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver v0.106.0
 	github.com/stretchr/testify v1.9.0
 	go.opentelemetry.io/collector/component v0.106.0
-	go.opentelemetry.io/collector/confmap v0.106.0
+	go.opentelemetry.io/collector/confmap v1.20.0
 	go.opentelemetry.io/collector/confmap/converter/expandconverter v0.106.0
-	go.opentelemetry.io/collector/confmap/provider/envprovider v0.106.0
-	go.opentelemetry.io/collector/confmap/provider/fileprovider v0.106.0
-	go.opentelemetry.io/collector/confmap/provider/httpprovider v0.106.0
-	go.opentelemetry.io/collector/confmap/provider/httpsprovider v0.106.0
-	go.opentelemetry.io/collector/confmap/provider/yamlprovider v0.106.0
+	go.opentelemetry.io/collector/confmap/provider/envprovider v1.18.0
 	go.opentelemetry.io/collector/connector v0.106.0
 	go.opentelemetry.io/collector/connector/forwardconnector v0.106.0
 	go.opentelemetry.io/collector/exporter v0.106.0
@@ -103,6 +99,7 @@ require (
 	go.opentelemetry.io/collector/extension v0.106.0
 	go.opentelemetry.io/collector/extension/ballastextension v0.106.0
 	go.opentelemetry.io/collector/extension/zpagesextension v0.106.0
+	go.opentelemetry.io/collector/odigos/providers/odigosfileprovider v0.106.0
 	go.opentelemetry.io/collector/otelcol v0.106.0
 	go.opentelemetry.io/collector/processor v0.106.0
 	go.opentelemetry.io/collector/processor/batchprocessor v0.106.0
@@ -608,5 +605,7 @@ replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporte
 replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigostrafficmetrics => ../processors/odigostrafficmetrics
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/extension/configreload => ../extensions/configreloadextension
+
+replace go.opentelemetry.io/collector/odigos/providers/odigosfileprovider => ../providers/odigosfileprovider
 
 exclude github.com/knadh/koanf v1.5.0

@@ -37,7 +37,7 @@ func createExtension(ctx context.Context, s extension.Settings, cfg component.Co
 	cr := &configReloader{
 		pid: os.Getpid(),
 	}
-
+	fmt.Printf("MY PID IS %+v\n\n\n", os.Getpid())
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
