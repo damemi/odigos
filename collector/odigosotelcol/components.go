@@ -65,6 +65,7 @@ import (
 	healthcheckextension "github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension"
 	pprofextension "github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension"
 	basicauthextension "github.com/open-telemetry/opentelemetry-collector-contrib/extension/basicauthextension"
+	configreload "github.com/open-telemetry/opentelemetry-collector-contrib/odigos/extension/configreload"
 	odigosresourcenameprocessor "github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigosresourcenameprocessor"
 	odigossamplingprocessor "github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigossamplingprocessor"
 	odigosconditionalattributes "github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigosconditionalattributes"
@@ -108,6 +109,7 @@ func components() (otelcol.Factories, error) {
 		healthcheckextension.NewFactory(),
 		pprofextension.NewFactory(),
 		basicauthextension.NewFactory(),
+		configreload.NewFactory(),
 	)
 	if err != nil {
 		return otelcol.Factories{}, err
@@ -118,6 +120,7 @@ func components() (otelcol.Factories, error) {
 	factories.ExtensionModules[healthcheckextension.NewFactory().Type()] = "github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.106.0"
 	factories.ExtensionModules[pprofextension.NewFactory().Type()] = "github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.106.0"
 	factories.ExtensionModules[basicauthextension.NewFactory().Type()] = "github.com/open-telemetry/opentelemetry-collector-contrib/extension/basicauthextension v0.106.0"
+	factories.ExtensionModules[configreload.NewFactory().Type()] = "github.com/open-telemetry/opentelemetry-collector-contrib/odigos/extension/configreload v0.106.0"
 
 	factories.Receivers, err = receiver.MakeFactoryMap(
 		otlpreceiver.NewFactory(),

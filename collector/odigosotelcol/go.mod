@@ -4,7 +4,7 @@ module odigos.io/opentelemetry-collector/cmd/odigosotelcol
 
 go 1.22.0
 
-toolchain go1.22.6
+toolchain go1.22.8
 
 require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.106.0
@@ -55,6 +55,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.106.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/azureblobstorageexporter v0.106.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/googlecloudstorageexporter v0.106.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/odigos/extension/configreload v0.106.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigosconditionalattributes v0.106.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigosresourcenameprocessor v0.106.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigossamplingprocessor v0.106.0
@@ -288,7 +289,7 @@ require (
 	github.com/expr-lang/expr v1.16.9 // indirect
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/fsnotify/fsnotify v1.7.0 // indirect
+	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/getsentry/sentry-go v0.28.1 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.7.1 // indirect
@@ -605,5 +606,7 @@ replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporte
 replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/googlecloudstorageexporter => ../exporters/googlecloudstorageexporter
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigostrafficmetrics => ../processors/odigostrafficmetrics
+
+replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/extension/configreload => ../extensions/configreloadextension
 
 exclude github.com/knadh/koanf v1.5.0
