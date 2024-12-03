@@ -2,10 +2,14 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 
+	"github.com/go-logr/logr"
+	"github.com/odigos-io/odigos/common/consts"
 	"github.com/odigos-io/odigos/odiglet/pkg/instrumentation/fs"
 
+	"net/http"
 	_ "net/http/pprof"
 
 	"github.com/kubevirt/device-plugin-manager/pkg/dpm"
@@ -59,8 +63,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	go common.StartPprofServer(log.Logger)
-
 	// Init Kubernetes API client
 	cfg, err := rest.InClusterConfig()
 	if err != nil {
@@ -83,11 +85,15 @@ func main() {
 
 	ctx := signals.SetupSignalHandler()
 
+	go startPprofServer(log.Logger)
+
 	odigosNs := k8senv.GetCurrentNamespace()
-	err = server.StartOpAmpServer(ctx, log.Logger, mgr, clientset, env.Current.NodeName, odigosNs)
-	if err != nil {
-		log.Logger.Error(err, "Failed to start opamp server")
-	}
+	go func() {
+		err = server.StartOpAmpServer(ctx, log.Logger, mgr, clientset, env.Current.NodeName, odigosNs)
+		if err != nil {
+			log.Logger.Error(err, "Failed to start opamp server")
+		}
+	}()
 
 	ebpfDirectors, err := initEbpf(ctx, mgr.GetClient(), mgr.GetScheme())
 	if err != nil {
@@ -117,11 +123,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = kube.StartManager(ctx, mgr)
-	if err != nil {
-		log.Logger.Error(err, "Failed to start controller-runtime manager")
-		os.Exit(-1)
-	}
+	go func() {
+		err := mgr.Start(ctx)
+		if err != nil {
+			log.Logger.Error(err, "Failed to start controller-runtime manager")
+			os.Exit(-1)
+		}
+	}()
 
 	<-ctx.Done()
 	for _, director := range ebpfDirectors {
@@ -240,4 +248,12 @@ func initEbpf(ctx context.Context, kubeclient client.Client, scheme *runtime.Sch
 		nodeJSDirectorKey:        nodeJSDirector,
 		mySQLDirectorKey:         mySQLDirector,
 	}, nil
+}
+
+func startPprofServer(logger logr.Logger) {
+	logger.Info("Starting pprof server")
+	addr := fmt.Sprintf(":%d", consts.PprofOdigosPort)
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		logger.Error(err, "unable to start pprof server")
+	}
 }

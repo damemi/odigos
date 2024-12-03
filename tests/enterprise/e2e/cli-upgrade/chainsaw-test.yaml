@@ -116,8 +116,9 @@ spec:
     - name: Generate Traffic
       try:
         - script:
-            timeout: 300s
+            timeout: 120s
             content: |
+              sleep 20
               # Apply the job
               kubectl apply -f 05-generate-traffic.yaml
 

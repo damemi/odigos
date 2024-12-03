@@ -10,11 +10,11 @@ require (
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20241118092124-a4f7cb7b800e
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20240801061800-241ec87ae161
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.0.131
-	github.com/odigos-io/odigos/common v1.0.131
-	github.com/odigos-io/odigos/k8sutils v1.0.131
-	github.com/odigos-io/odigos/odiglet v1.0.131
-	github.com/odigos-io/odigos/opampserver v1.0.131
+	github.com/odigos-io/odigos/api v1.0.132
+	github.com/odigos-io/odigos/common v1.0.132
+	github.com/odigos-io/odigos/k8sutils v1.0.132
+	github.com/odigos-io/odigos/odiglet v1.0.132
+	github.com/odigos-io/odigos/opampserver v1.0.132
 	go.opentelemetry.io/auto v0.17.0-alpha
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.31.0
 	go.opentelemetry.io/otel/trace v1.31.0
@@ -134,15 +134,15 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20241106153346-3a3cca232c83
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20241127083927-487a682d1686
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.131
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.132
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.131
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.132
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.131
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.132
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.131
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.132
 
 // Used for testing purposes
 // replace github.com/odigos-io/odigos/odiglet => github.com/RonFed/odigos_fork/odiglet add_java_envs_to_envOverwrite
