@@ -5,7 +5,8 @@ LIBRARIES := go.opentelemetry.io/auto \
 			github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension \
 			github.com/odigos-io/ebpf-generic-instrumentation \
 			github.com/odigos-io/ebpf-nodejs-instrumentation \
-			github.com/odigos-io/mysql-instrumentation
+			github.com/odigos-io/mysql-instrumentation \
+			github.com/odigos-io/runtime-detector
 
 # For development, we can modify the libraries by adding a @<version/branch> suffix
 # here, we make sure to remove the suffix to get the actual library name

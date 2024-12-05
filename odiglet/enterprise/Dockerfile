@@ -51,7 +51,7 @@ WORKDIR /dtrace-injector/ebpf-java-instrumentation/otel_agent_extension
 RUN make gradle-build
 RUN make build-jni
 
-FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.5 AS builder
+FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.7 AS builder
 
 RUN --mount=type=secret,id=github_token \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"

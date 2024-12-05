@@ -107,7 +107,7 @@ func main() {
 	}
 
 	// odigos reconcilers
-	err = kube.SetupWithManager(mgr, plainDirectors, clientset)
+	err = kube.SetupWithManager(mgr, plainDirectors, clientset, nil)
 	if err != nil {
 		log.Logger.Error(err, "Failed to setup controller-runtime manager")
 		os.Exit(-1)
