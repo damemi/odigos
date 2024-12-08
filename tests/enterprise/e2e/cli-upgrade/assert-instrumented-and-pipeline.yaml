@@ -150,6 +150,8 @@ spec:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: metadata.name
+            - name: GOMEMLIMIT
+              (value != null): true
       hostNetwork: true
       nodeSelector:
         kubernetes.io/os: linux

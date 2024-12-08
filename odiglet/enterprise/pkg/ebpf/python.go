@@ -9,7 +9,6 @@ import (
 	"github.com/odigos-io/odigos/common/consts"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 	"github.com/odigos-io/odigos/odiglet/pkg/env"
-	"github.com/odigos-io/odigos/odiglet/pkg/kube/utils"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	apitrace "go.opentelemetry.io/otel/trace"
@@ -43,10 +42,10 @@ func (p *PythonInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx c
 		return nil, err
 	}
 
+	// In Python, resource attributes are provided through OpAMP, which is why WithResourceAttributes is not sent as in other languages.
 	inst, err := auto.NewInstrumentation(
 		ctx,
 		auto.WithPID(pid),
-		auto.WithResourceAttributes(utils.GetResourceAttributes(podWorkload, podName)...),
 		auto.WithServiceName(serviceName),
 		auto.WithTraceExporter(exporter),
 		auto.WithLoadedIndicator(loadedIndicator),
@@ -80,4 +79,3 @@ func (p *PythonOtelEbpfSdkEnterprise) ConfigBool(instrumentedModuleName string, 
 func (p *PythonOtelEbpfSdkEnterprise) GetConfigOptions() map[string][]ConfigOption {
 	return map[string][]ConfigOption{}
 }
-
