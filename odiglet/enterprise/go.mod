@@ -13,18 +13,18 @@ require (
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20241208143603-f29f221b60e4
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20241208143713-ad46193e6c00
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.0.136-0.20241208152349-4b449743dd9f
-	github.com/odigos-io/odigos/common v1.0.136-0.20241208152349-4b449743dd9f
-	github.com/odigos-io/odigos/k8sutils v1.0.136-0.20241208152349-4b449743dd9f
-	github.com/odigos-io/odigos/odiglet v1.0.136-0.20241208152349-4b449743dd9f
-	github.com/odigos-io/odigos/opampserver v1.0.136-0.20241208152349-4b449743dd9f
-	go.opentelemetry.io/auto v0.18.0-alpha
+	github.com/odigos-io/odigos/api v1.0.136
+	github.com/odigos-io/odigos/common v1.0.136
+	github.com/odigos-io/odigos/k8sutils v1.0.136
+	github.com/odigos-io/odigos/odiglet v1.0.136
+	github.com/odigos-io/odigos/opampserver v1.0.136
+	go.opentelemetry.io/auto v0.19.0-alpha
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.32.0
 	go.opentelemetry.io/otel/trace v1.32.0
 	k8s.io/apimachinery v0.31.3
 	k8s.io/client-go v0.31.3
 	k8s.io/kubelet v0.31.3
-	sigs.k8s.io/controller-runtime v0.19.2
+	sigs.k8s.io/controller-runtime v0.19.3
 )
 
 require (
@@ -59,7 +59,7 @@ require (
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/pprof v0.0.0-20240525223248-4bfdf5a9a2af // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.23.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.24.0 // indirect
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
 	github.com/hashicorp/go-version v1.7.0 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
@@ -80,7 +80,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.20.5 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
-	github.com/prometheus/common v0.60.1 // indirect
+	github.com/prometheus/common v0.61.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
@@ -102,24 +102,24 @@ require (
 	go.opentelemetry.io/otel/sdk v1.32.0 // indirect
 	go.opentelemetry.io/otel/sdk/log v0.8.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.32.0 // indirect
-	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
+	go.opentelemetry.io/proto/otlp v1.4.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/arch v0.12.0 // indirect
-	golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc // indirect
-	golang.org/x/net v0.30.0 // indirect
-	golang.org/x/oauth2 v0.23.0 // indirect
-	golang.org/x/sync v0.9.0 // indirect
-	golang.org/x/sys v0.27.0 // indirect
-	golang.org/x/term v0.25.0 // indirect
-	golang.org/x/text v0.20.0 // indirect
+	golang.org/x/exp v0.0.0-20241204233417-43b7b7cde48d // indirect
+	golang.org/x/net v0.32.0 // indirect
+	golang.org/x/oauth2 v0.24.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/term v0.27.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20241104194629-dd2ea8efbc28 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20241104194629-dd2ea8efbc28 // indirect
-	google.golang.org/grpc v1.68.0 // indirect
-	google.golang.org/protobuf v1.35.1 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20241202173237-19429a94021a // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20241202173237-19429a94021a // indirect
+	google.golang.org/grpc v1.68.1 // indirect
+	google.golang.org/protobuf v1.35.2 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
@@ -140,13 +140,13 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20241208143020-8c38e659dd22
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.136-0.20241208152349-4b449743dd9f
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.136
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.136-0.20241208152349-4b449743dd9f
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.136
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.136-0.20241208152349-4b449743dd9f
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.136
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.136-0.20241208152349-4b449743dd9f
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.136
 
 // Used for testing purposes
 // replace github.com/odigos-io/odigos/odiglet => github.com/RonFed/odigos_fork/odiglet add_java_envs_to_envOverwrite
