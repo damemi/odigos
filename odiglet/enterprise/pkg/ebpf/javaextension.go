@@ -48,7 +48,6 @@ func (p *JavaExtensionInstrumentationFactoryEnterprise) CreateEbpfInstrumentatio
 		auto.WithResourceAttributes(utils.GetResourceAttributes(podWorkload, podName)...),
 		auto.WithServiceName(serviceName),
 		auto.WithTraceExporter(exporter),
-		auto.WithLoadedIndicator(loadedIndicator),
 	)
 
 	if err != nil {
@@ -62,6 +61,10 @@ func (p *JavaExtensionInstrumentationFactoryEnterprise) CreateEbpfInstrumentatio
 	}
 
 	return javaInstWrapper, nil
+}
+
+func (p *JavaExtensionOtelEbpfSdk) Load(ctx context.Context) error {
+	return p.inst.Load(ctx)
 }
 
 func (p *JavaExtensionOtelEbpfSdk) Run(ctx context.Context) error {

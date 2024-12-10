@@ -76,7 +76,6 @@ func (g *GoInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx conte
 		auto.WithServiceName(serviceName),
 		auto.WithTraceExporter(defaultExporter),
 		auto.WithGlobal(),
-		auto.WithLoadedIndicator(loadedIndicator),
 		auto.WithConfigProvider(cp),
 	)
 	if err != nil {
@@ -103,6 +102,10 @@ func (g *GoInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx conte
 	}
 
 	return goInstWrapper, nil
+}
+
+func (g *GoOtelEbpfSdkEnterprise) Load(ctx context.Context) error {
+	return g.inst.Load(ctx)
 }
 
 func (g *GoOtelEbpfSdkEnterprise) Run(ctx context.Context) error {

@@ -63,6 +63,10 @@ func (n *NodeJSInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx c
 	return nodeInstWrapper, nil
 }
 
+func (n *NodeJSOtelEbpfSdkEnterprise) Load(ctx context.Context) error {
+	return n.inst.Load(ctx)
+}
+
 func (n *NodeJSOtelEbpfSdkEnterprise) Run(ctx context.Context) error {
 	return n.inst.Run(ctx)
 }

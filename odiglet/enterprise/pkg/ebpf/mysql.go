@@ -64,6 +64,10 @@ func (g *MySQLInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx co
 	return mysqlInstWrapper, nil
 }
 
+func (g *MySQLOtelEbpfSdkEnterprise) Load(ctx context.Context) error {
+	return g.inst.Load(ctx)
+}
+
 func (g *MySQLOtelEbpfSdkEnterprise) Run(ctx context.Context) error {
 	return g.inst.Run(ctx)
 }

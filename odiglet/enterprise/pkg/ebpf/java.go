@@ -49,7 +49,6 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx con
 		auto.WithPID(pid),
 		auto.WithResourceAttributes(utils.GetResourceAttributes(podWorkload, podName)...),
 		auto.WithServiceName(serviceName),
-		auto.WithLoadedIndicator(loadedIndicator),
 		auto.WithTraceExporter(defaultExporter),
 	)
 	if err != nil {
@@ -63,6 +62,10 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx con
 	}
 
 	return javaInstWrapper, nil
+}
+
+func (g *JavaOtelEbpfSdkEnterprise) Load(ctx context.Context) error {
+	return g.inst.Load(ctx)
 }
 
 func (g *JavaOtelEbpfSdkEnterprise) Run(ctx context.Context) error {

@@ -7,24 +7,24 @@ toolchain go1.22.10
 require (
 	github.com/go-logr/logr v1.4.2
 	github.com/kubevirt/device-plugin-manager v1.19.5
-	github.com/odigos-io/ebpf-generic-instrumentation v0.0.0-20241027151233-a9484a5b7557
-	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20241121133044-6b9e895e0dab
-	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20241121133044-6b9e895e0dab
-	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20241118092124-a4f7cb7b800e
-	github.com/odigos-io/mysql-instrumentation v0.0.0-20240801061800-241ec87ae161
+	github.com/odigos-io/ebpf-generic-instrumentation v0.0.0-20241210081152-459bcedb375f
+	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20241208143354-e4ae36f815f9
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20241208143354-e4ae36f815f9
+	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20241208143603-f29f221b60e4
+	github.com/odigos-io/mysql-instrumentation v0.0.0-20241208143713-ad46193e6c00
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.0.135
-	github.com/odigos-io/odigos/common v1.0.135
-	github.com/odigos-io/odigos/k8sutils v1.0.135
-	github.com/odigos-io/odigos/odiglet v1.0.135
-	github.com/odigos-io/odigos/opampserver v1.0.135
+	github.com/odigos-io/odigos/api v1.0.136-0.20241208152349-4b449743dd9f
+	github.com/odigos-io/odigos/common v1.0.136-0.20241208152349-4b449743dd9f
+	github.com/odigos-io/odigos/k8sutils v1.0.136-0.20241208152349-4b449743dd9f
+	github.com/odigos-io/odigos/odiglet v1.0.136-0.20241208152349-4b449743dd9f
+	github.com/odigos-io/odigos/opampserver v1.0.136-0.20241208152349-4b449743dd9f
 	go.opentelemetry.io/auto v0.18.0-alpha
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.32.0
 	go.opentelemetry.io/otel/trace v1.32.0
-	k8s.io/apimachinery v0.31.0
-	k8s.io/client-go v0.31.0
-	k8s.io/kubelet v0.31.0
-	sigs.k8s.io/controller-runtime v0.19.0
+	k8s.io/apimachinery v0.31.3
+	k8s.io/client-go v0.31.3
+	k8s.io/kubelet v0.31.3
+	sigs.k8s.io/controller-runtime v0.19.2
 )
 
 require (
@@ -123,7 +123,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.31.0 // indirect
+	k8s.io/api v0.31.3 // indirect
 	k8s.io/apiextensions-apiserver v0.31.0 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
@@ -138,15 +138,15 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20241127083927-487a682d1686
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20241208143020-8c38e659dd22
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.135
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.136-0.20241208152349-4b449743dd9f
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.135
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.136-0.20241208152349-4b449743dd9f
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.135
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.136-0.20241208152349-4b449743dd9f
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.135
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.136-0.20241208152349-4b449743dd9f
 
 // Used for testing purposes
 // replace github.com/odigos-io/odigos/odiglet => github.com/RonFed/odigos_fork/odiglet add_java_envs_to_envOverwrite

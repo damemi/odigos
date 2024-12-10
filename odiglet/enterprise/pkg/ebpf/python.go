@@ -48,7 +48,6 @@ func (p *PythonInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx c
 		auto.WithPID(pid),
 		auto.WithServiceName(serviceName),
 		auto.WithTraceExporter(exporter),
-		auto.WithLoadedIndicator(loadedIndicator),
 	)
 
 	if err != nil {
@@ -64,11 +63,15 @@ func (p *PythonInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx c
 	return pythonInstWrapper, nil
 }
 
+func (p *PythonOtelEbpfSdkEnterprise) Load(ctx context.Context) error {
+	return p.inst.Load(ctx)
+}
+
 func (p *PythonOtelEbpfSdkEnterprise) Run(ctx context.Context) error {
 	return p.inst.Run(ctx)
 }
 
-func (p *PythonOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
+func (p *PythonOtelEbpfSdkEnterprise) Close(_ context.Context) error {
 	return p.inst.Close()
 }
 

@@ -15,6 +15,7 @@ type ConfigOption struct {
 // The pid is part of a pod, which is part of a workload.
 // This interface is generic and does not assume any specific SDK or language,
 // so it can be extended to support any SDK in the future (java, python, nodejs, etc.)
+// Deprecated: this will be removed once we complete the transition to the generic instrumentation manager
 type OtelEbpfSdkEnterprise interface {
 	odigosebpf.OtelEbpfSdk
 
