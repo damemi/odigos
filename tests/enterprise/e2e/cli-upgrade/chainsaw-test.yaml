@@ -100,8 +100,15 @@ spec:
       try:
         - apply:
             file: 04-add-destination.yaml
-        - assert:
-            file: assert-instrumented-and-pipeline.yaml
+    - name: Odigos pipeline pods ready
+      # We make sure that the pipeline pods are ready before proceeding with the next steps
+      # This is intentionally different from pipeline-ready.yaml, which checks for the pipeline CRDs
+      # When adding a feature related to the pipeline, if we would use the same assert before the upgrade, the test would fail.
+      # Since the version installed here is latest official one.
+      try:
+        - script:
+            content: ../../common/assert_pipeline_pods_ready.sh odigos-test-cli-upgrade 120s
+            timeout: 60s
     - name: Upgrade to HEAD version with the current compiled cli
       try:
         - script:
