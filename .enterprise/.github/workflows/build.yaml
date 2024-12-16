@@ -131,7 +131,7 @@ jobs:
         with:
           version: v3.9.0
       - name: Install chainsaw
-        uses: kyverno/action-install-chainsaw@v0.2.4
+        uses: kyverno/action-install-chainsaw@v0.2.12
       - name: Checkout Odigos OSS
         uses: actions/checkout@v4
         with:
