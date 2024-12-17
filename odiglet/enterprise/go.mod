@@ -6,8 +6,8 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/kubevirt/device-plugin-manager v1.19.5
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.0-20241210081152-459bcedb375f
-	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20241208143354-e4ae36f815f9
-	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20241208143354-e4ae36f815f9
+	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20241217081638-add6ff9249e9
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20241217081638-add6ff9249e9
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20241208143603-f29f221b60e4
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20241208143713-ad46193e6c00
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
