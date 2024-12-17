@@ -11,11 +11,11 @@ require (
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20241208143603-f29f221b60e4
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20241208143713-ad46193e6c00
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.0.138
-	github.com/odigos-io/odigos/common v1.0.138
-	github.com/odigos-io/odigos/k8sutils v1.0.138
-	github.com/odigos-io/odigos/odiglet v1.0.138
-	github.com/odigos-io/odigos/opampserver v1.0.138
+	github.com/odigos-io/odigos/api v1.0.138-0.20241217105501-716aac7f19e8
+	github.com/odigos-io/odigos/common v1.0.138-0.20241217105501-716aac7f19e8
+	github.com/odigos-io/odigos/k8sutils v1.0.138-0.20241217105501-716aac7f19e8
+	github.com/odigos-io/odigos/odiglet v1.0.138-0.20241217105501-716aac7f19e8
+	github.com/odigos-io/odigos/opampserver v1.0.138-0.20241217105501-716aac7f19e8
 	go.opentelemetry.io/auto v0.19.0-alpha
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.33.0
 	go.opentelemetry.io/otel/trace v1.33.0
@@ -134,15 +134,15 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20241215094442-1027d1f53179
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.138
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.138-0.20241217105501-716aac7f19e8
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.138
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.138-0.20241217105501-716aac7f19e8
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.138
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.138-0.20241217105501-716aac7f19e8
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.138
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.138-0.20241217105501-716aac7f19e8
 
-replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.137
+replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.138-0.20241217105501-716aac7f19e8
 
 // Used for testing purposes
 // replace github.com/odigos-io/odigos/odiglet => github.com/RonFed/odigos_fork/odiglet add_java_envs_to_envOverwrite
