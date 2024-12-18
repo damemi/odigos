@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/go-logr/logr"
 	"github.com/odigos-io/odigos/common/consts"
@@ -13,10 +14,10 @@ import (
 	_ "net/http/pprof"
 
 	"github.com/kubevirt/device-plugin-manager/pkg/dpm"
-	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf"
+	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/sdks"
 	enterpriseinstrumentlang "github.com/odigos-io/odigos-enterprise/odiglet/pkg/instrumentation/instrumentlang"
-	enterprisekube "github.com/odigos-io/odigos-enterprise/odiglet/pkg/kube"
 	"github.com/odigos-io/odigos/common"
+	commonInstrumentation "github.com/odigos-io/odigos/instrumentation"
 	k8senv "github.com/odigos-io/odigos/k8sutils/pkg/env"
 	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	"github.com/odigos-io/odigos/odiglet/pkg/env"
@@ -25,11 +26,13 @@ import (
 	"github.com/odigos-io/odigos/odiglet/pkg/kube"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
 	"github.com/odigos-io/odigos/opampserver/pkg/server"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+)
+
+const (
+	configUpdatesBufferSize = 10
 )
 
 func odigletInitPhase() {
@@ -57,6 +60,8 @@ func main() {
 
 	assertProOdigletToken()
 
+	// TODO; from this point the code is identical to the OSS version, except the ebpf factories amd the devices
+	// We should use here a common function from the OSS repo which have the factories and the devices as parameters
 	// Load env
 	if err := env.Load(); err != nil {
 		log.Logger.Error(err, "Failed to load env")
@@ -87,54 +92,63 @@ func main() {
 
 	go startPprofServer(log.Logger)
 
+	var wg sync.WaitGroup
 	odigosNs := k8senv.GetCurrentNamespace()
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		err = server.StartOpAmpServer(ctx, log.Logger, mgr, clientset, env.Current.NodeName, odigosNs)
 		if err != nil {
 			log.Logger.Error(err, "Failed to start opamp server")
 		}
 	}()
 
-	ebpfDirectors, err := initEbpf(ctx, mgr.GetClient(), mgr.GetScheme())
+	configUpdates := make(chan commonInstrumentation.ConfigUpdate[odigosebpf.K8sConfigGroup], configUpdatesBufferSize)
+	ebpfManager, err := odigosebpf.NewManager(
+		mgr.GetClient(),
+		log.Logger,
+		ebpfInstrumentationFactories(),
+		configUpdates,
+	)
 	if err != nil {
-		log.Logger.Error(err, "Failed to init eBPF director")
+		log.Logger.Error(err, "Failed to create ebpf manager")
 		os.Exit(-1)
 	}
 
-	plainDirectors := make(odigosebpf.DirectorsMap)
-	for k, v := range ebpfDirectors {
-		plainDirectors[k] = v
-	}
+	wg.Add(1)
+	go func () {
+		defer wg.Done()
+		err = ebpfManager.Run(ctx)
+		if err != nil {
+			log.Logger.Error(err, "Failed to run ebpf manager")
+		}
+		log.Logger.V(0).Info("eBPF manager exited")
+	}()
 
 	// odigos reconcilers
-	err = kube.SetupWithManager(mgr, plainDirectors, clientset, nil)
+	err = kube.SetupWithManager(mgr, nil, clientset, configUpdates)
 	if err != nil {
 		log.Logger.Error(err, "Failed to setup controller-runtime manager")
 		os.Exit(-1)
 	}
 
-	// enterprise reconcilers
-	if err = (&enterprisekube.InstrumentationConfigReconciler{
-		Client:    mgr.GetClient(),
-		Scheme:    mgr.GetScheme(),
-		Directors: ebpfDirectors,
-	}).SetupWithManager(mgr); err != nil {
-		log.Logger.Error(err, "unable to create controller", "controller", "InstrumentationConfig")
-		os.Exit(1)
-	}
-
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		err := mgr.Start(ctx)
 		if err != nil {
 			log.Logger.Error(err, "Failed to start controller-runtime manager")
 			os.Exit(-1)
 		}
+		// the manager is stopped, it is now safe to close the config updates channel
+		if configUpdates != nil {
+			close(configUpdates)
+		}
 	}()
 
 	<-ctx.Done()
-	for _, director := range ebpfDirectors {
-		director.Shutdown()
-	}
+	wg.Wait()
+	log.Logger.V(0).Info("odiglet exiting")
 }
 
 func startDeviceManager(clientset *kubernetes.Clientset) {
@@ -190,64 +204,40 @@ func startDeviceManager(clientset *kubernetes.Clientset) {
 	manager.Run()
 }
 
-func initEbpf(ctx context.Context, kubeclient client.Client, scheme *runtime.Scheme) (ebpf.DirectorsEnterpriseMap, error) {
-	goInstrumentationFactory := ebpf.NewGoInstrumentationFactoryEnterprise(kubeclient)
-	goDirector := ebpf.NewEbpfDirectorEnterprise(ctx, kubeclient, scheme, common.GoProgrammingLanguage, goInstrumentationFactory)
-	goDirectorKey := odigosebpf.DirectorKey{
-		Language: common.GoProgrammingLanguage,
-		OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
+func ebpfInstrumentationFactories() map[commonInstrumentation.OtelDistribution]commonInstrumentation.Factory {
+	return map[commonInstrumentation.OtelDistribution]commonInstrumentation.Factory{
+		{
+			Language: common.GoProgrammingLanguage,
+			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
+		} : sdks.NewGoInstrumentationFactoryEnterprise(),
+		{
+			Language: common.JavaProgrammingLanguage,
+			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
+		} : sdks.NewJavaInstrumentationFactoryEnterprise(),
+		// Utilizing the Otel Java Agent extension mechanism
+		// We define it as a native-enterprise SDK but it also requires ebpf initialization.
+		// TODO: this is a similar implementation to what we have for JS and Python,
+		// so maybe should consider defining them as native-enterprise as well.
+		// On the other hand, if we'll choose to use this instrumentation without keeping the original ebpf-enterprise for Java,
+		// we might consider defining this one as ebpf-enterprise instead of the old one.
+		// Currently we can't define this as ebpf-enterprise because it will conflict with the old Java ebpf instrumentation.
+		{
+			Language: common.JavaProgrammingLanguage,
+			OtelSdk:  common.OtelSdk{SdkType: common.NativeOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
+		} : sdks.NewJavaExtensionInstrumentationFactoryEnterprise(),
+		{
+			Language: common.PythonProgrammingLanguage,
+			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
+		} : sdks.NewPythonInstrumentationFactoryEnterprise(),
+		{
+			Language: common.JavascriptProgrammingLanguage,
+			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
+		} : sdks.NewNodeJSInstrumentationFactoryEnterprise(),
+		{
+			Language: common.MySQLProgrammingLanguage,
+			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
+		} : sdks.NewMySQLInstrumentationFactoryEnterprise(),
 	}
-
-	javaInstrumentationFactory := ebpf.NewJavaInstrumentationFactoryEnterprise(kubeclient)
-	javaDirector := ebpf.NewEbpfDirectorEnterprise(ctx, kubeclient, scheme, common.JavaProgrammingLanguage, javaInstrumentationFactory)
-	javaDirectorKey := odigosebpf.DirectorKey{
-		Language: common.JavaProgrammingLanguage,
-		OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-	}
-
-	// Utilizing the Otel Java Agent extension mechanism
-	// We define it as a native-enterprise director but it also requires ebpf initialization.
-	// TODO: this is a similar implementation to what we have for JS and Python,
-	// so maybe should consider defining them as native-enterprise as well.
-	// On the other hand, if we'll choose to use this instrumentation without keeping the original ebpf-enterprise for Java,
-	// we might consider defining this one as ebpf-enterprise instead of the old one.
-	// Currently we can't define this as ebpf-enterprise because it will conflict with the old Java ebpf director.
-	javaExtensionInstrumentationFactory := ebpf.NewJavaExtensionInstrumentationFactoryEnterprise(kubeclient)
-	javaExtensionDirector := ebpf.NewEbpfDirectorEnterprise(ctx, kubeclient, scheme, common.JavaProgrammingLanguage, javaExtensionInstrumentationFactory)
-	javaExtensionDirectorKey := odigosebpf.DirectorKey{
-		Language: common.JavaProgrammingLanguage,
-		OtelSdk:  common.OtelSdk{SdkType: common.NativeOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-	}
-
-	pythonInstrumentationFactory := ebpf.NewPythonInstrumentationFactoryEnterprise(kubeclient)
-	pythonDirector := ebpf.NewEbpfDirectorEnterprise(ctx, kubeclient, scheme, common.PythonProgrammingLanguage, pythonInstrumentationFactory)
-	pythonDirectorKey := odigosebpf.DirectorKey{
-		Language: common.PythonProgrammingLanguage,
-		OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-	}
-
-	nodeJSInstrumentationFactory := ebpf.NewNodeJSInstrumentationFactoryEnterprise(kubeclient)
-	nodeJSDirector := ebpf.NewEbpfDirectorEnterprise(ctx, kubeclient, scheme, common.JavascriptProgrammingLanguage, nodeJSInstrumentationFactory)
-	nodeJSDirectorKey := odigosebpf.DirectorKey{
-		Language: common.JavascriptProgrammingLanguage,
-		OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-	}
-
-	mySQLInstrumentationFactory := ebpf.NewMySQLInstrumentationFactoryEnterprise(kubeclient)
-	mySQLDirector := ebpf.NewEbpfDirectorEnterprise(ctx, kubeclient, scheme, common.MySQLProgrammingLanguage, mySQLInstrumentationFactory)
-	mySQLDirectorKey := odigosebpf.DirectorKey{
-		Language: common.MySQLProgrammingLanguage,
-		OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-	}
-
-	return ebpf.DirectorsEnterpriseMap{
-		goDirectorKey:            goDirector,
-		javaDirectorKey:          javaDirector,
-		javaExtensionDirectorKey: javaExtensionDirector,
-		pythonDirectorKey:        pythonDirector,
-		nodeJSDirectorKey:        nodeJSDirector,
-		mySQLDirectorKey:         mySQLDirector,
-	}, nil
 }
 
 func startPprofServer(logger logr.Logger) {

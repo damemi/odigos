@@ -1,39 +1,29 @@
-package ebpf
+package sdks
 
 import (
 	"context"
 	"fmt"
 
+	"github.com/odigos-io/odigos/instrumentation"
 	auto "github.com/odigos-io/ebpf-generic-instrumentation"
 	"github.com/odigos-io/ebpf-generic-instrumentation/pkg/opentelemetry"
 	"github.com/odigos-io/odigos/common/consts"
-	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 	"github.com/odigos-io/odigos/odiglet/pkg/env"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	apitrace "go.opentelemetry.io/otel/trace"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type PythonOtelEbpfSdkEnterprise struct {
-	kubeclient client.Client
 	inst       *auto.Instrumentation
 }
 
-type PythonInstrumentationFactoryEnterprise struct {
-	kubeclient client.Client
+type PythonInstrumentationFactoryEnterprise struct {}
+
+func NewPythonInstrumentationFactoryEnterprise() instrumentation.Factory {
+	return &PythonInstrumentationFactoryEnterprise{}
 }
 
-// compile time check
-var _ OtelEbpfSdkEnterprise = &PythonOtelEbpfSdkEnterprise{}
-
-func NewPythonInstrumentationFactoryEnterprise(kubeclient client.Client) InstrumentationFactoryEnterprise[*PythonOtelEbpfSdkEnterprise] {
-	return &PythonInstrumentationFactoryEnterprise{
-		kubeclient: kubeclient,
-	}
-}
-
-func (p *PythonInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx context.Context, pid int, serviceName string, podWorkload *workload.PodWorkload, containerName string, podName string, loadedIndicator chan struct{}) (*PythonOtelEbpfSdkEnterprise, error) {
+func (p *PythonInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
 	c := otlptracegrpc.NewClient(otlptracegrpc.WithInsecure(),
 		otlptracegrpc.WithEndpoint(fmt.Sprintf("%s:%d", env.Current.NodeIP, consts.OTLPPort)))
 	exporter, err := opentelemetry.New(ctx, c)
@@ -46,7 +36,7 @@ func (p *PythonInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx c
 	inst, err := auto.NewInstrumentation(
 		ctx,
 		auto.WithPID(pid),
-		auto.WithServiceName(serviceName),
+		auto.WithServiceName(settings.ServiceName),
 		auto.WithTraceExporter(exporter),
 	)
 
@@ -57,7 +47,6 @@ func (p *PythonInstrumentationFactoryEnterprise) CreateEbpfInstrumentation(ctx c
 
 	pythonInstWrapper := &PythonOtelEbpfSdkEnterprise{
 		inst:       inst,
-		kubeclient: p.kubeclient,
 	}
 
 	return pythonInstWrapper, nil
@@ -75,10 +64,7 @@ func (p *PythonOtelEbpfSdkEnterprise) Close(_ context.Context) error {
 	return p.inst.Close()
 }
 
-func (p *PythonOtelEbpfSdkEnterprise) ConfigBool(instrumentedModuleName string, optionKey string, spanKind apitrace.SpanKind, optionValue bool) error {
+// Not implemented
+func (p *PythonOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, sdkConfig instrumentation.Config) error {
 	return nil
-}
-
-func (p *PythonOtelEbpfSdkEnterprise) GetConfigOptions() map[string][]ConfigOption {
-	return map[string][]ConfigOption{}
 }
