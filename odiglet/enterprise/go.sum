@@ -269,8 +269,8 @@ github.com/odigos-io/odigos/instrumentation v1.0.139 h1:rbhWnX5WKgkFUXhXBun0U9Sw
 github.com/odigos-io/odigos/instrumentation v1.0.139/go.mod h1:hvnSJor/lvPqicr0XuKkO33qlqNL7CH/XiPRpr32wKM=
 github.com/odigos-io/odigos/k8sutils v1.0.139 h1:pl4c8PK7+1UqQk+8kuyB/mcNmn4HuJg6uh79S5uKhD8=
 github.com/odigos-io/odigos/k8sutils v1.0.139/go.mod h1:D11e726FFC0RU+IQW0j6y3dLov3QEe52PNAkPgOzlSQ=
-github.com/odigos-io/odigos/odiglet v1.0.139 h1:huyVMPMqtBiCBZXAO/P3RP57ATuRXYqEtyi7ji9OmjQ=
-github.com/odigos-io/odigos/odiglet v1.0.139/go.mod h1:gWHjs1UGcdrBcWRnIfZmO1LAFk15HHCwT85B2B+5zzQ=
+github.com/odigos-io/odigos/odiglet v1.0.140-0.20241218135623-c6ff5251bff9 h1:kHVad55JZkJyeY37dplYcNswdfKwNeP3ITUT/6eqcLs=
+github.com/odigos-io/odigos/odiglet v1.0.140-0.20241218135623-c6ff5251bff9/go.mod h1:iBJBjcjhTJ/x3CXMU4Q0MjIiodAGIV1fXfh5uIgxsR4=
 github.com/odigos-io/odigos/opampserver v1.0.139 h1:JLI83El6+2956W5r4y0oRLfJZ6+IPQxIqEjyTUVMBLU=
 github.com/odigos-io/odigos/opampserver v1.0.139/go.mod h1:eLdLciTExSJ7T9OtDw2sJftYcJ5tpWaM5Oq0gU3qgoU=
 github.com/odigos-io/odigos/procdiscovery v1.0.139 h1:0jPAkhJmvm6q2ZYFADjj1qiTj84gwngm0FpwX4lxLF4=

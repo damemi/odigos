@@ -1,33 +1,21 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"os"
-	"sync"
 
-	"github.com/go-logr/logr"
-	"github.com/odigos-io/odigos/common/consts"
 	"github.com/odigos-io/odigos/odiglet/pkg/instrumentation/fs"
 
-	"net/http"
 	_ "net/http/pprof"
 
-	"github.com/kubevirt/device-plugin-manager/pkg/dpm"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/sdks"
 	enterpriseinstrumentlang "github.com/odigos-io/odigos-enterprise/odiglet/pkg/instrumentation/instrumentlang"
 	"github.com/odigos-io/odigos/common"
 	commonInstrumentation "github.com/odigos-io/odigos/instrumentation"
-	k8senv "github.com/odigos-io/odigos/k8sutils/pkg/env"
-	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
+	"github.com/odigos-io/odigos/odiglet"
 	"github.com/odigos-io/odigos/odiglet/pkg/env"
 	"github.com/odigos-io/odigos/odiglet/pkg/instrumentation"
 	communityinstrumentlang "github.com/odigos-io/odigos/odiglet/pkg/instrumentation/instrumentlang"
-	"github.com/odigos-io/odigos/odiglet/pkg/kube"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
-	"github.com/odigos-io/odigos/opampserver/pkg/server"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
 
@@ -60,107 +48,29 @@ func main() {
 
 	assertProOdigletToken()
 
-	// TODO; from this point the code is identical to the OSS version, except the ebpf factories amd the devices
-	// We should use here a common function from the OSS repo which have the factories and the devices as parameters
-	// Load env
 	if err := env.Load(); err != nil {
 		log.Logger.Error(err, "Failed to load env")
 		os.Exit(1)
 	}
 
-	// Init Kubernetes API client
-	cfg, err := rest.InClusterConfig()
+	o, err := odiglet.New(deviceInjectionCallbacks(), ebpfInstrumentationFactories())
 	if err != nil {
-		log.Logger.Error(err, "Failed to init Kubernetes API client")
-		os.Exit(-1)
-	}
-	clientset, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		log.Logger.Error(err, "Failed to init Kubernetes API client")
-		os.Exit(-1)
-	}
-
-	go startDeviceManager(clientset)
-
-	mgr, err := kube.CreateManager()
-	if err != nil {
-		log.Logger.Error(err, "Failed to create controller-runtime manager")
-		os.Exit(-1)
+		log.Logger.Error(err, "Failed to initialize odiglet")
+		os.Exit(1)
 	}
 
 	ctx := signals.SetupSignalHandler()
+	o.Run(ctx)
 
-	go startPprofServer(log.Logger)
-
-	var wg sync.WaitGroup
-	odigosNs := k8senv.GetCurrentNamespace()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		err = server.StartOpAmpServer(ctx, log.Logger, mgr, clientset, env.Current.NodeName, odigosNs)
-		if err != nil {
-			log.Logger.Error(err, "Failed to start opamp server")
-		}
-	}()
-
-	configUpdates := make(chan commonInstrumentation.ConfigUpdate[odigosebpf.K8sConfigGroup], configUpdatesBufferSize)
-	ebpfManager, err := odigosebpf.NewManager(
-		mgr.GetClient(),
-		log.Logger,
-		ebpfInstrumentationFactories(),
-		configUpdates,
-	)
-	if err != nil {
-		log.Logger.Error(err, "Failed to create ebpf manager")
-		os.Exit(-1)
-	}
-
-	wg.Add(1)
-	go func () {
-		defer wg.Done()
-		err = ebpfManager.Run(ctx)
-		if err != nil {
-			log.Logger.Error(err, "Failed to run ebpf manager")
-		}
-		log.Logger.V(0).Info("eBPF manager exited")
-	}()
-
-	// odigos reconcilers
-	err = kube.SetupWithManager(mgr, nil, clientset, configUpdates)
-	if err != nil {
-		log.Logger.Error(err, "Failed to setup controller-runtime manager")
-		os.Exit(-1)
-	}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		err := mgr.Start(ctx)
-		if err != nil {
-			log.Logger.Error(err, "Failed to start controller-runtime manager")
-			os.Exit(-1)
-		}
-		// the manager is stopped, it is now safe to close the config updates channel
-		if configUpdates != nil {
-			close(configUpdates)
-		}
-	}()
-
-	<-ctx.Done()
-	wg.Wait()
 	log.Logger.V(0).Info("odiglet exiting")
 }
 
-func startDeviceManager(clientset *kubernetes.Clientset) {
-	log.Logger.V(0).Info("Starting device manager")
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+func deviceInjectionCallbacks() instrumentation.OtelSdksLsf {
 	otelSdkEbpfEnterprise := common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier}
 	otelSdkNativeCommunity := common.OtelSdk{SdkType: common.NativeOtelSdkType, SdkTier: common.CommunityOtelSdkTier}
 	otelSdkNativeEnterprise := common.OtelSdk{SdkType: common.NativeOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier}
 
-	otelSdkLsf := map[common.ProgrammingLanguage]map[common.OtelSdk]instrumentation.LangSpecificFunc{
+	return map[common.ProgrammingLanguage]map[common.OtelSdk]instrumentation.LangSpecificFunc{
 		common.GoProgrammingLanguage: {
 			otelSdkEbpfEnterprise: enterpriseinstrumentlang.EnterpriseGo,
 		},
@@ -193,15 +103,6 @@ func startDeviceManager(clientset *kubernetes.Clientset) {
 			otelSdkEbpfEnterprise: enterpriseinstrumentlang.EnterpriseMySQL,
 		},
 	}
-
-	lister, err := instrumentation.NewLister(ctx, clientset, otelSdkLsf)
-	if err != nil {
-		log.Logger.Error(err, "Failed to create new enterprise lister")
-		os.Exit(-1)
-	}
-
-	manager := dpm.NewManager(lister)
-	manager.Run()
 }
 
 func ebpfInstrumentationFactories() map[commonInstrumentation.OtelDistribution]commonInstrumentation.Factory {
@@ -209,11 +110,11 @@ func ebpfInstrumentationFactories() map[commonInstrumentation.OtelDistribution]c
 		{
 			Language: common.GoProgrammingLanguage,
 			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-		} : sdks.NewGoInstrumentationFactoryEnterprise(),
+		}: sdks.NewGoInstrumentationFactoryEnterprise(),
 		{
 			Language: common.JavaProgrammingLanguage,
 			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-		} : sdks.NewJavaInstrumentationFactoryEnterprise(),
+		}: sdks.NewJavaInstrumentationFactoryEnterprise(),
 		// Utilizing the Otel Java Agent extension mechanism
 		// We define it as a native-enterprise SDK but it also requires ebpf initialization.
 		// TODO: this is a similar implementation to what we have for JS and Python,
@@ -224,26 +125,18 @@ func ebpfInstrumentationFactories() map[commonInstrumentation.OtelDistribution]c
 		{
 			Language: common.JavaProgrammingLanguage,
 			OtelSdk:  common.OtelSdk{SdkType: common.NativeOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-		} : sdks.NewJavaExtensionInstrumentationFactoryEnterprise(),
+		}: sdks.NewJavaExtensionInstrumentationFactoryEnterprise(),
 		{
 			Language: common.PythonProgrammingLanguage,
 			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-		} : sdks.NewPythonInstrumentationFactoryEnterprise(),
+		}: sdks.NewPythonInstrumentationFactoryEnterprise(),
 		{
 			Language: common.JavascriptProgrammingLanguage,
 			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-		} : sdks.NewNodeJSInstrumentationFactoryEnterprise(),
+		}: sdks.NewNodeJSInstrumentationFactoryEnterprise(),
 		{
 			Language: common.MySQLProgrammingLanguage,
 			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-		} : sdks.NewMySQLInstrumentationFactoryEnterprise(),
-	}
-}
-
-func startPprofServer(logger logr.Logger) {
-	logger.Info("Starting pprof server")
-	addr := fmt.Sprintf(":%d", consts.PprofOdigosPort)
-	if err := http.ListenAndServe(addr, nil); err != nil {
-		logger.Error(err, "unable to start pprof server")
+		}: sdks.NewMySQLInstrumentationFactoryEnterprise(),
 	}
 }

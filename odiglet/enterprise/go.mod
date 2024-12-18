@@ -3,8 +3,6 @@ module github.com/odigos-io/odigos-enterprise/odiglet
 go 1.23.0
 
 require (
-	github.com/go-logr/logr v1.4.2
-	github.com/kubevirt/device-plugin-manager v1.19.5
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.0-20241210081152-459bcedb375f
 	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20241217084206-553f0901c30b
 	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20241217084206-553f0901c30b
@@ -14,13 +12,10 @@ require (
 	github.com/odigos-io/odigos/api v1.0.139
 	github.com/odigos-io/odigos/common v1.0.139
 	github.com/odigos-io/odigos/instrumentation v1.0.138-0.20241217105501-716aac7f19e8
-	github.com/odigos-io/odigos/k8sutils v1.0.139
-	github.com/odigos-io/odigos/odiglet v1.0.139
-	github.com/odigos-io/odigos/opampserver v1.0.139
+	github.com/odigos-io/odigos/odiglet v1.0.140-0.20241218135623-c6ff5251bff9
 	go.opentelemetry.io/auto v0.19.0-alpha
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.33.0
 	go.opentelemetry.io/otel/trace v1.33.0
-	k8s.io/client-go v0.32.0
 	k8s.io/kubelet v0.32.0
 	sigs.k8s.io/controller-runtime v0.19.3
 )
@@ -37,6 +32,7 @@ require (
 	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
+	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
@@ -61,11 +57,14 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
+	github.com/kubevirt/device-plugin-manager v1.19.5 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/moby/sys/mountinfo v0.7.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/odigos-io/odigos/k8sutils v1.0.139 // indirect
+	github.com/odigos-io/odigos/opampserver v1.0.139 // indirect
 	github.com/odigos-io/odigos/procdiscovery v0.0.0 // indirect
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5 // indirect
 	github.com/odigos-io/runtime-detector v0.0.4 // indirect
@@ -119,6 +118,7 @@ require (
 	k8s.io/api v0.32.0 // indirect
 	k8s.io/apiextensions-apiserver v0.31.3 // indirect
 	k8s.io/apimachinery v0.32.0 // indirect
+	k8s.io/client-go v0.32.0 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20241212222426-2c72e554b1e7 // indirect
 	k8s.io/utils v0.0.0-20241210054802-24370beab758 // indirect
