@@ -6,17 +6,17 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/kubevirt/device-plugin-manager v1.19.5
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.0-20241210081152-459bcedb375f
-	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20241217081638-add6ff9249e9
-	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20241217081638-add6ff9249e9
-	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20241208143603-f29f221b60e4
+	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20241217084206-553f0901c30b
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20241217084206-553f0901c30b
+	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20241216181638-4e7fac3800a0
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20241208143713-ad46193e6c00
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.0.138-0.20241217105501-716aac7f19e8
-	github.com/odigos-io/odigos/common v1.0.138-0.20241217105501-716aac7f19e8
+	github.com/odigos-io/odigos/api v1.0.139
+	github.com/odigos-io/odigos/common v1.0.139
 	github.com/odigos-io/odigos/instrumentation v1.0.138-0.20241217105501-716aac7f19e8
-	github.com/odigos-io/odigos/k8sutils v1.0.138-0.20241217105501-716aac7f19e8
-	github.com/odigos-io/odigos/odiglet v1.0.138-0.20241217105501-716aac7f19e8
-	github.com/odigos-io/odigos/opampserver v1.0.138-0.20241217105501-716aac7f19e8
+	github.com/odigos-io/odigos/k8sutils v1.0.139
+	github.com/odigos-io/odigos/odiglet v1.0.139
+	github.com/odigos-io/odigos/opampserver v1.0.139
 	go.opentelemetry.io/auto v0.19.0-alpha
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.33.0
 	go.opentelemetry.io/otel/trace v1.33.0
@@ -44,7 +44,7 @@ require (
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/goburrow/cache v0.1.4 // indirect
 	github.com/goccy/go-yaml v1.15.9 // indirect
-	github.com/gocql/gocql v1.6.0 // indirect
+	github.com/gocql/gocql v1.7.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/golang/glog v1.2.3 // indirect
@@ -132,17 +132,17 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20241215094442-1027d1f53179
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20241217163640-bccded83f26c
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.138-0.20241217105501-716aac7f19e8
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.139
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.138-0.20241217105501-716aac7f19e8
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.139
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.138-0.20241217105501-716aac7f19e8
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.139
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.138-0.20241217105501-716aac7f19e8
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.139
 
-replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.138-0.20241217105501-716aac7f19e8
+replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.139
 
 // Used for testing purposes
 // replace github.com/odigos-io/odigos/odiglet => github.com/RonFed/odigos_fork/odiglet add_java_envs_to_envOverwrite
