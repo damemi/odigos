@@ -26,6 +26,7 @@ import (
 // +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster
 // +kubebuilder:metadata:labels=metadata.labels.odigos.io/config=1
 // +kubebuilder:metadata:labels=metadata.labels.odigos.io/system-object=true
 // +kubebuilder:printcolumn:name="Workload",type=string,JSONPath=`.spec.workload.name`
