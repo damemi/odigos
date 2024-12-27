@@ -30,34 +30,35 @@ func (r *SourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	obj := workload.ClientObjectFromWorkloadKind(source.Spec.Workload.Kind)
-	err = r.Client.Get(ctx, types.NamespacedName{Name: source.Spec.Workload.Name, Namespace: source.Spec.Workload.Namespace}, obj)
-	if err != nil {
-		// TODO: Deleted objects should be filtered in the event filter
-		return ctrl.Result{}, err
-	}
-	instConfigName := workload.CalculateWorkloadRuntimeObjectName(source.Spec.Workload.Name, source.Spec.Workload.Kind)
-
 	if source.DeletionTimestamp.IsZero() {
 		if !controllerutil.ContainsFinalizer(source, consts.SourceFinalizer) {
 			controllerutil.AddFinalizer(source, consts.SourceFinalizer)
 			// Removed by deleteinstrumentedapplication controller
 			controllerutil.AddFinalizer(source, consts.InstrumentedApplicationFinalizer)
-
-			if source.Labels == nil {
-				source.Labels = make(map[string]string)
-			}
-			source.Labels[consts.WorkloadNameLabel] = source.Spec.Workload.Name
-			source.Labels[consts.WorkloadNamespaceLabel] = source.Spec.Workload.Namespace
-			source.Labels[consts.WorkloadKindLabel] = string(source.Spec.Workload.Kind)
-
-			if err := r.Update(ctx, source); err != nil {
-				return k8sutils.K8SUpdateErrorHandler(err)
-			}
-
-			err = requestOdigletsToCalculateRuntimeDetails(ctx, r.Client, instConfigName, req.Namespace, obj, r.Scheme)
-			return ctrl.Result{}, err
 		}
+		if source.Labels == nil {
+			source.Labels = make(map[string]string)
+		}
+
+		source.Labels[consts.WorkloadNameLabel] = source.Spec.Workload.Name
+		source.Labels[consts.WorkloadNamespaceLabel] = source.Spec.Workload.Namespace
+		source.Labels[consts.WorkloadKindLabel] = string(source.Spec.Workload.Kind)
+
+		if err := r.Update(ctx, source); err != nil {
+			return k8sutils.K8SUpdateErrorHandler(err)
+		}
+
+		return reconcileWorkload(ctx,
+			r.Client,
+			source.Spec.Workload.Kind,
+			ctrl.Request{
+				NamespacedName: types.NamespacedName{
+					Namespace: source.Spec.Workload.Namespace,
+					Name:      source.Spec.Workload.Name,
+				},
+			},
+			r.Scheme)
+
 	} else {
 		// Source is being deleted
 		if controllerutil.ContainsFinalizer(source, consts.SourceFinalizer) {
@@ -66,19 +67,21 @@ func (r *SourceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			// On the other hand, this could end up deleting a Source with an orphaned InstrumentationConfig.
 			controllerutil.RemoveFinalizer(source, consts.SourceFinalizer)
 			if err := r.Update(ctx, source); err != nil {
-				return ctrl.Result{}, err
-			}
-
-			instConfig := &v1alpha1.InstrumentationConfig{}
-			err = r.Client.Get(ctx, types.NamespacedName{Name: instConfigName, Namespace: req.Namespace}, instConfig)
-			if err != nil {
-				return ctrl.Result{}, client.IgnoreNotFound(err)
-			}
-			err = r.Client.Delete(ctx, instConfig)
-			if err != nil {
-				return ctrl.Result{}, client.IgnoreNotFound(err)
+				return k8sutils.K8SUpdateErrorHandler(err)
 			}
 		}
+
+		instConfig := &v1alpha1.InstrumentationConfig{}
+		instConfigName := workload.CalculateWorkloadRuntimeObjectName(source.Spec.Workload.Name, source.Spec.Workload.Kind)
+		err = r.Client.Get(ctx, types.NamespacedName{Name: instConfigName, Namespace: req.Namespace}, instConfig)
+		if err != nil {
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+		err = r.Client.Delete(ctx, instConfig)
+		if err != nil {
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+
 	}
 
 	return ctrl.Result{}, err
