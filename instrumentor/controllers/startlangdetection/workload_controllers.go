@@ -71,7 +71,7 @@ func reconcileWorkload(ctx context.Context, k8sClient client.Client, objKind wor
 		}
 		// if this is explicitly excluded (ie, namespace instrumentation), skip
 		for _, s := range sourceList.Items {
-			if _, exists := s.Labels[consts.InstrumentationDisabled]; exists {
+			if _, exists := s.Labels[consts.OdigosWorkloadExcludedLabel]; exists {
 				return ctrl.Result{}, nil
 			}
 		}
