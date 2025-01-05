@@ -2,7 +2,7 @@ TAG ?= $(shell odigos version --cluster)
 
 .PHONY: build-images
 build-images:
-	docker build -t keyval/odigos-enterprise-odiglet:$(TAG) . -f odiglet/Dockerfile --secret id=github_token,env=GITHUB_TOKEN
+	docker build -t keyval/odigos-enterprise-odiglet:$(TAG) . -f odiglet/Dockerfile --secret id=github_token,env=GITHUB_TOKEN --build-arg ODIGOS_VERSION=$(TAG)
 
 .PHONY: push-images
 push-images:

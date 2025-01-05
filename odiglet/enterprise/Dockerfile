@@ -1,7 +1,9 @@
 FROM python:3.11.9 AS python-builder
+ARG ODIGOS_VERSION
 WORKDIR /python-instrumentation
 ADD odiglet/agents/python/requirements.txt .
 RUN mkdir workspace && pip install -r requirements.txt --target workspace
+RUN echo "VERSION = \"$ODIGOS_VERSION\";" > /python-instrumentation/workspace/initializer/version.py
 
 # Enterprise version of ebpf-generic-instrumentation
 RUN apt update -y && apt install -y systemtap-sdt-dev
