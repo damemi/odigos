@@ -6,13 +6,13 @@ require (
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.0-20241210081152-459bcedb375f
 	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20241217084206-553f0901c30b
 	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20241217084206-553f0901c30b
-	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20250103092329-85f8ed7f920f
+	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20250106185813-0fbaeca0987c
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250105084718-c6cb16fc984d
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.0.140
-	github.com/odigos-io/odigos/common v1.0.140
-	github.com/odigos-io/odigos/instrumentation v1.0.140
-	github.com/odigos-io/odigos/odiglet v1.0.141-0.20250106154958-409bb0b15eae
+	github.com/odigos-io/odigos/api v1.0.141
+	github.com/odigos-io/odigos/common v1.0.141
+	github.com/odigos-io/odigos/instrumentation v1.0.141
+	github.com/odigos-io/odigos/odiglet v1.0.141
 	go.opentelemetry.io/auto v0.19.0-alpha
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.33.0
 	go.opentelemetry.io/otel/trace v1.33.0
@@ -63,8 +63,8 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/odigos-io/odigos/k8sutils v1.0.140 // indirect
-	github.com/odigos-io/odigos/opampserver v1.0.140 // indirect
+	github.com/odigos-io/odigos/k8sutils v1.0.141 // indirect
+	github.com/odigos-io/odigos/opampserver v1.0.141 // indirect
 	github.com/odigos-io/odigos/procdiscovery v0.0.0 // indirect
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5 // indirect
 	github.com/odigos-io/runtime-detector v0.0.5 // indirect
@@ -111,7 +111,7 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241209162323-e6fa225c2576 // indirect
 	google.golang.org/grpc v1.69.2 // indirect
-	google.golang.org/protobuf v1.35.2 // indirect
+	google.golang.org/protobuf v1.36.1 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
@@ -133,17 +133,17 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250103115021-4fd893f4442f
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250106191254-0835c70c6ac8
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.141-0.20250106154958-409bb0b15eae
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.141
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.141-0.20250106154958-409bb0b15eae
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.141
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.141-0.20250106154958-409bb0b15eae
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.141
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.141-0.20250106154958-409bb0b15eae
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.141
 
-replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.141-0.20250106154958-409bb0b15eae
+replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.141
 
 // Used for testing purposes
 // replace github.com/odigos-io/odigos/odiglet => github.com/RonFed/odigos_fork/odiglet add_java_envs_to_envOverwrite
