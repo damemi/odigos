@@ -2,7 +2,7 @@ name: Update Odigos Dependencies
 
 on:   
   repository_dispatch:
-    types: [enterprise-dependencies-update]
+    types: [process_update_dependencies_pr]
   workflow_dispatch:
 
 jobs:
@@ -45,7 +45,7 @@ jobs:
           if [ ! -z "$EXISTING_PR" ]; then
               gh pr close $EXISTING_PR --delete-branch
           fi
-
+          
           BRANCH_EXISTS=$(git ls-remote --heads origin ${{ steps.github_preperation.outputs.branch_name }})
           if [ ! -z "$BRANCH_EXISTS" ]; then
               git push origin --delete ${{ steps.github_preperation.outputs.branch_name }}
