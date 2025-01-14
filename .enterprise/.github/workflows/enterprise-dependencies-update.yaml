@@ -49,7 +49,8 @@ jobs:
           BRANCH_EXISTS=$(git ls-remote --heads origin ${{ steps.github_preperation.outputs.branch_name }})
           if [ ! -z "$BRANCH_EXISTS" ]; then
               git push origin --delete ${{ steps.github_preperation.outputs.branch_name }}
-
+          fi
+          
       - name: create dependencies update pr
         id: create_dependencies_update_pr
         env:
