@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: update odigos dependencies
+      - name: update odiglet dependencies
         working-directory: ./odiglet
         run: |
           git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
@@ -27,6 +27,15 @@ jobs:
           sed -i "s|github.com/odigos-io/ebpf-generic-instrumentation.*|github.com/odigos-io/ebpf-generic-instrumentation main|g" go.mod
           sed -i "s|github.com/odigos-io/ebpf-nodejs-instrumentation.*|github.com/odigos-io/ebpf-nodejs-instrumentation main|g" go.mod
           sed -i '0,/github.com\/odigos-io\/odigos\/odiglet.*/s//github.com\/odigos-io\/odigos\/odiglet main/' go.mod
+          go mod tidy
+      
+      - name: update onprem token generator dependencies
+        working-directory: ./onprem-token-generator
+        run: |
+          git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          go env -w GOPRIVATE=github.com/odigos-io/*
+          sed -i "s|replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v.*|replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common main|g" go.mod
+          sed -i "s|github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v.*|replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles main|g" go.mod
           go mod tidy
  
       - name: github preperation
