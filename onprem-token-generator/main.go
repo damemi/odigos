@@ -2,12 +2,16 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/odigos-io/odigos/common"
+	"github.com/odigos-io/odigos/profiles"
 )
 
 const (
@@ -15,6 +19,21 @@ const (
 	issuer            = "https://odigos.io"
 	subject           = "https://odigos.io/onprem"
 )
+
+func verifyProfiles(clientProfiles *[]string) {
+	var validProfiles []string
+
+	for _, profile := range *clientProfiles {
+		if _, exists := profiles.ProfilesByName[common.ProfileName(profile)]; exists {
+			validProfiles = append(validProfiles, profile)
+		} else {
+			fmt.Printf("\033[31mERROR\033[0m %s is invalid client profile, aborting\n", profile)
+			os.Exit(1)
+		}
+	}
+
+	*clientProfiles = validProfiles
+}
 
 func getExpTime() (int64, error) {
 	// Get the number of days from environment variable or default to 365
@@ -71,6 +90,14 @@ func main() {
 
 	// issued at
 	claims["iat"] = time.Now().Unix()
+
+	// client profile
+	profiles, exists := os.LookupEnv("ODIGOS_PROFILES")
+	if exists {
+		profiles := strings.Split(profiles, ",")
+		verifyProfiles(&profiles)
+		claims["profiles"] = profiles
+	}
 
 	// audience
 	audience, exists := os.LookupEnv("JWT_AUDIENCE")

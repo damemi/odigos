@@ -22,6 +22,9 @@ JWT_AUDIENCE=foobar make generate-token
 
 - TOKEN_EXPIRY_DAYS: the number of days the token is valid for. Defaults to 365 (1 year).
 
+- ODIGOS_PROFILES (optional): Specifies client profiles as a comma-separated list. Each profile defines unique custom resources that will be applied within the client cluster.
+Example: ODIGOS_PROFILES=kratos,code-attributes
+
 ### Verify the token
 
 After running the above command, you will get a token printed to stdout. like so:
