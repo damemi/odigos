@@ -4,7 +4,7 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
-    createdAt: "2025-01-17T20:23:03Z"
+    createdAt: "2025-01-17T20:26:30Z"
     operators.operatorframework.io/builder: operator-sdk-v1.39.1
     operators.operatorframework.io/project_layout: unknown
   name: odigos.io.v0.0.0

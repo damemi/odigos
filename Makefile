@@ -69,7 +69,7 @@ build-image/%:
 
 .PHONY: operator-bundle
 operator-bundle:
-	helm template ./helm/odigos/ --set certManagerApiVersion="cert-manager.io/v1" --skip-crds > deploy/manifests.yaml
+	helm template ./helm/odigos/ --namespace=odigos-system --set certManagerApiVersion="cert-manager.io/v1" --skip-crds > deploy/manifests.yaml
 	operator-sdk generate bundle --package odigos.io --input-dir=deploy --extra-service-accounts=odigos-autoscaler,cleanup-sa,odigos-data-collection,odigos-instrumentor,odiglet,odigos-scheduler,odigos-ui
 
 .PHONY: build-odiglet

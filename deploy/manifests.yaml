@@ -4,56 +4,56 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: odigos-autoscaler
-  namespace: default
+  namespace: odigos-system
 ---
 # Source: odigos/templates/cleanup/service-account.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: cleanup-sa
-  namespace: default
+  namespace: odigos-system
 ---
 # Source: odigos/templates/datacollection/serviceaccount.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: odigos-data-collection
-  namespace: default
+  namespace: odigos-system
 ---
 # Source: odigos/templates/instrumentor/serviceaccount.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: odigos-instrumentor
-  namespace: default
+  namespace: odigos-system
 ---
 # Source: odigos/templates/odiglet/serviceaccount.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: odiglet
-  namespace: default
+  namespace: odigos-system
 ---
 # Source: odigos/templates/scheduler/serviceaccount.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: odigos-scheduler
-  namespace: default
+  namespace: odigos-system
 ---
 # Source: odigos/templates/ui/serviceaccount.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: odigos-ui
-  namespace: default
+  namespace: odigos-system
 ---
 # Source: odigos/templates/odigos-deployment.yaml
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: odigos-deployment
-  namespace: default
+  namespace: odigos-system
 data:
   ODIGOS_VERSION: v0.0.0
   ODIGOS_TIER: "community"
@@ -64,7 +64,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: odigos-own-telemetry-otel-config
-  namespace: default
+  namespace: odigos-system
 data:
   OTEL_SDK_DISABLED: "true"
 ---
@@ -3600,7 +3600,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: odigos-autoscaler
-  namespace: default
+  namespace: odigos-system
 ---
 # Source: odigos/templates/cleanup/cleanup-clusterrolebinding.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -3610,7 +3610,7 @@ metadata:
 subjects:
 - kind: ServiceAccount
   name: cleanup-sa
-  namespace: default
+  namespace: odigos-system
 roleRef:
   kind: ClusterRole
   name: cleanup-clusterrole
@@ -3628,7 +3628,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: odigos-data-collection
-  namespace: default
+  namespace: odigos-system
 ---
 # Source: odigos/templates/instrumentor/clusterrolebinding.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -3642,7 +3642,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: odigos-instrumentor
-    namespace: default
+    namespace: odigos-system
 ---
 # Source: odigos/templates/odiglet/clusterrolebinding.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -3652,7 +3652,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: odiglet
-    namespace: default
+    namespace: odigos-system
 roleRef:
   kind: ClusterRole
   name: odiglet
@@ -3670,7 +3670,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: odigos-scheduler
-    namespace: default
+    namespace: odigos-system
 ---
 # Source: odigos/templates/ui/clusterrolebinding.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -3684,14 +3684,14 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: odigos-ui
-    namespace: default
+    namespace: odigos-system
 ---
 # Source: odigos/templates/autoscaler/leader-election-role.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: odigos-autoscaler-leader-election
-  namespace: default
+  namespace: odigos-system
 rules:
 - apiGroups:
   - ""
@@ -3718,7 +3718,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: odigos-autoscaler
-  namespace: 'default'
+  namespace: 'odigos-system'
 rules:
   - apiGroups:
       - ''
@@ -3865,7 +3865,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: cleanup-role
-  namespace: default
+  namespace: odigos-system
 rules:
 - apiGroups: [""]
   resources: ["namespaces", "configmaps"]
@@ -3876,7 +3876,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: odigos-instrumentor-leader-election
-  namespace: default
+  namespace: odigos-system
 rules:
 - apiGroups:
   - ""
@@ -3903,7 +3903,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: odigos-instrumentor
-  namespace: 'default'
+  namespace: 'odigos-system'
 rules:
   - apiGroups:
       - ''
@@ -3953,7 +3953,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: odiglet
-  namespace: 'default'
+  namespace: 'odigos-system'
 rules:
   - apiGroups:
       - odigos.io
@@ -3980,7 +3980,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: odigos-scheduler-leader-election
-  namespace: default
+  namespace: odigos-system
 rules:
 - apiGroups:
   - ""
@@ -4007,7 +4007,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: odigos-scheduler
-  namespace: 'default'
+  namespace: 'odigos-system'
 rules:
   - apiGroups:
       - ''
@@ -4070,7 +4070,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: odigos-ui
-  namespace: 'default'
+  namespace: 'odigos-system'
 rules:
   - apiGroups:
       - ''
@@ -4131,7 +4131,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: odigos-autoscaler-leader-election
-  namespace: default
+  namespace: odigos-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -4145,7 +4145,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: odigos-autoscaler
-  namespace: default
+  namespace: odigos-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -4159,11 +4159,11 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: cleanup-rolebinding
-  namespace: default
+  namespace: odigos-system
 subjects:
 - kind: ServiceAccount
   name: cleanup-sa
-  namespace: default
+  namespace: odigos-system
 roleRef:
   kind: Role
   name: cleanup-role
@@ -4174,7 +4174,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: odigos-instrumentor-leader-election
-  namespace: default
+  namespace: odigos-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -4188,7 +4188,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: odigos-instrumentor
-  namespace: default
+  namespace: odigos-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -4202,7 +4202,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: odiglet
-  namespace: default
+  namespace: odigos-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -4210,14 +4210,14 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: odiglet
-    namespace: default
+    namespace: odigos-system
 ---
 # Source: odigos/templates/scheduler/leader-election-rolebinding.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: odigos-scheduler-leader-election
-  namespace: default
+  namespace: odigos-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -4244,7 +4244,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: odigos-ui
-  namespace: default
+  namespace: odigos-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -4252,14 +4252,14 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: odigos-ui
-  namespace: default
+  namespace: odigos-system
 ---
 # Source: odigos/templates/instrumentor/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
   name: odigos-instrumentor
-  namespace: default
+  namespace: odigos-system
 spec:
   ports:
     - name: webhook-server
@@ -4273,7 +4273,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: ui
-  namespace: 'default'
+  namespace: 'odigos-system'
   labels:
     app.kubernetes.io/name: odigos-ui
 spec:
@@ -4292,7 +4292,7 @@ metadata:
   labels:
     app.kubernetes.io/name: odiglet
   name: odiglet
-  namespace: default
+  namespace: odigos-system
 spec:
   selector:
     matchLabels:
@@ -4393,7 +4393,7 @@ metadata:
   labels:
     app.kubernetes.io/name: odigos-autoscaler
   name: odigos-autoscaler
-  namespace: default
+  namespace: odigos-system
 spec:
   replicas: 1
   selector:
@@ -4461,7 +4461,7 @@ metadata:
   labels:
     app.kubernetes.io/name: odigos-instrumentor
   name: odigos-instrumentor
-  namespace: default
+  namespace: odigos-system
 spec:
   replicas: 2
   selector:
@@ -4550,7 +4550,7 @@ metadata:
   labels:
     app.kubernetes.io/name: odigos-scheduler
   name: odigos-scheduler
-  namespace: default
+  namespace: odigos-system
 spec:
   replicas: 1
   selector:
@@ -4622,7 +4622,7 @@ metadata:
   labels:
     app.kubernetes.io/name: odigos-ui
   name: odigos-ui
-  namespace: default
+  namespace: odigos-system
 spec:
   replicas: 1
   selector:
@@ -4670,7 +4670,7 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: serving-cert
-  namespace: default
+  namespace: odigos-system
   labels:
     app.kubernetes.io/name: instrumentor-cert
     app.kubernetes.io/instance: instrumentor-cert
@@ -4679,8 +4679,8 @@ metadata:
     app.kubernetes.io/part-of: odigos
 spec:
   dnsNames:
-    - "odigos-instrumentor.default.svc"
-    - "odigos-instrumentor.default.svc.cluster.local"
+    - "odigos-instrumentor.odigos-system.svc"
+    - "odigos-instrumentor.odigos-system.svc.cluster.local"
   issuerRef:
     kind: Issuer
     name: selfsigned-issuer
@@ -4691,7 +4691,7 @@ apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
   name: selfsigned-issuer
-  namespace: default
+  namespace: odigos-system
   labels:
     app.kubernetes.io/name: issuer
     app.kubernetes.io/instance: selfsigned-issuer
@@ -4713,13 +4713,13 @@ metadata:
     app.kubernetes.io/created-by: instrumentor
     app.kubernetes.io/part-of: odigos
   annotations:
-    cert-manager.io/inject-ca-from: default/serving-cert
+    cert-manager.io/inject-ca-from: odigos-system/serving-cert
 webhooks:
   - name: pod-mutating-webhook.odigos.io
     clientConfig:
       service:
         name: odigos-instrumentor
-        namespace: default
+        namespace: odigos-system
         path: /mutate--v1-pod
         port: 9443
     rules:
@@ -4751,13 +4751,13 @@ metadata:
     app.kubernetes.io/created-by: instrumentor
     app.kubernetes.io/part-of: odigos
   annotations:
-    cert-manager.io/inject-ca-from: default/serving-cert
+    cert-manager.io/inject-ca-from: odigos-system/serving-cert
 webhooks:
   - name: source-mutating-webhook.odigos.io
     clientConfig:
       service:
         name: odigos-instrumentor
-        namespace: default
+        namespace: odigos-system
         path: /mutate-odigos-io-v1alpha1-source
         port: 9443
     rules:
@@ -4786,13 +4786,13 @@ metadata:
     app.kubernetes.io/created-by: instrumentor
     app.kubernetes.io/part-of: odigos
   annotations:
-    cert-manager.io/inject-ca-from: default/serving-cert
+    cert-manager.io/inject-ca-from: odigos-system/serving-cert
 webhooks:
   - name: source-validating-webhook.odigos.io
     clientConfig:
       service:
         name: odigos-instrumentor
-        namespace: default
+        namespace: odigos-system
         path: /validate-odigos-io-v1alpha1-source
         port: 9443
     rules:
@@ -4813,7 +4813,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: odigos-config
-  namespace: default
+  namespace: odigos-system
   annotations:
     "helm.sh/hook": post-install,post-upgrade
   labels:
@@ -4872,7 +4872,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: cleanup-job
-  namespace: default
+  namespace: odigos-system
   annotations:
     "helm.sh/hook": pre-delete
     "helm.sh/hook-delete-policy": hook-succeeded
