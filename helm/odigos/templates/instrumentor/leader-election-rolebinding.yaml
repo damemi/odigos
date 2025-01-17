@@ -6,7 +6,7 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: odigos-leader-election-role
+  name: odigos-instrumentor-leader-election
 subjects:
 - kind: ServiceAccount
   name: odigos-instrumentor
