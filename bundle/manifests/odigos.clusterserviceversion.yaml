@@ -4,10 +4,10 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
-    createdAt: "2025-01-17T20:26:30Z"
+    createdAt: "2025-01-17T21:12:23Z"
     operators.operatorframework.io/builder: operator-sdk-v1.39.1
     operators.operatorframework.io/project_layout: unknown
-  name: odigos.io.v0.0.0
+  name: odigos.v0.0.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -61,8 +61,8 @@ spec:
     - kind: Source
       name: sources.odigos.io
       version: v1alpha1
-  description: Odigos Io description. TODO.
-  displayName: Odigos Io
+  description: Automatic distributed tracing with OpenTelemetry and eBPF
+  displayName: Odigos
   icon:
   - base64data: ""
     mediatype: ""
@@ -1066,17 +1066,22 @@ spec:
   - supported: true
     type: AllNamespaces
   keywords:
-  - odigos.io
+  - OpenTelemetry
+  - eBPF
+  - tracing
+  - observability
   links:
-  - name: Odigos Io
-    url: https://odigos.io.domain
+  - name: Odigos
+    url: https://odigos.io
+  - name: Odigos on Github
+    url: https://github.com/odigos-io/odigos
   maintainers:
-  - email: your@email.com
-    name: Maintainer Name
+  - email: mike@odigos.io
+    name: Mike Dame
   maturity: alpha
   provider:
-    name: Provider Name
-    url: https://your.domain
+    name: Odigos
+    url: https://odigos.io
   version: 0.0.0
   webhookdefinitions:
   - admissionReviewVersions:
