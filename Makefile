@@ -67,6 +67,11 @@ build-image/%:
 	--build-arg SUMMARY="$(SUMMARY)" \
 	--build-arg DESCRIPTION="$(DESCRIPTION)"
 
+.PHONY: operator-bundle
+operator-bundle:
+	helm template ./helm/odigos/ --set certManagerApiVersion="cert-manager.io/v1" --skip-crds > deploy/manifests.yaml
+	operator-sdk generate bundle --package odigos.io --input-dir=deploy --extra-service-accounts=odigos-autoscaler,cleanup-sa,odigos-data-collection,odigos-instrumentor,odiglet,odigos-scheduler,odigos-ui
+
 .PHONY: build-odiglet
 build-odiglet:
 	$(MAKE) build-image/odiglet DOCKERFILE=odiglet/$(DOCKERFILE) SUMMARY="Odiglet for Odigos" DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
