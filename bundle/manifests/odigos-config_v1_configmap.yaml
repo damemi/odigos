@@ -1,0 +1,56 @@
+apiVersion: v1
+data:
+  config.yaml: |
+    configVersion: 1
+    autoscalerImage: keyval/odigos-autoscaler
+    collectorGateway:
+      MinReplicas: 1
+      MaxReplicas: 10
+      requestMemoryMiB: 500
+      limitMemoryMiB: 625
+      requestCPUm: 500
+      limitCPUm: 1000
+      memoryLimiterLimitMiB: 450
+      memoryLimiterSpikeLimitMiB: 90
+      goMemLimitMiB: 340
+    collectorNode:
+      collectorOwnMetricsPort: 55682
+      requestMemoryMiB: 250
+      limitMemoryMiB: 500
+      requestCPUm: 250
+      limitCPUm: 500
+      memoryLimiterLimitMiB: 450
+      memoryLimiterSpikeLimitMiB: 55
+      goMemLimitMiB: 360
+    instrumentorImage: keyval/odigos-instrumentor
+    telemetryEnabled: true
+    openshiftEnabled: false
+    psp: false
+    ignoredNamespaces:
+        null
+    ignoredContainers:
+        null
+    defaultSDKs:
+      dotnet:
+        sdkTier: community
+        sdkType: native
+      go:
+        sdkTier: community
+        sdkType: ebpf
+      java:
+        sdkTier: community
+        sdkType: native
+      javascript:
+        sdkTier: community
+        sdkType: native
+      python:
+        sdkTier: community
+        sdkType: native
+kind: ConfigMap
+metadata:
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+  labels:
+    odigos.io/config: "1"
+    odigos.io/system-object: "true"
+  name: odigos-config

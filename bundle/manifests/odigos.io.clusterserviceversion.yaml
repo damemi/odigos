@@ -1,0 +1,1152 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+    createdAt: "2025-01-17T20:23:03Z"
+    operators.operatorframework.io/builder: operator-sdk-v1.39.1
+    operators.operatorframework.io/project_layout: unknown
+  name: odigos.io.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - kind: AddClusterInfo
+      name: addclusterinfos.actions.odigos.io
+      version: v1alpha1
+    - kind: DeleteAttribute
+      name: deleteattributes.actions.odigos.io
+      version: v1alpha1
+    - kind: ErrorSampler
+      name: errorsamplers.actions.odigos.io
+      version: v1alpha1
+    - kind: LatencySampler
+      name: latencysamplers.actions.odigos.io
+      version: v1alpha1
+    - kind: PiiMasking
+      name: piimaskings.actions.odigos.io
+      version: v1alpha1
+    - kind: ProbabilisticSampler
+      name: probabilisticsamplers.actions.odigos.io
+      version: v1alpha1
+    - kind: RenameAttribute
+      name: renameattributes.actions.odigos.io
+      version: v1alpha1
+    - kind: CollectorsGroup
+      name: collectorsgroups.odigos.io
+      version: v1alpha1
+    - kind: Destination
+      name: destinations.odigos.io
+      version: v1alpha1
+    - kind: InstrumentationConfig
+      name: instrumentationconfigs.odigos.io
+      version: v1alpha1
+    - kind: InstrumentationInstance
+      name: instrumentationinstances.odigos.io
+      version: v1alpha1
+    - kind: InstrumentationRule
+      name: instrumentationrules.odigos.io
+      version: v1alpha1
+    - kind: InstrumentedApplication
+      name: instrumentedapplications.odigos.io
+      version: v1alpha1
+    - kind: OdigosConfiguration
+      name: odigosconfigurations.odigos.io
+      version: v1alpha1
+    - kind: Processor
+      name: processors.odigos.io
+      version: v1alpha1
+    - kind: Source
+      name: sources.odigos.io
+      version: v1alpha1
+  description: Odigos Io description. TODO.
+  displayName: Odigos Io
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      clusterPermissions:
+      - rules:
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          - statefulsets
+          - daemonsets
+          verbs:
+          - get
+          - list
+          - patch
+        - apiGroups:
+          - ""
+          resources:
+          - namespaces
+          - services
+          - secrets
+          verbs:
+          - get
+          - list
+          - patch
+        - apiGroups:
+          - rbac.authorization.k8s.io
+          resources:
+          - clusterroles
+          - clusterrolebindings
+          verbs:
+          - get
+          - list
+          - patch
+        - apiGroups:
+          - apiextensions.k8s.io
+          resources:
+          - customresourcedefinitions
+          verbs:
+          - list
+          - get
+          - patch
+          - delete
+        - apiGroups:
+          - admissionregistration.k8s.io
+          resources:
+          - mutatingwebhookconfigurations
+          verbs:
+          - get
+          - list
+          - delete
+        serviceAccountName: cleanup-sa
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - pods/status
+          verbs:
+          - get
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          - daemonsets
+          - statefulsets
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - apps
+          resources:
+          - deployments/status
+          - daemonsets/status
+          - statefulsets/status
+          verbs:
+          - get
+        - apiGroups:
+          - ""
+          resources:
+          - nodes
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - instrumentationinstances
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - update
+          - watch
+          - delete
+        - apiGroups:
+          - odigos.io
+          resources:
+          - instrumentationinstances/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - odigos.io
+          resources:
+          - instrumentationconfigs
+          verbs:
+          - get
+          - list
+          - watch
+          - patch
+          - update
+        - apiGroups:
+          - odigos.io
+          resources:
+          - instrumentationconfigs/status
+          verbs:
+          - get
+          - patch
+          - update
+        serviceAccountName: odiglet
+      - rules:
+        - apiGroups:
+          - odigos.io
+          resources:
+          - instrumentationconfigs
+          verbs:
+          - get
+          - list
+          - watch
+        serviceAccountName: odigos-autoscaler
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - nodes/stats
+          - nodes/proxy
+          verbs:
+          - get
+          - list
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          verbs:
+          - get
+          - list
+        - apiGroups:
+          - apps
+          resources:
+          - replicasets
+          - deployments
+          - daemonsets
+          - statefulsets
+          verbs:
+          - get
+          - list
+        - apiGroups:
+          - ""
+          resources:
+          - endpoints
+          verbs:
+          - get
+          - list
+          - watch
+        serviceAccountName: odigos-data-collection
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - nodes
+          verbs:
+          - list
+          - watch
+          - get
+        - apiGroups:
+          - ""
+          resources:
+          - namespaces
+          verbs:
+          - list
+          - watch
+          - get
+        - apiGroups:
+          - apps
+          resources:
+          - daemonsets
+          verbs:
+          - get
+          - list
+          - watch
+          - update
+          - patch
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          verbs:
+          - get
+          - list
+          - watch
+          - update
+          - patch
+        - apiGroups:
+          - apps
+          resources:
+          - statefulsets
+          verbs:
+          - get
+          - list
+          - watch
+          - update
+          - patch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - instrumentedapplications
+          verbs:
+          - delete
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - instrumentationconfigs/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - odigos.io
+          resources:
+          - instrumentationconfigs
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - sources
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - sources/finalizers
+          verbs:
+          - update
+        serviceAccountName: odigos-instrumentor
+      - rules:
+        - apiGroups:
+          - odigos.io
+          resources:
+          - instrumentationconfigs
+          verbs:
+          - get
+          - list
+          - watch
+        serviceAccountName: odigos-scheduler
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - namespaces
+          verbs:
+          - get
+          - list
+          - patch
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          - statefulsets
+          - daemonsets
+          verbs:
+          - get
+          - list
+          - patch
+          - update
+        - apiGroups:
+          - apps
+          resources:
+          - replicasets
+          verbs:
+          - get
+          - list
+        - apiGroups:
+          - ""
+          resources:
+          - services
+          verbs:
+          - get
+          - list
+        - apiGroups:
+          - ""
+          resources:
+          - pods
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - instrumentationconfigs
+          - instrumentationinstances
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - sources
+          verbs:
+          - get
+          - list
+          - create
+          - delete
+        serviceAccountName: odigos-ui
+      deployments:
+      - label:
+          app.kubernetes.io/name: odigos-autoscaler
+        name: odigos-autoscaler
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: odigos-autoscaler
+          strategy: {}
+          template:
+            metadata:
+              annotations:
+                kubectl.kubernetes.io/default-container: manager
+              labels:
+                app.kubernetes.io/name: odigos-autoscaler
+            spec:
+              containers:
+              - args:
+                - --health-probe-bind-address=:8081
+                - --metrics-bind-address=127.0.0.1:8080
+                - --leader-elect
+                command:
+                - /app
+                env:
+                - name: OTEL_SERVICE_NAME
+                  value: auto-scaler
+                - name: CURRENT_NS
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                - name: ODIGOS_VERSION
+                  valueFrom:
+                    configMapKeyRef:
+                      key: ODIGOS_VERSION
+                      name: odigos-deployment
+                envFrom:
+                - configMapRef:
+                    name: odigos-own-telemetry-otel-config
+                    optional: true
+                image: keyval/odigos-autoscaler:v0.0.0
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8081
+                  initialDelaySeconds: 15
+                  periodSeconds: 20
+                name: manager
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+                  requests:
+                    cpu: 10m
+                    memory: 64Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+              nodeSelector:
+                kubernetes.io/os: linux
+              securityContext:
+                runAsNonRoot: true
+              serviceAccountName: odigos-autoscaler
+              terminationGracePeriodSeconds: 10
+      - label:
+          app.kubernetes.io/name: odigos-instrumentor
+        name: odigos-instrumentor
+        spec:
+          replicas: 2
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: odigos-instrumentor
+          strategy: {}
+          template:
+            metadata:
+              annotations:
+                kubectl.kubernetes.io/default-container: manager
+              labels:
+                app.kubernetes.io/name: odigos-instrumentor
+            spec:
+              affinity:
+                podAntiAffinity:
+                  preferredDuringSchedulingIgnoredDuringExecution:
+                  - podAffinityTerm:
+                      labelSelector:
+                        matchLabels:
+                          app.kubernetes.io/name: odigos-instrumentor
+                      topologyKey: kubernetes.io/hostname
+                    weight: 100
+              containers:
+              - args:
+                - --health-probe-bind-address=:8081
+                - --metrics-bind-address=127.0.0.1:8080
+                - --leader-elect
+                command:
+                - /app
+                env:
+                - name: OTEL_SERVICE_NAME
+                  value: instrumentor
+                - name: CURRENT_NS
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                - name: ODIGOS_TIER
+                  valueFrom:
+                    configMapKeyRef:
+                      key: ODIGOS_TIER
+                      name: odigos-deployment
+                envFrom:
+                - configMapRef:
+                    name: odigos-own-telemetry-otel-config
+                    optional: true
+                image: keyval/odigos-instrumentor:v0.0.0
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8081
+                  initialDelaySeconds: 15
+                  periodSeconds: 20
+                name: manager
+                ports:
+                - containerPort: 9443
+                  name: webhook-server
+                  protocol: TCP
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+                  requests:
+                    cpu: 10m
+                    memory: 64Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+                volumeMounts:
+                - mountPath: /tmp/k8s-webhook-server/serving-certs
+                  name: webhook-cert
+                  readOnly: true
+              nodeSelector:
+                kubernetes.io/os: linux
+              securityContext:
+                runAsNonRoot: true
+              serviceAccountName: odigos-instrumentor
+              terminationGracePeriodSeconds: 10
+              volumes:
+              - name: webhook-cert
+                secret:
+                  defaultMode: 420
+                  secretName: webhook-cert
+      - label:
+          app.kubernetes.io/name: odigos-scheduler
+        name: odigos-scheduler
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app.kubernetes.io/name: odigos-scheduler
+          strategy: {}
+          template:
+            metadata:
+              annotations:
+                kubectl.kubernetes.io/default-container: manager
+              labels:
+                app.kubernetes.io/name: odigos-scheduler
+            spec:
+              containers:
+              - args:
+                - --health-probe-bind-address=:8081
+                - --metrics-bind-address=127.0.0.1:8080
+                - --leader-elect
+                command:
+                - /app
+                env:
+                - name: OTEL_SERVICE_NAME
+                  value: scheduler
+                - name: CURRENT_NS
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                - name: ODIGOS_TIER
+                  valueFrom:
+                    configMapKeyRef:
+                      key: ODIGOS_TIER
+                      name: odigos-deployment
+                - name: ODIGOS_VERSION
+                  valueFrom:
+                    configMapKeyRef:
+                      key: ODIGOS_VERSION
+                      name: odigos-deployment
+                envFrom:
+                - configMapRef:
+                    name: odigos-own-telemetry-otel-config
+                    optional: true
+                image: keyval/odigos-scheduler:v0.0.0
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8081
+                  initialDelaySeconds: 15
+                  periodSeconds: 20
+                name: manager
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+                  requests:
+                    cpu: 10m
+                    memory: 64Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+              nodeSelector:
+                kubernetes.io/os: linux
+              securityContext:
+                runAsNonRoot: true
+              serviceAccountName: odigos-scheduler
+              terminationGracePeriodSeconds: 10
+      - label:
+          app.kubernetes.io/name: odigos-ui
+        name: odigos-ui
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: odigos-ui
+          strategy: {}
+          template:
+            metadata:
+              annotations:
+                kubectl.kubernetes.io/default-container: ui
+              labels:
+                app: odigos-ui
+            spec:
+              containers:
+              - args:
+                - --namespace=$(CURRENT_NS)
+                - --address=0.0.0.0
+                env:
+                - name: CURRENT_NS
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.namespace
+                image: keyval/odigos-ui:v0.0.0
+                name: ui
+                ports:
+                - containerPort: 3000
+                  name: ui
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+                  requests:
+                    cpu: 10m
+                    memory: 64Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+              nodeSelector:
+                kubernetes.io/os: linux
+              securityContext:
+                runAsNonRoot: true
+              serviceAccountName: odigos-ui
+              terminationGracePeriodSeconds: 10
+      permissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - namespaces
+          - configmaps
+          verbs:
+          - get
+          - list
+          - patch
+          - delete
+        serviceAccountName: cleanup-sa
+      - rules:
+        - apiGroups:
+          - odigos.io
+          resources:
+          - collectorsgroups
+          - collectorsgroups/status
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resourceNames:
+          - effective-config
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+          - watch
+        serviceAccountName: odiglet
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - patch
+          - update
+          - delete
+        - apiGroups:
+          - ""
+          resources:
+          - services
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - patch
+          - update
+          - delete
+          - deletecollection
+        - apiGroups:
+          - apps
+          resources:
+          - daemonsets
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - patch
+          - update
+          - delete
+          - deletecollection
+        - apiGroups:
+          - apps
+          resources:
+          - daemonsets/status
+          verbs:
+          - get
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          verbs:
+          - create
+          - delete
+          - deletecollection
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - apps
+          resources:
+          - deployments/status
+          verbs:
+          - get
+        - apiGroups:
+          - autoscaling
+          resources:
+          - horizontalpodautoscalers
+          verbs:
+          - create
+          - patch
+          - update
+          - delete
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - destinations
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - destinations/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - odigos.io
+          resources:
+          - processors
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - patch
+          - update
+        - apiGroups:
+          - actions.odigos.io
+          resources:
+          - '*'
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - actions.odigos.io
+          resources:
+          - '*/status'
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - odigos.io
+          resources:
+          - collectorsgroups
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - collectorsgroups/status
+          verbs:
+          - get
+          - patch
+          - update
+        serviceAccountName: odigos-autoscaler
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - ""
+          resourceNames:
+          - effective-config
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - collectorsgroups
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - collectorsgroups/status
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - destinations
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - instrumentationrules
+          verbs:
+          - get
+          - list
+          - watch
+        serviceAccountName: odigos-instrumentor
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resourceNames:
+          - effective-config
+          resources:
+          - configmaps
+          verbs:
+          - patch
+          - create
+        - apiGroups:
+          - odigos.io
+          resources:
+          - collectorsgroups
+          verbs:
+          - get
+          - list
+          - create
+          - patch
+          - update
+          - watch
+          - delete
+        - apiGroups:
+          - odigos.io
+          resources:
+          - collectorsgroups/status
+          verbs:
+          - get
+        - apiGroups:
+          - odigos.io
+          resources:
+          - destinations
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - instrumentationrules
+          - processors
+          verbs:
+          - get
+          - list
+          - watch
+          - patch
+          - delete
+          - create
+        serviceAccountName: odigos-scheduler
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - get
+          - list
+          - create
+          - patch
+          - update
+        - apiGroups:
+          - odigos.io
+          resources:
+          - instrumentationrules
+          - destinations
+          verbs:
+          - get
+          - list
+          - create
+          - patch
+          - update
+          - delete
+        - apiGroups:
+          - odigos.io
+          resources:
+          - destinations
+          verbs:
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - collectorsgroups
+          verbs:
+          - get
+          - list
+        - apiGroups:
+          - actions.odigos.io
+          resources:
+          - '*'
+          verbs:
+          - get
+          - list
+          - create
+          - patch
+          - update
+          - delete
+        serviceAccountName: odigos-ui
+    strategy: deployment
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - odigos.io
+  links:
+  - name: Odigos Io
+    url: https://odigos.io.domain
+  maintainers:
+  - email: your@email.com
+    name: Maintainer Name
+  maturity: alpha
+  provider:
+    name: Provider Name
+    url: https://your.domain
+  version: 0.0.0
+  webhookdefinitions:
+  - admissionReviewVersions:
+    - v1
+    containerPort: 9443
+    deploymentName: odigos-instrumentor
+    failurePolicy: Ignore
+    generateName: pod-mutating-webhook.odigos.io
+    objectSelector:
+      matchLabels:
+        odigos.io/inject-instrumentation: "true"
+    reinvocationPolicy: IfNeeded
+    rules:
+    - apiGroups:
+      - ""
+      apiVersions:
+      - v1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - pods
+      scope: Namespaced
+    sideEffects: None
+    targetPort: 9443
+    timeoutSeconds: 10
+    type: MutatingAdmissionWebhook
+    webhookPath: /mutate--v1-pod
+  - admissionReviewVersions:
+    - v1
+    containerPort: 9443
+    deploymentName: odigos-instrumentor
+    failurePolicy: Ignore
+    generateName: source-mutating-webhook.odigos.io
+    reinvocationPolicy: IfNeeded
+    rules:
+    - apiGroups:
+      - odigos.io
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - sources
+      scope: Namespaced
+    sideEffects: None
+    targetPort: 9443
+    timeoutSeconds: 10
+    type: MutatingAdmissionWebhook
+    webhookPath: /mutate-odigos-io-v1alpha1-source
+  - admissionReviewVersions:
+    - v1
+    containerPort: 9443
+    deploymentName: odigos-instrumentor
+    failurePolicy: Ignore
+    generateName: source-validating-webhook.odigos.io
+    rules:
+    - apiGroups:
+      - odigos.io
+      apiVersions:
+      - v1alpha1
+      operations:
+      - CREATE
+      - UPDATE
+      resources:
+      - sources
+      scope: Namespaced
+    sideEffects: None
+    targetPort: 9443
+    timeoutSeconds: 10
+    type: ValidatingAdmissionWebhook
+    webhookPath: /validate-odigos-io-v1alpha1-source
