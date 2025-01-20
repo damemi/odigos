@@ -98,7 +98,7 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"link":"${{ env.PR_LINK }}", "description":"PR created by: @${{ github.event.client_payload.pr_creator }} triggered PR in Odigos enterprise by dependencies syncer bot. Approve to continue"}' ${{ env.SLACK_WEBHOOK_URL }}
+          curl -X POST -H 'Content-type: application/json' --data '{"link":"${{ env.PR_LINK }}", "description":"PR created by: @${{ github.event.client_payload.pr_creator }} triggered PR in Odigos enterprise by dependencies syncer bot. Approve to continue"}' ${{ env.SLACK_ENTERPRISE_SYNC_URL }}
 
       - name: Notify Slack on Failure
         if: failure()
@@ -107,4 +107,4 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"link":"https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}", "description":"ERROR: odigos dependencies update PR failed to create"}' ${{ env.SLACK_WEBHOOK_URL }}
+          curl -X POST -H 'Content-type: application/json' --data '{"link":"https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}", "description":"ERROR: odigos dependencies update PR failed to create"}' ${{ env.SLACK_ENTERPRISE_SYNC_URL }}
