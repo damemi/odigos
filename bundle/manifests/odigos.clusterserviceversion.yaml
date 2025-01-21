@@ -4,7 +4,7 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
-    createdAt: "2025-01-17T21:12:23Z"
+    createdAt: "2025-01-20T22:39:26Z"
     operators.operatorframework.io/builder: operator-sdk-v1.39.1
     operators.operatorframework.io/project_layout: unknown
   name: odigos.v0.0.0
@@ -1082,7 +1082,7 @@ spec:
   provider:
     name: Odigos
     url: https://odigos.io
-  version: 0.0.0
+  version: 0.0.1
   webhookdefinitions:
   - admissionReviewVersions:
     - v1
