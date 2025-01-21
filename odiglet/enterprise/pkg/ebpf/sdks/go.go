@@ -25,7 +25,7 @@ type GoOtelEbpfSdkEnterprise struct {
 	cp   *odigosebpf.ConfigProvider[goAutoConfig.InstrumentationConfig]
 }
 
-type GoInstrumentationFactoryEnterprise struct {}
+type GoInstrumentationFactoryEnterprise struct{}
 
 func NewGoInstrumentationFactoryEnterprise() instrumentation.Factory {
 	return &GoInstrumentationFactoryEnterprise{}
@@ -74,7 +74,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 
 	// payload collection configuration is done separately from the general config because of the deprecated ConfigBool method
 	// that is used to set the payload collection configuration.
-	// Once we replace the ConfigBool method with the generic config provider, we can remove this and pass the 
+	// Once we replace the ConfigBool method with the generic config provider, we can remove this and pass the
 	// payload collection as part of the initial configuration to the config provider.
 	err = goInstWrapper.configPayloadCollection(settings.InitialConfig)
 	if err != nil {
@@ -229,10 +229,48 @@ func (g *GoOtelEbpfSdkEnterprise) configPayloadCollection(config instrumentation
 	return err
 }
 
+func mergeBooleanConfigValues(defaultValue *bool, libValue *bool) bool {
+	// if the lib is configuring this value, we take it
+	if libValue != nil {
+		return *libValue
+	}
+
+	// if the lib is not configuring this value, we take the default value
+	if defaultValue != nil {
+		return *defaultValue
+	}
+
+	// if neither the lib nor the default value is set, we return false (disabled)
+	return false
+}
+
+// returns the boolean value, but fallbacks to "false" if it is nil (from *bool to bool)
+func booleanValueWithDefault(value *bool) bool {
+	if value == nil {
+		return false
+	}
+	return *value
+}
+
+func convertCodeAttributesToInstrumentationConfig(rule *instrumentationrules.CodeAttributes) goAutoConfig.CodeAttributes {
+	if rule == nil {
+		return goAutoConfig.CodeAttributes{}
+	} else {
+		return goAutoConfig.CodeAttributes{
+			Column:     booleanValueWithDefault(rule.Column),
+			FilePath:   booleanValueWithDefault(rule.FilePath),
+			Function:   booleanValueWithDefault(rule.Function),
+			LineNumber: booleanValueWithDefault(rule.LineNumber),
+			Namespace:  booleanValueWithDefault(rule.Namespace),
+			Stacktrace: booleanValueWithDefault(rule.Stacktrace),
+		}
+	}
+}
+
 // Deprecated: this is a duplication of the OSS odiglet code, used to avoid breaking the enterprise odiglet
 // Once the enterprise odiglet is updated to use the generic config provider, this function will be removed
 func convertToGoInstrumentationConfig(sdkConfig instrumentation.Config) (goAutoConfig.InstrumentationConfig, error) {
-	initialConfig, ok := sdkConfig.(*odigosv1.SdkConfig)
+	config, ok := sdkConfig.(*odigosv1.SdkConfig)
 	if !ok {
 		return goAutoConfig.InstrumentationConfig{}, fmt.Errorf("invalid initial config type, expected *odigosv1.SdkConfig, got %T", sdkConfig)
 	}
@@ -242,7 +280,7 @@ func convertToGoInstrumentationConfig(sdkConfig instrumentation.Config) (goAutoC
 		return ic, nil
 	}
 	ic.InstrumentationLibraryConfigs = make(map[goAutoConfig.InstrumentationLibraryID]goAutoConfig.InstrumentationLibrary)
-	for _, ilc := range initialConfig.InstrumentationLibraryConfigs {
+	for _, ilc := range config.InstrumentationLibraryConfigs {
 		libID := goAutoConfig.InstrumentationLibraryID{
 			InstrumentedPkg: ilc.InstrumentationLibraryId.InstrumentationLibraryName,
 			SpanKind:        common.SpanKindOdigosToOtel(ilc.InstrumentationLibraryId.SpanKind),
@@ -251,10 +289,34 @@ func convertToGoInstrumentationConfig(sdkConfig instrumentation.Config) (goAutoC
 		if ilc.TraceConfig != nil {
 			tracesEnabled = ilc.TraceConfig.Enabled
 		}
+
+		// go config must get boolean (true or false), while odigos semantics allows also nil, which means "don't care" (use default or false).
+		// we resolve these here, to convert the odigos schema to the go instrumentation schema.
+		var codeAttributes *goAutoConfig.CodeAttributes
+		if ilc.CodeAttributes != nil {
+			if config.DefaultCodeAttributes != nil {
+				// if there is a global default, merge it with the library specific config
+				codeAttributes = &goAutoConfig.CodeAttributes{
+					Column:     mergeBooleanConfigValues(config.DefaultCodeAttributes.Column, ilc.CodeAttributes.Column),
+					FilePath:   mergeBooleanConfigValues(config.DefaultCodeAttributes.FilePath, ilc.CodeAttributes.FilePath),
+					Function:   mergeBooleanConfigValues(config.DefaultCodeAttributes.Function, ilc.CodeAttributes.Function),
+					LineNumber: mergeBooleanConfigValues(config.DefaultCodeAttributes.LineNumber, ilc.CodeAttributes.LineNumber),
+					Namespace:  mergeBooleanConfigValues(config.DefaultCodeAttributes.Namespace, ilc.CodeAttributes.Namespace),
+					Stacktrace: mergeBooleanConfigValues(config.DefaultCodeAttributes.Stacktrace, ilc.CodeAttributes.Stacktrace),
+				}
+			} else {
+				// if there is library config but not global config, use the library config as is
+				ilcCodeAttributes := convertCodeAttributesToInstrumentationConfig(ilc.CodeAttributes)
+				codeAttributes = &ilcCodeAttributes
+			}
+		}
+
 		ic.InstrumentationLibraryConfigs[libID] = goAutoConfig.InstrumentationLibrary{
-			TracesEnabled: tracesEnabled,
+			TracesEnabled:  tracesEnabled,
+			CodeAttributes: codeAttributes,
 		}
 	}
+	ic.DefaultCodeAttributes = convertCodeAttributesToInstrumentationConfig(config.DefaultCodeAttributes)
 
 	// TODO: take sampling config from the CR
 	// sampling is not yet supported in the enterprise go instrumentation
