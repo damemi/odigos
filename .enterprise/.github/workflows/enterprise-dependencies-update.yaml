@@ -73,7 +73,7 @@ jobs:
 
           PR_LINK=$(gh pr create \
           --title "chore: automatic dependencies syncer bot" \
-          --body "Automated PR to update Odigos enterprise components after a dependency module merge. PR created by: @${{ github.event.client_payload.pr_creator }}" \
+          --body "Automated PR to update Odigos enterprise components after a dependency module merge. PR created by: @${{ github.event.client_payload.pr_creator }}. link to PR in source repository: ${{github.event.client_payload.source_pr_url}}"  \
           --base main \
           --head ${{ steps.github_preperation.outputs.branch_name }})
           echo "PR_LINK=$PR_LINK" >> $GITHUB_ENV
@@ -96,7 +96,7 @@ jobs:
 
       - name: Notify Slack
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"link":"${{ env.PR_LINK }}", "description":"PR created by: @${{ github.event.client_payload.pr_creator }} triggered PR in Odigos enterprise by dependencies syncer bot. Approve to continue"}' ${{ secrets.SLACK_ENTERPRISE_SYNC_URL }}
+          curl -X POST -H 'Content-type: application/json' --data '{"link":"${{ env.PR_LINK }}", "source_pr_link": ${{ github.event.client_payload.source_pr_url }}, "description": "PR created by: @${{ github.event.client_payload.pr_creator }} triggered a PR in Odigos enterprise by the dependencies syncer bot.\n\nApprove to continue." }'  ${{ secrets.SLACK_ENTERPRISE_SYNC_URL }}
 
       - name: Notify Slack on Failure
         if: failure()
