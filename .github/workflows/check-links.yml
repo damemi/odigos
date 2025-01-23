@@ -11,6 +11,7 @@ jobs:
     strategy:
       matrix:
         dockerfile: ['Dockerfile', 'Dockerfile.rhel']
+        service: ['autoscaler', 'scheduler', 'instrumentor', 'collector', 'odiglet', 'ui']
         include:
           - service: autoscaler
             runner: ubuntu-latest
