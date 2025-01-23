@@ -39,6 +39,9 @@ jobs:
             description: "UI provides the frontend webapp for managing an Odigos installation."
     runs-on: ubuntu-22.04
     steps:
+    - name: log value
+      run: |
+        echo "${{ matrix.dockerfile }} ${{ matrix.service }} ${{ matrix.summary }} ${{ matrix.description }} ${{ matrix.runner }}"
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
