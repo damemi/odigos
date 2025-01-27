@@ -12,6 +12,7 @@ import (
 	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/consts"
 
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -19,7 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-		certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
+	certv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	cmmeta "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
 )
 
@@ -274,7 +275,7 @@ func NewInstrumentorCertificate(ns string) *certv1.Certificate {
 				Kind: "Issuer",
 				Name: "selfsigned-issuer",
 			},
-			SecretName: InstrumentorWebhookSecretName,
+			SecretName: k8sconsts.InstrumentorWebhookSecretName,
 		},
 	}
 }
@@ -736,17 +737,6 @@ func (a *instrumentorResourceManager) InstallFromScratch(ctx context.Context) er
 		NewInstrumentorService(a.ns),
 	}
 
-<<<<<<< HEAD
-	ca, err := crypto.GenCA(k8sconsts.InstrumentorCertificateName, 365)
-	if err != nil {
-		return fmt.Errorf("failed to generate CA: %w", err)
-	}
-
-	altNames := []string{
-		fmt.Sprintf("%s.%s.svc", k8sconsts.InstrumentorServiceName, a.ns),
-		fmt.Sprintf("%s.%s.svc.cluster.local", k8sconsts.InstrumentorServiceName, a.ns),
-	}
-=======
 	if certManagerInstalled && a.config.SkipWebhookIssuerCreation != true {
 		resources = append([]kube.Object{NewInstrumentorIssuer(a.ns),
 			NewInstrumentorCertificate(a.ns),
@@ -755,16 +745,14 @@ func (a *instrumentorResourceManager) InstallFromScratch(ctx context.Context) er
 		},
 			resources...)
 	} else {
-
-		ca, err := crypto.GenCA(InstrumentorCertificateName, 365)
+		ca, err := crypto.GenCA(k8sconsts.InstrumentorCertificateName, 365)
 		if err != nil {
 			return fmt.Errorf("failed to generate CA: %w", err)
 		}
->>>>>>> 8d40fade (revert(#2146): re-add optional cert-manager support)
 
 		altNames := []string{
-			fmt.Sprintf("%s.%s.svc", InstrumentorServiceName, a.ns),
-			fmt.Sprintf("%s.%s.svc.cluster.local", InstrumentorServiceName, a.ns),
+			fmt.Sprintf("%s.%s.svc", k8sconsts.InstrumentorServiceName, a.ns),
+			fmt.Sprintf("%s.%s.svc.cluster.local", k8sconsts.InstrumentorServiceName, a.ns),
 		}
 
 		cert, err := crypto.GenerateSignedCertificate("serving-cert", nil, altNames, 365, ca)
