@@ -50,12 +50,37 @@ type OdigosReconciler struct {
 // +kubebuilder:rbac:groups=operator.odigos.io,resources=odigos,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=operator.odigos.io,resources=odigos/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=operator.odigos.io,resources=odigos/finalizers,verbs=update
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=list;watch;create
-// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;delete
-// +kubebuilder:rbac:groups="",resources=services;serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=odigos.io,resources=collectorsgroups,verbs=get;list;watch;create;patch;update;delete
+// +kubebuilder:rbac:groups=odigos.io,resources=collectorsgroups/status,verbs=get;list;watch
+// +kubebuilder:rbac:groups=odigos.io,resources=destinations,verbs=get;list;watch
+// +kubebuilder:rbac:groups=odigos.io,resources=instrumentationrules,verbs=get;list;watch;patch;delete;create
+// +kubebuilder:rbac:groups=odigos.io,resources=instrumentationinstances,verbs=get;list;watch;patch;delete;create
+// +kubebuilder:rbac:groups=odigos.io,resources=instrumentationinstances/status,verbs=get;patch;update
+// +kubebuilder:rbac:groups=odigos.io,resources=instrumentationconfigs,verbs=create;delete;get;list;patch;update;watch
+// +kubebuilder:rbac:groups=odigos.io,resources=instrumentationconfigs/status,verbs=get;watch;update;patch
+// +kubebuilder:rbac:groups=odigos.io,resources=instrumentedapplications,verbs=delete;get;list;watch
+// +kubebuilder:rbac:groups=odigos.io,resources=sources,verbs=create;delete;get;list;patch;update;watch
+// +kubebuilder:rbac:groups=odigos.io,resources=sources/finalizers,verbs=update
+// +kubebuilder:rbac:groups=odigos.io,resources=processors,verbs=get;list;watch;patch;delete;create
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=list;watch;create;patch;get
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;delete;patch
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=create;get;list;watch;patch
+// +kubebuilder:rbac:groups="",resources=nodes/proxy,verbs=get;list
+// +kubebuilder:rbac:groups="",resources=nodes/stats,verbs=get;list
+// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=pods/status,verbs=get
+// +kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;get
 // +kubebuilder:rbac:groups=apps,resources=deployments;replicasets;daemonsets;statefulsets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=deployments/status;daemonsets/status;statefulsets/status,verbs=get
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;clusterrolebindings;roles;rolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
+// +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=mutatingwebhookconfigurations;validatingwebhookconfigurations,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

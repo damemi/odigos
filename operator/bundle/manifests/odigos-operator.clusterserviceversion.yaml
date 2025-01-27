@@ -20,7 +20,7 @@ metadata:
     capabilities: Basic Install
     categories: Logging & Tracing
     containerImage: docker.io/keyval/odigos-odiglet:v1.0.143
-    createdAt: "2025-01-27T20:54:03Z"
+    createdAt: "2025-01-27T22:14:08Z"
     description: Odigos enables automatic distributed tracing with OpenTelemetry and
       eBPF.
     features.operators.openshift.io/disconnected: "false"
@@ -35,7 +35,7 @@ metadata:
     operators.operatorframework.io/builder: operator-sdk-v1.39.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     support: Odigos
-  name: odigos-operator.v0.0.1
+  name: odigos-operator.v1.0.143
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -70,26 +70,69 @@ spec:
           - ""
           resources:
           - configmaps
+          - endpoints
+          - services
           verbs:
           - create
           - delete
           - get
           - list
+          - patch
           - update
           - watch
         - apiGroups:
           - ""
           resources:
-          - secrets
+          - events
           verbs:
           - create
+          - patch
+        - apiGroups:
+          - ""
+          resources:
+          - namespaces
+          - nodes
+          verbs:
+          - get
           - list
           - watch
         - apiGroups:
           - ""
           resources:
+          - nodes/proxy
+          - nodes/stats
+          - pods
+          verbs:
+          - get
+          - list
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
           - serviceaccounts
-          - services
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - watch
+        - apiGroups:
+          - admissionregistration.k8s.io
+          resources:
+          - mutatingwebhookconfigurations
+          - validatingwebhookconfigurations
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - apiextensions.k8s.io
+          resources:
+          - customresourcedefinitions
           verbs:
           - create
           - delete
@@ -113,6 +156,77 @@ spec:
           - patch
           - update
           - watch
+        - apiGroups:
+          - coordination.k8s.io
+          resources:
+          - leases
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - collectorsgroups
+          - instrumentationconfigs
+          - sources
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - collectorsgroups/status
+          - destinations
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - instrumentationconfigs/status
+          verbs:
+          - get
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - instrumentationrules
+          - processors
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - instrumentedapplications
+          verbs:
+          - delete
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - sources/finalizers
+          verbs:
+          - update
         - apiGroups:
           - operator.odigos.io
           resources:
@@ -199,7 +313,7 @@ spec:
                 - --health-probe-bind-address=:8081
                 command:
                 - /manager
-                image: controller:latest
+                image: keyval/odigos-operator:1.0.143
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -294,4 +408,4 @@ spec:
   provider:
     name: Odigos
     url: https://odigos.io
-  version: 0.0.1
+  version: 1.0.143
