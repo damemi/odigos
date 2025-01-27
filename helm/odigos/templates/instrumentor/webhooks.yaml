@@ -14,7 +14,9 @@ metadata:
 webhooks:
   - name: pod-mutating-webhook.odigos.io
     clientConfig:
+{{- if not .Values.disableWebhookCert -}}
       caBundle: {{ $ca.Cert | b64enc }}
+{{- end }}
       service:
         name: odigos-instrumentor
         namespace: {{ .Release.Namespace }}
@@ -52,7 +54,9 @@ metadata:
 webhooks:
   - name: source-mutating-webhook.odigos.io
     clientConfig:
+{{- if not .Values.disableWebhookCert -}}
       caBundle: {{ $ca.Cert | b64enc }}
+{{- end }}
       service:
         name: odigos-instrumentor
         namespace: {{ .Release.Namespace }}
@@ -87,7 +91,9 @@ metadata:
 webhooks:
   - name: source-validating-webhook.odigos.io
     clientConfig:
+{{- if not .Values.disableWebhookCert -}}
       caBundle: {{ $ca.Cert | b64enc }}
+{{- end }}
       service:
         name: odigos-instrumentor
         namespace: {{ .Release.Namespace }}
@@ -106,6 +112,7 @@ webhooks:
     timeoutSeconds: 10
     admissionReviewVersions: ["v1"]
 ---
+{{- if not .Values.disableWebhookCert -}}
 apiVersion: v1
 kind: Secret
 type: kubernetes.io/tls
@@ -124,3 +131,4 @@ metadata:
 data:
   tls.crt: {{ $cert.Cert | b64enc }}
   tls.key: {{ $cert.Key | b64enc }}
+{{- end }}

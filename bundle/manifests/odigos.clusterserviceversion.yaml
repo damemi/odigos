@@ -4,9 +4,23 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
-    createdAt: "2025-01-27T17:13:45Z"
+    categories: Logging & Tracing
+    containerImage: docker.io/keyval/odigos-odiglet:v1.0.143
+    createdAt: "2025-01-27T18:12:11Z"
+    description: Odigos enables automatic distributed tracing with OpenTelemetry and
+      eBPF.
+    features.operators.openshift.io/disconnected: "false"
+    features.operators.openshift.io/fips-compliant: "true"
+    features.operators.openshift.io/proxy-aware: "false"
+    features.operators.openshift.io/tls-profiles: "false"
+    features.operators.openshift.io/token-auth-aws: "false"
+    features.operators.openshift.io/token-auth-azure: "false"
+    features.operators.openshift.io/token-auth-gcp: "false"
+    operators.openshift.io/valid-subscription: Odigos Enterprise subscription (for
+      enterprise features)
     operators.operatorframework.io/builder: operator-sdk-v1.39.1
     operators.operatorframework.io/project_layout: unknown
+    support: Odigos
   name: odigos.v1.0.143
   namespace: placeholder
 spec:

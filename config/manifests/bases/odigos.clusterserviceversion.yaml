@@ -3,6 +3,18 @@ kind: ClusterServiceVersion
 metadata:
   annotations:
     alm-examples: '[]'
+    categories: 'Logging & Tracing'
+    description: 'Odigos enables automatic distributed tracing with OpenTelemetry and eBPF.'
+    containerImage: 'docker.io/keyval/odigos-odiglet:v1.0.143'
+    support: 'Odigos'
+    operators.openshift.io/valid-subscription: 'Odigos Enterprise subscription (for enterprise features)'
+    features.operators.openshift.io/disconnected: 'false'
+    features.operators.openshift.io/fips-compliant: 'true'
+    features.operators.openshift.io/proxy-aware: 'false'
+    features.operators.openshift.io/tls-profiles: 'false'
+    features.operators.openshift.io/token-auth-aws: 'false'
+    features.operators.openshift.io/token-auth-azure: 'false'
+    features.operators.openshift.io/token-auth-gcp: 'false'
     capabilities: Basic Install
   name: odigos.v1.0.143
   namespace: placeholder
