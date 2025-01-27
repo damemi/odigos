@@ -3,6 +3,7 @@ data:
   config.yaml: |
     configVersion: 1
     autoscalerImage: keyval/odigos-autoscaler
+    uiMode: normal
     collectorGateway:
       MinReplicas: 1
       MaxReplicas: 10

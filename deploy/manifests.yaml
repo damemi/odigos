@@ -1,0 +1,4866 @@
+---
+# Source: odigos/templates/autoscaler/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: odigos-autoscaler
+  namespace: odigos-system
+---
+# Source: odigos/templates/cleanup/service-account.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cleanup-sa
+  namespace: odigos-system
+---
+# Source: odigos/templates/datacollection/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: odigos-data-collection
+  namespace: odigos-system
+---
+# Source: odigos/templates/instrumentor/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: odigos-instrumentor
+  namespace: odigos-system
+---
+# Source: odigos/templates/odiglet/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: odiglet
+  namespace: odigos-system
+---
+# Source: odigos/templates/scheduler/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: odigos-scheduler
+  namespace: odigos-system
+---
+# Source: odigos/templates/ui/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: odigos-ui
+  namespace: odigos-system
+---
+# Source: odigos/templates/odigos-deployment.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: odigos-deployment
+  namespace: odigos-system
+data:
+  ODIGOS_VERSION: v0.0.0
+  ODIGOS_TIER: "community"
+  installation-method: helm
+---
+# Source: odigos/templates/odigos-own-telemetry-otel-config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: odigos-own-telemetry-otel-config
+  namespace: odigos-system
+data:
+  OTEL_SDK_DISABLED: "true"
+---
+# Source: odigos/templates/crds/actions.odigos.io_addclusterinfos.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  labels:
+    metadata.labels.odigos.io/config: "1"
+    metadata.labels.odigos.io/system-object: "true"
+  name: addclusterinfos.actions.odigos.io
+spec:
+  group: actions.odigos.io
+  names:
+    kind: AddClusterInfo
+    listKind: AddClusterInfoList
+    plural: addclusterinfos
+    shortNames:
+    - aci
+    singular: addclusterinfo
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: AddClusterInfo is the Schema for the addclusterinfo odigos action
+          API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AddClusterInfoSpec defines the desired state of AddClusterInfo
+              action
+            properties:
+              actionName:
+                type: string
+              clusterAttributes:
+                items:
+                  properties:
+                    attributeName:
+                      description: the name of the attribute to insert
+                      type: string
+                    attributeStringValue:
+                      description: |-
+                        if the value is a string, this field should be used.
+                        empty string is a valid value
+                      type: string
+                  required:
+                  - attributeName
+                  - attributeStringValue
+                  type: object
+                type: array
+              disabled:
+                type: boolean
+              notes:
+                type: string
+              signals:
+                items:
+                  enum:
+                  - LOGS
+                  - TRACES
+                  - METRICS
+                  type: string
+                type: array
+            required:
+            - clusterAttributes
+            - signals
+            type: object
+          status:
+            description: AddClusterInfoStatus defines the observed state of AddClusterInfo
+              action
+            properties:
+              conditions:
+                description: |-
+                  Represents the observations of a addclusterinfo's current state.
+                  Known .status.conditions.type are: "Available", "Progressing"
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+# Source: odigos/templates/crds/actions.odigos.io_deleteattributes.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  labels:
+    odigos.io/config: "1"
+    odigos.io/system-object: "true"
+  name: deleteattributes.actions.odigos.io
+spec:
+  group: actions.odigos.io
+  names:
+    kind: DeleteAttribute
+    listKind: DeleteAttributeList
+    plural: deleteattributes
+    shortNames:
+    - da
+    singular: deleteattribute
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: DeleteAttribute is the Schema for the DeleteAttribute odigos
+          action API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: DeleteAttributeSpec defines the desired state of DeleteAttribute
+              action
+            properties:
+              actionName:
+                type: string
+              attributeNamesToDelete:
+                items:
+                  type: string
+                type: array
+              disabled:
+                type: boolean
+              notes:
+                type: string
+              signals:
+                items:
+                  enum:
+                  - LOGS
+                  - TRACES
+                  - METRICS
+                  type: string
+                type: array
+            required:
+            - attributeNamesToDelete
+            - signals
+            type: object
+          status:
+            description: DeleteAttributeStatus defines the observed state of DeleteAttribute
+              action
+            properties:
+              conditions:
+                description: |-
+                  Represents the observations of a DeleteAttribute's current state.
+                  Known .status.conditions.type are: "Available", "Progressing"
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+# Source: odigos/templates/crds/actions.odigos.io_errorsamplers.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  labels:
+    odigos.io/config: "1"
+    odigos.io/system-object: "true"
+  name: errorsamplers.actions.odigos.io
+spec:
+  group: actions.odigos.io
+  names:
+    kind: ErrorSampler
+    listKind: ErrorSamplerList
+    plural: errorsamplers
+    shortNames:
+    - es
+    singular: errorsampler
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ErrorSampler is the Schema for the ErrorSampler odigos action
+          API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ErrorSamplerSpec defines the desired state of ErrorSampler
+              action
+            properties:
+              actionName:
+                type: string
+              disabled:
+                type: boolean
+              fallback_sampling_ratio:
+                description: Specifies the ratio of non-error traces to be sampled.
+                type: number
+              notes:
+                type: string
+              signals:
+                items:
+                  enum:
+                  - LOGS
+                  - TRACES
+                  - METRICS
+                  type: string
+                type: array
+            required:
+            - fallback_sampling_ratio
+            - signals
+            type: object
+          status:
+            description: ErrorSamplerStatus defines the observed state of ErrorSampler
+              action
+            properties:
+              conditions:
+                description: |-
+                  Represents the observations of a ErrorSampler's current state.
+                  Known .status.conditions.type are: "Available", "Progressing"
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+# Source: odigos/templates/crds/actions.odigos.io_latencysamplers.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  labels:
+    odigos.io/config: "1"
+    odigos.io/system-object: "true"
+  name: latencysamplers.actions.odigos.io
+spec:
+  group: actions.odigos.io
+  names:
+    kind: LatencySampler
+    listKind: LatencySamplerList
+    plural: latencysamplers
+    shortNames:
+    - ls
+    singular: latencysampler
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: LatencySampler is the Schema for the LatencySampler odigos action
+          API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: LatencySamplerSpec defines the desired state of LatencySampler
+              action
+            properties:
+              actionName:
+                type: string
+              disabled:
+                type: boolean
+              endpoints_filters:
+                description: Specifies the list of endpoint filters to be applied
+                  for sampling
+                items:
+                  properties:
+                    fallback_sampling_ratio:
+                      description: Specifies the fallback sampling ratio to be applied
+                        in case service and endpoint filter match but the latency
+                        threshold is not met.
+                      type: number
+                    http_route:
+                      description: Specifies the http.route to be sampled
+                      type: string
+                    minimum_latency_threshold:
+                      description: Specifies the lower latency threshold in milliseconds;
+                        traces with latency equal to or exceeding this value will
+                        be considered for sampling.
+                      type: integer
+                    service_name:
+                      description: Specifies the service to be sampled
+                      type: string
+                  required:
+                  - fallback_sampling_ratio
+                  - http_route
+                  - minimum_latency_threshold
+                  - service_name
+                  type: object
+                type: array
+              notes:
+                type: string
+              signals:
+                items:
+                  enum:
+                  - LOGS
+                  - TRACES
+                  - METRICS
+                  type: string
+                type: array
+            required:
+            - endpoints_filters
+            - signals
+            type: object
+          status:
+            description: LatencySamplerStatus defines the observed state of LatencySampler
+              action
+            properties:
+              conditions:
+                description: |-
+                  Represents the observations of a LatencySampler's current state.
+                  Known .status.conditions.type are: "Available", "Progressing"
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+# Source: odigos/templates/crds/actions.odigos.io_piimaskings.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  labels:
+    odigos.io/config: "1"
+    odigos.io/system-object: "true"
+  name: piimaskings.actions.odigos.io
+spec:
+  group: actions.odigos.io
+  names:
+    kind: PiiMasking
+    listKind: PiiMaskingList
+    plural: piimaskings
+    shortNames:
+    - red
+    singular: piimasking
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: PiiMasking is the Schema for the PiiMasking odigos action API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: PiiMaskingSpec defines the desired state of PiiMasking action
+            properties:
+              actionName:
+                type: string
+              disabled:
+                type: boolean
+              notes:
+                type: string
+              piiCategories:
+                items:
+                  enum:
+                  - CREDIT_CARD
+                  type: string
+                type: array
+              signals:
+                items:
+                  enum:
+                  - LOGS
+                  - TRACES
+                  - METRICS
+                  type: string
+                type: array
+            required:
+            - piiCategories
+            - signals
+            type: object
+          status:
+            description: PiiMaskingStatus defines the observed state of PiiMasking
+              action
+            properties:
+              conditions:
+                description: |-
+                  Represents the observations of a piiMasking's current state.
+                  Known .status.conditions.type are: "Available", "Progressing"
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+# Source: odigos/templates/crds/actions.odigos.io_probabilisticsamplers.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  labels:
+    odigos.io/config: "1"
+    odigos.io/system-object: "true"
+  name: probabilisticsamplers.actions.odigos.io
+spec:
+  group: actions.odigos.io
+  names:
+    kind: ProbabilisticSampler
+    listKind: ProbabilisticSamplerList
+    plural: probabilisticsamplers
+    shortNames:
+    - ps
+    singular: probabilisticsampler
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ProbabilisticSampler is the Schema for the ProbabilisticSampler
+          odigos action API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ProbabilisticSamplerSpec defines the desired state of ProbabilisticSampler
+              action
+            properties:
+              actionName:
+                type: string
+              disabled:
+                type: boolean
+              notes:
+                type: string
+              sampling_percentage:
+                type: string
+              signals:
+                items:
+                  enum:
+                  - LOGS
+                  - TRACES
+                  - METRICS
+                  type: string
+                type: array
+            required:
+            - sampling_percentage
+            - signals
+            type: object
+          status:
+            description: ProbabilisticSamplerStatus defines the observed state of
+              ProbabilisticSampler action
+            properties:
+              conditions:
+                description: |-
+                  Represents the observations of a ProbabilisticSampler's current state.
+                  Known .status.conditions.type are: "Available", "Progressing"
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+# Source: odigos/templates/crds/actions.odigos.io_renameattributes.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  labels:
+    odigos.io/config: "1"
+    odigos.io/system-object: "true"
+  name: renameattributes.actions.odigos.io
+spec:
+  group: actions.odigos.io
+  names:
+    kind: RenameAttribute
+    listKind: RenameAttributeList
+    plural: renameattributes
+    singular: renameattribute
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: RenameAttribute is the Schema for the RenameAttribute odigos
+          action API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: RenameAttributeSpec defines the desired state of RenameAttribute
+              action
+            properties:
+              actionName:
+                type: string
+              disabled:
+                type: boolean
+              notes:
+                type: string
+              renames:
+                additionalProperties:
+                  type: string
+                type: object
+              signals:
+                items:
+                  enum:
+                  - LOGS
+                  - TRACES
+                  - METRICS
+                  type: string
+                type: array
+            required:
+            - renames
+            - signals
+            type: object
+          status:
+            description: RenameAttributeStatus defines the observed state of RenameAttribute
+              action
+            properties:
+              conditions:
+                description: |-
+                  Represents the observations of a RenameAttribute's current state.
+                  Known .status.conditions.type are: "Available", "Progressing"
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+# Source: odigos/templates/crds/odigos.io_collectorsgroups.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  labels:
+    odigos.io/config: "1"
+    odigos.io/system-object: "true"
+  name: collectorsgroups.odigos.io
+spec:
+  group: odigos.io
+  names:
+    kind: CollectorsGroup
+    listKind: CollectorsGroupList
+    plural: collectorsgroups
+    singular: collectorsgroup
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: CollectorsGroup is the Schema for the collectors API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: CollectorsGroupSpec defines the desired state of Collector
+            properties:
+              collectorOwnMetricsPort:
+                description: |-
+                  The port to use for exposing the collector's own metrics as a prometheus endpoint.
+                  This can be used to resolve conflicting ports when a collector is using the host network.
+                format: int32
+                type: integer
+              resourcesSettings:
+                description: |-
+                  Resources [memory/cpu] settings for the collectors group.
+                  these settings are used to protect the collectors instances from:
+                  - running out of memory and being killed by the k8s OOM killer
+                  - consuming all available memory on the node which can lead to node instability
+                  - pushing back pressure to the instrumented applications
+                properties:
+                  cpuLimitMillicores:
+                    description: |-
+                      CPU resource limit to be used on the pod template.
+                      it will be embedded in the as a resource limit of the form `cpu: <value>m`
+                    type: integer
+                  cpuRequestMillicores:
+                    description: |-
+                      CPU resource request to be used on the pod template.
+                      it will be embedded in the as a resource request of the form `cpu: <value>m`
+                    type: integer
+                  gomemlimitMiB:
+                    description: |-
+                      the GOMEMLIMIT environment variable value for the collector pod.
+                      this is when go runtime will start garbage collection.
+                      it is recommended to be set to 80% of the hard limit of the memory limiter.
+                    type: integer
+                  maxReplicas:
+                    type: integer
+                  memoryLimitMiB:
+                    description: |-
+                      This option sets the limit on the memory usage of the collector.
+                      since the memory limiter mechanism is heuristic, and operates on fixed intervals,
+                      while it cannot fully prevent OOMs, it can help in reducing the chances of OOMs in edge cases.
+                      the settings should prevent the collector from exceeding the memory request,
+                      so one can set this to the same value as the memory request or higher to allow for some buffer for bursts.
+                    type: integer
+                  memoryLimiterLimitMiB:
+                    description: |-
+                      this parameter sets the "limit_mib" parameter in the memory limiter configuration for the collector.
+                      it is the hard limit after which a force garbage collection will be performed.
+                      this value will end up comparing against the go runtime reported heap Alloc value.
+                      According to the memory limiter docs:
+                      > Note that typically the total memory usage of process will be about 50MiB higher than this value
+                      a test from nov 2024 showed that fresh odigos collector with no traffic takes 38MiB,
+                      thus the 50MiB is a good value to start with.
+                    type: integer
+                  memoryLimiterSpikeLimitMiB:
+                    description: |-
+                      this parameter sets the "spike_limit_mib" parameter in the memory limiter configuration for the collector memory limiter.
+                      note that this is not the processor soft limit itself, but the diff in Mib between the hard limit and the soft limit.
+                      according to the memory limiter docs, it is recommended to set this to 20% of the hard limit.
+                      changing this value allows trade-offs between memory usage and resiliency to bursts.
+                    type: integer
+                  memoryRequestMiB:
+                    description: |-
+                      MemoryRequestMiB is the memory resource request to be used on the pod template.
+                      it will be embedded in the as a resource request of the form `memory: <value>Mi`
+                    type: integer
+                  minReplicas:
+                    description: Minumum + Maximum number of replicas for the collector
+                      - these relevant only for gateway.
+                    type: integer
+                required:
+                - cpuLimitMillicores
+                - cpuRequestMillicores
+                - gomemlimitMiB
+                - memoryLimitMiB
+                - memoryLimiterLimitMiB
+                - memoryLimiterSpikeLimitMiB
+                - memoryRequestMiB
+                type: object
+              role:
+                enum:
+                - CLUSTER_GATEWAY
+                - NODE_COLLECTOR
+                type: string
+            required:
+            - collectorOwnMetricsPort
+            - resourcesSettings
+            - role
+            type: object
+          status:
+            description: CollectorsGroupStatus defines the observed state of Collector
+            properties:
+              conditions:
+                description: |-
+                  Represents the observations of a collectorsroup's current state.
+                  Known .status.conditions.type are: "Available", "Progressing"
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              ready:
+                type: boolean
+              receiverSignals:
+                description: |-
+                  Receiver Signals are the signals (trace, metrics, logs) that the collector has setup
+                  an otlp receiver for, thus it can accept data from an upstream component.
+                  this is used to determine if a workload should export each signal or not.
+                  this list is calculated based on the odigos destinations that were configured
+                items:
+                  enum:
+                  - LOGS
+                  - TRACES
+                  - METRICS
+                  type: string
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+# Source: odigos/templates/crds/odigos.io_destinations.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  labels:
+    odigos.io/config: "1"
+    odigos.io/system-object: "true"
+  name: destinations.odigos.io
+spec:
+  group: odigos.io
+  names:
+    kind: Destination
+    listKind: DestinationList
+    plural: destinations
+    singular: destination
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Destination is the Schema for the destinations API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: DestinationSpec defines the desired state of Destination
+            properties:
+              data:
+                additionalProperties:
+                  type: string
+                type: object
+              destinationName:
+                type: string
+              secretRef:
+                description: |-
+                  LocalObjectReference contains enough information to let you locate the
+                  referenced object inside the same namespace.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              signals:
+                items:
+                  enum:
+                  - LOGS
+                  - TRACES
+                  - METRICS
+                  type: string
+                type: array
+              sourceSelector:
+                description: |-
+                  SourceSelector defines which sources can send data to this destination.
+                  If not specified, defaults to "all".
+                properties:
+                  groups:
+                    description: |-
+                      Workloads (sources) are assigned to groups via labels (odigos.io/group-backend: true), allowing a more flexible selection mechanism.
+                      Example:
+                      groups: ["backend", "monitoring"]
+                      This means the destination will receive data only from sources labeled with "backend" or "monitoring".
+                    items:
+                      type: string
+                    type: array
+                  namespaces:
+                    description: |-
+                      If a namespace is specified, all workloads (sources) within that namespace are allowed to send data.
+                      Example:
+                      namespaces: ["default", "production"]
+                      This means the destination will receive data from all sources in "default" and "production" namespaces.
+                    items:
+                      type: string
+                    type: array
+                type: object
+              type:
+                type: string
+            required:
+            - data
+            - destinationName
+            - signals
+            - type
+            type: object
+          status:
+            description: DestinationStatus defines the observed state of Destination
+            properties:
+              conditions:
+                description: Represents the observations of a destination's current
+                  state.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+# Source: odigos/templates/crds/odigos.io_instrumentationconfigs.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  name: instrumentationconfigs.odigos.io
+spec:
+  group: odigos.io
+  names:
+    kind: InstrumentationConfig
+    listKind: InstrumentationConfigList
+    plural: instrumentationconfigs
+    singular: instrumentationconfig
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: InstrumentationConfig is the Schema for the instrumentationconfig
+          API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              Config for the OpenTelemeetry SDKs that should be applied to a workload.
+              The workload is identified by the owner reference
+            properties:
+              sdkConfigs:
+                description: |-
+                  Configuration for the OpenTelemetry SDKs that this workload should use.
+                  The SDKs are identified by the programming language they are written in.
+                items:
+                  properties:
+                    codeAttributes:
+                      description: default configuration for collecting code attributes,
+                        in case the instrumentation library does not provide a configuration.
+                      properties:
+                        column:
+                          description: |-
+                            Should record the `code.column` attribute.
+                            if unset, the value will resolve from other relevant rules, or fallback to false
+                          type: boolean
+                        filePath:
+                          description: |-
+                            Should record the `code.filepath` attribute.
+                            if unset, the value will resolve from other relevant rules, or fallback to false
+                          type: boolean
+                        function:
+                          description: |-
+                            Should record the `code.function` attribute.
+                            if unset, the value will resolve from other relevant rules, or fallback to false
+                          type: boolean
+                        lineNumber:
+                          description: |-
+                            Should record the `code.lineno` attribute.
+                            if unset, the value will resolve from other relevant rules, or fallback to false
+                          type: boolean
+                        namespace:
+                          description: |-
+                            Should record the `code.namespace` attribute.
+                            if unset, the value will resolve from other relevant rules, or fallback to false
+                          type: boolean
+                        stackTrace:
+                          description: |-
+                            Should record the `code.stacktrace` attribute.
+                            if unset, the value will resolve from other relevant rules, or fallback to false
+                          type: boolean
+                      type: object
+                    headSamplerConfig:
+                      description: |-
+                        HeadSamplingConfig is a set sampling rules.
+                        This config currently only applies to root spans.
+                        In the Future we might add another level of configuration base on the parent span (ParentBased Sampling)
+                      properties:
+                        attributesAndSamplerRules:
+                          items:
+                            description: |-
+                              AttributesAndSamplerRule is a set of AttributeCondition that are ANDed together.
+                              If all attribute conditions evaluate to true, the AND sampler evaluates to true,
+                              and the fraction is used to determine the sampling decision.
+                              If any of the attribute compare samplers evaluate to false,
+                              the fraction is not used and the rule is skipped.
+                              An "empty" AttributesAndSamplerRule with no attribute conditions is considered to always evaluate to true.
+                              and the fraction is used to determine the sampling decision.
+                              This entity is refered to a rule in Odigos terminology for head-sampling.
+                            properties:
+                              attributeConditions:
+                                items:
+                                  description: '''Operand'' represents the attributes
+                                    and values that an operator acts upon in an expression'
+                                  properties:
+                                    key:
+                                      description: attribute key (e.g. "url.path")
+                                      type: string
+                                    operator:
+                                      description: The operator to use to compare
+                                        the attribute value.
+                                      enum:
+                                      - equals
+                                      - notEquals
+                                      - endWith
+                                      - startWith
+                                      type: string
+                                    val:
+                                      description: currently only string values are
+                                        supported.
+                                      type: string
+                                  required:
+                                  - key
+                                  - val
+                                  type: object
+                                type: array
+                              fraction:
+                                default: 1
+                                description: |-
+                                  The fraction of spans to sample, in the range [0, 1].
+                                  If the fraction is 0, no spans are sampled.
+                                  If the fraction is 1, all spans are sampled.
+                                type: number
+                            required:
+                            - attributeConditions
+                            - fraction
+                            type: object
+                          type: array
+                        fallbackFraction:
+                          default: 1
+                          description: |-
+                            Used as a fallback if all rules evaluate to false,
+                            it may be empty - in this case the default value will be 1 - all spans are sampled.
+                            it should be a float value in the range [0, 1] - the fraction of spans to sample.
+                            a value of 0 means no spans are sampled if none of the rules evaluate to true.
+                          type: number
+                      required:
+                      - attributesAndSamplerRules
+                      - fallbackFraction
+                      type: object
+                    instrumentationLibraryConfigs:
+                      description: configurations for the instrumentation libraries
+                        the the SDK should use
+                      items:
+                        properties:
+                          codeAttributes:
+                            description: |-
+                              code attributes configuration for a specific library.
+                              if not set, the default code attributes configuration for the workload will be used.
+                              if set, but internal fields are empty, those fields will be used from the default configuration.
+                            properties:
+                              column:
+                                description: |-
+                                  Should record the `code.column` attribute.
+                                  if unset, the value will resolve from other relevant rules, or fallback to false
+                                type: boolean
+                              filePath:
+                                description: |-
+                                  Should record the `code.filepath` attribute.
+                                  if unset, the value will resolve from other relevant rules, or fallback to false
+                                type: boolean
+                              function:
+                                description: |-
+                                  Should record the `code.function` attribute.
+                                  if unset, the value will resolve from other relevant rules, or fallback to false
+                                type: boolean
+                              lineNumber:
+                                description: |-
+                                  Should record the `code.lineno` attribute.
+                                  if unset, the value will resolve from other relevant rules, or fallback to false
+                                type: boolean
+                              namespace:
+                                description: |-
+                                  Should record the `code.namespace` attribute.
+                                  if unset, the value will resolve from other relevant rules, or fallback to false
+                                type: boolean
+                              stackTrace:
+                                description: |-
+                                  Should record the `code.stacktrace` attribute.
+                                  if unset, the value will resolve from other relevant rules, or fallback to false
+                                type: boolean
+                            type: object
+                          libraryId:
+                            properties:
+                              libraryName:
+                                description: |-
+                                  The name of the instrumentation library
+                                  - Node.js: The name of the npm package: `@opentelemetry/instrumentation-<name>`
+                                type: string
+                              spanKind:
+                                description: |-
+                                  SpanKind is only supported by Golang and will be ignored for any other SDK language.
+                                  In Go, SpanKind is used because the same instrumentation library can be utilized for different span kinds (e.g., client/server).
+                                enum:
+                                - client
+                                - server
+                                - producer
+                                - consumer
+                                - internal
+                                type: string
+                            required:
+                            - libraryName
+                            type: object
+                          payloadCollection:
+                            properties:
+                              dbQuery:
+                                description: rule for collecting db payloads for the
+                                  mentioned workload and instrumentation libraries
+                                properties:
+                                  dropPartialPayloads:
+                                    description: |-
+                                      If the payload is larger than the MaxPayloadLength, this parameter will determine if the payload should be partially collected up to the allowed length, or not collected at all.
+                                      This is useful if you require some decoding of the payload (like json) and having it partially is not useful.
+                                    type: boolean
+                                  maxPayloadLength:
+                                    description: |-
+                                      Maximum length of the payload to collect.
+                                      If the payload is longer than this value, it will be truncated or dropped, based on the value of `dropPartialPayloads` config option
+                                    format: int64
+                                    type: integer
+                                type: object
+                              httpRequest:
+                                description: |-
+                                  Collect HTTP request payload data when available.
+                                  Can be a client (outgoing) request or a server (incoming) request, depending on the instrumentation library
+                                properties:
+                                  dropPartialPayloads:
+                                    description: |-
+                                      If the payload is larger than the MaxPayloadLength, this parameter will determine if the payload should be partially collected up to the allowed length, or not collected at all.
+                                      This is useful if you require some decoding of the payload (like json) and having it partially is not useful.
+                                    type: boolean
+                                  maxPayloadLength:
+                                    description: |-
+                                      Maximum length of the payload to collect.
+                                      If the payload is longer than this value, it will be truncated or dropped, based on the value of `dropPartialPayloads` config option
+                                    format: int64
+                                    type: integer
+                                  mimeTypes:
+                                    description: |-
+                                      Limit payload collection to specific mime types based on the content type header.
+                                      When not specified, all mime types payloads will be collected.
+                                      Empty array will make the rule ineffective.
+                                    items:
+                                      type: string
+                                    type: array
+                                type: object
+                              httpResponse:
+                                description: |-
+                                  rule for collecting the response part of an http payload.
+                                  Can be a client response or a server response, depending on the instrumentation library
+                                properties:
+                                  dropPartialPayloads:
+                                    description: |-
+                                      If the payload is larger than the MaxPayloadLength, this parameter will determine if the payload should be partially collected up to the allowed length, or not collected at all.
+                                      This is useful if you require some decoding of the payload (like json) and having it partially is not useful.
+                                    type: boolean
+                                  maxPayloadLength:
+                                    description: |-
+                                      Maximum length of the payload to collect.
+                                      If the payload is longer than this value, it will be truncated or dropped, based on the value of `dropPartialPayloads` config option
+                                    format: int64
+                                    type: integer
+                                  mimeTypes:
+                                    description: |-
+                                      Limit payload collection to specific mime types based on the content type header.
+                                      When not specified, all mime types payloads will be collected.
+                                      Empty array will make the rule ineffective.
+                                    items:
+                                      type: string
+                                    type: array
+                                type: object
+                              messaging:
+                                description: rule for collecting messaging payloads
+                                  for the mentioned workload and instrumentation libraries
+                                properties:
+                                  dropPartialPayloads:
+                                    description: |-
+                                      If the payload is larger than the MaxPayloadLength, this parameter will determine if the payload should be partially collected up to the allowed length, or not collected at all.
+                                      This is useful if you require some decoding of the payload (like json) and having it partially is not useful.
+                                    type: boolean
+                                  maxPayloadLength:
+                                    description: |-
+                                      Maximum length of the payload to collect.
+                                      If the payload is longer than this value, it will be truncated or dropped, based on the value of `dropPartialPayloads` config option
+                                    format: int64
+                                    type: integer
+                                type: object
+                            type: object
+                          traceConfig:
+                            properties:
+                              enabled:
+                                description: |-
+                                  Whether the instrumentation library is enabled to record traces.
+                                  When false, it is expected that the instrumentation library does not produce any spans regardless of any other configuration.
+                                  When true, the instrumentation library should produce spans according to the other configuration options.
+                                  If not specified, the default value for this signal should be used (whether to enable libraries by default or not).
+                                type: boolean
+                            type: object
+                        required:
+                        - libraryId
+                        type: object
+                      type: array
+                    language:
+                      description: The language of the SDK being configured
+                      enum:
+                      - java
+                      - python
+                      - go
+                      - dotnet
+                      - javascript
+                      - mysql
+                      - nginx
+                      - unknown
+                      - ignored
+                      type: string
+                    payloadCollection:
+                      properties:
+                        dbQuery:
+                          description: rule for collecting db payloads for the mentioned
+                            workload and instrumentation libraries
+                          properties:
+                            dropPartialPayloads:
+                              description: |-
+                                If the payload is larger than the MaxPayloadLength, this parameter will determine if the payload should be partially collected up to the allowed length, or not collected at all.
+                                This is useful if you require some decoding of the payload (like json) and having it partially is not useful.
+                              type: boolean
+                            maxPayloadLength:
+                              description: |-
+                                Maximum length of the payload to collect.
+                                If the payload is longer than this value, it will be truncated or dropped, based on the value of `dropPartialPayloads` config option
+                              format: int64
+                              type: integer
+                          type: object
+                        httpRequest:
+                          description: |-
+                            Collect HTTP request payload data when available.
+                            Can be a client (outgoing) request or a server (incoming) request, depending on the instrumentation library
+                          properties:
+                            dropPartialPayloads:
+                              description: |-
+                                If the payload is larger than the MaxPayloadLength, this parameter will determine if the payload should be partially collected up to the allowed length, or not collected at all.
+                                This is useful if you require some decoding of the payload (like json) and having it partially is not useful.
+                              type: boolean
+                            maxPayloadLength:
+                              description: |-
+                                Maximum length of the payload to collect.
+                                If the payload is longer than this value, it will be truncated or dropped, based on the value of `dropPartialPayloads` config option
+                              format: int64
+                              type: integer
+                            mimeTypes:
+                              description: |-
+                                Limit payload collection to specific mime types based on the content type header.
+                                When not specified, all mime types payloads will be collected.
+                                Empty array will make the rule ineffective.
+                              items:
+                                type: string
+                              type: array
+                          type: object
+                        httpResponse:
+                          description: |-
+                            rule for collecting the response part of an http payload.
+                            Can be a client response or a server response, depending on the instrumentation library
+                          properties:
+                            dropPartialPayloads:
+                              description: |-
+                                If the payload is larger than the MaxPayloadLength, this parameter will determine if the payload should be partially collected up to the allowed length, or not collected at all.
+                                This is useful if you require some decoding of the payload (like json) and having it partially is not useful.
+                              type: boolean
+                            maxPayloadLength:
+                              description: |-
+                                Maximum length of the payload to collect.
+                                If the payload is longer than this value, it will be truncated or dropped, based on the value of `dropPartialPayloads` config option
+                              format: int64
+                              type: integer
+                            mimeTypes:
+                              description: |-
+                                Limit payload collection to specific mime types based on the content type header.
+                                When not specified, all mime types payloads will be collected.
+                                Empty array will make the rule ineffective.
+                              items:
+                                type: string
+                              type: array
+                          type: object
+                        messaging:
+                          description: rule for collecting messaging payloads for
+                            the mentioned workload and instrumentation libraries
+                          properties:
+                            dropPartialPayloads:
+                              description: |-
+                                If the payload is larger than the MaxPayloadLength, this parameter will determine if the payload should be partially collected up to the allowed length, or not collected at all.
+                                This is useful if you require some decoding of the payload (like json) and having it partially is not useful.
+                              type: boolean
+                            maxPayloadLength:
+                              description: |-
+                                Maximum length of the payload to collect.
+                                If the payload is longer than this value, it will be truncated or dropped, based on the value of `dropPartialPayloads` config option
+                              format: int64
+                              type: integer
+                          type: object
+                      type: object
+                  required:
+                  - language
+                  type: object
+                type: array
+              serviceName:
+                description: the service.name property is used to populate the `service.name`
+                  resource attribute in the telemetry generated by this workload
+                type: string
+            type: object
+          status:
+            properties:
+              conditions:
+                description: Represents the observations of a InstrumentationConfig's
+                  current state.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              runtimeDetailsByContainer:
+                description: Capture Runtime Details for the workloads that this CR
+                  applies to.
+                items:
+                  properties:
+                    containerName:
+                      type: string
+                    criErrorMessage:
+                      description: Stores the error message from the CRI runtime if
+                        returned to prevent instrumenting the container if an error
+                        exists.
+                      type: string
+                    envFromContainerRuntime:
+                      description: Holds the environment variables retrieved from
+                        the container runtime.
+                      items:
+                        properties:
+                          name:
+                            type: string
+                          value:
+                            type: string
+                        required:
+                        - name
+                        - value
+                        type: object
+                      type: array
+                    envVars:
+                      items:
+                        properties:
+                          name:
+                            type: string
+                          value:
+                            type: string
+                        required:
+                        - name
+                        - value
+                        type: object
+                      type: array
+                    language:
+                      enum:
+                      - java
+                      - python
+                      - go
+                      - dotnet
+                      - javascript
+                      - mysql
+                      - nginx
+                      - unknown
+                      - ignored
+                      type: string
+                    libCType:
+                      enum:
+                      - glibc
+                      - musl
+                      type: string
+                    otherAgent:
+                      properties:
+                        name:
+                          type: string
+                      type: object
+                    runtimeUpdateState:
+                      description: A temporary variable used during migration to track
+                        whether the new runtime detection process has been executed.
+                        If empty, it indicates the process has not yet been run. This
+                        field may be removed later.
+                      type: string
+                    runtimeVersion:
+                      type: string
+                  required:
+                  - containerName
+                  - language
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+# Source: odigos/templates/crds/odigos.io_instrumentationinstances.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  labels:
+    odigos.io/config: "1"
+    odigos.io/system-object: "true"
+  name: instrumentationinstances.odigos.io
+spec:
+  group: odigos.io
+  names:
+    kind: InstrumentationInstance
+    listKind: InstrumentationInstanceList
+    plural: instrumentationinstances
+    singular: instrumentationinstance
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: InstrumentationInstance is the Schema for the InstrumentationInstances
+          API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              containerName:
+                description: |-
+                  stores the name of the container in the pod where the SDK is running.
+                  The pod details can be found as the owner reference on the CR.
+                type: string
+            required:
+            - containerName
+            type: object
+          status:
+            description: |-
+              InstrumentationInstanceStatus defines the observed state of InstrumentationInstance
+              If the instrumentation is not active, this CR should be deleted
+            properties:
+              components:
+                items:
+                  description: |-
+                    InstrumentationLibraryStatus defines the observed state of an InstrumentationLibrary.
+                    if a library is not active/disable, it should not be included in the status
+                  properties:
+                    healthy:
+                      type: boolean
+                    identifyingAttributes:
+                      description: |-
+                        Attributes that identify the component.
+                        The combination of (Name, Type, IdentifyingAttributes) must be unique.
+                      items:
+                        description: Attribute is a key-value pair that describes
+                          a component or instrumentation
+                        properties:
+                          key:
+                            minLength: 1
+                            type: string
+                          value:
+                            type: string
+                        required:
+                        - key
+                        - value
+                        type: object
+                      type: array
+                    lastStatusTime:
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the component health.
+                        can be omitted if healthy is true
+                      maxLength: 32768
+                      type: string
+                    name:
+                      description: for example ("net/http", "@opentelemetry/instrumentation-redis")
+                      minLength: 1
+                      type: string
+                    nonIdentifyingAttributes:
+                      description: |-
+                        Attributes that do not necessarily identify the component but help describe
+                        its characteristics.
+                      items:
+                        description: Attribute is a key-value pair that describes
+                          a component or instrumentation
+                        properties:
+                          key:
+                            minLength: 1
+                            type: string
+                          value:
+                            type: string
+                        required:
+                        - key
+                        - value
+                        type: object
+                      type: array
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the SDK status.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                      type: string
+                    type:
+                      enum:
+                      - instrumentation
+                      - sampler
+                      - exporter
+                      type: string
+                  required:
+                  - lastStatusTime
+                  - name
+                  - type
+                  type: object
+                type: array
+              healthy:
+                description: |-
+                  Healthy true means that the odigos agent has started the SDK, and there are no errors. User can expect telemetry to be generated.
+                  Healthy false means that the agent has stopped and telemetry data is not expected to be generated.
+                  Healthy nil means that the agent did not report any health status yet (prefer to always report health status).
+                type: boolean
+              identifyingAttributes:
+                description: |-
+                  Attributes that identify the SDK and are reported as resource attributes in the generated telemetry.
+                  One can identify if an arbitrary telemetry is generated by this SDK by checking those resource attributes.
+                items:
+                  description: Attribute is a key-value pair that describes a component
+                    or instrumentation
+                  properties:
+                    key:
+                      minLength: 1
+                      type: string
+                    value:
+                      type: string
+                  required:
+                  - key
+                  - value
+                  type: object
+                type: array
+              lastStatusTime:
+                format: date-time
+                type: string
+              message:
+                description: |-
+                  message is a human readable message indicating details about the SDK general health.
+                  can be omitted if healthy is true
+                maxLength: 32768
+                type: string
+              nonIdentifyingAttributes:
+                description: Attributes that are not reported as resource attributes
+                  but useful to describe characteristics of the SDK.
+                items:
+                  description: Attribute is a key-value pair that describes a component
+                    or instrumentation
+                  properties:
+                    key:
+                      minLength: 1
+                      type: string
+                    value:
+                      type: string
+                  required:
+                  - key
+                  - value
+                  type: object
+                type: array
+              reason:
+                description: |-
+                  reason contains a programmatic identifier indicating the reason for the component status.
+                  Producers of specific condition types may define expected values and meanings for this field,
+                  and whether the values are considered a guaranteed API.
+                type: string
+            required:
+            - lastStatusTime
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+# Source: odigos/templates/crds/odigos.io_instrumentationrules.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  labels:
+    metadata.labels.odigos.io/config: "1"
+    metadata.labels.odigos.io/system-object: "true"
+  name: instrumentationrules.odigos.io
+spec:
+  group: odigos.io
+  names:
+    kind: InstrumentationRule
+    listKind: InstrumentationRuleList
+    plural: instrumentationrules
+    singular: instrumentationrule
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              codeAttributes:
+                description: Configure which code attributes should be recorded as
+                  span attributes.
+                properties:
+                  column:
+                    description: |-
+                      Should record the `code.column` attribute.
+                      if unset, the value will resolve from other relevant rules, or fallback to false
+                    type: boolean
+                  filePath:
+                    description: |-
+                      Should record the `code.filepath` attribute.
+                      if unset, the value will resolve from other relevant rules, or fallback to false
+                    type: boolean
+                  function:
+                    description: |-
+                      Should record the `code.function` attribute.
+                      if unset, the value will resolve from other relevant rules, or fallback to false
+                    type: boolean
+                  lineNumber:
+                    description: |-
+                      Should record the `code.lineno` attribute.
+                      if unset, the value will resolve from other relevant rules, or fallback to false
+                    type: boolean
+                  namespace:
+                    description: |-
+                      Should record the `code.namespace` attribute.
+                      if unset, the value will resolve from other relevant rules, or fallback to false
+                    type: boolean
+                  stackTrace:
+                    description: |-
+                      Should record the `code.stacktrace` attribute.
+                      if unset, the value will resolve from other relevant rules, or fallback to false
+                    type: boolean
+                type: object
+              disabled:
+                description: A boolean field allowing to temporarily disable the rule,
+                  but keep it around for future use
+                type: boolean
+              instrumentationLibraries:
+                description: |-
+                  For fine grained control, the user can specify the instrumentation library to use.
+                  One can specify same rule for multiple languages and libraries at the same time.
+                  If nil, all instrumentation libraries will be used.
+                  If empty, no instrumentation libraries will be used.
+                items:
+                  description: |-
+                    Includes the instrumentation library name, span kind (for golang) and language
+                    which identifies a specific library globally.
+                  properties:
+                    language:
+                      description: The language in which this library will collect
+                        data
+                      enum:
+                      - java
+                      - python
+                      - go
+                      - dotnet
+                      - javascript
+                      - mysql
+                      - nginx
+                      - unknown
+                      - ignored
+                      type: string
+                    name:
+                      description: The name of the instrumentation library
+                      type: string
+                    spanKind:
+                      description: |-
+                        SpanKind is only supported by Golang and will be ignored for any other SDK language.
+                        In Go, SpanKind is used because the same instrumentation library can be utilized for different span kinds (e.g., client/server).
+                      enum:
+                      - client
+                      - server
+                      - producer
+                      - consumer
+                      - internal
+                      type: string
+                  required:
+                  - language
+                  - name
+                  type: object
+                type: array
+              notes:
+                description: 'A free-form text field that allows you to attach notes
+                  regarding the rule for convenience. For example: why it was added.
+                  Odigos does not use or assume any meaning from this field.'
+                type: string
+              otelSdks:
+                description: |-
+                  Set the OtelSdk to use for the workloads in this rule.
+                  instrumentation libraries will be ignored if set.
+                  the rule will be used only for languages which are specified, and ignored otherwise.
+                properties:
+                  otelSdkByLanguage:
+                    additionalProperties:
+                      properties:
+                        sdkTier:
+                          type: string
+                        sdkType:
+                          description: 'Odigos supports two types of OpenTelemetry
+                            SDKs: native and ebpf.'
+                          type: string
+                      required:
+                      - sdkTier
+                      - sdkType
+                      type: object
+                    type: object
+                required:
+                - otelSdkByLanguage
+                type: object
+              payloadCollection:
+                description: Allows to configure payload collection aspects for different
+                  types of payloads.
+                properties:
+                  dbQuery:
+                    description: rule for collecting db payloads for the mentioned
+                      workload and instrumentation libraries
+                    properties:
+                      dropPartialPayloads:
+                        description: |-
+                          If the payload is larger than the MaxPayloadLength, this parameter will determine if the payload should be partially collected up to the allowed length, or not collected at all.
+                          This is useful if you require some decoding of the payload (like json) and having it partially is not useful.
+                        type: boolean
+                      maxPayloadLength:
+                        description: |-
+                          Maximum length of the payload to collect.
+                          If the payload is longer than this value, it will be truncated or dropped, based on the value of `dropPartialPayloads` config option
+                        format: int64
+                        type: integer
+                    type: object
+                  httpRequest:
+                    description: |-
+                      Collect HTTP request payload data when available.
+                      Can be a client (outgoing) request or a server (incoming) request, depending on the instrumentation library
+                    properties:
+                      dropPartialPayloads:
+                        description: |-
+                          If the payload is larger than the MaxPayloadLength, this parameter will determine if the payload should be partially collected up to the allowed length, or not collected at all.
+                          This is useful if you require some decoding of the payload (like json) and having it partially is not useful.
+                        type: boolean
+                      maxPayloadLength:
+                        description: |-
+                          Maximum length of the payload to collect.
+                          If the payload is longer than this value, it will be truncated or dropped, based on the value of `dropPartialPayloads` config option
+                        format: int64
+                        type: integer
+                      mimeTypes:
+                        description: |-
+                          Limit payload collection to specific mime types based on the content type header.
+                          When not specified, all mime types payloads will be collected.
+                          Empty array will make the rule ineffective.
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                  httpResponse:
+                    description: |-
+                      rule for collecting the response part of an http payload.
+                      Can be a client response or a server response, depending on the instrumentation library
+                    properties:
+                      dropPartialPayloads:
+                        description: |-
+                          If the payload is larger than the MaxPayloadLength, this parameter will determine if the payload should be partially collected up to the allowed length, or not collected at all.
+                          This is useful if you require some decoding of the payload (like json) and having it partially is not useful.
+                        type: boolean
+                      maxPayloadLength:
+                        description: |-
+                          Maximum length of the payload to collect.
+                          If the payload is longer than this value, it will be truncated or dropped, based on the value of `dropPartialPayloads` config option
+                        format: int64
+                        type: integer
+                      mimeTypes:
+                        description: |-
+                          Limit payload collection to specific mime types based on the content type header.
+                          When not specified, all mime types payloads will be collected.
+                          Empty array will make the rule ineffective.
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                  messaging:
+                    description: rule for collecting messaging payloads for the mentioned
+                      workload and instrumentation libraries
+                    properties:
+                      dropPartialPayloads:
+                        description: |-
+                          If the payload is larger than the MaxPayloadLength, this parameter will determine if the payload should be partially collected up to the allowed length, or not collected at all.
+                          This is useful if you require some decoding of the payload (like json) and having it partially is not useful.
+                        type: boolean
+                      maxPayloadLength:
+                        description: |-
+                          Maximum length of the payload to collect.
+                          If the payload is longer than this value, it will be truncated or dropped, based on the value of `dropPartialPayloads` config option
+                        format: int64
+                        type: integer
+                    type: object
+                type: object
+              ruleName:
+                description: Allows you to attach a meaningful name to the rule for
+                  convenience. Odigos does not use or assume any meaning from this
+                  field.
+                type: string
+              workloads:
+                description: An array of workload objects (name, namespace, kind)
+                  to which the rule should be applied. If not specified, the rule
+                  will be applied to all workloads. empty array will render the rule
+                  inactive.
+                items:
+                  description: |-
+                    PodWorkload represents the higher-level controller managing a specific Pod within a Kubernetes cluster.
+                    It contains essential details about the controller such as its Name, Namespace, and Kind.
+                    'Kind' refers to the type of controller, which can be a Deployment, StatefulSet, or DaemonSet.
+                    This struct is useful for identifying and interacting with the overarching entity
+                    that governs the lifecycle and behavior of a Pod, especially in contexts where
+                    understanding the relationship between a Pod and its controlling workload is crucial.
+                  properties:
+                    kind:
+                      description: |-
+                        1. the pascal case representation of the workload kind
+                        it is used in k8s api objects as the `Kind` field.
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                  required:
+                  - kind
+                  - name
+                  - namespace
+                  type: object
+                type: array
+            type: object
+          status:
+            properties:
+              conditions:
+                description: |-
+                  Represents the observations of a instrumentationrule's current state.
+                  Known .status.conditions.type are: "Available", "Progressing"
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+# Source: odigos/templates/crds/odigos.io_instrumentedapplications.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  labels:
+    odigos.io/config: "1"
+    odigos.io/system-object: "true"
+  name: instrumentedapplications.odigos.io
+spec:
+  group: odigos.io
+  names:
+    kind: InstrumentedApplication
+    listKind: InstrumentedApplicationList
+    plural: instrumentedapplications
+    singular: instrumentedapplication
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          InstrumentedApplication is the Schema for the instrumentedapplications API
+
+          Deprecated: in favour of InstrumentationConfig
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              InstrumentedApplicationSpec defines the desired state of InstrumentedApplication
+
+              Deprecated: in favour of InstrumentationConfig
+            properties:
+              options:
+                items:
+                  description: 'Deprecated: configuration is done via InstrumentationConfig'
+                  properties:
+                    containerName:
+                      type: string
+                    instrumentationsLibraries:
+                      items:
+                        description: 'Deprecated: configuration is done via InstrumentationConfig'
+                        properties:
+                          libraryName:
+                            type: string
+                          options:
+                            items:
+                              description: 'Deprecated: configuration is done via
+                                InstrumentationConfig'
+                              properties:
+                                optionKey:
+                                  type: string
+                                spanKind:
+                                  description: |-
+                                    SpanKind is already defined in opentelemetry-go as int.
+                                    this value can go into the CRD in which case it will be string for user convenience.
+                                  enum:
+                                  - client
+                                  - server
+                                  - producer
+                                  - consumer
+                                  - internal
+                                  type: string
+                              required:
+                              - optionKey
+                              - spanKind
+                              type: object
+                            type: array
+                        required:
+                        - libraryName
+                        - options
+                        type: object
+                      type: array
+                  required:
+                  - containerName
+                  - instrumentationsLibraries
+                  type: object
+                type: array
+              runtimeDetails:
+                items:
+                  properties:
+                    containerName:
+                      type: string
+                    criErrorMessage:
+                      description: Stores the error message from the CRI runtime if
+                        returned to prevent instrumenting the container if an error
+                        exists.
+                      type: string
+                    envFromContainerRuntime:
+                      description: Holds the environment variables retrieved from
+                        the container runtime.
+                      items:
+                        properties:
+                          name:
+                            type: string
+                          value:
+                            type: string
+                        required:
+                        - name
+                        - value
+                        type: object
+                      type: array
+                    envVars:
+                      items:
+                        properties:
+                          name:
+                            type: string
+                          value:
+                            type: string
+                        required:
+                        - name
+                        - value
+                        type: object
+                      type: array
+                    language:
+                      enum:
+                      - java
+                      - python
+                      - go
+                      - dotnet
+                      - javascript
+                      - mysql
+                      - nginx
+                      - unknown
+                      - ignored
+                      type: string
+                    libCType:
+                      enum:
+                      - glibc
+                      - musl
+                      type: string
+                    otherAgent:
+                      properties:
+                        name:
+                          type: string
+                      type: object
+                    runtimeUpdateState:
+                      description: A temporary variable used during migration to track
+                        whether the new runtime detection process has been executed.
+                        If empty, it indicates the process has not yet been run. This
+                        field may be removed later.
+                      type: string
+                    runtimeVersion:
+                      type: string
+                  required:
+                  - containerName
+                  - language
+                  type: object
+                type: array
+            type: object
+          status:
+            description: |-
+              InstrumentedApplicationStatus defines the observed state of InstrumentedApplication
+
+              Deprecated: in favour of InstrumentationConfig
+            properties:
+              conditions:
+                description: Represents the observations of a nstrumentedApplication's
+                  current state.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+# Source: odigos/templates/crds/odigos.io_odigosconfigurations.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  labels:
+    odigos.io/config: "1"
+    odigos.io/system-object: "true"
+  name: odigosconfigurations.odigos.io
+spec:
+  group: odigos.io
+  names:
+    kind: OdigosConfiguration
+    listKind: OdigosConfigurationList
+    plural: odigosconfigurations
+    singular: odigosconfiguration
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          OdigosConfiguration is the Schema for the odigos configuration
+
+          Deprecated: Use common.OdigosConfiguration instead
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              OdigosConfigurationSpec defines the desired state of OdigosConfiguration
+
+              Deprecated: Use common.OdigosConfiguration instead
+            properties:
+              autoscalerImage:
+                type: string
+              collectorGateway:
+                description: 'Deprecated: Use common.OdigosConfiguration instead'
+                properties:
+                  goMemLimitMiB:
+                    description: |-
+                      the GOMEMLIMIT environment variable value for the collector gateway deployment.
+                      this is when go runtime will start garbage collection.
+                      if not specified, it will be set to 80% of the hard limit of the memory limiter.
+                    type: integer
+                  memoryLimiterLimitMiB:
+                    description: |-
+                      this parameter sets the "limit_mib" parameter in the memory limiter configuration for the collector gateway.
+                      it is the hard limit after which a force garbage collection will be performed.
+                      if not set, it will be 50Mi below the memory request.
+                    type: integer
+                  memoryLimiterSpikeLimitMiB:
+                    description: |-
+                      this parameter sets the "spike_limit_mib" parameter in the memory limiter configuration for the collector gateway.
+                      note that this is not the processor soft limit, but the diff in Mib between the hard limit and the soft limit.
+                      if not set, this will be set to 20% of the hard limit (so the soft limit will be 80% of the hard limit).
+                    type: integer
+                  requestMemoryMiB:
+                    description: |-
+                      RequestMemoryMiB is the memory request for the cluster gateway collector deployment.
+                      it will be embedded in the deployment as a resource request of the form `memory: <value>Mi`
+                      default value is 500Mi
+                    type: integer
+                type: object
+              configVersion:
+                type: integer
+              goAutoIncludeCodeAttributes:
+                description: |-
+                  this is internal currently, and is not exposed on the CLI / helm
+                  used for odigos enterprise
+                type: boolean
+              ignoredContainers:
+                items:
+                  type: string
+                type: array
+              ignoredNamespaces:
+                items:
+                  type: string
+                type: array
+              imagePrefix:
+                type: string
+              instrumentorImage:
+                type: string
+              odigletImage:
+                type: string
+              odigosVersion:
+                type: string
+              openshiftEnabled:
+                type: boolean
+              psp:
+                type: boolean
+              telemetryEnabled:
+                type: boolean
+            required:
+            - configVersion
+            - odigosVersion
+            type: object
+        type: object
+    served: true
+    storage: true
+---
+# Source: odigos/templates/crds/odigos.io_processors.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  labels:
+    odigos.io/config: "1"
+    odigos.io/system-object: "true"
+  name: processors.odigos.io
+spec:
+  group: odigos.io
+  names:
+    kind: Processor
+    listKind: ProcessorList
+    plural: processors
+    singular: processor
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Processor is the Schema for an Opentelemetry Collector Processor
+          that is added to Odigos pipeline
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ProcessorSpec defines the an OpenTelemetry Collector processor
+              in odigos telemetry pipeline
+            properties:
+              collectorRoles:
+                description: control which collector roles in odigos pipeline this
+                  processor is attached to.
+                items:
+                  enum:
+                  - CLUSTER_GATEWAY
+                  - NODE_COLLECTOR
+                  type: string
+                type: array
+              disabled:
+                description: |-
+                  disable is a flag to enable or disable the processor.
+                  if the processor is disabled, it will not be included in the collector configuration yaml.
+                  this allows the user to keep the processor configuration in the CR, but disable it temporarily.
+                type: boolean
+              notes:
+                description: user can attach notes to the processor, to document its
+                  purpose, usage, etc.
+                type: string
+              orderHint:
+                description: |-
+                  control the order of processors.
+                  a processor with lower order hint value will be placed before other processors with higher value.
+                  if 2 processors have the same value, the order is arbitrary.
+                  if the value is missing (or 0) the processor can be placed anywhere in the pipeline
+                type: integer
+              processorConfig:
+                description: this it the configuration of the opentelemetry collector
+                  processor component with the type specified in 'type'.
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              processorName:
+                description: |-
+                  this name is solely for the user convenience, to attach a meaningful name to the processor.
+                  odigos must not assume any semantics from this name.
+                  odigos cannot assume this name is unique, not empty, exclude spaces or dots, limited in length, etc.
+                type: string
+              signals:
+                description: signals can be used to control which observability signals
+                  are processed by the processor.
+                items:
+                  enum:
+                  - LOGS
+                  - TRACES
+                  - METRICS
+                  type: string
+                type: array
+              type:
+                description: |-
+                  type of the processor (batch, attributes, etc).
+                  this field is only the type, not it's instance name in the collector configuration yaml
+                type: string
+            required:
+            - collectorRoles
+            - processorConfig
+            - signals
+            - type
+            type: object
+          status:
+            description: ProcessorStatus defines the observed state of the processor
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+# Source: odigos/templates/crds/odigos.io_sources.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  name: sources.odigos.io
+spec:
+  group: odigos.io
+  names:
+    kind: Source
+    listKind: SourceList
+    plural: sources
+    singular: source
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.workload.name
+      name: Workload
+      type: string
+    - jsonPath: .spec.workload.kind
+      name: Kind
+      type: string
+    - jsonPath: .spec.workload.namespace
+      name: Namespace
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Source configures an application for auto-instrumentation.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              disableInstrumentation:
+                description: DisableInstrumentation excludes this workload from auto-instrumentation.
+                type: boolean
+              otelServiceName:
+                description: |-
+                  OtelServiceName determines the "service.name" resource attribute which will be reported by the instrumentations of this source.
+                  If not set, the workload name will be used.
+                  It is not valid for namespace sources.
+                type: string
+              workload:
+                description: |-
+                  Workload represents the workload or namespace to be instrumented.
+                  This field is required upon creation and cannot be modified.
+                properties:
+                  kind:
+                    description: |-
+                      1. the pascal case representation of the workload kind
+                      it is used in k8s api objects as the `Kind` field.
+                    type: string
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                required:
+                - kind
+                - name
+                - namespace
+                type: object
+            required:
+            - workload
+            type: object
+          status:
+            properties:
+              conditions:
+                description: |-
+                  Represents the observations of a source's current state.
+                  Known .status.conditions.type are: "Available", "Progressing"
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+# Source: odigos/templates/autoscaler/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: odigos-autoscaler
+rules:
+  - apiGroups:
+      - odigos.io
+    resources:
+      - instrumentationconfigs
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - odigos.io
+    resources:
+      - sources
+    verbs:
+      - get
+      - list
+      - watch
+---
+# Source: odigos/templates/cleanup/cleanup-clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cleanup-clusterrole
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets", "daemonsets"]
+  verbs: ["get", "list", "patch"]
+- apiGroups: [""]
+  resources: ["namespaces", "services", "secrets"]
+  verbs: ["get", "list", "patch"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["clusterroles", "clusterrolebindings"]
+  verbs: ["get", "list", "patch"]
+- apiGroups: ["apiextensions.k8s.io"]
+  resources: ["customresourcedefinitions"]
+  verbs: ["list", "get", "patch", "delete"]
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["mutatingwebhookconfigurations"]
+  verbs: ["get", "list", "delete"]
+---
+# Source: odigos/templates/datacollection/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: odigos-data-collection
+rules:
+  - apiGroups:
+      - ''
+    resources:
+      - nodes/stats
+      - nodes/proxy
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - ''
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - apps
+    resources:
+      - replicasets
+      - deployments
+      - daemonsets
+      - statefulsets
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - ''
+    resources:
+      - endpoints
+    verbs:
+      - get
+      - list
+      - watch
+---
+# Source: odigos/templates/instrumentor/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: odigos-instrumentor
+rules:
+  - apiGroups:
+      - ''
+    resources:
+      - nodes
+    verbs:
+      - list
+      - watch
+      - get
+  - apiGroups:
+      - ''
+    resources:
+      - namespaces
+    verbs:
+      - list
+      - watch
+      - get
+  - apiGroups:
+      - apps
+    resources:
+      - daemonsets
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+      - patch
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+      - patch
+  - apiGroups:
+      - apps
+    resources:
+      - statefulsets
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+      - patch
+  - apiGroups:
+      - odigos.io
+    resources:
+      - instrumentedapplications
+    verbs:
+      - delete
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - odigos.io
+    resources:
+      - instrumentationconfigs/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - odigos.io
+    resources:
+      - instrumentationconfigs
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - odigos.io
+    resources:
+      - sources
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - odigos.io
+    resources:
+      - sources/finalizers
+    verbs:
+      - update
+---
+# Source: odigos/templates/odiglet/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: odiglet
+rules:
+  - apiGroups:
+      - ''
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ''
+    resources:
+      - pods/status
+    verbs:
+      - get
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+      - daemonsets
+      - statefulsets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - apps
+    resources:
+      - deployments/status
+      - daemonsets/status
+      - statefulsets/status
+    verbs:
+      - get
+  - apiGroups:
+      - ''
+    resources:
+      - nodes
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - odigos.io
+    resources:
+      - instrumentationinstances
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+      - watch
+      - delete
+  - apiGroups:
+      - odigos.io
+    resources:
+      - instrumentationinstances/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - odigos.io
+    resources:
+      - instrumentationconfigs
+    verbs:
+      - get
+      - list
+      - watch
+      - patch
+      - update
+  - apiGroups:
+      - odigos.io
+    resources:
+      - instrumentationconfigs/status
+    verbs:
+      - get
+      - patch
+      - update
+---
+# Source: odigos/templates/scheduler/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: odigos-scheduler
+rules:
+  - apiGroups:
+      - odigos.io
+    resources:
+      - instrumentationconfigs
+    verbs:
+      - get
+      - list
+      - watch
+---
+# Source: odigos/templates/ui/clusterrole.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: odigos-ui
+rules:
+  - apiGroups:
+      - ''
+    resources:
+      - namespaces
+    verbs:
+      - get
+      - list
+      - patch
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+    verbs:
+      - get
+      - list
+      - patch
+      - update
+  - apiGroups:
+      - apps
+    resources:
+      - replicasets
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - ''
+    resources:
+      - services
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - ''
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - odigos.io
+    resources:
+      - instrumentationconfigs
+      - instrumentationinstances
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - odigos.io
+    resources:
+      - sources
+    verbs:
+      - get
+      - list
+      - create
+      - delete
+---
+# Source: odigos/templates/autoscaler/clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: odigos-autoscaler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: odigos-autoscaler
+subjects:
+- kind: ServiceAccount
+  name: odigos-autoscaler
+  namespace: odigos-system
+---
+# Source: odigos/templates/cleanup/cleanup-clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cleanup-clusterrolebinding
+subjects:
+- kind: ServiceAccount
+  name: cleanup-sa
+  namespace: odigos-system
+roleRef:
+  kind: ClusterRole
+  name: cleanup-clusterrole
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: odigos/templates/datacollection/clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: odigos-data-collection
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: odigos-data-collection
+subjects:
+- kind: ServiceAccount
+  name: odigos-data-collection
+  namespace: odigos-system
+---
+# Source: odigos/templates/instrumentor/clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: odigos-instrumentor
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: odigos-instrumentor
+subjects:
+  - kind: ServiceAccount
+    name: odigos-instrumentor
+    namespace: odigos-system
+---
+# Source: odigos/templates/odiglet/clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: odiglet
+subjects:
+  - kind: ServiceAccount
+    name: odiglet
+    namespace: odigos-system
+roleRef:
+  kind: ClusterRole
+  name: odiglet
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: odigos/templates/scheduler/clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: odigos-scheduler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: odigos-scheduler
+subjects:
+  - kind: ServiceAccount
+    name: odigos-scheduler
+    namespace: odigos-system
+---
+# Source: odigos/templates/ui/clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: odigos-ui
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: odigos-ui
+subjects:
+  - kind: ServiceAccount
+    name: odigos-ui
+    namespace: odigos-system
+---
+# Source: odigos/templates/autoscaler/leader-election-role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: odigos-autoscaler-leader-election
+  namespace: odigos-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+---
+# Source: odigos/templates/autoscaler/role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: odigos-autoscaler
+  namespace: 'odigos-system'
+rules:
+  - apiGroups:
+      - ''
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - patch
+      - update
+      - delete
+  - apiGroups:
+      - ''
+    resources:
+      - services
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - patch
+      - update
+      - delete
+      - deletecollection
+  - apiGroups:
+      - apps
+    resources:
+      - daemonsets
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - patch
+      - update
+      - delete
+      - deletecollection
+  - apiGroups:
+      - apps
+    resources:
+      - daemonsets/status
+    verbs:
+      - get
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+    verbs:
+      - create
+      - delete
+      - deletecollection
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - apps
+    resources:
+      - deployments/status
+    verbs:
+      - get
+  - apiGroups:
+      - autoscaling
+    resources:
+      - horizontalpodautoscalers
+    verbs:
+      - create
+      - patch
+      - update
+      - delete
+  - apiGroups:
+      - ''
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - odigos.io
+    resources:
+      - destinations
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - odigos.io
+    resources:
+      - destinations/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - odigos.io
+    resources:
+      - processors
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - patch
+      - update
+  - apiGroups:
+      - actions.odigos.io
+    resources:
+      - '*'
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - actions.odigos.io
+    resources:
+      - '*/status'
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - odigos.io
+    resources:
+      - collectorsgroups
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - odigos.io
+    resources:
+      - collectorsgroups/status
+    verbs:
+      - get
+      - patch
+      - update
+---
+# Source: odigos/templates/cleanup/cleanup-role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cleanup-role
+  namespace: odigos-system
+rules:
+- apiGroups: [""]
+  resources: ["namespaces", "configmaps"]
+  verbs: ["get", "list", "patch", "delete"]
+---
+# Source: odigos/templates/instrumentor/leader-election-role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: odigos-instrumentor-leader-election
+  namespace: odigos-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+---
+# Source: odigos/templates/instrumentor/role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: odigos-instrumentor
+  namespace: 'odigos-system'
+rules:
+  - apiGroups:
+      - ''
+    resourceNames:
+      - effective-config
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - odigos.io
+    resources:
+      - collectorsgroups
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - odigos.io
+    resources:
+      - collectorsgroups/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - odigos.io
+    resources:
+      - destinations
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - odigos.io
+    resources:
+      - instrumentationrules
+    verbs:
+      - get
+      - list
+      - watch
+---
+# Source: odigos/templates/odiglet/role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: odiglet
+  namespace: 'odigos-system'
+rules:
+  - apiGroups:
+      - odigos.io
+    resources:
+      - collectorsgroups
+      - collectorsgroups/status
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ''
+    resourceNames:
+      - effective-config
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+---
+# Source: odigos/templates/scheduler/leader-election-role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: odigos-scheduler-leader-election
+  namespace: odigos-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+---
+# Source: odigos/templates/scheduler/role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: odigos-scheduler
+  namespace: 'odigos-system'
+rules:
+  - apiGroups:
+      - ''
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ''
+    resources:
+      - configmaps
+    resourceNames:
+      - effective-config
+      - odigos-deployment
+    verbs:
+      - patch
+      - create
+      - update
+  - apiGroups:
+      - odigos.io
+    resources:
+      - collectorsgroups
+    verbs:
+      - get
+      - list
+      - create
+      - patch
+      - update
+      - watch
+      - delete
+  - apiGroups:
+      - odigos.io
+    resources:
+      - collectorsgroups/status
+    verbs:
+      - get
+  - apiGroups:
+      - odigos.io
+    resources:
+      - destinations
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - odigos.io
+    resources:
+      - instrumentationrules
+      - processors
+    verbs:
+      - get
+      - list
+      - watch
+      - patch
+      - delete
+      - create
+  - apiGroups:
+      - ''
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+---
+# Source: odigos/templates/ui/role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: odigos-ui
+  namespace: 'odigos-system'
+rules:
+  - apiGroups:
+      - ''
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - ''
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - create
+      - patch
+      - update
+  - apiGroups:
+      - odigos.io
+    resources:
+      - instrumentationrules
+      - destinations
+    verbs:
+      - get
+      - list
+      - create
+      - patch
+      - update
+      - delete
+  - apiGroups:
+      - odigos.io
+    resources:
+      - destinations
+    verbs:
+      - watch
+  - apiGroups:
+      - odigos.io
+    resources:
+      - collectorsgroups
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - actions.odigos.io
+    resources:
+      - '*'
+    verbs:
+      - get
+      - list
+      - create
+      - patch
+      - update
+      - delete
+---
+# Source: odigos/templates/autoscaler/leader-election-rolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: odigos-autoscaler-leader-election
+  namespace: odigos-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: odigos-autoscaler-leader-election
+subjects:
+- kind: ServiceAccount
+  name: odigos-autoscaler
+---
+# Source: odigos/templates/autoscaler/rolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: odigos-autoscaler
+  namespace: odigos-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: odigos-autoscaler
+subjects:
+- kind: ServiceAccount
+  name: odigos-autoscaler
+---
+# Source: odigos/templates/cleanup/cleanup-rolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cleanup-rolebinding
+  namespace: odigos-system
+subjects:
+- kind: ServiceAccount
+  name: cleanup-sa
+  namespace: odigos-system
+roleRef:
+  kind: Role
+  name: cleanup-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: odigos/templates/instrumentor/leader-election-rolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: odigos-instrumentor-leader-election
+  namespace: odigos-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: odigos-instrumentor-leader-election
+subjects:
+- kind: ServiceAccount
+  name: odigos-instrumentor
+---
+# Source: odigos/templates/instrumentor/rolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: odigos-instrumentor
+  namespace: odigos-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: odigos-instrumentor
+subjects:
+- kind: ServiceAccount
+  name: odigos-instrumentor
+---
+# Source: odigos/templates/odiglet/rolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: odiglet
+  namespace: odigos-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: odiglet
+subjects:
+  - kind: ServiceAccount
+    name: odiglet
+    namespace: odigos-system
+---
+# Source: odigos/templates/scheduler/leader-election-rolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: odigos-scheduler-leader-election
+  namespace: odigos-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: odigos-scheduler-leader-election
+subjects:
+- kind: ServiceAccount
+  name: odigos-scheduler
+---
+# Source: odigos/templates/scheduler/role-binding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: odigos-scheduler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: odigos-scheduler
+subjects:
+  - kind: ServiceAccount
+    name: odigos-scheduler
+---
+# Source: odigos/templates/ui/rolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: odigos-ui
+  namespace: odigos-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: odigos-ui
+subjects:
+- kind: ServiceAccount
+  name: odigos-ui
+  namespace: odigos-system
+---
+# Source: odigos/templates/instrumentor/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: odigos-instrumentor
+  namespace: odigos-system
+spec:
+  ports:
+    - name: webhook-server
+      port: 9443
+      targetPort: 9443
+  selector:
+    app.kubernetes.io/name: odigos-instrumentor
+---
+# Source: odigos/templates/ui/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ui
+  namespace: 'odigos-system'
+  labels:
+    app.kubernetes.io/name: odigos-ui
+spec:
+  ports:
+    - name: ui
+      port: 3000
+    - name: otlp
+      port: 4317
+  selector:
+    app: odigos-ui
+---
+# Source: odigos/templates/odiglet/daemonset.yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app.kubernetes.io/name: odiglet
+  name: odiglet
+  namespace: odigos-system
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: odiglet
+  updateStrategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 50%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: odiglet
+    spec:
+      initContainers:
+        - name: init
+          image: "keyval/odigos-odiglet:v0.0.0"
+          imagePullPolicy: IfNotPresent
+          command:
+            - /root/odiglet
+          args:
+            - init
+          volumeMounts:
+            - name: odigos
+              mountPath: /var/odigos
+      containers:
+        - name: odiglet
+          image: "keyval/odigos-odiglet:v0.0.0"
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: CURRENT_NS
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: OTEL_LOG_LEVEL
+              value: info
+          envFrom:
+            - configMapRef:
+                name: odigos-own-telemetry-otel-config
+                optional: true
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+            capabilities:
+              add:
+                - SYS_PTRACE
+          volumeMounts:
+            - name: run-dir
+              mountPath: /run
+            
+            - name: device-plugins-dir
+              mountPath: /var/lib/kubelet/device-plugins
+            - name: pod-resources
+              mountPath: /var/lib/kubelet/pod-resources
+              readOnly: true
+            - name: odigos
+              mountPath: /var/odigos
+              readOnly: true
+            - name: kernel-debug
+              mountPath: /sys/kernel/debug
+      hostNetwork: true
+      hostPID: true
+      priorityClassName: system-node-critical
+      serviceAccountName: odiglet
+      volumes:
+        - name: run-dir
+          hostPath:
+            path: /run
+        
+        - name: pod-resources
+          hostPath:
+            path: /var/lib/kubelet/pod-resources
+        - name: device-plugins-dir
+          hostPath:
+            path: /var/lib/kubelet/device-plugins
+        - name: odigos
+          hostPath:
+            path: /var/odigos
+        - name: kernel-debug
+          hostPath:
+            path: /sys/kernel/debug
+      nodeSelector: 
+        kubernetes.io/os: linux
+      tolerations: 
+        - operator: Exists
+---
+# Source: odigos/templates/autoscaler/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: odigos-autoscaler
+  name: odigos-autoscaler
+  namespace: odigos-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: odigos-autoscaler
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        app.kubernetes.io/name: odigos-autoscaler
+    spec:
+      containers:
+      - args:
+          - --health-probe-bind-address=:8081
+          - --metrics-bind-address=127.0.0.1:8080
+          - --leader-elect
+          
+        command:
+          - /app
+        image: "keyval/odigos-autoscaler:v0.0.0"
+        env:
+          - name: OTEL_SERVICE_NAME
+            value: auto-scaler
+          - name: CURRENT_NS
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: ODIGOS_VERSION
+            valueFrom:
+              configMapKeyRef:
+                key: ODIGOS_VERSION
+                name: odigos-deployment                
+        envFrom:
+          - configMapRef:
+              name: odigos-own-telemetry-otel-config
+              optional: true
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: manager
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+      securityContext:
+        runAsNonRoot: true
+      serviceAccountName: odigos-autoscaler
+      terminationGracePeriodSeconds: 10
+      nodeSelector: 
+        kubernetes.io/os: linux
+---
+# Source: odigos/templates/instrumentor/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: odigos-instrumentor
+  name: odigos-instrumentor
+  namespace: odigos-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: odigos-instrumentor
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        app.kubernetes.io/name: odigos-instrumentor
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: odigos-instrumentor
+                topologyKey: "kubernetes.io/hostname"
+      containers:
+      - args:
+          - --health-probe-bind-address=:8081
+          - --metrics-bind-address=127.0.0.1:8080
+          - --leader-elect
+        command:
+          - /app
+        image: "keyval/odigos-instrumentor:v0.0.0"
+        ports:
+          - containerPort: 9443
+            name: webhook-server
+            protocol: TCP
+        env:
+          - name: OTEL_SERVICE_NAME
+            value: instrumentor
+          - name: CURRENT_NS
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: ODIGOS_TIER
+            valueFrom:
+              configMapKeyRef:
+                key: ODIGOS_TIER
+                name: odigos-deployment                
+        volumeMounts:
+          - name: webhook-cert
+            mountPath: /tmp/k8s-webhook-server/serving-certs
+            readOnly: true
+        envFrom:
+          - configMapRef:
+              name: odigos-own-telemetry-otel-config
+              optional: true
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: manager
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+      securityContext:
+        runAsNonRoot: true
+      serviceAccountName: odigos-instrumentor
+      volumes:
+        - name: webhook-cert
+          secret:
+            secretName: webhook-cert
+            defaultMode: 420
+      terminationGracePeriodSeconds: 10
+      nodeSelector: 
+        kubernetes.io/os: linux
+---
+# Source: odigos/templates/scheduler/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: odigos-scheduler
+  name: odigos-scheduler
+  namespace: odigos-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: odigos-scheduler
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        app.kubernetes.io/name: odigos-scheduler
+    spec:
+      containers:
+      - args:
+          - --health-probe-bind-address=:8081
+          - --metrics-bind-address=127.0.0.1:8080
+          - --leader-elect
+        command:
+          - /app
+        image: "keyval/odigos-scheduler:v0.0.0"
+        env:
+          - name: OTEL_SERVICE_NAME
+            value: scheduler
+          - name: CURRENT_NS
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: ODIGOS_TIER
+            valueFrom:
+              configMapKeyRef:
+                key: ODIGOS_TIER
+                name: odigos-deployment
+          - name: ODIGOS_VERSION
+            valueFrom:
+              configMapKeyRef:
+                key: ODIGOS_VERSION
+                name: odigos-deployment
+        envFrom:
+          - configMapRef:
+              name: odigos-own-telemetry-otel-config
+              optional: true
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: manager
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+      securityContext:
+        runAsNonRoot: true
+      serviceAccountName: odigos-scheduler
+      terminationGracePeriodSeconds: 10
+      nodeSelector: 
+        kubernetes.io/os: linux
+---
+# Source: odigos/templates/ui/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: odigos-ui
+  name: odigos-ui
+  namespace: odigos-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: odigos-ui
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: ui
+      labels:
+        app: odigos-ui
+    spec:
+      containers:
+      - name: ui
+        image: "keyval/odigos-ui:v0.0.0"
+        args:
+          - --namespace=$(CURRENT_NS)
+          - --address=0.0.0.0
+        env:
+          - name: CURRENT_NS
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+        ports:
+          - containerPort: 3000
+            name: ui
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+      securityContext:
+        runAsNonRoot: true
+      serviceAccountName: odigos-ui
+      terminationGracePeriodSeconds: 10
+      nodeSelector: 
+        kubernetes.io/os: linux
+---
+# Source: odigos/templates/instrumentor/webhooks.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: mutating-webhook-configuration
+  labels:
+    app.kubernetes.io/name: pod-mutating-webhook
+    app.kubernetes.io/instance: mutating-webhook-configuration
+    app.kubernetes.io/component: webhook
+    app.kubernetes.io/created-by: instrumentor
+    app.kubernetes.io/part-of: odigos
+webhooks:
+  - name: pod-mutating-webhook.odigos.io
+    clientConfig:
+      caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURHakNDQWdLZ0F3SUJBZ0lSQUxycHMyc0xjVXA4ZFZXT0E2V3l5dGN3RFFZSktvWklodmNOQVFFTEJRQXcKRnpFVk1CTUdBMVVFQXhNTWMyVnlkbWx1WnkxalpYSjBNQjRYRFRJMU1ERXlOekUyTWpNMU1Gb1hEVEkyTURFeQpOekUyTWpNMU1Gb3dGekVWTUJNR0ExVUVBeE1NYzJWeWRtbHVaeTFqWlhKME1JSUJJakFOQmdrcWhraUc5dzBCCkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQXROWVlpc1BmTmtZeXlITnlJRWxzMWk5elRab21UcFY2VnhaN3hoQmcKOXpMck10ZzN5WVZSb3lmUmZWTmlzS0FsLzU5YVdiS0pLL2ZiK1ZWWUFiSXAwdTVLQWM3UVhtQnEyenZiVko0MgpoQ083Mm1paTNCUERDK3pBeW9BYXBYNVpLcmMvaFNDSDFMYVVHVnNLV2MzUnpUdWVveXpsam82TitMdnBTTWtvCkNWUFduT2Nia0ZiQXhvdjh6eWxpQlFTNHYzbjRMNk9RbHg3YmkxQ1k0RkJuQUxyRU1jV0NibEpGZVF1amNiN3EKSmF1QW9NMUhNeEJ5QzV6SVZEUFc2Nng3UUlTL2d4SVorcmtIbUdwTlhndjJiaHVXV2tPUkJOQ2tjMzBiSnNvTwpKU3N3UW42YW4zVGNLZi84WkZTRm01VjUzM1pzS2NLNElYV1Y1eUdJa25mMDl3SURBUUFCbzJFd1h6QU9CZ05WCkhROEJBZjhFQkFNQ0FxUXdIUVlEVlIwbEJCWXdGQVlJS3dZQkJRVUhBd0VHQ0NzR0FRVUZCd01DTUE4R0ExVWQKRXdFQi93UUZNQU1CQWY4d0hRWURWUjBPQkJZRUZGY0J6K09iWWZBMlBHWm1GSHJzOU1XaDVQeU9NQTBHQ1NxRwpTSWIzRFFFQkN3VUFBNElCQVFDUUE2NHZISmN3aGlobmRYTVpDWTMrNnBPRmx2ZmY2QW15ekMxRTZFVGlWUkYzCldqR0phK0JtQ1FCdk5zYUl3RmlRWkFSSktXZmZSQ3ZsM0NxTGRralArODNPTkRpNFQ4eVpEdko4VW8xcmZDbW4Ka3lNUUQ0MDk3TDFtdDFDdFJudTA1aWZUYzVPNGplMUF0RXpIZHpWUlZVQTRPTWdRNU9uRzlpQkt2L0pFVmIwRQpzcEJmaVF0cEJ6VWUzZHlkaHhMNU9GQzEwaGlSSXZvTkZvVjU4TGNWb0hSc01ReVJxaHYwZHczWmJtem01S2J0ClAxRFVaVHdwMXJLMzVQSWVkT0xoWjBFbms4bE9NWElGL0wxV3BuNGlxdXZFMk1ZcjhDbHlmcmp4UTBwWFRsQ28KcHVsUVhvdE5EQVJhQzl0VmJXKzVMS1Bhb3ZPVjQvL0NxU2hYVzhiSwotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+      service:
+        name: odigos-instrumentor
+        namespace: odigos-system
+        path: /mutate--v1-pod
+        port: 9443
+    rules:
+      - operations:
+          - CREATE
+          - UPDATE
+        apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+        scope: Namespaced
+    failurePolicy: Ignore
+    reinvocationPolicy: IfNeeded
+    sideEffects: None
+    objectSelector:
+      matchLabels:
+        odigos.io/inject-instrumentation: "true"
+    timeoutSeconds: 10
+    admissionReviewVersions: ["v1"]
+---
+# Source: odigos/templates/instrumentor/webhooks.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: source-mutating-webhook-configuration
+  labels:
+    app.kubernetes.io/name: source-mutating-webhook
+    app.kubernetes.io/instance: source-mutating-webhook-configuration
+    app.kubernetes.io/component: webhook
+    app.kubernetes.io/created-by: instrumentor
+    app.kubernetes.io/part-of: odigos
+  annotations:
+    cert-manager.io/inject-ca-from: odigos-system/serving-cert
+webhooks:
+  - name: source-mutating-webhook.odigos.io
+    clientConfig:
+      caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURHakNDQWdLZ0F3SUJBZ0lSQUxycHMyc0xjVXA4ZFZXT0E2V3l5dGN3RFFZSktvWklodmNOQVFFTEJRQXcKRnpFVk1CTUdBMVVFQXhNTWMyVnlkbWx1WnkxalpYSjBNQjRYRFRJMU1ERXlOekUyTWpNMU1Gb1hEVEkyTURFeQpOekUyTWpNMU1Gb3dGekVWTUJNR0ExVUVBeE1NYzJWeWRtbHVaeTFqWlhKME1JSUJJakFOQmdrcWhraUc5dzBCCkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQXROWVlpc1BmTmtZeXlITnlJRWxzMWk5elRab21UcFY2VnhaN3hoQmcKOXpMck10ZzN5WVZSb3lmUmZWTmlzS0FsLzU5YVdiS0pLL2ZiK1ZWWUFiSXAwdTVLQWM3UVhtQnEyenZiVko0MgpoQ083Mm1paTNCUERDK3pBeW9BYXBYNVpLcmMvaFNDSDFMYVVHVnNLV2MzUnpUdWVveXpsam82TitMdnBTTWtvCkNWUFduT2Nia0ZiQXhvdjh6eWxpQlFTNHYzbjRMNk9RbHg3YmkxQ1k0RkJuQUxyRU1jV0NibEpGZVF1amNiN3EKSmF1QW9NMUhNeEJ5QzV6SVZEUFc2Nng3UUlTL2d4SVorcmtIbUdwTlhndjJiaHVXV2tPUkJOQ2tjMzBiSnNvTwpKU3N3UW42YW4zVGNLZi84WkZTRm01VjUzM1pzS2NLNElYV1Y1eUdJa25mMDl3SURBUUFCbzJFd1h6QU9CZ05WCkhROEJBZjhFQkFNQ0FxUXdIUVlEVlIwbEJCWXdGQVlJS3dZQkJRVUhBd0VHQ0NzR0FRVUZCd01DTUE4R0ExVWQKRXdFQi93UUZNQU1CQWY4d0hRWURWUjBPQkJZRUZGY0J6K09iWWZBMlBHWm1GSHJzOU1XaDVQeU9NQTBHQ1NxRwpTSWIzRFFFQkN3VUFBNElCQVFDUUE2NHZISmN3aGlobmRYTVpDWTMrNnBPRmx2ZmY2QW15ekMxRTZFVGlWUkYzCldqR0phK0JtQ1FCdk5zYUl3RmlRWkFSSktXZmZSQ3ZsM0NxTGRralArODNPTkRpNFQ4eVpEdko4VW8xcmZDbW4Ka3lNUUQ0MDk3TDFtdDFDdFJudTA1aWZUYzVPNGplMUF0RXpIZHpWUlZVQTRPTWdRNU9uRzlpQkt2L0pFVmIwRQpzcEJmaVF0cEJ6VWUzZHlkaHhMNU9GQzEwaGlSSXZvTkZvVjU4TGNWb0hSc01ReVJxaHYwZHczWmJtem01S2J0ClAxRFVaVHdwMXJLMzVQSWVkT0xoWjBFbms4bE9NWElGL0wxV3BuNGlxdXZFMk1ZcjhDbHlmcmp4UTBwWFRsQ28KcHVsUVhvdE5EQVJhQzl0VmJXKzVMS1Bhb3ZPVjQvL0NxU2hYVzhiSwotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+      service:
+        name: odigos-instrumentor
+        namespace: odigos-system
+        path: /mutate-odigos-io-v1alpha1-source
+        port: 9443
+    rules:
+      - operations:
+          - CREATE
+          - UPDATE
+        apiGroups: ["odigos.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["sources"]
+        scope: Namespaced
+    failurePolicy: Ignore
+    reinvocationPolicy: IfNeeded
+    sideEffects: None
+    timeoutSeconds: 10
+    admissionReviewVersions: ["v1"]
+---
+# Source: odigos/templates/instrumentor/webhooks.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: source-validating-webhook-configuration
+  labels:
+    app.kubernetes.io/name: source-validating-webhook
+    app.kubernetes.io/instance: source-validating-webhook-configuration
+    app.kubernetes.io/component: webhook
+    app.kubernetes.io/created-by: instrumentor
+    app.kubernetes.io/part-of: odigos
+  annotations:
+    cert-manager.io/inject-ca-from: odigos-system/serving-cert
+webhooks:
+  - name: source-validating-webhook.odigos.io
+    clientConfig:
+      caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURHakNDQWdLZ0F3SUJBZ0lSQUxycHMyc0xjVXA4ZFZXT0E2V3l5dGN3RFFZSktvWklodmNOQVFFTEJRQXcKRnpFVk1CTUdBMVVFQXhNTWMyVnlkbWx1WnkxalpYSjBNQjRYRFRJMU1ERXlOekUyTWpNMU1Gb1hEVEkyTURFeQpOekUyTWpNMU1Gb3dGekVWTUJNR0ExVUVBeE1NYzJWeWRtbHVaeTFqWlhKME1JSUJJakFOQmdrcWhraUc5dzBCCkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQXROWVlpc1BmTmtZeXlITnlJRWxzMWk5elRab21UcFY2VnhaN3hoQmcKOXpMck10ZzN5WVZSb3lmUmZWTmlzS0FsLzU5YVdiS0pLL2ZiK1ZWWUFiSXAwdTVLQWM3UVhtQnEyenZiVko0MgpoQ083Mm1paTNCUERDK3pBeW9BYXBYNVpLcmMvaFNDSDFMYVVHVnNLV2MzUnpUdWVveXpsam82TitMdnBTTWtvCkNWUFduT2Nia0ZiQXhvdjh6eWxpQlFTNHYzbjRMNk9RbHg3YmkxQ1k0RkJuQUxyRU1jV0NibEpGZVF1amNiN3EKSmF1QW9NMUhNeEJ5QzV6SVZEUFc2Nng3UUlTL2d4SVorcmtIbUdwTlhndjJiaHVXV2tPUkJOQ2tjMzBiSnNvTwpKU3N3UW42YW4zVGNLZi84WkZTRm01VjUzM1pzS2NLNElYV1Y1eUdJa25mMDl3SURBUUFCbzJFd1h6QU9CZ05WCkhROEJBZjhFQkFNQ0FxUXdIUVlEVlIwbEJCWXdGQVlJS3dZQkJRVUhBd0VHQ0NzR0FRVUZCd01DTUE4R0ExVWQKRXdFQi93UUZNQU1CQWY4d0hRWURWUjBPQkJZRUZGY0J6K09iWWZBMlBHWm1GSHJzOU1XaDVQeU9NQTBHQ1NxRwpTSWIzRFFFQkN3VUFBNElCQVFDUUE2NHZISmN3aGlobmRYTVpDWTMrNnBPRmx2ZmY2QW15ekMxRTZFVGlWUkYzCldqR0phK0JtQ1FCdk5zYUl3RmlRWkFSSktXZmZSQ3ZsM0NxTGRralArODNPTkRpNFQ4eVpEdko4VW8xcmZDbW4Ka3lNUUQ0MDk3TDFtdDFDdFJudTA1aWZUYzVPNGplMUF0RXpIZHpWUlZVQTRPTWdRNU9uRzlpQkt2L0pFVmIwRQpzcEJmaVF0cEJ6VWUzZHlkaHhMNU9GQzEwaGlSSXZvTkZvVjU4TGNWb0hSc01ReVJxaHYwZHczWmJtem01S2J0ClAxRFVaVHdwMXJLMzVQSWVkT0xoWjBFbms4bE9NWElGL0wxV3BuNGlxdXZFMk1ZcjhDbHlmcmp4UTBwWFRsQ28KcHVsUVhvdE5EQVJhQzl0VmJXKzVMS1Bhb3ZPVjQvL0NxU2hYVzhiSwotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+      service:
+        name: odigos-instrumentor
+        namespace: odigos-system
+        path: /validate-odigos-io-v1alpha1-source
+        port: 9443
+    rules:
+      - operations:
+          - CREATE
+          - UPDATE
+        apiGroups: ["odigos.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["sources"]
+        scope: Namespaced
+    failurePolicy: Ignore
+    sideEffects: None
+    timeoutSeconds: 10
+    admissionReviewVersions: ["v1"]
+---
+# Source: odigos/templates/instrumentor/webhooks.yaml
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/tls
+metadata:
+  name: webhook-cert
+  namespace: odigos-system
+  labels:
+    app.kubernetes.io/name: instrumentor-cert
+    app.kubernetes.io/instance: instrumentor-cert
+    app.kubernetes.io/component: certificate
+    app.kubernetes.io/created-by: instrumentor
+    app.kubernetes.io/part-of: odigos
+  annotations:
+    "helm.sh/hook": "pre-install,pre-upgrade"
+    "helm.sh/hook-delete-policy": "before-hook-creation"
+data:
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURZRENDQWtpZ0F3SUJBZ0lRR1pSTCtKei83ellBZEpSZzhpY29sVEFOQmdrcWhraUc5dzBCQVFzRkFEQVgKTVJVd0V3WURWUVFERXd4elpYSjJhVzVuTFdObGNuUXdIaGNOTWpVd01USTNNVFl5TXpVeFdoY05Nall3TVRJMwpNVFl5TXpVeFdqQVhNUlV3RXdZRFZRUURFd3h6WlhKMmFXNW5MV05sY25Rd2dnRWlNQTBHQ1NxR1NJYjNEUUVCCkFRVUFBNElCRHdBd2dnRUtBb0lCQVFDOG9TL2x6V3ZHZ1YxUHgrc1FuWG9hUDJhaTFqWDhycmpMRDhTdmlFdnEKa0lPdnMzOHJLd2YwMk84azZ6SG1WVzU5aXR1M3lxeldaOG5TYndRM0toYmlyOWljTFViOTZpNlFPNHhBVkFwaQpqY1dYUTE0WStKYkY2a2gxVGtBUkUvSndLWkNRZ1JURGtwQkdFWU1KbEEyMFlOU3J2S3M3OVRURURCaVoxTFBOCndnNlVVK2N1SHhZVHNRREh4S2lqQnVMNzJCdktaZVdYSkxodGQ3UUZ0TVMzaHh0ZysydFFEMWY1WXo1OC8vZ1kKbTI3eENFUWpjUHVLVWpZSkJvMFk2M1lWeWlnejNTaWlXcWRxRDRDNnRCWGpZMmFvTUgvL2dLUlU2T3VkV2M5ZAoxdkhWbWY5bDZKQkpURlNvUnhZSFV3VGhhK3BNeStoeVpsOERVbFd6eHE0TEFnTUJBQUdqZ2Fjd2dhUXdEZ1lEClZSMFBBUUgvQkFRREFnV2dNQjBHQTFVZEpRUVdNQlFHQ0NzR0FRVUZCd01CQmdnckJnRUZCUWNEQWpBTUJnTlYKSFJNQkFmOEVBakFBTUdVR0ExVWRFUVJlTUZ5Q0pXOWthV2R2Y3kxcGJuTjBjblZ0Wlc1MGIzSXViMlJwWjI5egpMWE41YzNSbGJTNXpkbU9DTTI5a2FXZHZjeTFwYm5OMGNuVnRaVzUwYjNJdWIyUnBaMjl6TFhONWMzUmxiUzV6CmRtTXVZMngxYzNSbGNpNXNiMk5oYkRBTkJna3Foa2lHOXcwQkFRc0ZBQU9DQVFFQUw1R2dxamIzWkpCckVxeFEKL25sbGthQVlXdktMMlJYZnZDamhHOFlmd1Ura01FN3dFSnlxb2ZHdWMvU3l5UFNvTW0wbzMxUE9zNEJDQStxTgowSG9BZk51Y0dyRjBvM0JWeGNLL3JxNHYyWEhoQSs3TjZzT21CQ2JubzZ5NlZWVyswRmlsVmpuWTV6QmIzRVRhClAzUXh4WGowa1kyRHltbkQyKytDSkVCclNEc21yYWJjejkzMlV2VnFLSnhNV0szZ1BtUTZtK2wzNEs1STN5U3cKVWRNQnRsQkNoZXpKc3JtYlZYaDljVUVNUTc0T1YwWk1DMTdxZTE4WXVONjVzM0xBUWtwOXF2U2UySmNxZm5NeQo2VnZ1NFg2eUtWaFNxVVBKY3pNZEc2cmNvM2xvd015dFQvVk5pS0FZYUtEKzNCanR1ditjRHFkU0JDcnN3MUNZCldaZjhWdz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+  tls.key: LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFb3dJQkFBS0NBUUVBdktFdjVjMXJ4b0ZkVDhmckVKMTZHajltb3RZMS9LNjR5dy9FcjRoTDZwQ0RyN04vCkt5c0g5Tmp2Sk9zeDVsVnVmWXJidDhxczFtZkowbThFTnlvVzRxL1luQzFHL2VvdWtEdU1RRlFLWW8zRmwwTmUKR1BpV3hlcElkVTVBRVJQeWNDbVFrSUVVdzVLUVJoR0RDWlFOdEdEVXE3eXJPL1UweEF3WW1kU3p6Y0lPbEZQbgpMaDhXRTdFQXg4U29vd2JpKzlnYnltWGxseVM0YlhlMEJiVEV0NGNiWVB0clVBOVgrV00rZlAvNEdKdHU4UWhFCkkzRDdpbEkyQ1FhTkdPdDJGY29vTTkwb29scW5hZytBdXJRVjQyTm1xREIvLzRDa1ZPanJuVm5QWGRieDFabi8KWmVpUVNVeFVxRWNXQjFNRTRXdnFUTXZvY21aZkExSlZzOGF1Q3dJREFRQUJBb0lCQUVHZUdObHFJa25GaXI1TQpIMXVDVEkyQTdLVk11eThSWUx0UzJ1cnRFT3VpSmcwaTllUUFiaDRnc09BNDZQemxUekJnODVuMTZUWVVtTUtaClYvQVF0akZaVnBMTnRWcHk4b3UrQzBYOWRqZGVkaFB1blhjMlVzeTZlVVpGV0VnWWxrZXFUZDNXNlhBM05mVUoKOW5tSWhWUHdNMHNpc0xhRTBEdzZzUHdpWUFIOUhNSFNoNlloQlJ6ajd1ejVYQ0VITUp1T0Q2ZGRmYzhzSlpmOApsZkdaQmJWOElXcHRWanRwQWVWaG1sTXRROGpJYmtBUFVDbEZLck9NbmpZT1ZCdm9BN0FMakc5NjZ5R0I3Nis1CjlWOFF0T3hXMTg4ei9TNnlxN3VsenNLb2lRc085YkNJdGFINVU3NWhSbnB5Z3NrVHErdWVkQlZ0UThQbGZTSmcKSnJuL1JMRUNnWUVBNFZDazFuQW9LQW41ZnBEVkdXVWYrZ3h5dkF6S0RUTGNZc1hqK2dFMG5tU0VJUFM0TUxVQwo4U1BnTll0dHBmcmtHVVVrTkxneStKcmJhTGpwcWYwN1NGbVpxdEczZmQxVlZHWmp5dFJ1dmVNU05wbmgvbDF4CnhURS9OVmc2aE14b1ZpcytXRVY4YXhMNzBwanNvcmd2ZnY2Vm5sakpydkRzMnlKM1hHcUc4V2NDZ1lFQTFsR00KYXlEb1VYQkZjaXRZSExONlZEdE1BVlZNNmc4TjlSVk9MTFdHNnRsNFcwMEprbEdTOUw0U095eDJHa01oQXN1bQp5c0lISllrS1R6OTgzd3BrNFpRNCtUcHl6Y2JxOGU2RTZiNW9KMm1nTjFUd2owMWtoYVBocG90S0RneE00OW44CnVIVG1LZGVCNGtCTkIzS00wV0F4cnB6c1o0Z25NZEZqeHJWenc3MENnWUJsZWJpRGk0ZktZSk9wV1BsZ3NwYXcKT3lNQlpwRXBXSnJCTVhiM2hjdDQrclEzVTRBUkQ3VC9mYlRnNkthOWRqMTgxQkwyVzI4NVlDVXBDUDdUdkdVUwp0S2Zzc3Y3OUJNNEZjUWZJdGR3YVVVWkdxUStMUy9LTmFSeWFuZDNkS1dKa1RKMkxpOS81S1ZlWkJaNnR1bDVKCng4Y0N4ZUl2ay9wWXh6RVN3amQ4U1FLQmdRQ2hoeURmOVJOam5jeVplZFdVL0Noc3A2eG5MTlVsYTJkSG1tRXIKRFQyOGIxOW80SzBnSEY4NEdyRSs3QW12VFh6cDBIZkxSV1dCZ3NIRWJNTStqMlR0SjN1eFM3NFBIYWNoNUhWRQpmbitkaE54K0Y0U2ZYT013WGczS0toME1iWFRlSGdOOU9vM21aMGk3TDE5ZkI1VGVrVE9ndVNEci94QWJXZ2RyClVvTUh1UUtCZ0ZHU0gvVFdUbzRZdTVhd2ZRYWRtUzR1MGVETTMxK2RTeXZLVlFyallOamJaNWI4MUVRMnVQUG8KZ3J3UUFMOHpVaWdVR3RscG9RRDl0WnV0TGNJNmVQQ2lnZHRqY1hEMC9qSkhHV1lISDJGQUZseWpSYTRNODNLQgpBelRHZGFxYms1STEyc3IwYWRneFB3MjBUQm8yMXVrZ2xLQTVyMjFZRXZZNXBFM3NMQVozCi0tLS0tRU5EIFJTQSBQUklWQVRFIEtFWS0tLS0tCg==
+---
+# Source: odigos/templates/odigos-config-cm.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: odigos-config
+  namespace: 'odigos-system'
+  annotations:
+    'helm.sh/hook': post-install,post-upgrade
+  labels:
+    odigos.io/config: '1'
+    odigos.io/system-object: 'true'
+data:
+  config.yaml: |
+    configVersion: 1
+    autoscalerImage: keyval/odigos-autoscaler
+    uiMode: normal
+    collectorGateway:
+      MinReplicas: 1
+      MaxReplicas: 10
+      requestMemoryMiB: 500
+      limitMemoryMiB: 625
+      requestCPUm: 500
+      limitCPUm: 1000
+      memoryLimiterLimitMiB: 450
+      memoryLimiterSpikeLimitMiB: 90
+      goMemLimitMiB: 340
+    collectorNode:
+      collectorOwnMetricsPort: 55682
+      requestMemoryMiB: 250
+      limitMemoryMiB: 500
+      requestCPUm: 250
+      limitCPUm: 500
+      memoryLimiterLimitMiB: 450
+      memoryLimiterSpikeLimitMiB: 55
+      goMemLimitMiB: 360
+    instrumentorImage: keyval/odigos-instrumentor
+    telemetryEnabled: true
+    openshiftEnabled: false
+    psp: false
+    ignoredNamespaces:
+        null
+    ignoredContainers:
+        null
+    defaultSDKs:
+      dotnet:
+        sdkTier: community
+        sdkType: native
+      go:
+        sdkTier: community
+        sdkType: ebpf
+      java:
+        sdkTier: community
+        sdkType: native
+      javascript:
+        sdkTier: community
+        sdkType: native
+      python:
+        sdkTier: community
+        sdkType: native
+---
+# Source: odigos/templates/cleanup/cleanup-job.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cleanup-job
+  namespace: odigos-system
+  annotations:
+    "helm.sh/hook": pre-delete
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  ttlSecondsAfterFinished: 30
+  activeDeadlineSeconds: 240
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: cleanup-sa
+      containers:
+      - name: cleanup
+        image: "keyval/odigos-cli:v0.0.0"
+        args: ["uninstall", "--yes"]
+      restartPolicy: Never

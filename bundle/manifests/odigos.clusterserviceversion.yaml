@@ -4,7 +4,7 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
-    createdAt: "2025-01-20T22:39:26Z"
+    createdAt: "2025-01-27T16:23:51Z"
     operators.operatorframework.io/builder: operator-sdk-v1.39.1
     operators.operatorframework.io/project_layout: unknown
   name: odigos.v0.0.0
@@ -202,6 +202,14 @@ spec:
           - odigos.io
           resources:
           - instrumentationconfigs
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - sources
           verbs:
           - get
           - list
@@ -956,11 +964,13 @@ spec:
           - ""
           resourceNames:
           - effective-config
+          - odigos-deployment
           resources:
           - configmaps
           verbs:
           - patch
           - create
+          - update
         - apiGroups:
           - odigos.io
           resources:
@@ -999,6 +1009,14 @@ spec:
           - patch
           - delete
           - create
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - get
+          - list
+          - watch
         serviceAccountName: odigos-scheduler
       - rules:
         - apiGroups:
