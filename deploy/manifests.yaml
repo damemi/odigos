@@ -3638,6 +3638,20 @@ roleRef:
   name: odiglet
   apiGroup: rbac.authorization.k8s.io
 ---
+# Source: odigos/templates/odiglet/clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system:openshift:scc:anyuid:odigos-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:openshift:scc:anyuid
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: system:serviceaccounts:odigos-system
+---
 # Source: odigos/templates/scheduler/clusterrolebinding.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -4191,6 +4205,24 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
+  name: system:openshift:scc:privileged
+  namespace: odigos-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:openshift:scc:privileged
+subjects:
+  - kind: ServiceAccount
+    name: odiglet
+    namespace: odigos-system
+  - kind: ServiceAccount
+    name: odigos-data-collection
+    namespace: odigos-system
+---
+# Source: odigos/templates/odiglet/rolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
   name: odiglet
   namespace: odigos-system
 roleRef:
@@ -4339,7 +4371,12 @@ spec:
           volumeMounts:
             - name: run-dir
               mountPath: /run
-            
+            - name: host
+              mountPath: /host
+              readOnly: true
+            - name: selinux
+              mountPath: /host/etc/selinux
+              mountPropagation: Bidirectional
             - name: device-plugins-dir
               mountPath: /var/lib/kubelet/device-plugins
             - name: pod-resources
@@ -4358,7 +4395,12 @@ spec:
         - name: run-dir
           hostPath:
             path: /run
-        
+        - name: host
+          hostPath:
+            path: /
+        - name: selinux
+          hostPath:
+            path: /etc/selinux
         - name: pod-resources
           hostPath:
             path: /var/lib/kubelet/pod-resources
@@ -4797,7 +4839,7 @@ data:
       goMemLimitMiB: 360
     instrumentorImage: keyval/odigos-instrumentor
     telemetryEnabled: true
-    openshiftEnabled: false
+    openshiftEnabled: true
     psp: false
     ignoredNamespaces:
         null

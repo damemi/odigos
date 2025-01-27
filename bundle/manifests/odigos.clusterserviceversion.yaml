@@ -6,7 +6,7 @@ metadata:
     capabilities: Basic Install
     categories: Logging & Tracing
     containerImage: docker.io/keyval/odigos-odiglet:v1.0.143
-    createdAt: "2025-01-27T18:12:11Z"
+    createdAt: "2025-01-27T18:20:22Z"
     description: Odigos enables automatic distributed tracing with OpenTelemetry and
       eBPF.
     features.operators.openshift.io/disconnected: "false"

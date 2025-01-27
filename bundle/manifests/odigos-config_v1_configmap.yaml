@@ -25,7 +25,7 @@ data:
       goMemLimitMiB: 360
     instrumentorImage: keyval/odigos-instrumentor
     telemetryEnabled: true
-    openshiftEnabled: false
+    openshiftEnabled: true
     psp: false
     ignoredNamespaces:
         null
