@@ -163,6 +163,9 @@ func (r *OdigosReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		ImagePrefix:               odigos.Spec.ImagePrefix,
 		Profiles:                  odigos.Spec.Profiles,
 		UiMode:                    common.UiMode(odigos.Spec.UIMode),
+
+		AutoscalerImage:   "keyval/odigos-autoscaler",
+		InstrumentorImage: "keyval/odigos-instrumentor",
 	}
 
 	logger.Info("Installing Odigos version " + odigos.Spec.Version + " in namespace " + ns)
