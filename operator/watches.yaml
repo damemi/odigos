@@ -1,0 +1,6 @@
+# Use the 'create api' subcommand to add watches to this file.
+- group: operator.odigos.io
+  version: v1alpha1
+  kind: Odigos
+  chart: helm-charts/odigos
+# +kubebuilder:scaffold:watch

@@ -67,6 +67,10 @@ build-image/%:
 	--build-arg SUMMARY="$(SUMMARY)" \
 	--build-arg DESCRIPTION="$(DESCRIPTION)"
 
+.PHONY: build-operator
+build-operator:
+	$(MAKE) build-image/operator DOCKERFILE=operator/$(DOCKERFILE) SUMMARY="Odigos Operator" DESCRIPTION="Kubernetes Operator for Odigos manages installation in cluster." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
 .PHONY: build-odiglet
 build-odiglet:
 	$(MAKE) build-image/odiglet DOCKERFILE=odiglet/$(DOCKERFILE) SUMMARY="Odiglet for Odigos" DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)

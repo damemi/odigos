@@ -1,0 +1,83 @@
+apiVersion: operator.odigos.io/v1alpha1
+kind: Odigos
+metadata:
+  name: odigos-sample
+spec:
+  # Default values copied from <project_dir>/helm-charts/odigos/values.yaml
+  autoscaler:
+    affinity: {}
+    image:
+      repository: keyval/odigos-autoscaler
+    nodeSelector:
+      kubernetes.io/os: linux
+    tolerations: []
+  cli:
+    image:
+      repository: keyval/odigos-cli
+  collectorGateway:
+    goMemLimitMiB: 340
+    limitCPUm: 1000
+    limitMemoryMiB: 625
+    maxReplicas: 10
+    memoryLimiterLimitMiB: 450
+    memoryLimiterSpikeLimitMiB: 90
+    minReplicas: 1
+    requestCPUm: 500
+    requestMemoryMiB: 500
+  collectorNode:
+    collectorOwnMetricsPort: 55682
+    goMemLimitMiB: 360
+    limitCPUm: 500
+    limitMemoryMiB: 500
+    memoryLimiterLimitMiB: 450
+    memoryLimiterSpikeLimitMiB: 55
+    requestCPUm: 250
+    requestMemoryMiB: 250
+  gke:
+    enabled: false
+  ignoredContainers: null
+  ignoredNamespaces: null
+  image:
+    tag: ""
+  imagePullSecrets: []
+  instrumentor:
+    affinity: {}
+    deleteLangDetectionPods: true
+    image:
+      repository: keyval/odigos-instrumentor
+    nodeSelector:
+      kubernetes.io/os: linux
+    skipWebhookIssuerCreation: false
+    tolerations: []
+  odiglet:
+    affinity: {}
+    image:
+      enterpriseRepository: keyval/odigos-enterprise-odiglet
+      repository: keyval/odigos-odiglet
+    nodeSelector:
+      kubernetes.io/os: linux
+    tolerations:
+    - operator: Exists
+  openshift:
+    enabled: false
+  psp:
+    enabled: false
+  scheduler:
+    affinity: {}
+    image:
+      repository: keyval/odigos-scheduler
+    nodeSelector:
+      kubernetes.io/os: linux
+    tolerations: []
+  telemetry:
+    enabled: true
+  ui:
+    affinity: {}
+    image:
+      repository: keyval/odigos-ui
+    nodeSelector:
+      kubernetes.io/os: linux
+    tolerations: []
+    uiMode: normal
+  
+  
