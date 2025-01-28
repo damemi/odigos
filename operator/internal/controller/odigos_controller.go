@@ -21,10 +21,8 @@ import (
 	"errors"
 	"fmt"
 
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -50,22 +48,25 @@ type OdigosReconciler struct {
 // +kubebuilder:rbac:groups=operator.odigos.io,resources=odigos,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=operator.odigos.io,resources=odigos/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=operator.odigos.io,resources=odigos/finalizers,verbs=update
+// +kubebuilder:rbac:groups=actions.odigos.io,resources=*,verbs=get;list;watch;create;patch;update;delete
+// +kubebuilder:rbac:groups=actions.odigos.io,resources=*/status,verbs=get;patch;update
 // +kubebuilder:rbac:groups=odigos.io,resources=collectorsgroups,verbs=get;list;watch;create;patch;update;delete
-// +kubebuilder:rbac:groups=odigos.io,resources=collectorsgroups/status,verbs=get;list;watch
-// +kubebuilder:rbac:groups=odigos.io,resources=destinations,verbs=get;list;watch
-// +kubebuilder:rbac:groups=odigos.io,resources=instrumentationrules,verbs=get;list;watch;patch;delete;create
-// +kubebuilder:rbac:groups=odigos.io,resources=instrumentationinstances,verbs=get;list;watch;patch;delete;create
+// +kubebuilder:rbac:groups=odigos.io,resources=collectorsgroups/status,verbs=get;list;watch;patch;update
+// +kubebuilder:rbac:groups=odigos.io,resources=destinations,verbs=get;list;watch;create;patch;update;delete
+// +kubebuilder:rbac:groups=odigos.io,resources=destinations/status,verbs=get;patch;update
+// +kubebuilder:rbac:groups=odigos.io,resources=instrumentationrules,verbs=get;list;watch;patch;delete;create;update
+// +kubebuilder:rbac:groups=odigos.io,resources=instrumentationinstances,verbs=get;list;watch;patch;delete;create;update
 // +kubebuilder:rbac:groups=odigos.io,resources=instrumentationinstances/status,verbs=get;patch;update
 // +kubebuilder:rbac:groups=odigos.io,resources=instrumentationconfigs,verbs=create;delete;get;list;patch;update;watch
 // +kubebuilder:rbac:groups=odigos.io,resources=instrumentationconfigs/status,verbs=get;watch;update;patch
 // +kubebuilder:rbac:groups=odigos.io,resources=instrumentedapplications,verbs=delete;get;list;watch
 // +kubebuilder:rbac:groups=odigos.io,resources=sources,verbs=create;delete;get;list;patch;update;watch
 // +kubebuilder:rbac:groups=odigos.io,resources=sources/finalizers,verbs=update
-// +kubebuilder:rbac:groups=odigos.io,resources=processors,verbs=get;list;watch;patch;delete;create
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=list;watch;create;patch;get
+// +kubebuilder:rbac:groups=odigos.io,resources=processors,verbs=get;list;watch;patch;delete;create;update
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=list;watch;create;patch;get;update
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;delete;patch
-// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete;deletecollection
 // +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=create;get;list;watch;patch
 // +kubebuilder:rbac:groups="",resources=nodes/proxy,verbs=get;list
 // +kubebuilder:rbac:groups="",resources=nodes/stats,verbs=get;list
@@ -73,14 +74,15 @@ type OdigosReconciler struct {
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=pods/status,verbs=get
 // +kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;get
-// +kubebuilder:rbac:groups=apps,resources=deployments;replicasets;daemonsets;statefulsets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;get;patch
+// +kubebuilder:rbac:groups=apps,resources=deployments;replicasets;daemonsets;statefulsets,verbs=get;list;watch;create;update;patch;delete;deletecollection
 // +kubebuilder:rbac:groups=apps,resources=deployments/status;daemonsets/status;statefulsets/status,verbs=get
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;clusterrolebindings;roles;rolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=use
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=admissionregistration.k8s.io,resources=mutatingwebhookconfigurations;validatingwebhookconfigurations,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=autoscaling,resources=horizontalpodautoscalers,verbs=create;patch;update;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -97,18 +99,20 @@ func (r *OdigosReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	odigos := &operatorv1alpha1.Odigos{}
 	err := r.Client.Get(ctx, req.NamespacedName, odigos)
 	if err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	ns := odigos.GetNamespace()
 	// Check if Odigos already installed
-	odigosCm := &corev1.ConfigMap{}
-	err = r.Client.Get(ctx, types.NamespacedName{Name: k8sconsts.OdigosDeploymentConfigMapName, Namespace: ns}, odigosCm)
-	if err != nil && !apierrors.IsNotFound(err) {
+	odigosList := &operatorv1alpha1.OdigosList{}
+	err = r.Client.List(ctx, odigosList, client.InNamespace(ns))
+	if err != nil {
 		return ctrl.Result{}, err
 	}
-	if err == nil {
-		return ctrl.Result{Requeue: false}, errors.New("odigos is already installed in namespace")
+	for _, o := range odigosList.Items {
+		if o.GetName() != odigos.GetName() {
+			return ctrl.Result{Requeue: false}, errors.New("odigos is already installed in namespace " + ns)
+		}
 	}
 
 	// Check if the cluster meets the minimum requirements
@@ -124,7 +128,7 @@ func (r *OdigosReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		if k8sVersion.LessThan(k8sconsts.MinK8SVersionForInstallation) {
 			return ctrl.Result{Requeue: false}, errors.New("odigos requires Kubernetes version " + k8sconsts.MinK8SVersionForInstallation.String() + " but found " + k8sVersion.String())
 		}
-		fmt.Printf("Detected cluster: Kubernetes version: %s\n", k8sVersion.String())
+		logger.Info(fmt.Sprintf("Detected cluster: Kubernetes version: %s\n", k8sVersion.String()))
 	}
 
 	var odigosProToken string
@@ -163,11 +167,20 @@ func (r *OdigosReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	logger.Info("Installing Odigos version " + odigos.Spec.Version + " in namespace " + ns)
 
+	ownerReference := metav1.OwnerReference{
+		APIVersion: odigos.APIVersion,
+		Kind:       odigos.Kind,
+		Name:       odigos.GetName(),
+		UID:        odigos.GetUID(),
+	}
+
 	resourceManagers := resources.CreateResourceManagers(r.KubeClient, ns, odigosTier, &odigosProToken, &odigosConfig, odigos.Spec.Version)
-	err = resources.ApplyResourceManagers(ctx, r.KubeClient, resourceManagers, "Creating")
+	err = resources.ApplyResourceManagers(ctx, r.KubeClient, resourceManagers, "Creating", ownerReference)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
+	logger.Info("Odigos installed")
 
 	return ctrl.Result{}, nil
 }

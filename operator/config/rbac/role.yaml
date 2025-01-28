@@ -9,7 +9,6 @@ rules:
   resources:
   - configmaps
   - endpoints
-  - services
   verbs:
   - create
   - delete
@@ -29,7 +28,16 @@ rules:
   - ""
   resources:
   - namespaces
+  verbs:
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - nodes
+  - pods
   verbs:
   - get
   - list
@@ -39,14 +47,29 @@ rules:
   resources:
   - nodes/proxy
   - nodes/stats
-  - pods
   verbs:
   - get
   - list
 - apiGroups:
   - ""
   resources:
+  - pods/status
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
   - secrets
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - serviceaccounts
   verbs:
   - create
@@ -54,6 +77,39 @@ rules:
   - list
   - patch
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - deletecollection
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - actions.odigos.io
+  resources:
+  - '*'
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - actions.odigos.io
+  resources:
+  - '*/status'
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - admissionregistration.k8s.io
   resources:
@@ -89,11 +145,29 @@ rules:
   verbs:
   - create
   - delete
+  - deletecollection
   - get
   - list
   - patch
   - update
   - watch
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets/status
+  - deployments/status
+  - statefulsets/status
+  verbs:
+  - get
+- apiGroups:
+  - autoscaling
+  resources:
+  - horizontalpodautoscalers
+  verbs:
+  - create
+  - delete
+  - patch
+  - update
 - apiGroups:
   - coordination.k8s.io
   resources:
@@ -110,7 +184,11 @@ rules:
   - odigos.io
   resources:
   - collectorsgroups
+  - destinations
   - instrumentationconfigs
+  - instrumentationinstances
+  - instrumentationrules
+  - processors
   - sources
   verbs:
   - create
@@ -124,11 +202,21 @@ rules:
   - odigos.io
   resources:
   - collectorsgroups/status
-  - destinations
   verbs:
   - get
   - list
+  - patch
+  - update
   - watch
+- apiGroups:
+  - odigos.io
+  resources:
+  - destinations/status
+  - instrumentationinstances/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - odigos.io
   resources:
@@ -137,18 +225,6 @@ rules:
   - get
   - patch
   - update
-  - watch
-- apiGroups:
-  - odigos.io
-  resources:
-  - instrumentationrules
-  - processors
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
   - watch
 - apiGroups:
   - odigos.io

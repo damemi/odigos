@@ -20,7 +20,7 @@ metadata:
     capabilities: Basic Install
     categories: Logging & Tracing
     containerImage: docker.io/keyval/odigos-odiglet:v1.0.143
-    createdAt: "2025-01-27T22:14:08Z"
+    createdAt: "2025-01-28T20:17:57Z"
     description: Odigos enables automatic distributed tracing with OpenTelemetry and
       eBPF.
     features.operators.openshift.io/disconnected: "false"
@@ -71,7 +71,6 @@ spec:
           resources:
           - configmaps
           - endpoints
-          - services
           verbs:
           - create
           - delete
@@ -91,7 +90,16 @@ spec:
           - ""
           resources:
           - namespaces
+          verbs:
+          - get
+          - list
+          - patch
+          - watch
+        - apiGroups:
+          - ""
+          resources:
           - nodes
+          - pods
           verbs:
           - get
           - list
@@ -101,14 +109,29 @@ spec:
           resources:
           - nodes/proxy
           - nodes/stats
-          - pods
           verbs:
           - get
           - list
         - apiGroups:
           - ""
           resources:
+          - pods/status
+          verbs:
+          - get
+        - apiGroups:
+          - ""
+          resources:
           - secrets
+          verbs:
+          - create
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
           - serviceaccounts
           verbs:
           - create
@@ -116,6 +139,39 @@ spec:
           - list
           - patch
           - watch
+        - apiGroups:
+          - ""
+          resources:
+          - services
+          verbs:
+          - create
+          - delete
+          - deletecollection
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - actions.odigos.io
+          resources:
+          - '*'
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - actions.odigos.io
+          resources:
+          - '*/status'
+          verbs:
+          - get
+          - patch
+          - update
         - apiGroups:
           - admissionregistration.k8s.io
           resources:
@@ -151,11 +207,29 @@ spec:
           verbs:
           - create
           - delete
+          - deletecollection
           - get
           - list
           - patch
           - update
           - watch
+        - apiGroups:
+          - apps
+          resources:
+          - daemonsets/status
+          - deployments/status
+          - statefulsets/status
+          verbs:
+          - get
+        - apiGroups:
+          - autoscaling
+          resources:
+          - horizontalpodautoscalers
+          verbs:
+          - create
+          - delete
+          - patch
+          - update
         - apiGroups:
           - coordination.k8s.io
           resources:
@@ -172,7 +246,11 @@ spec:
           - odigos.io
           resources:
           - collectorsgroups
+          - destinations
           - instrumentationconfigs
+          - instrumentationinstances
+          - instrumentationrules
+          - processors
           - sources
           verbs:
           - create
@@ -186,11 +264,21 @@ spec:
           - odigos.io
           resources:
           - collectorsgroups/status
-          - destinations
           verbs:
           - get
           - list
+          - patch
+          - update
           - watch
+        - apiGroups:
+          - odigos.io
+          resources:
+          - destinations/status
+          - instrumentationinstances/status
+          verbs:
+          - get
+          - patch
+          - update
         - apiGroups:
           - odigos.io
           resources:
@@ -199,18 +287,6 @@ spec:
           - get
           - patch
           - update
-          - watch
-        - apiGroups:
-          - odigos.io
-          resources:
-          - instrumentationrules
-          - processors
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
           - watch
         - apiGroups:
           - odigos.io
