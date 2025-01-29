@@ -5,6 +5,7 @@ metadata:
     control-plane: controller-manager
     app.kubernetes.io/name: odigos-operator
     app.kubernetes.io/managed-by: kustomize
+    odigos.io/system-object: "true"
   name: system
 ---
 apiVersion: apps/v1
