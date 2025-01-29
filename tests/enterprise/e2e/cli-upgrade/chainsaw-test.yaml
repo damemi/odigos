@@ -90,10 +90,16 @@ spec:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/install-simple-demo.yaml
         - assert:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/simple-demo-installed.yaml
+    - name: Instrument Namespace
+      try:
+    # Using the deprecated way of instrumenting a namespace,
+    # after v1.0.144, use https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/instrument-default-ns.yaml
+        - script:
+            content: kubectl label namespace default odigos-instrumentation=enabled
+      # - apply:
+      #     file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/instrument-default-ns.yaml
     - name: Detect Languages
       try:
-        - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/instrument-default-ns.yaml
         - assert:
             timeout: 2m
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/simple-demo-runtime-detected.yaml
