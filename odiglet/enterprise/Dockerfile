@@ -29,7 +29,6 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     else \
         echo "x64" > /tmp/arch_suffix; \
     fi
-
 RUN ARCH_SUFFIX=$(cat /tmp/arch_suffix) && \
     wget https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/${DOTNET_OTEL_VERSION}/opentelemetry-dotnet-instrumentation-linux-glibc-${ARCH_SUFFIX}.zip && \
     unzip opentelemetry-dotnet-instrumentation-linux-glibc-${ARCH_SUFFIX}.zip && \
@@ -45,6 +44,12 @@ RUN ARCH_SUFFIX=$(cat /tmp/arch_suffix) && \
 RUN ARCH_SUFFIX=$(cat /tmp/arch_suffix) && \
     wget https://github.com/odigos-io/opentelemetry-dotnet-instrumentation/releases/download/${DOTNET_OTEL_VERSION}/OpenTelemetry.AutoInstrumentation.Native-${ARCH_SUFFIX}.so && \
     mv OpenTelemetry.AutoInstrumentation.Native-${ARCH_SUFFIX}.so linux-glibc-${ARCH_SUFFIX}/OpenTelemetry.AutoInstrumentation.Native.so
+
+
+WORKDIR /legacy-dotnet-instrumentation
+ARG LEGACY_DOTNET_OTEL_VERSION=v0.4.0-beta.1
+ADD https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/$LEGACY_DOTNET_OTEL_VERSION/opentelemetry-dotnet-instrumentation-linux-musl.zip .
+RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetry-dotnet-instrumentation-linux-musl.zip
 
 # Dtrace injector
 FROM keyval/javabuilder-base:v3.0 AS java-builder
@@ -101,6 +106,7 @@ COPY --from=nodejs-builder /nodejs-instrumentation/ebpf-nodejs-instrumentation/d
 
 # .NET
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
+COPY --from=dotnet-builder /legacy-dotnet-instrumentation /instrumentations/legacy-dotnet
 
 # Java eBPF
 COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injector/tracing_probes.so /instrumentations/java-ebpf/tracing_probes.so

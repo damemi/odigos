@@ -11,6 +11,11 @@ updates:
     schedule:
       day: sunday
       interval: weekly
+  - package-ecosystem: gomod
+    directory: /onprem-token-generator
+    schedule:
+      day: sunday
+      interval: weekly
   - package-ecosystem: pip
     directory: /odiglet/agents/python
     schedule:

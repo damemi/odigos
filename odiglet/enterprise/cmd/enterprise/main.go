@@ -97,7 +97,8 @@ func deviceInjectionCallbacks() instrumentation.OtelSdksLsf {
 			otelSdkEbpfEnterprise:  enterpriseinstrumentlang.EnterpriseNodeJS,
 		},
 		common.DotNetProgrammingLanguage: {
-			otelSdkNativeCommunity: communityinstrumentlang.DotNet,
+			otelSdkNativeCommunity:  communityinstrumentlang.DotNet,
+			otelSdkNativeEnterprise: enterpriseinstrumentlang.LegacyDotNet,
 		},
 		common.MySQLProgrammingLanguage: {
 			otelSdkEbpfEnterprise: enterpriseinstrumentlang.EnterpriseMySQL,
