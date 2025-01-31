@@ -1,16 +1,19 @@
 TAG ?= $(shell odigos version --cluster)
+# These are used to point to different Dockerfiles (such as Dockerfile.rhel) and add -ubi9 to RHEL based images.
+DOCKERFILE=Dockerfile
+IMG_SUFFIX=
 
 .PHONY: build-images
 build-images:
-	docker build -t keyval/odigos-enterprise-odiglet:$(TAG) . -f odiglet/Dockerfile --secret id=github_token,env=GITHUB_TOKEN --build-arg ODIGOS_VERSION=$(TAG)
+	docker build -t keyval/odigos-enterprise-odiglet$(IMG_SUFFIX):$(TAG) . -f odiglet/$(DOCKERFILE) --secret id=github_token,env=GITHUB_TOKEN --build-arg ODIGOS_VERSION=$(TAG) --build-arg SUMMARY="Odiglet for Odigos" --build-arg DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." --build-arg VERSION=$(TAG) --build-arg RELEASE=$(TAG)
 
 .PHONY: push-images
 push-images:
-	docker push keyval/odigos-enterprise-odiglet:$(TAG)
+	docker push keyval/odigos-enterprise-odiglet$(IMG_SUFFIX):$(TAG)
 
 .PHONY: load-to-kind
 load-to-kind:
-	kind load docker-image keyval/odigos-enterprise-odiglet:$(TAG)
+	kind load docker-image keyval/odigos-enterprise-odiglet$(IMG_SUFFIX):$(TAG)
 
 .PHONY: restart-odiglet
 restart-odiglet:
