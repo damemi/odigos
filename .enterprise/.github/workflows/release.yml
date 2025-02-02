@@ -55,7 +55,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: true
           tags: |
-            keyval/odigos-enterprise-odiglet${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}:${{ env.ODIGOS_TAG }}
+            keyval/odigos-enterprise-odiglet${{ matrix.dockerfile == 'odiglet/Dockerfile.rhel' && '-ubi9' || '' }}:${{ env.ODIGOS_TAG }}
           build-args: |
             ODIGOS_VERSION=${{ env.ODIGOS_TAG }}
             SUMMARY="Odiglet for Odigos"
