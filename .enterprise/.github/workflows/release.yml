@@ -48,12 +48,12 @@ jobs:
           push: true
           tags: |
             keyval/odigos-enterprise-odiglet${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}:${{ steps.vars.outputs.tag }}
-          build-args:
-            - ODIGOS_VERSION=${{ steps.vars.outputs.tag }}
-            - SUMMARY="Odiglet for Odigos"
-            - DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs."
-            - VERSION=${{ steps.vars.outputs.tag }}
-            - RELEASE=${{ steps.vars.outputs.tag }}
+          build-args: |
+            ODIGOS_VERSION=${{ steps.vars.outputs.tag }}
+            SUMMARY="Odiglet for Odigos"
+            DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs."
+            VERSION=${{ steps.vars.outputs.tag }}
+            RELEASE=${{ steps.vars.outputs.tag }}
           platforms: linux/amd64,linux/arm64
           secrets: |
             "github_token=${{ secrets.RELEASE_BOT_TOKEN }}"
