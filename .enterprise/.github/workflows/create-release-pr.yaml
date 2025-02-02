@@ -49,6 +49,7 @@ jobs:
         run: |
           git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
           go env -w GOPRIVATE=github.com/odigos-io/*
+          sed -i "s|replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v.*|replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api main|g" go.mod
           sed -i "s|replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v.*|replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common ${TAG}|g" go.mod
           sed -i "s|replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v.*|replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils ${TAG}|g" go.mod
           sed -i "s|replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v.*|replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery ${TAG}|g" go.mod
