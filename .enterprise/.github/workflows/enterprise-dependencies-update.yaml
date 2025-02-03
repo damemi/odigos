@@ -97,7 +97,18 @@ jobs:
 
       - name: Notify Slack
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"link":"${{ env.PR_LINK }}", "source_pr_link": ${{ github.event.client_payload.source_pr_url }}, "description": "PR created by: @${{ github.event.client_payload.pr_creator }} triggered a PR in Odigos enterprise by the dependencies syncer bot.\n\nApprove to continue." }'  ${{ secrets.SLACK_ENTERPRISE_SYNC_URL }}
+          if [[ -z "${{ secrets.SLACK_ENTERPRISE_SYNC_URL }}" ]]; then
+            echo "SLACK_ENTERPRISE_SYNC_URL is missing!"
+            exit 1
+          fi
+
+          curl -X POST -H 'Content-type: application/json' --data "$(jq -n \
+            --arg link "${{ env.PR_LINK }}" \
+            --arg source_pr_link "${{ github.event.client_payload.source_pr_url }}" \
+            --arg description "PR created by: @${{ github.event.client_payload.pr_creator }} triggered a PR in Odigos enterprise by the dependencies syncer bot.\n\nApprove to continue." \
+            '{link: $link, source_pr_link: $source_pr_link, description: $description}')" \
+            ${{ secrets.SLACK_ENTERPRISE_SYNC_URL }}
+
 
       - name: Notify Slack on Failure
         if: failure()
