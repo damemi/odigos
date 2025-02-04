@@ -105,7 +105,7 @@ jobs:
           curl -X POST -H 'Content-type: application/json' --data "$(jq -n \
             --arg link "${{ env.PR_LINK }}" \
             --arg source_pr_link "${{ github.event.client_payload.source_pr_url }}" \
-            --arg description "PR created by: @${{ github.event.client_payload.pr_creator }} triggered a PR in Odigos enterprise by the dependencies syncer bot.\n\nApprove to continue." \
+            --arg description "PR created by: @${{ github.event.client_payload.pr_creator }} triggered a PR in Odigos enterprise by the dependencies syncer bot. Approve to continue." \
             '{link: $link, source_pr_link: $source_pr_link, description: $description}')" \
             ${{ secrets.SLACK_ENTERPRISE_SYNC_URL }}
 
