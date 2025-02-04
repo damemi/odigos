@@ -3,8 +3,6 @@ package main
 import (
 	"os"
 
-	"github.com/odigos-io/odigos/odiglet/pkg/instrumentation/fs"
-
 	_ "net/http/pprof"
 
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/sdks"
@@ -23,22 +21,10 @@ const (
 	configUpdatesBufferSize = 10
 )
 
-func odigletInitPhase() {
-	if err := log.Init(); err != nil {
-		panic(err)
-	}
-	err := fs.CopyAgentsDirectoryToHost()
-	if err != nil {
-		log.Logger.Error(err, "Failed to copy agents directory to host")
-		os.Exit(-1)
-	}
-	os.Exit(0)
-}
-
 func main() {
 	// If started in init mode
 	if len(os.Args) == 2 && os.Args[1] == "init" {
-		odigletInitPhase()
+		odiglet.OdigletInitPhase()
 	}
 
 	if err := log.Init(); err != nil {

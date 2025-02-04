@@ -234,6 +234,15 @@ metadata:
   labels:
     app: coupon
 spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: odigos.io/odiglet-enterprise-installed
+                operator: In
+                values:
+                  - "true"
   containers:
     - name: coupon
       resources:
@@ -256,6 +265,15 @@ metadata:
   labels:
     app: inventory
 spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: odigos.io/odiglet-enterprise-installed
+                operator: In
+                values:
+                  - "true"
   containers:
     - name: inventory
       resources:
@@ -278,6 +296,15 @@ metadata:
   labels:
     app: membership
 spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: odigos.io/odiglet-enterprise-installed
+                operator: In
+                values:
+                  - "true"
   containers:
     - name: membership
       resources:
@@ -300,6 +327,15 @@ metadata:
   labels:
     app: pricing
 spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: odigos.io/odiglet-enterprise-installed
+                operator: In
+                values:
+                  - "true"
   containers:
     - name: pricing
       resources:
