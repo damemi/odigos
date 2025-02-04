@@ -59,7 +59,7 @@ spec:
               valueFrom:
                 resourceFieldRef:
                   containerName: gateway
-                  divisor: "0"
+                  divisor: '0'
                   resource: limits.cpu
           name: gateway
           resources:
@@ -165,6 +165,12 @@ spec:
                   fieldPath: metadata.name
             - name: GOMEMLIMIT
               (value != null): true
+            - name: GOMAXPROCS
+              valueFrom:
+                resourceFieldRef:
+                  containerName: data-collection
+                  divisor: '0'
+                  resource: limits.cpu
       hostNetwork: true
       nodeSelector:
         kubernetes.io/os: linux
@@ -193,7 +199,7 @@ spec:
           name: kubeletpodresources
         - hostPath:
             path: /
-            type: ""
+            type: ''
           name: hostfs
 status:
   numberAvailable: 1
@@ -356,7 +362,7 @@ status:
     - key: k8s.container.name
       (value != null): true
     - key: k8s.pod.name
-      (value != null): true          
+      (value != null): true
 ---
 apiVersion: odigos.io/v1alpha1
 kind: InstrumentationInstance
