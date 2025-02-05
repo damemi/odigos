@@ -39,6 +39,12 @@ spec:
     - script:
         content: |
           kubectl get pods -n odigos-test
+
+  - name: Verify node Odiglet installed label has been added
+    try:
+      - assert:
+          file: ../../common/assert/node-odiglet-label.yaml
+                    
   - name: Install Demo App
     try:
     - script:
