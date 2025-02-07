@@ -318,7 +318,7 @@ func (r *OdigosReconciler) install(ctx context.Context, odigos *operatorv1alpha1
 	})
 
 	if upgrade {
-		err = resources.DeleteOldOdigosSystemObjects(ctx, r.KubeClient, ns, config)
+		err = resources.DeleteOldOdigosSystemObjects(ctx, r.KubeClient, ns, &odigosConfig)
 		if err != nil {
 			meta.SetStatusCondition(&odigos.Status.Conditions, metav1.Condition{
 				Type:               odigosUpgradeCondition,
