@@ -5,8 +5,8 @@ kind: Kustomization
 images:
 - name: controller
   newName: keyval/odigos-operator
-  newTag: 1.0.148
+  newTag: 1.0.149
 configMapGenerator:
 - literals:
-  - ODIGOS_VERSION=1.0.148
+  - ODIGOS_VERSION=1.0.149
   name: odigos-version

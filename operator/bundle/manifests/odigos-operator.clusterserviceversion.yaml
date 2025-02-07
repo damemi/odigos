@@ -20,7 +20,7 @@ metadata:
     capabilities: Basic Install
     categories: Logging & Tracing
     containerImage: docker.io/keyval/odigos-operator:v1.0.144
-    createdAt: "2025-02-07T19:58:31Z"
+    createdAt: "2025-02-07T20:23:38Z"
     description: Odigos enables automatic distributed tracing with OpenTelemetry and
       eBPF.
     features.operators.openshift.io/disconnected: "false"
@@ -35,7 +35,7 @@ metadata:
     operators.operatorframework.io/builder: operator-sdk-v1.39.1
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     support: Odigos
-  name: odigos-operator.v1.0.148
+  name: odigos-operator.v1.0.149
   namespace: odigos-operator-system
 spec:
   apiservicedefinitions: {}
@@ -377,8 +377,8 @@ spec:
                   valueFrom:
                     configMapKeyRef:
                       key: ODIGOS_VERSION
-                      name: odigos-operator-odigos-version-2h4fkg424d
-                image: keyval/odigos-operator:1.0.148
+                      name: odigos-operator-odigos-version-5t5fk676bf
+                image: keyval/odigos-operator:1.0.149
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -473,4 +473,4 @@ spec:
   provider:
     name: Odigos
     url: https://odigos.io
-  version: 1.0.148
+  version: 1.0.149

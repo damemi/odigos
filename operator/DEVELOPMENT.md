@@ -1,5 +1,15 @@
 # Development and testing
 
+Running the operator requires the following steps:
+
+1. Build the Operator image (the controller)
+2. Generate the Operator bundle (a collection of ready-to-deploy manifests)
+3. Build the Operator Bundle Image (another image used by OpenShift to deploy the manifests)
+
+The current version of Odigos is set by the `VERSION` variable in the Makefile. This value
+reflects what version of component images will be installed in the cluster. This should stay
+bound to the version of the operator.
+
 ## Building the Operator image
 
 From the root repo directory (ie `cd ..` from here), run:
