@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -50,6 +51,7 @@ const (
 	operatorFinalizer = "operator.odigos.io/odigos-finalizer"
 
 	odigosInstalledCondition = "OdigosInstalled"
+	odigosUpgradeCondition   = "OdigosUpgraded"
 )
 
 // OdigosReconciler reconciles a Odigos object
@@ -243,21 +245,44 @@ func (r *OdigosReconciler) install(ctx context.Context, odigos *operatorv1alpha1
 		selectedProfiles = append(selectedProfiles, common.ProfileName(profile))
 	}
 
-	odigosConfig := common.OdigosConfiguration{
-		ConfigVersion:             1,
-		TelemetryEnabled:          odigos.Spec.TelemetryEnabled,
-		OpenshiftEnabled:          odigos.Spec.OpenShiftEnabled,
-		IgnoredNamespaces:         odigos.Spec.IgnoredNamespaces,
-		IgnoredContainers:         odigos.Spec.IgnoredContainers,
-		SkipWebhookIssuerCreation: odigos.Spec.SkipWebhookIssuerCreation,
-		Psp:                       odigos.Spec.PodSecurityPolicy,
-		ImagePrefix:               odigos.Spec.ImagePrefix,
-		Profiles:                  odigos.Spec.Profiles,
-		UiMode:                    common.UiMode(odigos.Spec.UIMode),
+	odigosConfig := common.OdigosConfiguration{}
+	upgrade := false
+	config, err := resources.GetCurrentConfig(ctx, r.KubeClient, ns)
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			meta.SetStatusCondition(&odigos.Status.Conditions, metav1.Condition{
+				Type:               odigosInstalledCondition,
+				Status:             metav1.ConditionFalse,
+				Reason:             "OdigosConfigErr",
+				Message:            "Error getting current Odigos config",
+				ObservedGeneration: odigos.GetGeneration(),
+			})
+			return ctrl.Result{Requeue: false}, utilerrors.NewAggregate(
+				[]error{errors.New(fmt.Sprintf("error getting current odigos config: %+v", err)),
+					r.Status().Update(ctx, odigos),
+				})
+		}
 
-		AutoscalerImage:   "keyval/odigos-autoscaler",
-		InstrumentorImage: "keyval/odigos-instrumentor",
+		odigosConfig = common.OdigosConfiguration{
+			ConfigVersion: 1,
+		}
+	} else {
+		odigosConfig = *config
+		odigosConfig.ConfigVersion = odigosConfig.ConfigVersion + 1
+		upgrade = true
 	}
+
+	odigosConfig.TelemetryEnabled = odigos.Spec.TelemetryEnabled
+	odigosConfig.OpenshiftEnabled = odigos.Spec.OpenShiftEnabled
+	odigosConfig.IgnoredNamespaces = odigos.Spec.IgnoredNamespaces
+	odigosConfig.IgnoredContainers = odigos.Spec.IgnoredContainers
+	odigosConfig.SkipWebhookIssuerCreation = odigos.Spec.SkipWebhookIssuerCreation
+	odigosConfig.Psp = odigos.Spec.PodSecurityPolicy
+	odigosConfig.ImagePrefix = odigos.Spec.ImagePrefix
+	odigosConfig.Profiles = odigos.Spec.Profiles
+	odigosConfig.UiMode = common.UiMode(odigos.Spec.UIMode)
+	odigosConfig.AutoscalerImage = "keyval/odigos-autoscaler"
+	odigosConfig.InstrumentorImage = "keyval/odigos-instrumentor"
 
 	if odigos.Spec.OpenShiftEnabled {
 		if odigos.Spec.ImagePrefix == "" {
@@ -291,6 +316,30 @@ func (r *OdigosReconciler) install(ctx context.Context, odigos *operatorv1alpha1
 		Message:            "All Odigos components successfully installed",
 		ObservedGeneration: odigos.GetGeneration(),
 	})
+
+	if upgrade {
+		err = resources.DeleteOldOdigosSystemObjects(ctx, r.KubeClient, ns, config)
+		if err != nil {
+			meta.SetStatusCondition(&odigos.Status.Conditions, metav1.Condition{
+				Type:               odigosUpgradeCondition,
+				Status:             metav1.ConditionFalse,
+				Reason:             "OdigosUpgradeFailed",
+				Message:            "error deleting old Odigos system objects: " + err.Error(),
+				ObservedGeneration: odigos.GetGeneration(),
+			})
+			return ctrl.Result{Requeue: false}, utilerrors.NewAggregate(
+				[]error{errors.New(fmt.Sprintf("error deleting old odigos system objects: %+v", err)),
+					r.Status().Update(ctx, odigos),
+				})
+		}
+		meta.SetStatusCondition(&odigos.Status.Conditions, metav1.Condition{
+			Type:               odigosUpgradeCondition,
+			Status:             metav1.ConditionTrue,
+			Reason:             "OdigosUpgradeSucceeded",
+			Message:            "successfully upgraded Odigos",
+			ObservedGeneration: odigos.GetGeneration(),
+		})
+	}
 
 	return ctrl.Result{}, r.Status().Update(ctx, odigos)
 }
