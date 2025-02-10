@@ -245,11 +245,6 @@ spec:
                   - "true"
   containers:
     - name: coupon
-      resources:
-        limits:
-          instrumentation.odigos.io/javascript-ebpf-enterprise: "1"
-        requests:
-          instrumentation.odigos.io/javascript-ebpf-enterprise: "1"
 status:
   containerStatuses:
     - name: coupon
