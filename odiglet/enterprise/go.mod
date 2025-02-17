@@ -11,8 +11,8 @@ require (
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
 	github.com/odigos-io/odigos/api v1.0.154-0.20250217045048-3b6721e17d78
 	github.com/odigos-io/odigos/common v1.0.154-0.20250217045048-3b6721e17d78
-	github.com/odigos-io/odigos/instrumentation v1.0.153
-	github.com/odigos-io/odigos/odiglet v1.0.153
+	github.com/odigos-io/odigos/instrumentation v1.0.154-0.20250217093015-13e132188a18
+	github.com/odigos-io/odigos/odiglet v1.0.154-0.20250217093015-13e132188a18
 	go.opentelemetry.io/auto v0.20.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.34.0
 	go.opentelemetry.io/otel/trace v1.34.0
@@ -146,7 +146,7 @@ replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8su
 
 replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.154-0.20250217045048-3b6721e17d78
 
-replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.153
+replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.154-0.20250217093015-13e132188a18
 
 // Used for testing purposes
 // replace github.com/odigos-io/odigos/odiglet => github.com/RonFed/odigos_fork/odiglet add_java_envs_to_envOverwrite

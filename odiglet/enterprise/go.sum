@@ -267,12 +267,12 @@ github.com/odigos-io/odigos/api v1.0.154-0.20250217045048-3b6721e17d78 h1:4x497d
 github.com/odigos-io/odigos/api v1.0.154-0.20250217045048-3b6721e17d78/go.mod h1:qqDR7qngL37WD+tM/pGgPJaw9RzkHcTAmCYB6UywW6I=
 github.com/odigos-io/odigos/common v1.0.154-0.20250217045048-3b6721e17d78 h1:oJyCLG6o9KqNbO3pcjbp4GKKh23MA/8H1eY8+JgsNEA=
 github.com/odigos-io/odigos/common v1.0.154-0.20250217045048-3b6721e17d78/go.mod h1:43zThe/JN8ujZbOyrsFuZB9irJEXo1d6iikRgwz1zFE=
-github.com/odigos-io/odigos/instrumentation v1.0.153 h1:S4t4ifkU+8hIysMlIJquJRvDo4ZsBeaIe49kMB0xZGw=
-github.com/odigos-io/odigos/instrumentation v1.0.153/go.mod h1:gAlOn1K0ZIVYWm5OtuvGEVFJB99JaHWWpu6RWwAMbEY=
+github.com/odigos-io/odigos/instrumentation v1.0.154-0.20250217093015-13e132188a18 h1:v3B3R1Lu3sisyHC00sCgUll4aGNp04Pf3cPcRq00K90=
+github.com/odigos-io/odigos/instrumentation v1.0.154-0.20250217093015-13e132188a18/go.mod h1:gAlOn1K0ZIVYWm5OtuvGEVFJB99JaHWWpu6RWwAMbEY=
 github.com/odigos-io/odigos/k8sutils v1.0.154-0.20250217045048-3b6721e17d78 h1:UBXrcl0+egAiqrSgg7Eivl/K0Cc6sCURIFgKK+2O544=
 github.com/odigos-io/odigos/k8sutils v1.0.154-0.20250217045048-3b6721e17d78/go.mod h1:f9hr2S2Eq+7FrYsl8RhfzfinAPzqIDVxEcsu1ixwVBM=
-github.com/odigos-io/odigos/odiglet v1.0.153 h1:xN8Vl+6LfPwBTzUXPAotZ38Y6lGwdaQUIdVIeqilg3I=
-github.com/odigos-io/odigos/odiglet v1.0.153/go.mod h1:qNtKseRZV5+Y9JjAKkRMGwRvyAA3tZyyKJRdpwSwQyU=
+github.com/odigos-io/odigos/odiglet v1.0.154-0.20250217093015-13e132188a18 h1:hYD09KCAjC176N7MPU6i9q+i4U9JkjgIm/hMHD6mlKU=
+github.com/odigos-io/odigos/odiglet v1.0.154-0.20250217093015-13e132188a18/go.mod h1:qNtKseRZV5+Y9JjAKkRMGwRvyAA3tZyyKJRdpwSwQyU=
 github.com/odigos-io/odigos/opampserver v1.0.154-0.20250217045048-3b6721e17d78 h1:n56w0UhxL1rvlPZ4cStehqbHSjvGFj3gFngd9Rq8qAE=
 github.com/odigos-io/odigos/opampserver v1.0.154-0.20250217045048-3b6721e17d78/go.mod h1:SGXY/yYFtOQjtnbCfv6LDkqYbiACtcZ3GWgBhScq/ug=
 github.com/odigos-io/odigos/procdiscovery v1.0.154-0.20250217045048-3b6721e17d78 h1:UWwDXWbcucWc2liwb7kVjgWOIDa16aeFn4JVnlu4xHM=
