@@ -216,9 +216,9 @@ spec:
     - name: frontend
       resources:
         limits:
-          instrumentation.odigos.io/java-native-enterprise: '1'
+          instrumentation.odigos.io/generic: '1'
         requests:
-          instrumentation.odigos.io/java-native-enterprise: '1'
+          instrumentation.odigos.io/generic: '1'
 status:
   containerStatuses:
     - name: frontend
@@ -260,9 +260,9 @@ spec:
     - name: inventory
       resources:
         limits:
-          instrumentation.odigos.io/python-ebpf-enterprise: '1'
+          instrumentation.odigos.io/generic: '1'
         requests:
-          instrumentation.odigos.io/python-ebpf-enterprise: '1'
+          instrumentation.odigos.io/generic: '1'
 status:
   containerStatuses:
     - name: inventory
