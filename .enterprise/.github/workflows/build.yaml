@@ -31,7 +31,7 @@ jobs:
           file: odiglet/Dockerfile
           context: .
           push: false
-          tags: keyval/odigos-enterprise-odiglet:${{ env.IMAGE_TAG }}
+          tags: registry.odigos.io/odigos-enterprise-odiglet:${{ env.IMAGE_TAG }}
           secrets: |
             github_token=${{ secrets.RELEASE_BOT_TOKEN }}
           cache-to: type=local,mode=max,dest=odiglet-enterprise-cache
@@ -84,10 +84,10 @@ jobs:
       - name: Save Docker images as tar files
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
-          docker save keyval/odigos-autoscaler:${{ env.IMAGE_TAG }} -o /tmp/odigos-autoscaler.tar
-          docker save keyval/odigos-scheduler:${{ env.IMAGE_TAG }} -o /tmp/odigos-scheduler.tar
-          docker save keyval/odigos-instrumentor:${{ env.IMAGE_TAG }} -o /tmp/odigos-instrumentor.tar
-          docker save keyval/odigos-collector:${{ env.IMAGE_TAG }} -o /tmp/odigos-collector.tar
+          docker save registry.odigos.io/odigos-autoscaler:${{ env.IMAGE_TAG }} -o /tmp/odigos-autoscaler.tar
+          docker save registry.odigos.io/odigos-scheduler:${{ env.IMAGE_TAG }} -o /tmp/odigos-scheduler.tar
+          docker save registry.odigos.io/odigos-instrumentor:${{ env.IMAGE_TAG }} -o /tmp/odigos-instrumentor.tar
+          docker save registry.odigos.io/odigos-collector:${{ env.IMAGE_TAG }} -o /tmp/odigos-collector.tar
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -164,10 +164,11 @@ jobs:
       - name: Load Latest UI Image from Dockerhub
         run: |
           # The UI will still be installed by the CLI with the TAG, but it's not used in the tests so no need to build it
+          # TODO: we should get the latest tag from registry.odigos.io not dockerhub
           LATEST_TAG=$(curl -s "https://hub.docker.com/v2/repositories/keyval/odigos-ui/tags/?page_size=1" | jq -r '.results[0].name')
-          docker pull "keyval/odigos-ui:$LATEST_TAG"
-          docker tag "keyval/odigos-ui:$LATEST_TAG" keyval/odigos-ui:${{ env.IMAGE_TAG }}
-          kind load docker-image keyval/odigos-ui:${{ env.IMAGE_TAG }}
+          docker pull "registry.odigos.io/odigos-ui:$LATEST_TAG"
+          docker tag "registry.odigos.io/odigos-ui:$LATEST_TAG" registry.odigos.io/odigos-ui:${{ env.IMAGE_TAG }}
+          kind load docker-image registry.odigos.io/odigos-ui:${{ env.IMAGE_TAG }}
       - name: Copy CLI to Expected Path
         run: |
           # Copy the CLI executable to the expected path which is in the OSS repo sibling to the enterprise repo
