@@ -14,8 +14,16 @@ env:
 
 jobs:
 
-  build-odiglet:
+  build-enterprise-components:
     runs-on: warp-ubuntu-latest-x64-4x-spot
+    strategy:
+      matrix:
+        service: [odiglet, instrumentor]
+        include:
+          - service: odiglet
+            dockerfile: odiglet/Dockerfile
+          - service: instrumentor
+            dockerfile: Dockerfile
     steps:
       - uses: actions/checkout@v4
       - name: Set up Docker Buildx
@@ -23,25 +31,26 @@ jobs:
       - name: Cache Docker Layers
         uses: WarpBuilds/cache@v1
         with:
-          path: odiglet-enterprise-cache
-          key: odiglet-enterprise-cache-${{ github.head_ref }}
-      - name: Build Odiglet Image
+          path: ${{ matrix.service }}-enterprise-cache
+          key: ${{ matrix.service }}-enterprise-cache-${{ github.head_ref }}
+      - name: Build Image
         uses: docker/build-push-action@v6
         with:
-          file: odiglet/Dockerfile
+          file: ${{ matrix.dockerfile }}
           context: .
           push: false
-          tags: registry.odigos.io/odigos-enterprise-odiglet:${{ env.IMAGE_TAG }}
+          tags: registry.odigos.io/odigos-enterprise-${{ matrix.service }}:${{ env.IMAGE_TAG }}
           secrets: |
             github_token=${{ secrets.RELEASE_BOT_TOKEN }}
-          cache-to: type=local,mode=max,dest=odiglet-enterprise-cache
-          cache-from: type=local,src=odiglet-enterprise-cache
-          outputs: type=docker,dest=/tmp/odiglet-enterprise.tar
+          cache-to: type=local,mode=max,dest=${{ matrix.service }}-enterprise-cache
+          cache-from: type=local,src=${{ matrix.service }}-enterprise-cache
+          outputs: type=docker,dest=/tmp/${{ matrix.service }}-enterprise.tar
+          build-args: SERVICE_NAME=${{ matrix.service }}
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: odiglet-enterprise
-          path: /tmp/odiglet-enterprise.tar
+          name: ${{ matrix.service }}-enterprise
+          path: /tmp/${{ matrix.service }}-enterprise.tar
 
   build-oss-components-for-tests:
     runs-on: warp-ubuntu-latest-x64-4x-spot
@@ -59,10 +68,9 @@ jobs:
           path: |
             /tmp/odigos-autoscaler.tar
             /tmp/odigos-scheduler.tar
-            /tmp/odigos-instrumentor.tar
             /tmp/odigos-collector.tar
             /tmp/odigos-cli
-          key: odigos-oss-cache-${{ hashFiles('odigos/.git/HEAD') }}
+          key: odigos-oss-cache-${{ hashFiles('odigos/.git/refs/heads/main') }}
           restore-keys: |
             odigos-oss-cache-
       - name: Set up Go # Needed to build the CLI
@@ -80,13 +88,12 @@ jobs:
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
           cd odigos
-          TAG=${{ env.IMAGE_TAG }} make -j 4 build-autoscaler build-scheduler build-instrumentor build-collector
+          TAG=${{ env.IMAGE_TAG }} make -j 3 build-autoscaler build-scheduler build-collector
       - name: Save Docker images as tar files
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
           docker save registry.odigos.io/odigos-autoscaler:${{ env.IMAGE_TAG }} -o /tmp/odigos-autoscaler.tar
           docker save registry.odigos.io/odigos-scheduler:${{ env.IMAGE_TAG }} -o /tmp/odigos-scheduler.tar
-          docker save registry.odigos.io/odigos-instrumentor:${{ env.IMAGE_TAG }} -o /tmp/odigos-instrumentor.tar
           docker save registry.odigos.io/odigos-collector:${{ env.IMAGE_TAG }} -o /tmp/odigos-collector.tar
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -95,13 +102,12 @@ jobs:
           path: |
             /tmp/odigos-autoscaler.tar
             /tmp/odigos-scheduler.tar
-            /tmp/odigos-instrumentor.tar
             /tmp/odigos-collector.tar
             /tmp/odigos-cli
 
   kubernetes-tests:
     needs: 
-      - build-odiglet
+      - build-enterprise-components
       - build-oss-components-for-tests
     runs-on: warp-ubuntu-latest-x64-4x-spot
     strategy:
@@ -144,10 +150,15 @@ jobs:
           node_image: ${{ matrix.kind-image }}
           version: "v0.23.0"
           cluster_name: kind
-      - name: Download Odiglet Enterpries Artifact
+      - name: Download Odiglet Enterprise Artifact
         uses: actions/download-artifact@v4
         with:
           name: odiglet-enterprise
+          path: /tmp
+      - name: Download Instrumentor Enterprise Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: instrumentor-enterprise
           path: /tmp
       - name: Download Odigos OSS Components
         uses: actions/download-artifact@v4
@@ -157,15 +168,14 @@ jobs:
       - name: Load Odigos Components to Kind Cluster
         run: |
           kind load image-archive /tmp/odiglet-enterprise.tar
+          kind load image-archive /tmp/instrumentor-enterprise.tar
           kind load image-archive /tmp/odigos-autoscaler.tar
           kind load image-archive /tmp/odigos-scheduler.tar
-          kind load image-archive /tmp/odigos-instrumentor.tar
           kind load image-archive /tmp/odigos-collector.tar
-      - name: Load Latest UI Image from Dockerhub
+      - name: Load Latest UI Image from Container Registry
         run: |
           # The UI will still be installed by the CLI with the TAG, but it's not used in the tests so no need to build it
-          # TODO: we should get the latest tag from registry.odigos.io not dockerhub
-          LATEST_TAG=$(curl -s "https://hub.docker.com/v2/repositories/keyval/odigos-ui/tags/?page_size=1" | jq -r '.results[0].name')
+          LATEST_TAG=$(curl -s "https://artifactregistry.us-central1.rep.googleapis.com/v1/projects/odigos-cloud/locations/us-central1/repositories/components/packages/odigos-ui/tags" | jq -r '[.tags[].name | capture(".*/(?<tag>v[0-9\\.]+)$").tag] | sort | last')
           docker pull "registry.odigos.io/odigos-ui:$LATEST_TAG"
           docker tag "registry.odigos.io/odigos-ui:$LATEST_TAG" registry.odigos.io/odigos-ui:${{ env.IMAGE_TAG }}
           kind load docker-image registry.odigos.io/odigos-ui:${{ env.IMAGE_TAG }}

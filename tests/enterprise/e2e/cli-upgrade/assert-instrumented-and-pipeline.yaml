@@ -238,9 +238,9 @@ spec:
     - name: coupon
       resources:
         limits:
-          instrumentation.odigos.io/javascript-ebpf-enterprise: '1'
+          instrumentation.odigos.io/generic: '1'
         requests:
-          instrumentation.odigos.io/javascript-ebpf-enterprise: '1'
+          instrumentation.odigos.io/generic: '1'
 status:
   containerStatuses:
     - name: coupon

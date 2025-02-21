@@ -2,31 +2,74 @@ TAG ?= $(shell odigos version --cluster)
 # These are used to point to different Dockerfiles (such as Dockerfile.rhel) and add -ubi9 to RHEL based images.
 DOCKERFILE=Dockerfile
 IMG_SUFFIX=
+ORG ?= registry.odigos.io
+BUILD_DIR=.
+
+build-image/%:
+	docker build -t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
+	--secret id=github_token,env=GITHUB_TOKEN \
+	--build-arg SERVICE_NAME="$*" \
+	--build-arg ODIGOS_VERSION=$(TAG) \
+	--build-arg SUMMARY="Odiglet for Odigos" \
+	--build-arg DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." \
+	--build-arg VERSION=$(TAG) \
+	--build-arg RELEASE=$(TAG)
+
+.PHONY: build-odiglet
+build-odiglet:
+	$(MAKE) build-image/odiglet DOCKERFILE=odiglet/$(DOCKERFILE) SUMMARY="Odiglet for Odigos" DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
+.PHONY: build-instrumentor
+build-instrumentor:
+	$(MAKE) build-image/instrumentor SUMMARY="Instrumentor for Odigos" DESCRIPTION="Instrumentor manages auto-instrumentation for workloads with Odigos." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: build-images
 build-images:
-	docker build -t keyval/odigos-enterprise-odiglet$(IMG_SUFFIX):$(TAG) . -f odiglet/$(DOCKERFILE) --secret id=github_token,env=GITHUB_TOKEN --build-arg ODIGOS_VERSION=$(TAG) --build-arg SUMMARY="Odiglet for Odigos" --build-arg DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." --build-arg VERSION=$(TAG) --build-arg RELEASE=$(TAG)
+	make -j 2 build-odiglet build-instrumentor TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
 
-.PHONY: push-images
-push-images:
-	docker push keyval/odigos-enterprise-odiglet$(IMG_SUFFIX):$(TAG)
+.PHONY: build-images-rhel
+build-images-rhel:
+	$(MAKE) build-images IMG_SUFFIX=-ubi9 DOCKERFILE=Dockerfile.rhel TAG=$(TAG) ORG=$(ORG)
+
+push-image/%:
+	docker buildx build --platform linux/amd64,linux/arm64/v8 -t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
+	--build-arg SERVICE_NAME="$*" \
+	--build-arg VERSION=$(TAG) \
+	--build-arg RELEASE=$(TAG) \
+	--build-arg SUMMARY="$(SUMMARY)" \
+	--build-arg DESCRIPTION="$(DESCRIPTION)"
+
+.PHONY: push-odiglet
+push-odiglet:
+	$(MAKE) push-image/odiglet DOCKERFILE=odiglet/$(DOCKERFILE) SUMMARY="Odiglet for Odigos" DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
+.PHONY: push-instrumentor
+push-instrumentor:
+	$(MAKE) push-image/instrumentor SUMMARY="Instrumentor for Odigos" DESCRIPTION="Instrumentor manages auto-instrumentation for workloads with Odigos." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
+load-to-kind-%:
+	kind load docker-image $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG)
 
 .PHONY: load-to-kind
 load-to-kind:
-	kind load docker-image keyval/odigos-enterprise-odiglet$(IMG_SUFFIX):$(TAG)
+	make -j 2 load-to-kind-instrumentor load-to-kind-odiglet ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
 
 .PHONY: restart-odiglet
 restart-odiglet:
 	kubectl rollout restart daemonset odiglet -n odigos-system
 
+.PHONY: restart-instrumentor
+restart-instrumentor:
+	kubectl rollout restart deployment odigos-instrumentor -n odigos-system
+
 .PHONY: deploy
 deploy:
-	make build-images TAG=$(TAG) && make load-to-kind TAG=$(TAG) && make restart-odiglet
+	make build-images TAG=$(TAG) && make load-to-kind TAG=$(TAG) && make restart-odiglet && make restart-instrumentor
 
 .PHONY: debug-odiglet
 debug-odiglet:
-	docker build -t keyval/odigos-enterprise-odiglet:$(TAG) . -f odiglet/debug.Dockerfile --secret id=github_token,env=GITHUB_TOKEN
-	kind load docker-image keyval/odigos-enterprise-odiglet:$(TAG)
+	docker build -t $(ORG)/odigos-enterprise-odiglet:$(TAG) . -f odiglet/debug.Dockerfile --secret id=github_token,env=GITHUB_TOKEN
+	kind load docker-image $(ORG)/odigos-enterprise-odiglet:$(TAG)
 	kubectl delete pod -n odigos-system -l app.kubernetes.io/name=odiglet
 	kubectl wait --for=condition=ready pod -n odigos-system -l app.kubernetes.io/name=odiglet
 	kubectl port-forward -n odigos-system daemonset/odiglet 2345:2345

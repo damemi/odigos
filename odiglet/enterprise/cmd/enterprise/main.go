@@ -10,6 +10,7 @@ import (
 
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/sdks"
 	enterpriseinstrumentlang "github.com/odigos-io/odigos-enterprise/odiglet/pkg/instrumentation/instrumentlang"
+	"github.com/odigos-io/odigos-enterprise/odigosauth"
 	"github.com/odigos-io/odigos/common"
 	commonInstrumentation "github.com/odigos-io/odigos/instrumentation"
 	"github.com/odigos-io/odigos/odiglet"
@@ -44,7 +45,7 @@ func main() {
 	}
 	log.Logger.V(0).Info("Starting odiglet enterprise")
 
-	assertProOdigletToken()
+	odigosauth.AssertEnterpriseOdigosToken(log.Logger)
 
 	if err := env.Load(); err != nil {
 		log.Logger.Error(err, "Failed to load env")

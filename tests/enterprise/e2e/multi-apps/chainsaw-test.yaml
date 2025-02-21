@@ -38,7 +38,7 @@ spec:
     catch:
     - script:
         content: |
-          kubectl get pods -n odigos-test
+          kubectl describe pods -n odigos-test
 
   - name: Verify node Odiglet installed label has been added
     try:

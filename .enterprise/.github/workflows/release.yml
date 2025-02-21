@@ -17,17 +17,17 @@ jobs:
   release:
     strategy:
       matrix:
-        dockerfile: ['odiglet/Dockerfile', 'odiglet/Dockerfile.rhel']
+        dockerfile: ['Dockerfile', 'Dockerfile.rhel']
+        service: ['odiglet', 'instrumentor']
+        include:
+          - service: odiglet
+            summary: "Odiglet for Odigos"
+            description: "Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs."
+          - service: instrumentor
+            summary: "Instrumentor for Odigos"
+            description: "Instrumentor manages auto-instrumentation for workloads with Odigos."
     runs-on: large-runner
     steps:
-
-      - name: Notify Slack Start
-        env:
-          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag}}
-          SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-        run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"description":"Start releasing Odigos enterprise components. This should take few minutes", "tag":"${{ env.ODIGOS_TAG }}"}' ${{ env.SLACK_WEBHOOK_URL }}
-
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -52,45 +52,19 @@ jobs:
         env:
           ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag}}
         with:
-          file: ${{ matrix.dockerfile }}
+          file: ${{ matrix.service == 'odiglet' && format('odiglet/{0}', matrix.dockerfile) || matrix.dockerfile }}
           push: true
-          tags: |
-            keyval/odigos-enterprise-odiglet${{ matrix.dockerfile == 'odiglet/Dockerfile.rhel' && '-ubi9' || '' }}:${{ env.ODIGOS_TAG }}
+          tags: keyval/odigos-enterprise-${{ matrix.service }}${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}:${{ env.ODIGOS_TAG }}
           build-args: |
+            SERVICE_NAME=${{ matrix.service }}
             ODIGOS_VERSION=${{ env.ODIGOS_TAG }}
-            SUMMARY="Odiglet for Odigos"
-            DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs."
+            SUMMARY=${{ matrix.summary }}
+            DESCRIPTION=${{ matrix.description }}
             VERSION=${{ env.ODIGOS_TAG }}
             RELEASE=${{ env.ODIGOS_TAG }}
           platforms: linux/amd64,linux/arm64
           secrets: |
             "github_token=${{ secrets.RELEASE_BOT_TOKEN }}"
 
-      - name: Trigger CLI Release in Odigos Main Repo
-        env:
-          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag}}
-        run: |
-          curl -X POST \
-            -H "Accept: application/vnd.github.v3+json" \
-            -H "Authorization: token ${{ secrets.RELEASE_BOT_TOKEN }}" \
-            https://api.github.com/repos/odigos-io/odigos/dispatches \
-            -d '{"event_type": "release_cli", "client_payload": {"tag": "${{ env.ODIGOS_TAG }}"}}'
-
-      - name: Notify Slack End
-        env:
-          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag}}
-          SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-        run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"description":"Odigos enterprise components released. Next step: release CLI", "tag":"${{ env.ODIGOS_TAG }}"}' ${{ env.SLACK_WEBHOOK_URL }}
-      
-      - name: Notify Slack on Failure
-        if: failure()
-        env:
-          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag}}
-          SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-        run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"link":"https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}", "description":"ERROR: odigos enterprise component release failed", "tag":"${{ env.ODIGOS_TAG }}"}' ${{ env.SLACK_WEBHOOK_URL }}
       
       
