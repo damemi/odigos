@@ -115,6 +115,23 @@ jobs:
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
+          PR_LINK: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          SOURCE_PR_LINK: "${{ github.event.client_payload.source_pr_url }}"
+          PR_CREATOR: "${{ github.event.client_payload.pr_creator }}"
+          SLACK_URL: "${{ secrets.SLACK_ENTERPRISE_SYNC_URL }}"
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"link":"https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}", "description":"ERROR: odigos dependencies update PR failed to create"}' ${{ secrets.SLACK_ENTERPRISE_SYNC_URL }}
+          if [[ -z "$SLACK_URL" ]]; then
+            echo "SLACK_ENTERPRISE_SYNC_URL is missing!"
+            exit 1
+          fi
+          
+          # Set default values if SOURCE_PR_LINK or PR_CREATOR are missing
+          SOURCE_PR_LINK=${SOURCE_PR_LINK:-"Not available"}
+          PR_CREATOR=${PR_CREATOR:-"Unknown"}
 
+          curl -X POST -H 'Content-type: application/json' --data "$(jq -n \
+            --arg link "$PR_LINK" \
+            --arg source_pr_link "$SOURCE_PR_LINK" \
+            --arg description "ERROR: PR creation failed. Original PR by @$PR_CREATOR triggered a sync PR in Odigos enterprise, but it failed." \
+            '{link: $link, source_pr_link: $source_pr_link, description: $description}')" \
+            $SLACK_URL
