@@ -64,6 +64,7 @@ RUN --mount=type=secret,id=github_token \
 WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
 # Copyy local modules required by the build
 COPY odigosauth/ odigosauth/
+COPY distros/ distros/
 WORKDIR ./odiglet/
 ENV GOPRIVATE=github.com/odigos-io/enterprise-go-instrumentation,github.com/odigos-io/ebpf-java-instrumentation
 # Pre-copy/cache go.mod for pre-downloading dependencies and only redownloading

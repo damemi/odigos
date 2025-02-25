@@ -76,6 +76,7 @@ RUN --mount=type=secret,id=github_token \
 WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
 # Copyy local modules required by the build
 COPY odigosauth/ odigosauth/
+COPY distros/ distros/
 WORKDIR ./odiglet/
 # Copy rest of source code for odiglet
 COPY odiglet/ .

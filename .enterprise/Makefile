@@ -62,6 +62,10 @@ restart-odiglet:
 restart-instrumentor:
 	kubectl rollout restart deployment odigos-instrumentor -n odigos-system
 
+.PHONY: deploy-odiglet
+deploy-odiglet:
+	make build-odiglet TAG=$(TAG) && make load-to-kind-odiglet TAG=$(TAG) && make restart-odiglet
+
 .PHONY: deploy
 deploy:
 	make build-images TAG=$(TAG) && make load-to-kind TAG=$(TAG) && make restart-odiglet && make restart-instrumentor

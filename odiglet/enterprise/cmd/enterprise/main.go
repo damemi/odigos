@@ -8,12 +8,14 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
+	enterprisedistros "github.com/odigos-io/odigos-enterprise/distros"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/sdks"
 	enterpriseinstrumentlang "github.com/odigos-io/odigos-enterprise/odiglet/pkg/instrumentation/instrumentlang"
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
 	"github.com/odigos-io/odigos/common"
 	commonInstrumentation "github.com/odigos-io/odigos/instrumentation"
 	"github.com/odigos-io/odigos/odiglet"
+	"github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	"github.com/odigos-io/odigos/odiglet/pkg/env"
 	"github.com/odigos-io/odigos/odiglet/pkg/instrumentation"
 	communityinstrumentlang "github.com/odigos-io/odigos/odiglet/pkg/instrumentation/instrumentlang"
@@ -52,7 +54,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	o, err := odiglet.New(clientset, deviceInjectionCallbacks(), ebpfInstrumentationFactories())
+	enterpriseDistrosGetter, err := enterprisedistros.NewEnterpriseGetter()
+	if err != nil {
+		log.Logger.Error(err, "Failed to create enterprise distros getter")
+		os.Exit(1)
+	}
+
+	instrumentationManagerOptions := ebpf.InstrumentationManagerOptions{
+		Factories:          ebpfInstrumentationFactories(),
+		DistributionGetter: enterpriseDistrosGetter,
+	}
+
+	o, err := odiglet.New(clientset, deviceInjectionCallbacks(), instrumentationManagerOptions)
 	if err != nil {
 		log.Logger.Error(err, "Failed to initialize odiglet")
 		os.Exit(1)

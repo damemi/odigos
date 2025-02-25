@@ -8,11 +8,12 @@ require (
 	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20250218080118-2ead2280cf15
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20250218080126-c43c816454d6
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250105084718-c6cb16fc984d
+	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
 	github.com/odigos-io/odigos/api v1.0.157
 	github.com/odigos-io/odigos/common v1.0.157
 	github.com/odigos-io/odigos/instrumentation v1.0.157
-	github.com/odigos-io/odigos/odiglet v1.0.157
+	github.com/odigos-io/odigos/odiglet v1.0.158-0.20250225135208-f11b221339e8
 	go.opentelemetry.io/auto v0.20.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.34.0
 	go.opentelemetry.io/otel/trace v1.34.0
@@ -26,7 +27,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/cilium/ebpf v0.17.2 // indirect
+	github.com/cilium/ebpf v0.17.3 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/elliotchance/orderedmap v1.6.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
@@ -65,11 +66,12 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/odigos-io/odigos/k8sutils v1.0.157 // indirect
-	github.com/odigos-io/odigos/opampserver v1.0.157 // indirect
+	github.com/odigos-io/odigos/distros v1.0.158-0.20250225135208-f11b221339e8 // indirect
+	github.com/odigos-io/odigos/k8sutils v1.0.156 // indirect
+	github.com/odigos-io/odigos/opampserver v1.0.156 // indirect
 	github.com/odigos-io/odigos/procdiscovery v0.0.0 // indirect
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5 // indirect
-	github.com/odigos-io/runtime-detector v0.0.6 // indirect
+	github.com/odigos-io/runtime-detector v0.0.7 // indirect
 	github.com/parca-dev/parca-agent v0.9.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.20.5 // indirect
@@ -105,7 +107,7 @@ require (
 	golang.org/x/net v0.34.0 // indirect
 	golang.org/x/oauth2 v0.25.0 // indirect
 	golang.org/x/sync v0.11.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/term v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
@@ -146,9 +148,8 @@ replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8su
 
 replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.157
 
-replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.157
-
-// Used for testing purposes
-// replace github.com/odigos-io/odigos/odiglet => github.com/RonFed/odigos_fork/odiglet add_java_envs_to_envOverwrite
+replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.158-0.20250225135208-f11b221339e8
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
+
+replace github.com/odigos-io/odigos-enterprise/distros => ../distros
