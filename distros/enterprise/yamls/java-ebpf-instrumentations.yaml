@@ -21,4 +21,6 @@ spec:
   runtimeAgent:
     directoryNames:
       - "{{ODIGOS_AGENTS_DIR}}/java-ebpf"
+    fileOpenTriggers:
+      - "{{ODIGOS_AGENTS_DIR}}/java-ebpf/tracing_probes.so"
     device: 'instrumentation.odigos.io/generic'

@@ -19,3 +19,5 @@ spec:
     directoryNames:
       - "{{ODIGOS_AGENTS_DIR}}/nodejs-ebpf"
     device: 'instrumentation.odigos.io/generic'
+    fileOpenTriggers:
+      - "{{ODIGOS_AGENTS_DIR}}/nodejs-ebpf/build/Release/dtrace-injector-native.node"

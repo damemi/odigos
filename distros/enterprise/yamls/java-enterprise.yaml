@@ -22,3 +22,5 @@ spec:
     directoryNames:
       - "{{ODIGOS_AGENTS_DIR}}/java-ext-ebpf"
     device: 'instrumentation.odigos.io/generic'
+    fileOpenTriggers:
+      - "{{ODIGOS_AGENTS_DIR}}/java-ext-ebpf/end_span_usdt.so"

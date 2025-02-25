@@ -20,3 +20,5 @@ spec:
       - "{{ODIGOS_AGENTS_DIR}}/python"
       - "{{ODIGOS_AGENTS_DIR}}/python-ebpf"
     device: 'instrumentation.odigos.io/generic'
+    fileOpenTriggers:
+      - "{{ODIGOS_AGENTS_DIR}}/python-ebpf/pythonUSDT.abi3.so"
