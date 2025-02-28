@@ -119,7 +119,7 @@ COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/otel_agent_e
 COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/otel_agent_extension/extension/end_span_usdt.so /instrumentations/java-ext-ebpf/end_span_usdt.so
 RUN cp /instrumentations/java/javaagent.jar /instrumentations/java-ext-ebpf/javaagent.jar
 
-FROM registry.access.redhat.com/ubi9:9.5-1736404036
+FROM registry.access.redhat.com/ubi9/ubi-micro:latest
 ARG VERSION
 ARG RELEASE
 ARG SUMMARY
