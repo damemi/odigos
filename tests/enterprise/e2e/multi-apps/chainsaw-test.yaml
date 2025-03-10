@@ -90,10 +90,10 @@ spec:
           kubectl wait --for=condition=complete job/$job_name
           
           # Delete the job
+          kubectl delete -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/generate-traffic-job.yaml
 
           while true; do
             sleep 5
-            kubectl delete -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/generate-traffic-job.yaml
             
             # Run the wait-for-trace script
             ../../common/traceql_runner.sh tracesql/wait-for-trace.yaml

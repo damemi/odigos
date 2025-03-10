@@ -105,7 +105,7 @@ metadata:
 spec:
   containers:
     - name: data-collection
-  hostNetwork: true
+  (($values.k8sMinorVersion < `26` && hostNetwork != null) || (hostNetwork == null)): true
   nodeSelector:
     kubernetes.io/os: linux
   serviceAccount: odigos-data-collection

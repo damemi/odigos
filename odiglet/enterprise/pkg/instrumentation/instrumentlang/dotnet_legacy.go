@@ -1,9 +1,8 @@
 package instrumentlang
 
 import (
-	"fmt"
 	"github.com/odigos-io/odigos/common"
-	"github.com/odigos-io/odigos/common/consts"
+	"github.com/odigos-io/odigos/k8sutils/pkg/service"
 	"github.com/odigos-io/odigos/odiglet/pkg/env"
 	"k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
@@ -34,7 +33,7 @@ func LegacyDotNet(deviceId string, uniqueDestinationSignals map[common.Observabi
 			profilerEndVar:        profilerId,
 			profilerPathEnv:       profilerPath,
 			tracerHomeEnv:         tracerHome,
-			collectorUrlEnv:       fmt.Sprintf("http://%s:%d", env.Current.NodeIP, consts.OTLPHttpPort),
+			collectorUrlEnv:       service.LocalTrafficOTLPHttpDataCollectionEndpoint(env.Current.NodeIP),
 			serviceNameEnv:        deviceId,
 			exportTypeEnv:         "otlp",
 			startupHookEnv:        startupHook,

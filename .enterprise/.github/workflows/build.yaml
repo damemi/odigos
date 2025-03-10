@@ -189,4 +189,10 @@ jobs:
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
           ODIGOS_API_KEY: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
         run: |
-          chainsaw test odigos-enterprise/tests/e2e/${{ matrix.test-scenario }}
+
+          # Extract minor version number from the kube-version
+          MINOR_VERSION=$(echo ${{ matrix.kube-version }} | sed -E 's/^1\.([0-9]+).*$/\1/')
+          # Run chainsaw with the extracted minor version
+          chainsaw test odigos-enterprise/tests/e2e/${{ matrix.test-scenario }} --values - <<EOF
+          k8sMinorVersion: ${MINOR_VERSION}
+          EOF

@@ -101,6 +101,7 @@ spec:
           
             # Delete the job
             kubectl delete -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/generate-traffic-job.yaml
+
             while true; do
               sleep 5
             
