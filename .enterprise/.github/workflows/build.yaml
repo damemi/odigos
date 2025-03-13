@@ -40,6 +40,7 @@ jobs:
           context: .
           push: false
           tags: registry.odigos.io/odigos-enterprise-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+          provenance: false
           secrets: |
             github_token=${{ secrets.RELEASE_BOT_TOKEN }}
           cache-to: type=local,mode=max,dest=${{ matrix.service }}-enterprise-cache

@@ -83,6 +83,7 @@ jobs:
             VERSION=${{ env.ODIGOS_TAG }}
             RELEASE=${{ env.ODIGOS_TAG }}
           platforms: linux/amd64,linux/arm64
+          provenance: false
           secrets: |
             "github_token=${{ secrets.RELEASE_BOT_TOKEN }}"
 
