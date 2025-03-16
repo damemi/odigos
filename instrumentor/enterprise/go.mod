@@ -6,11 +6,11 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/distros v1.0.161
-	github.com/odigos-io/odigos/instrumentor v1.0.161
+	github.com/odigos-io/odigos/distros v1.0.162
+	github.com/odigos-io/odigos/instrumentor v1.0.162
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5
 	k8s.io/client-go v0.32.2
-	sigs.k8s.io/controller-runtime v0.20.2
+	sigs.k8s.io/controller-runtime v0.20.3
 )
 
 require (
@@ -60,16 +60,16 @@ require (
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
-	go.opentelemetry.io/otel v1.34.0 // indirect
-	go.opentelemetry.io/otel/metric v1.34.0 // indirect
+	go.opentelemetry.io/otel v1.35.0 // indirect
+	go.opentelemetry.io/otel/metric v1.35.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.34.0 // indirect
-	go.opentelemetry.io/otel/trace v1.34.0 // indirect
+	go.opentelemetry.io/otel/trace v1.35.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.5.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/oauth2 v0.25.0 // indirect
-	golang.org/x/sync v0.11.0 // indirect
+	golang.org/x/sync v0.12.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/term v0.29.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
@@ -98,8 +98,8 @@ replace (
 	github.com/odigos-io/odigos-enterprise/distros => ../distros
 	github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
-	github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.161
-	github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.161
-	github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.0.161
-	github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.161
+	github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.162
+	github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.162
+	github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.0.162
+	github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.162
 )
