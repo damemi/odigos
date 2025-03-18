@@ -14,7 +14,7 @@ require (
 	github.com/odigos-io/odigos/common v1.0.162
 	github.com/odigos-io/odigos/instrumentation v1.0.162
 	github.com/odigos-io/odigos/k8sutils v1.0.162
-	github.com/odigos-io/odigos/odiglet v1.0.162
+	github.com/odigos-io/odigos/odiglet v1.0.163-0.20250318094435-aad731a9428e
 	go.opentelemetry.io/auto v0.21.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
@@ -136,19 +136,19 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250226135901-4838f83d1e91
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250317133537-cee9cf63ea1f
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.162
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.163-0.20250318094435-aad731a9428e
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.162
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.163-0.20250318094435-aad731a9428e
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.162
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.163-0.20250318094435-aad731a9428e
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.162
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.163-0.20250318094435-aad731a9428e
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.162
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.163-0.20250318094435-aad731a9428e
 
-replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.162
+replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.163-0.20250318094435-aad731a9428e
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
