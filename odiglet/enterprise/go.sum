@@ -259,8 +259,8 @@ github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20250
 github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20250316150721-0e4078f281ca/go.mod h1:dDdATwqqVNKQt4rqBF/xUGy1G1bLDBx3cuSQC5u/BCY=
 github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20250312141715-a90e5b8ba1b8 h1:wsukQ0CJlP26fmPUYkCqjRPDkqw/OIblhX5Gzb2a1IU=
 github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20250312141715-a90e5b8ba1b8/go.mod h1:QuDevn36UzvtaBnx9KUkdbcvObbxU8001/N02NMdWsU=
-github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250319113454-a0315e8093ea h1:SXoeLxIulWR4MVwtQsvgebzDb7bWtehr+QA0vY7wB6c=
-github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250319113454-a0315e8093ea/go.mod h1:yfPOKeX47jZFQfEyBtIArUmZA91Mli5DdO6RGUuzrqU=
+github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250321143024-66ae5729c957 h1:k7nPoki/h+K48yTHlZOkwGU1RUeRscbN1tIuFn3Or58=
+github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250321143024-66ae5729c957/go.mod h1:yfPOKeX47jZFQfEyBtIArUmZA91Mli5DdO6RGUuzrqU=
 github.com/odigos-io/mysql-instrumentation v0.0.0-20250105084718-c6cb16fc984d h1:Q29x5GsY3RhNAfyS4AinbxnZlDkZlg0ZdKkUckzp1kM=
 github.com/odigos-io/mysql-instrumentation v0.0.0-20250105084718-c6cb16fc984d/go.mod h1:J5jQgrjFpdwSS2N924u5suppg1rSDkm536Fb3ZHDFwU=
 github.com/odigos-io/odigos/api v1.0.164 h1:d2RyIfdd8J0lmYGxJOpHjAo0tiNPCaSxQENShI8ZVfk=
