@@ -6,8 +6,8 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/distros v1.0.164
-	github.com/odigos-io/odigos/instrumentor v1.0.164
+	github.com/odigos-io/odigos/distros v1.0.165-0.20250323103228-01c2514c6dbc
+	github.com/odigos-io/odigos/instrumentor v1.0.165-0.20250323103228-01c2514c6dbc
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5
 	k8s.io/client-go v0.32.3
 	sigs.k8s.io/controller-runtime v0.20.3
@@ -47,7 +47,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/odigos-io/odigos/api v1.0.154-0.20250217045048-3b6721e17d78 // indirect
-	github.com/odigos-io/odigos/common v1.0.154-0.20250217045048-3b6721e17d78 // indirect
+	github.com/odigos-io/odigos/common v1.0.165-0.20250323103228-01c2514c6dbc // indirect
 	github.com/odigos-io/odigos/k8sutils v0.0.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.20.5 // indirect
@@ -94,8 +94,8 @@ replace (
 	github.com/odigos-io/odigos-enterprise/distros => ../distros
 	github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
-	github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.164
-	github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.164
-	github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.0.164
-	github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.164
+	github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.165-0.20250323103228-01c2514c6dbc
+	github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.165-0.20250323103228-01c2514c6dbc
+	github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.0.165-0.20250323103228-01c2514c6dbc
+	github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.165-0.20250323103228-01c2514c6dbc
 )

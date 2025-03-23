@@ -66,6 +66,10 @@ restart-instrumentor:
 deploy-odiglet:
 	make build-odiglet TAG=$(TAG) && make load-to-kind-odiglet TAG=$(TAG) && make restart-odiglet
 
+.PHONY: deploy-instrumentor
+deploy-instrumentor:
+	make build-instrumentor TAG=$(TAG) && make load-to-kind-instrumentor TAG=$(TAG) && make restart-instrumentor
+
 .PHONY: deploy
 deploy:
 	make build-images TAG=$(TAG) && make load-to-kind TAG=$(TAG) && make restart-odiglet && make restart-instrumentor

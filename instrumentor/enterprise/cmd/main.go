@@ -20,14 +20,9 @@ import (
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	_ "net/http/pprof"
-)
-
-var (
-	setupLog = ctrl.Log.WithName("setup")
 )
 
 func main() {
@@ -58,15 +53,17 @@ func main() {
 	// TODO: remove once the webhook stops using the default SDKs from the sdks package
 	sdks.SetDefaultSDKs()
 
+	logger.Info("Starting Odigos Enterprise Instrumentor")
+
 	dp, err := newEnterpriseDistributionProvider()
 	if err != nil {
-		setupLog.Error(err, "Failed to initialize distribution provider")
+		logger.Error(err, "Failed to initialize distribution provider")
 		os.Exit(1)
 	}
 
 	i, err := instrumentor.New(managerOptions, dp)
 	if err != nil {
-		setupLog.Error(err, "Failed to initialize instrumentor")
+		logger.Error(err, "Failed to initialize instrumentor")
 		os.Exit(1)
 	}
 

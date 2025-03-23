@@ -273,11 +273,6 @@ metadata:
 spec:
   containers:
     - name: membership
-      resources:
-        limits:
-          instrumentation.odigos.io/go-ebpf-enterprise: '1'
-        requests:
-          instrumentation.odigos.io/go-ebpf-enterprise: '1'
 status:
   containerStatuses:
     - name: membership

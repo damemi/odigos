@@ -212,6 +212,21 @@ spec:
           instrumentation.odigos.io/generic: "1"
         requests:
           instrumentation.odigos.io/generic: "1"
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: 'frontend'
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: 'java-enterprise'
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: 'default'
+      (env[?name == 'JAVA_OPTS']):
+        - value: '-javaagent:/var/odigos/java-ext-ebpf/javaagent.jar -Dotel.javaagent.extensions=/var/odigos/java-ext-ebpf/otel_agent_extension.jar'
+      (env[?name == 'JAVA_TOOL_OPTIONS']):
+        - value: '-javaagent:/var/odigos/java-ext-ebpf/javaagent.jar -Dotel.javaagent.extensions=/var/odigos/java-ext-ebpf/otel_agent_extension.jar'
 status:
   containerStatuses:
     - name: frontend
@@ -238,6 +253,24 @@ spec:
                   - "true"
   containers:
     - name: coupon
+      resources:
+        limits:
+          instrumentation.odigos.io/generic: "1"
+        requests:
+          instrumentation.odigos.io/generic: "1"
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: 'coupon'
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: 'nodejs-enterprise'
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: 'default'
+      (env[?name == 'NODE_OPTIONS']):
+        - value: '--require /var/odigos/nodejs-ebpf/autoinstrumentation.js'
 status:
   containerStatuses:
     - name: coupon
@@ -269,6 +302,28 @@ spec:
           instrumentation.odigos.io/generic: "1"
         requests:
           instrumentation.odigos.io/generic: "1"
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: 'inventory'
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: 'python-enterprise'
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: 'default'
+      (env[?name == 'OTEL_PYTHON_CONFIGURATOR']):
+        - value: 'ebpf'
+      (env[?name == 'NODE_IP']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.hostIP
+      (env[?name == 'ODIGOS_OPAMP_SERVER_HOST']):
+        - value: '$(NODE_IP):4320'
+      (env[?name == 'PYTHONPATH']):
+        - value: '/bar:/var/odigos/python-ebpf:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation:/var/odigos/python'
 status:
   containerStatuses:
     - name: inventory
@@ -295,11 +350,19 @@ spec:
                   - "true"
   containers:
     - name: membership
-      resources:
-        limits:
-          instrumentation.odigos.io/go-ebpf-enterprise: "1"
-        requests:
-          instrumentation.odigos.io/go-ebpf-enterprise: "1"
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: 'membership'
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: 'golang-enterprise'
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: 'default'
+      (env[?name == 'GODEBUG']):
+        - value: 'tracebackancestors=5'
 status:
   containerStatuses:
     - name: membership
@@ -331,6 +394,21 @@ spec:
           instrumentation.odigos.io/dotnet-native-community: "1"
         requests:
           instrumentation.odigos.io/dotnet-native-community: "1"
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: 'pricing'
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: 'dotnet-community'
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: 'default'
+      (env[?name == 'OTEL_SERVICE_NAME']):
+        - value: 'pricing'
+      (env[?name == 'OTEL_RESOURCE_ATTRIBUTES']):
+        - value: 'k8s.pod.name=$(ODIGOS_POD_NAME),k8s.container.name=pricing,k8s.namespace.name=default,k8s.deployment.name=pricing'
 status:
   containerStatuses:
     - name: pricing
