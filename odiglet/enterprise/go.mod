@@ -10,11 +10,11 @@ require (
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250105084718-c6cb16fc984d
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.0.165-0.20250323103228-01c2514c6dbc
-	github.com/odigos-io/odigos/common v1.0.165-0.20250323103228-01c2514c6dbc
-	github.com/odigos-io/odigos/instrumentation v1.0.165-0.20250323103228-01c2514c6dbc
-	github.com/odigos-io/odigos/k8sutils v1.0.165-0.20250323103228-01c2514c6dbc
-	github.com/odigos-io/odigos/odiglet v1.0.165-0.20250324203258-59a667872bdc
+	github.com/odigos-io/odigos/api v1.0.165
+	github.com/odigos-io/odigos/common v1.0.165
+	github.com/odigos-io/odigos/instrumentation v1.0.165
+	github.com/odigos-io/odigos/k8sutils v1.0.165
+	github.com/odigos-io/odigos/odiglet v1.0.165
 	go.opentelemetry.io/auto v0.21.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
@@ -67,8 +67,8 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/odigos-io/odigos/distros v1.0.165-0.20250323103228-01c2514c6dbc // indirect
-	github.com/odigos-io/odigos/opampserver v1.0.165-0.20250323103228-01c2514c6dbc // indirect
+	github.com/odigos-io/odigos/distros v1.0.165 // indirect
+	github.com/odigos-io/odigos/opampserver v1.0.165 // indirect
 	github.com/odigos-io/odigos/procdiscovery v0.0.0 // indirect
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5 // indirect
 	github.com/odigos-io/runtime-detector v0.0.7 // indirect
@@ -104,12 +104,12 @@ require (
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/arch v0.14.0 // indirect
 	golang.org/x/exp v0.0.0-20241210194714-1829a127f884 // indirect
-	golang.org/x/net v0.35.0 // indirect
+	golang.org/x/net v0.37.0 // indirect
 	golang.org/x/oauth2 v0.26.0 // indirect
 	golang.org/x/sync v0.12.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/term v0.29.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/term v0.30.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250218202821-56aae31c358a // indirect
@@ -136,19 +136,19 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250321160821-cb107af75fa2
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250330131200-ef34d012a77f
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.165-0.20250324203258-59a667872bdc
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.165
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.165-0.20250324203258-59a667872bdc
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.165
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.165-0.20250324203258-59a667872bdc
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.165
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.165-0.20250324203258-59a667872bdc
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.165
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.165-0.20250324203258-59a667872bdc
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.165
 
-replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.165-0.20250324203258-59a667872bdc
+replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.165
 
 replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.0.165-0.20250323103228-01c2514c6dbc
 
