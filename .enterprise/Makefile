@@ -1,7 +1,8 @@
 TAG ?= $(shell odigos version --cluster)
 # These are used to point to different Dockerfiles (such as Dockerfile.rhel) and add -ubi9 to RHEL based images.
 DOCKERFILE=Dockerfile
-IMG_SUFFIX=
+IMG_PREFIX?=
+IMG_SUFFIX?=
 ORG ?= registry.odigos.io
 BUILD_DIR=.
 
@@ -73,6 +74,41 @@ deploy-instrumentor:
 .PHONY: deploy
 deploy:
 	make build-images TAG=$(TAG) && make load-to-kind TAG=$(TAG) && make restart-odiglet && make restart-instrumentor
+
+# Use these to deploy Odigos Enterprise into an EKS cluster
+
+.PHONY: ecr-login
+ecr-login:
+	aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+
+build-tag-push-eks-image/%:
+	docker build --platform linux/amd64 -t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
+	--secret id=github_token,env=GITHUB_TOKEN \
+	--build-arg SERVICE_NAME="$*" \
+	--build-arg ODIGOS_VERSION=$(TAG) \
+	--build-arg VERSION=$(TAG) \
+	--build-arg RELEASE=$(TAG) \
+	--build-arg SUMMARY="$(SUMMARY)" \
+	--build-arg DESCRIPTION="$(DESCRIPTION)"
+	docker tag $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(IMG_PREFIX)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG)
+	docker push $(IMG_PREFIX)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG)
+
+.PHONY: deploy-to-eks
+deploy-to-eks:
+	if [ -z "$(GITHUB_TOKEN)" ]; then \
+		echo "❌ GITHUB_TOKEN is not set"; \
+		exit 1; \
+	fi
+	if [ -z "$(IMG_PREFIX)" ]; then \
+		echo "❌ IMG_PREFIX is not set"; \
+		exit 1; \
+	fi
+	make ecr-login
+	make -j 3 build-tag-push-eks-image/odiglet DOCKERFILE=odiglet/$(DOCKERFILE) SUMMARY="Odiglet for Odigos" DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	make -j 3 build-tag-push-eks-image/instrumentor SUMMARY="Instrumentor for Odigos" DESCRIPTION="Instrumentor manages auto-instrumentation for workloads with Odigos." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	echo "✅ Deployed Odigos to EKS, now install the CLI"
+
+# Debug
 
 .PHONY: debug-odiglet
 debug-odiglet:
