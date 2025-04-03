@@ -81,7 +81,7 @@ deploy:
 ecr-login:
 	aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
 
-build-tag-push-eks-image/%:
+build-tag-push-ecr-image/%:
 	docker build --platform linux/amd64 -t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
 	--secret id=github_token,env=GITHUB_TOKEN \
 	--build-arg SERVICE_NAME="$*" \
@@ -93,8 +93,8 @@ build-tag-push-eks-image/%:
 	docker tag $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(IMG_PREFIX)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG)
 	docker push $(IMG_PREFIX)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG)
 
-.PHONY: deploy-to-eks
-deploy-to-eks:
+.PHONY: publish-to-ecr
+publish-to-ecr:
 	if [ -z "$(GITHUB_TOKEN)" ]; then \
 		echo "❌ GITHUB_TOKEN is not set"; \
 		exit 1; \
@@ -104,9 +104,9 @@ deploy-to-eks:
 		exit 1; \
 	fi
 	make ecr-login
-	make -j 3 build-tag-push-eks-image/odiglet DOCKERFILE=odiglet/$(DOCKERFILE) SUMMARY="Odiglet for Odigos" DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
-	make -j 3 build-tag-push-eks-image/instrumentor SUMMARY="Instrumentor for Odigos" DESCRIPTION="Instrumentor manages auto-instrumentation for workloads with Odigos." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
-	echo "✅ Deployed Odigos to EKS, now install the CLI"
+	make -j 3 build-tag-push-ecr-image/odiglet DOCKERFILE=odiglet/$(DOCKERFILE) SUMMARY="Odiglet for Odigos" DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	make -j 3 build-tag-push-ecr-image/instrumentor SUMMARY="Instrumentor for Odigos" DESCRIPTION="Instrumentor manages auto-instrumentation for workloads with Odigos." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	echo "✅ Publish Odigos images into ECR, now install the CLI"
 
 # Debug
 
