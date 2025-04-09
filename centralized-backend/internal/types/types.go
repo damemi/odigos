@@ -1,0 +1,17 @@
+package types
+
+type GqlRequestPayload struct {
+	Query     string                 `json:"query"`
+	RequestId string                 `json:"request_id"`
+	Variables map[string]interface{} `json:"variables"`
+}
+
+type ResponsePayload struct {
+	ProxyID  string `json:"proxy_id"`
+	Response string `json:"response"`
+}
+
+type ConnectionStatus struct {
+	ProxyID string `json:"proxy_id"`
+	Status  string `json:"status"`
+}

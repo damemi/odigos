@@ -1,0 +1,18 @@
+# GraphQL schema example
+#
+# https://gqlgen.com/getting-started/
+
+scalar JSON
+
+type Connection {
+  proxyID: String!
+  status: String!
+  name: String!
+}
+
+type Query {
+  connections: [Connection!]!
+  remoteFetch(proxyID: String!, query: String!, variables: JSON!): String!
+}
+
+# type Mutation {}
