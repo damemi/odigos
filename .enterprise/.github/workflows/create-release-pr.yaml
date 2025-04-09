@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Version to release"
+        description: 'Version to release'
         required: true
 
   repository_dispatch:
@@ -35,7 +35,6 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
         run: |
           curl -X POST -H 'Content-type: application/json' --data '{"description":"Detected new tag, creating PR in enterprise", "tag":"${{ env.TAG }}"}' ${{ env.SLACK_WEBHOOK_URL }}
-  
 
       - uses: actions/checkout@v4
 
@@ -81,6 +80,14 @@ jobs:
           sed -i "s|github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v.*|github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros ${TAG}|g" go.mod
           sed -i "s|github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v.*|github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils ${TAG}|g" go.mod
           go get github.com/odigos-io/odigos/instrumentor@${TAG} github.com/odigos-io/odigos/distros@${TAG}
+          go mod tidy
+
+      - name: update centralized-proxy dependencies
+        working-directory: ./centralized-proxy
+        run: |
+          git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          go env -w GOPRIVATE=github.com/odigos-io/*
+          go get github.com/odigos-io/odigos/api@${TAG} github.com/odigos-io/odigos/common@${TAG} github.com/odigos-io/odigos/k8sutils@${TAG}
           go mod tidy
 
       - name: github preperation
