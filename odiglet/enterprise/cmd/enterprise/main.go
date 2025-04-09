@@ -60,8 +60,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	factories, err := ebpfInstrumentationFactories()
+	if err != nil {
+		log.Logger.Error(err, "failed to set up ebpf factories")
+		os.Exit(1)
+	}
+
 	instrumentationManagerOptions := ebpf.InstrumentationManagerOptions{
-		Factories:          ebpfInstrumentationFactories(),
+		Factories:          factories,
 		DistributionGetter: enterpriseDistrosGetter,
 	}
 
@@ -118,12 +124,17 @@ func deviceInjectionCallbacks() instrumentation.OtelSdksLsf {
 	}
 }
 
-func ebpfInstrumentationFactories() map[commonInstrumentation.OtelDistribution]commonInstrumentation.Factory {
+func ebpfInstrumentationFactories() (map[commonInstrumentation.OtelDistribution]commonInstrumentation.Factory, error) {
+	goFactory, err := sdks.NewGoInstrumentationFactoryEnterprise()
+	if err != nil {
+		return nil, err
+	}
+
 	return map[commonInstrumentation.OtelDistribution]commonInstrumentation.Factory{
 		{
 			Language: common.GoProgrammingLanguage,
 			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-		}: sdks.NewGoInstrumentationFactoryEnterprise(),
+		}: goFactory,
 		{
 			Language: common.JavaProgrammingLanguage,
 			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
@@ -151,5 +162,5 @@ func ebpfInstrumentationFactories() map[commonInstrumentation.OtelDistribution]c
 			Language: common.MySQLProgrammingLanguage,
 			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
 		}: sdks.NewMySQLInstrumentationFactoryEnterprise(),
-	}
+	}, nil
 }

@@ -1,37 +1,104 @@
 package sdks
 
 import (
+	"bytes"
 	"context"
+	"crypto"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"strings"
+	"time"
 
-	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
-	"github.com/odigos-io/odigos/api/odigos/v1alpha1/instrumentationrules"
-	"github.com/odigos-io/odigos/common"
-	"github.com/odigos-io/odigos/k8sutils/pkg/service"
-	"github.com/odigos-io/odigos/instrumentation"
-	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
-	"github.com/odigos-io/odigos/odiglet/pkg/env"
-	"github.com/odigos-io/odigos/odiglet/pkg/log"
+	"encoding/base64"
+	"encoding/pem"
+
 	"go.opentelemetry.io/auto"
 	goAutoConfig "go.opentelemetry.io/auto/config"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/trace"
 	apitrace "go.opentelemetry.io/otel/trace"
+
+	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	"github.com/odigos-io/odigos/api/odigos/v1alpha1/instrumentationrules"
+	"github.com/odigos-io/odigos/common"
+	"github.com/odigos-io/odigos/instrumentation"
+	"github.com/odigos-io/odigos/k8sutils/pkg/service"
+	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
+	"github.com/odigos-io/odigos/odiglet/pkg/env"
+	"github.com/odigos-io/odigos/odiglet/pkg/log"
 )
+
+const rsaPublicKeyString = `-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmMXVUgppNeHZA507GFX3
+Pg2c+p95AFOJ1SY1OYklZoHYu3wEsx0mdsr2shSXMMvsbekMTlyeJ4L5SUgGLDyh
+h57aBYC4WP9SGE1btJt3Faz/mZRsGgsV/JoqnezHzEDZBaNtmiszf0kzLNcd2RxE
+JnMVMEH3i2h0lQhKNwGcLimijopdrWgnMMcnVXB8DUrQrVqK+OjxIN/Uv23jv4Vz
+vjS5OxdhOOAlRNp+44JZg5ISnRt8VnM+ETDE6UOF5WcKES+r7WFFxT1q+XPnIYix
+eNabH8dpHROXDm8+N9JI/yMWUChnQe9oqSiCNj/xc5VYaFrdLCbpsBGRT7lVL9fC
+bwIDAQAB
+-----END PUBLIC KEY-----`
+
+var offsetsFilePathEnv = "OTEL_GO_OFFSETS_FILE"
 
 type GoOtelEbpfSdkEnterprise struct {
 	inst *auto.Instrumentation
 	cp   *odigosebpf.ConfigProvider[goAutoConfig.InstrumentationConfig]
 }
 
-type GoInstrumentationFactoryEnterprise struct{}
+type GoInstrumentationFactoryEnterprise struct {
+	offsetLastModified time.Time
+	offsetFile         io.Reader
+}
 
-func NewGoInstrumentationFactoryEnterprise() instrumentation.Factory {
-	return &GoInstrumentationFactoryEnterprise{}
+func NewGoInstrumentationFactoryEnterprise() (instrumentation.Factory, error) {
+	g := &GoInstrumentationFactoryEnterprise{
+		offsetLastModified: time.Time{},
+	}
+	err := g.updateLocalOffsets()
+	if err != nil {
+		return nil, err
+	}
+
+	return g, nil
+}
+
+func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
+	// if the offsets file var is set, check if it has been modified
+	if path := os.Getenv(offsetsFilePathEnv); path != "" {
+		info, err := os.Stat(path)
+		if err != nil {
+			return err
+		}
+
+		// if the modtime has been updated, read the new bytes
+		if info.ModTime().After(g.offsetLastModified) {
+			file, err := readAndVerifyOffsetsFile(path)
+			if err != nil {
+				return err
+			}
+			g.offsetFile = file
+			g.offsetLastModified = info.ModTime()
+		}
+	} else {
+		// if the env var isn't set, clear the local offset file
+		// this allows switching back to in-memory offsets by deleting the env var
+		g.offsetFile = strings.NewReader("")
+	}
+
+	return nil
 }
 
 func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
+	err := g.updateLocalOffsets()
+	if err != nil {
+		return nil, err
+	}
+
 	defaultExporter, err := otlptracegrpc.New(
 		ctx,
 		otlptracegrpc.WithInsecure(),
@@ -52,8 +119,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 
 	// TODO: once we have all the desired functionality in the generic config provider this code should
 	// be refactored to call the OSS Odiglet factory
-	inst, err := auto.NewInstrumentation(
-		ctx,
+	opts := []auto.InstrumentationOption{
 		auto.WithEnv(), // for OTEL_LOG_LEVEL
 		auto.WithPID(pid),
 		auto.WithResourceAttributes(settings.ResourceAttributes...),
@@ -61,6 +127,15 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 		auto.WithTraceExporter(defaultExporter),
 		auto.WithGlobal(),
 		auto.WithConfigProvider(cp),
+	}
+
+	if g.offsetFile != nil {
+		opts = append(opts, auto.WithOffsetFile(g.offsetFile))
+	}
+
+	inst, err := auto.NewInstrumentation(
+		ctx,
+		opts...,
 	)
 	if err != nil {
 		log.Logger.Error(err, "instrumentation setup failed")
@@ -365,4 +440,49 @@ func mergePayloadConfigs(defaultConfig *instrumentationrules.PayloadCollection, 
 		}
 	}
 	return mergedConfig
+}
+
+func readAndVerifyOffsetsFile(path string) (io.Reader, error) {
+	fileBytes, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	parts := strings.Split(string(fileBytes), "---SIGNATURE---")
+	if len(parts) != 2 {
+		return nil, errors.New("Invalid file format. Signature delimiter not found.")
+	}
+
+	originalContent := parts[0]
+	signatureBase64 := strings.TrimSpace(parts[1])
+
+	// Decode the Base64-encoded signature
+	signature, err := base64.StdEncoding.DecodeString(signatureBase64)
+	if err != nil {
+		return nil, err
+	}
+
+	block, _ := pem.Decode([]byte(rsaPublicKeyString))
+	if block == nil || block.Type != "PUBLIC KEY" {
+		return nil, errors.New("Failed to decode PEM block containing public key")
+	}
+
+	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	rsaPublicKey, ok := publicKey.(*rsa.PublicKey)
+	if !ok {
+		return nil, errors.New("Public key is not of type RSA")
+	}
+
+	hash := sha256.Sum256([]byte(originalContent))
+
+	err = rsa.VerifyPKCS1v15(rsaPublicKey, crypto.SHA256, hash[:], signature)
+	if err != nil {
+		return nil, err
+	}
+
+	return bytes.NewReader([]byte(originalContent)), nil
 }
