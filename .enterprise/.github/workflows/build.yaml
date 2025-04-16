@@ -18,12 +18,9 @@ jobs:
     runs-on: warp-ubuntu-latest-x64-4x-spot
     strategy:
       matrix:
-        service: [odiglet, instrumentor]
-        include:
-          - service: odiglet
-            dockerfile: odiglet/Dockerfile
-          - service: instrumentor
-            dockerfile: Dockerfile
+        service: [odiglet, instrumentor, central-proxy]
+        dockerfile: [Dockerfile, Dockerfile.rhel]
+
     steps:
       - uses: actions/checkout@v4
       - name: Set up Docker Buildx
@@ -36,10 +33,13 @@ jobs:
       - name: Build Image
         uses: docker/build-push-action@v6
         with:
-          file: ${{ matrix.dockerfile }}
+          file: >-
+            ${{ matrix.service == 'odiglet' && format('odiglet/{0}', matrix.dockerfile)
+            || matrix.service == 'central-proxy' && format('central-proxy/{0}', matrix.dockerfile)
+            || matrix.dockerfile }}
           context: .
           push: false
-          tags: registry.odigos.io/odigos-enterprise-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+          tags: registry.odigos.io/odigos-enterprise-${{ matrix.service }}${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}:${{ env.IMAGE_TAG }}
           provenance: false
           secrets: |
             github_token=${{ secrets.RELEASE_BOT_TOKEN }}
@@ -50,7 +50,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.service }}-enterprise
+          name: ${{ matrix.service }}-enterprise${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}
           path: /tmp/${{ matrix.service }}-enterprise.tar
 
   build-oss-components-for-tests:

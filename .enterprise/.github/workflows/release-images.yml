@@ -18,15 +18,18 @@ jobs:
   release:
     strategy:
       matrix:
-        service: ['odiglet', 'instrumentor']
+        service: ['odiglet', 'instrumentor', 'central-proxy']
         dockerfile: ['Dockerfile', 'Dockerfile.rhel']
         include:
           - service: odiglet
-            summary: "Odiglet for Odigos"
-            description: "Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs."
+            summary: 'Odiglet for Odigos'
+            description: 'Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs.'
           - service: instrumentor
-            summary: "Instrumentor for Odigos"
-            description: "Instrumentor manages auto-instrumentation for workloads with Odigos."
+            summary: 'Instrumentor for Odigos'
+            description: 'Instrumentor manages auto-instrumentation for workloads with Odigos.'
+          - service: central-proxy
+            summary: 'Central Proxy for Odigos'
+            description: 'The Central Proxy handles communication between clusters and the centralized Odigos backend.'
     runs-on: large-runner
     steps:
       - uses: actions/checkout@v4
@@ -58,7 +61,7 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           access_token_lifetime: 1200s
-        
+
       - name: Login to Artifact Registry
         uses: docker/login-action@v3
         with:
@@ -77,7 +80,10 @@ jobs:
         env:
           ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag}}
         with:
-          file: ${{ matrix.service == 'odiglet' && format('odiglet/{0}', matrix.dockerfile) || matrix.dockerfile }}
+          file: >-
+            ${{ matrix.service == 'odiglet' && format('odiglet/{0}', matrix.dockerfile)
+            || matrix.service == 'central-proxy' && format('central-proxy/{0}', matrix.dockerfile)
+            || matrix.dockerfile }}
           push: true
           tags: |
             us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}:${{ env.ODIGOS_TAG }}
@@ -138,7 +144,7 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
         run: |
           curl -X POST -H 'Content-type: application/json' --data '{"description":"Odigos enterprise components published to registry. Next step: release CLI", "tag":"${{ env.ODIGOS_TAG }}"}' ${{ env.SLACK_WEBHOOK_URL }}
-      
+
       - name: Notify Slack on Failure
         if: failure()
         env:
