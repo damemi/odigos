@@ -8,10 +8,10 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/odigos-io/centralized-proxy/internal/config"
-	"github.com/odigos-io/centralized-proxy/internal/graphql"
-	"github.com/odigos-io/centralized-proxy/internal/logger"
-	"github.com/odigos-io/centralized-proxy/kube"
+	"github.com/odigos-io/central-proxy/internal/config"
+	"github.com/odigos-io/central-proxy/internal/graphql"
+	"github.com/odigos-io/central-proxy/internal/logger"
+	"github.com/odigos-io/central-proxy/kube"
 )
 
 func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string) (*WebSocketClient, error) {

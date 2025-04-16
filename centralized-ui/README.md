@@ -39,7 +39,7 @@ To develop the UI, you'll need to maintain the UI kit repo: [ui-kit](https://git
 5. Start the Centralized proxy:
 
    ```bash
-   cd ./centralized-proxy
+   cd ./central-proxy
    go run .
    ```
 

@@ -1,4 +1,4 @@
-module github.com/odigos-io/centralized-proxy
+module github.com/odigos-io/central-proxy
 
 go 1.23.5
 

@@ -4,15 +4,13 @@ FROM golang:1.23-alpine AS builder
 # Set the working directory inside the container
 WORKDIR /app
 
-# Copy and download dependencies
-COPY go.mod go.sum ./
+COPY central-proxy/ central-proxy
+
+WORKDIR /app/central-proxy
+# Copy and download dependencies 
 RUN go mod download
-
-# Copy the entire application code
-COPY . .
-
 # Build the binary
-RUN go build -o centralized-proxy main.go
+RUN go build -o central-proxy main.go
 
 # Use a minimal runtime image
 FROM alpine:latest
@@ -21,10 +19,11 @@ FROM alpine:latest
 WORKDIR /root/
 
 # Copy the built binary from the builder stage
-COPY --from=builder /app/centralized-proxy .
+COPY --from=builder /app/central-proxy .
 
 # Expose the necessary port
 EXPOSE 8082
+USER 65532:65532
 
 # Run the application
-CMD ["./centralized-proxy"]
+CMD ["./central-proxy"]

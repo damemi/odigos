@@ -6,10 +6,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/odigos-io/centralized-proxy/internal/config"
-	"github.com/odigos-io/centralized-proxy/internal/logger"
-	websocketserver "github.com/odigos-io/centralized-proxy/internal/websocket"
-	"github.com/odigos-io/centralized-proxy/kube"
+	"github.com/odigos-io/central-proxy/internal/config"
+	"github.com/odigos-io/central-proxy/internal/logger"
+	websocketserver "github.com/odigos-io/central-proxy/internal/websocket"
+	"github.com/odigos-io/central-proxy/kube"
 )
 
 func main() {

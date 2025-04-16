@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/odigos-io/centralized-proxy/kube"
+	"github.com/odigos-io/central-proxy/kube"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/consts"
