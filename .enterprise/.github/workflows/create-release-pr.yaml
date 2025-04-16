@@ -82,8 +82,8 @@ jobs:
           go get github.com/odigos-io/odigos/instrumentor@${TAG} github.com/odigos-io/odigos/distros@${TAG}
           go mod tidy
 
-      - name: update centralized-proxy dependencies
-        working-directory: ./centralized-proxy
+      - name: update central-proxy dependencies
+        working-directory: ./central-proxy
         run: |
           git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
           go env -w GOPRIVATE=github.com/odigos-io/*
