@@ -1,0 +1,42 @@
+name: Prepare Odigos Central Release
+
+on:
+  push:
+    branches:
+      - 'main'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-job:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create or Update Release PR
+        uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.RELEASE_BOT_TOKEN }}
+
+      # The logic below handles the npm publication:
+      # - uses: actions/setup-node@v4
+      #   with:
+      #     node-version: 20
+      #     registry-url: 'https://registry.npmjs.org'
+      #   if: ${{ steps.release.outputs.release_created }}
+      # - run: yarn
+      #   if: ${{ steps.release.outputs.release_created }}
+      # - run: yarn compile
+      #   if: ${{ steps.release.outputs.release_created }}
+      # - run: npm publish
+      #   env:
+      #     NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+      #   if: ${{ steps.release.outputs.release_created }}
