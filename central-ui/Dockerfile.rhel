@@ -1,17 +1,20 @@
-# Use the correct Go version
-FROM golang:1.23 AS builder
 
-# Set the working directory inside the container
+FROM node:22-alpine AS builder
+
+# Set working directory inside the container
 WORKDIR /app
 
-COPY central-ui/ central-ui
+# Copy go.mod and go.sum to download dependencies
+COPY package.json yarn.lock ./
 
-WORKDIR /app/central-ui
-# Copy and download dependencies 
-RUN go mod download
-# Build the binary
-RUN go build -o central-ui main.go
-RUN make licenses
+# Install dependencies
+RUN yarn install --frozen-lockfile
+
+# Copy application source code
+COPY . .
+
+# Build the Next.js app
+RUN yarn build
 
 # Use a minimal runtime image
 FROM registry.access.redhat.com/ubi9/ubi-micro:latest
@@ -26,17 +29,22 @@ LABEL "version"=$VERSION
 LABEL "release"=$RELEASE
 LABEL "summary"=$SUMMARY
 LABEL "description"=$DESCRIPTION
+                                                                                                                                                                                                                                                                                                                                                      
 
-# Set working directory
-WORKDIR /root/
+# Set working directory inside the container
+WORKDIR /app
 
-# Copy the built binary from the builder stage
-COPY --from=builder /app/central-ui .
+# Copy only the built Next.js app
+COPY --from=builder /app/package.json /app/yarn.lock ./
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/central-ui/licenses /licenses
 
-# Expose the necessary port
-EXPOSE 8082
+
+# Expose the frontend port
+EXPOSE 3000
 USER 65532:65532
 
-# Run the application
-CMD ["./central-ui"]
+# Start Next.js in production mode
+CMD ["yarn", "start"]

@@ -1,5 +1,5 @@
 # 1️⃣ Build Stage: Compile Next.js App
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 # Set working directory inside the container
 WORKDIR /app
@@ -17,7 +17,7 @@ COPY . .
 RUN yarn build
 
 # 2️⃣ Runtime Stage: Serve with Next.js Built-in Server
-FROM node:20-alpine
+FROM node:22-alpine
 
 # Set working directory
 WORKDIR /app

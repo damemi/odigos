@@ -1,16 +1,20 @@
-# Use the correct Go version
-FROM golang:1.23 AS builder
+# 1️⃣ Build Stage: Compile Go Binary
+FROM golang:1.23-alpine AS builder
 
-# Set the working directory inside the container
+# Set working directory inside the container
 WORKDIR /app
 
-COPY central-backend/ central-backend
+# Copy go.mod and go.sum to download dependencies
+COPY go.mod go.sum ./
 
-WORKDIR /app/central-backend
-# Copy and download dependencies 
+# Download dependencies
 RUN go mod download
-# Build the binary
-RUN go build -o central-backend main.go
+
+# Copy the rest of the source code
+COPY . .
+
+# Build the Go application
+RUN go build -o central-backend .
 RUN make licenses
 
 # Use a minimal runtime image
@@ -26,17 +30,17 @@ LABEL "version"=$VERSION
 LABEL "release"=$RELEASE
 LABEL "summary"=$SUMMARY
 LABEL "description"=$DESCRIPTION
+                                                                                                                                                                                                                                                                                                                                                      
 
-# Set working directory
-WORKDIR /root/
+# Set working directory inside the container
+WORKDIR /app
 
-# Copy the built binary from the builder stage
+# Copy the compiled Go binary from the build stage
 COPY --from=builder /app/central-backend .
 COPY --from=builder /app/central-backend/licenses /licenses
 
-# Expose the necessary port
-EXPOSE 8082
+# Expose the backend port
+EXPOSE 8081
 USER 65532:65532
-
-# Run the application
-CMD ["./central-backend"]
+# Run the backend service
+CMD ["/app/central-backend"]
