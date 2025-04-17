@@ -24,9 +24,11 @@ jobs:
           - service: central-ui
             summary: 'Central UI for Odigos'
             description: 'The Central UI is the web interface for Central Odigos, providing a user-friendly experience for managing and visualizing data.'
+            path: central-ui
           - service: central-backend
             summary: 'Central Backend for Odigos'
             description: 'The Central Backend is the core component of Central Odigos, responsible for data processing and management.'
+            path: central-backend
     runs-on: large-runner
     steps:
       - uses: actions/checkout@v4
@@ -83,6 +85,7 @@ jobs:
             ${{ matrix.service == 'central-ui' && format('central-ui/{0}', matrix.dockerfile)
             || matrix.service == 'central-backend' && format('central-backend/{0}', matrix.dockerfile)
             || matrix.dockerfile }}
+          context: ${{ matrix.path }}
           push: true
           tags: |
             us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}:${{ env.ODIGOS_TAG }}
