@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/odigos-io/centralized-backend/internal/config"
-	"github.com/odigos-io/centralized-backend/internal/consts"
-	"github.com/odigos-io/centralized-backend/internal/logger"
-	"github.com/odigos-io/centralized-backend/internal/types"
+	"github.com/odigos-io/central-backend/internal/config"
+	"github.com/odigos-io/central-backend/internal/consts"
+	"github.com/odigos-io/central-backend/internal/logger"
+	"github.com/odigos-io/central-backend/internal/types"
 )
 
 type RedisClient struct {

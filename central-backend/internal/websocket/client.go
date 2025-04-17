@@ -9,10 +9,10 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/odigos-io/centralized-backend/internal/consts"
-	"github.com/odigos-io/centralized-backend/internal/logger"
-	redisclient "github.com/odigos-io/centralized-backend/internal/redis"
-	"github.com/odigos-io/centralized-backend/internal/types"
+	"github.com/odigos-io/central-backend/internal/consts"
+	"github.com/odigos-io/central-backend/internal/logger"
+	redisclient "github.com/odigos-io/central-backend/internal/redis"
+	"github.com/odigos-io/central-backend/internal/types"
 )
 
 const ProxyIDQueryParam = "proxyID"

@@ -3,7 +3,7 @@ package config
 import (
 	"os"
 
-	"github.com/odigos-io/centralized-backend/internal/utils"
+	"github.com/odigos-io/central-backend/internal/utils"
 )
 
 type AppConfig struct {

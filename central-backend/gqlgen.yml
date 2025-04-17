@@ -26,7 +26,7 @@ resolver:
 # gqlgen will search for any type names in the schema in these go packages
 # if they match it will use them, otherwise it will generate them.
 autobind:
-#  - github.com/odigos-io/centralized-backend/graph/model
+#  - github.com/odigos-io/central-backend/graph/model
 
 models:
   ID:

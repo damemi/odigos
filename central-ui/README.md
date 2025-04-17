@@ -29,24 +29,24 @@ To develop the UI, you'll need to maintain the UI kit repo: [ui-kit](https://git
    yarn back:start
    ```
 
-4. Start the Centralized backend:
+4. Start the Central backend:
 
    ```bash
-   cd ./centralized-backend
+   cd ./central-backend
    go run .
    ```
 
-5. Start the Centralized proxy:
+5. Start the Central proxy:
 
    ```bash
    cd ./central-proxy
    go run .
    ```
 
-6. Start the Centralized UI:
+6. Start the Central UI:
 
    ```bash
-   cd ./centralized-ui
+   cd ./central-ui
    yarn
    yarn dev
    ```

@@ -14,7 +14,7 @@ import (
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/introspection"
-	"github.com/odigos-io/centralized-backend/graph/model"
+	"github.com/odigos-io/central-backend/graph/model"
 	gqlparser "github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 )
@@ -612,7 +612,7 @@ func (ec *executionContext) _Query_connections(ctx context.Context, field graphq
 	}
 	res := resTmp.([]*model.Connection)
 	fc.Result = res
-	return ec.marshalNConnection2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralizedᚑbackendᚋgraphᚋmodelᚐConnectionᚄ(ctx, field.Selections, res)
+	return ec.marshalNConnection2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐConnectionᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Query_connections(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -3274,7 +3274,7 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
-func (ec *executionContext) marshalNConnection2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralizedᚑbackendᚋgraphᚋmodelᚐConnectionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Connection) graphql.Marshaler {
+func (ec *executionContext) marshalNConnection2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐConnectionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Connection) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -3298,7 +3298,7 @@ func (ec *executionContext) marshalNConnection2ᚕᚖgithubᚗcomᚋodigosᚑio�
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNConnection2ᚖgithubᚗcomᚋodigosᚑioᚋcentralizedᚑbackendᚋgraphᚋmodelᚐConnection(ctx, sel, v[i])
+			ret[i] = ec.marshalNConnection2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐConnection(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -3318,7 +3318,7 @@ func (ec *executionContext) marshalNConnection2ᚕᚖgithubᚗcomᚋodigosᚑio�
 	return ret
 }
 
-func (ec *executionContext) marshalNConnection2ᚖgithubᚗcomᚋodigosᚑioᚋcentralizedᚑbackendᚋgraphᚋmodelᚐConnection(ctx context.Context, sel ast.SelectionSet, v *model.Connection) graphql.Marshaler {
+func (ec *executionContext) marshalNConnection2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐConnection(ctx context.Context, sel ast.SelectionSet, v *model.Connection) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")

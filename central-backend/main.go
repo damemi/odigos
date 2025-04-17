@@ -12,11 +12,11 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
-	"github.com/odigos-io/centralized-backend/graph"
-	"github.com/odigos-io/centralized-backend/internal/config"
-	"github.com/odigos-io/centralized-backend/internal/logger"
-	redisclient "github.com/odigos-io/centralized-backend/internal/redis"
-	websocketserver "github.com/odigos-io/centralized-backend/internal/websocket"
+	"github.com/odigos-io/central-backend/graph"
+	"github.com/odigos-io/central-backend/internal/config"
+	"github.com/odigos-io/central-backend/internal/logger"
+	redisclient "github.com/odigos-io/central-backend/internal/redis"
+	websocketserver "github.com/odigos-io/central-backend/internal/websocket"
 )
 
 func main() {

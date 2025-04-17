@@ -20,7 +20,7 @@ RUN go mod download
 COPY . .
 
 # Build the Go application
-RUN go build -o centralized-backend .
+RUN go build -o central-backend .
 
 # 2️⃣ Runtime Stage: Minimal Image for Execution
 FROM registry.fedoraproject.org/fedora-minimal:38                                                                                                                                                                                                                                                                                                                                                        
@@ -29,10 +29,10 @@ FROM registry.fedoraproject.org/fedora-minimal:38
 WORKDIR /app
 
 # Copy the compiled Go binary from the build stage
-COPY --from=builder /app/centralized-backend .
+COPY --from=builder /app/central-backend .
 
 # Expose the backend port
 EXPOSE 8081
 
 # Run the backend service
-CMD ["/app/centralized-backend"]
+CMD ["/app/central-backend"]
