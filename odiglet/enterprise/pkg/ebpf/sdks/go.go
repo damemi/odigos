@@ -83,6 +83,7 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 			}
 			g.offsetFile = file
 			g.offsetLastModified = info.ModTime()
+			log.Logger.Info("using custom Go offsets file")
 		}
 	} else {
 		// if the env var isn't set, clear the local offset file
@@ -96,7 +97,8 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
 	err := g.updateLocalOffsets()
 	if err != nil {
-		return nil, err
+		log.Logger.Error(err, "no custom Go offsets loaded, falling back to default offsets")
+		g.offsetFile = strings.NewReader("")
 	}
 
 	defaultExporter, err := otlptracegrpc.New(
