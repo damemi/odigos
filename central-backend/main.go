@@ -22,7 +22,7 @@ import (
 func main() {
 
 	logger.InitLogger()
-	logger.Log.Info("Starting Centralized Backend Service...")
+	logger.Log.Info("Starting Central Backend Service...")
 
 	ctx := context.Background()
 
