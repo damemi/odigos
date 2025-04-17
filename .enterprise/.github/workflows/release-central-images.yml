@@ -1,4 +1,4 @@
-name: Release Enterprise Components to Artifact Registry
+name: Release Odigos Central Components to Artifact Registry
 on:
   push:
     tags:
