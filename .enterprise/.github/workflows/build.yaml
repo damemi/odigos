@@ -197,3 +197,17 @@ jobs:
           chainsaw test odigos-enterprise/tests/e2e/${{ matrix.test-scenario }} --values - <<EOF
           k8sMinorVersion: ${MINOR_VERSION}
           EOF
+
+      - name: Run diagnose command
+        if: ${{ failure() }}
+        run: |
+          odigos/cli/odigos diagnose
+        continue-on-error: true  
+      - name: Upload diagnose artifact
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-details-${{ matrix.test-scenario }}-${{ matrix.kube-version }}
+          path: odigos_debug*.tar.gz
+        continue-on-error: true
+  
