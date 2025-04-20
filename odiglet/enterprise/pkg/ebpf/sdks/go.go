@@ -75,6 +75,12 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 			return err
 		}
 
+		// If the file is empty, use default offsets
+		if info.Size() == 0 {
+			g.offsetFile = strings.NewReader("")
+			return nil
+		}
+
 		// if the modtime has been updated, read the new bytes
 		if info.ModTime().After(g.offsetLastModified) {
 			file, err := readAndVerifyOffsetsFile(path)
