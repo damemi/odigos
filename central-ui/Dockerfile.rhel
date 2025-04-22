@@ -5,13 +5,13 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Copy go.mod and go.sum to download dependencies
-COPY package.json yarn.lock ./
+COPY central-ui/package.json central-ui/yarn.lock ./
 
 # Install dependencies
 RUN yarn install --frozen-lockfile
 
 # Copy application source code
-COPY . .
+COPY central-ui/ .
 
 # Build the Next.js app
 RUN yarn build
@@ -39,7 +39,7 @@ COPY --from=builder /app/package.json /app/yarn.lock ./
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/central-ui/licenses /licenses
+COPY --from=builder /app/licenses /licenses
 
 
 # Expose the frontend port

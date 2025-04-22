@@ -5,13 +5,13 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Copy package.json and yarn.lock for dependency installation
-COPY package.json yarn.lock ./
+COPY central-ui/package.json central-ui/yarn.lock ./
 
 # Install dependencies
 RUN yarn install --frozen-lockfile
 
 # Copy application source code
-COPY . .
+COPY central-ui/ .
 
 # Build the Next.js app
 RUN yarn build
