@@ -18,38 +18,61 @@ jobs:
   release:
     strategy:
       matrix:
-        service: ['odiglet', 'instrumentor', 'central-proxy']
+        service:
+          [
+            'odiglet',
+            'instrumentor',
+            'central-proxy',
+            'central-ui',
+            'central-backend',
+          ]
         dockerfile: ['Dockerfile', 'Dockerfile.rhel']
         include:
           - service: odiglet
             summary: 'Odiglet for Odigos'
             description: 'Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs.'
+            path: odiglet
           - service: instrumentor
             summary: 'Instrumentor for Odigos'
             description: 'Instrumentor manages auto-instrumentation for workloads with Odigos.'
+            path: .
           - service: central-proxy
             summary: 'Central Proxy for Odigos'
             description: 'The Central Proxy handles communication between clusters and the centralized Odigos backend.'
+            path: central-proxy
+          - service: central-ui
+            summary: 'Central UI for Odigos'
+            description: 'The Central UI is the web interface for Central Odigos, providing a user-friendly experience for managing and visualizing data.'
+            path: central-ui
+          - service: central-backend
+            summary: 'Central Backend for Odigos'
+            description: 'The Central Backend is the core component of Central Odigos, responsible for data processing and management.'
+            path: central-backend
+
     runs-on: large-runner
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - run: git fetch --force --tags
+
       - name: Set env
         id: vars
-        run: |
-          echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+        run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+
       - name: Notify Slack Start
         env:
-          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag}}
+          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
           SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
         run: |
           curl -X POST -H 'Content-type: application/json' --data '{
-          "description":"Start releasing Odigos enterprise component: ${{ matrix.service }}. (${{ matrix.dockerfile == 'Dockerfile.rhel' && 'UBI9' || 'Standard' }} image). This should take few minutes",
-          "tag":"${{ env.ODIGOS_TAG }}"}' ${{ env.SLACK_WEBHOOK_URL }}
+            "description":"Start releasing Odigos enterprise component: ${{ matrix.service }}. (${{ matrix.dockerfile == 'Dockerfile.rhel' && 'UBI9' || 'Standard' }} image). This should take few minutes",
+            "tag":"${{ env.ODIGOS_TAG }}"
+          }' ${{ env.SLACK_WEBHOOK_URL }}
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -78,12 +101,10 @@ jobs:
       - name: Build and Push Enterprise Image
         uses: docker/build-push-action@v6
         env:
-          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag}}
+          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
         with:
-          file: >-
-            ${{ matrix.service == 'odiglet' && format('odiglet/{0}', matrix.dockerfile)
-            || matrix.service == 'central-proxy' && format('central-proxy/{0}', matrix.dockerfile)
-            || matrix.dockerfile }}
+          file: ${{ format('{0}/{1}', matrix.path, matrix.dockerfile) }}
+          context: ${{ matrix.path }}
           push: true
           tags: |
             us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}:${{ env.ODIGOS_TAG }}
@@ -103,7 +124,7 @@ jobs:
       - name: Notify Slack on Failure
         if: failure()
         env:
-          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag}}
+          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
           SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
@@ -123,6 +144,7 @@ jobs:
         with:
           fetch-depth: 0
       - run: git fetch --force --tags
+
       - name: Set env
         id: vars
         run: |
@@ -130,7 +152,7 @@ jobs:
 
       - name: Trigger CLI Release in Odigos Main Repo
         env:
-          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag}}
+          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
         run: |
           curl -X POST \
             -H "Accept: application/vnd.github.v3+json" \
@@ -140,7 +162,7 @@ jobs:
 
       - name: Notify Slack End
         env:
-          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag}}
+          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
           SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
         run: |
           curl -X POST -H 'Content-type: application/json' --data '{"description":"Odigos enterprise components published to registry. Next step: release CLI", "tag":"${{ env.ODIGOS_TAG }}"}' ${{ env.SLACK_WEBHOOK_URL }}
@@ -148,7 +170,7 @@ jobs:
       - name: Notify Slack on Failure
         if: failure()
         env:
-          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag}}
+          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
           SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}

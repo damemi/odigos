@@ -22,7 +22,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    odigos.io/collector-role: "CLUSTER_GATEWAY"
+    odigos.io/collector-role: 'CLUSTER_GATEWAY'
   name: odigos-gateway
   namespace: odigos-test
   ownerReferences:
@@ -35,11 +35,11 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      odigos.io/collector-role: "CLUSTER_GATEWAY"
+      odigos.io/collector-role: 'CLUSTER_GATEWAY'
   template:
     metadata:
       labels:
-        odigos.io/collector-role: "CLUSTER_GATEWAY"
+        odigos.io/collector-role: 'CLUSTER_GATEWAY'
     spec:
       containers:
         - env:
@@ -59,7 +59,7 @@ spec:
               valueFrom:
                 resourceFieldRef:
                   containerName: gateway
-                  divisor: "0"
+                  divisor: '0'
                   resource: limits.cpu
           name: gateway
           resources:
@@ -115,7 +115,7 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   labels:
-    odigos.io/collector-role: "NODE_COLLECTOR"
+    odigos.io/collector-role: 'NODE_COLLECTOR'
   name: odigos-data-collection
   namespace: odigos-test
   ownerReferences:
@@ -127,11 +127,11 @@ metadata:
 spec:
   selector:
     matchLabels:
-      odigos.io/collector-role: "NODE_COLLECTOR"
+      odigos.io/collector-role: 'NODE_COLLECTOR'
   template:
     metadata:
       labels:
-        odigos.io/collector-role: "NODE_COLLECTOR"
+        odigos.io/collector-role: 'NODE_COLLECTOR'
     spec:
       containers:
         - name: data-collection
@@ -145,6 +145,9 @@ spec:
               readOnly: true
             - mountPath: /var/log
               name: varlog
+              readOnly: true
+            - mountPath: /mnt/var/log
+              name: mntvarlog
               readOnly: true
             - mountPath: /hostfs
               name: hostfs
@@ -166,7 +169,7 @@ spec:
               valueFrom:
                 resourceFieldRef:
                   containerName: data-collection
-                  divisor: "0"
+                  divisor: '0'
                   resource: limits.cpu
           resources:
             limits:
@@ -189,15 +192,19 @@ spec:
           name: conf
         - hostPath:
             path: /var/log
-            type: ""
+            type: ''
           name: varlog
         - hostPath:
+            path: /mnt/var/log
+            type: ''
+          name: mntvarlog
+        - hostPath:
             path: /var/lib/docker/containers
-            type: ""
+            type: ''
           name: varlibdockercontainers
         - hostPath:
             path: /
-            type: ""
+            type: ''
           name: hostfs
 status:
   numberAvailable: 1
@@ -218,14 +225,14 @@ spec:
               - key: odigos.io/odiglet-enterprise-installed
                 operator: In
                 values:
-                  - "true"
+                  - 'true'
   containers:
     - name: frontend
       resources:
         limits:
-          instrumentation.odigos.io/generic: "1"
+          instrumentation.odigos.io/generic: '1'
         requests:
-          instrumentation.odigos.io/generic: "1"
+          instrumentation.odigos.io/generic: '1'
       (env[?name == 'ODIGOS_CONTAINER_NAME']):
         - value: 'frontend'
       (env[?name == 'ODIGOS_DISTRO_NAME']):
@@ -264,7 +271,7 @@ spec:
               - key: odigos.io/odiglet-enterprise-installed
                 operator: In
                 values:
-                  - "true"
+                  - 'true'
   containers:
     - name: coupon
       resources:
@@ -308,14 +315,14 @@ spec:
               - key: odigos.io/odiglet-enterprise-installed
                 operator: In
                 values:
-                  - "true"
+                  - 'true'
   containers:
     - name: inventory
       resources:
         limits:
-          instrumentation.odigos.io/generic: "1"
+          instrumentation.odigos.io/generic: '1'
         requests:
-          instrumentation.odigos.io/generic: "1"
+          instrumentation.odigos.io/generic: '1'
       (env[?name == 'ODIGOS_CONTAINER_NAME']):
         - value: 'inventory'
       (env[?name == 'ODIGOS_DISTRO_NAME']):
@@ -361,7 +368,7 @@ spec:
               - key: odigos.io/odiglet-enterprise-installed
                 operator: In
                 values:
-                  - "true"
+                  - 'true'
   containers:
     - name: membership
       (env[?name == 'ODIGOS_CONTAINER_NAME']):
@@ -400,14 +407,14 @@ spec:
               - key: odigos.io/odiglet-enterprise-installed
                 operator: In
                 values:
-                  - "true"
+                  - 'true'
   containers:
     - name: pricing
       resources:
         limits:
-          instrumentation.odigos.io/dotnet-native-community: "1"
+          instrumentation.odigos.io/dotnet-native-community: '1'
         requests:
-          instrumentation.odigos.io/dotnet-native-community: "1"
+          instrumentation.odigos.io/dotnet-native-community: '1'
       (env[?name == 'ODIGOS_CONTAINER_NAME']):
         - value: 'pricing'
       (env[?name == 'ODIGOS_DISTRO_NAME']):
