@@ -18,36 +18,15 @@ jobs:
   release:
     strategy:
       matrix:
-        service:
-          [
-            'odiglet',
-            'instrumentor',
-            'central-proxy',
-            'central-ui',
-            'central-backend',
-          ]
+        service: ['odiglet', 'instrumentor']
         dockerfile: ['Dockerfile', 'Dockerfile.rhel']
         include:
           - service: odiglet
             summary: 'Odiglet for Odigos'
             description: 'Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs.'
-            path: odiglet
           - service: instrumentor
             summary: 'Instrumentor for Odigos'
             description: 'Instrumentor manages auto-instrumentation for workloads with Odigos.'
-            path: .
-          - service: central-proxy
-            summary: 'Central Proxy for Odigos'
-            description: 'The Central Proxy handles communication between clusters and the centralized Odigos backend.'
-            path: central-proxy
-          - service: central-ui
-            summary: 'Central UI for Odigos'
-            description: 'The Central UI is the web interface for Central Odigos, providing a user-friendly experience for managing and visualizing data.'
-            path: central-ui
-          - service: central-backend
-            summary: 'Central Backend for Odigos'
-            description: 'The Central Backend is the core component of Central Odigos, responsible for data processing and management.'
-            path: central-backend
 
     runs-on: large-runner
     steps:
@@ -103,8 +82,9 @@ jobs:
         env:
           ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
         with:
-          file: ${{ format('{0}/{1}', matrix.path, matrix.dockerfile) }}
-          context: ${{ matrix.path }}
+          file: >-
+            ${{ matrix.service == 'odiglet' && format('odiglet/{0}', matrix.dockerfile)
+            || matrix.dockerfile }}
           push: true
           tags: |
             us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}:${{ env.ODIGOS_TAG }}

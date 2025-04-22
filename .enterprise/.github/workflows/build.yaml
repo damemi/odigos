@@ -13,12 +13,11 @@ env:
   IMAGE_TAG: pr-${{ github.event.number }}
 
 jobs:
-
   build-enterprise-components:
     runs-on: warp-ubuntu-latest-x64-4x-spot
     strategy:
       matrix:
-        service: [odiglet, instrumentor, central-proxy]
+        service: [odiglet, instrumentor]
         dockerfile: [Dockerfile, Dockerfile.rhel]
 
     steps:
@@ -35,7 +34,6 @@ jobs:
         with:
           file: >-
             ${{ matrix.service == 'odiglet' && format('odiglet/{0}', matrix.dockerfile)
-            || matrix.service == 'central-proxy' && format('central-proxy/{0}', matrix.dockerfile)
             || matrix.dockerfile }}
           context: .
           push: false
@@ -107,7 +105,7 @@ jobs:
             /tmp/odigos-cli
 
   kubernetes-tests:
-    needs: 
+    needs:
       - build-enterprise-components
       - build-oss-components-for-tests
     runs-on: warp-ubuntu-latest-x64-4x-spot
@@ -115,24 +113,24 @@ jobs:
       fail-fast: false
       matrix:
         kube-version:
-          - "1.23"
-          - "1.30"
+          - '1.23'
+          - '1.30'
         test-scenario:
-          - "multi-apps"
-          - "helm-chart"
-          - "cli-upgrade"
+          - 'multi-apps'
+          - 'helm-chart'
+          - 'cli-upgrade'
         include:
-          - kube-version: "1.23"
-            kind-image: "kindest/node:v1.23.17@sha256:14d0a9a892b943866d7e6be119a06871291c517d279aedb816a4b4bc0ec0a5b3"
-          - kube-version: "1.30"
-            kind-image: "kindest/node:v1.30.0@sha256:047357ac0cfea04663786a612ba1eaba9702bef25227a794b52890dd8bcd692e"
+          - kube-version: '1.23'
+            kind-image: 'kindest/node:v1.23.17@sha256:14d0a9a892b943866d7e6be119a06871291c517d279aedb816a4b4bc0ec0a5b3'
+          - kube-version: '1.30'
+            kind-image: 'kindest/node:v1.30.0@sha256:047357ac0cfea04663786a612ba1eaba9702bef25227a794b52890dd8bcd692e'
     steps:
       - uses: actions/checkout@v4
         with:
           # we need the enterprise and oss to be siblings.
           # when using the default path and try to checkout the oss to be sibling, we get this:
           # Error: Repository path '/home/runner/work/odigos-enterprise/odigos' is not under '/home/runner/work/odigos-enterprise/odigos-enterprise'
-          path: odigos-enterprise 
+          path: odigos-enterprise
       - name: Set up Helm
         uses: azure/setup-helm@v4
         with:
@@ -149,7 +147,7 @@ jobs:
         uses: helm/kind-action@v1.12.0
         with:
           node_image: ${{ matrix.kind-image }}
-          version: "v0.23.0"
+          version: 'v0.23.0'
           cluster_name: kind
       - name: Download Odiglet Enterprise Artifact
         uses: actions/download-artifact@v4
@@ -202,7 +200,7 @@ jobs:
         if: ${{ failure() }}
         run: |
           odigos/cli/odigos diagnose
-        continue-on-error: true  
+        continue-on-error: true
       - name: Upload diagnose artifact
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4
@@ -210,4 +208,3 @@ jobs:
           name: run-details-${{ matrix.test-scenario }}-${{ matrix.kube-version }}
           path: odigos_debug*.tar.gz
         continue-on-error: true
-  
