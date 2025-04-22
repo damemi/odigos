@@ -25,9 +25,9 @@ WORKDIR /dotnet-instrumentation
 ARG DOTNET_OTEL_VERSION=v1.9.0
 ARG TARGETARCH
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
-        echo "arm64" > /tmp/arch_suffix; \
+    echo "arm64" > /tmp/arch_suffix; \
     else \
-        echo "x64" > /tmp/arch_suffix; \
+    echo "x64" > /tmp/arch_suffix; \
     fi
 RUN ARCH_SUFFIX=$(cat /tmp/arch_suffix) && \
     wget https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/${DOTNET_OTEL_VERSION}/opentelemetry-dotnet-instrumentation-linux-glibc-${ARCH_SUFFIX}.zip && \
@@ -44,7 +44,6 @@ RUN ARCH_SUFFIX=$(cat /tmp/arch_suffix) && \
 RUN ARCH_SUFFIX=$(cat /tmp/arch_suffix) && \
     wget https://github.com/odigos-io/opentelemetry-dotnet-instrumentation/releases/download/${DOTNET_OTEL_VERSION}/OpenTelemetry.AutoInstrumentation.Native-${ARCH_SUFFIX}.so && \
     mv OpenTelemetry.AutoInstrumentation.Native-${ARCH_SUFFIX}.so linux-glibc-${ARCH_SUFFIX}/OpenTelemetry.AutoInstrumentation.Native.so
-
 
 WORKDIR /legacy-dotnet-instrumentation
 ARG LEGACY_DOTNET_OTEL_VERSION=v0.4.0-beta.1
@@ -67,6 +66,17 @@ RUN make build-jni && mvn package -DskipTests
 WORKDIR /dtrace-injector/ebpf-java-instrumentation/otel_agent_extension
 RUN make gradle-build
 RUN make build-jni
+
+
+# PHP: Clone agents repo (contains pre-compiled binaries and libraries for each PHP version)
+FROM --platform=$BUILDPLATFORM php:8-cli AS php-agents
+WORKDIR /php-agents
+ARG PHP_AGENT_VERSION=v0.0.2
+RUN apt-get update && apt-get upgrade -y && apt-get install -y git
+RUN git clone https://github.com/odigos-io/opentelemetry-php \
+    && cd opentelemetry-php \
+    && git checkout tags/${PHP_AGENT_VERSION}
+
 
 FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.7 AS builder
 
@@ -118,6 +128,13 @@ COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injec
 COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/otel_agent_extension/extension/build/libs/odigos-opentelemetry-java-extension-1.0.jar /instrumentations/java-ext-ebpf/otel_agent_extension.jar
 COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/otel_agent_extension/extension/end_span_usdt.so /instrumentations/java-ext-ebpf/end_span_usdt.so
 RUN cp /instrumentations/java/javaagent.jar /instrumentations/java-ext-ebpf/javaagent.jar
+
+# PHP
+COPY --from=php-agents /php-agents/opentelemetry-php/8.0 /instrumentations/php/8.0
+COPY --from=php-agents /php-agents/opentelemetry-php/8.1 /instrumentations/php/8.1
+COPY --from=php-agents /php-agents/opentelemetry-php/8.2 /instrumentations/php/8.2
+COPY --from=php-agents /php-agents/opentelemetry-php/8.3 /instrumentations/php/8.3
+COPY --from=php-agents /php-agents/opentelemetry-php/8.4 /instrumentations/php/8.4
 
 FROM registry.fedoraproject.org/fedora-minimal:38
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
