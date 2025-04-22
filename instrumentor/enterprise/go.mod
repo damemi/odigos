@@ -6,8 +6,8 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/distros v1.0.172
-	github.com/odigos-io/odigos/instrumentor v1.0.172
+	github.com/odigos-io/odigos/distros v1.0.174
+	github.com/odigos-io/odigos/instrumentor v1.0.174
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5
 	k8s.io/client-go v0.32.3
 	sigs.k8s.io/controller-runtime v0.20.3
@@ -94,8 +94,8 @@ replace (
 	github.com/odigos-io/odigos-enterprise/distros => ../distros
 	github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
-	github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.172
-	github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.172
-	github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.0.172
-	github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.172
+	github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.174
+	github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.174
+	github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.0.174
+	github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.174
 )
