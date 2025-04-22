@@ -11,7 +11,7 @@ type entepriseDefaulter struct{}
 
 var _ distros.Defaulter = &entepriseDefaulter{}
 
-func NewEnterpriseDefaulter() distros.Defaulter  {
+func NewEnterpriseDefaulter() distros.Defaulter {
 	return &entepriseDefaulter{}
 }
 
@@ -23,6 +23,7 @@ func (o *entepriseDefaulter) GetDefaultDistroNames() map[common.ProgrammingLangu
 		common.JavaProgrammingLanguage:       "java-enterprise",
 		common.GoProgrammingLanguage:         "golang-enterprise",
 		common.MySQLProgrammingLanguage:      "mysql-enterprise",
+		common.PhpProgrammingLanguage:        "php-enterprise",
 	}
 }
 
