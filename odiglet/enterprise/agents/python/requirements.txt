@@ -1,1 +1,1 @@
-odigos-opentelemetry-python==1.0.36 #@ http://host.docker.internal:8081/packages/odigos_opentelemetry_python-0.1.1-py3-none-any.whl
+odigos-opentelemetry-python==1.0.39 #@ http://host.docker.internal:8081/packages/odigos_opentelemetry_python-0.1.1-py3-none-any.whl
