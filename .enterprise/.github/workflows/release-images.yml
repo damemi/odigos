@@ -18,7 +18,14 @@ jobs:
   release:
     strategy:
       matrix:
-        service: ['odiglet', 'instrumentor']
+        service:
+          [
+            'odiglet',
+            'instrumentor',
+            'central-proxy',
+            'central-backend',
+            'central-ui',
+          ]
         dockerfile: ['Dockerfile', 'Dockerfile.rhel']
         include:
           - service: odiglet
@@ -27,6 +34,15 @@ jobs:
           - service: instrumentor
             summary: 'Instrumentor for Odigos'
             description: 'Instrumentor manages auto-instrumentation for workloads with Odigos.'
+          - service: central-proxy
+            summary: 'Central Proxy for Odigos'
+            description: 'Central Proxy is handle the communication between the cluster that Odigos is running in and the Odigos Central.'
+          - service: central-backend
+            summary: 'Central Backend for Odigos'
+            description: 'Central Backend is the core component of Odigos Central, responsible for managing the data flow from the cluster to the ui.'
+          - service: central-ui
+            summary: 'Central UI for Odigos'
+            description: 'Central UI is the web interface for Odigos Central, providing a user-friendly way to manage and visualize the data collected by Odigos.'
 
     runs-on: large-runner
     steps:
@@ -84,7 +100,9 @@ jobs:
         with:
           file: >-
             ${{ matrix.service == 'odiglet' && format('odiglet/{0}', matrix.dockerfile)
+            || matrix.service == 'central-ui' && format('central-ui/{0}', matrix.dockerfile)
             || matrix.dockerfile }}
+          context: ${{ matrix.service == 'central-ui' && 'central-ui' || '.' }}
           push: true
           tags: |
             us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}:${{ env.ODIGOS_TAG }}

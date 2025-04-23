@@ -17,7 +17,8 @@ jobs:
     runs-on: warp-ubuntu-latest-x64-4x-spot
     strategy:
       matrix:
-        service: [odiglet, instrumentor]
+        service:
+          [odiglet, instrumentor, central-ui, central-proxy, central-backend]
         dockerfile: [Dockerfile, Dockerfile.rhel]
 
     steps:
@@ -34,8 +35,9 @@ jobs:
         with:
           file: >-
             ${{ matrix.service == 'odiglet' && format('odiglet/{0}', matrix.dockerfile)
+            || matrix.service == 'central-ui' && format('central-ui/{0}', matrix.dockerfile)
             || matrix.dockerfile }}
-          context: .
+          context: ${{ matrix.service == 'central-ui' && 'central-ui' || '.' }}
           push: false
           tags: registry.odigos.io/odigos-enterprise-${{ matrix.service }}${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}:${{ env.IMAGE_TAG }}
           provenance: false
