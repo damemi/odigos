@@ -5,16 +5,24 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Copy go.mod and go.sum to download dependencies
-COPY central-ui/package.json central-ui/yarn.lock ./
+COPY package.json yarn.lock ./
 
 # Install dependencies
 RUN yarn install --frozen-lockfile
 
+# Install generate-license-file globally
+RUN yarn global add generate-license-file
+
 # Copy application source code
-COPY central-ui/ .
+COPY . .
 
 # Build the Next.js app
 RUN yarn build
+
+# Generate license file for all dependencies
+RUN mkdir /app/licenses && \
+    generate-license-file --input=./node_modules --output=./licenses/licenses.txt
+
 
 # Use a minimal runtime image
 FROM registry.access.redhat.com/ubi9/ubi-micro:latest
