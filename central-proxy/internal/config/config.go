@@ -13,23 +13,26 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-func GetCentralBackendURL(ctx context.Context, kubeClient *kube.Client) (string, error) {
+func GetCentralBackendURLAndClusterName(ctx context.Context, kubeClient *kube.Client) (string, string, error) {
 	ns := env.GetCurrentNamespace()
-	//TODO: get also the name of the cluster
 	configMap, err := kubeClient.CoreV1().ConfigMaps(ns).Get(ctx, consts.OdigosConfigurationName, metav1.GetOptions{})
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	var odigosConfig common.OdigosConfiguration
 	if err := yaml.Unmarshal([]byte(configMap.Data[consts.OdigosConfigurationFileName]), &odigosConfig); err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	if odigosConfig.CentralBackendURL == "" {
-		return "", fmt.Errorf("key %s not found in ConfigMap", odigosConfig.CentralBackendURL)
+		return "", "", fmt.Errorf("key %s not found in ConfigMap", odigosConfig.CentralBackendURL)
 	}
 
-	return odigosConfig.CentralBackendURL, nil
+	if odigosConfig.ClusterName == "" {
+		return "", "", fmt.Errorf("key %s not found in ConfigMap", odigosConfig.ClusterName)
+	}
+
+	return odigosConfig.CentralBackendURL, odigosConfig.ClusterName, nil
 }
 
 func GetOdigosDeploymentId(ctx context.Context, kubeClient *kube.Client) (string, error) {

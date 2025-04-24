@@ -36,7 +36,8 @@ func main() {
 
 	wsServer := websocketserver.NewWebSocketServer(redisClient)
 	gqlHandler := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
-		RedisClient: redisClient,
+		RedisClient:     redisClient,
+		WebSocketServer: wsServer,
 	}}))
 
 	router := gin.Default()

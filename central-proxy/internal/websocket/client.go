@@ -14,12 +14,17 @@ import (
 	"github.com/odigos-io/central-proxy/kube"
 )
 
-func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string) (*WebSocketClient, error) {
+func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, clusterName string) (*WebSocketClient, error) {
 	proxyID, err := config.GetOdigosDeploymentId(ctx, client)
 	if err != nil {
 		return nil, err
 	}
-	u := url.URL{Scheme: "ws", Host: wsURL, Path: "/ws/proxy", RawQuery: "proxyID=" + proxyID}
+	u := url.URL{
+		Scheme:   "ws",
+		Host:     wsURL,
+		Path:     "/ws/proxy",
+		RawQuery: "proxyID=" + proxyID + "&clusterName=" + clusterName,
+	}
 	conn, _, err := websocket.Dial(ctx, u.String(), &websocket.DialOptions{})
 	if err != nil {
 		return nil, err

@@ -29,11 +29,14 @@ func (r *queryResolver) Connections(ctx context.Context) ([]*model.Connection, e
 			logger.Log.Error("Failed to get proxy connection status", "proxyID", proxyID, "error", err)
 			continue
 		}
-
+		clusterName := "unknown"
+		if name, ok := r.WebSocketServer.GetClusterName(proxyID); ok {
+			clusterName = name
+		}
 		connections = append(connections, &model.Connection{
 			ProxyID: proxyID,
 			Status:  status,
-			Name:    "cluster1", // Currently hardcoded
+			Name:    clusterName,
 		})
 	}
 	return connections, nil

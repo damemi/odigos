@@ -23,12 +23,12 @@ func main() {
 	if err != nil {
 		logger.Fatal("[ERROR] Failed to create Kubernetes client", err)
 	}
-	centralBackendURL, err := config.GetCentralBackendURL(ctx, client)
+	centralBackendURL, clusterName, err := config.GetCentralBackendURLAndClusterName(ctx, client)
 	if err != nil {
 		logger.Fatal("[ERROR] Failed to get WebSocket URL from ConfigMap:", err)
 	}
 
-	wsClient, err := websocketserver.NewWebSocketClient(ctx, client, centralBackendURL)
+	wsClient, err := websocketserver.NewWebSocketClient(ctx, client, centralBackendURL, clusterName)
 	if err != nil {
 		logger.Fatal("[ERROR] Failed to init WebSocket Client: %v", err)
 	}

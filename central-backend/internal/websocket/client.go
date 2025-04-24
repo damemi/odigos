@@ -16,6 +16,12 @@ import (
 )
 
 const ProxyIDQueryParam = "proxyID"
+const ClusterNameQueryParam = "clusterName"
+
+type ProxyConnection struct {
+	Conn        *websocket.Conn
+	ClusterName string
+}
 
 type WebSocketServer struct {
 	proxyConnections sync.Map
@@ -36,6 +42,11 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	clusterName := r.URL.Query().Get(ClusterNameQueryParam)
+	if clusterName == "" {
+		logger.Log.Warn("clusterName not provided for proxyID", "proxyID", proxyID)
+	}
+
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		CompressionMode: websocket.CompressionDisabled,
 	})
@@ -49,7 +60,10 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 	const maxMessageSize = 10 * 1024 * 1024 // 10 MB
 	conn.SetReadLimit(maxMessageSize)
 
-	ws.proxyConnections.Store(proxyID, conn)
+	ws.proxyConnections.Store(proxyID, &ProxyConnection{
+		Conn:        conn,
+		ClusterName: clusterName,
+	})
 	defer ws.cleanupConnection(ctx, proxyID)
 
 	if err := ws.redisClient.AddProxyConnection(ctx, proxyID, string(consts.StatusConnected)); err != nil {
@@ -84,6 +98,11 @@ func (ws *WebSocketServer) listenForMessages(ctx context.Context, proxyID string
 }
 
 func (ws *WebSocketServer) cleanupConnection(ctx context.Context, proxyID string) {
+	connVal, ok := ws.proxyConnections.Load(proxyID)
+	if ok {
+		proxyConn := connVal.(*ProxyConnection)
+		logger.Log.Info("Cleaning up connection", "proxyID", proxyID, "clusterName", proxyConn.ClusterName)
+	}
 	ws.proxyConnections.Delete(proxyID)
 
 	if err := ws.redisClient.SetProxyConnectionStatus(ctx, proxyID, consts.StatusDisconnected); err != nil {
@@ -98,10 +117,11 @@ func (ws *WebSocketServer) SendGraphQLRequest(ctx context.Context, proxyID strin
 		return errors.New("client not connected")
 	}
 
-	conn, ok := connValue.(*websocket.Conn)
+	proxyConn, ok := connValue.(*ProxyConnection)
 	if !ok {
-		return errors.New("invalid WebSocket connection type")
+		return errors.New("invalid proxy connection type")
 	}
+	conn := proxyConn.Conn
 
 	msg := WebSocketMessageToProxy{
 		Type:      string(MessageTypeGraphQLQuery),
@@ -116,4 +136,18 @@ func (ws *WebSocketServer) SendGraphQLRequest(ctx context.Context, proxyID strin
 	}
 
 	return conn.Write(ctx, websocket.MessageText, jsonMsg)
+}
+
+func (ws *WebSocketServer) GetClusterName(proxyID string) (string, bool) {
+	connValue, ok := ws.proxyConnections.Load(proxyID)
+	if !ok {
+		return "", false
+	}
+
+	proxyConn, ok := connValue.(*ProxyConnection)
+	if !ok {
+		return "", false
+	}
+
+	return proxyConn.ClusterName, true
 }
