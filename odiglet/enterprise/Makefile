@@ -19,7 +19,7 @@ GOPRIVATE := $(subst $(space),$(comma),$(CLEANED_LIBRARIES))
 export GOPRIVATE
 
 build-odiglet: generate
-	go build -o odiglet ./cmd/enterprise
+	go build -ldflags="$(LD_FLAGS)" -o odiglet ./cmd/enterprise
 
 debug-build-odiglet: generate
 	go build -gcflags "all=-N -l" -o odiglet ./cmd/enterprise

@@ -14,7 +14,8 @@ build-image/%:
 	--build-arg SUMMARY="Odiglet for Odigos" \
 	--build-arg DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." \
 	--build-arg VERSION=$(TAG) \
-	--build-arg RELEASE=$(TAG)
+	--build-arg RELEASE=$(TAG) \
+	--build-arg LD_FLAGS="$(LD_FLAGS)"
 
 .PHONY: build-odiglet
 build-odiglet:
