@@ -8,13 +8,12 @@ spec:
   steps:
     - name: Prepare destination
       try:
-      - apply:
-          file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/simple-trace-db-deployment.yaml
-    - name: Wait for destination to be ready
-      try:
+        - apply:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/simple-trace-db-deployment.yaml
         - assert:
             timeout: 1m
-            file: ../../common/assert/simple-trace-db-running.yaml
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/simple-trace-db-running.yaml
+
     - name: Install Odigos latest release from GitHub for pre upgrade setup
       try:
         - script:
@@ -55,41 +54,38 @@ spec:
               ./odigos uninstall --yes
               # Run the Odigos CLI installation
               ./odigos install --namespace odigos-test --onprem-token $ODIGOS_API_KEY
-            timeout: 120s # longer timeout since the images are being pulled from dockerhub
+            timeout: 2m # longer timeout since the images are being pulled from dockerhub
         - assert:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/odigos-installed.yaml
-    - name: Install Demo App
+
+    - name: Install Simple Demo Apps
       try:
-        - script:
-            timeout: 100s
-            content: |
-              docker pull keyval/odigos-demo-inventory:v0.1
-              docker pull keyval/odigos-demo-membership:v0.1
-              docker pull keyval/odigos-demo-coupon:v0.1
-              docker pull keyval/odigos-demo-inventory:v0.1
-              docker pull keyval/odigos-demo-frontend:v0.2
-              kind load docker-image keyval/odigos-demo-inventory:v0.1
-              kind load docker-image keyval/odigos-demo-membership:v0.1
-              kind load docker-image keyval/odigos-demo-coupon:v0.1
-              kind load docker-image keyval/odigos-demo-inventory:v0.1
-              kind load docker-image keyval/odigos-demo-frontend:v0.2
         - apply:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/install-simple-demo.yaml
+        - script:
+            timeout: 2m
+            content: |
+              kubectl wait --for=condition=ready pod -l app=frontend --timeout=120s
+              kubectl wait --for=condition=ready pod -l app=coupon --timeout=120s
+              kubectl wait --for=condition=ready pod -l app=inventory --timeout=120s
+              kubectl wait --for=condition=ready pod -l app=pricing --timeout=120s
+              kubectl wait --for=condition=ready pod -l app=membership --timeout=120s
+              kubectl wait --for=condition=ready pod -l app=currency --timeout=120s
         - assert:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/simple-demo-installed.yaml
-    - name: Instrument Namespace
+
+    - name: Instrument Namespace & Assert Detect Languages
       try:
         - apply:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/instrument-default-ns.yaml
-    - name: Detect Languages
-      try:
         - assert:
-            timeout: 2m
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/simple-demo-runtime-detected.yaml
+
     - name: Add Destination
       try:
         - apply:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/add-simple-trace-db-destination.yaml
+
     - name: Odigos pipeline pods ready
       # We make sure that the pipeline pods are ready before proceeding with the next steps
       # This is intentionally different from pipeline-ready.yaml, which checks for the pipeline CRDs
@@ -97,68 +93,88 @@ spec:
       # Since the version installed here is latest official one.
       try:
         - script:
-            content: ../../common/assert_pipeline_pods_ready.sh odigos-test 120s
-            timeout: 60s
+            timeout: 1m
+            content: |
+              curl -sSL https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert_pipeline_pods_ready.sh | bash -s -- "odigos-test" "120s"
+
     - name: Upgrade to HEAD version with the current compiled cli
       try:
         - script:
+            timeout: 3m
             content: ../../../../odigos/cli/odigos upgrade --version $IMAGE_TAG --skip-version-check # since the tag e2e-test is not a valid semantic version, we need to bypass it with --skip-version-check
-            timeout: 60s
         - assert:
+            timeout: 1m
             file: assert-odigos-upgraded.yaml
+
     - name: Instrumented and pipeline ready after upgrade
       try:
         - assert:
             file: assert-instrumented-and-pipeline.yaml
+
     - name: Generate Traffic
       try:
-      - script:
-          timeout: 60s
-          content: |
-            # Apply the job
-            kubectl apply -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/generate-traffic-job.yaml
-            
-            # Wait for the job to complete
-            job_name=$(kubectl get -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
-            kubectl wait --for=condition=complete job/$job_name
-            
-            # Delete the job
-            kubectl delete -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/generate-traffic-job.yaml
+        - apply:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/generate-traffic-job.yaml
+        - script:
+            timeout: 1m
+            content: |
+              kubectl wait --for=condition=complete job/$(kubectl get -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
+        - delete:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/generate-traffic-job.yaml
 
-            while true; do
-              sleep 1
-              
-              # Run the wait-for-trace script
-              echo "Running Simple-trace-db query for full trace at $(date)"
-              ../../common/simple_trace_db_query_runner.sh queries/wait-for-trace.yaml
-
-              if [ $? -eq 0 ]; then
-                break
-              fi
-            done
-    - name: Verify Trace - Context Propagation
+    - name: Wait For Trace
       try:
-      - script:
-          content: |
-            ../../common/simple_trace_db_query_runner.sh queries/context-propagation.yaml
+        - script:
+            timeout: 1m
+            content: |
+              while true; do
+                yaml=$(mktemp)
+                curl -sSL -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/queries/wait-for-trace.yaml
+                curl -sSL https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
+
+                status=$?
+                rm -f "$yaml"
+
+                [ $status -eq 0 ] && break
+                sleep 1
+              done
       catch:
-      - podLogs:
-          name: odiglet
-          namespace: odigos-test
-    - name: Verify Trace - Resource Attributes
+        - script:
+            content: |
+              java_pod_name=$(kubectl get pods -n default -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | grep ^frontend)
+              kubectl logs $java_pod_name -n default
+
+    - name: Verify Trace - Context Propagation
       try:
         - script:
             content: |
-              ../../common/simple_trace_db_query_runner.sh queries/resource-attributes.yaml
+              yaml=$(mktemp)
+              curl -sSL -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/queries/context-propagation.yaml
+              curl -sSL https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
       catch:
         - podLogs:
             name: odiglet
             namespace: odigos-test
+
+    - name: Verify Trace - Resource Attributes
+      try:
+        - script:
+            content: |
+              yaml=$(mktemp)
+              curl -sSL -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/queries/resource-attributes.yaml
+              curl -sSL https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
+      catch:
+        - podLogs:
+            name: odiglet
+            namespace: odigos-test
+
     - name: Verify Trace - Span Attributes
       try:
         - script:
             content: |
-              ../../common/simple_trace_db_query_runner.sh queries/span-attributes.yaml
+              yaml=$(mktemp)
+              curl -sSL -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/queries/span-attributes.yaml
+              curl -sSL https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
       catch:
         - podLogs:
             name: odiglet

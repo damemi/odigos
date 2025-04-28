@@ -1,24 +1,20 @@
 name: Build and Test
 
-on:
-  pull_request:
-    branches:
-      - main
+on: pull_request
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 env:
-  IMAGE_TAG: pr-${{ github.event.number }}
+  IMAGE_TAG: e2e-test # pr-${{ github.event.number }}
 
 jobs:
   build-enterprise-components:
     runs-on: warp-ubuntu-latest-x64-4x-spot
     strategy:
       matrix:
-        service:
-          [odiglet, instrumentor, central-ui, central-proxy, central-backend]
+        service: [odiglet, instrumentor, central-ui, central-proxy, central-backend]
         dockerfile: [Dockerfile, Dockerfile.rhel]
 
     steps:
@@ -29,7 +25,7 @@ jobs:
         uses: WarpBuilds/cache@v1
         with:
           path: ${{ matrix.service }}-enterprise-cache
-          key: ${{ matrix.service }}-enterprise-cache-${{ github.head_ref }}
+          key: ${{ matrix.service }}-enterprise-cache-${{ github.head_ref }}-${{ env.IMAGE_TAG }}
       - name: Build Image
         uses: docker/build-push-action@v6
         with:
@@ -71,7 +67,7 @@ jobs:
             /tmp/odigos-scheduler.tar
             /tmp/odigos-collector.tar
             /tmp/odigos-cli
-          key: odigos-oss-cache-${{ hashFiles('odigos/.git/refs/heads/main') }}
+          key: odigos-oss-cache-${{ hashFiles('odigos/.git/refs/heads/main') }}-${{ env.IMAGE_TAG }}
           restore-keys: |
             odigos-oss-cache-
       - name: Set up Go # Needed to build the CLI
