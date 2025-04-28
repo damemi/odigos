@@ -1,11 +1,11 @@
 apiVersion: odigos.io/v1alpha1
 kind: Action
 metadata:
-  name: 01-action-no-config
+  name: 04-action-renameattribute
   namespace: default
 spec:
   signals:
   - TRACES
-  renameAttribute:
+  config:
     renames:
       bar: baz

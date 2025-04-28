@@ -17,7 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
-	actionsv1 "github.com/odigos-io/odigos/api/actions/v1alpha1"
+	"encoding/json"
+
 	"github.com/odigos-io/odigos/common"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -56,17 +57,10 @@ type ActionSpec struct {
 	// Which signals should this action operate on.
 	Signals []common.ObservabilitySignal `json:"signals"`
 
-	// AddClusterInfo is the config for the AddClusterInfo Action.
-	AddClusterInfo *actionsv1.AddClusterInfoConfig `json:"addClusterInfo,omitempty"`
-
-	// DeleteAttribute is the config for the DeleteAttribute Action.
-	DeleteAttribute *actionsv1.DeleteAttributeConfig `json:"deleteAttribute,omitempty"`
-
-	// RenameAttribute is the config for the RenameAttribute Action.
-	RenameAttribute *actionsv1.RenameAttributeConfig `json:"renameAttribute,omitempty"`
-
-	// PiiMasking is the config for the PiiMasking Action.
-	PiiMasking *actionsv1.PiiMaskingConfig `json:"piiMasking,omitempty"`
+	// Config is an object containing the config for this action.
+	// Must be one of: [AddClusterInfoConfig], [DeleteAttributeConfig], [RenameAttributeConfig], [RenameAttributeConfig]
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Config json.RawMessage `json:"config"`
 }
 
 type ActionStatus struct {

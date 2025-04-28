@@ -19,7 +19,6 @@ package actions
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,16 +28,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	actionsv1alpha1 "github.com/odigos-io/odigos/api/actions/v1alpha1"
 	"github.com/odigos-io/odigos/api/odigos/v1alpha1"
 )
-
-var validActionConfigNames = []string{
-	actionsv1alpha1.ActionNameAddClusterInfo,
-	actionsv1alpha1.ActionNameDeleteAttribute,
-	actionsv1alpha1.ActionNameRenameAttribute,
-	actionsv1alpha1.ActionNamePiiMasking,
-}
 
 type ActionsValidator struct {
 	client.Client
@@ -88,35 +79,11 @@ func (s *ActionsValidator) ValidateDelete(ctx context.Context, obj runtime.Objec
 	return nil, nil
 }
 
-// TODO: Refactor Action config to cast a generic config field in v1alpha2 to one of the matching action configs to allow type-switch validation.
 func (a *ActionsValidator) validateAction(ctx context.Context, action *v1alpha1.Action) field.ErrorList {
-	fields := make(map[*field.Path]ActionConfig, 0)
 	var allErrs field.ErrorList
-	for _, cfg := range []ActionConfig{
-		action.Spec.AddClusterInfo,
-		action.Spec.DeleteAttribute,
-		action.Spec.RenameAttribute,
-		action.Spec.PiiMasking,
-	} {
-		if cfg != nil {
-			path := field.NewPath("spec").Child(cfg.Name())
-			fields[path] = cfg
-		}
+	_, _, err := actionProcessorDetails(action)
+	if err != nil {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("config"), action.Spec.Config, err.Error()))
 	}
-
-	if len(fields) == 0 {
-		allErrs = append(allErrs, field.Required(field.NewPath("spec"), fmt.Sprintf("At least one of (%s) must be set", strings.Join(validActionConfigNames, ", "))))
-	}
-	if len(fields) > 1 {
-		for path, cfg := range fields {
-			allErrs = append(allErrs, field.Invalid(
-				path,
-				cfg,
-				fmt.Sprintf("Only one of (%s) may be set", strings.Join(validActionConfigNames, ", ")),
-			))
-		}
-		return allErrs
-	}
-
-	return nil
+	return allErrs
 }

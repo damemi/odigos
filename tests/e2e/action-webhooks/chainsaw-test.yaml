@@ -25,38 +25,31 @@ spec:
             expect:
               - check:
                   ($error != null): true
-    - name: "[Validating] - Action with multiple configs is invalid"
-      try:
-        - apply:
-            file: validating-02-multi-config.yaml
-            expect:
-              - check:
-                  ($error != null): true
     - name: "[Validating] - valid AddClusterInfo"
       try:
         - apply:
-            file: validating-03-addClusterInfo.yaml
+            file: validating-02-addClusterInfo.yaml
             expect:
               - check:
                   ($error == null): true
     - name: "[Validating] - valid DeleteAttribute"
       try:
         - apply:
-            file: validating-04-deleteAttribute.yaml
+            file: validating-03-deleteAttribute.yaml
             expect:
               - check:
                   ($error == null): true
     - name: "[Validating] - valid RenameAttribute"
       try:
         - apply:
-            file: validating-05-renameAttribute.yaml
+            file: validating-04-renameAttribute.yaml
             expect:
               - check:
                   ($error == null): true
     - name: "[Validating] - valid PiiMasking"
       try:
         - apply:
-            file: validating-06-piiMasking.yaml
+            file: validating-05-piiMasking.yaml
             expect:
               - check:
                   ($error == null): true

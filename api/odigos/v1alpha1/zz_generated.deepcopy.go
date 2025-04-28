@@ -21,7 +21,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	actionsv1alpha1 "github.com/odigos-io/odigos/api/actions/v1alpha1"
+	"encoding/json"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/odigos-io/odigos/api/odigos/v1alpha1/instrumentationrules"
 	"github.com/odigos-io/odigos/common"
@@ -97,25 +97,10 @@ func (in *ActionSpec) DeepCopyInto(out *ActionSpec) {
 		*out = make([]common.ObservabilitySignal, len(*in))
 		copy(*out, *in)
 	}
-	if in.AddClusterInfo != nil {
-		in, out := &in.AddClusterInfo, &out.AddClusterInfo
-		*out = new(actionsv1alpha1.AddClusterInfoConfig)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.DeleteAttribute != nil {
-		in, out := &in.DeleteAttribute, &out.DeleteAttribute
-		*out = new(actionsv1alpha1.DeleteAttributeConfig)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.RenameAttribute != nil {
-		in, out := &in.RenameAttribute, &out.RenameAttribute
-		*out = new(actionsv1alpha1.RenameAttributeConfig)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.PiiMasking != nil {
-		in, out := &in.PiiMasking, &out.PiiMasking
-		*out = new(actionsv1alpha1.PiiMaskingConfig)
-		(*in).DeepCopyInto(*out)
+	if in.Config != nil {
+		in, out := &in.Config, &out.Config
+		*out = make(json.RawMessage, len(*in))
+		copy(*out, *in)
 	}
 }
 

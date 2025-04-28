@@ -1,12 +1,12 @@
 apiVersion: odigos.io/v1alpha1
 kind: Action
 metadata:
-  name: 01-action-no-config
+  name: 02-action-addclusterinfo
   namespace: default
 spec:
   signals:
   - TRACES
-  addClusterInfo:
+  config:
     clusterAttributes:
     - attributeName: foo
       attributeStringValue: bar

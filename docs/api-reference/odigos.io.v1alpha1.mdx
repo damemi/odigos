@@ -517,46 +517,14 @@ auto_generated: true
 </tr>
 <tr>
 <td>
-<code>addClusterInfo</code> <B>[Required]</B>
+<code>config</code> <B>[Required]</B>
 </td>
 <td>
-<code>actions/v1alpha1.AddClusterInfoConfig</code>
+<code>encoding/json.RawMessage</code>
 </td>
 <td>
-   <p>AddClusterInfo is the config for the AddClusterInfo Action.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>deleteAttribute</code> <B>[Required]</B>
-</td>
-<td>
-<code>actions/v1alpha1.DeleteAttributeConfig</code>
-</td>
-<td>
-   <p>DeleteAttribute is the config for the DeleteAttribute Action.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>renameAttribute</code> <B>[Required]</B>
-</td>
-<td>
-<code>actions/v1alpha1.RenameAttributeConfig</code>
-</td>
-<td>
-   <p>RenameAttribute is the config for the RenameAttribute Action.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>piiMasking</code> <B>[Required]</B>
-</td>
-<td>
-<code>actions/v1alpha1.PiiMaskingConfig</code>
-</td>
-<td>
-   <p>PiiMasking is the config for the PiiMasking Action.</p>
+   <p>Config is an object containing the config for this action.
+Must be one of: [AddClusterInfoConfig], [DeleteAttributeConfig], [RenameAttributeConfig], [RenameAttributeConfig]</p>
 </td>
 </tr>
 </tbody>

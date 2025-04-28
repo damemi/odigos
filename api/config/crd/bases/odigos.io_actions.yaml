@@ -44,39 +44,13 @@ spec:
                   for convenience. Odigos does not use or assume any meaning from
                   this field.
                 type: string
-              addClusterInfo:
-                description: AddClusterInfo is the config for the AddClusterInfo Action.
-                properties:
-                  clusterAttributes:
-                    items:
-                      properties:
-                        attributeName:
-                          description: the name of the attribute to insert
-                          type: string
-                        attributeStringValue:
-                          description: |-
-                            if the value is a string, this field should be used.
-                            empty string is a valid value
-                          type: string
-                      required:
-                      - attributeName
-                      - attributeStringValue
-                      type: object
-                    type: array
-                required:
-                - clusterAttributes
-                type: object
-              deleteAttribute:
-                description: DeleteAttribute is the config for the DeleteAttribute
-                  Action.
-                properties:
-                  attributeNamesToDelete:
-                    items:
-                      type: string
-                    type: array
-                required:
-                - attributeNamesToDelete
-                type: object
+              config:
+                description: |-
+                  Config is an object containing the config for this action.
+                  Must be one of: [AddClusterInfoConfig], [DeleteAttributeConfig], [RenameAttributeConfig], [RenameAttributeConfig]
+                format: byte
+                type: string
+                x-kubernetes-preserve-unknown-fields: true
               disabled:
                 description: A boolean field allowing to temporarily disable the action,
                   but keep it around for future use
@@ -86,29 +60,6 @@ spec:
                   regarding the action for convenience. For example: why it was added.
                   Odigos does not use or assume any meaning from this field.'
                 type: string
-              piiMasking:
-                description: PiiMasking is the config for the PiiMasking Action.
-                properties:
-                  piiCategories:
-                    items:
-                      enum:
-                      - CREDIT_CARD
-                      type: string
-                    type: array
-                required:
-                - piiCategories
-                type: object
-              renameAttribute:
-                description: RenameAttribute is the config for the RenameAttribute
-                  Action.
-                properties:
-                  renames:
-                    additionalProperties:
-                      type: string
-                    type: object
-                required:
-                - renames
-                type: object
               signals:
                 description: Which signals should this action operate on.
                 items:
@@ -119,6 +70,7 @@ spec:
                   type: string
                 type: array
             required:
+            - config
             - signals
             type: object
           status:

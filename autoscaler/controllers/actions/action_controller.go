@@ -11,6 +11,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	actionsv1 "github.com/odigos-io/odigos/api/actions/v1alpha1"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/k8sutils/pkg/utils"
 )
@@ -20,45 +21,54 @@ type ActionReconciler struct {
 }
 
 type ActionConfig interface {
-	Name() string
 	ProcessorType() string
 	OrderHint() int
+}
+
+// unmarshal attempts to cast the raw json from the action config to a known config struct
+func unmarshal(cfg json.RawMessage, dest interface{}) bool {
+	err := json.Unmarshal(cfg, dest)
+	return err == nil
 }
 
 // giving an action, return it's specific processor details
 // returns the type of the processors, order hint, config, and error
 func actionProcessorDetails(action *odigosv1.Action) (ActionConfig, any, error) {
+	var addClusterInfo actionsv1.AddClusterInfoConfig
+	var deleteAttribute actionsv1.DeleteAttributeConfig
+	var piiMasking actionsv1.PiiMaskingConfig
+	var renameAttribute actionsv1.RenameAttributeConfig
+
 	var config any
-	if action.Spec.AddClusterInfo != nil {
-		config = addClusterInfoConfig(action.Spec.AddClusterInfo.ClusterAttributes)
-		return action.Spec.AddClusterInfo, config, nil
-	}
+	switch {
+	case unmarshal(action.Spec.Config, &addClusterInfo):
+		config = addClusterInfoConfig(addClusterInfo.ClusterAttributes)
+		return addClusterInfo, config, nil
 
-	if action.Spec.DeleteAttribute != nil {
-		config, err := deleteAttributeConfig(action.Spec.DeleteAttribute.AttributeNamesToDelete, action.Spec.Signals)
+	case unmarshal(action.Spec.Config, &deleteAttribute):
+		config, err := deleteAttributeConfig(deleteAttribute.AttributeNamesToDelete, action.Spec.Signals)
 		if err != nil {
 			return nil, nil, err
 		}
-		return action.Spec.AddClusterInfo, config, nil
-	}
+		return deleteAttribute, config, nil
 
-	if action.Spec.PiiMasking != nil {
-		config, err := piiMaskingConfig(action.Spec.PiiMasking.PiiCategories)
+	case unmarshal(action.Spec.Config, &piiMasking):
+		config, err := piiMaskingConfig(piiMasking.PiiCategories)
 		if err != nil {
 			return nil, nil, err
 		}
-		return action.Spec.PiiMasking, config, nil
-	}
+		return piiMasking, config, nil
 
-	if action.Spec.RenameAttribute != nil {
-		config, err := renameAttributeConfig(action.Spec.RenameAttribute.Renames, action.Spec.Signals)
+	case unmarshal(action.Spec.Config, renameAttribute):
+		config, err := renameAttributeConfig(renameAttribute.Renames, action.Spec.Signals)
 		if err != nil {
 			return nil, nil, err
 		}
-		return action.Spec.PiiMasking, config, nil
-	}
+		return renameAttribute, config, nil
 
-	return nil, nil, errors.New("no supported action found in resource")
+	default:
+		return nil, nil, errors.New("no supported action found in resource")
+	}
 }
 
 // returns a processor object with:
