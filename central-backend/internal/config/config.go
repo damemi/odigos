@@ -16,7 +16,7 @@ var Config AppConfig
 
 func init() {
 	Config = AppConfig{
-		RedisAddr:            getEnv("REDIS_ADDR", "localhost:6379"),
+		RedisAddr:            getEnv("REDIS_ADDR", "redis:6379"),
 		ServerPort:           getEnv("SERVER_PORT", "8081"),
 		CentralizedBackendID: utils.GenerateUUID(),
 	}
