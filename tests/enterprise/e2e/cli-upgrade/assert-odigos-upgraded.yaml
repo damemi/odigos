@@ -14,6 +14,7 @@ metadata:
 spec:
   containers:
     - name: manager
+      image: registry.odigos.io/odigos-autoscaler:e2e-test
 status:
   containerStatuses:
     - name: manager
@@ -31,6 +32,7 @@ metadata:
 spec:
   containers:
     - name: manager
+      image: registry.odigos.io/odigos-scheduler:e2e-test
 status:
   containerStatuses:
     - name: manager
@@ -48,6 +50,7 @@ metadata:
 spec:
   containers:
     - name: manager
+      image: registry.odigos.io/odigos-enterprise-instrumentor:e2e-test
 status:
   containerStatuses:
     - name: manager
@@ -71,6 +74,7 @@ metadata:
 spec:
   containers:
     - name: odiglet
+      image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
       resources: {}
       securityContext:
         capabilities:
@@ -105,6 +109,7 @@ metadata:
 spec:
   containers:
     - name: data-collection
+      image: registry.odigos.io/odigos-collector:e2e-test
   (($values.k8sMinorVersion < `26` && hostNetwork != null) || (hostNetwork == null)): true
   nodeSelector:
     kubernetes.io/os: linux
@@ -127,6 +132,7 @@ metadata:
 spec:
   containers:
     - name: gateway
+      image: registry.odigos.io/odigos-collector:e2e-test
 status:
   containerStatuses:
     - name: gateway
