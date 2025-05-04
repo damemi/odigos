@@ -3,20 +3,20 @@ import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { createClient } from 'graphql-ws';
 import { getMainDefinition } from '@apollo/client/utilities';
 
-// ✅ HTTP Link for Queries/Mutations
+const backendHttpUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8081/graphql';
+const backendWsUrl = process.env.NEXT_PUBLIC_BACKEND_WS_URL || 'ws://localhost:8081/graphql';
+
 const httpLink = new HttpLink({
-  uri: 'http://localhost:8081/graphql', // ✅ Change to match your backend
+  uri: backendHttpUrl,
   credentials: 'same-origin',
 });
 
-// ✅ WebSocket Link for Subscriptions
 const wsLink = new GraphQLWsLink(
   createClient({
-    url: 'ws://localhost:8081/graphql', // ✅ Enable WebSocket connection
+    url: backendWsUrl,
   }),
 );
 
-// ✅ Use WebSockets for Subscriptions, HTTP for Queries/Mutations
 const splitLink = split(
   ({ query }) => {
     const definition = getMainDefinition(query);
