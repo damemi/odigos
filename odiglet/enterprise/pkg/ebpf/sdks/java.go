@@ -2,6 +2,9 @@ package sdks
 
 import (
 	"context"
+	"fmt"
+	"github.com/odigos-io/ebpf-java-instrumentation/pkg/dynamic"
+	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 
 	auto "github.com/odigos-io/ebpf-java-instrumentation"
 	"github.com/odigos-io/odigos/instrumentation"
@@ -12,10 +15,10 @@ import (
 )
 
 type JavaOtelEbpfSdkEnterprise struct {
-	inst       *auto.Instrumentation
+	inst *auto.Instrumentation
 }
 
-type JavaInstrumentationFactoryEnterprise struct {}
+type JavaInstrumentationFactoryEnterprise struct{}
 
 func NewJavaInstrumentationFactoryEnterprise() instrumentation.Factory {
 	return &JavaInstrumentationFactoryEnterprise{}
@@ -45,7 +48,7 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 	}
 
 	javaInstWrapper := &JavaOtelEbpfSdkEnterprise{
-		inst:       inst,
+		inst: inst,
 	}
 
 	return javaInstWrapper, nil
@@ -63,7 +66,28 @@ func (g *JavaOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 	return g.inst.Close()
 }
 
-// Not implemented
-func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, sdkConfig instrumentation.Config) error {
-	return nil
+func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instrumentation.Config) error {
+	if conf == nil {
+		log.Logger.V(0).Info("got nil config, skipping")
+		return nil
+	}
+
+	sdkConfig, ok := conf.(*odigosv1.SdkConfig)
+	if !ok {
+		return fmt.Errorf("invalid config type, expected *odigosv1.SdkConfig, got %T", conf)
+	}
+
+	// TODO(edenfed): config per library is not implement in java-eBPF yet. merge all libraries
+	var headers []string
+	if sdkConfig.DefaultHeadersCollection != nil && sdkConfig.DefaultHeadersCollection.HeaderKeys != nil {
+		headers = sdkConfig.DefaultHeadersCollection.HeaderKeys
+	}
+
+	for _, library := range sdkConfig.InstrumentationLibraryConfigs {
+		if library.HeadersCollection != nil && library.HeadersCollection.HeaderKeys != nil {
+			headers = append(headers, library.HeadersCollection.HeaderKeys...)
+		}
+	}
+
+	return g.inst.ApplyDynamicConfig(dynamic.HTTPHeaders(headers))
 }

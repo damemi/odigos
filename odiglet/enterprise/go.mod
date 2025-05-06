@@ -10,7 +10,7 @@ require (
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250105084718-c6cb16fc984d
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.0.183
+	github.com/odigos-io/odigos/api v1.0.184-0.20250506164826-61a4af30bdc0
 	github.com/odigos-io/odigos/common v1.0.183
 	github.com/odigos-io/odigos/instrumentation v1.0.183
 	github.com/odigos-io/odigos/k8sutils v1.0.183
@@ -139,7 +139,7 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250428094849-b0f0d2669a46
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.184-0.20250506143520-dc117c0bfb32
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.184-0.20250506164826-61a4af30bdc0
 
 replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.184-0.20250506143520-dc117c0bfb32
 

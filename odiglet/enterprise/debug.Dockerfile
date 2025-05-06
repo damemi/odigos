@@ -9,7 +9,7 @@ RUN --mount=type=secret,id=github_token \
     git clone https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-generic-instrumentation.git
 RUN mkdir enterprise-workspace && pip install --target enterprise-workspace ./ebpf-generic-instrumentation/dtrace-injector
 
-FROM node:16 AS nodejs-builder
+FROM node:21.6.2-bullseye AS nodejs-builder
 WORKDIR /nodejs-instrumentation
 RUN apt update -y && apt install -y systemtap-sdt-dev
 RUN --mount=type=secret,id=github_token \
@@ -56,7 +56,6 @@ ENV JAVA_HOME=/usr/local/openjdk-8
 RUN make generate-headers
 RUN make build-jni && mvn package -DskipTests
 
-
 # PHP
 FROM --platform=$BUILDPLATFORM maniator/gh AS php-agents
 WORKDIR /php-agents
@@ -74,8 +73,7 @@ RUN for v in ${PHP_VERSIONS}; do \
     rm -rf opentelemetry-php/$v/bin; \
     done
 
-
-FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.5 as builder
+FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.7 as builder
 
 RUN --mount=type=secret,id=github_token \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
