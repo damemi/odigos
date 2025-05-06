@@ -2,18 +2,16 @@ import { ApolloClient, InMemoryCache, split, HttpLink } from '@apollo/client';
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { createClient } from 'graphql-ws';
 import { getMainDefinition } from '@apollo/client/utilities';
-
-const backendHttpUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8081/graphql';
-const backendWsUrl = process.env.NEXT_PUBLIC_BACKEND_WS_URL || 'ws://localhost:8081/graphql';
+import { API } from '@/utils';
 
 const httpLink = new HttpLink({
-  uri: backendHttpUrl,
+  uri: API.GRAPHQL_HTTP,
   credentials: 'same-origin',
 });
 
 const wsLink = new GraphQLWsLink(
   createClient({
-    url: backendWsUrl,
+    url: API.GRAPHQL_WS,
   }),
 );
 
