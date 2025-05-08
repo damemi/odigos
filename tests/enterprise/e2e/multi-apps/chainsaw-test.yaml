@@ -61,8 +61,16 @@ spec:
       try:
         - apply:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/add-simple-trace-db-destination.yaml
+
+    - name: Simple-demo instrumented and pipeline ready
+      try:
         - assert:
-            file: assert-instrumented-and-pipeline.yaml
+            file: ../../common/assert/instrumented-and-pipeline.yaml
+      catch:
+        - script:
+            content: |
+              echo "🧪 Describing simple-demo pods"
+              kubectl describe pods -n default
 
     - name: Generate Traffic
       try:

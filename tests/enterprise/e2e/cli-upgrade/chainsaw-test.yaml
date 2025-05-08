@@ -109,7 +109,7 @@ spec:
     - name: Instrumented and pipeline ready after upgrade
       try:
         - assert:
-            file: assert-instrumented-and-pipeline.yaml
+            file: ../../common/assert/instrumented-and-pipeline.yaml
 
     - name: Generate Traffic
       try:

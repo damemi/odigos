@@ -1,0 +1,813 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    odigos.io/collector-role: 'NODE_COLLECTOR'
+  name: odigos-data-collection
+  namespace: odigos-test
+  ownerReferences:
+    - apiVersion: odigos.io/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: CollectorsGroup
+      name: odigos-data-collection
+spec:
+  selector:
+    matchLabels:
+      odigos.io/collector-role: 'NODE_COLLECTOR'
+  template:
+    metadata:
+      labels:
+        odigos.io/collector-role: 'NODE_COLLECTOR'
+    spec:
+      containers:
+        - name: data-collection
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /conf
+              name: conf
+            - mountPath: /var/lib/docker/containers
+              name: varlibdockercontainers
+              readOnly: true
+            - mountPath: /var/log
+              name: varlog
+              readOnly: true
+            # - mountPath: /mnt/var/log
+            #   name: mntvarlog
+            #   readOnly: true
+            - mountPath: /hostfs
+              name: hostfs
+              readOnly: true
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: GOMEMLIMIT
+              (value != null): true
+            - name: GOMAXPROCS
+              valueFrom:
+                resourceFieldRef:
+                  containerName: data-collection
+                  divisor: '0'
+                  resource: limits.cpu
+          resources:
+            limits:
+              (memory != null): true
+            requests:
+              (memory != null): true
+      (($values.k8sMinorVersion < `26` && hostNetwork != null) || (hostNetwork == null)): true
+      nodeSelector:
+        kubernetes.io/os: linux
+      securityContext: {}
+      serviceAccount: odigos-data-collection
+      serviceAccountName: odigos-data-collection
+      volumes:
+        - configMap:
+            defaultMode: 420
+            items:
+              - key: conf
+                path: conf.yaml
+            name: odigos-data-collection
+          name: conf
+        - hostPath:
+            path: /var/log
+            type: ''
+          name: varlog
+        # - hostPath:
+        #     path: /mnt/var/log
+        #     type: ''
+        #   name: mntvarlog
+        - hostPath:
+            path: /var/lib/docker/containers
+            type: ''
+          name: varlibdockercontainers
+        - hostPath:
+            path: /
+            type: ''
+          name: hostfs
+status:
+  numberAvailable: 2
+  numberReady: 2
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    odigos.io/collector-role: 'NODE_COLLECTOR'
+  name: odigos-data-collection
+  namespace: odigos-test
+  ownerReferences:
+    - apiVersion: odigos.io/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: CollectorsGroup
+      name: odigos-data-collection
+spec:
+  selector:
+    matchLabels:
+      odigos.io/collector-role: 'NODE_COLLECTOR'
+  template:
+    metadata:
+      labels:
+        odigos.io/collector-role: 'NODE_COLLECTOR'
+    spec:
+      containers:
+        - name: data-collection
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /conf
+              name: conf
+            - mountPath: /var/lib/docker/containers
+              name: varlibdockercontainers
+              readOnly: true
+            - mountPath: /var/log
+              name: varlog
+              readOnly: true
+            # - mountPath: /mnt/var/log
+            #   name: mntvarlog
+            #   readOnly: true
+            - mountPath: /hostfs
+              name: hostfs
+              readOnly: true
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: GOMEMLIMIT
+              (value != null): true
+            - name: GOMAXPROCS
+              valueFrom:
+                resourceFieldRef:
+                  containerName: data-collection
+                  divisor: '0'
+                  resource: limits.cpu
+      (($values.k8sMinorVersion < `26` && hostNetwork != null) || (hostNetwork == null)): true
+      nodeSelector:
+        kubernetes.io/os: linux
+      securityContext: {}
+      serviceAccount: odigos-data-collection
+      serviceAccountName: odigos-data-collection
+      volumes:
+        - configMap:
+            defaultMode: 420
+            items:
+              - key: conf
+                path: conf.yaml
+            name: odigos-data-collection
+          name: conf
+        - hostPath:
+            path: /var/log
+            type: ''
+          name: varlog
+        # - hostPath:
+        #     path: /mnt/var/log
+        #     type: ''
+        #   name: mntvarlog
+        - hostPath:
+            path: /var/lib/docker/containers
+            type: ''
+          name: varlibdockercontainers
+        - hostPath:
+            path: /
+            type: ''
+          name: hostfs
+status:
+  numberAvailable: 2
+  numberReady: 2
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    odigos.io/collector-role: 'CLUSTER_GATEWAY'
+  name: odigos-gateway
+  namespace: odigos-test
+  ownerReferences:
+    - apiVersion: odigos.io/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: CollectorsGroup
+      name: odigos-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      odigos.io/collector-role: 'CLUSTER_GATEWAY'
+  template:
+    metadata:
+      labels:
+        odigos.io/collector-role: 'CLUSTER_GATEWAY'
+    spec:
+      containers:
+        - env:
+            - name: ODIGOS_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  key: ODIGOS_VERSION
+                  name: odigos-deployment
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: GOMEMLIMIT
+              (value != null): true
+            - name: GOMAXPROCS
+              valueFrom:
+                resourceFieldRef:
+                  containerName: gateway
+                  divisor: '0'
+                  resource: limits.cpu
+          name: gateway
+          resources:
+            requests:
+              (memory != null): true
+              (cpu != null): true
+            limits:
+              (memory != null): true
+              (cpu != null): true
+          volumeMounts:
+            - mountPath: /conf
+              name: collector-conf
+      volumes:
+        - configMap:
+            defaultMode: 420
+            items:
+              - key: collector-conf
+                path: collector-conf.yaml
+            name: odigos-gateway
+          name: collector-conf
+status:
+  availableReplicas: 1
+  readyReplicas: 1
+  replicas: 1
+---
+apiVersion: odigos.io/v1alpha1
+kind: CollectorsGroup
+metadata:
+  name: odigos-data-collection
+  namespace: odigos-test
+spec:
+  role: NODE_COLLECTOR
+status:
+  ready: true
+---
+apiVersion: odigos.io/v1alpha1
+kind: CollectorsGroup
+metadata:
+  name: odigos-gateway
+  namespace: odigos-test
+spec:
+  role: CLUSTER_GATEWAY
+status:
+  ready: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: odigos-data-collection
+  namespace: odigos-test
+  ownerReferences:
+    - apiVersion: odigos.io/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: CollectorsGroup
+      name: odigos-data-collection
+(data != null): true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: odigos-gateway
+  namespace: odigos-test
+  ownerReferences:
+    - apiVersion: odigos.io/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: CollectorsGroup
+      name: odigos-gateway
+(data != null): true
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: coupon
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: odigos.io/odiglet-enterprise-installed
+                operator: In
+                values:
+                  - 'true'
+  containers:
+    - name: coupon
+      resources:
+        limits:
+          instrumentation.odigos.io/generic: '1'
+        requests:
+          instrumentation.odigos.io/generic: '1'
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: 'coupon'
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: 'nodejs-enterprise'
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: 'default'
+      (env[?name == 'NODE_OPTIONS']):
+        - value: '--require /var/odigos/nodejs-ebpf/autoinstrumentation.js'
+status:
+  containerStatuses:
+    - name: coupon
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: coupon
+spec:
+  containers:
+    - name: coupon
+      resources:
+        limits:
+          instrumentation.odigos.io/generic: '1'
+        requests:
+          instrumentation.odigos.io/generic: '1'
+status:
+  containerStatuses:
+    - name: coupon
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: currency
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: odigos.io/odiglet-enterprise-installed
+                operator: In
+                values:
+                  - 'true'
+  containers:
+    - name: currency
+      resources:
+        limits:
+          instrumentation.odigos.io/generic: '1'
+        requests:
+          instrumentation.odigos.io/generic: '1'
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: currency
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: php-enterprise
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: default
+      (env[?name == 'OTEL_SERVICE_NAME']):
+        - value: currency
+      (env[?name == 'OTEL_RESOURCE_ATTRIBUTES']):
+        - value: 'k8s.pod.name=$(ODIGOS_POD_NAME),k8s.container.name=currency,k8s.namespace.name=default,k8s.deployment.name=currency'
+      (env[?name == 'OTEL_LOGS_EXPORTER']):
+        - value: none
+      (env[?name == 'OTEL_METRICS_EXPORTER']):
+        - value: none
+      (env[?name == 'OTEL_TRACES_EXPORTER']):
+        - value: otlp
+      (env[?name == 'OTEL_EXPORTER_OTLP_ENDPOINT']):
+        - (($values.k8sMinorVersion < `26` && value == 'http://$(NODE_IP):4318') || value == 'http://odigos-data-collection-local-traffic.odigos-test:4318'): true
+      (env[?name == 'PHP_INI_SCAN_DIR']):
+        - value: ':/var/odigos/php/8.2'
+status:
+  containerStatuses:
+    - name: currency
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: currency
+spec:
+  containers:
+    - name: currency
+      resources:
+        limits:
+          instrumentation.odigos.io/generic: '1'
+        requests:
+          instrumentation.odigos.io/generic: '1'
+status:
+  containerStatuses:
+    - name: currency
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: frontend
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: odigos.io/odiglet-enterprise-installed
+                operator: In
+                values:
+                  - 'true'
+  containers:
+    - name: frontend
+      resources:
+        limits:
+          instrumentation.odigos.io/generic: '1'
+        requests:
+          instrumentation.odigos.io/generic: '1'
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: 'frontend'
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: 'java-enterprise'
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: 'default'
+      (env[?name == 'JAVA_OPTS']):
+        - value: '-javaagent:/var/odigos/java-ext-ebpf/javaagent.jar -Dotel.javaagent.extensions=/var/odigos/java-ext-ebpf/otel_agent_extension.jar'
+      (env[?name == 'JAVA_TOOL_OPTIONS']):
+        - value: '-javaagent:/var/odigos/java-ext-ebpf/javaagent.jar -Dotel.javaagent.extensions=/var/odigos/java-ext-ebpf/otel_agent_extension.jar'
+status:
+  containerStatuses:
+    - name: frontend
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: frontend
+spec:
+  containers:
+    - name: frontend
+      resources:
+        limits:
+          instrumentation.odigos.io/generic: '1'
+        requests:
+          instrumentation.odigos.io/generic: '1'
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: 'frontend'
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: 'java-enterprise'
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: 'default'
+      (env[?name == 'JAVA_OPTS']):
+        - value: '-javaagent:/var/odigos/java-ext-ebpf/javaagent.jar -Dotel.javaagent.extensions=/var/odigos/java-ext-ebpf/otel_agent_extension.jar'
+      (env[?name == 'JAVA_TOOL_OPTIONS']):
+        - value: '-javaagent:/var/odigos/java-ext-ebpf/javaagent.jar -Dotel.javaagent.extensions=/var/odigos/java-ext-ebpf/otel_agent_extension.jar'
+status:
+  containerStatuses:
+    - name: frontend
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: frontend
+spec:
+  containers:
+    - name: frontend
+      resources:
+        limits:
+          instrumentation.odigos.io/generic: '1'
+        requests:
+          instrumentation.odigos.io/generic: '1'
+status:
+  containerStatuses:
+    - name: frontend
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: inventory
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: odigos.io/odiglet-enterprise-installed
+                operator: In
+                values:
+                  - 'true'
+  containers:
+    - name: inventory
+      resources:
+        limits:
+          instrumentation.odigos.io/generic: '1'
+        requests:
+          instrumentation.odigos.io/generic: '1'
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: 'inventory'
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: 'python-enterprise'
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: 'default'
+      (env[?name == 'OTEL_PYTHON_CONFIGURATOR']):
+        - value: 'ebpf'
+      (env[?name == 'NODE_IP']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.hostIP
+      (env[?name == 'ODIGOS_OPAMP_SERVER_HOST']):
+        - value: '$(NODE_IP):4320'
+      (env[?name == 'PYTHONPATH']):
+        - value: '/bar:/var/odigos/python-ebpf:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation:/var/odigos/python'
+status:
+  containerStatuses:
+    - name: inventory
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: inventory
+spec:
+  containers:
+    - name: inventory
+      resources:
+        limits:
+          instrumentation.odigos.io/generic: '1'
+        requests:
+          instrumentation.odigos.io/generic: '1'
+status:
+  containerStatuses:
+    - name: inventory
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: membership
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: odigos.io/odiglet-enterprise-installed
+                operator: In
+                values:
+                  - 'true'
+  containers:
+    - name: membership
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: 'membership'
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: 'golang-enterprise'
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: 'default'
+      (env[?name == 'GODEBUG']):
+        - value: 'tracebackancestors=5'
+status:
+  containerStatuses:
+    - name: membership
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: membership
+spec:
+  containers:
+    - name: membership
+status:
+  containerStatuses:
+    - name: membership
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: pricing
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: odigos.io/odiglet-enterprise-installed
+                operator: In
+                values:
+                  - 'true'
+  containers:
+    - name: pricing
+      resources:
+        limits:
+          instrumentation.odigos.io/dotnet-native-community: '1'
+        requests:
+          instrumentation.odigos.io/dotnet-native-community: '1'
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: 'pricing'
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: 'dotnet-community'
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: 'default'
+      (env[?name == 'OTEL_SERVICE_NAME']):
+        - value: 'pricing'
+      (env[?name == 'OTEL_RESOURCE_ATTRIBUTES']):
+        - value: 'k8s.pod.name=$(ODIGOS_POD_NAME),k8s.container.name=pricing,k8s.namespace.name=default,k8s.deployment.name=pricing'
+status:
+  containerStatuses:
+    - name: pricing
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: pricing
+spec:
+  containers:
+    - name: pricing
+      resources:
+        limits:
+          instrumentation.odigos.io/dotnet-native-community: '1'
+        requests:
+          instrumentation.odigos.io/dotnet-native-community: '1'
+status:
+  containerStatuses:
+    - name: pricing
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+# TODO: Uncomment this block after enabling opamp to OSS
+# apiVersion: odigos.io/v1alpha1
+# kind: InstrumentationInstance
+# metadata:
+#   namespace: default
+#   labels:
+#     instrumented-app: deployment-coupon
+# status:
+#   healthy: true
+#   identifyingAttributes:
+#     - key: service.instance.id
+#       (value != null): true
+#     - key: telemetry.sdk.language
+#       value: nodejs
+#     - key: process.runtime.version
+#       (value != null): true
+#     - key: telemetry.distro.version
+#       (value != null): true # This will hold the version before the upgrade
+#     - key: process.pid
+#       (value != null): true
+#     - key: k8s.namespace.name
+#       (value != null): true
+#     - key: k8s.container.name
+#       (value != null): true
+#     - key: k8s.pod.name
+#       (value != null): true
+#
+# ---
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationInstance
+metadata:
+  namespace: default
+  labels:
+    instrumented-app: deployment-inventory
+status:
+  healthy: true
+  identifyingAttributes:
+    - key: service.instance.id
+      (value != null): true
+    - key: process.vpid
+      (value != null): true
+    - key: telemetry.sdk.language
+      value: python
+    - key: k8s.namespace.name
+      (value != null): true
+    - key: k8s.container.name
+      (value != null): true
+    - key: k8s.pod.name
+      (value != null): true
+---
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationInstance
+metadata:
+  namespace: default
+  labels:
+    instrumented-app: deployment-membership
+status:
+  healthy: true
+  reason: LoadedSuccessfully

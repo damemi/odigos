@@ -4,9 +4,12 @@ ADD odiglet/agents/python/requirements.txt .
 RUN mkdir workspace && pip install --target workspace -r requirements.txt
 
 # Enterprise version of ebpf-generic-instrumentation
+ARG EBPF_GENERIC_VERSION="v0.0.1"
 RUN apt update -y && apt install -y systemtap-sdt-dev
 RUN --mount=type=secret,id=github_token \
-    git clone https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-generic-instrumentation.git
+    git clone https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-generic-instrumentation.git \
+    && cd ebpf-generic-instrumentation \
+    && git checkout tags/${EBPF_GENERIC_VERSION}
 RUN mkdir enterprise-workspace && pip install --target enterprise-workspace ./ebpf-generic-instrumentation/dtrace-injector
 
 FROM node:21.6.2-bullseye AS nodejs-builder
