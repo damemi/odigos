@@ -14,7 +14,7 @@ require (
 	github.com/odigos-io/odigos/common v1.0.185
 	github.com/odigos-io/odigos/instrumentation v1.0.185
 	github.com/odigos-io/odigos/k8sutils v1.0.185
-	github.com/odigos-io/odigos/odiglet v1.0.185
+	github.com/odigos-io/odigos/odiglet v1.0.186-0.20250509201219-ba3ba21d63a9
 	go.opentelemetry.io/auto v0.21.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
@@ -141,7 +141,7 @@ replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumen
 
 replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.185
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.185
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.186-0.20250509201219-ba3ba21d63a9
 
 replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.185
 
