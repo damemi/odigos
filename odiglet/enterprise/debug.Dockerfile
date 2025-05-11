@@ -76,7 +76,7 @@ RUN for v in ${PHP_VERSIONS}; do \
     rm -rf opentelemetry-php/$v/bin; \
     done
 
-FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.7 as builder
+FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.8 AS builder
 
 RUN --mount=type=secret,id=github_token \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
