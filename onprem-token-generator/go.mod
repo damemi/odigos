@@ -1,6 +1,6 @@
 module github.com/odigos-io/odigos-enterprise/onprem-token-generator
 
-go 1.23.0
+go 1.24.0
 
 require github.com/odigos-io/odigos/profiles v1.0.161
 
@@ -13,4 +13,4 @@ require (
 	go.opentelemetry.io/otel/trace v1.35.0 // indirect
 )
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.185-0.20250508140451-0f7b13cf9c21
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.186-0.20250511072415-61c8f142b689
