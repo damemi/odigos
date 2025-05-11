@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 
 	"go.opentelemetry.io/auto"
@@ -456,7 +457,13 @@ func readAndVerifyOffsetsFile(path string) (io.Reader, error) {
 		return nil, err
 	}
 
-	parts := strings.Split(string(fileBytes), "---SIGNATURE---")
+	var decoded string
+	err = json.Unmarshal(fileBytes, &decoded)
+	if err != nil {
+		return nil, err
+	}
+
+	parts := strings.Split(decoded, "---SIGNATURE---")
 	if len(parts) != 2 {
 		return nil, errors.New("Invalid file format. Signature delimiter not found.")
 	}
