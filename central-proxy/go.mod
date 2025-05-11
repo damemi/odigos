@@ -1,10 +1,10 @@
 module github.com/odigos-io/central-proxy
 
-go 1.23.5
+go 1.24.0
 
 require (
-	github.com/odigos-io/odigos/api v1.0.185
-	github.com/odigos-io/odigos/k8sutils v1.0.185
+	github.com/odigos-io/odigos/api v1.0.186-0.20250511072415-61c8f142b689
+	github.com/odigos-io/odigos/k8sutils v1.0.186-0.20250511072415-61c8f142b689
 	k8s.io/apimachinery v0.32.3
 	k8s.io/client-go v0.32.3
 )
