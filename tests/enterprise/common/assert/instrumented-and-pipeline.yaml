@@ -25,8 +25,6 @@ spec:
           securityContext:
             privileged: true
           volumeMounts:
-            - mountPath: /conf
-              name: conf
             - mountPath: /var/lib/docker/containers
               name: varlibdockercontainers
               readOnly: true
@@ -70,13 +68,6 @@ spec:
       serviceAccount: odigos-data-collection
       serviceAccountName: odigos-data-collection
       volumes:
-        - configMap:
-            defaultMode: 420
-            items:
-              - key: conf
-                path: conf.yaml
-            name: odigos-data-collection
-          name: conf
         - hostPath:
             path: /var/log
             type: ''
@@ -124,8 +115,6 @@ spec:
           securityContext:
             privileged: true
           volumeMounts:
-            - mountPath: /conf
-              name: conf
             - mountPath: /var/lib/docker/containers
               name: varlibdockercontainers
               readOnly: true
@@ -164,13 +153,6 @@ spec:
       serviceAccount: odigos-data-collection
       serviceAccountName: odigos-data-collection
       volumes:
-        - configMap:
-            defaultMode: 420
-            items:
-              - key: conf
-                path: conf.yaml
-            name: odigos-data-collection
-          name: conf
         - hostPath:
             path: /var/log
             type: ''
@@ -242,17 +224,6 @@ spec:
             limits:
               (memory != null): true
               (cpu != null): true
-          volumeMounts:
-            - mountPath: /conf
-              name: collector-conf
-      volumes:
-        - configMap:
-            defaultMode: 420
-            items:
-              - key: collector-conf
-                path: collector-conf.yaml
-            name: odigos-gateway
-          name: collector-conf
 status:
   availableReplicas: 1
   readyReplicas: 1
