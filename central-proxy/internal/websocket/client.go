@@ -3,6 +3,7 @@ package websocketserver
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"time"
 
@@ -19,11 +20,17 @@ func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, 
 	if err != nil {
 		return nil, err
 	}
+
+	proxyVersion, err := config.GetOdigosVersion(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+
 	u := url.URL{
 		Scheme:   "ws",
 		Host:     wsURL,
 		Path:     "/ws/proxy",
-		RawQuery: "proxyID=" + proxyID + "&clusterName=" + clusterName,
+		RawQuery: fmt.Sprintf("proxyID=%s&clusterName=%s&version=%s", proxyID, clusterName, proxyVersion),
 	}
 	conn, _, err := websocket.Dial(ctx, u.String(), &websocket.DialOptions{})
 	if err != nil {

@@ -50,3 +50,19 @@ func GetOdigosDeploymentId(ctx context.Context, kubeClient *kube.Client) (string
 
 	return deploymentId, nil
 }
+
+func GetOdigosVersion(ctx context.Context, kubeClient *kube.Client) (string, error) {
+	ns := env.GetCurrentNamespace()
+
+	configMap, err := kubeClient.CoreV1().ConfigMaps(ns).Get(ctx, k8sconsts.OdigosDeploymentConfigMapName, metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+
+	version, exists := configMap.Data[consts.OdigosVersionEnvVarName]
+	if !exists || version == "" {
+		return "", fmt.Errorf("key %s not found in ConfigMap", consts.OdigosVersionEnvVarName)
+	}
+
+	return version, nil
+}
