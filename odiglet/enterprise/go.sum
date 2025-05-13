@@ -249,8 +249,8 @@ github.com/mwitkow/go-conntrack v0.0.0-20161129095857-cc309e4a2223/go.mod h1:qRW
 github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f/go.mod h1:ZdcZmHo+o7JKHSa8/e818NopupXU1YMK5fe1lsApnBw=
 github.com/nxadm/tail v1.4.4 h1:DQuhQpB1tVlglWS2hLQ5OV6B5r8aGxSrPc5Qo6uTN78=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
-github.com/odigos-io/ebpf-generic-instrumentation v0.0.2 h1:DqPdA9jwQc6zJGDAq5b2a8bSjK+NfpxqXfCT3qoRIb4=
-github.com/odigos-io/ebpf-generic-instrumentation v0.0.2/go.mod h1:S3fP7R041PWEboCKebMuzVQCQ0fP+MZcPPbnakp6mxg=
+github.com/odigos-io/ebpf-generic-instrumentation v0.0.3 h1:Po+HqSN7xH72au/goLrwyXhvJHWTIEGpFGzTF7aj6KE=
+github.com/odigos-io/ebpf-generic-instrumentation v0.0.3/go.mod h1:S3fP7R041PWEboCKebMuzVQCQ0fP+MZcPPbnakp6mxg=
 github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20250512131259-b8693ced710c h1:D/ckvoJn+phZ0/nlRJq8MTeZz2B97jWLo2IO4PGRM2w=
 github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20250512131259-b8693ced710c/go.mod h1:pCa9sVTtuJHqwBB1Wz3MF4yyeFGgHtRjTs+IkuIYD64=
 github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20250512131259-b8693ced710c h1:hFO4giCUdxsSjr5DKs0RUTxddQA6CwSZ3KsAH/6woHs=
