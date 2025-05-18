@@ -324,28 +324,6 @@ kind: Pod
 metadata:
   namespace: default
   labels:
-    app: coupon
-spec:
-  containers:
-    - name: coupon
-      resources:
-        limits:
-          instrumentation.odigos.io/generic: '1'
-        requests:
-          instrumentation.odigos.io/generic: '1'
-status:
-  containerStatuses:
-    - name: coupon
-      ready: true
-      restartCount: 0
-      started: true
-  phase: Running
----
-apiVersion: v1
-kind: Pod
-metadata:
-  namespace: default
-  labels:
     app: currency
 spec:
   affinity:
@@ -375,6 +353,21 @@ spec:
               fieldPath: metadata.name
       (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
         - value: default
+      (env[?name == 'NODE_IP']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.hostIP
+      (env[?name == 'OTEL_EXPORTER_OTLP_ENDPOINT']):
+        - (($values.k8sMinorVersion < `26` && value == 'http://$(NODE_IP):4318') || value == 'http://odigos-data-collection-local-traffic.odigos-test:4318'): true
+      (env[?name == 'PHP_INI_SCAN_DIR']):
+        - value: ':/var/odigos/php/8.2'
+      (env[?name == 'OTEL_PHP_AUTOLOAD_ENABLED']):
+        - value: 'true'
+      (env[?name == 'OTEL_EXPORTER_OTLP_PROTOCOL']):
+        - value: 'http/protobuf'
+      (env[?name == 'OTEL_PROPAGATORS']):
+        - value: 'tracecontext,baggage'
       (env[?name == 'OTEL_SERVICE_NAME']):
         - value: currency
       (env[?name == 'OTEL_RESOURCE_ATTRIBUTES']):
@@ -385,35 +378,14 @@ spec:
         - value: none
       (env[?name == 'OTEL_TRACES_EXPORTER']):
         - value: otlp
-      (env[?name == 'OTEL_EXPORTER_OTLP_ENDPOINT']):
-        - (($values.k8sMinorVersion < `26` && value == 'http://$(NODE_IP):4318') || value == 'http://odigos-data-collection-local-traffic.odigos-test:4318'): true
-      (env[?name == 'PHP_INI_SCAN_DIR']):
-        - value: ':/var/odigos/php/8.2'
+    - name: nginx
 status:
   containerStatuses:
     - name: currency
       ready: true
       restartCount: 0
       started: true
-  phase: Running
----
-apiVersion: v1
-kind: Pod
-metadata:
-  namespace: default
-  labels:
-    app: currency
-spec:
-  containers:
-    - name: currency
-      resources:
-        limits:
-          instrumentation.odigos.io/generic: '1'
-        requests:
-          instrumentation.odigos.io/generic: '1'
-status:
-  containerStatuses:
-    - name: currency
+    - name: nginx
       ready: true
       restartCount: 0
       started: true
@@ -457,65 +429,6 @@ spec:
         - value: '-javaagent:/var/odigos/java-ext-ebpf/javaagent.jar -Dotel.javaagent.extensions=/var/odigos/java-ext-ebpf/otel_agent_extension.jar'
       (env[?name == 'JAVA_TOOL_OPTIONS']):
         - value: '-javaagent:/var/odigos/java-ext-ebpf/javaagent.jar -Dotel.javaagent.extensions=/var/odigos/java-ext-ebpf/otel_agent_extension.jar'
-status:
-  containerStatuses:
-    - name: frontend
-      ready: true
-      restartCount: 0
-      started: true
-  phase: Running
----
-apiVersion: v1
-kind: Pod
-metadata:
-  namespace: default
-  labels:
-    app: frontend
-spec:
-  containers:
-    - name: frontend
-      resources:
-        limits:
-          instrumentation.odigos.io/generic: '1'
-        requests:
-          instrumentation.odigos.io/generic: '1'
-      (env[?name == 'ODIGOS_CONTAINER_NAME']):
-        - value: 'frontend'
-      (env[?name == 'ODIGOS_DISTRO_NAME']):
-        - value: 'java-enterprise'
-      (env[?name == 'ODIGOS_POD_NAME']):
-        - valueFrom:
-            fieldRef:
-              apiVersion: v1
-              fieldPath: metadata.name
-      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
-        - value: 'default'
-      (env[?name == 'JAVA_OPTS']):
-        - value: '-javaagent:/var/odigos/java-ext-ebpf/javaagent.jar -Dotel.javaagent.extensions=/var/odigos/java-ext-ebpf/otel_agent_extension.jar'
-      (env[?name == 'JAVA_TOOL_OPTIONS']):
-        - value: '-javaagent:/var/odigos/java-ext-ebpf/javaagent.jar -Dotel.javaagent.extensions=/var/odigos/java-ext-ebpf/otel_agent_extension.jar'
-status:
-  containerStatuses:
-    - name: frontend
-      ready: true
-      restartCount: 0
-      started: true
-  phase: Running
----
-apiVersion: v1
-kind: Pod
-metadata:
-  namespace: default
-  labels:
-    app: frontend
-spec:
-  containers:
-    - name: frontend
-      resources:
-        limits:
-          instrumentation.odigos.io/generic: '1'
-        requests:
-          instrumentation.odigos.io/generic: '1'
 status:
   containerStatuses:
     - name: frontend
@@ -582,28 +495,6 @@ kind: Pod
 metadata:
   namespace: default
   labels:
-    app: inventory
-spec:
-  containers:
-    - name: inventory
-      resources:
-        limits:
-          instrumentation.odigos.io/generic: '1'
-        requests:
-          instrumentation.odigos.io/generic: '1'
-status:
-  containerStatuses:
-    - name: inventory
-      ready: true
-      restartCount: 0
-      started: true
-  phase: Running
----
-apiVersion: v1
-kind: Pod
-metadata:
-  namespace: default
-  labels:
     app: membership
 spec:
   affinity:
@@ -630,23 +521,6 @@ spec:
         - value: 'default'
       (env[?name == 'GODEBUG']):
         - value: 'tracebackancestors=5'
-status:
-  containerStatuses:
-    - name: membership
-      ready: true
-      restartCount: 0
-      started: true
-  phase: Running
----
-apiVersion: v1
-kind: Pod
-metadata:
-  namespace: default
-  labels:
-    app: membership
-spec:
-  containers:
-    - name: membership
 status:
   containerStatuses:
     - name: membership
@@ -693,28 +567,6 @@ spec:
         - value: 'pricing'
       (env[?name == 'OTEL_RESOURCE_ATTRIBUTES']):
         - value: 'k8s.pod.name=$(ODIGOS_POD_NAME),k8s.container.name=pricing,k8s.namespace.name=default,k8s.deployment.name=pricing'
-status:
-  containerStatuses:
-    - name: pricing
-      ready: true
-      restartCount: 0
-      started: true
-  phase: Running
----
-apiVersion: v1
-kind: Pod
-metadata:
-  namespace: default
-  labels:
-    app: pricing
-spec:
-  containers:
-    - name: pricing
-      resources:
-        limits:
-          instrumentation.odigos.io/dotnet-native-community: '1'
-        requests:
-          instrumentation.odigos.io/dotnet-native-community: '1'
 status:
   containerStatuses:
     - name: pricing
