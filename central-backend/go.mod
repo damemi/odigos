@@ -4,8 +4,10 @@ go 1.24.0
 
 require (
 	github.com/99designs/gqlgen v0.17.70
+	github.com/go-logr/logr v1.4.2
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/google/uuid v1.6.0
+	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
 	github.com/vektah/gqlparser/v2 v2.5.24
 )
 
@@ -21,6 +23,7 @@ require (
 	github.com/go-playground/validator/v10 v10.26.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
+	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -52,3 +55,5 @@ require (
 	github.com/gorilla/websocket v1.5.3 // indirect
 	golang.org/x/mod v0.24.0
 )
+
+replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth

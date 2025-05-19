@@ -8,6 +8,8 @@ import (
 	"syscall"
 
 	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/go-logr/logr"
+	"github.com/odigos-io/odigos-enterprise/odigosauth"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -23,6 +25,7 @@ func main() {
 
 	logger.InitLogger()
 	logger.Log.Info("Starting Central Backend Service...")
+	odigosauth.AssertEnterpriseOdigosToken(logr.FromSlogHandler(logger.Log.Handler()))
 
 	ctx := context.Background()
 
