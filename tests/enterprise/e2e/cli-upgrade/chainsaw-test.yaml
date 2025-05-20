@@ -86,6 +86,13 @@ spec:
         - apply:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/add-simple-trace-db-destination.yaml
 
+    - name: Use custom Go offsets file to make sure it works with upgrade
+      try:
+        - script:
+            content: ../../../../odigos/cli/odigos pro update-offsets
+        - assert:
+            file: assert-custom-offsets.yaml
+
     - name: Odigos pipeline pods ready
       # We make sure that the pipeline pods are ready before proceeding with the next steps
       # This is intentionally different from pipeline-ready.yaml, which checks for the pipeline CRDs
@@ -104,7 +111,7 @@ spec:
             content: ../../../../odigos/cli/odigos upgrade --version $IMAGE_TAG --skip-version-check # since the tag e2e-test is not a valid semantic version, we need to bypass it with --skip-version-check
         - assert:
             timeout: 3m
-            file: assert-odigos-upgraded.yaml
+            file: assert-odigos-upgraded-with-custom-offsets.yaml
 
     # TODO: remove this after release of v1.0.188
     - name: Restart PHP pod
@@ -188,3 +195,10 @@ spec:
         - podLogs:
             name: odiglet
             namespace: odigos-test
+
+    - name: Revert custom Go offsets
+      try:
+        - script:
+            content: ../../../../odigos/cli/odigos pro update-offsets --default
+        - assert:
+            file: assert-odigos-upgraded.yaml
