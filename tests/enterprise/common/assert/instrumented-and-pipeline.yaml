@@ -425,8 +425,6 @@ spec:
               fieldPath: metadata.name
       (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
         - value: 'default'
-      (env[?name == 'JAVA_OPTS']):
-        - value: '-javaagent:/var/odigos/java-ext-ebpf/javaagent.jar -Dotel.javaagent.extensions=/var/odigos/java-ext-ebpf/otel_agent_extension.jar'
       (env[?name == 'JAVA_TOOL_OPTIONS']):
         - value: '-javaagent:/var/odigos/java-ext-ebpf/javaagent.jar -Dotel.javaagent.extensions=/var/odigos/java-ext-ebpf/otel_agent_extension.jar'
 status:
