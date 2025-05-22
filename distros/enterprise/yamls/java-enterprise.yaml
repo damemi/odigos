@@ -18,9 +18,6 @@ spec:
     fileOpenTriggers:
       - "{{ODIGOS_AGENTS_DIR}}/java-ext-ebpf/end_span_usdt.so"
     environmentVariables:
-      - envName: JAVA_OPTS
-        envValue: "-javaagent:{{ODIGOS_AGENTS_DIR}}/java-ext-ebpf/javaagent.jar -Dotel.javaagent.extensions={{ODIGOS_AGENTS_DIR}}/java-ext-ebpf/otel_agent_extension.jar"
-        delimiter: ' '
       - envName: JAVA_TOOL_OPTIONS
         envValue: "-javaagent:{{ODIGOS_AGENTS_DIR}}/java-ext-ebpf/javaagent.jar -Dotel.javaagent.extensions={{ODIGOS_AGENTS_DIR}}/java-ext-ebpf/otel_agent_extension.jar"
         delimiter: ' '

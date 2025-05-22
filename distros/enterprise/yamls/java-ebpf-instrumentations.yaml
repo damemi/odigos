@@ -18,9 +18,6 @@ spec:
       - "{{ODIGOS_AGENTS_DIR}}/java-ebpf/tracing_probes.so"
     device: 'instrumentation.odigos.io/generic'
     environmentVariables:
-      - envName: JAVA_OPTS
-        envValue: '-javaagent:{{ODIGOS_AGENTS_DIR}}/java-ebpf/dtrace-injector.jar'
-        delimiter: ' '
       - envName: JAVA_TOOL_OPTIONS
         envValue: '-javaagent:{{ODIGOS_AGENTS_DIR}}/java-ebpf/dtrace-injector.jar'
         delimiter: ' '
