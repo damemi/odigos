@@ -54,7 +54,10 @@ spec:
               ./odigos uninstall --yes
               # Run the Odigos CLI installation
               ./odigos install --namespace odigos-test --onprem-token $ODIGOS_API_KEY
-            timeout: 2m # longer timeout since the images are being pulled from dockerhub
+
+              curl -sSL -o verify_odigos_installation.sh https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/verify_odigos_installation.sh
+              bash verify_odigos_installation.sh odigos-test
+            timeout: 4m # longer timeout since the images are being pulled from dockerhub
         - assert:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/odigos-installed.yaml
 

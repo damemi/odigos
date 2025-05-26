@@ -22,6 +22,9 @@ spec:
               # use the helm chart from main repo which is expected to be in a sibling directory to this repo
               helm upgrade --install odigos  ../../../../odigos/helm/odigos --create-namespace --namespace odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY
               kubectl label namespace odigos-test odigos.io/system-object="true"
+
+              curl -sSL -o verify_odigos_installation.sh https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/verify_odigos_installation.sh
+              bash verify_odigos_installation.sh odigos-test
         - assert:
             timeout: 1m
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/odigos-installed.yaml

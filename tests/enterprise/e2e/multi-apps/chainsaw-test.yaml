@@ -21,6 +21,8 @@ spec:
             content: |
               echo "Installing Odigos with tag $IMAGE_TAG"
               ../../../../odigos/cli/odigos install --namespace odigos-test --version $IMAGE_TAG --onprem-token $ODIGOS_API_KEY
+              curl -sSL -o verify_odigos_installation.sh https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/verify_odigos_installation.sh
+              bash verify_odigos_installation.sh odigos-test
         - assert:
             timeout: 1m
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/odigos-installed.yaml
