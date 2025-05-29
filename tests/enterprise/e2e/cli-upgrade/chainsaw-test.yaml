@@ -116,15 +116,6 @@ spec:
             timeout: 3m
             file: assert-odigos-upgraded-with-custom-offsets.yaml
 
-    # TODO: remove this after release of v1.0.188
-    - name: Restart PHP pod
-      try:
-        - script:
-            timeout: 1m
-            content: |
-              kubectl delete pod -l app=currency
-              kubectl wait --for=condition=ready pod -l app=currency --timeout=60s
-
     - name: Instrumented and pipeline ready after upgrade
       try:
         - assert:
