@@ -3,26 +3,27 @@ import { useProxy } from '../proxy';
 import { useConfig } from '../config';
 import type { NamespaceInstrumentInput } from '@/types';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
-import { useEntityStore, useNotificationStore } from '@odigos/ui-kit/store';
 import { GET_NAMESPACE, GET_NAMESPACES, PERSIST_NAMESPACES } from '@/graphql';
 import { EntityTypes, type Namespace, StatusType } from '@odigos/ui-kit/types';
+import { useDataStreamStore, useEntityStore, useNotificationStore } from '@odigos/ui-kit/store';
 
-export const useNamespace = (namespaceName?: string) => {
+export const useNamespace = () => {
   const { isReadonly } = useConfig();
   const { addNotification } = useNotificationStore();
+  const { selectedStreamName } = useDataStreamStore();
   const { namespacesLoading, setEntitiesLoading, namespaces, setEntities } = useEntityStore();
 
   const notifyUser = (type: StatusType, title: string, message: string, hideFromHistory?: boolean) => {
     addNotification({ type, title, message, hideFromHistory });
   };
 
-  const { fetch: fetchAll } = useProxy<{ computePlatform?: { k8sActualNamespaces?: Namespace[] } }>(GET_NAMESPACES);
-  const { fetch: fetchSingle, data: singleNamespace, loading: singleLoading } = useProxy<{ computePlatform?: { k8sActualNamespace?: Namespace } }>(GET_NAMESPACE);
+  const { fetch: queryAllNs } = useProxy<{ computePlatform?: { k8sActualNamespaces?: Namespace[] } }>(GET_NAMESPACES);
+  const { fetch: querySingleNs } = useProxy<{ computePlatform?: { k8sActualNamespace?: Namespace } }, { namespaceName: string }>(GET_NAMESPACE);
   const { fetch: mutatePersist } = useProxy<{ persistK8sNamespace: boolean }>(PERSIST_NAMESPACES);
 
   const fetchNamespaces = async () => {
     setEntitiesLoading(EntityTypes.Namespace, true);
-    const { data } = await fetchAll();
+    const { data } = await queryAllNs();
 
     if (data?.computePlatform?.k8sActualNamespaces) {
       const { k8sActualNamespaces: items } = data.computePlatform;
@@ -40,19 +41,15 @@ export const useNamespace = (namespaceName?: string) => {
   };
 
   useEffect(() => {
-    if (!namespaces.length) fetchNamespaces();
+    if (selectedStreamName && !namespaces.length && !namespacesLoading) fetchNamespaces();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (namespaceName && !singleLoading) fetchSingle({ namespaceName });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [namespaceName]);
+  }, [selectedStreamName]);
 
   return {
-    loading: namespacesLoading || singleLoading,
+    namespacesLoading,
     namespaces,
-    namespace: singleNamespace?.computePlatform?.k8sActualNamespace,
+    fetchNamespaces,
+    fetchNamespace: querySingleNs,
     persistNamespace,
   };
 };

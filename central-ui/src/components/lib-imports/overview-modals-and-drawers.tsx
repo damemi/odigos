@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { ActionDrawer, ActionModal, DestinationDrawer, DestinationModal, InstrumentationRuleDrawer, InstrumentationRuleModal, SourceDrawer, SourceModal } from '@odigos/ui-kit/containers';
 import {
   useActionCRUD,
@@ -16,43 +16,34 @@ import {
 const OverviewModalsAndDrawers = () => {
   const { isEnterprise } = useConfig();
   const { fetchDescribeSource } = useDescribe();
+  const { testConnection } = useTestConnection();
   const { categories } = useDestinationCategories();
   const { persistSources, updateSource } = useSourceCRUD();
   const { potentialDestinations } = usePotentialDestinations();
   const { createAction, updateAction, deleteAction } = useActionCRUD();
   const { createDestination, updateDestination, deleteDestination } = useDestinationCRUD();
-  const { testConnection, testConnectionResult, isTestConnectionLoading } = useTestConnection();
   const { createInstrumentationRule, updateInstrumentationRule, deleteInstrumentationRule } = useInstrumentationRuleCRUD();
 
-  const [selectedNamespace, setSelectedNamespace] = useState('');
-  const { namespace } = useNamespace(selectedNamespace);
+  const { fetchNamespace } = useNamespace();
 
   return (
     <>
       {/* modals */}
-      <SourceModal namespace={namespace} selectedNamespace={selectedNamespace} setSelectedNamespace={setSelectedNamespace} persistSources={persistSources} />
+      <SourceModal fetchSingleNamespace={fetchNamespace} persistSources={persistSources} />
       <DestinationModal
         isOnboarding={false}
         categories={categories}
         potentialDestinations={potentialDestinations}
         createDestination={createDestination}
+        updateDestination={updateDestination}
         testConnection={testConnection}
-        testResult={testConnectionResult}
-        testLoading={isTestConnectionLoading}
       />
       <InstrumentationRuleModal isEnterprise={isEnterprise} createInstrumentationRule={createInstrumentationRule} />
       <ActionModal createAction={createAction} />
 
       {/* drawers */}
       <SourceDrawer persistSources={persistSources} updateSource={updateSource} fetchDescribeSource={fetchDescribeSource} />
-      <DestinationDrawer
-        categories={categories}
-        updateDestination={updateDestination}
-        deleteDestination={deleteDestination}
-        testConnection={testConnection}
-        testResult={testConnectionResult}
-        testLoading={isTestConnectionLoading}
-      />
+      <DestinationDrawer categories={categories} updateDestination={updateDestination} deleteDestination={deleteDestination} testConnection={testConnection} />
       <InstrumentationRuleDrawer updateInstrumentationRule={updateInstrumentationRule} deleteInstrumentationRule={deleteInstrumentationRule} />
       <ActionDrawer updateAction={updateAction} deleteAction={deleteAction} />
     </>

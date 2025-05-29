@@ -5,9 +5,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { ROUTES } from '@/utils';
 import styled from 'styled-components';
 import { EntityTypes } from '@odigos/ui-kit/types';
-import { useProxyID, useTokenTracker } from '@/hooks';
 import { ConnectionsIcon } from '@odigos/ui-kit/icons';
 import { OverviewHeader, OverviewModalsAndDrawers } from '@/components';
+import { useDataStreamsCRUD, useProxyID, useTokenTracker } from '@/hooks';
 import { ErrorBoundary, FlexColumn, FlexRow, type NavIcon } from '@odigos/ui-kit/components';
 import { DataFlowActionsMenu, NavIconIds, SideNav, ToastList } from '@odigos/ui-kit/containers';
 
@@ -25,7 +25,7 @@ const ContentWithActions = styled.div`
 `;
 
 const ContentUnderActions = styled(FlexRow)`
-  align-items: flex-start;
+  align-items: flex-start !important;
   justify-content: space-between;
   padding-left: 12px;
   width: calc(100% - 12px);
@@ -69,6 +69,7 @@ function OverviewLayout({ children }: PropsWithChildren) {
   // call important hooks that should run on page-mount
   // useSSE();
   useTokenTracker();
+  const { updateDataStream, deleteDataStream } = useDataStreamsCRUD();
 
   const router = useRouter();
   const pathname = usePathname();
@@ -103,7 +104,12 @@ function OverviewLayout({ children }: PropsWithChildren) {
         <OverviewHeader />
 
         <ContentWithActions>
-          <DataFlowActionsMenu addEntity={entityType} />
+          <DataFlowActionsMenu
+            addEntity={entityType}
+            onClickNewDataStream={() => console.warn('TODO: overview modal for new stream')}
+            updateDataStream={updateDataStream}
+            deleteDataStream={deleteDataStream}
+          />
           <ContentUnderActions>
             <SideNav defaultSelectedId={selectedId} onClickId={onClickId} extendedNavIcons={extendedNavIcons} />
             {children}

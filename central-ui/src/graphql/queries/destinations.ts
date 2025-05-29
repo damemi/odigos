@@ -4,6 +4,7 @@ export const GET_DESTINATIONS = `
       destinations {
         id
         name
+        dataStreamNames
         fields
         exportedSignals {
           logs
@@ -36,7 +37,7 @@ export const GET_DESTINATIONS = `
       }
     }
   }
-`
+`;
 
 export const GET_DESTINATION_CATEGORIES = `
   query GetDestinationCategories {
@@ -79,7 +80,7 @@ export const GET_DESTINATION_CATEGORIES = `
       }
     }
   }
-`
+`;
 
 export const GET_POTENTIAL_DESTINATIONS = `
   query GetPotentialDestinations {
@@ -88,4 +89,4 @@ export const GET_POTENTIAL_DESTINATIONS = `
       fields
     }
   }
-`
+`;

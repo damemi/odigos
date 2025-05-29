@@ -3,6 +3,7 @@ export const CREATE_DESTINATION = `
     createNewDestination(destination: $destination) {
       id
       name
+      dataStreamNames
       fields
       exportedSignals {
         logs
@@ -34,7 +35,7 @@ export const CREATE_DESTINATION = `
       }
     }
   }
-`
+`;
 
 export const UPDATE_DESTINATION = `
   mutation UpdateDestination($id: ID!, $destination: DestinationInput!) {
@@ -42,13 +43,13 @@ export const UPDATE_DESTINATION = `
       id
     }
   }
-`
+`;
 
 export const DELETE_DESTINATION = `
-  mutation DeleteDestination($id: ID!) {
-    deleteDestination(id: $id)
+  mutation DeleteDestination($id: ID!, $currentStreamName: String!) {
+    deleteDestination(id: $id, currentStreamName: $currentStreamName) {
   }
-`
+`;
 
 export const TEST_DESTINATION_CONNECTION = `
   mutation TestConnection($destination: DestinationInput!) {
@@ -60,4 +61,4 @@ export const TEST_DESTINATION_CONNECTION = `
       reason
     }
   }
-`
+`;

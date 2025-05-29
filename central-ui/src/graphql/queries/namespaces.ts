@@ -16,10 +16,12 @@ export const GET_NAMESPACE = `
         name
         selected
         sources {
+          namespace
           kind
           name
-          numberOfInstances
+          dataStreamNames
           selected
+          numberOfInstances
         }
       }
     }

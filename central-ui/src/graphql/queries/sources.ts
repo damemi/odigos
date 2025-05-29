@@ -7,6 +7,7 @@ export const GET_SOURCES = `
           namespace
           name
           kind
+          dataStreamNames
           selected
           otelServiceName
           containers {
@@ -28,7 +29,7 @@ export const GET_SOURCES = `
       }
     }
   }
-`
+`;
 
 export const GET_SOURCE = `
   query GetSource($sourceId: K8sSourceId!) {
@@ -37,6 +38,7 @@ export const GET_SOURCE = `
         namespace
         name
         kind
+        dataStreamNames
         selected
         otelServiceName
         containers {
@@ -57,15 +59,15 @@ export const GET_SOURCE = `
       }
     }
   }
-`
+`;
 
-export const GET_INSTRUMENTATION_INSTANCES_HEALTH = `
-  query GetInstrumentationInstancesHealth {
-    instrumentationInstancesHealth {
+export const GET_SOURCE_CONDITIONS = `
+  query GetSourceConditions {
+    sourceConditions {
       namespace
       name
       kind
-      condition {
+      conditions {
         status
         type
         reason
@@ -74,4 +76,4 @@ export const GET_INSTRUMENTATION_INSTANCES_HEALTH = `
       }
     }
   }
-`
+`;

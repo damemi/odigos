@@ -4,11 +4,20 @@ import { useConfig } from '../config';
 import { useNamespace } from '../namespaces';
 import { getSseTargetFromId } from '@odigos/ui-kit/functions';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
-import type { InstrumentationInstancesHealth, PaginatedData, SourceUpdateInput } from '@/types';
+import type { PaginatedData, SourceConditions, SourceInstrumentInput } from '@/types';
 import { addConditionToSources, prepareNamespacePayloads, prepareSourcePayloads } from '@/utils';
-import { GET_INSTRUMENTATION_INSTANCES_HEALTH, GET_SOURCE, GET_SOURCES, PERSIST_SOURCES, UPDATE_SOURCE } from '@/graphql';
+import { GET_SOURCE, GET_SOURCE_CONDITIONS, GET_SOURCES, PERSIST_SOURCES, UPDATE_SOURCE } from '@/graphql';
 import { Crud, EntityTypes, StatusType, type SourceFormData, type Source, type WorkloadId } from '@odigos/ui-kit/types';
-import { type NamespaceSelectionFormData, type SourceSelectionFormData, useEntityStore, useInstrumentStore, useNotificationStore, usePendingStore, useSetupStore } from '@odigos/ui-kit/store';
+import {
+  type NamespaceSelectionFormData,
+  type SourceSelectionFormData,
+  useDataStreamStore,
+  useEntityStore,
+  useInstrumentStore,
+  useNotificationStore,
+  usePendingStore,
+  useSetupStore,
+} from '@odigos/ui-kit/store';
 
 interface UseSourceCrud {
   sources: Source[];
@@ -23,6 +32,7 @@ export const useSourceCRUD = (): UseSourceCrud => {
   const { isReadonly } = useConfig();
   const { persistNamespace } = useNamespace();
   const { addNotification } = useNotificationStore();
+  const { selectedStreamName } = useDataStreamStore();
   const { addPendingItems, removePendingItems } = usePendingStore();
   const { setInstrumentAwait, setInstrumentCount } = useInstrumentStore();
   const { setConfiguredSources, setConfiguredFutureApps } = useSetupStore();
@@ -39,11 +49,11 @@ export const useSourceCRUD = (): UseSourceCrud => {
     });
   };
 
-  const { fetch: queryByPage } = useProxy<{ computePlatform?: { sources?: PaginatedData<Source> } }>(GET_SOURCES);
-  const { fetch: queryById } = useProxy<{ computePlatform?: { source?: Source } }>(GET_SOURCE);
-  const { fetch: mutatePersistSources } = useProxy<{ persistK8sSources: boolean }>(PERSIST_SOURCES);
-  const { fetch: mutateUpdate } = useProxy<{ updateK8sActualSource: boolean }>(UPDATE_SOURCE);
-  const { fetch: queryInstances } = useProxy<{ instrumentationInstancesHealth: InstrumentationInstancesHealth[] }>(GET_INSTRUMENTATION_INSTANCES_HEALTH);
+  const { fetch: queryByPage } = useProxy<{ computePlatform?: { sources?: PaginatedData<Source> } }, { nextPage: string }>(GET_SOURCES);
+  const { fetch: queryById } = useProxy<{ computePlatform?: { source?: Source } }, { sourceId: WorkloadId }>(GET_SOURCE);
+  const { fetch: mutatePersistSources } = useProxy<{ persistK8sSources: boolean }, SourceInstrumentInput>(PERSIST_SOURCES);
+  const { fetch: mutateUpdate } = useProxy<{ updateK8sActualSource: boolean }, { sourceId: WorkloadId; patchSourceRequest: SourceFormData }>(UPDATE_SOURCE);
+  const { fetch: queryOtherConditions } = useProxy<{ sourceConditions: SourceConditions[] }>(GET_SOURCE_CONDITIONS);
 
   const shouldFetchSource = (allowFetchDuringLoadTrue?: boolean) => {
     // We should not fetch if we are already fetching.
@@ -57,23 +67,27 @@ export const useSourceCRUD = (): UseSourceCrud => {
   const handleInstrumentationCount = (toAddCount: number, toDeleteCount: number) => {
     const { sourcesToCreate, sourcesToDelete } = useInstrumentStore.getState();
 
-    setInstrumentCount('sourcesToDelete', sourcesToDelete + toDeleteCount);
-    setInstrumentCount('sourcesToCreate', sourcesToCreate + toAddCount);
+    // TODO: estimate the number of instrumentationConfigs to create for future-apps
+
+    if (toDeleteCount > 0) setInstrumentCount('sourcesToDelete', sourcesToDelete + toDeleteCount);
+    if (toAddCount > 0) setInstrumentCount('sourcesToCreate', sourcesToCreate + toAddCount);
+
+    if (toDeleteCount > 0 || toAddCount > 0) setInstrumentAwait(true);
   };
 
-  const fetchAllInstances = async () => {
+  const fetchAllConditions = async () => {
     const sourcesFromStore = useEntityStore.getState().sources;
-    const { data } = await queryInstances();
+    const { data } = await queryOtherConditions();
 
-    if (data?.instrumentationInstancesHealth) {
-      const sourcesWithInstances: Source[] = [];
+    if (data?.sourceConditions) {
+      const tempSources: Source[] = [];
 
-      for (const instanceHealth of data.instrumentationInstancesHealth) {
-        const updatedSource = addConditionToSources(instanceHealth, sourcesFromStore);
-        if (updatedSource) sourcesWithInstances.push(updatedSource);
+      for (const item of data.sourceConditions) {
+        const updatedSource = addConditionToSources(item, sourcesFromStore);
+        if (updatedSource) tempSources.push(updatedSource);
       }
 
-      addEntities(EntityTypes.Source, sourcesWithInstances);
+      addEntities(EntityTypes.Source, tempSources);
     }
   };
 
@@ -94,7 +108,7 @@ export const useSourceCRUD = (): UseSourceCrud => {
         setEntitiesLoading(EntityTypes.Source, false);
         setInstrumentCount('sourcesToCreate', 0);
         setInstrumentCount('sourcesCreated', 0);
-        fetchAllInstances();
+        fetchAllConditions();
       }
     }
   };
@@ -114,19 +128,16 @@ export const useSourceCRUD = (): UseSourceCrud => {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
       let alreadyNotified = false;
-      const { payloads: persistSourcesPayloads, isEmpty: sourcesEmpty } = prepareSourcePayloads(selectAppsList, handleInstrumentationCount, removeEntities);
+      const { payloads: persistSourcesPayloads, isEmpty: sourcesEmpty } = prepareSourcePayloads(selectAppsList, sources, selectedStreamName, handleInstrumentationCount, removeEntities, addEntities);
       const { payloads: persistNamespacesPayloads, isEmpty: futueAppsEmpty } = prepareNamespacePayloads(futureSelectAppsList);
 
       if (!sourcesEmpty && !alreadyNotified) {
         alreadyNotified = true;
         notifyUser(StatusType.Default, 'Pending', 'Persisting sources...', undefined, true);
-        setInstrumentAwait(true);
       }
       if (!futueAppsEmpty && !alreadyNotified) {
         alreadyNotified = true;
         notifyUser(StatusType.Default, 'Pending', 'Persisting namespaces...', undefined, true);
-        // TODO: estimate the number of instrumentationConfigs to create for future apps in "handleInstrumentationCount", then uncomment the below
-        // setInstrumentAwait(true);
       }
 
       await Promise.all(persistSourcesPayloads.map(mutatePersistSources));
@@ -134,7 +145,7 @@ export const useSourceCRUD = (): UseSourceCrud => {
       await Promise.all(persistNamespacesPayloads.map(persistNamespace));
       setConfiguredFutureApps({});
 
-      // !! no "fetch" and no "setInstrumentAwait(false)""
+      // !! no "fetch" and no "setInstrumentAwait(false)"
       // !! we should wait for SSE to handle that
       // TODO: SSE for centralized
     }
@@ -147,8 +158,7 @@ export const useSourceCRUD = (): UseSourceCrud => {
       notifyUser(StatusType.Default, 'Pending', 'Updating source...', undefined, true);
       addPendingItems([{ entityType: EntityTypes.Source, entityId: sourceId }]);
 
-      const patchSourceRequest: SourceUpdateInput = payload;
-      await mutateUpdate({ sourceId, patchSourceRequest });
+      await mutateUpdate({ sourceId, patchSourceRequest: payload });
 
       notifyUser(StatusType.Success, Crud.Update, `Successfully updated "${sourceId.name}" source`, sourceId);
       removePendingItems([{ entityType: EntityTypes.Source, entityId: sourceId }]);
