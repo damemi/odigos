@@ -15,7 +15,8 @@ import (
 )
 
 type JavaOtelEbpfSdkEnterprise struct {
-	inst *auto.Instrumentation
+	inst   *auto.Instrumentation
+	config instrumentation.Config
 }
 
 type JavaInstrumentationFactoryEnterprise struct{}
@@ -48,14 +49,23 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 	}
 
 	javaInstWrapper := &JavaOtelEbpfSdkEnterprise{
-		inst: inst,
+		inst:   inst,
+		config: settings.InitialConfig,
 	}
 
 	return javaInstWrapper, nil
 }
 
 func (g *JavaOtelEbpfSdkEnterprise) Load(ctx context.Context) error {
-	return g.inst.Load(ctx)
+	if err := g.inst.Load(ctx); err != nil {
+		return err
+	}
+
+	if err := g.ApplyConfig(ctx, g.config); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (g *JavaOtelEbpfSdkEnterprise) Run(ctx context.Context) error {
