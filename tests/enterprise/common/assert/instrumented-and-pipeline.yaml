@@ -477,7 +477,7 @@ spec:
               apiVersion: v1
               fieldPath: status.hostIP
       (env[?name == 'ODIGOS_OPAMP_SERVER_HOST']):
-        - value: '$(NODE_IP):4320'
+        - (($values.k8sMinorVersion < `26` && value == '$(NODE_IP):4320') || value == 'odiglet-local.odigos-test:4320'): true
       (env[?name == 'PYTHONPATH']):
         - value: '/bar:/var/odigos/python-ebpf:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation:/var/odigos/python'
 status:
