@@ -6,11 +6,11 @@ require github.com/odigos-io/odigos/profiles v1.0.187
 
 require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
-	github.com/go-logr/logr v1.4.2 // indirect
+	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/hashicorp/go-version v1.7.0 // indirect
 	github.com/odigos-io/odigos/common v0.0.0
 	go.opentelemetry.io/otel v1.35.0 // indirect
 	go.opentelemetry.io/otel/trace v1.35.0 // indirect
 )
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.190
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.192-0.20250605081549-816e76a81b9c
