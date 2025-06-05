@@ -25,11 +25,11 @@ func GetCentralBackendURLAndClusterName(ctx context.Context, kubeClient *kube.Cl
 	}
 
 	if odigosConfig.CentralBackendURL == "" {
-		return "", "", fmt.Errorf("key %s not found in ConfigMap", odigosConfig.CentralBackendURL)
+		return "", "", fmt.Errorf("key \"%s\" not found in ConfigMap", "centralBackendURL")
 	}
 
 	if odigosConfig.ClusterName == "" {
-		return "", "", fmt.Errorf("key %s not found in ConfigMap", odigosConfig.ClusterName)
+		return "", "", fmt.Errorf("key \"%s\" not found in ConfigMap", "clusterName")
 	}
 
 	return odigosConfig.CentralBackendURL, odigosConfig.ClusterName, nil
