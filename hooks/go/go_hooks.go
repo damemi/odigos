@@ -9,6 +9,14 @@ import (
 //
 //go:noinline
 func GetTraceContext(ctx context.Context) string {
-	traceId := ""
+	for i := 0; i < 100; i++ {
+		fmt.Println(i)
+		i = i + 1
+		fmt.Println(secondHelper(i))
+	}
 	return traceId
+}
+
+func secondHelper(i int) bool {
+	return i%2 == 0
 }
