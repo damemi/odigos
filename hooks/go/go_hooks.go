@@ -9,6 +9,6 @@ import (
 //
 //go:noinline
 func GetTraceContext(ctx context.Context) string {
-	var traceId string
+	traceId := ""
 	return traceId
 }
