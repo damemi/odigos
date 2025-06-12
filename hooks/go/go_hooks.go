@@ -2,7 +2,6 @@ package go_hooks
 
 import (
 	"context"
-	"fmt"
 )
 
 // GetTraceContext extracts the trace.SpanContext from the provided context.
