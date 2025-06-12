@@ -14,6 +14,11 @@ func GetTraceContext(ctx context.Context) string {
 		i = i + 1
 		fmt.Println(secondHelper(i))
 	}
+
+	dummy := make([]byte, 1024)
+	for i := range dummy {
+		dummy[i] = byte(i % 256)
+	}
 	return traceId
 }
 
