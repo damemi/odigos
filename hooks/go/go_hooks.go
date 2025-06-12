@@ -9,7 +9,7 @@ import (
 //
 //go:noinline
 func GetTraceContext(ctx context.Context) string {
-	var traceId string
+	traceId := "none"
 
 	dummy := make([]byte, 1024)
 	for i := range dummy {
