@@ -11,11 +11,6 @@ import (
 //go:noinline
 func GetTraceContext(ctx context.Context) string {
 	var traceId string
-	for i := 0; i < 100; i++ {
-		fmt.Println(i)
-		i = i + 1
-		fmt.Println(secondHelper(i))
-	}
 
 	dummy := make([]byte, 1024)
 	for i := range dummy {
