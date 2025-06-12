@@ -2,6 +2,7 @@ package go_hooks
 
 import (
 	"context"
+	"fmt"
 )
 
 // GetTraceContext extracts the trace.SpanContext from the provided context.
@@ -9,6 +10,7 @@ import (
 //
 //go:noinline
 func GetTraceContext(ctx context.Context) string {
+	var traceId string
 	for i := 0; i < 100; i++ {
 		fmt.Println(i)
 		i = i + 1
