@@ -10,11 +10,6 @@ import (
 //go:noinline
 func GetTraceContext(ctx context.Context) string {
 	traceId := "none"
-
-	dummy := make([]byte, 1024)
-	for i := range dummy {
-		dummy[i] = byte(i % 256)
-	}
 	return traceId
 }
 
