@@ -2,7 +2,7 @@ module github.com/odigos-io/odigos-enterprise/onprem-token-generator
 
 go 1.24.0
 
-require github.com/odigos-io/odigos/profiles v1.0.187
+require github.com/odigos-io/odigos/profiles v1.0.198
 
 require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
@@ -14,3 +14,5 @@ require (
 )
 
 replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.199-0.20250617131142-4134c62840bf
+
+replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v1.0.199-0.20250617160805-f61bcc24b59f
