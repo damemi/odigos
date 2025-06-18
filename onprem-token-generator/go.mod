@@ -4,14 +4,17 @@ go 1.24.0
 
 require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
-	github.com/go-logr/logr v1.4.3 // indirect
-	github.com/hashicorp/go-version v1.7.0 // indirect
 	github.com/odigos-io/odigos/common v0.0.0
 	github.com/odigos-io/odigos/profiles v0.0.0
+)
+
+require (
+	github.com/go-logr/logr v1.4.3 // indirect
+	github.com/hashicorp/go-version v1.7.0 // indirect
 	go.opentelemetry.io/otel v1.35.0 // indirect
 	go.opentelemetry.io/otel/trace v1.35.0 // indirect
 )
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.199-0.20250617131142-4134c62840bf
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.200-0.20250618140200-2f7110c17dd6
 
-replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v1.0.199-0.20250617160805-f61bcc24b59f
+replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v1.0.200-0.20250618140200-2f7110c17dd6
