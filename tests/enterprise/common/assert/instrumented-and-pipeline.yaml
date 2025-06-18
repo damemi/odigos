@@ -440,6 +440,73 @@ kind: Pod
 metadata:
   namespace: default
   labels:
+    app: geolocation
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: odigos.io/odiglet-enterprise-installed
+                operator: In
+                values:
+                  - 'true'
+  containers:
+    - name: geolocation
+      resources:
+        limits:
+          instrumentation.odigos.io/generic: '1'
+        requests:
+          instrumentation.odigos.io/generic: '1'
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: geolocation
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: ruby-enterprise
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: default
+      (env[?name == 'NODE_IP']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.hostIP
+      (env[?name == 'OTEL_EXPORTER_OTLP_ENDPOINT']):
+        - (($values.k8sMinorVersion < `26` && value == 'http://$(NODE_IP):4318') || value == 'http://odigos-data-collection-local-traffic.odigos-test:4318'): true
+      (env[?name == 'OTEL_EXPORTER_OTLP_PROTOCOL']):
+        - value: 'http/protobuf'
+      (env[?name == 'OTEL_PROPAGATORS']):
+        - value: 'tracecontext,baggage'
+      (env[?name == 'OTEL_SERVICE_NAME']):
+        - value: geolocation
+      (env[?name == 'OTEL_RESOURCE_ATTRIBUTES']):
+        - value: 'k8s.pod.name=$(ODIGOS_POD_NAME),k8s.container.name=geolocation,k8s.namespace.name=default,k8s.deployment.name=geolocation'
+      (env[?name == 'OTEL_LOGS_EXPORTER']):
+        - value: none
+      (env[?name == 'OTEL_METRICS_EXPORTER']):
+        - value: none
+      (env[?name == 'OTEL_TRACES_EXPORTER']):
+        - value: otlp
+      (env[?name == 'RUBYOPT']):
+        - value: '-r /var/odigos/ruby/3.4/index'
+      (env[?name == 'ADDITIONAL_GEM_PATH']):
+        - value: '/var/odigos/ruby/3.4/bundle'
+status:
+  containerStatuses:
+    - name: geolocation
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
     app: inventory
 spec:
   affinity:

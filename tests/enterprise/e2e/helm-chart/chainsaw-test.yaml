@@ -26,7 +26,7 @@ spec:
               curl -sSL -o verify_odigos_installation.sh https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/verify_odigos_installation.sh
               bash verify_odigos_installation.sh odigos-test
         - assert:
-            timeout: 1m
+            timeout: 3m
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/odigos-installed.yaml
       catch:
         - script:
@@ -45,20 +45,36 @@ spec:
         - script:
             timeout: 2m
             content: |
-              kubectl wait --for=condition=ready pod -l app=frontend --timeout=120s
               kubectl wait --for=condition=ready pod -l app=coupon --timeout=120s
+              kubectl wait --for=condition=ready pod -l app=currency --timeout=120s
+              kubectl wait --for=condition=ready pod -l app=frontend --timeout=120s
+              kubectl wait --for=condition=ready pod -l app=geolocation --timeout=120s
               kubectl wait --for=condition=ready pod -l app=inventory --timeout=120s
               kubectl wait --for=condition=ready pod -l app=pricing --timeout=120s
               kubectl wait --for=condition=ready pod -l app=membership --timeout=120s
-              kubectl wait --for=condition=ready pod -l app=currency --timeout=120s
         - assert:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/simple-demo-installed.yaml
 
-    - name: Instrument Namespace & Assert Detect Languages
+    - name: Instrument Namespace
       try:
         - apply:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/instrument-default-ns.yaml
+
+    - name: Ruby Detected, Rollout Restart
+      try:
         - assert:
+            timeout: 3m
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/ruby-partial-runtime-detected.yaml
+        - script:
+            timeout: 1m
+            content: |
+              kubectl rollout restart deployment geolocation
+              kubectl wait --for=condition=ready pod -l app=geolocation --timeout=60s
+
+    - name: Assert Runtime Detected
+      try:
+        - assert:
+            timeout: 3m
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/simple-demo-runtime-detected.yaml
 
     - name: Add Destination
