@@ -36,7 +36,7 @@ jobs:
           git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
           go env -w GOPRIVATE=github.com/odigos-io/*
           sed -i "s|replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v.*|replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common main|g" go.mod
-          sed -i "s|github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v.*|replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles main|g" go.mod
+          sed -i "s|replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v.*|replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles main|g" go.mod
           go mod tidy
  
       - name: github preperation
