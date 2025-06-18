@@ -266,6 +266,18 @@ func (g *GoOtelEbpfSdkEnterprise) configPayloadCollection(config instrumentation
 		return err
 	}
 
+	// github.com/jackc/pgx
+	payloadCollectionNetJackcPgx := getPayloadCollectionConfig(sdkConfig, odigosv1.InstrumentationLibraryId{
+		InstrumentationLibraryName: "github.com/jackc/pgx",
+		SpanKind:                   common.ClientSpanKind,
+	})
+	collectDbQueryJackcPgx := payloadCollectionNetJackcPgx.DbQuery != nil
+	log.Logger.V(0).Info("Applying config to golang github.com/jackc/pgx", "collectDbQuery", collectDbQueryJackcPgx)
+	err = g.configBool("github.com/jackc/pgx", "db.query.text", trace.SpanKindClient, collectDbQueryJackcPgx)
+	if err != nil {
+		return err
+	}
+
 	// github.com/ClickHouse/clickhouse-go/v2
 	payloadCollectionClickhouse := getPayloadCollectionConfig(sdkConfig, odigosv1.InstrumentationLibraryId{
 		InstrumentationLibraryName: "github.com/ClickHouse/clickhouse-go/v2",
