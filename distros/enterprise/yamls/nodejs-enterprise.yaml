@@ -11,9 +11,12 @@ spec:
   displayName: Node.js Enterprise eBPF Processing
   description: |
     This distribution is for Node.js applications using an efficient eBPF-based SDK, and native instrumentation libraries from the OpenTelemetry community.
+  environmentVariables:
+    opAmpClientEnvironments: true
   runtimeAgent:
     directoryNames:
       - "{{ODIGOS_AGENTS_DIR}}/nodejs-ebpf"
+      - "{{ODIGOS_AGENTS_DIR}}/opentelemetry-node"
     device: 'instrumentation.odigos.io/generic'
     fileOpenTriggers:
       - "{{ODIGOS_AGENTS_DIR}}/nodejs-ebpf/build/Release/dtrace-injector-native.node"
@@ -21,3 +24,4 @@ spec:
       - envName: NODE_OPTIONS
         envValue: '--require {{ODIGOS_AGENTS_DIR}}/nodejs-ebpf/autoinstrumentation.js'
         delimiter: ' '
+    k8sAttrsViaEnvVars: true
