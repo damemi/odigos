@@ -1,4 +1,4 @@
-.PHONY: build-odiglet generate
+.PHONY: build-odiglet generate build-modular-docker build-final-docker
 
 LIBRARIES := go.opentelemetry.io/auto \
 			github.com/odigos-io/ebpf-java-instrumentation \

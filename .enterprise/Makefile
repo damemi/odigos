@@ -5,7 +5,12 @@ IMG_PREFIX?=
 IMG_SUFFIX?=
 ORG ?= registry.odigos.io
 BUILD_DIR=.
+# If you made a change and it's not being reflected in the image,
+# it might be because the cache is being used and not invalidated properly.
+# Use NO_CACHE=--no-cache to force a rebuild, or make build-odiglet-with-otel_agents NO_CACHE=--no-cache
+NO_CACHE?=
 
+.PHONY: build-image/%
 build-image/%:
 	docker build -t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
 	--secret id=github_token,env=GITHUB_TOKEN \
@@ -15,11 +20,17 @@ build-image/%:
 	--build-arg DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." \
 	--build-arg VERSION=$(TAG) \
 	--build-arg RELEASE=$(TAG) \
-	--build-arg LD_FLAGS="$(LD_FLAGS)"
+	--build-arg LD_FLAGS="$(LD_FLAGS)" \
+	$(BUILD_CONTEXT) \
+	$(NO_CACHE)
 
 .PHONY: build-odiglet
 build-odiglet:
 	$(MAKE) build-image/odiglet DOCKERFILE=odiglet/$(DOCKERFILE) SUMMARY="Odiglet for Odigos" DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
+.PHONY: build-odiglet-with-otel_agents
+build-odiglet-with-otel_agents:
+	$(MAKE) build-image/odiglet DOCKERFILE=odiglet/$(DOCKERFILE) SUMMARY="Odiglet for Odigos" DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) BUILD_CONTEXT="--build-context nodejs-agent-src=../opentelemetry-node --build-context nodejs-enterprise-agent-src=../ebpf-nodejs-instrumentation" NO_CACHE=--no-cache
 
 .PHONY: build-instrumentor
 build-instrumentor:
@@ -28,6 +39,10 @@ build-instrumentor:
 .PHONY: build-images
 build-images:
 	make -j 2 build-odiglet build-instrumentor TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
+
+.PHONY: build-images-with-agents
+build-images-with-agents:
+	make -j 2 build-odiglet-with-otel_agents build-instrumentor TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
 
 .PHONY: build-images-rhel
 build-images-rhel:
@@ -67,6 +82,10 @@ restart-instrumentor:
 .PHONY: deploy-odiglet
 deploy-odiglet:
 	make build-odiglet TAG=$(TAG) && make load-to-kind-odiglet TAG=$(TAG) && make restart-odiglet
+
+.PHONY: deploy-odiglet-with-agents
+deploy-odiglet-with-agents:
+	make build-odiglet-with-otel_agents TAG=$(TAG) && make load-to-kind-odiglet TAG=$(TAG) && make restart-odiglet
 
 .PHONY: deploy-instrumentor
 deploy-instrumentor:
