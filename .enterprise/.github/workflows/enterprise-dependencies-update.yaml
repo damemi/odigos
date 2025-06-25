@@ -22,6 +22,7 @@ jobs:
           sed -i "s|replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v.*|replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery main|g" go.mod
           sed -i "s|replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v.*|replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver main|g" go.mod
           sed -i "s|replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v.*|replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation main|g" go.mod
+          sed -i "s|replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v.*|replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros main|g" go.mod
           sed -i "s|replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation .*|replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation main|g" go.mod
           sed -i "s|github.com/odigos-io/ebpf-java-instrumentation.*|github.com/odigos-io/ebpf-java-instrumentation main|g" go.mod
           sed -i "s|github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension.*|github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension main|g" go.mod
