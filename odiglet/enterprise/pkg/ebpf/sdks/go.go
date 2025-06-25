@@ -413,6 +413,9 @@ func convertToGoInstrumentationConfig(sdkConfig instrumentation.Config) (goAutoC
 		}
 	}
 	ic.DefaultCodeAttributes = convertCodeAttributesToInstrumentationConfig(config.DefaultCodeAttributes)
+	if config.DefaultTraceConfig != nil && config.DefaultTraceConfig.Disabled != nil {
+		ic.DefaultTracesDisabled = *config.DefaultTraceConfig.Disabled
+	}
 
 	// TODO: take sampling config from the CR
 	// sampling is not yet supported in the enterprise go instrumentation
