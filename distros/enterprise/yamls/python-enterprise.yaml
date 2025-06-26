@@ -16,6 +16,9 @@ spec:
     staticVariables:
       - envName: OTEL_PYTHON_CONFIGURATOR
         envValue: 'ebpf'
+    appendOdigosVariables:
+      - envName: PYTHONPATH
+        replacePattern: "{{ORIGINAL_ENV_VALUE}}:{{ODIGOS_AGENTS_DIR}}/python-ebpf:{{ODIGOS_AGENTS_DIR}}/python/opentelemetry/instrumentation/auto_instrumentation:{{ODIGOS_AGENTS_DIR}}/python"
   runtimeAgent:
     directoryNames:
       - "{{ODIGOS_AGENTS_DIR}}/python"

@@ -11,13 +11,13 @@ spec:
   displayName: Java Enterprise eBPF Processing
   description: |
     This distribution is for JVM-based applications (Java, Scala, Kotlin, etc.) using eBPF based SDK and native instrumentation libraries from the OpenTelemetry community.
+  environmentVariables:
+    appendOdigosVariables:
+      - envName: JAVA_TOOL_OPTIONS
+        replacePattern: "{{ORIGINAL_ENV_VALUE}} -javaagent:{{ODIGOS_AGENTS_DIR}}/java-ext-ebpf/javaagent.jar -Dotel.javaagent.extensions={{ODIGOS_AGENTS_DIR}}/java-ext-ebpf/otel_agent_extension.jar"
   runtimeAgent:
     directoryNames:
       - "{{ODIGOS_AGENTS_DIR}}/java-ext-ebpf"
     device: 'instrumentation.odigos.io/generic'
     fileOpenTriggers:
       - "{{ODIGOS_AGENTS_DIR}}/java-ext-ebpf/end_span_usdt.so"
-    environmentVariables:
-      - envName: JAVA_TOOL_OPTIONS
-        envValue: "-javaagent:{{ODIGOS_AGENTS_DIR}}/java-ext-ebpf/javaagent.jar -Dotel.javaagent.extensions={{ODIGOS_AGENTS_DIR}}/java-ext-ebpf/otel_agent_extension.jar"
-        delimiter: ' '
