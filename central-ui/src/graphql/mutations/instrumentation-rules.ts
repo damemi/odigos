@@ -36,6 +36,9 @@ export const CREATE_INSTRUMENTATION_RULE = `
         namespace
         stacktrace
       }
+      headersCollection {
+        headerKeys
+      }
     }
   }
 `;
@@ -77,6 +80,9 @@ export const UPDATE_INSTURMENTATION_RULE = `
         lineNumber
         namespace
         stacktrace
+      }
+      headersCollection {
+        headerKeys
       }
     }
   }

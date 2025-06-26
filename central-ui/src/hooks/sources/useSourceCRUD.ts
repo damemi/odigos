@@ -30,7 +30,7 @@ interface UseSourceCrud {
 
 export const useSourceCRUD = (): UseSourceCrud => {
   const { isReadonly } = useConfig();
-  const { persistNamespace } = useNamespace();
+  const { persistNamespaces } = useNamespace();
   const { addNotification } = useNotificationStore();
   const { selectedStreamName } = useDataStreamStore();
   const { addPendingItems, removePendingItems } = usePendingStore();
@@ -128,8 +128,8 @@ export const useSourceCRUD = (): UseSourceCrud => {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
       let alreadyNotified = false;
-      const { payloads: persistSourcesPayloads, isEmpty: sourcesEmpty } = prepareSourcePayloads(selectAppsList, sources, selectedStreamName, handleInstrumentationCount, removeEntities, addEntities);
-      const { payloads: persistNamespacesPayloads, isEmpty: futueAppsEmpty } = prepareNamespacePayloads(futureSelectAppsList);
+      const { payload: persistSourcesPayloads, isEmpty: sourcesEmpty } = prepareSourcePayloads(selectAppsList, sources, selectedStreamName, handleInstrumentationCount, removeEntities, addEntities);
+      const { payload: persistNamespacesPayloads, isEmpty: futueAppsEmpty } = prepareNamespacePayloads(futureSelectAppsList, selectedStreamName);
 
       if (!sourcesEmpty && !alreadyNotified) {
         alreadyNotified = true;
@@ -140,9 +140,9 @@ export const useSourceCRUD = (): UseSourceCrud => {
         notifyUser(StatusType.Default, 'Pending', 'Persisting namespaces...', undefined, true);
       }
 
-      await Promise.all(persistSourcesPayloads.map(mutatePersistSources));
+      await mutatePersistSources(persistSourcesPayloads);
       setConfiguredSources({});
-      await Promise.all(persistNamespacesPayloads.map(persistNamespace));
+      await persistNamespaces(persistNamespacesPayloads);
       setConfiguredFutureApps({});
 
       // !! no "fetch" and no "setInstrumentAwait(false)"

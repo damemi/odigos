@@ -153,7 +153,7 @@ export const GET_DESCRIBE_ODIGOS = `
       }
     }
   }
-`
+`;
 
 export const GET_DESCRIBE_SOURCE = `
   query DescribeSource($namespace: String!, $kind: String!, $name: String!) {
@@ -179,6 +179,18 @@ export const GET_DESCRIBE_SOURCE = `
           status
           explain
         }
+        agentInjected {
+          name
+          value
+          status
+          explain
+        }
+        runningLatestWorkloadRevision {
+          name
+          value
+          status
+          explain
+        }
         containers {
           containerName {
             name
@@ -187,6 +199,18 @@ export const GET_DESCRIBE_SOURCE = `
             explain
           }
           actualDevices {
+            name
+            value
+            status
+            explain
+          }
+          started {
+            name
+            value
+            status
+            explain
+          }
+          ready {
             name
             value
             status
@@ -216,4 +240,4 @@ export const GET_DESCRIBE_SOURCE = `
       }
     }
   }
-`
+`;

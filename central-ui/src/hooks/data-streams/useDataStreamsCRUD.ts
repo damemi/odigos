@@ -72,9 +72,9 @@ export const useDataStreamsCRUD = (): UseDataStreamsCrud => {
         notifyUser(StatusType.Success, Crud.Update, `Successfully updated "${oldStream?.name}" data stream`);
 
         const switchToStream = selectedStreamName === oldStream?.name ? newStream.name : selectedStreamName;
-        await fetchDataStreams(switchToStream);
-        await fetchSourcesPaginated();
         await fetchDestinations();
+        await fetchSourcesPaginated();
+        await fetchDataStreams(switchToStream);
       }
     }
   };
@@ -92,9 +92,9 @@ export const useDataStreamsCRUD = (): UseDataStreamsCrud => {
         notifyUser(StatusType.Success, Crud.Delete, `Successfully deleted "${oldStream?.name}" data stream`);
 
         const switchToStream = selectedStreamName === oldStream?.name ? DEFAULT_DATA_STREAM_NAME : selectedStreamName;
-        await fetchDataStreams(switchToStream);
-        await fetchSourcesPaginated();
         await fetchDestinations();
+        await fetchSourcesPaginated();
+        await fetchDataStreams(switchToStream);
       }
     }
   };

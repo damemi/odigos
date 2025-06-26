@@ -37,6 +37,9 @@ export const GET_INSTRUMENTATION_RULES = `
           namespace
           stacktrace
         }
+        headersCollection {
+          headerKeys
+        }
       }
     }
   }

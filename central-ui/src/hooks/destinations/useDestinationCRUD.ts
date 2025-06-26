@@ -4,8 +4,8 @@ import { useConfig } from '../config';
 import { mapFetchedDestinations } from '@/utils';
 import { getSseTargetFromId } from '@odigos/ui-kit/functions';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
+import { useDataStreamStore, useEntityStore, useNotificationStore } from '@odigos/ui-kit/store';
 import { CREATE_DESTINATION, DELETE_DESTINATION, GET_DESTINATIONS, UPDATE_DESTINATION } from '@/graphql';
-import { useDataStreamStore, useEntityStore, useNotificationStore, usePendingStore } from '@odigos/ui-kit/store';
 import { EntityTypes, type Destination, type DestinationFormData, StatusType, Crud } from '@odigos/ui-kit/types';
 
 interface UseDestinationCrud {
@@ -17,21 +17,17 @@ interface UseDestinationCrud {
   deleteDestination: (id: string) => Promise<void>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const mapNoUndefinedFields = (destination: DestinationFormData, selectedStreamName: string) => ({
   ...destination,
   fields: destination.fields.filter(({ value }) => value !== undefined),
-
-  // TODO: uncomment when Data Streams are ready to use
-  currentStreamName: '', // selectedStreamName,
+  currentStreamName: selectedStreamName,
 });
 
 export const useDestinationCRUD = (): UseDestinationCrud => {
   const { isReadonly } = useConfig();
   const { addNotification } = useNotificationStore();
   const { selectedStreamName } = useDataStreamStore();
-  const { addPendingItems, removePendingItems } = usePendingStore();
-  const { destinationsLoading, setEntitiesLoading, destinations, addEntities, removeEntities } = useEntityStore();
+  const { destinationsLoading, setEntitiesLoading, destinations, addEntities } = useEntityStore();
 
   const notifyUser = (type: StatusType, title: string, message: string, id?: string, hideFromHistory?: boolean) => {
     addNotification({
@@ -64,10 +60,13 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
-      const res = await mutateCreate({ destination: mapNoUndefinedFields(destination, selectedStreamName) });
-      const created = res.data?.createNewDestination as Destination;
-      addEntities(EntityTypes.Destination, mapFetchedDestinations([created]));
-      notifyUser(StatusType.Success, Crud.Create, `Successfully created "${created.destinationType.type}" destination`, created.id);
+      const { data } = await mutateCreate({ destination: mapNoUndefinedFields(destination, selectedStreamName) });
+
+      if (data?.createNewDestination) {
+        const created = data.createNewDestination;
+        addEntities(EntityTypes.Destination, mapFetchedDestinations([created]));
+        notifyUser(StatusType.Success, Crud.Create, `Successfully created "${created.destinationType.type}" destination`, created.id);
+      }
     }
   };
 
@@ -75,13 +74,12 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
-      addPendingItems([{ entityType: EntityTypes.Destination, entityId: id }]);
-      notifyUser(StatusType.Default, 'Pending', 'Updating destination...', undefined, true);
-      await mutateUpdate({ id, destination: mapNoUndefinedFields(destination, selectedStreamName) });
-      removePendingItems([{ entityType: EntityTypes.Destination, entityId: id }]);
-      notifyUser(StatusType.Success, Crud.Update, `Successfully updated "${destination.type}" destination`, id);
-      // no updating store, we wait for SSE
-      // TODO: SSE for centralized
+      const { data } = await mutateUpdate({ id, destination: mapNoUndefinedFields(destination, selectedStreamName) });
+
+      if (data?.updateDestination) {
+        notifyUser(StatusType.Success, Crud.Update, `Successfully updated "${destination.type}" destination`, id);
+        fetchDestinations();
+      }
     }
   };
 
@@ -89,14 +87,13 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
-      await mutateDelete({
-        id,
-        // TODO: uncomment when Data Streams are ready to use
-        currentStreamName: '', // selectedStreamName
-      });
-      const destination = destinations.find((r) => r.id === id);
-      removeEntities(EntityTypes.Destination, [id]);
-      notifyUser(StatusType.Success, Crud.Delete, `Successfully deleted "${destination?.destinationType.type || id}" destination`, id);
+      const { data } = await mutateDelete({ id, currentStreamName: selectedStreamName });
+
+      if (data?.deleteDestination) {
+        const destination = destinations.find((r) => r.id === id);
+        notifyUser(StatusType.Success, Crud.Delete, `Successfully deleted "${destination?.destinationType.type || id}" destination`, id);
+        fetchDestinations();
+      }
     }
   };
 

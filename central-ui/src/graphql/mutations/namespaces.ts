@@ -1,5 +1,5 @@
 export const PERSIST_NAMESPACES = `
-  mutation PersistNamespace($namespace: PersistNamespaceItemInput!) {
-    persistK8sNamespace(namespace: $namespace)
+  mutation PersistNamespaces($namespaces: [PersistNamespaceItemInput!]!) {
+    persistK8sNamespaces(namespaces: $namespaces)
   }
-`
+`;

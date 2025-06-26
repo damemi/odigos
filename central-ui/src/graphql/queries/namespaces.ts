@@ -4,6 +4,7 @@ export const GET_NAMESPACES = `
       k8sActualNamespaces {
         name
         selected
+        dataStreamNames
       }
     }
   }
@@ -15,6 +16,7 @@ export const GET_NAMESPACE = `
       k8sActualNamespace(name: $namespaceName) {
         name
         selected
+        dataStreamNames
         sources {
           namespace
           kind

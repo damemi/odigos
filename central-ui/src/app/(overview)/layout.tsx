@@ -4,8 +4,9 @@ import React, { useCallback, useMemo, type PropsWithChildren } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { ROUTES } from '@/utils';
 import styled from 'styled-components';
-import { EntityTypes } from '@odigos/ui-kit/types';
+import { useModalStore } from '@odigos/ui-kit/store';
 import { ConnectionsIcon } from '@odigos/ui-kit/icons';
+import { EntityTypes, OtherEntityTypes } from '@odigos/ui-kit/types';
 import { OverviewHeader, OverviewModalsAndDrawers } from '@/components';
 import { useDataStreamsCRUD, useProxyID, useTokenTracker } from '@/hooks';
 import { ErrorBoundary, FlexColumn, FlexRow, type NavIcon } from '@odigos/ui-kit/components';
@@ -70,6 +71,7 @@ function OverviewLayout({ children }: PropsWithChildren) {
   // useSSE();
   useTokenTracker();
   const { updateDataStream, deleteDataStream } = useDataStreamsCRUD();
+  const { setCurrentModal } = useModalStore();
 
   const router = useRouter();
   const pathname = usePathname();
@@ -106,7 +108,7 @@ function OverviewLayout({ children }: PropsWithChildren) {
         <ContentWithActions>
           <DataFlowActionsMenu
             addEntity={entityType}
-            onClickNewDataStream={() => console.warn('TODO: overview modal for new stream')}
+            onClickNewDataStream={() => setCurrentModal(OtherEntityTypes.DataStream)}
             updateDataStream={updateDataStream}
             deleteDataStream={deleteDataStream}
           />

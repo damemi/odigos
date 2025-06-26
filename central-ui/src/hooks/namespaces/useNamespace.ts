@@ -19,7 +19,7 @@ export const useNamespace = () => {
 
   const { fetch: queryAllNs } = useProxy<{ computePlatform?: { k8sActualNamespaces?: Namespace[] } }>(GET_NAMESPACES);
   const { fetch: querySingleNs } = useProxy<{ computePlatform?: { k8sActualNamespace?: Namespace } }, { namespaceName: string }>(GET_NAMESPACE);
-  const { fetch: mutatePersist } = useProxy<{ persistK8sNamespace: boolean }>(PERSIST_NAMESPACES);
+  const { fetch: mutatePersist } = useProxy<{ persistK8sNamespaces: boolean }, NamespaceInstrumentInput>(PERSIST_NAMESPACES);
 
   const fetchNamespaces = async () => {
     setEntitiesLoading(EntityTypes.Namespace, true);
@@ -32,11 +32,11 @@ export const useNamespace = () => {
     }
   };
 
-  const persistNamespace = async (payload: NamespaceInstrumentInput) => {
+  const persistNamespaces = async (payload: NamespaceInstrumentInput) => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, true);
     } else {
-      await mutatePersist({ namespace: payload });
+      await mutatePersist(payload);
     }
   };
 
@@ -50,6 +50,6 @@ export const useNamespace = () => {
     namespaces,
     fetchNamespaces,
     fetchNamespace: querySingleNs,
-    persistNamespace,
+    persistNamespaces,
   };
 };
