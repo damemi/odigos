@@ -6,8 +6,8 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/distros v1.0.200
-	github.com/odigos-io/odigos/instrumentor v1.0.200
+	github.com/odigos-io/odigos/distros v1.0.201
+	github.com/odigos-io/odigos/instrumentor v1.0.201
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5
 	k8s.io/client-go v0.33.1
 	sigs.k8s.io/controller-runtime v0.20.4
@@ -28,7 +28,6 @@ require (
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
-	github.com/goccy/go-yaml v1.17.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/google/btree v1.1.3 // indirect
@@ -95,8 +94,8 @@ replace (
 	github.com/odigos-io/odigos-enterprise/distros => ../distros
 	github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
-	github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.200
-	github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.200
-	github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.0.200
-	github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.200
+	github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.201
+	github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.201
+	github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.0.201
+	github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.201
 )

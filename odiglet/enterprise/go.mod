@@ -10,11 +10,11 @@ require (
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250105084718-c6cb16fc984d
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.0.200
-	github.com/odigos-io/odigos/common v1.0.200
-	github.com/odigos-io/odigos/instrumentation v1.0.200
-	github.com/odigos-io/odigos/k8sutils v1.0.200
-	github.com/odigos-io/odigos/odiglet v1.0.201-0.20250625140527-d258bae8905d
+	github.com/odigos-io/odigos/api v1.0.201
+	github.com/odigos-io/odigos/common v1.0.201
+	github.com/odigos-io/odigos/instrumentation v1.0.201
+	github.com/odigos-io/odigos/k8sutils v1.0.201
+	github.com/odigos-io/odigos/odiglet v1.0.201
 	go.opentelemetry.io/auto v0.22.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.36.0
 	go.opentelemetry.io/otel/trace v1.36.0
@@ -43,7 +43,6 @@ require (
 	github.com/go-openapi/jsonreference v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/goburrow/cache v0.1.4 // indirect
-	github.com/goccy/go-yaml v1.17.1 // indirect
 	github.com/gocql/gocql v1.7.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
@@ -65,8 +64,8 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/odigos-io/odigos-device-plugin v1.19.6 // indirect
-	github.com/odigos-io/odigos/distros v1.0.200 // indirect
-	github.com/odigos-io/odigos/opampserver v1.0.200 // indirect
+	github.com/odigos-io/odigos/distros v1.0.201 // indirect
+	github.com/odigos-io/odigos/opampserver v1.0.201 // indirect
 	github.com/odigos-io/odigos/procdiscovery v1.0.199-0.20250618104217-bc5ab69c992f // indirect
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5 // indirect
 	github.com/odigos-io/runtime-detector v0.0.7 // indirect
@@ -136,21 +135,21 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250624185922-1de858999f5c
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250626134532-181e0bd4d0fa
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.201-0.20250625140527-d258bae8905d
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.201
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.201-0.20250625140527-d258bae8905d
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.201
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.201-0.20250625140527-d258bae8905d
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.201
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.201-0.20250625140527-d258bae8905d
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.201
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.201-0.20250625140527-d258bae8905d
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.201
 
-replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.201-0.20250625140527-d258bae8905d
+replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.201
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.0.201-0.20250625140527-d258bae8905d
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.0.201
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
