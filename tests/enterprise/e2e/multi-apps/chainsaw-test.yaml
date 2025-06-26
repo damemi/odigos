@@ -21,7 +21,7 @@ spec:
             content: |
               echo "Installing Odigos with tag $IMAGE_TAG"
               ../../../../odigos/cli/odigos install --namespace odigos-test --version $IMAGE_TAG --onprem-token $ODIGOS_API_KEY
-              curl -sSL -o verify_odigos_installation.sh https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/verify_odigos_installation.sh
+              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o verify_odigos_installation.sh https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/verify_odigos_installation.sh
               bash verify_odigos_installation.sh odigos-test
         - assert:
             timeout: 3m
@@ -108,8 +108,8 @@ spec:
             content: |
               while true; do
                 yaml=$(mktemp)
-                curl -sSL -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/queries/wait-for-trace.yaml
-                curl -sSL https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
+                curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/queries/wait-for-trace.yaml
+                curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
 
                 status=$?
                 rm -f "$yaml"
@@ -128,8 +128,8 @@ spec:
         - script:
             content: |
               yaml=$(mktemp)
-              curl -sSL -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/queries/context-propagation.yaml
-              curl -sSL https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
+              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/queries/context-propagation.yaml
+              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
       catch:
         - podLogs:
             name: odiglet
@@ -140,8 +140,8 @@ spec:
         - script:
             content: |
               yaml=$(mktemp)
-              curl -sSL -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/queries/resource-attributes.yaml
-              curl -sSL https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
+              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/queries/resource-attributes.yaml
+              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
       catch:
         - podLogs:
             name: odiglet
@@ -152,8 +152,8 @@ spec:
         - script:
             content: |
               yaml=$(mktemp)
-              curl -sSL -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/queries/span-attributes.yaml
-              curl -sSL https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
+              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/queries/span-attributes.yaml
+              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
       catch:
         - podLogs:
             name: odiglet
