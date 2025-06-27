@@ -60,3 +60,73 @@ java:
     sdkType: ebpf
 ```
 Will cause a restart of the instrumented Java applications with the eBPF SDK.
+
+# Development
+
+## Go workspace setup
+
+Similar to [the main OSS repo](https://github.com/odigos-io/odigos/blob/main/DEVELOPMENT.md#go-workspace-setup),
+the use of different Go modules as dependencies makes Go Workspaces essential for a clean IDE environment.
+
+The modules currently used are:
+
+* `github.com/odigos-io/enterprise-go-instrumentation`
+* `github.com/odigos-io/ebpf-java-instrumentation`
+* `github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension`
+* `github.com/odigos-io/ebpf-nodejs-instrumentation`
+* `github.com/odigos-io/mysql-instrumentation`
+* `github.com/odigos-io/runtime-detector`
+
+Go Workspaces lets you refer to local copies of these repos as their dependencies. Set up a Go Workspace
+by running:
+
+```
+go work init
+go work use -r .
+```
+
+Then edit the `go.work` file to refer to the relative local folder for the dependency modules, for example:
+
+```
+go 1.24.4
+
+use (
+  ../enterprise-go-instrumentation
+  ../ebpf-java-instrumentation
+  ../ebpf-java-instrumentation/otel_agent_extension
+  ../ebpf-nodejs-instrumentation
+  ../mysql-instrumentation
+  ../runtime-detector
+  ./central-backend
+  ./central-proxy
+  ./distros
+  ./instrumentor
+  ./odiglet
+  ./odiglet/licenses/github.com/hashicorp/go-version
+  ./odigosauth
+  ./onprem-token-generator
+)
+
+replace github.com/odigos-io/odigos/common => ../odigos/common
+```
+
+This example also sets a `replace` for `github.com/odigos-io/odigos/common`. This is because this repo already defines
+`replace` directives for this module, so redeclaring it in the `go.work` file overrides it.
+
+You can usually tell if you have a dependency problem that can be resolved by Go Workspace settings if you see the following
+types of errors:
+
+```
+pattern bpf_arm64_bpfel.o: no matching files found
+```
+
+```
+packages.Load error: err: exit status 1: stderr: go: conflicting replacements for github.com/odigos-io/odigos/common:
+	github.com/odigos-io/odigos/common@v1.0.201
+	github.com/odigos-io/odigos/common@v1.0.201-0.20250625140527-d258bae8905d
+use "go work edit -replace github.com/odigos-io/odigos/common=[override]" to resolve
+go list
+```
+
+Or any error around Go imports or `go.mod`. Go Workspaces allow you to set up your own dev environment
+however you want, so these settings may take some trial and error to get perfect.
