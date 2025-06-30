@@ -8,12 +8,32 @@ permissions:
   pull-requests: read
   statuses: write
 
+env:
+  # Linear team prefixes (keep the trailing dash on each one)
+  LINEAR_PREFIX_REGEX: '(CORE-|PLAT-|PRD-|RUN-|GEN-)'
+
 jobs:
   linear-check:
+    #
+    # ───── Skip this entire job when the PR is bot-authored ───────────────
+    # 1. True bot accounts → github.event.pull_request.user.type == 'Bot'
+    # 2. “Bot-like” service accounts you list below (e.g. keyval-release-bot)
+    #
+    if: ${{ !(
+            github.event.pull_request.user.type == 'Bot' ||
+            contains(
+              fromJson(
+                '["dependabot[bot]","renovate[bot]","odigos-bot","github-actions[bot]","keyval-release-bot"]'
+              ),
+              github.actor
+            )
+          ) }}
+
     runs-on: ubuntu-latest
+
     steps:
       - name: Ensure PR links a Linear issue
         uses: copilotmoney/linear-pr-check@1.0.0
         with:
-          prefix: '(CORE-|PLAT-|PRD-|RUN-|GEN-)'
+          prefix:       ${{ env.LINEAR_PREFIX_REGEX }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
