@@ -1,0 +1,19 @@
+name: "Require linked Linear issue"
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+  statuses: write
+
+jobs:
+  linear-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure PR links a Linear issue
+        uses: copilotmoney/linear-pr-check@1.0.0
+        with:
+          prefix: '(CORE-|PLAT-|PRD-|RUN-|GEN-)'
+          github_token: ${{ secrets.GITHUB_TOKEN }}
