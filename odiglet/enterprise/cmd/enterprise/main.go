@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	_ "net/http/pprof"
 	"os"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/sdks"
 	enterpriseinstrumentlang "github.com/odigos-io/odigos-enterprise/odiglet/pkg/instrumentation/instrumentlang"
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
+	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/odigos-io/odigos/common"
 	commonInstrumentation "github.com/odigos-io/odigos/instrumentation"
 	"github.com/odigos-io/odigos/odiglet"
@@ -27,6 +29,10 @@ const (
 )
 
 func main() {
+	var healthProbeBindPort int
+	flag.IntVar(&healthProbeBindPort, "health-probe-bind-port", k8sconsts.OdigletDefaultHealthProbeBindPort, "The port the probe endpoint binds to.")
+	flag.Parse()
+
 	// Init Kubernetes clientset
 	cfg, err := rest.InClusterConfig()
 	if err != nil {
@@ -67,8 +73,9 @@ func main() {
 	}
 
 	instrumentationManagerOptions := ebpf.InstrumentationManagerOptions{
-		Factories:          factories,
-		DistributionGetter: enterpriseDistrosGetter,
+		Factories:                  factories,
+		DistributionGetter:         enterpriseDistrosGetter,
+		OdigletHealthProbeBindPort: healthProbeBindPort,
 	}
 
 	o, err := odiglet.New(clientset, deviceInjectionCallbacks(), instrumentationManagerOptions)

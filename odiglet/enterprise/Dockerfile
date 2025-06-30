@@ -9,9 +9,8 @@ RUN echo "VERSION = \"$ODIGOS_VERSION\";" > /python-instrumentation/workspace/in
 ARG EBPF_GENERIC_VERSION="v0.0.3"
 RUN apt update -y && apt install -y systemtap-sdt-dev
 RUN --mount=type=secret,id=github_token \
-    git clone https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-generic-instrumentation.git \
-    && cd ebpf-generic-instrumentation \
-    && git checkout tags/${EBPF_GENERIC_VERSION}
+    git clone -b ${EBPF_GENERIC_VERSION} https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-generic-instrumentation.git \
+    && cd ebpf-generic-instrumentation
 RUN mkdir enterprise-workspace && pip install --target enterprise-workspace ./ebpf-generic-instrumentation/dtrace-injector
 
 
@@ -29,7 +28,7 @@ FROM alpine AS nodejs-agent-clone
 RUN apk add git
 WORKDIR /src
 ARG NODEJS_AGENT_VERSION=main
-RUN git clone https://github.com/odigos-io/opentelemetry-node.git && cd opentelemetry-node && git checkout $NODEJS_AGENT_VERSION
+RUN git clone -b $NODEJS_AGENT_VERSION https://github.com/odigos-io/opentelemetry-node.git
 
 # The second build stage 'nodejs-agent-src' prepares the actual code we are going to compile and embed in odiglet.
 # By default, it uses the previous 'nodejs-agent-src' stage, but one can override it by setting the 
@@ -64,7 +63,7 @@ FROM alpine AS nodejs-enterprise-agent-clone
 RUN apk add git
 WORKDIR /src
 ARG NODEJS_ENTERPRISE_AGENT_VERSION=main
-RUN --mount=type=secret,id=github_token git clone https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-nodejs-instrumentation.git
+RUN --mount=type=secret,id=github_token git clone -b $NODEJS_ENTERPRISE_AGENT_VERSION https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-nodejs-instrumentation.git
 
 FROM scratch AS nodejs-enterprise-agent-src
 COPY --from=nodejs-enterprise-agent-clone /src/ebpf-nodejs-instrumentation /
@@ -96,17 +95,19 @@ RUN ARCH_SUFFIX=$(cat /tmp/arch_suffix) && \
     wget https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/${DOTNET_OTEL_VERSION}/opentelemetry-dotnet-instrumentation-linux-glibc-${ARCH_SUFFIX}.zip && \
     unzip opentelemetry-dotnet-instrumentation-linux-glibc-${ARCH_SUFFIX}.zip && \
     rm opentelemetry-dotnet-instrumentation-linux-glibc-${ARCH_SUFFIX}.zip && \
-    mv linux-$ARCH_SUFFIX linux-glibc-$ARCH_SUFFIX && \
+    mv linux-$ARCH_SUFFIX linux-glibc
+RUN ARCH_SUFFIX=$(cat /tmp/arch_suffix) && \
     wget https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/${DOTNET_OTEL_VERSION}/opentelemetry-dotnet-instrumentation-linux-musl-${ARCH_SUFFIX}.zip && \
-    unzip opentelemetry-dotnet-instrumentation-linux-musl-${ARCH_SUFFIX}.zip "linux-musl-$ARCH_SUFFIX/*" -d . && \
-    rm opentelemetry-dotnet-instrumentation-linux-musl-${ARCH_SUFFIX}.zip
+    unzip -o opentelemetry-dotnet-instrumentation-linux-musl-${ARCH_SUFFIX}.zip && \
+    rm opentelemetry-dotnet-instrumentation-linux-musl-${ARCH_SUFFIX}.zip && \
+    mv linux-musl-$ARCH_SUFFIX linux-musl
 
 # TODO(edenfed): Currently .NET Automatic instrumentation does not work on dotnet 6.0 with glibc,
 # This is due to compilation of the .so file on a newer version of glibc than the one used by the dotnet runtime.
 # The following override the .so file with our own which is compiled on the same glibc version as the dotnet runtime.
 RUN ARCH_SUFFIX=$(cat /tmp/arch_suffix) && \
     wget https://github.com/odigos-io/opentelemetry-dotnet-instrumentation/releases/download/${DOTNET_OTEL_VERSION}/OpenTelemetry.AutoInstrumentation.Native-${ARCH_SUFFIX}.so && \
-    mv OpenTelemetry.AutoInstrumentation.Native-${ARCH_SUFFIX}.so linux-glibc-${ARCH_SUFFIX}/OpenTelemetry.AutoInstrumentation.Native.so
+    mv OpenTelemetry.AutoInstrumentation.Native-${ARCH_SUFFIX}.so linux-glibc/OpenTelemetry.AutoInstrumentation.Native.so
 
 WORKDIR /legacy-dotnet-instrumentation
 ARG LEGACY_DOTNET_OTEL_VERSION=v0.4.0-beta.1
