@@ -227,11 +227,11 @@ func (g *GoOtelEbpfSdkEnterprise) configPayloadCollection(config instrumentation
 	})
 	collectResponseNetHttpServer := payloadCollectionNetHttpServer.HttpResponse != nil
 	log.Logger.V(0).Info("Applying config to golang net/http server", "collectResponse", collectResponseNetHttpServer)
-	err := g.configBool("net/http", "http.response.body", trace.SpanKindServer, collectResponseNetHttpServer)
+	err := g.configBool("net/http", "http.body", trace.SpanKindServer, collectResponseNetHttpServer)
 	if err != nil {
 		return err
 	}
-	err = g.configBool("net/http", "http.response.header.content-length", trace.SpanKindServer, collectResponseNetHttpServer)
+	err = g.configBool("net/http", "http.header.content-length", trace.SpanKindServer, collectResponseNetHttpServer)
 	if err != nil {
 		return err
 	}
@@ -245,11 +245,11 @@ func (g *GoOtelEbpfSdkEnterprise) configPayloadCollection(config instrumentation
 	collectResponseNetHttpClient := payloadCollectionNetHttpClient.HttpResponse != nil
 
 	log.Logger.V(0).Info("Applying config to golang net/http client", "collectResponse", collectResponseNetHttpClient, "collectRequest", collectRequestNetHttpClient)
-	err = g.configBool("net/http", "http.request.body", trace.SpanKindClient, collectRequestNetHttpClient)
+	err = g.configBool("net/http", "http.body", trace.SpanKindClient, collectRequestNetHttpClient)
 	if err != nil {
 		return err
 	}
-	err = g.configBool("net/http", "http.response.header.content-length", trace.SpanKindClient, collectResponseNetHttpClient)
+	err = g.configBool("net/http", "http.header.content-length", trace.SpanKindClient, collectResponseNetHttpClient)
 	if err != nil {
 		return err
 	}
