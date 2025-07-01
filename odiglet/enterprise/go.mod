@@ -14,7 +14,7 @@ require (
 	github.com/odigos-io/odigos/common v1.0.203
 	github.com/odigos-io/odigos/instrumentation v1.0.203
 	github.com/odigos-io/odigos/k8sutils v1.0.203
-	github.com/odigos-io/odigos/odiglet v1.0.203
+	github.com/odigos-io/odigos/odiglet v1.0.204-0.20250701072042-3f1cfed31ae8
 	go.opentelemetry.io/auto v0.22.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.36.0
 	go.opentelemetry.io/otel/trace v1.36.0
@@ -29,7 +29,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.2 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/cilium/ebpf v0.18.0 // indirect
+	github.com/cilium/ebpf v0.19.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/elliotchance/orderedmap v1.6.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
@@ -135,21 +135,21 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250630150916-15e32321e8d8
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250701072333-7244a75a143c
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.203
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.204-0.20250701072042-3f1cfed31ae8
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.203
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.204-0.20250701072042-3f1cfed31ae8
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.203
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.204-0.20250701072042-3f1cfed31ae8
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.203
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.204-0.20250701072042-3f1cfed31ae8
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.203
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.204-0.20250701072042-3f1cfed31ae8
 
-replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.203
+replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.204-0.20250701072042-3f1cfed31ae8
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.0.203
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.0.204-0.20250701072042-3f1cfed31ae8
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
