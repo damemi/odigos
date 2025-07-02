@@ -21,3 +21,4 @@ spec:
     device: 'instrumentation.odigos.io/generic'
     fileOpenTriggers:
       - "{{ODIGOS_AGENTS_DIR}}/java-ext-ebpf/end_span_usdt.so"
+    ldPreloadInjectionSupported: true

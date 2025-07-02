@@ -24,3 +24,4 @@ spec:
     fileOpenTriggers:
       - "{{ODIGOS_AGENTS_DIR}}/nodejs-ebpf/build/Release/dtrace-injector-native.node"
     k8sAttrsViaEnvVars: true
+    ldPreloadInjectionSupported: true
