@@ -309,8 +309,8 @@ spec:
               fieldPath: metadata.name
       (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
         - value: 'default'
-      (env[?name == 'NODE_OPTIONS']):
-        - value: '--require /var/odigos/nodejs-ebpf/autoinstrumentation.js'
+      (env[?name == 'LD_PRELOAD']):
+        - value: "/var/odigos/loader/loader.so"
 status:
   containerStatuses:
     - name: coupon
@@ -425,8 +425,8 @@ spec:
               fieldPath: metadata.name
       (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
         - value: 'default'
-      (env[?name == 'JAVA_TOOL_OPTIONS']):
-        - value: '-javaagent:/var/odigos/java-ext-ebpf/javaagent.jar -Dotel.javaagent.extensions=/var/odigos/java-ext-ebpf/otel_agent_extension.jar'
+      (env[?name == 'LD_PRELOAD']):
+        - value: "/var/odigos/loader/loader.so"
 status:
   containerStatuses:
     - name: frontend
@@ -545,8 +545,8 @@ spec:
               fieldPath: status.hostIP
       (env[?name == 'ODIGOS_OPAMP_SERVER_HOST']):
         - (($values.k8sMinorVersion < `26` && value == '$(NODE_IP):4320') || value == 'odiglet-local.odigos-test:4320'): true
-      (env[?name == 'PYTHONPATH']):
-        - value: '/bar:/var/odigos/python-ebpf:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation:/var/odigos/python'
+      (env[?name == 'LD_PRELOAD']):
+        - value: "/var/odigos/loader/loader.so"
 status:
   containerStatuses:
     - name: inventory
