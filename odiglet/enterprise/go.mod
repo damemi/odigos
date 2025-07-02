@@ -3,18 +3,18 @@ module github.com/odigos-io/odigos-enterprise/odiglet
 go 1.24.0
 
 require (
-	github.com/odigos-io/ebpf-generic-instrumentation v0.0.4-0.20250520102442-bcc533611dd1
+	github.com/odigos-io/ebpf-generic-instrumentation v0.0.4-0.20250701125348-ce26152d09e7
 	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20250630122418-7fd1b4088049
 	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20250630122418-7fd1b4088049
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20250624064032-dfa108dd2ac0
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250105084718-c6cb16fc984d
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.0.205-0.20250702105647-24f4dfd7631d
-	github.com/odigos-io/odigos/common v1.0.205-0.20250702105647-24f4dfd7631d
-	github.com/odigos-io/odigos/instrumentation v1.0.205-0.20250702105647-24f4dfd7631d
-	github.com/odigos-io/odigos/k8sutils v1.0.205-0.20250702105647-24f4dfd7631d
-	github.com/odigos-io/odigos/odiglet v1.0.205-0.20250702105647-24f4dfd7631d
+	github.com/odigos-io/odigos/api v1.0.205
+	github.com/odigos-io/odigos/common v1.0.205
+	github.com/odigos-io/odigos/instrumentation v1.0.205
+	github.com/odigos-io/odigos/k8sutils v1.0.205
+	github.com/odigos-io/odigos/odiglet v1.0.205
 	go.opentelemetry.io/auto v0.22.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.36.0
 	go.opentelemetry.io/otel/trace v1.36.0
@@ -64,8 +64,8 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/odigos-io/odigos-device-plugin v1.19.6 // indirect
-	github.com/odigos-io/odigos/distros v1.0.205-0.20250702105647-24f4dfd7631d // indirect
-	github.com/odigos-io/odigos/opampserver v1.0.205-0.20250702105647-24f4dfd7631d // indirect
+	github.com/odigos-io/odigos/distros v1.0.205 // indirect
+	github.com/odigos-io/odigos/opampserver v1.0.205 // indirect
 	github.com/odigos-io/odigos/procdiscovery v1.0.199-0.20250618104217-bc5ab69c992f // indirect
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5 // indirect
 	github.com/odigos-io/runtime-detector v0.0.7 // indirect
@@ -137,19 +137,19 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250701072333-7244a75a143c
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.205-0.20250702105647-24f4dfd7631d
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.0.205
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.205-0.20250702105647-24f4dfd7631d
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.0.205
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.205-0.20250702105647-24f4dfd7631d
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.0.205
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.205-0.20250702105647-24f4dfd7631d
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.0.205
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.205-0.20250702105647-24f4dfd7631d
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.0.205
 
-replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.205-0.20250702105647-24f4dfd7631d
+replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.0.205
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.0.205-0.20250702105647-24f4dfd7631d
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.0.205
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
