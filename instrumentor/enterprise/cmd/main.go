@@ -4,7 +4,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/odigos-io/odigos/distros"
+	"github.com/odigos-io/odigos-enterprise/distros"
 
 	"github.com/odigos-io/odigos/instrumentor/controllers"
 	"github.com/odigos-io/odigos/instrumentor/sdks"
@@ -16,7 +16,6 @@ import (
 
 	"github.com/odigos-io/odigos/instrumentor"
 
-	enterprisedistros "github.com/odigos-io/odigos-enterprise/distros"
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -55,7 +54,7 @@ func main() {
 
 	logger.Info("Starting Odigos Enterprise Instrumentor")
 
-	dp, err := newEnterpriseDistributionProvider()
+	dp, err := distros.NewEnterpriseProvider()
 	if err != nil {
 		logger.Error(err, "Failed to initialize distribution provider")
 		os.Exit(1)
@@ -71,19 +70,4 @@ func main() {
 
 	i.Run(ctx, telemetryDisabled)
 	logger.V(0).Info("instrumentor exiting")
-}
-
-func newEnterpriseDistributionProvider() (*distros.Provider, error) {
-	communityGetter, err := distros.NewCommunityGetter()
-	if err != nil {
-		return nil, err
-	}
-	enterpriseGetter, err := enterprisedistros.NewEnterpriseGetter()
-	if err != nil {
-		return nil, err
-	}
-
-	// use the enterprise defaulter to set the default distro for enterprise clusters
-	// combine the community and enterprise distro getters to have both of them available if needed
-	return distros.NewProvider(enterprisedistros.NewEnterpriseDefaulter(), communityGetter, enterpriseGetter)
 }

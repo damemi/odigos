@@ -60,7 +60,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	enterpriseDistrosGetter, err := enterprisedistros.NewEnterpriseGetter()
+	enterpriseDistrosProvider, err := enterprisedistros.NewEnterpriseProvider()
 	if err != nil {
 		log.Logger.Error(err, "Failed to create enterprise distros getter")
 		os.Exit(1)
@@ -74,7 +74,7 @@ func main() {
 
 	instrumentationManagerOptions := ebpf.InstrumentationManagerOptions{
 		Factories:                  factories,
-		DistributionGetter:         enterpriseDistrosGetter,
+		DistributionGetter:         enterpriseDistrosProvider.Getter,
 		OdigletHealthProbeBindPort: healthProbeBindPort,
 	}
 
@@ -131,43 +131,19 @@ func deviceInjectionCallbacks() instrumentation.OtelSdksLsf {
 	}
 }
 
-func ebpfInstrumentationFactories() (map[commonInstrumentation.OtelDistribution]commonInstrumentation.Factory, error) {
+func ebpfInstrumentationFactories() (map[string]commonInstrumentation.Factory, error) {
 	goFactory, err := sdks.NewGoInstrumentationFactoryEnterprise()
 	if err != nil {
 		return nil, err
 	}
 
-	return map[commonInstrumentation.OtelDistribution]commonInstrumentation.Factory{
-		{
-			Language: common.GoProgrammingLanguage,
-			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-		}: goFactory,
-		{
-			Language: common.JavaProgrammingLanguage,
-			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-		}: sdks.NewJavaInstrumentationFactoryEnterprise(),
-		// Utilizing the Otel Java Agent extension mechanism
-		// We define it as a native-enterprise SDK but it also requires ebpf initialization.
-		// TODO: this is a similar implementation to what we have for JS and Python,
-		// so maybe should consider defining them as native-enterprise as well.
-		// On the other hand, if we'll choose to use this instrumentation without keeping the original ebpf-enterprise for Java,
-		// we might consider defining this one as ebpf-enterprise instead of the old one.
-		// Currently we can't define this as ebpf-enterprise because it will conflict with the old Java ebpf instrumentation.
-		{
-			Language: common.JavaProgrammingLanguage,
-			OtelSdk:  common.OtelSdk{SdkType: common.NativeOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-		}: sdks.NewJavaExtensionInstrumentationFactoryEnterprise(),
-		{
-			Language: common.PythonProgrammingLanguage,
-			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-		}: sdks.NewPythonInstrumentationFactoryEnterprise(),
-		{
-			Language: common.JavascriptProgrammingLanguage,
-			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-		}: sdks.NewNodeJSInstrumentationFactoryEnterprise(),
-		{
-			Language: common.MySQLProgrammingLanguage,
-			OtelSdk:  common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier},
-		}: sdks.NewMySQLInstrumentationFactoryEnterprise(),
+	return map[string]commonInstrumentation.Factory{
+		"golang-enterprise":          goFactory,
+		"java-ebpf-instrumentations": sdks.NewJavaInstrumentationFactoryEnterprise(),
+		"java-enterprise":            sdks.NewJavaExtensionInstrumentationFactoryEnterprise(),
+		"python-enterprise":          sdks.NewPythonInstrumentationFactoryEnterprise(),
+		"nodejs-enterprise":          sdks.NewNodeJSInstrumentationFactoryEnterprise(),
+		"mysql-enterprise":           sdks.NewMySQLInstrumentationFactoryEnterprise(),
+		// dotnet, ruby and php are using native instrumentation and does not have ebpf instrumentation.
 	}, nil
 }
