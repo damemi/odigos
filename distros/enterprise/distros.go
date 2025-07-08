@@ -31,3 +31,18 @@ func (o *entepriseDefaulter) GetDefaultDistroNames() map[common.ProgrammingLangu
 func NewEnterpriseGetter() (*distros.Getter, error) {
 	return distros.NewGetterFromFS(yamls.GetFS())
 }
+
+// the provider getter returns both enterprise and community distros.
+func NewEnterpriseProvider() (*distros.Provider, error) {
+
+	communityGetter, err := distros.NewCommunityGetter()
+	if err != nil {
+		return nil, err
+	}
+	enterpriseGetter, err := NewEnterpriseGetter()
+	if err != nil {
+		return nil, err
+	}
+
+	return distros.NewProvider(NewEnterpriseDefaulter(), communityGetter, enterpriseGetter)
+}
