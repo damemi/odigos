@@ -3,13 +3,14 @@ package sdks
 import (
 	"context"
 	"fmt"
+
 	"github.com/odigos-io/ebpf-java-instrumentation/pkg/dynamic"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 
 	auto "github.com/odigos-io/ebpf-java-instrumentation"
 	"github.com/odigos-io/odigos/instrumentation"
+	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 	"github.com/odigos-io/odigos/k8sutils/pkg/service"
-	"github.com/odigos-io/odigos/odiglet/pkg/env"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 )

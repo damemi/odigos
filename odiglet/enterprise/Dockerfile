@@ -31,14 +31,14 @@ ARG NODEJS_AGENT_VERSION=main
 RUN git clone -b $NODEJS_AGENT_VERSION https://github.com/odigos-io/opentelemetry-node.git
 
 # The second build stage 'nodejs-agent-src' prepares the actual code we are going to compile and embed in odiglet.
-# By default, it uses the previous 'nodejs-agent-src' stage, but one can override it by setting the 
+# By default, it uses the previous 'nodejs-agent-src' stage, but one can override it by setting the
 # --build-context nodejs-agent-src=../opentelemetry-node flag in the docker build command.
 # This allows us to nobe the agent sources and test changes during development.
 # The output of this stage is the resolved source code to be used in the next stage.
 FROM scratch AS nodejs-agent-src
 COPY --from=nodejs-agent-clone /src/opentelemetry-node /
 
-# The third step 'nodejs-agent-build' compiles the agent sources and prepares it for 
+# The third step 'nodejs-agent-build' compiles the agent sources and prepares it for
 # Run yarn install to generate the production node_modules directory
 FROM node:18 AS nodejs-agent-build
 # Run yarn install to generate the production node_modules directory
@@ -171,7 +171,7 @@ RUN for v in ${RUBY_VERSIONS}; do \
     done
 
 
-FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.8 AS builder
+FROM --platform=$BUILDPLATFORM registry.odigos.io/odiglet-base:v1.8 AS builder
 
 RUN --mount=type=secret,id=github_token \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
@@ -189,6 +189,23 @@ ARG LD_FLAGS
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
     GOOS=linux GOARCH=$TARGETARCH LD_FLAGS="${LD_FLAGS}" make build-odiglet
+
+# Build deviceplugin binary
+WORKDIR /go/src/github.com/odigos-io/odigos-enterprise/deviceplugin
+COPY deviceplugin/ .
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg \
+    GOOS=linux GOARCH=$TARGETARCH go build -o deviceplugin ./cmd
+
+# Download grpc_health_probe this is used by the deviceplugin container to check if the deviceplugin is healthy
+ARG GRPC_HEALTH_PROBE_VERSION=v0.4.24
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+        GRPC_ARCH="arm64"; \
+    else \
+        GRPC_ARCH="amd64"; \
+    fi && \
+    wget -O /tmp/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-${GRPC_ARCH} && \
+    chmod +x /tmp/grpc_health_probe
 
 WORKDIR /instrumentations
 
@@ -247,8 +264,10 @@ COPY --from=ruby-agents /ruby-agents/opentelemetry-ruby/3.4 /instrumentations/ru
 ARG ODIGOS_LOADER_VERSION=v0.0.4
 RUN wget --directory-prefix=loader https://storage.googleapis.com/odigos-loader/$ODIGOS_LOADER_VERSION/$TARGETARCH/loader.so
 
-FROM registry.fedoraproject.org/fedora-minimal:38
+FROM gcr.io/distroless/base:latest
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
+COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/deviceplugin/deviceplugin /root/deviceplugin
+COPY --from=builder /tmp/grpc_health_probe /root/grpc_health_probe
 WORKDIR /instrumentations/
 COPY --from=builder /instrumentations/ .
 CMD ["/root/odiglet"]

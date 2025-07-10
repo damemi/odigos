@@ -11,16 +11,12 @@ import (
 
 	enterprisedistros "github.com/odigos-io/odigos-enterprise/distros"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/sdks"
-	enterpriseinstrumentlang "github.com/odigos-io/odigos-enterprise/odiglet/pkg/instrumentation/instrumentlang"
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
 	"github.com/odigos-io/odigos/api/k8sconsts"
-	"github.com/odigos-io/odigos/common"
 	commonInstrumentation "github.com/odigos-io/odigos/instrumentation"
+	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 	"github.com/odigos-io/odigos/odiglet"
 	"github.com/odigos-io/odigos/odiglet/pkg/ebpf"
-	"github.com/odigos-io/odigos/odiglet/pkg/env"
-	"github.com/odigos-io/odigos/odiglet/pkg/instrumentation"
-	communityinstrumentlang "github.com/odigos-io/odigos/odiglet/pkg/instrumentation/instrumentlang"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
 )
 
@@ -78,7 +74,7 @@ func main() {
 		OdigletHealthProbeBindPort: healthProbeBindPort,
 	}
 
-	o, err := odiglet.New(clientset, deviceInjectionCallbacks(), instrumentationManagerOptions)
+	o, err := odiglet.New(clientset, instrumentationManagerOptions)
 	if err != nil {
 		log.Logger.Error(err, "Failed to initialize odiglet")
 		os.Exit(1)
@@ -88,47 +84,6 @@ func main() {
 	o.Run(ctx)
 
 	log.Logger.V(0).Info("odiglet exiting")
-}
-
-func deviceInjectionCallbacks() instrumentation.OtelSdksLsf {
-	otelSdkEbpfEnterprise := common.OtelSdk{SdkType: common.EbpfOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier}
-	otelSdkNativeCommunity := common.OtelSdk{SdkType: common.NativeOtelSdkType, SdkTier: common.CommunityOtelSdkTier}
-	otelSdkNativeEnterprise := common.OtelSdk{SdkType: common.NativeOtelSdkType, SdkTier: common.EnterpriseOtelSdkTier}
-
-	return map[common.ProgrammingLanguage]map[common.OtelSdk]instrumentation.LangSpecificFunc{
-		common.GoProgrammingLanguage: {
-			otelSdkEbpfEnterprise: enterpriseinstrumentlang.EnterpriseGo,
-		},
-		// For Java there are currently 3 different directors:
-		// 1. native-community: regular otel java agent.
-		// 2. ebpf-enterprise: our custom ebpf java agent with our written instrumentations.
-		// 3. native-enterprise: using the otel java agent extension mechanism, to export the spans
-		//   to ebpf.
-		// 2 and 3 should not be kept together for the long run and we should decide on one of them.
-		// Once we decide, the implementation we use should be called ebpf-enterprise.
-		// The third SDK is identical concept to the JS and Python SDKs (which are called ebpf-enterprise),
-		// we called it native-enterprise for backward compatibility, and the need to use both of them if we need to.
-		common.JavaProgrammingLanguage: {
-			otelSdkNativeCommunity:  communityinstrumentlang.Java,
-			otelSdkEbpfEnterprise:   enterpriseinstrumentlang.EnterpriseJava,
-			otelSdkNativeEnterprise: enterpriseinstrumentlang.NativeEnterpriseJava,
-		},
-		common.PythonProgrammingLanguage: {
-			otelSdkNativeCommunity: communityinstrumentlang.Python,
-			otelSdkEbpfEnterprise:  enterpriseinstrumentlang.EnterprisePython,
-		},
-		common.JavascriptProgrammingLanguage: {
-			otelSdkNativeCommunity: communityinstrumentlang.NodeJS,
-			otelSdkEbpfEnterprise:  enterpriseinstrumentlang.EnterpriseNodeJS,
-		},
-		common.DotNetProgrammingLanguage: {
-			otelSdkNativeCommunity:  communityinstrumentlang.DotNet,
-			otelSdkNativeEnterprise: enterpriseinstrumentlang.LegacyDotNet,
-		},
-		common.MySQLProgrammingLanguage: {
-			otelSdkEbpfEnterprise: enterpriseinstrumentlang.EnterpriseMySQL,
-		},
-	}
 }
 
 func ebpfInstrumentationFactories() (map[string]commonInstrumentation.Factory, error) {

@@ -6,17 +6,17 @@ import (
 	auto "github.com/odigos-io/ebpf-nodejs-instrumentation"
 	"github.com/odigos-io/ebpf-nodejs-instrumentation/pkg/opentelemetry"
 	"github.com/odigos-io/odigos/instrumentation"
+	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 	"github.com/odigos-io/odigos/k8sutils/pkg/service"
-	"github.com/odigos-io/odigos/odiglet/pkg/env"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 )
 
 type NodeJSOtelEbpfSdkEnterprise struct {
-	inst       *auto.Instrumentation
+	inst *auto.Instrumentation
 }
 
-type NodeJSInstrumentationFactoryEnterprise struct {}
+type NodeJSInstrumentationFactoryEnterprise struct{}
 
 func NewNodeJSInstrumentationFactoryEnterprise() instrumentation.Factory {
 	return &NodeJSInstrumentationFactoryEnterprise{}
@@ -65,4 +65,3 @@ func (n *NodeJSOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 func (n *NodeJSOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, sdkConfig instrumentation.Config) error {
 	return nil
 }
-

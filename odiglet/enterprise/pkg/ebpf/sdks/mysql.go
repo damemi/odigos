@@ -5,17 +5,17 @@ import (
 
 	auto "github.com/odigos-io/mysql-instrumentation"
 	"github.com/odigos-io/odigos/instrumentation"
+	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 	"github.com/odigos-io/odigos/k8sutils/pkg/service"
-	"github.com/odigos-io/odigos/odiglet/pkg/env"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 )
 
 type MySQLOtelEbpfSdkEnterprise struct {
-	inst       *auto.Instrumentation
+	inst *auto.Instrumentation
 }
 
-type MySQLInstrumentationFactoryEnterprise struct {}
+type MySQLInstrumentationFactoryEnterprise struct{}
 
 func NewMySQLInstrumentationFactoryEnterprise() instrumentation.Factory {
 	return &MySQLInstrumentationFactoryEnterprise{}
@@ -65,4 +65,3 @@ func (g *MySQLOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 func (g *MySQLOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, sdkConfig instrumentation.Config) error {
 	return nil
 }
-

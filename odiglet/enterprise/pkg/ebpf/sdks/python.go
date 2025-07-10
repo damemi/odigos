@@ -6,17 +6,17 @@ import (
 	auto "github.com/odigos-io/ebpf-generic-instrumentation"
 	"github.com/odigos-io/ebpf-generic-instrumentation/pkg/opentelemetry"
 	"github.com/odigos-io/odigos/instrumentation"
+	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 	"github.com/odigos-io/odigos/k8sutils/pkg/service"
-	"github.com/odigos-io/odigos/odiglet/pkg/env"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 )
 
 type PythonOtelEbpfSdkEnterprise struct {
-	inst       *auto.Instrumentation
+	inst *auto.Instrumentation
 }
 
-type PythonInstrumentationFactoryEnterprise struct {}
+type PythonInstrumentationFactoryEnterprise struct{}
 
 func NewPythonInstrumentationFactoryEnterprise() instrumentation.Factory {
 	return &PythonInstrumentationFactoryEnterprise{}
@@ -45,7 +45,7 @@ func (p *PythonInstrumentationFactoryEnterprise) CreateInstrumentation(ctx conte
 	}
 
 	pythonInstWrapper := &PythonOtelEbpfSdkEnterprise{
-		inst:       inst,
+		inst: inst,
 	}
 
 	return pythonInstWrapper, nil
