@@ -14,6 +14,7 @@ import (
 )
 
 func GetCentralBackendURLAndClusterName(ctx context.Context, kubeClient *kube.Client) (string, string, error) {
+
 	ns := env.GetCurrentNamespace()
 	configMap, err := kubeClient.CoreV1().ConfigMaps(ns).Get(ctx, consts.OdigosConfigurationName, metav1.GetOptions{})
 	if err != nil {
@@ -36,6 +37,7 @@ func GetCentralBackendURLAndClusterName(ctx context.Context, kubeClient *kube.Cl
 }
 
 func GetOdigosDeploymentId(ctx context.Context, kubeClient *kube.Client) (string, error) {
+
 	ns := env.GetCurrentNamespace()
 
 	configMap, err := kubeClient.CoreV1().ConfigMaps(ns).Get(ctx, k8sconsts.OdigosDeploymentConfigMapName, metav1.GetOptions{})
@@ -52,6 +54,7 @@ func GetOdigosDeploymentId(ctx context.Context, kubeClient *kube.Client) (string
 }
 
 func GetOdigosVersion(ctx context.Context, kubeClient *kube.Client) (string, error) {
+
 	ns := env.GetCurrentNamespace()
 
 	configMap, err := kubeClient.CoreV1().ConfigMaps(ns).Get(ctx, k8sconsts.OdigosDeploymentConfigMapName, metav1.GetOptions{})

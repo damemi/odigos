@@ -1,15 +1,15 @@
-'use client'
+'use client';
 
-import React, { type PropsWithChildren } from 'react'
-import dynamic from 'next/dynamic'
-import client from '@/lib/apollo-client'
-import { ApolloProvider } from '@apollo/client'
-import { useDarkMode } from '@odigos/ui-kit/store'
+import React, { type PropsWithChildren } from 'react';
+import dynamic from 'next/dynamic';
+import client from '@/lib/apollo-client';
+import { ApolloProvider } from '@apollo/client';
+import { useDarkMode } from '@odigos/ui-kit/store';
 
-const ThemeProvider = dynamic(() => import('@/lib/theme-provider'), { ssr: false })
+const ThemeProvider = dynamic(() => import('@/lib/theme-provider'), { ssr: false });
 
 function RootLayout({ children }: PropsWithChildren) {
-  const { darkMode } = useDarkMode()
+  const { darkMode } = useDarkMode();
 
   return (
     <html lang='en'>
@@ -17,7 +17,7 @@ function RootLayout({ children }: PropsWithChildren) {
         <link rel='manifest' href='/manifest.json' />
         <link rel='icon' type='image/x-icon' href='/favicon.svg' />
         <meta name='description' content='Odigos Centralized' />
-        <title>Odigos Centralized</title>
+        <title>Odigos Central</title>
       </head>
 
       <body
@@ -34,7 +34,7 @@ function RootLayout({ children }: PropsWithChildren) {
         </ThemeProvider>
       </body>
     </html>
-  )
+  );
 }
 
-export default RootLayout
+export default RootLayout;

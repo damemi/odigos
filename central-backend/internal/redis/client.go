@@ -3,6 +3,7 @@ package redisclient
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/odigos-io/central-backend/internal/config"
@@ -145,4 +146,25 @@ func (r *RedisClient) Close() error {
 		return err
 	}
 	return nil
+}
+
+// GetSystemInitialized checks if the system has been initialized (has users)
+func (r *RedisClient) GetSystemInitialized(ctx context.Context) (bool, error) {
+	result, err := r.client.Get(ctx, consts.SystemInitializedKey).Result()
+	if err != nil {
+		if err.Error() == "redis: nil" {
+			return false, nil
+		}
+		return false, err
+	}
+	return result == "true", nil
+}
+
+// SetSystemInitialized sets the system initialization status
+func (r *RedisClient) SetSystemInitialized(ctx context.Context, initialized bool) error {
+	value := "false"
+	if initialized {
+		value = "true"
+	}
+	return r.client.Set(ctx, consts.SystemInitializedKey, value, time.Duration(consts.SystemInitializedTTL)*time.Second).Err()
 }

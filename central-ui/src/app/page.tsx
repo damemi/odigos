@@ -15,7 +15,7 @@ export default function App() {
 
   // default route to redirect to
   useEffect(() => {
-    router.push(ROUTES.CONNECTIONS);
+    router.push(ROUTES.SIGN_IN);
   }, [router]);
 
   return (

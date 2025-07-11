@@ -5,49 +5,97 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/99designs/gqlgen/graphql/handler"
-	"github.com/go-logr/logr"
-	"github.com/odigos-io/odigos-enterprise/odigosauth"
-
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
 	"github.com/odigos-io/central-backend/graph"
 	"github.com/odigos-io/central-backend/internal/config"
+	"github.com/odigos-io/central-backend/internal/consts"
+	"github.com/odigos-io/central-backend/internal/keycloak"
 	"github.com/odigos-io/central-backend/internal/logger"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
+	"github.com/odigos-io/central-backend/internal/repositories/keycloak_repositories"
+	"github.com/odigos-io/central-backend/internal/services"
+	"github.com/odigos-io/central-backend/internal/utils"
 	websocketserver "github.com/odigos-io/central-backend/internal/websocket"
 )
 
 func main() {
-
 	logger.InitLogger()
 	logger.Log.Info("Starting Central Backend Service...")
-	odigosauth.AssertEnterpriseOdigosToken(logr.FromSlogHandler(logger.Log.Handler()))
+	// odigosauth.AssertEnterpriseOdigosToken(logr.FromSlogHandler(logger.Log.Handler()))
 
 	ctx := context.Background()
 
-	redisClient, err := redisclient.NewRedisClient(ctx)
+	credentialsService, err := services.NewCredentialsService()
+	if err != nil {
+		logger.Fatal("Failed to initialize credentials service", err)
+	}
 
+	credentials, err := credentialsService.GetAdminCredentials(ctx)
+	if err != nil {
+		logger.Fatal("Failed to get admin credentials", err)
+	}
+
+	adminToken, err := keycloak.GetKeycloakAccessToken(consts.KeycloakHost, credentials.Username, credentials.Password)
+	if err != nil {
+		logger.Fatal("Failed to get admin token", err)
+	}
+
+	err = keycloak.CreateOdigosUIClient(adminToken, consts.KeycloakHost, consts.KeycloakRealm)
+	if err != nil {
+		logger.Fatal("Failed to create odigos-ui client", err)
+	}
+
+	err = keycloak.EnsureRequiredRoles(adminToken, consts.KeycloakHost, consts.KeycloakRealm)
+	if err != nil {
+		logger.Fatal("Failed to ensure required roles", err)
+	}
+
+	redisClient, err := redisclient.NewRedisClient(ctx)
 	if err != nil {
 		logger.Fatal("Failed to connect to Redis", err)
+	}
+
+	// Ensure system starts in uninitialized state
+	err = redisClient.SetSystemInitialized(ctx, false)
+	if err != nil {
+		logger.Log.Error("Failed to set system initialization status", "error", err)
+		// Don't fail startup if this fails, just log it
 	}
 
 	go handleShutdown(ctx, redisClient)
 
 	wsServer := websocketserver.NewWebSocketServer(redisClient)
+
+	authRepo := keycloak_repositories.NewAuthRepository(credentialsService)
+
+	adminService := services.NewAdminService(redisClient, authRepo)
+
+	userRepo := keycloak_repositories.NewUserRepository(redisClient, credentialsService, adminService)
+	teamRepo := keycloak_repositories.NewTeamRepository(redisClient, credentialsService, adminService)
+
+	authService := services.NewAuthService(redisClient, userRepo, authRepo)
+	userService := services.NewUserService(redisClient, userRepo, authRepo)
+	teamService := services.NewTeamService(redisClient, teamRepo)
+
 	gqlHandler := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
 		RedisClient:     redisClient,
 		WebSocketServer: wsServer,
+		AuthService:     authService,
+		UserService:     userService,
+		TeamService:     teamService,
 	}}))
 
 	router := gin.Default()
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET", "POST", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		AllowCredentials: true,
 	}))
 
@@ -55,6 +103,13 @@ func main() {
 		wsServer.HandleConnection(c.Writer, c.Request)
 	})
 	router.POST("/graphql", func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
+			token := strings.TrimPrefix(authHeader, "Bearer ")
+			ctx := utils.SetTokenInContext(c.Request.Context(), token)
+			c.Request = c.Request.WithContext(ctx)
+		}
+
 		gqlHandler.ServeHTTP(c.Writer, c.Request)
 	})
 

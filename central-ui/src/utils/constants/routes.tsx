@@ -1,6 +1,9 @@
 export const ROUTES = {
   ROOT: '/',
+  SIGN_IN: '/signin',
   CONNECTIONS: '/connections',
+  UPDATE_PASSWORD: '/update-password',
+  ACCESS_MANAGEMENT: '/access-management',
 
   OVERVIEW: (proxyID: string) => `/overview/${proxyID}`,
   SOURCES: (proxyID: string) => `/sources/${proxyID}`,

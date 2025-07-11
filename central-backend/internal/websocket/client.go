@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"sync"
 
@@ -14,7 +13,6 @@ import (
 	"github.com/odigos-io/central-backend/internal/logger"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
 	"github.com/odigos-io/central-backend/internal/types"
-	"github.com/odigos-io/central-backend/internal/version"
 )
 
 const ProxyIDQueryParam = "proxyID"
@@ -43,16 +41,16 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Missing proxyID parameter", http.StatusBadRequest)
 		return
 	}
-	currentVersion := r.URL.Query().Get("version")
-	if currentVersion == "" {
-		http.Error(w, "Missing protocol version", http.StatusBadRequest)
-		return
-	}
+	// currentVersion := r.URL.Query().Get("version")
+	// if currentVersion == "" {
+	// 	http.Error(w, "Missing protocol version", http.StatusBadRequest)
+	// 	return
+	// }
 
-	if !version.IsVersionSupported(currentVersion) {
-		http.Error(w, fmt.Sprintf("Unsupported version: %s", currentVersion), http.StatusUpgradeRequired)
-		return
-	}
+	// if !version.IsVersionSupported(currentVersion) {
+	// 	http.Error(w, fmt.Sprintf("Unsupported version: %s", currentVersion), http.StatusUpgradeRequired)
+	// 	return
+	// }
 
 	clusterName := r.URL.Query().Get(ClusterNameQueryParam)
 	if clusterName == "" {

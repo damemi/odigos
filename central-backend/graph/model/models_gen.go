@@ -2,11 +2,214 @@
 
 package model
 
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"strconv"
+)
+
+type AssignComputePlatformsToUserInput struct {
+	UserID             string   `json:"userID"`
+	ComputePlatformIDs []string `json:"computePlatformIDs"`
+}
+
+type AssignComputePlatformsToUserPayload struct {
+	Success bool    `json:"success"`
+	Error   *string `json:"error,omitempty"`
+}
+
+type AssignTeamsToUserInput struct {
+	UserID  string   `json:"userID"`
+	TeamIDs []string `json:"teamIDs"`
+}
+
+type AssignTeamsToUserPayload struct {
+	Success bool    `json:"success"`
+	Error   *string `json:"error,omitempty"`
+}
+
+type ComputePlatform struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Type   string `json:"type"`
+	Status string `json:"status"`
+}
+
 type Connection struct {
 	ProxyID string `json:"proxyID"`
 	Status  string `json:"status"`
 	Name    string `json:"name"`
 }
 
+type CreateTeamInput struct {
+	Name        string  `json:"name"`
+	Description *string `json:"description,omitempty"`
+}
+
+type CreateTeamPayload struct {
+	Success bool    `json:"success"`
+	Team    *Team   `json:"team,omitempty"`
+	Error   *string `json:"error,omitempty"`
+}
+
+type CreateUserPayload struct {
+	Success           bool    `json:"success"`
+	GeneratedPassword *string `json:"generatedPassword,omitempty"`
+}
+
+type DeleteUserPayload struct {
+	Success bool    `json:"success"`
+	Error   *string `json:"error,omitempty"`
+}
+
+type Mutation struct {
+}
+
 type Query struct {
+}
+
+type SignInPayload struct {
+	Token  string       `json:"token"`
+	User   *User        `json:"user,omitempty"`
+	Status SignInStatus `json:"status"`
+}
+
+type SystemConfig struct {
+	IsInitialized bool   `json:"isInitialized"`
+	Version       string `json:"version"`
+}
+
+type Team struct {
+	ID               string             `json:"id"`
+	Name             string             `json:"name"`
+	Description      *string            `json:"description,omitempty"`
+	CreatedAt        string             `json:"createdAt"`
+	UpdatedAt        string             `json:"updatedAt"`
+	Users            []*User            `json:"users"`
+	ComputePlatforms []*ComputePlatform `json:"computePlatforms"`
+}
+
+type User struct {
+	ID                  string             `json:"id"`
+	Email               string             `json:"email"`
+	Username            string             `json:"username"`
+	Role                Role               `json:"role"`
+	NeedsPasswordChange bool               `json:"needsPasswordChange"`
+	Teams               []*Team            `json:"teams"`
+	ComputePlatforms    []*ComputePlatform `json:"computePlatforms"`
+}
+
+type Role string
+
+const (
+	RoleOwner      Role = "OWNER"
+	RoleAdmin      Role = "ADMIN"
+	RoleMaintainer Role = "MAINTAINER"
+	RoleViewer     Role = "VIEWER"
+)
+
+var AllRole = []Role{
+	RoleOwner,
+	RoleAdmin,
+	RoleMaintainer,
+	RoleViewer,
+}
+
+func (e Role) IsValid() bool {
+	switch e {
+	case RoleOwner, RoleAdmin, RoleMaintainer, RoleViewer:
+		return true
+	}
+	return false
+}
+
+func (e Role) String() string {
+	return string(e)
+}
+
+func (e *Role) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = Role(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid Role", str)
+	}
+	return nil
+}
+
+func (e Role) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *Role) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e Role) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type SignInStatus string
+
+const (
+	SignInStatusSuccess                SignInStatus = "SUCCESS"
+	SignInStatusPasswordUpdateRequired SignInStatus = "PASSWORD_UPDATE_REQUIRED"
+)
+
+var AllSignInStatus = []SignInStatus{
+	SignInStatusSuccess,
+	SignInStatusPasswordUpdateRequired,
+}
+
+func (e SignInStatus) IsValid() bool {
+	switch e {
+	case SignInStatusSuccess, SignInStatusPasswordUpdateRequired:
+		return true
+	}
+	return false
+}
+
+func (e SignInStatus) String() string {
+	return string(e)
+}
+
+func (e *SignInStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = SignInStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid SignInStatus", str)
+	}
+	return nil
+}
+
+func (e SignInStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *SignInStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e SignInStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }

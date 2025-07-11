@@ -10,9 +10,114 @@ type Connection {
   name: String!
 }
 
+type SystemConfig {
+  isInitialized: Boolean!
+  version: String!
+}
+
 type Query {
   connections: [Connection!]!
   remoteFetch(proxyID: String!, query: String!, variables: JSON!): String!
+  teams: [Team!]!
+  users: [User!]!
+  systemConfig: SystemConfig!
 }
 
-# type Mutation {}
+enum Role {
+  OWNER
+  ADMIN
+  MAINTAINER
+  VIEWER
+}
+
+enum SignInStatus {
+  SUCCESS
+  PASSWORD_UPDATE_REQUIRED
+}
+
+type User {
+  id: String!
+  email: String!
+  username: String!
+  role: Role!
+  needsPasswordChange: Boolean!
+  teams: [Team!]!
+  computePlatforms: [ComputePlatform!]!
+}
+
+type SignInPayload {
+  token: String!
+  user: User
+  status: SignInStatus!
+}
+
+type CreateUserPayload {
+  success: Boolean!
+  generatedPassword: String
+}
+
+type DeleteUserPayload {
+  success: Boolean!
+  error: String
+}
+
+# TODO: replace connection with compute platform
+type ComputePlatform {
+  id: String!
+  name: String!
+  type: String!
+  status: String!
+}
+
+type Team {
+  id: String!
+  name: String!
+  description: String
+  createdAt: String!
+  updatedAt: String!
+  users: [User!]!
+  computePlatforms: [ComputePlatform!]!
+}
+
+type CreateTeamPayload {
+  success: Boolean!
+  team: Team
+  error: String
+}
+
+input CreateTeamInput {
+  name: String!
+  description: String
+}
+
+input AssignTeamsToUserInput {
+  userID: String!
+  teamIDs: [String!]!
+}
+
+input AssignComputePlatformsToUserInput {
+  userID: String!
+  computePlatformIDs: [String!]!
+}
+
+type AssignTeamsToUserPayload {
+  success: Boolean!
+  error: String
+}
+
+type AssignComputePlatformsToUserPayload {
+  success: Boolean!
+  error: String
+}
+
+type Mutation {
+  signIn(email: String!, password: String!): SignInPayload!
+  createUser(email: String!, password: String, role: Role!): CreateUserPayload!
+  deleteUser(userID: String!): DeleteUserPayload!
+  setInitialPassword(email: String!, password: String!): SignInPayload!
+  createTeam(input: CreateTeamInput!): CreateTeamPayload!
+  assignTeamsToUser(input: AssignTeamsToUserInput!): AssignTeamsToUserPayload!
+  assignComputePlatformsToUser(
+    input: AssignComputePlatformsToUserInput!
+  ): AssignComputePlatformsToUserPayload!
+}

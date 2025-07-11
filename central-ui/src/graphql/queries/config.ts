@@ -5,4 +5,4 @@ export const GET_CONFIG = `
       readonly
     }
   }
-`
+`;
