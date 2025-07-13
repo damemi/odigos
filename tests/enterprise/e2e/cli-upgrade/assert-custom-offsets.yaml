@@ -18,6 +18,7 @@ metadata:
       name: odiglet
 spec:
   containers:
+    - name: deviceplugin
     - name: odiglet
       resources: {}
       securityContext:
@@ -52,6 +53,10 @@ spec:
           value: /offsets/go_offset_results.json
 status:
   containerStatuses:
+    - name: deviceplugin
+      ready: true
+      restartCount: 0
+      started: true
     - name: odiglet
       ready: true
       restartCount: 0

@@ -73,6 +73,7 @@ metadata:
       name: odiglet
 spec:
   containers:
+    - name: deviceplugin
     - name: odiglet
       image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
       resources: {}
@@ -89,6 +90,10 @@ spec:
   serviceAccountName: odiglet
 status:
   containerStatuses:
+    - name: deviceplugin
+      ready: true
+      restartCount: 0
+      started: true
     - name: odiglet
       ready: true
       restartCount: 0
