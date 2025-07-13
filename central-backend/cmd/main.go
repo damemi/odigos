@@ -41,17 +41,17 @@ func main() {
 		logger.Fatal("Failed to get admin credentials", err)
 	}
 
-	adminToken, err := keycloak.GetKeycloakAccessToken(consts.KeycloakHost, credentials.Username, credentials.Password)
+	adminToken, err := keycloak.GetKeycloakAccessToken(consts.GetKeycloakHost(), credentials.Username, credentials.Password)
 	if err != nil {
 		logger.Fatal("Failed to get admin token", err)
 	}
 
-	err = keycloak.CreateOdigosUIClient(adminToken, consts.KeycloakHost, consts.KeycloakRealm)
+	err = keycloak.CreateOdigosUIClient(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm)
 	if err != nil {
 		logger.Fatal("Failed to create odigos-ui client", err)
 	}
 
-	err = keycloak.EnsureRequiredRoles(adminToken, consts.KeycloakHost, consts.KeycloakRealm)
+	err = keycloak.EnsureRequiredRoles(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm)
 	if err != nil {
 		logger.Fatal("Failed to ensure required roles", err)
 	}

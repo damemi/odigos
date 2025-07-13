@@ -44,7 +44,7 @@ func (k *AuthRepository) GetAdminTokenForInitialPassword(ctx context.Context) (s
 		return "", err
 	}
 
-	adminToken, err := keycloak.GetKeycloakAccessToken(consts.KeycloakHost, credentials.Username, credentials.Password)
+	adminToken, err := keycloak.GetKeycloakAccessToken(consts.GetKeycloakHost(), credentials.Username, credentials.Password)
 	if err != nil {
 		return "", err
 	}

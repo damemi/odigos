@@ -53,7 +53,7 @@ type PasswordUpdatePayload struct {
 
 func NewUserService() *UserService {
 	return &UserService{
-		host:  consts.KeycloakHost,
+		host:  consts.GetKeycloakHost(),
 		realm: consts.KeycloakRealm,
 	}
 }

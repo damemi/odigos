@@ -26,7 +26,7 @@ type UserAuthResult struct {
 
 func NewAuthService() *AuthService {
 	return &AuthService{
-		host:        consts.KeycloakHost,
+		host:        consts.GetKeycloakHost(),
 		realm:       consts.KeycloakRealm,
 		client:      consts.ClientID,
 		userService: NewUserService(),

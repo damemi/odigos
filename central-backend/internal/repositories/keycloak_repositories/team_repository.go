@@ -32,7 +32,7 @@ func (k *TeamRepository) CreateTeam(ctx context.Context, input model.CreateTeamI
 		return nil, fmt.Errorf("failed to get admin token: %w", err)
 	}
 
-	createdTeam, err := keycloak.CreateTeam(adminToken, consts.KeycloakHost, consts.KeycloakRealm, input)
+	createdTeam, err := keycloak.CreateTeam(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, input)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create team in Keycloak: %w", err)
 	}
@@ -48,7 +48,7 @@ func (k *TeamRepository) GetTeams(ctx context.Context) ([]*model.Team, error) {
 		return nil, err
 	}
 
-	teams, err := keycloak.ListTeams(adminToken, consts.KeycloakHost, consts.KeycloakRealm)
+	teams, err := keycloak.ListTeams(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func (k *TeamRepository) AssignTeamsToUser(ctx context.Context, userID string, t
 		return fmt.Errorf("failed to get admin token: %w", err)
 	}
 
-	err = keycloak.AssignTeamsToUser(adminToken, consts.KeycloakHost, consts.KeycloakRealm, userID, teamIDs)
+	err = keycloak.AssignTeamsToUser(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, userID, teamIDs)
 	if err != nil {
 		return fmt.Errorf("failed to assign teams to user: %w", err)
 	}
@@ -76,7 +76,7 @@ func (k *TeamRepository) CheckTeamExists(ctx context.Context, teamName string) (
 		return false, err
 	}
 
-	teams, err := keycloak.ListTeams(adminToken, consts.KeycloakHost, consts.KeycloakRealm)
+	teams, err := keycloak.ListTeams(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm)
 	if err != nil {
 		return false, err
 	}

@@ -1,11 +1,22 @@
 package consts
 
+import (
+	"os"
+)
+
 const (
 	UpdatePasswordAction = "UPDATE_PASSWORD"
 )
 
+// GetKeycloakHost returns the Keycloak host from environment variable or defaults to localhost
+func GetKeycloakHost() string {
+	if host := os.Getenv("KEYCLOAK_HOST"); host != "" {
+		return host
+	}
+	return "http://localhost:8080"
+}
+
 const (
-	KeycloakHost  = "http://localhost:8080"
 	KeycloakRealm = "master"
 	ClientID      = "odigos-central"
 )
