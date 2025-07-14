@@ -29,14 +29,14 @@ ARG NODEJS_AGENT_VERSION=main
 RUN git clone https://github.com/odigos-io/opentelemetry-node.git && cd opentelemetry-node && git checkout $NODEJS_AGENT_VERSION
 
 # The second build stage 'nodejs-agent-src' prepares the actual code we are going to compile and embed in odiglet.
-# By default, it uses the previous 'nodejs-agent-src' stage, but one can override it by setting the 
+# By default, it uses the previous 'nodejs-agent-src' stage, but one can override it by setting the
 # --build-context nodejs-agent-src=../opentelemetry-node flag in the docker build command.
 # This allows us to nobe the agent sources and test changes during development.
 # The output of this stage is the resolved source code to be used in the next stage.
 FROM scratch AS nodejs-agent-src
 COPY --from=nodejs-agent-clone /src/opentelemetry-node /
 
-# The third step 'nodejs-agent-build' compiles the agent sources and prepares it for 
+# The third step 'nodejs-agent-build' compiles the agent sources and prepares it for
 # Run yarn install to generate the production node_modules directory
 FROM node:18 AS nodejs-agent-build
 # Run yarn install to generate the production node_modules directory
@@ -185,6 +185,32 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 # Install delve
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
 
+
+# Compile rsync statically for distroless image
+ARG RSYNC_VERSION=3.2.7
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    wget \
+    ca-certificates \
+    libacl1-dev \
+    libattr1-dev \
+    libpopt-dev \
+    liblz4-dev \
+    libzstd-dev \
+    libxxhash-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN wget https://download.samba.org/pub/rsync/src/rsync-${RSYNC_VERSION}.tar.gz \
+    && tar -xzf rsync-${RSYNC_VERSION}.tar.gz \
+    && cd rsync-${RSYNC_VERSION} \
+    && ./configure --prefix=/usr LDFLAGS="-static" \
+    && make \
+    && make install DESTDIR=/rsync-install \
+    && cd .. \
+    && rm -rf rsync-${RSYNC_VERSION}*
+
+
 WORKDIR /instrumentations
 
 # Java
@@ -239,6 +265,8 @@ RUN wget --directory-prefix=loader https://storage.googleapis.com/odigos-loader/
 FROM registry.fedoraproject.org/fedora-minimal:38
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
 COPY --from=builder /go/bin/dlv /root/dlv
+# Copy statically compiled rsync (no shared libraries needed)
+COPY --from=builder /rsync-install/usr/bin/rsync /usr/bin/rsync
 WORKDIR /instrumentations/
 COPY --from=builder /instrumentations/ .
 
