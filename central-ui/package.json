@@ -10,14 +10,14 @@
   },
   "dependencies": {
     "@apollo/client": "^3.13.8",
-    "@odigos/ui-kit": "^0.0.47",
+    "@odigos/ui-kit": "^0.0.55",
     "graphql": "^16.11.0",
     "graphql-ws": "^6.0.5",
-    "next": "15.3.4",
+    "next": "15.3.5",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "styled-components": "^6.1.19",
-    "zustand": "^5.0.5"
+    "zustand": "^5.0.6"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -27,7 +27,7 @@
     "@types/styled-components": "^5.1.34",
     "babel-plugin-styled-components": "^2.1.4",
     "eslint": "^9",
-    "eslint-config-next": "15.3.4",
+    "eslint-config-next": "15.3.5",
     "typescript": "^5"
   }
 }

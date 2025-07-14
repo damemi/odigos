@@ -82,30 +82,7 @@ export const SuccessSubtitle = styled(Text)`
 `;
 
 export const PasswordInputWrapper = styled.div`
-  display: flex;
-  padding: 4px 8px 4px 16px;
-  align-items: center;
-  gap: 24px;
-  flex: 1 0 0;
-  border-radius: 8px;
-  background: #525252;
-  color: #aabef7;
-  font-size: 16px;
-  font-weight: 500;
-  line-height: 24px;
   max-width: 360px;
-`;
-
-export const PasswordInput = styled.input`
-  font-family: ${({ theme }) => theme.font_family.code};
-  font-size: 16px;
-  font-weight: 500;
-  line-height: 24px;
-  outline: none;
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: #aabef7;
 `;
 
 export const DoneButton = styled(Button)`

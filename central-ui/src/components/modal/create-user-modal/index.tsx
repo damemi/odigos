@@ -2,11 +2,10 @@ import React, { useState } from 'react';
 import { useUsersCRUD } from '@/hooks';
 import { DropdownOption, Role } from '@/types';
 import { StatusType } from '@odigos/ui-kit/types';
-import * as STRINGS from '@/utils/constants/strings';
-import { useCopy } from '@odigos/ui-kit/hooks';
 import { Modal } from '@odigos/ui-kit/components';
-import { useNotificationStore } from '@odigos/ui-kit/store';
+import * as STRINGS from '@/utils/constants/strings';
 import { ModalContent } from './create-user-modal.styled';
+import { useNotificationStore } from '@odigos/ui-kit/store';
 import { UserCreatedSuccessfully } from './user-created-successfully';
 import { CreateUserForm, CreateUserFormField } from './create-user-form';
 
@@ -16,8 +15,8 @@ enum CreateUserModalState {
 }
 
 export const roleOptions: DropdownOption<Role>[] = [
-  { id: Role.ADMIN, value: 'ADMIN' },
   { id: Role.OWNER, value: 'OWNER' },
+  { id: Role.ADMIN, value: 'ADMIN' },
   { id: Role.MAINTAINER, value: 'MAINTAINER' },
   { id: Role.VIEWER, value: 'VIEWER' },
 ];
@@ -46,7 +45,6 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClos
   const [errors, setErrors] = useState<Partial<CreateUserFormData>>({});
   const [modalState, setModalState] = useState<CreateUserModalState>(CreateUserModalState.Form);
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
-  const { isCopied, clickCopy } = useCopy();
 
   const validateForm = (): boolean => {
     const newErrors: Partial<CreateUserFormData> = {};
@@ -102,19 +100,13 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClos
     }
   };
 
-  const handleCopy = () => {
-    if (generatedPassword) {
-      clickCopy(generatedPassword);
-    }
-  };
-
   return (
     <Modal isOpen={isOpen} onClose={handleClose} header={{ title: STRINGS.CREATE_USER_MODAL_TITLE }}>
       <ModalContent>
         {modalState === CreateUserModalState.Form ? (
           <CreateUserForm formData={formData} errors={errors} creating={creating} onChange={handleInputChange} onSubmit={handleSubmit} />
         ) : (
-          <UserCreatedSuccessfully email={formData[CreateUserFormField.Email]} password={generatedPassword ?? ''} isCopied={isCopied} onCopy={handleCopy} onDone={handleClose} />
+          <UserCreatedSuccessfully email={formData[CreateUserFormField.Email]} password={generatedPassword ?? ''} onDone={handleClose} />
         )}
       </ModalContent>
     </Modal>

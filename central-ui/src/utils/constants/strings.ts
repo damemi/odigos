@@ -67,10 +67,6 @@ export const TEAMS_PLACEHOLDER = 'Choose Team from list';
 export const COMPUTE_PLATFORM_LABEL = 'Compute platform';
 export const COMPUTE_PLATFORM_PLACEHOLDER = 'Choose Compute platform from list';
 
-// Copy tooltip strings
-export const COPY_TOOLTIP = 'Copy';
-export const COPIED_TOOLTIP = 'Copied!';
-
 // Create User Form
 export const CREATE_USER_FORM_DESCRIPTION_1 = 'Add a new user to your Odigos environment.';
 export const CREATE_USER_FORM_DESCRIPTION_2 = 'Assign their role and link them to relevant teams or compute platforms.';

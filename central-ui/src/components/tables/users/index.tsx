@@ -1,11 +1,12 @@
-import React, { useMemo, useCallback } from 'react';
-import styled from 'styled-components';
-import * as STRINGS from '@/utils';
+import React, { useMemo, useCallback, useState } from 'react';
+import * as UTILS from '@/utils';
 import type { User } from '@/types';
-import { RoleBadge } from '@/components';
-import { InteractiveTable, RowCell } from '@odigos/ui-kit/components';
-import { MinusIcon, TrashIcon } from '@odigos/ui-kit/icons';
 import { useUsersCRUD } from '@/hooks';
+import Theme from '@odigos/ui-kit/theme';
+import { Crud, StatusType } from '@odigos/ui-kit/types';
+import { useNotificationStore } from '@odigos/ui-kit/store';
+import { EditIcon, MinusCircledIcon, UserIcon } from '@odigos/ui-kit/icons';
+import { DeleteWarning, FlexRow, IconButton, IconWrapped, InteractiveTable, RowCell, Tag } from '@odigos/ui-kit/components';
 
 interface UsersTableProps {
   users: User[];
@@ -20,68 +21,38 @@ export enum UserTableColumn {
   Actions = 'actions',
 }
 
-const UserIconWrapper = styled.div`
-  border-radius: 8px;
-  background: rgba(249, 249, 249, 0.04);
-  display: flex;
-  width: 36px;
-  height: 36px;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
-`;
-
-const ActionButton = styled.button`
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  transition: background-color 0.2s ease;
-
-  &:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-  }
-
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
-  }
-`;
-
 export const UsersTable: React.FC<UsersTableProps> = ({ users }) => {
+  const theme = Theme.useTheme();
   const { deleteUser, deleting } = useUsersCRUD();
+  const { addNotification } = useNotificationStore();
+  const [deleteOpenForUser, setDeleteOpenForUser] = useState<User | null>(null);
 
   const handleDeleteUser = useCallback(
-    async (userID: string, userEmail: string) => {
-      const confirmed = window.confirm(`Are you sure you want to delete user "${userEmail}"? This action cannot be undone.`);
-
-      if (!confirmed) {
-        return;
-      }
-
+    async (userID: string) => {
       try {
+        if (deleting) return;
+
         const result = await deleteUser(userID);
 
         if (!result.success) {
           const errorMessage = result.error || 'Failed to delete user';
-          alert(`Error: ${errorMessage}`);
+          addNotification({ type: StatusType.Error, title: Crud.Delete, description: errorMessage });
         }
       } catch (error) {
-        console.error('Error deleting user:', error);
-        alert('An unexpected error occurred while deleting the user.');
+        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred while deleting the user.';
+        addNotification({ type: StatusType.Error, title: Crud.Delete, description: errorMessage });
       }
     },
-    [deleteUser],
+    [deleting, deleteUser],
   );
 
   const columns = [
     { key: UserTableColumn.Icon, title: '', sortable: true },
-    { key: UserTableColumn.User, title: STRINGS.USERS_TAB, sortable: true },
-    { key: UserTableColumn.Role, title: STRINGS.ROLE_COLUMN, sortable: true },
-    { key: UserTableColumn.Teams, title: STRINGS.TEAMS_TAB, sortable: true },
-    { key: UserTableColumn.Platforms, title: STRINGS.COMPUTE_PLATFORMS_TAB, sortable: true },
-    { key: UserTableColumn.Actions, title: STRINGS.ACTIONS_COLUMN },
+    { key: UserTableColumn.User, title: UTILS.USERS_TAB, sortable: true },
+    { key: UserTableColumn.Role, title: UTILS.ROLE_COLUMN, sortable: true },
+    { key: UserTableColumn.Teams, title: UTILS.TEAMS_TAB, sortable: true },
+    { key: UserTableColumn.Platforms, title: UTILS.COMPUTE_PLATFORMS_TAB, sortable: true },
+    { key: UserTableColumn.Actions, title: UTILS.ACTIONS_COLUMN },
   ];
 
   const rows = useMemo(
@@ -90,11 +61,7 @@ export const UsersTable: React.FC<UsersTableProps> = ({ users }) => {
         cells: [
           {
             columnKey: UserTableColumn.Icon,
-            component: () => (
-              <UserIconWrapper>
-                <MinusIcon />
-              </UserIconWrapper>
-            ),
+            component: () => <IconWrapped icon={UserIcon} />,
           },
           {
             columnKey: UserTableColumn.User,
@@ -102,33 +69,49 @@ export const UsersTable: React.FC<UsersTableProps> = ({ users }) => {
           },
           {
             columnKey: UserTableColumn.Role,
-            component: () => <RoleBadge variant={user.role}>{user.role}</RoleBadge>,
-            value: user.role,
+            component: () => <Tag type={UTILS.getStatusForRole(user.role)}>{user.role}</Tag>,
           },
           {
             columnKey: UserTableColumn.Teams,
-            value: user.teams.length,
-            component: () => (user.teams.length > 0 ? `${user.teams.length} ${STRINGS.TEAM_LABEL}${user.teams.length > 1 ? 's' : ''}` : STRINGS.DASH),
+            value: user.teams.length > 0 ? `${user.teams.length} ${UTILS.TEAM_LABEL}${user.teams.length > 1 ? 's' : ''}` : UTILS.DASH,
           },
           {
             columnKey: UserTableColumn.Platforms,
-            value: user.computePlatforms.length,
-            component: () => (user.computePlatforms.length > 0 ? `${user.computePlatforms.length} ${STRINGS.PLATFORM_LABEL}${user.computePlatforms.length > 1 ? 's' : ''}` : STRINGS.DASH),
+            value: user.computePlatforms.length > 0 ? `${user.computePlatforms.length} ${UTILS.PLATFORM_LABEL}${user.computePlatforms.length > 1 ? 's' : ''}` : UTILS.DASH,
           },
           {
             columnKey: UserTableColumn.Actions,
             component: () => (
-              <div style={{ display: 'flex', gap: 12 }}>
-                <ActionButton onClick={() => handleDeleteUser(user.id, user.email)} disabled={deleting} title='Delete user' aria-label={`Delete user ${user.email}`}>
-                  <TrashIcon />
-                </ActionButton>
-              </div>
+              <FlexRow>
+                <IconButton onClick={() => alert('TODO')} tooltip='Edit user'>
+                  <EditIcon />
+                </IconButton>
+                <IconButton onClick={() => setDeleteOpenForUser(user)} tooltip='Delete user'>
+                  <MinusCircledIcon fill={theme.text.error} />
+                </IconButton>
+              </FlexRow>
             ),
           },
         ] as RowCell[],
       })),
-    [users, handleDeleteUser, deleting],
+    [users, handleDeleteUser],
   );
 
-  return <InteractiveTable columns={columns} rows={rows} />;
+  return (
+    <>
+      <InteractiveTable columns={columns} rows={rows} />
+
+      <DeleteWarning
+        isOpen={deleteOpenForUser !== null}
+        name={deleteOpenForUser?.username || deleteOpenForUser?.email || deleteOpenForUser?.id}
+        onApprove={() => {
+          handleDeleteUser(deleteOpenForUser?.id as string);
+          setDeleteOpenForUser(null);
+        }}
+        onDeny={() => {
+          setDeleteOpenForUser(null);
+        }}
+      />
+    </>
+  );
 };
