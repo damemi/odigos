@@ -15,14 +15,6 @@ type SystemConfig {
   version: String!
 }
 
-type Query {
-  connections: [Connection!]!
-  remoteFetch(proxyID: String!, query: String!, variables: JSON!): String!
-  teams: [Team!]!
-  users: [User!]!
-  systemConfig: SystemConfig!
-}
-
 enum Role {
   OWNER
   ADMIN
@@ -56,11 +48,6 @@ type CreateUserPayload {
   generatedPassword: String
 }
 
-type DeleteUserPayload {
-  success: Boolean!
-  error: String
-}
-
 # TODO: replace connection with compute platform
 type ComputePlatform {
   id: String!
@@ -85,9 +72,9 @@ type CreateTeamPayload {
   error: String
 }
 
-input CreateTeamInput {
-  name: String!
-  description: String
+type DeleteResult {
+  success: Boolean!
+  error: String
 }
 
 input AssignTeamsToUserInput {
@@ -110,12 +97,32 @@ type AssignComputePlatformsToUserPayload {
   error: String
 }
 
+type Query {
+  connections: [Connection!]!
+  remoteFetch(proxyID: String!, query: String!, variables: JSON!): String!
+  users: [User!]!
+  teams: [Team!]!
+  systemConfig: SystemConfig!
+}
+
 type Mutation {
   signIn(email: String!, password: String!): SignInPayload!
-  createUser(email: String!, password: String, role: Role!): CreateUserPayload!
-  deleteUser(userID: String!): DeleteUserPayload!
+  createUser(
+    email: String!
+    password: String
+    role: Role!
+    teams: [String]!
+    computePlatforms: [String]!
+  ): CreateUserPayload!
+  deleteUser(userID: String!): DeleteResult!
   setInitialPassword(email: String!, password: String!): SignInPayload!
-  createTeam(input: CreateTeamInput!): CreateTeamPayload!
+  createTeam(
+    name: String!
+    description: String
+    users: [String]!
+    computePlatforms: [String]!
+  ): CreateTeamPayload!
+  deleteTeam(teamID: String!): DeleteResult!
   assignTeamsToUser(input: AssignTeamsToUserInput!): AssignTeamsToUserPayload!
   assignComputePlatformsToUser(
     input: AssignComputePlatformsToUserInput!

@@ -81,7 +81,7 @@ type ComplexityRoot struct {
 		Success           func(childComplexity int) int
 	}
 
-	DeleteUserPayload struct {
+	DeleteResult struct {
 		Error   func(childComplexity int) int
 		Success func(childComplexity int) int
 	}
@@ -89,8 +89,9 @@ type ComplexityRoot struct {
 	Mutation struct {
 		AssignComputePlatformsToUser func(childComplexity int, input model.AssignComputePlatformsToUserInput) int
 		AssignTeamsToUser            func(childComplexity int, input model.AssignTeamsToUserInput) int
-		CreateTeam                   func(childComplexity int, input model.CreateTeamInput) int
-		CreateUser                   func(childComplexity int, email string, password *string, role model.Role) int
+		CreateTeam                   func(childComplexity int, name string, description *string, users []*string, computePlatforms []*string) int
+		CreateUser                   func(childComplexity int, email string, password *string, role model.Role, teams []*string, computePlatforms []*string) int
+		DeleteTeam                   func(childComplexity int, teamID string) int
 		DeleteUser                   func(childComplexity int, userID string) int
 		SetInitialPassword           func(childComplexity int, email string, password string) int
 		SignIn                       func(childComplexity int, email string, password string) int
@@ -138,18 +139,19 @@ type ComplexityRoot struct {
 
 type MutationResolver interface {
 	SignIn(ctx context.Context, email string, password string) (*model.SignInPayload, error)
-	CreateUser(ctx context.Context, email string, password *string, role model.Role) (*model.CreateUserPayload, error)
-	DeleteUser(ctx context.Context, userID string) (*model.DeleteUserPayload, error)
+	CreateUser(ctx context.Context, email string, password *string, role model.Role, teams []*string, computePlatforms []*string) (*model.CreateUserPayload, error)
+	DeleteUser(ctx context.Context, userID string) (*model.DeleteResult, error)
 	SetInitialPassword(ctx context.Context, email string, password string) (*model.SignInPayload, error)
-	CreateTeam(ctx context.Context, input model.CreateTeamInput) (*model.CreateTeamPayload, error)
+	CreateTeam(ctx context.Context, name string, description *string, users []*string, computePlatforms []*string) (*model.CreateTeamPayload, error)
+	DeleteTeam(ctx context.Context, teamID string) (*model.DeleteResult, error)
 	AssignTeamsToUser(ctx context.Context, input model.AssignTeamsToUserInput) (*model.AssignTeamsToUserPayload, error)
 	AssignComputePlatformsToUser(ctx context.Context, input model.AssignComputePlatformsToUserInput) (*model.AssignComputePlatformsToUserPayload, error)
 }
 type QueryResolver interface {
 	Connections(ctx context.Context) ([]*model.Connection, error)
 	RemoteFetch(ctx context.Context, proxyID string, query string, variables map[string]any) (string, error)
-	Teams(ctx context.Context) ([]*model.Team, error)
 	Users(ctx context.Context) ([]*model.User, error)
+	Teams(ctx context.Context) ([]*model.Team, error)
 	SystemConfig(ctx context.Context) (*model.SystemConfig, error)
 }
 
@@ -284,19 +286,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.CreateUserPayload.Success(childComplexity), true
 
-	case "DeleteUserPayload.error":
-		if e.complexity.DeleteUserPayload.Error == nil {
+	case "DeleteResult.error":
+		if e.complexity.DeleteResult.Error == nil {
 			break
 		}
 
-		return e.complexity.DeleteUserPayload.Error(childComplexity), true
+		return e.complexity.DeleteResult.Error(childComplexity), true
 
-	case "DeleteUserPayload.success":
-		if e.complexity.DeleteUserPayload.Success == nil {
+	case "DeleteResult.success":
+		if e.complexity.DeleteResult.Success == nil {
 			break
 		}
 
-		return e.complexity.DeleteUserPayload.Success(childComplexity), true
+		return e.complexity.DeleteResult.Success(childComplexity), true
 
 	case "Mutation.assignComputePlatformsToUser":
 		if e.complexity.Mutation.AssignComputePlatformsToUser == nil {
@@ -332,7 +334,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.CreateTeam(childComplexity, args["input"].(model.CreateTeamInput)), true
+		return e.complexity.Mutation.CreateTeam(childComplexity, args["name"].(string), args["description"].(*string), args["users"].([]*string), args["computePlatforms"].([]*string)), true
 
 	case "Mutation.createUser":
 		if e.complexity.Mutation.CreateUser == nil {
@@ -344,7 +346,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.CreateUser(childComplexity, args["email"].(string), args["password"].(*string), args["role"].(model.Role)), true
+		return e.complexity.Mutation.CreateUser(childComplexity, args["email"].(string), args["password"].(*string), args["role"].(model.Role), args["teams"].([]*string), args["computePlatforms"].([]*string)), true
+
+	case "Mutation.deleteTeam":
+		if e.complexity.Mutation.DeleteTeam == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteTeam_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.DeleteTeam(childComplexity, args["teamID"].(string)), true
 
 	case "Mutation.deleteUser":
 		if e.complexity.Mutation.DeleteUser == nil {
@@ -565,7 +579,6 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputAssignComputePlatformsToUserInput,
 		ec.unmarshalInputAssignTeamsToUserInput,
-		ec.unmarshalInputCreateTeamInput,
 	)
 	first := true
 
@@ -741,28 +754,97 @@ func (ec *executionContext) field_Mutation_assignTeamsToUser_argsInput(
 func (ec *executionContext) field_Mutation_createTeam_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := ec.field_Mutation_createTeam_argsInput(ctx, rawArgs)
+	arg0, err := ec.field_Mutation_createTeam_argsName(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
-	args["input"] = arg0
+	args["name"] = arg0
+	arg1, err := ec.field_Mutation_createTeam_argsDescription(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["description"] = arg1
+	arg2, err := ec.field_Mutation_createTeam_argsUsers(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["users"] = arg2
+	arg3, err := ec.field_Mutation_createTeam_argsComputePlatforms(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["computePlatforms"] = arg3
 	return args, nil
 }
-func (ec *executionContext) field_Mutation_createTeam_argsInput(
+func (ec *executionContext) field_Mutation_createTeam_argsName(
 	ctx context.Context,
 	rawArgs map[string]any,
-) (model.CreateTeamInput, error) {
-	if _, ok := rawArgs["input"]; !ok {
-		var zeroVal model.CreateTeamInput
+) (string, error) {
+	if _, ok := rawArgs["name"]; !ok {
+		var zeroVal string
 		return zeroVal, nil
 	}
 
-	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("input"))
-	if tmp, ok := rawArgs["input"]; ok {
-		return ec.unmarshalNCreateTeamInput2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCreateTeamInput(ctx, tmp)
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+	if tmp, ok := rawArgs["name"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
 	}
 
-	var zeroVal model.CreateTeamInput
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_createTeam_argsDescription(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*string, error) {
+	if _, ok := rawArgs["description"]; !ok {
+		var zeroVal *string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
+	if tmp, ok := rawArgs["description"]; ok {
+		return ec.unmarshalOString2ᚖstring(ctx, tmp)
+	}
+
+	var zeroVal *string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_createTeam_argsUsers(
+	ctx context.Context,
+	rawArgs map[string]any,
+) ([]*string, error) {
+	if _, ok := rawArgs["users"]; !ok {
+		var zeroVal []*string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("users"))
+	if tmp, ok := rawArgs["users"]; ok {
+		return ec.unmarshalNString2ᚕᚖstring(ctx, tmp)
+	}
+
+	var zeroVal []*string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_createTeam_argsComputePlatforms(
+	ctx context.Context,
+	rawArgs map[string]any,
+) ([]*string, error) {
+	if _, ok := rawArgs["computePlatforms"]; !ok {
+		var zeroVal []*string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("computePlatforms"))
+	if tmp, ok := rawArgs["computePlatforms"]; ok {
+		return ec.unmarshalNString2ᚕᚖstring(ctx, tmp)
+	}
+
+	var zeroVal []*string
 	return zeroVal, nil
 }
 
@@ -784,6 +866,16 @@ func (ec *executionContext) field_Mutation_createUser_args(ctx context.Context, 
 		return nil, err
 	}
 	args["role"] = arg2
+	arg3, err := ec.field_Mutation_createUser_argsTeams(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["teams"] = arg3
+	arg4, err := ec.field_Mutation_createUser_argsComputePlatforms(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["computePlatforms"] = arg4
 	return args, nil
 }
 func (ec *executionContext) field_Mutation_createUser_argsEmail(
@@ -837,6 +929,70 @@ func (ec *executionContext) field_Mutation_createUser_argsRole(
 	}
 
 	var zeroVal model.Role
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_createUser_argsTeams(
+	ctx context.Context,
+	rawArgs map[string]any,
+) ([]*string, error) {
+	if _, ok := rawArgs["teams"]; !ok {
+		var zeroVal []*string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("teams"))
+	if tmp, ok := rawArgs["teams"]; ok {
+		return ec.unmarshalNString2ᚕᚖstring(ctx, tmp)
+	}
+
+	var zeroVal []*string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_createUser_argsComputePlatforms(
+	ctx context.Context,
+	rawArgs map[string]any,
+) ([]*string, error) {
+	if _, ok := rawArgs["computePlatforms"]; !ok {
+		var zeroVal []*string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("computePlatforms"))
+	if tmp, ok := rawArgs["computePlatforms"]; ok {
+		return ec.unmarshalNString2ᚕᚖstring(ctx, tmp)
+	}
+
+	var zeroVal []*string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteTeam_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_deleteTeam_argsTeamID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["teamID"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_deleteTeam_argsTeamID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	if _, ok := rawArgs["teamID"]; !ok {
+		var zeroVal string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("teamID"))
+	if tmp, ok := rawArgs["teamID"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
 	return zeroVal, nil
 }
 
@@ -1897,8 +2053,8 @@ func (ec *executionContext) fieldContext_CreateUserPayload_generatedPassword(_ c
 	return fc, nil
 }
 
-func (ec *executionContext) _DeleteUserPayload_success(ctx context.Context, field graphql.CollectedField, obj *model.DeleteUserPayload) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_DeleteUserPayload_success(ctx, field)
+func (ec *executionContext) _DeleteResult_success(ctx context.Context, field graphql.CollectedField, obj *model.DeleteResult) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeleteResult_success(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -1928,9 +2084,9 @@ func (ec *executionContext) _DeleteUserPayload_success(ctx context.Context, fiel
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_DeleteUserPayload_success(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_DeleteResult_success(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "DeleteUserPayload",
+		Object:     "DeleteResult",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -1941,8 +2097,8 @@ func (ec *executionContext) fieldContext_DeleteUserPayload_success(_ context.Con
 	return fc, nil
 }
 
-func (ec *executionContext) _DeleteUserPayload_error(ctx context.Context, field graphql.CollectedField, obj *model.DeleteUserPayload) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_DeleteUserPayload_error(ctx, field)
+func (ec *executionContext) _DeleteResult_error(ctx context.Context, field graphql.CollectedField, obj *model.DeleteResult) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeleteResult_error(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -1969,9 +2125,9 @@ func (ec *executionContext) _DeleteUserPayload_error(ctx context.Context, field 
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_DeleteUserPayload_error(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_DeleteResult_error(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "DeleteUserPayload",
+		Object:     "DeleteResult",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -2059,7 +2215,7 @@ func (ec *executionContext) _Mutation_createUser(ctx context.Context, field grap
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().CreateUser(rctx, fc.Args["email"].(string), fc.Args["password"].(*string), fc.Args["role"].(model.Role))
+		return ec.resolvers.Mutation().CreateUser(rctx, fc.Args["email"].(string), fc.Args["password"].(*string), fc.Args["role"].(model.Role), fc.Args["teams"].([]*string), fc.Args["computePlatforms"].([]*string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2132,9 +2288,9 @@ func (ec *executionContext) _Mutation_deleteUser(ctx context.Context, field grap
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*model.DeleteUserPayload)
+	res := resTmp.(*model.DeleteResult)
 	fc.Result = res
-	return ec.marshalNDeleteUserPayload2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐDeleteUserPayload(ctx, field.Selections, res)
+	return ec.marshalNDeleteResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐDeleteResult(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_Mutation_deleteUser(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -2146,11 +2302,11 @@ func (ec *executionContext) fieldContext_Mutation_deleteUser(ctx context.Context
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "success":
-				return ec.fieldContext_DeleteUserPayload_success(ctx, field)
+				return ec.fieldContext_DeleteResult_success(ctx, field)
 			case "error":
-				return ec.fieldContext_DeleteUserPayload_error(ctx, field)
+				return ec.fieldContext_DeleteResult_error(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type DeleteUserPayload", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type DeleteResult", field.Name)
 		},
 	}
 	defer func() {
@@ -2244,7 +2400,7 @@ func (ec *executionContext) _Mutation_createTeam(ctx context.Context, field grap
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().CreateTeam(rctx, fc.Args["input"].(model.CreateTeamInput))
+		return ec.resolvers.Mutation().CreateTeam(rctx, fc.Args["name"].(string), fc.Args["description"].(*string), fc.Args["users"].([]*string), fc.Args["computePlatforms"].([]*string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2287,6 +2443,67 @@ func (ec *executionContext) fieldContext_Mutation_createTeam(ctx context.Context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_createTeam_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteTeam(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_deleteTeam(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().DeleteTeam(rctx, fc.Args["teamID"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.DeleteResult)
+	fc.Result = res
+	return ec.marshalNDeleteResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐDeleteResult(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_deleteTeam(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "success":
+				return ec.fieldContext_DeleteResult_success(ctx, field)
+			case "error":
+				return ec.fieldContext_DeleteResult_error(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type DeleteResult", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteTeam_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -2522,66 +2739,6 @@ func (ec *executionContext) fieldContext_Query_remoteFetch(ctx context.Context, 
 	return fc, nil
 }
 
-func (ec *executionContext) _Query_teams(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Query_teams(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
-		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Teams(rctx)
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.([]*model.Team)
-	fc.Result = res
-	return ec.marshalNTeam2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐTeamᚄ(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext_Query_teams(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "id":
-				return ec.fieldContext_Team_id(ctx, field)
-			case "name":
-				return ec.fieldContext_Team_name(ctx, field)
-			case "description":
-				return ec.fieldContext_Team_description(ctx, field)
-			case "createdAt":
-				return ec.fieldContext_Team_createdAt(ctx, field)
-			case "updatedAt":
-				return ec.fieldContext_Team_updatedAt(ctx, field)
-			case "users":
-				return ec.fieldContext_Team_users(ctx, field)
-			case "computePlatforms":
-				return ec.fieldContext_Team_computePlatforms(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type Team", field.Name)
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Query_users(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Query_users(ctx, field)
 	if err != nil {
@@ -2637,6 +2794,66 @@ func (ec *executionContext) fieldContext_Query_users(_ context.Context, field gr
 				return ec.fieldContext_User_computePlatforms(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_teams(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_teams(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Teams(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.Team)
+	fc.Result = res
+	return ec.marshalNTeam2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐTeamᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_teams(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Team_id(ctx, field)
+			case "name":
+				return ec.fieldContext_Team_name(ctx, field)
+			case "description":
+				return ec.fieldContext_Team_description(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Team_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Team_updatedAt(ctx, field)
+			case "users":
+				return ec.fieldContext_Team_users(ctx, field)
+			case "computePlatforms":
+				return ec.fieldContext_Team_computePlatforms(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Team", field.Name)
 		},
 	}
 	return fc, nil
@@ -5740,40 +5957,6 @@ func (ec *executionContext) unmarshalInputAssignTeamsToUserInput(ctx context.Con
 	return it, nil
 }
 
-func (ec *executionContext) unmarshalInputCreateTeamInput(ctx context.Context, obj any) (model.CreateTeamInput, error) {
-	var it model.CreateTeamInput
-	asMap := map[string]any{}
-	for k, v := range obj.(map[string]any) {
-		asMap[k] = v
-	}
-
-	fieldsInOrder := [...]string{"name", "description"}
-	for _, k := range fieldsInOrder {
-		v, ok := asMap[k]
-		if !ok {
-			continue
-		}
-		switch k {
-		case "name":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
-			data, err := ec.unmarshalNString2string(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Name = data
-		case "description":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Description = data
-		}
-	}
-
-	return it, nil
-}
-
 // endregion **************************** input.gotpl *****************************
 
 // region    ************************** interface.gotpl ***************************
@@ -6051,24 +6234,24 @@ func (ec *executionContext) _CreateUserPayload(ctx context.Context, sel ast.Sele
 	return out
 }
 
-var deleteUserPayloadImplementors = []string{"DeleteUserPayload"}
+var deleteResultImplementors = []string{"DeleteResult"}
 
-func (ec *executionContext) _DeleteUserPayload(ctx context.Context, sel ast.SelectionSet, obj *model.DeleteUserPayload) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, deleteUserPayloadImplementors)
+func (ec *executionContext) _DeleteResult(ctx context.Context, sel ast.SelectionSet, obj *model.DeleteResult) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, deleteResultImplementors)
 
 	out := graphql.NewFieldSet(fields)
 	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
-			out.Values[i] = graphql.MarshalString("DeleteUserPayload")
+			out.Values[i] = graphql.MarshalString("DeleteResult")
 		case "success":
-			out.Values[i] = ec._DeleteUserPayload_success(ctx, field, obj)
+			out.Values[i] = ec._DeleteResult_success(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		case "error":
-			out.Values[i] = ec._DeleteUserPayload_error(ctx, field, obj)
+			out.Values[i] = ec._DeleteResult_error(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -6142,6 +6325,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "createTeam":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createTeam(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteTeam":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteTeam(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -6246,7 +6436,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "teams":
+		case "users":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -6255,7 +6445,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_teams(ctx, field)
+				res = ec._Query_users(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -6268,7 +6458,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "users":
+		case "teams":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -6277,7 +6467,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_users(ctx, field)
+				res = ec._Query_teams(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -7065,11 +7255,6 @@ func (ec *executionContext) marshalNConnection2ᚖgithubᚗcomᚋodigosᚑioᚋc
 	return ec._Connection(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalNCreateTeamInput2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCreateTeamInput(ctx context.Context, v any) (model.CreateTeamInput, error) {
-	res, err := ec.unmarshalInputCreateTeamInput(ctx, v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
 func (ec *executionContext) marshalNCreateTeamPayload2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCreateTeamPayload(ctx context.Context, sel ast.SelectionSet, v model.CreateTeamPayload) graphql.Marshaler {
 	return ec._CreateTeamPayload(ctx, sel, &v)
 }
@@ -7098,18 +7283,18 @@ func (ec *executionContext) marshalNCreateUserPayload2ᚖgithubᚗcomᚋodigos�
 	return ec._CreateUserPayload(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNDeleteUserPayload2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐDeleteUserPayload(ctx context.Context, sel ast.SelectionSet, v model.DeleteUserPayload) graphql.Marshaler {
-	return ec._DeleteUserPayload(ctx, sel, &v)
+func (ec *executionContext) marshalNDeleteResult2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐDeleteResult(ctx context.Context, sel ast.SelectionSet, v model.DeleteResult) graphql.Marshaler {
+	return ec._DeleteResult(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNDeleteUserPayload2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐDeleteUserPayload(ctx context.Context, sel ast.SelectionSet, v *model.DeleteUserPayload) graphql.Marshaler {
+func (ec *executionContext) marshalNDeleteResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐDeleteResult(ctx context.Context, sel ast.SelectionSet, v *model.DeleteResult) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
-	return ec._DeleteUserPayload(ctx, sel, v)
+	return ec._DeleteResult(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNJSON2map(ctx context.Context, v any) (map[string]any, error) {
@@ -7209,6 +7394,30 @@ func (ec *executionContext) marshalNString2ᚕstringᚄ(ctx context.Context, sel
 		if e == graphql.Null {
 			return graphql.Null
 		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) unmarshalNString2ᚕᚖstring(ctx context.Context, v any) ([]*string, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]*string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalOString2ᚖstring(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNString2ᚕᚖstring(ctx context.Context, sel ast.SelectionSet, v []*string) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalOString2ᚖstring(ctx, sel, v[i])
 	}
 
 	return ret

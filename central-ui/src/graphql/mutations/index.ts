@@ -5,6 +5,7 @@ export * from './destinations';
 export * from './instrumentation-rules';
 export * from './namespaces';
 export * from './sources';
+export * from './teams';
 export * from './tokens';
 export * from './auth';
 export * from './users';

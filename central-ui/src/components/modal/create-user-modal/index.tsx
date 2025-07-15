@@ -4,10 +4,11 @@ import { DropdownOption, Role } from '@/types';
 import { StatusType } from '@odigos/ui-kit/types';
 import { Modal } from '@odigos/ui-kit/components';
 import * as STRINGS from '@/utils/constants/strings';
+import { useGenericForm } from '@odigos/ui-kit/hooks';
 import { ModalContent } from './create-user-modal.styled';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { UserCreatedSuccessfully } from './user-created-successfully';
-import { CreateUserForm, CreateUserFormField } from './create-user-form';
+import { CreateUserForm, CreateUserFormData, CreateUserFormField } from './create-user-form';
 
 enum CreateUserModalState {
   Form = 'form',
@@ -26,34 +27,28 @@ interface CreateUserModalProps {
   onClose: () => void;
 }
 
-interface CreateUserFormData {
-  [CreateUserFormField.Email]: string;
-  [CreateUserFormField.Role]: DropdownOption<Role>;
-  [CreateUserFormField.Teams]: DropdownOption[];
-  [CreateUserFormField.ComputePlatforms]: DropdownOption[];
-}
+const INITIAL_FORM_DATA: CreateUserFormData = {
+  [CreateUserFormField.Email]: '',
+  [CreateUserFormField.Role]: roleOptions.find((opt) => opt.id === Role.VIEWER)!,
+  [CreateUserFormField.Teams]: [],
+  [CreateUserFormField.ComputePlatforms]: [],
+};
 
 export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose }) => {
   const { createUser, creating } = useUsersCRUD();
   const { addNotification } = useNotificationStore();
-  const [formData, setFormData] = useState<CreateUserFormData>({
-    [CreateUserFormField.Email]: '',
-    [CreateUserFormField.Role]: roleOptions.find((opt) => opt.id === Role.VIEWER)!,
-    [CreateUserFormField.Teams]: [],
-    [CreateUserFormField.ComputePlatforms]: [],
-  });
-  const [errors, setErrors] = useState<Partial<CreateUserFormData>>({});
+  const { formData, handleFormChange, formErrors, handleErrorChange, resetFormData } = useGenericForm(INITIAL_FORM_DATA);
   const [modalState, setModalState] = useState<CreateUserModalState>(CreateUserModalState.Form);
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
 
   const validateForm = (): boolean => {
-    const newErrors: Partial<CreateUserFormData> = {};
+    const newErrors: typeof formErrors = {};
     if (!formData[CreateUserFormField.Email]) {
       newErrors[CreateUserFormField.Email] = STRINGS.CREATE_USER_EMAIL_REQUIRED;
     } else if (!/\S+@\S+\.\S+/.test(formData[CreateUserFormField.Email])) {
       newErrors[CreateUserFormField.Email] = STRINGS.CREATE_USER_EMAIL_INVALID;
     }
-    setErrors(newErrors);
+    handleErrorChange(undefined, undefined, newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
@@ -61,15 +56,20 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClos
     e.preventDefault();
     if (!validateForm()) return;
     try {
-      const resp = await createUser({
+      const resData = await createUser({
         email: formData[CreateUserFormField.Email],
         role: formData[CreateUserFormField.Role].id as Role,
         password: undefined,
+        teams: formData[CreateUserFormField.Teams].map(({ id }) => id as string),
+        computePlatforms: formData[CreateUserFormField.ComputePlatforms].map(({ id }) => id as string),
       });
-      const password = resp?.data?.createUser?.generatedPassword;
-      if (password) {
-        setGeneratedPassword(password);
-        setModalState(CreateUserModalState.Success);
+
+      if (resData) {
+        const { generatedPassword } = resData.createUser;
+        if (generatedPassword) {
+          setGeneratedPassword(generatedPassword);
+          setModalState(CreateUserModalState.Success);
+        }
       }
     } catch {
       addNotification({
@@ -81,30 +81,23 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClos
   };
 
   const handleClose = () => {
-    setFormData({
-      [CreateUserFormField.Email]: '',
-      [CreateUserFormField.Role]: roleOptions.find((opt) => opt.id === Role.VIEWER)!,
-      [CreateUserFormField.Teams]: [],
-      [CreateUserFormField.ComputePlatforms]: [],
-    });
-    setErrors({});
+    resetFormData();
+    handleErrorChange(undefined, undefined, {});
     setModalState(CreateUserModalState.Form);
     setGeneratedPassword(null);
     onClose();
   };
 
   const handleInputChange = (field: CreateUserFormField, value: string | DropdownOption<Role> | DropdownOption[]) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: undefined }));
-    }
+    handleFormChange(field, value);
+    handleErrorChange(field, undefined);
   };
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} header={{ title: STRINGS.CREATE_USER_MODAL_TITLE }}>
       <ModalContent>
         {modalState === CreateUserModalState.Form ? (
-          <CreateUserForm formData={formData} errors={errors} creating={creating} onChange={handleInputChange} onSubmit={handleSubmit} />
+          <CreateUserForm formData={formData} errors={formErrors} creating={creating} onChange={handleInputChange} onSubmit={handleSubmit} />
         ) : (
           <UserCreatedSuccessfully email={formData[CreateUserFormField.Email]} password={generatedPassword ?? ''} onDone={handleClose} />
         )}

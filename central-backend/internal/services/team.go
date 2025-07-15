@@ -20,8 +20,8 @@ func NewTeamService(redisClient *redisclient.RedisClient, teamRepo TeamRepositor
 	}
 }
 
-func (s *TeamService) CreateTeam(ctx context.Context, input model.CreateTeamInput) (*model.CreateTeamPayload, error) {
-	if err := s.validateCreateTeamInput(input); err != nil {
+func (s *TeamService) CreateTeam(ctx context.Context, name string, description *string, users []*string, computePlatforms []*string) (*model.CreateTeamPayload, error) {
+	if err := s.validateCreateTeamInput(name, description); err != nil {
 		errorMsg := err.Error()
 		return &model.CreateTeamPayload{
 			Success: false,
@@ -29,7 +29,7 @@ func (s *TeamService) CreateTeam(ctx context.Context, input model.CreateTeamInpu
 		}, nil
 	}
 
-	exists, err := s.teamRepo.CheckTeamExists(ctx, input.Name)
+	exists, err := s.teamRepo.CheckTeamExists(ctx, name)
 	if err != nil {
 		errorMsg := "Failed to validate team name: " + err.Error()
 		return &model.CreateTeamPayload{
@@ -39,14 +39,14 @@ func (s *TeamService) CreateTeam(ctx context.Context, input model.CreateTeamInpu
 	}
 
 	if exists {
-		errorMsg := fmt.Sprintf("Team with name '%s' already exists", input.Name)
+		errorMsg := fmt.Sprintf("Team with name '%s' already exists", name)
 		return &model.CreateTeamPayload{
 			Success: false,
 			Error:   &errorMsg,
 		}, nil
 	}
 
-	createdTeam, err := s.teamRepo.CreateTeam(ctx, input)
+	createdTeam, err := s.teamRepo.CreateTeam(ctx, name, description, users, computePlatforms)
 	if err != nil {
 		errorMsg := "Failed to create team: " + err.Error()
 		return &model.CreateTeamPayload{
@@ -61,20 +61,20 @@ func (s *TeamService) CreateTeam(ctx context.Context, input model.CreateTeamInpu
 	}, nil
 }
 
-func (s *TeamService) validateCreateTeamInput(input model.CreateTeamInput) error {
-	if input.Name == "" {
+func (s *TeamService) validateCreateTeamInput(name string, description *string) error {
+	if name == "" {
 		return fmt.Errorf("team name is required")
 	}
 
-	if len(input.Name) < 2 {
+	if len(name) < 2 {
 		return fmt.Errorf("team name must be at least 2 characters long")
 	}
 
-	if len(input.Name) > 50 {
+	if len(name) > 50 {
 		return fmt.Errorf("team name must be at most 50 characters long")
 	}
 
-	if input.Description != nil && len(*input.Description) > 500 {
+	if description != nil && len(*description) > 500 {
 		return fmt.Errorf("team description must be at most 500 characters long")
 	}
 
@@ -92,6 +92,16 @@ func (s *TeamService) AssignTeamsToUser(ctx context.Context, input model.AssignT
 			Success: false,
 			Error:   &errorMsg,
 		}, nil
+	}
+
+	for _, teamID := range input.TeamIDs {
+		exists, err := s.teamRepo.CheckTeamExists(ctx, teamID)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			return nil, fmt.Errorf("team %s does not exist", teamID)
+		}
 	}
 
 	err := s.teamRepo.AssignTeamsToUser(ctx, input.UserID, input.TeamIDs)
@@ -124,4 +134,8 @@ func (s *TeamService) validateAssignTeamsInput(input model.AssignTeamsToUserInpu
 	}
 
 	return nil
+}
+
+func (s *TeamService) DeleteTeam(ctx context.Context, teamID string) (*DeleteTeamResult, error) {
+	return s.teamRepo.DeleteTeam(ctx, teamID)
 }

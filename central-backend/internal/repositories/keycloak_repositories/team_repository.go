@@ -26,18 +26,29 @@ func NewTeamRepository(redisClient *redisclient.RedisClient, credentialsService 
 	}
 }
 
-func (k *TeamRepository) CreateTeam(ctx context.Context, input model.CreateTeamInput) (*model.Team, error) {
+func (k *TeamRepository) CreateTeam(ctx context.Context, name string, description *string, users []*string, computePlatforms []*string) (*model.Team, error) {
 	adminToken, err := k.adminService.GetAdminToken(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get admin token: %w", err)
 	}
 
-	createdTeam, err := keycloak.CreateTeam(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, input)
+	createdTeam, err := keycloak.CreateTeam(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, name, description)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create team in Keycloak: %w", err)
 	}
 
 	logger.Log.Info("Team created successfully", "teamID", createdTeam.ID, "teamName", createdTeam.Name)
+
+	for _, uid := range users {
+		err = keycloak.AssignTeamsToUser(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, *uid, []string{createdTeam.ID})
+		if err != nil {
+			return nil, fmt.Errorf("failed to assign team to user: %w", err)
+		}
+	}
+
+	// TODO: assign computePlatforms to team
+	// for _, cpid := range computePlatforms {
+	// }
 
 	return createdTeam, nil
 }
@@ -70,7 +81,7 @@ func (k *TeamRepository) AssignTeamsToUser(ctx context.Context, userID string, t
 	return nil
 }
 
-func (k *TeamRepository) CheckTeamExists(ctx context.Context, teamName string) (bool, error) {
+func (k *TeamRepository) CheckTeamExists(ctx context.Context, teamNameOrTeamID string) (bool, error) {
 	adminToken, err := k.adminService.GetAdminToken(ctx)
 	if err != nil {
 		return false, err
@@ -82,10 +93,24 @@ func (k *TeamRepository) CheckTeamExists(ctx context.Context, teamName string) (
 	}
 
 	for _, team := range teams {
-		if team.Name == teamName {
+		if team.Name == teamNameOrTeamID || team.ID == teamNameOrTeamID {
 			return true, nil
 		}
 	}
 
 	return false, nil
+}
+
+func (k *TeamRepository) DeleteTeam(ctx context.Context, teamID string) (*services.DeleteTeamResult, error) {
+	adminToken, err := k.adminService.GetAdminToken(ctx)
+	if err != nil {
+		return &services.DeleteTeamResult{Success: false, Error: err.Error()}, nil
+	}
+
+	err = keycloak.DeleteTeam(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, teamID)
+	if err != nil {
+		return &services.DeleteTeamResult{Success: false, Error: err.Error()}, nil
+	}
+
+	return &services.DeleteTeamResult{Success: true, Error: ""}, nil
 }

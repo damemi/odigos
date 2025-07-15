@@ -22,22 +22,6 @@ func NewUserService(redisClient *redisclient.RedisClient, userRepo UserRepositor
 	}
 }
 
-type CreateUserRequest struct {
-	Email    string
-	Password *string
-	Role     model.Role
-}
-
-type CreateUserResult struct {
-	Success           bool
-	GeneratedPassword *string
-}
-
-type DeleteUserResult struct {
-	Success bool
-	Error   string
-}
-
 func (s *UserService) CreateUser(ctx context.Context, req CreateUserRequest) (*CreateUserResult, error) {
 	return s.userRepo.CreateUser(ctx, req)
 }

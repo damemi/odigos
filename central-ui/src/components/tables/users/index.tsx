@@ -6,11 +6,7 @@ import Theme from '@odigos/ui-kit/theme';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { EditIcon, MinusCircledIcon, UserIcon } from '@odigos/ui-kit/icons';
-import { DeleteWarning, FlexRow, IconButton, IconWrapped, InteractiveTable, RowCell, Tag } from '@odigos/ui-kit/components';
-
-interface UsersTableProps {
-  users: User[];
-}
+import { CenterThis, DeleteWarning, FlexRow, IconButton, IconWrapped, InteractiveTable, NoDataFound, RowCell, Tag } from '@odigos/ui-kit/components';
 
 export enum UserTableColumn {
   Icon = 'icon',
@@ -21,10 +17,10 @@ export enum UserTableColumn {
   Actions = 'actions',
 }
 
-export const UsersTable: React.FC<UsersTableProps> = ({ users }) => {
+export const UsersTable: React.FC = () => {
   const theme = Theme.useTheme();
-  const { deleteUser, deleting } = useUsersCRUD();
   const { addNotification } = useNotificationStore();
+  const { users, deleteUser, deleting } = useUsersCRUD();
   const [deleteOpenForUser, setDeleteOpenForUser] = useState<User | null>(null);
 
   const handleDeleteUser = useCallback(
@@ -34,8 +30,8 @@ export const UsersTable: React.FC<UsersTableProps> = ({ users }) => {
 
         const result = await deleteUser(userID);
 
-        if (!result.success) {
-          const errorMessage = result.error || 'Failed to delete user';
+        if (!result?.success) {
+          const errorMessage = result?.error || 'Failed to delete user';
           addNotification({ type: StatusType.Error, title: Crud.Delete, description: errorMessage });
         }
       } catch (error) {
@@ -100,6 +96,12 @@ export const UsersTable: React.FC<UsersTableProps> = ({ users }) => {
   return (
     <>
       <InteractiveTable columns={columns} rows={rows} />
+
+      {!rows.length && (
+        <CenterThis style={{ marginTop: '2rem' }}>
+          <NoDataFound />
+        </CenterThis>
+      )}
 
       <DeleteWarning
         isOpen={deleteOpenForUser !== null}

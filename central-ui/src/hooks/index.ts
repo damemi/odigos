@@ -9,6 +9,7 @@ export * from './metrics';
 export * from './namespaces';
 export * from './proxy';
 export * from './sources';
+export * from './teams';
 export * from './tokens';
 export * from './auth';
 export * from './users';

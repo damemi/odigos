@@ -9,8 +9,8 @@ import { ConnectionsIcon } from '@odigos/ui-kit/icons';
 import { EntityTypes, OtherEntityTypes } from '@odigos/ui-kit/types';
 import { OverviewHeader, OverviewModalsAndDrawers } from '@/components';
 import { useDataStreamsCRUD, useProxyID, useTokenTracker } from '@/hooks';
+import { DataFlowActionsMenu, NavIconIds, SideNav } from '@odigos/ui-kit/containers';
 import { ErrorBoundary, FlexColumn, FlexRow, type NavIcon } from '@odigos/ui-kit/components';
-import { DataFlowActionsMenu, NavIconIds, SideNav, ToastList } from '@odigos/ui-kit/containers';
 
 const PageContent = styled(FlexColumn)`
   width: 100%;
@@ -119,7 +119,6 @@ function OverviewLayout({ children }: PropsWithChildren) {
         </ContentWithActions>
 
         <OverviewModalsAndDrawers />
-        <ToastList />
       </PageContent>
     </ErrorBoundary>
   );

@@ -32,7 +32,7 @@ type KeycloakGroupUpdate struct {
 	Attributes map[string][]string `json:"attributes,omitempty"`
 }
 
-func CreateTeam(token, keycloakHost, realm string, team model.CreateTeamInput) (*model.Team, error) {
+func CreateTeam(token, keycloakHost, realm string, name string, description *string) (*model.Team, error) {
 	url := fmt.Sprintf("%s/admin/realms/%s/groups", keycloakHost, realm)
 
 	now := time.Now().Format(time.RFC3339)
@@ -41,12 +41,12 @@ func CreateTeam(token, keycloakHost, realm string, team model.CreateTeamInput) (
 		consts.TeamAttributeUpdatedAt: {now},
 	}
 
-	if team.Description != nil && *team.Description != "" {
-		attributes[consts.TeamAttributeDescription] = []string{*team.Description}
+	if description != nil && *description != "" {
+		attributes[consts.TeamAttributeDescription] = []string{*description}
 	}
 
 	group := KeycloakGroupCreate{
-		Name:       team.Name,
+		Name:       name,
 		Attributes: attributes,
 	}
 
@@ -81,8 +81,8 @@ func CreateTeam(token, keycloakHost, realm string, team model.CreateTeamInput) (
 
 	createdTeam := &model.Team{
 		ID:               teamID,
-		Name:             team.Name,
-		Description:      team.Description,
+		Name:             name,
+		Description:      description,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 		Users:            []*model.User{},            // Empty array for new teams
@@ -119,9 +119,48 @@ func ListTeams(token, keycloakHost, realm string) ([]*model.Team, error) {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
+	var users []*model.User
+	userService := NewUserService()
+	for _, group := range groups {
+		userList, err := userService.ListUsersByTeamID(token, group.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list users by team ID: %w", err)
+		}
+
+		for _, user := range userList {
+			// Safely extract values with nil checks
+			id, _ := user["id"].(string)
+			email, _ := user["email"].(string)
+			username, _ := user["username"].(string)
+			role, _ := user["role"].(string)
+
+			// Skip users with missing required fields
+			if id == "" || email == "" || username == "" {
+				continue
+			}
+
+			users = append(users, &model.User{
+				ID:       id,
+				Email:    email,
+				Username: username,
+				Role:     model.Role(role),
+				Teams: []*model.Team{
+					{
+						ID:   group.ID,
+						Name: group.Name,
+					},
+				},
+			})
+		}
+	}
+
+	// For now, return empty arrays for computePlatforms
+	// In a real implementation, you would fetch these from Keycloak or other services
+	var computePlatforms []*model.ComputePlatform
+
 	var teams []*model.Team
 	for _, group := range groups {
-		team, err := mapKeycloakGroupToTeam(group)
+		team, err := mapKeycloakGroupToTeam(group, users, computePlatforms)
 		if err != nil {
 			continue
 		}
@@ -153,7 +192,7 @@ func getTeamIDFromResponse(resp *http.Response) (string, error) {
 	return location[lastSlashIndex+1:], nil
 }
 
-func mapKeycloakGroupToTeam(group KeycloakGroup) (*model.Team, error) {
+func mapKeycloakGroupToTeam(group KeycloakGroup, users []*model.User, computePlatforms []*model.ComputePlatform) (*model.Team, error) {
 	if group.ID == "" {
 		return nil, fmt.Errorf("invalid team ID")
 	}
@@ -177,11 +216,6 @@ func mapKeycloakGroupToTeam(group KeycloakGroup) (*model.Team, error) {
 			description = &descValues[0]
 		}
 	}
-
-	// For now, return empty arrays for users and computePlatforms
-	// In a real implementation, you would fetch these from Keycloak or other services
-	users := []*model.User{}
-	computePlatforms := []*model.ComputePlatform{}
 
 	return &model.Team{
 		ID:               group.ID,
@@ -279,7 +313,7 @@ func GetUserTeams(token, keycloakHost, realm, userID string) ([]*model.Team, err
 
 	var teams []*model.Team
 	for _, group := range groups {
-		team, err := mapKeycloakGroupToTeam(group)
+		team, err := mapKeycloakGroupToTeam(group, []*model.User{}, []*model.ComputePlatform{})
 		if err != nil {
 			continue
 		}
@@ -287,4 +321,29 @@ func GetUserTeams(token, keycloakHost, realm, userID string) ([]*model.Team, err
 	}
 
 	return teams, nil
+}
+
+func DeleteTeam(token, keycloakHost, realm, teamID string) error {
+	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", keycloakHost, realm, teamID)
+
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to delete team: status %d, response: %s", resp.StatusCode, string(responseBody))
+	}
+
+	return nil
 }

@@ -6,6 +6,34 @@ import (
 	"github.com/odigos-io/central-backend/graph/model"
 )
 
+type AuthResult struct {
+	AccessToken string
+	UserData    map[string]any
+}
+
+
+type CreateUserRequest struct {
+	Email    string
+	Password *string
+	Role     model.Role
+}
+
+type CreateUserResult struct {
+	Success           bool
+	UserID            string
+	GeneratedPassword *string
+}
+
+type DeleteUserResult struct {
+	Success bool
+	Error   string
+}
+
+type DeleteTeamResult struct {
+	Success bool
+	Error   string
+}
+
 type UserRepository interface {
 	CreateUser(ctx context.Context, req CreateUserRequest) (*CreateUserResult, error)
 	GetUsers(ctx context.Context) ([]*model.User, error)
@@ -25,13 +53,9 @@ type AuthRepository interface {
 }
 
 type TeamRepository interface {
-	CreateTeam(ctx context.Context, input model.CreateTeamInput) (*model.Team, error)
+	CreateTeam(ctx context.Context, name string, description *string, users []*string, computePlatforms []*string) (*model.Team, error)
 	GetTeams(ctx context.Context) ([]*model.Team, error)
 	AssignTeamsToUser(ctx context.Context, userID string, teamIDs []string) error
 	CheckTeamExists(ctx context.Context, teamName string) (bool, error)
-}
-
-type AuthResult struct {
-	AccessToken string
-	UserData    map[string]any
+	DeleteTeam(ctx context.Context, teamID string) (*DeleteTeamResult, error)
 }

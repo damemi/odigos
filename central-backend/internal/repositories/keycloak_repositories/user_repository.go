@@ -52,8 +52,14 @@ func (k *UserRepository) CreateUser(ctx context.Context, req services.CreateUser
 		return nil, fmt.Errorf("failed to assign role: %w", err)
 	}
 
+	user, err := k.GetUserByEmail(ctx, req.Email)
+	if err != nil {
+		return nil, err
+	}
+
 	return &services.CreateUserResult{
 		Success:           true,
+		UserID:            user.ID,
 		GeneratedPassword: generatedPassword,
 	}, nil
 }

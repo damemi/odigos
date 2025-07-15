@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { roleOptions } from './index';
+import { useTeamsCRUD } from '@/hooks';
 import { DropdownOption, Role } from '@/types';
 import { StatusType } from '@odigos/ui-kit/types';
 import * as STRINGS from '@/utils/constants/strings';
@@ -13,10 +14,7 @@ export enum CreateUserFormField {
   ComputePlatforms = 'computePlatforms',
 }
 
-const teamOptions: DropdownOption[] = [];
-const computePlatformOptions: DropdownOption[] = [];
-
-interface CreateUserFormData {
+export interface CreateUserFormData {
   [CreateUserFormField.Email]: string;
   [CreateUserFormField.Role]: DropdownOption<Role>;
   [CreateUserFormField.Teams]: DropdownOption[];
@@ -25,13 +23,18 @@ interface CreateUserFormData {
 
 interface CreateUserFormProps {
   formData: CreateUserFormData;
-  errors: Partial<CreateUserFormData>;
+  errors: Partial<Record<keyof CreateUserFormData, string>>;
   creating: boolean;
   onChange: (field: CreateUserFormField, value: string | DropdownOption<Role> | DropdownOption[]) => void;
   onSubmit: (e: React.FormEvent) => void;
 }
 
 export const CreateUserForm: React.FC<CreateUserFormProps> = ({ formData, errors, creating, onChange, onSubmit }) => {
+  const { teams } = useTeamsCRUD();
+
+  const teamOptions: DropdownOption[] = useMemo(() => teams.map((team) => ({ id: team.id, value: team.name })), [teams]);
+  const platformOptions: DropdownOption[] = [];
+
   const isSubmitDisabled = !formData[CreateUserFormField.Email] || creating;
 
   return (
@@ -65,14 +68,33 @@ export const CreateUserForm: React.FC<CreateUserFormProps> = ({ formData, errors
       </Row>
       <Row>
         <Half>
-          <Dropdown title={STRINGS.TEAMS_LABEL} value={formData[CreateUserFormField.Teams]} onSelect={() => {}} options={teamOptions} placeholder={STRINGS.TEAMS_PLACEHOLDER} isMulti />
+          <Dropdown
+            title={STRINGS.TEAMS_LABEL}
+            value={formData[CreateUserFormField.Teams]}
+            onSelect={(value) => onChange(CreateUserFormField.Teams, formData[CreateUserFormField.Teams].concat([value]))}
+            onDeselect={(value) =>
+              onChange(
+                CreateUserFormField.Teams,
+                formData[CreateUserFormField.Teams].filter(({ id }) => id !== value.id),
+              )
+            }
+            options={teamOptions}
+            placeholder={STRINGS.TEAMS_PLACEHOLDER}
+            isMulti
+          />
         </Half>
         <Half>
           <Dropdown
             title={STRINGS.COMPUTE_PLATFORM_LABEL}
             value={formData[CreateUserFormField.ComputePlatforms]}
-            onSelect={() => {}}
-            options={computePlatformOptions}
+            onSelect={(value) => onChange(CreateUserFormField.ComputePlatforms, formData[CreateUserFormField.ComputePlatforms].concat([value]))}
+            onDeselect={(value) =>
+              onChange(
+                CreateUserFormField.ComputePlatforms,
+                formData[CreateUserFormField.ComputePlatforms].filter(({ id }) => id !== value.id),
+              )
+            }
+            options={platformOptions}
             placeholder={STRINGS.COMPUTE_PLATFORM_PLACEHOLDER}
             isMulti
           />
@@ -80,7 +102,7 @@ export const CreateUserForm: React.FC<CreateUserFormProps> = ({ formData, errors
       </Row>
       <ButtonContainer>
         <CreateButton type='submit' disabled={isSubmitDisabled}>
-          {creating ? STRINGS.CREATE_USER_CREATING : STRINGS.CREATE_USER_SUBMIT}
+          {creating ? STRINGS.CREATING : STRINGS.CREATE_USER_SUBMIT}
         </CreateButton>
       </ButtonContainer>
     </Form>

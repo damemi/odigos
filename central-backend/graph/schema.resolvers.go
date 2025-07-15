@@ -21,15 +21,24 @@ func (r *mutationResolver) SignIn(ctx context.Context, email string, password st
 }
 
 // CreateUser is the resolver for the createUser field.
-func (r *mutationResolver) CreateUser(ctx context.Context, email string, password *string, role model.Role) (*model.CreateUserPayload, error) {
+func (r *mutationResolver) CreateUser(ctx context.Context, email string, password *string, role model.Role, teams []*string, computePlatforms []*string) (*model.CreateUserPayload, error) {
 	result, err := r.UserService.CreateUser(ctx, services.CreateUserRequest{
 		Email:    email,
 		Password: password,
 		Role:     role,
 	})
-
 	if err != nil {
 		return nil, err
+	}
+
+	for _, team := range teams {
+		_, err := r.TeamService.AssignTeamsToUser(ctx, model.AssignTeamsToUserInput{
+			UserID:  result.UserID,
+			TeamIDs: []string{*team},
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &model.CreateUserPayload{
@@ -39,9 +48,9 @@ func (r *mutationResolver) CreateUser(ctx context.Context, email string, passwor
 }
 
 // DeleteUser is the resolver for the deleteUser field.
-func (r *mutationResolver) DeleteUser(ctx context.Context, userID string) (*model.DeleteUserPayload, error) {
+func (r *mutationResolver) DeleteUser(ctx context.Context, userID string) (*model.DeleteResult, error) {
 	result, _ := r.UserService.DeleteUser(ctx, userID)
-	return &model.DeleteUserPayload{Success: result.Success, Error: &result.Error}, nil
+	return &model.DeleteResult{Success: result.Success, Error: &result.Error}, nil
 }
 
 // SetInitialPassword is the resolver for the setInitialPassword field.
@@ -50,8 +59,14 @@ func (r *mutationResolver) SetInitialPassword(ctx context.Context, email string,
 }
 
 // CreateTeam is the resolver for the createTeam field.
-func (r *mutationResolver) CreateTeam(ctx context.Context, input model.CreateTeamInput) (*model.CreateTeamPayload, error) {
-	return r.TeamService.CreateTeam(ctx, input)
+func (r *mutationResolver) CreateTeam(ctx context.Context, name string, description *string, users []*string, computePlatforms []*string) (*model.CreateTeamPayload, error) {
+	return r.TeamService.CreateTeam(ctx, name, description, users, computePlatforms)
+}
+
+// DeleteTeam is the resolver for the deleteTeam field.
+func (r *mutationResolver) DeleteTeam(ctx context.Context, teamID string) (*model.DeleteResult, error) {
+	result, _ := r.TeamService.DeleteTeam(ctx, teamID)
+	return &model.DeleteResult{Success: result.Success, Error: &result.Error}, nil
 }
 
 // AssignTeamsToUser is the resolver for the assignTeamsToUser field.
@@ -121,14 +136,14 @@ func (r *queryResolver) RemoteFetch(ctx context.Context, proxyID string, query s
 	}
 }
 
-// Teams is the resolver for the teams field.
-func (r *queryResolver) Teams(ctx context.Context) ([]*model.Team, error) {
-	return r.TeamService.GetTeams(ctx)
-}
-
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
 	return r.UserService.GetUsers(ctx)
+}
+
+// Teams is the resolver for the teams field.
+func (r *queryResolver) Teams(ctx context.Context) ([]*model.Team, error) {
+	return r.TeamService.GetTeams(ctx)
 }
 
 // SystemConfig is the resolver for the systemConfig field.

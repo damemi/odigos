@@ -653,3 +653,28 @@ func (u *UserService) DeleteUserByID(token, userID string) error {
 	}
 	return nil
 }
+
+func (u *UserService) ListUsersByTeamID(token, teamID string) (UserList, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s/members", u.host, u.realm, teamID)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get users by team ID: status %d, response: %s", resp.StatusCode, string(responseBody))
+	}
+	var userList UserList
+	if err := json.NewDecoder(resp.Body).Decode(&userList); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return userList, nil
+}

@@ -42,11 +42,6 @@ type Connection struct {
 	Name    string `json:"name"`
 }
 
-type CreateTeamInput struct {
-	Name        string  `json:"name"`
-	Description *string `json:"description,omitempty"`
-}
-
 type CreateTeamPayload struct {
 	Success bool    `json:"success"`
 	Team    *Team   `json:"team,omitempty"`
@@ -58,7 +53,7 @@ type CreateUserPayload struct {
 	GeneratedPassword *string `json:"generatedPassword,omitempty"`
 }
 
-type DeleteUserPayload struct {
+type DeleteResult struct {
 	Success bool    `json:"success"`
 	Error   *string `json:"error,omitempty"`
 }

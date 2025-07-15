@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import client from '@/lib/apollo-client';
 import { ApolloProvider } from '@apollo/client';
 import { useDarkMode } from '@odigos/ui-kit/store';
+import { ToastList } from '@odigos/ui-kit/containers';
 
 const ThemeProvider = dynamic(() => import('@/lib/theme-provider'), { ssr: false });
 
@@ -30,6 +31,7 @@ function RootLayout({ children }: PropsWithChildren) {
         }}
       >
         <ThemeProvider>
+          <ToastList />
           <ApolloProvider client={client}>{children}</ApolloProvider>
         </ThemeProvider>
       </body>
