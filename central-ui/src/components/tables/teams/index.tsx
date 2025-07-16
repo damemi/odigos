@@ -21,13 +21,14 @@ export const TeamsTable: React.FC = () => {
   const theme = Theme.useTheme();
   const { addNotification } = useNotificationStore();
   const { teams, deleteTeam, deleting } = useTeamsCRUD();
+
+  const [_, setEditOpenForTeam] = useState<Team | null>(null);
   const [deleteOpenForTeam, setDeleteOpenForTeam] = useState<Team | null>(null);
 
   const handleDeleteTeam = useCallback(
     async (teamID: string) => {
       try {
         if (deleting) return;
-
         const result = await deleteTeam(teamID);
 
         if (!result?.success) {
@@ -54,6 +55,7 @@ export const TeamsTable: React.FC = () => {
   const rows = useMemo(
     () =>
       teams.map((team) => ({
+        onClick: () => setEditOpenForTeam(team),
         cells: [
           {
             columnKey: TeamsTableColumn.Icon,
@@ -65,11 +67,11 @@ export const TeamsTable: React.FC = () => {
           },
           {
             columnKey: TeamsTableColumn.Members,
-            value: team.users.length > 0 ? `${team.users.length} ${UTILS.MEMBER}${team.users.length > 1 ? 's' : ''}` : UTILS.DASH,
+            value: UTILS.MEMBERS_COUNT(team.users?.length || 0),
           },
           {
             columnKey: TeamsTableColumn.Platforms,
-            value: team.computePlatforms.length > 0 ? `${team.computePlatforms.length} ${UTILS.PLATFORM_LABEL}${team.computePlatforms.length > 1 ? 's' : ''}` : UTILS.DASH,
+            value: UTILS.PLATFORMS_COUNT(team.computePlatforms?.length || 0),
           },
           {
             columnKey: TeamsTableColumn.Description,
@@ -79,7 +81,7 @@ export const TeamsTable: React.FC = () => {
             columnKey: TeamsTableColumn.Actions,
             component: () => (
               <FlexRow>
-                <IconButton onClick={() => alert('TODO')} tooltip='Edit team'>
+                <IconButton onClick={() => setEditOpenForTeam(team)} tooltip='Edit team'>
                   <EditIcon />
                 </IconButton>
                 <IconButton onClick={() => setDeleteOpenForTeam(team)} tooltip='Delete team'>
@@ -96,7 +98,6 @@ export const TeamsTable: React.FC = () => {
   return (
     <>
       <InteractiveTable columns={columns} rows={rows} />
-
       {!rows.length && (
         <CenterThis style={{ marginTop: '2rem' }}>
           <NoDataFound />

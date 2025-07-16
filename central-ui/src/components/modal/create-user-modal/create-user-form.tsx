@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { roleOptions } from './index';
+import { ROLE_OPTIONS } from '@/utils';
 import { useTeamsCRUD } from '@/hooks';
 import { DropdownOption, Role } from '@/types';
 import { StatusType } from '@odigos/ui-kit/types';
@@ -60,7 +60,7 @@ export const CreateUserForm: React.FC<CreateUserFormProps> = ({ formData, errors
             title={STRINGS.CREATE_USER_ROLE_LABEL + ' *'}
             value={formData[CreateUserFormField.Role]}
             onSelect={(option) => onChange(CreateUserFormField.Role, option as DropdownOption<Role>)}
-            options={roleOptions}
+            options={ROLE_OPTIONS}
             placeholder={STRINGS.CREATE_USER_ROLE_LABEL}
             required
           />

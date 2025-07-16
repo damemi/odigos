@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ROLE_OPTIONS } from '@/utils';
 import { useUsersCRUD } from '@/hooks';
 import { DropdownOption, Role } from '@/types';
 import { StatusType } from '@odigos/ui-kit/types';
@@ -15,13 +16,6 @@ enum CreateUserModalState {
   Success = 'success',
 }
 
-export const roleOptions: DropdownOption<Role>[] = [
-  { id: Role.OWNER, value: 'OWNER' },
-  { id: Role.ADMIN, value: 'ADMIN' },
-  { id: Role.MAINTAINER, value: 'MAINTAINER' },
-  { id: Role.VIEWER, value: 'VIEWER' },
-];
-
 interface CreateUserModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -29,7 +23,7 @@ interface CreateUserModalProps {
 
 const INITIAL_FORM_DATA: CreateUserFormData = {
   [CreateUserFormField.Email]: '',
-  [CreateUserFormField.Role]: roleOptions.find((opt) => opt.id === Role.VIEWER)!,
+  [CreateUserFormField.Role]: ROLE_OPTIONS.find((opt) => opt.id === Role.VIEWER)!,
   [CreateUserFormField.Teams]: [],
   [CreateUserFormField.ComputePlatforms]: [],
 };

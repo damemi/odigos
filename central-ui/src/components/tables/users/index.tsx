@@ -3,6 +3,7 @@ import * as UTILS from '@/utils';
 import type { User } from '@/types';
 import { useUsersCRUD } from '@/hooks';
 import Theme from '@odigos/ui-kit/theme';
+import { EditUserDrawer } from '@/components/drawer';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { EditIcon, MinusCircledIcon, UserIcon } from '@odigos/ui-kit/icons';
@@ -21,13 +22,14 @@ export const UsersTable: React.FC = () => {
   const theme = Theme.useTheme();
   const { addNotification } = useNotificationStore();
   const { users, deleteUser, deleting } = useUsersCRUD();
+
+  const [editOpenForUser, setEditOpenForUser] = useState<User | null>(null);
   const [deleteOpenForUser, setDeleteOpenForUser] = useState<User | null>(null);
 
   const handleDeleteUser = useCallback(
     async (userID: string) => {
       try {
         if (deleting) return;
-
         const result = await deleteUser(userID);
 
         if (!result?.success) {
@@ -54,6 +56,7 @@ export const UsersTable: React.FC = () => {
   const rows = useMemo(
     () =>
       users.map((user) => ({
+        onClick: () => setEditOpenForUser(user),
         cells: [
           {
             columnKey: UserTableColumn.Icon,
@@ -69,17 +72,17 @@ export const UsersTable: React.FC = () => {
           },
           {
             columnKey: UserTableColumn.Teams,
-            value: user.teams.length > 0 ? `${user.teams.length} ${UTILS.TEAM_LABEL}${user.teams.length > 1 ? 's' : ''}` : UTILS.DASH,
+            value: UTILS.TEAMS_COUNT(user.teams?.length || 0),
           },
           {
             columnKey: UserTableColumn.Platforms,
-            value: user.computePlatforms.length > 0 ? `${user.computePlatforms.length} ${UTILS.PLATFORM_LABEL}${user.computePlatforms.length > 1 ? 's' : ''}` : UTILS.DASH,
+            value: UTILS.PLATFORMS_COUNT(user.computePlatforms?.length || 0),
           },
           {
             columnKey: UserTableColumn.Actions,
             component: () => (
               <FlexRow>
-                <IconButton onClick={() => alert('TODO')} tooltip='Edit user'>
+                <IconButton onClick={() => setEditOpenForUser(user)} tooltip='Edit user'>
                   <EditIcon />
                 </IconButton>
                 <IconButton onClick={() => setDeleteOpenForUser(user)} tooltip='Delete user'>
@@ -96,11 +99,29 @@ export const UsersTable: React.FC = () => {
   return (
     <>
       <InteractiveTable columns={columns} rows={rows} />
-
       {!rows.length && (
         <CenterThis style={{ marginTop: '2rem' }}>
           <NoDataFound />
         </CenterThis>
+      )}
+
+      {editOpenForUser && (
+        <EditUserDrawer
+          user={editOpenForUser}
+          onClose={() => {
+            setEditOpenForUser(null);
+          }}
+          onSave={() => {
+            alert('TODO');
+          }}
+          onDelete={() => {
+            setDeleteOpenForUser(editOpenForUser);
+            setEditOpenForUser(null);
+          }}
+          onResetPassword={() => {
+            alert('TODO');
+          }}
+        />
       )}
 
       <DeleteWarning

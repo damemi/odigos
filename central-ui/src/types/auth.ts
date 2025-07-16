@@ -15,19 +15,19 @@ export interface User {
   email: string;
   username: string;
   role: Role;
-  needsPasswordChange: boolean;
-  teams: Team[];
-  computePlatforms: ComputePlatform[];
+  needsPasswordChange?: boolean;
+  teams?: Team[];
+  computePlatforms?: ComputePlatform[];
 }
 
 export interface Team {
   id: string;
   name: string;
   description?: string;
-  createdAt: string;
-  updatedAt: string;
-  users: User[];
-  computePlatforms: ComputePlatform[];
+  createdAt?: string;
+  updatedAt?: string;
+  users?: User[];
+  computePlatforms?: ComputePlatform[];
 }
 
 export interface ComputePlatform {

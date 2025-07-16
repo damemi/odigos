@@ -21,6 +21,7 @@ export const CREATE_USER_BUTTON = 'CREATE USER +';
 export const CREATE_TEAM_BUTTON = 'CREATE TEAM +';
 export const ROLE_COLUMN = 'Role';
 export const ACTIONS_COLUMN = 'Actions';
+export const USER_LABEL = 'User';
 export const TEAM_LABEL = 'Team';
 export const PLATFORM_LABEL = 'Platform';
 export const DASH = '—';
@@ -95,3 +96,8 @@ export const CREATE_TEAM_FORM_DESCRIPTION_PLACEHOLDER = 'Add any additional note
 
 // Access Management
 export const ACCESS_MANAGEMENT_TITLE = 'Access Management';
+
+export const USERS_COUNT = (count: number) => `${count} ${USER_LABEL}${count === 1 ? '' : 's'}`;
+export const MEMBERS_COUNT = (count: number) => `${count} ${MEMBER}${count === 1 ? '' : 's'}`;
+export const TEAMS_COUNT = (count: number) => `${count} ${TEAM_LABEL}${count === 1 ? '' : 's'}`;
+export const PLATFORMS_COUNT = (count: number) => `${count} ${PLATFORM_LABEL}${count === 1 ? '' : 's'}`;
