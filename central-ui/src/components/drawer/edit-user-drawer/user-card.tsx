@@ -1,7 +1,7 @@
 import React, { type FC } from 'react';
 import type { User } from '@/types';
 import { DataCard, Dropdown, Text } from '@odigos/ui-kit/components';
-import { DataCardCellStretch, DataCardCellTitle, DataCardContent, DataCardContentCell } from './styled';
+import { DataCardCellStretch, DataCardCellTitle, DataCardContent, DataCardContentCell } from '../cards/styled';
 import { COMPUTE_PLATFORMS_TAB, CREATE_USER_ROLE_LABEL, PLATFORMS_COUNT, ROLE_COLUMN, ROLE_OPTIONS, TEAMS_COUNT, TEAMS_TAB } from '@/utils';
 
 interface UserCardProps {

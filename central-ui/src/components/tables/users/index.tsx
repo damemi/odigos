@@ -3,7 +3,7 @@ import * as UTILS from '@/utils';
 import type { User } from '@/types';
 import { useUsersCRUD } from '@/hooks';
 import Theme from '@odigos/ui-kit/theme';
-import { EditUserDrawer } from '@/components/drawer';
+import { EditUserDrawer } from '@/components';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { EditIcon, MinusCircledIcon, UserIcon } from '@odigos/ui-kit/icons';

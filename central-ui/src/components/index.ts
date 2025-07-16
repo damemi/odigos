@@ -1,4 +1,5 @@
 export * from './auth';
-export * from './tables';
+export * from './drawer';
 export * from './lib-imports';
 export * from './modal';
+export * from './tables';

@@ -3,6 +3,7 @@ import * as UTILS from '@/utils';
 import type { Team } from '@/types';
 import { useTeamsCRUD } from '@/hooks';
 import Theme from '@odigos/ui-kit/theme';
+import { EditTeamDrawer } from '@/components';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { EditIcon, MinusCircledIcon, UserIcon } from '@odigos/ui-kit/icons';
@@ -22,7 +23,7 @@ export const TeamsTable: React.FC = () => {
   const { addNotification } = useNotificationStore();
   const { teams, deleteTeam, deleting } = useTeamsCRUD();
 
-  const [_, setEditOpenForTeam] = useState<Team | null>(null);
+  const [editOpenForTeam, setEditOpenForTeam] = useState<Team | null>(null);
   const [deleteOpenForTeam, setDeleteOpenForTeam] = useState<Team | null>(null);
 
   const handleDeleteTeam = useCallback(
@@ -102,6 +103,22 @@ export const TeamsTable: React.FC = () => {
         <CenterThis style={{ marginTop: '2rem' }}>
           <NoDataFound />
         </CenterThis>
+      )}
+
+      {editOpenForTeam && (
+        <EditTeamDrawer
+          team={editOpenForTeam}
+          onClose={() => {
+            setEditOpenForTeam(null);
+          }}
+          onSave={() => {
+            alert('TODO');
+          }}
+          onDelete={() => {
+            setDeleteOpenForTeam(editOpenForTeam);
+            setEditOpenForTeam(null);
+          }}
+        />
       )}
 
       <DeleteWarning

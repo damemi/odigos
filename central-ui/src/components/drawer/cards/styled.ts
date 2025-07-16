@@ -4,6 +4,7 @@ import { FlexColumn, FlexRow, Text } from '@odigos/ui-kit/components';
 export const DataCardContent = styled(FlexRow)`
   width: 100%;
   gap: 36px;
+  align-items: flex-start;
 `;
 
 export const DataCardContentCell = styled(FlexColumn)`
@@ -16,5 +17,5 @@ export const DataCardCellTitle = styled(Text)`
 `;
 
 export const DataCardCellStretch = styled(Text)`
-  width: 250px;
+  width: 300px;
 `;
