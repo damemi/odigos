@@ -3,6 +3,7 @@ import type { User } from '@/types';
 import styled from 'styled-components';
 import { UserCard } from './user-card';
 import Theme from '@odigos/ui-kit/theme';
+import { Relative } from '@/components/styled';
 import { TeamsCard } from '../cards/teams-card';
 import { PlatformsCard } from '../cards/platforms-card';
 import { BUTTON_TEXTS } from '@odigos/ui-kit/constants';
@@ -17,10 +18,6 @@ interface EditUserDrawerProps {
   onDelete: () => void;
   onResetPassword: () => void;
 }
-
-const Relative = styled.div`
-  position: relative;
-`;
 
 const ActionItem = styled(Text)`
   display: flex;

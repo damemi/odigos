@@ -3,6 +3,7 @@ import type { Team } from '@/types';
 import styled from 'styled-components';
 import { TeamCard } from './team-card';
 import Theme from '@odigos/ui-kit/theme';
+import { Relative } from '@/components/styled';
 import { MembersCard } from '../cards/members-card';
 import { BUTTON_TEXTS } from '@odigos/ui-kit/constants';
 import { PlatformsCard } from '../cards/platforms-card';
@@ -16,10 +17,6 @@ interface EditTeamDrawerProps {
   onSave: (payload: Team) => void;
   onDelete: () => void;
 }
-
-const Relative = styled.div`
-  position: relative;
-`;
 
 const ActionItem = styled(Text)`
   display: flex;

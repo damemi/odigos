@@ -115,6 +115,24 @@ func (k *TeamRepository) GetTeams(ctx context.Context) ([]*model.Team, error) {
 	return teams, nil
 }
 
+func (k *TeamRepository) GetTeamByID(ctx context.Context, teamID string) (*model.Team, error) {
+	adminToken, err := k.adminService.GetAdminToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return keycloak.GetTeamByID(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, teamID)
+}
+
+func (k *TeamRepository) GetTeamByName(ctx context.Context, teamName string) (*model.Team, error) {
+	adminToken, err := k.adminService.GetAdminToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return keycloak.GetTeamByName(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, teamName)
+}
+
 func (k *TeamRepository) GetUsersForTeam(ctx context.Context, teamID string) ([]*model.User, error) {
 	adminToken, err := k.adminService.GetAdminToken(ctx)
 	if err != nil {

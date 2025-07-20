@@ -33,7 +33,7 @@ func (s *TeamService) CreateTeam(ctx context.Context, input *model.WriteTeamInpu
 		}, nil
 	}
 
-	exists, err := s.teamRepo.CheckTeamExists(ctx, *name)
+	teamExists, err := s.teamRepo.CheckTeamExists(ctx, *name)
 	if err != nil {
 		errorMsg := "Failed to validate team name: " + err.Error()
 		return &model.GeneralResult{
@@ -41,7 +41,7 @@ func (s *TeamService) CreateTeam(ctx context.Context, input *model.WriteTeamInpu
 			Error:   &errorMsg,
 		}, nil
 	}
-	if exists {
+	if teamExists {
 		errorMsg := fmt.Sprintf("Team with name '%s' already exists", *name)
 		return &model.GeneralResult{
 			Success: false,
@@ -95,7 +95,7 @@ func (s *TeamService) UpdateTeam(ctx context.Context, teamID string, input *mode
 	}
 
 	// Check if the team being updated exists
-	teamExists, err := s.teamRepo.CheckTeamExists(ctx, teamID)
+	existingTeam, err := s.teamRepo.GetTeamByID(ctx, teamID)
 	if err != nil {
 		errorMsg := "Failed to validate team existence: " + err.Error()
 		return &model.GeneralResult{
@@ -103,7 +103,7 @@ func (s *TeamService) UpdateTeam(ctx context.Context, teamID string, input *mode
 			Error:   &errorMsg,
 		}, nil
 	}
-	if !teamExists {
+	if existingTeam == nil {
 		errorMsg := fmt.Sprintf("Team with ID '%s' does not exist", teamID)
 		return &model.GeneralResult{
 			Success: false,
@@ -112,20 +112,22 @@ func (s *TeamService) UpdateTeam(ctx context.Context, teamID string, input *mode
 	}
 
 	// Check if another team already has the new name
-	nameExists, err := s.teamRepo.CheckTeamExists(ctx, *name)
-	if err != nil {
-		errorMsg := "Failed to validate team name: " + err.Error()
-		return &model.GeneralResult{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
-	}
-	if nameExists {
-		errorMsg := fmt.Sprintf("Team with name '%s' already exists", *name)
-		return &model.GeneralResult{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
+	if *name != existingTeam.Name {
+		existingTeamWithNewName, err := s.teamRepo.GetTeamByName(ctx, *name)
+		if err != nil {
+			errorMsg := "Failed to validate team name: " + err.Error()
+			return &model.GeneralResult{
+				Success: false,
+				Error:   &errorMsg,
+			}, nil
+		}
+		if existingTeamWithNewName != nil {
+			errorMsg := fmt.Sprintf("Team with name '%s' already exists", *name)
+			return &model.GeneralResult{
+				Success: false,
+				Error:   &errorMsg,
+			}, nil
+		}
 	}
 
 	_, err = s.teamRepo.UpdateTeam(ctx, teamID, input)
@@ -180,11 +182,11 @@ func (s *TeamService) GetTeams(ctx context.Context) ([]*model.Team, error) {
 }
 
 func (s *TeamService) GetUsersForTeam(ctx context.Context, teamID string) ([]*model.User, error) {
-	exists, err := s.teamRepo.CheckTeamExists(ctx, teamID)
+	teamExists, err := s.teamRepo.CheckTeamExists(ctx, teamID)
 	if err != nil {
 		return nil, err
 	}
-	if !exists {
+	if !teamExists {
 		return nil, fmt.Errorf("team %s does not exist", teamID)
 	}
 
@@ -197,11 +199,11 @@ func (s *TeamService) GetTeamsForUser(ctx context.Context, userID string) ([]*mo
 
 func (s *TeamService) AssignTeamsToUser(ctx context.Context, userID string, teamIDs []string) (*model.GeneralResult, error) {
 	for _, teamID := range teamIDs {
-		exists, err := s.teamRepo.CheckTeamExists(ctx, teamID)
+		teamExists, err := s.teamRepo.CheckTeamExists(ctx, teamID)
 		if err != nil {
 			return nil, err
 		}
-		if !exists {
+		if !teamExists {
 			return nil, fmt.Errorf("team %s does not exist", teamID)
 		}
 	}

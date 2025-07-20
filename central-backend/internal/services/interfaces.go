@@ -39,6 +39,8 @@ type TeamRepository interface {
 	UpdateTeam(ctx context.Context, teamID string, input *model.WriteTeamInput) (*model.Team, error)
 	DeleteTeam(ctx context.Context, teamID string) (*model.GeneralResult, error)
 	GetTeams(ctx context.Context) ([]*model.Team, error)
+	GetTeamByID(ctx context.Context, teamID string) (*model.Team, error)
+	GetTeamByName(ctx context.Context, teamName string) (*model.Team, error)
 
 	GetUsersForTeam(ctx context.Context, teamID string) ([]*model.User, error)
 	GetTeamsForUser(ctx context.Context, userID string) ([]*model.Team, error)

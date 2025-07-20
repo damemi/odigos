@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/odigos-io/central-backend/graph/model"
@@ -511,4 +512,84 @@ func DeleteTeam(token, keycloakHost, realm, teamID string) error {
 	}
 
 	return nil
+}
+
+func GetTeamByID(token, keycloakHost, realm, teamID string) (*model.Team, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", keycloakHost, realm, teamID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get team by id: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		// Team doesn't exist - return nil, nil as expected by service layer
+		return nil, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get team by id: status %d, response: %s", resp.StatusCode, string(responseBody))
+	}
+
+	var group KeycloakGroup
+	if err := json.NewDecoder(resp.Body).Decode(&group); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return mapKeycloakGroupToTeam(group)
+}
+
+func GetTeamByName(token, keycloakHost, realm, teamName string) (*model.Team, error) {
+	// URL encode the team name to handle special characters
+	encodedTeamName := url.QueryEscape(teamName)
+	requestURL := fmt.Sprintf("%s/admin/realms/%s/groups?search=%s", keycloakHost, realm, encodedTeamName)
+
+	req, err := http.NewRequest("GET", requestURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get team by name: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get team by name: status %d, response: %s", resp.StatusCode, string(responseBody))
+	}
+
+	var groups []KeycloakGroup
+	if err := json.NewDecoder(resp.Body).Decode(&groups); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// No teams found - return nil, nil as expected by service layer
+	if len(groups) == 0 {
+		return nil, nil
+	}
+
+	// Search for exact name match since Keycloak search is partial
+	for _, group := range groups {
+		if group.Name == teamName {
+			return mapKeycloakGroupToTeam(group)
+		}
+	}
+
+	// No exact match found - return nil, nil as expected by service layer
+	return nil, nil
 }

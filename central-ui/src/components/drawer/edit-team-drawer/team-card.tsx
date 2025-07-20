@@ -28,7 +28,7 @@ const TeamCard: FC<TeamCardProps> = ({ formData, handleFormChange }) => {
         <DataCardContentCell>
           <DataCardCellTitle>{DESCRIPTION}</DataCardCellTitle>
           <DataCardCellStretch>
-            <TextArea value={formData.description} onChange={(e) => handleFormChange('description', e.target.value)} required />
+            <TextArea value={formData.description || ''} onChange={(e) => handleFormChange('description', e.target.value)} required />
           </DataCardCellStretch>
         </DataCardContentCell>
       </DataCardContentRow>
