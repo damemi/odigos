@@ -13,7 +13,7 @@ import { CancelWarning, Drawer, FlexColumn, IconButton, Popup, Text } from '@odi
 interface EditUserDrawerProps {
   user: User;
   onClose: () => void;
-  onSave: () => void;
+  onSave: (payload: User) => void;
   onDelete: () => void;
   onResetPassword: () => void;
 }
@@ -38,7 +38,7 @@ const DRAWER_WIDTH = '750px';
 const EditUserDrawer: FC<EditUserDrawerProps> = ({ user, onClose, onSave, onDelete, onResetPassword }) => {
   const theme = Theme.useTheme();
   const { popupRef, popupOpen, setPopupOpen } = usePopup();
-  const { formData, handleFormChange, resetFormData, isFormDirty } = useGenericForm({ role: user.role, teams: user.teams, computePlatforms: user.computePlatforms });
+  const { formData, handleFormChange, resetFormData, isFormDirty } = useGenericForm(user);
 
   const [cancelWarningOpen, setCancelWarningOpen] = useState(false);
   const [cancelApproveCallback, setCancelApproveCallback] = useState<(() => void) | null>(null);
@@ -91,7 +91,7 @@ const EditUserDrawer: FC<EditUserDrawerProps> = ({ user, onClose, onSave, onDele
             {
               'data-id': 'drawer-save',
               variant: 'primary',
-              onClick: onSave,
+              onClick: () => onSave(formData),
               children: BUTTON_TEXTS.SAVE,
             },
           ],

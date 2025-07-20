@@ -11,51 +11,37 @@ type AuthResult struct {
 	UserData    map[string]any
 }
 
-
-type CreateUserRequest struct {
-	Email    string
-	Password *string
-	Role     model.Role
-}
-
-type CreateUserResult struct {
-	Success           bool
-	UserID            string
-	GeneratedPassword *string
-}
-
-type DeleteUserResult struct {
-	Success bool
-	Error   string
-}
-
-type DeleteTeamResult struct {
-	Success bool
-	Error   string
-}
-
-type UserRepository interface {
-	CreateUser(ctx context.Context, req CreateUserRequest) (*CreateUserResult, error)
-	GetUsers(ctx context.Context) ([]*model.User, error)
-	GetUserByEmail(ctx context.Context, email string) (*model.User, error)
-	UpdateUserPassword(ctx context.Context, email, password string) error
-	SetUserPasswordRequirement(ctx context.Context, email string, required bool) error
-	CheckUserExists(ctx context.Context, email string) error
-	AssignComputePlatformsToUser(ctx context.Context, input model.AssignComputePlatformsToUserInput) (*model.AssignComputePlatformsToUserPayload, error)
-	CheckUserNeedsPasswordChange(ctx context.Context, email string) (bool, error)
-	GetUserRole(ctx context.Context, userID string) (string, error)
-	DeleteUser(ctx context.Context, userID string) (*DeleteUserResult, error)
-}
-
 type AuthRepository interface {
 	AuthenticateUser(ctx context.Context, email, password string) (*AuthResult, error)
 	GetAdminTokenForInitialPassword(ctx context.Context) (string, error)
 }
 
+type UserRepository interface {
+	CheckUserExists(ctx context.Context, email string) error
+	CreateUser(ctx context.Context, input *model.WriteUserInput) (*model.CreateUserResult, error)
+	UpdateUser(ctx context.Context, userID string, input *model.WriteUserInput) (*model.GeneralResult, error)
+	DeleteUser(ctx context.Context, userID string) (*model.GeneralResult, error)
+	GetUsers(ctx context.Context) ([]*model.User, error)
+	GetUserByID(ctx context.Context, userID string) (*model.User, error)
+	GetUserByEmail(ctx context.Context, email string) (*model.User, error)
+
+	CheckUserNeedsPasswordChange(ctx context.Context, email string) (bool, error)
+	UpdateUserPassword(ctx context.Context, email string, password string) error
+	SetUserPasswordRequirement(ctx context.Context, email string, required bool) error
+	GetUserRole(ctx context.Context, userID string) (string, error)
+
+	AssignComputePlatformsToUser(ctx context.Context, userID string, computePlatformIDs []string) (*model.GeneralResult, error)
+}
+
 type TeamRepository interface {
-	CreateTeam(ctx context.Context, name string, description *string, users []*string, computePlatforms []*string) (*model.Team, error)
+	CheckTeamExists(ctx context.Context, teamNameOrTeamID string) (bool, error)
+	CreateTeam(ctx context.Context, input *model.WriteTeamInput) (*model.Team, error)
+	UpdateTeam(ctx context.Context, teamID string, input *model.WriteTeamInput) (*model.Team, error)
+	DeleteTeam(ctx context.Context, teamID string) (*model.GeneralResult, error)
 	GetTeams(ctx context.Context) ([]*model.Team, error)
+
+	GetUsersForTeam(ctx context.Context, teamID string) ([]*model.User, error)
+	GetTeamsForUser(ctx context.Context, userID string) ([]*model.Team, error)
 	AssignTeamsToUser(ctx context.Context, userID string, teamIDs []string) error
-	CheckTeamExists(ctx context.Context, teamName string) (bool, error)
-	DeleteTeam(ctx context.Context, teamID string) (*DeleteTeamResult, error)
+	RemoveTeamsFromUser(ctx context.Context, userID string, teamIDs []string) error
 }

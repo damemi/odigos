@@ -10,101 +10,48 @@ import (
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/logger"
-	"github.com/odigos-io/central-backend/internal/services"
 	"github.com/odigos-io/central-backend/internal/types"
 	"github.com/odigos-io/central-backend/internal/utils"
 )
 
 // SignIn is the resolver for the signIn field.
-func (r *mutationResolver) SignIn(ctx context.Context, email string, password string) (*model.SignInPayload, error) {
+func (r *mutationResolver) SignIn(ctx context.Context, email string, password string) (*model.SignInResult, error) {
 	return r.AuthService.SignIn(ctx, email, password)
 }
 
-// CreateUser is the resolver for the createUser field.
-func (r *mutationResolver) CreateUser(ctx context.Context, email string, password *string, role model.Role, teams []*string, computePlatforms []*string) (*model.CreateUserPayload, error) {
-	result, err := r.UserService.CreateUser(ctx, services.CreateUserRequest{
-		Email:    email,
-		Password: password,
-		Role:     role,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	for _, team := range teams {
-		_, err := r.TeamService.AssignTeamsToUser(ctx, model.AssignTeamsToUserInput{
-			UserID:  result.UserID,
-			TeamIDs: []string{*team},
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return &model.CreateUserPayload{
-		Success:           result.Success,
-		GeneratedPassword: result.GeneratedPassword,
-	}, nil
-}
-
-// DeleteUser is the resolver for the deleteUser field.
-func (r *mutationResolver) DeleteUser(ctx context.Context, userID string) (*model.DeleteResult, error) {
-	result, _ := r.UserService.DeleteUser(ctx, userID)
-	return &model.DeleteResult{Success: result.Success, Error: &result.Error}, nil
-}
-
 // SetInitialPassword is the resolver for the setInitialPassword field.
-func (r *mutationResolver) SetInitialPassword(ctx context.Context, email string, password string) (*model.SignInPayload, error) {
+func (r *mutationResolver) SetInitialPassword(ctx context.Context, email string, password string) (*model.SignInResult, error) {
 	return r.AuthService.SetInitialPassword(ctx, email, password)
 }
 
+// CreateUser is the resolver for the createUser field.
+func (r *mutationResolver) CreateUser(ctx context.Context, input model.WriteUserInput) (*model.CreateUserResult, error) {
+	return r.UserService.CreateUser(ctx, &input)
+}
+
+// UpdateUser is the resolver for the updateUser field.
+func (r *mutationResolver) UpdateUser(ctx context.Context, userID string, input model.WriteUserInput) (*model.GeneralResult, error) {
+	return r.UserService.UpdateUser(ctx, userID, &input)
+}
+
+// DeleteUser is the resolver for the deleteUser field.
+func (r *mutationResolver) DeleteUser(ctx context.Context, userID string) (*model.GeneralResult, error) {
+	return r.UserService.DeleteUser(ctx, userID)
+}
+
 // CreateTeam is the resolver for the createTeam field.
-func (r *mutationResolver) CreateTeam(ctx context.Context, name string, description *string, users []*string, computePlatforms []*string) (*model.CreateTeamPayload, error) {
-	return r.TeamService.CreateTeam(ctx, name, description, users, computePlatforms)
+func (r *mutationResolver) CreateTeam(ctx context.Context, input model.WriteTeamInput) (*model.GeneralResult, error) {
+	return r.TeamService.CreateTeam(ctx, &input)
+}
+
+// UpdateTeam is the resolver for the updateTeam field.
+func (r *mutationResolver) UpdateTeam(ctx context.Context, teamID string, input model.WriteTeamInput) (*model.GeneralResult, error) {
+	return r.TeamService.UpdateTeam(ctx, teamID, &input)
 }
 
 // DeleteTeam is the resolver for the deleteTeam field.
-func (r *mutationResolver) DeleteTeam(ctx context.Context, teamID string) (*model.DeleteResult, error) {
-	result, _ := r.TeamService.DeleteTeam(ctx, teamID)
-	return &model.DeleteResult{Success: result.Success, Error: &result.Error}, nil
-}
-
-// AssignTeamsToUser is the resolver for the assignTeamsToUser field.
-func (r *mutationResolver) AssignTeamsToUser(ctx context.Context, input model.AssignTeamsToUserInput) (*model.AssignTeamsToUserPayload, error) {
-	return r.TeamService.AssignTeamsToUser(ctx, input)
-}
-
-// AssignComputePlatformsToUser is the resolver for the assignComputePlatformsToUser field.
-func (r *mutationResolver) AssignComputePlatformsToUser(ctx context.Context, input model.AssignComputePlatformsToUserInput) (*model.AssignComputePlatformsToUserPayload, error) {
-	return r.UserService.AssignComputePlatformsToUser(ctx, input)
-}
-
-// Connections is the resolver for the connections field.
-func (r *queryResolver) Connections(ctx context.Context) ([]*model.Connection, error) {
-	keys, err := r.RedisClient.ListProxyConnectionsKeys(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var connections []*model.Connection
-	for _, proxyConnectionsRedisKey := range keys {
-		proxyID := consts.ExtractProxyIDFromConnectionKey(proxyConnectionsRedisKey)
-		status, err := r.RedisClient.GetProxyConnection(ctx, proxyConnectionsRedisKey)
-		if err != nil {
-			logger.Log.Error("Failed to get proxy connection status", "proxyID", proxyID, "error", err)
-			continue
-		}
-		clusterName := "unknown"
-		if name, ok := r.WebSocketServer.GetClusterName(proxyID); ok {
-			clusterName = name
-		}
-		connections = append(connections, &model.Connection{
-			ProxyID: proxyID,
-			Status:  status,
-			Name:    clusterName,
-		})
-	}
-	return connections, nil
+func (r *mutationResolver) DeleteTeam(ctx context.Context, teamID string) (*model.GeneralResult, error) {
+	return r.TeamService.DeleteTeam(ctx, teamID)
 }
 
 // RemoteFetch is the resolver for the remoteFetch field.
@@ -136,16 +83,6 @@ func (r *queryResolver) RemoteFetch(ctx context.Context, proxyID string, query s
 	}
 }
 
-// Users is the resolver for the users field.
-func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
-	return r.UserService.GetUsers(ctx)
-}
-
-// Teams is the resolver for the teams field.
-func (r *queryResolver) Teams(ctx context.Context) ([]*model.Team, error) {
-	return r.TeamService.GetTeams(ctx)
-}
-
 // SystemConfig is the resolver for the systemConfig field.
 func (r *queryResolver) SystemConfig(ctx context.Context) (*model.SystemConfig, error) {
 	isInitialized, err := r.RedisClient.GetSystemInitialized(ctx)
@@ -160,6 +97,44 @@ func (r *queryResolver) SystemConfig(ctx context.Context) (*model.SystemConfig, 
 		IsInitialized: isInitialized,
 		Version:       version,
 	}, nil
+}
+
+// Connections is the resolver for the connections field.
+func (r *queryResolver) Connections(ctx context.Context) ([]*model.Connection, error) {
+	keys, err := r.RedisClient.ListProxyConnectionsKeys(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var connections []*model.Connection
+	for _, proxyConnectionsRedisKey := range keys {
+		proxyID := consts.ExtractProxyIDFromConnectionKey(proxyConnectionsRedisKey)
+		status, err := r.RedisClient.GetProxyConnection(ctx, proxyConnectionsRedisKey)
+		if err != nil {
+			logger.Log.Error("Failed to get proxy connection status", "proxyID", proxyID, "error", err)
+			continue
+		}
+		clusterName := "unknown"
+		if name, ok := r.WebSocketServer.GetClusterName(proxyID); ok {
+			clusterName = name
+		}
+		connections = append(connections, &model.Connection{
+			ProxyID: proxyID,
+			Status:  status,
+			Name:    clusterName,
+		})
+	}
+	return connections, nil
+}
+
+// Users is the resolver for the users field.
+func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
+	return r.UserService.GetUsers(ctx)
+}
+
+// Teams is the resolver for the teams field.
+func (r *queryResolver) Teams(ctx context.Context) ([]*model.Team, error) {
+	return r.TeamService.GetTeams(ctx)
 }
 
 // Mutation returns MutationResolver implementation.

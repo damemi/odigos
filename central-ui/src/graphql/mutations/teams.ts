@@ -1,9 +1,19 @@
 import { gql } from '@apollo/client';
 
 export const CREATE_TEAM = gql`
-  mutation CreateTeam($name: String!, $description: String, $users: [String]!, $computePlatforms: [String]!) {
-    createTeam(name: $name, description: $description, users: $users, computePlatforms: $computePlatforms) {
+  mutation CreateTeam($input: WriteTeamInput!) {
+    createTeam(input: $input) {
       success
+      error
+    }
+  }
+`;
+
+export const UPDATE_TEAM = gql`
+  mutation UpdateTeam($teamID: String!, $input: WriteTeamInput!) {
+    updateTeam(teamID: $teamID, input: $input) {
+      success
+      error
     }
   }
 `;

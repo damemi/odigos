@@ -10,24 +10,14 @@ export enum SignInStatus {
   PASSWORD_UPDATE_REQUIRED = 'PASSWORD_UPDATE_REQUIRED',
 }
 
-export interface User {
-  id: string;
-  email: string;
-  username: string;
-  role: Role;
-  needsPasswordChange?: boolean;
-  teams?: Team[];
-  computePlatforms?: ComputePlatform[];
+export interface SystemConfig {
+  isInitialized: boolean;
+  version: string;
 }
 
-export interface Team {
-  id: string;
-  name: string;
-  description?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  users?: User[];
-  computePlatforms?: ComputePlatform[];
+export interface GeneralResult {
+  success: boolean;
+  error?: string;
 }
 
 export interface ComputePlatform {
@@ -43,12 +33,43 @@ export interface SignInPayload {
   status: SignInStatus;
 }
 
-export interface DeleteUserPayload {
-  success: boolean;
-  error?: string;
+export interface User {
+  id: string;
+  email: string;
+  username: string;
+  role: Role;
+  needsPasswordChange?: boolean;
+  teams?: Team[];
+  computePlatforms?: ComputePlatform[];
 }
 
-export interface SystemConfig {
-  isInitialized: boolean;
-  version: string;
+export interface Team {
+  id: string;
+  name: string;
+  description?: string;
+  users?: User[];
+  computePlatforms?: ComputePlatform[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface WriteUserInput {
+  email: string;
+  password?: string;
+  role: Role;
+  teams: string[];
+  computePlatforms: string[];
+}
+
+export interface CreateUserResult {
+  success: boolean;
+  userID: string;
+  generatedPassword?: string;
+}
+
+export interface WriteTeamInput {
+  name: string;
+  description?: string;
+  users: string[];
+  computePlatforms: string[];
 }

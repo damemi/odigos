@@ -1,67 +1,53 @@
-import type { DeleteUserPayload, Team } from '@/types';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
-import { CREATE_TEAM, DELETE_TEAM, GET_TEAMS } from '@/graphql';
+import type { GeneralResult, Team, WriteTeamInput } from '@/types';
+import { CREATE_TEAM, DELETE_TEAM, GET_TEAMS, UPDATE_TEAM } from '@/graphql';
 import { useQuery, useMutation, type ApolloError } from '@apollo/client';
-
-interface CreateTeamVariables {
-  name: string;
-  description?: string;
-  users: string[];
-  computePlatforms: string[];
-}
-
-interface CreateTeamResponse {
-  createTeam: {
-    success: boolean;
-  };
-}
-
-interface DeleteTeamVariables {
-  teamID: string;
-}
-
-interface DeleteTeamResponse {
-  deleteTeam: DeleteUserPayload;
-}
 
 export const useTeamsCRUD = () => {
   const { addNotification } = useNotificationStore();
-  const onError = (error: ApolloError, crudType: Crud) => {
-    addNotification({ type: StatusType.Error, title: error.name || crudType, message: error.cause?.message || error.message });
-  };
+  const onError = (error: ApolloError, crudType: Crud) => addNotification({ type: StatusType.Error, title: error.name || crudType, message: error.cause?.message || error.message });
 
   const { data, loading, error, refetch } = useQuery<{ teams: Team[] }>(GET_TEAMS);
-  const [createTeamMutation, { loading: creating }] = useMutation<CreateTeamResponse, CreateTeamVariables>(CREATE_TEAM, { onError: (error) => onError(error, Crud.Create) });
-  const [deleteTeamMutation, { loading: deleting }] = useMutation<DeleteTeamResponse, DeleteTeamVariables>(DELETE_TEAM, { onError: (error) => onError(error, Crud.Delete) });
+  const [createTeamMutation, { loading: creating }] = useMutation<{ createTeam: GeneralResult }, { input: WriteTeamInput }>(CREATE_TEAM, {
+    onError: (error) => onError(error, Crud.Create),
+  });
+  const [updateTeamMutation, { loading: updating }] = useMutation<{ updateTeam: GeneralResult }, { teamID: string; input: WriteTeamInput }>(UPDATE_TEAM, {
+    onError: (error) => onError(error, Crud.Update),
+  });
+  const [deleteTeamMutation, { loading: deleting }] = useMutation<{ deleteTeam: GeneralResult }, { teamID: string }>(DELETE_TEAM, {
+    onError: (error) => onError(error, Crud.Delete),
+  });
 
-  const createTeam = async (input: CreateTeamVariables): Promise<CreateTeamResponse | undefined | null> => {
-    const response = await createTeamMutation({ variables: input });
+  const createTeam = async (input: WriteTeamInput): Promise<GeneralResult | undefined> => {
+    const { data } = await createTeamMutation({ variables: { input } });
     refetch();
-    return response.data;
+
+    return data?.createTeam;
   };
 
-  const deleteTeam = async (teamID: string): Promise<DeleteUserPayload | undefined | null> => {
+  const updateTeam = async (teamID: string, input: WriteTeamInput): Promise<GeneralResult | undefined> => {
+    const { data } = await updateTeamMutation({ variables: { teamID, input } });
+    refetch();
+
+    return data?.updateTeam;
+  };
+
+  const deleteTeam = async (teamID: string): Promise<GeneralResult | undefined> => {
     const { data } = await deleteTeamMutation({
       variables: { teamID },
       update: (cache) => {
         // Remove the deleted team from the cache
         cache.modify({
           fields: {
-            teams(existingTeams = []) {
-              return existingTeams.filter((team: Team) => team.id !== teamID);
-            },
+            teams: (existingTeams = []) => existingTeams.filter((team: Team) => team.id !== teamID),
           },
         });
       },
     });
+    refetch();
 
-    if (data?.deleteTeam) {
-      refetch();
-      return data.deleteTeam;
-    }
-
-    return null;
+    return data?.deleteTeam;
   };
 
   return {
@@ -71,6 +57,8 @@ export const useTeamsCRUD = () => {
     refetch,
     createTeam,
     creating,
+    updateTeam,
+    updating,
     deleteTeam,
     deleting,
   };

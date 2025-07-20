@@ -54,7 +54,7 @@ export const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClos
         computePlatforms: formData[CreateTeamFormField.ComputePlatforms].map(({ id }) => id as string),
       });
 
-      if (resData) {
+      if (resData?.success) {
         setModalState(CreateTeamModalState.Success);
       }
     } catch {

@@ -1,12 +1,12 @@
 import React, { useMemo, useCallback, useState } from 'react';
 import * as UTILS from '@/utils';
-import type { Team } from '@/types';
 import { useTeamsCRUD } from '@/hooks';
 import Theme from '@odigos/ui-kit/theme';
 import { EditTeamDrawer } from '@/components';
+import type { Team, WriteTeamInput } from '@/types';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
-import { EditIcon, MinusCircledIcon, UserIcon } from '@odigos/ui-kit/icons';
+import { EditIcon, TrashIcon, UserIcon } from '@odigos/ui-kit/icons';
 import { CenterThis, DeleteWarning, FlexRow, IconButton, IconWrapped, InteractiveTable, NoDataFound, RowCell } from '@odigos/ui-kit/components';
 
 export enum TeamsTableColumn {
@@ -21,10 +21,28 @@ export enum TeamsTableColumn {
 export const TeamsTable: React.FC = () => {
   const theme = Theme.useTheme();
   const { addNotification } = useNotificationStore();
-  const { teams, deleteTeam, deleting } = useTeamsCRUD();
+  const { teams, updateTeam, updating, deleteTeam, deleting } = useTeamsCRUD();
 
   const [editOpenForTeam, setEditOpenForTeam] = useState<Team | null>(null);
   const [deleteOpenForTeam, setDeleteOpenForTeam] = useState<Team | null>(null);
+
+  const handleUpdateTeam = useCallback(
+    async (teamID: string, input: WriteTeamInput) => {
+      try {
+        if (updating) return;
+        const result = await updateTeam(teamID, input);
+
+        if (!result?.success) {
+          const errorMessage = result?.error || 'Failed to update team';
+          addNotification({ type: StatusType.Error, title: Crud.Update, description: errorMessage });
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred while updating the team.';
+        addNotification({ type: StatusType.Error, title: Crud.Update, description: errorMessage });
+      }
+    },
+    [updating, updateTeam, addNotification],
+  );
 
   const handleDeleteTeam = useCallback(
     async (teamID: string) => {
@@ -86,7 +104,7 @@ export const TeamsTable: React.FC = () => {
                   <EditIcon />
                 </IconButton>
                 <IconButton onClick={() => setDeleteOpenForTeam(team)} tooltip='Delete team'>
-                  <MinusCircledIcon fill={theme.text.error} />
+                  <TrashIcon fill={theme.text.error} />
                 </IconButton>
               </FlexRow>
             ),
@@ -111,8 +129,14 @@ export const TeamsTable: React.FC = () => {
           onClose={() => {
             setEditOpenForTeam(null);
           }}
-          onSave={() => {
-            alert('TODO');
+          onSave={(payload) => {
+            handleUpdateTeam(editOpenForTeam.id, {
+              name: payload.name,
+              description: payload.description,
+              users: payload.users?.map((user) => user.id) || [],
+              computePlatforms: payload.computePlatforms?.map((platform) => platform.id) || [],
+            });
+            setEditOpenForTeam(null);
           }}
           onDelete={() => {
             setDeleteOpenForTeam(editOpenForTeam);
@@ -127,6 +151,7 @@ export const TeamsTable: React.FC = () => {
         onApprove={() => {
           handleDeleteTeam(deleteOpenForTeam?.id as string);
           setDeleteOpenForTeam(null);
+          setEditOpenForTeam(null);
         }}
         onDeny={() => {
           setDeleteOpenForTeam(null);

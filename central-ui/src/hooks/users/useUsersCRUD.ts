@@ -1,69 +1,51 @@
-import type { User, DeleteUserPayload } from '@/types';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
-import { GET_USERS, CREATE_USER, DELETE_USER } from '@/graphql';
 import { useQuery, useMutation, type ApolloError } from '@apollo/client';
-
-interface CreateUserVariables {
-  email: string;
-  password?: string;
-  role: string;
-  teams: string[];
-  computePlatforms: string[];
-}
-
-interface CreateUserResponse {
-  createUser: {
-    success: boolean;
-    generatedPassword?: string;
-  };
-}
-
-interface DeleteUserVariables {
-  userID: string;
-}
-
-interface DeleteUserResponse {
-  deleteUser: DeleteUserPayload;
-}
+import { GET_USERS, CREATE_USER, DELETE_USER, UPDATE_USER } from '@/graphql';
+import type { User, CreateUserResult, WriteUserInput, GeneralResult } from '@/types';
 
 export const useUsersCRUD = () => {
   const { addNotification } = useNotificationStore();
-  const onError = (error: ApolloError, crudType: Crud) => {
-    addNotification({ type: StatusType.Error, title: error.name || crudType, message: error.cause?.message || error.message });
-  };
+  const onError = (error: ApolloError, crudType: Crud) => addNotification({ type: StatusType.Error, title: error.name || crudType, message: error.cause?.message || error.message });
 
   const { data, loading, error, refetch } = useQuery<{ users: User[] }>(GET_USERS);
-  const [createUserMutation, { loading: creating }] = useMutation<CreateUserResponse, CreateUserVariables>(CREATE_USER, { onError: (error) => onError(error, Crud.Create) });
-  const [deleteUserMutation, { loading: deleting }] = useMutation<DeleteUserResponse, DeleteUserVariables>(DELETE_USER, { onError: (error) => onError(error, Crud.Delete) });
+  const [createUserMutation, { loading: creating }] = useMutation<{ createUser: CreateUserResult }, { input: WriteUserInput }>(CREATE_USER, {
+    onError: (error) => onError(error, Crud.Create),
+  });
+  const [updateUserMutation, { loading: updating }] = useMutation<{ updateUser: GeneralResult }, { userID: string; input: WriteUserInput }>(UPDATE_USER, {
+    onError: (error) => onError(error, Crud.Update),
+  });
+  const [deleteUserMutation, { loading: deleting }] = useMutation<{ deleteUser: GeneralResult }, { userID: string }>(DELETE_USER, {
+    onError: (error) => onError(error, Crud.Delete),
+  });
 
-  const createUser = async (input: CreateUserVariables): Promise<CreateUserResponse | undefined | null> => {
-    const response = await createUserMutation({ variables: input });
+  const createUser = async (input: WriteUserInput): Promise<CreateUserResult | undefined> => {
+    const { data } = await createUserMutation({ variables: { input } });
     refetch();
-    return response.data;
+
+    return data?.createUser;
   };
 
-  const deleteUser = async (userID: string): Promise<DeleteUserPayload | undefined | null> => {
+  const updateUser = async (userID: string, input: WriteUserInput): Promise<GeneralResult | undefined> => {
+    const { data } = await updateUserMutation({ variables: { userID, input } });
+    refetch();
+
+    return data?.updateUser;
+  };
+
+  const deleteUser = async (userID: string): Promise<GeneralResult | undefined> => {
     const { data } = await deleteUserMutation({
       variables: { userID },
       update: (cache) => {
         // Remove the deleted user from the cache
         cache.modify({
-          fields: {
-            users(existingUsers = []) {
-              return existingUsers.filter((user: User) => user.id !== userID);
-            },
-          },
+          fields: { users: (existingUsers = []) => existingUsers.filter((user: User) => user.id !== userID) },
         });
       },
     });
+    refetch();
 
-    if (data?.deleteUser) {
-      refetch();
-      return data.deleteUser;
-    }
-
-    return null;
+    return data?.deleteUser;
   };
 
   return {
@@ -73,6 +55,8 @@ export const useUsersCRUD = () => {
     refetch,
     createUser,
     creating,
+    updateUser,
+    updating,
     deleteUser,
     deleting,
   };

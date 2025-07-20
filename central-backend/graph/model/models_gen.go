@@ -9,26 +9,6 @@ import (
 	"strconv"
 )
 
-type AssignComputePlatformsToUserInput struct {
-	UserID             string   `json:"userID"`
-	ComputePlatformIDs []string `json:"computePlatformIDs"`
-}
-
-type AssignComputePlatformsToUserPayload struct {
-	Success bool    `json:"success"`
-	Error   *string `json:"error,omitempty"`
-}
-
-type AssignTeamsToUserInput struct {
-	UserID  string   `json:"userID"`
-	TeamIDs []string `json:"teamIDs"`
-}
-
-type AssignTeamsToUserPayload struct {
-	Success bool    `json:"success"`
-	Error   *string `json:"error,omitempty"`
-}
-
 type ComputePlatform struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
@@ -42,18 +22,13 @@ type Connection struct {
 	Name    string `json:"name"`
 }
 
-type CreateTeamPayload struct {
-	Success bool    `json:"success"`
-	Team    *Team   `json:"team,omitempty"`
-	Error   *string `json:"error,omitempty"`
-}
-
-type CreateUserPayload struct {
+type CreateUserResult struct {
 	Success           bool    `json:"success"`
+	UserID            string  `json:"userID"`
 	GeneratedPassword *string `json:"generatedPassword,omitempty"`
 }
 
-type DeleteResult struct {
+type GeneralResult struct {
 	Success bool    `json:"success"`
 	Error   *string `json:"error,omitempty"`
 }
@@ -64,7 +39,7 @@ type Mutation struct {
 type Query struct {
 }
 
-type SignInPayload struct {
+type SignInResult struct {
 	Token  string       `json:"token"`
 	User   *User        `json:"user,omitempty"`
 	Status SignInStatus `json:"status"`
@@ -79,10 +54,10 @@ type Team struct {
 	ID               string             `json:"id"`
 	Name             string             `json:"name"`
 	Description      *string            `json:"description,omitempty"`
-	CreatedAt        string             `json:"createdAt"`
-	UpdatedAt        string             `json:"updatedAt"`
 	Users            []*User            `json:"users"`
 	ComputePlatforms []*ComputePlatform `json:"computePlatforms"`
+	CreatedAt        string             `json:"createdAt"`
+	UpdatedAt        string             `json:"updatedAt"`
 }
 
 type User struct {
@@ -93,6 +68,21 @@ type User struct {
 	NeedsPasswordChange bool               `json:"needsPasswordChange"`
 	Teams               []*Team            `json:"teams"`
 	ComputePlatforms    []*ComputePlatform `json:"computePlatforms"`
+}
+
+type WriteTeamInput struct {
+	Name             *string   `json:"name,omitempty"`
+	Description      *string   `json:"description,omitempty"`
+	Users            []*string `json:"users,omitempty"`
+	ComputePlatforms []*string `json:"computePlatforms,omitempty"`
+}
+
+type WriteUserInput struct {
+	Email            *string   `json:"email,omitempty"`
+	Password         *string   `json:"password,omitempty"`
+	Role             *Role     `json:"role,omitempty"`
+	Teams            []*string `json:"teams,omitempty"`
+	ComputePlatforms []*string `json:"computePlatforms,omitempty"`
 }
 
 type Role string

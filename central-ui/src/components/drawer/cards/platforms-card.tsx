@@ -1,9 +1,9 @@
 import React, { useState, type FC, useMemo } from 'react';
 import Theme from '@odigos/ui-kit/theme';
-import { DataCardContent } from './styled';
 import type { ComputePlatform } from '@/types';
 import { getPlatformIcon } from '@odigos/ui-kit/functions';
 import { MinusCircledIcon, SearchIcon } from '@odigos/ui-kit/icons';
+import { DataCardContentColumn, DataCardContentRow } from './styled';
 import { DataCard, DataFinger, IconButton, Input, NoDataFound } from '@odigos/ui-kit/components';
 
 interface PlatformsCardProps {
@@ -25,11 +25,13 @@ const PlatformsCard: FC<PlatformsCardProps> = ({ formData, handleFormChange }) =
 
   return (
     <DataCard title='Compute Platforms' titleBadge={platformsCount} action={<Input icon={SearchIcon} placeholder='Search...' value={search} onChange={(e) => setSearch(e.target.value)} />}>
-      <DataCardContent $justifyContent={!filteredPlatformsCount ? 'center' : ''}>
-        {!filteredPlatformsCount ? (
+      {!filteredPlatformsCount ? (
+        <DataCardContentRow $justifyContent='center'>
           <NoDataFound subTitle={search ? undefined : ''} />
-        ) : (
-          filteredPlatforms?.map((cp) => (
+        </DataCardContentRow>
+      ) : (
+        <DataCardContentColumn>
+          {filteredPlatforms?.map((cp) => (
             <DataFinger
               key={`platform-${cp.id}`}
               title={cp.name}
@@ -50,9 +52,9 @@ const PlatformsCard: FC<PlatformsCardProps> = ({ formData, handleFormChange }) =
                 </IconButton>
               )}
             />
-          ))
-        )}
-      </DataCardContent>
+          ))}
+        </DataCardContentColumn>
+      )}
     </DataCard>
   );
 };

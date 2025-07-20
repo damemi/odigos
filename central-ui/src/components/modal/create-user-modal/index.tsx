@@ -58,8 +58,8 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClos
         computePlatforms: formData[CreateUserFormField.ComputePlatforms].map(({ id }) => id as string),
       });
 
-      if (resData) {
-        const { generatedPassword } = resData.createUser;
+      if (resData?.success) {
+        const { generatedPassword } = resData;
         if (generatedPassword) {
           setGeneratedPassword(generatedPassword);
           setModalState(CreateUserModalState.Success);

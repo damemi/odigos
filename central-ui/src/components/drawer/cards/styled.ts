@@ -1,10 +1,15 @@
 import styled from 'styled-components';
 import { FlexColumn, FlexRow, Text } from '@odigos/ui-kit/components';
 
-export const DataCardContent = styled(FlexRow)`
+export const DataCardContentRow = styled(FlexRow)`
   width: 100%;
   gap: 36px;
   align-items: flex-start;
+`;
+
+export const DataCardContentColumn = styled(FlexColumn)`
+  width: 100%;
+  gap: 12px;
 `;
 
 export const DataCardContentCell = styled(FlexColumn)`

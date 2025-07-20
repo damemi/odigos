@@ -13,7 +13,7 @@ import { CancelWarning, Drawer, FlexColumn, IconButton, Popup, Text } from '@odi
 interface EditTeamDrawerProps {
   team: Team;
   onClose: () => void;
-  onSave: () => void;
+  onSave: (payload: Team) => void;
   onDelete: () => void;
 }
 
@@ -37,7 +37,7 @@ const DRAWER_WIDTH = '750px';
 const EditTeamDrawer: FC<EditTeamDrawerProps> = ({ team, onClose, onSave, onDelete }) => {
   const theme = Theme.useTheme();
   const { popupRef, popupOpen, setPopupOpen } = usePopup();
-  const { formData, handleFormChange, resetFormData, isFormDirty } = useGenericForm({ description: team.description || '', users: team.users, computePlatforms: team.computePlatforms });
+  const { formData, handleFormChange, resetFormData, isFormDirty } = useGenericForm(team);
 
   const [cancelWarningOpen, setCancelWarningOpen] = useState(false);
   const [cancelApproveCallback, setCancelApproveCallback] = useState<(() => void) | null>(null);
@@ -87,7 +87,7 @@ const EditTeamDrawer: FC<EditTeamDrawerProps> = ({ team, onClose, onSave, onDele
             {
               'data-id': 'drawer-save',
               variant: 'primary',
-              onClick: onSave,
+              onClick: () => onSave(formData),
               children: BUTTON_TEXTS.SAVE,
             },
           ],

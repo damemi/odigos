@@ -149,7 +149,7 @@ func (u *UserService) GetUserInfo(token string) (UserInfo, error) {
 
 }
 
-func (u *UserService) AddUserToRealm(token, username, email, password string) error {
+func (u *UserService) AddUserToRealm(token, username string, email string, password string) error {
 	url := fmt.Sprintf("%s/admin/realms/%s/users", u.host, u.realm)
 	user := UserPayload{
 		Username:      username,
@@ -270,6 +270,122 @@ func (u *UserService) AddRealmRoleToUser(token, email, roleName string) error {
 	if resp.StatusCode != StatusNoContent {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to assign role to user: %s", string(body))
+	}
+	return nil
+}
+
+func (u *UserService) RemoveRealmRoleFromUser(token, email, roleName string) error {
+
+	searchUserURL := fmt.Sprintf("%s/admin/realms/%s/users?email=%s", u.host, u.realm, email)
+	req, err := http.NewRequest("GET", searchUserURL, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to search user: %s", string(body))
+	}
+	var users UserList
+	if err := json.NewDecoder(resp.Body).Decode(&users); err != nil {
+		return err
+	}
+	if len(users) == 0 {
+		return fmt.Errorf("user with email %s not found", email)
+	}
+	userID, ok := users[0]["id"].(string)
+	if !ok {
+		return fmt.Errorf("failed to get user ID from response")
+	}
+
+	searchRoleURL := fmt.Sprintf("%s/admin/realms/%s/roles/%s", u.host, u.realm, roleName)
+	req, err = http.NewRequest("GET", searchRoleURL, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to get role: %s", string(body))
+	}
+	var role RolePayload
+	if err := json.NewDecoder(resp.Body).Decode(&role); err != nil {
+		return err
+	}
+	roleID := role.ID
+	if roleID == "" {
+		return fmt.Errorf("failed to get role ID from response")
+	}
+
+	removeRoleURL := fmt.Sprintf("%s/admin/realms/%s/users/%s/role-mappings/realm", u.host, u.realm, userID)
+	roleRep := []RolePayload{
+		{
+			ID:   roleID,
+			Name: roleName,
+		},
+	}
+	body, err := json.Marshal(roleRep)
+	if err != nil {
+		return err
+	}
+	req, err = http.NewRequest("DELETE", removeRoleURL, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to remove role from user: %s", string(body))
+	}
+	return nil
+}
+
+func (u *UserService) UpdateUser(token, userID string, input *model.WriteUserInput) error {
+	// Only marshal fields that Keycloak expects, not the full input (which may include "role" etc.)
+	payload := make(map[string]interface{})
+	if input.Email != nil {
+		payload["email"] = *input.Email
+		payload["username"] = *input.Email
+	}
+	// Add more fields as needed, but do NOT include "role" or other non-Keycloak fields
+
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", u.host, u.realm, userID)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest("PUT", url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update user: %s", string(body))
 	}
 	return nil
 }
@@ -630,9 +746,32 @@ func (u *UserService) GetUserComputePlatforms(token, userID string) ([]string, e
 	return result, nil
 }
 
-// GetUserTeams gets the teams assigned to a user
 func (u *UserService) GetUserTeams(token, userID string) ([]*model.Team, error) {
 	return GetUserTeams(token, u.host, u.realm, userID)
+}
+
+func (u *UserService) GetUserByID(token, userID string) (UserInfo, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", u.host, u.realm, userID)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get user by ID: status %d, response: %s", resp.StatusCode, string(responseBody))
+	}
+	var userData UserInfo
+	if err := json.NewDecoder(resp.Body).Decode(&userData); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	return userData, nil
 }
 
 func (u *UserService) DeleteUserByID(token, userID string) error {

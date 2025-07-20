@@ -80,8 +80,8 @@ func main() {
 	teamRepo := keycloak_repositories.NewTeamRepository(redisClient, credentialsService, adminService)
 
 	authService := services.NewAuthService(redisClient, userRepo, authRepo)
-	userService := services.NewUserService(redisClient, userRepo, authRepo)
-	teamService := services.NewTeamService(redisClient, teamRepo)
+	userService := services.NewUserService(redisClient, userRepo, teamRepo)
+	teamService := services.NewTeamService(redisClient, teamRepo, userRepo)
 
 	gqlHandler := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
 		RedisClient:     redisClient,

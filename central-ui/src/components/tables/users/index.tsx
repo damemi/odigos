@@ -1,12 +1,12 @@
 import React, { useMemo, useCallback, useState } from 'react';
 import * as UTILS from '@/utils';
-import type { User } from '@/types';
 import { useUsersCRUD } from '@/hooks';
 import Theme from '@odigos/ui-kit/theme';
 import { EditUserDrawer } from '@/components';
+import type { User, WriteUserInput } from '@/types';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
-import { EditIcon, MinusCircledIcon, UserIcon } from '@odigos/ui-kit/icons';
+import { EditIcon, TrashIcon, UserIcon } from '@odigos/ui-kit/icons';
 import { CenterThis, DeleteWarning, FlexRow, IconButton, IconWrapped, InteractiveTable, NoDataFound, RowCell, Tag } from '@odigos/ui-kit/components';
 
 export enum UserTableColumn {
@@ -21,10 +21,28 @@ export enum UserTableColumn {
 export const UsersTable: React.FC = () => {
   const theme = Theme.useTheme();
   const { addNotification } = useNotificationStore();
-  const { users, deleteUser, deleting } = useUsersCRUD();
+  const { users, updateUser, updating, deleteUser, deleting } = useUsersCRUD();
 
   const [editOpenForUser, setEditOpenForUser] = useState<User | null>(null);
   const [deleteOpenForUser, setDeleteOpenForUser] = useState<User | null>(null);
+
+  const handleUpdateUser = useCallback(
+    async (userID: string, input: WriteUserInput) => {
+      try {
+        if (updating) return;
+        const result = await updateUser(userID, input);
+
+        if (!result?.success) {
+          const errorMessage = result?.error || 'Failed to update user';
+          addNotification({ type: StatusType.Error, title: Crud.Update, description: errorMessage });
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred while updating the user.';
+        addNotification({ type: StatusType.Error, title: Crud.Update, description: errorMessage });
+      }
+    },
+    [updating, updateUser, addNotification],
+  );
 
   const handleDeleteUser = useCallback(
     async (userID: string) => {
@@ -86,7 +104,7 @@ export const UsersTable: React.FC = () => {
                   <EditIcon />
                 </IconButton>
                 <IconButton onClick={() => setDeleteOpenForUser(user)} tooltip='Delete user'>
-                  <MinusCircledIcon fill={theme.text.error} />
+                  <TrashIcon fill={theme.text.error} />
                 </IconButton>
               </FlexRow>
             ),
@@ -111,8 +129,14 @@ export const UsersTable: React.FC = () => {
           onClose={() => {
             setEditOpenForUser(null);
           }}
-          onSave={() => {
-            alert('TODO');
+          onSave={(payload) => {
+            handleUpdateUser(editOpenForUser.id, {
+              email: payload.email,
+              role: payload.role,
+              teams: payload.teams?.map((team) => team.id) || [],
+              computePlatforms: payload.computePlatforms?.map((platform) => platform.id) || [],
+            });
+            setEditOpenForUser(null);
           }}
           onDelete={() => {
             setDeleteOpenForUser(editOpenForUser);
@@ -130,6 +154,7 @@ export const UsersTable: React.FC = () => {
         onApprove={() => {
           handleDeleteUser(deleteOpenForUser?.id as string);
           setDeleteOpenForUser(null);
+          setEditOpenForUser(null);
         }}
         onDeny={() => {
           setDeleteOpenForUser(null);

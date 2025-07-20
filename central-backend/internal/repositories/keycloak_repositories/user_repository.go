@@ -29,39 +29,123 @@ func NewUserRepository(redisClient *redisclient.RedisClient, credentialsService 
 	}
 }
 
-func (k *UserRepository) CreateUser(ctx context.Context, req services.CreateUserRequest) (*services.CreateUserResult, error) {
+func (k *UserRepository) CheckUserExists(ctx context.Context, email string) error {
+	// First try to get admin token from context (for SetInitialPassword flow)
+	if adminToken := utils.GetTokenFromContext(ctx); adminToken != "" {
+		// Try to use the token directly as an admin token
+		_, err := k.keycloakUserService.CheckUserDetails(adminToken, email)
+		if err == nil {
+			return nil
+		}
+		// If it fails, fall back to getting a fresh admin token
+	}
+
+	adminToken, err := k.adminService.GetAdminToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = k.keycloakUserService.CheckUserDetails(adminToken, email)
+	return err
+}
+
+func (k *UserRepository) CreateUser(ctx context.Context, input *model.WriteUserInput) (*model.CreateUserResult, error) {
+	email := input.Email
+	role := input.Role
+
+	if email == nil {
+		return nil, fmt.Errorf("email is required")
+	}
+	if role == nil {
+		return nil, fmt.Errorf("role is required")
+	}
+
 	adminToken, err := k.adminService.GetAdminToken(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get admin token: %w", err)
 	}
 
-	tempPassword, generatedPassword := k.preparePassword(req.Password)
+	tempPassword, generatedPassword := k.preparePassword(input.Password)
 
-	err = k.keycloakUserService.AddUserToRealm(adminToken, req.Email, req.Email, tempPassword)
+	err = k.keycloakUserService.AddUserToRealm(adminToken, *email, *email, tempPassword)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user in Keycloak: %w", err)
 	}
-
-	err = k.keycloakUserService.SetUserPasswordRequirement(adminToken, req.Email, req.Password == nil)
+	err = k.keycloakUserService.SetUserPasswordRequirement(adminToken, *email, input.Password == nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to set password requirement: %w", err)
 	}
-
-	err = k.keycloakUserService.AddRealmRoleToUser(adminToken, req.Email, strings.ToLower(string(req.Role)))
+	err = k.keycloakUserService.AddRealmRoleToUser(adminToken, *email, strings.ToLower(string(*role)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to assign role: %w", err)
 	}
 
-	user, err := k.GetUserByEmail(ctx, req.Email)
+	user, err := k.GetUserByEmail(ctx, *email)
+	if err != nil {
+		return nil, err
+	}
+	userID := user.ID
+
+	return &model.CreateUserResult{
+		Success:           true,
+		UserID:            userID,
+		GeneratedPassword: generatedPassword,
+	}, nil
+}
+
+func (k *UserRepository) UpdateUser(ctx context.Context, userID string, input *model.WriteUserInput) (*model.GeneralResult, error) {
+
+	email := input.Email
+	newRole := input.Role
+
+	if email == nil {
+		return nil, fmt.Errorf("email is required")
+	}
+	if newRole == nil {
+		return nil, fmt.Errorf("role is required")
+	}
+
+	adminToken, err := k.adminService.GetAdminToken(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return &services.CreateUserResult{
-		Success:           true,
-		UserID:            user.ID,
-		GeneratedPassword: generatedPassword,
-	}, nil
+	user, err := k.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	oldRole := user.Role
+
+	err = k.keycloakUserService.UpdateUser(adminToken, userID, input)
+	if err != nil {
+		return nil, err
+	}
+	err = k.keycloakUserService.RemoveRealmRoleFromUser(adminToken, *email, strings.ToLower(string(oldRole)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to remove role: %w", err)
+	}
+	err = k.keycloakUserService.AddRealmRoleToUser(adminToken, *email, strings.ToLower(string(*newRole)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to assign role: %w", err)
+	}
+
+	return &model.GeneralResult{Success: true, Error: nil}, nil
+}
+
+func (k *UserRepository) DeleteUser(ctx context.Context, userID string) (*model.GeneralResult, error) {
+	adminToken, err := k.adminService.GetAdminToken(ctx)
+	if err != nil {
+		errorMsg := err.Error()
+		return &model.GeneralResult{Success: false, Error: &errorMsg}, nil
+	}
+
+	err = k.keycloakUserService.DeleteUserByID(adminToken, userID)
+	if err != nil {
+		errorMsg := err.Error()
+		return &model.GeneralResult{Success: false, Error: &errorMsg}, nil
+	}
+
+	return &model.GeneralResult{Success: true, Error: nil}, nil
 }
 
 func (k *UserRepository) GetUsers(ctx context.Context) ([]*model.User, error) {
@@ -89,6 +173,20 @@ func (k *UserRepository) GetUsers(ctx context.Context) ([]*model.User, error) {
 	return result, nil
 }
 
+func (k *UserRepository) GetUserByID(ctx context.Context, userID string) (*model.User, error) {
+	adminToken, err := k.adminService.GetAdminToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	userData, err := k.keycloakUserService.GetUserByID(adminToken, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return k.mapKeycloakUserToModel(userData, adminToken)
+}
+
 func (k *UserRepository) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
 	// First try to get admin token from context (for SetInitialPassword flow)
 	if adminToken := utils.GetTokenFromContext(ctx); adminToken != "" {
@@ -113,7 +211,26 @@ func (k *UserRepository) GetUserByEmail(ctx context.Context, email string) (*mod
 	return k.mapKeycloakUserToModel(users[0], adminToken)
 }
 
-func (k *UserRepository) UpdateUserPassword(ctx context.Context, email, password string) error {
+func (k *UserRepository) CheckUserNeedsPasswordChange(ctx context.Context, email string) (bool, error) {
+	// First try to get admin token from context (for SetInitialPassword flow)
+	if adminToken := utils.GetTokenFromContext(ctx); adminToken != "" {
+		// Try to use the token directly as an admin token
+		needsChange, err := k.keycloakUserService.CheckUserNeedsPasswordChange(adminToken, email)
+		if err == nil {
+			return needsChange, nil
+		}
+		// If it fails, fall back to getting a fresh admin token
+	}
+
+	adminToken, err := k.adminService.GetAdminToken(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return k.keycloakUserService.CheckUserNeedsPasswordChange(adminToken, email)
+}
+
+func (k *UserRepository) UpdateUserPassword(ctx context.Context, email string, password string) error {
 	// First try to get admin token from context (for SetInitialPassword flow)
 	if adminToken := utils.GetTokenFromContext(ctx); adminToken != "" {
 		// Try to use the token directly as an admin token
@@ -159,71 +276,6 @@ func (k *UserRepository) SetUserPasswordRequirement(ctx context.Context, email s
 	return k.keycloakUserService.SetUserPasswordRequirement(adminToken, email, required)
 }
 
-func (k *UserRepository) CheckUserExists(ctx context.Context, email string) error {
-	// First try to get admin token from context (for SetInitialPassword flow)
-	if adminToken := utils.GetTokenFromContext(ctx); adminToken != "" {
-		// Try to use the token directly as an admin token
-		_, err := k.keycloakUserService.CheckUserDetails(adminToken, email)
-		if err == nil {
-			return nil
-		}
-		// If it fails, fall back to getting a fresh admin token
-	}
-
-	adminToken, err := k.adminService.GetAdminToken(ctx)
-	if err != nil {
-		return err
-	}
-
-	_, err = k.keycloakUserService.CheckUserDetails(adminToken, email)
-	return err
-}
-
-func (k *UserRepository) AssignComputePlatformsToUser(ctx context.Context, input model.AssignComputePlatformsToUserInput) (*model.AssignComputePlatformsToUserPayload, error) {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
-	if err != nil {
-		logger.Log.Error("Failed to get admin token for compute platform assignment", "error", err)
-		errorMsg := "Failed to authenticate: " + err.Error()
-		return &model.AssignComputePlatformsToUserPayload{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
-	}
-
-	err = k.keycloakUserService.AssignComputePlatformsToUser(adminToken, input.UserID, input.ComputePlatformIDs)
-	if err != nil {
-		logger.Log.Error("Failed to assign compute platforms to user", "userID", input.UserID, "computePlatformIDs", input.ComputePlatformIDs, "error", err)
-		errorMsg := "Failed to assign compute platforms: " + err.Error()
-		return &model.AssignComputePlatformsToUserPayload{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
-	}
-
-	return &model.AssignComputePlatformsToUserPayload{
-		Success: true,
-	}, nil
-}
-
-func (k *UserRepository) CheckUserNeedsPasswordChange(ctx context.Context, email string) (bool, error) {
-	// First try to get admin token from context (for SetInitialPassword flow)
-	if adminToken := utils.GetTokenFromContext(ctx); adminToken != "" {
-		// Try to use the token directly as an admin token
-		needsChange, err := k.keycloakUserService.CheckUserNeedsPasswordChange(adminToken, email)
-		if err == nil {
-			return needsChange, nil
-		}
-		// If it fails, fall back to getting a fresh admin token
-	}
-
-	adminToken, err := k.adminService.GetAdminToken(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	return k.keycloakUserService.CheckUserNeedsPasswordChange(adminToken, email)
-}
-
 func (k *UserRepository) GetUserRole(ctx context.Context, userID string) (string, error) {
 	adminToken, err := k.adminService.GetAdminToken(ctx)
 	if err != nil {
@@ -233,21 +285,34 @@ func (k *UserRepository) GetUserRole(ctx context.Context, userID string) (string
 	return k.keycloakUserService.GetUserRole(adminToken, userID)
 }
 
-func (k *UserRepository) DeleteUser(ctx context.Context, userID string) (*services.DeleteUserResult, error) {
+func (k *UserRepository) AssignComputePlatformsToUser(ctx context.Context, userID string, computePlatformIDs []string) (*model.GeneralResult, error) {
 	adminToken, err := k.adminService.GetAdminToken(ctx)
 	if err != nil {
-		return &services.DeleteUserResult{Success: false, Error: err.Error()}, nil
+		logger.Log.Error("Failed to get admin token for compute platform assignment", "error", err)
+		errorMsg := "Failed to authenticate: " + err.Error()
+		return &model.GeneralResult{
+			Success: false,
+			Error:   &errorMsg,
+		}, nil
 	}
 
-	err = k.keycloakUserService.DeleteUserByID(adminToken, userID)
+	err = k.keycloakUserService.AssignComputePlatformsToUser(adminToken, userID, computePlatformIDs)
 	if err != nil {
-		return &services.DeleteUserResult{Success: false, Error: err.Error()}, nil
+		logger.Log.Error("Failed to assign compute platforms to user", "userID", userID, "computePlatformIDs", computePlatformIDs, "error", err)
+		errorMsg := "Failed to assign compute platforms: " + err.Error()
+		return &model.GeneralResult{
+			Success: false,
+			Error:   &errorMsg,
+		}, nil
 	}
 
-	return &services.DeleteUserResult{Success: true, Error: ""}, nil
+	return &model.GeneralResult{
+		Success: true,
+	}, nil
 }
 
 // Helper methods
+
 func (k *UserRepository) preparePassword(password *string) (string, *string) {
 	tempPassword := password
 	var generatedPassword *string
@@ -268,14 +333,19 @@ func (k *UserRepository) mapKeycloakUserToModel(userData map[string]any, adminTo
 		return nil, fmt.Errorf("invalid user ID")
 	}
 
-	email, ok := userData["email"].(string)
-	if !ok || email == "" {
-		return nil, fmt.Errorf("invalid user email")
-	}
-
 	username, ok := userData["username"].(string)
 	if !ok || username == "" {
 		return nil, fmt.Errorf("invalid username")
+	}
+
+	email, ok := userData["email"].(string)
+	if !ok || email == "" {
+		logger.Log.Warn("User email is missing or empty, falling back to username",
+			"userID", id,
+			"username", username,
+			"emailFound", ok,
+			"emailValue", email)
+		email = username
 	}
 
 	role, err := k.keycloakUserService.GetUserRole(adminToken, id)

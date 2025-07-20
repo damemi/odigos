@@ -4,15 +4,23 @@
 
 scalar JSON
 
+type SystemConfig {
+  isInitialized: Boolean!
+  version: String!
+}
+
 type Connection {
   proxyID: String!
   status: String!
   name: String!
 }
 
-type SystemConfig {
-  isInitialized: Boolean!
-  version: String!
+# TODO: replace connection with compute platform
+type ComputePlatform {
+  id: String!
+  name: String!
+  type: String!
+  status: String!
 }
 
 enum Role {
@@ -27,6 +35,12 @@ enum SignInStatus {
   PASSWORD_UPDATE_REQUIRED
 }
 
+type SignInResult {
+  token: String!
+  user: User
+  status: SignInStatus!
+}
+
 type User {
   id: String!
   email: String!
@@ -37,94 +51,59 @@ type User {
   computePlatforms: [ComputePlatform!]!
 }
 
-type SignInPayload {
-  token: String!
-  user: User
-  status: SignInStatus!
+input WriteUserInput {
+  email: String
+  password: String
+  role: Role
+  teams: [String]
+  computePlatforms: [String]
 }
 
-type CreateUserPayload {
+type CreateUserResult {
   success: Boolean!
+  userID: String!
   generatedPassword: String
-}
-
-# TODO: replace connection with compute platform
-type ComputePlatform {
-  id: String!
-  name: String!
-  type: String!
-  status: String!
 }
 
 type Team {
   id: String!
   name: String!
   description: String
-  createdAt: String!
-  updatedAt: String!
   users: [User!]!
   computePlatforms: [ComputePlatform!]!
+  createdAt: String!
+  updatedAt: String!
 }
 
-type CreateTeamPayload {
-  success: Boolean!
-  team: Team
-  error: String
+input WriteTeamInput {
+  name: String
+  description: String
+  users: [String]
+  computePlatforms: [String]
 }
 
-type DeleteResult {
-  success: Boolean!
-  error: String
-}
-
-input AssignTeamsToUserInput {
-  userID: String!
-  teamIDs: [String!]!
-}
-
-input AssignComputePlatformsToUserInput {
-  userID: String!
-  computePlatformIDs: [String!]!
-}
-
-type AssignTeamsToUserPayload {
-  success: Boolean!
-  error: String
-}
-
-type AssignComputePlatformsToUserPayload {
+type GeneralResult {
   success: Boolean!
   error: String
 }
 
 type Query {
-  connections: [Connection!]!
   remoteFetch(proxyID: String!, query: String!, variables: JSON!): String!
+  systemConfig: SystemConfig!
+  connections: [Connection!]!
   users: [User!]!
   teams: [Team!]!
-  systemConfig: SystemConfig!
 }
 
 type Mutation {
-  signIn(email: String!, password: String!): SignInPayload!
-  createUser(
-    email: String!
-    password: String
-    role: Role!
-    teams: [String]!
-    computePlatforms: [String]!
-  ): CreateUserPayload!
-  deleteUser(userID: String!): DeleteResult!
-  setInitialPassword(email: String!, password: String!): SignInPayload!
-  createTeam(
-    name: String!
-    description: String
-    users: [String]!
-    computePlatforms: [String]!
-  ): CreateTeamPayload!
-  deleteTeam(teamID: String!): DeleteResult!
-  assignTeamsToUser(input: AssignTeamsToUserInput!): AssignTeamsToUserPayload!
-  assignComputePlatformsToUser(
-    input: AssignComputePlatformsToUserInput!
-  ): AssignComputePlatformsToUserPayload!
+  signIn(email: String!, password: String!): SignInResult!
+  setInitialPassword(email: String!, password: String!): SignInResult!
+
+  createUser(input: WriteUserInput!): CreateUserResult!
+  updateUser(userID: String!, input: WriteUserInput!): GeneralResult!
+  deleteUser(userID: String!): GeneralResult!
+
+  createTeam(input: WriteTeamInput!): GeneralResult!
+  updateTeam(teamID: String!, input: WriteTeamInput!): GeneralResult!
+  deleteTeam(teamID: String!): GeneralResult!
 }

@@ -1,7 +1,7 @@
 import React, { useState, type FC, useMemo } from 'react';
 import type { User } from '@/types';
 import Theme from '@odigos/ui-kit/theme';
-import { DataCardContent } from './styled';
+import { DataCardContentColumn, DataCardContentRow } from './styled';
 import { MinusCircledIcon, SearchIcon, UserGroupIcon } from '@odigos/ui-kit/icons';
 import { DataCard, DataFinger, IconButton, Input, NoDataFound } from '@odigos/ui-kit/components';
 
@@ -24,11 +24,13 @@ const MembersCard: FC<MembersCardProps> = ({ formData, handleFormChange }) => {
 
   return (
     <DataCard title='Members' titleBadge={usersCount} action={<Input icon={SearchIcon} placeholder='Search...' value={search} onChange={(e) => setSearch(e.target.value)} />}>
-      <DataCardContent $justifyContent={!filteredUsersCount ? 'center' : ''}>
-        {!filteredUsersCount ? (
+      {!filteredUsersCount ? (
+        <DataCardContentRow $justifyContent='center'>
           <NoDataFound subTitle={search ? undefined : ''} />
-        ) : (
-          filteredUsers?.map((u) => (
+        </DataCardContentRow>
+      ) : (
+        <DataCardContentColumn>
+          {filteredUsers?.map((u) => (
             <DataFinger
               key={`user-${u.id}`}
               title={u.email}
@@ -48,9 +50,9 @@ const MembersCard: FC<MembersCardProps> = ({ formData, handleFormChange }) => {
                 </IconButton>
               )}
             />
-          ))
-        )}
-      </DataCardContent>
+          ))}
+        </DataCardContentColumn>
+      )}
     </DataCard>
   );
 };

@@ -25,14 +25,15 @@ func NewAuthService(redisClient *redisclient.RedisClient, userRepo UserRepositor
 	}
 }
 
-func (a *AuthService) SignIn(ctx context.Context, email, password string) (*model.SignInPayload, error) {
+func (a *AuthService) SignIn(ctx context.Context, email, password string) (*model.SignInResult, error) {
 	if a.isFirstTimeSetup(ctx, email, password) {
 		logger.Log.Info("First-time setup detected, creating first admin user")
 
-		_, err := a.userRepo.CreateUser(ctx, CreateUserRequest{
-			Email:    email,
+		role := model.RoleAdmin
+		_, err := a.userRepo.CreateUser(ctx, &model.WriteUserInput{
+			Email:    &email,
 			Password: &password,
-			Role:     model.RoleAdmin,
+			Role:     &role,
 		})
 		if err != nil {
 			logger.Log.Error("Failed to create first admin user", "error", err)
@@ -58,7 +59,7 @@ func (a *AuthService) SignIn(ctx context.Context, email, password string) (*mode
 			logger.Log.Error("Failed to set system as initialized", "error", err)
 		}
 
-		return &model.SignInPayload{
+		return &model.SignInResult{
 			Token:  authResult.AccessToken,
 			Status: model.SignInStatusSuccess,
 			User:   user,
@@ -73,7 +74,7 @@ func (a *AuthService) SignIn(ctx context.Context, email, password string) (*mode
 			if err != nil {
 				return nil, fmt.Errorf("failed to get admin token for initial password setup: %w", err)
 			}
-			return &model.SignInPayload{
+			return &model.SignInResult{
 				Token:  adminToken,
 				Status: model.SignInStatusPasswordUpdateRequired,
 				User: &model.User{
@@ -98,14 +99,14 @@ func (a *AuthService) SignIn(ctx context.Context, email, password string) (*mode
 
 	logger.Log.Info("User login successful", "email", email, "userID", user.ID, "needsPasswordChange", user.NeedsPasswordChange)
 
-	return &model.SignInPayload{
+	return &model.SignInResult{
 		Token:  authResult.AccessToken,
 		Status: model.SignInStatusSuccess,
 		User:   user,
 	}, nil
 }
 
-func (a *AuthService) SetInitialPassword(ctx context.Context, email, password string) (*model.SignInPayload, error) {
+func (a *AuthService) SetInitialPassword(ctx context.Context, email, password string) (*model.SignInResult, error) {
 	token := utils.GetTokenFromContext(ctx)
 	if token == "" {
 		return nil, fmt.Errorf("authentication required")
@@ -134,7 +135,7 @@ func (a *AuthService) SetInitialPassword(ctx context.Context, email, password st
 		return nil, err
 	}
 
-	return &model.SignInPayload{
+	return &model.SignInResult{
 		Token:  token,
 		Status: model.SignInStatusSuccess,
 		User:   user,
