@@ -146,8 +146,7 @@ jobs:
 
       - name: Set env
         id: vars
-        run: |
-          echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+        run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
 
       - name: Trigger CLI Release in Odigos Main Repo
         env:
