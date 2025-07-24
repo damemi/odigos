@@ -36,6 +36,10 @@ build-odiglet-with-otel_agents:
 build-instrumentor:
 	$(MAKE) build-image/instrumentor SUMMARY="Instrumentor for Odigos" DESCRIPTION="Instrumentor manages auto-instrumentation for workloads with Odigos." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
+.PHONY: build-agents
+build-agents:
+	$(MAKE) build-image/agents DOCKERFILE=agents/$(DOCKERFILE) SUMMARY="Odigos Enterprise Agents" DESCRIPTION="The Odigos Agents used to copy Odigos agent relevant files into the user workloads." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
 .PHONY: build-images
 build-images:
 	make -j 2 build-odiglet build-instrumentor TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
@@ -90,6 +94,10 @@ deploy-odiglet-with-agents:
 .PHONY: deploy-instrumentor
 deploy-instrumentor:
 	make build-instrumentor TAG=$(TAG) && make load-to-kind-instrumentor TAG=$(TAG) && make restart-instrumentor
+
+.PHONY: deploy-agents
+deploy-agents:
+	make build-agents TAG=$(TAG) && make load-to-kind-agents TAG=$(TAG)
 
 .PHONY: deploy
 deploy:

@@ -14,7 +14,7 @@ jobs:
     runs-on: warp-ubuntu-latest-x64-4x-spot
     strategy:
       matrix:
-        service: [odiglet, instrumentor, central-ui, central-proxy, central-backend]
+        service: [odiglet, instrumentor, central-ui, central-proxy, central-backend, agents]
         dockerfile: [Dockerfile, Dockerfile.rhel]
 
     steps:
@@ -32,6 +32,7 @@ jobs:
           file: >-
             ${{ matrix.service == 'odiglet' && format('odiglet/{0}', matrix.dockerfile)
             || matrix.service == 'central-ui' && format('central-ui/{0}', matrix.dockerfile)
+            || matrix.service == 'agents' && format('agents/{0}', matrix.dockerfile)
             || matrix.dockerfile }}
           context: ${{ matrix.service == 'central-ui' && 'central-ui' || '.' }}
           push: false

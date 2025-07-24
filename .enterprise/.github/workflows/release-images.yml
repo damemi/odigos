@@ -25,6 +25,7 @@ jobs:
             'central-proxy',
             'central-backend',
             'central-ui',
+            'agents'
           ]
         dockerfile: ['Dockerfile', 'Dockerfile.rhel']
         include:
@@ -43,6 +44,9 @@ jobs:
           - service: central-ui
             summary: 'Central UI for Odigos'
             description: 'Central UI is the web interface for Odigos Central, providing a user-friendly way to manage and visualize the data collected by Odigos.'
+          - service: agents
+            summary: 'Odigos Enterprise Agents'
+            description: 'The Odigos Agents used to copy Odigos agent relevant files into the user workloads.'
 
     runs-on: large-runner
     steps:
@@ -101,6 +105,7 @@ jobs:
           file: >-
             ${{ matrix.service == 'odiglet' && format('odiglet/{0}', matrix.dockerfile)
             || matrix.service == 'central-ui' && format('central-ui/{0}', matrix.dockerfile)
+            || matrix.service == 'agents' && format('agents/{0}', matrix.dockerfile)
             || matrix.dockerfile }}
           context: ${{ matrix.service == 'central-ui' && 'central-ui' || '.' }}
           push: true
