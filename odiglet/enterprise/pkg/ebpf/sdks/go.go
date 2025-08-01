@@ -1,7 +1,6 @@
 package sdks
 
 import (
-	"bytes"
 	"context"
 	"crypto"
 	"crypto/rsa"
@@ -9,7 +8,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 	"time"
@@ -53,7 +51,7 @@ type GoOtelEbpfSdkEnterprise struct {
 
 type GoInstrumentationFactoryEnterprise struct {
 	offsetLastModified time.Time
-	offsetFile         io.Reader
+	offsetFileBytes    []byte
 }
 
 func NewGoInstrumentationFactoryEnterprise() (instrumentation.Factory, error) {
@@ -78,7 +76,7 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 
 		// If the file is empty, use default offsets
 		if info.Size() == 0 {
-			g.offsetFile = strings.NewReader("")
+			g.offsetFileBytes = []byte{}
 			return nil
 		}
 
@@ -88,14 +86,14 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 			if err != nil {
 				return err
 			}
-			g.offsetFile = file
+			g.offsetFileBytes = file
 			g.offsetLastModified = info.ModTime()
 			log.Logger.Info("using custom Go offsets file")
 		}
 	} else {
 		// if the env var isn't set, clear the local offset file
 		// this allows switching back to in-memory offsets by deleting the env var
-		g.offsetFile = strings.NewReader("")
+		g.offsetFileBytes = []byte{}
 	}
 
 	return nil
@@ -105,7 +103,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 	err := g.updateLocalOffsets()
 	if err != nil {
 		log.Logger.Error(err, "no custom Go offsets loaded, falling back to default offsets")
-		g.offsetFile = strings.NewReader("")
+		g.offsetFileBytes = []byte{}
 	}
 
 	defaultExporter, err := otlptracegrpc.New(
@@ -138,8 +136,8 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 		auto.WithConfigProvider(cp),
 	}
 
-	if g.offsetFile != nil {
-		opts = append(opts, auto.WithOffsetFile(g.offsetFile))
+	if len(g.offsetFileBytes) > 0 {
+		opts = append(opts, auto.WithOffsetFile(g.offsetFileBytes))
 	}
 
 	inst, err := auto.NewInstrumentation(
@@ -466,7 +464,7 @@ func mergePayloadConfigs(defaultConfig *instrumentationrules.PayloadCollection, 
 	return mergedConfig
 }
 
-func readAndVerifyOffsetsFile(path string) (io.Reader, error) {
+func readAndVerifyOffsetsFile(path string) ([]byte, error) {
 	fileBytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -514,5 +512,5 @@ func readAndVerifyOffsetsFile(path string) (io.Reader, error) {
 		return nil, err
 	}
 
-	return bytes.NewReader([]byte(originalContent)), nil
+	return []byte(originalContent), nil
 }
