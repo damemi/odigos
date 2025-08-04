@@ -77,6 +77,7 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 		// If the file is empty, use default offsets
 		if info.Size() == 0 {
 			g.offsetFileBytes = []byte{}
+			log.Logger.Info("no custom Go offsets loaded, falling back to default offsets")
 			return nil
 		}
 
@@ -86,14 +87,25 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 			if err != nil {
 				return err
 			}
+
+			var timestamp interface{}
+			var data map[string]interface{}
+			err = json.Unmarshal(file, &data)
+			if err != nil {
+				return err
+			}
+			timestamp = data["timestamp"]
+
+			log.Logger.Info("using custom Go offsets file", "timestamp", timestamp)
+
 			g.offsetFileBytes = file
 			g.offsetLastModified = info.ModTime()
-			log.Logger.Info("using custom Go offsets file")
 		}
 	} else {
 		// if the env var isn't set, clear the local offset file
 		// this allows switching back to in-memory offsets by deleting the env var
 		g.offsetFileBytes = []byte{}
+		log.Logger.Info("custom Go offsets file env var not set, falling back to default offsets")
 	}
 
 	return nil
@@ -102,7 +114,7 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
 	err := g.updateLocalOffsets()
 	if err != nil {
-		log.Logger.Error(err, "no custom Go offsets loaded, falling back to default offsets")
+		log.Logger.Error(err, "failed to update custom Go offsets, attempting to continue with default offsets")
 		g.offsetFileBytes = []byte{}
 	}
 
