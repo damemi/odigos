@@ -159,6 +159,32 @@ RUN for v in ${RUBY_VERSIONS}; do \
     done
 
 
+# Compile rsync statically for distroless image
+# don't specify the platform here, since we want to compile for multi architecture natively with gcc
+FROM registry.odigos.io/odiglet-base:v1.8 AS rsync-builder
+ARG RSYNC_VERSION=3.2.7
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    wget \
+    ca-certificates \
+    libacl1-dev \
+    libattr1-dev \
+    libpopt-dev \
+    liblz4-dev \
+    libzstd-dev \
+    libxxhash-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN wget https://download.samba.org/pub/rsync/src/rsync-${RSYNC_VERSION}.tar.gz \
+    && tar -xzf rsync-${RSYNC_VERSION}.tar.gz \
+    && cd rsync-${RSYNC_VERSION} \
+    && ./configure --prefix=/usr LDFLAGS="-static" \
+    && make \
+    && make install DESTDIR=/rsync-install \
+    && cd .. \
+    && rm -rf rsync-${RSYNC_VERSION}*
+
 FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.8 AS builder
 
 RUN --mount=type=secret,id=github_token \
@@ -184,32 +210,6 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 
 # Install delve
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
-
-
-# Compile rsync statically for distroless image
-ARG RSYNC_VERSION=3.2.7
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    wget \
-    ca-certificates \
-    libacl1-dev \
-    libattr1-dev \
-    libpopt-dev \
-    liblz4-dev \
-    libzstd-dev \
-    libxxhash-dev \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN wget https://download.samba.org/pub/rsync/src/rsync-${RSYNC_VERSION}.tar.gz \
-    && tar -xzf rsync-${RSYNC_VERSION}.tar.gz \
-    && cd rsync-${RSYNC_VERSION} \
-    && ./configure --prefix=/usr LDFLAGS="-static" \
-    && make \
-    && make install DESTDIR=/rsync-install \
-    && cd .. \
-    && rm -rf rsync-${RSYNC_VERSION}*
-
 
 WORKDIR /instrumentations
 
@@ -266,7 +266,7 @@ FROM registry.fedoraproject.org/fedora-minimal:38
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
 COPY --from=builder /go/bin/dlv /root/dlv
 # Copy statically compiled rsync (no shared libraries needed)
-COPY --from=builder /rsync-install/usr/bin/rsync /usr/bin/rsync
+COPY --from=rsync-builder /rsync-install/usr/bin/rsync /usr/bin/rsync
 WORKDIR /instrumentations/
 COPY --from=builder /instrumentations/ .
 
