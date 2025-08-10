@@ -1,6 +1,7 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useStatusStore } from '../../store';
+import { AccountMenu } from '../account-menu';
 import { FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { ACCESS_MANAGEMENT_TITLE, ROUTES } from '@/utils';
 import { Connection, StatusType } from '@odigos/ui-kit/types';
@@ -10,14 +11,15 @@ import { useConfig, useConnectionsCRUD, useDescribe, useProxyID, useTokenCRUD } 
 import { ComputePlatformSelect, NotificationManager, SlackInvite, SystemOverview, ToggleDarkMode } from '@odigos/ui-kit/containers';
 
 const OverviewHeader = () => {
+  const router = useRouter();
+
   const { isReadonly } = useConfig();
   const { fetchDescribeOdigos } = useDescribe();
   const { tokens, updateToken } = useTokenCRUD();
   const { status, title, message } = useStatusStore();
+
   const { proxyID, goSelectNewProxy, selectProxyID } = useProxyID();
   const { connections, currentConnection } = useConnectionsCRUD(proxyID);
-
-  const router = useRouter();
 
   const onClickHome = () => router.push(ROUTES.ROOT);
   const onClickPlatform = ({ id }: Connection) => selectProxyID(id);
@@ -47,6 +49,7 @@ const OverviewHeader = () => {
         <SystemOverview key='system-overview' tokens={tokens} saveToken={updateToken} fetchDescribeOdigos={fetchDescribeOdigos} />,
         <NotificationManager key='notification-manager' />,
         <SlackInvite key='slack-invite' />,
+        <AccountMenu key='account-menu' />,
       ]}
     />
   );

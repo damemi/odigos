@@ -111,7 +111,7 @@ export const TeamsTable: React.FC = () => {
           },
         ] as RowCell[],
       })),
-    [teams, handleDeleteTeam, theme.text.error],
+    [teams, theme.text.error],
   );
 
   return (

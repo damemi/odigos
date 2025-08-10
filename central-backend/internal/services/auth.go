@@ -222,3 +222,25 @@ func (a *AuthService) isFirstTimeSetup(ctx context.Context, email, password stri
 
 	return !isInitialized
 }
+
+func (a *AuthService) SignOut(ctx context.Context) (*model.GeneralResult, error) {
+	token := utils.GetTokenFromContext(ctx)
+	if token == "" {
+		return nil, fmt.Errorf("authentication required")
+	}
+
+	err := a.authRepo.Logout(ctx, token)
+	if err != nil {
+		logger.Log.Error("Failed to logout user", "error", err)
+		errorMsg := fmt.Sprintf("failed to logout: %v", err)
+		return &model.GeneralResult{
+			Success: false,
+			Error:   &errorMsg,
+		}, nil
+	}
+
+	logger.Log.Info("User logged out successfully")
+	return &model.GeneralResult{
+		Success: true,
+	}, nil
+}

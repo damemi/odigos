@@ -42,3 +42,12 @@ export const SET_INITIAL_PASSWORD = gql`
     }
   }
 `;
+
+export const SIGN_OUT = gql`
+  mutation SignOut {
+    signOut {
+      success
+      error
+    }
+  }
+`;

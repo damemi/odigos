@@ -4,7 +4,7 @@ import { useUserStore } from '@/store';
 import { useRouter } from 'next/navigation';
 import { useState, useCallback } from 'react';
 import { SignInPayload, SignInStatus, SystemConfig } from '@/types';
-import { SIGN_IN, SET_INITIAL_PASSWORD, GET_SYSTEM_CONFIG } from '@/graphql';
+import { SIGN_IN, SET_INITIAL_PASSWORD, SIGN_OUT, GET_SYSTEM_CONFIG } from '@/graphql';
 
 export const useAuth = () => {
   const router = useRouter();
@@ -47,6 +47,20 @@ export const useAuth = () => {
     },
   });
 
+  const [signOut, { loading: signOutLoading }] = useMutation<{ signOut: { success: boolean; error?: string } }>(SIGN_OUT, {
+    onCompleted: (data) => {
+      if (data.signOut.success) {
+        clearAuth();
+        router.push(ROUTES.SIGN_IN);
+      } else {
+        setError(data.signOut.error || 'Logout failed');
+      }
+    },
+    onError: (error) => {
+      setError(error.message);
+    },
+  });
+
   const handleSignIn = async (email: string, password: string) => {
     setError(null);
     try {
@@ -60,6 +74,15 @@ export const useAuth = () => {
     setError(null);
     try {
       await setInitialPassword({ variables: { email, password } });
+    } catch (_err) {
+      console.error(_err);
+    }
+  };
+
+  const handleSignOut = async () => {
+    setError(null);
+    try {
+      await signOut();
     } catch (_err) {
       console.error(_err);
     }
@@ -82,13 +105,14 @@ export const useAuth = () => {
 
   return {
     logout,
+    signOut: handleSignOut,
     getCurrentUser,
     isAuthenticated,
     signIn: handleSignIn,
     setInitialPassword: handleSetInitialPassword,
     systemConfigLoading,
     systemConfig: systemConfigData?.systemConfig,
-    loading: signInLoading || passwordUpdateLoading,
+    loading: signInLoading || passwordUpdateLoading || signOutLoading,
     error,
   };
 };

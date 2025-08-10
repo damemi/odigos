@@ -59,7 +59,7 @@ export const UsersTable: React.FC = () => {
         addNotification({ type: StatusType.Error, title: Crud.Delete, description: errorMessage });
       }
     },
-    [deleting, deleteUser],
+    [deleting, deleteUser, addNotification],
   );
 
   const columns = [
@@ -111,7 +111,7 @@ export const UsersTable: React.FC = () => {
           },
         ] as RowCell[],
       })),
-    [users, handleDeleteUser],
+    [users, theme.text.error],
   );
 
   return (

@@ -35,7 +35,7 @@ func (a *AdminService) GetAdminToken(ctx context.Context) (string, error) {
 	if token := utils.GetTokenFromContext(ctx); token != "" {
 		_, err := a.ValidateAdminPermissions(token)
 		if err == nil {
-			return a.authRepo.GetAdminTokenForInitialPassword(ctx)
+			return token, nil
 		}
 	}
 

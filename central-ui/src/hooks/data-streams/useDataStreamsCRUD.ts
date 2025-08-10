@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useProxy, useProxyID } from '../proxy';
 import { useConfig } from '../config';
 import { STORAGE_KEYS } from '@/utils';
@@ -34,28 +34,31 @@ export const useDataStreamsCRUD = (): UseDataStreamsCrud => {
   const { fetch: mutateUpdate } = useProxy<{ updateDataStream: { name: string } }, { id: string; dataStream: DataStream }>(UPDATE_DATA_STREAM);
   const { fetch: mutateDelete } = useProxy<{ deleteDataStream: boolean }, { id: string }>(DELETE_DATA_STREAM);
 
-  const fetchDataStreams = async (overrideStreamNameSelection?: string) => {
-    setDataStreamsLoading(true);
-    const { data } = await fetchDataStreamsQuery();
-    setDataStreamsLoading(false);
+  const fetchDataStreams = useCallback(
+    async (overrideStreamNameSelection?: string) => {
+      setDataStreamsLoading(true);
+      const { data } = await fetchDataStreamsQuery();
+      setDataStreamsLoading(false);
 
-    if (data?.computePlatform?.dataStreams) {
-      setDataStreams(data.computePlatform.dataStreams);
+      if (data?.computePlatform?.dataStreams) {
+        setDataStreams(data.computePlatform.dataStreams);
 
-      if (overrideStreamNameSelection) {
-        setSelectedStreamName(overrideStreamNameSelection);
-      } else {
-        const streamNameFromStorage = sessionStorage.getItem(STORAGE_KEYS.SELECTED_DATA_STREAM(proxyID));
-        const storedSteamNameExistsInCP = data.computePlatform.dataStreams.some((stream) => stream.name === streamNameFromStorage);
-
-        if (streamNameFromStorage && storedSteamNameExistsInCP) {
-          setSelectedStreamName(streamNameFromStorage);
+        if (overrideStreamNameSelection) {
+          setSelectedStreamName(overrideStreamNameSelection);
         } else {
-          setSelectedStreamName(DEFAULT_DATA_STREAM_NAME);
+          const streamNameFromStorage = sessionStorage.getItem(STORAGE_KEYS.SELECTED_DATA_STREAM(proxyID));
+          const storedSteamNameExistsInCP = data.computePlatform.dataStreams.some((stream) => stream.name === streamNameFromStorage);
+
+          if (streamNameFromStorage && storedSteamNameExistsInCP) {
+            setSelectedStreamName(streamNameFromStorage);
+          } else {
+            setSelectedStreamName(DEFAULT_DATA_STREAM_NAME);
+          }
         }
       }
-    }
-  };
+    },
+    [fetchDataStreamsQuery, proxyID, setDataStreams, setSelectedStreamName, setDataStreamsLoading],
+  );
 
   const updateDataStream: UseDataStreamsCrud['updateDataStream'] = async (dataStreamName, dataStream) => {
     if (isReadonly) {
@@ -105,7 +108,7 @@ export const useDataStreamsCRUD = (): UseDataStreamsCrud => {
 
   useEffect(() => {
     if (!dataStreams.length && !dataStreamsLoading) fetchDataStreams();
-  }, []);
+  }, [dataStreams.length, dataStreamsLoading, fetchDataStreams]);
 
   return {
     dataStreamsLoading,

@@ -50,3 +50,7 @@ func (k *AuthRepository) GetAdminTokenForInitialPassword(ctx context.Context) (s
 	}
 	return adminToken, nil
 }
+
+func (k *AuthRepository) Logout(ctx context.Context, token string) error {
+	return keycloak.LogoutUser(consts.GetKeycloakHost(), consts.KeycloakRealm, consts.ClientID, token)
+}

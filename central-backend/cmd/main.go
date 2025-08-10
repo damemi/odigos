@@ -61,11 +61,10 @@ func main() {
 		logger.Fatal("Failed to connect to Redis", err)
 	}
 
-	// Ensure system starts in uninitialized state
-	err = redisClient.SetSystemInitialized(ctx, false)
-	if err != nil {
-		logger.Log.Error("Failed to set system initialization status", "error", err)
-		// Don't fail startup if this fails, just log it
+	initialized := determineSystemInitialized(adminToken, credentials.Username)
+
+	if setErr := redisClient.SetSystemInitialized(ctx, initialized); setErr != nil {
+		logger.Log.Error("Failed to set system initialization status", "error", setErr)
 	}
 
 	go handleShutdown(ctx, redisClient)
@@ -91,27 +90,7 @@ func main() {
 		TeamService:     teamService,
 	}}))
 
-	router := gin.Default()
-	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
-		AllowMethods:     []string{"GET", "POST", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-		AllowCredentials: true,
-	}))
-
-	router.GET("/ws/proxy", func(c *gin.Context) {
-		wsServer.HandleConnection(c.Writer, c.Request)
-	})
-	router.POST("/graphql", func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
-			token := strings.TrimPrefix(authHeader, "Bearer ")
-			ctx := utils.SetTokenInContext(c.Request.Context(), token)
-			c.Request = c.Request.WithContext(ctx)
-		}
-
-		gqlHandler.ServeHTTP(c.Writer, c.Request)
-	})
+	router := newRouter(gqlHandler, wsServer)
 
 	port := config.Config.ServerPort
 
@@ -123,7 +102,59 @@ func main() {
 
 }
 
-// remove all active proxy connections from Redis and close the Redis connection
+func determineSystemInitialized(adminToken, adminUsername string) bool {
+	userService := keycloak.NewUserService()
+	users, err := userService.ListUsers(adminToken)
+	if err != nil {
+		logger.Log.Error("Failed to list users from Keycloak to determine initialization state", "error", err)
+		return false
+	}
+
+	for _, u := range users {
+		if _, isServiceAccount := u["serviceAccountClientId"]; isServiceAccount {
+			continue
+		}
+		username, _ := u["username"].(string)
+		if username == adminUsername {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func newRouter(gqlHandler *handler.Server, wsServer *websocketserver.WebSocketServer) *gin.Engine {
+	router := gin.Default()
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"},
+		AllowMethods:     []string{"GET", "POST", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowCredentials: true,
+	}))
+
+	router.GET("/ws/proxy", func(c *gin.Context) {
+		wsServer.HandleConnection(c.Writer, c.Request)
+	})
+
+	router.POST("/graphql", authContextMiddleware(), func(c *gin.Context) {
+		gqlHandler.ServeHTTP(c.Writer, c.Request)
+	})
+
+	return router
+}
+
+func authContextMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
+			token := strings.TrimPrefix(authHeader, "Bearer ")
+			ctx := utils.SetTokenInContext(c.Request.Context(), token)
+			c.Request = c.Request.WithContext(ctx)
+		}
+		c.Next()
+	}
+}
+
 func handleShutdown(ctx context.Context, redisClient *redisclient.RedisClient) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
