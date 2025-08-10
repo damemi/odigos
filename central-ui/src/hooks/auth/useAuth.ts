@@ -9,7 +9,7 @@ import { SIGN_IN, SET_INITIAL_PASSWORD, SIGN_OUT, GET_SYSTEM_CONFIG } from '@/gr
 export const useAuth = () => {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const { setAuth, clearAuth } = useUserStore();
+  const { setAuth, clearAuth, setLastAuthEmail } = useUserStore();
 
   const { data: systemConfigData, loading: systemConfigLoading } = useQuery<{ systemConfig: SystemConfig }>(GET_SYSTEM_CONFIG);
 
@@ -22,6 +22,7 @@ export const useAuth = () => {
 
       switch (status) {
         case SignInStatus.SUCCESS:
+          setLastAuthEmail(null);
           router.push(ROUTES.CONNECTIONS);
           break;
         case SignInStatus.PASSWORD_UPDATE_REQUIRED:
@@ -40,6 +41,7 @@ export const useAuth = () => {
       if (user) {
         setAuth(user, token);
       }
+      setLastAuthEmail(null);
       router.push(ROUTES.CONNECTIONS);
     },
     onError: (error) => {
@@ -51,6 +53,7 @@ export const useAuth = () => {
     onCompleted: (data) => {
       if (data.signOut.success) {
         clearAuth();
+        setLastAuthEmail(null);
         router.push(ROUTES.SIGN_IN);
       } else {
         setError(data.signOut.error || 'Logout failed');
@@ -64,6 +67,7 @@ export const useAuth = () => {
   const handleSignIn = async (email: string, password: string) => {
     setError(null);
     try {
+      setLastAuthEmail(email);
       await signIn({ variables: { email, password } });
     } catch (_err) {
       console.error(_err);
@@ -90,6 +94,7 @@ export const useAuth = () => {
 
   const logout = useCallback(() => {
     clearAuth();
+    setLastAuthEmail(null);
     router.push(ROUTES.SIGN_IN);
   }, [router, clearAuth]);
 
@@ -103,10 +108,16 @@ export const useAuth = () => {
     return user;
   }, []);
 
+  const getLastAuthEmail = useCallback(() => {
+    const { lastAuthEmail } = useUserStore.getState();
+    return lastAuthEmail;
+  }, []);
+
   return {
     logout,
     signOut: handleSignOut,
     getCurrentUser,
+    getLastAuthEmail,
     isAuthenticated,
     signIn: handleSignIn,
     setInitialPassword: handleSetInitialPassword,

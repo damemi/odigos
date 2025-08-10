@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks';
 import styled from 'styled-components';
 import { OdigosLogo } from '@odigos/ui-kit/icons';
@@ -23,9 +23,14 @@ const Form = styled.form`
 export default function UpdatePasswordPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { setInitialPassword, loading, error } = useAuth();
+  const { setInitialPassword, loading, error, getLastAuthEmail } = useAuth();
   const [confirmPassword, setConfirmPassword] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const lastEmail = getLastAuthEmail();
+    if (lastEmail) setEmail(lastEmail);
+  }, [getLastAuthEmail]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

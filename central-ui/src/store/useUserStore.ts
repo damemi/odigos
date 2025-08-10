@@ -6,6 +6,7 @@ interface UserStoreState {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
+  lastAuthEmail: string | null;
 }
 
 interface UserStoreActions {
@@ -14,6 +15,7 @@ interface UserStoreActions {
   setAuth: (user: User, token: string) => void;
   clearAuth: () => void;
   updateUser: (updates: Partial<User>) => void;
+  setLastAuthEmail: (email: string | null) => void;
 }
 
 export const useUserStore = create<UserStoreState & UserStoreActions>()(
@@ -22,6 +24,7 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
       user: null,
       token: null,
       isAuthenticated: false,
+      lastAuthEmail: null,
 
       setUser: (user) =>
         set({
@@ -56,12 +59,18 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
           });
         }
       },
+
+      setLastAuthEmail: (email) =>
+        set({
+          lastAuthEmail: email,
+        }),
     }),
     {
       name: 'user-storage',
       partialize: (state) => ({
         user: state.user,
         token: state.token,
+        lastAuthEmail: state.lastAuthEmail,
       }),
     },
   ),
