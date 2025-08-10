@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/consts"
@@ -82,18 +83,26 @@ func (u *UserService) GetUserRole(adminToken, userID string) (string, error) {
 		return "", fmt.Errorf("failed to decode roles: %w", err)
 	}
 
+	hasRole := map[string]bool{}
+	var roleNames []string
 	for _, role := range roles {
-		roleName := role["name"].(string)
-		switch roleName {
-		case RoleAdmin:
-			return RoleAdmin, nil
-		case RoleMaintainer:
-			return RoleMaintainer, nil
-		case RoleViewer:
-			return RoleViewer, nil
-		case RoleOwner:
-			return RoleOwner, nil
+		if name, ok := role["name"].(string); ok {
+			hasRole[strings.ToLower(name)] = true
+			roleNames = append(roleNames, name)
 		}
+	}
+
+	if hasRole[strings.ToLower(RoleOwner)] {
+		return RoleOwner, nil
+	}
+	if hasRole[strings.ToLower(RoleAdmin)] {
+		return RoleAdmin, nil
+	}
+	if hasRole[strings.ToLower(RoleMaintainer)] {
+		return RoleMaintainer, nil
+	}
+	if hasRole[strings.ToLower(RoleViewer)] {
+		return RoleViewer, nil
 	}
 
 	return RoleViewer, nil

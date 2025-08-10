@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"strings"
+
 	"github.com/odigos-io/central-backend/graph/model"
 )
 
@@ -19,7 +21,8 @@ func ConvertKeycloakUserToModel(userData map[string]any, role model.Role, needsP
 }
 
 func ConvertStringRoleToModel(roleStr string) model.Role {
-	switch roleStr {
+	normalized := strings.ToUpper(roleStr)
+	switch normalized {
 	case "OWNER":
 		return model.RoleOwner
 	case "ADMIN":

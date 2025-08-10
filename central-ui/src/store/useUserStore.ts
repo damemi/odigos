@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { User } from '@/types/auth';
+import { User, Role } from '@/types/auth';
 
 interface UserStoreState {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
   lastAuthEmail: string | null;
+  isAdmin: boolean;
 }
 
 interface UserStoreActions {
@@ -25,11 +26,13 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
       token: null,
       isAuthenticated: false,
       lastAuthEmail: null,
+      isAdmin: false,
 
       setUser: (user) =>
         set({
           user,
           isAuthenticated: !!user,
+          isAdmin: !!user && (user.role === Role.ADMIN || user.role === Role.OWNER),
         }),
 
       setToken: (token) =>
@@ -42,6 +45,7 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
           user,
           token,
           isAuthenticated: true,
+          isAdmin: user.role === Role.ADMIN || user.role === Role.OWNER,
         }),
 
       clearAuth: () =>
@@ -49,13 +53,17 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
           user: null,
           token: null,
           isAuthenticated: false,
+          isAdmin: false,
         }),
 
       updateUser: (updates) => {
         const currentUser = get().user;
         if (currentUser) {
+          const nextUser: User = { ...currentUser, ...updates };
+          const effectiveRole: Role = updates.role ?? currentUser.role;
           set({
-            user: { ...currentUser, ...updates },
+            user: nextUser,
+            isAdmin: effectiveRole === Role.ADMIN || effectiveRole === Role.OWNER,
           });
         }
       },
@@ -71,6 +79,7 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
         user: state.user,
         token: state.token,
         lastAuthEmail: state.lastAuthEmail,
+        isAdmin: state.isAdmin,
       }),
     },
   ),

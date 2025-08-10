@@ -86,13 +86,14 @@ func (a *AuthService) SignIn(ctx context.Context, email, password string) (*mode
 		return nil, err
 	}
 
-	needsPasswordChange, err := a.userRepo.CheckUserNeedsPasswordChange(ctx, email)
+	adminCtx := utils.SetTokenInContext(ctx, authResult.AccessToken)
+	needsPasswordChange, err := a.userRepo.CheckUserNeedsPasswordChange(adminCtx, email)
 	if err != nil {
 		logger.Log.Error("Failed to check if user needs password change", "error", err)
 		needsPasswordChange = false
 	}
 
-	user, err := a.buildUserModel(ctx, authResult.AccessToken, authResult.UserData, needsPasswordChange)
+	user, err := a.buildUserModel(adminCtx, authResult.AccessToken, authResult.UserData, needsPasswordChange)
 	if err != nil {
 		return nil, err
 	}
@@ -203,6 +204,7 @@ func (a *AuthService) buildUserModel(ctx context.Context, token string, userData
 		roleStr = "user"
 	}
 	role := utils.ConvertStringRoleToModel(roleStr)
+	logger.Log.Info("buildUserModel: resolved role for user", "userID", userID, "email", email, "roleStr", roleStr, "roleModel", role)
 
 	return &model.User{
 		ID:                  userID,

@@ -11,6 +11,7 @@ import { ComputePlatforms } from '@odigos/ui-kit/containers';
 import { CreateTeamModal } from '@/components/modal/create-team-modal';
 import { UsersTable, CreateUserModal, OverviewHeader } from '@/components';
 import { FlexColumn, Button, TabList, Tab } from '@odigos/ui-kit/components';
+import { useUserStore } from '@/store';
 
 export const PageWrapper = styled(FlexColumn)`
   width: 100%;
@@ -43,6 +44,7 @@ const renderActiveTab = ({ activeTab, connections }: { activeTab: AccessTab; con
 export default function Page() {
   const theme = Theme.useTheme();
   const { connections } = useConnectionsCRUD();
+  const { isAdmin } = useUserStore();
   const [activeTab, setActiveTab] = useState<AccessTab>(AccessTab.Users);
   const [createModalOpenFor, setCreateModalOpenFor] = useState<AccessTab | null>(null);
 
@@ -63,7 +65,7 @@ export default function Page() {
         <FlexColumn>
           <TabList tabs={tabs} />
 
-          {activeTab !== AccessTab.Compute && (
+          {activeTab !== AccessTab.Compute && isAdmin && (
             <PushRight>
               <Button onClick={onClickCreate}>
                 <PlusIcon fill={theme.text.primary} />
