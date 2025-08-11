@@ -13,10 +13,12 @@ type GraphQLClient struct {
 
 func NewGraphQLClient() *GraphQLClient {
 	frontendBackendURL := os.Getenv("FRONTEND_BACKEND_URL")
-	//TODO: remove this before deploy to production
 	if frontendBackendURL == "" {
-		frontendBackendURL = "http://ui.odigos-system:3000/graphql"
-		// frontendBackendURL = "http://localhost:8085/graphql"
+		if os.Getenv("KUBERNETES_SERVICE_HOST") == "" {
+			frontendBackendURL = "http://localhost:8085/graphql"
+		} else {
+			frontendBackendURL = "http://ui.odigos-system:3000/graphql"
+		}
 	}
 
 	client := graphql.NewClient(frontendBackendURL)

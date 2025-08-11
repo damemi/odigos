@@ -3,7 +3,9 @@ package config
 import (
 	"context"
 	"fmt"
+	"os"
 
+	"github.com/google/uuid"
 	"github.com/odigos-io/central-proxy/kube"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/odigos-io/odigos/common"
@@ -13,8 +15,14 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-func GetCentralBackendURLAndClusterName(ctx context.Context, kubeClient *kube.Client) (string, string, error) {
+func runningInCluster() bool {
+	return os.Getenv("KUBERNETES_SERVICE_HOST") != ""
+}
 
+func GetCentralBackendURLAndClusterName(ctx context.Context, kubeClient *kube.Client) (string, string, error) {
+	if !runningInCluster() {
+		return DevCentralBackendURL(), DevClusterName(), nil
+	}
 	ns := env.GetCurrentNamespace()
 	configMap, err := kubeClient.CoreV1().ConfigMaps(ns).Get(ctx, consts.OdigosConfigurationName, metav1.GetOptions{})
 	if err != nil {
@@ -37,7 +45,9 @@ func GetCentralBackendURLAndClusterName(ctx context.Context, kubeClient *kube.Cl
 }
 
 func GetOdigosDeploymentId(ctx context.Context, kubeClient *kube.Client) (string, error) {
-
+	if !runningInCluster() {
+		return uuid.New().String(), nil
+	}
 	ns := env.GetCurrentNamespace()
 
 	configMap, err := kubeClient.CoreV1().ConfigMaps(ns).Get(ctx, k8sconsts.OdigosDeploymentConfigMapName, metav1.GetOptions{})
@@ -54,7 +64,9 @@ func GetOdigosDeploymentId(ctx context.Context, kubeClient *kube.Client) (string
 }
 
 func GetOdigosVersion(ctx context.Context, kubeClient *kube.Client) (string, error) {
-
+	if !runningInCluster() {
+		return DevVersion(), nil
+	}
 	ns := env.GetCurrentNamespace()
 
 	configMap, err := kubeClient.CoreV1().ConfigMaps(ns).Get(ctx, k8sconsts.OdigosDeploymentConfigMapName, metav1.GetOptions{})
