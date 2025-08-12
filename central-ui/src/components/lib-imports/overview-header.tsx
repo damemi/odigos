@@ -7,16 +7,17 @@ import { ACCESS_MANAGEMENT_TITLE, ROUTES } from '@/utils';
 import { Connection, StatusType } from '@odigos/ui-kit/types';
 import { OdigosLogoText, UserSettingsIcon } from '@odigos/ui-kit/icons';
 import { Header, IconButton, Status, Tag, Tooltip } from '@odigos/ui-kit/components';
-import { useConfig, useConnectionsCRUD, useDescribe, useProxyID, useTokenCRUD } from '@/hooks';
-import { ComputePlatformSelect, NotificationManager, SlackInvite, SystemOverview, ToggleDarkMode } from '@odigos/ui-kit/containers';
+import { useConfig, useConnectionsCRUD, useDescribe, useOdigosConfigCRUD, useProxyID, useTokenCRUD } from '@/hooks';
+import { ComputePlatformSelect, NotificationManager, SlackInvite, SystemOverview, SystemSettings, ToggleDarkMode } from '@odigos/ui-kit/containers';
 
 const OverviewHeader = () => {
   const router = useRouter();
 
-  const { isReadonly } = useConfig();
   const { fetchDescribeOdigos } = useDescribe();
   const { tokens, updateToken } = useTokenCRUD();
   const { status, title, message } = useStatusStore();
+  const { isReadonly, installationMethod } = useConfig();
+  const { fetchOdigosConfig, updateOdigosConfig } = useOdigosConfigCRUD();
 
   const { proxyID, goSelectNewProxy, selectProxyID } = useProxyID();
   const { connections, currentConnection } = useConnectionsCRUD(proxyID);
@@ -46,8 +47,9 @@ const OverviewHeader = () => {
         <IconButton key='access-management' tooltip={ACCESS_MANAGEMENT_TITLE} onClick={onClickAccessManagement}>
           <UserSettingsIcon />
         </IconButton>,
-        <SystemOverview key='system-overview' tokens={tokens} saveToken={updateToken} fetchDescribeOdigos={fetchDescribeOdigos} />,
         <NotificationManager key='notification-manager' />,
+        <SystemOverview key='system-overview' tokens={tokens} saveToken={updateToken} fetchDescribeOdigos={fetchDescribeOdigos} />,
+        <SystemSettings key='system-settings' installationMethod={installationMethod} fetchSettings={fetchOdigosConfig} onSave={updateOdigosConfig} />,
         <SlackInvite key='slack-invite' />,
         <AccountMenu key='account-menu' />,
       ]}

@@ -6,8 +6,8 @@ import { getSseTargetFromId } from '@odigos/ui-kit/functions';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
 import type { PaginatedData, SourceConditions, SourceInstrumentInput } from '@/types';
 import { addConditionToSources, prepareNamespacePayloads, prepareSourcePayloads } from '@/utils';
-import { GET_SOURCE, GET_SOURCE_CONDITIONS, GET_SOURCES, PERSIST_SOURCES, UPDATE_SOURCE } from '@/graphql';
-import { Crud, EntityTypes, StatusType, type SourceFormData, type Source, type WorkloadId } from '@odigos/ui-kit/types';
+import { GET_SOURCE, GET_SOURCE_CONDITIONS, GET_SOURCE_LIBRARIES, GET_SOURCES, PERSIST_SOURCES, UPDATE_SOURCE } from '@/graphql';
+import { Crud, EntityTypes, StatusType, type SourceFormData, type Source, type WorkloadId, type InstrumentationInstanceComponent } from '@odigos/ui-kit/types';
 import {
   type NamespaceSelectionFormData,
   type SourceSelectionFormData,
@@ -23,7 +23,8 @@ interface UseSourceCrud {
   sources: Source[];
   sourcesLoading: boolean;
   fetchSourcesPaginated: (getAll?: boolean, nextPage?: string) => Promise<void>;
-  fetchSourceById: (id: WorkloadId, bypassPaginationLoader?: boolean) => Promise<void>;
+  fetchSourceById: (id: WorkloadId, bypassPaginationLoader?: boolean) => Promise<Source | undefined>;
+  fetchSourceLibraries: (req: { variables: WorkloadId }) => Promise<{ data?: { instrumentationInstanceComponents: InstrumentationInstanceComponent[] } }>;
   persistSources: (selectAppsList: SourceSelectionFormData, futureSelectAppsList: NamespaceSelectionFormData) => Promise<void>;
   updateSource: (sourceId: WorkloadId, payload: SourceFormData) => Promise<void>;
 }
@@ -54,6 +55,7 @@ export const useSourceCRUD = (): UseSourceCrud => {
   const { fetch: mutatePersistSources } = useProxy<{ persistK8sSources: boolean }, SourceInstrumentInput>(PERSIST_SOURCES);
   const { fetch: mutateUpdate } = useProxy<{ updateK8sActualSource: boolean }, { sourceId: WorkloadId; patchSourceRequest: SourceFormData }>(UPDATE_SOURCE);
   const { fetch: queryOtherConditions } = useProxy<{ sourceConditions: SourceConditions[] }>(GET_SOURCE_CONDITIONS);
+  const { fetch: querySourceLibraries } = useProxy<{ instrumentationInstanceComponents: InstrumentationInstanceComponent[] }, WorkloadId>(GET_SOURCE_LIBRARIES);
 
   const shouldFetchSource = (allowFetchDuringLoadTrue?: boolean) => {
     // We should not fetch if we are already fetching.
@@ -113,13 +115,15 @@ export const useSourceCRUD = (): UseSourceCrud => {
     }
   };
 
-  const fetchSourceById = async (id: WorkloadId, bypassPaginationLoader: boolean = false) => {
+  const fetchSourceById = async (id: WorkloadId, bypassPaginationLoader: boolean = false): Promise<Source | undefined> => {
     if (!shouldFetchSource(bypassPaginationLoader)) return;
 
     const { data } = await queryById({ sourceId: id });
 
     if (data?.computePlatform?.source) {
-      addEntities(EntityTypes.Source, [data.computePlatform.source]);
+      const { source } = data.computePlatform;
+      addEntities(EntityTypes.Source, [source]);
+      return source;
     }
   };
 
@@ -179,6 +183,7 @@ export const useSourceCRUD = (): UseSourceCrud => {
     sourcesLoading,
     fetchSourcesPaginated,
     fetchSourceById,
+    fetchSourceLibraries: (req) => querySourceLibraries(req.variables),
     persistSources,
     updateSource,
   };

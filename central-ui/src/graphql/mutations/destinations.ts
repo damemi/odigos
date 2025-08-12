@@ -3,6 +3,7 @@ export const CREATE_DESTINATION = `
     createNewDestination(destination: $destination) {
       id
       name
+      disabled
       dataStreamNames
       fields
       exportedSignals {

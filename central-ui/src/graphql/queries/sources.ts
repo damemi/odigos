@@ -14,6 +14,7 @@ export const GET_SOURCES = `
             containerName
             language
             runtimeVersion
+            overriden
             instrumented
             instrumentationMessage
             otelDistroName
@@ -45,6 +46,7 @@ export const GET_SOURCE = `
           containerName
           language
           runtimeVersion
+          overriden
           instrumented
           instrumentationMessage
           otelDistroName
@@ -73,6 +75,18 @@ export const GET_SOURCE_CONDITIONS = `
         reason
         message
         lastTransitionTime
+      }
+    }
+  }
+`;
+
+export const GET_SOURCE_LIBRARIES = `
+  query GetSourceLibraries($namespace: String!, $kind: String!, $name: String!) {
+    instrumentationInstanceComponents(namespace: $namespace, kind: $kind, name: $name) {
+      name
+      nonIdentifyingAttributes {
+        key
+        value
       }
     }
   }

@@ -1,16 +1,21 @@
 'use client';
 
-import React, { useCallback, useMemo, type PropsWithChildren } from 'react';
+import React, { useCallback, useMemo, type PropsWithChildren, CSSProperties } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { ROUTES } from '@/utils';
 import styled from 'styled-components';
 import { useModalStore } from '@odigos/ui-kit/store';
-import { ConnectionsIcon } from '@odigos/ui-kit/icons';
+import { DATA_FLOW_HEIGHT, MENU_BAR_HEIGHT, ROUTES } from '@/utils';
 import { EntityTypes, OtherEntityTypes } from '@odigos/ui-kit/types';
+import { ConnectionsIcon, ServiceMapIcon } from '@odigos/ui-kit/icons';
 import { OverviewHeader, OverviewModalsAndDrawers } from '@/components';
 import { useDataStreamsCRUD, useProxyID, useTokenTracker } from '@/hooks';
 import { DataFlowActionsMenu, NavIconIds, SideNav } from '@odigos/ui-kit/containers';
 import { ErrorBoundary, FlexColumn, FlexRow, type NavIcon } from '@odigos/ui-kit/components';
+
+enum OtherNavIconIds {
+  Connections = 'connections',
+  ServiceMap = 'service-map',
+}
 
 const PageContent = styled(FlexColumn)`
   width: 100%;
@@ -19,9 +24,9 @@ const PageContent = styled(FlexColumn)`
   align-items: center;
 `;
 
-const ContentWithActions = styled.div`
+const ContentWithActions = styled.div<{ $height: CSSProperties['height'] }>`
   width: 100%;
-  height: calc(100vh - 176px);
+  height: ${({ $height }) => $height};
   position: relative;
 `;
 
@@ -45,16 +50,20 @@ const getEntityType = (pathname: string, proxyID: string) => {
 };
 
 const getSelectedId = (pathname: string, proxyID: string) => {
-  return pathname.includes(ROUTES.OVERVIEW(proxyID))
+  return pathname === ROUTES.OVERVIEW(proxyID)
     ? NavIconIds.Overview
-    : pathname.includes(ROUTES.SOURCES(proxyID))
+    : pathname === ROUTES.SOURCES(proxyID)
     ? NavIconIds.Sources
-    : pathname.includes(ROUTES.DESTINATIONS(proxyID))
+    : pathname === ROUTES.DESTINATIONS(proxyID)
     ? NavIconIds.Destinations
-    : pathname.includes(ROUTES.ACTIONS(proxyID))
+    : pathname === ROUTES.ACTIONS(proxyID)
     ? NavIconIds.Actions
-    : pathname.includes(ROUTES.INSTRUMENTATION_RULES(proxyID))
+    : pathname === ROUTES.INSTRUMENTATION_RULES(proxyID)
     ? NavIconIds.InstrumentationRules
+    : pathname === ROUTES.CONNECTIONS
+    ? OtherNavIconIds.Connections
+    : pathname === ROUTES.SERVICE_MAP(proxyID)
+    ? OtherNavIconIds.ServiceMap
     : undefined;
 };
 
@@ -64,6 +73,8 @@ const routesMap = {
   [NavIconIds.Destinations]: (proxyID: string) => ROUTES.DESTINATIONS(proxyID),
   [NavIconIds.Actions]: (proxyID: string) => ROUTES.ACTIONS(proxyID),
   [NavIconIds.InstrumentationRules]: (proxyID: string) => ROUTES.INSTRUMENTATION_RULES(proxyID),
+  [OtherNavIconIds.Connections]: ROUTES.CONNECTIONS,
+  [OtherNavIconIds.ServiceMap]: (proxyID: string) => ROUTES.SERVICE_MAP(proxyID),
 };
 
 function OverviewLayout({ children }: PropsWithChildren) {
@@ -81,9 +92,10 @@ function OverviewLayout({ children }: PropsWithChildren) {
   const selectedId = useMemo(() => getSelectedId(pathname, proxyID), [pathname, proxyID]);
 
   const onClickId = useCallback(
-    (navId: NavIconIds) => {
-      const route = routesMap[navId]?.(proxyID);
-      if (route) router.push(route);
+    (navId: NavIconIds | OtherNavIconIds) => {
+      const temp = routesMap[navId];
+      const path = typeof temp === 'function' ? temp(proxyID) : temp;
+      if (path) router.push(path);
     },
     [proxyID, router],
   );
@@ -91,13 +103,21 @@ function OverviewLayout({ children }: PropsWithChildren) {
   const extendedNavIcons: NavIcon[] = useMemo(
     () => [
       {
-        id: ROUTES.CONNECTIONS,
+        id: OtherNavIconIds.Connections,
         icon: ConnectionsIcon,
-        selected: pathname.includes(ROUTES.CONNECTIONS),
-        onClick: () => router.push(ROUTES.CONNECTIONS),
+        selected: selectedId === OtherNavIconIds.Connections,
+        onClick: () => onClickId(OtherNavIconIds.Connections),
+        tooltip: 'All Connections',
+      },
+      {
+        id: OtherNavIconIds.ServiceMap,
+        icon: ServiceMapIcon,
+        selected: selectedId === OtherNavIconIds.ServiceMap,
+        onClick: () => onClickId(OtherNavIconIds.ServiceMap),
+        tooltip: 'Service Map',
       },
     ],
-    [pathname, router],
+    [onClickId, selectedId],
   );
 
   return (
@@ -105,13 +125,17 @@ function OverviewLayout({ children }: PropsWithChildren) {
       <PageContent>
         <OverviewHeader />
 
-        <ContentWithActions>
-          <DataFlowActionsMenu
-            addEntity={entityType}
-            onClickNewDataStream={() => setCurrentModal(OtherEntityTypes.DataStream)}
-            updateDataStream={updateDataStream}
-            deleteDataStream={deleteDataStream}
-          />
+        <ContentWithActions $height={DATA_FLOW_HEIGHT}>
+          {selectedId !== OtherNavIconIds.ServiceMap ? (
+            <DataFlowActionsMenu
+              addEntity={entityType}
+              onClickNewDataStream={() => setCurrentModal(OtherEntityTypes.DataStream)}
+              updateDataStream={updateDataStream}
+              deleteDataStream={deleteDataStream}
+            />
+          ) : (
+            <div style={{ height: `${MENU_BAR_HEIGHT}px` }} />
+          )}
           <ContentUnderActions>
             <SideNav defaultSelectedId={selectedId} onClickId={onClickId} extendedNavIcons={extendedNavIcons} />
             {children}

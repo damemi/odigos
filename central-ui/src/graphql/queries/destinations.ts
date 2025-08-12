@@ -4,6 +4,7 @@ export const GET_DESTINATIONS = `
       destinations {
         id
         name
+        disabled
         dataStreamNames
         fields
         exportedSignals {

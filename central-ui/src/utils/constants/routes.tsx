@@ -10,6 +10,8 @@ export const ROUTES = {
   DESTINATIONS: (proxyID: string) => `/destinations/${proxyID}`,
   ACTIONS: (proxyID: string) => `/actions/${proxyID}`,
   INSTRUMENTATION_RULES: (proxyID: string) => `/instrumentation-rules/${proxyID}`,
+
+  SERVICE_MAP: (proxyID: string) => `/service-map/${proxyID}`,
 };
 
 const IS_PROD = process.env.NODE_ENV === 'production';

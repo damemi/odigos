@@ -7,6 +7,7 @@ export * from './destinations';
 export * from './instrumentation-rules';
 export * from './metrics';
 export * from './namespaces';
+export * from './service-map';
 export * from './sources';
 export * from './system';
 export * from './teams';

@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
+import { HEADER_HEIGHT, MENU_BAR_HEIGHT } from '@/utils';
 import { useMetrics, useSourceCRUD, useWorkloadUtils } from '@/hooks';
-import { OVERVIEW_HEIGHT_WITHOUT_DATA_FLOW } from '@/utils';
 import { DataFlow, MultiSourceControl } from '@odigos/ui-kit/containers';
 
 export default function Page() {
@@ -12,7 +12,7 @@ export default function Page() {
 
   return (
     <>
-      <DataFlow heightToRemove={OVERVIEW_HEIGHT_WITHOUT_DATA_FLOW} metrics={metrics} />
+      <DataFlow heightToRemove={HEADER_HEIGHT + MENU_BAR_HEIGHT} metrics={metrics} />
       <MultiSourceControl totalSourceCount={sources.length} uninstrumentSources={(payload) => persistSources(payload, {})} restartWorkloads={restartWorkloads} />
     </>
   );

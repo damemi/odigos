@@ -31,7 +31,13 @@ export const useProxy = <ResT = AnyObj, ReqT = AnyObj>(queryString: string): Use
       return EMPTY_RESPONSE;
     }
 
-    const { data, error } = await remoteFetch({ variables: { proxyID, query: queryString, variables: variables || {} } });
+    const { data, error } = await remoteFetch({
+      variables: {
+        proxyID,
+        query: queryString,
+        variables: variables || {},
+      },
+    });
 
     if (error) {
       addNotification({ type: StatusType.Error, title: error.name || 'API Error', message: error.cause?.message || error.message });

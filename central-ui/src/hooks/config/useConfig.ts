@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { useProxy } from '../proxy';
 import { GET_CONFIG } from '@/graphql';
-import { Tier } from '@odigos/ui-kit/types';
 import type { FetchedConfig } from '@/types';
+import { InstallationMethod, Tier } from '@odigos/ui-kit/types';
 
 export const useConfig = () => {
   const { data, fetch } = useProxy<{ config?: FetchedConfig }>(GET_CONFIG);
@@ -14,12 +14,14 @@ export const useConfig = () => {
 
   const config = data?.config;
   const isReadonly = data?.config?.readonly || false;
+  const installationMethod = data?.config?.installationMethod || InstallationMethod.Cli;
   const isCommunity = (config?.tier && [Tier.Community].includes(config.tier)) || false;
   const isEnterprise = (config?.tier && [Tier.Onprem].includes(config.tier)) || false;
 
   return {
     config,
     isReadonly,
+    installationMethod,
     isCommunity,
     isEnterprise,
   };
