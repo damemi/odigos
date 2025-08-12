@@ -63,7 +63,7 @@ export const UsersTable: React.FC = () => {
   );
 
   const columns = [
-    { key: UserTableColumn.Icon, title: '', sortable: true },
+    { key: UserTableColumn.Icon, title: '' },
     { key: UserTableColumn.User, title: UTILS.USERS_TAB, sortable: true },
     { key: UserTableColumn.Role, title: UTILS.ROLE_COLUMN, sortable: true },
     { key: UserTableColumn.Teams, title: UTILS.TEAMS_TAB, sortable: true },
@@ -78,7 +78,7 @@ export const UsersTable: React.FC = () => {
         cells: [
           {
             columnKey: UserTableColumn.Icon,
-            component: () => <IconWrapped icon={UserIcon} />,
+            component: () => <IconWrapped icon={() => <UserIcon strokeWidth={2} size={24} />} />,
           },
           {
             columnKey: UserTableColumn.User,

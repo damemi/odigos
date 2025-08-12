@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { ROLE_OPTIONS } from '@/utils';
 import { useUsersCRUD } from '@/hooks';
-import { DropdownOption, Role } from '@/types';
+import { Role } from '@/types';
 import { StatusType } from '@odigos/ui-kit/types';
-import { Modal } from '@odigos/ui-kit/components';
 import * as STRINGS from '@/utils/constants/strings';
 import { useGenericForm } from '@odigos/ui-kit/hooks';
 import { ModalContent } from './create-user-modal.styled';
 import { useNotificationStore } from '@odigos/ui-kit/store';
+import { DropdownOption, Modal } from '@odigos/ui-kit/components';
 import { UserCreatedSuccessfully } from './user-created-successfully';
 import { CreateUserForm, CreateUserFormData, CreateUserFormField } from './create-user-form';
 

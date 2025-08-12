@@ -4,16 +4,15 @@ import React, { useCallback, useMemo, type PropsWithChildren, CSSProperties } fr
 import { usePathname, useRouter } from 'next/navigation';
 import styled from 'styled-components';
 import { useModalStore } from '@odigos/ui-kit/store';
+import { ServiceMapIcon } from '@odigos/ui-kit/icons';
 import { DATA_FLOW_HEIGHT, MENU_BAR_HEIGHT, ROUTES } from '@/utils';
 import { EntityTypes, OtherEntityTypes } from '@odigos/ui-kit/types';
-import { ConnectionsIcon, ServiceMapIcon } from '@odigos/ui-kit/icons';
 import { OverviewHeader, OverviewModalsAndDrawers } from '@/components';
 import { useDataStreamsCRUD, useProxyID, useTokenTracker } from '@/hooks';
 import { DataFlowActionsMenu, NavIconIds, SideNav } from '@odigos/ui-kit/containers';
 import { ErrorBoundary, FlexColumn, FlexRow, type NavIcon } from '@odigos/ui-kit/components';
 
 enum OtherNavIconIds {
-  Connections = 'connections',
   ServiceMap = 'service-map',
 }
 
@@ -60,8 +59,6 @@ const getSelectedId = (pathname: string, proxyID: string) => {
     ? NavIconIds.Actions
     : pathname === ROUTES.INSTRUMENTATION_RULES(proxyID)
     ? NavIconIds.InstrumentationRules
-    : pathname === ROUTES.CONNECTIONS
-    ? OtherNavIconIds.Connections
     : pathname === ROUTES.SERVICE_MAP(proxyID)
     ? OtherNavIconIds.ServiceMap
     : undefined;
@@ -73,7 +70,6 @@ const routesMap = {
   [NavIconIds.Destinations]: (proxyID: string) => ROUTES.DESTINATIONS(proxyID),
   [NavIconIds.Actions]: (proxyID: string) => ROUTES.ACTIONS(proxyID),
   [NavIconIds.InstrumentationRules]: (proxyID: string) => ROUTES.INSTRUMENTATION_RULES(proxyID),
-  [OtherNavIconIds.Connections]: ROUTES.CONNECTIONS,
   [OtherNavIconIds.ServiceMap]: (proxyID: string) => ROUTES.SERVICE_MAP(proxyID),
 };
 
@@ -102,13 +98,6 @@ function OverviewLayout({ children }: PropsWithChildren) {
 
   const extendedNavIcons: NavIcon[] = useMemo(
     () => [
-      {
-        id: OtherNavIconIds.Connections,
-        icon: ConnectionsIcon,
-        selected: selectedId === OtherNavIconIds.Connections,
-        onClick: () => onClickId(OtherNavIconIds.Connections),
-        tooltip: 'All Connections',
-      },
       {
         id: OtherNavIconIds.ServiceMap,
         icon: ServiceMapIcon,

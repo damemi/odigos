@@ -6,15 +6,15 @@ import { EditTeamDrawer } from '@/components';
 import type { Team, WriteTeamInput } from '@/types';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
-import { EditIcon, TrashIcon, UserIcon } from '@odigos/ui-kit/icons';
+import { EditIcon, TrashIcon, UserGroupIcon } from '@odigos/ui-kit/icons';
 import { CenterThis, DeleteWarning, FlexRow, IconButton, IconWrapped, InteractiveTable, NoDataFound, RowCell } from '@odigos/ui-kit/components';
 
 export enum TeamsTableColumn {
   Icon = 'icon',
   Name = 'name',
+  Description = 'description',
   Members = 'members',
   Platforms = 'platforms',
-  Description = 'description',
   Actions = 'actions',
 }
 
@@ -63,11 +63,11 @@ export const TeamsTable: React.FC = () => {
   );
 
   const columns = [
-    { key: TeamsTableColumn.Icon, title: '', sortable: true },
+    { key: TeamsTableColumn.Icon, title: '' },
     { key: TeamsTableColumn.Name, title: UTILS.NAME, sortable: true },
+    { key: TeamsTableColumn.Description, title: UTILS.DESCRIPTION, sortable: true },
     { key: TeamsTableColumn.Members, title: UTILS.MEMBERS_LABEL, sortable: true },
     { key: TeamsTableColumn.Platforms, title: UTILS.COMPUTE_PLATFORMS_TAB, sortable: true },
-    { key: TeamsTableColumn.Description, title: UTILS.DESCRIPTION, sortable: true },
     { key: TeamsTableColumn.Actions, title: UTILS.ACTIONS_COLUMN },
   ];
 
@@ -78,11 +78,15 @@ export const TeamsTable: React.FC = () => {
         cells: [
           {
             columnKey: TeamsTableColumn.Icon,
-            component: () => <IconWrapped icon={UserIcon} />,
+            component: () => <IconWrapped icon={() => <UserGroupIcon strokeWidth={2} size={24} />} />,
           },
           {
             columnKey: TeamsTableColumn.Name,
             value: team.name,
+          },
+          {
+            columnKey: TeamsTableColumn.Description,
+            value: team.description,
           },
           {
             columnKey: TeamsTableColumn.Members,
@@ -91,10 +95,6 @@ export const TeamsTable: React.FC = () => {
           {
             columnKey: TeamsTableColumn.Platforms,
             value: UTILS.PLATFORMS_COUNT(team.computePlatforms?.length || 0),
-          },
-          {
-            columnKey: TeamsTableColumn.Description,
-            value: team.description,
           },
           {
             columnKey: TeamsTableColumn.Actions,

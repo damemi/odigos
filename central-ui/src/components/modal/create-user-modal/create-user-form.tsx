@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
+import { Role } from '@/types';
 import { ROLE_OPTIONS } from '@/utils';
 import { useTeamsCRUD } from '@/hooks';
-import { DropdownOption, Role } from '@/types';
 import { StatusType } from '@odigos/ui-kit/types';
 import * as STRINGS from '@/utils/constants/strings';
-import { Input, Dropdown, NotificationNote, Text } from '@odigos/ui-kit/components';
+import { Input, Dropdown, NotificationNote, Text, DropdownOption } from '@odigos/ui-kit/components';
 import { Form, ButtonContainer, CreateButton, DescriptionTextWrapper, Row, Half } from './create-user-modal.styled';
 
 export enum CreateUserFormField {

@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { useTeamsCRUD } from '@/hooks';
-import { DropdownOption } from '@/types';
 import { StatusType } from '@odigos/ui-kit/types';
-import { Modal } from '@odigos/ui-kit/components';
 import * as STRINGS from '@/utils/constants/strings';
 import { useGenericForm } from '@odigos/ui-kit/hooks';
 import { FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { ModalContent } from './create-team-modal.styled';
 import { useNotificationStore } from '@odigos/ui-kit/store';
+import { DropdownOption, Modal } from '@odigos/ui-kit/components';
 import { TeamCreatedSuccessfully } from './team-created-successfully';
 import { CreateTeamForm, type CreateTeamFormData, CreateTeamFormField } from './create-team-form';
 

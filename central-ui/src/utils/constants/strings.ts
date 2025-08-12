@@ -16,7 +16,9 @@ export const TEAM_NAME_PLACEHOLDER = 'Enter team name';
 export const USERS_TAB = 'Users';
 export const TEAMS_TAB = 'Teams';
 export const COMPUTE_PLATFORMS_TAB = 'Compute Platforms';
+export const CONNECTIONS_TAB = 'Connections';
 export const DESCRIPTION = 'Description';
+export const TYPE = 'Type';
 export const CREATE_USER_BUTTON = 'CREATE USER +';
 export const CREATE_TEAM_BUTTON = 'CREATE TEAM +';
 export const ROLE_COLUMN = 'Role';
@@ -26,6 +28,11 @@ export const TEAM_LABEL = 'Team';
 export const PLATFORM_LABEL = 'Platform';
 export const DASH = '—';
 export const ERROR_TITLE = 'Error';
+export const ID = 'ID';
+export const UNIQUE_ID = 'Unique ID';
+export const STATUS = 'Status';
+export const CONNECTION_ALIVE = 'Connection Live';
+export const CONNECTION_LOST = 'Connection Lost';
 
 // Update Password Page
 export const UPDATE_PASSWORD_TITLE = 'Update Your Password';

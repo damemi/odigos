@@ -3,17 +3,20 @@
 import React from 'react';
 import styled from 'styled-components';
 import { FlexColumn } from '@odigos/ui-kit/components';
-import { ConnectionsMain, OverviewHeader } from '@/components';
+import { ConnectionsActionsMenu, ConnectionsTable, OverviewHeader } from '@/components';
 
-export const PageWrapper = styled(FlexColumn)`
-  align-items: center;
+const Padding = styled.div`
+  padding: 24px;
 `;
 
 export default function Page() {
   return (
-    <PageWrapper>
+    <FlexColumn>
       <OverviewHeader />
-      <ConnectionsMain />
-    </PageWrapper>
+      <Padding>
+        <ConnectionsActionsMenu />
+        <ConnectionsTable />
+      </Padding>
+    </FlexColumn>
   );
 }

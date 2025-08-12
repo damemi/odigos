@@ -2,13 +2,14 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useStatusStore } from '../../store';
 import { AccountMenu } from '../account-menu';
+import { StatusType } from '@odigos/ui-kit/types';
 import { FORM_ALERTS } from '@odigos/ui-kit/constants';
+import { ConnectionSelect } from '../connection-select';
 import { ACCESS_MANAGEMENT_TITLE, ROUTES } from '@/utils';
-import { Connection, StatusType } from '@odigos/ui-kit/types';
 import { OdigosLogoText, UserSettingsIcon } from '@odigos/ui-kit/icons';
+import { useConfig, useDescribe, useOdigosConfigCRUD, useTokenCRUD } from '@/hooks';
 import { Header, IconButton, Status, Tag, Tooltip } from '@odigos/ui-kit/components';
-import { useConfig, useConnectionsCRUD, useDescribe, useOdigosConfigCRUD, useProxyID, useTokenCRUD } from '@/hooks';
-import { ComputePlatformSelect, NotificationManager, SlackInvite, SystemOverview, SystemSettings, ToggleDarkMode } from '@odigos/ui-kit/containers';
+import { NotificationManager, SlackInvite, SystemOverview, SystemSettings, ToggleDarkMode } from '@odigos/ui-kit/containers';
 
 const OverviewHeader = () => {
   const router = useRouter();
@@ -19,12 +20,7 @@ const OverviewHeader = () => {
   const { isReadonly, installationMethod } = useConfig();
   const { fetchOdigosConfig, updateOdigosConfig } = useOdigosConfigCRUD();
 
-  const { proxyID, goSelectNewProxy, selectProxyID } = useProxyID();
-  const { connections, currentConnection } = useConnectionsCRUD(proxyID);
-
   const onClickHome = () => router.push(ROUTES.ROOT);
-  const onClickPlatform = ({ id }: Connection) => selectProxyID(id);
-  const onClickAllPlatforms = () => goSelectNewProxy();
   const onClickAccessManagement = () => router.push(ROUTES.ACCESS_MANAGEMENT);
 
   return (
@@ -34,7 +30,7 @@ const OverviewHeader = () => {
         <Tag key='central' type={StatusType.Default}>
           [central]
         </Tag>,
-        currentConnection ? <ComputePlatformSelect key='cp-select' connections={connections} selected={currentConnection} onSelect={onClickPlatform} onViewAll={onClickAllPlatforms} /> : null,
+        <ConnectionSelect key='connection-select' />,
         title ? <Status key='status' status={status} title={title} subtitle={message} size={14} family='primary' withIcon withBackground /> : null,
         isReadonly && (
           <Tooltip key='readonly' text={FORM_ALERTS.READONLY_WARNING}>
@@ -44,12 +40,12 @@ const OverviewHeader = () => {
       ]}
       right={[
         <ToggleDarkMode key='toggle-theme' />,
-        <IconButton key='access-management' tooltip={ACCESS_MANAGEMENT_TITLE} onClick={onClickAccessManagement}>
-          <UserSettingsIcon />
-        </IconButton>,
         <NotificationManager key='notification-manager' />,
         <SystemOverview key='system-overview' tokens={tokens} saveToken={updateToken} fetchDescribeOdigos={fetchDescribeOdigos} />,
         <SystemSettings key='system-settings' installationMethod={installationMethod} fetchSettings={fetchOdigosConfig} onSave={updateOdigosConfig} />,
+        <IconButton key='access-management' tooltip={ACCESS_MANAGEMENT_TITLE} onClick={onClickAccessManagement}>
+          <UserSettingsIcon />
+        </IconButton>,
         <SlackInvite key='slack-invite' />,
         <AccountMenu key='account-menu' />,
       ]}

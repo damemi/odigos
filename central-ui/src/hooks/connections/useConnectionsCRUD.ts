@@ -1,8 +1,8 @@
 import { useQuery } from '@apollo/client';
 import { GET_CONNECTIONS } from '@/graphql';
-import type { FetchedConnection } from '@/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
-import { type Connection, Crud, StatusType, PlatformType } from '@odigos/ui-kit/types';
+import type { Connection, FetchedConnection } from '@/types';
+import { Crud, StatusType, PlatformType } from '@odigos/ui-kit/types';
 
 export const useConnectionsCRUD = (selectedId?: string) => {
   const { addNotification } = useNotificationStore();

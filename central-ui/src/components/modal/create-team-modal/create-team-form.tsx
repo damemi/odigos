@@ -1,9 +1,8 @@
 import React, { useMemo } from 'react';
 import { useUsersCRUD } from '@/hooks';
-import { DropdownOption } from '@/types';
 import { StatusType } from '@odigos/ui-kit/types';
 import * as STRINGS from '@/utils/constants/strings';
-import { Input, Dropdown, NotificationNote, Text, TextArea } from '@odigos/ui-kit/components';
+import { Input, Dropdown, NotificationNote, Text, TextArea, DropdownOption } from '@odigos/ui-kit/components';
 import { Form, ButtonContainer, CreateButton, DescriptionTextWrapper, Row, Half } from './create-team-modal.styled';
 
 export enum CreateTeamFormField {

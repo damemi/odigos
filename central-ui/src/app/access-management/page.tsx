@@ -2,27 +2,20 @@
 
 import React, { useState } from 'react';
 import styled from 'styled-components';
+import { useUserStore } from '@/store';
 import Theme from '@odigos/ui-kit/theme';
-import { useConnectionsCRUD } from '@/hooks';
 import { PlusIcon } from '@odigos/ui-kit/icons';
-import { TeamsTable } from '@/components/tables';
-import { Connection } from '@odigos/ui-kit/types';
-import { ComputePlatforms } from '@odigos/ui-kit/containers';
 import { CreateTeamModal } from '@/components/modal/create-team-modal';
+import { ComputePlatformsTable, TeamsTable } from '@/components/tables';
 import { UsersTable, CreateUserModal, OverviewHeader } from '@/components';
 import { FlexColumn, Button, TabList, Tab } from '@odigos/ui-kit/components';
-import { useUserStore } from '@/store';
 
-export const PageWrapper = styled(FlexColumn)`
-  width: 100%;
+const Padding = styled.div`
+  padding: 24px;
 `;
 
 const PushRight = styled.div`
   margin-left: auto;
-`;
-
-const TableWrapper = styled.div`
-  padding: 24px;
 `;
 
 enum AccessTab {
@@ -31,11 +24,11 @@ enum AccessTab {
   Compute = 'Compute Platforms',
 }
 
-const renderActiveTab = ({ activeTab, connections }: { activeTab: AccessTab; connections: Connection[] }) => {
+const renderActiveTab = ({ activeTab }: { activeTab: AccessTab }) => {
   const tabFactories: Record<AccessTab, () => React.ReactNode> = {
-    [AccessTab.Compute]: () => <ComputePlatforms connections={connections} onSelect={() => {}} />,
-    [AccessTab.Teams]: () => <TeamsTable />,
     [AccessTab.Users]: () => <UsersTable />,
+    [AccessTab.Teams]: () => <TeamsTable />,
+    [AccessTab.Compute]: () => <ComputePlatformsTable />,
   };
 
   return (tabFactories[activeTab] || tabFactories[AccessTab.Users])();
@@ -43,7 +36,6 @@ const renderActiveTab = ({ activeTab, connections }: { activeTab: AccessTab; con
 
 export default function Page() {
   const theme = Theme.useTheme();
-  const { connections } = useConnectionsCRUD();
   const { isAdmin } = useUserStore();
   const [activeTab, setActiveTab] = useState<AccessTab>(AccessTab.Users);
   const [createModalOpenFor, setCreateModalOpenFor] = useState<AccessTab | null>(null);
@@ -58,10 +50,10 @@ export default function Page() {
   const onClickCloseCreate = () => setCreateModalOpenFor(null);
 
   return (
-    <PageWrapper>
+    <FlexColumn>
       <OverviewHeader />
 
-      <TableWrapper>
+      <Padding>
         <FlexColumn>
           <TabList tabs={tabs} />
 
@@ -75,11 +67,11 @@ export default function Page() {
           )}
         </FlexColumn>
 
-        {renderActiveTab({ activeTab, connections })}
-      </TableWrapper>
+        {renderActiveTab({ activeTab })}
+      </Padding>
 
       <CreateUserModal isOpen={createModalOpenFor === AccessTab.Users} onClose={onClickCloseCreate} />
       <CreateTeamModal isOpen={createModalOpenFor === AccessTab.Teams} onClose={onClickCloseCreate} />
-    </PageWrapper>
+    </FlexColumn>
   );
 }
