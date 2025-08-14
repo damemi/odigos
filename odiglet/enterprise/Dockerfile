@@ -128,7 +128,9 @@ RUN make generate-headers
 RUN make build-jni && mvn package -DskipTests
 # build extension
 WORKDIR /dtrace-injector/ebpf-java-instrumentation/otel_agent_extension
-RUN make gradle-build
+ARG JAVA_OTEL_VERSION=v2.6.0
+ENV JAVA_OTEL_VERSION=$JAVA_OTEL_VERSION
+RUN make build-agent
 RUN make build-jni
 
 
@@ -268,9 +270,9 @@ COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injec
 COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injector/target/utils.jar /instrumentations/java-ebpf/utils.jar
 
 # Java Agent Extension
-COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/otel_agent_extension/extension/build/libs/odigos-opentelemetry-java-extension-1.0.jar /instrumentations/java-ext-ebpf/otel_agent_extension.jar
+COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/otel_agent_extension/build/opentelemetry-javaagent.jar /instrumentations/java-ext-ebpf/javaagent.jar
+COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/otel_agent_extension/extension/build/libs/otel_agent_extension.jar /instrumentations/java-ext-ebpf/otel_agent_extension.jar
 COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/otel_agent_extension/extension/end_span_usdt.so /instrumentations/java-ext-ebpf/end_span_usdt.so
-RUN cp /instrumentations/java/javaagent.jar /instrumentations/java-ext-ebpf/javaagent.jar
 
 # PHP
 COPY --from=php-agents /php-agents/opentelemetry-php/8.0 /instrumentations/php/8.0
