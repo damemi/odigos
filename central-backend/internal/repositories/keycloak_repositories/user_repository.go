@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/odigos-io/central-backend/graph/model"
+	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/keycloak"
 	"github.com/odigos-io/central-backend/internal/logger"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
@@ -285,30 +286,93 @@ func (k *UserRepository) GetUserRole(ctx context.Context, userID string) (string
 	return k.keycloakUserService.GetUserRole(adminToken, userID)
 }
 
-func (k *UserRepository) AssignComputePlatformsToUser(ctx context.Context, userID string, computePlatformIDs []string) (*model.GeneralResult, error) {
+func (k *UserRepository) AssignTeamsToUser(ctx context.Context, userID string, teamIDs []string) error {
 	adminToken, err := k.adminService.GetAdminToken(ctx)
 	if err != nil {
-		logger.Log.Error("Failed to get admin token for compute platform assignment", "error", err)
-		errorMsg := "Failed to authenticate: " + err.Error()
-		return &model.GeneralResult{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
+		return err
+	}
+
+	err = keycloak.AssignTeamsToUser(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, userID, teamIDs)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (k *UserRepository) RemoveTeamsFromUser(ctx context.Context, userID string, teamIDs []string) error {
+	adminToken, err := k.adminService.GetAdminToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = keycloak.RemoveTeamsFromUser(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, userID, teamIDs)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (k *UserRepository) GetTeamsForUser(ctx context.Context, userID string) ([]*model.Team, error) {
+	adminToken, err := k.adminService.GetAdminToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	teams, err := keycloak.GetUserTeams(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return teams, nil
+}
+
+func (k *UserRepository) AssignComputePlatformsToUser(ctx context.Context, userID string, computePlatformIDs []string) error {
+	adminToken, err := k.adminService.GetAdminToken(ctx)
+	if err != nil {
+		return err
 	}
 
 	err = k.keycloakUserService.AssignComputePlatformsToUser(adminToken, userID, computePlatformIDs)
 	if err != nil {
-		logger.Log.Error("Failed to assign compute platforms to user", "userID", userID, "computePlatformIDs", computePlatformIDs, "error", err)
-		errorMsg := "Failed to assign compute platforms: " + err.Error()
-		return &model.GeneralResult{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
+		return err
 	}
 
-	return &model.GeneralResult{
-		Success: true,
-	}, nil
+	return nil
+}
+
+func (k *UserRepository) RemoveComputePlatformsFromUser(ctx context.Context, userID string, computePlatformIDs []string) error {
+	adminToken, err := k.adminService.GetAdminToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = k.keycloakUserService.RemoveComputePlatformsFromUser(adminToken, userID, computePlatformIDs)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (k *UserRepository) GetComputePlatformsForUser(ctx context.Context, userID string) ([]*model.ComputePlatform, error) {
+	adminToken, err := k.adminService.GetAdminToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	computePlatforms, err := k.keycloakUserService.GetComputePlatformIdsForUser(adminToken, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	var computePlatformModels []*model.ComputePlatform
+	for _, cpID := range computePlatforms {
+		computePlatformModels = append(computePlatformModels, &model.ComputePlatform{ID: cpID})
+	}
+
+	return computePlatformModels, nil
 }
 
 // Helper methods
@@ -366,14 +430,14 @@ func (k *UserRepository) mapKeycloakUserToModel(userData map[string]any, adminTo
 		teams = []*model.Team{}
 	}
 
-	computePlatforms, err := k.keycloakUserService.GetUserComputePlatforms(adminToken, id)
+	computePlatformIds, err := k.keycloakUserService.GetComputePlatformIdsForUser(adminToken, id)
 	if err != nil {
 		logger.Log.Error("Failed to get user compute platforms", "userID", id, "error", err)
-		computePlatforms = []string{}
+		computePlatformIds = []string{}
 	}
 
 	var computePlatformModels []*model.ComputePlatform
-	for _, cpID := range computePlatforms {
+	for _, cpID := range computePlatformIds {
 		computePlatformModels = append(computePlatformModels, &model.ComputePlatform{ID: cpID})
 	}
 

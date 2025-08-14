@@ -54,8 +54,10 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClos
         email: formData[CreateUserFormField.Email],
         role: formData[CreateUserFormField.Role].id as Role,
         password: undefined,
-        teams: formData[CreateUserFormField.Teams].map(({ id }) => id as string),
-        computePlatforms: formData[CreateUserFormField.ComputePlatforms].map(({ id }) => id as string),
+        addTeamIds: formData[CreateUserFormField.Teams].map(({ id }) => id as string),
+        removeTeamIds: [],
+        addComputePlatformIds: formData[CreateUserFormField.ComputePlatforms].map(({ id }) => id as string),
+        removeComputePlatformIds: [],
       });
 
       if (resData?.success) {

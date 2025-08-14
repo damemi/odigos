@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
 import * as UTILS from '@/utils';
-import type { Connection } from '@/types';
+import type { ComputePlatform } from '@/types';
 import { StatusType } from '@odigos/ui-kit/types';
-import { useConnectionsCRUD, useProxyID } from '@/hooks';
 import { getPlatformIcon } from '@odigos/ui-kit/functions';
+import { useComputePlatformsCRUD, useProxyID } from '@/hooks';
 import { useFilterStore, useNotificationStore } from '@odigos/ui-kit/store';
 import { CenterThis, DropdownOption, FadeLoader, IconWrapped, InteractiveTable, NoDataFound, RowCell, Status } from '@odigos/ui-kit/components';
 
@@ -18,10 +18,10 @@ export enum ConnectionsTableColumn {
 export const ConnectionsTable: React.FC = () => {
   const { selectProxyID } = useProxyID();
   const { addNotification } = useNotificationStore();
-  const { connections, loading } = useConnectionsCRUD();
+  const { computePlatforms, loading } = useComputePlatformsCRUD();
   const { searchText, platformTypes, statuses } = useFilterStore();
 
-  const onClickRow = ({ id, status }: Connection) => {
+  const onClickRow = ({ id, status }: ComputePlatform) => {
     if (status === StatusType.Success) {
       selectProxyID(id);
     } else {
@@ -44,26 +44,26 @@ export const ConnectionsTable: React.FC = () => {
 
   const filtered = useMemo(
     () =>
-      connections.filter(
+      computePlatforms.filter(
         ({ id, type, status }) =>
           (!searchText || id.toLowerCase().includes(searchText)) &&
           (!platformTypes?.length || platformTypes.find((opt: DropdownOption) => opt.id === type)) &&
           (!statuses?.length || statuses.find((opt: DropdownOption) => opt.id === status)),
       ),
-    [connections, searchText, platformTypes, statuses],
+    [computePlatforms, searchText, platformTypes, statuses],
   );
 
   const rows = useMemo(
     () =>
-      filtered.map((connection) => ({
-        onClick: () => onClickRow(connection),
+      filtered.map((cp) => ({
+        onClick: () => onClickRow(cp),
         cells: [
           {
             columnKey: ConnectionsTableColumn.Icon,
             component: () => (
               <IconWrapped
                 icon={() =>
-                  getPlatformIcon(connection.type)({
+                  getPlatformIcon(cp.type)({
                     strokeWidth: 2,
                     size: 24,
                   })
@@ -73,21 +73,21 @@ export const ConnectionsTable: React.FC = () => {
           },
           {
             columnKey: ConnectionsTableColumn.Id,
-            value: connection.id,
+            value: cp.id,
           },
           {
             columnKey: ConnectionsTableColumn.Name,
-            value: connection.name,
+            value: cp.name,
           },
           {
             columnKey: ConnectionsTableColumn.Type,
-            value: connection.type,
+            value: cp.type,
           },
           {
             columnKey: ConnectionsTableColumn.Status,
             component: () => (
               <div style={{ lineHeight: 1 }}>
-                <Status status={connection.status} title={connection.status === StatusType.Success ? UTILS.CONNECTION_ALIVE : UTILS.CONNECTION_LOST} withIcon withBorder />
+                <Status status={cp.status} title={cp.status === StatusType.Success ? UTILS.CONNECTION_ALIVE : UTILS.CONNECTION_LOST} withIcon withBorder />
               </div>
             ),
           },

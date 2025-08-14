@@ -1,18 +1,23 @@
 import React, { type FC } from 'react';
 import type { Team } from '@/types';
 import { DataCard, Text, TextArea } from '@odigos/ui-kit/components';
-import { COMPUTE_PLATFORMS_TAB, DESCRIPTION, MEMBERS_COUNT, PLATFORMS_COUNT, TEAMS_TAB } from '@/utils';
+import { COMPUTE_PLATFORMS_TAB, DESCRIPTION, MEMBERS_COUNT, MEMBERS_LABEL, PLATFORMS_COUNT } from '@/utils';
 import { DataCardCellStretch, DataCardCellTitle, DataCardContentRow, DataCardContentCell } from '../cards/styled';
 
-interface TeamCardProps {
-  formData: Pick<Team, 'description' | 'users' | 'computePlatforms'>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handleFormChange: (key: string, value: any) => void;
+interface FormData {
+  description: string;
 }
 
-const TeamCard: FC<TeamCardProps> = ({ formData, handleFormChange }) => {
-  const usersCount = formData.users?.length || 0;
-  const platformsCount = formData.computePlatforms?.length || 0;
+interface TeamCardProps {
+  team: Team;
+  formData: FormData;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handleFormChange: (key: keyof FormData, value: any) => void;
+}
+
+const TeamCard: FC<TeamCardProps> = ({ team, formData, handleFormChange }) => {
+  const usersCount = team.users?.length || 0;
+  const platformsCount = team.computePlatforms?.length || 0;
 
   return (
     <DataCard title=''>
@@ -24,7 +29,7 @@ const TeamCard: FC<TeamCardProps> = ({ formData, handleFormChange }) => {
           </DataCardCellStretch>
         </DataCardContentCell>
         <DataCardContentCell>
-          <DataCardCellTitle>{TEAMS_TAB}</DataCardCellTitle>
+          <DataCardCellTitle>{MEMBERS_LABEL}</DataCardCellTitle>
           <Text>{MEMBERS_COUNT(usersCount)}</Text>
         </DataCardContentCell>
         <DataCardContentCell>

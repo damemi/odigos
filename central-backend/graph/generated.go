@@ -51,13 +51,9 @@ type ComplexityRoot struct {
 		ID     func(childComplexity int) int
 		Name   func(childComplexity int) int
 		Status func(childComplexity int) int
+		Teams  func(childComplexity int) int
 		Type   func(childComplexity int) int
-	}
-
-	Connection struct {
-		Name    func(childComplexity int) int
-		ProxyID func(childComplexity int) int
-		Status  func(childComplexity int) int
+		Users  func(childComplexity int) int
 	}
 
 	CreateUserResult struct {
@@ -72,23 +68,24 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		CreateTeam         func(childComplexity int, input model.WriteTeamInput) int
-		CreateUser         func(childComplexity int, input model.WriteUserInput) int
-		DeleteTeam         func(childComplexity int, teamID string) int
-		DeleteUser         func(childComplexity int, userID string) int
-		SetInitialPassword func(childComplexity int, email string, password string) int
-		SignIn             func(childComplexity int, email string, password string) int
-		SignOut            func(childComplexity int) int
-		UpdateTeam         func(childComplexity int, teamID string, input model.WriteTeamInput) int
-		UpdateUser         func(childComplexity int, userID string, input model.WriteUserInput) int
+		CreateTeam            func(childComplexity int, input model.WriteTeamInput) int
+		CreateUser            func(childComplexity int, input model.WriteUserInput) int
+		DeleteTeam            func(childComplexity int, teamID string) int
+		DeleteUser            func(childComplexity int, userID string) int
+		SetInitialPassword    func(childComplexity int, email string, password string) int
+		SignIn                func(childComplexity int, email string, password string) int
+		SignOut               func(childComplexity int) int
+		UpdateComputePlatform func(childComplexity int, id string, input model.WriteComputePlatformInput) int
+		UpdateTeam            func(childComplexity int, teamID string, input model.WriteTeamInput) int
+		UpdateUser            func(childComplexity int, userID string, input model.WriteUserInput) int
 	}
 
 	Query struct {
-		Connections  func(childComplexity int) int
-		RemoteFetch  func(childComplexity int, proxyID string, query string, variables map[string]any) int
-		SystemConfig func(childComplexity int) int
-		Teams        func(childComplexity int) int
-		Users        func(childComplexity int) int
+		ComputePlatforms func(childComplexity int) int
+		RemoteFetch      func(childComplexity int, proxyID string, query string, variables map[string]any) int
+		SystemConfig     func(childComplexity int) int
+		Teams            func(childComplexity int) int
+		Users            func(childComplexity int) int
 	}
 
 	SignInResult struct {
@@ -127,6 +124,7 @@ type MutationResolver interface {
 	SignIn(ctx context.Context, email string, password string) (*model.SignInResult, error)
 	SetInitialPassword(ctx context.Context, email string, password string) (*model.SignInResult, error)
 	SignOut(ctx context.Context) (*model.GeneralResult, error)
+	UpdateComputePlatform(ctx context.Context, id string, input model.WriteComputePlatformInput) (*model.GeneralResult, error)
 	CreateUser(ctx context.Context, input model.WriteUserInput) (*model.CreateUserResult, error)
 	UpdateUser(ctx context.Context, userID string, input model.WriteUserInput) (*model.GeneralResult, error)
 	DeleteUser(ctx context.Context, userID string) (*model.GeneralResult, error)
@@ -137,7 +135,7 @@ type MutationResolver interface {
 type QueryResolver interface {
 	RemoteFetch(ctx context.Context, proxyID string, query string, variables map[string]any) (string, error)
 	SystemConfig(ctx context.Context) (*model.SystemConfig, error)
-	Connections(ctx context.Context) ([]*model.Connection, error)
+	ComputePlatforms(ctx context.Context) ([]*model.ComputePlatform, error)
 	Users(ctx context.Context) ([]*model.User, error)
 	Teams(ctx context.Context) ([]*model.Team, error)
 }
@@ -182,6 +180,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.ComputePlatform.Status(childComplexity), true
 
+	case "ComputePlatform.teams":
+		if e.complexity.ComputePlatform.Teams == nil {
+			break
+		}
+
+		return e.complexity.ComputePlatform.Teams(childComplexity), true
+
 	case "ComputePlatform.type":
 		if e.complexity.ComputePlatform.Type == nil {
 			break
@@ -189,26 +194,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.ComputePlatform.Type(childComplexity), true
 
-	case "Connection.name":
-		if e.complexity.Connection.Name == nil {
+	case "ComputePlatform.users":
+		if e.complexity.ComputePlatform.Users == nil {
 			break
 		}
 
-		return e.complexity.Connection.Name(childComplexity), true
-
-	case "Connection.proxyID":
-		if e.complexity.Connection.ProxyID == nil {
-			break
-		}
-
-		return e.complexity.Connection.ProxyID(childComplexity), true
-
-	case "Connection.status":
-		if e.complexity.Connection.Status == nil {
-			break
-		}
-
-		return e.complexity.Connection.Status(childComplexity), true
+		return e.complexity.ComputePlatform.Users(childComplexity), true
 
 	case "CreateUserResult.generatedPassword":
 		if e.complexity.CreateUserResult.GeneratedPassword == nil {
@@ -324,6 +315,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Mutation.SignOut(childComplexity), true
 
+	case "Mutation.updateComputePlatform":
+		if e.complexity.Mutation.UpdateComputePlatform == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateComputePlatform_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.UpdateComputePlatform(childComplexity, args["id"].(string), args["input"].(model.WriteComputePlatformInput)), true
+
 	case "Mutation.updateTeam":
 		if e.complexity.Mutation.UpdateTeam == nil {
 			break
@@ -348,12 +351,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Mutation.UpdateUser(childComplexity, args["userID"].(string), args["input"].(model.WriteUserInput)), true
 
-	case "Query.connections":
-		if e.complexity.Query.Connections == nil {
+	case "Query.computePlatforms":
+		if e.complexity.Query.ComputePlatforms == nil {
 			break
 		}
 
-		return e.complexity.Query.Connections(childComplexity), true
+		return e.complexity.Query.ComputePlatforms(childComplexity), true
 
 	case "Query.remoteFetch":
 		if e.complexity.Query.RemoteFetch == nil {
@@ -529,6 +532,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	opCtx := graphql.GetOperationContext(ctx)
 	ec := executionContext{opCtx, e, 0, 0, make(chan graphql.DeferredResult)}
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
+		ec.unmarshalInputWriteComputePlatformInput,
 		ec.unmarshalInputWriteTeamInput,
 		ec.unmarshalInputWriteUserInput,
 	)
@@ -720,6 +724,22 @@ func (ec *executionContext) field_Mutation_signIn_args(ctx context.Context, rawA
 		return nil, err
 	}
 	args["password"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_updateComputePlatform_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNWriteComputePlatformInput2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐWriteComputePlatformInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg1
 	return args, nil
 }
 
@@ -953,9 +973,9 @@ func (ec *executionContext) _ComputePlatform_type(ctx context.Context, field gra
 		}
 		return graphql.Null
 	}
-	res := resTmp.(string)
+	res := resTmp.(model.PlatformType)
 	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
+	return ec.marshalNPlatformType2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐPlatformType(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_ComputePlatform_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -965,7 +985,7 @@ func (ec *executionContext) fieldContext_ComputePlatform_type(_ context.Context,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
+			return nil, errors.New("field of type PlatformType does not have child fields")
 		},
 	}
 	return fc, nil
@@ -1015,8 +1035,8 @@ func (ec *executionContext) fieldContext_ComputePlatform_status(_ context.Contex
 	return fc, nil
 }
 
-func (ec *executionContext) _Connection_proxyID(ctx context.Context, field graphql.CollectedField, obj *model.Connection) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Connection_proxyID(ctx, field)
+func (ec *executionContext) _ComputePlatform_users(ctx context.Context, field graphql.CollectedField, obj *model.ComputePlatform) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ComputePlatform_users(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -1029,7 +1049,7 @@ func (ec *executionContext) _Connection_proxyID(ctx context.Context, field graph
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.ProxyID, nil
+		return obj.Users, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1041,26 +1061,42 @@ func (ec *executionContext) _Connection_proxyID(ctx context.Context, field graph
 		}
 		return graphql.Null
 	}
-	res := resTmp.(string)
+	res := resTmp.([]*model.User)
 	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
+	return ec.marshalNUser2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐUserᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Connection_proxyID(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_ComputePlatform_users(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "Connection",
+		Object:     "ComputePlatform",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_User_id(ctx, field)
+			case "email":
+				return ec.fieldContext_User_email(ctx, field)
+			case "username":
+				return ec.fieldContext_User_username(ctx, field)
+			case "role":
+				return ec.fieldContext_User_role(ctx, field)
+			case "needsPasswordChange":
+				return ec.fieldContext_User_needsPasswordChange(ctx, field)
+			case "teams":
+				return ec.fieldContext_User_teams(ctx, field)
+			case "computePlatforms":
+				return ec.fieldContext_User_computePlatforms(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _Connection_status(ctx context.Context, field graphql.CollectedField, obj *model.Connection) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Connection_status(ctx, field)
+func (ec *executionContext) _ComputePlatform_teams(ctx context.Context, field graphql.CollectedField, obj *model.ComputePlatform) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_ComputePlatform_teams(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -1073,7 +1109,7 @@ func (ec *executionContext) _Connection_status(ctx context.Context, field graphq
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Status, nil
+		return obj.Teams, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1085,63 +1121,35 @@ func (ec *executionContext) _Connection_status(ctx context.Context, field graphq
 		}
 		return graphql.Null
 	}
-	res := resTmp.(string)
+	res := resTmp.([]*model.Team)
 	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
+	return ec.marshalNTeam2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐTeamᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Connection_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_ComputePlatform_teams(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "Connection",
+		Object:     "ComputePlatform",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Connection_name(ctx context.Context, field graphql.CollectedField, obj *model.Connection) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Connection_name(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Name, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(string)
-	fc.Result = res
-	return ec.marshalNString2string(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext_Connection_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Connection",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Team_id(ctx, field)
+			case "name":
+				return ec.fieldContext_Team_name(ctx, field)
+			case "description":
+				return ec.fieldContext_Team_description(ctx, field)
+			case "users":
+				return ec.fieldContext_Team_users(ctx, field)
+			case "computePlatforms":
+				return ec.fieldContext_Team_computePlatforms(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Team_createdAt(ctx, field)
+			case "updatedAt":
+				return ec.fieldContext_Team_updatedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Team", field.Name)
 		},
 	}
 	return fc, nil
@@ -1533,6 +1541,67 @@ func (ec *executionContext) fieldContext_Mutation_signOut(_ context.Context, fie
 			}
 			return nil, fmt.Errorf("no field named %q was found under type GeneralResult", field.Name)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateComputePlatform(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_updateComputePlatform(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().UpdateComputePlatform(rctx, fc.Args["id"].(string), fc.Args["input"].(model.WriteComputePlatformInput))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.GeneralResult)
+	fc.Result = res
+	return ec.marshalNGeneralResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐGeneralResult(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_updateComputePlatform(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "success":
+				return ec.fieldContext_GeneralResult_success(ctx, field)
+			case "error":
+				return ec.fieldContext_GeneralResult_error(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type GeneralResult", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateComputePlatform_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -2010,8 +2079,8 @@ func (ec *executionContext) fieldContext_Query_systemConfig(_ context.Context, f
 	return fc, nil
 }
 
-func (ec *executionContext) _Query_connections(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Query_connections(ctx, field)
+func (ec *executionContext) _Query_computePlatforms(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_computePlatforms(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -2024,7 +2093,7 @@ func (ec *executionContext) _Query_connections(ctx context.Context, field graphq
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Connections(rctx)
+		return ec.resolvers.Query().ComputePlatforms(rctx)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2036,12 +2105,12 @@ func (ec *executionContext) _Query_connections(ctx context.Context, field graphq
 		}
 		return graphql.Null
 	}
-	res := resTmp.([]*model.Connection)
+	res := resTmp.([]*model.ComputePlatform)
 	fc.Result = res
-	return ec.marshalNConnection2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐConnectionᚄ(ctx, field.Selections, res)
+	return ec.marshalNComputePlatform2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐComputePlatformᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Query_connections(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_computePlatforms(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -2049,14 +2118,20 @@ func (ec *executionContext) fieldContext_Query_connections(_ context.Context, fi
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "proxyID":
-				return ec.fieldContext_Connection_proxyID(ctx, field)
-			case "status":
-				return ec.fieldContext_Connection_status(ctx, field)
+			case "id":
+				return ec.fieldContext_ComputePlatform_id(ctx, field)
 			case "name":
-				return ec.fieldContext_Connection_name(ctx, field)
+				return ec.fieldContext_ComputePlatform_name(ctx, field)
+			case "type":
+				return ec.fieldContext_ComputePlatform_type(ctx, field)
+			case "status":
+				return ec.fieldContext_ComputePlatform_status(ctx, field)
+			case "users":
+				return ec.fieldContext_ComputePlatform_users(ctx, field)
+			case "teams":
+				return ec.fieldContext_ComputePlatform_teams(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type Connection", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type ComputePlatform", field.Name)
 		},
 	}
 	return fc, nil
@@ -2782,6 +2857,10 @@ func (ec *executionContext) fieldContext_Team_computePlatforms(_ context.Context
 				return ec.fieldContext_ComputePlatform_type(ctx, field)
 			case "status":
 				return ec.fieldContext_ComputePlatform_status(ctx, field)
+			case "users":
+				return ec.fieldContext_ComputePlatform_users(ctx, field)
+			case "teams":
+				return ec.fieldContext_ComputePlatform_teams(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ComputePlatform", field.Name)
 		},
@@ -3204,6 +3283,10 @@ func (ec *executionContext) fieldContext_User_computePlatforms(_ context.Context
 				return ec.fieldContext_ComputePlatform_type(ctx, field)
 			case "status":
 				return ec.fieldContext_ComputePlatform_status(ctx, field)
+			case "users":
+				return ec.fieldContext_ComputePlatform_users(ctx, field)
+			case "teams":
+				return ec.fieldContext_ComputePlatform_teams(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ComputePlatform", field.Name)
 		},
@@ -5162,6 +5245,54 @@ func (ec *executionContext) fieldContext___Type_isOneOf(_ context.Context, field
 
 // region    **************************** input.gotpl *****************************
 
+func (ec *executionContext) unmarshalInputWriteComputePlatformInput(ctx context.Context, obj any) (model.WriteComputePlatformInput, error) {
+	var it model.WriteComputePlatformInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"addUserIds", "removeUserIds", "addTeamIds", "removeTeamIds"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "addUserIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addUserIds"))
+			data, err := ec.unmarshalOString2ᚕᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AddUserIds = data
+		case "removeUserIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("removeUserIds"))
+			data, err := ec.unmarshalOString2ᚕᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RemoveUserIds = data
+		case "addTeamIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addTeamIds"))
+			data, err := ec.unmarshalOString2ᚕᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AddTeamIds = data
+		case "removeTeamIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("removeTeamIds"))
+			data, err := ec.unmarshalOString2ᚕᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RemoveTeamIds = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputWriteTeamInput(ctx context.Context, obj any) (model.WriteTeamInput, error) {
 	var it model.WriteTeamInput
 	asMap := map[string]any{}
@@ -5169,7 +5300,7 @@ func (ec *executionContext) unmarshalInputWriteTeamInput(ctx context.Context, ob
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"name", "description", "users", "computePlatforms"}
+	fieldsInOrder := [...]string{"name", "description", "addUserIds", "removeUserIds", "addComputePlatformIds", "removeComputePlatformIds"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -5190,20 +5321,34 @@ func (ec *executionContext) unmarshalInputWriteTeamInput(ctx context.Context, ob
 				return it, err
 			}
 			it.Description = data
-		case "users":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("users"))
+		case "addUserIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addUserIds"))
 			data, err := ec.unmarshalOString2ᚕᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.Users = data
-		case "computePlatforms":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("computePlatforms"))
+			it.AddUserIds = data
+		case "removeUserIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("removeUserIds"))
 			data, err := ec.unmarshalOString2ᚕᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.ComputePlatforms = data
+			it.RemoveUserIds = data
+		case "addComputePlatformIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addComputePlatformIds"))
+			data, err := ec.unmarshalOString2ᚕᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AddComputePlatformIds = data
+		case "removeComputePlatformIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("removeComputePlatformIds"))
+			data, err := ec.unmarshalOString2ᚕᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RemoveComputePlatformIds = data
 		}
 	}
 
@@ -5217,7 +5362,7 @@ func (ec *executionContext) unmarshalInputWriteUserInput(ctx context.Context, ob
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"email", "password", "role", "teams", "computePlatforms"}
+	fieldsInOrder := [...]string{"email", "password", "role", "addTeamIds", "removeTeamIds", "addComputePlatformIds", "removeComputePlatformIds"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -5245,20 +5390,34 @@ func (ec *executionContext) unmarshalInputWriteUserInput(ctx context.Context, ob
 				return it, err
 			}
 			it.Role = data
-		case "teams":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("teams"))
+		case "addTeamIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addTeamIds"))
 			data, err := ec.unmarshalOString2ᚕᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.Teams = data
-		case "computePlatforms":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("computePlatforms"))
+			it.AddTeamIds = data
+		case "removeTeamIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("removeTeamIds"))
 			data, err := ec.unmarshalOString2ᚕᚖstring(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.ComputePlatforms = data
+			it.RemoveTeamIds = data
+		case "addComputePlatformIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("addComputePlatformIds"))
+			data, err := ec.unmarshalOString2ᚕᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AddComputePlatformIds = data
+		case "removeComputePlatformIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("removeComputePlatformIds"))
+			data, err := ec.unmarshalOString2ᚕᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RemoveComputePlatformIds = data
 		}
 	}
 
@@ -5304,52 +5463,13 @@ func (ec *executionContext) _ComputePlatform(ctx context.Context, sel ast.Select
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch(ctx)
-	if out.Invalids > 0 {
-		return graphql.Null
-	}
-
-	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
-
-	for label, dfs := range deferred {
-		ec.processDeferredGroup(graphql.DeferredGroup{
-			Label:    label,
-			Path:     graphql.GetPath(ctx),
-			FieldSet: dfs,
-			Context:  ctx,
-		})
-	}
-
-	return out
-}
-
-var connectionImplementors = []string{"Connection"}
-
-func (ec *executionContext) _Connection(ctx context.Context, sel ast.SelectionSet, obj *model.Connection) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, connectionImplementors)
-
-	out := graphql.NewFieldSet(fields)
-	deferred := make(map[string]*graphql.FieldSet)
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("Connection")
-		case "proxyID":
-			out.Values[i] = ec._Connection_proxyID(ctx, field, obj)
+		case "users":
+			out.Values[i] = ec._ComputePlatform_users(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "status":
-			out.Values[i] = ec._Connection_status(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "name":
-			out.Values[i] = ec._Connection_name(ctx, field, obj)
+		case "teams":
+			out.Values[i] = ec._ComputePlatform_teams(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -5503,6 +5623,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "updateComputePlatform":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateComputePlatform(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createUser":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createUser(ctx, field)
@@ -5631,7 +5758,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "connections":
+		case "computePlatforms":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -5640,7 +5767,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_connections(ctx, field)
+				res = ec._Query_computePlatforms(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -6358,60 +6485,6 @@ func (ec *executionContext) marshalNComputePlatform2ᚖgithubᚗcomᚋodigosᚑi
 	return ec._ComputePlatform(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNConnection2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐConnectionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Connection) graphql.Marshaler {
-	ret := make(graphql.Array, len(v))
-	var wg sync.WaitGroup
-	isLen1 := len(v) == 1
-	if !isLen1 {
-		wg.Add(len(v))
-	}
-	for i := range v {
-		i := i
-		fc := &graphql.FieldContext{
-			Index:  &i,
-			Result: &v[i],
-		}
-		ctx := graphql.WithFieldContext(ctx, fc)
-		f := func(i int) {
-			defer func() {
-				if r := recover(); r != nil {
-					ec.Error(ctx, ec.Recover(ctx, r))
-					ret = nil
-				}
-			}()
-			if !isLen1 {
-				defer wg.Done()
-			}
-			ret[i] = ec.marshalNConnection2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐConnection(ctx, sel, v[i])
-		}
-		if isLen1 {
-			f(i)
-		} else {
-			go f(i)
-		}
-
-	}
-	wg.Wait()
-
-	for _, e := range ret {
-		if e == graphql.Null {
-			return graphql.Null
-		}
-	}
-
-	return ret
-}
-
-func (ec *executionContext) marshalNConnection2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐConnection(ctx context.Context, sel ast.SelectionSet, v *model.Connection) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._Connection(ctx, sel, v)
-}
-
 func (ec *executionContext) marshalNCreateUserResult2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCreateUserResult(ctx context.Context, sel ast.SelectionSet, v model.CreateUserResult) graphql.Marshaler {
 	return ec._CreateUserResult(ctx, sel, &v)
 }
@@ -6460,6 +6533,16 @@ func (ec *executionContext) marshalNJSON2map(ctx context.Context, sel ast.Select
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) unmarshalNPlatformType2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐPlatformType(ctx context.Context, v any) (model.PlatformType, error) {
+	var res model.PlatformType
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNPlatformType2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐPlatformType(ctx context.Context, sel ast.SelectionSet, v model.PlatformType) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) unmarshalNRole2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐRole(ctx context.Context, v any) (model.Role, error) {
@@ -6632,6 +6715,11 @@ func (ec *executionContext) marshalNUser2ᚖgithubᚗcomᚋodigosᚑioᚋcentral
 		return graphql.Null
 	}
 	return ec._User(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNWriteComputePlatformInput2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐWriteComputePlatformInput(ctx context.Context, v any) (model.WriteComputePlatformInput, error) {
+	res, err := ec.unmarshalInputWriteComputePlatformInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNWriteTeamInput2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐWriteTeamInput(ctx context.Context, v any) (model.WriteTeamInput, error) {

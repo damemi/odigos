@@ -6,6 +6,7 @@ package graph
 
 import (
 	"context"
+	"slices"
 
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/consts"
@@ -27,6 +28,55 @@ func (r *mutationResolver) SetInitialPassword(ctx context.Context, email string,
 // SignOut is the resolver for the signOut field.
 func (r *mutationResolver) SignOut(ctx context.Context) (*model.GeneralResult, error) {
 	return r.AuthService.SignOut(ctx)
+}
+
+// UpdateComputePlatform is the resolver for the updateComputePlatform field.
+func (r *mutationResolver) UpdateComputePlatform(ctx context.Context, id string, input model.WriteComputePlatformInput) (*model.GeneralResult, error) {
+	for _, userID := range input.AddUserIds {
+		err := r.UserService.AssignComputePlatformsToUser(ctx, *userID, []string{id})
+		if err != nil {
+			errorMsg := "Failed to assign compute platforms to user: " + err.Error()
+			return &model.GeneralResult{
+				Success: false,
+				Error:   &errorMsg,
+			}, err
+		}
+	}
+	for _, userID := range input.RemoveUserIds {
+		err := r.UserService.RemoveComputePlatformsFromUser(ctx, *userID, []string{id})
+		if err != nil {
+			errorMsg := "Failed to remove compute platforms from user: " + err.Error()
+			return &model.GeneralResult{
+				Success: false,
+				Error:   &errorMsg,
+			}, err
+		}
+	}
+
+	for _, teamID := range input.AddTeamIds {
+		err := r.TeamService.AssignComputePlatformsToTeam(ctx, *teamID, []string{id})
+		if err != nil {
+			errorMsg := "Failed to assign compute platforms to team: " + err.Error()
+			return &model.GeneralResult{
+				Success: false,
+				Error:   &errorMsg,
+			}, err
+		}
+	}
+	for _, teamID := range input.RemoveTeamIds {
+		err := r.TeamService.RemoveComputePlatformsFromTeam(ctx, *teamID, []string{id})
+		if err != nil {
+			errorMsg := "Failed to remove compute platforms from team: " + err.Error()
+			return &model.GeneralResult{
+				Success: false,
+				Error:   &errorMsg,
+			}, err
+		}
+	}
+
+	return &model.GeneralResult{
+		Success: true,
+	}, nil
 }
 
 // CreateUser is the resolver for the createUser field.
@@ -104,17 +154,18 @@ func (r *queryResolver) SystemConfig(ctx context.Context) (*model.SystemConfig, 
 	}, nil
 }
 
-// Connections is the resolver for the connections field.
-func (r *queryResolver) Connections(ctx context.Context) ([]*model.Connection, error) {
-	keys, err := r.RedisClient.ListProxyConnectionsKeys(ctx)
+// ComputePlatforms is the resolver for the computePlatforms field.
+func (r *queryResolver) ComputePlatforms(ctx context.Context) ([]*model.ComputePlatform, error) {
+	connectionKeys, err := r.RedisClient.ListProxyConnectionsKeys(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var connections []*model.Connection
-	for _, proxyConnectionsRedisKey := range keys {
-		proxyID := consts.ExtractProxyIDFromConnectionKey(proxyConnectionsRedisKey)
-		status, err := r.RedisClient.GetProxyConnection(ctx, proxyConnectionsRedisKey)
+	// Create a map of compute platforms without their users and teams
+	var cpMap = make(map[string]*model.ComputePlatform)
+	for _, key := range connectionKeys {
+		proxyID := consts.ExtractProxyIDFromConnectionKey(key)
+		status, err := r.RedisClient.GetProxyConnection(ctx, key)
 		if err != nil {
 			logger.Log.Error("Failed to get proxy connection status", "proxyID", proxyID, "error", err)
 			continue
@@ -123,13 +174,49 @@ func (r *queryResolver) Connections(ctx context.Context) ([]*model.Connection, e
 		if name, ok := r.WebSocketServer.GetClusterName(proxyID); ok {
 			clusterName = name
 		}
-		connections = append(connections, &model.Connection{
-			ProxyID: proxyID,
-			Status:  status,
-			Name:    clusterName,
-		})
+		cpMap[proxyID] = &model.ComputePlatform{
+			ID:     proxyID,
+			Name:   clusterName,
+			Type:   model.PlatformTypeK8s,
+			Status: status,
+			Users:  []*model.User{},
+			Teams:  []*model.Team{},
+		}
 	}
-	return connections, nil
+
+	// Add users to compute platforms
+	users, err := r.UserService.GetUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, user := range users {
+		for _, cp := range user.ComputePlatforms {
+			if !slices.Contains(cpMap[cp.ID].Users, user) {
+				cpMap[cp.ID].Users = append(cpMap[cp.ID].Users, user)
+			}
+		}
+	}
+
+	// Add teams to compute platforms
+	teams, err := r.TeamService.GetTeams(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, team := range teams {
+		for _, cp := range team.ComputePlatforms {
+			if !slices.Contains(cpMap[cp.ID].Teams, team) {
+				cpMap[cp.ID].Teams = append(cpMap[cp.ID].Teams, team)
+			}
+		}
+	}
+
+	// Convert the map to a slice
+	var cps []*model.ComputePlatform
+	for _, cp := range cpMap {
+		cps = append(cps, cp)
+	}
+
+	return cps, nil
 }
 
 // Users is the resolver for the users field.

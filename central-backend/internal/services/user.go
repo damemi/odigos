@@ -5,6 +5,7 @@ import (
 
 	"github.com/odigos-io/central-backend/graph/model"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
+	"github.com/odigos-io/central-backend/internal/utils"
 )
 
 type UserService struct {
@@ -28,26 +29,31 @@ func (s *UserService) CreateUser(ctx context.Context, input *model.WriteUserInpu
 	}
 	userID := user.UserID
 
-	teamIDs := make([]string, 0)
-	for _, teamID := range input.Teams {
-		if teamID != nil {
-			teamIDs = append(teamIDs, *teamID)
+	if len(input.AddTeamIds) > 0 {
+		err = s.userRepo.AssignTeamsToUser(ctx, userID, utils.ConvertStringPtrsToStrings(input.AddTeamIds))
+		if err != nil {
+			return nil, err
 		}
 	}
-	err = s.teamRepo.AssignTeamsToUser(ctx, userID, teamIDs)
-	if err != nil {
-		return nil, err
+	if len(input.RemoveTeamIds) > 0 {
+		err = s.userRepo.RemoveTeamsFromUser(ctx, userID, utils.ConvertStringPtrsToStrings(input.RemoveTeamIds))
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	// TODO: assign compute platforms to user
-	// computePlatformIDs := make([]string, len(input.ComputePlatforms))
-	// for i, computePlatformID := range input.ComputePlatforms {
-	// 	computePlatformIDs[i] = *computePlatformID
-	// }
-	// _, err = s.userRepo.AssignComputePlatformsToUser(ctx, userID, computePlatformIDs)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	if len(input.AddComputePlatformIds) > 0 {
+		err = s.userRepo.AssignComputePlatformsToUser(ctx, userID, utils.ConvertStringPtrsToStrings(input.AddComputePlatformIds))
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(input.RemoveComputePlatformIds) > 0 {
+		err = s.userRepo.RemoveComputePlatformsFromUser(ctx, userID, utils.ConvertStringPtrsToStrings(input.RemoveComputePlatformIds))
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	return user, nil
 }
@@ -58,41 +64,31 @@ func (s *UserService) UpdateUser(ctx context.Context, userID string, input *mode
 		return nil, err
 	}
 
-	// remove user from old teams
-	oldTeams, err := s.teamRepo.GetTeamsForUser(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	oldTeamIDs := make([]string, len(oldTeams))
-	for i, team := range oldTeams {
-		oldTeamIDs[i] = team.ID
-	}
-	err = s.teamRepo.RemoveTeamsFromUser(ctx, userID, oldTeamIDs)
-	if err != nil {
-		return nil, err
-	}
-
-	// add user to new teams
-	newTeamIDs := make([]string, 0)
-	for _, teamID := range input.Teams {
-		if teamID != nil {
-			newTeamIDs = append(newTeamIDs, *teamID)
+	if len(input.AddTeamIds) > 0 {
+		err = s.userRepo.AssignTeamsToUser(ctx, userID, utils.ConvertStringPtrsToStrings(input.AddTeamIds))
+		if err != nil {
+			return nil, err
 		}
 	}
-	err = s.teamRepo.AssignTeamsToUser(ctx, userID, newTeamIDs)
-	if err != nil {
-		return nil, err
+	if len(input.RemoveTeamIds) > 0 {
+		err = s.userRepo.RemoveTeamsFromUser(ctx, userID, utils.ConvertStringPtrsToStrings(input.RemoveTeamIds))
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	// TODO: assign compute platforms to user
-	// computePlatformIDs := make([]string, len(input.ComputePlatforms))
-	// for i, computePlatformID := range input.ComputePlatforms {
-	// 	computePlatformIDs[i] = *computePlatformID
-	// }
-	// _, err = s.userRepo.AssignComputePlatformsToUser(ctx, userID, computePlatformIDs)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	if len(input.AddComputePlatformIds) > 0 {
+		err = s.userRepo.AssignComputePlatformsToUser(ctx, userID, utils.ConvertStringPtrsToStrings(input.AddComputePlatformIds))
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(input.RemoveComputePlatformIds) > 0 {
+		err = s.userRepo.RemoveComputePlatformsFromUser(ctx, userID, utils.ConvertStringPtrsToStrings(input.RemoveComputePlatformIds))
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	return user, nil
 }
@@ -107,4 +103,50 @@ func (s *UserService) GetUsers(ctx context.Context) ([]*model.User, error) {
 
 func (s *UserService) GetUserByID(ctx context.Context, userID string) (*model.User, error) {
 	return s.userRepo.GetUserByID(ctx, userID)
+}
+
+func (s *UserService) AssignTeamsToUser(ctx context.Context, userID string, teamIDs []string) (*model.GeneralResult, error) {
+	err := s.userRepo.AssignTeamsToUser(ctx, userID, teamIDs)
+	if err != nil {
+		errorMsg := "Failed to assign teams: " + err.Error()
+		return &model.GeneralResult{
+			Success: false,
+			Error:   &errorMsg,
+		}, nil
+	}
+
+	return &model.GeneralResult{
+		Success: true,
+	}, nil
+}
+
+func (s *UserService) RemoveTeamsFromUser(ctx context.Context, userID string, teamIDs []string) (*model.GeneralResult, error) {
+	err := s.userRepo.RemoveTeamsFromUser(ctx, userID, teamIDs)
+	if err != nil {
+		errorMsg := "Failed to remove teams: " + err.Error()
+		return &model.GeneralResult{
+			Success: false,
+			Error:   &errorMsg,
+		}, nil
+	}
+
+	return &model.GeneralResult{
+		Success: true,
+	}, nil
+}
+
+func (s *UserService) GetTeamsForUser(ctx context.Context, userID string) ([]*model.Team, error) {
+	return s.userRepo.GetTeamsForUser(ctx, userID)
+}
+
+func (s *UserService) AssignComputePlatformsToUser(ctx context.Context, userID string, computePlatformIDs []string) error {
+	return s.userRepo.AssignComputePlatformsToUser(ctx, userID, computePlatformIDs)
+}
+
+func (s *UserService) RemoveComputePlatformsFromUser(ctx context.Context, userID string, computePlatformIDs []string) error {
+	return s.userRepo.RemoveComputePlatformsFromUser(ctx, userID, computePlatformIDs)
+}
+
+func (s *UserService) GetComputePlatformsForUser(ctx context.Context, userID string) ([]*model.ComputePlatform, error) {
+	return s.userRepo.GetComputePlatformsForUser(ctx, userID)
 }

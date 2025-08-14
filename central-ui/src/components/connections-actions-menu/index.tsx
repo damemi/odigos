@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo } from 'react';
 import styled from 'styled-components';
-import { useConnectionsCRUD } from '@/hooks';
+import { useComputePlatformsCRUD } from '@/hooks';
 import { SearchIcon } from '@odigos/ui-kit/icons';
 import { useFilterStore } from '@odigos/ui-kit/store';
 import { Badge, Divider, Dropdown, DropdownOption, DropdownProps, FlexRow, Input, Text } from '@odigos/ui-kit/components';
@@ -25,7 +25,7 @@ const SearchAndFilterWrapper = styled.div`
 `;
 
 export const ConnectionsActionsMenu = () => {
-  const { connections } = useConnectionsCRUD();
+  const { computePlatforms } = useComputePlatformsCRUD();
   const { searchText, setSearchText, statuses, setStatuses, platformTypes, setPlatformTypes, clearAll } = useFilterStore();
 
   // cleanup filters on unmount
@@ -36,33 +36,33 @@ export const ConnectionsActionsMenu = () => {
   const statusOptions = useMemo(() => {
     const payload: DropdownProps['options'] = [];
 
-    connections?.forEach(({ status }) => {
+    computePlatforms?.forEach(({ status }) => {
       if (!payload.find((opt) => opt.id === status)) {
         payload.push({ id: status, value: status });
       }
     });
 
     return payload;
-  }, [connections]);
+  }, [computePlatforms]);
 
   const typeOptions = useMemo(() => {
     const payload: DropdownProps['options'] = [];
 
-    connections?.forEach(({ type }) => {
+    computePlatforms?.forEach(({ type }) => {
       if (!payload.find((opt) => opt.id === type)) {
         payload.push({ id: type, value: type });
       }
     });
 
     return payload;
-  }, [connections]);
+  }, [computePlatforms]);
 
   return (
     <Container>
       <FlexRow $gap={16}>
         <FlexRow $gap={12}>
-          <Title>Compute platforms</Title>
-          <Badge label={connections.length} filled={!!connections.length} />
+          <Title>Connections</Title>
+          <Badge label={computePlatforms.length} filled={!!computePlatforms.length} />
         </FlexRow>
 
         <Divider orientation='vertical' length='20px' margin='0' />

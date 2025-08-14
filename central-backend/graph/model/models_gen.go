@@ -10,16 +10,12 @@ import (
 )
 
 type ComputePlatform struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Type   string `json:"type"`
-	Status string `json:"status"`
-}
-
-type Connection struct {
-	ProxyID string `json:"proxyID"`
-	Status  string `json:"status"`
-	Name    string `json:"name"`
+	ID     string       `json:"id"`
+	Name   string       `json:"name"`
+	Type   PlatformType `json:"type"`
+	Status string       `json:"status"`
+	Users  []*User      `json:"users"`
+	Teams  []*Team      `json:"teams"`
 }
 
 type CreateUserResult struct {
@@ -70,19 +66,85 @@ type User struct {
 	ComputePlatforms    []*ComputePlatform `json:"computePlatforms"`
 }
 
+type WriteComputePlatformInput struct {
+	AddUserIds    []*string `json:"addUserIds,omitempty"`
+	RemoveUserIds []*string `json:"removeUserIds,omitempty"`
+	AddTeamIds    []*string `json:"addTeamIds,omitempty"`
+	RemoveTeamIds []*string `json:"removeTeamIds,omitempty"`
+}
+
 type WriteTeamInput struct {
-	Name             *string   `json:"name,omitempty"`
-	Description      *string   `json:"description,omitempty"`
-	Users            []*string `json:"users,omitempty"`
-	ComputePlatforms []*string `json:"computePlatforms,omitempty"`
+	Name                     *string   `json:"name,omitempty"`
+	Description              *string   `json:"description,omitempty"`
+	AddUserIds               []*string `json:"addUserIds,omitempty"`
+	RemoveUserIds            []*string `json:"removeUserIds,omitempty"`
+	AddComputePlatformIds    []*string `json:"addComputePlatformIds,omitempty"`
+	RemoveComputePlatformIds []*string `json:"removeComputePlatformIds,omitempty"`
 }
 
 type WriteUserInput struct {
-	Email            *string   `json:"email,omitempty"`
-	Password         *string   `json:"password,omitempty"`
-	Role             *Role     `json:"role,omitempty"`
-	Teams            []*string `json:"teams,omitempty"`
-	ComputePlatforms []*string `json:"computePlatforms,omitempty"`
+	Email                    *string   `json:"email,omitempty"`
+	Password                 *string   `json:"password,omitempty"`
+	Role                     *Role     `json:"role,omitempty"`
+	AddTeamIds               []*string `json:"addTeamIds,omitempty"`
+	RemoveTeamIds            []*string `json:"removeTeamIds,omitempty"`
+	AddComputePlatformIds    []*string `json:"addComputePlatformIds,omitempty"`
+	RemoveComputePlatformIds []*string `json:"removeComputePlatformIds,omitempty"`
+}
+
+type PlatformType string
+
+const (
+	PlatformTypeK8s PlatformType = "k8s"
+	PlatformTypeVM  PlatformType = "vm"
+)
+
+var AllPlatformType = []PlatformType{
+	PlatformTypeK8s,
+	PlatformTypeVM,
+}
+
+func (e PlatformType) IsValid() bool {
+	switch e {
+	case PlatformTypeK8s, PlatformTypeVM:
+		return true
+	}
+	return false
+}
+
+func (e PlatformType) String() string {
+	return string(e)
+}
+
+func (e *PlatformType) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = PlatformType(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid PlatformType", str)
+	}
+	return nil
+}
+
+func (e PlatformType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *PlatformType) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e PlatformType) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 type Role string

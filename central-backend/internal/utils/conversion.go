@@ -35,3 +35,13 @@ func ConvertStringRoleToModel(roleStr string) model.Role {
 		return model.RoleViewer
 	}
 }
+
+func ConvertStringPtrsToStrings(input []*string) []string {
+	output := make([]string, 0, len(input))
+	for _, s := range input {
+		if s != nil {
+			output = append(output, *s)
+		}
+	}
+	return output
+}

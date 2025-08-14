@@ -110,7 +110,14 @@ func (k *TeamRepository) GetTeams(ctx context.Context) ([]*model.Team, error) {
 		team.Users = users
 	}
 
-	// TODO: get compute platforms for each team
+	// get compute platforms for each team
+	for _, team := range teams {
+		computePlatforms, err := k.GetComputePlatformsForTeam(ctx, team.ID)
+		if err != nil {
+			return nil, err
+		}
+		team.ComputePlatforms = computePlatforms
+	}
 
 	return teams, nil
 }
@@ -121,7 +128,24 @@ func (k *TeamRepository) GetTeamByID(ctx context.Context, teamID string) (*model
 		return nil, err
 	}
 
-	return keycloak.GetTeamByID(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, teamID)
+	team, err := keycloak.GetTeamByID(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, teamID)
+	if err != nil {
+		return nil, err
+	}
+
+	users, err := k.GetUsersForTeam(ctx, teamID)
+	if err != nil {
+		return nil, err
+	}
+	team.Users = users
+
+	computePlatforms, err := k.GetComputePlatformsForTeam(ctx, teamID)
+	if err != nil {
+		return nil, err
+	}
+	team.ComputePlatforms = computePlatforms
+
+	return team, nil
 }
 
 func (k *TeamRepository) GetTeamByName(ctx context.Context, teamName string) (*model.Team, error) {
@@ -147,48 +171,6 @@ func (k *TeamRepository) GetUsersForTeam(ctx context.Context, teamID string) ([]
 	return users, nil
 }
 
-func (k *TeamRepository) GetTeamsForUser(ctx context.Context, userID string) ([]*model.Team, error) {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	teams, err := keycloak.GetUserTeams(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	return teams, nil
-}
-
-func (k *TeamRepository) AssignTeamsToUser(ctx context.Context, userID string, teamIDs []string) error {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get admin token: %w", err)
-	}
-
-	err = keycloak.AssignTeamsToUser(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, userID, teamIDs)
-	if err != nil {
-		return fmt.Errorf("failed to assign teams to user: %w", err)
-	}
-
-	return nil
-}
-
-func (k *TeamRepository) RemoveTeamsFromUser(ctx context.Context, userID string, teamIDs []string) error {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get admin token: %w", err)
-	}
-
-	err = keycloak.RemoveTeamsFromUser(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, userID, teamIDs)
-	if err != nil {
-		return fmt.Errorf("failed to remove teams from user: %w", err)
-	}
-
-	return nil
-}
-
 func (k *TeamRepository) DeleteTeam(ctx context.Context, teamID string) (*model.GeneralResult, error) {
 	adminToken, err := k.adminService.GetAdminToken(ctx)
 	if err != nil {
@@ -203,4 +185,51 @@ func (k *TeamRepository) DeleteTeam(ctx context.Context, teamID string) (*model.
 	}
 
 	return &model.GeneralResult{Success: true, Error: nil}, nil
+}
+
+func (k *TeamRepository) AssignComputePlatformsToTeam(ctx context.Context, teamID string, computePlatformIDs []string) error {
+	adminToken, err := k.adminService.GetAdminToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = keycloak.AssignComputePlatformsToTeam(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, teamID, computePlatformIDs)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (k *TeamRepository) RemoveComputePlatformsFromTeam(ctx context.Context, teamID string, computePlatformIDs []string) error {
+	adminToken, err := k.adminService.GetAdminToken(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = keycloak.RemoveComputePlatformsFromTeam(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, teamID, computePlatformIDs)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (k *TeamRepository) GetComputePlatformsForTeam(ctx context.Context, teamID string) ([]*model.ComputePlatform, error) {
+	adminToken, err := k.adminService.GetAdminToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	computePlatformIds, err := keycloak.GetComputePlatformIdsForTeam(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, teamID)
+	if err != nil {
+		return nil, err
+	}
+
+	var computePlatformModels []*model.ComputePlatform
+	for _, id := range computePlatformIds {
+		computePlatformModels = append(computePlatformModels, &model.ComputePlatform{ID: id})
+	}
+
+	return computePlatformModels, nil
 }

@@ -1,6 +1,6 @@
 export * from './actions';
 export * from './config';
-export * from './connections';
+export * from './compute-platforms';
 export * from './data-streams';
 export * from './describe';
 export * from './destinations';

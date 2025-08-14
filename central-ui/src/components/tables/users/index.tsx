@@ -3,7 +3,7 @@ import * as UTILS from '@/utils';
 import { useUsersCRUD } from '@/hooks';
 import Theme from '@odigos/ui-kit/theme';
 import { EditUserDrawer } from '@/components';
-import type { User, WriteUserInput } from '@/types';
+import type { User, UserInput } from '@/types';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { EditIcon, TrashIcon, UserIcon } from '@odigos/ui-kit/icons';
@@ -27,7 +27,7 @@ export const UsersTable: React.FC = () => {
   const [deleteOpenForUser, setDeleteOpenForUser] = useState<User | null>(null);
 
   const handleUpdateUser = useCallback(
-    async (userID: string, input: WriteUserInput) => {
+    async (userID: string, input: UserInput) => {
       try {
         if (updating) return;
         const result = await updateUser(userID, input);
@@ -130,12 +130,7 @@ export const UsersTable: React.FC = () => {
             setEditOpenForUser(null);
           }}
           onSave={(payload) => {
-            handleUpdateUser(editOpenForUser.id, {
-              email: payload.email,
-              role: payload.role,
-              teams: payload.teams?.map((team) => team.id) || [],
-              computePlatforms: payload.computePlatforms?.map((platform) => platform.id) || [],
-            });
+            handleUpdateUser(editOpenForUser.id, payload);
             setEditOpenForUser(null);
           }}
           onDelete={() => {

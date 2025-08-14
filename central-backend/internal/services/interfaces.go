@@ -31,7 +31,13 @@ type UserRepository interface {
 	SetUserPasswordRequirement(ctx context.Context, email string, required bool) error
 	GetUserRole(ctx context.Context, userID string) (string, error)
 
-	AssignComputePlatformsToUser(ctx context.Context, userID string, computePlatformIDs []string) (*model.GeneralResult, error)
+	AssignTeamsToUser(ctx context.Context, userID string, teamIDs []string) error
+	RemoveTeamsFromUser(ctx context.Context, userID string, teamIDs []string) error
+	GetTeamsForUser(ctx context.Context, userID string) ([]*model.Team, error)
+
+	AssignComputePlatformsToUser(ctx context.Context, userID string, computePlatformIDs []string) error
+	RemoveComputePlatformsFromUser(ctx context.Context, userID string, computePlatformIDs []string) error
+	GetComputePlatformsForUser(ctx context.Context, userID string) ([]*model.ComputePlatform, error)
 }
 
 type TeamRepository interface {
@@ -44,7 +50,8 @@ type TeamRepository interface {
 	GetTeamByName(ctx context.Context, teamName string) (*model.Team, error)
 
 	GetUsersForTeam(ctx context.Context, teamID string) ([]*model.User, error)
-	GetTeamsForUser(ctx context.Context, userID string) ([]*model.Team, error)
-	AssignTeamsToUser(ctx context.Context, userID string, teamIDs []string) error
-	RemoveTeamsFromUser(ctx context.Context, userID string, teamIDs []string) error
+
+	AssignComputePlatformsToTeam(ctx context.Context, teamID string, computePlatformIDs []string) error
+	RemoveComputePlatformsFromTeam(ctx context.Context, teamID string, computePlatformIDs []string) error
+	GetComputePlatformsForTeam(ctx context.Context, teamID string) ([]*model.ComputePlatform, error)
 }

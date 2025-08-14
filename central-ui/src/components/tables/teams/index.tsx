@@ -3,7 +3,7 @@ import * as UTILS from '@/utils';
 import { useTeamsCRUD } from '@/hooks';
 import Theme from '@odigos/ui-kit/theme';
 import { EditTeamDrawer } from '@/components';
-import type { Team, WriteTeamInput } from '@/types';
+import type { Team, TeamInput } from '@/types';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { EditIcon, TrashIcon, UserGroupIcon } from '@odigos/ui-kit/icons';
@@ -27,7 +27,7 @@ export const TeamsTable: React.FC = () => {
   const [deleteOpenForTeam, setDeleteOpenForTeam] = useState<Team | null>(null);
 
   const handleUpdateTeam = useCallback(
-    async (teamID: string, input: WriteTeamInput) => {
+    async (teamID: string, input: TeamInput) => {
       try {
         if (updating) return;
         const result = await updateTeam(teamID, input);
@@ -130,12 +130,7 @@ export const TeamsTable: React.FC = () => {
             setEditOpenForTeam(null);
           }}
           onSave={(payload) => {
-            handleUpdateTeam(editOpenForTeam.id, {
-              name: payload.name,
-              description: payload.description,
-              users: payload.users?.map((user) => user.id) || [],
-              computePlatforms: payload.computePlatforms?.map((platform) => platform.id) || [],
-            });
+            handleUpdateTeam(editOpenForTeam.id, payload);
             setEditOpenForTeam(null);
           }}
           onDelete={() => {

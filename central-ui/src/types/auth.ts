@@ -1,3 +1,5 @@
+import type { ComputePlatform } from './compute-platforms';
+
 export enum Role {
   OWNER = 'OWNER',
   ADMIN = 'ADMIN',
@@ -20,17 +22,16 @@ export interface GeneralResult {
   error?: string;
 }
 
-export interface ComputePlatform {
-  id: string;
-  name: string;
-  type: string;
-  status: string;
-}
-
 export interface SignInPayload {
   token: string;
   user?: User;
   status: SignInStatus;
+}
+
+export interface CreateUserResult {
+  success: boolean;
+  userID: string;
+  generatedPassword?: string;
 }
 
 export interface User {
@@ -43,6 +44,16 @@ export interface User {
   computePlatforms?: ComputePlatform[];
 }
 
+export interface UserInput {
+  email: string;
+  password?: string;
+  role: Role;
+  addTeamIds: string[];
+  removeTeamIds: string[];
+  addComputePlatformIds: string[];
+  removeComputePlatformIds: string[];
+}
+
 export interface Team {
   id: string;
   name: string;
@@ -53,23 +64,11 @@ export interface Team {
   updatedAt?: string;
 }
 
-export interface WriteUserInput {
-  email: string;
-  password?: string;
-  role: Role;
-  teams: string[];
-  computePlatforms: string[];
-}
-
-export interface CreateUserResult {
-  success: boolean;
-  userID: string;
-  generatedPassword?: string;
-}
-
-export interface WriteTeamInput {
+export interface TeamInput {
   name: string;
   description?: string;
-  users: string[];
-  computePlatforms: string[];
+  addUserIds: string[];
+  removeUserIds: string[];
+  addComputePlatformIds: string[];
+  removeComputePlatformIds: string[];
 }

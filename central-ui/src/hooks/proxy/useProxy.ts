@@ -26,7 +26,8 @@ export const useProxy = <ResT = AnyObj, ReqT = AnyObj>(queryString: string): Use
 
   const fetch: UseProxy<ResT, ReqT>['fetch'] = async (variables) => {
     if (!proxyID || !queryString) {
-      addNotification({ type: StatusType.Error, title: 'Request Error', message: 'Unable to load data from the proxy. Please make sure your connection is configured correctly.' });
+      // addNotification({ type: StatusType.Error, title: 'Request Error', message: 'Unable to load data from the proxy. Please make sure your connection is configured correctly.' });
+      console.warn('no `proxyID` or `queryString` to load data from the proxy. Please make sure your connection is configured correctly.');
 
       return EMPTY_RESPONSE;
     }

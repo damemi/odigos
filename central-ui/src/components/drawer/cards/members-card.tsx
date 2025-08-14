@@ -2,38 +2,52 @@ import React, { useState, type FC, useMemo } from 'react';
 import type { User } from '@/types';
 import { useUsersCRUD } from '@/hooks';
 import Theme from '@odigos/ui-kit/theme';
-import { useGenericForm } from '@odigos/ui-kit/hooks';
 import { MinWidthWide, Relative } from '@/components/styled';
 import { DataCardContentColumn, DataCardContentRow } from './styled';
 import { MinusCircledIcon, PlusIcon, SearchIcon, UserGroupIcon } from '@odigos/ui-kit/icons';
 import { DataCard, DataFinger, Dropdown, IconButton, Input, NoDataFound, PopupForm } from '@odigos/ui-kit/components';
 
-interface MembersCardProps {
-  formData: {
-    users?: User[];
-  };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handleFormChange: (key: string, value: any) => void;
+interface FormData {
+  addUserIds: string[];
+  removeUserIds: string[];
 }
 
-const MembersCard: FC<MembersCardProps> = ({ formData, handleFormChange }) => {
+interface MembersCardProps {
+  currentUsers: User[];
+  formData: FormData;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handleFormChange: (key: keyof FormData, value: any) => void;
+}
+
+const MembersCard: FC<MembersCardProps> = ({ currentUsers, formData, handleFormChange }) => {
   const theme = Theme.useTheme();
   const { users } = useUsersCRUD();
 
+  const [search, setSearch] = useState('');
   const [isAdd, setIsAdd] = useState(false);
   const toggleAdd = () => setIsAdd((prev) => !prev);
-  const { formData: tempFormData, handleFormChange: handleTempFormChange, resetFormData: resetTempFormData } = useGenericForm(formData);
 
-  const [search, setSearch] = useState('');
-  const filteredUsers = useMemo(() => formData.users?.filter(({ email }) => email.toLowerCase().includes(search.toLowerCase())), [formData.users, search]);
+  const filteredUsers = useMemo(() => {
+    const arr =
+      currentUsers.filter(({ id, email }) => {
+        return !formData.removeUserIds.includes(id) && email.toLowerCase().includes(search.toLowerCase());
+      }) || [];
 
-  const usersCount = formData.users?.length || 0;
-  const filteredUsersCount = filteredUsers?.length || 0;
+    formData.addUserIds.forEach((id) => {
+      const user = users.find((user) => user.id === id);
+      const exists = arr.find((user) => user.id === id);
+      if (user && !exists) {
+        arr.push(user);
+      }
+    });
+
+    return arr;
+  }, [currentUsers, search, users, formData]);
 
   return (
     <DataCard
       title='Members'
-      titleBadge={usersCount}
+      titleBadge={currentUsers.length}
       action={
         <>
           <Input icon={SearchIcon} placeholder='Search...' value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -50,11 +64,10 @@ const MembersCard: FC<MembersCardProps> = ({ formData, handleFormChange }) => {
               isOpen={isAdd}
               title='Add members from the list'
               onClose={() => {
-                resetTempFormData();
+                handleFormChange('addUserIds', []);
                 toggleAdd();
               }}
               onSave={() => {
-                handleFormChange('users', tempFormData.users);
                 toggleAdd();
               }}
             >
@@ -62,19 +75,34 @@ const MembersCard: FC<MembersCardProps> = ({ formData, handleFormChange }) => {
                 <Dropdown
                   showSearch
                   isMulti
-                  options={users.map((x) => ({ id: x.id, value: x.email }))}
-                  value={tempFormData.users?.map((x) => ({ id: x.id, value: x.email }))}
+                  options={users.map((user) => ({ id: user.id, value: user.email }))}
+                  value={formData.addUserIds.map((id) => {
+                    const user = users.find((user) => user.id === id);
+                    return { id, value: user?.email || user?.username || id };
+                  })}
                   onSelect={({ id }) => {
-                    const fullUser = users.find((user) => user.id === id);
-                    if (fullUser) {
-                      handleTempFormChange('users', [...(tempFormData.users || []), fullUser]);
+                    if (id) {
+                      if (formData.removeUserIds.includes(id)) {
+                        const newRemoveUserIds = formData.removeUserIds.filter((str) => str !== id);
+                        handleFormChange('removeUserIds', newRemoveUserIds);
+                      }
+
+                      const foundAdd = formData.addUserIds.find((str) => str === id);
+                      const foundCurrent = currentUsers.find((user) => user.id === id);
+                      if (!foundAdd && !foundCurrent) {
+                        const newAddUserIds = [...formData.addUserIds, id];
+                        handleFormChange('addUserIds', newAddUserIds);
+                      }
                     }
                   }}
                   onDeselect={({ id }) => {
-                    handleTempFormChange(
-                      'users',
-                      tempFormData.users?.filter((x) => x.id !== id),
-                    );
+                    if (id) {
+                      if (formData.addUserIds.includes(id)) {
+                        const newAddUserIds = formData.addUserIds.filter((str) => str !== id);
+                        handleFormChange('addUserIds', newAddUserIds);
+                      }
+                      // note: do not handle the 'remove' list here, it's not needed
+                    }
                   }}
                 />
               </MinWidthWide>
@@ -83,26 +111,33 @@ const MembersCard: FC<MembersCardProps> = ({ formData, handleFormChange }) => {
         </>
       }
     >
-      {!filteredUsersCount ? (
+      {!filteredUsers.length ? (
         <DataCardContentRow $justifyContent='center'>
           <NoDataFound subTitle={search ? undefined : ''} />
         </DataCardContentRow>
       ) : (
         <DataCardContentColumn>
-          {filteredUsers?.map((x) => (
+          {filteredUsers?.map(({ id, email, username, role }) => (
             <DataFinger
-              key={`user-${x.id}`}
-              title={x.email}
-              subTitle={x.role}
+              key={`user-${id}`}
+              title={email || username}
+              subTitle={role}
               icons={[UserGroupIcon]}
               renderActions={() => (
                 <IconButton
                   tooltip='Remove member'
                   onClick={() => {
-                    handleFormChange(
-                      'users',
-                      formData.users?.filter(({ id }) => id !== x.id),
-                    );
+                    if (formData.addUserIds.includes(id)) {
+                      const newAddUserIds = formData.addUserIds.filter((str) => str !== id);
+                      handleFormChange('addUserIds', newAddUserIds);
+                    }
+
+                    const foundRemove = formData.removeUserIds.find((str) => str === id);
+                    const foundCurrent = currentUsers.find((user) => user.id === id);
+                    if (!foundRemove && foundCurrent) {
+                      const newRemoveUserIds = [...formData.removeUserIds, id];
+                      handleFormChange('removeUserIds', newRemoveUserIds);
+                    }
                   }}
                 >
                   <MinusCircledIcon fill={theme.text.error} />

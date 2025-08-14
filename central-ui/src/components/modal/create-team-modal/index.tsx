@@ -49,8 +49,10 @@ export const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClos
       const resData = await createTeam({
         name: formData[CreateTeamFormField.Name],
         description: formData[CreateTeamFormField.Description],
-        users: formData[CreateTeamFormField.Members].map(({ id }) => id as string),
-        computePlatforms: formData[CreateTeamFormField.ComputePlatforms].map(({ id }) => id as string),
+        addUserIds: formData[CreateTeamFormField.Members].map(({ id }) => id as string),
+        removeUserIds: [],
+        addComputePlatformIds: formData[CreateTeamFormField.ComputePlatforms].map(({ id }) => id as string),
+        removeComputePlatformIds: [],
       });
 
       if (resData?.success) {

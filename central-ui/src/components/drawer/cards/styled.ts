@@ -21,6 +21,6 @@ export const DataCardCellTitle = styled(Text)`
   font-size: 12px;
 `;
 
-export const DataCardCellStretch = styled(Text)`
+export const DataCardCellStretch = styled.div`
   width: 300px;
 `;

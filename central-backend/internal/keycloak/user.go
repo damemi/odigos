@@ -703,7 +703,111 @@ func (u *UserService) AssignComputePlatformsToUser(token, userID string, compute
 	return nil
 }
 
-func (u *UserService) GetUserComputePlatforms(token, userID string) ([]string, error) {
+func (u *UserService) RemoveComputePlatformsFromUser(token, userID string, computePlatformIDs []string) error {
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", u.host, u.realm, userID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create GET request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to get user data: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to get user data: status %d, response: %s", resp.StatusCode, string(responseBody))
+	}
+
+	var userData map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&userData); err != nil {
+		return fmt.Errorf("failed to decode user data: %w", err)
+	}
+
+	attributes, ok := userData["attributes"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("failed to get attributes: %w", err)
+	}
+
+	computePlatformsAttr, ok := attributes[consts.UserAttributeComputePlatforms]
+	if !ok {
+		return fmt.Errorf("failed to get platform IDs: %w", err)
+	}
+
+	var platformIDs []interface{}
+	// Handle both string array and interface array formats
+	if stringArray, ok := computePlatformsAttr.([]string); ok {
+		for _, id := range stringArray {
+			platformIDs = append(platformIDs, id)
+		}
+	} else if interfaceArray, ok := computePlatformsAttr.([]interface{}); ok {
+		platformIDs = interfaceArray
+	} else {
+		return fmt.Errorf("failed to get platform IDs: unexpected format")
+	}
+
+	// Filter out the compute platform IDs that are in the remove list
+	var remainingPlatformIDs []string
+	for _, id := range platformIDs {
+		idStr, ok := id.(string)
+		if !ok {
+			continue // skip non-string IDs
+		}
+		found := false
+		for _, removeID := range computePlatformIDs {
+			if idStr == removeID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			remainingPlatformIDs = append(remainingPlatformIDs, idStr)
+		}
+	}
+
+	// Update the compute platforms attribute
+	attributes[consts.UserAttributeComputePlatforms] = remainingPlatformIDs
+
+	// Prepare the update payload
+	updateData := map[string]interface{}{
+		"attributes": attributes,
+	}
+
+	body, err := json.Marshal(updateData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal update data: %w", err)
+	}
+
+	// Update the user with new attributes
+	req, err = http.NewRequest("PUT", url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create PUT request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to update user: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != StatusNoContent {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update user compute platforms: status %d, response: %s", resp.StatusCode, string(responseBody))
+	}
+
+	return nil
+}
+
+func (u *UserService) GetComputePlatformIdsForUser(token, userID string) ([]string, error) {
 	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", u.host, u.realm, userID)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -740,19 +844,29 @@ func (u *UserService) GetUserComputePlatforms(token, userID string) ([]string, e
 		return []string{}, nil
 	}
 
-	platformIDs, ok := computePlatformsAttr.([]interface{})
-	if !ok {
-		return []string{}, nil
-	}
-
-	var result []string
-	for _, id := range platformIDs {
-		if idStr, ok := id.(string); ok && idStr != "" {
-			result = append(result, idStr)
+	// Try to handle as string array first (new format)
+	if stringArray, ok := computePlatformsAttr.([]string); ok {
+		var result []string
+		for _, id := range stringArray {
+			if id != "" {
+				result = append(result, id)
+			}
 		}
+		return result, nil
 	}
 
-	return result, nil
+	// Fall back to interface array (old format for backwards compatibility)
+	if interfaceArray, ok := computePlatformsAttr.([]interface{}); ok {
+		var result []string
+		for _, id := range interfaceArray {
+			if idStr, ok := id.(string); ok && idStr != "" {
+				result = append(result, idStr)
+			}
+		}
+		return result, nil
+	}
+
+	return []string{}, nil
 }
 
 func (u *UserService) GetUserTeams(token, userID string) ([]*model.Team, error) {

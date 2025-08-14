@@ -58,24 +58,39 @@ func (s *TeamService) CreateTeam(ctx context.Context, input *model.WriteTeamInpu
 		}, nil
 	}
 
-	for _, uid := range input.Users {
+	for _, uid := range input.AddUserIds {
 		if uid != nil {
-			err = s.teamRepo.AssignTeamsToUser(ctx, *uid, []string{createdTeam.ID})
+			err = s.userRepo.AssignTeamsToUser(ctx, *uid, []string{createdTeam.ID})
 			if err != nil {
-				return nil, fmt.Errorf("failed to assign team to user: %w", err)
+				return nil, err
+			}
+		}
+	}
+	for _, uid := range input.RemoveUserIds {
+		if uid != nil {
+			err = s.userRepo.RemoveTeamsFromUser(ctx, *uid, []string{createdTeam.ID})
+			if err != nil {
+				return nil, err
 			}
 		}
 	}
 
-	// TODO: assign computePlatforms to team? currently assigns to users of the team...
-	// for _, cpid := range input.ComputePlatforms {
-	// 	for _, uid := range input.Users {
-	// 		_, err = s.userRepo.AssignComputePlatformsToUser(ctx, *uid, []string{*cpid})
-	// 		if err != nil {
-	// 			return nil, fmt.Errorf("failed to assign compute platform to user: %w", err)
-	// 		}
-	// 	}
-	// }
+	for _, cpid := range input.AddComputePlatformIds {
+		if cpid != nil {
+			err = s.teamRepo.AssignComputePlatformsToTeam(ctx, createdTeam.ID, []string{*cpid})
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	for _, cpid := range input.RemoveComputePlatformIds {
+		if cpid != nil {
+			err = s.teamRepo.RemoveComputePlatformsFromTeam(ctx, createdTeam.ID, []string{*cpid})
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 
 	return &model.GeneralResult{
 		Success: true,
@@ -139,34 +154,39 @@ func (s *TeamService) UpdateTeam(ctx context.Context, teamID string, input *mode
 		}, nil
 	}
 
-	users, err := s.teamRepo.GetUsersForTeam(ctx, teamID)
-	if err != nil {
-		errorMsg := "Failed to get users for team: " + err.Error()
-		return &model.GeneralResult{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
-	}
-
-	// remove old users from team
-	for _, user := range users {
-		err = s.teamRepo.RemoveTeamsFromUser(ctx, user.ID, []string{teamID})
-		if err != nil {
-			return nil, fmt.Errorf("failed to remove team from user: %w", err)
+	for _, uid := range input.AddUserIds {
+		if uid != nil {
+			err = s.userRepo.AssignTeamsToUser(ctx, *uid, []string{teamID})
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
-
-	// add new users to team
-	for _, userID := range input.Users {
-		if userID != nil {
-			err = s.teamRepo.AssignTeamsToUser(ctx, *userID, []string{teamID})
+	for _, uid := range input.RemoveUserIds {
+		if uid != nil {
+			err = s.userRepo.RemoveTeamsFromUser(ctx, *uid, []string{teamID})
 			if err != nil {
-				return nil, fmt.Errorf("failed to add user to team: %w", err)
+				return nil, err
 			}
 		}
 	}
 
-	// TODO: computePlatforms?
+	for _, cpid := range input.AddComputePlatformIds {
+		if cpid != nil {
+			err = s.teamRepo.AssignComputePlatformsToTeam(ctx, teamID, []string{*cpid})
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	for _, cpid := range input.RemoveComputePlatformIds {
+		if cpid != nil {
+			err = s.teamRepo.RemoveComputePlatformsFromTeam(ctx, teamID, []string{*cpid})
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 
 	return &model.GeneralResult{
 		Success: true,
@@ -182,57 +202,17 @@ func (s *TeamService) GetTeams(ctx context.Context) ([]*model.Team, error) {
 }
 
 func (s *TeamService) GetUsersForTeam(ctx context.Context, teamID string) ([]*model.User, error) {
-	teamExists, err := s.teamRepo.CheckTeamExists(ctx, teamID)
-	if err != nil {
-		return nil, err
-	}
-	if !teamExists {
-		return nil, fmt.Errorf("team %s does not exist", teamID)
-	}
-
 	return s.teamRepo.GetUsersForTeam(ctx, teamID)
 }
 
-func (s *TeamService) GetTeamsForUser(ctx context.Context, userID string) ([]*model.Team, error) {
-	return s.teamRepo.GetTeamsForUser(ctx, userID)
+func (s *TeamService) AssignComputePlatformsToTeam(ctx context.Context, teamID string, computePlatformIDs []string) error {
+	return s.teamRepo.AssignComputePlatformsToTeam(ctx, teamID, computePlatformIDs)
 }
 
-func (s *TeamService) AssignTeamsToUser(ctx context.Context, userID string, teamIDs []string) (*model.GeneralResult, error) {
-	for _, teamID := range teamIDs {
-		teamExists, err := s.teamRepo.CheckTeamExists(ctx, teamID)
-		if err != nil {
-			return nil, err
-		}
-		if !teamExists {
-			return nil, fmt.Errorf("team %s does not exist", teamID)
-		}
-	}
-
-	err := s.teamRepo.AssignTeamsToUser(ctx, userID, teamIDs)
-	if err != nil {
-		errorMsg := "Failed to assign teams: " + err.Error()
-		return &model.GeneralResult{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
-	}
-
-	return &model.GeneralResult{
-		Success: true,
-	}, nil
+func (s *TeamService) RemoveComputePlatformsFromTeam(ctx context.Context, teamID string, computePlatformIDs []string) error {
+	return s.teamRepo.RemoveComputePlatformsFromTeam(ctx, teamID, computePlatformIDs)
 }
 
-func (s *TeamService) RemoveTeamsFromUser(ctx context.Context, userID string, teamIDs []string) (*model.GeneralResult, error) {
-	err := s.teamRepo.RemoveTeamsFromUser(ctx, userID, teamIDs)
-	if err != nil {
-		errorMsg := "Failed to remove teams: " + err.Error()
-		return &model.GeneralResult{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
-	}
-
-	return &model.GeneralResult{
-		Success: true,
-	}, nil
+func (s *TeamService) GetComputePlatformsForTeam(ctx context.Context, teamID string) ([]*model.ComputePlatform, error) {
+	return s.teamRepo.GetComputePlatformsForTeam(ctx, teamID)
 }

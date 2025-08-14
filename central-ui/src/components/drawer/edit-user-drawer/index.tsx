@@ -1,5 +1,5 @@
 import React, { useState, type FC } from 'react';
-import type { User } from '@/types';
+import type { User, UserInput } from '@/types';
 import styled from 'styled-components';
 import { UserCard } from './user-card';
 import Theme from '@odigos/ui-kit/theme';
@@ -14,7 +14,7 @@ import { CancelWarning, Drawer, FlexColumn, IconButton, Popup, Text } from '@odi
 interface EditUserDrawerProps {
   user: User;
   onClose: () => void;
-  onSave: (payload: User) => void;
+  onSave: (payload: UserInput) => void;
   onDelete: () => void;
   onResetPassword: () => void;
 }
@@ -35,7 +35,14 @@ const DRAWER_WIDTH = '750px';
 const EditUserDrawer: FC<EditUserDrawerProps> = ({ user, onClose, onSave, onDelete, onResetPassword }) => {
   const theme = Theme.useTheme();
   const { popupRef, popupOpen, setPopupOpen } = usePopup();
-  const { formData, handleFormChange, resetFormData, isFormDirty } = useGenericForm(user);
+  const { formData, handleFormChange, resetFormData, isFormDirty } = useGenericForm({
+    email: user.email || '',
+    role: user.role,
+    addTeamIds: [],
+    removeTeamIds: [],
+    addComputePlatformIds: [],
+    removeComputePlatformIds: [],
+  });
 
   const [cancelWarningOpen, setCancelWarningOpen] = useState(false);
   const [cancelApproveCallback, setCancelApproveCallback] = useState<(() => void) | null>(null);
@@ -95,9 +102,9 @@ const EditUserDrawer: FC<EditUserDrawerProps> = ({ user, onClose, onSave, onDele
         }}
       >
         <FlexColumn $gap={24}>
-          <UserCard formData={formData} handleFormChange={handleFormChange} />
-          <PlatformsCard formData={formData} handleFormChange={handleFormChange} />
-          <TeamsCard formData={formData} handleFormChange={handleFormChange} />
+          <UserCard user={user} formData={formData} handleFormChange={handleFormChange} />
+          <PlatformsCard currentComputePlatforms={user.computePlatforms || []} formData={formData} handleFormChange={handleFormChange} />
+          <TeamsCard currentTeams={user.teams || []} formData={formData} handleFormChange={handleFormChange} />
         </FlexColumn>
       </Drawer>
 

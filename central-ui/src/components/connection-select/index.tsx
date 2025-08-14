@@ -1,10 +1,10 @@
 import React, { useRef, useState } from 'react';
-import type { Connection } from '@/types';
 import Theme from '@odigos/ui-kit/theme';
+import type { ComputePlatform } from '@/types';
 import styled, { css } from 'styled-components';
 import { StatusType } from '@odigos/ui-kit/types';
-import { useConnectionsCRUD, useProxyID } from '@/hooks';
 import { useNotificationStore } from '@odigos/ui-kit/store';
+import { useComputePlatformsCRUD, useProxyID } from '@/hooks';
 import { OverviewIcon, SearchIcon } from '@odigos/ui-kit/icons';
 import { useKeyDown, useOnClickOutside } from '@odigos/ui-kit/hooks';
 import { getPlatformIcon, getPlatformLabel } from '@odigos/ui-kit/functions';
@@ -76,7 +76,7 @@ export const ConnectionSelect: React.FC = () => {
   const theme = Theme.useTheme();
   const { addNotification } = useNotificationStore();
   const { proxyID, goSelectNewProxy, selectProxyID } = useProxyID();
-  const { connections, currentConnection } = useConnectionsCRUD(proxyID);
+  const { computePlatforms, currentComputePlatform } = useComputePlatformsCRUD(proxyID);
 
   const [isOpen, setIsOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -85,22 +85,22 @@ export const ConnectionSelect: React.FC = () => {
     setIsOpen(false);
   };
 
-  const onClickConnection = ({ id }: Connection) => selectProxyID(id);
+  const onClickConnection = ({ id }: ComputePlatform) => selectProxyID(id);
   const onClickAll = () => goSelectNewProxy();
 
   const containerRef = useRef<HTMLDivElement>(null);
   useOnClickOutside(containerRef, onClose);
   useKeyDown({ key: 'Escape', active: isOpen }, onClose);
 
-  const withSelect = !!connections.length;
-  const filtered = connections.filter(({ id }) => id.toLowerCase().includes(searchText));
-  const Icon = !!currentConnection?.type ? getPlatformIcon(currentConnection.type) : null;
+  const withSelect = !!computePlatforms.length;
+  const filtered = computePlatforms.filter(({ id }) => id.toLowerCase().includes(searchText));
+  const Icon = !!currentComputePlatform?.type ? getPlatformIcon(currentComputePlatform.type) : null;
 
   return (
     <RelativeContainer ref={containerRef}>
       <Tab $withSelect={withSelect} onClick={() => setIsOpen((prev) => !prev)}>
         <LogoWrap>{!!Icon ? <Icon size={20} fill={theme.text.info} /> : <OverviewIcon fill={theme.text.info} />}</LogoWrap>
-        <Title>{currentConnection?.name || currentConnection?.id || 'no platform'}</Title>
+        <Title>{currentComputePlatform?.name || currentComputePlatform?.id || 'no platform'}</Title>
 
         {withSelect && (
           <PushToEnd>
@@ -121,7 +121,7 @@ export const ConnectionSelect: React.FC = () => {
                 key={`platform-${id}`}
                 icon={() => getPlatformIcon(type)?.({ fill: status === StatusType.Success ? theme.text.success : theme.text.error })}
                 label={`${!!name ? name : getPlatformLabel(type)} (${id})`}
-                isSelected={currentConnection?.id === id}
+                isSelected={currentComputePlatform?.id === id}
                 onClick={() => {
                   if (status === StatusType.Success) {
                     onClickConnection(filtered[idx]);

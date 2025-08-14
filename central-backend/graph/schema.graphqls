@@ -4,23 +4,9 @@
 
 scalar JSON
 
-type SystemConfig {
-  isInitialized: Boolean!
-  version: String!
-}
-
-type Connection {
-  proxyID: String!
-  status: String!
-  name: String!
-}
-
-# TODO: replace connection with compute platform
-type ComputePlatform {
-  id: String!
-  name: String!
-  type: String!
-  status: String!
+enum PlatformType {
+  k8s
+  vm
 }
 
 enum Role {
@@ -33,6 +19,27 @@ enum Role {
 enum SignInStatus {
   SUCCESS
   PASSWORD_UPDATE_REQUIRED
+}
+
+type SystemConfig {
+  isInitialized: Boolean!
+  version: String!
+}
+
+type ComputePlatform {
+  id: String!
+  name: String!
+  type: PlatformType!
+  status: String!
+  users: [User!]!
+  teams: [Team!]!
+}
+
+input WriteComputePlatformInput {
+  addUserIds: [String]
+  removeUserIds: [String]
+  addTeamIds: [String]
+  removeTeamIds: [String]
 }
 
 type SignInResult {
@@ -55,8 +62,10 @@ input WriteUserInput {
   email: String
   password: String
   role: Role
-  teams: [String]
-  computePlatforms: [String]
+  addTeamIds: [String]
+  removeTeamIds: [String]
+  addComputePlatformIds: [String]
+  removeComputePlatformIds: [String]
 }
 
 type CreateUserResult {
@@ -78,8 +87,10 @@ type Team {
 input WriteTeamInput {
   name: String
   description: String
-  users: [String]
-  computePlatforms: [String]
+  addUserIds: [String]
+  removeUserIds: [String]
+  addComputePlatformIds: [String]
+  removeComputePlatformIds: [String]
 }
 
 type GeneralResult {
@@ -90,7 +101,7 @@ type GeneralResult {
 type Query {
   remoteFetch(proxyID: String!, query: String!, variables: JSON!): String!
   systemConfig: SystemConfig!
-  connections: [Connection!]!
+  computePlatforms: [ComputePlatform!]!
   users: [User!]!
   teams: [Team!]!
 }
@@ -99,6 +110,11 @@ type Mutation {
   signIn(email: String!, password: String!): SignInResult!
   setInitialPassword(email: String!, password: String!): SignInResult!
   signOut: GeneralResult!
+
+  updateComputePlatform(
+    id: String!
+    input: WriteComputePlatformInput!
+  ): GeneralResult!
 
   createUser(input: WriteUserInput!): CreateUserResult!
   updateUser(userID: String!, input: WriteUserInput!): GeneralResult!

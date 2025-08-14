@@ -276,6 +276,8 @@ func mapKeycloakGroupToTeam(group KeycloakGroup) (*model.Team, error) {
 		if descValues, exists := group.Attributes[consts.TeamAttributeDescription]; exists && len(descValues) > 0 {
 			description = &descValues[0]
 		}
+		// Note: compute platforms will be populated by the team repository layer
+		// since it needs to resolve platform IDs to actual ComputePlatform objects
 	}
 
 	return &model.Team{
@@ -592,4 +594,237 @@ func GetTeamByName(token, keycloakHost, realm, teamName string) (*model.Team, er
 
 	// No exact match found - return nil, nil as expected by service layer
 	return nil, nil
+}
+
+func AssignComputePlatformsToTeam(token, keycloakHost, realm, teamID string, computePlatformIDs []string) error {
+	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", keycloakHost, realm, teamID)
+
+	// First, get the current team data to retrieve existing attributes
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create GET request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to get team data: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to get team data: status %d, response: %s", resp.StatusCode, string(responseBody))
+	}
+
+	var teamData map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&teamData); err != nil {
+		return fmt.Errorf("failed to decode team data: %w", err)
+	}
+
+	// Get existing attributes or create new ones
+	attributes, ok := teamData["attributes"].(map[string]interface{})
+	if !ok {
+		attributes = make(map[string]interface{})
+	}
+
+	// Convert compute platform IDs to string array format expected by Keycloak
+	var platformIDs []string
+	for _, id := range computePlatformIDs {
+		if id != "" {
+			platformIDs = append(platformIDs, id)
+		}
+	}
+
+	// Update the compute platforms attribute
+	attributes[consts.TeamAttributeComputePlatforms] = platformIDs
+
+	// Prepare the update payload
+	updateData := map[string]interface{}{
+		"attributes": attributes,
+	}
+
+	body, err := json.Marshal(updateData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal update data: %w", err)
+	}
+
+	// Update the team with new attributes
+	req, err = http.NewRequest("PUT", url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create PUT request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to update team: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update team compute platforms: status %d, response: %s", resp.StatusCode, string(responseBody))
+	}
+
+	return nil
+}
+
+func RemoveComputePlatformsFromTeam(token, keycloakHost, realm, teamID string, computePlatformIDs []string) error {
+	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", keycloakHost, realm, teamID)
+
+	// First, get the current team data to retrieve existing attributes
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create GET request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to get team data: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to get team data: status %d, response: %s", resp.StatusCode, string(responseBody))
+	}
+
+	var teamData map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&teamData); err != nil {
+		return fmt.Errorf("failed to decode team data: %w", err)
+	}
+
+	attributes, ok := teamData["attributes"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("failed to get attributes: %w", err)
+	}
+
+	platformIDs, ok := attributes[consts.TeamAttributeComputePlatforms].([]interface{})
+	if !ok {
+		return fmt.Errorf("failed to get platform IDs: %w", err)
+	}
+
+	// Filter out the compute platform IDs that are in the remove list
+	var remainingPlatformIDs []string
+	for _, id := range platformIDs {
+		idStr, ok := id.(string)
+		if !ok {
+			continue // skip non-string IDs
+		}
+		found := false
+		for _, removeID := range computePlatformIDs {
+			if idStr == removeID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			remainingPlatformIDs = append(remainingPlatformIDs, idStr)
+		}
+	}
+
+	// Update the compute platforms attribute
+	attributes[consts.TeamAttributeComputePlatforms] = remainingPlatformIDs
+
+	// Prepare the update payload
+	updateData := map[string]interface{}{
+		"attributes": attributes,
+	}
+
+	body, err := json.Marshal(updateData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal update data: %w", err)
+	}
+
+	// Update the team with new attributes
+	req, err = http.NewRequest("PUT", url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create PUT request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to update team: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to update team compute platforms: status %d, response: %s", resp.StatusCode, string(responseBody))
+	}
+
+	return nil
+}
+
+func GetComputePlatformIdsForTeam(token, keycloakHost, realm, teamID string) ([]string, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", keycloakHost, realm, teamID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get compute platforms for team: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get compute platforms for team: status %d, response: %s", resp.StatusCode, string(responseBody))
+	}
+
+	var teamData map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&teamData); err != nil {
+		return nil, fmt.Errorf("failed to decode team data: %w", err)
+	}
+
+	attributes, ok := teamData["attributes"].(map[string]interface{})
+	if !ok {
+		return []string{}, nil
+	}
+
+	computePlatformsAttr, ok := attributes[consts.UserAttributeComputePlatforms]
+	if !ok {
+		return []string{}, nil
+	}
+
+	// Try to handle as string array first (new format)
+	if stringArray, ok := computePlatformsAttr.([]string); ok {
+		var result []string
+		for _, id := range stringArray {
+			if id != "" {
+				result = append(result, id)
+			}
+		}
+		return result, nil
+	}
+
+	// Fall back to interface array (old format for backwards compatibility)
+	if interfaceArray, ok := computePlatformsAttr.([]interface{}); ok {
+		var result []string
+		for _, id := range interfaceArray {
+			if idStr, ok := id.(string); ok && idStr != "" {
+				result = append(result, idStr)
+			}
+		}
+		return result, nil
+	}
+
+	return []string{}, nil
 }

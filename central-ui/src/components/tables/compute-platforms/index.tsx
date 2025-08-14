@@ -1,11 +1,12 @@
-import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import React, { useMemo, useCallback, useState } from 'react';
 import * as UTILS from '@/utils';
-import type { Connection } from '@/types';
-import { useConnectionsCRUD } from '@/hooks';
+import { useComputePlatformsCRUD } from '@/hooks';
 import { EditIcon } from '@odigos/ui-kit/icons';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { getPlatformIcon } from '@odigos/ui-kit/functions';
 import { useNotificationStore } from '@odigos/ui-kit/store';
+import type { ComputePlatform, ComputePlatformInput } from '@/types';
+import { EditComputePlatformDrawer } from '@/components/drawer/edit-compute-platform-drawer';
 import { CenterThis, FlexRow, IconButton, IconWrapped, InteractiveTable, NoDataFound, RowCell } from '@odigos/ui-kit/components';
 
 export enum ComputePlatformsTableColumn {
@@ -19,30 +20,15 @@ export enum ComputePlatformsTableColumn {
 
 export const ComputePlatformsTable: React.FC = () => {
   const { addNotification } = useNotificationStore();
-  const { connections } = useConnectionsCRUD();
+  const { computePlatforms, updateComputePlatform, updating } = useComputePlatformsCRUD();
 
-  // TODO: develop this in `useConnectionsCRUD` hook
-  const updating = false;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const updateCP = async (...params: any[]) => {
-    return { success: false, error: 'TODO development' };
-  };
-
-  const [editOpenForCP, setEditOpenForCP] = useState<Connection | null>(null);
-
-  // TODO: remove this effect after developing the handler
-  useEffect(() => {
-    if (editOpenForCP) {
-      alert('TODO development: editOpenForCP');
-      setEditOpenForCP(null);
-    }
-  }, [editOpenForCP]);
+  const [editOpenForCP, setEditOpenForCP] = useState<ComputePlatform | null>(null);
 
   const handleUpdateCP = useCallback(
-    async (proxyID: string, input: unknown) => {
+    async (id: string, input: ComputePlatformInput) => {
       try {
         if (updating) return;
-        const result = await updateCP(proxyID, input);
+        const result = await updateComputePlatform(id, input);
 
         if (!result?.success) {
           const errorMessage = result?.error || 'Failed to update compute platform';
@@ -53,7 +39,7 @@ export const ComputePlatformsTable: React.FC = () => {
         addNotification({ type: StatusType.Error, title: Crud.Update, description: errorMessage });
       }
     },
-    [updating, updateCP, addNotification],
+    [updating, updateComputePlatform, addNotification],
   );
 
   const columns = [
@@ -67,15 +53,15 @@ export const ComputePlatformsTable: React.FC = () => {
 
   const rows = useMemo(
     () =>
-      connections.map((connection) => ({
-        onClick: () => setEditOpenForCP(connection),
+      computePlatforms.map((cp) => ({
+        onClick: () => setEditOpenForCP(cp),
         cells: [
           {
             columnKey: ComputePlatformsTableColumn.Icon,
             component: () => (
               <IconWrapped
                 icon={() =>
-                  getPlatformIcon(connection.type)({
+                  getPlatformIcon(cp.type)({
                     strokeWidth: 2,
                     size: 24,
                   })
@@ -85,27 +71,25 @@ export const ComputePlatformsTable: React.FC = () => {
           },
           {
             columnKey: ComputePlatformsTableColumn.Name,
-            value: connection.name,
+            value: cp.name,
           },
           {
             columnKey: ComputePlatformsTableColumn.Type,
-            value: connection.type,
+            value: cp.type,
           },
           {
             columnKey: ComputePlatformsTableColumn.Members,
-            // TODO: populate this with the number of members
-            value: UTILS.MEMBERS_COUNT(0),
+            value: UTILS.MEMBERS_COUNT(cp.users?.length || 0),
           },
           {
             columnKey: ComputePlatformsTableColumn.Teams,
-            // TODO: populate this with the number of teams
-            value: UTILS.TEAMS_COUNT(0),
+            value: UTILS.TEAMS_COUNT(cp.teams?.length || 0),
           },
           {
             columnKey: ComputePlatformsTableColumn.Actions,
             component: () => (
               <FlexRow>
-                <IconButton onClick={() => setEditOpenForCP(connection)} tooltip='Edit compute platform'>
+                <IconButton onClick={() => setEditOpenForCP(cp)} tooltip='Edit compute platform'>
                   <EditIcon />
                 </IconButton>
               </FlexRow>
@@ -113,7 +97,7 @@ export const ComputePlatformsTable: React.FC = () => {
           },
         ] as RowCell[],
       })),
-    [connections],
+    [computePlatforms],
   );
 
   return (
@@ -125,28 +109,18 @@ export const ComputePlatformsTable: React.FC = () => {
         </CenterThis>
       )}
 
-      {/* TODO: create the drawer */}
-      {/* {editOpenForCP && (
+      {editOpenForCP && (
         <EditComputePlatformDrawer
           computePlatform={editOpenForCP}
           onClose={() => {
             setEditOpenForCP(null);
           }}
           onSave={(payload) => {
-            handleUpdateCP(editOpenForCP.id, {
-              name: payload.name,
-              description: payload.description,
-              users: payload.users?.map((user) => user.id) || [],
-              computePlatforms: payload.computePlatforms?.map((platform) => platform.id) || [],
-            });
-            setEditOpenForCP(null);
-          }}
-          onDelete={() => {
-            setDeleteOpenForCP(editOpenForCP);
+            handleUpdateCP(editOpenForCP.id, payload);
             setEditOpenForCP(null);
           }}
         />
-      )} */}
+      )}
     </>
   );
 };

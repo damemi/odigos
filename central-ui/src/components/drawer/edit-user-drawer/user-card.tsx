@@ -1,18 +1,23 @@
 import React, { type FC } from 'react';
-import type { User } from '@/types';
+import type { Role, User } from '@/types';
 import { DataCard, Dropdown, Text } from '@odigos/ui-kit/components';
 import { DataCardCellStretch, DataCardCellTitle, DataCardContentRow, DataCardContentCell } from '../cards/styled';
 import { COMPUTE_PLATFORMS_TAB, CREATE_USER_ROLE_LABEL, PLATFORMS_COUNT, ROLE_COLUMN, ROLE_OPTIONS, TEAMS_COUNT, TEAMS_TAB } from '@/utils';
 
-interface UserCardProps {
-  formData: Pick<User, 'role' | 'teams' | 'computePlatforms'>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handleFormChange: (key: string, value: any) => void;
+interface FormData {
+  role: Role;
 }
 
-const UserCard: FC<UserCardProps> = ({ formData, handleFormChange }) => {
-  const teamsCount = formData.teams?.length || 0;
-  const platformsCount = formData.computePlatforms?.length || 0;
+interface UserCardProps {
+  user: User;
+  formData: FormData;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handleFormChange: (key: keyof FormData, value: any) => void;
+}
+
+const UserCard: FC<UserCardProps> = ({ user, formData, handleFormChange }) => {
+  const teamsCount = user.teams?.length || 0;
+  const platformsCount = user.computePlatforms?.length || 0;
 
   return (
     <DataCard title=''>
@@ -21,11 +26,11 @@ const UserCard: FC<UserCardProps> = ({ formData, handleFormChange }) => {
           <DataCardCellTitle>{ROLE_COLUMN}</DataCardCellTitle>
           <DataCardCellStretch>
             <Dropdown
+              placeholder={CREATE_USER_ROLE_LABEL}
+              options={ROLE_OPTIONS}
               value={ROLE_OPTIONS.find(({ id }) => id === formData.role)}
               onSelect={(opt) => handleFormChange('role', opt.id)}
               onDeselect={() => {}}
-              options={ROLE_OPTIONS}
-              placeholder={CREATE_USER_ROLE_LABEL}
               required
             />
           </DataCardCellStretch>
