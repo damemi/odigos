@@ -4,7 +4,7 @@ package config
 const (
 	DevCentralBackendHostDefault = "localhost:8081"
 	DevClusterNameDefault        = "local"
-	DevVersionValue              = "v1.0.218"
+	DevVersionValue              = "v1.0.220"
 )
 
 func DevCentralBackendURL() string { return DevCentralBackendHostDefault }

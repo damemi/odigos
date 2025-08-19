@@ -516,12 +516,12 @@
   resolved "https://registry.yarnpkg.com/@nolyfill/is-core-module/-/is-core-module-1.0.39.tgz#3dc35ba0f1e66b403c00b39344f870298ebb1c8e"
   integrity sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==
 
-"@odigos/ui-kit@^0.0.83":
-  version "0.0.83"
-  resolved "https://registry.yarnpkg.com/@odigos/ui-kit/-/ui-kit-0.0.83.tgz#6cf434e18885593f5115d650003028781a3898d5"
-  integrity sha512-k+5E7xqhX3PSaNXCoWrnjf3V7t9IpgO0sF/e7MJOw4k4bKYKTU4Eb81r1D4M8/PZCUqJkmAhItu51CynrmQGpg==
+"@odigos/ui-kit@^0.0.85":
+  version "0.0.85"
+  resolved "https://registry.yarnpkg.com/@odigos/ui-kit/-/ui-kit-0.0.85.tgz#8f7a0d97643ca3c31dcdfe6c6c5458eef18f6365"
+  integrity sha512-Epyn41VYbCtm6S9cOntETM8HwMMGoDaSPnnRtAkQl8cThfRN02JeaaRviSWwBi/pYY76s0ekhWDoctTZhCGP9Q==
   dependencies:
-    "@xyflow/react" "^12.8.2"
+    "@xyflow/react" "^12.8.3"
     javascript-time-ago "^2.5.11"
     lottie-react "^2.4.1"
     prism-react-renderer "^2.4.1"
@@ -821,19 +821,19 @@
   dependencies:
     tslib "^2.3.0"
 
-"@xyflow/react@^12.8.2":
-  version "12.8.2"
-  resolved "https://registry.yarnpkg.com/@xyflow/react/-/react-12.8.2.tgz#3e0818699c8d29407bd6f77d88570d38ef513b46"
-  integrity sha512-VifLpxOy74ck283NQOtBn1e8igmB7xo7ADDKxyBHkKd8IKpyr16TgaYOhzqVwNMdB4NT+m++zfkic530L+gEXw==
+"@xyflow/react@^12.8.3":
+  version "12.8.3"
+  resolved "https://registry.yarnpkg.com/@xyflow/react/-/react-12.8.3.tgz#74baa636dd8b79cd5de3200147ec4a5f4d38c8a9"
+  integrity sha512-8sdRZPMCzfhauF96krlUMPCKmi9cX64HsYG8qoVAAvTKDAqxXg7RSp/IhoXlzbI/lsRD1vAxeDBxvI/XqACa6g==
   dependencies:
-    "@xyflow/system" "0.0.66"
+    "@xyflow/system" "0.0.67"
     classcat "^5.0.3"
     zustand "^4.4.0"
 
-"@xyflow/system@0.0.66":
-  version "0.0.66"
-  resolved "https://registry.yarnpkg.com/@xyflow/system/-/system-0.0.66.tgz#94eec3962e65b8686b314629911b51a7db057059"
-  integrity sha512-TTxESDwPsATnuDMUeYYtKe4wt9v8bRO29dgYBhR8HyhSCzipnAdIL/1CDfFd+WqS1srVreo24u6zZeVIDk4r3Q==
+"@xyflow/system@0.0.67":
+  version "0.0.67"
+  resolved "https://registry.yarnpkg.com/@xyflow/system/-/system-0.0.67.tgz#f10ee5643d0775388acbfc3bc5d8d3dc2d46e9ff"
+  integrity sha512-hYsmbj+8JDei0jmupBmxNLaeJEcf9kKmMl6IziGe02i0TOCsHwjIdP+qz+f4rI1/FR2CQiCZJrw4dkHOLC6tEQ==
   dependencies:
     "@types/d3-drag" "^3.0.7"
     "@types/d3-interpolate" "^3.0.4"
