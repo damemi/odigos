@@ -26,9 +26,9 @@ const OverviewHeader = () => {
   return (
     <Header
       left={[
-        <OdigosLogoText key='logo' size={100} onClick={onClickHome} />,
-        <Tag key='central' type={StatusType.Default}>
-          [central]
+        <OdigosLogoText key='logo' size={150} onClick={onClickHome} />,
+        <Tag key='tower' type={StatusType.Default}>
+          [tower]
         </Tag>,
         <ConnectionSelect key='connection-select' />,
         title ? <Status key='status' status={status} title={title} subtitle={message} size={14} family='primary' withIcon withBackground /> : null,

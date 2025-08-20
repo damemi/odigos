@@ -60,16 +60,7 @@ export const ConnectionsTable: React.FC = () => {
         cells: [
           {
             columnKey: ConnectionsTableColumn.Icon,
-            component: () => (
-              <IconWrapped
-                icon={() =>
-                  getPlatformIcon(cp.type)({
-                    strokeWidth: 2,
-                    size: 24,
-                  })
-                }
-              />
-            ),
+            component: () => <IconWrapped icon={() => getPlatformIcon(cp.type)({ size: 24 })} />,
           },
           {
             columnKey: ConnectionsTableColumn.Id,

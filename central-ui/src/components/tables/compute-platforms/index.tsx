@@ -58,16 +58,7 @@ export const ComputePlatformsTable: React.FC = () => {
         cells: [
           {
             columnKey: ComputePlatformsTableColumn.Icon,
-            component: () => (
-              <IconWrapped
-                icon={() =>
-                  getPlatformIcon(cp.type)({
-                    strokeWidth: 2,
-                    size: 24,
-                  })
-                }
-              />
-            ),
+            component: () => <IconWrapped icon={() => getPlatformIcon(cp.type)({ size: 24 })} />,
           },
           {
             columnKey: ComputePlatformsTableColumn.Name,
