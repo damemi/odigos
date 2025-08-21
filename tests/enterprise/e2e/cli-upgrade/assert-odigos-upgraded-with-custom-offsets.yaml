@@ -139,7 +139,6 @@ metadata:
       name: odiglet
 spec:
   containers:
-    - name: deviceplugin
     - name: odiglet
       resources: {}
       securityContext:
@@ -148,6 +147,7 @@ spec:
             - SYS_PTRACE
         privileged: true
       image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
+    - name: deviceplugin
   (($values.k8sMinorVersion < `26` && hostNetwork != null) || (hostNetwork == null)): true
   hostPID: true
   nodeName: kind-worker
