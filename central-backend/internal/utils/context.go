@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 type contextKey string
@@ -79,4 +80,28 @@ func ExtractEmailFromToken(token string) (string, error) {
 	}
 
 	return "", fmt.Errorf("email not found in token")
+}
+
+func IsTokenExpired(token string) (bool, error) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return true, fmt.Errorf("invalid JWT token format")
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return true, fmt.Errorf("failed to decode JWT payload: %w", err)
+	}
+
+	var claims map[string]any
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return true, fmt.Errorf("failed to parse JWT payload: %w", err)
+	}
+
+	exp, ok := claims["exp"].(float64)
+	if !ok {
+		return true, fmt.Errorf("exp not found in token")
+	}
+
+	return time.Now().Unix() >= int64(exp), nil
 }

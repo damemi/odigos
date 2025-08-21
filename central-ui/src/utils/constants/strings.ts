@@ -1,6 +1,6 @@
 export const SIGNIN_TITLE = 'Sign In';
-export const SIGNUP_TITLE = 'Set Up Odigos Central';
-export const SIGNIN_SUBTITLE = 'Sign in to your Odigos Central account.';
+export const SIGNUP_TITLE = 'Set Up Odigos Tower';
+export const SIGNIN_SUBTITLE = 'Sign in to your Odigos Tower account.';
 export const SIGNUP_SUBTITLE = 'Create the first user for this environment by entering your email and password.';
 export const EMAIL_LABEL = 'Email address';
 export const PASSWORD_LABEL = 'Password';

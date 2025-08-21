@@ -1,6 +1,7 @@
 import React, { useMemo, useCallback, useState } from 'react';
 import * as UTILS from '@/utils';
 import { useUsersCRUD } from '@/hooks';
+import { useUserStore } from '@/store';
 import Theme from '@odigos/ui-kit/theme';
 import { EditUserDrawer } from '@/components';
 import type { User, UserInput } from '@/types';
@@ -14,12 +15,12 @@ export enum UserTableColumn {
   User = 'user',
   Role = 'role',
   Teams = 'teams',
-  Platforms = 'platforms',
   Actions = 'actions',
 }
 
 export const UsersTable: React.FC = () => {
   const theme = Theme.useTheme();
+  const { isAdmin } = useUserStore();
   const { addNotification } = useNotificationStore();
   const { users, updateUser, updating, deleteUser, deleting } = useUsersCRUD();
 
@@ -62,14 +63,16 @@ export const UsersTable: React.FC = () => {
     [deleting, deleteUser, addNotification],
   );
 
-  const columns = [
-    { key: UserTableColumn.Icon, title: '' },
-    { key: UserTableColumn.User, title: UTILS.USERS_TAB, sortable: true },
-    { key: UserTableColumn.Role, title: UTILS.ROLE_COLUMN, sortable: true },
-    { key: UserTableColumn.Teams, title: UTILS.TEAMS_TAB, sortable: true },
-    { key: UserTableColumn.Platforms, title: UTILS.COMPUTE_PLATFORMS_TAB, sortable: true },
-    { key: UserTableColumn.Actions, title: UTILS.ACTIONS_COLUMN },
-  ];
+  const columns = useMemo(
+    () => [
+      { key: UserTableColumn.Icon, title: '' },
+      { key: UserTableColumn.User, title: UTILS.USERS_TAB, sortable: true },
+      { key: UserTableColumn.Role, title: UTILS.ROLE_COLUMN, sortable: true },
+      { key: UserTableColumn.Teams, title: UTILS.TEAMS_TAB, sortable: true },
+      ...(isAdmin ? [{ key: UserTableColumn.Actions, title: UTILS.ACTIONS_COLUMN }] : []),
+    ],
+    [isAdmin],
+  );
 
   const rows = useMemo(
     () =>
@@ -92,26 +95,26 @@ export const UsersTable: React.FC = () => {
             columnKey: UserTableColumn.Teams,
             value: UTILS.TEAMS_COUNT(user.teams?.length || 0),
           },
-          {
-            columnKey: UserTableColumn.Platforms,
-            value: UTILS.PLATFORMS_COUNT(user.computePlatforms?.length || 0),
-          },
-          {
-            columnKey: UserTableColumn.Actions,
-            component: () => (
-              <FlexRow>
-                <IconButton onClick={() => setEditOpenForUser(user)} tooltip='Edit user'>
-                  <EditIcon />
-                </IconButton>
-                <IconButton onClick={() => setDeleteOpenForUser(user)} tooltip='Delete user'>
-                  <TrashIcon fill={theme.text.error} />
-                </IconButton>
-              </FlexRow>
-            ),
-          },
+          ...(isAdmin
+            ? [
+                {
+                  columnKey: UserTableColumn.Actions,
+                  component: () => (
+                    <FlexRow>
+                      <IconButton onClick={() => setEditOpenForUser(user)} tooltip='Edit user'>
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton onClick={() => setDeleteOpenForUser(user)} tooltip='Delete user'>
+                        <TrashIcon fill={theme.text.error} />
+                      </IconButton>
+                    </FlexRow>
+                  ),
+                } as RowCell,
+              ]
+            : []),
         ] as RowCell[],
       })),
-    [users, theme.text.error],
+    [users, theme.text.error, isAdmin],
   );
 
   return (

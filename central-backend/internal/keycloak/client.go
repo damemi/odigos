@@ -121,6 +121,60 @@ func EnsureRequiredRoles(adminToken, keycloakHost, realm string) error {
 	return nil
 }
 
+func EnsureAccessTokenLifespan(adminToken, keycloakHost, realm string, seconds int) error {
+	realmURL := fmt.Sprintf("%s/admin/realms/%s", keycloakHost, realm)
+
+	getReq, err := http.NewRequest(http.MethodGet, realmURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create realm GET request: %w", err)
+	}
+	getReq.Header.Set("Authorization", "Bearer "+adminToken)
+	getReq.Header.Set("Content-Type", "application/json")
+
+	getResp, err := http.DefaultClient.Do(getReq)
+	if err != nil {
+		return fmt.Errorf("failed to GET realm: %w", err)
+	}
+	defer getResp.Body.Close()
+	if getResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(getResp.Body)
+		return fmt.Errorf("failed to GET realm, status %d, body: %s", getResp.StatusCode, string(body))
+	}
+
+	var realmData map[string]any
+	if err := json.NewDecoder(getResp.Body).Decode(&realmData); err != nil {
+		return fmt.Errorf("failed to decode realm data: %w", err)
+	}
+
+	if current, ok := realmData["accessTokenLifespan"].(float64); !ok || int(current) != seconds {
+		realmData["accessTokenLifespan"] = seconds
+
+		payload, err := json.Marshal(realmData)
+		if err != nil {
+			return fmt.Errorf("failed to marshal realm data: %w", err)
+		}
+
+		putReq, err := http.NewRequest(http.MethodPut, realmURL, bytes.NewReader(payload))
+		if err != nil {
+			return fmt.Errorf("failed to create realm PUT request: %w", err)
+		}
+		putReq.Header.Set("Authorization", "Bearer "+adminToken)
+		putReq.Header.Set("Content-Type", "application/json")
+
+		putResp, err := http.DefaultClient.Do(putReq)
+		if err != nil {
+			return fmt.Errorf("failed to PUT realm: %w", err)
+		}
+		defer putResp.Body.Close()
+		if putResp.StatusCode != http.StatusNoContent {
+			body, _ := io.ReadAll(putResp.Body)
+			return fmt.Errorf("failed to update realm token lifespan, status %d, body: %s", putResp.StatusCode, string(body))
+		}
+	}
+
+	return nil
+}
+
 func createRoleIfNotExists(adminToken, keycloakHost, realm, roleName string) error {
 	checkURL := fmt.Sprintf("%s/admin/realms/%s/roles/%s", keycloakHost, realm, roleName)
 	req, err := http.NewRequest(http.MethodGet, checkURL, nil)

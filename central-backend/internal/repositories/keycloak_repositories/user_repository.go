@@ -150,7 +150,8 @@ func (k *UserRepository) DeleteUser(ctx context.Context, userID string) (*model.
 }
 
 func (k *UserRepository) GetUsers(ctx context.Context) ([]*model.User, error) {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+
+	adminToken, err := k.adminService.GetAdminTokenFromKeycloak(ctx)
 	if err != nil {
 		return nil, err
 	}

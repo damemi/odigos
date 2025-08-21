@@ -5,7 +5,6 @@ import { UserCard } from './user-card';
 import Theme from '@odigos/ui-kit/theme';
 import { Relative } from '@/components/styled';
 import { TeamsCard } from '../cards/teams-card';
-import { PlatformsCard } from '../cards/platforms-card';
 import { BUTTON_TEXTS } from '@odigos/ui-kit/constants';
 import { useGenericForm, usePopup } from '@odigos/ui-kit/hooks';
 import { RotateArrowsIcon, TrashIcon, UserIcon } from '@odigos/ui-kit/icons';
@@ -23,7 +22,6 @@ const ActionItem = styled(Text)`
   display: flex;
   align-items: center;
   gap: 8px;
-  text-wrap: nowrap;
   cursor: pointer;
   &:hover {
     text-decoration: underline;
@@ -40,8 +38,6 @@ const EditUserDrawer: FC<EditUserDrawerProps> = ({ user, onClose, onSave, onDele
     role: user.role,
     addTeamIds: [],
     removeTeamIds: [],
-    addComputePlatformIds: [],
-    removeComputePlatformIds: [],
   });
 
   const [cancelWarningOpen, setCancelWarningOpen] = useState(false);
@@ -103,7 +99,6 @@ const EditUserDrawer: FC<EditUserDrawerProps> = ({ user, onClose, onSave, onDele
       >
         <FlexColumn $gap={24}>
           <UserCard user={user} formData={formData} handleFormChange={handleFormChange} />
-          <PlatformsCard currentComputePlatforms={user.computePlatforms || []} formData={formData} handleFormChange={handleFormChange} />
           <TeamsCard currentTeams={user.teams || []} formData={formData} handleFormChange={handleFormChange} />
         </FlexColumn>
       </Drawer>

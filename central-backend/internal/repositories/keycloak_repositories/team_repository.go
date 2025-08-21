@@ -91,7 +91,7 @@ func (k *TeamRepository) UpdateTeam(ctx context.Context, teamID string, input *m
 }
 
 func (k *TeamRepository) GetTeams(ctx context.Context) ([]*model.Team, error) {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetAdminTokenFromKeycloak(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -169,6 +169,20 @@ func (k *TeamRepository) GetUsersForTeam(ctx context.Context, teamID string) ([]
 	}
 
 	return users, nil
+}
+
+func (k *TeamRepository) GetTeamsByUserID(ctx context.Context, userID string) ([]*model.Team, error) {
+	adminToken, err := k.adminService.GetAdminTokenFromKeycloak(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	teams, err := keycloak.GetUserTeams(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return teams, nil
 }
 
 func (k *TeamRepository) DeleteTeam(ctx context.Context, teamID string) (*model.GeneralResult, error) {

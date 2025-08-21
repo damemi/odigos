@@ -50,8 +50,8 @@ export interface UserInput {
   role: Role;
   addTeamIds: string[];
   removeTeamIds: string[];
-  addComputePlatformIds: string[];
-  removeComputePlatformIds: string[];
+  addComputePlatformIds?: string[];
+  removeComputePlatformIds?: string[];
 }
 
 export interface Team {

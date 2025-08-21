@@ -191,6 +191,17 @@ func (r *queryResolver) ComputePlatforms(ctx context.Context) ([]*model.ComputeP
 	}
 	for _, user := range users {
 		for _, cp := range user.ComputePlatforms {
+			// Ensure the compute platform exists in the map even if it has no active connection
+			if _, exists := cpMap[cp.ID]; !exists {
+				cpMap[cp.ID] = &model.ComputePlatform{
+					ID:     cp.ID,
+					Name:   "unknown",
+					Type:   model.PlatformTypeK8s,
+					Status: "disconnected",
+					Users:  []*model.User{},
+					Teams:  []*model.Team{},
+				}
+			}
 			if !slices.Contains(cpMap[cp.ID].Users, user) {
 				cpMap[cp.ID].Users = append(cpMap[cp.ID].Users, user)
 			}
@@ -204,6 +215,17 @@ func (r *queryResolver) ComputePlatforms(ctx context.Context) ([]*model.ComputeP
 	}
 	for _, team := range teams {
 		for _, cp := range team.ComputePlatforms {
+			// Ensure the compute platform exists in the map even if it has no active connection
+			if _, exists := cpMap[cp.ID]; !exists {
+				cpMap[cp.ID] = &model.ComputePlatform{
+					ID:     cp.ID,
+					Name:   "unknown",
+					Type:   model.PlatformTypeK8s,
+					Status: "disconnected",
+					Users:  []*model.User{},
+					Teams:  []*model.Team{},
+				}
+			}
 			if !slices.Contains(cpMap[cp.ID].Teams, team) {
 				cpMap[cp.ID].Teams = append(cpMap[cp.ID].Teams, team)
 			}

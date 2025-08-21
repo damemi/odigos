@@ -51,6 +51,8 @@ type TeamRepository interface {
 
 	GetUsersForTeam(ctx context.Context, teamID string) ([]*model.User, error)
 
+	GetTeamsByUserID(ctx context.Context, userID string) ([]*model.Team, error)
+
 	AssignComputePlatformsToTeam(ctx context.Context, teamID string, computePlatformIDs []string) error
 	RemoveComputePlatformsFromTeam(ctx context.Context, teamID string, computePlatformIDs []string) error
 	GetComputePlatformsForTeam(ctx context.Context, teamID string) ([]*model.ComputePlatform, error)

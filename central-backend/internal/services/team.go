@@ -50,6 +50,7 @@ func (s *TeamService) CreateTeam(ctx context.Context, input *model.WriteTeamInpu
 	}
 
 	createdTeam, err := s.teamRepo.CreateTeam(ctx, input)
+
 	if err != nil {
 		errorMsg := "Failed to create team: " + err.Error()
 		return &model.GeneralResult{

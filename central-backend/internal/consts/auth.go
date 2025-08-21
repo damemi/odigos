@@ -2,13 +2,13 @@ package consts
 
 import (
 	"os"
+	"strconv"
 )
 
 const (
 	UpdatePasswordAction = "UPDATE_PASSWORD"
 )
 
-// GetKeycloakHost returns the Keycloak host from environment variable or defaults to localhost
 func GetKeycloakHost() string {
 	if host := os.Getenv("KEYCLOAK_HOST"); host != "" {
 		return host
@@ -20,6 +20,16 @@ const (
 	KeycloakRealm = "master"
 	ClientID      = "odigos-central"
 )
+
+// Default: 43200 seconds (12 hours)
+func GetAccessTokenLifespanSeconds() int {
+	if s := os.Getenv("KEYCLOAK_ACCESS_TOKEN_LIFESPAN"); s != "" {
+		if v, err := strconv.Atoi(s); err == nil && v > 0 {
+			return v
+		}
+	}
+	return 43200
+}
 
 const (
 	DefaultKeycloakSecretNamespace = "odigos-central"

@@ -21,6 +21,14 @@ func NewAdminService(redisClient *redisclient.RedisClient, authRepo AuthReposito
 	}
 }
 
+func (a *AdminService) GetAdminTokenFromKeycloak(ctx context.Context) (string, error) {
+	adminToken, err := a.authRepo.GetAdminTokenForInitialPassword(ctx)
+	if err != nil {
+		return "", err
+	}
+	return adminToken, nil
+}
+
 func (a *AdminService) GetAdminToken(ctx context.Context) (string, error) {
 	isInitialized, err := a.redisClient.GetSystemInitialized(ctx)
 	if err != nil {
@@ -31,14 +39,15 @@ func (a *AdminService) GetAdminToken(ctx context.Context) (string, error) {
 	if !isInitialized {
 		return a.authRepo.GetAdminTokenForInitialPassword(ctx)
 	}
-
 	if token := utils.GetTokenFromContext(ctx); token != "" {
+		if expired, _ := utils.IsTokenExpired(token); expired {
+			return "", fmt.Errorf("authentication expired")
+		}
 		_, err := a.ValidateAdminPermissions(token)
 		if err == nil {
 			return token, nil
 		}
 	}
-
 	return "", fmt.Errorf("admin permissions required")
 }
 

@@ -269,12 +269,19 @@ func mapKeycloakGroupToTeam(group KeycloakGroup) (*model.Team, error) {
 	if group.Attributes != nil {
 		if createdAtValues, exists := group.Attributes[consts.TeamAttributeCreatedAt]; exists && len(createdAtValues) > 0 {
 			createdAt = createdAtValues[0]
+		} else if legacy, ok := group.Attributes["createdAt"]; ok && len(legacy) > 0 {
+			createdAt = legacy[0]
 		}
+
 		if updatedAtValues, exists := group.Attributes[consts.TeamAttributeUpdatedAt]; exists && len(updatedAtValues) > 0 {
 			updatedAt = updatedAtValues[0]
+		} else if legacy, ok := group.Attributes["updatedAt"]; ok && len(legacy) > 0 {
+			updatedAt = legacy[0]
 		}
 		if descValues, exists := group.Attributes[consts.TeamAttributeDescription]; exists && len(descValues) > 0 {
 			description = &descValues[0]
+		} else if legacy, ok := group.Attributes["description"]; ok && len(legacy) > 0 {
+			description = &legacy[0]
 		}
 		// Note: compute platforms will be populated by the team repository layer
 		// since it needs to resolve platform IDs to actual ComputePlatform objects
@@ -641,8 +648,15 @@ func AssignComputePlatformsToTeam(token, keycloakHost, realm, teamID string, com
 	// Update the compute platforms attribute
 	attributes[consts.TeamAttributeComputePlatforms] = platformIDs
 
-	// Prepare the update payload
+	// Extract current name (required by Keycloak on group update)
+	nameValue, _ := teamData["name"].(string)
+	if nameValue == "" {
+		return fmt.Errorf("failed to update team compute platforms: missing group name in fetched team data")
+	}
+
+	// Prepare the update payload (must include name)
 	updateData := map[string]interface{}{
+		"name":       nameValue,
 		"attributes": attributes,
 	}
 
@@ -734,8 +748,15 @@ func RemoveComputePlatformsFromTeam(token, keycloakHost, realm, teamID string, c
 	// Update the compute platforms attribute
 	attributes[consts.TeamAttributeComputePlatforms] = remainingPlatformIDs
 
-	// Prepare the update payload
+	// Extract current name (required by Keycloak on group update)
+	nameValue, _ := teamData["name"].(string)
+	if nameValue == "" {
+		return fmt.Errorf("failed to update team compute platforms: missing group name in fetched team data")
+	}
+
+	// Prepare the update payload (must include name)
 	updateData := map[string]interface{}{
+		"name":       nameValue,
 		"attributes": attributes,
 	}
 
@@ -799,9 +820,13 @@ func GetComputePlatformIdsForTeam(token, keycloakHost, realm, teamID string) ([]
 		return []string{}, nil
 	}
 
-	computePlatformsAttr, ok := attributes[consts.UserAttributeComputePlatforms]
+	computePlatformsAttr, ok := attributes[consts.TeamAttributeComputePlatforms]
 	if !ok {
-		return []string{}, nil
+		// backward compatibility for legacy key name
+		computePlatformsAttr, ok = attributes["computePlatforms"]
+		if !ok {
+			return []string{}, nil
+		}
 	}
 
 	// Try to handle as string array first (new format)

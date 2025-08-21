@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { useUsersCRUD } from '@/hooks';
+import { useComputePlatformsCRUD, useUsersCRUD } from '@/hooks';
 import { StatusType } from '@odigos/ui-kit/types';
 import * as STRINGS from '@/utils/constants/strings';
 import { Input, Dropdown, NotificationNote, Text, TextArea, DropdownOption } from '@odigos/ui-kit/components';
@@ -29,9 +29,9 @@ interface CreateTeamFormProps {
 
 export const CreateTeamForm: React.FC<CreateTeamFormProps> = ({ formData, errors, creating, onChange, onSubmit }) => {
   const { users } = useUsersCRUD();
-
+  const { computePlatforms, loading } = useComputePlatformsCRUD();
   const membersOptions: DropdownOption[] = useMemo(() => users.map((user) => ({ id: user.id, value: user.email })), [users]);
-  const platformsOptions: DropdownOption[] = [];
+  const platformsOptions: DropdownOption[] = useMemo(() => computePlatforms.map((platform) => ({ id: platform.id, value: platform.name })), [computePlatforms]);
 
   const isSubmitDisabled = !formData[CreateTeamFormField.Name] || creating;
 

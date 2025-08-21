@@ -1,10 +1,42 @@
-import { ApolloClient, InMemoryCache, split, HttpLink, from } from '@apollo/client';
-import { setContext } from '@apollo/client/link/context';
-import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
-import { createClient } from 'graphql-ws';
-import { getMainDefinition } from '@apollo/client/utilities';
-import { API } from '@/utils';
 import { useUserStore } from '@/store';
+import { API, ROUTES } from '@/utils';
+import { createClient } from 'graphql-ws';
+import { onError } from '@apollo/client/link/error';
+import { setContext } from '@apollo/client/link/context';
+import { getMainDefinition } from '@apollo/client/utilities';
+import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
+import { ApolloClient, InMemoryCache, split, HttpLink, from } from '@apollo/client';
+
+const redirectToSignIn = () => {
+  try {
+    useUserStore.getState().clearAuth();
+  } catch {}
+  if (typeof window !== 'undefined') {
+    window.location.assign(ROUTES.SIGN_IN);
+  }
+};
+
+const isAuthErrorMessage = (message?: string) => {
+  if (!message) return false;
+  const lower = message.toLowerCase();
+  return lower.includes('authentication required') || lower.includes('authentication expired') || lower.includes('http 401');
+};
+
+const errorLink = onError(({ graphQLErrors, networkError }) => {
+  if (graphQLErrors && graphQLErrors.length > 0) {
+    const shouldRedirect = graphQLErrors.some((e) => isAuthErrorMessage(e.message));
+
+    if (shouldRedirect) redirectToSignIn();
+  }
+
+  // Some auth failures might surface as network 401s
+  // Apollo's HttpLink sets networkError with a statusCode when available
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ne: any = networkError as any;
+  if (ne && (ne.statusCode === 401 || isAuthErrorMessage(ne?.message))) {
+    redirectToSignIn();
+  }
+});
 
 const authLink = setContext((_, { headers }) => {
   const token = useUserStore.getState().token;
@@ -33,7 +65,7 @@ const splitLink = split(
     return definition.kind === 'OperationDefinition' && definition.operation === 'subscription';
   },
   wsLink,
-  from([authLink, httpLink]),
+  from([errorLink, authLink, httpLink]),
 );
 
 const client = new ApolloClient({

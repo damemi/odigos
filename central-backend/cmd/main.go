@@ -56,6 +56,10 @@ func main() {
 		logger.Fatal("Failed to ensure required roles", err)
 	}
 
+	if err := keycloak.EnsureAccessTokenLifespan(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, consts.GetAccessTokenLifespanSeconds()); err != nil {
+		logger.Log.Error("Failed to ensure access token lifespan", "error", err)
+	}
+
 	redisClient, err := redisclient.NewRedisClient(ctx)
 	if err != nil {
 		logger.Fatal("Failed to connect to Redis", err)
@@ -78,7 +82,7 @@ func main() {
 	userRepo := keycloak_repositories.NewUserRepository(redisClient, credentialsService, adminService)
 	teamRepo := keycloak_repositories.NewTeamRepository(redisClient, credentialsService, adminService)
 
-	authService := services.NewAuthService(redisClient, userRepo, authRepo)
+	authService := services.NewAuthService(redisClient, userRepo, authRepo, teamRepo)
 	userService := services.NewUserService(redisClient, userRepo, teamRepo)
 	teamService := services.NewTeamService(redisClient, teamRepo, userRepo)
 

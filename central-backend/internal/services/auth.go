@@ -15,13 +15,15 @@ type AuthService struct {
 	redisClient *redisclient.RedisClient
 	userRepo    UserRepository
 	authRepo    AuthRepository
+	teamRepo    TeamRepository
 }
 
-func NewAuthService(redisClient *redisclient.RedisClient, userRepo UserRepository, authRepo AuthRepository) *AuthService {
+func NewAuthService(redisClient *redisclient.RedisClient, userRepo UserRepository, authRepo AuthRepository, teamRepo TeamRepository) *AuthService {
 	return &AuthService{
 		redisClient: redisClient,
 		userRepo:    userRepo,
 		authRepo:    authRepo,
+		teamRepo:    teamRepo,
 	}
 }
 
@@ -206,12 +208,19 @@ func (a *AuthService) buildUserModel(ctx context.Context, token string, userData
 	role := utils.ConvertStringRoleToModel(roleStr)
 	logger.Log.Info("buildUserModel: resolved role for user", "userID", userID, "email", email, "roleStr", roleStr, "roleModel", role)
 
+	teams, err := a.teamRepo.GetTeamsByUserID(ctx, userID)
+	if err != nil {
+		logger.Log.Error("Failed to get teams by user ID", "userID", userID, "error", err)
+		teams = []*model.Team{}
+	}
+
 	return &model.User{
 		ID:                  userID,
 		Email:               email,
 		Username:            username,
 		Role:                role,
 		NeedsPasswordChange: needsPasswordChange,
+		Teams:               teams,
 	}, nil
 }
 

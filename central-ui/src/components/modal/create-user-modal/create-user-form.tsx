@@ -33,7 +33,6 @@ export const CreateUserForm: React.FC<CreateUserFormProps> = ({ formData, errors
   const { teams } = useTeamsCRUD();
 
   const teamOptions: DropdownOption[] = useMemo(() => teams.map((team) => ({ id: team.id, value: team.name })), [teams]);
-  const platformOptions: DropdownOption[] = [];
 
   const isSubmitDisabled = !formData[CreateUserFormField.Email] || creating;
 
@@ -80,22 +79,6 @@ export const CreateUserForm: React.FC<CreateUserFormProps> = ({ formData, errors
             }
             options={teamOptions}
             placeholder={STRINGS.TEAMS_PLACEHOLDER}
-            isMulti
-          />
-        </Half>
-        <Half>
-          <Dropdown
-            title={STRINGS.COMPUTE_PLATFORM_LABEL}
-            value={formData[CreateUserFormField.ComputePlatforms]}
-            onSelect={(value) => onChange(CreateUserFormField.ComputePlatforms, formData[CreateUserFormField.ComputePlatforms].concat([value]))}
-            onDeselect={(value) =>
-              onChange(
-                CreateUserFormField.ComputePlatforms,
-                formData[CreateUserFormField.ComputePlatforms].filter(({ id }) => id !== value.id),
-              )
-            }
-            options={platformOptions}
-            placeholder={STRINGS.COMPUTE_PLATFORM_PLACEHOLDER}
             isMulti
           />
         </Half>
