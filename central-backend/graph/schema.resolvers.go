@@ -184,7 +184,7 @@ func (r *queryResolver) ComputePlatforms(ctx context.Context) ([]*model.ComputeP
 		}
 	}
 
-	// Add users to compute platforms
+	// Append users to compute platforms
 	users, err := r.UserService.GetUsers(ctx)
 	if err != nil {
 		return nil, err
@@ -208,7 +208,7 @@ func (r *queryResolver) ComputePlatforms(ctx context.Context) ([]*model.ComputeP
 		}
 	}
 
-	// Add teams to compute platforms
+	// Append teams to compute platforms
 	teams, err := r.TeamService.GetTeams(ctx)
 	if err != nil {
 		return nil, err

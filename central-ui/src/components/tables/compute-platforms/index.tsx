@@ -46,7 +46,8 @@ export const ComputePlatformsTable: React.FC = () => {
     { key: ComputePlatformsTableColumn.Icon, title: '' },
     { key: ComputePlatformsTableColumn.Name, title: UTILS.NAME, sortable: true },
     { key: ComputePlatformsTableColumn.Type, title: UTILS.TYPE, sortable: true },
-    { key: ComputePlatformsTableColumn.Members, title: UTILS.MEMBERS_LABEL, sortable: true },
+    // TODO: uncomment when user attributes are implemented
+    // { key: ComputePlatformsTableColumn.Members, title: UTILS.MEMBERS_LABEL, sortable: true },
     { key: ComputePlatformsTableColumn.Teams, title: UTILS.TEAMS_TAB, sortable: true },
     { key: ComputePlatformsTableColumn.Actions, title: UTILS.ACTIONS_COLUMN },
   ];
@@ -68,10 +69,11 @@ export const ComputePlatformsTable: React.FC = () => {
             columnKey: ComputePlatformsTableColumn.Type,
             value: cp.type,
           },
-          {
-            columnKey: ComputePlatformsTableColumn.Members,
-            value: UTILS.MEMBERS_COUNT(cp.users?.length || 0),
-          },
+          // TODO: uncomment when user attributes are implemented
+          // {
+          //   columnKey: ComputePlatformsTableColumn.Members,
+          //   value: UTILS.MEMBERS_COUNT(cp.users?.length || 0),
+          // },
           {
             columnKey: ComputePlatformsTableColumn.Teams,
             value: UTILS.TEAMS_COUNT(cp.teams?.length || 0),

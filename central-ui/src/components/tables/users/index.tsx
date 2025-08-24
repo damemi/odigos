@@ -69,6 +69,8 @@ export const UsersTable: React.FC = () => {
       { key: UserTableColumn.User, title: UTILS.USERS_TAB, sortable: true },
       { key: UserTableColumn.Role, title: UTILS.ROLE_COLUMN, sortable: true },
       { key: UserTableColumn.Teams, title: UTILS.TEAMS_TAB, sortable: true },
+      // TODO: uncomment when user attributes are implemented
+      // { key: UserTableColumn.Platforms, title: UTILS.COMPUTE_PLATFORMS_TAB, sortable: true },
       ...(isAdmin ? [{ key: UserTableColumn.Actions, title: UTILS.ACTIONS_COLUMN }] : []),
     ],
     [isAdmin],
@@ -95,6 +97,11 @@ export const UsersTable: React.FC = () => {
             columnKey: UserTableColumn.Teams,
             value: UTILS.TEAMS_COUNT(user.teams?.length || 0),
           },
+          // TODO: uncomment when user attributes are implemented
+          // {
+          //   columnKey: UserTableColumn.Platforms,
+          //   value: UTILS.COMPUTE_PLATFORMS_COUNT(user.computePlatforms?.length || 0),
+          // },
           ...(isAdmin
             ? [
                 {

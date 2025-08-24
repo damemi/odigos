@@ -2,7 +2,7 @@ import React, { type FC } from 'react';
 import type { Role, User } from '@/types';
 import { DataCard, Dropdown, Text } from '@odigos/ui-kit/components';
 import { DataCardCellStretch, DataCardCellTitle, DataCardContentRow, DataCardContentCell } from '../cards/styled';
-import { COMPUTE_PLATFORMS_TAB, CREATE_USER_ROLE_LABEL, PLATFORMS_COUNT, ROLE_COLUMN, ROLE_OPTIONS, TEAMS_COUNT, TEAMS_TAB } from '@/utils';
+import { CREATE_USER_ROLE_LABEL, ROLE_COLUMN, ROLE_OPTIONS, TEAMS_COUNT, TEAMS_TAB } from '@/utils';
 
 interface FormData {
   role: Role;
@@ -17,7 +17,8 @@ interface UserCardProps {
 
 const UserCard: FC<UserCardProps> = ({ user, formData, handleFormChange }) => {
   const teamsCount = user.teams?.length || 0;
-  const platformsCount = user.computePlatforms?.length || 0;
+  // TODO: uncomment when user attributes are implemented
+  // const platformsCount = user.computePlatforms?.length || 0;
 
   return (
     <DataCard title=''>
@@ -39,10 +40,11 @@ const UserCard: FC<UserCardProps> = ({ user, formData, handleFormChange }) => {
           <DataCardCellTitle>{TEAMS_TAB}</DataCardCellTitle>
           <Text>{TEAMS_COUNT(teamsCount)}</Text>
         </DataCardContentCell>
-        <DataCardContentCell>
+        {/* TODO: uncomment when user attributes are implemented */}
+        {/* <DataCardContentCell>
           <DataCardCellTitle>{COMPUTE_PLATFORMS_TAB}</DataCardCellTitle>
           <Text>{PLATFORMS_COUNT(platformsCount)}</Text>
-        </DataCardContentCell>
+        </DataCardContentCell> */}
       </DataCardContentRow>
     </DataCard>
   );
