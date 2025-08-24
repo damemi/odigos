@@ -10,14 +10,17 @@ jobs:
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release-bot')
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
       with:
         token: ${{ secrets.RELEASE_BOT_TOKEN }}
+        persist-credentials: false
 
     - name: Extract Version from PR Comment
+      env:
+        GITHUB_EVENT_PULL_REQUEST_BODY: ${{ github.event.pull_request.body }}
       id: extract-version
       run: |
-        PR_COMMENT="${{ github.event.pull_request.body }}"
+        PR_COMMENT="${GITHUB_EVENT_PULL_REQUEST_BODY}"
         VERSION=$(echo "$PR_COMMENT" | grep -oP 'Version:\K.*')
         echo "Extracted version: $VERSION"
         echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -30,16 +33,18 @@ jobs:
     - name: Tag Current Commit
       env:
         GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+        STEPS_EXTRACT_VERSION_OUTPUTS_VERSION: ${{ steps.extract-version.outputs.version }}
       run: |
-          VERSION=${{ steps.extract-version.outputs.version }}
+          VERSION=${STEPS_EXTRACT_VERSION_OUTPUTS_VERSION}
           git tag $VERSION
           git push --tags
 
     - name: Notify Slack
       env:
         SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+        STEPS_EXTRACT_VERSION_OUTPUTS_VERSION: ${{ steps.extract-version.outputs.version }}
       run: |
-        curl -X POST -H 'Content-type: application/json' --data '{"description":"Tagged odigos enterprise. Release shouls follow", "tag":"${{ steps.extract-version.outputs.version }}"}' ${{ env.SLACK_WEBHOOK_URL }}
+        curl -X POST -H 'Content-type: application/json' --data '{"description":"Tagged odigos enterprise. Release shouls follow", "tag":"${STEPS_EXTRACT_VERSION_OUTPUTS_VERSION}"}' ${SLACK_WEBHOOK_URL}
 
     - name: Notify Slack on Failure
       if: failure()
@@ -47,6 +52,7 @@ jobs:
         SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         GITHUB_RUN_ID: ${{ github.run_id }}
+        STEPS_EXTRACT_VERSION_OUTPUTS_VERSION: ${{ steps.extract-version.outputs.version }}
       run: |
-        curl -X POST -H 'Content-type: application/json' --data '{"link":"https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}", "description":"ERROR: odigos enterprise not able to tag release", "tag":"${{ steps.extract-version.outputs.version }}"}' ${{ env.SLACK_WEBHOOK_URL }}
+        curl -X POST -H 'Content-type: application/json' --data '{"link":"https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}", "description":"ERROR: odigos enterprise not able to tag release", "tag":"${STEPS_EXTRACT_VERSION_OUTPUTS_VERSION}"}' ${SLACK_WEBHOOK_URL}
 

@@ -20,11 +20,14 @@ jobs:
     steps:
       - name: Determine Tag Value
         id: set-tag
+        env:
+          GITHUB_EVENT_INPUTS_TAG: ${{ github.event.inputs.tag }}
+          GITHUB_EVENT_CLIENT_PAYLOAD_TAG: ${{ github.event.client_payload.tag }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "TAG=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
+            echo "TAG=${GITHUB_EVENT_INPUTS_TAG}" >> $GITHUB_ENV
           elif [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "TAG=${{ github.event.client_payload.tag }}" >> $GITHUB_ENV
+            echo "TAG=${GITHUB_EVENT_CLIENT_PAYLOAD_TAG}" >> $GITHUB_ENV
           else
             echo "Unknown event type"
             exit 1
@@ -33,13 +36,16 @@ jobs:
       - name: Notify Slack
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+          TAG: ${{ env.TAG }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"description":"Detected new tag, creating PR in enterprise", "tag":"${{ env.TAG }}"}' ${{ env.SLACK_WEBHOOK_URL }}
+          curl -X POST -H 'Content-type: application/json' --data '{"description":"Detected new tag, creating PR in enterprise", "tag":"${TAG}"}' ${SLACK_WEBHOOK_URL}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          persist-credentials: false
 
       # we are using go commands later on, so need go installed
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 #v5.5.0
         with:
           go-version-file: ./odiglet/go.mod
 
@@ -92,6 +98,8 @@ jobs:
           go mod tidy
 
       - name: github preperation
+        env:
+          TAG: ${{ env.TAG }}
         id: github_preperation
         run: |
           # Set global Git configurations
@@ -100,38 +108,41 @@ jobs:
 
           BRANCH_PREFIX="release-bot-"
           echo "branch_prefix=${BRANCH_PREFIX}-" >> $GITHUB_OUTPUT
-          echo "branch_name=${BRANCH_PREFIX}${{ env.TAG }}" >> $GITHUB_OUTPUT
+          echo "branch_name=${BRANCH_PREFIX}${TAG}" >> $GITHUB_OUTPUT
 
       - name: delete existing branch
         env:
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+          STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME: ${{ steps.github_preperation.outputs.branch_name }}
         run: |
           # Check if a pull request already exists for the branch and close it if it does
-          EXISTING_PR=$(gh pr list --head ${{ steps.github_preperation.outputs.branch_name }} --base main --state open --json number --jq '.[0].number')
+          EXISTING_PR=$(gh pr list --head ${STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME} --base main --state open --json number --jq '.[0].number')
           if [ ! -z "$EXISTING_PR" ]; then
               gh pr close $EXISTING_PR --delete-branch
           fi
 
-          BRANCH_EXISTS=$(git ls-remote --heads origin ${{ steps.github_preperation.outputs.branch_name }})
+          BRANCH_EXISTS=$(git ls-remote --heads origin ${STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME})
           if [ ! -z "$BRANCH_EXISTS" ]; then
-              git push origin --delete ${{ steps.github_preperation.outputs.branch_name }}
+              git push origin --delete ${STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME}
           fi
 
       - name: create release pr
         env:
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+          STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME: ${{ steps.github_preperation.outputs.branch_name }}
+          TAG: ${{ env.TAG }}
         run: |
-          git checkout -b ${{ steps.github_preperation.outputs.branch_name }}
+          git checkout -b ${STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME}
           git add .
-          git commit -m "bump odigos dependencise to use ${{ env.TAG }}"
-          git push origin ${{ steps.github_preperation.outputs.branch_name }}
+          git commit -m "bump odigos dependencise to use ${TAG}"
+          git push origin ${STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME}
 
           PR_LINK=$(gh pr create \
-            --title "chore: automatic release ${{ env.TAG }}" \
+            --title "chore: automatic release ${TAG}" \
             --body "follow up PR for odigos release to upgrade enterprise components.
-            Version:${{ env.TAG }}" \
+            Version:${TAG}" \
             --base main \
-            --head ${{ steps.github_preperation.outputs.branch_name }})
+            --head ${STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME})
           echo "PR_LINK=$PR_LINK" >> $GITHUB_ENV
 
           # Extract PR number from PR_LINK
@@ -149,14 +160,17 @@ jobs:
       - name: Enable Auto Merge on PR
         env:
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+          PR_LINK: ${{ env.PR_LINK }}
         run: |
-          gh pr merge ${{ env.PR_LINK }} --auto --squash
+          gh pr merge ${PR_LINK} --auto --squash
 
       - name: Notify Slack
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+          PR_LINK: ${{ env.PR_LINK }}
+          TAG: ${{ env.TAG }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"link":"${{ env.PR_LINK }}/files", "description":"Odigos enterprise PR created. Approve to continue:", "tag":"${{ env.TAG }}"}' ${{ env.SLACK_WEBHOOK_URL }}
+          curl -X POST -H 'Content-type: application/json' --data '{"link":"${PR_LINK}/files", "description":"Odigos enterprise PR created. Approve to continue:", "tag":"${TAG}"}' ${SLACK_WEBHOOK_URL}
 
       - name: Notify Slack on Failure
         if: failure()
@@ -164,5 +178,6 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
+          TAG: ${{ env.TAG }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"link":"https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}", "description":"ERROR: odigos enterprise PR not created", "tag":"${{ env.TAG }}"}' ${{ env.SLACK_WEBHOOK_URL }}
+          curl -X POST -H 'Content-type: application/json' --data '{"link":"https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}", "description":"ERROR: odigos enterprise PR not created", "tag":"${TAG}"}' ${SLACK_WEBHOOK_URL}

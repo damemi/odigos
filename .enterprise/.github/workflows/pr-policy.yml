@@ -11,5 +11,5 @@ on:
 
 jobs:
   require-linear:
-    uses: odigos-io/ci-core/.github/workflows/require-linear.yml@v1
+    uses: odigos-io/ci-core/.github/workflows/require-linear.yml@3442890ffb5e5d26b81eb322c9261527d9d4cd80 #v1
     secrets: inherit

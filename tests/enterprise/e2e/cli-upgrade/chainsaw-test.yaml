@@ -57,7 +57,7 @@ spec:
 
               curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o verify_odigos_installation.sh https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/verify_odigos_installation.sh
               bash verify_odigos_installation.sh odigos-test
-            timeout: 4m # longer timeout since the images are being pulled from dockerhub
+            timeout: 5m # longer timeout since the images are being pulled from dockerhub
         - assert:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/odigos-installed.yaml
 

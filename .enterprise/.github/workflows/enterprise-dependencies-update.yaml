@@ -9,7 +9,9 @@ jobs:
   update-dependencies:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          persist-credentials: false
 
       - name: update odiglet dependencies
         working-directory: ./odiglet
@@ -51,33 +53,37 @@ jobs:
       - name: delete existing branch
         env:
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+          STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME: ${{ steps.github_preperation.outputs.branch_name }}
         run: |
           # Check if a pull request already exists for the branch and close it if it does
-          EXISTING_PR=$(gh pr list --head ${{ steps.github_preperation.outputs.branch_name }} --base main --state open --json number --jq '.[0].number')
+          EXISTING_PR=$(gh pr list --head ${STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME} --base main --state open --json number --jq '.[0].number')
           if [ ! -z "$EXISTING_PR" ]; then
               gh pr close $EXISTING_PR --delete-branch
           fi
           
-          BRANCH_EXISTS=$(git ls-remote --heads origin ${{ steps.github_preperation.outputs.branch_name }})
+          BRANCH_EXISTS=$(git ls-remote --heads origin ${STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME})
           if [ ! -z "$BRANCH_EXISTS" ]; then
-              git push origin --delete ${{ steps.github_preperation.outputs.branch_name }}
+              git push origin --delete ${STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME}
           fi
           
       - name: create dependencies update pr
         id: create_dependencies_update_pr
         env:
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+          STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME: ${{ steps.github_preperation.outputs.branch_name }}
+          GITHUB_EVENT_CLIENT_PAYLOAD_PR_CREATOR: ${{ github.event.client_payload.pr_creator }}
+          GITHUB_EVENT_CLIENT_PAYLOAD_SOURCE_PR_URL: ${{github.event.client_payload.source_pr_url}}
         run: |
-          git checkout -b ${{ steps.github_preperation.outputs.branch_name }}
+          git checkout -b ${STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME}
           git add .
           git commit -m "update Odigos enterprise dependencies"
-          git push origin ${{ steps.github_preperation.outputs.branch_name }}
+          git push origin ${STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME}
 
           PR_LINK=$(gh pr create \
           --title "chore: automatic dependencies syncer bot" \
-          --body "Automated PR to update Odigos enterprise components after a dependency module merge. PR created by: @${{ github.event.client_payload.pr_creator }}. link to PR in source repository: ${{github.event.client_payload.source_pr_url}}"  \
+          --body "Automated PR to update Odigos enterprise components after a dependency module merge. PR created by: @${GITHUB_EVENT_CLIENT_PAYLOAD_PR_CREATOR}. link to PR in source repository: ${GITHUB_EVENT_CLIENT_PAYLOAD_SOURCE_PR_URL}"  \
           --base main \
-          --head ${{ steps.github_preperation.outputs.branch_name }})
+          --head ${STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME})
           echo "PR_LINK=$PR_LINK" >> $GITHUB_ENV
 
           # Extract PR number from PR_LINK
@@ -87,14 +93,16 @@ jobs:
       - name: Add bot label to PR
         env:
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
         run: |
           curl -X POST -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/labels -d '{"labels": ["dependencies-syncer-bot"]}'
       
       - name: Enable Auto Merge on PR
         env:
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+          PR_LINK: ${{ env.PR_LINK }}
         run: |
-          gh pr merge ${{ env.PR_LINK }} --auto --squash
+          gh pr merge ${PR_LINK} --auto --squash
 
       - name: Notify Slack
         run: |
@@ -104,11 +112,15 @@ jobs:
           fi
 
           curl -X POST -H 'Content-type: application/json' --data "$(jq -n \
-            --arg link "${{ env.PR_LINK }}" \
-            --arg source_pr_link "${{ github.event.client_payload.source_pr_url }}" \
-            --arg description "PR created by: @${{ github.event.client_payload.pr_creator }} triggered a PR in Odigos enterprise by the dependencies syncer bot. Approve to continue." \
+            --arg link "${PR_LINK}" \
+            --arg source_pr_link "${GITHUB_EVENT_CLIENT_PAYLOAD_SOURCE_PR_URL}" \
+            --arg description "PR created by: @${GITHUB_EVENT_CLIENT_PAYLOAD_PR_CREATOR} triggered a PR in Odigos enterprise by the dependencies syncer bot. Approve to continue." \
             '{link: $link, source_pr_link: $source_pr_link, description: $description}')" \
             ${{ secrets.SLACK_ENTERPRISE_SYNC_URL }}
+        env:
+          PR_LINK: ${{ env.PR_LINK }}
+          GITHUB_EVENT_CLIENT_PAYLOAD_SOURCE_PR_URL: ${{ github.event.client_payload.source_pr_url }}
+          GITHUB_EVENT_CLIENT_PAYLOAD_PR_CREATOR: ${{ github.event.client_payload.pr_creator }}
 
 
       - name: Notify Slack on Failure

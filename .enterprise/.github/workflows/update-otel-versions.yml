@@ -9,9 +9,10 @@ jobs:
   update_opentelemetry_instrumentations:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Fetch latest version of instrumentations
         id: fetch_latest_version
         run: |
@@ -22,14 +23,17 @@ jobs:
           echo "Latest version of opentelemetry-java-instrumentation is ${java_latest_version}"
           echo "Latest version of opentelemetry-dotnet-instrumentation is ${dotnet_latest_version}"
       - name: Replace versions in Dockerfile
+        env:
+          STEPS_FETCH_LATEST_VERSION_OUTPUTS_JAVA_LATEST_VERSION: ${{ steps.fetch_latest_version.outputs.java_latest_version }}
+          STEPS_FETCH_LATEST_VERSION_OUTPUTS_DOTNET_LATEST_VERSION: ${{ steps.fetch_latest_version.outputs.dotnet_latest_version }}
         run: |
           cd odiglet
-          java_latest_version=${{ steps.fetch_latest_version.outputs.java_latest_version }}
+          java_latest_version=${STEPS_FETCH_LATEST_VERSION_OUTPUTS_JAVA_LATEST_VERSION}
           sed -i "s/JAVA_OTEL_VERSION=.*/JAVA_OTEL_VERSION=${java_latest_version}/" Dockerfile
-          dotnet_latest_version=${{ steps.fetch_latest_version.outputs.dotnet_latest_version }}
+          dotnet_latest_version=${STEPS_FETCH_LATEST_VERSION_OUTPUTS_DOTNET_LATEST_VERSION}
           sed -i "s/DOTNET_OTEL_VERSION=.*/DOTNET_OTEL_VERSION=${dotnet_latest_version}/" Dockerfile
       - name: Create pull request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e #v7.0.8
         with:
           commit-message: 'Update Java instrumentation to  ${{ steps.fetch_latest_version.outputs.java_latest_version }} and .NET instrumentation to ${{ steps.fetch_latest_version.outputs.dotnet_latest_version }}'
           branch: automated/update-opentelemetry-instrumentations

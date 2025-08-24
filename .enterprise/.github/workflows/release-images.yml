@@ -2,17 +2,17 @@ name: Release Enterprise Components to Artifact Registry
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Docker image tag'
+        description: "Docker image tag"
         required: true
 
 permissions:
   contents: write
   packages: write
-  id-token: 'write'
+  id-token: write
 
 jobs:
   release:
@@ -20,39 +20,40 @@ jobs:
       matrix:
         service:
           [
-            'odiglet',
-            'instrumentor',
-            'central-proxy',
-            'central-backend',
-            'central-ui',
-            'agents'
+            "odiglet",
+            "instrumentor",
+            "central-proxy",
+            "central-backend",
+            "central-ui",
+            "agents",
           ]
-        dockerfile: ['Dockerfile', 'Dockerfile.rhel']
+        dockerfile: ["Dockerfile", "Dockerfile.rhel"]
         include:
           - service: odiglet
-            summary: 'Odiglet for Odigos'
-            description: 'Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs.'
+            summary: "Odiglet for Odigos"
+            description: "Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs."
           - service: instrumentor
-            summary: 'Instrumentor for Odigos'
-            description: 'Instrumentor manages auto-instrumentation for workloads with Odigos.'
+            summary: "Instrumentor for Odigos"
+            description: "Instrumentor manages auto-instrumentation for workloads with Odigos."
           - service: central-proxy
-            summary: 'Central Proxy for Odigos'
-            description: 'Central Proxy is handle the communication between the cluster that Odigos is running in and the Odigos Central.'
+            summary: "Central Proxy for Odigos"
+            description: "Central Proxy is handle the communication between the cluster that Odigos is running in and the Odigos Central."
           - service: central-backend
-            summary: 'Central Backend for Odigos'
-            description: 'Central Backend is the core component of Odigos Central, responsible for managing the data flow from the cluster to the ui.'
+            summary: "Central Backend for Odigos"
+            description: "Central Backend is the core component of Odigos Central, responsible for managing the data flow from the cluster to the ui."
           - service: central-ui
-            summary: 'Central UI for Odigos'
-            description: 'Central UI is the web interface for Odigos Central, providing a user-friendly way to manage and visualize the data collected by Odigos.'
+            summary: "Central UI for Odigos"
+            description: "Central UI is the web interface for Odigos Central, providing a user-friendly way to manage and visualize the data collected by Odigos."
           - service: agents
-            summary: 'Odigos Enterprise Agents'
-            description: 'The Odigos Agents used to copy Odigos agent relevant files into the user workloads.'
+            summary: "Odigos Enterprise Agents"
+            description: "The Odigos Agents used to copy Odigos agent relevant files into the user workloads."
 
     runs-on: large-runner
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
           fetch-depth: 0
+          persist-credentials: false
       - run: git fetch --force --tags
 
       - name: Set env
@@ -66,39 +67,39 @@ jobs:
         run: |
           curl -X POST -H 'Content-type: application/json' --data '{
             "description":"Start releasing Odigos enterprise component: ${{ matrix.service }}. (${{ matrix.dockerfile == 'Dockerfile.rhel' && 'UBI9' || 'Standard' }} image). This should take few minutes",
-            "tag":"${{ env.ODIGOS_TAG }}"
-          }' ${{ env.SLACK_WEBHOOK_URL }}
+            "tag":"${ODIGOS_TAG}"
+          }' ${SLACK_WEBHOOK_URL}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 #v3.11.1
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 #v3.6.0
 
       - id: gcp-auth
         name: Authenticate with Google Cloud
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@b7593ed2efd1c1617e1b0254da33b86225adb2a5 #v2.1.12
         with:
-          token_format: 'access_token'
+          token_format: access_token
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           access_token_lifetime: 1200s
 
       - name: Login to Artifact Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 #v3.5.0
         with:
           registry: us-central1-docker.pkg.dev
           username: oauth2accesstoken
           password: ${{ steps.gcp-auth.outputs.access_token }}
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 #v3.5.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and Push Enterprise Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 #v6.18.0
         env:
           ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
         with:
@@ -136,17 +137,18 @@ jobs:
         run: |
           curl -X POST -H 'Content-type: application/json' --data '{
             "link":"https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}",
-            "description":"ERROR: Failed to build ${{ matrix.service }} (${{ matrix.dockerfile == 'Dockerfile.rhel' && 'UBI9' || 'Standard' }} image). Image: ${{ env.IMAGE_NAME }}:${{ env.ODIGOS_TAG }}",
-            "tag":"${{ env.ODIGOS_TAG }}"
-          }' ${{ env.SLACK_WEBHOOK_URL }}
+            "description":"ERROR: Failed to build ${{ matrix.service }} (${{ matrix.dockerfile == 'Dockerfile.rhel' && 'UBI9' || 'Standard' }} image). Image: ${IMAGE_NAME}:${ODIGOS_TAG}",
+            "tag":"${ODIGOS_TAG}"
+          }' ${SLACK_WEBHOOK_URL}
 
   trigger-cli-release:
     needs: release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
           fetch-depth: 0
+          persist-credentials: false
       - run: git fetch --force --tags
 
       - name: Set env
@@ -161,14 +163,14 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token ${{ secrets.RELEASE_BOT_TOKEN }}" \
             https://api.github.com/repos/odigos-io/odigos/dispatches \
-            -d '{"event_type": "release_cli", "client_payload": {"tag": "${{ env.ODIGOS_TAG }}"}}'
+            -d '{"event_type": "release_cli", "client_payload": {"tag": "${ODIGOS_TAG}"}}'
 
       - name: Notify Slack End
         env:
           ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
           SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"description":"Odigos enterprise components published to registry. Next step: release CLI", "tag":"${{ env.ODIGOS_TAG }}"}' ${{ env.SLACK_WEBHOOK_URL }}
+          curl -X POST -H 'Content-type: application/json' --data '{"description":"Odigos enterprise components published to registry. Next step: release CLI", "tag":"${ODIGOS_TAG}"}' ${SLACK_WEBHOOK_URL}
 
       - name: Notify Slack on Failure
         if: failure()
@@ -178,4 +180,4 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"link":"https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}", "description":"ERROR: odigos enterprise component release failed", "tag":"${{ env.ODIGOS_TAG }}"}' ${{ env.SLACK_WEBHOOK_URL }}
+          curl -X POST -H 'Content-type: application/json' --data '{"link":"https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}", "description":"ERROR: odigos enterprise component release failed", "tag":"${ODIGOS_TAG}"}' ${SLACK_WEBHOOK_URL}

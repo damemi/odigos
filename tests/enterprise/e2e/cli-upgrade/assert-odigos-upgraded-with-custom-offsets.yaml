@@ -73,7 +73,6 @@ metadata:
       name: odiglet
 spec:
   containers:
-    - name: deviceplugin
     - name: odiglet
       resources: {}
       securityContext:
@@ -107,6 +106,7 @@ spec:
               name: odigos-pro
         - name: OTEL_GO_OFFSETS_FILE
           value: /offsets/go_offset_results.json
+    - name: deviceplugin
   (($values.k8sMinorVersion < `26` && hostNetwork != null) || (hostNetwork == null)): true
   hostPID: true
   nodeName: kind-control-plane

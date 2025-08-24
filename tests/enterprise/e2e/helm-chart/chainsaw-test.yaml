@@ -17,7 +17,7 @@ spec:
     - name: Install Odigos
       try:
         - script:
-            timeout: 3m
+            timeout: 5m
             content: |
               # use the helm chart from main repo which is expected to be in a sibling directory to this repo
               helm upgrade --install odigos  ../../../../odigos/helm/odigos --create-namespace --namespace odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY
@@ -26,7 +26,7 @@ spec:
               curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o verify_odigos_installation.sh https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/verify_odigos_installation.sh
               bash verify_odigos_installation.sh odigos-test
         - assert:
-            timeout: 3m
+            timeout: 5m
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/odigos-installed.yaml
       catch:
         - script:
