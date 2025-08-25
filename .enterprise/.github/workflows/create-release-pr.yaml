@@ -38,7 +38,12 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
           TAG: ${{ env.TAG }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"description":"Detected new tag, creating PR in enterprise", "tag":"${TAG}"}' ${SLACK_WEBHOOK_URL}
+          payload=$(jq -n \
+            --arg description "Detected new tag, creating PR in enterprise" \
+            --arg tag "${TAG}" \
+            '{description: $description, tag: $tag}')
+
+          curl -X POST -H 'Content-type: application/json' --data "$payload" "${SLACK_WEBHOOK_URL}"
 
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
@@ -170,7 +175,13 @@ jobs:
           PR_LINK: ${{ env.PR_LINK }}
           TAG: ${{ env.TAG }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"link":"${PR_LINK}/files", "description":"Odigos enterprise PR created. Approve to continue:", "tag":"${TAG}"}' ${SLACK_WEBHOOK_URL}
+          payload=$(jq -n \
+            --arg link "${PR_LINK}/files" \
+            --arg description "Odigos enterprise PR created. Approve to continue:" \
+            --arg tag "${TAG}" \
+            '{link: $link, description: $description, tag: $tag}')
+
+          curl -X POST -H 'Content-type: application/json' --data "$payload" "${SLACK_WEBHOOK_URL}"
 
       - name: Notify Slack on Failure
         if: failure()
@@ -180,4 +191,10 @@ jobs:
           GITHUB_RUN_ID: ${{ github.run_id }}
           TAG: ${{ env.TAG }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"link":"https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}", "description":"ERROR: odigos enterprise PR not created", "tag":"${TAG}"}' ${SLACK_WEBHOOK_URL}
+          payload=$(jq -n \
+            --arg link "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --arg description "ERROR: odigos enterprise PR not created" \
+            --arg tag "${TAG}" \
+            '{link: $link, description: $description, tag: $tag}')
+          
+          curl -X POST -H 'Content-type: application/json' --data "$payload" "${SLACK_WEBHOOK_URL}"
