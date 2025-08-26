@@ -14,6 +14,7 @@ jobs:
       with:
         token: ${{ secrets.RELEASE_BOT_TOKEN }}
         persist-credentials: false
+        ref: ${{ github.event.pull_request.head.ref }}
 
     - name: Extract Version from PR Comment
       env:
