@@ -151,6 +151,7 @@ func (r *RedisClient) Close() error {
 // GetSystemInitialized checks if the system has been initialized (has users)
 func (r *RedisClient) GetSystemInitialized(ctx context.Context) (bool, error) {
 	result, err := r.client.Get(ctx, consts.SystemInitializedKey).Result()
+
 	if err != nil {
 		if err.Error() == "redis: nil" {
 			return false, nil

@@ -158,7 +158,7 @@ func (k *TeamRepository) GetTeamByName(ctx context.Context, teamName string) (*m
 }
 
 func (k *TeamRepository) GetUsersForTeam(ctx context.Context, teamID string) ([]*model.User, error) {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetAdminTokenFromKeycloak(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -230,7 +230,7 @@ func (k *TeamRepository) RemoveComputePlatformsFromTeam(ctx context.Context, tea
 }
 
 func (k *TeamRepository) GetComputePlatformsForTeam(ctx context.Context, teamID string) ([]*model.ComputePlatform, error) {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetAdminTokenFromKeycloak(ctx)
 	if err != nil {
 		return nil, err
 	}

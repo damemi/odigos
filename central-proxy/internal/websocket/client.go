@@ -98,9 +98,9 @@ func (w *WebSocketClient) handleMessage(message []byte) {
 
 	switch parsedMessage.Type {
 	case MessageTypeGraphQLQuery:
-		resp, err := w.gqlClient.ForwardGraphQLRequest(w.ctx, parsedMessage.Query, parsedMessage.Variables)
+		resp, err := w.gqlClient.ForwardGraphQLRequest(w.ctx, parsedMessage.RequestId, parsedMessage.Query, parsedMessage.Variables)
 		if err != nil {
-			logger.Log.Error("Failed GraphQL request", "error", err)
+			logger.Log.Error("Failed GraphQL request", "error", err, "request_id", parsedMessage.RequestId)
 			return
 		}
 
@@ -111,7 +111,7 @@ func (w *WebSocketClient) handleMessage(message []byte) {
 		}
 
 		if err := w.Send(response); err != nil {
-			logger.Log.Error("Failed to send GraphQL response", "error", err)
+			logger.Log.Error("Failed to send GraphQL response", "error", err, "request_id", parsedMessage.RequestId)
 		}
 
 	default:
@@ -130,11 +130,23 @@ func (w *WebSocketClient) handleReconnect(kubeClient *kube.Client) *websocket.Co
 		return nil
 	}
 
+	proxyVersion, err := config.GetOdigosVersion(w.ctx, kubeClient)
+	if err != nil {
+		logger.Log.Error("Failed to get version during reconnect", "error", err)
+		return nil
+	}
+
+	_, clusterName, err := config.GetCentralBackendURLAndClusterName(w.ctx, kubeClient)
+	if err != nil {
+		logger.Log.Error("Failed to get clusterName during reconnect", "error", err)
+		return nil
+	}
+
 	u := url.URL{
 		Scheme:   "ws",
 		Host:     w.url,
 		Path:     "/ws/proxy",
-		RawQuery: "proxyID=" + proxyID,
+		RawQuery: fmt.Sprintf("proxyID=%s&clusterName=%s&version=%s", proxyID, clusterName, proxyVersion),
 	}
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
