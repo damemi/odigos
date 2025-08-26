@@ -1,0 +1,48 @@
+name: Ensure release branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.2.0)'
+        required: true
+  repository_dispatch:
+    types: [ensure-release-branch]
+
+permissions:
+  contents: write  # needed to push a new branch
+
+jobs:
+  ensure-release-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "bot@keyval.dev"
+          git config --global user.name "Odigos Release Bot"
+
+      - name: Determine TAG input
+        id: inputs
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then TAG="${{ github.event.client_payload.tag }}"; fi
+          if [ -z "$TAG" ]; then
+            echo "TAG is required (workflow_dispatch input 'tag' or repository_dispatch client_payload.tag)"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure release branch exists
+        run: |
+          TAG="${{ steps.inputs.outputs.tag }}"
+          BRANCH="releases/$TAG"
+
+          if git rev-parse --verify "$BRANCH" >/dev/null 2>&1; then
+            echo "Branch $BRANCH already exists."
+          else
+            git checkout -b "$BRANCH"
+            git push origin "$BRANCH"
+          fi
