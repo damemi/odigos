@@ -3,8 +3,8 @@ name: Ensure release branch
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Release tag (e.g. v1.2.0)'
+      branch:
+        description: 'Release branch (e.g. releases/v1.2.0)'
         required: true
   repository_dispatch:
     types: [ensure-release-branch]
@@ -27,18 +27,17 @@ jobs:
       - name: Determine TAG input
         id: inputs
         run: |
-          TAG="${{ github.event.inputs.tag }}"
-          if [ -z "$TAG" ]; then TAG="${{ github.event.client_payload.tag }}"; fi
-          if [ -z "$TAG" ]; then
-            echo "TAG is required (workflow_dispatch input 'tag' or repository_dispatch client_payload.tag)"
+          BRANCH="${{ github.event.inputs.branch }}"
+          if [ -z "$BRANCH" ]; then BRANCH="${{ github.event.client_payload.branch }}"; fi
+          if [ -z "$BRANCH" ]; then
+            echo "BRANCH is required (workflow_dispatch input 'branch' or repository_dispatch client_payload.branch)"
             exit 1
           fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
       - name: Ensure release branch exists
         run: |
-          TAG="${{ steps.inputs.outputs.tag }}"
-          BRANCH="releases/$TAG"
+          BRANCH="${{ steps.inputs.outputs.branch }}"
 
           if git rev-parse --verify "$BRANCH" >/dev/null 2>&1; then
             echo "Branch $BRANCH already exists."
