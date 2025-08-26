@@ -10,14 +10,14 @@
   },
   "dependencies": {
     "@apollo/client": "^3.13.9",
-    "@odigos/ui-kit": "^0.0.87",
+    "@odigos/ui-kit": "^0.0.95",
     "graphql": "^16.11.0",
     "graphql-ws": "^6.0.6",
     "next": "15.4.7",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "styled-components": "^6.1.19",
-    "zustand": "^5.0.7"
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
