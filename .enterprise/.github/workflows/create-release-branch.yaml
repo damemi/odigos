@@ -10,7 +10,7 @@ on:
     types: [ensure-release-branch]
 
 permissions:
-  contents: write  # needed to push a new branch
+  contents: write
 
 jobs:
   ensure-release-branch:
@@ -18,13 +18,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # token: ${{ secrets.RELEASE_BOT_TOKEN }} # uncomment if needed
 
       - name: Configure Git
         run: |
           git config --global user.email "bot@keyval.dev"
           git config --global user.name "Odigos Release Bot"
 
-      - name: Determine TAG input
+      - name: Determine BRANCH input
         id: inputs
         run: |
           BRANCH="${{ github.event.inputs.branch }}"
@@ -36,12 +39,20 @@ jobs:
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
       - name: Ensure release branch exists
+        env:
+          BRANCH: ${{ steps.inputs.outputs.branch }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          BRANCH="${{ steps.inputs.outputs.branch }}"
+          set -euo pipefail
+          git fetch origin +refs/heads/*:refs/remotes/origin/*
 
-          if git rev-parse --verify "$BRANCH" >/dev/null 2>&1; then
-            echo "Branch $BRANCH already exists."
-          else
-            git checkout -b "$BRANCH"
-            git push origin "$BRANCH"
+          if git ls-remote --heads origin "$BRANCH" | grep -qE "refs/heads/${BRANCH}$"; then
+            echo "Branch '$BRANCH' already exists on origin."
+            exit 0
           fi
+
+          echo "Creating '$BRANCH' from 'origin/${DEFAULT_BRANCH}'"
+          git switch --detach "origin/${DEFAULT_BRANCH}"
+          git switch -c "$BRANCH"
+          git push --set-upstream origin "$BRANCH"
+          echo "Branch '$BRANCH' created and pushed."
