@@ -21,8 +21,9 @@ jobs:
         GITHUB_EVENT_PULL_REQUEST_BODY: ${{ github.event.pull_request.body }}
       id: extract-version
       run: |
-        PR_COMMENT="${GITHUB_EVENT_PULL_REQUEST_BODY}"
-        VERSION=$(echo "$PR_COMMENT" | grep -oP 'Version:\K.*')
+        PR_COMMENT="${{ github.event.pull_request.body }}"
+        # Extract the version from the PR comment, xargs is used to remove any leading or trailing whitespace
+        VERSION=$(echo "$PR_COMMENT" | grep -oP 'Version:\K.*' | xargs)
         echo "Extracted version: $VERSION"
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
