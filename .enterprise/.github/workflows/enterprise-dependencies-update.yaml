@@ -111,12 +111,12 @@ jobs:
             exit 1
           fi
 
-          curl -X POST -H 'Content-type: application/json' --data "$(jq -n \
-            --arg link "${PR_LINK}" \
-            --arg source_pr_link "${GITHUB_EVENT_CLIENT_PAYLOAD_SOURCE_PR_URL}" \
-            --arg description "PR created by: @${GITHUB_EVENT_CLIENT_PAYLOAD_PR_CREATOR} triggered a PR in Odigos enterprise by the dependencies syncer bot. Approve to continue." \
-            '{link: $link, source_pr_link: $source_pr_link, description: $description}')" \
-            ${{ secrets.SLACK_ENTERPRISE_SYNC_URL }}
+          payload=$(jq -n \
+              --arg link "${PR_LINK}" \
+              --arg source_pr_link "${GITHUB_EVENT_CLIENT_PAYLOAD_SOURCE_PR_URL}" \
+              --arg description "PR created by: @${GITHUB_EVENT_CLIENT_PAYLOAD_PR_CREATOR} triggered a PR in Odigos enterprise by the dependencies syncer bot. Approve to continue." \
+              '{link: $link, source_pr_link: $source_pr_link, description: $description}')
+          curl -X POST -H 'Content-type: application/json' --data "$payload" ${{ secrets.SLACK_ENTERPRISE_SYNC_URL }}
         env:
           PR_LINK: ${{ env.PR_LINK }}
           GITHUB_EVENT_CLIENT_PAYLOAD_SOURCE_PR_URL: ${{ github.event.client_payload.source_pr_url }}
@@ -142,9 +142,9 @@ jobs:
           SOURCE_PR_LINK=${SOURCE_PR_LINK:-"Not available"}
           PR_CREATOR=${PR_CREATOR:-"Unknown"}
 
-          curl -X POST -H 'Content-type: application/json' --data "$(jq -n \
+            payload=$(jq -n \
             --arg link "$PR_LINK" \
             --arg source_pr_link "$SOURCE_PR_LINK" \
             --arg description "ERROR: PR creation failed. Original PR by @$PR_CREATOR triggered a sync PR in Odigos enterprise, but it failed." \
-            '{link: $link, source_pr_link: $source_pr_link, description: $description}')" \
-            $SLACK_URL
+            '{link: $link, source_pr_link: $source_pr_link, description: $description}')
+            curl -X POST -H 'Content-type: application/json' --data "$payload" $SLACK_URL
