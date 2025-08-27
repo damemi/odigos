@@ -38,7 +38,7 @@ func (k *AuthRepository) AuthenticateUser(ctx context.Context, email, password s
 	}, nil
 }
 
-func (k *AuthRepository) GetAdminTokenForInitialPassword(ctx context.Context) (string, error) {
+func (k *AuthRepository) GetAdminToken(ctx context.Context) (string, error) {
 	credentials, err := k.credentialsService.GetAdminCredentials(ctx)
 	if err != nil {
 		return "", err

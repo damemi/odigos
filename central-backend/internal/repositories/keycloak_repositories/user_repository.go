@@ -41,7 +41,7 @@ func (k *UserRepository) CheckUserExists(ctx context.Context, email string) erro
 		// If it fails, fall back to getting a fresh admin token
 	}
 
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func (k *UserRepository) CreateUser(ctx context.Context, input *model.WriteUserI
 		return nil, fmt.Errorf("role is required")
 	}
 
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get admin token: %w", err)
 	}
@@ -106,7 +106,7 @@ func (k *UserRepository) UpdateUser(ctx context.Context, userID string, input *m
 		return nil, fmt.Errorf("role is required")
 	}
 
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +134,7 @@ func (k *UserRepository) UpdateUser(ctx context.Context, userID string, input *m
 }
 
 func (k *UserRepository) DeleteUser(ctx context.Context, userID string) (*model.GeneralResult, error) {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		errorMsg := err.Error()
 		return &model.GeneralResult{Success: false, Error: &errorMsg}, nil
@@ -176,7 +176,7 @@ func (k *UserRepository) GetUsers(ctx context.Context) ([]*model.User, error) {
 }
 
 func (k *UserRepository) GetUserByID(ctx context.Context, userID string) (*model.User, error) {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +200,7 @@ func (k *UserRepository) GetUserByEmail(ctx context.Context, email string) (*mod
 		// If it fails, fall back to getting a fresh admin token
 	}
 
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +224,7 @@ func (k *UserRepository) CheckUserNeedsPasswordChange(ctx context.Context, email
 		// If it fails, fall back to getting a fresh admin token
 	}
 
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -252,7 +252,7 @@ func (k *UserRepository) UpdateUserPassword(ctx context.Context, email string, p
 		}
 	}
 
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return err
 	}
@@ -270,7 +270,7 @@ func (k *UserRepository) SetUserPasswordRequirement(ctx context.Context, email s
 		// If it fails, fall back to getting a fresh admin token
 	}
 
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return err
 	}
@@ -279,7 +279,7 @@ func (k *UserRepository) SetUserPasswordRequirement(ctx context.Context, email s
 }
 
 func (k *UserRepository) GetUserRole(ctx context.Context, userID string) (string, error) {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -288,7 +288,7 @@ func (k *UserRepository) GetUserRole(ctx context.Context, userID string) (string
 }
 
 func (k *UserRepository) AssignTeamsToUser(ctx context.Context, userID string, teamIDs []string) error {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return err
 	}
@@ -302,7 +302,7 @@ func (k *UserRepository) AssignTeamsToUser(ctx context.Context, userID string, t
 }
 
 func (k *UserRepository) RemoveTeamsFromUser(ctx context.Context, userID string, teamIDs []string) error {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return err
 	}
@@ -316,7 +316,7 @@ func (k *UserRepository) RemoveTeamsFromUser(ctx context.Context, userID string,
 }
 
 func (k *UserRepository) GetTeamsForUser(ctx context.Context, userID string) ([]*model.Team, error) {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +330,7 @@ func (k *UserRepository) GetTeamsForUser(ctx context.Context, userID string) ([]
 }
 
 func (k *UserRepository) AssignComputePlatformsToUser(ctx context.Context, userID string, computePlatformIDs []string) error {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return err
 	}
@@ -344,7 +344,7 @@ func (k *UserRepository) AssignComputePlatformsToUser(ctx context.Context, userI
 }
 
 func (k *UserRepository) RemoveComputePlatformsFromUser(ctx context.Context, userID string, computePlatformIDs []string) error {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return err
 	}
@@ -358,7 +358,7 @@ func (k *UserRepository) RemoveComputePlatformsFromUser(ctx context.Context, use
 }
 
 func (k *UserRepository) GetComputePlatformsForUser(ctx context.Context, userID string) ([]*model.ComputePlatform, error) {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -27,7 +27,7 @@ func NewTeamRepository(redisClient *redisclient.RedisClient, credentialsService 
 }
 
 func (k *TeamRepository) CheckTeamExists(ctx context.Context, teamNameOrTeamID string) (bool, error) {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -54,7 +54,7 @@ func (k *TeamRepository) CreateTeam(ctx context.Context, input *model.WriteTeamI
 		return nil, fmt.Errorf("team name is required")
 	}
 
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get admin token: %w", err)
 	}
@@ -77,7 +77,7 @@ func (k *TeamRepository) UpdateTeam(ctx context.Context, teamID string, input *m
 		return nil, fmt.Errorf("team name is required")
 	}
 
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get admin token: %w", err)
 	}
@@ -123,7 +123,7 @@ func (k *TeamRepository) GetTeams(ctx context.Context) ([]*model.Team, error) {
 }
 
 func (k *TeamRepository) GetTeamByID(ctx context.Context, teamID string) (*model.Team, error) {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func (k *TeamRepository) GetTeamByID(ctx context.Context, teamID string) (*model
 }
 
 func (k *TeamRepository) GetTeamByName(ctx context.Context, teamName string) (*model.Team, error) {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +186,7 @@ func (k *TeamRepository) GetTeamsByUserID(ctx context.Context, userID string) ([
 }
 
 func (k *TeamRepository) DeleteTeam(ctx context.Context, teamID string) (*model.GeneralResult, error) {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		errorMsg := err.Error()
 		return &model.GeneralResult{Success: false, Error: &errorMsg}, nil
@@ -202,7 +202,7 @@ func (k *TeamRepository) DeleteTeam(ctx context.Context, teamID string) (*model.
 }
 
 func (k *TeamRepository) AssignComputePlatformsToTeam(ctx context.Context, teamID string, computePlatformIDs []string) error {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return err
 	}
@@ -216,7 +216,7 @@ func (k *TeamRepository) AssignComputePlatformsToTeam(ctx context.Context, teamI
 }
 
 func (k *TeamRepository) RemoveComputePlatformsFromTeam(ctx context.Context, teamID string, computePlatformIDs []string) error {
-	adminToken, err := k.adminService.GetAdminToken(ctx)
+	adminToken, err := k.adminService.GetToken(ctx)
 	if err != nil {
 		return err
 	}

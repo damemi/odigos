@@ -13,7 +13,7 @@ type AuthResult struct {
 
 type AuthRepository interface {
 	AuthenticateUser(ctx context.Context, email, password string) (*AuthResult, error)
-	GetAdminTokenForInitialPassword(ctx context.Context) (string, error)
+	GetAdminToken(ctx context.Context) (string, error)
 	Logout(ctx context.Context, token string) error
 }
 

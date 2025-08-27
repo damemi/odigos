@@ -22,14 +22,14 @@ func NewAdminService(redisClient *redisclient.RedisClient, authRepo AuthReposito
 }
 
 func (a *AdminService) GetAdminTokenFromKeycloak(ctx context.Context) (string, error) {
-	adminToken, err := a.authRepo.GetAdminTokenForInitialPassword(ctx)
+	adminToken, err := a.authRepo.GetAdminToken(ctx)
 	if err != nil {
 		return "", err
 	}
 	return adminToken, nil
 }
 
-func (a *AdminService) GetAdminToken(ctx context.Context) (string, error) {
+func (a *AdminService) GetToken(ctx context.Context) (string, error) {
 	isInitialized, err := a.redisClient.GetSystemInitialized(ctx)
 	if err != nil {
 		logger.Log.Error("Failed to get system initialization status from cache", "error", err)
@@ -37,7 +37,7 @@ func (a *AdminService) GetAdminToken(ctx context.Context) (string, error) {
 	}
 
 	if !isInitialized {
-		return a.authRepo.GetAdminTokenForInitialPassword(ctx)
+		return a.authRepo.GetAdminToken(ctx)
 	}
 	if token := utils.GetTokenFromContext(ctx); token != "" {
 		if expired, _ := utils.IsTokenExpired(token); expired {

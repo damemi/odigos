@@ -72,7 +72,7 @@ func (a *AuthService) SignIn(ctx context.Context, email, password string) (*mode
 	if err != nil {
 
 		if strings.Contains(err.Error(), "password update required") {
-			adminToken, err := a.authRepo.GetAdminTokenForInitialPassword(ctx)
+			adminToken, err := a.authRepo.GetAdminToken(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get admin token for initial password setup: %w", err)
 			}
