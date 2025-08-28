@@ -219,8 +219,115 @@ func (g *GoOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, sdkConfig ins
 	if convertErr != nil {
 		return errors.Join(payloadCollectionErr, convertErr)
 	}
+	httpHeadersCollectionErr := g.configHttpHeadersCollection(sdkConfig)
+	if httpHeadersCollectionErr != nil {
+		return errors.Join(payloadCollectionErr, httpHeadersCollectionErr)
+	}
 
 	return g.cp.SendConfig(ctx, updatedConfig)
+}
+
+func mergeHttpHeadersCollectionrules(rule1 *instrumentationrules.HttpHeadersCollection, rule2 *instrumentationrules.HttpHeadersCollection) *instrumentationrules.HttpHeadersCollection {
+	if rule1 == nil {
+		return rule2
+	} else if rule2 == nil {
+		return rule1
+	}
+
+	mergedRules := instrumentationrules.HttpHeadersCollection{}
+
+	// Merge the headers collection rules
+	var mergedHeaders []string
+	if rule1.HeaderKeys != nil {
+		mergedHeaders = append(mergedHeaders, rule1.HeaderKeys...)
+	}
+
+	if rule2.HeaderKeys != nil {
+		mergedHeaders = append(mergedHeaders, rule2.HeaderKeys...)
+	}
+
+	mergedRules.HeaderKeys = mergedHeaders
+	return &mergedRules
+}
+
+func (g *GoOtelEbpfSdkEnterprise) configHttpHeadersCollection(config instrumentation.Config) error {
+	sdkConfig, ok := config.(*odigosv1.SdkConfig)
+	if !ok {
+		return fmt.Errorf("invalid config type, expected *odigosv1.SdkConfig, got %T", sdkConfig)
+	}
+	// We currntly support Content-Encoding and Content-Length and Content-Encoding
+	allkeys := []string{"content-encoding", "content-length", "content-type"}
+	// In case of default headers collection, we apply the config to all libraries that support headers collection
+	// Specific library configs will override the default config
+
+	// specific instructions for the go libraries:
+	// net/http server
+	libConfig := findInstrumentationLibraryConfig(sdkConfig, odigosv1.InstrumentationLibraryId{
+		InstrumentationLibraryName: "net/http",
+		SpanKind:                   common.ServerSpanKind,
+	})
+	var libHeadersCollection *instrumentationrules.HttpHeadersCollection
+	if libConfig != nil && libConfig.HeadersCollection != nil {
+		libHeadersCollection = libConfig.HeadersCollection
+	}
+	serverHeaders := mergeHttpHeadersCollectionrules(sdkConfig.DefaultHeadersCollection, libHeadersCollection)
+	if serverHeaders != nil {
+		// need to check if "*" is specified in either the default or specific library config and if so, replace the header keys with all supported keys
+		serverHeaders = checkForAllHeadersKey(serverHeaders, allkeys)
+		if serverHeaders != nil && serverHeaders.HeaderKeys != nil {
+			log.Logger.V(0).Info("Merging net/http server header keys with default header keys", "mergedHeaderKeys", serverHeaders.HeaderKeys)
+			for _, key := range serverHeaders.HeaderKeys {
+				log.Logger.V(0).Info("net/http server header key to collect", "headerKey", key)
+				err := g.configBool("net/http", fmt.Sprintf("http.header.%s", strings.ToLower(key)), trace.SpanKindServer, true)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	// net/http client
+	libConfig = findInstrumentationLibraryConfig(sdkConfig, odigosv1.InstrumentationLibraryId{
+		InstrumentationLibraryName: "net/http",
+		SpanKind:                   common.ClientSpanKind,
+	})
+	var libclientHeadersCollection *instrumentationrules.HttpHeadersCollection
+	if libConfig != nil && libConfig.HeadersCollection != nil {
+		libclientHeadersCollection = libConfig.HeadersCollection
+	}
+
+	clientHeaders := mergeHttpHeadersCollectionrules(sdkConfig.DefaultHeadersCollection, libclientHeadersCollection)
+
+	if clientHeaders != nil {
+		// need to check if "*" is specified in either the default or specific library config and if so, replace the header keys with all supported keys
+		clientHeaders = checkForAllHeadersKey(clientHeaders, allkeys)
+		if clientHeaders != nil && clientHeaders.HeaderKeys != nil {
+			log.Logger.V(0).Info("Merging net/http client header keys with default header keys", "mergedHeaderKeys", clientHeaders.HeaderKeys)
+			for _, key := range clientHeaders.HeaderKeys {
+				log.Logger.V(0).Info("net/http client header key to collect", "headerKey", key)
+				err := g.configBool("net/http", fmt.Sprintf("http.header.%s", strings.ToLower(key)), trace.SpanKindClient, true)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+func checkForAllHeadersKey(rule *instrumentationrules.HttpHeadersCollection, allkeys []string) *instrumentationrules.HttpHeadersCollection {
+	if rule == nil {
+		return rule
+	}
+	if rule.HeaderKeys != nil {
+		for _, key := range rule.HeaderKeys {
+			if key == "*" {
+				// if * is specified, we collect all supported headers
+				log.Logger.V(0).Info("Header key to collect is '*', collecting all supported headers")
+				rule.HeaderKeys = allkeys
+				break
+			}
+		}
+	}
+	return rule
 }
 
 func (g *GoOtelEbpfSdkEnterprise) configPayloadCollection(config instrumentation.Config) error {
@@ -241,11 +348,6 @@ func (g *GoOtelEbpfSdkEnterprise) configPayloadCollection(config instrumentation
 	if err != nil {
 		return err
 	}
-	err = g.configBool("net/http", "http.header.content-length", trace.SpanKindServer, collectResponseNetHttpServer)
-	if err != nil {
-		return err
-	}
-
 	// net/http client
 	payloadCollectionNetHttpClient := getPayloadCollectionConfig(sdkConfig, odigosv1.InstrumentationLibraryId{
 		InstrumentationLibraryName: "net/http",
@@ -256,10 +358,6 @@ func (g *GoOtelEbpfSdkEnterprise) configPayloadCollection(config instrumentation
 
 	log.Logger.V(0).Info("Applying config to golang net/http client", "collectResponse", collectResponseNetHttpClient, "collectRequest", collectRequestNetHttpClient)
 	err = g.configBool("net/http", "http.body", trace.SpanKindClient, collectRequestNetHttpClient)
-	if err != nil {
-		return err
-	}
-	err = g.configBool("net/http", "http.header.content-length", trace.SpanKindClient, collectResponseNetHttpClient)
 	if err != nil {
 		return err
 	}
@@ -395,7 +493,6 @@ func convertToGoInstrumentationConfig(sdkConfig instrumentation.Config) (goAutoC
 		if ilc.TraceConfig != nil {
 			tracesEnabled = ilc.TraceConfig.Enabled
 		}
-
 		// go config must get boolean (true or false), while odigos semantics allows also nil, which means "don't care" (use default or false).
 		// we resolve these here, to convert the odigos schema to the go instrumentation schema.
 		var codeAttributes *goAutoConfig.CodeAttributes
