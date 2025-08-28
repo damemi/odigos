@@ -6,7 +6,7 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/instrumentor v1.2.0-pre0
+	github.com/odigos-io/odigos/instrumentor v1.2.0-pre1
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5
 	k8s.io/client-go v0.33.1
 	sigs.k8s.io/controller-runtime v0.20.4
@@ -43,7 +43,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/odigos-io/odigos/api v1.0.199-0.20250618091037-fabcdd8b14ec // indirect
 	github.com/odigos-io/odigos/common v1.0.205-0.20250702105647-24f4dfd7631d // indirect
-	github.com/odigos-io/odigos/distros v1.2.0-pre0 // indirect
+	github.com/odigos-io/odigos/distros v1.2.0-pre1 // indirect
 	github.com/odigos-io/odigos/k8sutils v1.0.199-0.20250618091037-fabcdd8b14ec // indirect
 	github.com/open-policy-agent/cert-controller v0.12.1-0.20250516200449-317fe19e3eb5 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -95,8 +95,8 @@ replace (
 	github.com/odigos-io/odigos-enterprise/distros => ../distros
 	github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
-	github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.2.0-pre0
-	github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.2.0-pre0
-	github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.2.0-pre0
-	github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.2.0-pre0
+	github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.2.0-pre1
+	github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.2.0-pre1
+	github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.2.0-pre1
+	github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.2.0-pre1
 )
