@@ -21,7 +21,7 @@ interface UseDataStreamsCrud {
 export const useDataStreamsCRUD = (): UseDataStreamsCrud => {
   const { isReadonly } = useConfig();
   const { proxyID } = useProxyID();
-  const { fetchSourcesPaginated } = useSourceCRUD();
+  const { fetchSources } = useSourceCRUD();
   const { fetchDestinations } = useDestinationCRUD();
   const { addNotification } = useNotificationStore();
   const { dataStreams, setDataStreams, addDataStreams, removeDataStreams, dataStreamsLoading, setDataStreamsLoading, selectedStreamName, setSelectedStreamName } = useDataStreamStore();
@@ -76,7 +76,7 @@ export const useDataStreamsCRUD = (): UseDataStreamsCrud => {
 
         const switchToStream = selectedStreamName === oldStream?.name ? newStream.name : selectedStreamName;
         await fetchDestinations();
-        await fetchSourcesPaginated();
+        await fetchSources();
         await fetchDataStreams(switchToStream);
       }
     }
@@ -96,7 +96,7 @@ export const useDataStreamsCRUD = (): UseDataStreamsCrud => {
 
         const switchToStream = selectedStreamName === oldStream?.name ? DEFAULT_DATA_STREAM_NAME : selectedStreamName;
         await fetchDestinations();
-        await fetchSourcesPaginated();
+        await fetchSources();
         await fetchDataStreams(switchToStream);
       }
     }

@@ -1,31 +1,28 @@
 export const GET_SOURCES = `
-  query GetSources($nextPage: String!) {
+  query GetSources {
     computePlatform {
-      sources(nextPage: $nextPage) {
-        nextPage
-        items {
-          namespace
-          name
-          kind
-          dataStreamNames
-          selected
-          otelServiceName
-          containers {
-            containerName
-            language
-            runtimeVersion
-            overriden
-            instrumented
-            instrumentationMessage
-            otelDistroName
-          }
-          conditions {
-            status
-            type
-            reason
-            message
-            lastTransitionTime
-          }
+      sources {
+        namespace
+        name
+        kind
+        dataStreamNames
+        selected
+        otelServiceName
+        containers {
+          containerName
+          language
+          runtimeVersion
+          overriden
+          instrumented
+          instrumentationMessage
+          otelDistroName
+        }
+        conditions {
+          status
+          type
+          reason
+          message
+          lastTransitionTime
         }
       }
     }
@@ -58,7 +55,6 @@ export const GET_SOURCE = `
           message
           lastTransitionTime
         }
-      }
     }
   }
 `;

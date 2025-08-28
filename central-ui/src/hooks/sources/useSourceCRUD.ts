@@ -4,7 +4,7 @@ import { useConfig } from '../config';
 import { useNamespace } from '../namespaces';
 import { getSseTargetFromId } from '@odigos/ui-kit/functions';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
-import type { PaginatedData, SourceConditions, SourceInstrumentInput } from '@/types';
+import type { SourceConditions, SourceInstrumentInput } from '@/types';
 import { addConditionToSources, prepareNamespacePayloads, prepareSourcePayloads } from '@/utils';
 import { GET_SOURCE, GET_SOURCE_CONDITIONS, GET_SOURCE_LIBRARIES, GET_SOURCES, PERSIST_SOURCES, UPDATE_SOURCE } from '@/graphql';
 import { Crud, EntityTypes, StatusType, type SourceFormData, type Source, type WorkloadId, type InstrumentationInstanceComponent } from '@odigos/ui-kit/types';
@@ -22,7 +22,7 @@ import {
 interface UseSourceCrud {
   sources: Source[];
   sourcesLoading: boolean;
-  fetchSourcesPaginated: (getAll?: boolean, nextPage?: string) => Promise<void>;
+  fetchSources: () => Promise<void>;
   fetchSourceById: (id: WorkloadId, bypassPaginationLoader?: boolean) => Promise<Source | undefined>;
   fetchSourceLibraries: (req: { variables: WorkloadId }) => Promise<{ data?: { instrumentationInstanceComponents: InstrumentationInstanceComponent[] } }>;
   persistSources: (selectAppsList: SourceSelectionFormData, futureSelectAppsList: NamespaceSelectionFormData) => Promise<void>;
@@ -50,7 +50,7 @@ export const useSourceCRUD = (): UseSourceCrud => {
     });
   };
 
-  const { fetch: queryByPage } = useProxy<{ computePlatform?: { sources?: PaginatedData<Source> } }, { nextPage: string }>(GET_SOURCES);
+  const { fetch: queryAll } = useProxy<{ computePlatform?: { sources?: Source[] } }>(GET_SOURCES);
   const { fetch: queryById } = useProxy<{ computePlatform?: { source?: Source } }, { sourceId: WorkloadId }>(GET_SOURCE);
   const { fetch: mutatePersistSources } = useProxy<{ persistK8sSources: boolean }, SourceInstrumentInput>(PERSIST_SOURCES);
   const { fetch: mutateUpdate } = useProxy<{ updateK8sActualSource: boolean }, { sourceId: WorkloadId; patchSourceRequest: SourceFormData }>(UPDATE_SOURCE);
@@ -93,25 +93,20 @@ export const useSourceCRUD = (): UseSourceCrud => {
     }
   };
 
-  const fetchSourcesPaginated = async (getAll: boolean = true, page: string = '') => {
-    if (!shouldFetchSource(!!page)) return;
+  const fetchSources = async () => {
+    if (!shouldFetchSource()) return;
     setEntitiesLoading(EntityTypes.Source, true);
 
-    const { data } = await queryByPage({ nextPage: page });
+    const { data } = await queryAll();
+    const { sources } = data?.computePlatform || {};
 
-    if (data?.computePlatform?.sources) {
-      const { items, nextPage } = data.computePlatform.sources;
+    if (sources) {
+      addEntities(EntityTypes.Source, sources);
 
-      addEntities(EntityTypes.Source, items);
-
-      if (getAll && nextPage) {
-        fetchSourcesPaginated(true, nextPage);
-      } else if (useEntityStore.getState().sources.length >= useInstrumentStore.getState().sourcesToCreate) {
-        setEntitiesLoading(EntityTypes.Source, false);
-        setInstrumentCount('sourcesToCreate', 0);
-        setInstrumentCount('sourcesCreated', 0);
-        fetchAllConditions();
-      }
+      setEntitiesLoading(EntityTypes.Source, false);
+      setInstrumentCount('sourcesToCreate', 0);
+      setInstrumentCount('sourcesCreated', 0);
+      if (sources.length) fetchAllConditions();
     }
   };
 
@@ -174,14 +169,14 @@ export const useSourceCRUD = (): UseSourceCrud => {
   };
 
   useEffect(() => {
-    if (!sources.length && !sourcesLoading) fetchSourcesPaginated();
+    if (!sources.length && !sourcesLoading) fetchSources();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return {
     sources,
     sourcesLoading,
-    fetchSourcesPaginated,
+    fetchSources,
     fetchSourceById,
     fetchSourceLibraries: (req) => querySourceLibraries(req.variables),
     persistSources,

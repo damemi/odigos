@@ -3,7 +3,7 @@ package version
 import "golang.org/x/mod/semver"
 
 const (
-	MinSupportedVersion = "v1.0.220"
+	MinSupportedVersion = "v1.2.0"
 	MaxSupportedVersion = ""
 )
 
