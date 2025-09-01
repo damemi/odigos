@@ -170,14 +170,28 @@ func (r *queryResolver) ComputePlatforms(ctx context.Context) ([]*model.ComputeP
 			logger.Log.Error("Failed to get proxy connection status", "proxyID", proxyID, "error", err)
 			continue
 		}
-		clusterName := "unknown"
-		if name, ok := r.WebSocketServer.GetClusterName(proxyID); ok {
-			clusterName = name
+		platformName := "unknown"
+		if name, ok := r.WebSocketServer.GetPlatformName(proxyID); ok {
+			platformName = name
 		}
+
+		platformType := model.PlatformTypeK8s
+		if pType, ok := r.WebSocketServer.GetPlatformType(proxyID); ok {
+			switch pType {
+			case consts.PlatformTypeK8sString:
+				platformType = model.PlatformTypeK8s
+			case consts.PlatformTypeVMString:
+				platformType = model.PlatformTypeVM
+			default:
+				logger.Log.Warn("Unknown platform type, defaulting to k8s", "proxyID", proxyID, "platformType", pType)
+				platformType = model.PlatformTypeK8s
+			}
+		}
+
 		cpMap[proxyID] = &model.ComputePlatform{
 			ID:     proxyID,
-			Name:   clusterName,
-			Type:   model.PlatformTypeK8s,
+			Name:   platformName,
+			Type:   platformType,
 			Status: status,
 			Users:  []*model.User{},
 			Teams:  []*model.Team{},
@@ -193,10 +207,11 @@ func (r *queryResolver) ComputePlatforms(ctx context.Context) ([]*model.ComputeP
 		for _, cp := range user.ComputePlatforms {
 			// Ensure the compute platform exists in the map even if it has no active connection
 			if _, exists := cpMap[cp.ID]; !exists {
+				// For disconnected platforms, we can't determine the type, so default to k8s
 				cpMap[cp.ID] = &model.ComputePlatform{
 					ID:     cp.ID,
 					Name:   "unknown",
-					Type:   model.PlatformTypeK8s,
+					Type:   model.PlatformTypeK8s, // Default when connection info is not available
 					Status: "disconnected",
 					Users:  []*model.User{},
 					Teams:  []*model.Team{},
@@ -217,10 +232,11 @@ func (r *queryResolver) ComputePlatforms(ctx context.Context) ([]*model.ComputeP
 		for _, cp := range team.ComputePlatforms {
 			// Ensure the compute platform exists in the map even if it has no active connection
 			if _, exists := cpMap[cp.ID]; !exists {
+				// For disconnected platforms, we can't determine the type, so default to k8s
 				cpMap[cp.ID] = &model.ComputePlatform{
 					ID:     cp.ID,
 					Name:   "unknown",
-					Type:   model.PlatformTypeK8s,
+					Type:   model.PlatformTypeK8s, // Default when connection info is not available
 					Status: "disconnected",
 					Users:  []*model.User{},
 					Teams:  []*model.Team{},

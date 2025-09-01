@@ -18,11 +18,13 @@ import (
 )
 
 const ProxyIDQueryParam = "proxyID"
-const ClusterNameQueryParam = "clusterName"
+const PlatformNameQueryParam = "platformName"
+const PlatformTypeQueryParam = "platformType"
 
 type ProxyConnection struct {
-	Conn        *websocket.Conn
-	ClusterName string
+	Conn         *websocket.Conn
+	PlatformName string
+	PlatformType string
 }
 
 type WebSocketServer struct {
@@ -55,9 +57,16 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	clusterName := r.URL.Query().Get(ClusterNameQueryParam)
-	if clusterName == "" {
-		logger.Log.Warn("clusterName not provided for proxyID", "proxyID", proxyID)
+	platformName := r.URL.Query().Get(PlatformNameQueryParam)
+	if platformName == "" {
+		logger.Log.Warn("platformName not provided for proxyID", "proxyID", proxyID)
+	}
+
+	platformType := r.URL.Query().Get(PlatformTypeQueryParam)
+	if platformType == "" {
+		// Default to k8s for backward compatibility
+		platformType = consts.PlatformTypeK8sString
+		logger.Log.Warn("platformType not provided for proxyID, defaulting to k8s", "proxyID", proxyID)
 	}
 
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
@@ -74,8 +83,9 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 	conn.SetReadLimit(maxMessageSize)
 
 	ws.proxyConnections.Store(proxyID, &ProxyConnection{
-		Conn:        conn,
-		ClusterName: clusterName,
+		Conn:         conn,
+		PlatformName: platformName,
+		PlatformType: platformType,
 	})
 	defer ws.cleanupConnection(ctx, proxyID)
 
@@ -114,7 +124,7 @@ func (ws *WebSocketServer) cleanupConnection(ctx context.Context, proxyID string
 	connVal, ok := ws.proxyConnections.Load(proxyID)
 	if ok {
 		proxyConn := connVal.(*ProxyConnection)
-		logger.Log.Info("Cleaning up connection", "proxyID", proxyID, "clusterName", proxyConn.ClusterName)
+		logger.Log.Info("Cleaning up connection", "proxyID", proxyID, "platformName", proxyConn.PlatformName, "platformType", proxyConn.PlatformType)
 	}
 	ws.proxyConnections.Delete(proxyID)
 
@@ -151,7 +161,7 @@ func (ws *WebSocketServer) SendGraphQLRequest(ctx context.Context, proxyID strin
 	return conn.Write(ctx, websocket.MessageText, jsonMsg)
 }
 
-func (ws *WebSocketServer) GetClusterName(proxyID string) (string, bool) {
+func (ws *WebSocketServer) GetPlatformName(proxyID string) (string, bool) {
 	connValue, ok := ws.proxyConnections.Load(proxyID)
 	if !ok {
 		return "", false
@@ -162,5 +172,19 @@ func (ws *WebSocketServer) GetClusterName(proxyID string) (string, bool) {
 		return "", false
 	}
 
-	return proxyConn.ClusterName, true
+	return proxyConn.PlatformName, true
+}
+
+func (ws *WebSocketServer) GetPlatformType(proxyID string) (string, bool) {
+	connValue, ok := ws.proxyConnections.Load(proxyID)
+	if !ok {
+		return "", false
+	}
+
+	proxyConn, ok := connValue.(*ProxyConnection)
+	if !ok {
+		return "", false
+	}
+
+	return proxyConn.PlatformType, true
 }

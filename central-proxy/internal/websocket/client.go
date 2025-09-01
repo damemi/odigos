@@ -10,11 +10,13 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/odigos-io/central-proxy/internal/config"
+	"github.com/odigos-io/central-proxy/internal/consts"
 	"github.com/odigos-io/central-proxy/internal/graphql"
 	"github.com/odigos-io/central-proxy/internal/logger"
 	"github.com/odigos-io/central-proxy/kube"
 )
 
+// NewWebSocketClient creates a WebSocket client
 func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, clusterName string) (*WebSocketClient, error) {
 	proxyID, err := config.GetOdigosDeploymentId(ctx, client)
 	if err != nil {
@@ -30,7 +32,7 @@ func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, 
 		Scheme:   "ws",
 		Host:     wsURL,
 		Path:     "/ws/proxy",
-		RawQuery: fmt.Sprintf("proxyID=%s&clusterName=%s&version=%s", proxyID, clusterName, proxyVersion),
+		RawQuery: fmt.Sprintf("proxyID=%s&platformName=%s&version=%s&platformType=%s", proxyID, clusterName, proxyVersion, consts.PlatformTypeK8sString),
 	}
 	conn, _, err := websocket.Dial(ctx, u.String(), &websocket.DialOptions{})
 	if err != nil {
@@ -146,7 +148,7 @@ func (w *WebSocketClient) handleReconnect(kubeClient *kube.Client) *websocket.Co
 		Scheme:   "ws",
 		Host:     w.url,
 		Path:     "/ws/proxy",
-		RawQuery: fmt.Sprintf("proxyID=%s&clusterName=%s&version=%s", proxyID, clusterName, proxyVersion),
+		RawQuery: fmt.Sprintf("proxyID=%s&platformName=%s&version=%s&platformType=%s", proxyID, clusterName, proxyVersion, consts.PlatformTypeK8sString),
 	}
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
