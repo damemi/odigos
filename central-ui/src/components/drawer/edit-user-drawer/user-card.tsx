@@ -1,5 +1,5 @@
 import React, { type FC } from 'react';
-import type { Role, User } from '@/types';
+import { Role, User } from '@/types';
 import { DataCard, Dropdown, Text } from '@odigos/ui-kit/components';
 import { DataCardCellStretch, DataCardCellTitle, DataCardContentRow, DataCardContentCell } from '../cards/styled';
 import { CREATE_USER_ROLE_LABEL, ROLE_COLUMN, ROLE_OPTIONS, TEAMS_COUNT, TEAMS_TAB } from '@/utils';
@@ -29,6 +29,7 @@ const UserCard: FC<UserCardProps> = ({ user, formData, handleFormChange }) => {
             <Dropdown
               placeholder={CREATE_USER_ROLE_LABEL}
               options={ROLE_OPTIONS}
+              disabled={user.role !== Role.ADMIN}
               value={ROLE_OPTIONS.find(({ id }) => id === formData.role)}
               onSelect={(opt) => handleFormChange('role', opt.id)}
               onDeselect={() => {}}
