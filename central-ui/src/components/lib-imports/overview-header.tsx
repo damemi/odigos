@@ -5,7 +5,7 @@ import { AccountMenu } from '../account-menu';
 import { StatusType } from '@odigos/ui-kit/types';
 import { FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { ConnectionSelect } from '../connection-select';
-import { ACCESS_MANAGEMENT_TITLE, ROUTES } from '@/utils';
+import { ACCESS_MANAGEMENT, ROUTES } from '@/utils';
 import { OdigosLogoText, UserSettingsIcon } from '@odigos/ui-kit/icons';
 import { useConfig, useDescribe, useOdigosConfigCRUD, useProxyID, useTokenCRUD } from '@/hooks';
 import { Header, IconButton, Status, Tag, Tooltip } from '@odigos/ui-kit/components';
@@ -52,7 +52,7 @@ const OverviewHeader = () => {
 
     arr.push(
       ...[
-        <IconButton key='access-management' tooltip={ACCESS_MANAGEMENT_TITLE} onClick={onClickAccessManagement}>
+        <IconButton key='access-management' tooltip={ACCESS_MANAGEMENT} onClick={onClickAccessManagement}>
           <UserSettingsIcon />
         </IconButton>,
         <SlackInvite key='slack-invite' />,

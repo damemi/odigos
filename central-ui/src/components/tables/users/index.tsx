@@ -66,12 +66,12 @@ export const UsersTable: React.FC = () => {
   const columns = useMemo(
     () => [
       { key: UserTableColumn.Icon, title: '' },
-      { key: UserTableColumn.User, title: UTILS.USERS_TAB, sortable: true },
-      { key: UserTableColumn.Role, title: UTILS.ROLE_COLUMN, sortable: true },
-      { key: UserTableColumn.Teams, title: UTILS.TEAMS_TAB, sortable: true },
+      { key: UserTableColumn.User, title: UTILS.USERS, sortable: true },
+      { key: UserTableColumn.Role, title: UTILS.ROLE, sortable: true },
+      { key: UserTableColumn.Teams, title: UTILS.TEAMS, sortable: true },
       // TODO: uncomment when user attributes are implemented
-      // { key: UserTableColumn.Platforms, title: UTILS.COMPUTE_PLATFORMS_TAB, sortable: true },
-      ...(isAdmin ? [{ key: UserTableColumn.Actions, title: UTILS.ACTIONS_COLUMN }] : []),
+      // { key: UserTableColumn.Platforms, title: UTILS.COMPUTE_PLATFORMS, sortable: true },
+      ...(isAdmin ? [{ key: UserTableColumn.Actions, title: UTILS.ACTIONS }] : []),
     ],
     [isAdmin],
   );

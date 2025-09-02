@@ -50,11 +50,11 @@ export const CreateTeamForm: React.FC<CreateTeamFormProps> = ({ formData, errors
             onChange={(e) => onChange(CreateTeamFormField.Name, e.target.value)}
             placeholder={STRINGS.TEAM_NAME_PLACEHOLDER}
           />
-          {errors[CreateTeamFormField.Name] && <NotificationNote type={StatusType.Error} title={STRINGS.ERROR_TITLE} message={errors[CreateTeamFormField.Name]} />}
+          {errors[CreateTeamFormField.Name] && <NotificationNote type={StatusType.Error} title={STRINGS.ERROR} message={errors[CreateTeamFormField.Name]} />}
         </Half>
         <Half>
           <Dropdown
-            title={STRINGS.MEMBERS_LABEL}
+            title={STRINGS.MEMBERS}
             required
             value={formData[CreateTeamFormField.Members]}
             onSelect={(value) => onChange(CreateTeamFormField.Members, formData[CreateTeamFormField.Members].concat([value]))}
@@ -65,14 +65,14 @@ export const CreateTeamForm: React.FC<CreateTeamFormProps> = ({ formData, errors
               )
             }
             options={membersOptions}
-            placeholder={STRINGS.MEMBERS_PLACEHOLDER}
+            placeholder={STRINGS.CHOOSE_MEMBER}
             isMulti
           />
         </Half>
       </Row>
       <Row>
         <Dropdown
-          title={STRINGS.COMPUTE_PLATFORM_LABEL}
+          title={STRINGS.COMPUTE_PLATFORM}
           value={formData[CreateTeamFormField.ComputePlatforms]}
           onSelect={(value) => onChange(CreateTeamFormField.ComputePlatforms, formData[CreateTeamFormField.ComputePlatforms].concat([value]))}
           onDeselect={(value) =>
@@ -82,7 +82,7 @@ export const CreateTeamForm: React.FC<CreateTeamFormProps> = ({ formData, errors
             )
           }
           options={platformsOptions}
-          placeholder={STRINGS.COMPUTE_PLATFORM_PLACEHOLDER}
+          placeholder={STRINGS.CHOOSE_COMPUTE_PLATFORM}
           isMulti
         />
       </Row>
@@ -91,12 +91,12 @@ export const CreateTeamForm: React.FC<CreateTeamFormProps> = ({ formData, errors
           title={STRINGS.DESCRIPTION}
           value={formData[CreateTeamFormField.Description]}
           onChange={(e) => onChange(CreateTeamFormField.Description, e.target.value)}
-          placeholder={STRINGS.CREATE_TEAM_FORM_DESCRIPTION_PLACEHOLDER}
+          placeholder={STRINGS.NOTES}
         />
       </Row>
       <ButtonContainer>
         <CreateButton type='submit' disabled={isSubmitDisabled}>
-          {creating ? STRINGS.CREATING : STRINGS.CREATE_TEAM_SUBMIT}
+          {creating ? STRINGS.CREATING : STRINGS.CREATE_TEAM}
         </CreateButton>
       </ButtonContainer>
     </Form>

@@ -1,7 +1,7 @@
 import React, { type FC } from 'react';
 import type { Team } from '@/types';
 import { DataCard, Text, TextArea } from '@odigos/ui-kit/components';
-import { COMPUTE_PLATFORMS_TAB, DESCRIPTION, MEMBERS_COUNT, MEMBERS_LABEL, PLATFORMS_COUNT } from '@/utils';
+import { COMPUTE_PLATFORMS, DESCRIPTION, MEMBERS_COUNT, MEMBERS, PLATFORMS_COUNT } from '@/utils';
 import { DataCardCellStretch, DataCardCellTitle, DataCardContentRow, DataCardContentCell } from '../cards/styled';
 
 interface FormData {
@@ -29,11 +29,11 @@ const TeamCard: FC<TeamCardProps> = ({ team, formData, handleFormChange }) => {
           </DataCardCellStretch>
         </DataCardContentCell>
         <DataCardContentCell>
-          <DataCardCellTitle>{MEMBERS_LABEL}</DataCardCellTitle>
+          <DataCardCellTitle>{MEMBERS}</DataCardCellTitle>
           <Text>{MEMBERS_COUNT(usersCount)}</Text>
         </DataCardContentCell>
         <DataCardContentCell>
-          <DataCardCellTitle>{COMPUTE_PLATFORMS_TAB}</DataCardCellTitle>
+          <DataCardCellTitle>{COMPUTE_PLATFORMS}</DataCardCellTitle>
           <Text>{PLATFORMS_COUNT(platformsCount)}</Text>
         </DataCardContentCell>
       </DataCardContentRow>

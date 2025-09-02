@@ -38,9 +38,9 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClos
   const validateForm = (): boolean => {
     const newErrors: typeof formErrors = {};
     if (!formData[CreateUserFormField.Email]) {
-      newErrors[CreateUserFormField.Email] = STRINGS.CREATE_USER_EMAIL_REQUIRED;
+      newErrors[CreateUserFormField.Email] = STRINGS.EMAIL_REQUIRED;
     } else if (!/\S+@\S+\.\S+/.test(formData[CreateUserFormField.Email])) {
-      newErrors[CreateUserFormField.Email] = STRINGS.CREATE_USER_EMAIL_INVALID;
+      newErrors[CreateUserFormField.Email] = STRINGS.EMAIL_INVALID;
     }
     handleErrorChange(undefined, undefined, newErrors);
     return Object.keys(newErrors).length === 0;
@@ -90,7 +90,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClos
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} header={{ title: STRINGS.CREATE_USER_MODAL_TITLE }}>
+    <Modal isOpen={isOpen} onClose={handleClose} header={{ title: STRINGS.CREATE_USER }}>
       <ModalContent>
         {modalState === CreateUserModalState.Form ? (
           <CreateUserForm formData={formData} errors={formErrors} creating={creating} onChange={handleInputChange} onSubmit={handleSubmit} />

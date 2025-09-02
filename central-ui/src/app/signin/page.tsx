@@ -30,8 +30,8 @@ export default function SignInPage() {
           {/* TODO: need to be bigger by design*/}
           <OdigosLogo />
         </CenterThis>
-        <Title>{isFirstTime ? STRINGS.SIGNUP_TITLE : STRINGS.SIGNIN_TITLE}</Title>
-        <Subtitle>{isFirstTime ? STRINGS.SIGNUP_SUBTITLE : STRINGS.SIGNIN_SUBTITLE}</Subtitle>
+        <Title>{isFirstTime ? STRINGS.SIGN_UP : STRINGS.SIGN_IN}</Title>
+        <Subtitle>{isFirstTime ? STRINGS.SIGN_UP_SUBTITLE : STRINGS.SIGN_IN_SUBTITLE}</Subtitle>
         <AuthForm isFirstTime={!!isFirstTime} onSubmit={handleSubmit} loading={loading} error={error} />
       </Card>
     </Container>

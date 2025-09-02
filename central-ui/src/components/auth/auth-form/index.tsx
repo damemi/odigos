@@ -30,23 +30,16 @@ const AuthForm: React.FC<AuthFormProps> = ({ isFirstTime, onSubmit, loading, err
 
   return (
     <Form onSubmit={handleSubmit}>
-      <Input title={STRINGS.EMAIL_LABEL} required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={STRINGS.EMAIL_LABEL} type='email' />
-      {isFirstTime && <NotificationNote type={StatusType.Default} title={STRINGS.ADMIN_NOTE_TITLE} />}
-      <Input title={STRINGS.PASSWORD_LABEL} required value={password} onChange={(e) => setPassword(e.target.value)} placeholder={STRINGS.PASSWORD_LABEL} type={'password'} />
+      <Input title={STRINGS.EMAIL} required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={STRINGS.EMAIL} type='email' />
+      {isFirstTime && <NotificationNote type={StatusType.Default} title={STRINGS.SIGN_UP_ADMIN_DISCLAIMER} />}
+      <Input title={STRINGS.PASSWORD} required value={password} onChange={(e) => setPassword(e.target.value)} placeholder={STRINGS.PASSWORD} type={'password'} />
       {isFirstTime && (
-        <Input
-          title={STRINGS.CONFIRM_PASSWORD_LABEL}
-          required
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          placeholder={STRINGS.CONFIRM_PASSWORD_LABEL}
-          type={'password'}
-        />
+        <Input title={STRINGS.CONFIRM_PASSWORD} required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder={STRINGS.CONFIRM_PASSWORD} type={'password'} />
       )}
-      {error && <NotificationNote type={StatusType.Error} title={STRINGS.AUTH_ERROR_TITLE} message={error} />}
+      {error && <NotificationNote type={StatusType.Error} title={STRINGS.AUTH_ERROR} message={error} />}
       <CenterThis>
         <StyledButton type='submit' disabled={isButtonDisabled}>
-          {isFirstTime ? STRINGS.SIGNUP_BUTTON : STRINGS.SIGNIN_BUTTON}
+          {isFirstTime ? STRINGS.SIGN_UP : STRINGS.SIGN_IN}
         </StyledButton>
       </CenterThis>
     </Form>

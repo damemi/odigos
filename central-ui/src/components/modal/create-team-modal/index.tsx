@@ -80,7 +80,7 @@ export const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClos
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} header={{ title: STRINGS.CREATE_TEAM_MODAL_TITLE }}>
+    <Modal isOpen={isOpen} onClose={handleClose} header={{ title: STRINGS.CREATE_TEAM }}>
       <ModalContent>
         {modalState === CreateTeamModalState.Form ? (
           <CreateTeamForm formData={formData} errors={formErrors} creating={creating} onChange={handleInputChange} onSubmit={handleSubmit} />

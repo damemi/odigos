@@ -45,22 +45,22 @@ export const CreateUserForm: React.FC<CreateUserFormProps> = ({ formData, errors
       <Row>
         <Half>
           <Input
-            title={STRINGS.CREATE_USER_EMAIL_LABEL}
+            title={STRINGS.EMAIL}
             required
             value={formData[CreateUserFormField.Email]}
             onChange={(e) => onChange(CreateUserFormField.Email, e.target.value)}
             placeholder={STRINGS.EMAIL_PLACEHOLDER}
             type='email'
           />
-          {errors[CreateUserFormField.Email] && <NotificationNote type={StatusType.Error} title={STRINGS.ERROR_TITLE} message={errors[CreateUserFormField.Email]} />}
+          {errors[CreateUserFormField.Email] && <NotificationNote type={StatusType.Error} title={STRINGS.ERROR} message={errors[CreateUserFormField.Email]} />}
         </Half>
         <Half>
           <Dropdown
-            title={STRINGS.CREATE_USER_ROLE_LABEL + ' *'}
+            title={STRINGS.ROLE + ' *'}
             value={formData[CreateUserFormField.Role]}
             onSelect={(option) => onChange(CreateUserFormField.Role, option as DropdownOption<Role>)}
             options={ROLE_OPTIONS}
-            placeholder={STRINGS.CREATE_USER_ROLE_LABEL}
+            placeholder={STRINGS.ROLE}
             required
           />
         </Half>
@@ -68,7 +68,7 @@ export const CreateUserForm: React.FC<CreateUserFormProps> = ({ formData, errors
       <Row>
         <Half>
           <Dropdown
-            title={STRINGS.TEAMS_LABEL}
+            title={STRINGS.TEAMS}
             value={formData[CreateUserFormField.Teams]}
             onSelect={(value) => onChange(CreateUserFormField.Teams, formData[CreateUserFormField.Teams].concat([value]))}
             onDeselect={(value) =>
@@ -78,14 +78,14 @@ export const CreateUserForm: React.FC<CreateUserFormProps> = ({ formData, errors
               )
             }
             options={teamOptions}
-            placeholder={STRINGS.TEAMS_PLACEHOLDER}
+            placeholder={STRINGS.CHOOSE_TEAM}
             isMulti
           />
         </Half>
       </Row>
       <ButtonContainer>
         <CreateButton type='submit' disabled={isSubmitDisabled}>
-          {creating ? STRINGS.CREATING : STRINGS.CREATE_USER_SUBMIT}
+          {creating ? STRINGS.CREATING : STRINGS.CREATE_USER}
         </CreateButton>
       </ButtonContainer>
     </Form>

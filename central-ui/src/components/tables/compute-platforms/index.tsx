@@ -47,9 +47,9 @@ export const ComputePlatformsTable: React.FC = () => {
     { key: ComputePlatformsTableColumn.Name, title: UTILS.NAME, sortable: true },
     { key: ComputePlatformsTableColumn.Type, title: UTILS.TYPE, sortable: true },
     // TODO: uncomment when user attributes are implemented
-    // { key: ComputePlatformsTableColumn.Members, title: UTILS.MEMBERS_LABEL, sortable: true },
-    { key: ComputePlatformsTableColumn.Teams, title: UTILS.TEAMS_TAB, sortable: true },
-    { key: ComputePlatformsTableColumn.Actions, title: UTILS.ACTIONS_COLUMN },
+    // { key: ComputePlatformsTableColumn.Members, title: UTILS.MEMBERS, sortable: true },
+    { key: ComputePlatformsTableColumn.Teams, title: UTILS.TEAMS, sortable: true },
+    { key: ComputePlatformsTableColumn.Actions, title: UTILS.ACTIONS },
   ];
 
   const rows = useMemo(

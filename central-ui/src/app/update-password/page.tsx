@@ -50,23 +50,16 @@ export default function UpdatePasswordPage() {
         <CenterThis>
           <OdigosLogo />
         </CenterThis>
-        <Title>{STRINGS.UPDATE_PASSWORD_TITLE}</Title>
+        <Title>{STRINGS.UPDATE_YOUR_PASSWORD}</Title>
         <Subtitle>{STRINGS.UPDATE_PASSWORD_SUBTITLE}</Subtitle>
         <Form onSubmit={handleSubmit}>
-          <Input title={STRINGS.EMAIL_LABEL} required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={STRINGS.EMAIL_PLACEHOLDER} type='email' />
-          <Input title={STRINGS.NEW_PASSWORD_LABEL} required value={password} onChange={(e) => setPassword(e.target.value)} placeholder={STRINGS.NEW_PASSWORD_PLACEHOLDER} type='password' />
-          <Input
-            title={STRINGS.CONFIRM_PASSWORD_LABEL}
-            required
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder={STRINGS.CONFIRM_PASSWORD_PLACEHOLDER}
-            type='password'
-          />
-          {(formError || error) && <NotificationNote type={StatusType.Error} title={STRINGS.AUTH_ERROR_TITLE} message={(formError || error) ?? ''} />}
+          <Input title={STRINGS.EMAIL} required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={STRINGS.EMAIL_PLACEHOLDER} type='email' />
+          <Input title={STRINGS.NEW_PASSWORD} required value={password} onChange={(e) => setPassword(e.target.value)} placeholder={STRINGS.PASSWORD_PLACEHOLDER} type='password' />
+          <Input title={STRINGS.CONFIRM_PASSWORD} required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder={STRINGS.PASSWORD_PLACEHOLDER} type='password' />
+          {(formError || error) && <NotificationNote type={StatusType.Error} title={STRINGS.AUTH_ERROR} message={(formError || error) ?? ''} />}
           <CenterThis>
             <UpdatePasswordButton type='submit' disabled={isButtonDisabled}>
-              {loading ? STRINGS.UPDATING_PASSWORD_BUTTON : STRINGS.UPDATE_PASSWORD_BUTTON}
+              {loading ? STRINGS.UPDATING : STRINGS.UPDATE_PASSWORD}
             </UpdatePasswordButton>
           </CenterThis>
         </Form>

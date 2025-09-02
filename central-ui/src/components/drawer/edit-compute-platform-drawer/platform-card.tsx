@@ -1,7 +1,7 @@
 import React, { type FC } from 'react';
 import type { ComputePlatform } from '@/types';
 import { DataCard, Text } from '@odigos/ui-kit/components';
-import { MEMBERS_COUNT, TEAMS_TAB, TYPE } from '@/utils';
+import { MEMBERS_COUNT, TEAMS, TYPE } from '@/utils';
 import { DataCardCellTitle, DataCardContentRow, DataCardContentCell } from '../cards/styled';
 
 interface PlatformCardProps {
@@ -22,11 +22,11 @@ const PlatformCard: FC<PlatformCardProps> = ({ computePlatform }) => {
         </DataCardContentCell>
         {/* TODO: uncomment when user attributes are implemented */}
         {/* <DataCardContentCell>
-          <DataCardCellTitle>{USERS_TAB}</DataCardCellTitle>
+          <DataCardCellTitle>{USERS}</DataCardCellTitle>
           <Text>{USERS_COUNT(usersCount)}</Text>
         </DataCardContentCell> */}
         <DataCardContentCell>
-          <DataCardCellTitle>{TEAMS_TAB}</DataCardCellTitle>
+          <DataCardCellTitle>{TEAMS}</DataCardCellTitle>
           <Text>{MEMBERS_COUNT(teamsCount)}</Text>
         </DataCardContentCell>
       </DataCardContentRow>

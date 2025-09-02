@@ -26,7 +26,7 @@ export const useAuth = () => {
           router.push(ROUTES.CONNECTIONS);
           break;
         case SignInStatus.PASSWORD_UPDATE_REQUIRED:
-          router.push(ROUTES.UPDATE_PASSWORD);
+          router.push(ROUTES.UPDATE_YOUR_PASSWORD);
           break;
       }
     },

@@ -66,9 +66,9 @@ export const TeamsTable: React.FC = () => {
     { key: TeamsTableColumn.Icon, title: '' },
     { key: TeamsTableColumn.Name, title: UTILS.NAME, sortable: true },
     { key: TeamsTableColumn.Description, title: UTILS.DESCRIPTION, sortable: true },
-    { key: TeamsTableColumn.Members, title: UTILS.MEMBERS_LABEL, sortable: true },
-    { key: TeamsTableColumn.Platforms, title: UTILS.COMPUTE_PLATFORMS_TAB, sortable: true },
-    { key: TeamsTableColumn.Actions, title: UTILS.ACTIONS_COLUMN },
+    { key: TeamsTableColumn.Members, title: UTILS.MEMBERS, sortable: true },
+    { key: TeamsTableColumn.Platforms, title: UTILS.COMPUTE_PLATFORMS, sortable: true },
+    { key: TeamsTableColumn.Actions, title: UTILS.ACTIONS },
   ];
 
   const rows = useMemo(
