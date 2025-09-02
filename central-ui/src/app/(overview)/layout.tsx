@@ -9,8 +9,8 @@ import { DATA_FLOW_HEIGHT, MENU_BAR_HEIGHT, ROUTES } from '@/utils';
 import { EntityTypes, OtherEntityTypes } from '@odigos/ui-kit/types';
 import { OverviewHeader, OverviewModalsAndDrawers } from '@/components';
 import { useDataStreamsCRUD, useProxyID, useTokenTracker } from '@/hooks';
+import { ErrorBoundary, FlexColumn, type NavIcon } from '@odigos/ui-kit/components';
 import { DataFlowActionsMenu, NavIconIds, SideNav } from '@odigos/ui-kit/containers';
-import { ErrorBoundary, FlexColumn, FlexRow, type NavIcon } from '@odigos/ui-kit/components';
 
 enum OtherNavIconIds {
   ServiceMap = 'service-map',
@@ -29,11 +29,12 @@ const ContentWithActions = styled.div<{ $height: CSSProperties['height'] }>`
   position: relative;
 `;
 
-const ContentUnderActions = styled(FlexRow)`
-  align-items: flex-start !important;
+const ContentUnderActions = styled.div`
+  gap: 12px;
+  display: flex;
   justify-content: space-between;
-  padding-left: 12px;
-  width: calc(100% - 12px);
+  padding: 0 12px;
+  width: calc(100% - 24px);
 `;
 
 const getEntityType = (pathname: string, proxyID: string) => {
