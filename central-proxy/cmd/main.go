@@ -8,6 +8,7 @@ import (
 
 	"github.com/odigos-io/central-proxy/internal/config"
 	"github.com/odigos-io/central-proxy/internal/logger"
+	"github.com/odigos-io/central-proxy/internal/sseforwarder"
 	websocketserver "github.com/odigos-io/central-proxy/internal/websocket"
 	"github.com/odigos-io/central-proxy/kube"
 )
@@ -33,6 +34,9 @@ func main() {
 		logger.Fatal("Failed to init WebSocket Client", err)
 	}
 	go wsClient.Run(client)
+
+	// Start SSE forwarder (connects to frontend backend and forwards over WS)
+	sseforwarder.Start(ctx, wsClient)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)

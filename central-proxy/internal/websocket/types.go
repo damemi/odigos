@@ -12,6 +12,7 @@ type WebSocketMessageType string
 const (
 	MessageTypeGraphQLQuery    WebSocketMessageType = "graphql_query"
 	MessageTypeGraphQLResponse WebSocketMessageType = "graphql_response"
+	MessageTypeSSEEvent        WebSocketMessageType = "sse_event"
 )
 
 type WebSocketClient struct {

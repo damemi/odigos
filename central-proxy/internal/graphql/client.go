@@ -2,10 +2,9 @@ package graphql
 
 import (
 	"context"
-	"os"
-	"strings"
 
 	"github.com/machinebox/graphql"
+	"github.com/odigos-io/central-proxy/internal/config"
 )
 
 type GraphQLClient struct {
@@ -13,16 +12,7 @@ type GraphQLClient struct {
 }
 
 func NewGraphQLClient() *GraphQLClient {
-	frontendBackendURL := os.Getenv("FRONTEND_BACKEND_URL")
-	if frontendBackendURL == "" {
-		if os.Getenv("KUBERNETES_SERVICE_HOST") == "" {
-			frontendBackendURL = "http://localhost:8085/graphql"
-		} else {
-			frontendBackendURL = "http://ui.odigos-system:3000/graphql"
-		}
-	}
-
-	client := graphql.NewClient(frontendBackendURL)
+	client := graphql.NewClient(config.FrontendGraphQLURL())
 
 	return &GraphQLClient{client: client}
 }
@@ -43,16 +33,6 @@ func (g *GraphQLClient) ForwardGraphQLRequest(ctx context.Context, requestId str
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-
-	variableKeys := make([]string, 0, len(finalVars))
-	for k := range finalVars {
-		variableKeys = append(variableKeys, k)
-	}
-
-	snippet := strings.TrimSpace(query)
-	if len(snippet) > 160 {
-		snippet = snippet[:160] + "…"
-	}
 
 	var respData map[string]any
 	err := g.client.Run(ctx, req, &respData)

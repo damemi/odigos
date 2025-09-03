@@ -112,6 +112,13 @@ func (ws *WebSocketServer) listenForMessages(ctx context.Context, proxyID string
 			continue
 		}
 
+		switch parsedMessage.Type {
+		case string(MessageTypeSSEEvent):
+			logger.Log.Info("SSE event from proxy", "proxyID", proxyID, "data", parsedMessage.Data)
+		default:
+			// fall through to existing publishing behavior
+		}
+
 		responseChannel := consts.GetResponsesChannel(proxyID, parsedMessage.RequestId)
 		if err := ws.redisClient.Publish(ctx, responseChannel, parsedMessage); err != nil {
 			logger.Log.Error("Failed to publish response to Redis", "proxyID", proxyID, "error", err)

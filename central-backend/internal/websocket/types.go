@@ -17,4 +17,5 @@ type WebSocketMessageType string
 
 const (
 	MessageTypeGraphQLQuery WebSocketMessageType = "graphql_query"
+	MessageTypeSSEEvent     WebSocketMessageType = "sse_event"
 )
