@@ -25,9 +25,8 @@ import (
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/api/odigos/v1alpha1/instrumentationrules"
 	"github.com/odigos-io/odigos/common"
+	"github.com/odigos-io/odigos/common/consts"
 	"github.com/odigos-io/odigos/instrumentation"
-	"github.com/odigos-io/odigos/k8sutils/pkg/env"
-	"github.com/odigos-io/odigos/k8sutils/pkg/service"
 	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
 )
@@ -121,7 +120,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 	defaultExporter, err := otlptracegrpc.New(
 		ctx,
 		otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint(service.LocalTrafficOTLPGrpcDataCollectionEndpoint(env.Current.NodeIP)),
+		otlptracegrpc.WithEndpoint(fmt.Sprintf("localhost:%d", consts.OTLPPort)),
 	)
 	if err != nil {
 		log.Logger.Error(err, "failed to create exporter")

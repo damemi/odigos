@@ -2,12 +2,12 @@ package sdks
 
 import (
 	"context"
+	"fmt"
 
 	auto "github.com/odigos-io/ebpf-generic-instrumentation"
 	"github.com/odigos-io/ebpf-generic-instrumentation/pkg/opentelemetry"
+	"github.com/odigos-io/odigos/common/consts"
 	"github.com/odigos-io/odigos/instrumentation"
-	"github.com/odigos-io/odigos/k8sutils/pkg/env"
-	"github.com/odigos-io/odigos/k8sutils/pkg/service"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 )
@@ -24,7 +24,7 @@ func NewPythonInstrumentationFactoryEnterprise() instrumentation.Factory {
 
 func (p *PythonInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
 	c := otlptracegrpc.NewClient(otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint(service.LocalTrafficOTLPGrpcDataCollectionEndpoint(env.Current.NodeIP)))
+		otlptracegrpc.WithEndpoint(fmt.Sprintf("localhost:%d", consts.OTLPPort)))
 	exporter, err := opentelemetry.New(ctx, c)
 	if err != nil {
 		log.Logger.Error(err, "failed to create exporter")

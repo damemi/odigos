@@ -59,7 +59,7 @@ spec:
               bash verify_odigos_installation.sh odigos-test
             timeout: 5m # longer timeout since the images are being pulled from dockerhub
         - assert:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/odigos-installed.yaml
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/latest-odigos-version-installed.yaml
 
     - name: Install Simple Demo Apps
       try:

@@ -6,12 +6,11 @@ import (
 
 	"github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/pkg/dynamic"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	"github.com/odigos-io/odigos/common/consts"
 
 	auto "github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension"
 	"github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/pkg/opentelemetry"
 	"github.com/odigos-io/odigos/instrumentation"
-	"github.com/odigos-io/odigos/k8sutils/pkg/env"
-	"github.com/odigos-io/odigos/k8sutils/pkg/service"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -30,7 +29,7 @@ func NewJavaExtensionInstrumentationFactoryEnterprise() instrumentation.Factory 
 
 func (p *JavaExtensionInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
 	c := otlptracegrpc.NewClient(otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint(service.LocalTrafficOTLPGrpcDataCollectionEndpoint(env.Current.NodeIP)))
+		otlptracegrpc.WithEndpoint(fmt.Sprintf("localhost:%d", consts.OTLPPort)))
 	exporter, err := opentelemetry.New(ctx, c)
 	if err != nil {
 		log.Logger.Error(err, "failed to create exporter")
