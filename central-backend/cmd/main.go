@@ -20,6 +20,7 @@ import (
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
 	"github.com/odigos-io/central-backend/internal/repositories/keycloak_repositories"
 	"github.com/odigos-io/central-backend/internal/services"
+	"github.com/odigos-io/central-backend/internal/ssehub"
 	"github.com/odigos-io/central-backend/internal/utils"
 	websocketserver "github.com/odigos-io/central-backend/internal/websocket"
 )
@@ -73,7 +74,9 @@ func main() {
 
 	go handleShutdown(ctx, redisClient)
 
-	wsServer := websocketserver.NewWebSocketServer(redisClient)
+	centralSSEHub := ssehub.NewWithRedis(redisClient, config.Config.CentralizedBackendID)
+	centralSSEHub.StartRedisSSEBroadcast(ctx)
+	wsServer := websocketserver.NewWebSocketServer(redisClient, centralSSEHub)
 
 	authRepo := keycloak_repositories.NewAuthRepository(credentialsService)
 
@@ -94,7 +97,7 @@ func main() {
 		TeamService:     teamService,
 	}}))
 
-	router := newRouter(gqlHandler, wsServer)
+	router := newRouter(gqlHandler, wsServer, centralSSEHub)
 
 	port := config.Config.ServerPort
 
@@ -127,7 +130,7 @@ func determineSystemInitialized(adminToken, adminUsername string) bool {
 	return false
 }
 
-func newRouter(gqlHandler *handler.Server, wsServer *websocketserver.WebSocketServer) *gin.Engine {
+func newRouter(gqlHandler *handler.Server, wsServer *websocketserver.WebSocketServer, sseHub *ssehub.Hub) *gin.Engine {
 	router := gin.Default()
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"*"},
@@ -139,6 +142,8 @@ func newRouter(gqlHandler *handler.Server, wsServer *websocketserver.WebSocketSe
 	router.GET("/ws/proxy", func(c *gin.Context) {
 		wsServer.HandleConnection(c.Writer, c.Request)
 	})
+
+	router.GET("/sse/events", func(c *gin.Context) { sseHub.SSEHandler(c.Writer, c.Request) })
 
 	router.POST("/graphql", authContextMiddleware(), func(c *gin.Context) {
 		gqlHandler.ServeHTTP(c.Writer, c.Request)

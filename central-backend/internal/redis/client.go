@@ -123,6 +123,26 @@ func (r *RedisClient) Publish(ctx context.Context, channel string, message inter
 	return r.client.Publish(ctx, channel, jsonMessage).Err()
 }
 
+func (r *RedisClient) SubscribeToSSEBroadcast(ctx context.Context, channel string, handler func(payload string)) {
+	sub := r.client.Subscribe(ctx, channel)
+	ch := sub.Channel()
+	defer sub.Close()
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Log.Info("Stopping Redis SSE broadcast subscription", "channel", channel)
+			return
+		case msg, ok := <-ch:
+			if !ok {
+				logger.Log.Warn("Redis SSE broadcast subscription channel closed unexpectedly", "channel", channel)
+				return
+			}
+			handler(msg.Payload)
+		}
+	}
+}
+
 func (r *RedisClient) MarkAllConnectionsAsDisconnected(ctx context.Context) error {
 	pattern := consts.GetProxyConnectionsPattern()
 	keys, err := r.client.Keys(ctx, pattern).Result()

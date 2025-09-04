@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/coder/websocket"
 
 	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/logger"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
+	"github.com/odigos-io/central-backend/internal/ssehub"
 	"github.com/odigos-io/central-backend/internal/types"
 	"github.com/odigos-io/central-backend/internal/version"
 )
@@ -30,10 +32,11 @@ type ProxyConnection struct {
 type WebSocketServer struct {
 	proxyConnections sync.Map
 	redisClient      *redisclient.RedisClient
+	sseHub           *ssehub.Hub
 }
 
-func NewWebSocketServer(redisClient *redisclient.RedisClient) *WebSocketServer {
-	return &WebSocketServer{redisClient: redisClient}
+func NewWebSocketServer(redisClient *redisclient.RedisClient, sseHub *ssehub.Hub) *WebSocketServer {
+	return &WebSocketServer{redisClient: redisClient, sseHub: sseHub}
 }
 
 func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Request) {
@@ -114,7 +117,23 @@ func (ws *WebSocketServer) listenForMessages(ctx context.Context, proxyID string
 
 		switch parsedMessage.Type {
 		case string(MessageTypeSSEEvent):
-			logger.Log.Info("SSE event from proxy", "proxyID", proxyID, "data", parsedMessage.Data)
+			if ws.sseHub != nil {
+				b, err := json.Marshal(parsedMessage.Data)
+				if err != nil {
+					logger.Log.Error("Failed to marshal SSE event data", "proxyID", proxyID, "error", err)
+					break
+				}
+				ev := ssehub.Event{
+					Type:      "k8s_cluster_event",
+					Data:      json.RawMessage(b),
+					ClusterID: proxyID,
+					Timestamp: time.Now().Unix(),
+				}
+				if platformName, ok := ws.GetPlatformName(proxyID); ok {
+					ev.ClusterName = platformName
+				}
+				ws.sseHub.Broadcast(ev)
+			}
 		default:
 			// fall through to existing publishing behavior
 		}

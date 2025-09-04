@@ -28,3 +28,8 @@ func ExtractProxyIDFromConnectionKey(key string) string {
 	centralizedBackendID := config.Config.CentralizedBackendID
 	return key[len(fmt.Sprintf("proxy:%s:", centralizedBackendID)):]
 }
+
+func GetSSEBroadcastChannel() string {
+	centralizedBackendID := config.Config.CentralizedBackendID
+	return fmt.Sprintf("ui.sse.broadcast:%s", centralizedBackendID)
+}
