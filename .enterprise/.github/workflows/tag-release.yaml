@@ -42,37 +42,10 @@ jobs:
           git push --tags
 
     - name: Notify Slack
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-        STEPS_EXTRACT_VERSION_OUTPUTS_VERSION: ${{ steps.extract-version.outputs.version }}
-      run: |
-        PAYLOAD=$(jq -n \
-          --arg desc "Tagged odigos enterprise. Release shouls follow" \
-          --arg tag "${STEPS_EXTRACT_VERSION_OUTPUTS_VERSION}" \
-          '{
-            description: $desc,
-            tag: $tag
-          }'
-        )
-        curl -X POST -H 'Content-type: application/json' --data "$PAYLOAD" ${SLACK_WEBHOOK_URL}
-
-    - name: Notify Slack on Failure
-      if: failure()
-      env:
-        SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-        GITHUB_REPOSITORY: ${{ github.repository }}
-        GITHUB_RUN_ID: ${{ github.run_id }}
-        STEPS_EXTRACT_VERSION_OUTPUTS_VERSION: ${{ steps.extract-version.outputs.version }}
-      run: |
-        PAYLOAD=$(jq -n \
-          --arg link "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
-          --arg desc "ERROR: odigos enterprise not able to tag release" \
-          --arg tag "${STEPS_EXTRACT_VERSION_OUTPUTS_VERSION}" \
-          '{
-            link: $link,
-            description: $desc,
-            tag: $tag
-          }'
-        )
-        curl -X POST -H 'Content-type: application/json' --data "$PAYLOAD" ${SLACK_WEBHOOK_URL}
-
+      if: always()
+      uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
+      with: 
+        webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+        success-description: "Tagged odigos enterprise due to release PR merge"
+        failure-description: "ERROR: failed to tag odigos enterprise due to release PR merge"
+        tag: ${{ steps.extract-version.outputs.version }}

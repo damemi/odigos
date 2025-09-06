@@ -59,18 +59,16 @@ jobs:
         id: vars
         run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
 
-      - name: Notify Slack Start
+      - name: Notify Slack (Start)
+        if: always()
+        uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
         env:
-          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
-          SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-        run: |
-          payload=$(
-            jq -n \
-              --arg desc "Start releasing Odigos enterprise component: ${{ matrix.service }}. (${{ matrix.dockerfile == 'Dockerfile.rhel' && 'UBI9' || 'Standard' }} image). This should take few minutes" \
-              --arg tag "${ODIGOS_TAG}" \
-              '{description: $desc, tag: $tag}'
-          )
-          curl -X POST -H 'Content-type: application/json' -d "$payload" ${SLACK_WEBHOOK_URL}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
+        with: 
+          webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+          success-description: "Start releasing Odigos enterprise component: ${{ matrix.service }}. (${{ matrix.dockerfile == 'Dockerfile.rhel' && 'UBI9' || 'Standard' }} image)."
+          failure-description: "ERROR: starting enterprise component release: ${{ matrix.service }}. (${{ matrix.dockerfile == 'Dockerfile.rhel' && 'UBI9' || 'Standard' }} image)"
+          tag: ${{ env.TAG }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 #v3.11.1
@@ -128,23 +126,16 @@ jobs:
           secrets: |
             "github_token=${{ secrets.RELEASE_BOT_TOKEN }}"
 
-      - name: Notify Slack on Failure
-        if: failure()
+      - name: Notify Slack
+        if: always()
+        uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
         env:
-          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
-          SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          IMAGE_NAME: us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}
-        run: |
-            payload=$(
-            jq -n \
-              --arg link "https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}" \
-              --arg desc "ERROR: Failed to build ${{ matrix.service }} (${{ matrix.dockerfile == 'Dockerfile.rhel' && 'UBI9' || 'Standard' }} image). Image: ${IMAGE_NAME}:${ODIGOS_TAG}" \
-              --arg tag "${ODIGOS_TAG}" \
-              '{link: $link, description: $desc, tag: $tag}'
-            )
-            curl -X POST -H 'Content-type: application/json' -d "$payload" ${SLACK_WEBHOOK_URL}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
+        with: 
+          webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+          success-description: "Odigos enterprise component ${{ matrix.service }} ${{ matrix.dockerfile == 'Dockerfile.rhel' && 'UBI9' || 'Standard' }} image published to registry"
+          failure-description: "ERROR: failed to publish odigos enterprise component ${{ matrix.service }} ${{ matrix.dockerfile == 'Dockerfile.rhel' && 'UBI9' || 'Standard' }} image to registry"
+          tag: ${{ env.TAG }}
 
   trigger-cli-release:
     needs: release
@@ -161,45 +152,23 @@ jobs:
 
       - name: Trigger CLI Release in Odigos Main Repo
         env:
-          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
         run: |
-            payload=$(jq -n --arg tag "${ODIGOS_TAG}" '{"event_type": "release_cli", "client_payload": {"tag": $tag}}')
+            payload=$(jq -n --arg tag "${TAG}" '{"event_type": "release_cli", "client_payload": {"tag": $tag}}')
             curl -X POST \
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token ${{ secrets.RELEASE_BOT_TOKEN }}" \
             https://api.github.com/repos/odigos-io/odigos/dispatches \
             -d "$payload"
-
-      - name: Notify Slack End
+      
+      - name: Notify Slack
+        if: always()
+        uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
         env:
-          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
-          SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-        run: |
-          payload=$(
-            jq -n \
-              --arg desc "Odigos enterprise components published to registry. Next step: release CLI" \
-              --arg tag "${ODIGOS_TAG}" \
-              '{description: $desc, tag: $tag}'
-          )
-          curl -X POST -H 'Content-type: application/json' -d "$payload" ${SLACK_WEBHOOK_URL}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
+        with: 
+          webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+          success-description: "All odigos enterprise components published to registry. Triggered CLI release in Odigos Main Repo"
+          failure-description: "ERROR: failed to trigger CLI release in Odigos Main Repo"
+          tag: ${{ env.TAG }}
 
-      - name: Notify Slack on Failure
-        if: failure()
-        env:
-          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
-          SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-        run: |
-            payload=$(
-            jq -n \
-              --arg link "https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}" \
-              --arg desc "ERROR: odigos enterprise component release failed" \
-              --arg tag "${ODIGOS_TAG}" \
-              '{
-              link: $link,
-              description: $desc,
-              tag: $tag
-              }'
-            )
-            curl -X POST -H 'Content-type: application/json' -d "$payload" ${SLACK_WEBHOOK_URL}

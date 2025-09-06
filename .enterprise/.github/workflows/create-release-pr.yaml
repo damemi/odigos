@@ -61,17 +61,13 @@ jobs:
 
 
       - name: Notify Slack (start)
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-          TAG: ${{ env.TAG }}
-          BASE_BRANCH: ${{ env.BASE_BRANCH }}
-        run: |
-          payload=$(jq -n \
-            --arg description "Detected new tag, creating PR in enterprise" \
-            --arg tag "${TAG}" \
-            --arg base "${BASE_BRANCH}" \
-            '{description: $description, tag: $tag, base: $base}')
-          curl -X POST -H 'Content-type: application/json' --data "$payload" "${SLACK_WEBHOOK_URL}"
+        if: always()
+        uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
+        with: 
+          webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+          success-description: "Start creating release PR for enterprise repo on branch ${{ env.BASE_BRANCH }}"
+          failure-description: "ERROR: during creating release PR for enterprise repo"
+          tag: ${{ env.TAG }}
 
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
@@ -231,30 +227,12 @@ jobs:
         run: |
           gh pr merge "${PR_LINK}" --auto --squash
 
-      - name: Notify Slack (success)
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-          PR_LINK: ${{ env.PR_LINK }}
-          TAG: ${{ env.TAG }}
-        run: |
-          payload=$(jq -n \
-            --arg link "${PR_LINK}/files" \
-            --arg description "Odigos enterprise PR created. Approve to continue:" \
-            --arg tag "${TAG}" \
-            '{link: $link, description: $description, tag: $tag}')
-          curl -X POST -H 'Content-type: application/json' --data "$payload" "${SLACK_WEBHOOK_URL}"
-
-      - name: Notify Slack (failure)
-        if: failure()
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          TAG: ${{ env.TAG }}
-        run: |
-          payload=$(jq -n \
-            --arg link "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
-            --arg description "ERROR: odigos enterprise PR not created" \
-            --arg tag "${TAG}" \
-            '{link: $link, description: $description, tag: $tag}')
-          curl -X POST -H 'Content-type: application/json' --data "$payload" "${SLACK_WEBHOOK_URL}"
+      - name: Notify Slack
+        if: always()
+        uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
+        with: 
+          webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+          success-description: "Odigos release PR for odigos enterprise repo created"
+          failure-description: "ERROR: failed to create release PR for odigos enterprise repo"
+          tag: ${{ env.TAG }}
+          release-pr-link: ${{ env.PR_LINK }}
