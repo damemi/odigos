@@ -3,7 +3,7 @@ module github.com/odigos-io/odigos-enterprise/odiglet
 go 1.24.0
 
 require (
-	github.com/odigos-io/ebpf-generic-instrumentation v0.0.4-0.20250724082156-0c6161be6292
+	github.com/odigos-io/ebpf-generic-instrumentation v0.0.3
 	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20250904112724-df9f3f0838a3
 	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20250904112724-df9f3f0838a3
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20250724082002-7250611b1a89
