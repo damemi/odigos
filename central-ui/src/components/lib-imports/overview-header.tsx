@@ -3,12 +3,12 @@ import { useRouter } from 'next/navigation';
 import { useStatusStore } from '../../store';
 import { AccountMenu } from '../account-menu';
 import { StatusType } from '@odigos/ui-kit/types';
+import { ACCESS_MANAGEMENT, ROUTES } from '@/utils';
 import { FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { ConnectionSelect } from '../connection-select';
-import { ACCESS_MANAGEMENT, ROUTES } from '@/utils';
 import { OdigosLogoText, UserSettingsIcon } from '@odigos/ui-kit/icons';
-import { useConfig, useDescribe, useOdigosConfigCRUD, useProxyID, useTokenCRUD } from '@/hooks';
 import { Header, IconButton, Status, Tag, Tooltip } from '@odigos/ui-kit/components';
+import { useConfig, useDescribe, useOdigosConfigCRUD, useProxyID, useTokenCRUD } from '@/hooks';
 import { NotificationManager, SlackInvite, SystemOverview, SystemSettings, ToggleDarkMode } from '@odigos/ui-kit/containers';
 
 const OverviewHeader = () => {
@@ -31,13 +31,19 @@ const OverviewHeader = () => {
         [tower]
       </Tag>,
       <ConnectionSelect key='connection-select' />,
-      title ? <Status key='status' status={status} title={title} subtitle={message} size={14} family='primary' withIcon withBackground /> : null,
-      isReadonly && (
+    ];
+
+    if (title || message) {
+      arr.push(<Status key='status' status={status} title={title} subtitle={message} size={14} family='primary' withIcon withBackground />);
+    }
+
+    if (isReadonly) {
+      arr.push(
         <Tooltip key='readonly' text={FORM_ALERTS.READONLY_WARNING}>
           <Status status={StatusType.Info} title='Read Only' size={14} family='primary' withIcon withBackground />
-        </Tooltip>
-      ),
-    ];
+        </Tooltip>,
+      );
+    }
 
     return arr;
   }, [title, message, status, isReadonly]);

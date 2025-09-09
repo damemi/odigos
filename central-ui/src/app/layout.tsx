@@ -3,7 +3,6 @@
 import React, { type PropsWithChildren } from 'react';
 import dynamic from 'next/dynamic';
 import client from '@/lib/apollo-client';
-import SseBoot from './(providers)/SseBoot';
 import { ApolloProvider } from '@apollo/client';
 import { useDarkMode } from '@odigos/ui-kit/store';
 import { ToastList } from '@odigos/ui-kit/containers';
@@ -32,7 +31,6 @@ function RootLayout({ children }: PropsWithChildren) {
         }}
       >
         <ThemeProvider>
-          <SseBoot />
           <ToastList />
           <ApolloProvider client={client}>{children}</ApolloProvider>
         </ThemeProvider>

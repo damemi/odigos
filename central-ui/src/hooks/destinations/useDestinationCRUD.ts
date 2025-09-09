@@ -27,7 +27,7 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
   const { isReadonly } = useConfig();
   const { addNotification } = useNotificationStore();
   const { selectedStreamName } = useDataStreamStore();
-  const { destinationsLoading, setEntitiesLoading, destinations, addEntities } = useEntityStore();
+  const { destinationsLoading, setEntitiesLoading, destinations, setEntities, addEntities } = useEntityStore();
 
   const notifyUser = (type: StatusType, title: string, message: string, id?: string, hideFromHistory?: boolean) => {
     addNotification({
@@ -51,7 +51,7 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
 
     if (data?.computePlatform?.destinations) {
       const { destinations: items } = data.computePlatform;
-      addEntities(EntityTypes.Destination, mapFetchedDestinations(items));
+      setEntities(EntityTypes.Destination, mapFetchedDestinations(items));
       setEntitiesLoading(EntityTypes.Destination, false);
     }
   };
@@ -63,9 +63,11 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
       const { data } = await mutateCreate({ destination: mapNoUndefinedFields(destination, selectedStreamName) });
 
       if (data?.createNewDestination) {
-        const created = data.createNewDestination;
-        addEntities(EntityTypes.Destination, mapFetchedDestinations([created]));
-        notifyUser(StatusType.Success, Crud.Create, `Successfully created "${created.destinationType.type}" destination`, created.id);
+        // const created = data.createNewDestination;
+        // addEntities(EntityTypes.Destination, mapFetchedDestinations([created]));
+        // notifyUser(StatusType.Success, Crud.Create, `Successfully created "${created.destinationType.type}" destination`, created.id);
+        // !! no "fetch", and no "notifyUser"
+        // !! we should wait for SSE to handle that
       }
     }
   };
@@ -78,7 +80,9 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
 
       if (data?.updateDestination) {
         notifyUser(StatusType.Success, Crud.Update, `Successfully updated "${destination.type}" destination`, id);
-        fetchDestinations();
+
+        // !! no "fetch"
+        // !! we should wait for SSE to handle that
       }
     }
   };
@@ -90,9 +94,10 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
       const { data } = await mutateDelete({ id, currentStreamName: selectedStreamName });
 
       if (data?.deleteDestination) {
-        const destination = destinations.find((r) => r.id === id);
-        notifyUser(StatusType.Success, Crud.Delete, `Successfully deleted "${destination?.destinationType.type || id}" destination`, id);
-        fetchDestinations();
+        // const destination = destinations.find((r) => r.id === id);
+        // notifyUser(StatusType.Success, Crud.Delete, `Successfully deleted "${destination?.destinationType.type || id}" destination`, id);
+        // !! no "fetch", and no "notifyUser"
+        // !! we should wait for SSE to handle that
       }
     }
   };

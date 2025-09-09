@@ -37,7 +37,7 @@ export const useSourceCRUD = (): UseSourceCrud => {
   const { addPendingItems, removePendingItems } = usePendingStore();
   const { setInstrumentAwait, setInstrumentCount } = useInstrumentStore();
   const { setConfiguredSources, setConfiguredFutureApps } = useSetupStore();
-  const { sourcesLoading, setEntitiesLoading, sources, addEntities, removeEntities } = useEntityStore();
+  const { sourcesLoading, setEntitiesLoading, sources, setEntities, addEntities, removeEntities } = useEntityStore();
 
   const notifyUser = (type: StatusType, title: string, message: string, id?: WorkloadId, hideFromHistory?: boolean) => {
     addNotification({
@@ -80,11 +80,12 @@ export const useSourceCRUD = (): UseSourceCrud => {
   const fetchAllConditions = async () => {
     const sourcesFromStore = useEntityStore.getState().sources;
     const { data } = await queryOtherConditions();
+    const { sourceConditions } = data || {};
 
-    if (data?.sourceConditions) {
+    if (sourceConditions) {
       const tempSources: Source[] = [];
 
-      for (const item of data.sourceConditions) {
+      for (const item of sourceConditions) {
         const updatedSource = addConditionToSources(item, sourcesFromStore);
         if (updatedSource) tempSources.push(updatedSource);
       }
@@ -98,15 +99,12 @@ export const useSourceCRUD = (): UseSourceCrud => {
     setEntitiesLoading(EntityTypes.Source, true);
 
     const { data } = await queryAll();
-    const { sources } = data?.computePlatform || {};
+    const { sources: fetchedSources } = data?.computePlatform || {};
 
-    if (sources) {
-      addEntities(EntityTypes.Source, sources);
-
+    if (fetchedSources) {
+      setEntities(EntityTypes.Source, fetchedSources);
       setEntitiesLoading(EntityTypes.Source, false);
-      setInstrumentCount('sourcesToCreate', 0);
-      setInstrumentCount('sourcesCreated', 0);
-      if (sources.length) fetchAllConditions();
+      if (fetchedSources.length) fetchAllConditions();
     }
   };
 
@@ -114,9 +112,9 @@ export const useSourceCRUD = (): UseSourceCrud => {
     if (!shouldFetchSource(bypassPaginationLoader)) return;
 
     const { data } = await queryById({ sourceId: id });
+    const { source } = data?.computePlatform || {};
 
-    if (data?.computePlatform?.source) {
-      const { source } = data.computePlatform;
+    if (source) {
       addEntities(EntityTypes.Source, [source]);
       return source;
     }
@@ -146,7 +144,6 @@ export const useSourceCRUD = (): UseSourceCrud => {
 
       // !! no "fetch" and no "setInstrumentAwait(false)"
       // !! we should wait for SSE to handle that
-      // TODO: SSE for centralized
     }
   };
 
@@ -164,7 +161,6 @@ export const useSourceCRUD = (): UseSourceCrud => {
 
       // !! no "fetch"
       // !! we should wait for SSE to handle that
-      // TODO: SSE for centralized
     }
   };
 

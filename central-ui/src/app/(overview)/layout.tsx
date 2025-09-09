@@ -8,7 +8,7 @@ import { ServiceMapIcon } from '@odigos/ui-kit/icons';
 import { DATA_FLOW_HEIGHT, MENU_BAR_HEIGHT, ROUTES } from '@/utils';
 import { EntityTypes, OtherEntityTypes } from '@odigos/ui-kit/types';
 import { OverviewHeader, OverviewModalsAndDrawers } from '@/components';
-import { useDataStreamsCRUD, useProxyID, useTokenTracker } from '@/hooks';
+import { useDataStreamsCRUD, useProxyID, useSSE, useTokenTracker } from '@/hooks';
 import { ErrorBoundary, FlexColumn, type NavIcon } from '@odigos/ui-kit/components';
 import { DataFlowActionsMenu, NavIconIds, SideNav } from '@odigos/ui-kit/containers';
 
@@ -76,7 +76,7 @@ const routesMap = {
 
 function OverviewLayout({ children }: PropsWithChildren) {
   // call important hooks that should run on page-mount
-  // useSSE();
+  useSSE();
   useTokenTracker();
   const { updateDataStream, deleteDataStream } = useDataStreamsCRUD();
   const { setCurrentModal } = useModalStore();

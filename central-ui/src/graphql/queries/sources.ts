@@ -55,6 +55,7 @@ export const GET_SOURCE = `
           message
           lastTransitionTime
         }
+      }
     }
   }
 `;

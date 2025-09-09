@@ -11,7 +11,7 @@ import { getPlatformIcon, getPlatformLabel } from '@odigos/ui-kit/functions';
 import { Button, ExtendArrow, FlexRow, Input, SelectionButton, Text, VerticalScroll } from '@odigos/ui-kit/components';
 
 const Tab = styled(FlexRow)<{ $withSelect: boolean }>`
-  width: 260px;
+  width: 160px;
   padding: 4px;
   gap: 10px;
   border: 1px solid ${({ theme }) => theme.colors.border};
@@ -29,8 +29,11 @@ const Tab = styled(FlexRow)<{ $withSelect: boolean }>`
 
 const Title = styled(Text)`
   font-size: 14px;
-  margin-right: 10px;
   color: ${({ theme }) => theme.text.secondary};
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 const LogoWrap = styled.div`

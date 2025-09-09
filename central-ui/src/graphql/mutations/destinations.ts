@@ -48,7 +48,7 @@ export const UPDATE_DESTINATION = `
 
 export const DELETE_DESTINATION = `
   mutation DeleteDestination($id: ID!, $currentStreamName: String!) {
-    deleteDestination(id: $id, currentStreamName: $currentStreamName) {
+    deleteDestination(id: $id, currentStreamName: $currentStreamName)
   }
 `;
 
