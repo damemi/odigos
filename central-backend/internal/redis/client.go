@@ -12,6 +12,16 @@ import (
 	"github.com/odigos-io/central-backend/internal/types"
 )
 
+// PublishJSON publishes a typed value as JSON without requiring interface{} at call sites.
+// This is a package-level helper because methods cannot declare type parameters.
+func PublishJSON[T any](ctx context.Context, r *RedisClient, channel string, message T) error {
+	b, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+	return r.client.Publish(ctx, channel, b).Err()
+}
+
 type RedisClient struct {
 	client *redis.Client
 }
@@ -41,12 +51,12 @@ func (r *RedisClient) SetProxyConnectionStatus(ctx context.Context, proxyID stri
 	return r.client.Set(ctx, key, string(status), 0).Err()
 }
 
-func (r *RedisClient) GetProxyConnection(ctx context.Context, key string) (string, error) {
+func (r *RedisClient) GetProxyConnection(ctx context.Context, key string) (consts.ProxyConnectionStatus, error) {
 	result, err := r.client.Get(ctx, key).Result()
 	if err != nil {
 		return "", err
 	}
-	return result, nil
+	return consts.ProxyConnectionStatus(result), nil
 }
 
 func (r *RedisClient) ListProxyConnectionsKeys(ctx context.Context) ([]string, error) {
@@ -113,14 +123,6 @@ func (r *RedisClient) SubscribeToResponses(ctx context.Context, proxyID string, 
 			return
 		}
 	}
-}
-
-func (r *RedisClient) Publish(ctx context.Context, channel string, message interface{}) error {
-	jsonMessage, err := json.Marshal(message)
-	if err != nil {
-		return err
-	}
-	return r.client.Publish(ctx, channel, jsonMessage).Err()
 }
 
 func (r *RedisClient) SubscribeToSSEBroadcast(ctx context.Context, channel string, handler func(payload string)) {

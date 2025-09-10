@@ -11,6 +11,7 @@ import (
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/logger"
+	redisclient "github.com/odigos-io/central-backend/internal/redis"
 	"github.com/odigos-io/central-backend/internal/types"
 	"github.com/odigos-io/central-backend/internal/utils"
 )
@@ -125,7 +126,8 @@ func (r *queryResolver) RemoteFetch(ctx context.Context, proxyID string, query s
 		Variables: variables,
 	}
 	requestsChannel := consts.GetRequestsChannel(proxyID)
-	err := r.RedisClient.Publish(ctx, requestsChannel, requestPayload)
+	err := redisclient.PublishJSON(ctx, r.RedisClient, requestsChannel, requestPayload)
+
 	if err != nil {
 		return "", err
 	}
@@ -178,9 +180,9 @@ func (r *queryResolver) ComputePlatforms(ctx context.Context) ([]*model.ComputeP
 		platformType := model.PlatformTypeK8s
 		if pType, ok := r.WebSocketServer.GetPlatformType(proxyID); ok {
 			switch pType {
-			case consts.PlatformTypeK8sString:
+			case consts.PlatformTypeK8s:
 				platformType = model.PlatformTypeK8s
-			case consts.PlatformTypeVMString:
+			case consts.PlatformTypeVM:
 				platformType = model.PlatformTypeVM
 			default:
 				logger.Log.Warn("Unknown platform type, defaulting to k8s", "proxyID", proxyID, "platformType", pType)
@@ -192,7 +194,7 @@ func (r *queryResolver) ComputePlatforms(ctx context.Context) ([]*model.ComputeP
 			ID:     proxyID,
 			Name:   platformName,
 			Type:   platformType,
-			Status: status,
+			Status: string(status),
 			Users:  []*model.User{},
 			Teams:  []*model.Team{},
 		}

@@ -1,19 +1,25 @@
 package websocketserver
 
+import "encoding/json"
+
 type WebSocketMessageToProxy struct {
-	Type      string                 `json:"type"`
-	Query     string                 `json:"query,omitempty"`
-	Variables map[string]interface{} `json:"variables,omitempty"`
-	RequestId string                 `json:"request_id,omitempty"`
+	Type      WebSocketMessageType `json:"type"`
+	Query     string               `json:"query,omitempty"`
+	Variables GraphQLVariables     `json:"variables,omitempty"`
+	RequestId string               `json:"request_id,omitempty"`
 }
 
 type WebsocketMessageFromProxy struct {
-	Type      string      `json:"type"`
-	Data      interface{} `json:"data"`
-	RequestId string      `json:"request_id"`
+	Type      WebSocketMessageType `json:"type"`
+	Data      json.RawMessage      `json:"data"`
+	RequestId string               `json:"request_id"`
 }
 
 type WebSocketMessageType string
+
+// GraphQLVariables is an alias kept compatible with map[string]any for easy interop
+// with gqlgen and other request payloads.
+type GraphQLVariables = map[string]any
 
 const (
 	MessageTypeGraphQLQuery WebSocketMessageType = "graphql_query"

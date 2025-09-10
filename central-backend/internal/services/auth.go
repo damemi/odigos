@@ -8,6 +8,7 @@ import (
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/logger"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
+	"github.com/odigos-io/central-backend/internal/types"
 	"github.com/odigos-io/central-backend/internal/utils"
 )
 
@@ -195,10 +196,10 @@ func (a *AuthService) authenticateUserWithNewPassword(ctx context.Context, email
 	return authResult.AccessToken, user, nil
 }
 
-func (a *AuthService) buildUserModel(ctx context.Context, token string, userData map[string]any, needsPasswordChange bool) (*model.User, error) {
-	userID, _ := userData["id"].(string)
-	email, _ := userData["email"].(string)
-	username, _ := userData["username"].(string)
+func (a *AuthService) buildUserModel(ctx context.Context, token string, userData types.UserSummary, needsPasswordChange bool) (*model.User, error) {
+	userID := userData.ID
+	email := userData.Email
+	username := ""
 
 	roleStr, err := a.userRepo.GetUserRole(ctx, userID)
 	if err != nil {

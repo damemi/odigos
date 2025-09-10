@@ -4,11 +4,12 @@ import (
 	"context"
 
 	"github.com/odigos-io/central-backend/graph/model"
+	"github.com/odigos-io/central-backend/internal/types"
 )
 
 type AuthResult struct {
 	AccessToken string
-	UserData    map[string]any
+	UserData    types.UserSummary
 }
 
 type AuthRepository interface {

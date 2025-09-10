@@ -43,6 +43,10 @@ type RoleData struct {
 	Name string `json:"name"`
 }
 
+type clientListItem struct {
+	ClientID string `json:"clientId"`
+}
+
 func CreateOdigosUIClient(token, keycloakHost, realm string) error {
 	clientsURL := fmt.Sprintf("%s/admin/realms/%s/clients", keycloakHost, realm)
 	req, err := http.NewRequest(http.MethodGet, clientsURL, nil)
@@ -58,13 +62,13 @@ func CreateOdigosUIClient(token, keycloakHost, realm string) error {
 	}
 	defer resp.Body.Close()
 
-	var clients []map[string]interface{}
+	var clients []clientListItem
 	if err := json.NewDecoder(resp.Body).Decode(&clients); err != nil {
 		return fmt.Errorf("failed to decode clients: %w", err)
 	}
 
 	for _, client := range clients {
-		if clientID, ok := client["clientId"].(string); ok && clientID == consts.ClientID {
+		if client.ClientID == consts.ClientID {
 			return nil
 		}
 	}

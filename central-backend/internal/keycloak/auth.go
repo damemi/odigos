@@ -10,6 +10,7 @@ import (
 
 	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/logger"
+	"github.com/odigos-io/central-backend/internal/types"
 )
 
 type AuthService struct {
@@ -21,7 +22,7 @@ type AuthService struct {
 
 type UserAuthResult struct {
 	AccessToken string
-	UserData    map[string]interface{}
+	UserData    types.UserSummary
 }
 
 func NewAuthService() *AuthService {
@@ -31,6 +32,10 @@ func NewAuthService() *AuthService {
 		client:      consts.ClientID,
 		userService: NewUserService(),
 	}
+}
+
+type tokenResp struct {
+	AccessToken string `json:"access_token"`
 }
 
 func UserSignIn(keycloakHost, realm, clientID, username, password string) (string, error) {
@@ -60,17 +65,15 @@ func UserSignIn(keycloakHost, realm, clientID, username, password string) (strin
 		return "", fmt.Errorf("authentication failed with status %d: %s", resp.StatusCode, string(responseBody))
 	}
 
-	var result map[string]interface{}
+	var result tokenResp
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", fmt.Errorf("failed to decode response: %w", err)
 	}
-
-	accessToken, ok := result["access_token"].(string)
-	if !ok {
+	if result.AccessToken == "" {
 		return "", fmt.Errorf("access token not found in response")
 	}
 
-	return accessToken, nil
+	return result.AccessToken, nil
 }
 
 func LogoutUser(keycloakHost, realm, clientID, token string) error {
@@ -138,11 +141,22 @@ func (a *AuthService) handleAuthError(err error, email string) (*UserAuthResult,
 	return nil, fmt.Errorf("authentication failed for user %s: %v", email, err)
 }
 
-func (a *AuthService) getUserDetails(adminToken, email string) (map[string]any, error) {
+func (a *AuthService) getUserDetails(adminToken, email string) (types.UserSummary, error) {
 	users, err := a.userService.FindUsersByEmail(adminToken, email)
 	if err != nil || len(users) == 0 {
 		logger.Log.Error("Failed to find user after login", "email", email, "error", err)
-		return nil, fmt.Errorf("failed to find user by email after successful login: %w", err)
+		return types.UserSummary{}, fmt.Errorf("failed to find user by email after successful login: %w", err)
 	}
-	return users[0], nil
+	u := users[0]
+	return types.UserSummary{
+		ID:    getString(u, "id"),
+		Email: getString(u, "email"),
+	}, nil
+}
+
+func getString(m map[string]any, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
 }

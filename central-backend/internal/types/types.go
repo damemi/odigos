@@ -15,3 +15,8 @@ type ConnectionStatus struct {
 	ProxyID string `json:"proxy_id"`
 	Status  string `json:"status"`
 }
+
+type UserSummary struct {
+	ID    string `json:"id"`
+	Email string `json:"email"`
+}

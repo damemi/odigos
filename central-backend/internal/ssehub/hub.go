@@ -58,7 +58,7 @@ func (h *Hub) Broadcast(ev Event) {
 
 	if h.redis != nil {
 		env := redisEnvelope{Origin: h.instanceID, Event: ev}
-		_ = h.redis.Publish(context.Background(), consts.GetSSEBroadcastChannel(), env)
+		_ = redisclient.PublishJSON(context.Background(), h.redis, consts.GetSSEBroadcastChannel(), env)
 	}
 }
 

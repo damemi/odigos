@@ -26,7 +26,7 @@ const PlatformTypeQueryParam = "platformType"
 type ProxyConnection struct {
 	Conn         *websocket.Conn
 	PlatformName string
-	PlatformType string
+	PlatformType consts.PlatformType
 }
 
 type WebSocketServer struct {
@@ -65,11 +65,13 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 		logger.Log.Warn("platformName not provided for proxyID", "proxyID", proxyID)
 	}
 
-	platformType := r.URL.Query().Get(PlatformTypeQueryParam)
-	if platformType == "" {
-		// Default to k8s for backward compatibility
-		platformType = consts.PlatformTypeK8sString
-		logger.Log.Warn("platformType not provided for proxyID, defaulting to k8s", "proxyID", proxyID)
+	platformTypeStr := r.URL.Query().Get(PlatformTypeQueryParam)
+	var platformType consts.PlatformType
+	switch platformTypeStr {
+	case "vm":
+		platformType = consts.PlatformTypeVM
+	default:
+		platformType = consts.PlatformTypeK8s
 	}
 
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
@@ -116,16 +118,11 @@ func (ws *WebSocketServer) listenForMessages(ctx context.Context, proxyID string
 		}
 
 		switch parsedMessage.Type {
-		case string(MessageTypeSSEEvent):
+		case MessageTypeSSEEvent:
 			if ws.sseHub != nil {
-				b, err := json.Marshal(parsedMessage.Data)
-				if err != nil {
-					logger.Log.Error("Failed to marshal SSE event data", "proxyID", proxyID, "error", err)
-					break
-				}
 				ev := ssehub.Event{
 					Type:      "k8s_cluster_event",
-					Data:      json.RawMessage(b),
+					Data:      parsedMessage.Data,
 					ClusterID: proxyID,
 					Timestamp: time.Now().Unix(),
 				}
@@ -139,7 +136,7 @@ func (ws *WebSocketServer) listenForMessages(ctx context.Context, proxyID string
 		}
 
 		responseChannel := consts.GetResponsesChannel(proxyID, parsedMessage.RequestId)
-		if err := ws.redisClient.Publish(ctx, responseChannel, parsedMessage); err != nil {
+		if err := redisclient.PublishJSON(ctx, ws.redisClient, responseChannel, parsedMessage); err != nil {
 			logger.Log.Error("Failed to publish response to Redis", "proxyID", proxyID, "error", err)
 		}
 
@@ -173,7 +170,7 @@ func (ws *WebSocketServer) SendGraphQLRequest(ctx context.Context, proxyID strin
 	conn := proxyConn.Conn
 
 	msg := WebSocketMessageToProxy{
-		Type:      string(MessageTypeGraphQLQuery),
+		Type:      MessageTypeGraphQLQuery,
 		Query:     request.Query,
 		Variables: request.Variables,
 		RequestId: request.RequestId,
@@ -201,7 +198,7 @@ func (ws *WebSocketServer) GetPlatformName(proxyID string) (string, bool) {
 	return proxyConn.PlatformName, true
 }
 
-func (ws *WebSocketServer) GetPlatformType(proxyID string) (string, bool) {
+func (ws *WebSocketServer) GetPlatformType(proxyID string) (consts.PlatformType, bool) {
 	connValue, ok := ws.proxyConnections.Load(proxyID)
 	if !ok {
 		return "", false
