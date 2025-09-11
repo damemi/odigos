@@ -9,10 +9,10 @@ spec:
     - name: Prepare destination
       try:
         - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/simple-trace-db-deployment.yaml
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/simple-trace-db-deployment.yaml
         - assert:
             timeout: 1m
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/simple-trace-db-running.yaml
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-trace-db-running.yaml
 
     - name: Install Odigos
       try:
@@ -27,7 +27,7 @@ spec:
               bash verify_odigos_installation.sh odigos-test
         - assert:
             timeout: 5m
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/odigos-installed.yaml
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/odigos-installed.yaml
       catch:
         - script:
             content: |
@@ -41,7 +41,7 @@ spec:
     - name: Install Simple Demo Apps
       try:
         - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/install-simple-demo.yaml
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/install-simple-demo.yaml
         - script:
             timeout: 2m
             content: |
@@ -53,18 +53,18 @@ spec:
               kubectl wait --for=condition=ready pod -l app=pricing --timeout=120s
               kubectl wait --for=condition=ready pod -l app=membership --timeout=120s
         - assert:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/simple-demo-installed.yaml
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-installed.yaml
 
     - name: Instrument Namespace
       try:
         - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/instrument-default-ns.yaml
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/instrument-default-ns.yaml
 
     - name: Ruby Detected, Rollout Restart
       try:
         - assert:
             timeout: 3m
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/ruby-partial-runtime-detected.yaml
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/ruby-partial-runtime-detected.yaml
         - script:
             timeout: 1m
             content: |
@@ -75,12 +75,12 @@ spec:
       try:
         - assert:
             timeout: 3m
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/assert/simple-demo-runtime-detected.yaml
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-runtime-detected.yaml
 
     - name: Add Destination
       try:
         - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/add-simple-trace-db-destination.yaml
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/add-simple-trace-db-destination.yaml
 
     - name: Simple-demo instrumented and pipeline ready
       try:
@@ -95,13 +95,13 @@ spec:
     - name: Generate Traffic
       try:
         - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/generate-traffic-job.yaml
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
         - script:
             timeout: 1m
             content: |
-              kubectl wait --for=condition=complete job/$(kubectl get -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
+              kubectl wait --for=condition=complete job/$(kubectl get -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
         - delete:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/generate-traffic-job.yaml
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
 
     - name: Wait For Trace
       try:
@@ -110,8 +110,8 @@ spec:
             content: |
               while true; do
                 yaml=$(mktemp)
-                curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/queries/wait-for-trace.yaml
-                curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
+                curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/wait-for-trace.yaml
+                curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
 
                 status=$?
                 rm -f "$yaml"
@@ -130,8 +130,8 @@ spec:
         - script:
             content: |
               yaml=$(mktemp)
-              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/queries/context-propagation.yaml
-              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
+              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/context-propagation.yaml
+              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
       catch:
         - podLogs:
             name: odiglet
@@ -142,7 +142,7 @@ spec:
         - script:
             content: |
               yaml=$(mktemp)
-              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/
+              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/
       catch:
         - podLogs:
             name: odiglet
@@ -153,8 +153,8 @@ spec:
         - script:
             content: |
               yaml=$(mktemp)
-              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/queries/span-attributes.yaml
-              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
+              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/span-attributes.yaml
+              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
       catch:
         - podLogs:
             name: odiglet
