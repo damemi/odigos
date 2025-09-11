@@ -14,7 +14,7 @@ require (
 	github.com/odigos-io/odigos/common v1.2.0-pre1.0.20250907082103-cb013ede8a6b
 	github.com/odigos-io/odigos/instrumentation v1.2.0-pre1.0.20250907082103-cb013ede8a6b
 	github.com/odigos-io/odigos/k8sutils v1.2.0-pre1.0.20250907082103-cb013ede8a6b
-	github.com/odigos-io/odigos/odiglet v1.2.0-pre1.0.20250910135826-63071ae9f20d
+	github.com/odigos-io/odigos/odiglet v1.2.0-pre1.0.20250911124743-30716b7a9645
 	github.com/odigos-io/odigos/procdiscovery v1.2.0-pre1.0.20250907070502-5776445d8808
 	go.opentelemetry.io/auto v0.22.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.37.0
