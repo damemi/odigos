@@ -60,15 +60,9 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
-      const { data } = await mutateCreate({ destination: mapNoUndefinedFields(destination, selectedStreamName) });
-
-      if (data?.createNewDestination) {
-        // const created = data.createNewDestination;
-        // addEntities(EntityTypes.Destination, mapFetchedDestinations([created]));
-        // notifyUser(StatusType.Success, Crud.Create, `Successfully created "${created.destinationType.type}" destination`, created.id);
-        // !! no "fetch", and no "notifyUser"
-        // !! we should wait for SSE to handle that
-      }
+      await mutateCreate({ destination: mapNoUndefinedFields(destination, selectedStreamName) });
+      // !! no "fetch", and no "notifyUser"
+      // !! we should wait for SSE to handle that
     }
   };
 
@@ -80,7 +74,6 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
 
       if (data?.updateDestination) {
         notifyUser(StatusType.Success, Crud.Update, `Successfully updated "${destination.type}" destination`, id);
-
         // !! no "fetch"
         // !! we should wait for SSE to handle that
       }
@@ -91,14 +84,9 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
-      const { data } = await mutateDelete({ id, currentStreamName: selectedStreamName });
-
-      if (data?.deleteDestination) {
-        // const destination = destinations.find((r) => r.id === id);
-        // notifyUser(StatusType.Success, Crud.Delete, `Successfully deleted "${destination?.destinationType.type || id}" destination`, id);
-        // !! no "fetch", and no "notifyUser"
-        // !! we should wait for SSE to handle that
-      }
+      await mutateDelete({ id, currentStreamName: selectedStreamName });
+      // !! no "fetch", and no "notifyUser"
+      // !! we should wait for SSE to handle that
     }
   };
 

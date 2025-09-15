@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	MinSupportedVersion = "v1.2.0"
+	MinSupportedVersion = "v1.4.0"
 	MaxSupportedVersion = ""
 )
 

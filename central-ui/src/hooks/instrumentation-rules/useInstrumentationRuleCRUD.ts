@@ -19,7 +19,7 @@ interface UseInstrumentationRuleCrud {
 export const useInstrumentationRuleCRUD = (): UseInstrumentationRuleCrud => {
   const { isReadonly } = useConfig();
   const { addNotification } = useNotificationStore();
-  const { instrumentationRulesLoading, setEntitiesLoading, instrumentationRules, addEntities, removeEntities } = useEntityStore();
+  const { instrumentationRulesLoading, setEntitiesLoading, instrumentationRules, setEntities, addEntities, removeEntities } = useEntityStore();
 
   const notifyUser = (type: StatusType, title: string, message: string, id?: string, hideFromHistory?: boolean) => {
     addNotification({
@@ -44,7 +44,7 @@ export const useInstrumentationRuleCRUD = (): UseInstrumentationRuleCrud => {
     if (data?.computePlatform?.instrumentationRules) {
       const { instrumentationRules: items } = data.computePlatform;
 
-      addEntities(EntityTypes.InstrumentationRule, items);
+      setEntities(EntityTypes.InstrumentationRule, items);
       setEntitiesLoading(EntityTypes.InstrumentationRule, false);
     }
   };
@@ -54,9 +54,12 @@ export const useInstrumentationRuleCRUD = (): UseInstrumentationRuleCrud => {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
       const res = await mutateCreate({ instrumentationRule });
-      const rule = res.data?.createInstrumentationRule as InstrumentationRule;
-      addEntities(EntityTypes.InstrumentationRule, [rule]);
-      notifyUser(StatusType.Success, Crud.Create, `Successfully created "${rule.type}" rule`, rule.ruleId);
+      const rule = res.data?.createInstrumentationRule;
+      if (rule) {
+        const { ruleId, type } = rule;
+        addEntities(EntityTypes.InstrumentationRule, [rule]);
+        notifyUser(StatusType.Success, Crud.Create, `Successfully created "${type}" rule`, ruleId);
+      }
     }
   };
 
@@ -65,9 +68,12 @@ export const useInstrumentationRuleCRUD = (): UseInstrumentationRuleCrud => {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
       const res = await mutateUpdate({ ruleId, instrumentationRule });
-      const rule = res.data?.updateInstrumentationRule as InstrumentationRule;
-      addEntities(EntityTypes.InstrumentationRule, [rule]);
-      notifyUser(StatusType.Success, Crud.Update, `Successfully updated "${rule.type}" rule`, rule.ruleId);
+      const rule = res.data?.updateInstrumentationRule;
+      if (rule) {
+        const { ruleId, type } = rule;
+        addEntities(EntityTypes.InstrumentationRule, [rule]);
+        notifyUser(StatusType.Success, Crud.Update, `Successfully updated "${type}" rule`, ruleId);
+      }
     }
   };
 
@@ -75,11 +81,13 @@ export const useInstrumentationRuleCRUD = (): UseInstrumentationRuleCrud => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
-      await mutateDelete({ ruleId });
-      const rule = instrumentationRules.find((r) => r.ruleId === ruleId);
-      const type = rule ? rule.type : '';
-      removeEntities(EntityTypes.InstrumentationRule, [ruleId]);
-      notifyUser(StatusType.Success, Crud.Delete, `Successfully deleted "${type || ruleId}" rule`, ruleId);
+      const res = await mutateDelete({ ruleId });
+      const ok = res.data?.deleteInstrumentationRule;
+      if (ok) {
+        const { type } = instrumentationRules.find((r) => r.ruleId === ruleId) || {};
+        removeEntities(EntityTypes.InstrumentationRule, [ruleId]);
+        notifyUser(StatusType.Success, Crud.Delete, `Successfully deleted "${type || ruleId}" rule`, ruleId);
+      }
     }
   };
 

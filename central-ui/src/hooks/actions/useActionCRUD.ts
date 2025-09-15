@@ -1,10 +1,9 @@
 import { useEffect } from 'react';
 import { useProxy } from '../proxy';
 import { useConfig } from '../config';
-import type { FetchedAction } from '@/types';
+import type { ActionInput, FetchedAction } from '@/types';
 import type { ActionFormData } from '@odigos/ui-kit/types';
 import { getSseTargetFromId } from '@odigos/ui-kit/functions';
-import { mapActionsFormToGqlInput, mapFetchedActions } from '@/utils';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { useEntityStore, useNotificationStore } from '@odigos/ui-kit/store';
 import { CREATE_ACTION, DELETE_ACTION, GET_ACTIONS, UPDATE_ACTION } from '@/graphql';
@@ -19,10 +18,30 @@ interface UseActionCrud {
   deleteAction: (id: string, actionType: ActionType) => void;
 }
 
+const stringifyRenames = (action: ActionFormData): ActionInput => {
+  return {
+    ...action,
+    fields: {
+      ...action.fields,
+      renames: action.fields.renames ? JSON.stringify(action.fields.renames) : null,
+    },
+  };
+};
+
+const parseRenames = (action: FetchedAction): Action => {
+  return {
+    ...action,
+    fields: {
+      ...action.fields,
+      renames: action.fields.renames ? JSON.parse(action.fields.renames) : null,
+    },
+  };
+};
+
 export const useActionCRUD = (): UseActionCrud => {
   const { isReadonly } = useConfig();
   const { addNotification } = useNotificationStore();
-  const { actionsLoading, setEntitiesLoading, actions, addEntities, removeEntities } = useEntityStore();
+  const { actionsLoading, setEntitiesLoading, actions, setEntities, removeEntities } = useEntityStore();
 
   const notifyUser = (type: StatusType, title: string, message: string, id?: string, hideFromHistory?: boolean) => {
     addNotification({
@@ -36,8 +55,8 @@ export const useActionCRUD = (): UseActionCrud => {
   };
 
   const { fetch: queryAll } = useProxy<{ computePlatform?: { actions?: FetchedAction[] } }>(GET_ACTIONS);
-  const { fetch: mutateCreate } = useProxy<{ createAction: { id: string; type: ActionType } }>(CREATE_ACTION);
-  const { fetch: mutateUpdate } = useProxy<{ updateAction: { id: string; type: ActionType } }>(UPDATE_ACTION);
+  const { fetch: mutateCreate } = useProxy<{ createAction: FetchedAction }, { action: ActionInput }>(CREATE_ACTION);
+  const { fetch: mutateUpdate } = useProxy<{ updateAction: FetchedAction }, { id: string; action: ActionInput }>(UPDATE_ACTION);
   const { fetch: mutateDelete } = useProxy<{ deleteAction: boolean }>(DELETE_ACTION);
 
   const fetchActions: UseActionCrud['fetchActions'] = async () => {
@@ -47,29 +66,38 @@ export const useActionCRUD = (): UseActionCrud => {
     if (data?.computePlatform?.actions) {
       const { actions: items } = data.computePlatform;
 
-      addEntities(EntityTypes.Action, mapFetchedActions(items));
+      setEntities(EntityTypes.Action, items.map(parseRenames));
       setEntitiesLoading(EntityTypes.Action, false);
     }
   };
 
-  const createAction: UseActionCrud['createAction'] = async (action) => {
+  const createAction: UseActionCrud['createAction'] = async (payload) => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
-      const res = await mutateCreate({ action: mapActionsFormToGqlInput({ ...action }) });
-      const id = res.data?.createAction.id;
-      notifyUser(StatusType.Success, Crud.Create, `Successfully created "${action.type}" action`, id);
-      fetchActions();
+      const res = await mutateCreate({ action: stringifyRenames(payload) });
+      const action = res.data?.createAction;
+      if (action) {
+        const { id, type } = action;
+        // addEntities(EntityTypes.Action, [action]);
+        fetchActions(); // refetch because of conditions
+        notifyUser(StatusType.Success, Crud.Create, `Successfully created "${type}" action`, id);
+      }
     }
   };
 
-  const updateAction: UseActionCrud['updateAction'] = async (id, action) => {
+  const updateAction: UseActionCrud['updateAction'] = async (id, payload) => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
-      await mutateUpdate({ id, action: mapActionsFormToGqlInput({ ...action }) });
-      notifyUser(StatusType.Success, Crud.Update, `Successfully updated "${action.type}" action`, id);
-      fetchActions();
+      const res = await mutateUpdate({ id, action: stringifyRenames(payload) });
+      const action = res.data?.updateAction;
+      if (action) {
+        const { id, type } = action;
+        // addEntities(EntityTypes.Action, [action]);
+        fetchActions(); // refetch because of conditions
+        notifyUser(StatusType.Success, Crud.Update, `Successfully updated "${type}" action`, id);
+      }
     }
   };
 
@@ -77,9 +105,12 @@ export const useActionCRUD = (): UseActionCrud => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
-      await mutateDelete({ id, actionType });
-      notifyUser(StatusType.Success, Crud.Delete, `Successfully deleted "${actionType}" action`, id);
-      removeEntities(EntityTypes.Action, [id]);
+      const res = await mutateDelete({ id, actionType });
+      const ok = res.data?.deleteAction;
+      if (ok) {
+        removeEntities(EntityTypes.Action, [id]);
+        notifyUser(StatusType.Success, Crud.Delete, `Successfully deleted "${actionType}" action`, id);
+      }
     }
   };
 
