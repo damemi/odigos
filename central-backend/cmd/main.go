@@ -139,15 +139,10 @@ func newRouter(gqlHandler *handler.Server, wsServer *websocketserver.WebSocketSe
 		AllowCredentials: true,
 	}))
 
-	router.GET("/ws/proxy", func(c *gin.Context) {
-		wsServer.HandleConnection(c.Writer, c.Request)
-	})
-
+	router.GET("/healthz", func(c *gin.Context) { c.Status(200) })
+	router.GET("/ws/proxy", func(c *gin.Context) { wsServer.HandleConnection(c.Writer, c.Request) })
 	router.GET("/sse/events", func(c *gin.Context) { sseHub.SSEHandler(c.Writer, c.Request) })
-
-	router.POST("/graphql", authContextMiddleware(), func(c *gin.Context) {
-		gqlHandler.ServeHTTP(c.Writer, c.Request)
-	})
+	router.POST("/graphql", authContextMiddleware(), func(c *gin.Context) { gqlHandler.ServeHTTP(c.Writer, c.Request) })
 
 	return router
 }

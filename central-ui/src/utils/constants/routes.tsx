@@ -14,16 +14,16 @@ export const ROUTES = {
   SERVICE_MAP: (proxyID: string) => `/service-map/${proxyID}`,
 };
 
-const IS_PROD = process.env.NODE_ENV === 'production';
-const PORT = process.env.PORT || 8081;
+const PROTOCOL = typeof window !== 'undefined' ? window.location.protocol : 'http';
+const HOSTNAME = typeof window !== 'undefined' ? window.location.hostname : '';
+const IS_INGRESSED_DOMAIN = HOSTNAME && HOSTNAME !== 'localhost';
 
-const DEV_HTTP_URL = `http://localhost:${PORT}`;
-const DEV_WS_URL = `ws://localhost:${PORT}`;
-const PROD_HTTP_ORIGIN = typeof window !== 'undefined' ? `http://${window.location.hostname}:${PORT}` : DEV_HTTP_URL;
-const PROD_WS_ORIGIN = typeof window !== 'undefined' ? 'ws://' + window.location.hostname + PORT : DEV_WS_URL;
+const BACKEND_PORT = 8081;
+const BACKEND_WS_ORIGIN = IS_INGRESSED_DOMAIN ? `ws://${HOSTNAME}` : `ws://localhost:${BACKEND_PORT}`;
+const BACKEND_HTTP_ORIGIN = IS_INGRESSED_DOMAIN ? `${PROTOCOL}//${HOSTNAME}` : `http://localhost:${BACKEND_PORT}`;
 
 export const API = {
-  GRAPHQL_HTTP: `${IS_PROD ? PROD_HTTP_ORIGIN : DEV_HTTP_URL}/graphql`,
-  GRAPHQL_WS: `${IS_PROD ? PROD_WS_ORIGIN : DEV_WS_URL}/graphql`,
-  SSE_EVENTS: `${DEV_HTTP_URL}/sse/events`,
+  GRAPHQL_WS: `${BACKEND_WS_ORIGIN}/graphql`,
+  GRAPHQL_HTTP: `${BACKEND_HTTP_ORIGIN}/graphql`,
+  SSE_EVENTS: `${BACKEND_HTTP_ORIGIN}/sse/events`,
 };
