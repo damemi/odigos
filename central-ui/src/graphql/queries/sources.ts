@@ -55,6 +55,11 @@ export const GET_SOURCE = `
           message
           lastTransitionTime
         }
+        workloadOdigosHealthStatus {
+          status
+          reasonEnum
+          message
+        }
       }
     }
   }
