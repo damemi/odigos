@@ -10,9 +10,11 @@ spec:
       try:
         - apply:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/simple-trace-db-deployment.yaml
-        - assert:
-            timeout: 1m
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-trace-db-running.yaml
+
+    - name: Install - Simple Demo Apps
+      try:
+        - apply:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/install-simple-demo.yaml
 
     - name: Install Odigos latest release from GitHub for pre upgrade setup
       try:
@@ -33,7 +35,7 @@ spec:
               fi
 
               # Fetch the release assets from GitHub API
-              ASSETS_JSON=$(curl -s --retry 5 --retry-delay 1 --retry-max-time 30 "$REPO_URL")
+              ASSETS_JSON=$(curl -s --retry 5 --retry-delay 5 "$REPO_URL")
 
               # Find the download URL that matches the OS and architecture
               DOWNLOAD_URL=$(echo "$ASSETS_JSON" | grep "browser_download_url" | grep "$OS" | grep "$ARCH" | cut -d '"' -f 4)
@@ -45,7 +47,7 @@ spec:
               fi
 
               # Download the matched asset
-              curl -L --retry 5 --retry-delay 1 --retry-max-time 30 -o odigos-latest.tar.gz "$DOWNLOAD_URL"
+              curl -L --retry 5 --retry-delay 5 -o odigos-latest.tar.gz "$DOWNLOAD_URL"
 
               # Extract the downloaded file
               tar -xvzf odigos-latest.tar.gz
@@ -55,27 +57,32 @@ spec:
               # Run the Odigos CLI installation
               ./odigos install --namespace odigos-test --onprem-token $ODIGOS_API_KEY
 
-              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o verify_odigos_installation.sh https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/verify_odigos_installation.sh
-              bash verify_odigos_installation.sh odigos-test
+              ../../common/verify_odigos_installation.sh odigos-test
             timeout: 5m # longer timeout since the images are being pulled from dockerhub
         - assert:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/latest-odigos-version-installed.yaml
-
-    - name: Install Simple Demo Apps
-      try:
-        - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/install-simple-demo.yaml
+            timeout: 1m
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/odigos-installed.yaml
+      catch:
         - script:
-            timeout: 2m
             content: |
-              kubectl wait --for=condition=ready pod -l app=coupon --timeout=120s
-              kubectl wait --for=condition=ready pod -l app=currency --timeout=120s
-              kubectl wait --for=condition=ready pod -l app=frontend --timeout=120s
-              kubectl wait --for=condition=ready pod -l app=geolocation --timeout=120s
-              kubectl wait --for=condition=ready pod -l app=inventory --timeout=120s
-              kubectl wait --for=condition=ready pod -l app=pricing --timeout=120s
-              kubectl wait --for=condition=ready pod -l app=membership --timeout=120s
+              kubectl describe pods -n odigos-test
+
+    - name: Verify node Odiglet installed label has been added
+      try:
         - assert:
+            timeout: 30s
+            file: ../../common/assert/node-odiglet-label.yaml
+
+    - name: Assert Trace DB is up
+      try:
+        - assert:
+            timeout: 1m
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-trace-db-running.yaml
+
+    - name: Assert - Simple Demo Apps Installed
+      try:
+        - assert:
+            timeout: 3m
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-installed.yaml
 
     - name: Instrument Namespace
@@ -112,17 +119,6 @@ spec:
         - assert:
             file: assert-custom-offsets.yaml
 
-    - name: Odigos pipeline pods ready
-      # We make sure that the pipeline pods are ready before proceeding with the next steps
-      # This is intentionally different from pipeline-ready.yaml, which checks for the pipeline CRDs
-      # When adding a feature related to the pipeline, if we would use the same assert before the upgrade, the test would fail.
-      # Since the version installed here is latest official one.
-      try:
-        - script:
-            timeout: 1m
-            content: |
-              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert_pipeline_pods_ready.sh | bash -s -- "odigos-test" "120s"
-
     - name: Upgrade to HEAD version with the current compiled cli
       try:
         - script:
@@ -132,10 +128,21 @@ spec:
             timeout: 3m
             file: assert-odigos-upgraded-with-custom-offsets.yaml
 
+    - name: Assert simple demo apps ready after upgrade
+      try:
+        - assert:
+            timeout: 3m
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-installed.yaml
+
     - name: Instrumented and pipeline ready after upgrade
       try:
         - assert:
+            timeout: 3m
             file: ../../common/assert/instrumented-and-pipeline.yaml
+      catch:
+        - script:
+            content: |
+              kubectl describe pods -n default
 
     - name: Generate Traffic
       try:
@@ -153,17 +160,21 @@ spec:
         - script:
             timeout: 1m
             content: |
+              yaml=$(mktemp)
+              script=$(mktemp)
+              curl -sSL --retry 5 --retry-delay 5 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/wait-for-trace.yaml
+              curl -sSL --retry 5 --retry-delay 5 -o "$script" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh
+
               while true; do
-                yaml=$(mktemp)
-                curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/wait-for-trace.yaml
-                curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
-
+                bash "$script" "$yaml"
                 status=$?
-                rm -f "$yaml"
-
-                [ $status -eq 0 ] && break
+                if [ $status -eq 0 ]; then
+                  break
+                fi
                 sleep 1
               done
+
+              rm -f "$yaml" "$script"
       catch:
         - script:
             content: |
@@ -175,8 +186,8 @@ spec:
         - script:
             content: |
               yaml=$(mktemp)
-              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/context-propagation.yaml
-              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
+              curl -sSL --retry 5 --retry-delay 5 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/context-propagation.yaml
+              curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
       catch:
         - podLogs:
             name: odiglet
@@ -187,8 +198,8 @@ spec:
         - script:
             content: |
               yaml=$(mktemp)
-              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/resource-attributes.yaml
-              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
+              curl -sSL --retry 5 --retry-delay 5 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/resource-attributes.yaml
+              curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
       catch:
         - podLogs:
             name: odiglet
@@ -199,8 +210,8 @@ spec:
         - script:
             content: |
               yaml=$(mktemp)
-              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/span-attributes.yaml
-              curl -sSL --retry 5 --retry-delay 1 --retry-max-time 30 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
+              curl -sSL --retry 5 --retry-delay 5 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/span-attributes.yaml
+              curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
       catch:
         - podLogs:
             name: odiglet

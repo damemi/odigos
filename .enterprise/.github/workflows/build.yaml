@@ -60,11 +60,15 @@ jobs:
           cache-from: type=local,src=${{ matrix.service }}-enterprise-cache
           outputs: type=docker,dest=/tmp/${{ matrix.service }}-enterprise.tar
           build-args: SERVICE_NAME=${{ matrix.service }}
-      - name: Upload artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
+      - name: Cache enterprise component
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
-          name: ${{ matrix.service }}-enterprise${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}
           path: /tmp/${{ matrix.service }}-enterprise.tar
+          key: ${{ matrix.service }}-enterprise${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}-${{ github.head_ref }}-${{ env.IMAGE_TAG }}-${{ hashFiles(format('{0}/**', matrix.service)) }}
+          restore-keys: |
+            ${{ matrix.service }}-enterprise${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}-${{ github.head_ref }}-${{ env.IMAGE_TAG }}-
+            ${{ matrix.service }}-enterprise${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}-${{ github.head_ref }}-
+            ${{ matrix.service }}-enterprise${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}-
 
   build-oss-components-for-tests:
     runs-on: depot-ubuntu-24.04-4
@@ -110,15 +114,19 @@ jobs:
           docker save registry.odigos.io/odigos-autoscaler:${{ env.IMAGE_TAG }} -o /tmp/odigos-autoscaler.tar
           docker save registry.odigos.io/odigos-scheduler:${{ env.IMAGE_TAG }} -o /tmp/odigos-scheduler.tar
           docker save registry.odigos.io/odigos-collector:${{ env.IMAGE_TAG }} -o /tmp/odigos-collector.tar
-      - name: Upload artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
+      - name: Cache OSS components
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
-          name: odigos-oss-components
           path: |
             /tmp/odigos-autoscaler.tar
             /tmp/odigos-scheduler.tar
             /tmp/odigos-collector.tar
             /tmp/odigos-cli
+          key: odigos-oss-components-${{ hashFiles('odigos/.git/refs/heads/main') }}-${{ env.IMAGE_TAG }}-${{ hashFiles('odigos/**') }}
+          restore-keys: |
+            odigos-oss-components-${{ hashFiles('odigos/.git/refs/heads/main') }}-${{ env.IMAGE_TAG }}-
+            odigos-oss-components-${{ hashFiles('odigos/.git/refs/heads/main') }}-
+            odigos-oss-components-
 
   kubernetes-tests:
     needs:
@@ -180,23 +188,45 @@ jobs:
           cluster_name: kind
           config: kind-config.yaml
 
-      - name: Download Odiglet Enterprise Artifact
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 #v5.0.0
-        with:
-          name: odiglet-enterprise
-          path: /tmp
+      - name: wait for cluster readiness
+        run: |
+          kubectl wait --for=condition=Ready node --all --timeout=180s
+          kubectl wait -n kube-system --for=condition=Ready pod --all --timeout=300s
+          kubectl rollout status -n kube-system deployment/coredns --timeout=300s
 
-      - name: Download Instrumentor Enterprise Artifact
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 #v5.0.0
+      - name: Restore Odiglet Enterprise from Cache
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
-          name: instrumentor-enterprise
-          path: /tmp
+          path: /tmp/odiglet-enterprise.tar
+          key: odiglet-enterprise-${{ github.head_ref }}-${{ env.IMAGE_TAG }}-${{ hashFiles('odiglet/**') }}
+          restore-keys: |
+            odiglet-enterprise-${{ github.head_ref }}-${{ env.IMAGE_TAG }}-
+            odiglet-enterprise-${{ github.head_ref }}-
+            odiglet-enterprise-
 
-      - name: Download Odigos OSS Components
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 #v5.0.0
+      - name: Restore Instrumentor Enterprise from Cache
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
-          name: odigos-oss-components
-          path: /tmp
+          path: /tmp/instrumentor-enterprise.tar
+          key: instrumentor-enterprise-${{ github.head_ref }}-${{ env.IMAGE_TAG }}-${{ hashFiles('instrumentor/**') }}
+          restore-keys: |
+            instrumentor-enterprise-${{ github.head_ref }}-${{ env.IMAGE_TAG }}-
+            instrumentor-enterprise-${{ github.head_ref }}-
+            instrumentor-enterprise-
+
+      - name: Restore Odigos OSS Components from Cache
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: |
+            /tmp/odigos-autoscaler.tar
+            /tmp/odigos-scheduler.tar
+            /tmp/odigos-collector.tar
+            /tmp/odigos-cli
+          key: odigos-oss-components-${{ hashFiles('odigos/.git/refs/heads/main') }}-${{ env.IMAGE_TAG }}-${{ hashFiles('odigos/**') }}
+          restore-keys: |
+            odigos-oss-components-${{ hashFiles('odigos/.git/refs/heads/main') }}-${{ env.IMAGE_TAG }}-
+            odigos-oss-components-${{ hashFiles('odigos/.git/refs/heads/main') }}-
+            odigos-oss-components-
 
       - name: Load Odigos Components to Kind Cluster
         run: |
