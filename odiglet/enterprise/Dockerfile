@@ -115,7 +115,7 @@ ADD https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/relea
 RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetry-dotnet-instrumentation-linux-musl.zip
 
 # Dtrace injector
-FROM --platform=$BUILDPLATFORM keyval/javabuilder-base:v3.0 AS java-builder
+FROM keyval/javabuilder-base:v3.0 AS java-builder
 WORKDIR /dtrace-injector
 RUN --mount=type=secret,id=github_token \
     git clone https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-java-instrumentation.git

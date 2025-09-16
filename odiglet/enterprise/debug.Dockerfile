@@ -107,7 +107,7 @@ RUN ARCH_SUFFIX=$(cat /tmp/arch_suffix) && \
     mv OpenTelemetry.AutoInstrumentation.Native-${ARCH_SUFFIX}.so linux-glibc/OpenTelemetry.AutoInstrumentation.Native.so
 
 # Dtrace injector
-FROM --platform=$BUILDPLATFORM keyval/javabuilder-base:v1.0 AS java-builder
+FROM keyval/javabuilder-base:v1.0 AS java-builder
 WORKDIR /dtrace-injector
 RUN --mount=type=secret,id=github_token \
     git clone https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-java-instrumentation.git
