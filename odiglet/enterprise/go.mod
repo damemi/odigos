@@ -3,24 +3,24 @@ module github.com/odigos-io/odigos-enterprise/odiglet
 go 1.24.0
 
 require (
-	github.com/odigos-io/ebpf-generic-instrumentation v0.0.4-0.20250724082156-0c6161be6292
+	github.com/odigos-io/ebpf-generic-instrumentation v0.0.4
 	github.com/odigos-io/ebpf-java-instrumentation v0.0.0-20250904112724-df9f3f0838a3
 	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.0.0-20250904112724-df9f3f0838a3
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20250724082002-7250611b1a89
-	github.com/odigos-io/mysql-instrumentation v0.0.0-20250105084718-c6cb16fc984d
+	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.2.0-pre1.0.20250907082103-cb013ede8a6b
-	github.com/odigos-io/odigos/common v1.2.0-pre1.0.20250907082103-cb013ede8a6b
-	github.com/odigos-io/odigos/instrumentation v1.2.0-pre1.0.20250907082103-cb013ede8a6b
-	github.com/odigos-io/odigos/k8sutils v1.2.0-pre1.0.20250907082103-cb013ede8a6b
-	github.com/odigos-io/odigos/odiglet v1.2.0-pre1.0.20250911124743-30716b7a9645
-	github.com/odigos-io/odigos/procdiscovery v1.2.0-pre1.0.20250907070502-5776445d8808
+	github.com/odigos-io/odigos/api v1.2.0-pre1.0.20250914130231-d13e612a9c24
+	github.com/odigos-io/odigos/common v1.2.0-pre1.0.20250914130231-d13e612a9c24
+	github.com/odigos-io/odigos/instrumentation v1.2.0-pre1.0.20250914130231-d13e612a9c24
+	github.com/odigos-io/odigos/k8sutils v1.2.0-pre1.0.20250914130231-d13e612a9c24
+	github.com/odigos-io/odigos/odiglet v1.2.0-pre1.0.20250914130231-d13e612a9c24
+	github.com/odigos-io/odigos/procdiscovery v1.2.0-pre1.0.20250914130231-d13e612a9c24
 	go.opentelemetry.io/auto v0.22.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.37.0
 	go.opentelemetry.io/otel/trace v1.37.0
-	k8s.io/client-go v0.33.1
-	sigs.k8s.io/controller-runtime v0.20.4
+	k8s.io/client-go v0.34.1
+	sigs.k8s.io/controller-runtime v0.22.1
 )
 
 require (
@@ -32,10 +32,10 @@ require (
 	github.com/cilium/ebpf v0.19.1-0.20250815145053-c9de60689836 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/elliotchance/orderedmap v1.6.0 // indirect
-	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
+	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
-	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
+	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
@@ -48,7 +48,7 @@ require (
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/btree v1.1.3 // indirect
-	github.com/google/gnostic-models v0.6.9 // indirect
+	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/pprof v0.0.0-20250630185457-6e76a2b096b5 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -61,7 +61,7 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/moby/sys/mountinfo v0.7.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/odigos-io/odigos/distros v1.2.0-pre1.0.20250907082103-cb013ede8a6b // indirect
 	github.com/odigos-io/odigos/opampserver v1.2.0-pre1 // indirect
@@ -69,6 +69,7 @@ require (
 	github.com/odigos-io/runtime-detector v0.0.19 // indirect
 	github.com/parca-dev/parca-agent v0.9.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_golang v1.22.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.65.0 // indirect
@@ -99,57 +100,56 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
+	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/arch v0.20.0 // indirect
 	golang.org/x/exp v0.0.0-20250813145105-42675adae3e6 // indirect
-	golang.org/x/net v0.41.0 // indirect
+	golang.org/x/net v0.44.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
-	golang.org/x/sync v0.16.0 // indirect
-	golang.org/x/sys v0.35.0 // indirect
-	golang.org/x/term v0.32.0 // indirect
-	golang.org/x/text v0.27.0 // indirect
+	golang.org/x/sync v0.17.0 // indirect
+	golang.org/x/sys v0.36.0 // indirect
+	golang.org/x/term v0.35.0 // indirect
+	golang.org/x/text v0.29.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20250603155806-513f23925822 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect
-	google.golang.org/grpc v1.73.0 // indirect
-	google.golang.org/protobuf v1.36.6 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20250707201910-8d1bb00bc6a7 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250908214217-97024824d090 // indirect
+	google.golang.org/grpc v1.75.1 // indirect
+	google.golang.org/protobuf v1.36.9 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.33.1 // indirect
-	k8s.io/apiextensions-apiserver v0.33.1 // indirect
-	k8s.io/apimachinery v0.33.1 // indirect
-	k8s.io/cri-api v0.33.1 // indirect
+	k8s.io/api v0.34.1 // indirect
+	k8s.io/apiextensions-apiserver v0.34.1 // indirect
+	k8s.io/apimachinery v0.34.1 // indirect
+	k8s.io/cri-api v0.34.1 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff // indirect
-	k8s.io/utils v0.0.0-20241210054802-24370beab758 // indirect
+	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b // indirect
+	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397 // indirect
 	rsc.io/binaryregexp v0.2.0 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.7.0 // indirect
-	sigs.k8s.io/yaml v1.5.0 // indirect
+	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
+	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
 // currently, enterprise-go-instrumentation has no versioning or releases, so we pin it to main here.
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250910140003-ee81a3402baa
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250914075943-5d22c9cd2425
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.2.0-pre1.0.20250910135826-63071ae9f20d
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.2.0-pre1.0.20250914130231-d13e612a9c24
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.2.0-pre1.0.20250910135826-63071ae9f20d
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.2.0-pre1.0.20250914130231-d13e612a9c24
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.2.0-pre1.0.20250910135826-63071ae9f20d
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.2.0-pre1.0.20250914130231-d13e612a9c24
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.2.0-pre1.0.20250910135826-63071ae9f20d
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.2.0-pre1.0.20250914130231-d13e612a9c24
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.2.0-pre1.0.20250910135826-63071ae9f20d
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.2.0-pre1.0.20250914130231-d13e612a9c24
 
-replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v1.2.0-pre1.0.20250910135826-63071ae9f20d
-
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.2.0-pre1.0.20250910135826-63071ae9f20d
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.2.0-pre1.0.20250914130231-d13e612a9c24
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 

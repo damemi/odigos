@@ -2,12 +2,12 @@ package sdks
 
 import (
 	"context"
-	"fmt"
 
 	auto "github.com/odigos-io/ebpf-generic-instrumentation"
 	"github.com/odigos-io/ebpf-generic-instrumentation/pkg/opentelemetry"
-	"github.com/odigos-io/odigos/common/consts"
 	"github.com/odigos-io/odigos/instrumentation"
+	"github.com/odigos-io/odigos/k8sutils/pkg/env"
+	"github.com/odigos-io/odigos/k8sutils/pkg/service"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 )
@@ -23,20 +23,28 @@ func NewPythonInstrumentationFactoryEnterprise() instrumentation.Factory {
 }
 
 func (p *PythonInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
-	c := otlptracegrpc.NewClient(otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint(fmt.Sprintf("localhost:%d", consts.OTLPPort)))
-	exporter, err := opentelemetry.New(ctx, c)
-	if err != nil {
-		log.Logger.Error(err, "failed to create exporter")
-		return nil, err
+	opts := []auto.InstrumentationOption{
+		auto.WithPID(pid),
+		auto.WithServiceName(settings.ServiceName),
+	}
+
+	if settings.TracesMap.Map == nil {
+		c := otlptracegrpc.NewClient(otlptracegrpc.WithInsecure(),
+			otlptracegrpc.WithEndpoint(service.LocalTrafficOTLPGrpcDataCollectionEndpoint(env.Current.NodeIP)))
+		exporter, err := opentelemetry.New(ctx, c)
+		if err != nil {
+			log.Logger.Error(err, "failed to create exporter")
+			return nil, err
+		}
+		opts = append(opts, auto.WithTraceExporter(exporter))
+	} else {
+		opts = append(opts, auto.WithEventsBuffer(settings.TracesMap.Map, settings.TracesMap.ExternalReader))
 	}
 
 	// In Python, resource attributes are provided through OpAMP, which is why WithResourceAttributes is not sent as in other languages.
 	inst, err := auto.NewInstrumentation(
 		ctx,
-		auto.WithPID(pid),
-		auto.WithServiceName(settings.ServiceName),
-		auto.WithTraceExporter(exporter),
+		opts...,
 	)
 
 	if err != nil {
