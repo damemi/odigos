@@ -3,7 +3,6 @@ package redisclient
 import (
 	"context"
 	"encoding/json"
-	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/odigos-io/central-backend/internal/config"
@@ -189,5 +188,5 @@ func (r *RedisClient) SetSystemInitialized(ctx context.Context, initialized bool
 	if initialized {
 		value = "true"
 	}
-	return r.client.Set(ctx, consts.SystemInitializedKey, value, time.Duration(consts.SystemInitializedTTL)*time.Second).Err()
+	return r.client.Set(ctx, consts.SystemInitializedKey, value, 0).Err()
 }
