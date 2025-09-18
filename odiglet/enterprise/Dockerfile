@@ -114,26 +114,6 @@ ARG LEGACY_DOTNET_OTEL_VERSION=v0.4.0-beta.1
 ADD https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/$LEGACY_DOTNET_OTEL_VERSION/opentelemetry-dotnet-instrumentation-linux-musl.zip .
 RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetry-dotnet-instrumentation-linux-musl.zip
 
-# Dtrace injector
-FROM keyval/javabuilder-base:v3.0 AS java-builder
-WORKDIR /dtrace-injector
-RUN --mount=type=secret,id=github_token \
-    git clone https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-java-instrumentation.git
-WORKDIR /dtrace-injector/ebpf-java-instrumentation/utils
-RUN mvn clean package -DskipTests
-RUN mkdir -p ../dtrace-injector/target && cp ./target/utils.jar ../dtrace-injector/target/
-WORKDIR /dtrace-injector/ebpf-java-instrumentation/dtrace-injector
-ENV JAVA_HOME=/usr/local/openjdk-11
-RUN make generate-headers
-RUN make build-jni && mvn package -DskipTests
-# build extension
-WORKDIR /dtrace-injector/ebpf-java-instrumentation/otel_agent_extension
-ARG JAVA_OTEL_VERSION=v2.6.0
-ENV JAVA_OTEL_VERSION=$JAVA_OTEL_VERSION
-RUN make build-agent
-RUN make build-jni
-
-
 # PHP
 FROM --platform=$BUILDPLATFORM maniator/gh AS php-agents
 WORKDIR /php-agents
@@ -264,15 +244,9 @@ COPY --from=nodejs-enterprise-agent-build /nodejs-enterprise-prod/dtrace-injecto
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
 COPY --from=dotnet-builder /legacy-dotnet-instrumentation /instrumentations/legacy-dotnet
 
-# Java eBPF
-COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injector/tracing_probes.so /instrumentations/java-ebpf/tracing_probes.so
-COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injector/target/dtrace-injector-1.0-SNAPSHOT.jar /instrumentations/java-ebpf/dtrace-injector.jar
-COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injector/target/utils.jar /instrumentations/java-ebpf/utils.jar
-
-# Java Agent Extension
-COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/otel_agent_extension/build/opentelemetry-javaagent.jar /instrumentations/java-ext-ebpf/javaagent.jar
-COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/otel_agent_extension/extension/build/libs/otel_agent_extension.jar /instrumentations/java-ext-ebpf/otel_agent_extension.jar
-COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/otel_agent_extension/extension/end_span_usdt.so /instrumentations/java-ext-ebpf/end_span_usdt.so
+# Java
+COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v0.5.0 /instrumentations/java-ebpf /instrumentations/java-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v0.5.0 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
 
 # PHP
 COPY --from=php-agents /php-agents/opentelemetry-php/8.0 /instrumentations/php/8.0

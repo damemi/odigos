@@ -106,20 +106,6 @@ RUN ARCH_SUFFIX=$(cat /tmp/arch_suffix) && \
     wget https://github.com/odigos-io/opentelemetry-dotnet-instrumentation/releases/download/${DOTNET_OTEL_VERSION}/OpenTelemetry.AutoInstrumentation.Native-${ARCH_SUFFIX}.so && \
     mv OpenTelemetry.AutoInstrumentation.Native-${ARCH_SUFFIX}.so linux-glibc/OpenTelemetry.AutoInstrumentation.Native.so
 
-# Dtrace injector
-FROM keyval/javabuilder-base:v1.0 AS java-builder
-WORKDIR /dtrace-injector
-RUN --mount=type=secret,id=github_token \
-    git clone https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-java-instrumentation.git
-WORKDIR /dtrace-injector/ebpf-java-instrumentation/utils
-RUN mvn clean package -DskipTests
-RUN mkdir -p ../dtrace-injector/target && cp ./target/utils.jar ../dtrace-injector/target/
-WORKDIR /dtrace-injector/ebpf-java-instrumentation/dtrace-injector
-ENV JAVA_HOME=/usr/local/openjdk-8
-RUN make generate-headers
-RUN make build-jni && mvn package -DskipTests
-
-
 # PHP
 FROM --platform=$BUILDPLATFORM maniator/gh AS php-agents
 WORKDIR /php-agents
@@ -240,10 +226,9 @@ COPY --from=nodejs-enterprise-agent-build /nodejs-enterprise-prod/dtrace-injecto
 # .NET
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
 
-# Java eBPF
-COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injector/tracing_probes.so /instrumentations/java-ebpf/tracing_probes.so
-COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injector/target/dtrace-injector-1.0-SNAPSHOT.jar /instrumentations/java-ebpf/dtrace-injector.jar
-COPY --from=java-builder /dtrace-injector/ebpf-java-instrumentation/dtrace-injector/target/utils.jar /instrumentations/java-ebpf/utils.jar
+# Java
+COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v0.5.0 /instrumentations/java-ebpf /instrumentations/java-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v0.5.0 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
 
 # PHP
 COPY --from=php-agents /php-agents/opentelemetry-php/8.0 /instrumentations/php/8.0
