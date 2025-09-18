@@ -1,5 +1,6 @@
 import React, { type FC } from 'react';
 import { Role, User } from '@/types';
+import { useUserStore } from '@/store';
 import { ROLE, ROLE_OPTIONS, TEAMS_COUNT, TEAMS } from '@/utils';
 import { DataCard, Dropdown, Text } from '@odigos/ui-kit/components';
 import { DataCardCellStretch, DataCardCellTitle, DataCardContentRow, DataCardContentCell } from '../cards/styled';
@@ -16,6 +17,8 @@ interface UserCardProps {
 }
 
 const UserCard: FC<UserCardProps> = ({ user, formData, handleFormChange }) => {
+  const { isAdmin } = useUserStore();
+
   const teamsCount = user.teams?.length || 0;
   // TODO: uncomment when user attributes are implemented
   // const platformsCount = user.computePlatforms?.length || 0;
@@ -29,7 +32,7 @@ const UserCard: FC<UserCardProps> = ({ user, formData, handleFormChange }) => {
             <Dropdown
               placeholder={ROLE}
               options={ROLE_OPTIONS}
-              disabled={user.role !== Role.ADMIN}
+              disabled={!isAdmin}
               value={ROLE_OPTIONS.find(({ id }) => id === formData.role)}
               onSelect={(opt) => handleFormChange('role', opt.id)}
               onDeselect={() => {}}

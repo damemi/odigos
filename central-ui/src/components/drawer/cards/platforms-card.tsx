@@ -7,6 +7,7 @@ import { MinWidthWide, Relative } from '@/components/styled';
 import { DataCardContentColumn, DataCardContentRow } from './styled';
 import { MinusCircledIcon, PlusIcon, SearchIcon } from '@odigos/ui-kit/icons';
 import { DataCard, DataFinger, Dropdown, IconButton, Input, NoDataFound, PopupForm } from '@odigos/ui-kit/components';
+import { useUserStore } from '@/store';
 
 interface FormData {
   addComputePlatformIds: string[];
@@ -22,6 +23,7 @@ interface PlatformsCardProps {
 
 const PlatformsCard: FC<PlatformsCardProps> = ({ currentComputePlatforms, formData, handleFormChange }) => {
   const theme = Theme.useTheme();
+  const { isAdmin } = useUserStore();
   const { computePlatforms } = useComputePlatformsCRUD();
 
   const [search, setSearch] = useState('');
@@ -54,9 +56,11 @@ const PlatformsCard: FC<PlatformsCardProps> = ({ currentComputePlatforms, formDa
           <Input icon={SearchIcon} placeholder='Search...' value={search} onChange={(e) => setSearch(e.target.value)} />
 
           <Relative>
-            <IconButton size={32} onClick={toggleAdd} withBorder>
-              <PlusIcon />
-            </IconButton>
+            {isAdmin && (
+              <IconButton size={32} onClick={toggleAdd} withBorder>
+                <PlusIcon />
+              </IconButton>
+            )}
 
             <PopupForm
               flipX
@@ -124,26 +128,30 @@ const PlatformsCard: FC<PlatformsCardProps> = ({ currentComputePlatforms, formDa
               title={name}
               subTitle={type}
               icons={[getPlatformIcon(type)]}
-              renderActions={() => (
-                <IconButton
-                  tooltip='Remove compute platform'
-                  onClick={() => {
-                    if (formData.addComputePlatformIds.includes(id)) {
-                      const newAddComputePlatformIds = formData.addComputePlatformIds.filter((str) => str !== id);
-                      handleFormChange('addComputePlatformIds', newAddComputePlatformIds);
-                    }
+              renderActions={
+                isAdmin
+                  ? () => (
+                      <IconButton
+                        tooltip='Remove compute platform'
+                        onClick={() => {
+                          if (formData.addComputePlatformIds.includes(id)) {
+                            const newAddComputePlatformIds = formData.addComputePlatformIds.filter((str) => str !== id);
+                            handleFormChange('addComputePlatformIds', newAddComputePlatformIds);
+                          }
 
-                    const foundRemove = formData.removeComputePlatformIds.find((str) => str === id);
-                    const foundCurrent = currentComputePlatforms.find((cp) => cp.id === id);
-                    if (!foundRemove && foundCurrent) {
-                      const newRemoveComputePlatformIds = formData.removeComputePlatformIds.filter((str) => str !== id);
-                      handleFormChange('removeComputePlatformIds', newRemoveComputePlatformIds);
-                    }
-                  }}
-                >
-                  <MinusCircledIcon fill={theme.text.error} />
-                </IconButton>
-              )}
+                          const foundRemove = formData.removeComputePlatformIds.find((str) => str === id);
+                          const foundCurrent = currentComputePlatforms.find((cp) => cp.id === id);
+                          if (!foundRemove && foundCurrent) {
+                            const newRemoveComputePlatformIds = formData.removeComputePlatformIds.filter((str) => str !== id);
+                            handleFormChange('removeComputePlatformIds', newRemoveComputePlatformIds);
+                          }
+                        }}
+                      >
+                        <MinusCircledIcon fill={theme.text.error} />
+                      </IconButton>
+                    )
+                  : undefined
+              }
             />
           ))}
         </DataCardContentColumn>

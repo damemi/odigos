@@ -1,6 +1,7 @@
 import React, { useState, type FC, useMemo } from 'react';
 import type { User } from '@/types';
 import { useUsersCRUD } from '@/hooks';
+import { useUserStore } from '@/store';
 import Theme from '@odigos/ui-kit/theme';
 import { MinWidthWide, Relative } from '@/components/styled';
 import { DataCardContentColumn, DataCardContentRow } from './styled';
@@ -22,6 +23,7 @@ interface MembersCardProps {
 const MembersCard: FC<MembersCardProps> = ({ currentUsers, formData, handleFormChange }) => {
   const theme = Theme.useTheme();
   const { users } = useUsersCRUD();
+  const { isAdmin } = useUserStore();
 
   const [search, setSearch] = useState('');
   const [isAdd, setIsAdd] = useState(false);
@@ -53,9 +55,11 @@ const MembersCard: FC<MembersCardProps> = ({ currentUsers, formData, handleFormC
           <Input icon={SearchIcon} placeholder='Search...' value={search} onChange={(e) => setSearch(e.target.value)} />
 
           <Relative>
-            <IconButton size={32} onClick={toggleAdd} withBorder>
-              <PlusIcon />
-            </IconButton>
+            {isAdmin && (
+              <IconButton size={32} onClick={toggleAdd} withBorder>
+                <PlusIcon />
+              </IconButton>
+            )}
 
             <PopupForm
               flipX
@@ -123,26 +127,30 @@ const MembersCard: FC<MembersCardProps> = ({ currentUsers, formData, handleFormC
               title={email || username}
               subTitle={role}
               icons={[UserGroupIcon]}
-              renderActions={() => (
-                <IconButton
-                  tooltip='Remove member'
-                  onClick={() => {
-                    if (formData.addUserIds.includes(id)) {
-                      const newAddUserIds = formData.addUserIds.filter((str) => str !== id);
-                      handleFormChange('addUserIds', newAddUserIds);
-                    }
+              renderActions={
+                isAdmin
+                  ? () => (
+                      <IconButton
+                        tooltip='Remove member'
+                        onClick={() => {
+                          if (formData.addUserIds.includes(id)) {
+                            const newAddUserIds = formData.addUserIds.filter((str) => str !== id);
+                            handleFormChange('addUserIds', newAddUserIds);
+                          }
 
-                    const foundRemove = formData.removeUserIds.find((str) => str === id);
-                    const foundCurrent = currentUsers.find((user) => user.id === id);
-                    if (!foundRemove && foundCurrent) {
-                      const newRemoveUserIds = [...formData.removeUserIds, id];
-                      handleFormChange('removeUserIds', newRemoveUserIds);
-                    }
-                  }}
-                >
-                  <MinusCircledIcon fill={theme.text.error} />
-                </IconButton>
-              )}
+                          const foundRemove = formData.removeUserIds.find((str) => str === id);
+                          const foundCurrent = currentUsers.find((user) => user.id === id);
+                          if (!foundRemove && foundCurrent) {
+                            const newRemoveUserIds = [...formData.removeUserIds, id];
+                            handleFormChange('removeUserIds', newRemoveUserIds);
+                          }
+                        }}
+                      >
+                        <MinusCircledIcon fill={theme.text.error} />
+                      </IconButton>
+                    )
+                  : undefined
+              }
             />
           ))}
         </DataCardContentColumn>

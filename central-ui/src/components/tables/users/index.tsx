@@ -63,22 +63,26 @@ export const UsersTable: React.FC = () => {
     [deleting, deleteUser, addNotification],
   );
 
-  const columns = useMemo(
-    () => [
+  const columns = useMemo(() => {
+    const arr = [
       { key: UserTableColumn.Icon, title: '' },
       { key: UserTableColumn.User, title: UTILS.USERS, sortable: true },
       { key: UserTableColumn.Role, title: UTILS.ROLE, sortable: true },
       { key: UserTableColumn.Teams, title: UTILS.TEAMS, sortable: true },
       // TODO: uncomment when user attributes are implemented
       // { key: UserTableColumn.Platforms, title: UTILS.COMPUTE_PLATFORMS, sortable: true },
-      ...(isAdmin ? [{ key: UserTableColumn.Actions, title: UTILS.ACTIONS }] : []),
-    ],
-    [isAdmin],
-  );
+    ];
 
-  const rows = useMemo(
-    () =>
-      users.map((user) => ({
+    if (isAdmin) {
+      arr.push({ key: UserTableColumn.Actions, title: UTILS.ACTIONS });
+    }
+
+    return arr;
+  }, [isAdmin]);
+
+  const rows = useMemo(() => {
+    const arr = users.map((user) => {
+      const row = {
         onClick: () => setEditOpenForUser(user),
         cells: [
           {
@@ -102,27 +106,30 @@ export const UsersTable: React.FC = () => {
           //   columnKey: UserTableColumn.Platforms,
           //   value: UTILS.COMPUTE_PLATFORMS_COUNT(user.computePlatforms?.length || 0),
           // },
-          ...(isAdmin
-            ? [
-                {
-                  columnKey: UserTableColumn.Actions,
-                  component: () => (
-                    <FlexRow>
-                      <IconButton onClick={() => setEditOpenForUser(user)} tooltip='Edit user'>
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton onClick={() => setDeleteOpenForUser(user)} tooltip='Delete user'>
-                        <TrashIcon fill={theme.text.error} />
-                      </IconButton>
-                    </FlexRow>
-                  ),
-                } as RowCell,
-              ]
-            : []),
         ] as RowCell[],
-      })),
-    [users, theme.text.error, isAdmin],
-  );
+      };
+
+      if (isAdmin) {
+        row.cells.push({
+          columnKey: UserTableColumn.Actions,
+          component: () => (
+            <FlexRow>
+              <IconButton onClick={() => setEditOpenForUser(user)} tooltip='Edit user'>
+                <EditIcon />
+              </IconButton>
+              <IconButton onClick={() => setDeleteOpenForUser(user)} tooltip='Delete user'>
+                <TrashIcon fill={theme.text.error} />
+              </IconButton>
+            </FlexRow>
+          ),
+        });
+      }
+
+      return row;
+    });
+
+    return arr;
+  }, [users, theme.text.error, isAdmin]);
 
   return (
     <>

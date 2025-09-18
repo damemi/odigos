@@ -1,5 +1,6 @@
 import React, { type FC } from 'react';
 import type { Team } from '@/types';
+import { useUserStore } from '@/store';
 import { DataCard, Text, TextArea } from '@odigos/ui-kit/components';
 import { COMPUTE_PLATFORMS, DESCRIPTION, MEMBERS_COUNT, MEMBERS, PLATFORMS_COUNT } from '@/utils';
 import { DataCardCellStretch, DataCardCellTitle, DataCardContentRow, DataCardContentCell } from '../cards/styled';
@@ -16,6 +17,8 @@ interface TeamCardProps {
 }
 
 const TeamCard: FC<TeamCardProps> = ({ team, formData, handleFormChange }) => {
+  const { isAdmin } = useUserStore();
+
   const usersCount = team.users?.length || 0;
   const platformsCount = team.computePlatforms?.length || 0;
 
@@ -25,7 +28,7 @@ const TeamCard: FC<TeamCardProps> = ({ team, formData, handleFormChange }) => {
         <DataCardContentCell>
           <DataCardCellTitle>{DESCRIPTION}</DataCardCellTitle>
           <DataCardCellStretch>
-            <TextArea value={formData.description || ''} onChange={(e) => handleFormChange('description', e.target.value)} required />
+            <TextArea value={formData.description || ''} onChange={(e) => handleFormChange('description', e.target.value)} required disabled={!isAdmin} />
           </DataCardCellStretch>
         </DataCardContentCell>
         <DataCardContentCell>

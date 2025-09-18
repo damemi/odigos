@@ -1,5 +1,6 @@
 import React, { useMemo, useCallback, useState } from 'react';
 import * as UTILS from '@/utils';
+import { useUserStore } from '@/store';
 import { useTeamsCRUD } from '@/hooks';
 import Theme from '@odigos/ui-kit/theme';
 import { EditTeamDrawer } from '@/components';
@@ -20,6 +21,7 @@ export enum TeamsTableColumn {
 
 export const TeamsTable: React.FC = () => {
   const theme = Theme.useTheme();
+  const { isAdmin } = useUserStore();
   const { addNotification } = useNotificationStore();
   const { teams, updateTeam, updating, deleteTeam, deleting } = useTeamsCRUD();
 
@@ -62,18 +64,25 @@ export const TeamsTable: React.FC = () => {
     [deleting, deleteTeam, addNotification],
   );
 
-  const columns = [
-    { key: TeamsTableColumn.Icon, title: '' },
-    { key: TeamsTableColumn.Name, title: UTILS.NAME, sortable: true },
-    { key: TeamsTableColumn.Description, title: UTILS.DESCRIPTION, sortable: true },
-    { key: TeamsTableColumn.Members, title: UTILS.MEMBERS, sortable: true },
-    { key: TeamsTableColumn.Platforms, title: UTILS.COMPUTE_PLATFORMS, sortable: true },
-    { key: TeamsTableColumn.Actions, title: UTILS.ACTIONS },
-  ];
+  const columns = useMemo(() => {
+    const arr = [
+      { key: TeamsTableColumn.Icon, title: '' },
+      { key: TeamsTableColumn.Name, title: UTILS.NAME, sortable: true },
+      { key: TeamsTableColumn.Description, title: UTILS.DESCRIPTION, sortable: true },
+      { key: TeamsTableColumn.Members, title: UTILS.MEMBERS, sortable: true },
+      { key: TeamsTableColumn.Platforms, title: UTILS.COMPUTE_PLATFORMS, sortable: true },
+    ];
 
-  const rows = useMemo(
-    () =>
-      teams.map((team) => ({
+    if (isAdmin) {
+      arr.push({ key: TeamsTableColumn.Actions, title: UTILS.ACTIONS });
+    }
+
+    return arr;
+  }, [isAdmin]);
+
+  const rows = useMemo(() => {
+    const arr = teams.map((team) => {
+      const row = {
         onClick: () => setEditOpenForTeam(team),
         cells: [
           {
@@ -96,23 +105,30 @@ export const TeamsTable: React.FC = () => {
             columnKey: TeamsTableColumn.Platforms,
             value: UTILS.PLATFORMS_COUNT(team.computePlatforms?.length || 0),
           },
-          {
-            columnKey: TeamsTableColumn.Actions,
-            component: () => (
-              <FlexRow>
-                <IconButton onClick={() => setEditOpenForTeam(team)} tooltip='Edit team'>
-                  <EditIcon />
-                </IconButton>
-                <IconButton onClick={() => setDeleteOpenForTeam(team)} tooltip='Delete team'>
-                  <TrashIcon fill={theme.text.error} />
-                </IconButton>
-              </FlexRow>
-            ),
-          },
         ] as RowCell[],
-      })),
-    [teams, theme.text.error],
-  );
+      };
+
+      if (isAdmin) {
+        row.cells.push({
+          columnKey: TeamsTableColumn.Actions,
+          component: () => (
+            <FlexRow>
+              <IconButton onClick={() => setEditOpenForTeam(team)} tooltip='Edit team'>
+                <EditIcon />
+              </IconButton>
+              <IconButton onClick={() => setDeleteOpenForTeam(team)} tooltip='Delete team'>
+                <TrashIcon fill={theme.text.error} />
+              </IconButton>
+            </FlexRow>
+          ),
+        });
+      }
+
+      return row;
+    });
+
+    return arr;
+  }, [teams, theme.text.error, isAdmin]);
 
   return (
     <>

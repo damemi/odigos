@@ -1,6 +1,7 @@
 import React, { useState, type FC, useMemo } from 'react';
 import type { Team } from '@/types';
 import { useTeamsCRUD } from '@/hooks';
+import { useUserStore } from '@/store';
 import Theme from '@odigos/ui-kit/theme';
 import { MEMBERS_COUNT, PLATFORMS_COUNT } from '@/utils';
 import { MinWidthWide, Relative } from '@/components/styled';
@@ -23,6 +24,7 @@ interface TeamsCardProps {
 const TeamsCard: FC<TeamsCardProps> = ({ currentTeams, formData, handleFormChange }) => {
   const theme = Theme.useTheme();
   const { teams } = useTeamsCRUD();
+  const { isAdmin } = useUserStore();
 
   const [search, setSearch] = useState('');
   const [isAdd, setIsAdd] = useState(false);
@@ -54,9 +56,11 @@ const TeamsCard: FC<TeamsCardProps> = ({ currentTeams, formData, handleFormChang
           <Input icon={SearchIcon} placeholder='Search...' value={search} onChange={(e) => setSearch(e.target.value)} />
 
           <Relative>
-            <IconButton size={32} onClick={toggleAdd} withBorder>
-              <PlusIcon />
-            </IconButton>
+            {isAdmin && (
+              <IconButton size={32} onClick={toggleAdd} withBorder>
+                <PlusIcon />
+              </IconButton>
+            )}
 
             <PopupForm
               flipX
@@ -124,26 +128,30 @@ const TeamsCard: FC<TeamsCardProps> = ({ currentTeams, formData, handleFormChang
               title={name}
               subTitle={`${PLATFORMS_COUNT(computePlatforms?.length || 0)}, ${MEMBERS_COUNT(users?.length || 0)}`}
               icons={[UserGroupIcon]}
-              renderActions={() => (
-                <IconButton
-                  tooltip='Remove team'
-                  onClick={() => {
-                    if (formData.addTeamIds.includes(id)) {
-                      const newAddTeamIds = formData.addTeamIds.filter((str) => str !== id);
-                      handleFormChange('addTeamIds', newAddTeamIds);
-                    }
+              renderActions={
+                isAdmin
+                  ? () => (
+                      <IconButton
+                        tooltip='Remove team'
+                        onClick={() => {
+                          if (formData.addTeamIds.includes(id)) {
+                            const newAddTeamIds = formData.addTeamIds.filter((str) => str !== id);
+                            handleFormChange('addTeamIds', newAddTeamIds);
+                          }
 
-                    const foundRemove = formData.removeTeamIds.find((str) => str === id);
-                    const foundCurrent = currentTeams.find((team) => team.id === id);
-                    if (!foundRemove && foundCurrent) {
-                      const newRemoveTeamIds = [...formData.removeTeamIds, id];
-                      handleFormChange('removeTeamIds', newRemoveTeamIds);
-                    }
-                  }}
-                >
-                  <MinusCircledIcon fill={theme.text.error} />
-                </IconButton>
-              )}
+                          const foundRemove = formData.removeTeamIds.find((str) => str === id);
+                          const foundCurrent = currentTeams.find((team) => team.id === id);
+                          if (!foundRemove && foundCurrent) {
+                            const newRemoveTeamIds = [...formData.removeTeamIds, id];
+                            handleFormChange('removeTeamIds', newRemoveTeamIds);
+                          }
+                        }}
+                      >
+                        <MinusCircledIcon fill={theme.text.error} />
+                      </IconButton>
+                    )
+                  : undefined
+              }
             />
           ))}
         </DataCardContentColumn>

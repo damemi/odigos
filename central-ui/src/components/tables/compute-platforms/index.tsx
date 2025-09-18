@@ -1,7 +1,8 @@
 import React, { useMemo, useCallback, useState } from 'react';
 import * as UTILS from '@/utils';
-import { useComputePlatformsCRUD } from '@/hooks';
+import { useUserStore } from '@/store';
 import { EditIcon } from '@odigos/ui-kit/icons';
+import { useComputePlatformsCRUD } from '@/hooks';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { getPlatformIcon } from '@odigos/ui-kit/functions';
 import { useNotificationStore } from '@odigos/ui-kit/store';
@@ -19,6 +20,7 @@ export enum ComputePlatformsTableColumn {
 }
 
 export const ComputePlatformsTable: React.FC = () => {
+  const { isAdmin } = useUserStore();
   const { addNotification } = useNotificationStore();
   const { computePlatforms, updateComputePlatform, updating } = useComputePlatformsCRUD();
 
@@ -42,19 +44,26 @@ export const ComputePlatformsTable: React.FC = () => {
     [updating, updateComputePlatform, addNotification],
   );
 
-  const columns = [
-    { key: ComputePlatformsTableColumn.Icon, title: '' },
-    { key: ComputePlatformsTableColumn.Name, title: UTILS.NAME, sortable: true },
-    { key: ComputePlatformsTableColumn.Type, title: UTILS.TYPE, sortable: true },
-    // TODO: uncomment when user attributes are implemented
-    // { key: ComputePlatformsTableColumn.Members, title: UTILS.MEMBERS, sortable: true },
-    { key: ComputePlatformsTableColumn.Teams, title: UTILS.TEAMS, sortable: true },
-    { key: ComputePlatformsTableColumn.Actions, title: UTILS.ACTIONS },
-  ];
+  const columns = useMemo(() => {
+    const arr = [
+      { key: ComputePlatformsTableColumn.Icon, title: '' },
+      { key: ComputePlatformsTableColumn.Name, title: UTILS.NAME, sortable: true },
+      { key: ComputePlatformsTableColumn.Type, title: UTILS.TYPE, sortable: true },
+      // TODO: uncomment when user attributes are implemented
+      // { key: ComputePlatformsTableColumn.Members, title: UTILS.MEMBERS, sortable: true },
+      { key: ComputePlatformsTableColumn.Teams, title: UTILS.TEAMS, sortable: true },
+    ];
 
-  const rows = useMemo(
-    () =>
-      computePlatforms.map((cp) => ({
+    if (isAdmin) {
+      arr.push({ key: ComputePlatformsTableColumn.Actions, title: UTILS.ACTIONS });
+    }
+
+    return arr;
+  }, [isAdmin]);
+
+  const rows = useMemo(() => {
+    const arr = computePlatforms.map((cp) => {
+      const row = {
         onClick: () => setEditOpenForCP(cp),
         cells: [
           {
@@ -78,20 +87,27 @@ export const ComputePlatformsTable: React.FC = () => {
             columnKey: ComputePlatformsTableColumn.Teams,
             value: UTILS.TEAMS_COUNT(cp.teams?.length || 0),
           },
-          {
-            columnKey: ComputePlatformsTableColumn.Actions,
-            component: () => (
-              <FlexRow>
-                <IconButton onClick={() => setEditOpenForCP(cp)} tooltip='Edit compute platform'>
-                  <EditIcon />
-                </IconButton>
-              </FlexRow>
-            ),
-          },
         ] as RowCell[],
-      })),
-    [computePlatforms],
-  );
+      };
+
+      if (isAdmin) {
+        row.cells.push({
+          columnKey: ComputePlatformsTableColumn.Actions,
+          component: () => (
+            <FlexRow>
+              <IconButton onClick={() => setEditOpenForCP(cp)} tooltip='Edit compute platform'>
+                <EditIcon />
+              </IconButton>
+            </FlexRow>
+          ),
+        });
+      }
+
+      return row;
+    });
+
+    return arr;
+  }, [computePlatforms]);
 
   return (
     <>
