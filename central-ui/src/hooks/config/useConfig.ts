@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
 import { useProxy } from '../proxy';
 import { GET_CONFIG } from '@/graphql';
-import type { FetchedConfig } from '@/types';
+import { useUserStore } from '@/store';
+import { Role, type FetchedConfig } from '@/types';
 import { InstallationMethod, Tier } from '@odigos/ui-kit/types';
 
 export const useConfig = () => {
+  const { user } = useUserStore();
   const { data, fetch } = useProxy<{ config?: FetchedConfig }>(GET_CONFIG);
 
   useEffect(() => {
@@ -13,7 +15,7 @@ export const useConfig = () => {
   }, []);
 
   const config = data?.config;
-  const isReadonly = data?.config?.readonly || false;
+  const isReadonly = user?.role === Role.VIEWER || data?.config?.readonly || false;
   const installationMethod = data?.config?.installationMethod || InstallationMethod.Cli;
   const isCommunity = (config?.tier && [Tier.Community].includes(config.tier)) || false;
   const isEnterprise = (config?.tier && [Tier.Onprem].includes(config.tier)) || false;
