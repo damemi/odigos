@@ -14,7 +14,7 @@ require (
 	github.com/odigos-io/odigos/common v1.2.0-pre1.0.20250914130231-d13e612a9c24
 	github.com/odigos-io/odigos/instrumentation v1.2.0-pre1.0.20250914130231-d13e612a9c24
 	github.com/odigos-io/odigos/k8sutils v1.2.0-pre1.0.20250914130231-d13e612a9c24
-	github.com/odigos-io/odigos/odiglet v1.2.0-pre1.0.20250914130231-d13e612a9c24
+	github.com/odigos-io/odigos/odiglet v1.2.0-pre1.0.20250918100344-0eb37caaf129
 	github.com/odigos-io/odigos/procdiscovery v1.2.0-pre1.0.20250914130231-d13e612a9c24
 	go.opentelemetry.io/auto v0.22.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.38.0
@@ -66,7 +66,7 @@ require (
 	github.com/odigos-io/odigos/distros v1.2.0-pre1.0.20250907082103-cb013ede8a6b // indirect
 	github.com/odigos-io/odigos/opampserver v1.2.0-pre1 // indirect
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5 // indirect
-	github.com/odigos-io/runtime-detector v0.0.19 // indirect
+	github.com/odigos-io/runtime-detector v0.0.20 // indirect
 	github.com/parca-dev/parca-agent v0.9.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
@@ -139,17 +139,17 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20250914075943-5d22c9cd2425
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.2.0-pre1.0.20250914130231-d13e612a9c24
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.2.0-pre1.0.20250918100344-0eb37caaf129
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.2.0-pre1.0.20250914130231-d13e612a9c24
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.2.0-pre1.0.20250918100344-0eb37caaf129
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.2.0-pre1.0.20250914130231-d13e612a9c24
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.2.0-pre1.0.20250918100344-0eb37caaf129
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.2.0-pre1.0.20250914130231-d13e612a9c24
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.2.0-pre1.0.20250918100344-0eb37caaf129
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.2.0-pre1.0.20250914130231-d13e612a9c24
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.2.0-pre1.0.20250918100344-0eb37caaf129
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.2.0-pre1.0.20250914130231-d13e612a9c24
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.2.0-pre1.0.20250918100344-0eb37caaf129
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
