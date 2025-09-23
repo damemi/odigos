@@ -4,17 +4,18 @@ import (
 	"errors"
 	"strings"
 
+	cilumebpf "github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/rlimit"
 	"github.com/go-logr/logr"
+	"go.opentelemetry.io/otel/metric"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/odigos-io/odigos/distros"
 	"github.com/odigos-io/odigos/distros/distro"
 	"github.com/odigos-io/odigos/instrumentation"
 	"github.com/odigos-io/odigos/odiglet/pkg/detector"
-
-	cilumebpf "github.com/cilium/ebpf"
 	processdetector "github.com/odigos-io/runtime-detector"
-	"go.opentelemetry.io/otel/metric"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type InstrumentationManagerOptions struct {
@@ -48,6 +49,12 @@ func NewManager(client client.Client, logger logr.Logger, opts InstrumentationMa
 	spec := &cilumebpf.MapSpec{
 		Type: cilumebpf.PerfEventArray,
 		Name: "traces",
+	}
+
+	// Remove memlock limit required for older kernels
+	err := rlimit.RemoveMemlock()
+	if err != nil {
+		return nil, err
 	}
 
 	m, err := cilumebpf.NewMap(spec)

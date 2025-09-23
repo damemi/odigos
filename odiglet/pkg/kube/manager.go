@@ -49,7 +49,7 @@ type KubeManagerOptions struct {
 }
 
 func CreateManager(instrumentationMgrOpts ebpf.InstrumentationManagerOptions) (ctrl.Manager, error) {
-	log.Logger.V(0).Info("Starting reconcileres for runtime details")
+	log.Logger.V(0).Info("Starting reconcilers for runtime details")
 	ctrl.SetLogger(log.Logger)
 
 	currentNodeSelector := fields.OneTermEqualSelector("spec.nodeName", env.Current.NodeName)
