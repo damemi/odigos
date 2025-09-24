@@ -130,3 +130,28 @@ go list
 
 Or any error around Go imports or `go.mod`. Go Workspaces allow you to set up your own dev environment
 however you want, so these settings may take some trial and error to get perfect.
+
+## Updating OSS Dependencies
+
+This repository depends on various Odigos Open Source components. There are two main ways to update these dependencies:
+
+### Using Make Targets (Recommended for Development)
+
+The repository includes make targets in `deps.mk` for updating dependencies:
+
+#### Update All OSS Dependencies
+```bash
+# Update all OSS dependencies to a specific tag (e.g., v1.5.0)
+make update-odigos-oss-mod-deps-all OSS_TAG=v1.5.0
+
+# Update all OSS dependencies to main branch (default)
+make update-odigos-oss-mod-deps-all
+```
+
+### Using CI Workflows
+
+#### Automatic Dependency Sync (Enterprise Dependencies Update)
+The `enterprise-dependencies-update.yaml` workflow automatically updates all dependencies to the latest main branch when triggered. This is typically used when OSS dependencies are updated and need to be synced to the enterprise repository.
+
+#### Release Dependencies Update
+The `create-release-pr.yaml` workflow updates all dependencies to a specific release tag when creating a release PR. This is used during the release process to ensure enterprise components use the correct OSS version.

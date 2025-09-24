@@ -100,58 +100,14 @@ jobs:
         with:
           go-version-file: ./odiglet/go.mod
 
-      - name: update distros dependencies
-        working-directory: ./distros
+      - name: update all dependencies
         env:
-          TAG: ${{ env.TAG }}
+          OSS_TAG: ${{ env.TAG }}
         run: |
           git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
           go env -w GOPRIVATE=github.com/odigos-io/*
-          go get github.com/odigos-io/odigos/distros@${TAG}
-          go mod tidy
-
-      - name: update odiglet dependencies
-        working-directory: ./odiglet
-        env:
-          TAG: ${{ env.TAG }}
-        run: |
-          git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          go env -w GOPRIVATE=github.com/odigos-io/*
-          sed -i "s|replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v.*|replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api ${TAG}|g" go.mod
-          sed -i "s|replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v.*|replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common ${TAG}|g" go.mod
-          sed -i "s|replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v.*|replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils ${TAG}|g" go.mod
-          sed -i "s|replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v.*|replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery ${TAG}|g" go.mod
-          sed -i "s|replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v.*|replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver ${TAG}|g" go.mod
-          sed -i "s|replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v.*|replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation ${TAG}|g" go.mod
-          sed -i "s|replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v.*|replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros ${TAG}|g" go.mod
-          sed -i "s|replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation .*|replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation main|g" go.mod
-          sed -i "s|github.com/odigos-io/ebpf-nodejs-instrumentation.*|github.com/odigos-io/ebpf-nodejs-instrumentation main|g" go.mod
-          go get github.com/odigos-io/odigos/odiglet@${TAG} github.com/odigos-io/odigos/api@${TAG} github.com/odigos-io/odigos/common@${TAG} github.com/odigos-io/odigos/k8sutils@${TAG} github.com/odigos-io/odigos/opampserver@${TAG} github.com/odigos-io/odigos/instrumentation@${TAG}
-          go mod tidy
-
-      - name: update instrumentor dependencies
-        working-directory: ./instrumentor
-        env:
-          TAG: ${{ env.TAG }}
-        run: |
-          git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          go env -w GOPRIVATE=github.com/odigos-io/*
-          sed -i "s|github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v.*|github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api ${TAG}|g" go.mod
-          sed -i "s|github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v.*|github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common ${TAG}|g" go.mod
-          sed -i "s|github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v.*|github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros ${TAG}|g" go.mod
-          sed -i "s|github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v.*|github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils ${TAG}|g" go.mod
-          go get github.com/odigos-io/odigos/instrumentor@${TAG} github.com/odigos-io/odigos/distros@${TAG}
-          go mod tidy
-
-      - name: update central-proxy dependencies
-        working-directory: ./central-proxy
-        env:
-          TAG: ${{ env.TAG }}
-        run: |
-          git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          go env -w GOPRIVATE=github.com/odigos-io/*
-          go get github.com/odigos-io/odigos/api@${TAG} github.com/odigos-io/odigos/common@${TAG} github.com/odigos-io/odigos/k8sutils@${TAG}
-          go mod tidy
+          make update-odigos-oss-mod-deps-all OSS_TAG=${OSS_TAG}
+          make update-golang-enterprise-deps
 
       - name: Prepare PR branch metadata
         id: prep

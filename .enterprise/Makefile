@@ -1,4 +1,7 @@
 TAG ?= $(shell odigos version --cluster)
+
+# Include dependency update targets
+include deps.mk
 # These are used to point to different Dockerfiles (such as Dockerfile.rhel) and add -ubi9 to RHEL based images.
 DOCKERFILE=Dockerfile
 IMG_PREFIX?=
@@ -148,3 +151,4 @@ debug-odiglet:
 	kubectl delete pod -n odigos-system -l app.kubernetes.io/name=odiglet
 	kubectl wait --for=condition=ready pod -n odigos-system -l app.kubernetes.io/name=odiglet
 	kubectl port-forward -n odigos-system daemonset/odiglet 2345:2345
+

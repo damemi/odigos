@@ -13,32 +13,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: update odiglet dependencies
-        working-directory: ./odiglet
+      - name: update all dependencies
         run: |
           git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
           go env -w GOPRIVATE=github.com/odigos-io/*
-          sed -i "s|replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v.*|replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api main|g" go.mod
-          sed -i "s|replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v.*|replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common main|g" go.mod
-          sed -i "s|replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v.*|replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils main|g" go.mod
-          sed -i "s|replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v.*|replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery main|g" go.mod
-          sed -i "s|replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v.*|replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver main|g" go.mod
-          sed -i "s|replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation v.*|replace github.com/odigos-io/odigos/instrumentation => github.com/odigos-io/odigos/instrumentation main|g" go.mod
-          sed -i "s|replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v.*|replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros main|g" go.mod
-          sed -i "s|replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation .*|replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation main|g" go.mod
-          sed -i "s|github.com/odigos-io/ebpf-generic-instrumentation.*|github.com/odigos-io/ebpf-generic-instrumentation main|g" go.mod
-          sed -i "s|github.com/odigos-io/ebpf-nodejs-instrumentation.*|github.com/odigos-io/ebpf-nodejs-instrumentation main|g" go.mod
-          sed -i '0,/github.com\/odigos-io\/odigos\/odiglet.*/s//github.com\/odigos-io\/odigos\/odiglet main/' go.mod
-          go mod tidy
-      
-      - name: update onprem token generator dependencies
-        working-directory: ./onprem-token-generator
-        run: |
-          git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          go env -w GOPRIVATE=github.com/odigos-io/*
-          sed -i "s|replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v.*|replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common main|g" go.mod
-          sed -i "s|replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v.*|replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles main|g" go.mod
-          go mod tidy
+          make update-odigos-oss-mod-deps-all OSS_TAG=main
  
       - name: github preperation
         id: github_preperation
