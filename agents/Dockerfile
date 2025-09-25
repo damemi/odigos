@@ -6,7 +6,7 @@ RUN mkdir workspace && pip install -r requirements.txt --target workspace
 RUN echo "VERSION = \"$ODIGOS_VERSION\";" > /python-instrumentation/workspace/initializer/version.py
 
 # Enterprise version of ebpf-generic-instrumentation
-ARG EBPF_GENERIC_VERSION="v0.0.4"
+ARG EBPF_GENERIC_VERSION="v0.0.5"
 RUN apt update -y && apt install -y systemtap-sdt-dev
 RUN --mount=type=secret,id=github_token \
     git clone -b ${EBPF_GENERIC_VERSION} https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-generic-instrumentation.git \

@@ -120,8 +120,8 @@ github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee h1:W5t00kpgFd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
-github.com/odigos-io/ebpf-generic-instrumentation v0.0.4 h1:klKGPU2WqCVuN+98D2wog/70hiQnMaRiw38nHD0QL1Y=
-github.com/odigos-io/ebpf-generic-instrumentation v0.0.4/go.mod h1:S3fP7R041PWEboCKebMuzVQCQ0fP+MZcPPbnakp6mxg=
+github.com/odigos-io/ebpf-generic-instrumentation v0.0.5 h1:/jh4uEPZkSOCg6+3y8YBjiSS1DuO9umgY+ZgQ6zn2Ic=
+github.com/odigos-io/ebpf-generic-instrumentation v0.0.5/go.mod h1:S3fP7R041PWEboCKebMuzVQCQ0fP+MZcPPbnakp6mxg=
 github.com/odigos-io/ebpf-java-instrumentation v0.5.0 h1:f7l3YapwsjR4+oie+In4tReh6kd9yH2mb5mTvsUk0OY=
 github.com/odigos-io/ebpf-java-instrumentation v0.5.0/go.mod h1:t8Ry2HU0T9WfGA8bWr8Etzyq0FmOerxW/15EWKQEjuc=
 github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.5.0 h1:PXHZkpnau1aSFy9kwN+OrDk5AA0I/u5sRPzadj2t2hM=
