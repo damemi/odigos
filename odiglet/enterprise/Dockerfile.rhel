@@ -193,6 +193,7 @@ COPY odiglet/ .
 
 ARG TARGETARCH
 ARG LD_FLAGS
+ENV GOINSECURE=go.opentelemetry.io*
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
     GOOS=linux GOARCH=$TARGETARCH LD_FLAGS="${LD_FLAGS}" make build-odiglet
