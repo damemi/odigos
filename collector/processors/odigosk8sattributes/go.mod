@@ -1,6 +1,6 @@
 module github.com/odigos-io/odigos/collector/processors/odigosk8sattributes
 
-go 1.24.5
+go 1.24.0
 
 require (
 	go.opentelemetry.io/collector/component v1.42.0
