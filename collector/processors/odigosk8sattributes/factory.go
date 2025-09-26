@@ -41,10 +41,12 @@ func createTracesProcessor(
 	}
 
 	proc := &k8sAttributesProcessor{
-		logger:                set.Logger,
-		config:                cfg.(*Config),
-		instrumentationClient: instrumentationClient,
-		k8sClient:             k8sClient,
+		logger:         set.Logger,
+		config:         cfg.(*Config),
+		odigosClient:   instrumentationClient,
+		k8sClient:      k8sClient,
+		sourceInformer: nil, // Will be initialized when needed
+		informerStopCh: nil,
 	}
 
 	return processorhelper.NewTraces(
