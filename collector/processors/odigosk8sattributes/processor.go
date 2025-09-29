@@ -16,6 +16,8 @@ import (
 	"github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned/typed/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1alpha1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	"github.com/odigos-io/odigos/collector/processors/odigosk8sattributes/internal/kube"
+	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 )
 
 type k8sAttributesProcessor struct {
@@ -23,11 +25,11 @@ type k8sAttributesProcessor struct {
 	config         *Config
 	odigosClient   v1alpha1.OdigosV1alpha1Interface
 	k8sClient      *kubernetes.Clientset
-	sourceInformer cache.SharedIndexInformer
+	icInformer     cache.SharedIndexInformer
 	informerStopCh chan struct{}
 	mu             sync.RWMutex
-	// workloadCache maps workload key (namespace/kind/name) to PodWorkload
-	workloadCache map[string]*k8sconsts.PodWorkload
+	// workloadCache maps PodWorkload to Pod
+	workloadCache map[k8sconsts.PodWorkload]*kube.Pod
 }
 
 func (p *k8sAttributesProcessor) processTraces(ctx context.Context, td ptrace.Traces) (ptrace.Traces, error) {
@@ -37,29 +39,20 @@ func (p *k8sAttributesProcessor) processTraces(ctx context.Context, td ptrace.Tr
 		return td, err
 	}
 
-	// Get Sources from informer cache
-	sources, err := p.getSourcesFromCache()
+	// Get InstrumentationConfigs from informer cache
+	configs, err := p.getInstrumentationConfigsFromCache()
 	if err != nil {
-		p.logger.Error("Failed to get Sources from cache", zap.Error(err))
+		p.logger.Error("Failed to get InstrumentationConfigs from cache", zap.Error(err))
 		return td, err
 	}
 
-	p.logger.Info("Retrieved Sources from cache", zap.Int("count", len(sources)))
+	p.logger.Info("Retrieved InstrumentationConfigs from cache", zap.Int("count", len(configs)))
 
 	// Get workloads from cache
 	workloads := p.getWorkloadsFromCache()
 	p.logger.Info("Retrieved workloads from cache", zap.Int("count", len(workloads)))
 
-	// Get InstrumentationConfigs for processing
-	configs, err := p.getInstrumentationConfigs(ctx)
-	if err != nil {
-		p.logger.Error("Failed to get InstrumentationConfigs", zap.Error(err))
-		return td, err
-	}
-
-	p.logger.Info("Retrieved InstrumentationConfigs", zap.Int("count", len(configs.Items)))
-
-	// TODO: Process traces using the Sources, workloads, and InstrumentationConfigs
+	// TODO: Process traces using the InstrumentationConfigs and workloads
 	// This is where the actual k8s attributes processing logic would go
 
 	return td, nil
@@ -70,135 +63,159 @@ func (p *k8sAttributesProcessor) getInstrumentationConfigs(ctx context.Context) 
 	return p.odigosClient.InstrumentationConfigs("").List(ctx, metav1.ListOptions{})
 }
 
-// startInformer starts the Source informer
+// startInformer starts the InstrumentationConfig informer
 func (p *k8sAttributesProcessor) startInformer() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.sourceInformer != nil {
+	if p.icInformer != nil {
 		return nil // Already started
 	}
 
 	p.informerStopCh = make(chan struct{})
 
-	// Create informer for Source objects
-	p.sourceInformer = cache.NewSharedIndexInformer(
+	// Create informer for InstrumentationConfig objects
+	p.icInformer = cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-				return p.odigosClient.Sources("").List(context.Background(), options)
+				return p.odigosClient.InstrumentationConfigs("").List(context.Background(), options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-				return p.odigosClient.Sources("").Watch(context.Background(), options)
+				return p.odigosClient.InstrumentationConfigs("").Watch(context.Background(), options)
 			},
 		},
-		&odigosv1alpha1.Source{},
+		&odigosv1alpha1.InstrumentationConfig{},
 		0, // No resync period
 		cache.Indexers{},
 	)
 
 	// Add event handlers
-	p.sourceInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	p.icInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
-			if source, ok := obj.(*odigosv1alpha1.Source); ok {
-				p.logger.Info("Source added",
-					zap.String("name", source.Name),
-					zap.String("namespace", source.Namespace),
-					zap.String("workload", source.Spec.Workload.Name),
+			if ic, ok := obj.(*odigosv1alpha1.InstrumentationConfig); ok {
+				p.logger.Info("InstrumentationConfig added",
+					zap.String("name", ic.Name),
+					zap.String("namespace", ic.Namespace),
 				)
-				// Add workload to cache
-				p.addWorkloadToCache(&source.Spec.Workload)
+				// Extract workload info and add to cache
+				p.handleInstrumentationConfigEvent(ic)
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
-			if source, ok := newObj.(*odigosv1alpha1.Source); ok {
-				p.logger.Info("Source updated",
-					zap.String("name", source.Name),
-					zap.String("namespace", source.Namespace),
-					zap.String("workload", source.Spec.Workload.Name),
+			if ic, ok := newObj.(*odigosv1alpha1.InstrumentationConfig); ok {
+				p.logger.Info("InstrumentationConfig updated",
+					zap.String("name", ic.Name),
+					zap.String("namespace", ic.Namespace),
 				)
-				// Update workload in cache
-				p.addWorkloadToCache(&source.Spec.Workload)
+				// Extract workload info and update cache
+				p.handleInstrumentationConfigEvent(ic)
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
-			if source, ok := obj.(*odigosv1alpha1.Source); ok {
-				p.logger.Info("Source deleted",
-					zap.String("name", source.Name),
-					zap.String("namespace", source.Namespace),
-					zap.String("workload", source.Spec.Workload.Name),
+			if ic, ok := obj.(*odigosv1alpha1.InstrumentationConfig); ok {
+				p.logger.Info("InstrumentationConfig deleted",
+					zap.String("name", ic.Name),
+					zap.String("namespace", ic.Namespace),
 				)
-				// Remove workload from cache
-				p.removeWorkloadFromCache(&source.Spec.Workload)
+				// Extract workload info and remove from cache
+				p.handleInstrumentationConfigDeletion(ic)
 			}
 		},
 	})
 
 	// Start the informer
-	go p.sourceInformer.Run(p.informerStopCh)
+	go p.icInformer.Run(p.informerStopCh)
 
 	// Wait for cache to sync
-	if !cache.WaitForCacheSync(p.informerStopCh, p.sourceInformer.HasSynced) {
-		return fmt.Errorf("failed to sync Source informer cache")
+	if !cache.WaitForCacheSync(p.informerStopCh, p.icInformer.HasSynced) {
+		return fmt.Errorf("failed to sync InstrumentationConfig informer cache")
 	}
 
-	p.logger.Info("Source informer started successfully")
+	p.logger.Info("InstrumentationConfig informer started successfully")
 	return nil
 }
 
-// stopInformer stops the Source informer
+// stopInformer stops the InstrumentationConfig informer
 func (p *k8sAttributesProcessor) stopInformer() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.sourceInformer == nil {
+	if p.icInformer == nil {
 		return
 	}
 
 	close(p.informerStopCh)
-	p.sourceInformer = nil
-	p.logger.Info("Source informer stopped")
+	p.icInformer = nil
+	p.logger.Info("InstrumentationConfig informer stopped")
 }
 
-// getSourcesFromCache retrieves all Source objects from the informer cache
-func (p *k8sAttributesProcessor) getSourcesFromCache() ([]*odigosv1alpha1.Source, error) {
+// handleInstrumentationConfigEvent handles add/update events for InstrumentationConfig
+func (p *k8sAttributesProcessor) handleInstrumentationConfigEvent(ic *odigosv1alpha1.InstrumentationConfig) {
+	// Extract workload info from the InstrumentationConfig name
+	workloadInfo, err := workload.ExtractWorkloadInfoFromRuntimeObjectName(ic.Name, ic.Namespace)
+	if err != nil {
+		p.logger.Error("Failed to extract workload info from InstrumentationConfig",
+			zap.String("name", ic.Name),
+			zap.String("namespace", ic.Namespace),
+			zap.Error(err),
+		)
+		return
+	}
+
+	// Add workload to cache with empty Pod
+	p.addWorkloadToCache(workloadInfo, &kube.Pod{})
+}
+
+// handleInstrumentationConfigDeletion handles delete events for InstrumentationConfig
+func (p *k8sAttributesProcessor) handleInstrumentationConfigDeletion(ic *odigosv1alpha1.InstrumentationConfig) {
+	// Extract workload info from the InstrumentationConfig name
+	workloadInfo, err := workload.ExtractWorkloadInfoFromRuntimeObjectName(ic.Name, ic.Namespace)
+	if err != nil {
+		p.logger.Error("Failed to extract workload info from InstrumentationConfig",
+			zap.String("name", ic.Name),
+			zap.String("namespace", ic.Namespace),
+			zap.Error(err),
+		)
+		return
+	}
+
+	// Remove workload from cache
+	p.removeWorkloadFromCache(workloadInfo)
+}
+
+// getInstrumentationConfigsFromCache retrieves all InstrumentationConfig objects from the informer cache
+func (p *k8sAttributesProcessor) getInstrumentationConfigsFromCache() ([]*odigosv1alpha1.InstrumentationConfig, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	if p.sourceInformer == nil {
+	if p.icInformer == nil {
 		return nil, fmt.Errorf("informer not started")
 	}
 
 	// Get all objects from the cache
-	objects := p.sourceInformer.GetStore().List()
-	sources := make([]*odigosv1alpha1.Source, 0, len(objects))
+	objects := p.icInformer.GetStore().List()
+	configs := make([]*odigosv1alpha1.InstrumentationConfig, 0, len(objects))
 
 	for _, obj := range objects {
-		if source, ok := obj.(*odigosv1alpha1.Source); ok {
-			sources = append(sources, source)
+		if ic, ok := obj.(*odigosv1alpha1.InstrumentationConfig); ok {
+			configs = append(configs, ic)
 		}
 	}
 
-	return sources, nil
-}
-
-// getWorkloadKey creates a unique key for a workload
-func getWorkloadKey(workload *k8sconsts.PodWorkload) string {
-	return fmt.Sprintf("%s/%s/%s", workload.Namespace, workload.Kind, workload.Name)
+	return configs, nil
 }
 
 // addWorkloadToCache adds a workload to the cache
-func (p *k8sAttributesProcessor) addWorkloadToCache(workload *k8sconsts.PodWorkload) {
+func (p *k8sAttributesProcessor) addWorkloadToCache(workload k8sconsts.PodWorkload, pod *kube.Pod) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if p.workloadCache == nil {
-		p.workloadCache = make(map[string]*k8sconsts.PodWorkload)
+		p.workloadCache = make(map[k8sconsts.PodWorkload]*kube.Pod)
 	}
 
-	key := getWorkloadKey(workload)
-	p.workloadCache[key] = workload
+	p.workloadCache[workload] = pod
 	p.logger.Debug("Added workload to cache",
-		zap.String("key", key),
 		zap.String("name", workload.Name),
 		zap.String("namespace", workload.Namespace),
 		zap.String("kind", string(workload.Kind)),
@@ -206,7 +223,7 @@ func (p *k8sAttributesProcessor) addWorkloadToCache(workload *k8sconsts.PodWorkl
 }
 
 // removeWorkloadFromCache removes a workload from the cache
-func (p *k8sAttributesProcessor) removeWorkloadFromCache(workload *k8sconsts.PodWorkload) {
+func (p *k8sAttributesProcessor) removeWorkloadFromCache(workload k8sconsts.PodWorkload) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -214,10 +231,8 @@ func (p *k8sAttributesProcessor) removeWorkloadFromCache(workload *k8sconsts.Pod
 		return
 	}
 
-	key := getWorkloadKey(workload)
-	delete(p.workloadCache, key)
+	delete(p.workloadCache, workload)
 	p.logger.Debug("Removed workload from cache",
-		zap.String("key", key),
 		zap.String("name", workload.Name),
 		zap.String("namespace", workload.Namespace),
 		zap.String("kind", string(workload.Kind)),
@@ -225,7 +240,7 @@ func (p *k8sAttributesProcessor) removeWorkloadFromCache(workload *k8sconsts.Pod
 }
 
 // getWorkloadsFromCache returns all workloads from the cache
-func (p *k8sAttributesProcessor) getWorkloadsFromCache() []*k8sconsts.PodWorkload {
+func (p *k8sAttributesProcessor) getWorkloadsFromCache() []k8sconsts.PodWorkload {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -233,16 +248,16 @@ func (p *k8sAttributesProcessor) getWorkloadsFromCache() []*k8sconsts.PodWorkloa
 		return nil
 	}
 
-	workloads := make([]*k8sconsts.PodWorkload, 0, len(p.workloadCache))
-	for _, workload := range p.workloadCache {
+	workloads := make([]k8sconsts.PodWorkload, 0, len(p.workloadCache))
+	for workload := range p.workloadCache {
 		workloads = append(workloads, workload)
 	}
 
 	return workloads
 }
 
-// getWorkloadFromCache returns a specific workload from the cache
-func (p *k8sAttributesProcessor) getWorkloadFromCache(namespace, kind, name string) *k8sconsts.PodWorkload {
+// getPodFromCache returns a specific pod from the cache by workload
+func (p *k8sAttributesProcessor) getPodFromCache(workload k8sconsts.PodWorkload) *kube.Pod {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -250,6 +265,5 @@ func (p *k8sAttributesProcessor) getWorkloadFromCache(namespace, kind, name stri
 		return nil
 	}
 
-	key := fmt.Sprintf("%s/%s/%s", namespace, kind, name)
-	return p.workloadCache[key]
+	return p.workloadCache[workload]
 }

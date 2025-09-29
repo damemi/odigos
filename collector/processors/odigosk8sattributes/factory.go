@@ -15,6 +15,7 @@ import (
 
 	"github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned/typed/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/api/k8sconsts"
+	"github.com/odigos-io/odigos/collector/processors/odigosk8sattributes/internal/kube"
 )
 
 func NewFactory() processor.Factory {
@@ -46,9 +47,9 @@ func createTracesProcessor(
 		config:         cfg.(*Config),
 		odigosClient:   instrumentationClient,
 		k8sClient:      k8sClient,
-		sourceInformer: nil, // Will be initialized when needed
+		icInformer:     nil, // Will be initialized when needed
 		informerStopCh: nil,
-		workloadCache:  make(map[string]*k8sconsts.PodWorkload),
+		workloadCache:  make(map[k8sconsts.PodWorkload]*kube.Pod),
 	}
 
 	return processorhelper.NewTraces(
