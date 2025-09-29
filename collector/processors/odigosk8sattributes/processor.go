@@ -162,6 +162,8 @@ func (p *k8sAttributesProcessor) handleInstrumentationConfigEvent(ic *odigosv1al
 		return
 	}
 
+	
+
 	// Add workload to cache with empty Pod
 	p.addWorkloadToCache(workloadInfo, &kube.Pod{})
 }
