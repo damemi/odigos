@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned/typed/odigos/v1alpha1"
+	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1alpha1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 )
 
@@ -25,6 +26,8 @@ type k8sAttributesProcessor struct {
 	sourceInformer cache.SharedIndexInformer
 	informerStopCh chan struct{}
 	mu             sync.RWMutex
+	// workloadCache maps workload key (namespace/kind/name) to PodWorkload
+	workloadCache map[string]*k8sconsts.PodWorkload
 }
 
 func (p *k8sAttributesProcessor) processTraces(ctx context.Context, td ptrace.Traces) (ptrace.Traces, error) {
@@ -43,6 +46,10 @@ func (p *k8sAttributesProcessor) processTraces(ctx context.Context, td ptrace.Tr
 
 	p.logger.Info("Retrieved Sources from cache", zap.Int("count", len(sources)))
 
+	// Get workloads from cache
+	workloads := p.getWorkloadsFromCache()
+	p.logger.Info("Retrieved workloads from cache", zap.Int("count", len(workloads)))
+
 	// Get InstrumentationConfigs for processing
 	configs, err := p.getInstrumentationConfigs(ctx)
 	if err != nil {
@@ -52,7 +59,7 @@ func (p *k8sAttributesProcessor) processTraces(ctx context.Context, td ptrace.Tr
 
 	p.logger.Info("Retrieved InstrumentationConfigs", zap.Int("count", len(configs.Items)))
 
-	// TODO: Process traces using the Sources and InstrumentationConfigs
+	// TODO: Process traces using the Sources, workloads, and InstrumentationConfigs
 	// This is where the actual k8s attributes processing logic would go
 
 	return td, nil
@@ -98,6 +105,8 @@ func (p *k8sAttributesProcessor) startInformer() error {
 					zap.String("namespace", source.Namespace),
 					zap.String("workload", source.Spec.Workload.Name),
 				)
+				// Add workload to cache
+				p.addWorkloadToCache(&source.Spec.Workload)
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
@@ -107,6 +116,8 @@ func (p *k8sAttributesProcessor) startInformer() error {
 					zap.String("namespace", source.Namespace),
 					zap.String("workload", source.Spec.Workload.Name),
 				)
+				// Update workload in cache
+				p.addWorkloadToCache(&source.Spec.Workload)
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
@@ -116,6 +127,8 @@ func (p *k8sAttributesProcessor) startInformer() error {
 					zap.String("namespace", source.Namespace),
 					zap.String("workload", source.Spec.Workload.Name),
 				)
+				// Remove workload from cache
+				p.removeWorkloadFromCache(&source.Spec.Workload)
 			}
 		},
 	})
@@ -166,4 +179,77 @@ func (p *k8sAttributesProcessor) getSourcesFromCache() ([]*odigosv1alpha1.Source
 	}
 
 	return sources, nil
+}
+
+// getWorkloadKey creates a unique key for a workload
+func getWorkloadKey(workload *k8sconsts.PodWorkload) string {
+	return fmt.Sprintf("%s/%s/%s", workload.Namespace, workload.Kind, workload.Name)
+}
+
+// addWorkloadToCache adds a workload to the cache
+func (p *k8sAttributesProcessor) addWorkloadToCache(workload *k8sconsts.PodWorkload) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.workloadCache == nil {
+		p.workloadCache = make(map[string]*k8sconsts.PodWorkload)
+	}
+
+	key := getWorkloadKey(workload)
+	p.workloadCache[key] = workload
+	p.logger.Debug("Added workload to cache",
+		zap.String("key", key),
+		zap.String("name", workload.Name),
+		zap.String("namespace", workload.Namespace),
+		zap.String("kind", string(workload.Kind)),
+	)
+}
+
+// removeWorkloadFromCache removes a workload from the cache
+func (p *k8sAttributesProcessor) removeWorkloadFromCache(workload *k8sconsts.PodWorkload) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.workloadCache == nil {
+		return
+	}
+
+	key := getWorkloadKey(workload)
+	delete(p.workloadCache, key)
+	p.logger.Debug("Removed workload from cache",
+		zap.String("key", key),
+		zap.String("name", workload.Name),
+		zap.String("namespace", workload.Namespace),
+		zap.String("kind", string(workload.Kind)),
+	)
+}
+
+// getWorkloadsFromCache returns all workloads from the cache
+func (p *k8sAttributesProcessor) getWorkloadsFromCache() []*k8sconsts.PodWorkload {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	if p.workloadCache == nil {
+		return nil
+	}
+
+	workloads := make([]*k8sconsts.PodWorkload, 0, len(p.workloadCache))
+	for _, workload := range p.workloadCache {
+		workloads = append(workloads, workload)
+	}
+
+	return workloads
+}
+
+// getWorkloadFromCache returns a specific workload from the cache
+func (p *k8sAttributesProcessor) getWorkloadFromCache(namespace, kind, name string) *k8sconsts.PodWorkload {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	if p.workloadCache == nil {
+		return nil
+	}
+
+	key := fmt.Sprintf("%s/%s/%s", namespace, kind, name)
+	return p.workloadCache[key]
 }

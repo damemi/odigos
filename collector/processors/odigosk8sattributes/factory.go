@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned/typed/odigos/v1alpha1"
+	"github.com/odigos-io/odigos/api/k8sconsts"
 )
 
 func NewFactory() processor.Factory {
@@ -47,6 +48,7 @@ func createTracesProcessor(
 		k8sClient:      k8sClient,
 		sourceInformer: nil, // Will be initialized when needed
 		informerStopCh: nil,
+		workloadCache:  make(map[string]*k8sconsts.PodWorkload),
 	}
 
 	return processorhelper.NewTraces(
