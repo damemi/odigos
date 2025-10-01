@@ -3,11 +3,11 @@ module github.com/odigos-io/odigos/collector/processors/odigosk8sattributes
 go 1.24.0
 
 require (
-	go.opentelemetry.io/collector/component v1.42.0
-	go.opentelemetry.io/collector/consumer v1.42.0
-	go.opentelemetry.io/collector/pdata v1.42.0
-	go.opentelemetry.io/collector/processor v1.42.0
-	go.opentelemetry.io/collector/processor/processorhelper v0.136.0
+	go.opentelemetry.io/collector/component v1.36.0
+	go.opentelemetry.io/collector/consumer v1.36.0
+	go.opentelemetry.io/collector/pdata v1.36.0
+	go.opentelemetry.io/collector/processor v1.36.0
+	go.opentelemetry.io/collector/processor/processorhelper v0.130.0
 	go.uber.org/zap v1.27.0
 )
 
@@ -37,4 +37,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250707201910-8d1bb00bc6a7 // indirect
 	google.golang.org/grpc v1.75.1 // indirect
 	google.golang.org/protobuf v1.36.9 // indirect
+	k8s.io/client-go v0.32.3 // indirect
 )

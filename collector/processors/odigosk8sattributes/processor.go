@@ -1,271 +1,420 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
 package odigosk8sattributes
 
 import (
 	"context"
 	"fmt"
-	"sync"
+	"strconv"
+	"time"
 
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/component/componentstatus"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/pdata/pprofile"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	conventions "go.opentelemetry.io/otel/semconv/v1.8.0"
 	"go.uber.org/zap"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
 
-	"github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned/typed/odigos/v1alpha1"
-	"github.com/odigos-io/odigos/api/k8sconsts"
-	odigosv1alpha1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	"github.com/odigos-io/odigos/collector/processors/odigosk8sattributes/internal/k8sconfig"
 	"github.com/odigos-io/odigos/collector/processors/odigosk8sattributes/internal/kube"
-	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 )
 
-type k8sAttributesProcessor struct {
-	logger         *zap.Logger
-	config         *Config
-	odigosClient   v1alpha1.OdigosV1alpha1Interface
-	k8sClient      *kubernetes.Clientset
-	icInformer     cache.SharedIndexInformer
-	informerStopCh chan struct{}
-	mu             sync.RWMutex
-	// workloadCache maps PodWorkload to Pod
-	workloadCache map[k8sconsts.PodWorkload]*kube.Pod
+const (
+	clientIPLabelName string = "ip"
+)
+
+type kubernetesprocessor struct {
+	cfg                    component.Config
+	options                []option
+	telemetrySettings      component.TelemetrySettings
+	logger                 *zap.Logger
+	apiConfig              k8sconfig.APIConfig
+	kc                     kube.Client
+	passthroughMode        bool
+	rules                  kube.ExtractionRules
+	filters                kube.Filters
+	podAssociations        []kube.Association
+	podIgnore              kube.Excludes
+	waitForMetadata        bool
+	waitForMetadataTimeout time.Duration
 }
 
-func (p *k8sAttributesProcessor) processTraces(ctx context.Context, td ptrace.Traces) (ptrace.Traces, error) {
-	// Start informer if not already started
-	if err := p.startInformer(); err != nil {
-		p.logger.Error("Failed to start informer", zap.Error(err))
-		return td, err
+func (kp *kubernetesprocessor) initKubeClient(set component.TelemetrySettings, kubeClient kube.ClientProvider) error {
+	if kubeClient == nil {
+		kubeClient = kube.New
+	}
+	if !kp.passthroughMode {
+		kc, err := kubeClient(set, kp.apiConfig, kp.rules, kp.filters, kp.podAssociations, kp.podIgnore, nil, kube.InformersFactoryList{}, kp.waitForMetadata, kp.waitForMetadataTimeout)
+		if err != nil {
+			return err
+		}
+		kp.kc = kc
+	}
+	return nil
+}
+
+func (kp *kubernetesprocessor) Start(_ context.Context, host component.Host) error {
+	allOptions := append(createProcessorOpts(kp.cfg), kp.options...)
+
+	for _, opt := range allOptions {
+		if err := opt(kp); err != nil {
+			kp.logger.Error("Could not apply option", zap.Error(err))
+			componentstatus.ReportStatus(host, componentstatus.NewFatalErrorEvent(err))
+			return err
+		}
 	}
 
-	// Get InstrumentationConfigs from informer cache
-	configs, err := p.getInstrumentationConfigsFromCache()
-	if err != nil {
-		p.logger.Error("Failed to get InstrumentationConfigs from cache", zap.Error(err))
-		return td, err
+	// This might have been set by an option already
+	if kp.kc == nil {
+		err := kp.initKubeClient(kp.telemetrySettings, kubeClientProvider)
+		if err != nil {
+			kp.logger.Error("Could not initialize kube client", zap.Error(err))
+			componentstatus.ReportStatus(host, componentstatus.NewFatalErrorEvent(err))
+			return err
+		}
 	}
+	if !kp.passthroughMode {
+		err := kp.kc.Start()
+		if err != nil {
+			componentstatus.ReportStatus(host, componentstatus.NewFatalErrorEvent(err))
+			return err
+		}
+	}
+	return nil
+}
 
-	p.logger.Info("Retrieved InstrumentationConfigs from cache", zap.Int("count", len(configs)))
+func (kp *kubernetesprocessor) Shutdown(context.Context) error {
+	if kp.kc == nil {
+		return nil
+	}
+	if !kp.passthroughMode {
+		kp.kc.Stop()
+	}
+	return nil
+}
 
-	// Get workloads from cache
-	workloads := p.getWorkloadsFromCache()
-	p.logger.Info("Retrieved workloads from cache", zap.Int("count", len(workloads)))
-
-	// TODO: Process traces using the InstrumentationConfigs and workloads
-	// This is where the actual k8s attributes processing logic would go
+// processTraces process traces and add k8s metadata using resource IP or incoming IP as pod origin.
+func (kp *kubernetesprocessor) processTraces(ctx context.Context, td ptrace.Traces) (ptrace.Traces, error) {
+	rss := td.ResourceSpans()
+	for i := 0; i < rss.Len(); i++ {
+		kp.processResource(ctx, rss.At(i).Resource())
+	}
 
 	return td, nil
 }
 
-// getInstrumentationConfigs retrieves all InstrumentationConfigs from the cluster
-func (p *k8sAttributesProcessor) getInstrumentationConfigs(ctx context.Context) (*odigosv1alpha1.InstrumentationConfigList, error) {
-	return p.odigosClient.InstrumentationConfigs("").List(ctx, metav1.ListOptions{})
-}
-
-// startInformer starts the InstrumentationConfig informer
-func (p *k8sAttributesProcessor) startInformer() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if p.icInformer != nil {
-		return nil // Already started
+// processMetrics process metrics and add k8s metadata using resource IP, hostname or incoming IP as pod origin.
+func (kp *kubernetesprocessor) processMetrics(ctx context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
+	rm := md.ResourceMetrics()
+	for i := 0; i < rm.Len(); i++ {
+		kp.processResource(ctx, rm.At(i).Resource())
 	}
 
-	p.informerStopCh = make(chan struct{})
-
-	// Create informer for InstrumentationConfig objects
-	p.icInformer = cache.NewSharedIndexInformer(
-		&cache.ListWatch{
-			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-				return p.odigosClient.InstrumentationConfigs("").List(context.Background(), options)
-			},
-			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-				return p.odigosClient.InstrumentationConfigs("").Watch(context.Background(), options)
-			},
-		},
-		&odigosv1alpha1.InstrumentationConfig{},
-		0, // No resync period
-		cache.Indexers{},
-	)
-
-	// Add event handlers
-	p.icInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			if ic, ok := obj.(*odigosv1alpha1.InstrumentationConfig); ok {
-				p.logger.Info("InstrumentationConfig added",
-					zap.String("name", ic.Name),
-					zap.String("namespace", ic.Namespace),
-				)
-				// Extract workload info and add to cache
-				p.handleInstrumentationConfigEvent(ic)
-			}
-		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			if ic, ok := newObj.(*odigosv1alpha1.InstrumentationConfig); ok {
-				p.logger.Info("InstrumentationConfig updated",
-					zap.String("name", ic.Name),
-					zap.String("namespace", ic.Namespace),
-				)
-				// Extract workload info and update cache
-				p.handleInstrumentationConfigEvent(ic)
-			}
-		},
-		DeleteFunc: func(obj interface{}) {
-			if ic, ok := obj.(*odigosv1alpha1.InstrumentationConfig); ok {
-				p.logger.Info("InstrumentationConfig deleted",
-					zap.String("name", ic.Name),
-					zap.String("namespace", ic.Namespace),
-				)
-				// Extract workload info and remove from cache
-				p.handleInstrumentationConfigDeletion(ic)
-			}
-		},
-	})
-
-	// Start the informer
-	go p.icInformer.Run(p.informerStopCh)
-
-	// Wait for cache to sync
-	if !cache.WaitForCacheSync(p.informerStopCh, p.icInformer.HasSynced) {
-		return fmt.Errorf("failed to sync InstrumentationConfig informer cache")
-	}
-
-	p.logger.Info("InstrumentationConfig informer started successfully")
-	return nil
+	return md, nil
 }
 
-// stopInformer stops the InstrumentationConfig informer
-func (p *k8sAttributesProcessor) stopInformer() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+// processLogs process logs and add k8s metadata using resource IP, hostname or incoming IP as pod origin.
+func (kp *kubernetesprocessor) processLogs(ctx context.Context, ld plog.Logs) (plog.Logs, error) {
+	rl := ld.ResourceLogs()
+	for i := 0; i < rl.Len(); i++ {
+		kp.processResource(ctx, rl.At(i).Resource())
+	}
 
-	if p.icInformer == nil {
+	return ld, nil
+}
+
+// processProfiles process profiles and add k8s metadata using resource IP, hostname or incoming IP as pod origin.
+func (kp *kubernetesprocessor) processProfiles(ctx context.Context, pd pprofile.Profiles) (pprofile.Profiles, error) {
+	rp := pd.ResourceProfiles()
+	for i := 0; i < rp.Len(); i++ {
+		kp.processResource(ctx, rp.At(i).Resource())
+	}
+
+	return pd, nil
+}
+
+// processResource adds Pod metadata tags to resource based on pod association configuration
+func (kp *kubernetesprocessor) processResource(ctx context.Context, resource pcommon.Resource) {
+	podIdentifierValue := extractPodID(ctx, resource.Attributes(), kp.podAssociations)
+	kp.logger.Debug("evaluating pod identifier", zap.Any("value", podIdentifierValue))
+
+	for i := range podIdentifierValue {
+		if podIdentifierValue[i].Source.From == kube.ConnectionSource && podIdentifierValue[i].Value != "" {
+			setResourceAttribute(resource.Attributes(), kube.K8sIPLabelName, podIdentifierValue[i].Value)
+			break
+		}
+	}
+	if kp.passthroughMode {
 		return
 	}
 
-	close(p.informerStopCh)
-	p.icInformer = nil
-	p.logger.Info("InstrumentationConfig informer stopped")
-}
+	var pod *kube.Pod
+	if podIdentifierValue.IsNotEmpty() {
+		var podFound bool
+		if pod, podFound = kp.kc.GetPod(podIdentifierValue); podFound {
+			kp.logger.Debug("getting the pod", zap.Any("pod", pod))
 
-// handleInstrumentationConfigEvent handles add/update events for InstrumentationConfig
-func (p *k8sAttributesProcessor) handleInstrumentationConfigEvent(ic *odigosv1alpha1.InstrumentationConfig) {
-	// Extract workload info from the InstrumentationConfig name
-	workloadInfo, err := workload.ExtractWorkloadInfoFromRuntimeObjectName(ic.Name, ic.Namespace)
-	if err != nil {
-		p.logger.Error("Failed to extract workload info from InstrumentationConfig",
-			zap.String("name", ic.Name),
-			zap.String("namespace", ic.Namespace),
-			zap.Error(err),
-		)
-		return
-	}
-
-	
-
-	// Add workload to cache with empty Pod
-	p.addWorkloadToCache(workloadInfo, &kube.Pod{})
-}
-
-// handleInstrumentationConfigDeletion handles delete events for InstrumentationConfig
-func (p *k8sAttributesProcessor) handleInstrumentationConfigDeletion(ic *odigosv1alpha1.InstrumentationConfig) {
-	// Extract workload info from the InstrumentationConfig name
-	workloadInfo, err := workload.ExtractWorkloadInfoFromRuntimeObjectName(ic.Name, ic.Namespace)
-	if err != nil {
-		p.logger.Error("Failed to extract workload info from InstrumentationConfig",
-			zap.String("name", ic.Name),
-			zap.String("namespace", ic.Namespace),
-			zap.Error(err),
-		)
-		return
-	}
-
-	// Remove workload from cache
-	p.removeWorkloadFromCache(workloadInfo)
-}
-
-// getInstrumentationConfigsFromCache retrieves all InstrumentationConfig objects from the informer cache
-func (p *k8sAttributesProcessor) getInstrumentationConfigsFromCache() ([]*odigosv1alpha1.InstrumentationConfig, error) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	if p.icInformer == nil {
-		return nil, fmt.Errorf("informer not started")
-	}
-
-	// Get all objects from the cache
-	objects := p.icInformer.GetStore().List()
-	configs := make([]*odigosv1alpha1.InstrumentationConfig, 0, len(objects))
-
-	for _, obj := range objects {
-		if ic, ok := obj.(*odigosv1alpha1.InstrumentationConfig); ok {
-			configs = append(configs, ic)
+			for key, val := range pod.Attributes {
+				setResourceAttribute(resource.Attributes(), key, val)
+			}
+			kp.addContainerAttributes(resource.Attributes(), pod)
 		}
 	}
 
-	return configs, nil
-}
+	namespace := getNamespace(pod, resource.Attributes())
+	if namespace != "" {
+		attrsToAdd := kp.getAttributesForPodsNamespace(namespace)
+		for key, val := range attrsToAdd {
+			setResourceAttribute(resource.Attributes(), key, val)
+		}
 
-// addWorkloadToCache adds a workload to the cache
-func (p *k8sAttributesProcessor) addWorkloadToCache(workload k8sconsts.PodWorkload, pod *kube.Pod) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if p.workloadCache == nil {
-		p.workloadCache = make(map[k8sconsts.PodWorkload]*kube.Pod)
+		if kp.rules.ServiceNamespace {
+			resource.Attributes().PutStr(string(conventions.ServiceNamespaceKey), namespace)
+		}
 	}
 
-	p.workloadCache[workload] = pod
-	p.logger.Debug("Added workload to cache",
-		zap.String("name", workload.Name),
-		zap.String("namespace", workload.Namespace),
-		zap.String("kind", string(workload.Kind)),
-	)
+	nodeName := getNodeName(pod, resource.Attributes())
+	if nodeName != "" {
+		attrsToAdd := kp.getAttributesForPodsNode(nodeName)
+		for key, val := range attrsToAdd {
+			setResourceAttribute(resource.Attributes(), key, val)
+		}
+		nodeUID := kp.getUIDForPodsNode(nodeName)
+		if nodeUID != "" {
+			setResourceAttribute(resource.Attributes(), string(conventions.K8SNodeUIDKey), nodeUID)
+		}
+	}
+
+	deployment := getDeploymentUID(pod, resource.Attributes())
+	if deployment != "" {
+		attrsToAdd := kp.getAttributesForPodsDeployment(deployment)
+		for key, val := range attrsToAdd {
+			setResourceAttribute(resource.Attributes(), key, val)
+		}
+	}
+
+	statefulset := getStatefulSetUID(pod, resource.Attributes())
+	if statefulset != "" {
+		attrsToAdd := kp.getAttributesForPodsStatefulSet(statefulset)
+		for key, val := range attrsToAdd {
+			setResourceAttribute(resource.Attributes(), key, val)
+		}
+	}
+
+	daemonset := getDaemonSetUID(pod, resource.Attributes())
+	if daemonset != "" {
+		attrsToAdd := kp.getAttributesForPodsDaemonSet(daemonset)
+		for key, val := range attrsToAdd {
+			setResourceAttribute(resource.Attributes(), key, val)
+		}
+	}
+
+	job := getJobUID(pod, resource.Attributes())
+	if job != "" {
+		attrsToAdd := kp.getAttributesForPodsJob(job)
+		for key, val := range attrsToAdd {
+			setResourceAttribute(resource.Attributes(), key, val)
+		}
+	}
 }
 
-// removeWorkloadFromCache removes a workload from the cache
-func (p *k8sAttributesProcessor) removeWorkloadFromCache(workload k8sconsts.PodWorkload) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+func setResourceAttribute(attributes pcommon.Map, key, val string) {
+	attr, found := attributes.Get(key)
+	if !found || attr.AsString() == "" {
+		attributes.PutStr(key, val)
+	}
+}
 
-	if p.workloadCache == nil {
+func getNamespace(pod *kube.Pod, resAttrs pcommon.Map) string {
+	if pod != nil && pod.Namespace != "" {
+		return pod.Namespace
+	}
+	return stringAttributeFromMap(resAttrs, string(conventions.K8SNamespaceNameKey))
+}
+
+func getNodeName(pod *kube.Pod, resAttrs pcommon.Map) string {
+	if pod != nil && pod.NodeName != "" {
+		return pod.NodeName
+	}
+	return stringAttributeFromMap(resAttrs, string(conventions.K8SNodeNameKey))
+}
+
+func getDeploymentUID(pod *kube.Pod, resAttrs pcommon.Map) string {
+	if pod != nil && pod.DeploymentUID != "" {
+		return pod.DeploymentUID
+	}
+	return stringAttributeFromMap(resAttrs, string(conventions.K8SDeploymentUIDKey))
+}
+
+func getStatefulSetUID(pod *kube.Pod, resAttrs pcommon.Map) string {
+	if pod != nil && pod.StatefulSetUID != "" {
+		return pod.StatefulSetUID
+	}
+	return stringAttributeFromMap(resAttrs, string(conventions.K8SStatefulSetUIDKey))
+}
+
+func getDaemonSetUID(pod *kube.Pod, resAttrs pcommon.Map) string {
+	if pod != nil && pod.DaemonSetUID != "" {
+		return pod.DaemonSetUID
+	}
+	return stringAttributeFromMap(resAttrs, string(conventions.K8SDaemonSetUIDKey))
+}
+
+func getJobUID(pod *kube.Pod, resAttrs pcommon.Map) string {
+	if pod != nil && pod.JobUID != "" {
+		return pod.JobUID
+	}
+	return stringAttributeFromMap(resAttrs, string(conventions.K8SJobUIDKey))
+}
+
+// addContainerAttributes looks if pod has any container identifiers and adds additional container attributes
+func (kp *kubernetesprocessor) addContainerAttributes(attrs pcommon.Map, pod *kube.Pod) {
+	containerName := stringAttributeFromMap(attrs, string(conventions.K8SContainerNameKey))
+	containerID := stringAttributeFromMap(attrs, string(conventions.ContainerIDKey))
+	var (
+		containerSpec *kube.Container
+		ok            bool
+	)
+	switch {
+	case containerName != "":
+		containerSpec, ok = pod.Containers.ByName[containerName]
+		if !ok {
+			return
+		}
+	case containerID != "":
+		containerSpec, ok = pod.Containers.ByID[containerID]
+		if !ok {
+			return
+		}
+	// if there is only one container in the pod, we can fall back to that container
+	case len(pod.Containers.ByID) == 1:
+		for _, c := range pod.Containers.ByID {
+			containerSpec = c
+		}
+	case len(pod.Containers.ByName) == 1:
+		for _, c := range pod.Containers.ByName {
+			containerSpec = c
+		}
+	default:
 		return
 	}
-
-	delete(p.workloadCache, workload)
-	p.logger.Debug("Removed workload from cache",
-		zap.String("name", workload.Name),
-		zap.String("namespace", workload.Namespace),
-		zap.String("kind", string(workload.Kind)),
-	)
+	if containerSpec.Name != "" {
+		setResourceAttribute(attrs, string(conventions.K8SContainerNameKey), containerSpec.Name)
+	}
+	if containerSpec.ImageName != "" {
+		setResourceAttribute(attrs, string(conventions.ContainerImageNameKey), containerSpec.ImageName)
+	}
+	if containerSpec.ImageTag != "" {
+		setResourceAttribute(attrs, string(conventions.ContainerImageTagKey), containerSpec.ImageTag)
+	}
+	if containerSpec.ServiceInstanceID != "" {
+		setResourceAttribute(attrs, string(conventions.ServiceInstanceIDKey), containerSpec.ServiceInstanceID)
+	}
+	if containerSpec.ServiceVersion != "" {
+		setResourceAttribute(attrs, string(conventions.ServiceVersionKey), containerSpec.ServiceVersion)
+	}
+	// attempt to get container ID from restart count
+	runID := -1
+	runIDAttr, ok := attrs.Get(string(conventions.K8SContainerRestartCountKey))
+	if ok {
+		containerRunID, err := intFromAttribute(runIDAttr)
+		if err != nil {
+			kp.logger.Debug(err.Error())
+		} else {
+			runID = containerRunID
+		}
+	} else {
+		// take the highest runID (restart count) which represents the currently running container in most cases
+		for containerRunID := range containerSpec.Statuses {
+			if containerRunID > runID {
+				runID = containerRunID
+			}
+		}
+	}
+	if runID != -1 {
+		if containerStatus, ok := containerSpec.Statuses[runID]; ok {
+			if _, found := attrs.Get(string(conventions.ContainerIDKey)); !found && containerStatus.ContainerID != "" {
+				attrs.PutStr(string(conventions.ContainerIDKey), containerStatus.ContainerID)
+			}
+			if _, found := attrs.Get(containerImageRepoDigests); !found && containerStatus.ImageRepoDigest != "" {
+				attrs.PutEmptySlice(containerImageRepoDigests).AppendEmpty().SetStr(containerStatus.ImageRepoDigest)
+			}
+		}
+	}
 }
 
-// getWorkloadsFromCache returns all workloads from the cache
-func (p *k8sAttributesProcessor) getWorkloadsFromCache() []k8sconsts.PodWorkload {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	if p.workloadCache == nil {
+func (kp *kubernetesprocessor) getAttributesForPodsNamespace(namespace string) map[string]string {
+	ns, ok := kp.kc.GetNamespace(namespace)
+	if !ok {
 		return nil
 	}
-
-	workloads := make([]k8sconsts.PodWorkload, 0, len(p.workloadCache))
-	for workload := range p.workloadCache {
-		workloads = append(workloads, workload)
-	}
-
-	return workloads
+	return ns.Attributes
 }
 
-// getPodFromCache returns a specific pod from the cache by workload
-func (p *k8sAttributesProcessor) getPodFromCache(workload k8sconsts.PodWorkload) *kube.Pod {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	if p.workloadCache == nil {
+func (kp *kubernetesprocessor) getAttributesForPodsNode(nodeName string) map[string]string {
+	node, ok := kp.kc.GetNode(nodeName)
+	if !ok {
 		return nil
 	}
+	return node.Attributes
+}
 
-	return p.workloadCache[workload]
+func (kp *kubernetesprocessor) getAttributesForPodsDeployment(deploymentUID string) map[string]string {
+	d, ok := kp.kc.GetDeployment(deploymentUID)
+	if !ok {
+		return nil
+	}
+	return d.Attributes
+}
+
+func (kp *kubernetesprocessor) getAttributesForPodsStatefulSet(statefulsetUID string) map[string]string {
+	d, ok := kp.kc.GetStatefulSet(statefulsetUID)
+	if !ok {
+		return nil
+	}
+	return d.Attributes
+}
+
+func (kp *kubernetesprocessor) getAttributesForPodsDaemonSet(daemonsetUID string) map[string]string {
+	d, ok := kp.kc.GetDaemonSet(daemonsetUID)
+	if !ok {
+		return nil
+	}
+	return d.Attributes
+}
+
+func (kp *kubernetesprocessor) getAttributesForPodsJob(jobUID string) map[string]string {
+	j, ok := kp.kc.GetJob(jobUID)
+	if !ok {
+		return nil
+	}
+	return j.Attributes
+}
+
+func (kp *kubernetesprocessor) getUIDForPodsNode(nodeName string) string {
+	node, ok := kp.kc.GetNode(nodeName)
+	if !ok {
+		return ""
+	}
+	return node.NodeUID
+}
+
+// intFromAttribute extracts int value from an attribute stored as string or int
+func intFromAttribute(val pcommon.Value) (int, error) {
+	switch val.Type() {
+	case pcommon.ValueTypeInt:
+		return int(val.Int()), nil
+	case pcommon.ValueTypeStr:
+		i, err := strconv.Atoi(val.Str())
+		if err != nil {
+			return 0, err
+		}
+		return i, nil
+	default:
+		return 0, fmt.Errorf("wrong attribute type %v, expected int", val.Type())
+	}
 }

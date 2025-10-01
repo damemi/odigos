@@ -1,87 +1,212 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
 package odigosk8sattributes
 
 import (
 	"context"
-	"fmt"
+	"time"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
+	"go.opentelemetry.io/collector/consumer/xconsumer"
 	"go.opentelemetry.io/collector/processor"
 	"go.opentelemetry.io/collector/processor/processorhelper"
+	"go.opentelemetry.io/collector/processor/processorhelper/xprocessorhelper"
+	"go.opentelemetry.io/collector/processor/xprocessor"
 
-	"k8s.io/client-go/kubernetes"
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/client-go/rest"
-
-	"github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned/typed/odigos/v1alpha1"
-	"github.com/odigos-io/odigos/api/k8sconsts"
+	"github.com/odigos-io/odigos/collector/processors/odigosk8sattributes/internal/k8sconfig"
 	"github.com/odigos-io/odigos/collector/processors/odigosk8sattributes/internal/kube"
+	"github.com/odigos-io/odigos/collector/processors/odigosk8sattributes/internal/metadata"
 )
 
+var (
+	kubeClientProvider   = kube.ClientProvider(nil)
+	consumerCapabilities = consumer.Capabilities{MutatesData: true}
+	defaultExcludes      = ExcludeConfig{Pods: []ExcludePodConfig{{Name: "jaeger-agent"}, {Name: "jaeger-collector"}}}
+)
+
+// NewFactory returns a new factory for the k8s processor.
 func NewFactory() processor.Factory {
-	return processor.NewFactory(
-		component.MustNewType("odigosk8sattributes"),
+	return xprocessor.NewFactory(
+		metadata.Type,
 		createDefaultConfig,
-		processor.WithTraces(createTracesProcessor, component.StabilityLevelBeta),
+		xprocessor.WithTraces(createTracesProcessor, metadata.TracesStability),
+		xprocessor.WithMetrics(createMetricsProcessor, metadata.MetricsStability),
+		xprocessor.WithLogs(createLogsProcessor, metadata.LogsStability),
+		xprocessor.WithProfiles(createProfilesProcessor, metadata.ProfilesStability),
 	)
 }
 
 func createDefaultConfig() component.Config {
-	return &Config{}
+	return &Config{
+		APIConfig: k8sconfig.APIConfig{AuthType: k8sconfig.AuthTypeServiceAccount},
+		Exclude:   defaultExcludes,
+		Extract: ExtractConfig{
+			Metadata: enabledAttributes(),
+		},
+		WaitForMetadataTimeout: 10 * time.Second,
+	}
 }
 
 func createTracesProcessor(
 	ctx context.Context,
+	params processor.Settings,
+	cfg component.Config,
+	next consumer.Traces,
+) (processor.Traces, error) {
+	return createTracesProcessorWithOptions(ctx, params, cfg, next)
+}
+
+func createLogsProcessor(
+	ctx context.Context,
+	params processor.Settings,
+	cfg component.Config,
+	nextLogsConsumer consumer.Logs,
+) (processor.Logs, error) {
+	return createLogsProcessorWithOptions(ctx, params, cfg, nextLogsConsumer)
+}
+
+func createMetricsProcessor(
+	ctx context.Context,
+	params processor.Settings,
+	cfg component.Config,
+	nextMetricsConsumer consumer.Metrics,
+) (processor.Metrics, error) {
+	return createMetricsProcessorWithOptions(ctx, params, cfg, nextMetricsConsumer)
+}
+
+func createProfilesProcessor(
+	ctx context.Context,
+	params processor.Settings,
+	cfg component.Config,
+	nextProfilesConsumer xconsumer.Profiles,
+) (xprocessor.Profiles, error) {
+	return createProfilesProcessorWithOptions(ctx, params, cfg, nextProfilesConsumer)
+}
+
+func createTracesProcessorWithOptions(
+	ctx context.Context,
 	set processor.Settings,
 	cfg component.Config,
-	nextConsumer consumer.Traces) (processor.Traces, error) {
-
-	// Create Kubernetes client and instrumentation client
-	instrumentationClient, k8sClient, err := createK8sClients()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Kubernetes clients: %w", err)
-	}
-
-	proc := &k8sAttributesProcessor{
-		logger:         set.Logger,
-		config:         cfg.(*Config),
-		odigosClient:   instrumentationClient,
-		k8sClient:      k8sClient,
-		icInformer:     nil, // Will be initialized when needed
-		informerStopCh: nil,
-		workloadCache:  make(map[k8sconsts.PodWorkload]*kube.Pod),
-	}
+	next consumer.Traces,
+	options ...option,
+) (processor.Traces, error) {
+	kp := createKubernetesProcessor(set, cfg, options...)
 
 	return processorhelper.NewTraces(
 		ctx,
 		set,
 		cfg,
-		nextConsumer,
-		proc.processTraces,
-		processorhelper.WithCapabilities(consumer.Capabilities{MutatesData: true}),
+		next,
+		kp.processTraces,
+		processorhelper.WithCapabilities(consumerCapabilities),
+		processorhelper.WithStart(kp.Start),
+		processorhelper.WithShutdown(kp.Shutdown))
+}
+
+func createMetricsProcessorWithOptions(
+	ctx context.Context,
+	set processor.Settings,
+	cfg component.Config,
+	nextMetricsConsumer consumer.Metrics,
+	options ...option,
+) (processor.Metrics, error) {
+	kp := createKubernetesProcessor(set, cfg, options...)
+
+	return processorhelper.NewMetrics(
+		ctx,
+		set,
+		cfg,
+		nextMetricsConsumer,
+		kp.processMetrics,
+		processorhelper.WithCapabilities(consumerCapabilities),
+		processorhelper.WithStart(kp.Start),
+		processorhelper.WithShutdown(kp.Shutdown))
+}
+
+func createLogsProcessorWithOptions(
+	ctx context.Context,
+	set processor.Settings,
+	cfg component.Config,
+	nextLogsConsumer consumer.Logs,
+	options ...option,
+) (processor.Logs, error) {
+	kp := createKubernetesProcessor(set, cfg, options...)
+
+	return processorhelper.NewLogs(
+		ctx,
+		set,
+		cfg,
+		nextLogsConsumer,
+		kp.processLogs,
+		processorhelper.WithCapabilities(consumerCapabilities),
+		processorhelper.WithStart(kp.Start),
+		processorhelper.WithShutdown(kp.Shutdown))
+}
+
+func createProfilesProcessorWithOptions(
+	ctx context.Context,
+	set processor.Settings,
+	cfg component.Config,
+	nextProfilesConsumer xconsumer.Profiles,
+	options ...option,
+) (xprocessor.Profiles, error) {
+	kp := createKubernetesProcessor(set, cfg, options...)
+
+	return xprocessorhelper.NewProfiles(
+		ctx,
+		set,
+		cfg,
+		nextProfilesConsumer,
+		kp.processProfiles,
+		xprocessorhelper.WithCapabilities(consumerCapabilities),
+		xprocessorhelper.WithStart(kp.Start),
+		xprocessorhelper.WithShutdown(kp.Shutdown),
 	)
 }
 
-// createK8sClients creates the Kubernetes client and returns the instrumentation client
-func createK8sClients() (v1alpha1.OdigosV1alpha1Interface, *kubernetes.Clientset, error) {
-	// Create in-cluster config
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create in-cluster config: %w", err)
+func createKubernetesProcessor(
+	params processor.Settings,
+	cfg component.Config,
+	options ...option,
+) *kubernetesprocessor {
+	kp := &kubernetesprocessor{
+		logger:            params.Logger,
+		cfg:               cfg,
+		options:           options,
+		telemetrySettings: params.TelemetrySettings,
 	}
 
-	// Create Kubernetes client
-	k8sClient, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create Kubernetes client: %w", err)
+	return kp
+}
+
+func createProcessorOpts(cfg component.Config) []option {
+	oCfg := cfg.(*Config)
+	var opts []option
+	if oCfg.Passthrough {
+		opts = append(opts, withPassthrough())
 	}
 
-	// Create Odigos clientset
-	odigosClientset, err := v1alpha1.NewForConfig(config)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create Odigos clientset: %w", err)
+	// extraction rules
+	opts = append(opts,
+		withExtractMetadata(oCfg.Extract.Metadata...),
+		withExtractLabels(oCfg.Extract.Labels...),
+		withExtractAnnotations(oCfg.Extract.Annotations...),
+		withOtelAnnotations(oCfg.Extract.OtelAnnotations),
+		// filters
+		withFilterNode(oCfg.Filter.Node, oCfg.Filter.NodeFromEnvVar),
+		withFilterNamespace(oCfg.Filter.Namespace),
+		withFilterLabels(oCfg.Filter.Labels...),
+		withFilterFields(oCfg.Filter.Fields...),
+		withAPIConfig(oCfg.APIConfig),
+		withExtractPodAssociations(oCfg.Association...),
+		withExcludes(oCfg.Exclude),
+		withWaitForMetadataTimeout(oCfg.WaitForMetadataTimeout))
+
+	if oCfg.WaitForMetadata {
+		opts = append(opts, withWaitForMetadata(true))
 	}
 
-	// Return the instrumentation client
-	return odigosClientset, k8sClient, nil
+	return opts
 }
