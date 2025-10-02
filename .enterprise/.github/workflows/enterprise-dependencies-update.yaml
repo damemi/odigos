@@ -18,6 +18,7 @@ jobs:
           git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
           go env -w GOPRIVATE=github.com/odigos-io/*
           make update-odigos-oss-mod-deps-all OSS_TAG=main
+          make update-golang-enterprise-deps
  
       - name: github preperation
         id: github_preperation

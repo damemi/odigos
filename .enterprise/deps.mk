@@ -44,7 +44,7 @@ update-odigos-oss-mod-deps-all:
 	@echo "✅ All Odigos OSS module dependencies updated successfully!"
 
 # Update enterprise Go instrumentation dependency in odiglet to main branch of the agent.
-# Usage: make update-enterprise-go-deps
+# Usage: make update-golang-enterprise-deps
 # This target specifically updates the enterprise Go instrumentation dependency
 # in odiglet/go.mod to use the 'main' branch (hardcoded, no configurable tag)
 # rational: we don't want to create a chore for tagging the agent repo before a release,
@@ -53,7 +53,7 @@ update-odigos-oss-mod-deps-all:
 # 1. syncer bot that updates all dependencies to the latest on this repo main branch
 # 2. forking to a new release branch (e.g. releases/v1.X.0 at which point we want the latest agent once)
 # 3. run manually - for development to pull in latest agent once
-.PHONY: update-enterprise-go-deps
+.PHONY: update-golang-enterprise-deps
 update-golang-enterprise-deps:
 	@echo "🔄 Updating enterprise Go dependencies in odiglet..."
 	# Using docker with alpine to ensure consistent sed behavior across platforms (GNU vs BSD sed on Linux/Mac)
