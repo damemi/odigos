@@ -12,9 +12,9 @@ require (
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
 	github.com/odigos-io/odigos/api v0.0.0
 	github.com/odigos-io/odigos/common v1.7.0-pre2
-	github.com/odigos-io/odigos/instrumentation v1.7.0-pre2
+	github.com/odigos-io/odigos/instrumentation v1.7.0-pre0.0.20251009130703-7eb90d3fb2b0
 	github.com/odigos-io/odigos/k8sutils v0.0.0
-	github.com/odigos-io/odigos/odiglet v1.7.0-pre2
+	github.com/odigos-io/odigos/odiglet v1.7.0-pre0.0.20251009130703-7eb90d3fb2b0
 	github.com/odigos-io/odigos/procdiscovery v0.0.0
 	go.opentelemetry.io/auto v0.22.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.38.0
@@ -64,7 +64,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/odigos-io/odigos/distros v1.7.0-pre2 // indirect
-	github.com/odigos-io/odigos/opampserver v1.7.0-pre2 // indirect
+	github.com/odigos-io/odigos/opampserver v1.7.0-pre0.0.20251009130703-7eb90d3fb2b0 // indirect
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5 // indirect
 	github.com/odigos-io/runtime-detector v0.0.20 // indirect
 	github.com/parca-dev/parca-agent v0.9.1 // indirect
@@ -101,12 +101,12 @@ require (
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/arch v0.20.0 // indirect
-	golang.org/x/exp v0.0.0-20250813145105-42675adae3e6 // indirect
+	golang.org/x/arch v0.22.0 // indirect
+	golang.org/x/exp v0.0.0-20251002181428-27f1f14c8bb9 // indirect
 	golang.org/x/net v0.44.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
-	golang.org/x/sys v0.36.0 // indirect
+	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/term v0.35.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
@@ -137,19 +137,19 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20251008090438-dfe53251abd9
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20251009090901-5e2043b75b2f
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.7.0-pre2
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.7.0-pre0.0.20251009130703-7eb90d3fb2b0
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.7.0-pre2
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.7.0-pre0.0.20251009130703-7eb90d3fb2b0
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.7.0-pre2
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.7.0-pre0.0.20251009130703-7eb90d3fb2b0
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.7.0-pre2
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.7.0-pre0.0.20251009130703-7eb90d3fb2b0
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.7.0-pre2
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.7.0-pre0.0.20251009130703-7eb90d3fb2b0
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.7.0-pre2
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.7.0-pre0.0.20251009130703-7eb90d3fb2b0
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
