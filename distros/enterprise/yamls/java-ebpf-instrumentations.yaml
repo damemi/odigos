@@ -22,3 +22,4 @@ spec:
         envValue: '-javaagent:{{ODIGOS_AGENTS_DIR}}/java-ebpf/dtrace-injector.jar'
         delimiter: ' '
     ldPreloadInjectionSupported: true
+    k8sAttrsViaEnvVars: true
