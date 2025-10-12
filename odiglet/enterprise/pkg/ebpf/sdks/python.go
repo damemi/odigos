@@ -9,6 +9,7 @@ import (
 	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 	"github.com/odigos-io/odigos/k8sutils/pkg/service"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
+	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 )
 
@@ -26,6 +27,7 @@ func (p *PythonInstrumentationFactoryEnterprise) CreateInstrumentation(ctx conte
 	opts := []auto.InstrumentationOption{
 		auto.WithPID(pid),
 		auto.WithServiceName(settings.ServiceName),
+		auto.WithProcFS(process.HostProcDir()),
 	}
 
 	if settings.TracesMap.Map == nil {

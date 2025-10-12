@@ -7,6 +7,7 @@ import (
 	"github.com/odigos-io/ebpf-java-instrumentation/pkg/dynamic"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common/consts"
+	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
 
 	auto "github.com/odigos-io/ebpf-java-instrumentation"
 	"github.com/odigos-io/odigos/instrumentation"
@@ -42,6 +43,7 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 		auto.WithResourceAttributes(settings.ResourceAttributes...),
 		auto.WithServiceName(settings.ServiceName),
 		auto.WithTraceExporter(defaultExporter),
+		auto.WithProcFS(process.HostProcDir()),
 	)
 	if err != nil {
 		log.Logger.Error(err, "instrumentation setup failed")
