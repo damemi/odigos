@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
@@ -55,6 +56,18 @@ var (
 
 	sourceOtelServiceFlagName = "otel-service"
 	sourceOtelServiceFlag     string
+
+	excludeAppsFileFlagName = "exclude-apps-file"
+	excludeAppsFileFlag     string
+
+	excludeNamespacesFileFlagName = "exclude-namespaces-file"
+	excludeNamespacesFileFlag     string
+
+	dryRunFlagName = "dry-run"
+	dryRunFlag     bool
+
+	skipExcludedNamespacesFlagName = "skip-excluded-namespaces"
+	skipExcludedNamespacesFlag     bool
 )
 
 var sourcesCmd = &cobra.Command{
@@ -376,7 +389,7 @@ var sourceStatusCmd = &cobra.Command{
 	},
 }
 
-func enableOrDisableSource(cmd *cobra.Command, args []string, workloadKind k8sconsts.WorkloadKind, disableInstrumentation bool) {
+func enableOrDisableSource(cmd *cobra.Command, args []string, workloadKind k8sconsts.WorkloadKind, disableInstrumentation bool, namespace string) {
 	msg := "enable"
 	if disableInstrumentation {
 		msg = "disable"
@@ -384,12 +397,16 @@ func enableOrDisableSource(cmd *cobra.Command, args []string, workloadKind k8sco
 
 	ctx := cmd.Context()
 	client := cmdcontext.KubeClientFromContextOrExit(ctx)
-	source, err := updateOrCreateSourceForObject(ctx, client, workloadKind, args[0], disableInstrumentation)
+	source, err := updateOrCreateSourceForObject(ctx, client, workloadKind, args[0], disableInstrumentation, namespace)
 	if err != nil {
 		fmt.Printf("\033[31mERROR\033[0m Cannot %s Source: %+v\n", msg, err)
 		os.Exit(1)
 	}
-	fmt.Printf("%sd Source %s for %s %s\n", msg, source.GetName(), source.Spec.Workload.Kind, source.Spec.Workload.Name)
+	dryRunMsg := ""
+	if dryRunFlag {
+		dryRunMsg = "\033[31m(dry run)\033[0m"
+	}
+	fmt.Printf("%s%sd Source %s for %s %s (disabled=%t)\n", dryRunMsg, msg, source.GetName(), source.Spec.Workload.Kind, source.Spec.Workload.Name, disableInstrumentation)
 }
 
 func enableOrDisableSourceCmd(workloadKind k8sconsts.WorkloadKind, disableInstrumentation bool) *cobra.Command {
@@ -405,31 +422,264 @@ func enableOrDisableSourceCmd(workloadKind k8sconsts.WorkloadKind, disableInstru
 		Args:    cobra.ExactArgs(1),
 		Aliases: kindAliases[workloadKind],
 		Run: func(cmd *cobra.Command, args []string) {
-			enableOrDisableSource(cmd, args, workloadKind, disableInstrumentation)
+			enableOrDisableSource(cmd, args, workloadKind, disableInstrumentation, sourceNamespaceFlag)
 		},
 	}
 }
 
-func updateOrCreateSourceForObject(ctx context.Context, client *kube.Client, workloadKind k8sconsts.WorkloadKind, argName string, disableInstrumentation bool) (*v1alpha1.Source, error) {
+func enableClusterSourceCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "cluster",
+		Short: "Enable an entire cluster for Odigos instrumentation",
+		Long:  "This command enables the cluster for Odigos instrumentation. It will create Source objects for all namespaces in the cluster, except those that are excluded.",
+		Example: `
+# Enable the cluster for Odigos instrumentation
+odigos sources enable cluster
+
+# Enable the cluster for Odigos instrumentation, but dry run
+odigos sources enable cluster --dry-run
+
+# Enable the cluster for Odigos instrumentation with excluded namespaces
+# By default, disabled sources will be created for excluded namespaces unless --skip-excluded-namespaces is used
+odigos sources enable cluster --exclude-namespaces-file=excluded-namespaces.txt
+
+# Enable the cluster for Odigos instrumentation with excluded apps
+# Disabled sources will be created for excluded apps
+odigos sources enable cluster --exclude-apps-file=excluded-apps.txt
+
+# Enable the cluster for Odigos instrumentation with excluded namespaces and apps
+odigos sources enable cluster --exclude-namespaces-file=excluded-namespaces.txt --exclude-apps-file=excluded-apps.txt
+
+# Enable the cluster for Odigos instrumentation with excluded namespaces and apps, but skip excluded namespaces
+# Using --skip-excluded-namespaces will not create disabled sources for excluded namespaces, but will create disabled sources for excluded apps
+odigos sources enable cluster --exclude-namespaces-file=excluded-namespaces.txt --exclude-apps-file=excluded-apps.txt --skip-excluded-namespaces
+
+For example, excluded-namespaces.txt:
+namespace1
+namespace2
+
+For example, excluded-apps.txt:
+Deployment/app1
+CronJob/app2
+
+The format of each line in excluded-apps.txt can be either:
+<namespace>/<kind>/<name>: Exclude a specific app in the given namespace
+<kind>/<name>: Exclude any app of the given kind and name in any namespace
+<name>: Exclude any app of the given name in any namespace and kind
+`,
+		Run: func(cmd *cobra.Command, args []string) {
+			enableClusterSource(cmd, args)
+		},
+	}
+}
+
+func enableClusterSource(cmd *cobra.Command, args []string) {
+	ctx := cmd.Context()
+	client := cmdcontext.KubeClientFromContextOrExit(ctx)
+	namespaces, err := client.Clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		fmt.Printf("\033[31mERROR\033[0m Cannot list namespaces: %+v\n", err)
+		os.Exit(1)
+	}
+
+	excludeNamespaces, err := readAppListFromFile(excludeNamespacesFileFlag)
+	if err != nil {
+		fmt.Printf("\033[31mERROR\033[0m Cannot read exclude namespaces file: %+v\n", err)
+		os.Exit(1)
+	}
+
+	excludeApps, err := readAppListFromFile(excludeAppsFileFlag)
+	if err != nil {
+		fmt.Printf("\033[31mERROR\033[0m Cannot read exclude apps file: %+v\n", err)
+		os.Exit(1)
+	}
+
+	for _, namespace := range namespaces.Items {
+		namespaceName := namespace.GetName()
+
+		// Handle excluded namespaces
+		if _, ok := excludeNamespaces[namespaceName]; ok {
+			if !skipExcludedNamespacesFlag {
+				enableOrDisableSource(cmd, []string{namespaceName}, k8sconsts.WorkloadKindNamespace, true, namespaceName)
+			}
+			continue
+		}
+
+		// Handle excluded apps within this namespace
+		if len(excludeApps) > 0 {
+			// Check Deployments
+			deployments, err := client.Clientset.AppsV1().Deployments(namespaceName).List(ctx, metav1.ListOptions{})
+			if err == nil {
+				for _, deployment := range deployments.Items {
+					if isAppExcluded(excludeApps, namespaceName, k8sconsts.WorkloadKindDeployment, deployment.GetName()) {
+						enableOrDisableSource(cmd, []string{deployment.GetName()}, k8sconsts.WorkloadKindDeployment, true, namespaceName)
+					}
+				}
+			}
+
+			// Check DaemonSets
+			daemonsets, err := client.Clientset.AppsV1().DaemonSets(namespaceName).List(ctx, metav1.ListOptions{})
+			if err == nil {
+				for _, daemonset := range daemonsets.Items {
+					if isAppExcluded(excludeApps, namespaceName, k8sconsts.WorkloadKindDaemonSet, daemonset.GetName()) {
+						enableOrDisableSource(cmd, []string{daemonset.GetName()}, k8sconsts.WorkloadKindDaemonSet, true, namespaceName)
+					}
+				}
+			}
+
+			// Check StatefulSets
+			statefulsets, err := client.Clientset.AppsV1().StatefulSets(namespaceName).List(ctx, metav1.ListOptions{})
+			if err == nil {
+				for _, statefulset := range statefulsets.Items {
+					if isAppExcluded(excludeApps, namespaceName, k8sconsts.WorkloadKindStatefulSet, statefulset.GetName()) {
+						enableOrDisableSource(cmd, []string{statefulset.GetName()}, k8sconsts.WorkloadKindStatefulSet, true, namespaceName)
+					}
+				}
+			}
+
+			// Check CronJobs
+			ver := cmdcontext.K8SVersionFromContext(ctx)
+			cronjobNames := make([]string, 0)
+			if ver.LessThan(version.MustParseSemantic("1.21.0")) {
+				cronjobs, err := client.Clientset.BatchV1beta1().CronJobs(namespaceName).List(ctx, metav1.ListOptions{})
+				if err == nil {
+					for _, cronjob := range cronjobs.Items {
+						cronjobNames = append(cronjobNames, cronjob.GetName())
+					}
+				}
+			} else {
+				cronjobs, err := client.Clientset.BatchV1().CronJobs(namespaceName).List(ctx, metav1.ListOptions{})
+				if err == nil {
+					for _, cronjob := range cronjobs.Items {
+						cronjobNames = append(cronjobNames, cronjob.GetName())
+					}
+				}
+			}
+			if err == nil {
+				for _, cronjob := range cronjobNames {
+					if isAppExcluded(excludeApps, namespaceName, k8sconsts.WorkloadKindCronJob, cronjob) {
+						enableOrDisableSource(cmd, []string{cronjob}, k8sconsts.WorkloadKindCronJob, true, namespaceName)
+					}
+				}
+			}
+		}
+
+		// Enable namespace-level source
+		enableOrDisableSource(cmd, []string{namespaceName}, k8sconsts.WorkloadKindNamespace, false, namespaceName)
+	}
+}
+
+// readAppListFromFile reads a list of apps from a file and returns a map of app names to struct{}
+// the format of each line in the file can be either:
+// <kind>/<name>: Exclude a specific app in the given namespace
+// <namespace>/<kind>/<name>: Exclude a specific app in the given namespace
+// <name>: Exclude any app of the given name in any namespace and kind
+func readAppListFromFile(filename string) (map[string]interface{}, error) {
+	apps := make(map[string]interface{})
+	if filename == "" {
+		return apps, nil
+	}
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(string(content), "\n")
+	for lineNum, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// Split and check format based on the number of parts
+		parts := strings.Split(line, "/")
+
+		if len(parts) > 3 {
+			return nil, fmt.Errorf("invalid format on line %d (expected <kind>/<name> or <namespace>/<kind>/<name>): %s", lineNum+1, line)
+		}
+
+		if len(parts) == 1 {
+			// Format: <name>
+			apps[line] = struct{}{}
+			continue
+		}
+
+		var namespaceStr, kindStr, nameStr string
+		switch len(parts) {
+		case 2:
+			// Format: <kind>/<name>
+			kindStr = parts[0]
+			nameStr = parts[1]
+		case 3:
+			// Format: <namespace>/<kind>/<name>
+			// add a slash to the namespace for the key in the map now so we don't need an extra check for namespace when building the key
+			namespaceStr = parts[0] + "/"
+			kindStr = parts[1]
+			nameStr = parts[2]
+		default:
+			return nil, fmt.Errorf("invalid format on line %d (expected <kind>/<name> or <namespace>/<kind>/<name>): %s", lineNum+1, line)
+		}
+
+		// Validate and normalize the kind
+		kind := workload.WorkloadKindFromString(kindStr)
+		if kind == "" {
+			return nil, fmt.Errorf("invalid workload kind '%s' on line %d: %s", kindStr, lineNum+1, line)
+		}
+		if !workload.IsValidWorkloadKind(kind) {
+			return nil, fmt.Errorf("unsupported workload kind '%s' on line %d: %s", kindStr, lineNum+1, line)
+		}
+
+		// Normalize to lowercase
+		normalizedKind := workload.WorkloadKindLowerCaseFromKind(kind)
+		normalizedLine := fmt.Sprintf("%s%s/%s", namespaceStr, normalizedKind, nameStr)
+		apps[normalizedLine] = struct{}{}
+	}
+	return apps, nil
+}
+
+// isAppExcluded checks if an app matches any of the exclude patterns.
+// It checks in order of specificity:
+// 1. <namespace>/<kind>/<name>
+// 2. <kind>/<name>
+// 3. <name>
+func isAppExcluded(excludeApps map[string]interface{}, namespace string, kind k8sconsts.WorkloadKind, name string) bool {
+	// Normalize the kind to lowercase for comparison
+	normalizedKind := workload.WorkloadKindLowerCaseFromKind(kind)
+
+	// Check most specific pattern: namespace/kind/name
+	if _, ok := excludeApps[fmt.Sprintf("%s/%s/%s", namespace, normalizedKind, name)]; ok {
+		return true
+	}
+	// Check medium specificity: kind/name
+	if _, ok := excludeApps[fmt.Sprintf("%s/%s", normalizedKind, name)]; ok {
+		return true
+	}
+	// Check least specific: just name
+	if _, ok := excludeApps[name]; ok {
+		return true
+	}
+	return false
+}
+
+func updateOrCreateSourceForObject(ctx context.Context, client *kube.Client, workloadKind k8sconsts.WorkloadKind, argName string, disableInstrumentation bool, namespace string) (*v1alpha1.Source, error) {
 	var err error
 	obj := workload.ClientObjectFromWorkloadKind(workloadKind)
 	var objName, objNamespace, sourceNamespace string
 	switch workloadKind {
 	case k8sconsts.WorkloadKindDaemonSet:
-		obj, err = client.Clientset.AppsV1().DaemonSets(sourceNamespaceFlag).Get(ctx, argName, metav1.GetOptions{})
+		obj, err = client.Clientset.AppsV1().DaemonSets(namespace).Get(ctx, argName, metav1.GetOptions{})
 		objName = obj.GetName()
 		objNamespace = obj.GetNamespace()
-		sourceNamespace = sourceNamespaceFlag
+		sourceNamespace = namespace
 	case k8sconsts.WorkloadKindDeployment:
-		obj, err = client.Clientset.AppsV1().Deployments(sourceNamespaceFlag).Get(ctx, argName, metav1.GetOptions{})
+		obj, err = client.Clientset.AppsV1().Deployments(namespace).Get(ctx, argName, metav1.GetOptions{})
 		objName = obj.GetName()
 		objNamespace = obj.GetNamespace()
-		sourceNamespace = sourceNamespaceFlag
+		sourceNamespace = namespace
 	case k8sconsts.WorkloadKindStatefulSet:
-		obj, err = client.Clientset.AppsV1().StatefulSets(sourceNamespaceFlag).Get(ctx, argName, metav1.GetOptions{})
+		obj, err = client.Clientset.AppsV1().StatefulSets(namespace).Get(ctx, argName, metav1.GetOptions{})
 		objName = obj.GetName()
 		objNamespace = obj.GetNamespace()
-		sourceNamespace = sourceNamespaceFlag
+		sourceNamespace = namespace
 	case k8sconsts.WorkloadKindNamespace:
 		obj, err = client.Clientset.CoreV1().Namespaces().Get(ctx, argName, metav1.GetOptions{})
 		objName = obj.GetName()
@@ -438,13 +688,13 @@ func updateOrCreateSourceForObject(ctx context.Context, client *kube.Client, wor
 	case k8sconsts.WorkloadKindCronJob:
 		ver := cmdcontext.K8SVersionFromContext(ctx)
 		if ver.LessThan(version.MustParseSemantic("1.21.0")) {
-			obj, err = client.Clientset.BatchV1beta1().CronJobs(sourceNamespaceFlag).Get(ctx, argName, metav1.GetOptions{})
+			obj, err = client.Clientset.BatchV1beta1().CronJobs(namespace).Get(ctx, argName, metav1.GetOptions{})
 		} else {
-			obj, err = client.Clientset.BatchV1().CronJobs(sourceNamespaceFlag).Get(ctx, argName, metav1.GetOptions{})
+			obj, err = client.Clientset.BatchV1().CronJobs(namespace).Get(ctx, argName, metav1.GetOptions{})
 		}
 		objName = obj.GetName()
 		objNamespace = obj.GetNamespace()
-		sourceNamespace = sourceNamespaceFlag
+		sourceNamespace = namespace
 	}
 	if err != nil {
 		return nil, err
@@ -482,13 +732,15 @@ func updateOrCreateSourceForObject(ctx context.Context, client *kube.Client, wor
 
 	source.Spec.DisableInstrumentation = disableInstrumentation
 
-	if len(sources.Items) > 0 {
-		source, err = client.OdigosClient.Sources(sourceNamespace).Update(ctx, source, v1.UpdateOptions{})
-	} else {
-		source, err = client.OdigosClient.Sources(sourceNamespace).Create(ctx, source, v1.CreateOptions{})
-	}
-	if err != nil {
-		return nil, err
+	if !dryRunFlag {
+		if len(sources.Items) > 0 {
+			source, err = client.OdigosClient.Sources(sourceNamespace).Update(ctx, source, v1.UpdateOptions{})
+		} else {
+			source, err = client.OdigosClient.Sources(sourceNamespace).Create(ctx, source, v1.CreateOptions{})
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if workloadKind == k8sconsts.WorkloadKindNamespace {
@@ -589,9 +841,18 @@ func init() {
 			enableCmd.Flags().StringVarP(&sourceNamespaceFlag, namespaceFlagName, "n", "default", "Kubernetes Namespace for Source")
 			disableCmd.Flags().StringVarP(&sourceNamespaceFlag, namespaceFlagName, "n", "default", "Kubernetes Namespace for Source")
 		}
+		enableCmd.Flags().Bool(dryRunFlagName, false, "dry run")
+		disableCmd.Flags().Bool(dryRunFlagName, false, "dry run")
 		sourceEnableCmd.AddCommand(enableCmd)
 		sourceDisableCmd.AddCommand(disableCmd)
 	}
+
+	enableClusterSourceCmd := enableClusterSourceCmd()
+	enableClusterSourceCmd.Flags().StringVar(&excludeAppsFileFlag, excludeAppsFileFlagName, "", "Path to file containing apps to exclude")
+	enableClusterSourceCmd.Flags().StringVar(&excludeNamespacesFileFlag, excludeNamespacesFileFlagName, "", "Path to file containing namespaces to exclude")
+	enableClusterSourceCmd.Flags().BoolVar(&dryRunFlag, dryRunFlagName, false, "dry run")
+	enableClusterSourceCmd.Flags().BoolVar(&skipExcludedNamespacesFlag, skipExcludedNamespacesFlagName, false, "Passively ignore excluded namespaces instead of creating disabled sources for them")
+	sourceEnableCmd.AddCommand(enableClusterSourceCmd)
 
 	sourceCreateCmd.Flags().AddFlagSet(sourceFlags)
 	sourceCreateCmd.Flags().BoolVar(&disableInstrumentationFlag, disableInstrumentationFlagName, false, "Disable instrumentation for Source")
