@@ -142,6 +142,14 @@ publish-to-ecr:
 	make -j 3 build-tag-push-ecr-image/central-backend SUMMARY="Central Backend for Odigos" DESCRIPTION="Central Backend is the core component of Odigos Central, responsible for managing the data flow from the cluster to the ui." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 	echo "✅ Publish Odigos images into ECR, now install the CLI"
 
+ALL_GO_MOD_DIRS := $(shell find . -type f -name 'go.mod' -exec dirname {} \; | sort | grep -v "licenses")
+
+.PHONY: go-mod-tidy
+go-mod-tidy: $(ALL_GO_MOD_DIRS:%=go-mod-tidy/%)
+go-mod-tidy/%: DIR=$*
+go-mod-tidy/%:
+	@cd $(DIR) && go mod tidy
+
 # Debug
 
 .PHONY: debug-odiglet

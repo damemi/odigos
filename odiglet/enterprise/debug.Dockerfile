@@ -81,7 +81,7 @@ RUN for v in ${RUBY_VERSIONS}; do \
 
 # Compile rsync statically for distroless image
 # don't specify the platform here, since we want to compile for multi architecture natively with gcc
-FROM registry.odigos.io/odiglet-base:v1.8 AS rsync-builder
+FROM debian:bookworm-slim AS rsync-builder
 ARG RSYNC_VERSION=3.2.7
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -105,7 +105,7 @@ RUN wget https://download.samba.org/pub/rsync/src/rsync-${RSYNC_VERSION}.tar.gz 
     && cd .. \
     && rm -rf rsync-${RSYNC_VERSION}*
 
-FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.8 AS builder
+FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.9 AS builder
 
 RUN --mount=type=secret,id=github_token \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
