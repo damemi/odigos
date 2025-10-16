@@ -2,12 +2,14 @@ package lifecycle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/cli/pkg/remote"
+	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -68,13 +70,34 @@ func (w *WaitForLangDetection) Execute(ctx context.Context, obj client.Object, i
 			}
 		}
 
-		describe, err := remote.DescribeSource(ctx, w.client, obj.GetNamespace(), string(workloadKind), obj.GetName(), obj.GetNamespace())
+		describe, err := remote.DescribeSource(ctx, w.client, obj.GetNamespace(), string(workloadKind), obj.GetNamespace(), obj.GetName())
 		if err != nil {
 			return false, nil
 		}
 
-		if describe.SourceObjectsAnalysis.Instrumented.Value != "instrumented" {
+		if describe.RuntimeInfo == nil {
 			return false, nil
+		}
+
+		if len(describe.RuntimeInfo.Containers) == 0 {
+			return false, nil
+		}
+
+		langFound := false
+		for _, c := range describe.RuntimeInfo.Containers {
+			langStr, ok := c.Language.Value.(string)
+			if !ok {
+				continue
+			}
+
+			langParsed := common.ProgrammingLanguage(langStr)
+			if langParsed != common.UnknownProgrammingLanguage && langParsed != common.IgnoredProgrammingLanguage {
+				langFound = true
+				break
+			}
+		}
+		if !langFound {
+			return false, errors.New("Failed to detect language")
 		}
 
 		return true, nil

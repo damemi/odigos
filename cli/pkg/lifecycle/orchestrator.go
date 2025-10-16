@@ -8,6 +8,10 @@ import (
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/cli/cmd/resources"
 	"github.com/odigos-io/odigos/cli/pkg/kube"
+	"github.com/odigos-io/odigos/cli/pkg/remote"
+	"github.com/odigos-io/odigos/common"
+	"github.com/odigos-io/odigos/k8sutils/pkg/describe/source"
+	"github.com/odigos-io/odigos/k8sutils/pkg/utils"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -128,23 +132,36 @@ func (o *Orchestrator) getCurrentState(ctx context.Context, obj client.Object) S
 		kind = k8sconsts.WorkloadKindCronJob
 	}
 
-	labeled := labels.Set{
-		k8sconsts.WorkloadNameLabel:      obj.GetName(),
-		k8sconsts.WorkloadNamespaceLabel: obj.GetNamespace(),
-		k8sconsts.WorkloadKindLabel:      string(kind),
-	}
-	sources, err := o.Client.OdigosClient.Sources(obj.GetNamespace()).List(ctx, metav1.ListOptions{LabelSelector: labels.SelectorFromSet(labeled).String()})
-	if err != nil {
-		return UnknownState
-	}
-	if len(sources.Items) == 0 {
-		return NotInstrumentedState
+	var describe *source.SourceAnalyze
+	if !o.Remote {
+		labeled := labels.Set{
+			k8sconsts.WorkloadNameLabel:      obj.GetName(),
+			k8sconsts.WorkloadNamespaceLabel: obj.GetNamespace(),
+			k8sconsts.WorkloadKindLabel:      string(kind),
+		}
+		sources, err := o.Client.OdigosClient.Sources(obj.GetNamespace()).List(ctx, metav1.ListOptions{LabelSelector: labels.SelectorFromSet(labeled).String()})
+		if err != nil {
+			return UnknownState
+		}
+		if len(sources.Items) == 0 {
+			return NotInstrumentedState
+		}
+	} else {
+		des, err := remote.DescribeSource(ctx, o.Client, o.OdigosNamespace, string(kind), obj.GetNamespace(), obj.GetName())
+		if err != nil {
+			return UnknownState
+		}
+		if des.SourceObjectsAnalysis.Instrumented.Value != true {
+			return NotInstrumentedState
+		}
+		describe = des
 	}
 
 	icName := workload.CalculateWorkloadRuntimeObjectName(obj.GetName(), kind)
 
 	// Check if the instrumentation config exists for lang detection
 	var ic *odigosv1.InstrumentationConfig
+	var lang common.ProgrammingLanguage
 	if !o.Remote {
 		instrumentationConfig, err := o.Client.OdigosClient.InstrumentationConfigs(obj.GetNamespace()).Get(ctx, icName, metav1.GetOptions{})
 		if err != nil {
@@ -154,15 +171,71 @@ func (o *Orchestrator) getCurrentState(ctx context.Context, obj client.Object) S
 			return UnknownState
 		}
 		ic = instrumentationConfig
+		if ic.Status.Conditions == nil {
+			if status := meta.FindStatusCondition(ic.Status.Conditions, odigosv1.RuntimeDetectionStatusConditionType); status != nil {
+				if status.Reason == string(odigosv1.RuntimeDetectionReasonDetectedSuccessfully) && status.Status != metav1.ConditionTrue {
+					return LangDetectionInProgress
+				}
+			}
+		}
+
+		if ic.Spec.SdkConfigs == nil || len(ic.Spec.SdkConfigs) == 0 {
+			return LangDetectionInProgress
+		}
+
+		langFound := false
+		for _, sdkConfig := range ic.Spec.SdkConfigs {
+			if sdkConfig.Language != common.UnknownProgrammingLanguage && sdkConfig.Language != common.IgnoredProgrammingLanguage {
+				lang = sdkConfig.Language
+				langFound = true
+				break
+			}
+		}
+
+		if !langFound {
+			o.log("Failed to detect language, skipping")
+			return UnknownState
+		}
+	} else {
+		if describe.RuntimeInfo == nil {
+			return LangDetectionInProgress
+		}
+
+		if len(describe.RuntimeInfo.Containers) == 0 {
+			return LangDetectionInProgress
+		}
+
+		langFound := false
+		for _, c := range describe.RuntimeInfo.Containers {
+			langStr, ok := c.Language.Value.(string)
+			if !ok {
+				continue
+			}
+
+			langParsed := common.ProgrammingLanguage(langStr)
+			if langParsed != common.UnknownProgrammingLanguage && langParsed != common.IgnoredProgrammingLanguage {
+				langFound = true
+				lang = langParsed
+				break
+			}
+		}
+		if !langFound {
+			o.log("Failed to detect language, skipping")
+			return UnknownState
+		}
 	}
 
-	// Check if the lang detection is complete
-	if !o.Remote {
-		if status := meta.FindStatusCondition(ic.Status.Conditions, odigosv1.RuntimeDetectionStatusConditionType); status != nil {
-			if status.Reason == string(odigosv1.RuntimeDetectionReasonDetectedSuccessfully) && status.Status != metav1.ConditionTrue {
-				return LangDetectionInProgress
-			}
-			return InstrumentedState
+	o.log(fmt.Sprintf("Language detected: %s", lang))
+
+	if kind != k8sconsts.WorkloadKindCronJob && kind != k8sconsts.WorkloadKindJob {
+		instrumented, err := utils.VerifyAllPodsAreRunning(ctx, o.Client, obj)
+		if err != nil {
+			o.log(fmt.Sprintf("Error verifying all pods are instrumented: %s", err))
+			return UnknownState
+		}
+
+		if !instrumented {
+			return InstrumentationInProgress
 		}
 	}
 

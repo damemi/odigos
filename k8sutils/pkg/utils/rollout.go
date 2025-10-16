@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func checkAllPodsRunningAndContainsInstrumentation(pods *corev1.PodList) bool {
+func checkAllPodsRunning(pods *corev1.PodList) bool {
 	for _, pod := range pods.Items {
 		if pod.Status.Phase != corev1.PodRunning {
 			return false
@@ -35,21 +35,7 @@ func checkAllPodsRunningAndContainsInstrumentation(pods *corev1.PodList) bool {
 	return true
 }
 
-func checkAllPodsRunningAndNotInstrumented(pods *corev1.PodList) bool {
-	for _, pod := range pods.Items {
-		if pod.Status.Phase != corev1.PodRunning {
-			return false
-		}
-
-		if !container.AllContainersReady(&pod) {
-			return false
-		}
-	}
-
-	return true
-}
-
-func VerifyAllPodsAreInstrumented(ctx context.Context, client kubernetes.Interface, obj client.Object) (bool, error) {
+func VerifyAllPodsAreRunning(ctx context.Context, client kubernetes.Interface, obj client.Object) (bool, error) {
 	labels := GetMatchLabels(obj)
 
 	pods, err := client.CoreV1().Pods(obj.GetNamespace()).List(ctx, metav1.ListOptions{
@@ -60,21 +46,7 @@ func VerifyAllPodsAreInstrumented(ctx context.Context, client kubernetes.Interfa
 		return false, err
 	}
 
-	return checkAllPodsRunningAndContainsInstrumentation(pods), nil
-}
-
-func VerifyAllPodsAreNOTInstrumented(ctx context.Context, client kubernetes.Interface, obj client.Object) (bool, error) {
-	labels := GetMatchLabels(obj)
-
-	pods, err := client.CoreV1().Pods(obj.GetNamespace()).List(ctx, metav1.ListOptions{
-		LabelSelector: metav1.FormatLabelSelector(&metav1.LabelSelector{MatchLabels: labels}),
-	})
-
-	if err != nil {
-		return false, err
-	}
-
-	return checkAllPodsRunningAndNotInstrumented(pods), nil
+	return checkAllPodsRunning(pods), nil
 }
 
 func GetMatchLabels(obj client.Object) map[string]string {

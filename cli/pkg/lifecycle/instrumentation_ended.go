@@ -27,7 +27,7 @@ func (i *InstrumentationEnded) To() State {
 func (i *InstrumentationEnded) Execute(ctx context.Context, obj client.Object, isRemote bool) error {
 	return wait.PollUntilContextTimeout(ctx, 5*time.Second, 30*time.Minute, true, func(ctx context.Context) (bool, error) {
 		i.log("Waiting for all pods to be instrumented ...")
-		rolloutCompleted, err := utils.VerifyAllPodsAreInstrumented(ctx, i.client, obj)
+		rolloutCompleted, err := utils.VerifyAllPodsAreRunning(ctx, i.client, obj)
 		if err != nil {
 			i.log("Error verifying all pods are instrumented")
 			return false, err
@@ -39,7 +39,7 @@ func (i *InstrumentationEnded) Execute(ctx context.Context, obj client.Object, i
 			if coolOff > 0 {
 				i.log("Cool off flag is set, waiting for pods to be Running for " + coolOff.String() + " before marking the workload as instrumented")
 				time.Sleep(coolOff)
-				afterCoolOff, err := utils.VerifyAllPodsAreInstrumented(ctx, i.client, obj)
+				afterCoolOff, err := utils.VerifyAllPodsAreRunning(ctx, i.client, obj)
 				if err != nil {
 					i.log("Error verifying all pods are instrumented")
 					return false, err
