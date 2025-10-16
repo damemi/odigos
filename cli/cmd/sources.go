@@ -396,7 +396,7 @@ var sourceStatusCmd = &cobra.Command{
 	},
 }
 
-func enableOrDisableSource(cmd *cobra.Command, args []string, workloadKind k8sconsts.WorkloadKind, disableInstrumentation bool, namespace string) {
+func enableOrDisableSource(cmd *cobra.Command, args []string, workloadKind k8sconsts.WorkloadKind, disableInstrumentation bool) {
 	msg := "enable"
 	if disableInstrumentation {
 		msg = "disable"
@@ -404,7 +404,7 @@ func enableOrDisableSource(cmd *cobra.Command, args []string, workloadKind k8sco
 
 	ctx := cmd.Context()
 	client := cmdcontext.KubeClientFromContextOrExit(ctx)
-	source, err := updateOrCreateSourceForObject(ctx, client, workloadKind, args[0], disableInstrumentation, namespace)
+	source, err := updateOrCreateSourceForObject(ctx, client, workloadKind, args[0], disableInstrumentation)
 	if err != nil {
 		fmt.Printf("\033[31mERROR\033[0m Cannot %s Source: %+v\n", msg, err)
 		os.Exit(1)
@@ -429,7 +429,7 @@ func enableOrDisableSourceCmd(workloadKind k8sconsts.WorkloadKind, disableInstru
 		Args:    cobra.ExactArgs(1),
 		Aliases: kindAliases[workloadKind],
 		Run: func(cmd *cobra.Command, args []string) {
-			enableOrDisableSource(cmd, args, workloadKind, disableInstrumentation, sourceNamespaceFlag)
+			enableOrDisableSource(cmd, args, workloadKind, disableInstrumentation)
 		},
 	}
 }
@@ -469,26 +469,26 @@ app2
 	}
 }
 
-func updateOrCreateSourceForObject(ctx context.Context, client *kube.Client, workloadKind k8sconsts.WorkloadKind, argName string, disableInstrumentation bool, namespace string) (*v1alpha1.Source, error) {
+func updateOrCreateSourceForObject(ctx context.Context, client *kube.Client, workloadKind k8sconsts.WorkloadKind, argName string, disableInstrumentation bool) (*v1alpha1.Source, error) {
 	var err error
 	obj := workload.ClientObjectFromWorkloadKind(workloadKind)
 	var objName, objNamespace, sourceNamespace string
 	switch workloadKind {
 	case k8sconsts.WorkloadKindDaemonSet:
-		obj, err = client.Clientset.AppsV1().DaemonSets(namespace).Get(ctx, argName, metav1.GetOptions{})
+		obj, err = client.Clientset.AppsV1().DaemonSets(sourceNamespaceFlag).Get(ctx, argName, metav1.GetOptions{})
 		objName = obj.GetName()
 		objNamespace = obj.GetNamespace()
-		sourceNamespace = namespace
+		sourceNamespace = sourceNamespaceFlag
 	case k8sconsts.WorkloadKindDeployment:
-		obj, err = client.Clientset.AppsV1().Deployments(namespace).Get(ctx, argName, metav1.GetOptions{})
+		obj, err = client.Clientset.AppsV1().Deployments(sourceNamespaceFlag).Get(ctx, argName, metav1.GetOptions{})
 		objName = obj.GetName()
 		objNamespace = obj.GetNamespace()
-		sourceNamespace = namespace
+		sourceNamespace = sourceNamespaceFlag
 	case k8sconsts.WorkloadKindStatefulSet:
-		obj, err = client.Clientset.AppsV1().StatefulSets(namespace).Get(ctx, argName, metav1.GetOptions{})
+		obj, err = client.Clientset.AppsV1().StatefulSets(sourceNamespaceFlag).Get(ctx, argName, metav1.GetOptions{})
 		objName = obj.GetName()
 		objNamespace = obj.GetNamespace()
-		sourceNamespace = namespace
+		sourceNamespace = sourceNamespaceFlag
 	case k8sconsts.WorkloadKindNamespace:
 		obj, err = client.Clientset.CoreV1().Namespaces().Get(ctx, argName, metav1.GetOptions{})
 		objName = obj.GetName()
@@ -497,13 +497,13 @@ func updateOrCreateSourceForObject(ctx context.Context, client *kube.Client, wor
 	case k8sconsts.WorkloadKindCronJob:
 		ver := cmdcontext.K8SVersionFromContext(ctx)
 		if ver.LessThan(version.MustParseSemantic("1.21.0")) {
-			obj, err = client.Clientset.BatchV1beta1().CronJobs(namespace).Get(ctx, argName, metav1.GetOptions{})
+			obj, err = client.Clientset.BatchV1beta1().CronJobs(sourceNamespaceFlag).Get(ctx, argName, metav1.GetOptions{})
 		} else {
-			obj, err = client.Clientset.BatchV1().CronJobs(namespace).Get(ctx, argName, metav1.GetOptions{})
+			obj, err = client.Clientset.BatchV1().CronJobs(sourceNamespaceFlag).Get(ctx, argName, metav1.GetOptions{})
 		}
 		objName = obj.GetName()
 		objNamespace = obj.GetNamespace()
-		sourceNamespace = namespace
+		sourceNamespace = sourceNamespaceFlag
 	}
 	if err != nil {
 		return nil, err
