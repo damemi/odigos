@@ -1,12 +1,12 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -16,8 +16,8 @@ import (
 	"github.com/odigos-io/odigos/cli/pkg/lifecycle"
 	"github.com/odigos-io/odigos/cli/pkg/preflight"
 	"github.com/odigos-io/odigos/cli/pkg/remote"
-	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 	"k8s.io/apimachinery/pkg/util/version"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -107,14 +107,12 @@ func enableClusterSource(cmd *cobra.Command, args []string) {
 	}
 
 	runPreflightChecks(ctx, cmd, client, isRemote)
-
 	fmt.Printf("Starting instrumentation ...\n\n")
 	instrumentCluster(ctx, client, excludeNamespaces, excludeApps, dryRun, isRemote, onlyNamespace, onlyDeployment)
 }
 
-func instrumentCluster(ctx context.Context, client *kube.Client, excludeNamespaces map[string]interface{}, excludeApps map[string]interface{}, dryRun bool, isRemote bool, onlyNamespace string, onlyDeployment string) {
+func instrumentCluster(ctx context.Context, client *kube.Client, excludeNamespaces map[string]struct{}, excludeApps map[string]struct{}, dryRun bool, isRemote bool, onlyNamespace string, onlyDeployment string) {
 	systemNs := sliceToMap(k8sconsts.DefaultIgnoredNamespaces)
-
 	if onlyDeployment != "" {
 		orchestrator, err := lifecycle.NewOrchestrator(client, ctx, isRemote)
 		if err != nil {
@@ -169,28 +167,29 @@ func instrumentCluster(ctx context.Context, client *kube.Client, excludeNamespac
 	}
 }
 
-func instrumentNamespace(ctx context.Context, client *kube.Client, ns string, excludedApps map[string]interface{}, orchestrator *lifecycle.Orchestrator, dryRun bool) error {
+func instrumentApp(ctx context.Context, app client.Object, excludedApps map[string]struct{}, orchestrator *lifecycle.Orchestrator, dryRun bool, kind string) error {
+	fmt.Printf("  - Inspecting %s: %s\n", kind, app.GetName())
+	_, excluded := excludedApps[app.GetName()]
+	if excluded {
+		fmt.Printf("    - Skipping %s due to exclusion file\n", kind)
+		return nil
+	}
+	if dryRun {
+		fmt.Printf("    - Dry-Run mode ENABLED - No changes will be made\n")
+		return nil
+	}
+	err := orchestrator.Apply(ctx, app)
+	return err
+}
+
+func instrumentNamespace(ctx context.Context, client *kube.Client, ns string, excludedApps map[string]struct{}, orchestrator *lifecycle.Orchestrator, dryRun bool) error {
 	deps, err := client.AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		fmt.Printf("  - \033[31mERROR\033[0m Cannot list deployments: %s\n", err)
 		return nil
 	}
-
 	for _, dep := range deps.Items {
-		fmt.Printf("  - Inspecting Deployment: %s\n", dep.Name)
-		_, excluded := excludedApps[dep.Name]
-		if excluded {
-			fmt.Printf("    - Skipping deployment due to exclusion file\n")
-			continue
-		}
-
-		if dryRun {
-			fmt.Printf("    - Dry-Run mode ENABLED - No changes will be made\n")
-			continue
-		}
-
-		err = orchestrator.Apply(ctx, &dep)
-
+		err = instrumentApp(ctx, &dep, excludedApps, orchestrator, dryRun, "Deployment")
 		if errors.Is(err, context.Canceled) {
 			return err
 		}
@@ -202,22 +201,8 @@ func instrumentNamespace(ctx context.Context, client *kube.Client, ns string, ex
 		fmt.Printf("  - \033[31mERROR\033[0m Cannot list statefulsets: %s\n", err)
 		return nil
 	}
-
 	for _, sts := range statefulsets.Items {
-		fmt.Printf("  - Inspecting StatefulSet: %s\n", sts.Name)
-		_, excluded := excludedApps[sts.Name]
-		if excluded {
-			fmt.Printf("    - Skipping statefulset due to exclusion file\n")
-			continue
-		}
-
-		if dryRun {
-			fmt.Printf("    - Dry-Run mode ENABLED - No changes will be made\n")
-			continue
-		}
-
-		err = orchestrator.Apply(ctx, &sts)
-
+		err = instrumentApp(ctx, &sts, excludedApps, orchestrator, dryRun, "StatefulSet")
 		if errors.Is(err, context.Canceled) {
 			return err
 		}
@@ -229,22 +214,8 @@ func instrumentNamespace(ctx context.Context, client *kube.Client, ns string, ex
 		fmt.Printf("  - \033[31mERROR\033[0m Cannot list daemonsets: %s\n", err)
 		return nil
 	}
-
 	for _, ds := range daemonsets.Items {
-		fmt.Printf("  - Inspecting DaemonSet: %s\n", ds.Name)
-		_, excluded := excludedApps[ds.Name]
-		if excluded {
-			fmt.Printf("    - Skipping daemonset due to exclusion file\n")
-			continue
-		}
-
-		if dryRun {
-			fmt.Printf("    - Dry-Run mode ENABLED - No changes will be made\n")
-			continue
-		}
-
-		err = orchestrator.Apply(ctx, &ds)
-
+		err = instrumentApp(ctx, &ds, excludedApps, orchestrator, dryRun, "DaemonSet")
 		if errors.Is(err, context.Canceled) {
 			return err
 		}
@@ -259,22 +230,8 @@ func instrumentNamespace(ctx context.Context, client *kube.Client, ns string, ex
 			fmt.Printf("  - \033[31mERROR\033[0m Cannot list cronjobs (v1beta1): %s\n", err)
 			return nil
 		}
-
 		for _, cj := range cronjobs.Items {
-			fmt.Printf("  - Inspecting CronJob (v1beta1): %s\n", cj.Name)
-			_, excluded := excludedApps[cj.Name]
-			if excluded {
-				fmt.Printf("    - Skipping cronjob due to exclusion file\n")
-				continue
-			}
-
-			if dryRun {
-				fmt.Printf("    - Dry-Run mode ENABLED - No changes will be made\n")
-				continue
-			}
-
-			err = orchestrator.Apply(ctx, &cj)
-
+			err = instrumentApp(ctx, &cj, excludedApps, orchestrator, dryRun, "CronJob (v1beta1)")
 			if errors.Is(err, context.Canceled) {
 				return err
 			}
@@ -286,22 +243,8 @@ func instrumentNamespace(ctx context.Context, client *kube.Client, ns string, ex
 			fmt.Printf("  - \033[31mERROR\033[0m Cannot list cronjobs (v1): %s\n", err)
 			return nil
 		}
-
 		for _, cj := range cronjobs.Items {
-			fmt.Printf("  - Inspecting CronJob (v1): %s\n", cj.Name)
-			_, excluded := excludedApps[cj.Name]
-			if excluded {
-				fmt.Printf("    - Skipping cronjob due to exclusion file\n")
-				continue
-			}
-
-			if dryRun {
-				fmt.Printf("    - Dry-Run mode ENABLED - No changes will be made\n")
-				continue
-			}
-
-			err = orchestrator.Apply(ctx, &cj)
-
+			err = instrumentApp(ctx, &cj, excludedApps, orchestrator, dryRun, "CronJob (v1)")
 			if errors.Is(err, context.Canceled) {
 				return err
 			}
@@ -319,71 +262,24 @@ func sliceToMap(slice []string) map[string]struct{} {
 	return m
 }
 
-// readAppListFromFile reads a list of apps from a file and returns a map of app names to struct{}
-// the format of each line in the file can be either:
-// <kind>/<name>: Exclude a specific app in the given namespace
-// <namespace>/<kind>/<name>: Exclude a specific app in the given namespace
-// <name>: Exclude any app of the given name in any namespace and kind
-func readAppListFromFile(filename string) (map[string]interface{}, error) {
-	apps := make(map[string]interface{})
+func readAppListFromFile(filename string) (map[string]struct{}, error) {
 	if filename == "" {
-		return apps, nil
+		return nil, nil
 	}
-	content, err := os.ReadFile(filename)
+	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
-	lines := strings.Split(string(content), "\n")
-	for lineNum, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		// Split and check format based on the number of parts
-		parts := strings.Split(line, "/")
-
-		if len(parts) > 3 {
-			return nil, fmt.Errorf("invalid format on line %d (expected <kind>/<name> or <namespace>/<kind>/<name>): %s", lineNum+1, line)
-		}
-
-		if len(parts) == 1 {
-			// Format: <name>
-			apps[line] = struct{}{}
-			continue
-		}
-
-		var namespaceStr, kindStr, nameStr string
-		switch len(parts) {
-		case 2:
-			// Format: <kind>/<name>
-			kindStr = parts[0]
-			nameStr = parts[1]
-		case 3:
-			// Format: <namespace>/<kind>/<name>
-			// add a slash to the namespace for the key in the map now so we don't need an extra check for namespace when building the key
-			namespaceStr = parts[0] + "/"
-			kindStr = parts[1]
-			nameStr = parts[2]
-		default:
-			return nil, fmt.Errorf("invalid format on line %d (expected <kind>/<name> or <namespace>/<kind>/<name>): %s", lineNum+1, line)
-		}
-
-		// Validate and normalize the kind
-		kind := workload.WorkloadKindFromString(kindStr)
-		if kind == "" {
-			return nil, fmt.Errorf("invalid workload kind '%s' on line %d: %s", kindStr, lineNum+1, line)
-		}
-		if !workload.IsValidWorkloadKind(kind) {
-			return nil, fmt.Errorf("unsupported workload kind '%s' on line %d: %s", kindStr, lineNum+1, line)
-		}
-
-		// Normalize to lowercase
-		normalizedKind := workload.WorkloadKindLowerCaseFromKind(kind)
-		normalizedLine := fmt.Sprintf("%s%s/%s", namespaceStr, normalizedKind, nameStr)
-		apps[normalizedLine] = struct{}{}
+	defer f.Close()
+	lines := make(map[string]struct{})
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		lines[scanner.Text()] = struct{}{}
 	}
-	return apps, nil
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return lines, nil
 }
 
 func runPreflightChecks(ctx context.Context, cmd *cobra.Command, client *kube.Client, remote bool) {
@@ -392,7 +288,6 @@ func runPreflightChecks(ctx context.Context, cmd *cobra.Command, client *kube.Cl
 		fmt.Printf("Skipping preflight checks due to --%s flag\n", skipPreflightChecksFlagName)
 		return
 	}
-
 	fmt.Printf("Running preflight checks:\n")
 	for _, check := range preflight.AllChecks {
 		fmt.Printf("  - %-60s", check.Description())
@@ -404,6 +299,5 @@ func runPreflightChecks(ctx context.Context, cmd *cobra.Command, client *kube.Cl
 			fmt.Printf("\u001B[32mPASS\u001B[0m\n")
 		}
 	}
-
 	fmt.Printf("  - All preflight checks passed!\n\n")
 }
