@@ -8,7 +8,7 @@ Enable an entire cluster for Odigos instrumentation
 
 ### Synopsis
 
-This command enables the cluster for Odigos instrumentation. It will create Source objects for all namespaces in the cluster, except those that are excluded.
+This command enables the cluster for Odigos instrumentation. It will create Source objects for all apps in the cluster, except those that are excluded.
 
 ```
 odigos sources enable cluster [flags]
@@ -38,18 +38,23 @@ namespace1
 namespace2
 
 For example, excluded-apps.txt:
-deployment/app1
-cronjob/app2
+app1
+app2
 
 ```
 
 ### Options
 
 ```
-      --dry-run                   dry run
-      --exclude-apps-file         exclude apps namespaces
-      --exclude-namespaces-file   exclude namespaces
-  -h, --help                      help for cluster
+      --dry-run                             dry run
+      --exclude-apps-file string            Path to file containing apps to exclude
+      --exclude-namespaces-file string      Path to file containing namespaces to exclude
+  -h, --help                                help for cluster
+      --instrumentation-cool-off duration   Cool-off period for instrumentation. Time format is 1h30m
+      --only-deployment string              Name of the deployment to instrument (must be used with --only-namespace)
+      --only-namespace string               Namespace of the deployment to instrument (must be used with --only-deployment)
+      --remote                              remote
+      --skip-preflight-checks               Skip preflight checks
 ```
 
 ### Options inherited from parent commands

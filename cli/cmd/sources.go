@@ -1053,7 +1053,6 @@ func init() {
 	enableClusterSourceCmd.Flags().StringVar(&excludeAppsFileFlag, excludeAppsFileFlagName, "", "Path to file containing apps to exclude")
 	enableClusterSourceCmd.Flags().StringVar(&excludeNamespacesFileFlag, excludeNamespacesFileFlagName, "", "Path to file containing namespaces to exclude")
 	enableClusterSourceCmd.Flags().BoolVar(&dryRunFlag, dryRunFlagName, false, "dry run")
-	enableClusterSourceCmd.Flags().BoolVar(&skipExcludedNamespacesFlag, skipExcludedNamespacesFlagName, false, "Passively ignore excluded namespaces instead of creating disabled sources for them")
 	enableClusterSourceCmd.Flags().BoolVar(&remoteFlag, remoteFlagName, false, "remote")
 	enableClusterSourceCmd.Flags().Duration(instrumentationCoolOffFlagName, 0, "Cool-off period for instrumentation. Time format is 1h30m")
 	enableClusterSourceCmd.Flags().String(onlyNamespaceFlagName, "", "Namespace of the deployment to instrument (must be used with --only-deployment)")
