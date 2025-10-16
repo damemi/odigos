@@ -50,7 +50,7 @@ func GetNumberOfDestinations(ctx context.Context, client *kube.Client) (int, err
 }
 
 func GetDescribeSourceEndpoint(workloadKind string, workloadNs string, workloadName string) string {
-	return fmt.Sprintf("http://localhost:%s/api/describe/source/namespace/%s/kind/%s/name/%s", DefaultLocalPort, workloadNs, strings.ToLower(workloadKind), workloadName)
+	return fmt.Sprintf("http://localhost:%s/describe/source/namespace/%s/kind/%s/name/%s", DefaultLocalPort, workloadNs, strings.ToLower(workloadKind), workloadName)
 }
 
 func DescribeSource(ctx context.Context, client *kube.Client, odigosNs string, workloadKind string, workloadNs string, workloadName string) (*source.SourceAnalyze, error) {
@@ -82,4 +82,33 @@ func DescribeSource(ctx context.Context, client *kube.Client, odigosNs string, w
 	}
 
 	return &sourceObj, nil
+}
+
+func GetSourceEndpoint(workloadKind string, workloadNs string, workloadName string) string {
+	return fmt.Sprintf("http://localhost:%s/source/namespace/%s/kind/%s/name/%s", DefaultLocalPort, workloadNs, strings.ToLower(workloadKind), workloadName)
+}
+
+func CreateSource(ctx context.Context, client *kube.Client, odigosNs string, workloadKind string, workloadNs string, workloadName string) error {
+	url, err := url.Parse(GetSourceEndpoint(workloadKind, workloadNs, workloadName))
+	if err != nil {
+		return err
+	}
+	req := http.Request{
+		Method: http.MethodPost,
+		URL:    url,
+		Header: http.Header{"Accept": []string{"application/json"}},
+	}
+
+	resp, err := http.DefaultClient.Do(&req)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+	_, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

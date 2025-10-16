@@ -7,6 +7,7 @@ import (
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	"github.com/odigos-io/odigos/cli/pkg/remote"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -67,10 +68,17 @@ func (w *WaitForLangDetection) Execute(ctx context.Context, obj client.Object, i
 			}
 		}
 
+		describe, err := remote.DescribeSource(ctx, w.client, obj.GetNamespace(), string(workloadKind), obj.GetName(), obj.GetNamespace())
+		if err != nil {
+			return false, nil
+		}
+
+		if describe.SourceObjectsAnalysis.Instrumented.Value != "instrumented" {
+			return false, nil
+		}
+
 		return true, nil
 	})
-
-	return nil
 }
 
 var _ Transition = &WaitForLangDetection{}
