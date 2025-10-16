@@ -4,6 +4,7 @@ import (
 	"flag"
 	_ "net/http/pprof"
 	"os"
+	"strconv"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -26,7 +27,9 @@ const (
 
 func main() {
 	var healthProbeBindPort int
+	var traceIdSuffix string
 	flag.IntVar(&healthProbeBindPort, "health-probe-bind-port", k8sconsts.OdigletDefaultHealthProbeBindPort, "The port the probe endpoint binds to.")
+	flag.StringVar(&traceIdSuffix, "trace-id-suffix", "", "Hex value for the unique identifier for timestamp-based trace IDs. Must be 1 byte. Example: 5E.")
 	flag.Parse()
 
 	// Init Kubernetes clientset
@@ -62,7 +65,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	factories, err := ebpfInstrumentationFactories()
+	suffix := uint64(0)
+	if traceIdSuffix != "" {
+		suffix, err = strconv.ParseUint(traceIdSuffix, 16, 8)
+		if err != nil {
+			log.Logger.Error(err, "failed to parse TRACE_ID_SUFFIX")
+			os.Exit(1)
+		}
+	}
+
+	factories, err := ebpfInstrumentationFactories(uint8(suffix))
 	if err != nil {
 		log.Logger.Error(err, "failed to set up ebpf factories")
 		os.Exit(1)
@@ -86,7 +98,7 @@ func main() {
 	log.Logger.V(0).Info("odiglet exiting")
 }
 
-func ebpfInstrumentationFactories() (map[string]commonInstrumentation.Factory, error) {
+func ebpfInstrumentationFactories(suffix uint8) (map[string]commonInstrumentation.Factory, error) {
 	goFactory, err := sdks.NewGoInstrumentationFactoryEnterprise()
 	if err != nil {
 		return nil, err
@@ -94,7 +106,7 @@ func ebpfInstrumentationFactories() (map[string]commonInstrumentation.Factory, e
 
 	return map[string]commonInstrumentation.Factory{
 		"golang-enterprise":          goFactory,
-		"java-ebpf-instrumentations": sdks.NewJavaInstrumentationFactoryEnterprise(),
+		"java-ebpf-instrumentations": sdks.NewJavaInstrumentationFactoryEnterprise(suffix),
 		"java-enterprise":            sdks.NewJavaExtensionInstrumentationFactoryEnterprise(),
 		"python-enterprise":          sdks.NewPythonInstrumentationFactoryEnterprise(),
 		"nodejs-enterprise":          sdks.NewNodeJSInstrumentationFactoryEnterprise(),

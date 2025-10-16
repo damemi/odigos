@@ -20,10 +20,12 @@ type JavaOtelEbpfSdkEnterprise struct {
 	config instrumentation.Config
 }
 
-type JavaInstrumentationFactoryEnterprise struct{}
+type JavaInstrumentationFactoryEnterprise struct {
+	traceIdSuffix uint8
+}
 
-func NewJavaInstrumentationFactoryEnterprise() instrumentation.Factory {
-	return &JavaInstrumentationFactoryEnterprise{}
+func NewJavaInstrumentationFactoryEnterprise(traceIdSuffix uint8) instrumentation.Factory {
+	return &JavaInstrumentationFactoryEnterprise{traceIdSuffix: traceIdSuffix}
 }
 
 func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
@@ -37,13 +39,20 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 		return nil, err
 	}
 
-	inst, err := auto.NewInstrumentation(
-		ctx,
+	opts := []auto.InstrumentationOption{
 		auto.WithPID(pid),
 		auto.WithResourceAttributes(settings.ResourceAttributes...),
 		auto.WithServiceName(settings.ServiceName),
 		auto.WithTraceExporter(defaultExporter),
 		auto.WithProcFS(process.HostProcDir()),
+	}
+	if g.traceIdSuffix != 0 {
+		opts = append(opts, auto.WithTraceIdSuffix(g.traceIdSuffix))
+	}
+
+	inst, err := auto.NewInstrumentation(
+		ctx,
+		opts...,
 	)
 	if err != nil {
 		log.Logger.Error(err, "instrumentation setup failed")
