@@ -2,9 +2,12 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
@@ -13,6 +16,8 @@ import (
 	cmdcontext "github.com/odigos-io/odigos/cli/pkg/cmd_context"
 	"github.com/odigos-io/odigos/cli/pkg/confirm"
 	"github.com/odigos-io/odigos/cli/pkg/kube"
+	"github.com/odigos-io/odigos/cli/pkg/lifecycle"
+	"github.com/odigos-io/odigos/cli/pkg/remote"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -68,6 +73,9 @@ var (
 
 	skipExcludedNamespacesFlagName = "skip-excluded-namespaces"
 	skipExcludedNamespacesFlag     bool
+
+	remoteFlagName = "remote"
+	remoteFlag     bool
 )
 
 var sourcesCmd = &cobra.Command{
@@ -474,13 +482,24 @@ The format of each line in excluded-apps.txt can be either:
 }
 
 func enableClusterSource(cmd *cobra.Command, args []string) {
-	ctx := cmd.Context()
-	client := cmdcontext.KubeClientFromContextOrExit(ctx)
-	namespaces, err := client.Clientset.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		fmt.Printf("\033[31mERROR\033[0m Cannot list namespaces: %+v\n", err)
-		os.Exit(1)
-	}
+	ctx, cancel := context.WithCancel(cmd.Context())
+	var uiClient *remote.UIClientViaPortForward
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	defer func() {
+		if uiClient != nil {
+			uiClient.Close()
+		}
+	}()
+	defer signal.Stop(ch)
+
+	go func() {
+		<-ch
+		cancel()
+		if uiClient != nil {
+			uiClient.Close()
+		}
+	}()
 
 	excludeNamespaces, err := readAppListFromFile(excludeNamespacesFileFlag)
 	if err != nil {
@@ -494,79 +513,224 @@ func enableClusterSource(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	for _, namespace := range namespaces.Items {
-		namespaceName := namespace.GetName()
+	dryRun := cmd.Flag(dryRunFlagName).Changed && cmd.Flag(dryRunFlagName).Value.String() == "true"
+	isRemote := cmd.Flag(remoteFlagName).Changed && cmd.Flag(remoteFlagName).Value.String() == "true"
 
-		// Handle excluded namespaces
-		if _, ok := excludeNamespaces[namespaceName]; ok {
-			if !skipExcludedNamespacesFlag {
-				enableOrDisableSource(cmd, []string{namespaceName}, k8sconsts.WorkloadKindNamespace, true, namespaceName)
+	fmt.Printf("About to instrument with Odigos\n")
+	if dryRun {
+		fmt.Printf("Dry-Run mode ENABLED - No changes will be made\n")
+	}
+
+	fmt.Printf("%-50s", "Checking if Kubernetes cluster is reachable")
+	client := kube.GetCLIClientOrExit(cmd)
+	fmt.Printf("\u001B[32mPASS\u001B[0m\n\n")
+
+	if isRemote {
+		uiClient, err = remote.NewUIClient(client, ctx)
+		if err != nil {
+			fmt.Printf("\033[31mERROR\033[0m Cannot create remote UI client: %s\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("Flag --remote is set, starting port-forward to UI pod ...")
+		go func() {
+			if err := uiClient.Start(); err != nil {
+				fmt.Printf("\033[31mERROR\033[0m Cannot start remote UI client: %s\n", err)
+				os.Exit(1)
 			}
+		}()
+
+		<-uiClient.Ready()
+		port, err := uiClient.DiscoverLocalPort()
+		if err != nil {
+			fmt.Printf("\033[31mERROR\033[0m Cannot discover local port for UI client: %s\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Remote client is using local port %s\n", port)
+	}
+
+	instrumentCluster(ctx, client, excludeNamespaces, excludeApps, dryRun, isRemote)
+}
+
+func instrumentCluster(ctx context.Context, client *kube.Client, excludeNamespaces map[string]interface{}, excludeApps map[string]interface{}, dryRun bool, isRemote bool) {
+	systemNs := sliceToMap(k8sconsts.DefaultIgnoredNamespaces)
+
+	nsList, err := client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		fmt.Printf("\033[31mERROR\033[0m Cannot list namespaces: %s\n", err)
+		os.Exit(1)
+	}
+
+	orchestrator, err := lifecycle.NewOrchestrator(client, ctx, isRemote)
+	if err != nil {
+		fmt.Printf("\033[31mERROR\033[0m Cannot create orchestrator: %s\n", err)
+		os.Exit(1)
+	}
+
+	for _, ns := range nsList.Items {
+		fmt.Printf("Instrumenting namespace: %s\n", ns.Name)
+		_, excluded := excludeNamespaces[ns.Name]
+		_, system := systemNs[ns.Name]
+		if excluded || system {
+			fmt.Printf("  - Skipping namespace due to exclusion file or system namespace\n")
 			continue
 		}
 
-		// Handle excluded apps within this namespace
-		if len(excludeApps) > 0 {
-			// Check Deployments
-			deployments, err := client.Clientset.AppsV1().Deployments(namespaceName).List(ctx, metav1.ListOptions{})
-			if err == nil {
-				for _, deployment := range deployments.Items {
-					if isAppExcluded(excludeApps, namespaceName, k8sconsts.WorkloadKindDeployment, deployment.GetName()) {
-						enableOrDisableSource(cmd, []string{deployment.GetName()}, k8sconsts.WorkloadKindDeployment, true, namespaceName)
-					}
-				}
-			}
+		err = instrumentNamespace(ctx, client, ns.Name, excludeApps, orchestrator, dryRun)
+		if errors.Is(err, context.Canceled) {
+			return
+		}
+	}
+}
 
-			// Check DaemonSets
-			daemonsets, err := client.Clientset.AppsV1().DaemonSets(namespaceName).List(ctx, metav1.ListOptions{})
-			if err == nil {
-				for _, daemonset := range daemonsets.Items {
-					if isAppExcluded(excludeApps, namespaceName, k8sconsts.WorkloadKindDaemonSet, daemonset.GetName()) {
-						enableOrDisableSource(cmd, []string{daemonset.GetName()}, k8sconsts.WorkloadKindDaemonSet, true, namespaceName)
-					}
-				}
-			}
+func instrumentNamespace(ctx context.Context, client *kube.Client, ns string, excludedApps map[string]interface{}, orchestrator *lifecycle.Orchestrator, dryRun bool) error {
+	deps, err := client.AppsV1().Deployments(ns).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		fmt.Printf("  - \033[31mERROR\033[0m Cannot list deployments: %s\n", err)
+		return nil
+	}
 
-			// Check StatefulSets
-			statefulsets, err := client.Clientset.AppsV1().StatefulSets(namespaceName).List(ctx, metav1.ListOptions{})
-			if err == nil {
-				for _, statefulset := range statefulsets.Items {
-					if isAppExcluded(excludeApps, namespaceName, k8sconsts.WorkloadKindStatefulSet, statefulset.GetName()) {
-						enableOrDisableSource(cmd, []string{statefulset.GetName()}, k8sconsts.WorkloadKindStatefulSet, true, namespaceName)
-					}
-				}
-			}
-
-			// Check CronJobs
-			ver := cmdcontext.K8SVersionFromContext(ctx)
-			cronjobNames := make([]string, 0)
-			if ver.LessThan(version.MustParseSemantic("1.21.0")) {
-				cronjobs, err := client.Clientset.BatchV1beta1().CronJobs(namespaceName).List(ctx, metav1.ListOptions{})
-				if err == nil {
-					for _, cronjob := range cronjobs.Items {
-						cronjobNames = append(cronjobNames, cronjob.GetName())
-					}
-				}
-			} else {
-				cronjobs, err := client.Clientset.BatchV1().CronJobs(namespaceName).List(ctx, metav1.ListOptions{})
-				if err == nil {
-					for _, cronjob := range cronjobs.Items {
-						cronjobNames = append(cronjobNames, cronjob.GetName())
-					}
-				}
-			}
-			if err == nil {
-				for _, cronjob := range cronjobNames {
-					if isAppExcluded(excludeApps, namespaceName, k8sconsts.WorkloadKindCronJob, cronjob) {
-						enableOrDisableSource(cmd, []string{cronjob}, k8sconsts.WorkloadKindCronJob, true, namespaceName)
-					}
-				}
-			}
+	for _, dep := range deps.Items {
+		fmt.Printf("  - Inspecting Deployment: %s\n", dep.Name)
+		_, excluded := excludedApps[dep.Name]
+		if excluded {
+			fmt.Printf("    - Skipping deployment due to exclusion file\n")
+			continue
 		}
 
-		// Enable namespace-level source
-		enableOrDisableSource(cmd, []string{namespaceName}, k8sconsts.WorkloadKindNamespace, false, namespaceName)
+		if dryRun {
+			fmt.Printf("    - Dry-Run mode ENABLED - No changes will be made\n")
+			continue
+		}
+
+		err = orchestrator.Apply(ctx, &dep)
+
+		if errors.Is(err, context.Canceled) {
+			return err
+		}
 	}
+
+	// StatefulSets
+	statefulsets, err := client.AppsV1().StatefulSets(ns).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		fmt.Printf("  - \033[31mERROR\033[0m Cannot list statefulsets: %s\n", err)
+		return nil
+	}
+
+	for _, sts := range statefulsets.Items {
+		fmt.Printf("  - Inspecting StatefulSet: %s\n", sts.Name)
+		_, excluded := excludedApps[sts.Name]
+		if excluded {
+			fmt.Printf("    - Skipping statefulset due to exclusion file\n")
+			continue
+		}
+
+		if dryRun {
+			fmt.Printf("    - Dry-Run mode ENABLED - No changes will be made\n")
+			continue
+		}
+
+		err = orchestrator.Apply(ctx, &sts)
+
+		if errors.Is(err, context.Canceled) {
+			return err
+		}
+	}
+
+	// DaemonSets
+	daemonsets, err := client.AppsV1().DaemonSets(ns).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		fmt.Printf("  - \033[31mERROR\033[0m Cannot list daemonsets: %s\n", err)
+		return nil
+	}
+
+	for _, ds := range daemonsets.Items {
+		fmt.Printf("  - Inspecting DaemonSet: %s\n", ds.Name)
+		_, excluded := excludedApps[ds.Name]
+		if excluded {
+			fmt.Printf("    - Skipping daemonset due to exclusion file\n")
+			continue
+		}
+
+		if dryRun {
+			fmt.Printf("    - Dry-Run mode ENABLED - No changes will be made\n")
+			continue
+		}
+
+		err = orchestrator.Apply(ctx, &ds)
+
+		if errors.Is(err, context.Canceled) {
+			return err
+		}
+	}
+
+	// CronJobs - handle both v1 and v1beta1
+	ver := cmdcontext.K8SVersionFromContext(ctx)
+	if ver.LessThan(version.MustParseSemantic("1.21.0")) {
+		// Use v1beta1 for Kubernetes < 1.21
+		cronjobs, err := client.BatchV1beta1().CronJobs(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			fmt.Printf("  - \033[31mERROR\033[0m Cannot list cronjobs (v1beta1): %s\n", err)
+			return nil
+		}
+
+		for _, cj := range cronjobs.Items {
+			fmt.Printf("  - Inspecting CronJob (v1beta1): %s\n", cj.Name)
+			_, excluded := excludedApps[cj.Name]
+			if excluded {
+				fmt.Printf("    - Skipping cronjob due to exclusion file\n")
+				continue
+			}
+
+			if dryRun {
+				fmt.Printf("    - Dry-Run mode ENABLED - No changes will be made\n")
+				continue
+			}
+
+			err = orchestrator.Apply(ctx, &cj)
+
+			if errors.Is(err, context.Canceled) {
+				return err
+			}
+		}
+	} else {
+		// Use v1 for Kubernetes >= 1.21
+		cronjobs, err := client.BatchV1().CronJobs(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			fmt.Printf("  - \033[31mERROR\033[0m Cannot list cronjobs (v1): %s\n", err)
+			return nil
+		}
+
+		for _, cj := range cronjobs.Items {
+			fmt.Printf("  - Inspecting CronJob (v1): %s\n", cj.Name)
+			_, excluded := excludedApps[cj.Name]
+			if excluded {
+				fmt.Printf("    - Skipping cronjob due to exclusion file\n")
+				continue
+			}
+
+			if dryRun {
+				fmt.Printf("    - Dry-Run mode ENABLED - No changes will be made\n")
+				continue
+			}
+
+			err = orchestrator.Apply(ctx, &cj)
+
+			if errors.Is(err, context.Canceled) {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func sliceToMap(slice []string) map[string]struct{} {
+	m := make(map[string]struct{})
+	for _, s := range slice {
+		m[s] = struct{}{}
+	}
+	return m
 }
 
 // readAppListFromFile reads a list of apps from a file and returns a map of app names to struct{}
@@ -634,30 +798,6 @@ func readAppListFromFile(filename string) (map[string]interface{}, error) {
 		apps[normalizedLine] = struct{}{}
 	}
 	return apps, nil
-}
-
-// isAppExcluded checks if an app matches any of the exclude patterns.
-// It checks in order of specificity:
-// 1. <namespace>/<kind>/<name>
-// 2. <kind>/<name>
-// 3. <name>
-func isAppExcluded(excludeApps map[string]interface{}, namespace string, kind k8sconsts.WorkloadKind, name string) bool {
-	// Normalize the kind to lowercase for comparison
-	normalizedKind := workload.WorkloadKindLowerCaseFromKind(kind)
-
-	// Check most specific pattern: namespace/kind/name
-	if _, ok := excludeApps[fmt.Sprintf("%s/%s/%s", namespace, normalizedKind, name)]; ok {
-		return true
-	}
-	// Check medium specificity: kind/name
-	if _, ok := excludeApps[fmt.Sprintf("%s/%s", normalizedKind, name)]; ok {
-		return true
-	}
-	// Check least specific: just name
-	if _, ok := excludeApps[name]; ok {
-		return true
-	}
-	return false
 }
 
 func updateOrCreateSourceForObject(ctx context.Context, client *kube.Client, workloadKind k8sconsts.WorkloadKind, argName string, disableInstrumentation bool, namespace string) (*v1alpha1.Source, error) {
@@ -852,6 +992,7 @@ func init() {
 	enableClusterSourceCmd.Flags().StringVar(&excludeNamespacesFileFlag, excludeNamespacesFileFlagName, "", "Path to file containing namespaces to exclude")
 	enableClusterSourceCmd.Flags().BoolVar(&dryRunFlag, dryRunFlagName, false, "dry run")
 	enableClusterSourceCmd.Flags().BoolVar(&skipExcludedNamespacesFlag, skipExcludedNamespacesFlagName, false, "Passively ignore excluded namespaces instead of creating disabled sources for them")
+	enableClusterSourceCmd.Flags().BoolVar(&remoteFlag, remoteFlagName, false, "remote")
 	sourceEnableCmd.AddCommand(enableClusterSourceCmd)
 
 	sourceCreateCmd.Flags().AddFlagSet(sourceFlags)
