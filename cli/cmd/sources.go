@@ -73,9 +73,6 @@ var (
 	dryRunFlagName = "dry-run"
 	dryRunFlag     bool
 
-	skipExcludedNamespacesFlagName = "skip-excluded-namespaces"
-	skipExcludedNamespacesFlag     bool
-
 	remoteFlagName = "remote"
 	remoteFlag     bool
 
@@ -449,7 +446,7 @@ func enableClusterSourceCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "cluster",
 		Short: "Enable an entire cluster for Odigos instrumentation",
-		Long:  "This command enables the cluster for Odigos instrumentation. It will create Source objects for all namespaces in the cluster, except those that are excluded.",
+		Long:  "This command enables the cluster for Odigos instrumentation. It will create Source objects for all apps in the cluster, except those that are excluded.",
 		Example: `
 # Enable the cluster for Odigos instrumentation
 odigos sources enable cluster
@@ -458,32 +455,21 @@ odigos sources enable cluster
 odigos sources enable cluster --dry-run
 
 # Enable the cluster for Odigos instrumentation with excluded namespaces
-# By default, disabled sources will be created for excluded namespaces unless --skip-excluded-namespaces is used
 odigos sources enable cluster --exclude-namespaces-file=excluded-namespaces.txt
 
 # Enable the cluster for Odigos instrumentation with excluded apps
-# Disabled sources will be created for excluded apps
 odigos sources enable cluster --exclude-apps-file=excluded-apps.txt
 
 # Enable the cluster for Odigos instrumentation with excluded namespaces and apps
 odigos sources enable cluster --exclude-namespaces-file=excluded-namespaces.txt --exclude-apps-file=excluded-apps.txt
-
-# Enable the cluster for Odigos instrumentation with excluded namespaces and apps, but skip excluded namespaces
-# Using --skip-excluded-namespaces will not create disabled sources for excluded namespaces, but will create disabled sources for excluded apps
-odigos sources enable cluster --exclude-namespaces-file=excluded-namespaces.txt --exclude-apps-file=excluded-apps.txt --skip-excluded-namespaces
 
 For example, excluded-namespaces.txt:
 namespace1
 namespace2
 
 For example, excluded-apps.txt:
-Deployment/app1
-CronJob/app2
-
-The format of each line in excluded-apps.txt can be either:
-<namespace>/<kind>/<name>: Exclude a specific app in the given namespace
-<kind>/<name>: Exclude any app of the given kind and name in any namespace
-<name>: Exclude any app of the given name in any namespace and kind
+app1
+app2
 `,
 		Run: func(cmd *cobra.Command, args []string) {
 			enableClusterSource(cmd, args)
