@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 	"text/tabwriter"
+	"time"
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/odigos-io/odigos/api/odigos/v1alpha1"
@@ -17,6 +18,7 @@ import (
 	"github.com/odigos-io/odigos/cli/pkg/confirm"
 	"github.com/odigos-io/odigos/cli/pkg/kube"
 	"github.com/odigos-io/odigos/cli/pkg/lifecycle"
+	"github.com/odigos-io/odigos/cli/pkg/preflight"
 	"github.com/odigos-io/odigos/cli/pkg/remote"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 
@@ -76,6 +78,14 @@ var (
 
 	remoteFlagName = "remote"
 	remoteFlag     bool
+
+	instrumentationCoolOffFlagName = "instrumentation-cool-off"
+
+	onlyDeploymentFlagName = "only-deployment"
+	onlyNamespaceFlagName  = "only-namespace"
+
+	skipPreflightChecksFlagName = "skip-preflight-checks"
+	skipPreflightChecksFlag     bool
 )
 
 var sourcesCmd = &cobra.Command{
@@ -515,6 +525,21 @@ func enableClusterSource(cmd *cobra.Command, args []string) {
 
 	dryRun := cmd.Flag(dryRunFlagName).Changed && cmd.Flag(dryRunFlagName).Value.String() == "true"
 	isRemote := cmd.Flag(remoteFlagName).Changed && cmd.Flag(remoteFlagName).Value.String() == "true"
+	coolOffStr := cmd.Flag(instrumentationCoolOffFlagName).Value.String()
+	coolOff, err := time.ParseDuration(coolOffStr)
+	ctx = lifecycle.SetCoolOff(ctx, coolOff)
+	if err != nil {
+		fmt.Printf("\033[31mERROR\033[0m Invalid duration for instrumentation-cool-off: %s\n", err)
+		os.Exit(1)
+	}
+
+	onlyDeployment := cmd.Flag(onlyDeploymentFlagName).Value.String()
+	onlyNamespace := cmd.Flag(onlyNamespaceFlagName).Value.String()
+
+	if (onlyDeployment != "" && onlyNamespace == "") || (onlyDeployment == "" && onlyNamespace != "") {
+		fmt.Printf("\033[31mERROR\033[0m --only-deployment and --only-namespace must be set together\n")
+		os.Exit(1)
+	}
 
 	fmt.Printf("About to instrument with Odigos\n")
 	if dryRun {
@@ -549,6 +574,9 @@ func enableClusterSource(cmd *cobra.Command, args []string) {
 		fmt.Printf("Remote client is using local port %s\n", port)
 	}
 
+	runPreflightChecks(ctx, cmd, client, isRemote)
+
+	fmt.Printf("Starting instrumentation ...\n\n")
 	instrumentCluster(ctx, client, excludeNamespaces, excludeApps, dryRun, isRemote)
 }
 
@@ -800,6 +828,28 @@ func readAppListFromFile(filename string) (map[string]interface{}, error) {
 	return apps, nil
 }
 
+func runPreflightChecks(ctx context.Context, cmd *cobra.Command, client *kube.Client, remote bool) {
+	shouldSkip := cmd.Flag(skipPreflightChecksFlagName).Changed && cmd.Flag(skipPreflightChecksFlagName).Value.String() == "true"
+	if shouldSkip {
+		fmt.Printf("Skipping preflight checks due to --%s flag\n", skipPreflightChecksFlagName)
+		return
+	}
+
+	fmt.Printf("Running preflight checks:\n")
+	for _, check := range preflight.AllChecks {
+		fmt.Printf("  - %-60s", check.Description())
+		if err := check.Execute(client, ctx, remote); err != nil {
+			fmt.Printf("\u001B[31mERROR\u001B[0m\n\n")
+			fmt.Printf("Check failed: %s\n", err)
+			os.Exit(1)
+		} else {
+			fmt.Printf("\u001B[32mPASS\u001B[0m\n")
+		}
+	}
+
+	fmt.Printf("  - All preflight checks passed!\n\n")
+}
+
 func updateOrCreateSourceForObject(ctx context.Context, client *kube.Client, workloadKind k8sconsts.WorkloadKind, argName string, disableInstrumentation bool, namespace string) (*v1alpha1.Source, error) {
 	var err error
 	obj := workload.ClientObjectFromWorkloadKind(workloadKind)
@@ -993,6 +1043,10 @@ func init() {
 	enableClusterSourceCmd.Flags().BoolVar(&dryRunFlag, dryRunFlagName, false, "dry run")
 	enableClusterSourceCmd.Flags().BoolVar(&skipExcludedNamespacesFlag, skipExcludedNamespacesFlagName, false, "Passively ignore excluded namespaces instead of creating disabled sources for them")
 	enableClusterSourceCmd.Flags().BoolVar(&remoteFlag, remoteFlagName, false, "remote")
+	enableClusterSourceCmd.Flags().Duration(instrumentationCoolOffFlagName, 0, "Cool-off period for instrumentation. Time format is 1h30m")
+	enableClusterSourceCmd.Flags().String(onlyNamespaceFlagName, "", "Namespace of the deployment to instrument (must be used with --only-deployment)")
+	enableClusterSourceCmd.Flags().String(onlyDeploymentFlagName, "", "Name of the deployment to instrument (must be used with --only-namespace)")
+	enableClusterSourceCmd.Flags().Bool(skipPreflightChecksFlagName, false, "Skip preflight checks")
 	sourceEnableCmd.AddCommand(enableClusterSourceCmd)
 
 	sourceCreateCmd.Flags().AddFlagSet(sourceFlags)
