@@ -577,11 +577,37 @@ func enableClusterSource(cmd *cobra.Command, args []string) {
 	runPreflightChecks(ctx, cmd, client, isRemote)
 
 	fmt.Printf("Starting instrumentation ...\n\n")
-	instrumentCluster(ctx, client, excludeNamespaces, excludeApps, dryRun, isRemote)
+	instrumentCluster(ctx, client, excludeNamespaces, excludeApps, dryRun, isRemote, onlyNamespace, onlyDeployment)
 }
 
-func instrumentCluster(ctx context.Context, client *kube.Client, excludeNamespaces map[string]interface{}, excludeApps map[string]interface{}, dryRun bool, isRemote bool) {
+func instrumentCluster(ctx context.Context, client *kube.Client, excludeNamespaces map[string]interface{}, excludeApps map[string]interface{}, dryRun bool, isRemote bool, onlyNamespace string, onlyDeployment string) {
 	systemNs := sliceToMap(k8sconsts.DefaultIgnoredNamespaces)
+
+	if onlyDeployment != "" {
+		orchestrator, err := lifecycle.NewOrchestrator(client, ctx, isRemote)
+		if err != nil {
+			fmt.Printf("\033[31mERROR\033[0m Cannot create orchestrator: %s\n", err)
+			os.Exit(1)
+		}
+
+		dep, err := client.AppsV1().Deployments(onlyNamespace).Get(ctx, onlyDeployment, metav1.GetOptions{})
+		if err != nil {
+			fmt.Printf("\033[31mERROR\033[0m Cannot get deployment %s in namespace %s: %s\n", onlyDeployment, onlyNamespace, err)
+			os.Exit(1)
+		}
+
+		if dryRun {
+			fmt.Printf("Dry-Run mode ENABLED - No changes will be made\n")
+			return
+		}
+
+		err = orchestrator.Apply(ctx, dep)
+		if err != nil {
+			fmt.Printf("\033[31mERROR\033[0m Failed to instrument deployment: %s\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	nsList, err := client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
