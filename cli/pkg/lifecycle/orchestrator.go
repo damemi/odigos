@@ -148,9 +148,11 @@ func (o *Orchestrator) getCurrentState(ctx context.Context, obj client.Object) S
 		}
 	} else {
 		des, err := remote.DescribeSource(ctx, o.Client, o.OdigosNamespace, string(kind), obj.GetNamespace(), obj.GetName())
-		if err != nil {
+		if err != nil || des.Name.Value == nil {
+			// name value will be nil for unsupported kinds
 			return UnknownState
 		}
+
 		if des.SourceObjectsAnalysis.Instrumented.Value != true {
 			return NotInstrumentedState
 		}
