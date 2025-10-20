@@ -3,9 +3,9 @@ module github.com/odigos-io/odigos-enterprise/odiglet
 go 1.25.0
 
 require (
-	github.com/odigos-io/ebpf-generic-instrumentation v0.0.6
-	github.com/odigos-io/ebpf-java-instrumentation v0.8.0
-	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.7.0
+	github.com/odigos-io/ebpf-generic-instrumentation v0.0.7
+	github.com/odigos-io/ebpf-java-instrumentation v0.9.0
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.9.0
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.0-20250724082002-7250611b1a89
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
@@ -14,7 +14,7 @@ require (
 	github.com/odigos-io/odigos/common v1.8.0-pre0.0.20251019101119-489d0059cbdd
 	github.com/odigos-io/odigos/instrumentation v1.8.0-pre0.0.20251019101119-489d0059cbdd
 	github.com/odigos-io/odigos/k8sutils v0.0.0
-	github.com/odigos-io/odigos/odiglet v1.8.0-pre0.0.20251019101119-489d0059cbdd
+	github.com/odigos-io/odigos/odiglet v1.8.0-pre0.0.20251020072850-715320168a6d
 	github.com/odigos-io/odigos/procdiscovery v0.0.0
 	go.opentelemetry.io/auto v0.22.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.38.0

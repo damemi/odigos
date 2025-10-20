@@ -28,23 +28,27 @@ func NewJavaExtensionInstrumentationFactoryEnterprise() instrumentation.Factory 
 }
 
 func (p *JavaExtensionInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
-	c := otlptracegrpc.NewClient(otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint(fmt.Sprintf("localhost:%d", consts.OTLPPort)))
-	exporter, err := opentelemetry.New(ctx, c)
-	if err != nil {
-		log.Logger.Error(err, "failed to create exporter")
-		return nil, err
-	}
-
-	inst, err := auto.NewInstrumentation(
-		ctx,
+	opts := []auto.InstrumentationOption{
 		auto.WithPID(pid),
 		auto.WithResourceAttributes(settings.ResourceAttributes...),
 		auto.WithServiceName(settings.ServiceName),
-		auto.WithTraceExporter(exporter),
 		auto.WithProcFS(process.HostProcDir()),
-	)
+	}
 
+	if settings.TracesMap.Map == nil {
+		c := otlptracegrpc.NewClient(otlptracegrpc.WithInsecure(),
+			otlptracegrpc.WithEndpoint(fmt.Sprintf("localhost:%d", consts.OTLPPort)))
+		exporter, err := opentelemetry.New(ctx, c)
+		if err != nil {
+			log.Logger.Error(err, "failed to create exporter")
+			return nil, err
+		}
+		opts = append(opts, auto.WithTraceExporter(exporter))
+	} else {
+		opts = append(opts, auto.WithEventsBuffer(settings.TracesMap.Map, settings.TracesMap.ExternalReader))
+	}
+
+	inst, err := auto.NewInstrumentation(ctx, opts...)
 	if err != nil {
 		log.Logger.Error(err, "instrumentation setup failed")
 		return nil, err

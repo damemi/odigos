@@ -4,7 +4,7 @@ ADD odiglet/agents/python/requirements.txt .
 RUN mkdir workspace && pip install --target workspace -r requirements.txt
 
 # Enterprise version of ebpf-generic-instrumentation
-ARG EBPF_GENERIC_VERSION="v0.0.6"
+ARG EBPF_GENERIC_VERSION="v0.0.7"
 RUN apt update -y && apt install -y systemtap-sdt-dev
 RUN --mount=type=secret,id=github_token \
     git clone -b ${EBPF_GENERIC_VERSION} https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-generic-instrumentation.git \
@@ -152,8 +152,8 @@ COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.0.3 /instrumentati
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
 
 # Java
-COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v0.7.0 /instrumentations/java-ebpf /instrumentations/java-ebpf
-COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v0.7.0 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v0.9.0 /instrumentations/java-ebpf /instrumentations/java-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v0.9.0 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
 
 # PHP
 COPY --from=php-agents /php-agents/opentelemetry-php/8.0 /instrumentations/php/8.0
