@@ -54,7 +54,7 @@ spec:
 
               # cleanup any existing installation of odigos the might be left over from previous runs while developing
               ./odigos uninstall --yes
-              # Run the Odigos CLI installation
+
               ./odigos install --namespace odigos-test --onprem-token $ODIGOS_API_KEY
 
               ../../common/verify_odigos_installation.sh odigos-test
@@ -123,7 +123,7 @@ spec:
       try:
         - script:
             timeout: 3m
-            content: ../../../../odigos/cli/odigos upgrade --version $IMAGE_TAG --skip-version-check # since the tag e2e-test is not a valid semantic version, we need to bypass it with --skip-version-check
+            content: ../../../../odigos/cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY
         - assert:
             timeout: 3m
             file: assert-odigos-upgraded-with-custom-offsets.yaml

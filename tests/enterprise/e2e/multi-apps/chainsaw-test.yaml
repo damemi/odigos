@@ -22,7 +22,8 @@ spec:
             timeout: 5m
             content: |
               echo "Installing Odigos with tag $IMAGE_TAG"
-              ../../../../odigos/cli/odigos install --namespace odigos-test --version $IMAGE_TAG --onprem-token $ODIGOS_API_KEY
+              ../../../../odigos/cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY
+              kubectl label namespace odigos-test odigos.io/system-object="true"
               ../../common/verify_odigos_installation.sh odigos-test
         - assert:
             timeout: 1m
