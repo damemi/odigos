@@ -1,8 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { ROUTES } from '@/utils';
+import { useSessionRedirects } from '@/hooks';
 import styled from 'styled-components';
 import { CenterThis, FadeLoader } from '@odigos/ui-kit/components';
 
@@ -11,12 +9,7 @@ const Container = styled(CenterThis)`
 `;
 
 export default function App() {
-  const router = useRouter();
-
-  // default route to redirect to
-  useEffect(() => {
-    router.push(ROUTES.SIGN_IN);
-  }, [router]);
+  useSessionRedirects();
 
   return (
     <Container>

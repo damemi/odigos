@@ -21,12 +21,11 @@ const OverviewHeader = () => {
   const { isReadonly, installationMethod } = useConfig();
   const { fetchOdigosConfig, updateOdigosConfig } = useOdigosConfigCRUD();
 
-  const onClickHome = () => router.push(ROUTES.ROOT);
   const onClickAccessManagement = () => router.push(ROUTES.ACCESS_MANAGEMENT);
 
   const left = useMemo(() => {
     const arr = [
-      <OdigosLogoText key='logo' size={150} onClick={onClickHome} />,
+      <OdigosLogoText key='logo' size={150} />,
       <Tag key='tower' type={StatusType.Default}>
         [tower]
       </Tag>,

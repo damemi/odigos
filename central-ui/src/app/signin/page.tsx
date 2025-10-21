@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useAuth } from '@/hooks';
+import { useSessionRedirects } from '@/hooks';
 import * as STRINGS from '@/utils';
 import { AuthForm } from '@/components';
 import { OdigosLogo } from '@odigos/ui-kit/icons';
@@ -10,6 +11,7 @@ import { Container, Card, Title, Subtitle, CenterThis } from './signin.styled';
 
 export default function SignInPage() {
   const { systemConfig, systemConfigLoading, loading, error, signIn } = useAuth();
+  useSessionRedirects();
   if (systemConfigLoading) {
     return (
       <Container>

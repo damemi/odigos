@@ -11,6 +11,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/go-logr/logr"
 
 	"github.com/odigos-io/central-backend/graph"
 	"github.com/odigos-io/central-backend/internal/config"
@@ -23,12 +24,13 @@ import (
 	"github.com/odigos-io/central-backend/internal/ssehub"
 	"github.com/odigos-io/central-backend/internal/utils"
 	websocketserver "github.com/odigos-io/central-backend/internal/websocket"
+	"github.com/odigos-io/odigos-enterprise/odigosauth"
 )
 
 func main() {
 	logger.InitLogger()
 	logger.Log.Info("Starting Central Backend Service...")
-	// odigosauth.AssertEnterpriseOdigosToken(logr.FromSlogHandler(logger.Log.Handler()))
+	odigosauth.AssertEnterpriseOdigosToken(logr.FromSlogHandler(logger.Log.Handler()))
 
 	ctx := context.Background()
 

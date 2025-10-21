@@ -16,6 +16,14 @@ const redirectToSignIn = () => {
   }
 };
 
+const isAscii = (value: string) => {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code < 0x20 || code > 0x7e) return false;
+  }
+  return true;
+};
+
 const isAuthErrorMessage = (message?: string) => {
   if (!message) return false;
   const lower = message.toLowerCase();
@@ -40,6 +48,12 @@ const errorLink = onError(({ graphQLErrors, networkError }) => {
 
 const authLink = setContext((_, { headers }) => {
   const token = useUserStore.getState().token;
+
+  if (token && !isAscii(token)) {
+    redirectToSignIn();
+    return { headers: { ...headers } };
+  }
+
   return {
     headers: {
       ...headers,
