@@ -78,8 +78,9 @@ function OverviewLayout({ children }: PropsWithChildren) {
   // call important hooks that should run on page-mount
   useSSE();
   useTokenTracker();
-  const { updateDataStream, deleteDataStream } = useDataStreamsCRUD();
+
   const { setCurrentModal } = useModalStore();
+  const { updateDataStream, deleteDataStream } = useDataStreamsCRUD();
 
   const router = useRouter();
   const pathname = usePathname();

@@ -1,5 +1,15 @@
 import React from 'react';
-import { ActionDrawer, ActionModal, DestinationDrawer, DestinationModal, InstrumentationRuleDrawer, InstrumentationRuleModal, SourceDrawer, SourceModal } from '@odigos/ui-kit/containers';
+import {
+  ActionDrawer,
+  ActionModal,
+  DataStreamModal,
+  DestinationDrawer,
+  DestinationModal,
+  InstrumentationRuleDrawer,
+  InstrumentationRuleModal,
+  SourceDrawer,
+  SourceModal,
+} from '@odigos/ui-kit/containers';
 import {
   useActionCRUD,
   useConfig,
@@ -55,6 +65,7 @@ const OverviewModalsAndDrawers = () => {
       <DestinationDrawer categories={categories} updateDestination={updateDestination} deleteDestination={deleteDestination} testConnection={testConnection} />
       <InstrumentationRuleDrawer updateInstrumentationRule={updateInstrumentationRule} deleteInstrumentationRule={deleteInstrumentationRule} />
       <ActionDrawer updateAction={updateAction} deleteAction={deleteAction} />
+      <DataStreamModal />
     </>
   );
 };
