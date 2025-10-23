@@ -22,11 +22,13 @@ import (
 const ProxyIDQueryParam = "proxyID"
 const PlatformNameQueryParam = "platformName"
 const PlatformTypeQueryParam = "platformType"
+const OdigosVersionQueryParam = "version"
 
 type ProxyConnection struct {
-	Conn         *websocket.Conn
-	PlatformName string
-	PlatformType consts.PlatformType
+	Conn          *websocket.Conn
+	PlatformName  string
+	PlatformType  consts.PlatformType
+	OdigosVersion string
 }
 
 type WebSocketServer struct {
@@ -45,24 +47,23 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 
 	proxyID := r.URL.Query().Get(ProxyIDQueryParam)
 	if proxyID == "" {
-		http.Error(w, "Missing proxyID parameter", http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("Missing parameter: %s", ProxyIDQueryParam), http.StatusBadRequest)
 		return
 	}
-	currentVersion := r.URL.Query().Get("version")
 
+	currentVersion := r.URL.Query().Get(OdigosVersionQueryParam)
 	if currentVersion == "" {
-		http.Error(w, "Missing protocol version", http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("Missing parameter: %s", OdigosVersionQueryParam), http.StatusBadRequest)
 		return
 	}
-
 	if !version.IsVersionSupported(currentVersion) {
-		http.Error(w, fmt.Sprintf("Unsupported version: %s", currentVersion), http.StatusUpgradeRequired)
+		http.Error(w, fmt.Sprintf("Unsupported version: %s. Supported versions: %s - %s", currentVersion, version.MinSupportedVersion, version.MaxSupportedVersion), http.StatusUpgradeRequired)
 		return
 	}
 
 	platformName := r.URL.Query().Get(PlatformNameQueryParam)
 	if platformName == "" {
-		logger.Log.Warn("platformName not provided for proxyID", "proxyID", proxyID)
+		logger.Log.Warn(fmt.Sprintf("Missing parameter: %s", PlatformNameQueryParam), "proxyID", proxyID)
 	}
 
 	platformTypeStr := r.URL.Query().Get(PlatformTypeQueryParam)
@@ -70,8 +71,11 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 	switch platformTypeStr {
 	case "vm":
 		platformType = consts.PlatformTypeVM
-	default:
+	case "k8s":
 		platformType = consts.PlatformTypeK8s
+	default:
+		http.Error(w, fmt.Sprintf("Unsupported platform type: %s. Supported types: %s, %s", platformTypeStr, consts.PlatformTypeK8s, consts.PlatformTypeVM), http.StatusBadRequest)
+		return
 	}
 
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
@@ -88,9 +92,10 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 	conn.SetReadLimit(maxMessageSize)
 
 	ws.proxyConnections.Store(proxyID, &ProxyConnection{
-		Conn:         conn,
-		PlatformName: platformName,
-		PlatformType: platformType,
+		Conn:          conn,
+		PlatformName:  platformName,
+		PlatformType:  platformType,
+		OdigosVersion: currentVersion,
 	})
 	defer ws.cleanupConnection(ctx, proxyID)
 
@@ -210,4 +215,17 @@ func (ws *WebSocketServer) GetPlatformType(proxyID string) (consts.PlatformType,
 	}
 
 	return proxyConn.PlatformType, true
+}
+
+func (ws *WebSocketServer) GetOdigosVersion(proxyID string) (string, bool) {
+	connValue, ok := ws.proxyConnections.Load(proxyID)
+	if !ok {
+		return "", false
+	}
+
+	proxyConn, ok := connValue.(*ProxyConnection)
+	if !ok {
+		return "", false
+	}
+	return proxyConn.OdigosVersion, true
 }

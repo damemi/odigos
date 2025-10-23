@@ -13,6 +13,7 @@ export enum ConnectionsTableColumn {
   Name = 'name',
   Type = 'type',
   Status = 'status',
+  OdigosVersion = 'odigosVersion',
 }
 
 export const ConnectionsTable: React.FC = () => {
@@ -39,6 +40,7 @@ export const ConnectionsTable: React.FC = () => {
     { key: ConnectionsTableColumn.Name, title: UTILS.NAME, sortable: true },
     { key: ConnectionsTableColumn.Type, title: UTILS.TYPE, sortable: true },
     { key: ConnectionsTableColumn.Status, title: UTILS.STATUS, sortable: true },
+    { key: ConnectionsTableColumn.OdigosVersion, title: 'Odigos Version', sortable: true },
     { key: ConnectionsTableColumn.Id, title: UTILS.UNIQUE_ID },
   ];
 
@@ -73,6 +75,10 @@ export const ConnectionsTable: React.FC = () => {
           {
             columnKey: ConnectionsTableColumn.Type,
             value: cp.type,
+          },
+          {
+            columnKey: ConnectionsTableColumn.OdigosVersion,
+            value: cp.odigosVersion,
           },
           {
             columnKey: ConnectionsTableColumn.Status,

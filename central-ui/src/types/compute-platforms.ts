@@ -4,6 +4,7 @@ import { PlatformType, StatusType } from '@odigos/ui-kit/types';
 export interface ComputePlatform {
   id: string;
   name: string;
+  odigosVersion: string;
   type: PlatformType;
   status: StatusType;
   users?: User[];

@@ -10,12 +10,13 @@ import (
 )
 
 type ComputePlatform struct {
-	ID     string       `json:"id"`
-	Name   string       `json:"name"`
-	Type   PlatformType `json:"type"`
-	Status string       `json:"status"`
-	Users  []*User      `json:"users"`
-	Teams  []*Team      `json:"teams"`
+	ID            string       `json:"id"`
+	Name          string       `json:"name"`
+	OdigosVersion string       `json:"odigosVersion"`
+	Type          PlatformType `json:"type"`
+	Status        string       `json:"status"`
+	Users         []*User      `json:"users"`
+	Teams         []*Team      `json:"teams"`
 }
 
 type CreateUserResult struct {

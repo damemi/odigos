@@ -28,8 +28,12 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to get WebSocket URL from ConfigMap", err)
 	}
+	odigosVersion, err := config.GetOdigosVersion(ctx, client)
+	if err != nil {
+		logger.Fatal("Failed to get Odigos Version from ConfigMap", err)
+	}
 
-	wsClient, err := websocketserver.NewWebSocketClient(ctx, client, centralBackendURL, clusterName)
+	wsClient, err := websocketserver.NewWebSocketClient(ctx, client, centralBackendURL, clusterName, odigosVersion)
 	if err != nil {
 		logger.Fatal("Failed to init WebSocket Client", err)
 	}

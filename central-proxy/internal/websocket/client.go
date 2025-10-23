@@ -17,13 +17,8 @@ import (
 )
 
 // NewWebSocketClient creates a WebSocket client
-func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, clusterName string) (*WebSocketClient, error) {
+func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, clusterName string, odigosVersion string) (*WebSocketClient, error) {
 	proxyID, err := config.GetOdigosDeploymentId(ctx, client)
-	if err != nil {
-		return nil, err
-	}
-
-	proxyVersion, err := config.GetOdigosVersion(ctx, client)
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +27,7 @@ func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, 
 		Scheme:   "ws",
 		Host:     wsURL,
 		Path:     "/ws/proxy",
-		RawQuery: fmt.Sprintf("proxyID=%s&platformName=%s&version=%s&platformType=%s", proxyID, clusterName, proxyVersion, consts.PlatformTypeK8sString),
+		RawQuery: fmt.Sprintf("proxyID=%s&platformName=%s&version=%s&platformType=%s", proxyID, clusterName, odigosVersion, consts.PlatformTypeK8sString),
 	}
 	conn, _, err := websocket.Dial(ctx, u.String(), &websocket.DialOptions{})
 	if err != nil {
@@ -132,7 +127,7 @@ func (w *WebSocketClient) handleReconnect(kubeClient *kube.Client) *websocket.Co
 		return nil
 	}
 
-	proxyVersion, err := config.GetOdigosVersion(w.ctx, kubeClient)
+	odigosVersion, err := config.GetOdigosVersion(w.ctx, kubeClient)
 	if err != nil {
 		logger.Log.Error("Failed to get version during reconnect", "error", err)
 		return nil
@@ -148,7 +143,7 @@ func (w *WebSocketClient) handleReconnect(kubeClient *kube.Client) *websocket.Co
 		Scheme:   "ws",
 		Host:     w.url,
 		Path:     "/ws/proxy",
-		RawQuery: fmt.Sprintf("proxyID=%s&platformName=%s&version=%s&platformType=%s", proxyID, clusterName, proxyVersion, consts.PlatformTypeK8sString),
+		RawQuery: fmt.Sprintf("proxyID=%s&platformName=%s&version=%s&platformType=%s", proxyID, clusterName, odigosVersion, consts.PlatformTypeK8sString),
 	}
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {

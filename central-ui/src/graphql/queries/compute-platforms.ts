@@ -5,6 +5,7 @@ export const GET_COMPUTE_PLATFORMS = gql`
     computePlatforms {
       id
       name
+      odigosVersion
       type
       status
       users {
