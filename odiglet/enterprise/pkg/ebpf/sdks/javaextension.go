@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/pkg/dynamic"
-	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common/consts"
 
 	auto "github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension"
@@ -89,20 +88,22 @@ func (p *JavaExtensionOtelEbpfSdk) ApplyConfig(ctx context.Context, conf instrum
 		return nil
 	}
 
-	sdkConfig, ok := conf.(*odigosv1.SdkConfig)
-	if !ok {
-		return fmt.Errorf("invalid config type, expected *odigosv1.SdkConfig, got %T", conf)
-	}
+	// TODO: Barun 👋
+	// sdkConfig, ok := conf.(*odigosv1.SdkConfig)
+	// if !ok {
+	// 	return fmt.Errorf("invalid config type, expected *odigosv1.SdkConfig, got %T", conf)
+	// }
 
+	// var event dynamic.CustomInstrumentationEvent
+	// if sdkConfig.DefaultCustomInstrumentations != nil && sdkConfig.DefaultCustomInstrumentations.Probes != nil {
+	// 	for _, probe := range sdkConfig.DefaultCustomInstrumentations.Probes {
+	// 		event = append(event, dynamic.CustomProbe{
+	// 			ClassName:  probe.ClassName,
+	// 			MethodName: probe.MethodName,
+	// 		})
+	// 	}
+	// }
 	var event dynamic.CustomInstrumentationEvent
-	if sdkConfig.DefaultCustomInstrumentations != nil && sdkConfig.DefaultCustomInstrumentations.Probes != nil {
-		for _, probe := range sdkConfig.DefaultCustomInstrumentations.Probes {
-			event = append(event, dynamic.CustomProbe{
-				ClassName:  probe.ClassName,
-				MethodName: probe.MethodName,
-			})
-		}
-	}
 
 	return p.inst.ApplyDynamicConfig(dynamic.CustomInstrumentation(event))
 }

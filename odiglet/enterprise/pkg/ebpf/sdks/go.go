@@ -523,6 +523,17 @@ func convertToGoInstrumentationConfig(sdkConfig instrumentation.Config) (goAutoC
 		ic.DefaultTracesDisabled = *config.DefaultTraceConfig.Disabled
 	}
 
+	if config.CustomInstrumentations != nil {
+		for _, probe := range config.CustomInstrumentations.Golang {
+			ic.CustomInstrumentations = append(ic.CustomInstrumentations, goAutoConfig.CustomInstrumentation{
+				PackageName:        probe.PackageName,
+				FunctionName:       probe.FunctionName,
+				ReceiverName:       probe.ReceiverName,
+				ReceiverMethodName: probe.ReceiverMethodName,
+			})
+		}
+	}
+
 	// TODO: take sampling config from the CR
 	// sampling is not yet supported in the enterprise go instrumentation
 	//  ic.Sampler = auto.DefaultSampler()

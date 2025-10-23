@@ -15,8 +15,11 @@ OSS_TAG ?= main
 update-odigos-oss-mod-deps/%:
 	# Using docker with alpine to ensure consistent sed behavior across platforms (GNU vs BSD sed on Linux/Mac)
 	if [ -f $*/go.mod ]; then \
+		CONTAINER_ID=$$(hostname); \
+		HOST_PATH=$$(docker inspect $$CONTAINER_ID --format='{{range .Mounts}}{{if eq .Destination "/workspaces/odigos-enterprise"}}{{.Source}}{{end}}{{end}}' 2>/dev/null); \
+		if [ -z "$$HOST_PATH" ]; then HOST_PATH="$(PWD)"; fi; \
 		docker run --rm \
-			-v "$(PWD)":/workspace \
+			-v "$$HOST_PATH":/workspace \
 			alpine:latest \
 			sh -c "cd /workspace/$* && \
 				sed -i -E 's|replace (github\.com/odigos-io/odigos/[^ ]+) => (github\.com/odigos-io/odigos/[^ ]+) [^ ]+|replace \1 => \2 $(OSS_TAG)|' go.mod && \
@@ -58,11 +61,14 @@ update-golang-enterprise-deps:
 	@echo "🔄 Updating enterprise Go dependencies in odiglet..."
 	# Using docker with alpine to ensure consistent sed behavior across platforms (GNU vs BSD sed on Linux/Mac)
 	if [ -f odiglet/go.mod ]; then \
+		CONTAINER_ID=$$(hostname); \
+		HOST_PATH=$$(docker inspect $$CONTAINER_ID --format='{{range .Mounts}}{{if eq .Destination "/workspaces/odigos-enterprise"}}{{.Source}}{{end}}{{end}}' 2>/dev/null); \
+		if [ -z "$$HOST_PATH" ]; then HOST_PATH="$(PWD)"; fi; \
 		docker run --rm \
-			-v "$(PWD)":/workspace \
+			-v "$$HOST_PATH":/workspace \
 			alpine:latest \
 			sh -c "cd /workspace/odiglet && \
-				sed -i -E 's|replace go\.opentelemetry\.io/auto => github\.com/odigos-io/enterprise-go-instrumentation v[^ ]+|replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation main|' go.mod"; \
+				sed -i -E 's|replace go\.opentelemetry\.io/auto => github\.com/odigos-io/enterprise-go-instrumentation .*|replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation main|' go.mod"; \
 		cd odiglet && go mod tidy; \
 		echo "✅ Enterprise Go dependencies updated to main"; \
 	else \
