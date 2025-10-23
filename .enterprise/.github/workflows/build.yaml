@@ -73,7 +73,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
           repository: odigos-io/odigos
-          ref: fix-cron-job-permissions-failure
+          ref: ${{ env.BASE_BRANCH }}
           path: odigos
           persist-credentials: false
       - name: Cache built OSS components
@@ -170,7 +170,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
           repository: odigos-io/odigos
-          ref: fix-cron-job-permissions-failure
+          ref: ${{ env.BASE_BRANCH }}
           path: odigos
           persist-credentials: false
 
