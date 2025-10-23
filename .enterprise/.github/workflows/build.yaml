@@ -73,7 +73,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
           repository: odigos-io/odigos
-          ref: ${{ env.BASE_BRANCH }}
+          ref: fix-cron-job-permissions-failure
           path: odigos
           persist-credentials: false
       - name: Cache built OSS components
@@ -85,6 +85,7 @@ jobs:
             /tmp/odigos-scheduler.tar
             /tmp/odigos-collector.tar
             /tmp/odigos-cli
+            /tmp/odigos-cli.tar
           key: ${{ github.run_id }}-odigos-oss-components
       - name: Set up Go # Needed to build the CLI
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
@@ -109,12 +110,21 @@ jobs:
         run: |
           cd odigos
           TAG=${{ env.IMAGE_TAG }} make -j 3 build-autoscaler build-scheduler build-collector
+
+      - uses: ko-build/setup-ko@v0.9
+      - name: Build Odigos CLI Image
+        if: steps.cache-oss-components.outputs.cache-hit != 'true'
+        run: |
+          cd odigos
+          TAG=${{ env.IMAGE_TAG }} make build-cli-image
+
       - name: Save Docker images as tar files
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
           docker save registry.odigos.io/odigos-autoscaler:${{ env.IMAGE_TAG }} -o /tmp/odigos-autoscaler.tar
           docker save registry.odigos.io/odigos-scheduler:${{ env.IMAGE_TAG }} -o /tmp/odigos-scheduler.tar
           docker save registry.odigos.io/odigos-collector:${{ env.IMAGE_TAG }} -o /tmp/odigos-collector.tar
+          docker save registry.odigos.io/odigos-cli:${{ env.IMAGE_TAG }} -o /tmp/odigos-cli.tar
 
   kubernetes-tests:
     needs:
@@ -160,7 +170,7 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
           repository: odigos-io/odigos
-          ref: ${{ env.BASE_BRANCH }}
+          ref: fix-cron-job-permissions-failure
           path: odigos
           persist-credentials: false
 
@@ -221,6 +231,7 @@ jobs:
             /tmp/odigos-scheduler.tar
             /tmp/odigos-collector.tar
             /tmp/odigos-cli
+            /tmp/odigos-cli.tar
           fail-on-cache-miss: true
           key: ${{ github.run_id }}-odigos-oss-components
 
@@ -238,6 +249,7 @@ jobs:
           kind load image-archive /tmp/odigos-autoscaler.tar
           kind load image-archive /tmp/odigos-scheduler.tar
           kind load image-archive /tmp/odigos-collector.tar
+          kind load image-archive /tmp/odigos-cli.tar
 
       - name: Load Latest UI Image from Container Registry
         run: |

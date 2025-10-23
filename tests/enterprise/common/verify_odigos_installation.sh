@@ -41,8 +41,8 @@ until kubectl get pods -n $NAMESPACE 2>/dev/null | grep -q .; do
     sleep 2
 done
 
-# Now wait for pods to be ready
-kubectl wait --for=condition=ready pods --all -n $NAMESPACE --timeout=$TIMEOUT
+# Now wait for pods to be ready (excluding completed jobs)
+kubectl wait --for=condition=ready pods --all -n $NAMESPACE --timeout=$TIMEOUT --field-selector=status.phase!=Succeeded
 check_command "All pods are ready"
 
 echo "✅ Odigos Enterprise installation verification completed successfully"

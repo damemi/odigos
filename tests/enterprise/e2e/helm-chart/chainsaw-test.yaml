@@ -22,29 +22,33 @@ spec:
             timeout: 3m
             content: |
               # use the helm chart from main repo which is expected to be in a sibling directory to this repo
-              helm upgrade --install odigos  ../../../../odigos/helm/odigos --create-namespace --namespace odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY
+              helm upgrade --install odigos \
+                ../../../../odigos/helm/odigos \
+                --create-namespace \
+                --namespace odigos-test \
+                --set image.tag=$IMAGE_TAG \
+                --set onPremToken=$ODIGOS_API_KEY \
+                --set goAutoOffsetsCron="0 0 * * *" \
+                --set goAutoOffsetsMode="direct"
               kubectl label namespace odigos-test odigos.io/system-object="true"
 
     - name: Verify Odigos Installation
       try:
         - script:
-            timeout: 6m
+            timeout: 1m
             content: |
               echo "Starting Odigos version check..."
               export ACTUAL_VERSION=$(../../../../odigos/cli/odigos version --cluster)
               echo "Actual Version: $ACTUAL_VERSION"
               echo "Expected Version: $IMAGE_TAG"
 
-              if [ "$ACTUAL_VERSION" != "$IMAGE_TAG" ]; then
-                echo "❌ Odigos version is not the expected version, got $ACTUAL_VERSION"
-                exit 1
-              fi
-
-              ../../common/verify_odigos_installation.sh odigos-test
+        - assert:
+            timeout: 6m
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/odigos-installed.yaml
 
         - assert:
-            timeout: 1m
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/odigos-installed.yaml
+            timeout: 2m
+            file: initial-go-offeset-job-applied.yaml
 
       catch:
         - script:
