@@ -39,6 +39,18 @@ export const CREATE_INSTRUMENTATION_RULE = `
       headersCollection {
         headerKeys
       }
+      customInstrumentations {
+        golang {
+          packageName
+          functionName
+          receiverName
+          receiverMethodName
+        }
+        java {
+          methodName
+          className
+        }
+      }
     }
   }
 `;
@@ -83,6 +95,18 @@ export const UPDATE_INSTURMENTATION_RULE = `
       }
       headersCollection {
         headerKeys
+      }
+      customInstrumentations {
+        golang {
+          packageName
+          functionName
+          receiverName
+          receiverMethodName
+        }
+        java {
+          methodName
+          className
+        }
       }
     }
   }

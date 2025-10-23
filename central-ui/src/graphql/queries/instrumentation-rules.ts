@@ -9,6 +9,13 @@ export const GET_INSTRUMENTATION_RULES = `
         disabled
         mutable
         profileName
+        conditions {
+          status
+          type
+          reason
+          message
+          lastTransitionTime
+        }
         payloadCollection {
           httpRequest {
             mimeTypes
@@ -39,6 +46,18 @@ export const GET_INSTRUMENTATION_RULES = `
         }
         headersCollection {
           headerKeys
+        }
+        customInstrumentations {
+          golang {
+            packageName
+            functionName
+            receiverName
+            receiverMethodName
+          }
+          java {
+            methodName
+            className
+          }
         }
       }
     }
