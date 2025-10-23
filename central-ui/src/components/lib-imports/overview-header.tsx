@@ -26,8 +26,8 @@ const OverviewHeader = () => {
   const left = useMemo(() => {
     const arr = [
       <OdigosLogoText key='logo' size={150} />,
-      <Tag key='tower' type={StatusType.Default}>
-        [tower]
+      <Tag key='central' type={StatusType.Default}>
+        [central ui]
       </Tag>,
       <ConnectionSelect key='connection-select' />,
     ];

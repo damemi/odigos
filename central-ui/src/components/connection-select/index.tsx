@@ -3,7 +3,7 @@ import Theme from '@odigos/ui-kit/theme';
 import type { ComputePlatform } from '@/types';
 import styled, { css } from 'styled-components';
 import { StatusType } from '@odigos/ui-kit/types';
-import { useNotificationStore } from '@odigos/ui-kit/store';
+import { useNotificationStore, useSelectedStore } from '@odigos/ui-kit/store';
 import { useComputePlatformsCRUD, useProxyID } from '@/hooks';
 import { OverviewIcon, SearchIcon } from '@odigos/ui-kit/icons';
 import { useKeyDown, useOnClickOutside } from '@odigos/ui-kit/hooks';
@@ -77,9 +77,10 @@ const FootWrap = styled.div`
 
 export const ConnectionSelect: React.FC = () => {
   const theme = Theme.useTheme();
+  const { selectedConnection } = useSelectedStore();
   const { addNotification } = useNotificationStore();
   const { proxyID, goSelectNewProxy, selectProxyID } = useProxyID();
-  const { computePlatforms, currentComputePlatform } = useComputePlatformsCRUD(proxyID);
+  const { computePlatforms } = useComputePlatformsCRUD(proxyID);
 
   const [isOpen, setIsOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -97,13 +98,13 @@ export const ConnectionSelect: React.FC = () => {
 
   const withSelect = !!computePlatforms.length;
   const filtered = computePlatforms.filter(({ id }) => id.toLowerCase().includes(searchText));
-  const Icon = !!currentComputePlatform?.type ? getPlatformIcon(currentComputePlatform.type) : null;
+  const Icon = !!selectedConnection?.type ? getPlatformIcon(selectedConnection.type) : null;
 
   return (
     <RelativeContainer ref={containerRef}>
       <Tab $withSelect={withSelect} onClick={() => setIsOpen((prev) => !prev)}>
         <LogoWrap>{!!Icon ? <Icon size={20} fill={theme.text.info} /> : <OverviewIcon fill={theme.text.info} />}</LogoWrap>
-        <Title>{currentComputePlatform?.name || currentComputePlatform?.id || 'no platform'}</Title>
+        <Title>{selectedConnection?.name || selectedConnection?.id || 'no platform'}</Title>
 
         {withSelect && (
           <PushToEnd>
@@ -124,7 +125,7 @@ export const ConnectionSelect: React.FC = () => {
                 key={`platform-${id}`}
                 icon={() => getPlatformIcon(type)?.({ fill: status === StatusType.Success ? theme.text.success : theme.text.error })}
                 label={`${!!name ? name : getPlatformLabel(type)} (${id})`}
-                isSelected={currentComputePlatform?.id === id}
+                isSelected={selectedConnection?.id === id}
                 onClick={() => {
                   if (status === StatusType.Success) {
                     onClickConnection(filtered[idx]);
