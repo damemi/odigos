@@ -99,7 +99,7 @@ func main() {
 }
 
 func ebpfInstrumentationFactories(suffix uint8) (map[string]commonInstrumentation.Factory, error) {
-	goFactory, err := sdks.NewGoInstrumentationFactoryEnterprise()
+	goFactory, err := sdks.NewGoInstrumentationFactoryEnterprise(suffix)
 	if err != nil {
 		return nil, err
 	}

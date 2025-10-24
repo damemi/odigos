@@ -51,11 +51,13 @@ type GoOtelEbpfSdkEnterprise struct {
 type GoInstrumentationFactoryEnterprise struct {
 	offsetLastModified time.Time
 	offsetFileBytes    []byte
+	traceIdSuffix      uint8
 }
 
-func NewGoInstrumentationFactoryEnterprise() (instrumentation.Factory, error) {
+func NewGoInstrumentationFactoryEnterprise(traceIdSuffix uint8) (instrumentation.Factory, error) {
 	g := &GoInstrumentationFactoryEnterprise{
 		offsetLastModified: time.Time{},
+		traceIdSuffix:      traceIdSuffix,
 	}
 	err := g.updateLocalOffsets()
 	if err != nil {
@@ -149,6 +151,10 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 
 	if len(g.offsetFileBytes) > 0 {
 		opts = append(opts, auto.WithOffsetFile(g.offsetFileBytes))
+	}
+
+	if g.traceIdSuffix != 0 {
+		opts = append(opts, auto.WithTraceIdSuffix(g.traceIdSuffix))
 	}
 
 	inst, err := auto.NewInstrumentation(
