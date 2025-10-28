@@ -1,3 +1,5 @@
+ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.10
+
 FROM python:3.11 AS python-builder
 WORKDIR /python-instrumentation
 ADD odiglet/agents/python/requirements.txt .
@@ -78,7 +80,7 @@ RUN for v in ${RUBY_VERSIONS}; do \
     rm -rf opentelemetry-ruby/$v/arm64; \
     done
 
-FROM --platform=$BUILDPLATFORM keyval/odiglet-base:v1.10 AS builder
+FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS builder
 
 RUN --mount=type=secret,id=github_token \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
@@ -145,11 +147,14 @@ COPY --from=ruby-agents /ruby-agents/opentelemetry-ruby/3.4 /instrumentations/ru
 ARG ODIGOS_LOADER_VERSION=v0.0.5
 RUN wget --directory-prefix=loader https://storage.googleapis.com/odigos-loader/$ODIGOS_LOADER_VERSION/$TARGETARCH/loader.so
 
+# Note that we do not pass --platform=$BUILDPLATFORM here because we want to build for the target platform
+FROM ${ODIGLET_BASE_IMAGE} AS rsync-base
+
 FROM registry.fedoraproject.org/fedora-minimal:38
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
 COPY --from=builder /go/bin/dlv /root/dlv
 # Copy statically compiled rsync (no shared libraries needed)
-COPY --from=builder /usr/bin/rsync /usr/bin/rsync
+COPY --from=rsync-base /usr/bin/rsync /usr/bin/rsync
 WORKDIR /instrumentations/
 COPY --from=builder /instrumentations/ .
 

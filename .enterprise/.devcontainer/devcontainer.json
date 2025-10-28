@@ -4,6 +4,8 @@
     "dockerfile": "Dockerfile"
   },
   "features": {
+    "ghcr.io/devcontainers/features/aws-cli:1.1.2": {},
+    "ghcr.io/CASL0/devcontainer-features/eksctl:1": {},
     "ghcr.io/devcontainers/features/node:1": {
       "version": "v25.0.0"
     },

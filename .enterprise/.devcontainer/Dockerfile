@@ -1,6 +1,7 @@
 # Base image: Go devcontainer with Debian bookworm
 FROM mcr.microsoft.com/devcontainers/go:dev-1.25-bookworm
 
+USER root
 # Install dependencies
 RUN apt-get update && apt-get install -y \
     curl \
@@ -24,7 +25,13 @@ RUN echo "alias kc='kubectl --insecure-skip-tls-verify=true'" >> /etc/bash.bashr
     && echo "source <(kubectl completion zsh)" >> /etc/zsh/zshrc
 
 # Install ko (latest release)
-RUN KO_VERSION=$(curl -s https://api.github.com/repos/ko-build/ko/releases/latest \
-    | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/') && \
-    curl -L https://github.com/ko-build/ko/releases/download/v${KO_VERSION}/ko_Linux_$(dpkg --print-architecture).tar.gz \
-    | tar xz -C /usr/local/bin
+RUN ARCH=$(uname -m) && \
+    case "$ARCH" in \
+      x86_64) ARCH="x86_64" ;; \
+      aarch64) ARCH="arm64" ;; \
+      *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+    esac && \
+    KO_VERSION=$(curl -s https://api.github.com/repos/ko-build/ko/releases/latest \
+      | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/') && \
+    curl -L https://github.com/ko-build/ko/releases/download/v${KO_VERSION}/ko_Linux_${ARCH}.tar.gz \
+      | tar xz -C /usr/local/bin
