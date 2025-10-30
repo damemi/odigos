@@ -4,6 +4,7 @@ export * from './config';
 export * from './compute-platforms';
 export * from './data-streams';
 export * from './destinations';
+export * from './proxy';
 export * from './instrumentation-rules';
 export * from './namespaces';
 export * from './sources';

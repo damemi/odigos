@@ -10,7 +10,7 @@ import { useCallback } from 'react';
 type AnyObj = Record<string, any>;
 
 interface UseProxy<ResT, ReqT> {
-  fetch: (variables?: ReqT) => Promise<{ data?: ResT }>;
+  fetch: (variables?: ReqT, targetProxyID?: string) => Promise<{ data?: ResT }>;
   loading: boolean;
   error?: ApolloError;
   data?: ResT;
@@ -26,8 +26,9 @@ export const useProxy = <ResT = AnyObj, ReqT = AnyObj>(queryString: string): Use
   const [remoteFetch, { data: cachedData, loading }] = useLazyQuery(REMOTE_FETCH);
 
   const fetch: UseProxy<ResT, ReqT>['fetch'] = useCallback(
-    async (variables) => {
-      if (!proxyID || !queryString) {
+    async (variables, targetProxyID) => {
+      const effectiveProxyID = targetProxyID || proxyID;
+      if (!effectiveProxyID || !queryString) {
         // addNotification({ type: StatusType.Error, title: 'Request Error', message: 'Unable to load data from the proxy. Please make sure your connection is configured correctly.' });
         console.warn('no `proxyID` or `queryString` to load data from the proxy. Please make sure your connection is configured correctly.');
 
@@ -36,7 +37,7 @@ export const useProxy = <ResT = AnyObj, ReqT = AnyObj>(queryString: string): Use
 
       const { data, error } = await remoteFetch({
         variables: {
-          proxyID,
+          proxyID: effectiveProxyID,
           query: queryString,
           variables: variables || {},
         },
