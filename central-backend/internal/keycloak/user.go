@@ -22,7 +22,7 @@ type UserInfo map[string]any
 type UserList []map[string]any
 type RoleList []map[string]any
 
-type UserService struct {
+type KeycloakUserService struct {
 	host  string
 	realm string
 }
@@ -52,20 +52,20 @@ type PasswordUpdatePayload struct {
 	Temporary bool   `json:"temporary"`
 }
 
-func NewUserService() *UserService {
-	return &UserService{
+func NewKeycloakUserService() *KeycloakUserService {
+	return &KeycloakUserService{
 		host:  consts.GetKeycloakHost(),
 		realm: consts.KeycloakRealm,
 	}
 }
 
-func (u *UserService) GetUserRole(adminToken, userID string) (string, error) {
-	rolesURL := fmt.Sprintf("%s/admin/realms/%s/users/%s/role-mappings/realm", u.host, u.realm, userID)
+func (kc *KeycloakUserService) GetUserRole(token string, userID string) (string, error) {
+	rolesURL := fmt.Sprintf("%s/admin/realms/%s/users/%s/role-mappings/realm", kc.host, kc.realm, userID)
 	req, err := http.NewRequest("GET", rolesURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create roles request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+adminToken)
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
@@ -84,11 +84,11 @@ func (u *UserService) GetUserRole(adminToken, userID string) (string, error) {
 	}
 
 	hasRole := map[string]bool{}
-	var roleNames []string
+	// var roleNames []string
 	for _, role := range roles {
 		if name, ok := role["name"].(string); ok {
 			hasRole[strings.ToLower(name)] = true
-			roleNames = append(roleNames, name)
+			// roleNames = append(roleNames, name)
 		}
 	}
 
@@ -108,8 +108,8 @@ func (u *UserService) GetUserRole(adminToken, userID string) (string, error) {
 	return RoleViewer, nil
 }
 
-func (u *UserService) CheckUserNeedsPasswordChange(adminToken, email string) (bool, error) {
-	users, err := u.FindUsersByEmail(adminToken, email)
+func (kc *KeycloakUserService) CheckUserNeedsPasswordChange(token string, email string) (bool, error) {
+	users, err := kc.FindUsersByEmail(token, email)
 	if err != nil || len(users) == 0 {
 		return false, fmt.Errorf("failed to find user by email: %w", err)
 	}
@@ -129,8 +129,8 @@ func (u *UserService) CheckUserNeedsPasswordChange(adminToken, email string) (bo
 
 }
 
-func (u *UserService) GetUserInfo(token string) (UserInfo, error) {
-	url := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/userinfo", u.host, u.realm)
+func (kc *KeycloakUserService) GetUserInfo(token string) (UserInfo, error) {
+	url := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/userinfo", kc.host, kc.realm)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -158,8 +158,8 @@ func (u *UserService) GetUserInfo(token string) (UserInfo, error) {
 
 }
 
-func (u *UserService) AddUserToRealm(token, username string, email string, password string) error {
-	url := fmt.Sprintf("%s/admin/realms/%s/users", u.host, u.realm)
+func (kc *KeycloakUserService) AddUserToRealm(token string, username string, email string, password string) error {
+	url := fmt.Sprintf("%s/admin/realms/%s/users", kc.host, kc.realm)
 	user := UserPayload{
 		Username:      username,
 		Email:         email,
@@ -199,9 +199,8 @@ func (u *UserService) AddUserToRealm(token, username string, email string, passw
 	return nil
 }
 
-func (u *UserService) AddRealmRoleToUser(token, email, roleName string) error {
-
-	searchUserURL := fmt.Sprintf("%s/admin/realms/%s/users?email=%s", u.host, u.realm, email)
+func (kc *KeycloakUserService) AddRealmRoleToUser(token string, email, roleName string) error {
+	searchUserURL := fmt.Sprintf("%s/admin/realms/%s/users?email=%s", kc.host, kc.realm, email)
 	req, err := http.NewRequest("GET", searchUserURL, nil)
 	if err != nil {
 		return err
@@ -229,7 +228,7 @@ func (u *UserService) AddRealmRoleToUser(token, email, roleName string) error {
 		return fmt.Errorf("failed to get user ID from response")
 	}
 
-	searchRoleURL := fmt.Sprintf("%s/admin/realms/%s/roles/%s", u.host, u.realm, roleName)
+	searchRoleURL := fmt.Sprintf("%s/admin/realms/%s/roles/%s", kc.host, kc.realm, roleName)
 	req, err = http.NewRequest("GET", searchRoleURL, nil)
 	if err != nil {
 		return err
@@ -254,7 +253,7 @@ func (u *UserService) AddRealmRoleToUser(token, email, roleName string) error {
 		return fmt.Errorf("failed to get role ID from response")
 	}
 
-	assignRoleURL := fmt.Sprintf("%s/admin/realms/%s/users/%s/role-mappings/realm", u.host, u.realm, userID)
+	assignRoleURL := fmt.Sprintf("%s/admin/realms/%s/users/%s/role-mappings/realm", kc.host, kc.realm, userID)
 	roleRep := []RolePayload{
 		{
 			ID:   roleID,
@@ -283,9 +282,8 @@ func (u *UserService) AddRealmRoleToUser(token, email, roleName string) error {
 	return nil
 }
 
-func (u *UserService) RemoveRealmRoleFromUser(token, email, roleName string) error {
-
-	searchUserURL := fmt.Sprintf("%s/admin/realms/%s/users?email=%s", u.host, u.realm, email)
+func (kc *KeycloakUserService) RemoveRealmRoleFromUser(token string, email, roleName string) error {
+	searchUserURL := fmt.Sprintf("%s/admin/realms/%s/users?email=%s", kc.host, kc.realm, email)
 	req, err := http.NewRequest("GET", searchUserURL, nil)
 	if err != nil {
 		return err
@@ -313,7 +311,7 @@ func (u *UserService) RemoveRealmRoleFromUser(token, email, roleName string) err
 		return fmt.Errorf("failed to get user ID from response")
 	}
 
-	searchRoleURL := fmt.Sprintf("%s/admin/realms/%s/roles/%s", u.host, u.realm, roleName)
+	searchRoleURL := fmt.Sprintf("%s/admin/realms/%s/roles/%s", kc.host, kc.realm, roleName)
 	req, err = http.NewRequest("GET", searchRoleURL, nil)
 	if err != nil {
 		return err
@@ -338,7 +336,7 @@ func (u *UserService) RemoveRealmRoleFromUser(token, email, roleName string) err
 		return fmt.Errorf("failed to get role ID from response")
 	}
 
-	removeRoleURL := fmt.Sprintf("%s/admin/realms/%s/users/%s/role-mappings/realm", u.host, u.realm, userID)
+	removeRoleURL := fmt.Sprintf("%s/admin/realms/%s/users/%s/role-mappings/realm", kc.host, kc.realm, userID)
 	roleRep := []RolePayload{
 		{
 			ID:   roleID,
@@ -367,7 +365,7 @@ func (u *UserService) RemoveRealmRoleFromUser(token, email, roleName string) err
 	return nil
 }
 
-func (u *UserService) UpdateUser(token, userID string, input *model.WriteUserInput) error {
+func (kc *KeycloakUserService) UpdateUser(token string, userID string, input *model.WriteUserInput) error {
 	// Only marshal fields that Keycloak expects, not the full input (which may include "role" etc.)
 	payload := make(map[string]interface{})
 	if input.Email != nil {
@@ -376,7 +374,7 @@ func (u *UserService) UpdateUser(token, userID string, input *model.WriteUserInp
 	}
 	// Add more fields as needed, but do NOT include "role" or other non-Keycloak fields
 
-	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", u.host, u.realm, userID)
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", kc.host, kc.realm, userID)
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -399,8 +397,8 @@ func (u *UserService) UpdateUser(token, userID string, input *model.WriteUserInp
 	return nil
 }
 
-func (u *UserService) FindUsersByEmail(token, email string) (UserList, error) {
-	searchURL := fmt.Sprintf("%s/admin/realms/%s/users?email=%s", u.host, u.realm, email)
+func (kc *KeycloakUserService) FindUsersByEmail(token string, email string) (UserList, error) {
+	searchURL := fmt.Sprintf("%s/admin/realms/%s/users?email=%s", kc.host, kc.realm, email)
 	req, err := http.NewRequest("GET", searchURL, nil)
 	if err != nil {
 		return nil, err
@@ -426,15 +424,15 @@ func (u *UserService) FindUsersByEmail(token, email string) (UserList, error) {
 	return users, nil
 }
 
-func (u *UserService) UpdateUserPassword(token, email, newPassword string) error {
-	users, err := u.FindUsersByEmail(token, email)
+func (kc *KeycloakUserService) UpdateUserPassword(token string, email, newPassword string) error {
+	users, err := kc.FindUsersByEmail(token, email)
 	if err != nil || len(users) == 0 {
 		return fmt.Errorf("failed to find user by email: %w", err)
 	}
 	userData := users[0]
 	userID := userData["id"].(string)
 
-	url := fmt.Sprintf("%s/admin/realms/%s/users/%s/reset-password", u.host, u.realm, userID)
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s/reset-password", kc.host, kc.realm, userID)
 
 	updateData := PasswordUpdatePayload{
 		Type:      "password",
@@ -469,8 +467,8 @@ func (u *UserService) UpdateUserPassword(token, email, newPassword string) error
 	return nil
 }
 
-func (u *UserService) CheckUserDetails(token, email string) (map[string]interface{}, error) {
-	searchURL := fmt.Sprintf("%s/admin/realms/%s/users?email=%s", u.host, u.realm, email)
+func (kc *KeycloakUserService) CheckUserDetails(token string, email string) (map[string]interface{}, error) {
+	searchURL := fmt.Sprintf("%s/admin/realms/%s/users?email=%s", kc.host, kc.realm, email)
 	req, err := http.NewRequest("GET", searchURL, nil)
 	if err != nil {
 		return nil, err
@@ -502,15 +500,15 @@ func (u *UserService) CheckUserDetails(token, email string) (map[string]interfac
 	return user, nil
 }
 
-func (u *UserService) SetUserPasswordRequirement(token, email string, required bool) error {
-	users, err := u.FindUsersByEmail(token, email)
+func (kc *KeycloakUserService) SetUserPasswordRequirement(token string, email string, required bool) error {
+	users, err := kc.FindUsersByEmail(token, email)
 	if err != nil || len(users) == 0 {
 		return fmt.Errorf("failed to find user by email: %w", err)
 	}
 	userData := users[0]
 	userID := userData["id"].(string)
 
-	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", u.host, u.realm, userID)
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", kc.host, kc.realm, userID)
 
 	var requiredActions []string
 	if required {
@@ -550,14 +548,14 @@ func (u *UserService) SetUserPasswordRequirement(token, email string, required b
 	return nil
 }
 
-func (u *UserService) GetUserRequiredActions(adminToken, email string) ([]string, error) {
-	searchURL := fmt.Sprintf("%s/admin/realms/%s/users?email=%s", u.host, u.realm, email)
+func (kc *KeycloakUserService) GetUserRequiredActions(token string, email string) ([]string, error) {
+	searchURL := fmt.Sprintf("%s/admin/realms/%s/users?email=%s", kc.host, kc.realm, email)
 	req, err := http.NewRequest("GET", searchURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+adminToken)
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
@@ -596,8 +594,8 @@ func (u *UserService) GetUserRequiredActions(adminToken, email string) ([]string
 	return actions, nil
 }
 
-func (u *UserService) ListUsers(token string) (UserList, error) {
-	url := fmt.Sprintf("%s/admin/realms/%s/users", u.host, u.realm)
+func (kc *KeycloakUserService) ListUsers(token string) (UserList, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/users", kc.host, kc.realm)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -626,8 +624,8 @@ func (u *UserService) ListUsers(token string) (UserList, error) {
 	return users, nil
 }
 
-func (u *UserService) AssignComputePlatformsToUser(token, userID string, computePlatformIDs []string) error {
-	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", u.host, u.realm, userID)
+func (kc *KeycloakUserService) AssignComputePlatformsToUser(token string, userID string, computePlatformIDs []string) error {
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", kc.host, kc.realm, userID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -703,8 +701,8 @@ func (u *UserService) AssignComputePlatformsToUser(token, userID string, compute
 	return nil
 }
 
-func (u *UserService) RemoveComputePlatformsFromUser(token, userID string, computePlatformIDs []string) error {
-	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", u.host, u.realm, userID)
+func (kc *KeycloakUserService) RemoveComputePlatformsFromUser(token string, userID string, computePlatformIDs []string) error {
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", kc.host, kc.realm, userID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -807,8 +805,8 @@ func (u *UserService) RemoveComputePlatformsFromUser(token, userID string, compu
 	return nil
 }
 
-func (u *UserService) GetComputePlatformIdsForUser(token, userID string) ([]string, error) {
-	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", u.host, u.realm, userID)
+func (kc *KeycloakUserService) GetComputePlatformIdsForUser(token string, userID string) ([]string, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", kc.host, kc.realm, userID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -869,12 +867,8 @@ func (u *UserService) GetComputePlatformIdsForUser(token, userID string) ([]stri
 	return []string{}, nil
 }
 
-func (u *UserService) GetUserTeams(token, userID string) ([]*model.Team, error) {
-	return GetUserTeams(token, u.host, u.realm, userID)
-}
-
-func (u *UserService) GetUserByID(token, userID string) (UserInfo, error) {
-	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", u.host, u.realm, userID)
+func (kc *KeycloakUserService) GetUserByID(token string, userID string) (UserInfo, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", kc.host, kc.realm, userID)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -897,8 +891,8 @@ func (u *UserService) GetUserByID(token, userID string) (UserInfo, error) {
 	return userData, nil
 }
 
-func (u *UserService) DeleteUserByID(token, userID string) error {
-	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", u.host, u.realm, userID)
+func (kc *KeycloakUserService) DeleteUserByID(token string, userID string) error {
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", kc.host, kc.realm, userID)
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -916,8 +910,8 @@ func (u *UserService) DeleteUserByID(token, userID string) error {
 	return nil
 }
 
-func (u *UserService) ListUsersByTeamID(token, teamID string) (UserList, error) {
-	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s/members", u.host, u.realm, teamID)
+func (kc *KeycloakUserService) ListUsersByTeamID(token string, teamID string) (UserList, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s/members", kc.host, kc.realm, teamID)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)

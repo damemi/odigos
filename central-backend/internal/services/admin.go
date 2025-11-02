@@ -4,46 +4,45 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/odigos-io/central-backend/internal/keycloak"
 	"github.com/odigos-io/central-backend/internal/logger"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
 	"github.com/odigos-io/central-backend/internal/utils"
 )
 
 type AdminService struct {
-	redisClient *redisclient.RedisClient
-	authRepo    AuthRepository
+	redisClient      *redisclient.RedisClient
+	adminCredentials *AdminCredentials
+	kcAdmin          *keycloak.KeycloakAdminService
 }
 
-func NewAdminService(redisClient *redisclient.RedisClient, authRepo AuthRepository) *AdminService {
+func NewAdminService(redisClient *redisclient.RedisClient, adminCredentials *AdminCredentials) *AdminService {
 	return &AdminService{
-		redisClient: redisClient,
-		authRepo:    authRepo,
+		redisClient:      redisClient,
+		adminCredentials: adminCredentials,
+		kcAdmin:          keycloak.NewKeycloakAdminService(),
 	}
 }
 
-func (a *AdminService) GetAdminTokenFromKeycloak(ctx context.Context) (string, error) {
-	adminToken, err := a.authRepo.GetAdminToken(ctx)
-	if err != nil {
-		return "", err
-	}
-	return adminToken, nil
+func (svc *AdminService) GetAdminToken() (string, error) {
+	return svc.kcAdmin.GetAdminToken(svc.adminCredentials.Username, svc.adminCredentials.Password)
 }
 
-func (a *AdminService) GetToken(ctx context.Context) (string, error) {
-	isInitialized, err := a.redisClient.GetSystemInitialized(ctx)
+func (svc *AdminService) GetToken(ctx context.Context) (string, error) {
+	isInitialized, err := svc.redisClient.GetSystemInitialized(ctx)
 	if err != nil {
 		logger.Log.Error("Failed to get system initialization status from cache", "error", err)
 		isInitialized = false
 	}
 
 	if !isInitialized {
-		return a.authRepo.GetAdminToken(ctx)
+		return svc.GetAdminToken()
 	}
 	if token := utils.GetTokenFromContext(ctx); token != "" {
 		if expired, _ := utils.IsTokenExpired(token); expired {
 			return "", fmt.Errorf("authentication expired")
 		}
-		_, err := a.ValidateAdminPermissions(token)
+		_, err := svc.ValidateAdminPermissions(token)
 		if err == nil {
 			return token, nil
 		}
@@ -51,7 +50,7 @@ func (a *AdminService) GetToken(ctx context.Context) (string, error) {
 	return "", fmt.Errorf("admin permissions required")
 }
 
-func (a *AdminService) ValidateAdminPermissions(userToken string) (string, error) {
+func (svc *AdminService) ValidateAdminPermissions(userToken string) (string, error) {
 	roles, err := utils.ExtractRolesFromToken(userToken)
 	if err != nil {
 		return "", fmt.Errorf("failed to extract roles from token: %w", err)
