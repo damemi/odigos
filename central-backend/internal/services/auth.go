@@ -94,7 +94,7 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 				return nil, fmt.Errorf("failed to get admin token for initial password setup: %w", err)
 			}
 			return &model.SignInResult{
-				Token:  &adminToken,
+				Token:  adminToken,
 				Status: model.SignInStatusPasswordUpdateRequired,
 				User: &model.User{
 					Email:               email,
@@ -148,7 +148,7 @@ func (svc *AuthService) SetInitialPassword(ctx context.Context, email, password 
 	}
 
 	return &model.SignInResult{
-		Token:  &token,
+		Token:  token,
 		Status: model.SignInStatusSuccess,
 		User:   user,
 	}, nil
