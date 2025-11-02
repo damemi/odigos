@@ -80,7 +80,7 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 		}
 
 		return &model.SignInResult{
-			Token:  &authResult.AccessToken,
+			Token:  authResult.AccessToken,
 			Status: model.SignInStatusSuccess,
 			User:   user,
 		}, nil
@@ -119,7 +119,7 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 	logger.Log.Info("User login successful", "email", email, "userID", user.ID, "needsPasswordChange", user.NeedsPasswordChange)
 
 	return &model.SignInResult{
-		Token:  &authResult.AccessToken,
+		Token:  authResult.AccessToken,
 		Status: model.SignInStatusSuccess,
 		User:   user,
 	}, nil
