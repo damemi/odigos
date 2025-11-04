@@ -4,8 +4,8 @@ go 1.25.0
 
 require (
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.7
-	github.com/odigos-io/ebpf-java-instrumentation v0.9.0
-	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.9.0
+	github.com/odigos-io/ebpf-java-instrumentation v0.9.1
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.9.1
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.7
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
@@ -96,7 +96,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.38.0 // indirect
 	go.opentelemetry.io/otel/exporters/prometheus v0.59.0 // indirect
 	go.opentelemetry.io/otel/exporters/stdout/stdoutlog v0.13.0 // indirect
-	go.opentelemetry.io/otel/exporters/stdout/stdoutmetric v1.37.0 // indirect
+	go.opentelemetry.io/otel/exporters/stdout/stdoutmetric v1.38.0 // indirect
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.37.0 // indirect
 	go.opentelemetry.io/otel/log v0.13.0 // indirect
 	go.opentelemetry.io/otel/metric v1.38.0 // indirect
