@@ -5,63 +5,72 @@ import (
 	"fmt"
 
 	"github.com/odigos-io/central-backend/graph/model"
+	"github.com/odigos-io/central-backend/internal/keycloak"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
 )
 
 type TeamService struct {
-	redisClient *redisclient.RedisClient
-	teamRepo    TeamRepository
-	userRepo    UserRepository
+	redisClient  *redisclient.RedisClient
+	adminService *AdminService
+	kcTeam       *keycloak.KeycloakTeamService
 }
 
-func NewTeamService(redisClient *redisclient.RedisClient, teamRepo TeamRepository, userRepo UserRepository) *TeamService {
+func NewTeamService(redisClient *redisclient.RedisClient, adminService *AdminService) *TeamService {
 	return &TeamService{
-		redisClient: redisClient,
-		teamRepo:    teamRepo,
-		userRepo:    userRepo,
+		redisClient:  redisClient,
+		adminService: adminService,
+		kcTeam:       keycloak.NewKeycloakTeamService(),
 	}
 }
 
-func (s *TeamService) CreateTeam(ctx context.Context, input *model.WriteTeamInput) (*model.GeneralResult, error) {
+func (svc *TeamService) CheckTeamExists(teamNameOrTeamID string) (bool, error) {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return false, err
+	}
+
+	teams, err := svc.kcTeam.ListTeams(adminToken)
+	if err != nil {
+		return false, err
+	}
+
+	for _, team := range teams {
+		if team.Name == teamNameOrTeamID || team.ID == teamNameOrTeamID {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (svc *TeamService) CreateTeam(input *model.WriteTeamInput) (*model.GeneralResult, error) {
 	name := input.Name
 
 	if name == nil {
-		errorMsg := "Team name is required"
-		return &model.GeneralResult{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
+		return nil, fmt.Errorf("team name is required")
 	}
 
-	teamExists, err := s.teamRepo.CheckTeamExists(ctx, *name)
+	teamExists, err := svc.CheckTeamExists(*name)
 	if err != nil {
-		errorMsg := "Failed to validate team name: " + err.Error()
-		return &model.GeneralResult{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
+		return nil, fmt.Errorf("failed to validate team name: %w", err)
 	}
 	if teamExists {
-		errorMsg := fmt.Sprintf("Team with name '%s' already exists", *name)
-		return &model.GeneralResult{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
+		return nil, fmt.Errorf("team with name '%s' already exists", *name)
 	}
 
-	createdTeam, err := s.teamRepo.CreateTeam(ctx, input)
-
+	adminToken, err := svc.adminService.GetAdminToken()
 	if err != nil {
-		errorMsg := "Failed to create team: " + err.Error()
-		return &model.GeneralResult{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
+		return nil, fmt.Errorf("failed to get admin token: %w", err)
+	}
+
+	createdTeam, err := svc.kcTeam.CreateTeam(adminToken, *name, input.Description)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create team: %w", err)
 	}
 
 	for _, uid := range input.AddUserIds {
 		if uid != nil {
-			err = s.userRepo.AssignTeamsToUser(ctx, *uid, []string{createdTeam.ID})
+			err = svc.kcTeam.AssignTeamsToUser(adminToken, *uid, []string{createdTeam.ID})
 			if err != nil {
 				return nil, err
 			}
@@ -69,7 +78,7 @@ func (s *TeamService) CreateTeam(ctx context.Context, input *model.WriteTeamInpu
 	}
 	for _, uid := range input.RemoveUserIds {
 		if uid != nil {
-			err = s.userRepo.RemoveTeamsFromUser(ctx, *uid, []string{createdTeam.ID})
+			err = svc.kcTeam.RemoveTeamsFromUser(adminToken, *uid, []string{createdTeam.ID})
 			if err != nil {
 				return nil, err
 			}
@@ -78,7 +87,7 @@ func (s *TeamService) CreateTeam(ctx context.Context, input *model.WriteTeamInpu
 
 	for _, cpid := range input.AddComputePlatformIds {
 		if cpid != nil {
-			err = s.teamRepo.AssignComputePlatformsToTeam(ctx, createdTeam.ID, []string{*cpid})
+			err = svc.kcTeam.AssignComputePlatformsToTeam(adminToken, createdTeam.ID, []string{*cpid})
 			if err != nil {
 				return nil, err
 			}
@@ -86,7 +95,7 @@ func (s *TeamService) CreateTeam(ctx context.Context, input *model.WriteTeamInpu
 	}
 	for _, cpid := range input.RemoveComputePlatformIds {
 		if cpid != nil {
-			err = s.teamRepo.RemoveComputePlatformsFromTeam(ctx, createdTeam.ID, []string{*cpid})
+			err = svc.kcTeam.RemoveComputePlatformsFromTeam(adminToken, createdTeam.ID, []string{*cpid})
 			if err != nil {
 				return nil, err
 			}
@@ -99,65 +108,45 @@ func (s *TeamService) CreateTeam(ctx context.Context, input *model.WriteTeamInpu
 	}, nil
 }
 
-func (s *TeamService) UpdateTeam(ctx context.Context, teamID string, input *model.WriteTeamInput) (*model.GeneralResult, error) {
+func (svc *TeamService) UpdateTeam(teamID string, input *model.WriteTeamInput) (*model.GeneralResult, error) {
 	name := input.Name
 
 	if name == nil {
-		errorMsg := "Team name is required"
-		return &model.GeneralResult{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
+		return nil, fmt.Errorf("team name is required")
 	}
 
-	// Check if the team being updated exists
-	existingTeam, err := s.teamRepo.GetTeamByID(ctx, teamID)
+	adminToken, err := svc.adminService.GetAdminToken()
 	if err != nil {
-		errorMsg := "Failed to validate team existence: " + err.Error()
-		return &model.GeneralResult{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
+		return nil, fmt.Errorf("failed to get admin token: %w", err)
+	}
+
+	existingTeam, err := svc.kcTeam.GetTeamByID(adminToken, teamID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate team existence: %w", err)
 	}
 	if existingTeam == nil {
-		errorMsg := fmt.Sprintf("Team with ID '%s' does not exist", teamID)
-		return &model.GeneralResult{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
+		return nil, fmt.Errorf("team with id '%s' does not exist", teamID)
 	}
 
 	// Check if another team already has the new name
 	if *name != existingTeam.Name {
-		existingTeamWithNewName, err := s.teamRepo.GetTeamByName(ctx, *name)
+		existingTeamWithNewName, err := svc.kcTeam.GetTeamByName(adminToken, *name)
 		if err != nil {
-			errorMsg := "Failed to validate team name: " + err.Error()
-			return &model.GeneralResult{
-				Success: false,
-				Error:   &errorMsg,
-			}, nil
+			return nil, fmt.Errorf("failed to validate team name: %w", err)
 		}
 		if existingTeamWithNewName != nil {
-			errorMsg := fmt.Sprintf("Team with name '%s' already exists", *name)
-			return &model.GeneralResult{
-				Success: false,
-				Error:   &errorMsg,
-			}, nil
+			return nil, fmt.Errorf("team with name '%s' already exists", *name)
 		}
 	}
 
-	_, err = s.teamRepo.UpdateTeam(ctx, teamID, input)
+	_, err = svc.kcTeam.UpdateTeam(adminToken, teamID, *name, input.Description)
 	if err != nil {
-		errorMsg := "Failed to update team: " + err.Error()
-		return &model.GeneralResult{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
+		return nil, fmt.Errorf("failed to update team: %w", err)
 	}
 
 	for _, uid := range input.AddUserIds {
 		if uid != nil {
-			err = s.userRepo.AssignTeamsToUser(ctx, *uid, []string{teamID})
+			err = svc.kcTeam.AssignTeamsToUser(adminToken, *uid, []string{teamID})
 			if err != nil {
 				return nil, err
 			}
@@ -165,7 +154,7 @@ func (s *TeamService) UpdateTeam(ctx context.Context, teamID string, input *mode
 	}
 	for _, uid := range input.RemoveUserIds {
 		if uid != nil {
-			err = s.userRepo.RemoveTeamsFromUser(ctx, *uid, []string{teamID})
+			err = svc.kcTeam.RemoveTeamsFromUser(adminToken, *uid, []string{teamID})
 			if err != nil {
 				return nil, err
 			}
@@ -174,7 +163,7 @@ func (s *TeamService) UpdateTeam(ctx context.Context, teamID string, input *mode
 
 	for _, cpid := range input.AddComputePlatformIds {
 		if cpid != nil {
-			err = s.teamRepo.AssignComputePlatformsToTeam(ctx, teamID, []string{*cpid})
+			err = svc.kcTeam.AssignComputePlatformsToTeam(adminToken, teamID, []string{*cpid})
 			if err != nil {
 				return nil, err
 			}
@@ -182,7 +171,7 @@ func (s *TeamService) UpdateTeam(ctx context.Context, teamID string, input *mode
 	}
 	for _, cpid := range input.RemoveComputePlatformIds {
 		if cpid != nil {
-			err = s.teamRepo.RemoveComputePlatformsFromTeam(ctx, teamID, []string{*cpid})
+			err = svc.kcTeam.RemoveComputePlatformsFromTeam(adminToken, teamID, []string{*cpid})
 			if err != nil {
 				return nil, err
 			}
@@ -194,26 +183,73 @@ func (s *TeamService) UpdateTeam(ctx context.Context, teamID string, input *mode
 	}, nil
 }
 
-func (s *TeamService) DeleteTeam(ctx context.Context, teamID string) (*model.GeneralResult, error) {
-	return s.teamRepo.DeleteTeam(ctx, teamID)
+func (svc *TeamService) DeleteTeam(ctx context.Context, teamID string) (*model.GeneralResult, error) {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get admin token: %w", err)
+	}
+
+	err = svc.kcTeam.DeleteTeam(adminToken, teamID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete team: %w", err)
+	}
+
+	return &model.GeneralResult{
+		Success: true,
+	}, nil
 }
 
-func (s *TeamService) GetTeams(ctx context.Context) ([]*model.Team, error) {
-	return s.teamRepo.GetTeams(ctx)
+func (svc *TeamService) GetTeams(ctx context.Context) ([]*model.Team, error) {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get admin token: %w", err)
+	}
+
+	return svc.kcTeam.ListTeams(adminToken)
 }
 
-func (s *TeamService) GetUsersForTeam(ctx context.Context, teamID string) ([]*model.User, error) {
-	return s.teamRepo.GetUsersForTeam(ctx, teamID)
+func (svc *TeamService) GetUsersForTeam(ctx context.Context, teamID string) ([]*model.User, error) {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get admin token: %w", err)
+	}
+
+	return svc.kcTeam.GetUsersForTeam(adminToken, teamID)
 }
 
-func (s *TeamService) AssignComputePlatformsToTeam(ctx context.Context, teamID string, computePlatformIDs []string) error {
-	return s.teamRepo.AssignComputePlatformsToTeam(ctx, teamID, computePlatformIDs)
+func (svc *TeamService) AssignComputePlatformsToTeam(ctx context.Context, teamID string, computePlatformIDs []string) error {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return err
+	}
+
+	return svc.kcTeam.AssignComputePlatformsToTeam(adminToken, teamID, computePlatformIDs)
 }
 
-func (s *TeamService) RemoveComputePlatformsFromTeam(ctx context.Context, teamID string, computePlatformIDs []string) error {
-	return s.teamRepo.RemoveComputePlatformsFromTeam(ctx, teamID, computePlatformIDs)
+func (svc *TeamService) RemoveComputePlatformsFromTeam(ctx context.Context, teamID string, computePlatformIDs []string) error {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return err
+	}
+
+	return svc.kcTeam.RemoveComputePlatformsFromTeam(adminToken, teamID, computePlatformIDs)
 }
 
-func (s *TeamService) GetComputePlatformsForTeam(ctx context.Context, teamID string) ([]*model.ComputePlatform, error) {
-	return s.teamRepo.GetComputePlatformsForTeam(ctx, teamID)
+func (svc *TeamService) GetComputePlatformsForTeam(ctx context.Context, teamID string) ([]*model.ComputePlatform, error) {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get admin token: %w", err)
+	}
+
+	computePlatformIds, err := svc.kcTeam.GetComputePlatformIdsForTeam(adminToken, teamID)
+	if err != nil {
+		return nil, err
+	}
+
+	var computePlatformModels []*model.ComputePlatform
+	for _, id := range computePlatformIds {
+		computePlatformModels = append(computePlatformModels, &model.ComputePlatform{ID: id})
+	}
+
+	return computePlatformModels, nil
 }

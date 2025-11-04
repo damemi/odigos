@@ -97,12 +97,12 @@ func (r *mutationResolver) DeleteUser(ctx context.Context, userID string) (*mode
 
 // CreateTeam is the resolver for the createTeam field.
 func (r *mutationResolver) CreateTeam(ctx context.Context, input model.WriteTeamInput) (*model.GeneralResult, error) {
-	return r.TeamService.CreateTeam(ctx, &input)
+	return r.TeamService.CreateTeam(&input)
 }
 
 // UpdateTeam is the resolver for the updateTeam field.
 func (r *mutationResolver) UpdateTeam(ctx context.Context, teamID string, input model.WriteTeamInput) (*model.GeneralResult, error) {
-	return r.TeamService.UpdateTeam(ctx, teamID, &input)
+	return r.TeamService.UpdateTeam(teamID, &input)
 }
 
 // DeleteTeam is the resolver for the deleteTeam field.

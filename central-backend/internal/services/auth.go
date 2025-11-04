@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/odigos-io/central-backend/graph/model"
+	"github.com/odigos-io/central-backend/internal/keycloak"
 	"github.com/odigos-io/central-backend/internal/logger"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
 	"github.com/odigos-io/central-backend/internal/types"
@@ -13,51 +14,67 @@ import (
 )
 
 type AuthService struct {
-	redisClient *redisclient.RedisClient
-	userRepo    UserRepository
-	authRepo    AuthRepository
-	teamRepo    TeamRepository
+	redisClient  *redisclient.RedisClient
+	adminService *AdminService
+	userService  *UserService
+	kcUser       *keycloak.KeycloakUserService
+	kcAuth       *keycloak.KeycloakAuthService
+	kcTeam       *keycloak.KeycloakTeamService
 }
 
-func NewAuthService(redisClient *redisclient.RedisClient, userRepo UserRepository, authRepo AuthRepository, teamRepo TeamRepository) *AuthService {
+func NewAuthService(redisClient *redisclient.RedisClient, adminService *AdminService, userService *UserService) *AuthService {
 	return &AuthService{
-		redisClient: redisClient,
-		userRepo:    userRepo,
-		authRepo:    authRepo,
-		teamRepo:    teamRepo,
+		redisClient:  redisClient,
+		adminService: adminService,
+		userService:  userService,
+		kcAuth:       keycloak.NewKeycloakAuthService(),
+		kcUser:       keycloak.NewKeycloakUserService(),
+		kcTeam:       keycloak.NewKeycloakTeamService(),
 	}
 }
 
-func (a *AuthService) SignIn(ctx context.Context, email, password string) (*model.SignInResult, error) {
-	if a.isFirstTimeSetup(ctx, email, password) {
+func (svc *AuthService) isFirstTimeSetup(ctx context.Context) bool {
+	isInitialized, err := svc.redisClient.GetSystemInitialized(ctx)
+	if err != nil {
+		logger.Log.Error("Failed to get system initialization status from cache", "error", err)
+		isInitialized = false
+	}
+
+	return !isInitialized
+}
+
+func (svc *AuthService) SignIn(ctx context.Context, email string, password string) (*model.SignInResult, error) {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get admin token: %w", err)
+	}
+
+	if svc.isFirstTimeSetup(ctx) {
 		logger.Log.Info("First-time setup detected, creating first admin user")
 
 		role := model.RoleAdmin
-		_, err := a.userRepo.CreateUser(ctx, &model.WriteUserInput{
+		_, err := svc.userService.CreateUser(ctx, &model.WriteUserInput{
 			Email:    &email,
 			Password: &password,
 			Role:     &role,
 		})
 		if err != nil {
-			logger.Log.Error("Failed to create first admin user", "error", err)
 			return nil, fmt.Errorf("failed to create first admin user: %w", err)
 		}
 
-		logger.Log.Info("First admin user created successfully", "email", email)
-
-		authResult, err := a.authRepo.AuthenticateUser(ctx, email, password)
+		authResult, err := svc.kcAuth.AuthenticateUser(adminToken, email, password)
 		if err != nil {
 			return nil, fmt.Errorf("failed to authenticate newly created admin: %w", err)
 		}
 
-		user, err := a.buildUserModel(ctx, authResult.AccessToken, authResult.UserData, false)
+		user, err := svc.buildUserModel(authResult.AccessToken, authResult.UserData, false)
 		if err != nil {
 			return nil, err
 		}
 
 		logger.Log.Info("First admin login successful", "email", email, "userID", user.ID)
 
-		err = a.redisClient.SetSystemInitialized(ctx, true)
+		err = svc.redisClient.SetSystemInitialized(ctx, true)
 		if err != nil {
 			logger.Log.Error("Failed to set system as initialized", "error", err)
 		}
@@ -69,11 +86,10 @@ func (a *AuthService) SignIn(ctx context.Context, email, password string) (*mode
 		}, nil
 	}
 
-	authResult, err := a.authRepo.AuthenticateUser(ctx, email, password)
+	authResult, err := svc.kcAuth.AuthenticateUser(adminToken, email, password)
 	if err != nil {
-
 		if strings.Contains(err.Error(), "password update required") {
-			adminToken, err := a.authRepo.GetAdminToken(ctx)
+			adminToken, err := svc.adminService.GetAdminToken()
 			if err != nil {
 				return nil, fmt.Errorf("failed to get admin token for initial password setup: %w", err)
 			}
@@ -89,14 +105,13 @@ func (a *AuthService) SignIn(ctx context.Context, email, password string) (*mode
 		return nil, err
 	}
 
-	adminCtx := utils.SetTokenInContext(ctx, authResult.AccessToken)
-	needsPasswordChange, err := a.userRepo.CheckUserNeedsPasswordChange(adminCtx, email)
+	needsPasswordChange, err := svc.kcUser.CheckUserNeedsPasswordChange(adminToken, email)
 	if err != nil {
 		logger.Log.Error("Failed to check if user needs password change", "error", err)
 		needsPasswordChange = false
 	}
 
-	user, err := a.buildUserModel(adminCtx, authResult.AccessToken, authResult.UserData, needsPasswordChange)
+	user, err := svc.buildUserModel(authResult.AccessToken, authResult.UserData, needsPasswordChange)
 	if err != nil {
 		return nil, err
 	}
@@ -110,31 +125,24 @@ func (a *AuthService) SignIn(ctx context.Context, email, password string) (*mode
 	}, nil
 }
 
-func (a *AuthService) SetInitialPassword(ctx context.Context, email, password string) (*model.SignInResult, error) {
-	token := utils.GetTokenFromContext(ctx)
-	if token == "" {
-		return nil, fmt.Errorf("authentication required")
-	}
-
-	adminCtx := utils.SetTokenInContext(ctx, token)
-
-	if err := a.validateUserExists(adminCtx, email); err != nil {
+func (svc *AuthService) SetInitialPassword(ctx context.Context, email, password string) (*model.SignInResult, error) {
+	if err := svc.validateUserExists(email); err != nil {
 		return nil, err
 	}
 
-	if err := a.validatePasswordChangeRequired(adminCtx, email); err != nil {
+	if err := svc.validatePasswordChangeRequired(email); err != nil {
 		return nil, err
 	}
 
-	if err := a.updateUserPassword(adminCtx, email, password); err != nil {
+	if err := svc.updateUserPassword(email, password); err != nil {
 		return nil, err
 	}
 
-	if err := a.clearPasswordRequirement(adminCtx, email); err != nil {
+	if err := svc.clearPasswordRequirement(email); err != nil {
 		return nil, err
 	}
 
-	token, user, err := a.authenticateUserWithNewPassword(ctx, email, password)
+	token, user, err := svc.authenticateUserWithNewPassword(ctx, email, password)
 	if err != nil {
 		return nil, err
 	}
@@ -146,16 +154,23 @@ func (a *AuthService) SetInitialPassword(ctx context.Context, email, password st
 	}, nil
 }
 
-func (a *AuthService) validateUserExists(ctx context.Context, email string) error {
-	err := a.userRepo.CheckUserExists(ctx, email)
+func (svc *AuthService) validateUserExists(email string) error {
+	exists, err := svc.userService.CheckUserExists(email)
 	if err != nil {
+		return err
+	}
+	if !exists {
 		return fmt.Errorf("user not found: %w", err)
 	}
 	return nil
 }
 
-func (a *AuthService) validatePasswordChangeRequired(ctx context.Context, email string) error {
-	needsChange, err := a.userRepo.CheckUserNeedsPasswordChange(ctx, email)
+func (svc *AuthService) validatePasswordChangeRequired(email string) error {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return fmt.Errorf("failed to get admin token: %w", err)
+	}
+	needsChange, err := svc.kcUser.CheckUserNeedsPasswordChange(adminToken, email)
 	if err != nil {
 		return fmt.Errorf("failed to check password change requirement: %w", err)
 	}
@@ -165,30 +180,44 @@ func (a *AuthService) validatePasswordChangeRequired(ctx context.Context, email 
 	return nil
 }
 
-func (a *AuthService) updateUserPassword(ctx context.Context, email, password string) error {
-	err := a.userRepo.UpdateUserPassword(ctx, email, password)
+func (svc *AuthService) updateUserPassword(email, password string) error {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return fmt.Errorf("failed to get admin token: %w", err)
+	}
+
+	err = svc.kcUser.UpdateUserPassword(adminToken, email, password)
 	if err != nil {
 		return fmt.Errorf("failed to update password: %w", err)
 	}
 	return nil
 }
 
-func (a *AuthService) clearPasswordRequirement(ctx context.Context, email string) error {
-	err := a.userRepo.SetUserPasswordRequirement(ctx, email, false)
+func (svc *AuthService) clearPasswordRequirement(email string) error {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return fmt.Errorf("failed to get admin token: %w", err)
+	}
+
+	err = svc.kcUser.SetUserPasswordRequirement(adminToken, email, false)
 	if err != nil {
 		return fmt.Errorf("failed to clear password requirement: %w", err)
 	}
 	return nil
 }
 
-func (a *AuthService) authenticateUserWithNewPassword(ctx context.Context, email, password string) (string, *model.User, error) {
-	authResult, err := a.authRepo.AuthenticateUser(ctx, email, password)
+func (svc *AuthService) authenticateUserWithNewPassword(ctx context.Context, email string, password string) (string, *model.User, error) {
+	token, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to get admin token: %w", err)
+	}
+
+	authResult, err := svc.kcAuth.AuthenticateUser(token, email, password)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to sign in with new password: %w", err)
 	}
 
-	adminCtx := utils.SetTokenInContext(ctx, utils.GetTokenFromContext(ctx))
-	user, err := a.userRepo.GetUserByEmail(adminCtx, email)
+	user, err := svc.userService.GetUserByEmail(ctx, email)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to find user by email: %w", err)
 	}
@@ -196,12 +225,12 @@ func (a *AuthService) authenticateUserWithNewPassword(ctx context.Context, email
 	return authResult.AccessToken, user, nil
 }
 
-func (a *AuthService) buildUserModel(ctx context.Context, token string, userData types.UserSummary, needsPasswordChange bool) (*model.User, error) {
+func (svc *AuthService) buildUserModel(token string, userData types.UserSummary, needsPasswordChange bool) (*model.User, error) {
 	userID := userData.ID
 	email := userData.Email
 	username := ""
 
-	roleStr, err := a.userRepo.GetUserRole(ctx, userID)
+	roleStr, err := svc.kcUser.GetUserRole(token, userID)
 	if err != nil {
 		logger.Log.Error("Failed to get user role", "userID", userID, "error", err)
 		roleStr = "user"
@@ -209,7 +238,7 @@ func (a *AuthService) buildUserModel(ctx context.Context, token string, userData
 	role := utils.ConvertStringRoleToModel(roleStr)
 	logger.Log.Info("buildUserModel: resolved role for user", "userID", userID, "email", email, "roleStr", roleStr, "roleModel", role)
 
-	teams, err := a.teamRepo.GetTeamsByUserID(ctx, userID)
+	teams, err := svc.kcTeam.GetTeamsByUserID(token, userID)
 	if err != nil {
 		logger.Log.Error("Failed to get teams by user ID", "userID", userID, "error", err)
 		teams = []*model.Team{}
@@ -225,23 +254,13 @@ func (a *AuthService) buildUserModel(ctx context.Context, token string, userData
 	}, nil
 }
 
-func (a *AuthService) isFirstTimeSetup(ctx context.Context, email, password string) bool {
-	isInitialized, err := a.redisClient.GetSystemInitialized(ctx)
-	if err != nil {
-		logger.Log.Error("Failed to get system initialization status from cache", "error", err)
-		isInitialized = false
-	}
-
-	return !isInitialized
-}
-
-func (a *AuthService) SignOut(ctx context.Context) (*model.GeneralResult, error) {
+func (svc *AuthService) SignOut(ctx context.Context) (*model.GeneralResult, error) {
 	token := utils.GetTokenFromContext(ctx)
 	if token == "" {
 		return nil, fmt.Errorf("authentication required")
 	}
 
-	err := a.authRepo.Logout(ctx, token)
+	err := svc.kcAuth.LogoutUser(token)
 	if err != nil {
 		logger.Log.Error("Failed to logout user", "error", err)
 		errorMsg := fmt.Sprintf("failed to logout: %v", err)

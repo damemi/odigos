@@ -13,6 +13,11 @@ import (
 	"github.com/odigos-io/central-backend/internal/consts"
 )
 
+type KeycloakTeamService struct {
+	host  string
+	realm string
+}
+
 type KeycloakGroup struct {
 	ID          string                 `json:"id"`
 	Name        string                 `json:"name"`
@@ -40,8 +45,15 @@ type KeycloakUser struct {
 	Role     string `json:"role"`
 }
 
-func CreateTeam(token, keycloakHost, realm string, name string, description *string) (*model.Team, error) {
-	url := fmt.Sprintf("%s/admin/realms/%s/groups", keycloakHost, realm)
+func NewKeycloakTeamService() *KeycloakTeamService {
+	return &KeycloakTeamService{
+		host:  consts.GetKeycloakHost(),
+		realm: consts.KeycloakRealm,
+	}
+}
+
+func (kc *KeycloakTeamService) CreateTeam(token string, name string, description *string) (*model.Team, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/groups", kc.host, kc.realm)
 
 	now := time.Now().Format(time.RFC3339)
 	attributes := map[string][]string{
@@ -82,7 +94,7 @@ func CreateTeam(token, keycloakHost, realm string, name string, description *str
 		return nil, fmt.Errorf("failed to create team: status %d, response: %s", resp.StatusCode, string(responseBody))
 	}
 
-	teamID, err := getTeamIDFromResponse(resp)
+	teamID, err := kc.getTeamIDFromResponse(resp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get team ID: %w", err)
 	}
@@ -100,8 +112,8 @@ func CreateTeam(token, keycloakHost, realm string, name string, description *str
 	return createdTeam, nil
 }
 
-func UpdateTeam(token, keycloakHost, realm, teamID, name string, description *string) (*model.Team, error) {
-	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", keycloakHost, realm, teamID)
+func (kc *KeycloakTeamService) UpdateTeam(token string, teamID string, name string, description *string) (*model.Team, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", kc.host, kc.realm, teamID)
 
 	now := time.Now().Format(time.RFC3339)
 	attributes := map[string][]string{
@@ -151,8 +163,8 @@ func UpdateTeam(token, keycloakHost, realm, teamID, name string, description *st
 	return updatedTeam, nil
 }
 
-func ListTeams(token, keycloakHost, realm string) ([]*model.Team, error) {
-	url := fmt.Sprintf("%s/admin/realms/%s/groups", keycloakHost, realm)
+func (kc *KeycloakTeamService) ListTeams(token string) ([]*model.Team, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/groups", kc.host, kc.realm)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -181,14 +193,14 @@ func ListTeams(token, keycloakHost, realm string) ([]*model.Team, error) {
 	var teams []*model.Team
 	for _, group := range groups {
 		// Get full group details including attributes
-		fullGroup, err := getGroupDetails(token, keycloakHost, realm, group.ID)
+		fullGroup, err := kc.getGroupDetails(token, group.ID)
 		if err != nil {
 			fmt.Printf("Failed to get details for group %s: %v\n", group.ID, err)
 			// Fall back to basic group info if detailed fetch fails
 			fullGroup = &group
 		}
 
-		team, err := mapKeycloakGroupToTeam(*fullGroup)
+		team, err := kc.mapKeycloakGroupToTeam(*fullGroup)
 		if err != nil {
 			continue
 		}
@@ -198,8 +210,8 @@ func ListTeams(token, keycloakHost, realm string) ([]*model.Team, error) {
 	return teams, nil
 }
 
-func getGroupDetails(token, keycloakHost, realm, groupID string) (*KeycloakGroup, error) {
-	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", keycloakHost, realm, groupID)
+func (kc *KeycloakTeamService) getGroupDetails(token string, groupID string) (*KeycloakGroup, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", kc.host, kc.realm, groupID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -228,7 +240,7 @@ func getGroupDetails(token, keycloakHost, realm, groupID string) (*KeycloakGroup
 	return &group, nil
 }
 
-func getTeamIDFromResponse(resp *http.Response) (string, error) {
+func (kc *KeycloakTeamService) getTeamIDFromResponse(resp *http.Response) (string, error) {
 
 	location := resp.Header.Get("Location")
 	if location == "" {
@@ -250,7 +262,7 @@ func getTeamIDFromResponse(resp *http.Response) (string, error) {
 	return location[lastSlashIndex+1:], nil
 }
 
-func mapKeycloakGroupToTeam(group KeycloakGroup) (*model.Team, error) {
+func (kc *KeycloakTeamService) mapKeycloakGroupToTeam(group KeycloakGroup) (*model.Team, error) {
 	if group.ID == "" {
 		return nil, fmt.Errorf("invalid team ID")
 	}
@@ -298,8 +310,8 @@ func mapKeycloakGroupToTeam(group KeycloakGroup) (*model.Team, error) {
 	}, nil
 }
 
-func AssignTeamsToUser(token, keycloakHost, realm, userID string, teamIDs []string) error {
-	userURL := fmt.Sprintf("%s/admin/realms/%s/users/%s", keycloakHost, realm, userID)
+func (kc *KeycloakTeamService) AssignTeamsToUser(token string, userID string, teamIDs []string) error {
+	userURL := fmt.Sprintf("%s/admin/realms/%s/users/%s", kc.host, kc.realm, userID)
 
 	req, err := http.NewRequest("GET", userURL, nil)
 	if err != nil {
@@ -320,7 +332,7 @@ func AssignTeamsToUser(token, keycloakHost, realm, userID string, teamIDs []stri
 	}
 
 	for _, teamID := range teamIDs {
-		err = addUserToTeam(token, keycloakHost, realm, userID, teamID)
+		err = kc.addUserToTeam(token, userID, teamID)
 		if err != nil {
 			return fmt.Errorf("failed to add user to team %s: %w", teamID, err)
 		}
@@ -329,9 +341,9 @@ func AssignTeamsToUser(token, keycloakHost, realm, userID string, teamIDs []stri
 	return nil
 }
 
-func RemoveTeamsFromUser(token, keycloakHost, realm, userID string, teamIDs []string) error {
+func (kc *KeycloakTeamService) RemoveTeamsFromUser(token string, userID string, teamIDs []string) error {
 	// First verify the user exists
-	userURL := fmt.Sprintf("%s/admin/realms/%s/users/%s", keycloakHost, realm, userID)
+	userURL := fmt.Sprintf("%s/admin/realms/%s/users/%s", kc.host, kc.realm, userID)
 
 	req, err := http.NewRequest("GET", userURL, nil)
 	if err != nil {
@@ -353,7 +365,7 @@ func RemoveTeamsFromUser(token, keycloakHost, realm, userID string, teamIDs []st
 
 	// Remove user from each team individually
 	for _, teamID := range teamIDs {
-		err = removeUserFromTeam(token, keycloakHost, realm, userID, teamID)
+		err = kc.removeUserFromTeam(token, userID, teamID)
 		if err != nil {
 			return fmt.Errorf("failed to remove user from team %s: %w", teamID, err)
 		}
@@ -362,8 +374,8 @@ func RemoveTeamsFromUser(token, keycloakHost, realm, userID string, teamIDs []st
 	return nil
 }
 
-func removeUserFromTeam(token, keycloakHost, realm, userID, teamID string) error {
-	url := fmt.Sprintf("%s/admin/realms/%s/users/%s/groups/%s", keycloakHost, realm, userID, teamID)
+func (kc *KeycloakTeamService) removeUserFromTeam(token string, userID string, teamID string) error {
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s/groups/%s", kc.host, kc.realm, userID, teamID)
 
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
@@ -387,8 +399,8 @@ func removeUserFromTeam(token, keycloakHost, realm, userID, teamID string) error
 	return nil
 }
 
-func addUserToTeam(token, keycloakHost, realm, userID, teamID string) error {
-	url := fmt.Sprintf("%s/admin/realms/%s/users/%s/groups/%s", keycloakHost, realm, userID, teamID)
+func (kc *KeycloakTeamService) addUserToTeam(token string, userID string, teamID string) error {
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s/groups/%s", kc.host, kc.realm, userID, teamID)
 
 	req, err := http.NewRequest("PUT", url, nil)
 	if err != nil {
@@ -412,8 +424,8 @@ func addUserToTeam(token, keycloakHost, realm, userID, teamID string) error {
 	return nil
 }
 
-func GetUsersForTeam(token, keycloakHost, realm, teamID string) ([]*model.User, error) {
-	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s/members", keycloakHost, realm, teamID)
+func (kc *KeycloakTeamService) GetUsersForTeam(token string, teamID string) ([]*model.User, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s/members", kc.host, kc.realm, teamID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -451,8 +463,8 @@ func GetUsersForTeam(token, keycloakHost, realm, teamID string) ([]*model.User, 
 	return modelUsers, nil
 }
 
-func GetUserTeams(token, keycloakHost, realm, userID string) ([]*model.Team, error) {
-	url := fmt.Sprintf("%s/admin/realms/%s/users/%s/groups", keycloakHost, realm, userID)
+func (kc *KeycloakTeamService) GetTeamsByUserID(token string, userID string) ([]*model.Team, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s/groups", kc.host, kc.realm, userID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -481,14 +493,14 @@ func GetUserTeams(token, keycloakHost, realm, userID string) ([]*model.Team, err
 	var teams []*model.Team
 	for _, group := range groups {
 		// Get full group details including attributes
-		fullGroup, err := getGroupDetails(token, keycloakHost, realm, group.ID)
+		fullGroup, err := kc.getGroupDetails(token, group.ID)
 		if err != nil {
 			fmt.Printf("Failed to get details for group %s: %v\n", group.ID, err)
 			// Fall back to basic group info if detailed fetch fails
 			fullGroup = &group
 		}
 
-		team, err := mapKeycloakGroupToTeam(*fullGroup)
+		team, err := kc.mapKeycloakGroupToTeam(*fullGroup)
 		if err != nil {
 			continue
 		}
@@ -498,8 +510,8 @@ func GetUserTeams(token, keycloakHost, realm, userID string) ([]*model.Team, err
 	return teams, nil
 }
 
-func DeleteTeam(token, keycloakHost, realm, teamID string) error {
-	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", keycloakHost, realm, teamID)
+func (kc *KeycloakTeamService) DeleteTeam(token string, teamID string) error {
+	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", kc.host, kc.realm, teamID)
 
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
@@ -523,8 +535,8 @@ func DeleteTeam(token, keycloakHost, realm, teamID string) error {
 	return nil
 }
 
-func GetTeamByID(token, keycloakHost, realm, teamID string) (*model.Team, error) {
-	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", keycloakHost, realm, teamID)
+func (kc *KeycloakTeamService) GetTeamByID(token string, teamID string) (*model.Team, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", kc.host, kc.realm, teamID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -541,7 +553,7 @@ func GetTeamByID(token, keycloakHost, realm, teamID string) (*model.Team, error)
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		// Team doesn't exist - return nil, nil as expected by service layer
+		// Team doesn'kc exist - return nil, nil as expected by service layer
 		return nil, nil
 	}
 
@@ -555,13 +567,13 @@ func GetTeamByID(token, keycloakHost, realm, teamID string) (*model.Team, error)
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	return mapKeycloakGroupToTeam(group)
+	return kc.mapKeycloakGroupToTeam(group)
 }
 
-func GetTeamByName(token, keycloakHost, realm, teamName string) (*model.Team, error) {
+func (kc *KeycloakTeamService) GetTeamByName(token string, teamName string) (*model.Team, error) {
 	// URL encode the team name to handle special characters
 	encodedTeamName := url.QueryEscape(teamName)
-	requestURL := fmt.Sprintf("%s/admin/realms/%s/groups?search=%s", keycloakHost, realm, encodedTeamName)
+	requestURL := fmt.Sprintf("%s/admin/realms/%s/groups?search=%s", kc.host, kc.realm, encodedTeamName)
 
 	req, err := http.NewRequest("GET", requestURL, nil)
 	if err != nil {
@@ -595,7 +607,7 @@ func GetTeamByName(token, keycloakHost, realm, teamName string) (*model.Team, er
 	// Search for exact name match since Keycloak search is partial
 	for _, group := range groups {
 		if group.Name == teamName {
-			return mapKeycloakGroupToTeam(group)
+			return kc.mapKeycloakGroupToTeam(group)
 		}
 	}
 
@@ -603,8 +615,8 @@ func GetTeamByName(token, keycloakHost, realm, teamName string) (*model.Team, er
 	return nil, nil
 }
 
-func AssignComputePlatformsToTeam(token, keycloakHost, realm, teamID string, computePlatformIDs []string) error {
-	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", keycloakHost, realm, teamID)
+func (kc *KeycloakTeamService) AssignComputePlatformsToTeam(token string, teamID string, computePlatformIDs []string) error {
+	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", kc.host, kc.realm, teamID)
 
 	// First, get the current team data to retrieve existing attributes
 	req, err := http.NewRequest("GET", url, nil)
@@ -688,8 +700,8 @@ func AssignComputePlatformsToTeam(token, keycloakHost, realm, teamID string, com
 	return nil
 }
 
-func RemoveComputePlatformsFromTeam(token, keycloakHost, realm, teamID string, computePlatformIDs []string) error {
-	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", keycloakHost, realm, teamID)
+func (kc *KeycloakTeamService) RemoveComputePlatformsFromTeam(token string, teamID string, computePlatformIDs []string) error {
+	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", kc.host, kc.realm, teamID)
 
 	// First, get the current team data to retrieve existing attributes
 	req, err := http.NewRequest("GET", url, nil)
@@ -788,8 +800,8 @@ func RemoveComputePlatformsFromTeam(token, keycloakHost, realm, teamID string, c
 	return nil
 }
 
-func GetComputePlatformIdsForTeam(token, keycloakHost, realm, teamID string) ([]string, error) {
-	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", keycloakHost, realm, teamID)
+func (kc *KeycloakTeamService) GetComputePlatformIdsForTeam(token string, teamID string) ([]string, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", kc.host, kc.realm, teamID)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

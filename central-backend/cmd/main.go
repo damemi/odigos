@@ -19,7 +19,6 @@ import (
 	"github.com/odigos-io/central-backend/internal/keycloak"
 	"github.com/odigos-io/central-backend/internal/logger"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
-	"github.com/odigos-io/central-backend/internal/repositories/keycloak_repositories"
 	"github.com/odigos-io/central-backend/internal/services"
 	"github.com/odigos-io/central-backend/internal/ssehub"
 	"github.com/odigos-io/central-backend/internal/utils"
@@ -38,13 +37,12 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to initialize credentials service", err)
 	}
-
-	credentials, err := credentialsService.GetAdminCredentials(ctx)
+	adminCredentials, err := credentialsService.GetAdminCredentials(ctx)
 	if err != nil {
 		logger.Fatal("Failed to get admin credentials", err)
 	}
 
-	adminToken, err := keycloak.GetKeycloakAccessToken(consts.GetKeycloakHost(), credentials.Username, credentials.Password)
+	adminToken, err := keycloak.NewKeycloakAdminService().GetAdminToken(adminCredentials.Username, adminCredentials.Password)
 	if err != nil {
 		logger.Fatal("Failed to get admin token", err)
 	}
@@ -68,7 +66,7 @@ func main() {
 		logger.Fatal("Failed to connect to Redis", err)
 	}
 
-	initialized := determineSystemInitialized(adminToken, credentials.Username)
+	initialized := determineSystemInitialized(adminToken, adminCredentials.Username)
 
 	if setErr := redisClient.SetSystemInitialized(ctx, initialized); setErr != nil {
 		logger.Log.Error("Failed to set system initialization status", "error", setErr)
@@ -80,16 +78,10 @@ func main() {
 	centralSSEHub.StartRedisSSEBroadcast(ctx)
 	wsServer := websocketserver.NewWebSocketServer(redisClient, centralSSEHub)
 
-	authRepo := keycloak_repositories.NewAuthRepository(credentialsService)
-
-	adminService := services.NewAdminService(redisClient, authRepo)
-
-	userRepo := keycloak_repositories.NewUserRepository(redisClient, credentialsService, adminService)
-	teamRepo := keycloak_repositories.NewTeamRepository(redisClient, credentialsService, adminService)
-
-	authService := services.NewAuthService(redisClient, userRepo, authRepo, teamRepo)
-	userService := services.NewUserService(redisClient, userRepo, teamRepo)
-	teamService := services.NewTeamService(redisClient, teamRepo, userRepo)
+	adminService := services.NewAdminService(redisClient, adminCredentials)
+	userService := services.NewUserService(redisClient, adminService)
+	teamService := services.NewTeamService(redisClient, adminService)
+	authService := services.NewAuthService(redisClient, adminService, userService)
 
 	gqlHandler := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
 		RedisClient:     redisClient,
@@ -112,7 +104,7 @@ func main() {
 }
 
 func determineSystemInitialized(adminToken, adminUsername string) bool {
-	userService := keycloak.NewUserService()
+	userService := keycloak.NewKeycloakUserService()
 	users, err := userService.ListUsers(adminToken)
 	if err != nil {
 		logger.Log.Error("Failed to list users from Keycloak to determine initialization state", "error", err)

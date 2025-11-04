@@ -13,29 +13,25 @@ import (
 	"github.com/odigos-io/central-backend/internal/types"
 )
 
-type AuthService struct {
-	host        string
-	realm       string
-	client      string
-	userService *UserService
+type KeycloakAuthService struct {
+	host   string
+	realm  string
+	client string
+	kcUser *KeycloakUserService
 }
 
 type UserAuthResult struct {
-	AccessToken string
-	UserData    types.UserSummary
+	AccessToken string            `json:"access_token"`
+	UserData    types.UserSummary `json:"user_data"`
 }
 
-func NewAuthService() *AuthService {
-	return &AuthService{
-		host:        consts.GetKeycloakHost(),
-		realm:       consts.KeycloakRealm,
-		client:      consts.ClientID,
-		userService: NewUserService(),
+func NewKeycloakAuthService() *KeycloakAuthService {
+	return &KeycloakAuthService{
+		host:   consts.GetKeycloakHost(),
+		realm:  consts.KeycloakRealm,
+		client: consts.ClientID,
+		kcUser: NewKeycloakUserService(),
 	}
-}
-
-type tokenResp struct {
-	AccessToken string `json:"access_token"`
 }
 
 func UserSignIn(keycloakHost, realm, clientID, username, password string) (string, error) {
@@ -65,7 +61,7 @@ func UserSignIn(keycloakHost, realm, clientID, username, password string) (strin
 		return "", fmt.Errorf("authentication failed with status %d: %s", resp.StatusCode, string(responseBody))
 	}
 
-	var result tokenResp
+	var result UserAuthResult
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", fmt.Errorf("failed to decode response: %w", err)
 	}
@@ -76,9 +72,9 @@ func UserSignIn(keycloakHost, realm, clientID, username, password string) (strin
 	return result.AccessToken, nil
 }
 
-func LogoutUser(keycloakHost, realm, clientID, token string) error {
+func (kc *KeycloakAuthService) LogoutUser(token string) error {
 	// For logout, we'll simply return success since the frontend will clear the token
-	// This is a simpler approach that doesn't require additional Keycloak permissions
+	// This is kc simpler approach that doesn't require additional Keycloak permissions
 	// The actual session invalidation happens on the frontend by clearing the token
 
 	// We could validate the token format here if needed, but for now we'll just return success
@@ -87,24 +83,17 @@ func LogoutUser(keycloakHost, realm, clientID, token string) error {
 	return nil
 }
 
-func (a *AuthService) AuthenticateUser(email, password, adminUsername, adminPassword string) (*UserAuthResult, error) {
-
-	accessToken, err := UserSignIn(a.host, a.realm, a.client, email, password)
+func (kc *KeycloakAuthService) AuthenticateUser(token string, email string, password string) (*UserAuthResult, error) {
+	accessToken, err := UserSignIn(kc.host, kc.realm, kc.client, email, password)
 	if err != nil {
-		return a.handleAuthError(err, email)
+		return kc.handleAuthError(err, email)
 	}
 
-	adminToken, err := GetKeycloakAccessToken(a.host, adminUsername, adminPassword)
-	if err != nil {
-		logger.Log.Error("Failed to get admin token", "error", err)
-		return nil, fmt.Errorf("failed to get admin token: %w", err)
-	}
-
-	if err := a.checkPasswordUpdateRequired(adminToken, email); err != nil {
+	if err := kc.checkPasswordUpdateRequired(token, email); err != nil {
 		return nil, err
 	}
 
-	userData, err := a.getUserDetails(adminToken, email)
+	userData, err := kc.getUserDetails(token, email)
 	if err != nil {
 		return nil, err
 	}
@@ -115,8 +104,8 @@ func (a *AuthService) AuthenticateUser(email, password, adminUsername, adminPass
 	}, nil
 }
 
-func (a *AuthService) checkPasswordUpdateRequired(adminToken, email string) error {
-	requiredActions, err := a.userService.GetUserRequiredActions(adminToken, email)
+func (kc *KeycloakAuthService) checkPasswordUpdateRequired(adminToken, email string) error {
+	requiredActions, err := kc.kcUser.GetUserRequiredActions(adminToken, email)
 	if err != nil {
 		logger.Log.Error("Failed to get user required actions", "email", email, "error", err)
 		return nil
@@ -133,7 +122,7 @@ func (a *AuthService) checkPasswordUpdateRequired(adminToken, email string) erro
 	return nil
 }
 
-func (a *AuthService) handleAuthError(err error, email string) (*UserAuthResult, error) {
+func (kc *KeycloakAuthService) handleAuthError(err error, email string) (*UserAuthResult, error) {
 	if strings.Contains(err.Error(), "Account is not fully set up") {
 		return nil, fmt.Errorf("password update required: please use the set-password endpoint to set your initial password")
 	}
@@ -141,8 +130,8 @@ func (a *AuthService) handleAuthError(err error, email string) (*UserAuthResult,
 	return nil, fmt.Errorf("authentication failed for user %s: %v", email, err)
 }
 
-func (a *AuthService) getUserDetails(adminToken, email string) (types.UserSummary, error) {
-	users, err := a.userService.FindUsersByEmail(adminToken, email)
+func (kc *KeycloakAuthService) getUserDetails(adminToken, email string) (types.UserSummary, error) {
+	users, err := kc.kcUser.FindUsersByEmail(adminToken, email)
 	if err != nil || len(users) == 0 {
 		logger.Log.Error("Failed to find user after login", "email", email, "error", err)
 		return types.UserSummary{}, fmt.Errorf("failed to find user by email after successful login: %w", err)
