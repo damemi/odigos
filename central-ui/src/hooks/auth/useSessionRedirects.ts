@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useAuth } from './useAuth';
 import { ROUTES } from '@/utils';
-import { useValidateSession } from './useValidateSession';
 import { useUserStore } from '@/store';
+import { usePathname, useRouter } from 'next/navigation';
+import { useValidateSession } from './useValidateSession';
 
 /**
  * Redirects based on presence of a persisted auth token.
@@ -14,7 +15,8 @@ import { useUserStore } from '@/store';
 export function useSessionRedirects() {
   const router = useRouter();
   const pathname = usePathname();
-  const { token, clearAuth } = useUserStore();
+  const { token, clearAuth, user } = useUserStore();
+  const { systemConfig, systemConfigLoading } = useAuth();
 
   // Validate token in background when present; global errorLink will clean up on failure
   useValidateSession();
@@ -28,14 +30,10 @@ export function useSessionRedirects() {
       return;
     }
 
-    if (pathname === ROUTES.ROOT) {
-      if (hasToken) router.push(ROUTES.CONNECTIONS);
-      else router.push(ROUTES.SIGN_IN);
-      return;
-    }
-
-    if (pathname === ROUTES.SIGN_IN && hasToken) {
+    if (pathname === ROUTES.SIGN_IN && hasToken && !user?.needsPasswordChange && !systemConfigLoading && systemConfig?.isInitialized) {
       router.push(ROUTES.CONNECTIONS);
+    } else if (pathname === ROUTES.ROOT) {
+      router.push(ROUTES.SIGN_IN);
     }
-  }, [pathname, router, token, clearAuth]);
+  }, [pathname, router, token, clearAuth, user, systemConfig, systemConfigLoading]);
 }
