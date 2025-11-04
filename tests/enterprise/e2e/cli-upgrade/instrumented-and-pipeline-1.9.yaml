@@ -1,0 +1,490 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    odigos.io/collector-role: "CLUSTER_GATEWAY"
+  name: odigos-gateway
+  namespace: odigos-test
+  ownerReferences:
+    - apiVersion: odigos.io/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: CollectorsGroup
+      name: odigos-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      odigos.io/collector-role: "CLUSTER_GATEWAY"
+  template:
+    metadata:
+      labels:
+        odigos.io/collector-role: "CLUSTER_GATEWAY"
+    spec:
+      containers:
+        - env:
+            - name: ODIGOS_VERSION
+              valueFrom:
+                configMapKeyRef:
+                  key: ODIGOS_VERSION
+                  name: odigos-deployment
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: GOMEMLIMIT
+              (value != null): true
+            - name: GOMAXPROCS
+              valueFrom:
+                resourceFieldRef:
+                  containerName: gateway
+                  divisor: "0"
+                  resource: limits.cpu
+          name: gateway
+          resources:
+            requests:
+              (memory != null): true
+              (cpu != null): true
+            limits:
+              (memory != null): true
+              (cpu != null): true
+status:
+  availableReplicas: 2
+  readyReplicas: 2
+  replicas: 2
+---
+apiVersion: odigos.io/v1alpha1
+kind: CollectorsGroup
+metadata:
+  name: odigos-data-collection
+  namespace: odigos-test
+spec:
+  role: NODE_COLLECTOR
+status:
+  ready: true
+---
+apiVersion: odigos.io/v1alpha1
+kind: CollectorsGroup
+metadata:
+  name: odigos-gateway
+  namespace: odigos-test
+spec:
+  role: CLUSTER_GATEWAY
+status:
+  ready: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: odigos-data-collection
+  namespace: odigos-test
+  ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Deployment
+      name: odigos-autoscaler
+(data != null): true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: odigos-gateway
+  namespace: odigos-test
+  ownerReferences:
+    - apiVersion: odigos.io/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: CollectorsGroup
+      name: odigos-gateway
+(data != null): true
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: coupon
+spec:
+  containers:
+    - name: coupon
+      resources:
+        limits:
+          instrumentation.odigos.io/generic: "1"
+        requests:
+          instrumentation.odigos.io/generic: "1"
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: "coupon"
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: "nodejs-enterprise"
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: "default"
+      (env[?name == 'LD_PRELOAD']):
+        - value: "/var/odigos/loader/loader.so"
+status:
+  containerStatuses:
+    - name: coupon
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: currency
+spec:
+  containers:
+    - name: currency
+      resources:
+        limits:
+          instrumentation.odigos.io/generic: "1"
+        requests:
+          instrumentation.odigos.io/generic: "1"
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: currency
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: php-enterprise
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: default
+      (env[?name == 'NODE_IP']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.hostIP
+      (env[?name == 'OTEL_EXPORTER_OTLP_ENDPOINT']):
+        - (($values.k8sMinorVersion < `26` && value == 'http://$(NODE_IP):4318') || value == 'http://odigos-data-collection-local-traffic.odigos-test:4318'): true
+      (env[?name == 'PHP_INI_SCAN_DIR']):
+        - value: ":/var/odigos/php/8.2"
+      (env[?name == 'OTEL_PHP_AUTOLOAD_ENABLED']):
+        - value: "true"
+      (env[?name == 'OTEL_EXPORTER_OTLP_PROTOCOL']):
+        - value: "http/protobuf"
+      (env[?name == 'OTEL_PROPAGATORS']):
+        - value: "tracecontext,baggage"
+      (env[?name == 'OTEL_SERVICE_NAME']):
+        - value: currency
+      (env[?name == 'OTEL_RESOURCE_ATTRIBUTES']):
+        - "(regex_match('^k8s\\.pod\\.name=\\$\\(ODIGOS_POD_NAME\\),k8s\\.container\\.name=currency,k8s\\.namespace\\.name=default,k8s\\.deployment\\.name=currency,k8s\\.replicaset\\.name=currency-[A-Za-z0-9]+,k8s\\.replicaset\\.uid=[A-Za-z0-9-]+$',value))": true
+      (env[?name == 'OTEL_LOGS_EXPORTER']):
+        - value: none
+      (env[?name == 'OTEL_METRICS_EXPORTER']):
+        - value: none
+      (env[?name == 'OTEL_TRACES_EXPORTER']):
+        - value: otlp
+    - name: nginx
+status:
+  containerStatuses:
+    - name: currency
+      ready: true
+      restartCount: 0
+      started: true
+    - name: nginx
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: frontend
+spec:
+  containers:
+    - name: frontend
+      resources:
+        limits:
+          instrumentation.odigos.io/generic: "1"
+        requests:
+          instrumentation.odigos.io/generic: "1"
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: "frontend"
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: "java-enterprise"
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: "default"
+      (env[?name == 'LD_PRELOAD']):
+        - value: "/var/odigos/loader/loader.so"
+status:
+  containerStatuses:
+    - name: frontend
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: geolocation
+spec:
+  containers:
+    - name: geolocation
+      resources:
+        limits:
+          instrumentation.odigos.io/generic: "1"
+        requests:
+          instrumentation.odigos.io/generic: "1"
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: geolocation
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: ruby-enterprise
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: default
+      (env[?name == 'NODE_IP']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.hostIP
+      (env[?name == 'OTEL_EXPORTER_OTLP_ENDPOINT']):
+        - (($values.k8sMinorVersion < `26` && value == 'http://$(NODE_IP):4318') || value == 'http://odigos-data-collection-local-traffic.odigos-test:4318'): true
+      (env[?name == 'OTEL_EXPORTER_OTLP_PROTOCOL']):
+        - value: "http/protobuf"
+      (env[?name == 'OTEL_PROPAGATORS']):
+        - value: "tracecontext,baggage"
+      (env[?name == 'OTEL_SERVICE_NAME']):
+        - value: geolocation
+      (env[?name == 'OTEL_RESOURCE_ATTRIBUTES']):
+        - "(regex_match('^k8s\\.pod\\.name=\\$\\(ODIGOS_POD_NAME\\),k8s\\.container\\.name=geolocation,k8s\\.namespace\\.name=default,k8s\\.deployment\\.name=geolocation,k8s\\.replicaset\\.name=geolocation-[A-Za-z0-9]+,k8s\\.replicaset\\.uid=[A-Za-z0-9-]+$',value))": true
+      (env[?name == 'OTEL_LOGS_EXPORTER']):
+        - value: none
+      (env[?name == 'OTEL_METRICS_EXPORTER']):
+        - value: none
+      (env[?name == 'OTEL_TRACES_EXPORTER']):
+        - value: otlp
+      (env[?name == 'RUBYOPT']):
+        - value: "-r/var/odigos/ruby/3.4/index.rb"
+      (env[?name == 'ODIGOS_GEM_PATH']):
+        - value: "/var/odigos/ruby/3.4/bundle"
+status:
+  containerStatuses:
+    - name: geolocation
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: inventory
+spec:
+  containers:
+    - name: inventory
+      resources:
+        limits:
+          instrumentation.odigos.io/generic: "1"
+        requests:
+          instrumentation.odigos.io/generic: "1"
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: "inventory"
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: "python-enterprise"
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: "default"
+      (env[?name == 'OTEL_PYTHON_CONFIGURATOR']):
+        - value: "ebpf"
+      (env[?name == 'NODE_IP']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.hostIP
+      (env[?name == 'ODIGOS_OPAMP_SERVER_HOST']):
+        - (($values.k8sMinorVersion < `26` && value == '$(NODE_IP):4320') || value == 'odiglet-local.odigos-test:4320'): true
+      (env[?name == 'LD_PRELOAD']):
+        - value: "/var/odigos/loader/loader.so"
+status:
+  containerStatuses:
+    - name: inventory
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: membership
+spec:
+  containers:
+    - name: membership
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: "membership"
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: "golang-enterprise"
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: "default"
+      (env[?name == 'GODEBUG']):
+        - value: "tracebackancestors=5"
+status:
+  containerStatuses:
+    - name: membership
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: pricing
+spec:
+  containers:
+    - name: pricing
+      resources:
+        limits:
+          instrumentation.odigos.io/generic: "1"
+        requests:
+          instrumentation.odigos.io/generic: "1"
+      (env[?name == 'ODIGOS_CONTAINER_NAME']):
+        - value: "pricing"
+      (env[?name == 'ODIGOS_DISTRO_NAME']):
+        - value: "dotnet-community"
+      (env[?name == 'ODIGOS_POD_NAME']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
+        - value: "default"
+      (env[?name == 'OTEL_SERVICE_NAME']):
+        - value: "pricing"
+      (env[?name == 'OTEL_RESOURCE_ATTRIBUTES']):
+        - "(regex_match('^k8s\\.pod\\.name=\\$\\(ODIGOS_POD_NAME\\),k8s\\.container\\.name=pricing,k8s\\.namespace\\.name=default,k8s\\.deployment\\.name=pricing,k8s\\.replicaset\\.name=pricing-[A-Za-z0-9]+,k8s\\.replicaset\\.uid=[A-Za-z0-9-]+$',value))": true
+      (env[?name == 'CORECLR_ENABLE_PROFILING']):
+        - value: "1"
+      (env[?name == 'CORECLR_PROFILER']):
+        - value: "{918728DD-259F-4A6A-AC2B-B85E1B658318}"
+      (env[?name == 'CORECLR_PROFILER_PATH']):
+        - value: "/var/odigos/dotnet/linux-glibc/OpenTelemetry.AutoInstrumentation.Native.so"
+      (env[?name == 'OTEL_DOTNET_AUTO_HOME']):
+        - value: "/var/odigos/dotnet"
+      (env[?name == 'DOTNET_STARTUP_HOOKS']):
+        - value: "/var/odigos/dotnet/net/OpenTelemetry.AutoInstrumentation.StartupHook.dll"
+      (env[?name == 'DOTNET_ADDITIONAL_DEPS']):
+        - value: "/var/odigos/dotnet/AdditionalDeps"
+      (env[?name == 'DOTNET_SHARED_STORE']):
+        - value: "/var/odigos/dotnet/store"
+      (env[?name == 'OTEL_LOGS_EXPORTER']):
+        - value: "none"
+      (env[?name == 'OTEL_METRICS_EXPORTER']):
+        - value: "none"
+      (env[?name == 'OTEL_TRACES_EXPORTER']):
+        - value: "otlp"
+      (env[?name == 'NODE_IP']):
+        - valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.hostIP
+      (env[?name == 'OTEL_EXPORTER_OTLP_ENDPOINT']):
+        - (($values.k8sMinorVersion < `26` && value == 'http://$(NODE_IP):4318') || value == 'http://odigos-data-collection-local-traffic.odigos-test:4318'): true
+status:
+  containerStatuses:
+    - name: pricing
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+# TODO: Uncomment this block after enabling opamp to OSS
+# apiVersion: odigos.io/v1alpha1
+# kind: InstrumentationInstance
+# metadata:
+#   namespace: default
+#   labels:
+#     instrumented-app: deployment-coupon
+# status:
+#   healthy: true
+#   identifyingAttributes:
+#     - key: service.instance.id
+#       (value != null): true
+#     - key: telemetry.sdk.language
+#       value: nodejs
+#     - key: process.runtime.version
+#       (value != null): true
+#     - key: telemetry.distro.version
+#       (value != null): true # This will hold the version before the upgrade
+#     - key: process.pid
+#       (value != null): true
+#     - key: k8s.namespace.name
+#       (value != null): true
+#     - key: k8s.container.name
+#       (value != null): true
+#     - key: k8s.pod.name
+#       (value != null): true
+#
+# ---
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationInstance
+metadata:
+  namespace: default
+  labels:
+    instrumented-app: deployment-inventory
+status:
+  healthy: true
+  # identifyingAttributes:
+  #   - key: service.instance.id
+  #     (value != null): true
+  #   - key: process.vpid
+  #     (value != null): true
+  #   - key: telemetry.sdk.language
+  #     value: python
+  #   - key: k8s.namespace.name
+  #     (value != null): true
+  #   - key: k8s.container.name
+  #     (value != null): true
+  #   - key: k8s.pod.name
+  #     (value != null): true
+---
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationInstance
+metadata:
+  namespace: default
+  labels:
+    instrumented-app: deployment-membership
+status:
+  healthy: true
+  reason: LoadedSuccessfully

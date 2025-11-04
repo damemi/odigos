@@ -75,9 +75,6 @@ spec:
   (containers[?name=='odiglet']):
     - resources: {}
       securityContext:
-        capabilities:
-          add:
-            - SYS_PTRACE
         privileged: true
       image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
       env:
@@ -98,13 +95,15 @@ spec:
               fieldPath: metadata.namespace
         - name: OTEL_LOG_LEVEL
           value: info
+        - name: OTEL_GO_OFFSETS_FILE
+          value: /offsets/go_offset_results.json
         - name: ODIGOS_ONPREM_TOKEN
           valueFrom:
             secretKeyRef:
               key: odigos-onprem-token
               name: odigos-pro
-        - name: OTEL_GO_OFFSETS_FILE
-          value: /offsets/go_offset_results.json
+        - name: GOMEMLIMIT
+          (value != null): true
   (containers[?name=='data-collection']):
     - securityContext:
         privileged: true
@@ -177,9 +176,6 @@ spec:
   (containers[?name=='odiglet']):
     - resources: {}
       securityContext:
-        capabilities:
-          add:
-            - SYS_PTRACE
         privileged: true
       image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
   (containers[?name=='data-collection']):
@@ -273,7 +269,6 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   labels:
-    odigos.io/config: "2"
     odigos.io/system-object: "true"
   name: destinations.odigos.io
 ---
@@ -281,6 +276,5 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   labels:
-    odigos.io/config: "2"
     odigos.io/system-object: "true"
   name: processors.odigos.io
