@@ -64,7 +64,7 @@ jobs:
         uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
         env:
           TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
-        with: 
+        with:
           webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
           success-description: "Start releasing Odigos enterprise component: ${{ matrix.service }}. (${{ matrix.dockerfile == 'Dockerfile.rhel' && 'UBI9' || 'Standard' }} image)."
           failure-description: "ERROR: starting enterprise component release: ${{ matrix.service }}. (${{ matrix.dockerfile == 'Dockerfile.rhel' && 'UBI9' || 'Standard' }} image)"
@@ -98,6 +98,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and Push Enterprise Image
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 #v6.18.0
         env:
@@ -113,6 +120,7 @@ jobs:
           tags: |
             us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}:${{ env.ODIGOS_TAG }}
             keyval/odigos-enterprise-${{ matrix.service }}${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}:${{ env.ODIGOS_TAG }}
+            ghcr.io/odigos-io/odigos-enterprise-${{ matrix.service }}${{ matrix.dockerfile == 'Dockerfile.rhel' && '-ubi9' || '' }}:${{ env.ODIGOS_TAG }}
           build-args: |
             SERVICE_NAME=${{ matrix.service }}
             ODIGOS_VERSION=${{ env.ODIGOS_TAG }}
@@ -131,7 +139,7 @@ jobs:
         uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
         env:
           TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
-        with: 
+        with:
           webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
           success-description: "Odigos enterprise component ${{ matrix.service }} ${{ matrix.dockerfile == 'Dockerfile.rhel' && 'UBI9' || 'Standard' }} image published to registry"
           failure-description: "ERROR: failed to publish odigos enterprise component ${{ matrix.service }} ${{ matrix.dockerfile == 'Dockerfile.rhel' && 'UBI9' || 'Standard' }} image to registry"
@@ -160,13 +168,13 @@ jobs:
             -H "Authorization: token ${{ secrets.RELEASE_BOT_TOKEN }}" \
             https://api.github.com/repos/odigos-io/odigos/dispatches \
             -d "$payload"
-      
+
       - name: Notify Slack
         if: always()
         uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
         env:
           TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
-        with: 
+        with:
           webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
           success-description: "All odigos enterprise components published to registry. Triggered CLI release in Odigos Main Repo"
           failure-description: "ERROR: failed to trigger CLI release in Odigos Main Repo"
