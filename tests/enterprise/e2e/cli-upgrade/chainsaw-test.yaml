@@ -140,7 +140,7 @@ spec:
       try:
         - assert:
             timeout: 3m
-            file: instrumented-and-pipeline-1.9.yaml # temporary to handle change in resource attributes from previous version
+            file: ../../common/assert/instrumented-and-pipeline.yaml
       catch:
         - script:
             content: |
