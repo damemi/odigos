@@ -113,6 +113,17 @@ spec:
         - apply:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/add-simple-trace-db-destination.yaml
 
+    - name: Assert instrumented and pipeline ready
+      try:
+        - assert:
+            timeout: 3m
+            file: ../../common/assert/instrumented-and-pipeline.yaml
+      catch:
+        - script:
+            content: |
+              kubectl describe pods -n default
+              kubectl get pods -n odigos-test -o yaml
+
     - name: Use custom Go offsets file to make sure it works with upgrade
       try:
         - script:
@@ -145,6 +156,7 @@ spec:
         - script:
             content: |
               kubectl describe pods -n default
+              kubectl get pods -n odigos-test -o yaml
 
     - name: Generate Traffic
       try:
