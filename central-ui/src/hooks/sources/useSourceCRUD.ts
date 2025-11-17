@@ -36,8 +36,8 @@ export const useSourceCRUD = (): UseSourceCrud => {
   const { selectedStreamName } = useDataStreamStore();
   const { addPendingItems, removePendingItems } = usePendingStore();
   const { setInstrumentAwait, setInstrumentCount } = useInstrumentStore();
-  const { setConfiguredSources, setConfiguredFutureApps } = useSetupStore();
   const { sourcesLoading, setEntitiesLoading, sources, setEntities, addEntities, removeEntities } = useEntityStore();
+  const { setFetchedAllNamespaces, setAvailableSources, setConfiguredSources, setConfiguredFutureApps } = useSetupStore();
 
   const notifyUser = (type: StatusType, title: string, message: string, id?: WorkloadId, hideFromHistory?: boolean) => {
     addNotification({
@@ -138,8 +138,11 @@ export const useSourceCRUD = (): UseSourceCrud => {
       }
 
       await mutatePersistSources(persistSourcesPayloads);
-      setConfiguredSources({});
       await persistNamespaces(persistNamespacesPayloads);
+
+      setFetchedAllNamespaces(false);
+      setAvailableSources({});
+      setConfiguredSources({});
       setConfiguredFutureApps({});
 
       // !! no "fetch" and no "setInstrumentAwait(false)"
