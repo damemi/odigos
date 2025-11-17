@@ -28,6 +28,13 @@ func (o *entepriseDefaulter) GetDefaultDistroNames() map[common.ProgrammingLangu
 	}
 }
 
+// TODO: When C++ is enabled in k8s, delete the GetDefaultVmDistroNames interface update vm-agent to use GetDefaultDistroNames again ;)
+func (o *entepriseDefaulter) GetDefaultVmDistroNames() map[common.ProgrammingLanguage]string {
+	distros := o.GetDefaultDistroNames()
+	distros[common.CPlusPlusProgrammingLanguage] = "cplusplus-enterprise"
+	return distros
+}
+
 func NewEnterpriseGetter() (*distros.Getter, error) {
 	return distros.NewGetterFromFS(yamls.GetFS())
 }
