@@ -120,15 +120,15 @@ COPY --from=python-builder /python-instrumentation/workspace /instrumentations/p
 COPY --from=python-builder /python-instrumentation/enterprise-workspace /instrumentations/python-ebpf
 
 # nodejs-enterprise
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.0.7 /instrumentations/opentelemetry-node /instrumentations/opentelemetry-node
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.0.7 /instrumentations/nodejs-ebpf /instrumentations/nodejs-ebpf
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.0.8 /instrumentations/opentelemetry-node /instrumentations/opentelemetry-node
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.0.8 /instrumentations/nodejs-ebpf /instrumentations/nodejs-ebpf
 
 # .NET
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
 
 # Java
-COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v0.9.0 /instrumentations/java-ebpf /instrumentations/java-ebpf
-COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v0.9.0 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v0.10.3 /instrumentations/java-ebpf /instrumentations/java-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v0.10.3 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
 
 # PHP
 COPY --from=php-agents /php-agents/opentelemetry-php/8.0 /instrumentations/php/8.0

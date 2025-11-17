@@ -53,9 +53,10 @@ spec:
               tar -xvzf odigos-latest.tar.gz
 
               # cleanup any existing installation of odigos the might be left over from previous runs while developing
-              ./odigos uninstall --yes
+              ./odigos uninstall
 
-              ./odigos install --namespace odigos-test --onprem-token $ODIGOS_API_KEY
+              ./odigos install --ns odigos-test --set onPremToken=$ODIGOS_API_KEY
+              kubectl label namespace odigos-test odigos.io/system-object="true"
 
               ../../common/verify_odigos_installation.sh odigos-test
             timeout: 5m # longer timeout since the images are being pulled from dockerhub
@@ -112,11 +113,23 @@ spec:
         - apply:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/add-simple-trace-db-destination.yaml
 
+    - name: Assert instrumented and pipeline ready
+      try:
+        - assert:
+            timeout: 3m
+            file: ../../common/assert/instrumented-and-pipeline.yaml
+      catch:
+        - script:
+            content: |
+              kubectl describe pods -n default
+              kubectl get pods -n odigos-test -o yaml
+
     - name: Use custom Go offsets file to make sure it works with upgrade
       try:
         - script:
             content: ../../../../odigos/cli/odigos pro update-offsets
         - assert:
+            timeout: 3m
             file: assert-custom-offsets.yaml
 
     - name: Upgrade to HEAD version with the current compiled cli
@@ -143,6 +156,7 @@ spec:
         - script:
             content: |
               kubectl describe pods -n default
+              kubectl get pods -n odigos-test -o yaml
 
     - name: Generate Traffic
       try:
