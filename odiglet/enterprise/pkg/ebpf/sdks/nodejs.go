@@ -49,8 +49,8 @@ func (n *NodeJSInstrumentationFactoryEnterprise) CreateInstrumentation(ctx conte
 	return nodeInstWrapper, nil
 }
 
-func (n *NodeJSOtelEbpfSdkEnterprise) Load(ctx context.Context) error {
-	return n.inst.Load(ctx)
+func (n *NodeJSOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.Status, error) {
+	return instrumentation.Status{}, n.inst.Load(ctx)
 }
 
 func (n *NodeJSOtelEbpfSdkEnterprise) Run(ctx context.Context) error {

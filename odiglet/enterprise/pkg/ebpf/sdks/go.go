@@ -183,8 +183,12 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 	return goInstWrapper, nil
 }
 
-func (g *GoOtelEbpfSdkEnterprise) Load(ctx context.Context) error {
-	return g.inst.Load(ctx)
+func (g *GoOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.Status, error) {
+	_, err := g.inst.Load(ctx)
+	if err != nil {
+		return instrumentation.Status{}, err
+	}
+	return instrumentation.Status{}, nil
 }
 
 func (g *GoOtelEbpfSdkEnterprise) Run(ctx context.Context) error {

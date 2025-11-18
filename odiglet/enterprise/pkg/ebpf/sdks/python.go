@@ -61,8 +61,8 @@ func (p *PythonInstrumentationFactoryEnterprise) CreateInstrumentation(ctx conte
 	return pythonInstWrapper, nil
 }
 
-func (p *PythonOtelEbpfSdkEnterprise) Load(ctx context.Context) error {
-	return p.inst.Load(ctx)
+func (p *PythonOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.Status, error) {
+	return instrumentation.Status{}, p.inst.Load(ctx)
 }
 
 func (p *PythonOtelEbpfSdkEnterprise) Run(ctx context.Context) error {

@@ -67,16 +67,16 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 	return javaInstWrapper, nil
 }
 
-func (g *JavaOtelEbpfSdkEnterprise) Load(ctx context.Context) error {
+func (g *JavaOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.Status, error) {
 	if err := g.inst.Load(ctx); err != nil {
-		return err
+		return instrumentation.Status{}, err
 	}
 
 	if err := g.ApplyConfig(ctx, g.config); err != nil {
-		return err
+		return instrumentation.Status{}, err
 	}
 
-	return nil
+	return instrumentation.Status{}, nil
 }
 
 func (g *JavaOtelEbpfSdkEnterprise) Run(ctx context.Context) error {
