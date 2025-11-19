@@ -184,11 +184,18 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 }
 
 func (g *GoOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.Status, error) {
-	_, err := g.inst.Load(ctx)
+	probeLoadStatus, err := g.inst.Load(ctx)
 	if err != nil {
 		return instrumentation.Status{}, err
 	}
-	return instrumentation.Status{}, nil
+
+	status := instrumentation.Status{
+		Components: make(map[string]error),
+	}
+	for probeID, err := range probeLoadStatus {
+		status.Components[fmt.Sprintf("%s/%s", probeID.InstrumentedPkg, probeID.SpanKind.String())] = err
+	}
+	return status, nil
 }
 
 func (g *GoOtelEbpfSdkEnterprise) Run(ctx context.Context) error {
