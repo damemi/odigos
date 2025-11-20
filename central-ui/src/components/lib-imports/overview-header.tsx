@@ -7,19 +7,18 @@ import { ACCESS_MANAGEMENT, ROUTES } from '@/utils';
 import { FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { ConnectionSelect } from '../connection-select';
 import { OdigosLogoText, UserSettingsIcon } from '@odigos/ui-kit/icons';
+import { useConfig, useDescribe, useProxyID, useTokenCRUD } from '@/hooks';
 import { Header, IconButton, Status, Tag, Tooltip } from '@odigos/ui-kit/components';
-import { useConfig, useDescribe, useOdigosConfigCRUD, useProxyID, useTokenCRUD } from '@/hooks';
-import { NotificationManager, SlackInvite, SystemOverview, SystemSettings, ToggleDarkMode } from '@odigos/ui-kit/containers';
+import { NotificationManager, SlackInvite, SystemOverview, ToggleDarkMode } from '@odigos/ui-kit/containers';
 
 const OverviewHeader = () => {
   const router = useRouter();
   const { proxyID } = useProxyID();
 
+  const { isReadonly } = useConfig();
   const { fetchDescribeOdigos } = useDescribe();
   const { tokens, updateToken } = useTokenCRUD();
   const { status, title, message } = useStatusStore();
-  const { isReadonly, installationMethod } = useConfig();
-  const { fetchOdigosConfig, updateOdigosConfig } = useOdigosConfigCRUD();
 
   const onClickAccessManagement = () => router.push(ROUTES.ACCESS_MANAGEMENT);
 
@@ -52,7 +51,6 @@ const OverviewHeader = () => {
 
     if (proxyID) {
       arr.push(<SystemOverview key='system-overview' tokens={tokens} saveToken={updateToken} fetchDescribeOdigos={fetchDescribeOdigos} />);
-      arr.push(<SystemSettings key='system-settings' installationMethod={installationMethod} fetchSettings={fetchOdigosConfig} onSave={updateOdigosConfig} />);
     }
 
     arr.push(
@@ -66,7 +64,7 @@ const OverviewHeader = () => {
     );
 
     return arr;
-  }, [proxyID, tokens, updateToken, fetchDescribeOdigos, installationMethod, fetchOdigosConfig, updateOdigosConfig, onClickAccessManagement]);
+  }, [proxyID, tokens, updateToken, fetchDescribeOdigos, onClickAccessManagement]);
 
   return <Header left={left} right={right} />;
 };
