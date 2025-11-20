@@ -2,6 +2,7 @@ package websocketserver
 
 import (
 	"context"
+	"time"
 
 	"github.com/coder/websocket"
 	"github.com/odigos-io/central-proxy/internal/graphql"
@@ -16,10 +17,14 @@ const (
 )
 
 type WebSocketClient struct {
-	ctx       context.Context
-	url       string
-	conn      *websocket.Conn
-	gqlClient *graphql.GraphQLClient
+	ctx         context.Context
+	url         string
+	conn        *websocket.Conn
+	gqlClient   *graphql.GraphQLClient
+	proxyID     string
+	clusterName string
+	version     string
+	connectedAt time.Time
 }
 
 type WebSocketMessageFromCentralized struct {
