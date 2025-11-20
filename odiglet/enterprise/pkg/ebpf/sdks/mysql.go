@@ -49,8 +49,8 @@ func (g *MySQLInstrumentationFactoryEnterprise) CreateInstrumentation(ctx contex
 	return mysqlInstWrapper, nil
 }
 
-func (g *MySQLOtelEbpfSdkEnterprise) Load(ctx context.Context) error {
-	return g.inst.Load(ctx)
+func (g *MySQLOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.Status, error) {
+	return instrumentation.Status{}, g.inst.Load(ctx)
 }
 
 func (g *MySQLOtelEbpfSdkEnterprise) Run(ctx context.Context) error {
