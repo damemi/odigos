@@ -124,4 +124,6 @@ type Mutation {
   createTeam(input: WriteTeamInput!): GeneralResult!
   updateTeam(teamID: String!, input: WriteTeamInput!): GeneralResult!
   deleteTeam(teamID: String!): GeneralResult!
+
+  deleteProxyConnection(proxyID: String!): GeneralResult!
 }

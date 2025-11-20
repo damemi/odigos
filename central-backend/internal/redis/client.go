@@ -67,6 +67,15 @@ func (r *RedisClient) ListProxyConnectionsKeys(ctx context.Context) ([]string, e
 	return keys, nil
 }
 
+func (r *RedisClient) DeleteProxyConnection(ctx context.Context, proxyID string) error {
+	key := consts.GetProxyConnectionChannelKey(proxyID)
+	result := r.client.Del(ctx, key)
+	if result.Err() != nil {
+		return result.Err()
+	}
+	return nil
+}
+
 func (r *RedisClient) SubscribeToRequests(ctx context.Context, proxyID string, handler func(ctx context.Context, proxyID string, request types.GqlRequestPayload) error) {
 	requestsChannel := consts.GetRequestsChannel(proxyID)
 	sub := r.client.Subscribe(ctx, requestsChannel)

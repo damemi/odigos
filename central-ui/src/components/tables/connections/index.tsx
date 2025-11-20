@@ -108,26 +108,29 @@ export const ConnectionsTable: React.FC = () => {
   if (isAdmin) {
     rows.forEach((row, idx) => {
       const cp = filtered[idx];
-      (row.cells as RowCell[]).push({
-        columnKey: ConnectionsTableColumn.Actions,
-        component: () => (
-          <FlexRow>
-            {deleting ? (
-              <FadeLoader />
-            ) : (
-              <IconButton
-                tooltip='Delete connection'
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDeleteOpenForCp(cp);
-                }}
-              >
-                <TrashIcon />
-              </IconButton>
-            )}
-          </FlexRow>
-        ),
-      });
+
+      if (cp.status !== StatusType.Success) {
+        (row.cells as RowCell[]).push({
+          columnKey: ConnectionsTableColumn.Actions,
+          component: () => (
+            <FlexRow>
+              {deleting ? (
+                <FadeLoader />
+              ) : (
+                <IconButton
+                  tooltip='Delete connection'
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteOpenForCp(cp);
+                  }}
+                >
+                  <TrashIcon />
+                </IconButton>
+              )}
+            </FlexRow>
+          ),
+        });
+      }
     });
   }
 
