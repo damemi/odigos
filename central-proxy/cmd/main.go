@@ -33,10 +33,18 @@ func main() {
 		logger.Fatal("Failed to get Odigos Version from ConfigMap", err)
 	}
 
+	logger.Log.Info("Initializing WebSocket client",
+		"centralBackendURL", centralBackendURL,
+		"clusterName", clusterName,
+		"odigosVersion", odigosVersion)
+
 	wsClient, err := websocketserver.NewWebSocketClient(ctx, client, centralBackendURL, clusterName, odigosVersion)
 	if err != nil {
 		logger.Fatal("Failed to init WebSocket Client", err)
 	}
+
+	logger.Log.Info("Starting WebSocket client read loop goroutine",
+		"clusterName", clusterName)
 	go wsClient.Run(client)
 
 	// Start SSE forwarder (connects to frontend backend and forwards over WS)

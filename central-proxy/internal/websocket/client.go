@@ -2,8 +2,10 @@ package websocketserver
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"time"
 
@@ -29,7 +31,14 @@ func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, 
 		Path:     "/ws/proxy",
 		RawQuery: fmt.Sprintf("proxyID=%s&platformName=%s&version=%s&platformType=%s", proxyID, clusterName, odigosVersion, consts.PlatformTypeK8sString),
 	}
-	conn, _, err := websocket.Dial(ctx, u.String(), &websocket.DialOptions{})
+	transport := &http.Transport{
+		TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{},
+	}
+	dialer := websocket.DialOptions{
+		HTTPClient: &http.Client{Transport: transport},
+	}
+
+	conn, _, err := websocket.Dial(ctx, u.String(), &dialer)
 	if err != nil {
 		return nil, err
 	}
@@ -40,11 +49,32 @@ func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, 
 
 	gqlClient := graphql.NewGraphQLClient()
 
-	return &WebSocketClient{conn: conn, url: wsURL, gqlClient: gqlClient, ctx: ctx}, nil
+	now := time.Now()
+	wsClient := &WebSocketClient{
+		conn:        conn,
+		url:         wsURL,
+		gqlClient:   gqlClient,
+		ctx:         ctx,
+		proxyID:     proxyID,
+		clusterName: clusterName,
+		version:     odigosVersion,
+		connectedAt: now,
+	}
+
+	logger.Log.Info("WebSocket connection established",
+		"proxyID", proxyID,
+		"clusterName", clusterName,
+		"version", odigosVersion,
+		"url", u.String())
+
+	return wsClient, nil
 }
 
 func (w *WebSocketClient) Send(data WebSocketMessageToCentralized) error {
 	if w.conn == nil {
+		logger.Log.Warn("Attempted to send WebSocket message but connection is nil",
+			"proxyID", w.proxyID,
+			"messageType", data.Type)
 		return nil
 	}
 
@@ -53,14 +83,32 @@ func (w *WebSocketClient) Send(data WebSocketMessageToCentralized) error {
 		return err
 	}
 
-	return w.conn.Write(w.ctx, websocket.MessageText, jsonData)
+	err = w.conn.Write(w.ctx, websocket.MessageText, jsonData)
+	if err != nil {
+		logger.Log.Error("Failed to send WebSocket message",
+			"error", err,
+			"proxyID", w.proxyID,
+			"messageType", data.Type,
+			"requestID", data.RequestId)
+	}
+	return err
 }
 
 func (w *WebSocketClient) Run(kubeClient *kube.Client) {
+	logger.Log.Info("WebSocket client read loop started",
+		"proxyID", w.proxyID,
+		"clusterName", w.clusterName,
+		"version", w.version,
+		"url", w.url)
+
 	for {
 		select {
 		case <-w.ctx.Done():
-			logger.Log.Info("WebSocket client context canceled")
+			duration := time.Since(w.connectedAt)
+			logger.Log.Info("WebSocket client context canceled",
+				"proxyID", w.proxyID,
+				"clusterName", w.clusterName,
+				"duration", duration)
 			if w.conn != nil {
 				w.conn.Close(websocket.StatusNormalClosure, "context canceled")
 			}
@@ -70,14 +118,30 @@ func (w *WebSocketClient) Run(kubeClient *kube.Client) {
 
 			_, message, err := w.conn.Read(w.ctx)
 			if err != nil {
-				logger.Log.Error("WebSocket read failed", "error", err)
-				w.conn.Close(websocket.StatusInternalError, "read error")
+				duration := time.Since(w.connectedAt)
+				logger.Log.Error("WebSocket read failed, connection lost",
+					"error", err,
+					"proxyID", w.proxyID,
+					"clusterName", w.clusterName,
+					"duration", duration)
+				if w.conn != nil {
+					w.conn.Close(websocket.StatusInternalError, "read error")
+				}
+				logger.Log.Info("Starting WebSocket reconnection process",
+					"proxyID", w.proxyID,
+					"clusterName", w.clusterName)
 				newConn := w.handleReconnect(kubeClient)
 				if newConn == nil {
-					logger.Log.Error("WebSocket reconnection failed, stopping client")
+					logger.Log.Error("WebSocket reconnection failed, stopping client",
+						"proxyID", w.proxyID,
+						"clusterName", w.clusterName)
 					return
 				}
 				w.conn = newConn
+				w.connectedAt = time.Now()
+				logger.Log.Info("WebSocket reconnected, resuming read loop",
+					"proxyID", w.proxyID,
+					"clusterName", w.clusterName)
 				continue
 			}
 
@@ -149,22 +213,53 @@ func (w *WebSocketClient) handleReconnect(kubeClient *kube.Client) *websocket.Co
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		select {
 		case <-w.ctx.Done():
-			logger.Log.Warn("Stopping reconnect attempts as context was canceled")
+			logger.Log.Warn("Stopping reconnect attempts as context was canceled",
+				"proxyID", proxyID,
+				"clusterName", clusterName,
+				"attempt", attempt)
 			return nil
 		default:
 			delay := baseDelay * time.Duration(attempt)
-			logger.Log.Info("Attempting WebSocket reconnect", "attempt", attempt, "delay", delay)
+			logger.Log.Info("Attempting WebSocket reconnect",
+				"attempt", attempt,
+				"delay", delay,
+				"proxyID", proxyID,
+				"clusterName", clusterName,
+				"version", odigosVersion,
+				"url", u.String())
 			time.Sleep(delay)
+			transport := &http.Transport{
+				TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{},
+			}
+			dialer := websocket.DialOptions{
+				HTTPClient: &http.Client{Transport: transport},
+			}
+			conn, _, err := websocket.Dial(w.ctx, u.String(), &dialer)
 
-			conn, _, err := websocket.Dial(w.ctx, u.String(), &websocket.DialOptions{})
 			if err == nil {
-				logger.Log.Info("WebSocket reconnect successful")
+				logger.Log.Info("WebSocket reconnect successful",
+					"attempt", attempt,
+					"proxyID", proxyID,
+					"clusterName", clusterName,
+					"version", odigosVersion,
+					"url", u.String())
 				return conn
 			}
+
+			logger.Log.Warn("WebSocket reconnect attempt failed",
+				"attempt", attempt,
+				"error", err,
+				"proxyID", proxyID,
+				"clusterName", clusterName,
+				"url", u.String())
 
 		}
 	}
 
-	logger.Log.Error("Max reconnect attempts reached, stopping WebSocket client")
+	logger.Log.Error("Max reconnect attempts reached, stopping WebSocket client",
+		"maxRetries", maxRetries,
+		"proxyID", proxyID,
+		"clusterName", clusterName,
+		"url", u.String())
 	return nil
 }
