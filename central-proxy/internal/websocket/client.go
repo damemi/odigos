@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/coder/websocket"
@@ -25,8 +26,14 @@ func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, 
 		return nil, err
 	}
 
+	scheme := "ws"
+	if strings.HasSuffix(wsURL, ":443") {
+		logger.Log.Info("Using wss scheme", "wsURL", wsURL)
+		scheme = "wss"
+	}
+
 	u := url.URL{
-		Scheme:   "ws",
+		Scheme:   scheme,
 		Host:     wsURL,
 		Path:     "/ws/proxy",
 		RawQuery: fmt.Sprintf("proxyID=%s&platformName=%s&version=%s&platformType=%s", proxyID, clusterName, odigosVersion, consts.PlatformTypeK8sString),
@@ -203,8 +210,13 @@ func (w *WebSocketClient) handleReconnect(kubeClient *kube.Client) *websocket.Co
 		return nil
 	}
 
+	scheme := "ws"
+	if strings.HasSuffix(w.url, ":443") {
+		scheme = "wss"
+	}
+
 	u := url.URL{
-		Scheme:   "ws",
+		Scheme:   scheme,
 		Host:     w.url,
 		Path:     "/ws/proxy",
 		RawQuery: fmt.Sprintf("proxyID=%s&platformName=%s&version=%s&platformType=%s", proxyID, clusterName, odigosVersion, consts.PlatformTypeK8sString),
