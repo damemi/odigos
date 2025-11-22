@@ -2,6 +2,7 @@ package websocketserver
 
 import (
 	"context"
+	"crypto/tls"
 	"time"
 
 	"github.com/coder/websocket"
@@ -25,6 +26,7 @@ type WebSocketClient struct {
 	clusterName string
 	version     string
 	connectedAt time.Time
+	tlsConfig   *tls.Config
 }
 
 type WebSocketMessageFromCentralized struct {

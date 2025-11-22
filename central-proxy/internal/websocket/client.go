@@ -20,7 +20,7 @@ import (
 )
 
 // NewWebSocketClient creates a WebSocket client
-func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, clusterName string, odigosVersion string) (*WebSocketClient, error) {
+func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, clusterName string, odigosVersion string, tlsConfig *tls.Config) (*WebSocketClient, error) {
 	proxyID, err := config.GetOdigosDeploymentId(ctx, client)
 	if err != nil {
 		return nil, err
@@ -39,7 +39,8 @@ func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, 
 		RawQuery: fmt.Sprintf("proxyID=%s&platformName=%s&version=%s&platformType=%s", proxyID, clusterName, odigosVersion, consts.PlatformTypeK8sString),
 	}
 	transport := &http.Transport{
-		TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{},
+		TLSNextProto:   map[string]func(string, *tls.Conn) http.RoundTripper{},
+		TLSClientConfig: tlsConfig,
 	}
 	dialer := websocket.DialOptions{
 		HTTPClient: &http.Client{Transport: transport},
@@ -66,6 +67,7 @@ func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, 
 		clusterName: clusterName,
 		version:     odigosVersion,
 		connectedAt: now,
+		tlsConfig:   tlsConfig,
 	}
 
 	logger.Log.Info("WebSocket connection established",
@@ -241,7 +243,8 @@ func (w *WebSocketClient) handleReconnect(kubeClient *kube.Client) *websocket.Co
 				"url", u.String())
 			time.Sleep(delay)
 			transport := &http.Transport{
-				TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{},
+				TLSNextProto:   map[string]func(string, *tls.Conn) http.RoundTripper{},
+				TLSClientConfig: w.tlsConfig,
 			}
 			dialer := websocket.DialOptions{
 				HTTPClient: &http.Client{Transport: transport},

@@ -38,7 +38,12 @@ func main() {
 		"clusterName", clusterName,
 		"odigosVersion", odigosVersion)
 
-	wsClient, err := websocketserver.NewWebSocketClient(ctx, client, centralBackendURL, clusterName, odigosVersion)
+	tlsConfig, err := config.GetTLSConfig()
+	if err != nil {
+		logger.Fatal("Failed to get TLS configuration", err)
+	}
+
+	wsClient, err := websocketserver.NewWebSocketClient(ctx, client, centralBackendURL, clusterName, odigosVersion, tlsConfig)
 	if err != nil {
 		logger.Fatal("Failed to init WebSocket Client", err)
 	}
