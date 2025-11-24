@@ -7,6 +7,7 @@ type WebSocketMessageToProxy struct {
 	Query     string               `json:"query,omitempty"`
 	Variables GraphQLVariables     `json:"variables,omitempty"`
 	RequestId string               `json:"request_id,omitempty"`
+	IsAdmin   bool                 `json:"is_admin,omitempty"`
 }
 
 type WebsocketMessageFromProxy struct {

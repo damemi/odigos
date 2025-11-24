@@ -4,6 +4,7 @@ type GqlRequestPayload struct {
 	Query     string                 `json:"query"`
 	RequestId string                 `json:"request_id"`
 	Variables map[string]interface{} `json:"variables"`
+	IsAdmin   bool                   `json:"is_admin"`
 }
 
 type ResponsePayload struct {

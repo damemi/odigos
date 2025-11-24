@@ -39,7 +39,7 @@ func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, 
 		RawQuery: fmt.Sprintf("proxyID=%s&platformName=%s&version=%s&platformType=%s", proxyID, clusterName, odigosVersion, consts.PlatformTypeK8sString),
 	}
 	transport := &http.Transport{
-		TLSNextProto:   map[string]func(string, *tls.Conn) http.RoundTripper{},
+		TLSNextProto:    map[string]func(string, *tls.Conn) http.RoundTripper{},
 		TLSClientConfig: tlsConfig,
 	}
 	dialer := websocket.DialOptions{
@@ -168,7 +168,7 @@ func (w *WebSocketClient) handleMessage(message []byte) {
 
 	switch parsedMessage.Type {
 	case MessageTypeGraphQLQuery:
-		resp, err := w.gqlClient.ForwardGraphQLRequest(w.ctx, parsedMessage.RequestId, parsedMessage.Query, parsedMessage.Variables)
+		resp, err := w.gqlClient.ForwardGraphQLRequest(w.ctx, parsedMessage.RequestId, parsedMessage.Query, parsedMessage.Variables, parsedMessage.IsAdmin)
 		if err != nil {
 			logger.Log.Error("Failed GraphQL request", "error", err, "request_id", parsedMessage.RequestId)
 			return
@@ -243,7 +243,7 @@ func (w *WebSocketClient) handleReconnect(kubeClient *kube.Client) *websocket.Co
 				"url", u.String())
 			time.Sleep(delay)
 			transport := &http.Transport{
-				TLSNextProto:   map[string]func(string, *tls.Conn) http.RoundTripper{},
+				TLSNextProto:    map[string]func(string, *tls.Conn) http.RoundTripper{},
 				TLSClientConfig: w.tlsConfig,
 			}
 			dialer := websocket.DialOptions{

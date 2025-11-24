@@ -18,7 +18,7 @@ func NewGraphQLClient() *GraphQLClient {
 }
 
 // ForwardGraphQLRequest executes a generic GraphQL query with optional variables
-func (g *GraphQLClient) ForwardGraphQLRequest(ctx context.Context, requestId string, query string, variables map[string]any) (map[string]any, error) {
+func (g *GraphQLClient) ForwardGraphQLRequest(ctx context.Context, requestId string, query string, variables map[string]any, isAdmin bool) (map[string]any, error) {
 	req := graphql.NewRequest(query)
 
 	finalVars := variables
@@ -33,6 +33,9 @@ func (g *GraphQLClient) ForwardGraphQLRequest(ctx context.Context, requestId str
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	if isAdmin {
+		req.Header.Set("X-Odigos-Admin-Allow", "true")
+	}
 
 	var respData map[string]any
 	err := g.client.Run(ctx, req, &respData)

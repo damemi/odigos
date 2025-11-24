@@ -7,6 +7,7 @@ package graph
 import (
 	"context"
 	"slices"
+	"strings"
 
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/consts"
@@ -138,10 +139,24 @@ func (r *queryResolver) RemoteFetch(ctx context.Context, proxyID string, query s
 		return nil
 	})
 
+	// derive admin flag from the user token in context (ADMIN/OWNER)
+	isAdmin := false
+	if token := utils.GetTokenFromContext(ctx); token != "" {
+		if roles, err := utils.ExtractRolesFromToken(token); err == nil {
+			for _, role := range roles {
+				if strings.EqualFold(role, "ADMIN") || strings.EqualFold(role, "OWNER") {
+					isAdmin = true
+					break
+				}
+			}
+		}
+	}
+
 	requestPayload := types.GqlRequestPayload{
 		Query:     query,
 		RequestId: requestId,
 		Variables: variables,
+		IsAdmin:   isAdmin,
 	}
 	requestsChannel := consts.GetRequestsChannel(proxyID)
 	err := redisclient.PublishJSON(ctx, r.RedisClient, requestsChannel, requestPayload)

@@ -179,6 +179,7 @@ func (ws *WebSocketServer) SendGraphQLRequest(ctx context.Context, proxyID strin
 		Query:     request.Query,
 		Variables: request.Variables,
 		RequestId: request.RequestId,
+		IsAdmin:   request.IsAdmin,
 	}
 
 	jsonMsg, err := json.Marshal(msg)
