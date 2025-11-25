@@ -20,6 +20,8 @@ JWT_AUDIENCE=foobar make generate-token
 
 - JWT_AUDIENCE: the audience of the token, e.g. the name of the organization for which the token was issued. This is required. Can be any string that is meaningful to us to identify the customer.
 
+- TOKEN_EXPIRY_DURATION: the duration for which the token is valid for in Go time string format such as "300ms", "-1.5h" or "2h45m". Valid time units are "s", "m", "h". This is mainly used for testing, and the preferred way is to use TOKEN_EXPIRY_DAYS.
+
 - TOKEN_EXPIRY_DAYS: the number of days the token is valid for. Defaults to 365 (1 year).
 
 - ODIGOS_PROFILES (optional): Specifies client profiles as a comma-separated list. Each profile defines unique custom resources that will be applied within the client cluster.

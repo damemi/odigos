@@ -3,7 +3,7 @@ module github.com/odigos-io/odigos-enterprise/onprem-token-generator
 go 1.25.0
 
 require (
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/odigos-io/odigos/common v0.0.0
 	github.com/odigos-io/odigos/profiles v0.0.0
 )

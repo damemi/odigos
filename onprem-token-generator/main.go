@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/profiles"
 )
@@ -36,6 +36,16 @@ func verifyProfiles(clientProfiles *[]string) {
 }
 
 func getExpTime() (int64, error) {
+	durationStr, exists := os.LookupEnv("TOKEN_EXPIRY_DURATION")
+	if exists {
+		duration, err := time.ParseDuration(durationStr)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse expiry duration: %w", err)
+		}
+		expTime := time.Now().Add(duration).Unix()
+		return expTime, nil
+	}
+
 	// Get the number of days from environment variable or default to 365
 	daysStr, exists := os.LookupEnv("TOKEN_EXPIRY_DAYS")
 	days := defaultExpiryDays
