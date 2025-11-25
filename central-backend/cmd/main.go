@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/gin-contrib/cors"
@@ -72,7 +73,12 @@ func main() {
 		logger.Log.Error("Failed to set system initialization status", "error", setErr)
 	}
 
-	go handleShutdown(ctx, redisClient)
+	expirationChan, err := odigosauth.TokenExpirationChannel()
+	if err != nil {
+		logger.Fatal("Failed to get token expiration channel", err)
+	}
+
+	go handleShutdown(ctx, redisClient, expirationChan)
 
 	centralSSEHub := ssehub.NewWithRedis(redisClient, config.Config.CentralizedBackendID)
 	centralSSEHub.StartRedisSSEBroadcast(ctx)
@@ -153,12 +159,16 @@ func authContextMiddleware() gin.HandlerFunc {
 	}
 }
 
-func handleShutdown(ctx context.Context, redisClient *redisclient.RedisClient) {
+func handleShutdown(ctx context.Context, redisClient *redisclient.RedisClient, tokenExpirationChan <-chan time.Time) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	<-sigChan
-	logger.Log.Info("Shutting down server...")
+	select {
+	case <-tokenExpirationChan:
+		logger.Log.Info("token has expired, shutting down server. Please contact Odigos support to renew your token.")
+	case <-sigChan:
+		logger.Log.Info("got shutdown signal, shutting down server...")
+	}
 
 	if err := redisClient.MarkAllConnectionsAsDisconnected(ctx); err != nil {
 		logger.Log.Error("Failed to mark all connections as disconnected", "error", err)
