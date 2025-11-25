@@ -93,6 +93,20 @@ func main() {
 	}
 
 	ctx := signals.SetupSignalHandler()
+	expirationChan, err := odigosauth.TokenExpirationChannel()
+	if err != nil {
+		log.Logger.Error(err, "Failed to get token expiration channel")
+		os.Exit(1)
+	}
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-expirationChan:
+			log.Logger.Info("Odigos token has expired, shutting down odiglet. Please contact Odigos support to renew your token.")
+			os.Exit(1)
+		}
+	}()
 	o.Run(ctx)
 
 	log.Logger.V(0).Info("odiglet exiting")
