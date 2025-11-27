@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import * as UTILS from '@/utils';
 import { useUserStore } from '@/store';
 import type { ComputePlatform } from '@/types';
+import { useTimeAgo } from '@odigos/ui-kit/hooks';
 import { TrashIcon } from '@odigos/ui-kit/icons';
 import { StatusType } from '@odigos/ui-kit/types';
 import { getPlatformIcon } from '@odigos/ui-kit/functions';
@@ -16,20 +17,22 @@ export enum ConnectionsTableColumn {
   Type = 'type',
   Status = 'status',
   OdigosVersion = 'odigosVersion',
+  ConnectedSince = 'connectedSince',
+  LastActivity = 'lastActivity',
   Actions = 'actions',
 }
 
 export const ConnectionsTable: React.FC = () => {
+  const timeAgo = useTimeAgo();
   const { isAdmin } = useUserStore();
   const { clearStore } = useSetupStore();
   const { selectProxyID } = useProxyID();
+  const { deleteProxy, deleting } = useProxyCRUD();
   const { addNotification } = useNotificationStore();
   const { searchText, platformTypes, statuses } = useFilterStore();
   const { computePlatforms, loading, refetch } = useComputePlatformsCRUD();
 
   const [deleteOpenForCp, setDeleteOpenForCp] = useState<ComputePlatform | null>(null);
-
-  const { deleteProxy, deleting } = useProxyCRUD();
 
   const onClickRow = ({ id, status }: ComputePlatform) => {
     if (status === StatusType.Success) {
@@ -52,6 +55,8 @@ export const ConnectionsTable: React.FC = () => {
       { key: ConnectionsTableColumn.Type, title: UTILS.TYPE, sortable: true },
       { key: ConnectionsTableColumn.Status, title: UTILS.STATUS, sortable: true },
       { key: ConnectionsTableColumn.OdigosVersion, title: 'Odigos Version', sortable: true },
+      { key: ConnectionsTableColumn.ConnectedSince, title: 'Connected Since', sortable: true },
+      { key: ConnectionsTableColumn.LastActivity, title: 'Last Activity', sortable: true },
       { key: ConnectionsTableColumn.Id, title: UTILS.UNIQUE_ID },
     ];
     if (isAdmin) arr.push({ key: ConnectionsTableColumn.Actions, title: UTILS.ACTIONS });
@@ -61,8 +66,8 @@ export const ConnectionsTable: React.FC = () => {
   const filtered = useMemo(
     () =>
       computePlatforms.filter(
-        ({ id, type, status }) =>
-          (!searchText || id.toLowerCase().includes(searchText)) &&
+        ({ id, name, type, status }) =>
+          (!searchText || id.toLowerCase().includes(searchText) || (name && name.toLowerCase().includes(searchText))) &&
           (!platformTypes?.length || platformTypes.find((opt: DropdownOption) => opt.id === type)) &&
           (!statuses?.length || statuses.find((opt: DropdownOption) => opt.id === status)),
       ),
@@ -95,12 +100,26 @@ export const ConnectionsTable: React.FC = () => {
             value: cp.odigosVersion,
           },
           {
+            columnKey: ConnectionsTableColumn.ConnectedSince,
+            value: cp.connectedAt || '',
+            component: () => (cp.status === StatusType.Success && cp.connectedAt ? <div>{timeAgo.format(cp.connectedAt)}</div> : <div>—</div>),
+          },
+          {
+            columnKey: ConnectionsTableColumn.LastActivity,
+            value: cp.lastSeenAt || '',
+            component: () => (cp.lastSeenAt ? <div>{timeAgo.format(cp.lastSeenAt)}</div> : <div>—</div>),
+          },
+          {
             columnKey: ConnectionsTableColumn.Status,
-            component: () => (
-              <div style={{ lineHeight: 1 }}>
-                <Status status={cp.status} title={cp.status === StatusType.Success ? UTILS.CONNECTION_ALIVE : UTILS.CONNECTION_LOST} withIcon withBorder />
-              </div>
-            ),
+            component: () => {
+              const statusTitle = cp.status === StatusType.Success ? UTILS.CONNECTION_ALIVE : UTILS.CONNECTION_LOST;
+              const tooltipText = `Connected Since: ${cp.connectedAt || '—'}\nLast Activity: ${cp.lastSeenAt || '—'}`;
+              return (
+                <div style={{ lineHeight: 1 }}>
+                  <Status status={cp.status} title={statusTitle} withIcon withBorder />
+                </div>
+              );
+            },
           },
         ] as RowCell[],
       })),

@@ -33,3 +33,9 @@ func GetSSEBroadcastChannel() string {
 	centralizedBackendID := config.Config.CentralizedBackendID
 	return fmt.Sprintf("ui.sse.broadcast:%s", centralizedBackendID)
 }
+
+// Proxy metadata (durable info such as name, type, version, timestamps)
+func GetProxyMetadataKey(proxyID string) string {
+	centralizedBackendID := config.Config.CentralizedBackendID
+	return fmt.Sprintf("proxy-meta:%s:%s", centralizedBackendID, proxyID)
+}

@@ -8,6 +8,8 @@ export const GET_COMPUTE_PLATFORMS = gql`
       odigosVersion
       type
       status
+      connectedAt
+      lastSeenAt
       users {
         id
         email

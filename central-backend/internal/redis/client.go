@@ -3,6 +3,7 @@ package redisclient
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/odigos-io/central-backend/internal/config"
@@ -198,4 +199,62 @@ func (r *RedisClient) SetSystemInitialized(ctx context.Context, initialized bool
 		value = "true"
 	}
 	return r.client.Set(ctx, consts.SystemInitializedKey, value, 0).Err()
+}
+
+// ProxyMetadata holds durable proxy details and timestamps.
+type ProxyMetadata struct {
+	PlatformName  string
+	PlatformType  string
+	OdigosVersion string
+	ConnectedAt   int64
+	LastSeenAt    int64
+}
+
+// SetProxyMetadata sets basic proxy metadata fields (name/type/version) without touching timestamps.
+func (r *RedisClient) SetProxyMetadata(ctx context.Context, proxyID, name, platformType, version string) error {
+	key := consts.GetProxyMetadataKey(proxyID)
+	return r.client.HSet(
+		ctx,
+		key,
+		consts.ProxyMetaFieldPlatformName, name,
+		consts.ProxyMetaFieldPlatformType, platformType,
+		consts.ProxyMetaFieldOdigosVersion, version,
+	).Err()
+}
+
+// SetProxyConnectedAt sets the time when the proxy connected (unix seconds).
+func (r *RedisClient) SetProxyConnectedAt(ctx context.Context, proxyID string, connectedAt int64) error {
+	key := consts.GetProxyMetadataKey(proxyID)
+	return r.client.HSet(ctx, key, consts.ProxyMetaFieldConnectedAt, strconv.FormatInt(connectedAt, 10)).Err()
+}
+
+// UpdateProxyLastSeen updates the last seen timestamp (unix seconds).
+func (r *RedisClient) UpdateProxyLastSeen(ctx context.Context, proxyID string, lastSeenAt int64) error {
+	key := consts.GetProxyMetadataKey(proxyID)
+	return r.client.HSet(ctx, key, consts.ProxyMetaFieldLastSeenAt, strconv.FormatInt(lastSeenAt, 10)).Err()
+}
+
+// GetProxyMetadata returns proxy metadata if present. Missing fields will be empty/zero.
+func (r *RedisClient) GetProxyMetadata(ctx context.Context, proxyID string) (*ProxyMetadata, error) {
+	key := consts.GetProxyMetadataKey(proxyID)
+	m, err := r.client.HGetAll(ctx, key).Result()
+	if err != nil {
+		return nil, err
+	}
+	md := &ProxyMetadata{
+		PlatformName:  m[consts.ProxyMetaFieldPlatformName],
+		PlatformType:  m[consts.ProxyMetaFieldPlatformType],
+		OdigosVersion: m[consts.ProxyMetaFieldOdigosVersion],
+	}
+	if v := m[consts.ProxyMetaFieldConnectedAt]; v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			md.ConnectedAt = n
+		}
+	}
+	if v := m[consts.ProxyMetaFieldLastSeenAt]; v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			md.LastSeenAt = n
+		}
+	}
+	return md, nil
 }

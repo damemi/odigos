@@ -103,6 +103,17 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 		logger.Log.Error("Failed to store connection in Redis", "error", err)
 		return
 	}
+	// Persist basic proxy metadata and initial timestamps
+	now := time.Now().Unix()
+	if err := ws.redisClient.SetProxyMetadata(ctx, proxyID, platformName, string(platformType), currentVersion); err != nil {
+		logger.Log.Warn("Failed to set proxy metadata", "proxyID", proxyID, "error", err)
+	}
+	if err := ws.redisClient.SetProxyConnectedAt(ctx, proxyID, now); err != nil {
+		logger.Log.Warn("Failed to set proxy connectedAt", "proxyID", proxyID, "error", err)
+	}
+	if err := ws.redisClient.UpdateProxyLastSeen(ctx, proxyID, now); err != nil {
+		logger.Log.Warn("Failed to update proxy lastSeenAt", "proxyID", proxyID, "error", err)
+	}
 
 	go ws.redisClient.SubscribeToRequests(ctx, proxyID, ws.SendGraphQLRequest)
 	ws.listenForMessages(ctx, proxyID, conn)
@@ -120,6 +131,11 @@ func (ws *WebSocketServer) listenForMessages(ctx context.Context, proxyID string
 		if err := json.Unmarshal(msg, &parsedMessage); err != nil {
 			logger.Log.Error("Failed to parse WebSocket message", "proxyID", proxyID, "error", err)
 			continue
+		}
+
+		// Update last-seen timestamp on any message
+		if err := ws.redisClient.UpdateProxyLastSeen(ctx, proxyID, time.Now().Unix()); err != nil {
+			logger.Log.Warn("Failed to update proxy lastSeenAt", "proxyID", proxyID, "error", err)
 		}
 
 		switch parsedMessage.Type {
@@ -158,6 +174,10 @@ func (ws *WebSocketServer) cleanupConnection(ctx context.Context, proxyID string
 
 	if err := ws.redisClient.SetProxyConnectionStatus(ctx, proxyID, consts.StatusDisconnected); err != nil {
 		logger.Log.Error("Failed to update proxy status in Redis", "proxyID", proxyID, "error", err)
+	}
+	// Record last seen on disconnect as well
+	if err := ws.redisClient.UpdateProxyLastSeen(ctx, proxyID, time.Now().Unix()); err != nil {
+		logger.Log.Warn("Failed to update proxy lastSeenAt on disconnect", "proxyID", proxyID, "error", err)
 	}
 
 }

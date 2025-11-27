@@ -3,6 +3,7 @@
 # https://gqlgen.com/getting-started/
 
 scalar JSON
+scalar Int64
 
 enum PlatformType {
   k8s
@@ -32,6 +33,8 @@ type ComputePlatform {
   odigosVersion: String!
   type: PlatformType!
   status: String!
+  connectedAt: Int64
+  lastSeenAt: Int64
   users: [User!]!
   teams: [Team!]!
 }

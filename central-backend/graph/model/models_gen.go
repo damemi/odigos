@@ -15,6 +15,8 @@ type ComputePlatform struct {
 	OdigosVersion string       `json:"odigosVersion"`
 	Type          PlatformType `json:"type"`
 	Status        string       `json:"status"`
+	ConnectedAt   *int         `json:"connectedAt,omitempty"`
+	LastSeenAt    *int         `json:"lastSeenAt,omitempty"`
 	Users         []*User      `json:"users"`
 	Teams         []*Team      `json:"teams"`
 }

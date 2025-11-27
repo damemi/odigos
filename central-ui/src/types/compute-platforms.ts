@@ -7,6 +7,8 @@ export interface ComputePlatform {
   odigosVersion: string;
   type: PlatformType;
   status: StatusType;
+  connectedAt?: number | null; // unix seconds
+  lastSeenAt?: number | null; // unix seconds
   users?: User[];
   teams?: Team[];
 }

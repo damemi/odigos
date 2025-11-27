@@ -48,7 +48,9 @@ type DirectiveRoot struct {
 
 type ComplexityRoot struct {
 	ComputePlatform struct {
+		ConnectedAt   func(childComplexity int) int
 		ID            func(childComplexity int) int
+		LastSeenAt    func(childComplexity int) int
 		Name          func(childComplexity int) int
 		OdigosVersion func(childComplexity int) int
 		Status        func(childComplexity int) int
@@ -162,12 +164,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	_ = ec
 	switch typeName + "." + field {
 
+	case "ComputePlatform.connectedAt":
+		if e.complexity.ComputePlatform.ConnectedAt == nil {
+			break
+		}
+
+		return e.complexity.ComputePlatform.ConnectedAt(childComplexity), true
 	case "ComputePlatform.id":
 		if e.complexity.ComputePlatform.ID == nil {
 			break
 		}
 
 		return e.complexity.ComputePlatform.ID(childComplexity), true
+	case "ComputePlatform.lastSeenAt":
+		if e.complexity.ComputePlatform.LastSeenAt == nil {
+			break
+		}
+
+		return e.complexity.ComputePlatform.LastSeenAt(childComplexity), true
 	case "ComputePlatform.name":
 		if e.complexity.ComputePlatform.Name == nil {
 			break
@@ -994,6 +1008,64 @@ func (ec *executionContext) fieldContext_ComputePlatform_status(_ context.Contex
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ComputePlatform_connectedAt(ctx context.Context, field graphql.CollectedField, obj *model.ComputePlatform) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ComputePlatform_connectedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.ConnectedAt, nil
+		},
+		nil,
+		ec.marshalOInt642ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ComputePlatform_connectedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ComputePlatform",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int64 does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ComputePlatform_lastSeenAt(ctx context.Context, field graphql.CollectedField, obj *model.ComputePlatform) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ComputePlatform_lastSeenAt,
+		func(ctx context.Context) (any, error) {
+			return obj.LastSeenAt, nil
+		},
+		nil,
+		ec.marshalOInt642ᚖint,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ComputePlatform_lastSeenAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ComputePlatform",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int64 does not have child fields")
 		},
 	}
 	return fc, nil
@@ -1855,6 +1927,10 @@ func (ec *executionContext) fieldContext_Query_computePlatforms(_ context.Contex
 				return ec.fieldContext_ComputePlatform_type(ctx, field)
 			case "status":
 				return ec.fieldContext_ComputePlatform_status(ctx, field)
+			case "connectedAt":
+				return ec.fieldContext_ComputePlatform_connectedAt(ctx, field)
+			case "lastSeenAt":
+				return ec.fieldContext_ComputePlatform_lastSeenAt(ctx, field)
 			case "users":
 				return ec.fieldContext_ComputePlatform_users(ctx, field)
 			case "teams":
@@ -2391,6 +2467,10 @@ func (ec *executionContext) fieldContext_Team_computePlatforms(_ context.Context
 				return ec.fieldContext_ComputePlatform_type(ctx, field)
 			case "status":
 				return ec.fieldContext_ComputePlatform_status(ctx, field)
+			case "connectedAt":
+				return ec.fieldContext_ComputePlatform_connectedAt(ctx, field)
+			case "lastSeenAt":
+				return ec.fieldContext_ComputePlatform_lastSeenAt(ctx, field)
 			case "users":
 				return ec.fieldContext_ComputePlatform_users(ctx, field)
 			case "teams":
@@ -2684,6 +2764,10 @@ func (ec *executionContext) fieldContext_User_computePlatforms(_ context.Context
 				return ec.fieldContext_ComputePlatform_type(ctx, field)
 			case "status":
 				return ec.fieldContext_ComputePlatform_status(ctx, field)
+			case "connectedAt":
+				return ec.fieldContext_ComputePlatform_connectedAt(ctx, field)
+			case "lastSeenAt":
+				return ec.fieldContext_ComputePlatform_lastSeenAt(ctx, field)
 			case "users":
 				return ec.fieldContext_ComputePlatform_users(ctx, field)
 			case "teams":
@@ -4364,6 +4448,10 @@ func (ec *executionContext) _ComputePlatform(ctx context.Context, sel ast.Select
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "connectedAt":
+			out.Values[i] = ec._ComputePlatform_connectedAt(ctx, field, obj)
+		case "lastSeenAt":
+			out.Values[i] = ec._ComputePlatform_lastSeenAt(ctx, field, obj)
 		case "users":
 			out.Values[i] = ec._ComputePlatform_users(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -5333,7 +5421,7 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	res := graphql.MarshalBoolean(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 	}
 	return res
@@ -5386,7 +5474,7 @@ func (ec *executionContext) marshalNComputePlatform2ᚕᚖgithubᚗcomᚋodigos�
 func (ec *executionContext) marshalNComputePlatform2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐComputePlatform(ctx context.Context, sel ast.SelectionSet, v *model.ComputePlatform) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5400,7 +5488,7 @@ func (ec *executionContext) marshalNCreateUserResult2githubᚗcomᚋodigosᚑio�
 func (ec *executionContext) marshalNCreateUserResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCreateUserResult(ctx context.Context, sel ast.SelectionSet, v *model.CreateUserResult) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5414,7 +5502,7 @@ func (ec *executionContext) marshalNGeneralResult2githubᚗcomᚋodigosᚑioᚋc
 func (ec *executionContext) marshalNGeneralResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐGeneralResult(ctx context.Context, sel ast.SelectionSet, v *model.GeneralResult) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5429,7 +5517,7 @@ func (ec *executionContext) unmarshalNJSON2map(ctx context.Context, v any) (map[
 func (ec *executionContext) marshalNJSON2map(ctx context.Context, sel ast.SelectionSet, v map[string]any) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5437,7 +5525,7 @@ func (ec *executionContext) marshalNJSON2map(ctx context.Context, sel ast.Select
 	res := graphql.MarshalMap(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 	}
 	return res
@@ -5470,7 +5558,7 @@ func (ec *executionContext) marshalNSignInResult2githubᚗcomᚋodigosᚑioᚋce
 func (ec *executionContext) marshalNSignInResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐSignInResult(ctx context.Context, sel ast.SelectionSet, v *model.SignInResult) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5497,7 +5585,7 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 	}
 	return res
@@ -5510,7 +5598,7 @@ func (ec *executionContext) marshalNSystemConfig2githubᚗcomᚋodigosᚑioᚋce
 func (ec *executionContext) marshalNSystemConfig2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐSystemConfig(ctx context.Context, sel ast.SelectionSet, v *model.SystemConfig) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5564,7 +5652,7 @@ func (ec *executionContext) marshalNTeam2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcent
 func (ec *executionContext) marshalNTeam2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐTeam(ctx context.Context, sel ast.SelectionSet, v *model.Team) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5618,7 +5706,7 @@ func (ec *executionContext) marshalNUser2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcent
 func (ec *executionContext) marshalNUser2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐUser(ctx context.Context, sel ast.SelectionSet, v *model.User) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5698,7 +5786,7 @@ func (ec *executionContext) marshalN__DirectiveLocation2string(ctx context.Conte
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 	}
 	return res
@@ -5870,7 +5958,7 @@ func (ec *executionContext) marshalN__Type2ᚕgithubᚗcomᚋ99designsᚋgqlgen�
 func (ec *executionContext) marshalN__Type2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐType(ctx context.Context, sel ast.SelectionSet, v *introspection.Type) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
@@ -5887,7 +5975,7 @@ func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel a
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
 		}
 	}
 	return res
@@ -5920,6 +6008,24 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	_ = sel
 	_ = ctx
 	res := graphql.MarshalBoolean(*v)
+	return res
+}
+
+func (ec *executionContext) unmarshalOInt642ᚖint(ctx context.Context, v any) (*int, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalInt(v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOInt642ᚖint(ctx context.Context, sel ast.SelectionSet, v *int) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	_ = sel
+	_ = ctx
+	res := graphql.MarshalInt(*v)
 	return res
 }
 
