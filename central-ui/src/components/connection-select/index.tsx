@@ -3,7 +3,7 @@ import Theme from '@odigos/ui-kit/theme';
 import type { ComputePlatform } from '@/types';
 import styled, { css } from 'styled-components';
 import { StatusType } from '@odigos/ui-kit/types';
-import { useNotificationStore, useSelectedStore } from '@odigos/ui-kit/store';
+import { useNotificationStore, useSelectedStore, useSetupStore } from '@odigos/ui-kit/store';
 import { useComputePlatformsCRUD, useProxyID } from '@/hooks';
 import { OverviewIcon, SearchIcon } from '@odigos/ui-kit/icons';
 import { useKeyDown, useOnClickOutside } from '@odigos/ui-kit/hooks';
@@ -77,6 +77,7 @@ const FootWrap = styled.div`
 
 export const ConnectionSelect: React.FC = () => {
   const theme = Theme.useTheme();
+  const { clearStore } = useSetupStore();
   const { selectedConnection } = useSelectedStore();
   const { addNotification } = useNotificationStore();
   const { proxyID, goSelectNewProxy, selectProxyID } = useProxyID();
@@ -89,8 +90,15 @@ export const ConnectionSelect: React.FC = () => {
     setIsOpen(false);
   };
 
-  const onClickConnection = ({ id }: ComputePlatform) => selectProxyID(id);
-  const onClickAll = () => goSelectNewProxy();
+  const onClickConnection = ({ id }: ComputePlatform) => {
+    clearStore();
+    selectProxyID(id);
+  };
+
+  const onClickAll = () => {
+    clearStore();
+    goSelectNewProxy();
+  };
 
   const containerRef = useRef<HTMLDivElement>(null);
   useOnClickOutside(containerRef, onClose);
@@ -120,29 +128,36 @@ export const ConnectionSelect: React.FC = () => {
           </HeadWrap>
 
           <VerticalScroll style={{ maxHeight: '240px' }}>
-            {filtered.map(({ id, type, name, status }, idx) => (
-              <SelectionButton
-                key={`platform-${id}`}
-                icon={() => getPlatformIcon(type)?.({ fill: status === StatusType.Success ? theme.text.success : theme.text.error })}
-                label={`${!!name ? name : getPlatformLabel(type)} (${id})`}
-                isSelected={selectedConnection?.id === id}
-                onClick={() => {
-                  if (status === StatusType.Success) {
-                    onClickConnection(filtered[idx]);
-                  } else {
-                    addNotification({
-                      type: StatusType.Warning,
-                      title: 'Connection lost',
-                      message: 'Cannot connect to this platform',
-                      hideFromHistory: true,
-                    });
-                  }
-                  onClose();
-                }}
-                color='transparent'
-                style={{ width: '100%', justifyContent: 'flex-start' }}
-              />
-            ))}
+            {filtered.map(({ id, type, name, status }, idx) => {
+              const isSelected = selectedConnection?.id === id;
+
+              return (
+                <SelectionButton
+                  key={`platform-${id}`}
+                  icon={() => getPlatformIcon(type)?.({ fill: status === StatusType.Success ? theme.text.success : theme.text.error })}
+                  label={`${!!name ? name : getPlatformLabel(type)} (${id})`}
+                  isSelected={isSelected}
+                  onClick={() => {
+                    if (!isSelected) {
+                      if (status === StatusType.Success) {
+                        onClickConnection(filtered[idx]);
+                      } else {
+                        addNotification({
+                          type: StatusType.Warning,
+                          title: 'Connection lost',
+                          message: 'Cannot connect to this platform',
+                          hideFromHistory: true,
+                        });
+                      }
+                    }
+
+                    onClose();
+                  }}
+                  color='transparent'
+                  style={{ width: '100%', justifyContent: 'flex-start' }}
+                />
+              );
+            })}
           </VerticalScroll>
 
           <FootWrap>
