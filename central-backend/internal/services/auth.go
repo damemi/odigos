@@ -43,6 +43,20 @@ func (svc *AuthService) isFirstTimeSetup(ctx context.Context) bool {
 	return !isInitialized
 }
 
+func (svc *AuthService) VerifyToken(ctx context.Context, token string) (*model.GeneralResult, error) {
+	_, err := svc.kcAuth.VerifyToken(token)
+	if err != nil {
+		errorMsg := err.Error()
+		return &model.GeneralResult{
+			Success: false,
+			Error:   &errorMsg,
+		}, nil
+	}
+	return &model.GeneralResult{
+		Success: true,
+	}, nil
+}
+
 func (svc *AuthService) SignIn(ctx context.Context, email string, password string) (*model.SignInResult, error) {
 	adminToken, err := svc.adminService.GetAdminToken()
 	if err != nil {

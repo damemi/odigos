@@ -114,6 +114,7 @@ type Mutation {
   signIn(email: String!, password: String!): SignInResult!
   setInitialPassword(email: String!, password: String!): SignInResult!
   signOut: GeneralResult!
+  verifyToken(token: String!): GeneralResult!
 
   updateComputePlatform(
     id: String!

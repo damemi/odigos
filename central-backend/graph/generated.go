@@ -82,6 +82,7 @@ type ComplexityRoot struct {
 		UpdateComputePlatform func(childComplexity int, id string, input model.WriteComputePlatformInput) int
 		UpdateTeam            func(childComplexity int, teamID string, input model.WriteTeamInput) int
 		UpdateUser            func(childComplexity int, userID string, input model.WriteUserInput) int
+		VerifyToken           func(childComplexity int, token string) int
 	}
 
 	Query struct {
@@ -128,6 +129,7 @@ type MutationResolver interface {
 	SignIn(ctx context.Context, email string, password string) (*model.SignInResult, error)
 	SetInitialPassword(ctx context.Context, email string, password string) (*model.SignInResult, error)
 	SignOut(ctx context.Context) (*model.GeneralResult, error)
+	VerifyToken(ctx context.Context, token string) (*model.GeneralResult, error)
 	UpdateComputePlatform(ctx context.Context, id string, input model.WriteComputePlatformInput) (*model.GeneralResult, error)
 	CreateUser(ctx context.Context, input model.WriteUserInput) (*model.CreateUserResult, error)
 	UpdateUser(ctx context.Context, userID string, input model.WriteUserInput) (*model.GeneralResult, error)
@@ -367,6 +369,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.UpdateUser(childComplexity, args["userID"].(string), args["input"].(model.WriteUserInput)), true
+	case "Mutation.verifyToken":
+		if e.complexity.Mutation.VerifyToken == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_verifyToken_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.VerifyToken(childComplexity, args["token"].(string)), true
 
 	case "Query.computePlatforms":
 		if e.complexity.Query.ComputePlatforms == nil {
@@ -781,6 +794,17 @@ func (ec *executionContext) field_Mutation_updateUser_args(ctx context.Context, 
 		return nil, err
 	}
 	args["input"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_verifyToken_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "token", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["token"] = arg0
 	return args, nil
 }
 
@@ -1435,6 +1459,53 @@ func (ec *executionContext) fieldContext_Mutation_signOut(_ context.Context, fie
 			}
 			return nil, fmt.Errorf("no field named %q was found under type GeneralResult", field.Name)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_verifyToken(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_verifyToken,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().VerifyToken(ctx, fc.Args["token"].(string))
+		},
+		nil,
+		ec.marshalNGeneralResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐGeneralResult,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_verifyToken(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "success":
+				return ec.fieldContext_GeneralResult_success(ctx, field)
+			case "error":
+				return ec.fieldContext_GeneralResult_error(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type GeneralResult", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_verifyToken_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -4608,6 +4679,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "signOut":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_signOut(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "verifyToken":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_verifyToken(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++

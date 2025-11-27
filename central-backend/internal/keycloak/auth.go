@@ -1,12 +1,14 @@
 package keycloak
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/logger"
@@ -32,6 +34,48 @@ func NewKeycloakAuthService() *KeycloakAuthService {
 		client: consts.ClientID,
 		kcUser: NewKeycloakUserService(),
 	}
+}
+
+func (kc *KeycloakAuthService) VerifyToken(token string) (bool, error) {
+	if token == "" {
+		return false, fmt.Errorf("token is empty")
+	}
+
+	// Parse JWT token to extract claims
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return false, fmt.Errorf("invalid JWT token format")
+	}
+
+	// Decode the payload (second part)
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return false, fmt.Errorf("failed to decode JWT payload: %w", err)
+	}
+
+	var claims map[string]any
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return false, fmt.Errorf("failed to parse JWT payload: %w", err)
+	}
+
+	// Verify issuer matches our Keycloak realm
+	expectedIssuer := fmt.Sprintf("%s/realms/%s", kc.host, kc.realm)
+	iss, ok := claims["iss"].(string)
+	if !ok || iss != expectedIssuer {
+		return false, fmt.Errorf("invalid issuer: expected %s, got %v", expectedIssuer, claims["iss"])
+	}
+
+	// Verify token is not expired
+	exp, ok := claims["exp"].(float64)
+	if !ok {
+		return false, fmt.Errorf("expiration claim not found in token")
+	}
+
+	if time.Now().Unix() >= int64(exp) {
+		return false, fmt.Errorf("token is expired")
+	}
+
+	return true, nil
 }
 
 func UserSignIn(keycloakHost, realm, clientID, username, password string) (string, error) {

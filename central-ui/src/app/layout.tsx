@@ -2,12 +2,14 @@
 
 import React, { type PropsWithChildren } from 'react';
 import dynamic from 'next/dynamic';
+import { ROUTES } from '@/utils';
 import client from '@/lib/apollo-client';
 import { ApolloProvider } from '@apollo/client';
 import { useDarkMode } from '@odigos/ui-kit/store';
 import { ToastList } from '@odigos/ui-kit/containers';
 
 const ThemeProvider = dynamic(() => import('@/lib/theme-provider'), { ssr: false });
+const ProtectedRoute = dynamic(() => import('@/components/auth/protected-route'), { ssr: false });
 
 function RootLayout({ children }: PropsWithChildren) {
   const { darkMode } = useDarkMode();
@@ -32,7 +34,9 @@ function RootLayout({ children }: PropsWithChildren) {
       >
         <ThemeProvider>
           <ToastList />
-          <ApolloProvider client={client}>{children}</ApolloProvider>
+          <ApolloProvider client={client}>
+            <ProtectedRoute signInPath={ROUTES.SIGN_IN}>{children}</ProtectedRoute>
+          </ApolloProvider>
         </ThemeProvider>
       </body>
     </html>

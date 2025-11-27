@@ -1,5 +1,14 @@
 import { gql } from '@apollo/client';
 
+export const VERIFY_TOKEN = gql`
+  mutation VerifyToken($token: String!) {
+    verifyToken(token: $token) {
+      success
+      error
+    }
+  }
+`;
+
 export const SIGN_IN = gql`
   mutation SignIn($email: String!, $password: String!) {
     signIn(email: $email, password: $password) {

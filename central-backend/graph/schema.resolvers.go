@@ -33,6 +33,11 @@ func (r *mutationResolver) SignOut(ctx context.Context) (*model.GeneralResult, e
 	return r.AuthService.SignOut(ctx)
 }
 
+// VerifyToken is the resolver for the verifyToken field.
+func (r *mutationResolver) VerifyToken(ctx context.Context, token string) (*model.GeneralResult, error) {
+	return r.AuthService.VerifyToken(ctx, token)
+}
+
 // UpdateComputePlatform is the resolver for the updateComputePlatform field.
 func (r *mutationResolver) UpdateComputePlatform(ctx context.Context, id string, input model.WriteComputePlatformInput) (*model.GeneralResult, error) {
 	for _, userID := range input.AddUserIds {
