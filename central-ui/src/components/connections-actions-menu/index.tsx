@@ -2,10 +2,11 @@
 
 import React, { useEffect, useMemo } from 'react';
 import styled from 'styled-components';
+import Theme from '@odigos/ui-kit/theme';
 import { useComputePlatformsCRUD } from '@/hooks';
-import { SearchIcon } from '@odigos/ui-kit/icons';
 import { useFilterStore } from '@odigos/ui-kit/store';
-import { Badge, Divider, Dropdown, DropdownOption, DropdownProps, FlexRow, Input, Text } from '@odigos/ui-kit/components';
+import { RefreshIcon, SearchIcon } from '@odigos/ui-kit/icons';
+import { Badge, Button, Divider, Dropdown, DropdownOption, DropdownProps, FlexRow, Input, Text } from '@odigos/ui-kit/components';
 
 const Container = styled.div`
   display: flex;
@@ -24,8 +25,13 @@ const SearchAndFilterWrapper = styled.div`
   width: 200px;
 `;
 
+const PushRight = styled.div`
+  margin-left: auto;
+`;
+
 export const ConnectionsActionsMenu = () => {
-  const { computePlatforms } = useComputePlatformsCRUD();
+  const theme = Theme.useTheme();
+  const { computePlatforms, refetch, loading } = useComputePlatformsCRUD();
   const { searchText, setSearchText, statuses, setStatuses, platformTypes, setPlatformTypes, clearAll } = useFilterStore();
 
   // cleanup filters on unmount
@@ -101,6 +107,13 @@ export const ConnectionsActionsMenu = () => {
           />
         </SearchAndFilterWrapper>
       </FlexRow>
+
+      <PushRight>
+        <Button onClick={() => refetch()} disabled={loading}>
+          <RefreshIcon fill={theme.text.primary} />
+          {loading ? 'Refreshing...' : 'Refresh Connections'}
+        </Button>
+      </PushRight>
     </Container>
   );
 };
