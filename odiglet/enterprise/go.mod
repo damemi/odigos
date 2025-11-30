@@ -11,10 +11,10 @@ require (
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
 	github.com/odigos-io/odigos/api v0.0.0
-	github.com/odigos-io/odigos/common v1.10.3-pre0
-	github.com/odigos-io/odigos/instrumentation v1.9.0-pre0.0.20251121151608-a6a313617bd9
+	github.com/odigos-io/odigos/common v1.9.0-pre0.0.20251130073709-1904898de3da
+	github.com/odigos-io/odigos/instrumentation v1.9.0-pre0.0.20251130073709-1904898de3da
 	github.com/odigos-io/odigos/k8sutils v0.0.0
-	github.com/odigos-io/odigos/odiglet v1.9.0-pre0.0.20251121151608-a6a313617bd9
+	github.com/odigos-io/odigos/odiglet v1.9.0-pre0.0.20251130073709-1904898de3da
 	github.com/odigos-io/odigos/procdiscovery v0.0.0
 	go.opentelemetry.io/auto v0.22.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.38.0
@@ -32,7 +32,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/cilium/ebpf v0.19.1-0.20250815145053-c9de60689836 // indirect
+	github.com/cilium/ebpf v0.20.0 // indirect
 	github.com/cornelk/hashmap v1.0.8 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/elliotchance/orderedmap v1.6.0 // indirect
@@ -68,8 +68,8 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/odigos-io/ebpf-core v0.0.0-20251102122413-969af5085cd5 // indirect
-	github.com/odigos-io/odigos/distros v1.10.3-pre0 // indirect
-	github.com/odigos-io/odigos/opampserver v1.9.0-pre0.0.20251121151608-a6a313617bd9 // indirect
+	github.com/odigos-io/odigos/distros v1.9.0-pre0.0.20251130073709-1904898de3da // indirect
+	github.com/odigos-io/odigos/opampserver v1.9.0-pre0.0.20251130073709-1904898de3da // indirect
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5 // indirect
 	github.com/odigos-io/runtime-detector v0.0.21 // indirect
 	github.com/parca-dev/parca-agent v0.9.1 // indirect
@@ -146,19 +146,19 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20251120143931-a260c219e74a
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20251129203956-1bf1e904961d
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.9.0-pre0.0.20251121151608-a6a313617bd9
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.9.0-pre0.0.20251130073709-1904898de3da
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.9.0-pre0.0.20251121151608-a6a313617bd9
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.9.0-pre0.0.20251130073709-1904898de3da
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.9.0-pre0.0.20251121151608-a6a313617bd9
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.9.0-pre0.0.20251130073709-1904898de3da
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.9.0-pre0.0.20251121151608-a6a313617bd9
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.9.0-pre0.0.20251130073709-1904898de3da
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.9.0-pre0.0.20251121151608-a6a313617bd9
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.9.0-pre0.0.20251130073709-1904898de3da
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.9.0-pre0.0.20251121151608-a6a313617bd9
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.9.0-pre0.0.20251130073709-1904898de3da
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
