@@ -1,10 +1,10 @@
+import { type FC, type ReactNode, useEffect } from 'react';
 import { VERIFY_TOKEN } from '@/graphql';
 import { useUserStore } from '@/store';
 import { GeneralResult } from '@/types';
 import { useMutation } from '@apollo/client';
-import { CenterThis, FadeLoader } from '@odigos/ui-kit/components';
 import { usePathname, useRouter } from 'next/navigation';
-import { FC, ReactNode, useEffect } from 'react';
+import { CenterThis, FadeLoader } from '@odigos/ui-kit/components';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -14,33 +14,38 @@ interface ProtectedRouteProps {
 const ProtectedRoute: FC<ProtectedRouteProps> = ({ children, signInPath }) => {
   const router = useRouter();
   const pathname = usePathname();
-  const { token } = useUserStore();
-  const isSignInPath = pathname === signInPath;
+  const { token, clearAuth } = useUserStore();
+
+  const isOnSignInPath = pathname === signInPath;
+  const goToSignIn = () => {
+    clearAuth();
+    router.push(signInPath);
+  };
 
   const [verifyToken, { loading }] = useMutation<{ verifyToken: GeneralResult }, { token: string }>(VERIFY_TOKEN, {
     onError: (error) => {
       console.error(error);
-      router.push(signInPath);
+      goToSignIn();
     },
     onCompleted: (data) => {
       if (!data.verifyToken.success) {
-        router.push(signInPath);
+        goToSignIn();
       }
     },
   });
 
   useEffect(() => {
-    if (!isSignInPath) {
-      // If not on sign in path, check the token
-      if (token) {
-        verifyToken({ variables: { token } });
-      } else {
-        router.push(signInPath);
-      }
-    }
-  }, [isSignInPath, token]);
+    if (isOnSignInPath) return;
 
-  if (!isSignInPath && (loading || !token)) {
+    // If signed in, verify the token
+    if (token) {
+      verifyToken({ variables: { token } });
+    } else {
+      goToSignIn();
+    }
+  }, [isOnSignInPath, token]);
+
+  if (!isOnSignInPath && (loading || !token)) {
     return (
       <CenterThis style={{ height: '100vh' }}>
         <FadeLoader scale={2} />

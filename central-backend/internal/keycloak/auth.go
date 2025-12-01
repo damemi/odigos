@@ -58,13 +58,6 @@ func (kc *KeycloakAuthService) VerifyToken(token string) (bool, error) {
 		return false, fmt.Errorf("failed to parse JWT payload: %w", err)
 	}
 
-	// Verify issuer matches our Keycloak realm
-	expectedIssuer := fmt.Sprintf("%s/realms/%s", kc.host, kc.realm)
-	iss, ok := claims["iss"].(string)
-	if !ok || iss != expectedIssuer {
-		return false, fmt.Errorf("invalid issuer: expected %s, got %v", expectedIssuer, claims["iss"])
-	}
-
 	// Verify token is not expired
 	exp, ok := claims["exp"].(float64)
 	if !ok {
