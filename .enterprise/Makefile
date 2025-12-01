@@ -39,6 +39,18 @@ build-odiglet-with-otel_agents:
 build-instrumentor:
 	$(MAKE) build-image/instrumentor SUMMARY="Instrumentor for Odigos" DESCRIPTION="Instrumentor manages auto-instrumentation for workloads with Odigos." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
+.PHONY: build-central-backend
+build-central-backend:
+	$(MAKE) build-image/central-backend SUMMARY="Central Backend for Odigos" DESCRIPTION="Central Backend is the core component of Odigos Central, responsible for managing the data flow from the cluster to the ui." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
+.PHONY: build-central-ui
+build-central-ui:
+	$(MAKE) build-image/central-ui DOCKERFILE=central-ui/$(DOCKERFILE) BUILD_DIR=central-ui SUMMARY="Central UI for Odigos" DESCRIPTION="Central UI is the web interface for Odigos Central, providing a user-friendly way to manage and visualize the data collected by Odigos." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
+.PHONY: build-central-proxy
+build-central-proxy:
+	$(MAKE) build-image/central-proxy SUMMARY="Central Proxy for Odigos" DESCRIPTION="Central Proxy is handle the communication between the cluster that Odigos is running in and the Odigos Central." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
 .PHONY: build-agents
 build-agents:
 	$(MAKE) build-image/agents DOCKERFILE=agents/$(DOCKERFILE) SUMMARY="Odigos Enterprise Agents" DESCRIPTION="The Odigos Agents used to copy Odigos agent relevant files into the user workloads." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
@@ -46,6 +58,10 @@ build-agents:
 .PHONY: build-images
 build-images:
 	make -j 2 build-odiglet build-instrumentor TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
+
+.PHONY: build-central-images
+build-central-images:
+	make -j 3 build-central-backend build-central-ui build-central-proxy TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
 
 .PHONY: build-images-with-agents
 build-images-with-agents:
@@ -79,13 +95,37 @@ load-to-kind-%:
 load-to-kind:
 	make -j 2 load-to-kind-instrumentor load-to-kind-odiglet ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
 
+.PHONY: load-central-to-kind
+load-central-to-kind:
+	make -j 3 load-to-kind-central-backend load-to-kind-central-ui load-to-kind-central-proxy ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
+
 .PHONY: restart-odiglet
 restart-odiglet:
-	kubectl rollout restart daemonset odiglet -n odigos-system
+	kubectl rollout restart daemonset odiglet -n odigos-system || true
 
 .PHONY: restart-instrumentor
 restart-instrumentor:
-	kubectl rollout restart deployment odigos-instrumentor -n odigos-system
+	kubectl rollout restart deployment odigos-instrumentor -n odigos-system || true
+
+.PHONY: restart-central-backend
+restart-central-backend:
+	kubectl rollout restart deployment central-backend -n odigos-central || true
+
+.PHONY: restart-central-ui
+restart-central-ui:
+	kubectl rollout restart deployment central-ui -n odigos-central || true
+
+.PHONY: restart-central-proxy
+restart-central-proxy:
+	kubectl rollout restart deployment central-proxy -n odigos-central || true
+
+.PHONY: restart-all
+restart-all:
+	make restart-odiglet && make restart-instrumentor && make restart-central-backend && make restart-central-ui && make restart-central-proxy
+
+.PHONY: restart-central
+restart-central:
+	make restart-central-backend && make restart-central-ui && make restart-central-proxy
 
 .PHONY: deploy-odiglet
 deploy-odiglet:
@@ -103,9 +143,25 @@ deploy-instrumentor:
 deploy-agents:
 	make build-agents TAG=$(TAG) && make load-to-kind-agents TAG=$(TAG)
 
+.PHONY: deploy-central-backend
+deploy-central-backend:
+	make build-central-backend TAG=$(TAG) && make load-to-kind-central-backend TAG=$(TAG) && make restart-central-backend
+
+.PHONY: deploy-central-ui
+deploy-central-ui:
+	make build-central-ui TAG=$(TAG) && make load-to-kind-central-ui TAG=$(TAG) && make restart-central-ui
+
+.PHONY: deploy-central-proxy
+deploy-central-proxy:
+	make build-central-proxy TAG=$(TAG) && make load-to-kind-central-proxy TAG=$(TAG) && make restart-central-proxy
+
 .PHONY: deploy
 deploy:
 	make build-images TAG=$(TAG) && make load-to-kind TAG=$(TAG) && make restart-odiglet && make restart-instrumentor
+
+.PHONY: deploy-central
+deploy-central:
+	make build-central-images TAG=$(TAG) && make load-central-to-kind TAG=$(TAG) && make restart-central
 
 # Use these to deploy Odigos Enterprise into an EKS cluster
 
@@ -138,9 +194,9 @@ publish-to-ecr:
 	make ecr-login
 	make -j 3 build-tag-push-ecr-image/odiglet DOCKERFILE=odiglet/$(DOCKERFILE) SUMMARY="Odiglet for Odigos" DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 	make -j 3 build-tag-push-ecr-image/instrumentor SUMMARY="Instrumentor for Odigos" DESCRIPTION="Instrumentor manages auto-instrumentation for workloads with Odigos." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	make -j 3 build-tag-push-ecr-image/central-backend SUMMARY="Central Backend for Odigos" DESCRIPTION="Central Backend is the core component of Odigos Central, responsible for managing the data flow from the cluster to the ui." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 	make -j 3 build-tag-push-ecr-image/central-ui BUILD_DIR=central-ui DOCKERFILE=central-ui/$(DOCKERFILE) SUMMARY="Central UI for Odigos" DESCRIPTION="Central UI is the web interface for Odigos Central, providing a user-friendly way to manage and visualize the data collected by Odigos." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 	make -j 3 build-tag-push-ecr-image/central-proxy SUMMARY="Central Proxy for Odigos" DESCRIPTION="Central Proxy is handle the communication between the cluster that Odigos is running in and the Odigos Central." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
-	make -j 3 build-tag-push-ecr-image/central-backend SUMMARY="Central Backend for Odigos" DESCRIPTION="Central Backend is the core component of Odigos Central, responsible for managing the data flow from the cluster to the ui." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 	echo "✅ Publish Odigos images into ECR, now install the CLI"
 
 ALL_GO_MOD_DIRS := $(shell find . -type f -name 'go.mod' -exec dirname {} \; | sort | grep -v "licenses")
@@ -160,4 +216,3 @@ debug-odiglet:
 	kubectl delete pod -n odigos-system -l app.kubernetes.io/name=odiglet
 	kubectl wait --for=condition=ready pod -n odigos-system -l app.kubernetes.io/name=odiglet
 	kubectl port-forward -n odigos-system daemonset/odiglet 2345:2345
-
