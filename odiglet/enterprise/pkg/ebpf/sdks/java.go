@@ -68,15 +68,42 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 }
 
 func (g *JavaOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.Status, error) {
-	if err := g.inst.Load(ctx); err != nil {
+	javaStatus, err := g.inst.Load(ctx)
+	if err != nil {
 		return instrumentation.Status{}, err
+	}
+
+	status := instrumentation.Status{
+		Components: make(map[string]error),
+	}
+
+	// Convert Java instrumentation status to odiglet status format
+	if javaStatus != nil {
+		// Add library components
+		for _, lib := range javaStatus.Libraries {
+			isLoaded := lib.ClassCount > 0
+			isTransformed := len(lib.AdviceClasses) > 0
+
+			if isTransformed {
+				status.Components[lib.Name] = nil
+			} else if isLoaded {
+				status.Components[lib.Name] = fmt.Errorf("library loaded but not transformed")
+			}
+		}
+
+		log.Logger.V(0).Info("Java instrumentation loaded",
+			"nativeLibLoaded", javaStatus.NativeLibLoaded,
+			"byteBuddyClassCount", javaStatus.ByteBuddyClassCount,
+			"byteBuddyAuxiliaryCount", javaStatus.ByteBuddyAuxiliaryCount,
+			"agentInitialized", javaStatus.AgentInitialized,
+			"librariesCount", len(javaStatus.Libraries))
 	}
 
 	if err := g.ApplyConfig(ctx, g.config); err != nil {
 		return instrumentation.Status{}, err
 	}
 
-	return instrumentation.Status{}, nil
+	return status, nil
 }
 
 func (g *JavaOtelEbpfSdkEnterprise) Run(ctx context.Context) error {

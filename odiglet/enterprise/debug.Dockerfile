@@ -127,8 +127,8 @@ COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.0.8 /instrumentati
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
 
 # Java
-COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v0.10.3 /instrumentations/java-ebpf /instrumentations/java-ebpf
-COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v0.10.3 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v0.10.6 /instrumentations/java-ebpf /instrumentations/java-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v0.10.6 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
 
 # PHP
 COPY --from=php-agents /php-agents/opentelemetry-php/8.1 /instrumentations/php/8.1
