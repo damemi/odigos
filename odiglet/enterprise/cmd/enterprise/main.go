@@ -12,7 +12,6 @@ import (
 
 	enterprisedistros "github.com/odigos-io/odigos-enterprise/distros"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/sdks"
-	_ "github.com/odigos-io/odigos-enterprise/odiglet/pkg/nodedetails"
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	commonInstrumentation "github.com/odigos-io/odigos/instrumentation"
@@ -45,7 +44,7 @@ func main() {
 
 	// If started in init mode
 	if len(os.Args) == 2 && os.Args[1] == "init" {
-		odiglet.OdigletInitPhase(cfg, clientset)
+		odiglet.OdigletInitPhase(clientset)
 	}
 
 	if err := log.Init(); err != nil {

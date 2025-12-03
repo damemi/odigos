@@ -19,7 +19,6 @@ require (
 	go.opentelemetry.io/auto v0.22.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
-	k8s.io/api v0.34.1
 	k8s.io/client-go v0.34.1
 	sigs.k8s.io/controller-runtime v0.22.1
 )
@@ -131,6 +130,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	k8s.io/api v0.34.1 // indirect
 	k8s.io/apiextensions-apiserver v0.34.1 // indirect
 	k8s.io/apimachinery v0.34.1 // indirect
 	k8s.io/cri-api v0.34.1 // indirect
@@ -150,7 +150,7 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20251129203956-1bf1e904961d
 
-replace github.com/odigos-io/odigos/api => github.com/tamirdavid1/odigos/api v0.0.0-20251203115945-e32272c371cf
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.9.0-pre0.0.20251130073709-1904898de3da
 
 replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.9.0-pre0.0.20251130073709-1904898de3da
 
@@ -165,5 +165,3 @@ replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distr
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
 replace github.com/odigos-io/odigos-enterprise/distros => ../distros
-
-replace github.com/odigos-io/odigos/odiglet => github.com/tamirdavid1/odigos/odiglet v0.0.0-20251203115945-e32272c371cf

@@ -140,6 +140,8 @@ github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20251129203956-1bf1e90
 github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20251129203956-1bf1e904961d/go.mod h1:PfTKVRaIVS0u7CNhceQaFHrrgbYTZIdBvmUOsVvEAco=
 github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752 h1:Fv18bWsleIZzGy+SWOuwva3IYlcoEOclDxRy/WnypB8=
 github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752/go.mod h1:J5jQgrjFpdwSS2N924u5suppg1rSDkm536Fb3ZHDFwU=
+github.com/odigos-io/odigos/api v1.9.0-pre0.0.20251130073709-1904898de3da h1:SArfdWMHNRJgEMg9DdRKDTW3KX0N6OMnup5GP/L/p2c=
+github.com/odigos-io/odigos/api v1.9.0-pre0.0.20251130073709-1904898de3da/go.mod h1:5yAD98JWPu0VEqQBPK0rZdIFwGF/++mmrJ9pAAqs9s4=
 github.com/odigos-io/odigos/common v1.9.0-pre0.0.20251130073709-1904898de3da h1:vf58nlm5o5EOA+FGNfU9DaNKtPB/zcMKxMGh1iy8nl4=
 github.com/odigos-io/odigos/common v1.9.0-pre0.0.20251130073709-1904898de3da/go.mod h1:tGtU3Z+g2XFtyx4G4QP6gy/YcHlc6TXsOWdXltAoVzk=
 github.com/odigos-io/odigos/distros v1.9.0-pre0.0.20251130073709-1904898de3da h1:3eIToFf8/4I7eG6K8pPNJCRO9F2H2SRTN5y3TmYCtr8=
@@ -148,6 +150,8 @@ github.com/odigos-io/odigos/instrumentation v1.9.0-pre0.0.20251130073709-1904898
 github.com/odigos-io/odigos/instrumentation v1.9.0-pre0.0.20251130073709-1904898de3da/go.mod h1:J1oqi3evsdWE1VLw1Fr2bAl4bxUNrDpumbhD+kEvaBo=
 github.com/odigos-io/odigos/k8sutils v1.9.0-pre0.0.20251130073709-1904898de3da h1:AAwZNOpyO3PRwS0Vi9zkf+i/7hlX2e4a/k2Suc2VO3o=
 github.com/odigos-io/odigos/k8sutils v1.9.0-pre0.0.20251130073709-1904898de3da/go.mod h1:wPKHs4VZdo80w4z6HDWGrv+gRpUU+EdN6SBPVMvmUDc=
+github.com/odigos-io/odigos/odiglet v1.9.0-pre0.0.20251130073709-1904898de3da h1:ZMn+gyZYQ4ZNlHT+ZiFGbI2HixA9QyzbRwtzECzx38M=
+github.com/odigos-io/odigos/odiglet v1.9.0-pre0.0.20251130073709-1904898de3da/go.mod h1:TuNd1YlpXp4iITsLE0YIttHsxbVkzZcxBYwFF+w/Omk=
 github.com/odigos-io/odigos/opampserver v1.9.0-pre0.0.20251130073709-1904898de3da h1:5CoVUcRBqkRTlV2hHqHN/OdIfhbnhh7GatGCiHpbFkw=
 github.com/odigos-io/odigos/opampserver v1.9.0-pre0.0.20251130073709-1904898de3da/go.mod h1:v4r9PxaB/Cd930fL+fJVsh7YW08HTDwWTA//0BAN8I8=
 github.com/odigos-io/odigos/procdiscovery v1.9.0-pre0.0.20251130073709-1904898de3da h1:WhqxC4zZGINAcYZ3/n5CN1NmjDvijik5gMw7hhiHLlA=
@@ -198,10 +202,6 @@ github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UV
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu7U=
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
-github.com/tamirdavid1/odigos/api v0.0.0-20251203115945-e32272c371cf h1:a9JIUd50eTe29PxAemLUq1VVsaLKcfKqhivKHqXi/FI=
-github.com/tamirdavid1/odigos/api v0.0.0-20251203115945-e32272c371cf/go.mod h1:5yAD98JWPu0VEqQBPK0rZdIFwGF/++mmrJ9pAAqs9s4=
-github.com/tamirdavid1/odigos/odiglet v0.0.0-20251203115945-e32272c371cf h1:LUwBLp/b2mPC/18kEnyDQFNzyH9fJs6UDfQZVH+E7ns=
-github.com/tamirdavid1/odigos/odiglet v0.0.0-20251203115945-e32272c371cf/go.mod h1:TuNd1YlpXp4iITsLE0YIttHsxbVkzZcxBYwFF+w/Omk=
 github.com/tj/assert v0.0.3 h1:Df/BlaZ20mq6kuai7f5z2TvPFiwC3xaWJSDQNiIS3Rk=
 github.com/tj/assert v0.0.3/go.mod h1:Ne6X72Q+TB1AteidzQncjw9PabbMp4PBMZ1k+vd1Pvk=
 github.com/x448/float16 v0.8.4 h1:qLwI1I70+NjRFUR3zs1JPUCgaCXSh3SW62uAKT1mSBM=
