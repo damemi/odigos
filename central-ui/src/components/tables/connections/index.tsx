@@ -23,8 +23,8 @@ export enum ConnectionsTableColumn {
 }
 
 export const ConnectionsTable: React.FC = () => {
-  const timeAgo = useTimeAgo();
   const { isAdmin } = useUserStore();
+  const { formatTimeAgo } = useTimeAgo();
   const { clearStore } = useSetupStore();
   const { selectProxyID } = useProxyID();
   const { deleteProxy, deleting } = useProxyCRUD();
@@ -102,12 +102,12 @@ export const ConnectionsTable: React.FC = () => {
           {
             columnKey: ConnectionsTableColumn.ConnectedSince,
             value: cp.connectedAt || '',
-            component: () => (cp.status === StatusType.Success && cp.connectedAt ? <div>{timeAgo.format(cp.connectedAt)}</div> : <div>—</div>),
+            component: () => (cp.status === StatusType.Success && cp.connectedAt ? <div>{formatTimeAgo(cp.connectedAt)}</div> : <div>—</div>),
           },
           {
             columnKey: ConnectionsTableColumn.LastActivity,
             value: cp.lastSeenAt || '',
-            component: () => (cp.lastSeenAt ? <div>{timeAgo.format(cp.lastSeenAt)}</div> : <div>—</div>),
+            component: () => (cp.lastSeenAt ? <div>{formatTimeAgo(cp.lastSeenAt)}</div> : <div>—</div>),
           },
           {
             columnKey: ConnectionsTableColumn.Status,

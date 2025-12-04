@@ -4,35 +4,34 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "cross-env NODE_ENV=production next build",
-    "build:analyze": "cross-env ANALYZE=true next build",
+    "prebuild": "rm -rf out .next",
+    "build": "cross-env NODE_ENV=production next build --turbopack",
+    "build:analyze": "cross-env ANALYZE=true next build --turbopack",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
     "@apollo/client": "^3.13.9",
-    "@odigos/ui-kit": "^0.0.129",
-    "graphql": "^16.11.0",
+    "@odigos/ui-kit": "^0.0.134",
+    "graphql": "^16.12.0",
     "graphql-ws": "^6.0.6",
-    "next": "15.5.6",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "next": "16.0.7",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
     "styled-components": "^6.1.19",
-    "zustand": "^5.0.8"
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@next/bundle-analyzer": "^15.5.6",
+    "@next/bundle-analyzer": "^16.0.7",
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/styled-components": "^5.1.35",
+    "@types/styled-components": "^5.1.36",
     "babel-plugin-styled-components": "^2.1.4",
-    "compression-webpack-plugin": "^11.1.0",
     "cross-env": "^10.1.0",
     "eslint": "^9",
-    "eslint-config-next": "15.5.6",
-    "terser-webpack-plugin": "^5.3.14",
+    "eslint-config-next": "16.0.7",
     "typescript": "^5"
   }
 }
