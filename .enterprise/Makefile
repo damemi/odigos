@@ -74,6 +74,8 @@ build-images-rhel:
 push-image/%:
 	docker buildx build --platform linux/amd64,linux/arm64/v8 -t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
 	--secret id=github_token,env=GITHUB_TOKEN \
+	$(if $(filter true,$(PUSH_IMAGE)),--push,) \
+	$(if $(filter true,$(GCP_MARKETPLACE)),--annotation="index:com.googleapis.cloudmarketplace.product.service.name=services/odigos.endpoints.odigos-public.cloud.goog",) \
 	--build-arg SERVICE_NAME="$*" \
 	--build-arg VERSION=$(TAG) \
 	--build-arg RELEASE=$(TAG) \
@@ -87,6 +89,10 @@ push-odiglet:
 .PHONY: push-instrumentor
 push-instrumentor:
 	$(MAKE) push-image/instrumentor SUMMARY="Instrumentor for Odigos" DESCRIPTION="Instrumentor manages auto-instrumentation for workloads with Odigos." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
+.PHONY: push-agents
+push-agents:
+	$(MAKE) push-image/agents DOCKERFILE=agents/$(DOCKERFILE) SUMMARY="Odigos Enterprise Agents" DESCRIPTION="The Odigos Agents used to copy Odigos agent relevant files into the user workloads." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 load-to-kind-%:
 	kind load docker-image $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG)
