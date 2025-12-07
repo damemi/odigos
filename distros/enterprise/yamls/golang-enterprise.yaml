@@ -19,4 +19,5 @@ spec:
   # since we intentionally skip setting node affinity when the mount method is 'virtual device'.
   runtimeAgent:
     device: 'instrumentation.odigos.io/generic'
+    waspSupported: true
     k8sAttrsViaEnvVars: true
