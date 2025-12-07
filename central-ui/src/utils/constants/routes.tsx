@@ -10,6 +10,7 @@ export const ROUTES = {
   DESTINATIONS: (proxyID: string) => `/destinations/${proxyID}`,
   ACTIONS: (proxyID: string) => `/actions/${proxyID}`,
   INSTRUMENTATION_RULES: (proxyID: string) => `/instrumentation-rules/${proxyID}`,
+  SETTINGS: (proxyID: string) => `/settings/${proxyID}`,
 
   SERVICE_MAP: (proxyID: string) => `/service-map/${proxyID}`,
 };
