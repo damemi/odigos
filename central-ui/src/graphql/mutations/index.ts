@@ -6,7 +6,6 @@ export * from './destinations';
 export * from './proxy';
 export * from './instrumentation-rules';
 export * from './namespaces';
-export * from './remote-config';
 export * from './sources';
 export * from './teams';
 export * from './tokens';

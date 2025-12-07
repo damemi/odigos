@@ -10,7 +10,6 @@ export * from './instrumentation-rules';
 export * from './metrics';
 export * from './namespaces';
 export * from './proxy';
-export * from './remote-config';
 export * from './sources';
 export * from './teams';
 export * from './tokens';
