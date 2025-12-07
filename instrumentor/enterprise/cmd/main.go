@@ -17,6 +17,7 @@ import (
 
 	"github.com/odigos-io/odigos/instrumentor"
 
+	"github.com/odigos-io/odigos-enterprise/instrumentor/wasp"
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -69,7 +70,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	i, err := instrumentor.New(managerOptions, dp, nil, imagePullSecrets)
+	// always pass the wasp mutator function, it will only be invoked if wasp is opt in in the effective configuration
+	i, err := instrumentor.New(managerOptions, dp, wasp.PodMutator, imagePullSecrets)
 	if err != nil {
 		logger.Error(err, "Failed to initialize instrumentor")
 		os.Exit(1)
@@ -94,3 +96,4 @@ func main() {
 	i.Run(ctx, telemetryDisabled)
 	logger.V(0).Info("instrumentor exiting")
 }
+

@@ -134,10 +134,25 @@ spec:
     - name: Verify Trace - Context Propagation
       try:
         - script:
+            timeout: 1m
             content: |
               yaml=$(mktemp)
-              curl -sSL --retry 5 --retry-delay 5 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/context-propagation.yaml
-              curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
+              script=$(mktemp)
+
+              curl -sSL --retry 5 --retry-delay 5 -o "$yaml" \
+                https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/context-propagation.yaml
+              curl -sSL --retry 5 --retry-delay 5 -o "$script" \
+                https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh
+
+              while true; do
+                bash "$script" "$yaml"
+                if [ $? -eq 0 ]; then
+                  break
+                fi
+                sleep 1
+              done
+
+              rm -f "$yaml" "$script"
       catch:
         - podLogs:
             name: odiglet

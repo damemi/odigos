@@ -6,6 +6,9 @@ WORKDIR /workspace
 COPY distros/ distros/
 COPY odigosauth/ odigosauth/
 
+RUN --mount=type=secret,id=github_token \
+    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
+
 WORKDIR /workspace/$SERVICE_NAME
 RUN mkdir -p /workspace/build
 # Pre-copy/cache go.mod for pre-downloading dependencies and only redownloading

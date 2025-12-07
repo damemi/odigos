@@ -6,16 +6,18 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
+	github.com/odigos-io/odigos/api v1.9.0-pre0.0.20251130073709-1904898de3da
+	github.com/odigos-io/odigos/common v1.9.0-pre0.0.20251204193538-8b681e2c47ee
 	github.com/odigos-io/odigos/instrumentor v1.9.0-pre0.0.20251204193538-8b681e2c47ee
+	github.com/odigos-io/odigos/k8sutils v1.9.0-pre0.0.20251130073709-1904898de3da
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5
+	github.com/odigos-io/wasp-handshake v0.0.0-20251125161815-ff3306f4add1
+	k8s.io/api v0.34.1
 	k8s.io/client-go v0.34.1
 	sigs.k8s.io/controller-runtime v0.22.1
 )
 
-require (
-	github.com/openshift/api v0.0.0-20251103120323-33ccad512a44 // indirect
-	go.uber.org/automaxprocs v1.6.0 // indirect
-)
+require github.com/openshift/api v0.0.0-20251103120323-33ccad512a44 // indirect
 
 require (
 	github.com/agoda-com/opentelemetry-logs-go v0.4.0 // indirect
@@ -46,17 +48,14 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/odigos-io/odigos/api v1.9.0-pre0.0.20251204193538-8b681e2c47ee // indirect
-	github.com/odigos-io/odigos/common v1.9.0-pre0.0.20251204193538-8b681e2c47ee // indirect
 	github.com/odigos-io/odigos/distros v1.9.0-pre0.0.20251204193538-8b681e2c47ee // indirect
-	github.com/odigos-io/odigos/k8sutils v1.9.0-pre0.0.20251204193538-8b681e2c47ee // indirect
 	github.com/open-policy-agent/cert-controller v0.14.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_golang v1.22.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.65.0 // indirect
-	github.com/prometheus/procfs v0.16.1 // indirect
+	github.com/prometheus/procfs v0.17.0 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
@@ -73,7 +72,7 @@ require (
 	golang.org/x/net v0.44.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
-	golang.org/x/sys v0.36.0 // indirect
+	golang.org/x/sys v0.37.0 // indirect
 	golang.org/x/term v0.35.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
@@ -86,7 +85,6 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.34.1 // indirect
 	k8s.io/apiextensions-apiserver v0.34.1 // indirect
 	k8s.io/apimachinery v0.34.1 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect

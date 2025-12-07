@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/auto"
 	goAutoConfig "go.opentelemetry.io/auto/config"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.opentelemetry.io/otel/trace"
 	apitrace "go.opentelemetry.io/otel/trace"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/odigos-io/odigos/instrumentation"
 	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
+	wasp "github.com/odigos-io/wasp-handshake/common"
 )
 
 const rsaPublicKeyString = `-----BEGIN PUBLIC KEY-----
@@ -44,19 +46,24 @@ bwIDAQAB
 var offsetsFilePathEnv = "OTEL_GO_OFFSETS_FILE"
 
 type GoOtelEbpfSdkEnterprise struct {
-	inst *auto.Instrumentation
-	cp   *odigosebpf.ConfigProvider[goAutoConfig.InstrumentationConfig]
+	inst             *auto.Instrumentation
+	cp               *odigosebpf.ConfigProvider[goAutoConfig.InstrumentationConfig]
+	waspMaps         *wasp.Maps
+	waspMapsProvider wasp.MapsProvider
+	podName          string
 }
 
 type GoInstrumentationFactoryEnterprise struct {
 	offsetLastModified time.Time
 	offsetFileBytes    []byte
+	waspMapsProvider   wasp.MapsProvider
 	traceIdSuffix      uint8
 }
 
-func NewGoInstrumentationFactoryEnterprise(traceIdSuffix uint8) (instrumentation.Factory, error) {
+func NewGoInstrumentationFactoryEnterprise(traceIdSuffix uint8, ws wasp.MapsProvider) (instrumentation.Factory, error) {
 	g := &GoInstrumentationFactoryEnterprise{
 		offsetLastModified: time.Time{},
+		waspMapsProvider:   ws,
 		traceIdSuffix:      traceIdSuffix,
 	}
 	err := g.updateLocalOffsets()
@@ -112,6 +119,18 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 	return nil
 }
 
+func podNameFromSettings(settings instrumentation.Settings) string {
+	// getting the pod name from resource attributes is not the most elegant way of doing this
+	// consider the instrumentation.Settings is declared in OSS, and we don't want to put too much details there
+	for _, kv := range settings.ResourceAttributes {
+		if kv.Key == semconv.K8SPodNameKey {
+			return kv.Value.AsString()
+		}
+	}
+
+	return ""
+}
+
 func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
 	err := g.updateLocalOffsets()
 	if err != nil {
@@ -153,6 +172,22 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 		opts = append(opts, auto.WithOffsetFile(g.offsetFileBytes))
 	}
 
+	var (
+		waspMaps *wasp.Maps
+		podName  string
+	)
+
+	if g.waspMapsProvider != nil {
+		if podName = podNameFromSettings(settings); podName != "" {
+			log.Logger.V(0).Info("using wasp handshake for Go process", "pod", podName)
+			waspMaps, err = g.waspMapsProvider.Release(podName, pid)
+			if err != nil {
+				log.Logger.Error(err, "failed to acquire wasp maps")
+			} else {
+				opts = append(opts, auto.WithWASPHandshakeMaps(waspMaps))
+			}
+		}
+	}
 	if g.traceIdSuffix != 0 {
 		opts = append(opts, auto.WithTraceIdSuffix(g.traceIdSuffix))
 	}
@@ -163,12 +198,19 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 	)
 	if err != nil {
 		log.Logger.Error(err, "instrumentation setup failed")
+		if waspMaps != nil {
+			// return ownership of the wasp maps to the provider in case we failed to instrument this process
+			err = errors.Join(err, g.waspMapsProvider.Take(podName, waspMaps))
+		}
 		return nil, err
 	}
 
 	goInstWrapper := &GoOtelEbpfSdkEnterprise{
-		inst: inst,
-		cp:   cp,
+		inst:             inst,
+		cp:               cp,
+		waspMaps:         waspMaps,
+		waspMapsProvider: g.waspMapsProvider,
+		podName:          podName,
 	}
 
 	// payload collection configuration is done separately from the general config because of the deprecated ConfigBool method
@@ -186,6 +228,11 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 func (g *GoOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.Status, error) {
 	probeLoadStatus, err := g.inst.Load(ctx)
 	if err != nil {
+		if g.waspMaps != nil {
+			// if we failed to load, and the instrumentation took ownership over the wasp maps
+			// we return ownership back to the provider
+			err = errors.Join(err, g.waspMapsProvider.Take(g.podName, g.waspMaps))
+		}
 		return instrumentation.Status{}, err
 	}
 
@@ -203,7 +250,14 @@ func (g *GoOtelEbpfSdkEnterprise) Run(ctx context.Context) error {
 }
 
 func (g *GoOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
-	return g.inst.Close()
+	var err error
+	if g.waspMaps != nil {
+		// if the instrumentation had ownership of wasp maps - return ownership to the provider
+		// this will allow us to re-use the wasp maps if a new instrumentation is required in the same pod after this.
+		err = errors.Join(err, g.waspMapsProvider.Take(g.podName, g.waspMaps))
+	}
+	err = errors.Join(err, g.inst.Close())
+	return err
 }
 
 // Deprecated: this function will be removed in the future once we'll move to the generic config provider
