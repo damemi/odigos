@@ -33,6 +33,28 @@ func NewAuthService(redisClient *redisclient.RedisClient, adminService *AdminSer
 	}
 }
 
+func (svc *AuthService) GetRedirectUrlForSignIn(ctx context.Context, provider model.OidcProviderID) string {
+	providerID := provider.String()
+
+	idp, err := svc.adminService.GetIdentityProvider(providerID)
+	if err != nil {
+		logger.Log.Error("Failed to get identity provider", "error", err)
+		return ""
+	}
+
+	// If identity provider is not found, return empty string
+	if idp == nil {
+		return ""
+	}
+
+	// If identity provider is found, return the redirect URL
+	return svc.kcAuth.GetRedirectUrlForSignIn(providerID)
+}
+
+func (svc *AuthService) GetRedirectUrlForSignOut(ctx context.Context, idToken string) string {
+	return svc.kcAuth.GetRedirectUrlForSignOut(idToken)
+}
+
 func (svc *AuthService) isFirstTimeSetup(ctx context.Context) bool {
 	isInitialized, err := svc.redisClient.GetSystemInitialized(ctx)
 	if err != nil {
@@ -57,12 +79,40 @@ func (svc *AuthService) VerifyToken(ctx context.Context, token string) (*model.G
 	}, nil
 }
 
-func (svc *AuthService) SignIn(ctx context.Context, email string, password string) (*model.SignInResult, error) {
+func (svc *AuthService) SignIn(ctx context.Context, email string, password string, code string) (*model.SignInResult, error) {
 	adminToken, err := svc.adminService.GetAdminToken()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get admin token: %w", err)
 	}
 
+	// OAuth code flow (when code is provided)
+	if code != "" {
+		authResult, err := svc.kcAuth.AuthenticateUser(adminToken, "", "", code)
+		if err != nil {
+			return nil, err
+		}
+
+		user, err := svc.buildUserModel(authResult.AccessToken, authResult.UserData, false)
+		if err != nil {
+			return nil, err
+		}
+
+		logger.Log.Info("OAuth login successful", "userID", user.ID, "email", user.Email)
+
+		err = svc.redisClient.SetSystemInitialized(ctx, true)
+		if err != nil {
+			logger.Log.Error("Failed to set system as initialized", "error", err)
+		}
+
+		return &model.SignInResult{
+			IDToken:     &authResult.IDToken,
+			AccessToken: &authResult.AccessToken,
+			Status:      model.SignInStatusSuccess,
+			User:        user,
+		}, nil
+	}
+
+	// Password-based flow (when email/password are provided)
 	if svc.isFirstTimeSetup(ctx) {
 		logger.Log.Info("First-time setup detected, creating first admin user")
 
@@ -76,7 +126,7 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 			return nil, fmt.Errorf("failed to create first admin user: %w", err)
 		}
 
-		authResult, err := svc.kcAuth.AuthenticateUser(adminToken, email, password)
+		authResult, err := svc.kcAuth.AuthenticateUser(adminToken, email, password, "")
 		if err != nil {
 			return nil, fmt.Errorf("failed to authenticate newly created admin: %w", err)
 		}
@@ -94,13 +144,14 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 		}
 
 		return &model.SignInResult{
-			Token:  authResult.AccessToken,
-			Status: model.SignInStatusSuccess,
-			User:   user,
+			IDToken:     &authResult.IDToken,
+			AccessToken: &authResult.AccessToken,
+			Status:      model.SignInStatusSuccess,
+			User:        user,
 		}, nil
 	}
 
-	authResult, err := svc.kcAuth.AuthenticateUser(adminToken, email, password)
+	authResult, err := svc.kcAuth.AuthenticateUser(adminToken, email, password, "")
 	if err != nil {
 		if strings.Contains(err.Error(), "password update required") {
 			adminToken, err := svc.adminService.GetAdminToken()
@@ -108,8 +159,9 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 				return nil, fmt.Errorf("failed to get admin token for initial password setup: %w", err)
 			}
 			return &model.SignInResult{
-				Token:  adminToken,
-				Status: model.SignInStatusPasswordUpdateRequired,
+				// IDToken:     ,
+				AccessToken: &adminToken,
+				Status:      model.SignInStatusPasswordUpdateRequired,
 				User: &model.User{
 					Email:               email,
 					NeedsPasswordChange: true,
@@ -133,9 +185,10 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 	logger.Log.Info("User login successful", "email", email, "userID", user.ID, "needsPasswordChange", user.NeedsPasswordChange)
 
 	return &model.SignInResult{
-		Token:  authResult.AccessToken,
-		Status: model.SignInStatusSuccess,
-		User:   user,
+		IDToken:     &authResult.IDToken,
+		AccessToken: &authResult.AccessToken,
+		Status:      model.SignInStatusSuccess,
+		User:        user,
 	}, nil
 }
 
@@ -156,15 +209,16 @@ func (svc *AuthService) SetInitialPassword(ctx context.Context, email, password 
 		return nil, err
 	}
 
-	token, user, err := svc.authenticateUserWithNewPassword(ctx, email, password)
+	idToken, accessToken, user, err := svc.authenticateUserWithNewPassword(ctx, email, password)
 	if err != nil {
 		return nil, err
 	}
 
 	return &model.SignInResult{
-		Token:  token,
-		Status: model.SignInStatusSuccess,
-		User:   user,
+		IDToken:     &idToken,
+		AccessToken: &accessToken,
+		Status:      model.SignInStatusSuccess,
+		User:        user,
 	}, nil
 }
 
@@ -220,23 +274,23 @@ func (svc *AuthService) clearPasswordRequirement(email string) error {
 	return nil
 }
 
-func (svc *AuthService) authenticateUserWithNewPassword(ctx context.Context, email string, password string) (string, *model.User, error) {
+func (svc *AuthService) authenticateUserWithNewPassword(ctx context.Context, email string, password string) (string, string, *model.User, error) {
 	token, err := svc.adminService.GetAdminToken()
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to get admin token: %w", err)
+		return "", "", nil, fmt.Errorf("failed to get admin token: %w", err)
 	}
 
-	authResult, err := svc.kcAuth.AuthenticateUser(token, email, password)
+	authResult, err := svc.kcAuth.AuthenticateUser(token, email, password, "")
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to sign in with new password: %w", err)
+		return "", "", nil, fmt.Errorf("failed to sign in with new password: %w", err)
 	}
 
 	user, err := svc.userService.GetUserByEmail(ctx, email)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to find user by email: %w", err)
+		return "", "", nil, fmt.Errorf("failed to find user by email: %w", err)
 	}
 
-	return authResult.AccessToken, user, nil
+	return authResult.IDToken, authResult.AccessToken, user, nil
 }
 
 func (svc *AuthService) buildUserModel(token string, userData types.UserSummary, needsPasswordChange bool) (*model.User, error) {
@@ -265,27 +319,5 @@ func (svc *AuthService) buildUserModel(token string, userData types.UserSummary,
 		Role:                role,
 		NeedsPasswordChange: needsPasswordChange,
 		Teams:               teams,
-	}, nil
-}
-
-func (svc *AuthService) SignOut(ctx context.Context) (*model.GeneralResult, error) {
-	token := utils.GetTokenFromContext(ctx)
-	if token == "" {
-		return nil, fmt.Errorf("authentication required")
-	}
-
-	err := svc.kcAuth.LogoutUser(token)
-	if err != nil {
-		logger.Log.Error("Failed to logout user", "error", err)
-		errorMsg := fmt.Sprintf("failed to logout: %v", err)
-		return &model.GeneralResult{
-			Success: false,
-			Error:   &errorMsg,
-		}, nil
-	}
-
-	logger.Log.Info("User logged out successfully")
-	return &model.GeneralResult{
-		Success: true,
 	}, nil
 }

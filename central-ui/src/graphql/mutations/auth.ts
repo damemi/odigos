@@ -1,5 +1,14 @@
 import { gql } from '@apollo/client';
 
+export const ENSURE_IDENTITY_PROVIDER = gql`
+  mutation EnsureIdentityProvider($input: IdentityProviderInput!) {
+    ensureIdentityProvider(input: $input) {
+      success
+      error
+    }
+  }
+`;
+
 export const VERIFY_TOKEN = gql`
   mutation VerifyToken($token: String!) {
     verifyToken(token: $token) {
@@ -10,9 +19,11 @@ export const VERIFY_TOKEN = gql`
 `;
 
 export const SIGN_IN = gql`
-  mutation SignIn($email: String!, $password: String!) {
-    signIn(email: $email, password: $password) {
-      token
+  mutation SignIn($email: String, $password: String, $code: String) {
+    signIn(email: $email, password: $password, code: $code) {
+      idToken
+      accessToken
+      status
       user {
         id
         email
@@ -31,7 +42,6 @@ export const SIGN_IN = gql`
           status
         }
       }
-      status
     }
   }
 `;
@@ -39,7 +49,9 @@ export const SIGN_IN = gql`
 export const SET_INITIAL_PASSWORD = gql`
   mutation SetInitialPassword($email: String!, $password: String!) {
     setInitialPassword(email: $email, password: $password) {
-      token
+      idToken
+      accessToken
+      status
       user {
         id
         email
@@ -47,16 +59,6 @@ export const SET_INITIAL_PASSWORD = gql`
         role
         needsPasswordChange
       }
-      status
-    }
-  }
-`;
-
-export const SIGN_OUT = gql`
-  mutation SignOut {
-    signOut {
-      success
-      error
     }
   }
 `;

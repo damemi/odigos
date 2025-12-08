@@ -14,7 +14,7 @@ interface ProtectedRouteProps {
 const ProtectedRoute: FC<ProtectedRouteProps> = ({ children, signInPath }) => {
   const router = useRouter();
   const pathname = usePathname();
-  const { token, clearAuth } = useUserStore();
+  const { accessToken, clearAuth } = useUserStore();
 
   const isOnSignInPath = pathname === signInPath;
   const goToSignIn = () => {
@@ -38,14 +38,14 @@ const ProtectedRoute: FC<ProtectedRouteProps> = ({ children, signInPath }) => {
     if (isOnSignInPath) return;
 
     // If signed in, verify the token
-    if (token) {
-      verifyToken({ variables: { token } });
+    if (accessToken) {
+      verifyToken({ variables: { token: accessToken } });
     } else {
       goToSignIn();
     }
-  }, [isOnSignInPath, token]);
+  }, [isOnSignInPath, accessToken]);
 
-  if (!isOnSignInPath && (loading || !token)) {
+  if (!isOnSignInPath && (loading || !accessToken)) {
     return (
       <CenterThis style={{ height: '100vh' }}>
         <FadeLoader scale={2} />

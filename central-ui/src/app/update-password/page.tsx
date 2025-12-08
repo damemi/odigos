@@ -6,8 +6,16 @@ import styled from 'styled-components';
 import { OdigosLogo } from '@odigos/ui-kit/icons';
 import { StatusType } from '@odigos/ui-kit/types';
 import * as STRINGS from '@/utils/constants/strings';
-import { Button, Input, NotificationNote } from '@odigos/ui-kit/components';
-import { Container, Card, Title, Subtitle, CenterThis } from '../signin/signin.styled';
+import { FormTitle, FormSubtitle } from '@/components/auth/styled';
+import { Button, CenterThis, Input, NotificationNote } from '@odigos/ui-kit/components';
+
+const Container = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+`;
 
 const UpdatePasswordButton = styled(Button)`
   margin-top: 24px;
@@ -46,24 +54,22 @@ export default function UpdatePasswordPage() {
 
   return (
     <Container>
-      <Card>
+      <CenterThis>
+        <OdigosLogo size={50} />
+      </CenterThis>
+      <FormTitle>{STRINGS.UPDATE_YOUR_PASSWORD}</FormTitle>
+      <FormSubtitle>{STRINGS.UPDATE_PASSWORD_SUBTITLE}</FormSubtitle>
+      <Form onSubmit={handleSubmit}>
+        <Input title={STRINGS.EMAIL} required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={STRINGS.EMAIL_PLACEHOLDER} type='email' />
+        <Input title={STRINGS.NEW_PASSWORD} required value={password} onChange={(e) => setPassword(e.target.value)} placeholder={STRINGS.PASSWORD_PLACEHOLDER} type='password' />
+        <Input title={STRINGS.CONFIRM_PASSWORD} required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder={STRINGS.PASSWORD_PLACEHOLDER} type='password' />
+        {(formError || error) && <NotificationNote type={StatusType.Error} title={STRINGS.AUTH_ERROR} message={(formError || error) ?? ''} />}
         <CenterThis>
-          <OdigosLogo />
+          <UpdatePasswordButton type='submit' disabled={isButtonDisabled}>
+            {loading ? STRINGS.UPDATING : STRINGS.UPDATE_PASSWORD}
+          </UpdatePasswordButton>
         </CenterThis>
-        <Title>{STRINGS.UPDATE_YOUR_PASSWORD}</Title>
-        <Subtitle>{STRINGS.UPDATE_PASSWORD_SUBTITLE}</Subtitle>
-        <Form onSubmit={handleSubmit}>
-          <Input title={STRINGS.EMAIL} required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={STRINGS.EMAIL_PLACEHOLDER} type='email' />
-          <Input title={STRINGS.NEW_PASSWORD} required value={password} onChange={(e) => setPassword(e.target.value)} placeholder={STRINGS.PASSWORD_PLACEHOLDER} type='password' />
-          <Input title={STRINGS.CONFIRM_PASSWORD} required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder={STRINGS.PASSWORD_PLACEHOLDER} type='password' />
-          {(formError || error) && <NotificationNote type={StatusType.Error} title={STRINGS.AUTH_ERROR} message={(formError || error) ?? ''} />}
-          <CenterThis>
-            <UpdatePasswordButton type='submit' disabled={isButtonDisabled}>
-              {loading ? STRINGS.UPDATING : STRINGS.UPDATE_PASSWORD}
-            </UpdatePasswordButton>
-          </CenterThis>
-        </Form>
-      </Card>
+      </Form>
     </Container>
   );
 }

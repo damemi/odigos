@@ -7,6 +7,7 @@ package graph
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -18,19 +19,38 @@ import (
 	"github.com/odigos-io/central-backend/internal/utils"
 )
 
+// EnsureIdentityProvider is the resolver for the ensureIdentityProvider field.
+func (r *mutationResolver) EnsureIdentityProvider(ctx context.Context, input model.IdentityProviderInput) (*model.GeneralResult, error) {
+	err := r.AdminService.EnsureIdentityProvider(&input)
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to ensure IDP: %s", err.Error())
+		return &model.GeneralResult{
+			Success: false,
+			Error:   &errorMsg,
+		}, err
+	}
+	return &model.GeneralResult{
+		Success: true,
+	}, nil
+}
+
 // SignIn is the resolver for the signIn field.
-func (r *mutationResolver) SignIn(ctx context.Context, email string, password string) (*model.SignInResult, error) {
-	return r.AuthService.SignIn(ctx, email, password)
+func (r *mutationResolver) SignIn(ctx context.Context, email *string, password *string, code *string) (*model.SignInResult, error) {
+	// Handle OAuth code flow
+	if code != nil && *code != "" {
+		return r.AuthService.SignIn(ctx, "", "", *code)
+	}
+
+	// Handle password-based flow
+	if email == nil || password == nil {
+		return nil, fmt.Errorf("email and password are required for password-based sign in")
+	}
+	return r.AuthService.SignIn(ctx, *email, *password, "")
 }
 
 // SetInitialPassword is the resolver for the setInitialPassword field.
 func (r *mutationResolver) SetInitialPassword(ctx context.Context, email string, password string) (*model.SignInResult, error) {
 	return r.AuthService.SetInitialPassword(ctx, email, password)
-}
-
-// SignOut is the resolver for the signOut field.
-func (r *mutationResolver) SignOut(ctx context.Context) (*model.GeneralResult, error) {
-	return r.AuthService.SignOut(ctx)
 }
 
 // VerifyToken is the resolver for the verifyToken field.
@@ -195,6 +215,21 @@ func (r *queryResolver) SystemConfig(ctx context.Context) (*model.SystemConfig, 
 	}, nil
 }
 
+// OidcSignInURL is the resolver for the oidcSignInUrl field.
+func (r *queryResolver) OidcSignInURL(ctx context.Context, providerID model.OidcProviderID) (string, error) {
+	url := r.AuthService.GetRedirectUrlForSignIn(ctx, providerID)
+	return url, nil
+}
+
+// SignOut is the resolver for the signOut field.
+func (r *queryResolver) SignOutURL(ctx context.Context, idToken *string) (*string, error) {
+	if idToken == nil || *idToken == "" {
+		return nil, nil
+	}
+	url := r.AuthService.GetRedirectUrlForSignOut(ctx, *idToken)
+	return &url, nil
+}
+
 // ComputePlatforms is the resolver for the computePlatforms field.
 func (r *queryResolver) ComputePlatforms(ctx context.Context) ([]*model.ComputePlatform, error) {
 	connectionKeys, err := r.RedisClient.ListProxyConnectionsKeys(ctx)
@@ -287,7 +322,7 @@ func (r *queryResolver) ComputePlatforms(ctx context.Context) ([]*model.ComputeP
 					ID:            cp.ID,
 					Name:          consts.UnknownValue,
 					OdigosVersion: consts.UnknownValue,
-					Type:          model.PlatformTypeK8s, 
+					Type:          model.PlatformTypeK8s,
 					Status:        string(consts.StatusDisconnected),
 					Users:         []*model.User{},
 					Teams:         []*model.Team{},

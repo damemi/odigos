@@ -1,13 +1,22 @@
-import { useMutation, useQuery } from '@apollo/client';
-import { ROUTES } from '@/utils';
-import { useUserStore } from '@/store';
 import { useRouter } from 'next/navigation';
 import { useState, useCallback } from 'react';
-import { SignInPayload, SignInStatus, SystemConfig } from '@/types';
-import { SIGN_IN, SET_INITIAL_PASSWORD, SIGN_OUT, GET_SYSTEM_CONFIG } from '@/graphql';
+import { ROUTES } from '@/utils';
+import { useUserStore } from '@/store';
+import { useLazyQuery, useMutation, useQuery } from '@apollo/client';
+import { SignInPayload, SignInStatus, SystemConfig, User } from '@/types';
+import { SIGN_IN, SET_INITIAL_PASSWORD, GET_SYSTEM_CONFIG, GET_SIGN_OUT_URL } from '@/graphql';
+
+export type HandleSignIn = (credentials: { email?: string; password?: string; code?: string }) => void;
+export type HandleSetInitialPassword = (email: string, password: string) => void;
+export type HandleSignOut = () => void;
+export type Logout = () => void;
+export type IsAuthenticated = () => boolean;
+export type GetCurrentUser = () => User | null;
+export type GetLastAuthEmail = () => string | null;
 
 export const useAuth = () => {
   const router = useRouter();
+
   const [error, setError] = useState<string | null>(null);
   const { setAuth, clearAuth, setLastAuthEmail } = useUserStore();
 
@@ -15,10 +24,13 @@ export const useAuth = () => {
 
   const [signIn, { loading: signInLoading }] = useMutation<{ signIn: SignInPayload }>(SIGN_IN, {
     onCompleted: (data) => {
-      const { token, status, user } = data.signIn;
-      if (user) {
-        setAuth(user, token);
-      }
+      const { status, idToken, accessToken, user } = data.signIn;
+
+      setAuth({
+        idToken: idToken || '',
+        accessToken: accessToken || '',
+        user: user || null,
+      });
 
       switch (status) {
         case SignInStatus.SUCCESS:
@@ -28,6 +40,29 @@ export const useAuth = () => {
         case SignInStatus.PASSWORD_UPDATE_REQUIRED:
           router.push(ROUTES.UPDATE_YOUR_PASSWORD);
           break;
+        default:
+          break;
+      }
+    },
+    onError: (error) => {
+      setError(error.message);
+    },
+  });
+
+  const [getSignOutUrl, { loading: signOutLoading }] = useLazyQuery<{ signOutUrl: string | null }, { idToken: string | null }>(GET_SIGN_OUT_URL, {
+    onCompleted: (data) => {
+      const url = data.signOutUrl;
+
+      // Clear local auth state first
+      clearAuth();
+      setLastAuthEmail(null);
+
+      if (url) {
+        // Use window.location.href for full browser navigation to Keycloak logout endpoint
+        // This ensures cookies are cleared. DO NOT use router.replace() as that's client-side only.
+        window.location.href = url;
+      } else {
+        router.push(ROUTES.SIGN_IN);
       }
     },
     onError: (error) => {
@@ -37,10 +72,14 @@ export const useAuth = () => {
 
   const [setInitialPassword, { loading: passwordUpdateLoading }] = useMutation<{ setInitialPassword: SignInPayload }>(SET_INITIAL_PASSWORD, {
     onCompleted: (data) => {
-      const { token, user } = data.setInitialPassword;
-      if (user) {
-        setAuth(user, token);
-      }
+      const { idToken, accessToken, user } = data.setInitialPassword;
+
+      setAuth({
+        idToken: idToken || '',
+        accessToken: accessToken || '',
+        user: user || null,
+      });
+
       setLastAuthEmail(null);
       router.push(ROUTES.CONNECTIONS);
     },
@@ -49,32 +88,37 @@ export const useAuth = () => {
     },
   });
 
-  const [signOut, { loading: signOutLoading }] = useMutation<{ signOut: { success: boolean; error?: string } }>(SIGN_OUT, {
-    onCompleted: (data) => {
-      if (data.signOut.success) {
-        clearAuth();
-        setLastAuthEmail(null);
-        router.push(ROUTES.SIGN_IN);
-      } else {
-        setError(data.signOut.error || 'Logout failed');
-      }
-    },
-    onError: (error) => {
-      setError(error.message);
-    },
-  });
-
-  const handleSignIn = async (email: string, password: string) => {
+  const handleSignIn: HandleSignIn = async (credentials) => {
     setError(null);
     try {
-      setLastAuthEmail(email);
-      await signIn({ variables: { email, password } });
+      if (credentials.email) setLastAuthEmail(credentials.email);
+      await signIn({ variables: credentials });
     } catch (_err) {
       console.error(_err);
     }
   };
 
-  const handleSetInitialPassword = async (email: string, password: string) => {
+  const handleSignOut: HandleSignOut = async () => {
+    setError(null);
+    try {
+      const { idToken } = useUserStore.getState();
+      await getSignOutUrl({ variables: { idToken } });
+    } catch (_err) {
+      console.error(_err);
+    }
+  };
+
+  const getCurrentUser: GetCurrentUser = useCallback(() => {
+    const { user } = useUserStore.getState();
+    return user;
+  }, []);
+
+  const getLastAuthEmail: GetLastAuthEmail = useCallback(() => {
+    const { lastAuthEmail } = useUserStore.getState();
+    return lastAuthEmail;
+  }, []);
+
+  const handleSetInitialPassword: HandleSetInitialPassword = async (email, password) => {
     setError(null);
     try {
       await setInitialPassword({ variables: { email, password } });
@@ -83,43 +127,11 @@ export const useAuth = () => {
     }
   };
 
-  const handleSignOut = async () => {
-    setError(null);
-    try {
-      await signOut();
-    } catch (_err) {
-      console.error(_err);
-    }
-  };
-
-  const logout = useCallback(() => {
-    clearAuth();
-    setLastAuthEmail(null);
-    router.push(ROUTES.SIGN_IN);
-  }, [router, clearAuth]);
-
-  const isAuthenticated = useCallback(() => {
-    const { token } = useUserStore.getState();
-    return !!token;
-  }, []);
-
-  const getCurrentUser = useCallback(() => {
-    const { user } = useUserStore.getState();
-    return user;
-  }, []);
-
-  const getLastAuthEmail = useCallback(() => {
-    const { lastAuthEmail } = useUserStore.getState();
-    return lastAuthEmail;
-  }, []);
-
   return {
-    logout,
+    signIn: handleSignIn,
     signOut: handleSignOut,
     getCurrentUser,
     getLastAuthEmail,
-    isAuthenticated,
-    signIn: handleSignIn,
     setInitialPassword: handleSetInitialPassword,
     systemConfigLoading,
     systemConfig: systemConfigData?.systemConfig,

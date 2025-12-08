@@ -71,32 +71,35 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		CreateTeam            func(childComplexity int, input model.WriteTeamInput) int
-		CreateUser            func(childComplexity int, input model.WriteUserInput) int
-		DeleteProxyConnection func(childComplexity int, proxyID string) int
-		DeleteTeam            func(childComplexity int, teamID string) int
-		DeleteUser            func(childComplexity int, userID string) int
-		SetInitialPassword    func(childComplexity int, email string, password string) int
-		SignIn                func(childComplexity int, email string, password string) int
-		SignOut               func(childComplexity int) int
-		UpdateComputePlatform func(childComplexity int, id string, input model.WriteComputePlatformInput) int
-		UpdateTeam            func(childComplexity int, teamID string, input model.WriteTeamInput) int
-		UpdateUser            func(childComplexity int, userID string, input model.WriteUserInput) int
-		VerifyToken           func(childComplexity int, token string) int
+		CreateTeam             func(childComplexity int, input model.WriteTeamInput) int
+		CreateUser             func(childComplexity int, input model.WriteUserInput) int
+		DeleteProxyConnection  func(childComplexity int, proxyID string) int
+		DeleteTeam             func(childComplexity int, teamID string) int
+		DeleteUser             func(childComplexity int, userID string) int
+		EnsureIdentityProvider func(childComplexity int, input model.IdentityProviderInput) int
+		SetInitialPassword     func(childComplexity int, email string, password string) int
+		SignIn                 func(childComplexity int, email *string, password *string, code *string) int
+		UpdateComputePlatform  func(childComplexity int, id string, input model.WriteComputePlatformInput) int
+		UpdateTeam             func(childComplexity int, teamID string, input model.WriteTeamInput) int
+		UpdateUser             func(childComplexity int, userID string, input model.WriteUserInput) int
+		VerifyToken            func(childComplexity int, token string) int
 	}
 
 	Query struct {
 		ComputePlatforms func(childComplexity int) int
+		OidcSignInURL    func(childComplexity int, providerID model.OidcProviderID) int
 		RemoteFetch      func(childComplexity int, proxyID string, query string, variables map[string]any) int
+		SignOutURL       func(childComplexity int, idToken *string) int
 		SystemConfig     func(childComplexity int) int
 		Teams            func(childComplexity int) int
 		Users            func(childComplexity int) int
 	}
 
 	SignInResult struct {
-		Status func(childComplexity int) int
-		Token  func(childComplexity int) int
-		User   func(childComplexity int) int
+		AccessToken func(childComplexity int) int
+		IDToken     func(childComplexity int) int
+		Status      func(childComplexity int) int
+		User        func(childComplexity int) int
 	}
 
 	SystemConfig struct {
@@ -126,9 +129,9 @@ type ComplexityRoot struct {
 }
 
 type MutationResolver interface {
-	SignIn(ctx context.Context, email string, password string) (*model.SignInResult, error)
+	EnsureIdentityProvider(ctx context.Context, input model.IdentityProviderInput) (*model.GeneralResult, error)
+	SignIn(ctx context.Context, email *string, password *string, code *string) (*model.SignInResult, error)
 	SetInitialPassword(ctx context.Context, email string, password string) (*model.SignInResult, error)
-	SignOut(ctx context.Context) (*model.GeneralResult, error)
 	VerifyToken(ctx context.Context, token string) (*model.GeneralResult, error)
 	UpdateComputePlatform(ctx context.Context, id string, input model.WriteComputePlatformInput) (*model.GeneralResult, error)
 	CreateUser(ctx context.Context, input model.WriteUserInput) (*model.CreateUserResult, error)
@@ -142,6 +145,8 @@ type MutationResolver interface {
 type QueryResolver interface {
 	RemoteFetch(ctx context.Context, proxyID string, query string, variables map[string]any) (string, error)
 	SystemConfig(ctx context.Context) (*model.SystemConfig, error)
+	OidcSignInURL(ctx context.Context, providerID model.OidcProviderID) (string, error)
+	SignOutURL(ctx context.Context, idToken *string) (*string, error)
 	ComputePlatforms(ctx context.Context) ([]*model.ComputePlatform, error)
 	Users(ctx context.Context) ([]*model.User, error)
 	Teams(ctx context.Context) ([]*model.Team, error)
@@ -308,6 +313,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.DeleteUser(childComplexity, args["userID"].(string)), true
+	case "Mutation.ensureIdentityProvider":
+		if e.complexity.Mutation.EnsureIdentityProvider == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_ensureIdentityProvider_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.EnsureIdentityProvider(childComplexity, args["input"].(model.IdentityProviderInput)), true
 	case "Mutation.setInitialPassword":
 		if e.complexity.Mutation.SetInitialPassword == nil {
 			break
@@ -329,13 +345,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.SignIn(childComplexity, args["email"].(string), args["password"].(string)), true
-	case "Mutation.signOut":
-		if e.complexity.Mutation.SignOut == nil {
-			break
-		}
-
-		return e.complexity.Mutation.SignOut(childComplexity), true
+		return e.complexity.Mutation.SignIn(childComplexity, args["email"].(*string), args["password"].(*string), args["code"].(*string)), true
 	case "Mutation.updateComputePlatform":
 		if e.complexity.Mutation.UpdateComputePlatform == nil {
 			break
@@ -387,6 +397,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.ComputePlatforms(childComplexity), true
+	case "Query.oidcSignInUrl":
+		if e.complexity.Query.OidcSignInURL == nil {
+			break
+		}
+
+		args, err := ec.field_Query_oidcSignInUrl_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.OidcSignInURL(childComplexity, args["providerId"].(model.OidcProviderID)), true
 	case "Query.remoteFetch":
 		if e.complexity.Query.RemoteFetch == nil {
 			break
@@ -398,6 +419,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.RemoteFetch(childComplexity, args["proxyID"].(string), args["query"].(string), args["variables"].(map[string]any)), true
+	case "Query.signOutUrl":
+		if e.complexity.Query.SignOutURL == nil {
+			break
+		}
+
+		args, err := ec.field_Query_signOutUrl_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.SignOutURL(childComplexity, args["idToken"].(*string)), true
 	case "Query.systemConfig":
 		if e.complexity.Query.SystemConfig == nil {
 			break
@@ -417,18 +449,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Query.Users(childComplexity), true
 
+	case "SignInResult.accessToken":
+		if e.complexity.SignInResult.AccessToken == nil {
+			break
+		}
+
+		return e.complexity.SignInResult.AccessToken(childComplexity), true
+	case "SignInResult.idToken":
+		if e.complexity.SignInResult.IDToken == nil {
+			break
+		}
+
+		return e.complexity.SignInResult.IDToken(childComplexity), true
 	case "SignInResult.status":
 		if e.complexity.SignInResult.Status == nil {
 			break
 		}
 
 		return e.complexity.SignInResult.Status(childComplexity), true
-	case "SignInResult.token":
-		if e.complexity.SignInResult.Token == nil {
-			break
-		}
-
-		return e.complexity.SignInResult.Token(childComplexity), true
 	case "SignInResult.user":
 		if e.complexity.SignInResult.User == nil {
 			break
@@ -543,6 +581,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	opCtx := graphql.GetOperationContext(ctx)
 	ec := executionContext{opCtx, e, 0, 0, make(chan graphql.DeferredResult)}
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
+		ec.unmarshalInputIdentityProviderInput,
 		ec.unmarshalInputWriteComputePlatformInput,
 		ec.unmarshalInputWriteTeamInput,
 		ec.unmarshalInputWriteUserInput,
@@ -717,6 +756,17 @@ func (ec *executionContext) field_Mutation_deleteUser_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_ensureIdentityProvider_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNIdentityProviderInput2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐIdentityProviderInput)
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_setInitialPassword_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -736,16 +786,21 @@ func (ec *executionContext) field_Mutation_setInitialPassword_args(ctx context.C
 func (ec *executionContext) field_Mutation_signIn_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "email", ec.unmarshalNString2string)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "email", ec.unmarshalOString2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
 	args["email"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "password", ec.unmarshalNString2string)
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "password", ec.unmarshalOString2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
 	args["password"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "code", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["code"] = arg2
 	return args, nil
 }
 
@@ -819,6 +874,17 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_oidcSignInUrl_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "providerId", ec.unmarshalNOidcProviderId2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐOidcProviderID)
+	if err != nil {
+		return nil, err
+	}
+	args["providerId"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Query_remoteFetch_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -837,6 +903,17 @@ func (ec *executionContext) field_Query_remoteFetch_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["variables"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_signOutUrl_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "idToken", ec.unmarshalOString2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["idToken"] = arg0
 	return args, nil
 }
 
@@ -1330,6 +1407,53 @@ func (ec *executionContext) fieldContext_GeneralResult_error(_ context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_ensureIdentityProvider(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Mutation_ensureIdentityProvider,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Mutation().EnsureIdentityProvider(ctx, fc.Args["input"].(model.IdentityProviderInput))
+		},
+		nil,
+		ec.marshalNGeneralResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐGeneralResult,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Mutation_ensureIdentityProvider(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "success":
+				return ec.fieldContext_GeneralResult_success(ctx, field)
+			case "error":
+				return ec.fieldContext_GeneralResult_error(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type GeneralResult", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_ensureIdentityProvider_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_signIn(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1338,7 +1462,7 @@ func (ec *executionContext) _Mutation_signIn(ctx context.Context, field graphql.
 		ec.fieldContext_Mutation_signIn,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Mutation().SignIn(ctx, fc.Args["email"].(string), fc.Args["password"].(string))
+			return ec.resolvers.Mutation().SignIn(ctx, fc.Args["email"].(*string), fc.Args["password"].(*string), fc.Args["code"].(*string))
 		},
 		nil,
 		ec.marshalNSignInResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐSignInResult,
@@ -1355,8 +1479,10 @@ func (ec *executionContext) fieldContext_Mutation_signIn(ctx context.Context, fi
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "token":
-				return ec.fieldContext_SignInResult_token(ctx, field)
+			case "idToken":
+				return ec.fieldContext_SignInResult_idToken(ctx, field)
+			case "accessToken":
+				return ec.fieldContext_SignInResult_accessToken(ctx, field)
 			case "user":
 				return ec.fieldContext_SignInResult_user(ctx, field)
 			case "status":
@@ -1404,8 +1530,10 @@ func (ec *executionContext) fieldContext_Mutation_setInitialPassword(ctx context
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "token":
-				return ec.fieldContext_SignInResult_token(ctx, field)
+			case "idToken":
+				return ec.fieldContext_SignInResult_idToken(ctx, field)
+			case "accessToken":
+				return ec.fieldContext_SignInResult_accessToken(ctx, field)
 			case "user":
 				return ec.fieldContext_SignInResult_user(ctx, field)
 			case "status":
@@ -1424,41 +1552,6 @@ func (ec *executionContext) fieldContext_Mutation_setInitialPassword(ctx context
 	if fc.Args, err = ec.field_Mutation_setInitialPassword_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Mutation_signOut(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Mutation_signOut,
-		func(ctx context.Context) (any, error) {
-			return ec.resolvers.Mutation().SignOut(ctx)
-		},
-		nil,
-		ec.marshalNGeneralResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐGeneralResult,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Mutation_signOut(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Mutation",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "success":
-				return ec.fieldContext_GeneralResult_success(ctx, field)
-			case "error":
-				return ec.fieldContext_GeneralResult_error(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type GeneralResult", field.Name)
-		},
 	}
 	return fc, nil
 }
@@ -1964,6 +2057,88 @@ func (ec *executionContext) fieldContext_Query_systemConfig(_ context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_oidcSignInUrl(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_oidcSignInUrl,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().OidcSignInURL(ctx, fc.Args["providerId"].(model.OidcProviderID))
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_oidcSignInUrl(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_oidcSignInUrl_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_signOutUrl(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_signOutUrl,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().SignOutURL(ctx, fc.Args["idToken"].(*string))
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_signOutUrl(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_signOutUrl_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_computePlatforms(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -2211,23 +2386,52 @@ func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field
 	return fc, nil
 }
 
-func (ec *executionContext) _SignInResult_token(ctx context.Context, field graphql.CollectedField, obj *model.SignInResult) (ret graphql.Marshaler) {
+func (ec *executionContext) _SignInResult_idToken(ctx context.Context, field graphql.CollectedField, obj *model.SignInResult) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_SignInResult_token,
+		ec.fieldContext_SignInResult_idToken,
 		func(ctx context.Context) (any, error) {
-			return obj.Token, nil
+			return obj.IDToken, nil
 		},
 		nil,
-		ec.marshalNString2string,
+		ec.marshalOString2ᚖstring,
 		true,
-		true,
+		false,
 	)
 }
 
-func (ec *executionContext) fieldContext_SignInResult_token(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_SignInResult_idToken(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "SignInResult",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _SignInResult_accessToken(ctx context.Context, field graphql.CollectedField, obj *model.SignInResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_SignInResult_accessToken,
+		func(ctx context.Context) (any, error) {
+			return obj.AccessToken, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_SignInResult_accessToken(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "SignInResult",
 		Field:      field,
@@ -4296,6 +4500,61 @@ func (ec *executionContext) fieldContext___Type_isOneOf(_ context.Context, field
 
 // region    **************************** input.gotpl *****************************
 
+func (ec *executionContext) unmarshalInputIdentityProviderInput(ctx context.Context, obj any) (model.IdentityProviderInput, error) {
+	var it model.IdentityProviderInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"providerId", "clientId", "clientSecret", "discoveryUrl", "tenantId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "providerId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("providerId"))
+			data, err := ec.unmarshalNOidcProviderId2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐOidcProviderID(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ProviderID = data
+		case "clientId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientID = data
+		case "clientSecret":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("clientSecret"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ClientSecret = data
+		case "discoveryUrl":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("discoveryUrl"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.DiscoveryURL = data
+		case "tenantId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("tenantId"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.TenantID = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputWriteComputePlatformInput(ctx context.Context, obj any) (model.WriteComputePlatformInput, error) {
 	var it model.WriteComputePlatformInput
 	asMap := map[string]any{}
@@ -4662,6 +4921,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Mutation")
+		case "ensureIdentityProvider":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_ensureIdentityProvider(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "signIn":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_signIn(ctx, field)
@@ -4672,13 +4938,6 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "setInitialPassword":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_setInitialPassword(ctx, field)
-			})
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "signOut":
-			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_signOut(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -4832,6 +5091,47 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "oidcSignInUrl":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_oidcSignInUrl(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "signOutUrl":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_signOutUrl(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "computePlatforms":
 			field := field
 
@@ -4940,11 +5240,10 @@ func (ec *executionContext) _SignInResult(ctx context.Context, sel ast.Selection
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("SignInResult")
-		case "token":
-			out.Values[i] = ec._SignInResult_token(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
+		case "idToken":
+			out.Values[i] = ec._SignInResult_idToken(ctx, field, obj)
+		case "accessToken":
+			out.Values[i] = ec._SignInResult_accessToken(ctx, field, obj)
 		case "user":
 			out.Values[i] = ec._SignInResult_user(ctx, field, obj)
 		case "status":
@@ -5587,6 +5886,11 @@ func (ec *executionContext) marshalNGeneralResult2ᚖgithubᚗcomᚋodigosᚑio�
 	return ec._GeneralResult(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNIdentityProviderInput2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐIdentityProviderInput(ctx context.Context, v any) (model.IdentityProviderInput, error) {
+	res, err := ec.unmarshalInputIdentityProviderInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalNJSON2map(ctx context.Context, v any) (map[string]any, error) {
 	res, err := graphql.UnmarshalMap(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -5607,6 +5911,16 @@ func (ec *executionContext) marshalNJSON2map(ctx context.Context, sel ast.Select
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) unmarshalNOidcProviderId2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐOidcProviderID(ctx context.Context, v any) (model.OidcProviderID, error) {
+	var res model.OidcProviderID
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNOidcProviderId2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐOidcProviderID(ctx context.Context, sel ast.SelectionSet, v model.OidcProviderID) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) unmarshalNPlatformType2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐPlatformType(ctx context.Context, v any) (model.PlatformType, error) {

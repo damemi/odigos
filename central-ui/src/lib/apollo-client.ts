@@ -47,9 +47,9 @@ const errorLink = onError(({ graphQLErrors, networkError }) => {
 });
 
 const authLink = setContext((_, { headers }) => {
-  const token = useUserStore.getState().token;
+  const accessToken = useUserStore.getState().accessToken;
 
-  if (token && !isAscii(token)) {
+  if (accessToken && !isAscii(accessToken)) {
     redirectToSignIn();
     return { headers: { ...headers } };
   }
@@ -57,7 +57,7 @@ const authLink = setContext((_, { headers }) => {
   return {
     headers: {
       ...headers,
-      authorization: token ? `Bearer ${token}` : '',
+      authorization: accessToken ? `Bearer ${accessToken}` : '',
     },
   };
 });

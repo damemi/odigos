@@ -15,16 +15,16 @@ import { useValidateSession } from './useValidateSession';
 export function useSessionRedirects() {
   const router = useRouter();
   const pathname = usePathname();
-  const { token, clearAuth, user } = useUserStore();
+  const { accessToken, clearAuth, user } = useUserStore();
   const { systemConfig, systemConfigLoading } = useAuth();
 
   // Validate token in background when present; global errorLink will clean up on failure
   useValidateSession();
 
   useEffect(() => {
-    const hasToken = !!token && /^[\x20-\x7E]*$/.test(token);
+    const hasToken = !!accessToken && /^[\x20-\x7E]*$/.test(accessToken);
 
-    if (!!token && !hasToken) {
+    if (!!accessToken && !hasToken) {
       clearAuth();
       router.push(ROUTES.SIGN_IN);
       return;
@@ -35,5 +35,5 @@ export function useSessionRedirects() {
     } else if (pathname === ROUTES.ROOT) {
       router.push(ROUTES.SIGN_IN);
     }
-  }, [pathname, router, token, clearAuth, user, systemConfig, systemConfigLoading]);
+  }, [pathname, router, accessToken, clearAuth, user, systemConfig, systemConfigLoading]);
 }

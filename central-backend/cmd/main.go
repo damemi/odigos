@@ -92,6 +92,7 @@ func main() {
 	gqlHandler := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
 		RedisClient:     redisClient,
 		WebSocketServer: wsServer,
+		AdminService:    adminService,
 		AuthService:     authService,
 		UserService:     userService,
 		TeamService:     teamService,

@@ -9,6 +9,7 @@ import (
 type Resolver struct {
 	RedisClient     *redisclient.RedisClient
 	WebSocketServer *websocketserver.WebSocketServer
+	AdminService    *services.AdminService
 	AuthService     *services.AuthService
 	UserService     *services.UserService
 	TeamService     *services.TeamService

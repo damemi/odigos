@@ -22,6 +22,10 @@ enum SignInStatus {
   PASSWORD_UPDATE_REQUIRED
 }
 
+enum OidcProviderId {
+  azure
+}
+
 type SystemConfig {
   isInitialized: Boolean!
   version: String!
@@ -46,8 +50,17 @@ input WriteComputePlatformInput {
   removeTeamIds: [String]
 }
 
+input IdentityProviderInput {
+  providerId: OidcProviderId!
+  clientId: String!
+  clientSecret: String!
+  discoveryUrl: String!
+  tenantId: String!
+}
+
 type SignInResult {
-  token: String!
+  idToken: String
+  accessToken: String
   user: User
   status: SignInStatus!
 }
@@ -105,15 +118,20 @@ type GeneralResult {
 type Query {
   remoteFetch(proxyID: String!, query: String!, variables: JSON!): String!
   systemConfig: SystemConfig!
+
+  oidcSignInUrl(providerId: OidcProviderId!): String!
+  signOutUrl(idToken: String): String
+
   computePlatforms: [ComputePlatform!]!
   users: [User!]!
   teams: [Team!]!
 }
 
 type Mutation {
-  signIn(email: String!, password: String!): SignInResult!
+  ensureIdentityProvider(input: IdentityProviderInput!): GeneralResult!
+
+  signIn(email: String, password: String, code: String): SignInResult!
   setInitialPassword(email: String!, password: String!): SignInResult!
-  signOut: GeneralResult!
   verifyToken(token: String!): GeneralResult!
 
   updateComputePlatform(

@@ -10,17 +10,17 @@ import { GET_COMPUTE_PLATFORMS } from '@/graphql';
  * Apollo's errorLink handles invalid/expired tokens by clearing auth and redirecting.
  */
 export function useValidateSession() {
-  const { token } = useUserStore();
+  const { accessToken } = useUserStore();
 
   const { refetch } = useQuery(GET_COMPUTE_PLATFORMS, {
-    skip: !token,
+    skip: !accessToken,
     fetchPolicy: 'network-only',
   });
 
   useEffect(() => {
-    if (token) {
+    if (accessToken) {
       // Fire-and-forget; errors are handled globally by errorLink
       refetch().catch(() => {});
     }
-  }, [refetch, token]);
+  }, [refetch, accessToken]);
 }

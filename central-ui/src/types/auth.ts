@@ -23,7 +23,8 @@ export interface GeneralResult {
 }
 
 export interface SignInPayload {
-  token: string;
+  idToken?: string;
+  accessToken?: string;
   user?: User;
   status: SignInStatus;
 }

@@ -18,15 +18,42 @@ export const DONE = 'Done';
 // Auth strings
 export const ACCESS_MANAGEMENT = 'Access Management';
 export const SIGN_IN = 'Sign In';
-export const SIGN_IN_SUBTITLE = 'Sign in to your Odigos Tower account.';
-export const SIGN_UP = 'Set Up';
-export const SIGN_UP_SUBTITLE = 'Create the first user for this environment by entering your email and password.';
-export const SIGN_UP_ADMIN_DISCLAIMER = 'This is the primary admin account for your entire setup. Choose an email that you want to use as the main point of control.';
+export const SIGN_IN_SUBTITLE_1 = 'Log in to your Odigos Central account.';
+export const SIGN_IN_SUBTITLE_2 = 'Log in to your Odigos Central account using an email and password.';
+export const SIGN_UP = 'Sign Up';
+export const SIGN_UP_SUBTITLE_1 = 'Create your first user for this environment.';
+export const SIGN_UP_SUBTITLE_2 = 'Create your first user using an email and password.';
+export const SIGN_UP_ADMIN_TITLE = 'Set Up Your Admin Account';
+export const SIGN_UP_ADMIN_SUBTITLE_1 = 'Create the first user for this environment. This account will act as the main admin and manage all workspace settings';
+export const SIGN_UP_ADMIN_SUBTITLE_2 = 'Create your first user using an email and password. This account will serve as the main admin for this environment.';
+export const SIGN_UP_ADMIN_DISCLAIMER = 'This account will be used as the admin for setting up your environment.';
 export const SIGN_UP_PASSWORD_DISCLAIMER = 'This password is for first-time login only and must be changed after signing in. You won’t be able to view it again, make sure to copy and share it now';
 export const AUTH_ERROR = 'Authentication Error';
+export const LOGIN_WITH = 'Login with';
+export const CONTINUE_WITH = 'Continue with';
+export const CONTINUE_WITH_EMAIL = 'Continue with Email';
+export const PROVIDER_CREATED_SUCCESS = 'Provider Created Successfully!';
+export const PROVIDER_CREATED_SUCCESS_SUBTITLE = (displayName: string) => `Use your ${displayName} credentials to authenticate and register the admin account for this environment`;
+export const PROVIDER_REDIRECT_NOTICE = (displayName: string) => `Use your ${displayName} credentials to authenticate and register the admin account for this environment`;
+
+export const CLIENT_ID = 'Client ID';
+export const CLIENT_ID_REQUIRED = 'Client ID is required';
+export const CLIENT_ID_TOOLTIP = 'The Client ID is a unique identifier for the application.';
+export const CLIENT_SECRET = 'Client Secret';
+export const CLIENT_SECRET_REQUIRED = 'Client Secret is required';
+export const CLIENT_SECRET_TOOLTIP = 'The Client Secret is a secret key for the application.';
+export const DISCOVERY_URL = 'Discovery URL';
+export const DISCOVERY_URL_REQUIRED = 'Discovery URL is required';
+export const DISCOVERY_URL_TOOLTIP = 'The Discovery URL is used to import the configuration/metadata of the OIDC provider.';
+export const TENANT_ID = 'Tenant ID';
+export const TENANT_ID_REQUIRED = 'Tenant ID is required';
+export const TENANT_ID_TOOLTIP = 'An identifier that represents the organization.';
+export const CREATE_PROVIDER = 'Create Provider';
+export const CREATE_PROVIDER_TITLE = 'Set Up Identity Provider';
+export const CREATE_PROVIDER_SUBTITLE = 'Configure your identity provider for user authentication.';
 
 // Auth form strings
-export const EMAIL = 'Email Address';
+export const EMAIL = 'Email';
 export const EMAIL_PLACEHOLDER = 'john.doe@example.com';
 export const EMAIL_REQUIRED = 'Email is required';
 export const EMAIL_INVALID = 'Please enter a valid email address';

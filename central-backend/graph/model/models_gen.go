@@ -32,6 +32,14 @@ type GeneralResult struct {
 	Error   *string `json:"error,omitempty"`
 }
 
+type IdentityProviderInput struct {
+	ProviderID   OidcProviderID `json:"providerId"`
+	ClientID     string         `json:"clientId"`
+	ClientSecret string         `json:"clientSecret"`
+	DiscoveryURL string         `json:"discoveryUrl"`
+	TenantID     string         `json:"tenantId"`
+}
+
 type Mutation struct {
 }
 
@@ -39,9 +47,10 @@ type Query struct {
 }
 
 type SignInResult struct {
-	Token  string       `json:"token"`
-	User   *User        `json:"user,omitempty"`
-	Status SignInStatus `json:"status"`
+	IDToken     *string      `json:"idToken,omitempty"`
+	AccessToken *string      `json:"accessToken,omitempty"`
+	User        *User        `json:"user,omitempty"`
+	Status      SignInStatus `json:"status"`
 }
 
 type SystemConfig struct {
@@ -93,6 +102,59 @@ type WriteUserInput struct {
 	RemoveTeamIds            []*string `json:"removeTeamIds,omitempty"`
 	AddComputePlatformIds    []*string `json:"addComputePlatformIds,omitempty"`
 	RemoveComputePlatformIds []*string `json:"removeComputePlatformIds,omitempty"`
+}
+
+type OidcProviderID string
+
+const (
+	OidcProviderIDAzure OidcProviderID = "azure"
+)
+
+var AllOidcProviderID = []OidcProviderID{
+	OidcProviderIDAzure,
+}
+
+func (e OidcProviderID) IsValid() bool {
+	switch e {
+	case OidcProviderIDAzure:
+		return true
+	}
+	return false
+}
+
+func (e OidcProviderID) String() string {
+	return string(e)
+}
+
+func (e *OidcProviderID) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = OidcProviderID(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid OidcProviderId", str)
+	}
+	return nil
+}
+
+func (e OidcProviderID) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *OidcProviderID) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e OidcProviderID) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 type PlatformType string

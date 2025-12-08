@@ -1,58 +1,56 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import { User, Role } from '@/types/auth';
+import { persist } from 'zustand/middleware';
+import { OidcProviderId } from '@/types';
 
 interface UserStoreState {
+  authProviderId: OidcProviderId | null;
+
+  idToken: string | null; // for logout
+  accessToken: string | null; // for backend auth
   user: User | null;
-  token: string | null;
-  isAuthenticated: boolean;
+
   lastAuthEmail: string | null;
   isAdmin: boolean;
 }
 
 interface UserStoreActions {
-  setUser: (user: User | null) => void;
-  setToken: (token: string | null) => void;
-  setAuth: (user: User, token: string) => void;
+  setAuthProviderId: (providerId: UserStoreState['authProviderId']) => void;
+  setAuth: (payload: { idToken: UserStoreState['idToken']; accessToken: UserStoreState['accessToken']; user: UserStoreState['user'] }) => void;
   clearAuth: () => void;
-  updateUser: (updates: Partial<User>) => void;
+  updateUser: (payload: Partial<User>) => void;
   setLastAuthEmail: (email: string | null) => void;
 }
 
 export const useUserStore = create<UserStoreState & UserStoreActions>()(
   persist(
     (set, get) => ({
+      authProviderId: null,
+      idToken: null,
+      accessToken: null,
       user: null,
-      token: null,
-      isAuthenticated: false,
-      lastAuthEmail: null,
       isAdmin: false,
+      lastAuthEmail: null,
 
-      setUser: (user) =>
+      setAuthProviderId: (providerId) =>
         set({
-          user,
-          isAuthenticated: !!user,
-          isAdmin: !!user && (user.role === Role.ADMIN || user.role === Role.OWNER),
+          authProviderId: providerId,
         }),
 
-      setToken: (token) =>
+      setAuth: ({ idToken, accessToken, user }) =>
         set({
-          token,
-        }),
-
-      setAuth: (user, token) =>
-        set({
+          idToken,
+          accessToken,
           user,
-          token,
-          isAuthenticated: true,
-          isAdmin: user.role === Role.ADMIN || user.role === Role.OWNER,
+          isAdmin: user?.role && [Role.ADMIN, Role.OWNER].includes(user.role),
         }),
 
       clearAuth: () =>
         set({
+          authProviderId: null,
+          idToken: null,
+          accessToken: null,
           user: null,
-          token: null,
-          isAuthenticated: false,
           isAdmin: false,
         }),
 
@@ -74,12 +72,14 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
         }),
     }),
     {
-      name: 'user-storage',
+      name: 'odigos-auth-storage',
       partialize: (state) => ({
+        authProviderId: state.authProviderId,
+        idToken: state.idToken,
+        accessToken: state.accessToken,
         user: state.user,
-        token: state.token,
-        lastAuthEmail: state.lastAuthEmail,
         isAdmin: state.isAdmin,
+        lastAuthEmail: state.lastAuthEmail,
       }),
     },
   ),

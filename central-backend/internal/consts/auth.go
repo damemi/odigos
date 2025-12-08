@@ -16,6 +16,14 @@ func GetKeycloakHost() string {
 	return "http://localhost:8080"
 }
 
+func GetCentralUIHost() string {
+	// TODO: make this env in install command
+	if host := os.Getenv("CENTRAL_UI_HOST"); host != "" {
+		return host
+	}
+	return "http://localhost:3000"
+}
+
 const (
 	KeycloakRealm = "master"
 	ClientID      = "odigos-central"
@@ -36,6 +44,12 @@ const (
 	DefaultKeycloakSecretName      = "keycloak-admin-credentials"
 	AdminUsernameKey               = "admin-username"
 	AdminPasswordKey               = "admin-password"
+	DefaultKeycloakOidcSecretName  = "keycloak-oidc-credentials"
+	OidcProviderKey                = "provider"
+	OidcClientIdKey                = "client-id"
+	OidcClientSecretKey            = "client-secret"
+	OidcDiscoveryUrlKey            = "discovery-url"
+	OidcTenantIdKey                = "tenant-id"
 )
 
 const (
