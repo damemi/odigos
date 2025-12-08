@@ -99,7 +99,7 @@ load-to-kind-%:
 
 .PHONY: load-to-kind
 load-to-kind:
-	make -j 2 load-to-kind-instrumentor load-to-kind-odiglet ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
+	make -j 2 load-to-kind-instrumentor load-to-kind-odiglet ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: load-central-to-kind
 load-central-to-kind:
