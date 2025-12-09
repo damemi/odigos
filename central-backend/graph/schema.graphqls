@@ -115,8 +115,20 @@ type GeneralResult {
   error: String
 }
 
+type RemoteFetchResult {
+  proxyID: String!
+  success: Boolean!
+  data: String
+  error: String
+}
+
 type Query {
   remoteFetch(proxyID: String!, query: String!, variables: JSON!): String!
+  remoteMultiFetch(
+    proxyIDs: [String!]!
+    query: String!
+    variables: JSON!
+  ): [RemoteFetchResult!]!
   systemConfig: SystemConfig!
 
   oidcSignInUrl(providerId: OidcProviderId!): String!

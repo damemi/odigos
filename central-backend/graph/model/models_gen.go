@@ -46,6 +46,13 @@ type Mutation struct {
 type Query struct {
 }
 
+type RemoteFetchResult struct {
+	ProxyID string  `json:"proxyID"`
+	Success bool    `json:"success"`
+	Data    *string `json:"data,omitempty"`
+	Error   *string `json:"error,omitempty"`
+}
+
 type SignInResult struct {
 	IDToken     *string      `json:"idToken,omitempty"`
 	AccessToken *string      `json:"accessToken,omitempty"`

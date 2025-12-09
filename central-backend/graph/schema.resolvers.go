@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/consts"
@@ -17,6 +18,7 @@ import (
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
 	"github.com/odigos-io/central-backend/internal/types"
 	"github.com/odigos-io/central-backend/internal/utils"
+	"golang.org/x/sync/errgroup"
 )
 
 // EnsureIdentityProvider is the resolver for the ensureIdentityProvider field.
@@ -197,6 +199,34 @@ func (r *queryResolver) RemoteFetch(ctx context.Context, proxyID string, query s
 	case <-ctx.Done():
 		return "", ctx.Err()
 	}
+}
+
+// RemoteMultiFetch is the resolver for the remoteMultiFetch field.
+// It executes the same query against multiple proxies in parallel with concurrency control.
+func (r *queryResolver) RemoteMultiFetch(ctx context.Context, proxyIDs []string, query string, variables map[string]any) ([]*model.RemoteFetchResult, error) {
+	results := make([]*model.RemoteFetchResult, len(proxyIDs))
+	var mu sync.Mutex
+
+	g, gCtx := errgroup.WithContext(ctx)
+	g.SetLimit(20) // limit concurrency to 20 in-flight RemoteFetch calls to avoid overloading proxies/resources.
+
+	for i, proxyID := range proxyIDs {
+		i, proxyID := i, proxyID //creates NEW variables scoped to this iteration of the loop
+		g.Go(func() error {
+			data, err := r.RemoteFetch(gCtx, proxyID, query, variables)
+			mu.Lock()
+			defer mu.Unlock()
+			if err != nil {
+				errStr := err.Error()
+				results[i] = &model.RemoteFetchResult{ProxyID: proxyID, Success: false, Error: &errStr}
+			} else {
+				results[i] = &model.RemoteFetchResult{ProxyID: proxyID, Success: true, Data: &data}
+			}
+			return nil
+		})
+	}
+	g.Wait()
+	return results, nil
 }
 
 // SystemConfig is the resolver for the systemConfig field.

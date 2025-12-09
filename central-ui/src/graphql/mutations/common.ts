@@ -5,3 +5,14 @@ export const REMOTE_FETCH = gql`
     remoteFetch(proxyID: $proxyID, query: $query, variables: $variables)
   }
 `;
+
+export const REMOTE_MULTI_FETCH = gql`
+  query RemoteMultiFetch($proxyIDs: [String!]!, $query: String!, $variables: JSON!) {
+    remoteMultiFetch(proxyIDs: $proxyIDs, query: $query, variables: $variables) {
+      proxyID
+      success
+      data
+      error
+    }
+  }
+`;

@@ -4,6 +4,7 @@ export * from './config';
 export * from './compute-platforms';
 export * from './destinations';
 export * from './namespaces';
+export * from './remote-config';
 export * from './oidc';
 export * from './sources';
 export * from './auth';
