@@ -3,6 +3,7 @@
 import React from 'react';
 import { useServiceMap } from '@/hooks';
 import { ServiceMap } from '@odigos/ui-kit/containers';
+import { OverviewModalsAndDrawers } from '@/components';
 import { HEADER_HEIGHT, MENU_BAR_HEIGHT } from '@/utils';
 
 export default function Page() {
@@ -11,6 +12,7 @@ export default function Page() {
   return (
     <>
       <ServiceMap heightToRemove={HEADER_HEIGHT + MENU_BAR_HEIGHT} serviceMap={serviceMap} />
+      <OverviewModalsAndDrawers />
     </>
   );
 }

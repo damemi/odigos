@@ -7,6 +7,8 @@ import type { ComputePlatform, ComputePlatformInput, GeneralResult } from '@/typ
 
 export const useComputePlatformsCRUD = (selectedId?: string) => {
   const { addNotification } = useNotificationStore();
+  const { setSelectedConnection } = useSelectedStore();
+
   const onError = (error: ApolloError, crudType: Crud) => addNotification({ type: StatusType.Error, title: error.name || crudType, message: error.cause?.message || error.message });
 
   const { refetch, loading, error, data } = useQuery<{ computePlatforms?: ComputePlatform[] }>(GET_COMPUTE_PLATFORMS, {
@@ -16,14 +18,15 @@ export const useComputePlatformsCRUD = (selectedId?: string) => {
     onError: (error) => onError(error, Crud.Update),
   });
 
+  const getComputePlatforms = async () => {
+    const { data } = await refetch();
+    return data?.computePlatforms || [];
+  };
   const updateComputePlatform = async (id: string, input: ComputePlatformInput): Promise<GeneralResult | undefined> => {
     const { data } = await updateComputePlatformMutation({ variables: { id, input } });
     refetch();
-
     return data?.updateComputePlatform;
   };
-
-  const { setSelectedConnection } = useSelectedStore();
 
   useEffect(() => {
     if (!selectedId || !data?.computePlatforms) return;
@@ -37,6 +40,7 @@ export const useComputePlatformsCRUD = (selectedId?: string) => {
     error,
     refetch,
     computePlatforms: data?.computePlatforms || [],
+    getComputePlatforms,
     updateComputePlatform,
     updating,
   };

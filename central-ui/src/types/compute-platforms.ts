@@ -1,14 +1,7 @@
 import type { Team, User } from './auth';
-import { PlatformType, StatusType } from '@odigos/ui-kit/types';
+import type { Connection } from '@odigos/ui-kit/types';
 
-export interface ComputePlatform {
-  id: string;
-  name: string;
-  odigosVersion: string;
-  type: PlatformType;
-  status: StatusType;
-  connectedAt?: number | null; // unix seconds
-  lastSeenAt?: number | null; // unix seconds
+export interface ComputePlatform extends Connection {
   users?: User[];
   teams?: Team[];
 }

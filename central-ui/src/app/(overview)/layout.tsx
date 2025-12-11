@@ -1,18 +1,18 @@
 'use client';
 
-import React, { useCallback, useMemo, type PropsWithChildren, CSSProperties } from 'react';
+import React, { useCallback, useMemo, type PropsWithChildren } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { ROUTES } from '@/utils';
 import styled from 'styled-components';
-import { useModalStore } from '@odigos/ui-kit/store';
-import { ServiceMapIcon } from '@odigos/ui-kit/icons';
-import { DATA_FLOW_HEIGHT, MENU_BAR_HEIGHT, ROUTES } from '@/utils';
-import { EntityTypes, OtherEntityTypes } from '@odigos/ui-kit/types';
-import { OverviewHeader, OverviewModalsAndDrawers } from '@/components';
-import { useDataStreamsCRUD, useProxyID, useSSE, useTokenTracker } from '@/hooks';
+import { OverviewHeader } from '@/components';
+import { useProxyID, useSSE, useTokenTracker } from '@/hooks';
+import { NavIconIds, SideNav } from '@odigos/ui-kit/containers';
 import { ErrorBoundary, FlexColumn, type NavIcon } from '@odigos/ui-kit/components';
-import { DataFlowActionsMenu, NavIconIds, SideNav } from '@odigos/ui-kit/containers';
+import { ConnectionsIcon, ServiceMapIcon, UserSettingsIcon } from '@odigos/ui-kit/icons';
 
 enum OtherNavIconIds {
+  Connections = 'connections',
+  AccessManagement = 'access-management',
   ServiceMap = 'service-map',
 }
 
@@ -23,31 +23,13 @@ const PageContent = styled(FlexColumn)`
   align-items: center;
 `;
 
-const ContentWithActions = styled.div<{ $height: CSSProperties['height'] }>`
-  width: 100%;
-  height: ${({ $height }) => $height};
-  position: relative;
-`;
-
-const ContentUnderActions = styled.div`
-  gap: 12px;
+const Content = styled.div`
   display: flex;
-  justify-content: space-between;
-  padding: 0 12px;
+  gap: 12px;
+  padding: 12px;
   width: calc(100% - 24px);
+  height: 100%;
 `;
-
-const getEntityType = (pathname: string, proxyID: string) => {
-  return pathname.includes(ROUTES.SOURCES(proxyID))
-    ? EntityTypes.Source
-    : pathname.includes(ROUTES.DESTINATIONS(proxyID))
-    ? EntityTypes.Destination
-    : pathname.includes(ROUTES.ACTIONS(proxyID))
-    ? EntityTypes.Action
-    : pathname.includes(ROUTES.INSTRUMENTATION_RULES(proxyID))
-    ? EntityTypes.InstrumentationRule
-    : undefined;
-};
 
 const getSelectedId = (pathname: string, proxyID: string) => {
   return pathname === ROUTES.OVERVIEW(proxyID)
@@ -62,6 +44,10 @@ const getSelectedId = (pathname: string, proxyID: string) => {
     ? NavIconIds.InstrumentationRules
     : pathname === ROUTES.SERVICE_MAP(proxyID)
     ? OtherNavIconIds.ServiceMap
+    : pathname === ROUTES.ACCESS_MANAGEMENT
+    ? OtherNavIconIds.AccessManagement
+    : pathname === ROUTES.CONNECTIONS
+    ? OtherNavIconIds.Connections
     : undefined;
 };
 
@@ -71,22 +57,19 @@ const routesMap = {
   [NavIconIds.Destinations]: (proxyID: string) => ROUTES.DESTINATIONS(proxyID),
   [NavIconIds.Actions]: (proxyID: string) => ROUTES.ACTIONS(proxyID),
   [NavIconIds.InstrumentationRules]: (proxyID: string) => ROUTES.INSTRUMENTATION_RULES(proxyID),
+  [OtherNavIconIds.Connections]: ROUTES.CONNECTIONS,
+  [OtherNavIconIds.AccessManagement]: ROUTES.ACCESS_MANAGEMENT,
   [OtherNavIconIds.ServiceMap]: (proxyID: string) => ROUTES.SERVICE_MAP(proxyID),
 };
 
-function OverviewLayout({ children }: PropsWithChildren) {
+function Layout({ children }: PropsWithChildren) {
   // call important hooks that should run on page-mount
   useSSE();
   useTokenTracker();
 
-  const { setCurrentModal } = useModalStore();
-  const { updateDataStream, deleteDataStream } = useDataStreamsCRUD();
-
   const router = useRouter();
   const pathname = usePathname();
   const { proxyID } = useProxyID();
-
-  const entityType = useMemo(() => getEntityType(pathname, proxyID), [pathname, proxyID]);
   const selectedId = useMemo(() => getSelectedId(pathname, proxyID), [pathname, proxyID]);
 
   const onClickId = useCallback(
@@ -100,6 +83,20 @@ function OverviewLayout({ children }: PropsWithChildren) {
 
   const extendedNavIcons: NavIcon[] = useMemo(
     () => [
+      {
+        id: OtherNavIconIds.Connections,
+        icon: ConnectionsIcon,
+        selected: selectedId === OtherNavIconIds.Connections,
+        onClick: () => onClickId(OtherNavIconIds.Connections),
+        tooltip: 'Connections',
+      },
+      {
+        id: OtherNavIconIds.AccessManagement,
+        icon: UserSettingsIcon,
+        selected: selectedId === OtherNavIconIds.AccessManagement,
+        onClick: () => onClickId(OtherNavIconIds.AccessManagement),
+        tooltip: 'Access Management',
+      },
       {
         id: OtherNavIconIds.ServiceMap,
         icon: ServiceMapIcon,
@@ -115,28 +112,13 @@ function OverviewLayout({ children }: PropsWithChildren) {
     <ErrorBoundary>
       <PageContent>
         <OverviewHeader />
-
-        <ContentWithActions $height={DATA_FLOW_HEIGHT}>
-          {selectedId !== OtherNavIconIds.ServiceMap ? (
-            <DataFlowActionsMenu
-              addEntity={entityType}
-              onClickNewDataStream={() => setCurrentModal(OtherEntityTypes.DataStream)}
-              updateDataStream={updateDataStream}
-              deleteDataStream={deleteDataStream}
-            />
-          ) : (
-            <div style={{ height: `${MENU_BAR_HEIGHT}px` }} />
-          )}
-          <ContentUnderActions>
-            <SideNav defaultSelectedId={selectedId} onClickId={onClickId} extendedNavIcons={extendedNavIcons} />
-            {children}
-          </ContentUnderActions>
-        </ContentWithActions>
-
-        <OverviewModalsAndDrawers />
+        <Content>
+          <SideNav defaultSelectedId={selectedId} onClickId={onClickId} extendedNavIcons={extendedNavIcons} />
+          <div style={{ width: '100%' }}>{children}</div>
+        </Content>
       </PageContent>
     </ErrorBoundary>
   );
 }
 
-export default OverviewLayout;
+export default Layout;

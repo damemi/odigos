@@ -1,17 +1,18 @@
 import React, { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { ROUTES } from '@/utils';
 import { useStatusStore } from '../../store';
 import { AccountMenu } from '../account-menu';
-import { StatusType } from '@odigos/ui-kit/types';
-import { ACCESS_MANAGEMENT, ROUTES } from '@/utils';
 import { FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { ConnectionSelect } from '../connection-select';
-import { OdigosLogoText, UserSettingsIcon } from '@odigos/ui-kit/icons';
+import { OdigosCentralLogoText } from '@odigos/ui-kit/icons';
+import { OtherStatusType, StatusType } from '@odigos/ui-kit/types';
+import { Header, Status, Tooltip } from '@odigos/ui-kit/components';
 import { useConfig, useDescribe, useProxyID, useTokenCRUD } from '@/hooks';
-import { Header, IconButton, Status, Tag, Tooltip } from '@odigos/ui-kit/components';
+import { Badge as V2Badge, Header as V2Header } from '@odigos/ui-kit/components/v2';
 import { NotificationManager, SlackInvite, SystemOverview, ToggleDarkMode } from '@odigos/ui-kit/containers';
 
-const OverviewHeader = () => {
+const OverviewHeader = ({ v2 }: { v2?: boolean }) => {
   const router = useRouter();
   const { proxyID } = useProxyID();
 
@@ -23,48 +24,49 @@ const OverviewHeader = () => {
   const onClickAccessManagement = () => router.push(ROUTES.ACCESS_MANAGEMENT);
 
   const left = useMemo(() => {
-    const arr = [
-      <OdigosLogoText key='logo' size={150} />,
-      <Tag key='central' type={StatusType.Default}>
-        [central ui]
-      </Tag>,
-      <ConnectionSelect key='connection-select' />,
-    ];
+    const arr = [<OdigosCentralLogoText key='logo' size={150} />];
 
     if (title || message) {
-      arr.push(<Status key='status' status={status} title={title} subtitle={message} size={14} family='primary' withIcon withBackground />);
+      if (v2) {
+        arr.push(<V2Badge key='status' status={status} label={message} />);
+      } else {
+        arr.push(<Status key='status' status={status} title={title} subtitle={message} size={14} family='primary' withIcon withBackground />);
+      }
     }
 
     if (isReadonly) {
-      arr.push(
-        <Tooltip key='readonly' text={FORM_ALERTS.READONLY_WARNING}>
-          <Status status={StatusType.Info} title='Read Only' size={14} family='primary' withIcon withBackground />
-        </Tooltip>,
-      );
+      if (v2) {
+        arr.push(
+          <Tooltip key='readonly' text={FORM_ALERTS.READONLY_WARNING}>
+            <V2Badge status={OtherStatusType.Disabled} label='Read Only' />
+          </Tooltip>,
+        );
+      } else {
+        arr.push(
+          <Tooltip key='readonly' text={FORM_ALERTS.READONLY_WARNING}>
+            <Status status={StatusType.Info} title='Read Only' size={14} family='primary' withIcon withBackground />
+          </Tooltip>,
+        );
+      }
     }
 
+    arr.push(<ConnectionSelect key='connection-select' />);
+
     return arr;
-  }, [title, message, status, isReadonly]);
+  }, [v2, title, message, status, isReadonly]);
 
   const right = useMemo(() => {
-    const arr = [<ToggleDarkMode key='toggle-theme' />, <NotificationManager key='notification-manager' />];
-
-    if (proxyID) {
-      arr.push(<SystemOverview key='system-overview' tokens={tokens} saveToken={updateToken} fetchDescribeOdigos={fetchDescribeOdigos} />);
-    }
-
-    arr.push(
-      ...[
-        <IconButton key='access-management' tooltip={ACCESS_MANAGEMENT} onClick={onClickAccessManagement}>
-          <UserSettingsIcon />
-        </IconButton>,
-        <SlackInvite key='slack-invite' />,
-        <AccountMenu key='account-menu' />,
-      ],
-    );
+    const arr = [<NotificationManager key='notification-manager' />];
+    if (!v2) arr.unshift(<ToggleDarkMode key='toggle-theme' />);
+    if (proxyID) arr.push(<SystemOverview key='system-overview' tokens={tokens} saveToken={updateToken} fetchDescribeOdigos={fetchDescribeOdigos} />);
+    arr.push(...[<SlackInvite key='slack-invite' />, <AccountMenu key='account-menu' />]);
 
     return arr;
-  }, [proxyID, tokens, updateToken, fetchDescribeOdigos, onClickAccessManagement]);
+  }, [v2, proxyID, tokens, updateToken, fetchDescribeOdigos, onClickAccessManagement]);
+
+  if (v2) {
+    return <V2Header left={left} right={right} />;
+  }
 
   return <Header left={left} right={right} />;
 };

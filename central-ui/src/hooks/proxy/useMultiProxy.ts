@@ -16,6 +16,7 @@ export interface MultiProxyResult<T> {
 }
 
 export interface MultiProxyResponse<T> {
+  error?: string;
   results: MultiProxyResult<T>[];
   allSucceeded: boolean;
   anySucceeded: boolean;
@@ -29,13 +30,14 @@ interface UseMultiProxy<ResT, ReqT> {
   error?: ApolloError;
 }
 
-const EMPTY_RESPONSE: MultiProxyResponse<unknown> = {
+const EMPTY_RESPONSE = (error?: string): MultiProxyResponse<unknown> => ({
+  error,
   results: [],
   allSucceeded: false,
   anySucceeded: false,
   successCount: 0,
   failureCount: 0,
-};
+});
 
 export const useMultiProxy = <ResT = AnyObj, ReqT = AnyObj>(queryString: string): UseMultiProxy<ResT, ReqT> => {
   const { addNotification } = useNotificationStore();
@@ -47,7 +49,7 @@ export const useMultiProxy = <ResT = AnyObj, ReqT = AnyObj>(queryString: string)
     async (proxyIDs, variables) => {
       if (!proxyIDs.length || !queryString) {
         console.warn('no `proxyIDs` or `queryString` provided for multi-proxy fetch');
-        return EMPTY_RESPONSE as MultiProxyResponse<ResT>;
+        return EMPTY_RESPONSE() as MultiProxyResponse<ResT>;
       }
 
       setLoading(true);
@@ -62,7 +64,7 @@ export const useMultiProxy = <ResT = AnyObj, ReqT = AnyObj>(queryString: string)
 
         if (error) {
           addNotification({ type: StatusType.Error, title: error.name || 'API Error', message: error.cause?.message || error.message });
-          return EMPTY_RESPONSE as MultiProxyResponse<ResT>;
+          return EMPTY_RESPONSE(error.cause?.message || error.message) as MultiProxyResponse<ResT>;
         }
 
         const rawResults = data?.remoteMultiFetch || [];
@@ -95,4 +97,3 @@ export const useMultiProxy = <ResT = AnyObj, ReqT = AnyObj>(queryString: string)
     loading,
   };
 };
-

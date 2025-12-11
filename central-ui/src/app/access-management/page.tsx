@@ -5,13 +5,16 @@ import styled from 'styled-components';
 import { useUserStore } from '@/store';
 import Theme from '@odigos/ui-kit/theme';
 import { PlusIcon } from '@odigos/ui-kit/icons';
+import { UsersTable, CreateUserModal } from '@/components';
 import { CreateTeamModal } from '@/components/modal/create-team-modal';
 import { ComputePlatformsTable, TeamsTable } from '@/components/tables';
-import { UsersTable, CreateUserModal, OverviewHeader } from '@/components';
-import { FlexColumn, Button, TabList, Tab } from '@odigos/ui-kit/components';
+import { Button, TabList, Tab, FlexRow } from '@odigos/ui-kit/components';
 
-const Padding = styled.div`
-  padding: 24px;
+const Container = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 `;
 
 const PushRight = styled.div`
@@ -50,28 +53,24 @@ export default function Page() {
   const onClickCloseCreate = () => setCreateModalOpenFor(null);
 
   return (
-    <FlexColumn>
-      <OverviewHeader />
+    <Container>
+      <FlexRow>
+        <TabList tabs={tabs} />
 
-      <Padding>
-        <FlexColumn>
-          <TabList tabs={tabs} />
+        {activeTab !== AccessTab.Compute && isAdmin && (
+          <PushRight>
+            <Button onClick={onClickCreate}>
+              <PlusIcon fill={theme.text.primary} />
+              {`create ${activeTab.substring(0, activeTab.length - 1)}`.toUpperCase()}
+            </Button>
+          </PushRight>
+        )}
+      </FlexRow>
 
-          {activeTab !== AccessTab.Compute && isAdmin && (
-            <PushRight>
-              <Button onClick={onClickCreate}>
-                <PlusIcon fill={theme.text.primary} />
-                {`create ${activeTab.substring(0, activeTab.length - 1)}`.toUpperCase()}
-              </Button>
-            </PushRight>
-          )}
-        </FlexColumn>
-
-        {renderActiveTab({ activeTab })}
-      </Padding>
+      {renderActiveTab({ activeTab })}
 
       <CreateUserModal isOpen={createModalOpenFor === AccessTab.Users} onClose={onClickCloseCreate} />
       <CreateTeamModal isOpen={createModalOpenFor === AccessTab.Teams} onClose={onClickCloseCreate} />
-    </FlexColumn>
+    </Container>
   );
 }
