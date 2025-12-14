@@ -237,6 +237,7 @@ export const GET_DESCRIBE_SOURCE = `
             }
           }
         }
+        manifestYAML
       }
     }
   }

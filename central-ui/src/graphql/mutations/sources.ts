@@ -15,3 +15,9 @@ export const RESTART_WORKLOADS = `
     restartWorkloads(sourceIds: $sourceIds)
   }
 `;
+
+export const RESTART_POD = `
+  mutation RestartPod($namespace: String!, $name: String!) {
+    restartPod(namespace: $namespace, name: $name)
+  }
+`;
