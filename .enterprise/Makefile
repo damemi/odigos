@@ -2,10 +2,12 @@ TAG ?= $(shell odigos version --cluster)
 
 # Include dependency update targets
 include deps.mk
-# These are used to point to different Dockerfiles (such as Dockerfile.rhel) and add -ubi9 to RHEL based images.
+# These are used to point to different Dockerfiles
 DOCKERFILE=Dockerfile
 IMG_PREFIX?=
 IMG_SUFFIX?=
+TARGET?=
+RHEL?=false
 ORG ?= registry.odigos.io
 BUILD_DIR=.
 # If you made a change and it's not being reflected in the image,
@@ -13,9 +15,26 @@ BUILD_DIR=.
 # Use NO_CACHE=--no-cache to force a rebuild, or make build-odiglet-with-otel_agents NO_CACHE=--no-cache
 NO_CACHE?=
 
+ifeq ($(RHEL),true)
+    IMG_SUFFIX=-ubi9
+
+    # If TARGET is empty, set it to rhel
+    ifeq ($(strip $(TARGET)),)
+        TARGET := rhel
+    else
+        # If TARGET is not empty, append -rhel
+        TARGET := $(TARGET)-rhel
+    endif
+endif
+
+ifneq ($(strip $(TARGET)),)
+  TARGET_FLAG := --target $(TARGET)
+endif
+
 .PHONY: build-image/%
 build-image/%:
-	docker build -t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
+	docker build $(TARGET_FLAG) \
+	-t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
 	--secret id=github_token,env=GITHUB_TOKEN \
 	--build-arg SERVICE_NAME="$*" \
 	--build-arg ODIGOS_VERSION=$(TAG) \
@@ -24,6 +43,7 @@ build-image/%:
 	--build-arg VERSION=$(TAG) \
 	--build-arg RELEASE=$(TAG) \
 	--build-arg LD_FLAGS="$(LD_FLAGS)" \
+	--build-arg RHEL="$(RHEL)" \
 	$(BUILD_CONTEXT) \
 	$(NO_CACHE)
 
@@ -53,7 +73,11 @@ build-central-proxy:
 
 .PHONY: build-agents
 build-agents:
-	$(MAKE) build-image/agents DOCKERFILE=agents/$(DOCKERFILE) SUMMARY="Odigos Enterprise Agents" DESCRIPTION="The Odigos Agents used to copy Odigos agent relevant files into the user workloads." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	$(MAKE) build-image/agents \
+		DOCKERFILE=odiglet/$(DOCKERFILE) TARGET=$(if $(filter true,$(RHEL)),agents-rhel,agents) \
+		SUMMARY="Odigos Enterprise Agents" \
+		DESCRIPTION="The Odigos Agents used to copy Odigos agent relevant files into the user workloads." \
+		TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: build-images
 build-images:
@@ -69,10 +93,11 @@ build-images-with-agents:
 
 .PHONY: build-images-rhel
 build-images-rhel:
-	$(MAKE) build-images IMG_SUFFIX=-ubi9 DOCKERFILE=Dockerfile.rhel TAG=$(TAG) ORG=$(ORG)
+	$(MAKE) build-images RHEL=true TAG=$(TAG) ORG=$(ORG)
 
 push-image/%:
-	docker buildx build --platform linux/amd64,linux/arm64/v8 -t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
+	docker buildx build $(TARGET_FLAG) \
+	--platform linux/amd64,linux/arm64/v8 -t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
 	--secret id=github_token,env=GITHUB_TOKEN \
 	$(if $(filter true,$(PUSH_IMAGE)),--push,) \
 	$(if $(filter true,$(GCP_MARKETPLACE)),--annotation="index:com.googleapis.cloudmarketplace.product.service.name=services/odigos.endpoints.odigos-public.cloud.goog",) \
@@ -80,7 +105,9 @@ push-image/%:
 	--build-arg VERSION=$(TAG) \
 	--build-arg RELEASE=$(TAG) \
 	--build-arg SUMMARY="$(SUMMARY)" \
-	--build-arg DESCRIPTION="$(DESCRIPTION)"
+	--build-arg DESCRIPTION="$(DESCRIPTION)" \
+	--build-arg LD_FLAGS="$(LD_FLAGS)" \
+	--build-arg RHEL="$(RHEL)"
 
 .PHONY: push-odiglet
 push-odiglet:
@@ -92,7 +119,7 @@ push-instrumentor:
 
 .PHONY: push-agents
 push-agents:
-	$(MAKE) push-image/agents DOCKERFILE=agents/$(DOCKERFILE) SUMMARY="Odigos Enterprise Agents" DESCRIPTION="The Odigos Agents used to copy Odigos agent relevant files into the user workloads." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	$(MAKE) push-image/agents DOCKERFILE=odiglet/$(DOCKERFILE) TARGET=agents SUMMARY="Odigos Enterprise Agents" DESCRIPTION="The Odigos Agents used to copy Odigos agent relevant files into the user workloads." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 load-to-kind-%:
 	kind load docker-image $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG)
