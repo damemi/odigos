@@ -5,9 +5,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { getNavbarIcons } from '@/utils';
 import { useTheme } from 'styled-components';
 import { OverviewHeader } from '@/components';
-import { useSSE, useTokenTracker } from '@/hooks';
 import { useDarkMode } from '@odigos/ui-kit/store';
 import { Navbar } from '@odigos/ui-kit/components/v2';
+import { useProxyID, useSSE, useTokenTracker } from '@/hooks';
 import { ErrorBoundary, FlexColumn, FlexRow } from '@odigos/ui-kit/components';
 
 function V2Layout({ children }: PropsWithChildren) {
@@ -25,13 +25,14 @@ function V2Layout({ children }: PropsWithChildren) {
 
   const router = useRouter();
   const pathname = usePathname();
+  const { proxyID } = useProxyID();
 
   return (
     <ErrorBoundary>
       <FlexColumn $gap={0}>
         <OverviewHeader v2 />
         <FlexRow $gap={0}>
-          <Navbar height='calc(100vh - 90px)' icons={getNavbarIcons(router, pathname)} />
+          <Navbar height='calc(100vh - 90px)' icons={getNavbarIcons(router, pathname, proxyID)} />
           {children}
         </FlexRow>
       </FlexColumn>

@@ -12,6 +12,7 @@ export const ROUTES = {
   INSTRUMENTATION_RULES: (proxyID: string) => `/instrumentation-rules/${proxyID}`,
 
   SERVICE_MAP: (proxyID: string) => `/service-map/${proxyID}`,
+  PIPELINE_COLLECTORS: (proxyID: string) => `/pipeline-collectors/${proxyID}`,
 };
 
 const PROTOCOL = typeof window !== 'undefined' ? window.location.protocol : 'http';

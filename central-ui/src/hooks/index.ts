@@ -9,6 +9,7 @@ export * from './destinations';
 export * from './instrumentation-rules';
 export * from './metrics';
 export * from './namespaces';
+export * from './pipeline-collectors';
 export * from './proxy';
 export * from './remote-config';
 export * from './sources';
