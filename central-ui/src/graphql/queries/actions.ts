@@ -1,4 +1,7 @@
-export const GET_ACTIONS = `
+import type { VersionedRemoteFetch } from '@/types';
+
+export const GET_ACTIONS: VersionedRemoteFetch = {
+  'v1.11': `
   query GetActions {
     computePlatform {
       actions {
@@ -65,4 +68,5 @@ export const GET_ACTIONS = `
       }
     }
   }
-`;
+`,
+};

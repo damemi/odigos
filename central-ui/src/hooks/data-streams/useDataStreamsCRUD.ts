@@ -1,8 +1,8 @@
 import { useCallback, useEffect } from 'react';
-import { useProxy, useProxyID } from '../proxy';
 import { useConfig } from '../config';
 import { STORAGE_KEYS } from '@/utils';
 import { useSourceCRUD } from '../sources';
+import { useProxy, useRemoteFetch } from '../proxy';
 import { useDestinationCRUD } from '../destinations';
 import { Crud, type DataStream, StatusType } from '@odigos/ui-kit/types';
 import { useDataStreamStore, useNotificationStore } from '@odigos/ui-kit/store';
@@ -19,8 +19,8 @@ interface UseDataStreamsCrud {
 }
 
 export const useDataStreamsCRUD = (): UseDataStreamsCrud => {
+  const { proxyID } = useProxy();
   const { isReadonly } = useConfig();
-  const { proxyID } = useProxyID();
   const { fetchSources } = useSourceCRUD();
   const { fetchDestinations } = useDestinationCRUD();
   const { addNotification } = useNotificationStore();
@@ -30,9 +30,9 @@ export const useDataStreamsCRUD = (): UseDataStreamsCrud => {
     addNotification({ type, title, message, hideFromHistory });
   };
 
-  const { fetch: fetchDataStreamsQuery } = useProxy<{ computePlatform: { dataStreams?: DataStream[] } }>(GET_DATA_STREAMS);
-  const { fetch: mutateUpdate } = useProxy<{ updateDataStream: { name: string } }, { id: string; dataStream: DataStream }>(UPDATE_DATA_STREAM);
-  const { fetch: mutateDelete } = useProxy<{ deleteDataStream: boolean }, { id: string }>(DELETE_DATA_STREAM);
+  const { fetch: fetchDataStreamsQuery } = useRemoteFetch<{ computePlatform: { dataStreams?: DataStream[] } }>(GET_DATA_STREAMS);
+  const { fetch: mutateUpdate } = useRemoteFetch<{ updateDataStream: { name: string } }, { id: string; dataStream: DataStream }>(UPDATE_DATA_STREAM);
+  const { fetch: mutateDelete } = useRemoteFetch<{ deleteDataStream: boolean }, { id: string }>(DELETE_DATA_STREAM);
 
   const fetchDataStreams = useCallback(
     async (overrideStreamNameSelection?: string) => {

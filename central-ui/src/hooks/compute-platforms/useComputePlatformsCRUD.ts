@@ -14,7 +14,7 @@ export const useComputePlatformsCRUD = (selectedId?: string) => {
   const { refetch, loading, error, data } = useQuery<{ computePlatforms?: ComputePlatform[] }>(GET_COMPUTE_PLATFORMS, {
     onError: (error) => onError(error, Crud.Read),
   });
-  const [updateComputePlatformMutation, { loading: updating }] = useMutation<{ updateComputePlatform: GeneralResult }, { id: string; input: ComputePlatformInput }>(UPDATE_COMPUTE_PLATFORM, {
+  const [update, { loading: updating }] = useMutation<{ updateComputePlatform: GeneralResult }, { id: string; input: ComputePlatformInput }>(UPDATE_COMPUTE_PLATFORM, {
     onError: (error) => onError(error, Crud.Update),
   });
 
@@ -23,7 +23,7 @@ export const useComputePlatformsCRUD = (selectedId?: string) => {
     return data?.computePlatforms || [];
   };
   const updateComputePlatform = async (id: string, input: ComputePlatformInput): Promise<GeneralResult | undefined> => {
-    const { data } = await updateComputePlatformMutation({ variables: { id, input } });
+    const { data } = await update({ variables: { id, input } });
     refetch();
     return data?.updateComputePlatform;
   };
@@ -36,11 +36,11 @@ export const useComputePlatformsCRUD = (selectedId?: string) => {
   }, [selectedId, data?.computePlatforms]);
 
   return {
+    getComputePlatforms,
+    computePlatforms: data?.computePlatforms || [],
     loading,
     error,
-    refetch,
-    computePlatforms: data?.computePlatforms || [],
-    getComputePlatforms,
+
     updateComputePlatform,
     updating,
   };

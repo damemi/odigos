@@ -1,4 +1,7 @@
-export const CREATE_DESTINATION = `
+import type { VersionedRemoteFetch } from '@/types';
+
+export const CREATE_DESTINATION: VersionedRemoteFetch = {
+  'v1.11': `
   mutation CreateNewDestination($destination: DestinationInput!) {
     createNewDestination(destination: $destination) {
       id
@@ -36,23 +39,29 @@ export const CREATE_DESTINATION = `
       }
     }
   }
-`;
+`,
+};
 
-export const UPDATE_DESTINATION = `
+export const UPDATE_DESTINATION: VersionedRemoteFetch = {
+  'v1.11': `
   mutation UpdateDestination($id: ID!, $destination: DestinationInput!) {
     updateDestination(id: $id, destination: $destination) {
       id
     }
   }
-`;
+`,
+};
 
-export const DELETE_DESTINATION = `
+export const DELETE_DESTINATION: VersionedRemoteFetch = {
+  'v1.11': `
   mutation DeleteDestination($id: ID!, $currentStreamName: String!) {
     deleteDestination(id: $id, currentStreamName: $currentStreamName)
   }
-`;
+`,
+};
 
-export const TEST_DESTINATION_CONNECTION = `
+export const TEST_DESTINATION_CONNECTION: VersionedRemoteFetch = {
+  'v1.11': `
   mutation TestConnection($destination: DestinationInput!) {
     testConnectionForDestination(destination: $destination) {
       succeeded
@@ -62,4 +71,5 @@ export const TEST_DESTINATION_CONNECTION = `
       reason
     }
   }
-`;
+`,
+};

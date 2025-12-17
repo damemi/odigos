@@ -5,15 +5,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import styled from 'styled-components';
 import { getNavbarIcons } from '@/utils';
 import { OverviewHeader } from '@/components';
-import { useProxyID, useSSE, useTokenTracker } from '@/hooks';
+import { useProxy, useSSE, useTokenTracker } from '@/hooks';
 import { ErrorBoundary, FlexColumn, IconsNav } from '@odigos/ui-kit/components';
-
-enum OtherNavIconIds {
-  Connections = 'connections',
-  AccessManagement = 'access-management',
-  ServiceMap = 'service-map',
-  PipelineCollectors = 'pipeline-collectors',
-}
 
 const PageContent = styled(FlexColumn)`
   width: 100%;
@@ -37,7 +30,7 @@ function Layout({ children }: PropsWithChildren) {
 
   const router = useRouter();
   const pathname = usePathname();
-  const { proxyID } = useProxyID();
+  const { proxyID } = useProxy();
 
   return (
     <ErrorBoundary>

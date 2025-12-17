@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useProxy } from '../proxy';
 import { useConfig } from '../config';
+import { useRemoteFetch } from '../proxy';
 import { mapFetchedDestinations } from '@/utils';
 import { getSseTargetFromId } from '@odigos/ui-kit/functions';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
@@ -40,10 +40,10 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
     });
   };
 
-  const { fetch: queryAll } = useProxy<{ computePlatform: { destinations: Destination[] } }>(GET_DESTINATIONS);
-  const { fetch: mutateCreate } = useProxy<{ createNewDestination: Destination }, { destination: DestinationFormData }>(CREATE_DESTINATION);
-  const { fetch: mutateUpdate } = useProxy<{ updateDestination: { id: string } }, { id: string; destination: DestinationFormData }>(UPDATE_DESTINATION);
-  const { fetch: mutateDelete } = useProxy<{ deleteDestination: boolean }, { id: string; currentStreamName: string }>(DELETE_DESTINATION);
+  const { fetch: queryAll } = useRemoteFetch<{ computePlatform: { destinations: Destination[] } }>(GET_DESTINATIONS);
+  const { fetch: mutateCreate } = useRemoteFetch<{ createNewDestination: Destination }, { destination: DestinationFormData }>(CREATE_DESTINATION);
+  const { fetch: mutateUpdate } = useRemoteFetch<{ updateDestination: { id: string } }, { id: string; destination: DestinationFormData }>(UPDATE_DESTINATION);
+  const { fetch: mutateDelete } = useRemoteFetch<{ deleteDestination: boolean }, { id: string; currentStreamName: string }>(DELETE_DESTINATION);
 
   const fetchDestinations = async () => {
     setEntitiesLoading(EntityTypes.Destination, true);

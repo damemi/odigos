@@ -1,4 +1,7 @@
-export const GET_TOKENS = `
+import type { VersionedRemoteFetch } from '@/types';
+
+export const GET_TOKENS: VersionedRemoteFetch = {
+  'v1.11': `
   query GetTokens {
     computePlatform {
       apiTokens {
@@ -9,4 +12,5 @@ export const GET_TOKENS = `
       }
     }
   }
-`
+`,
+};

@@ -1,7 +1,8 @@
 import { create } from 'zustand';
+import { STORAGE_KEYS } from '@/utils';
+import { OidcProviderId } from '@/types';
 import { User, Role } from '@/types/auth';
 import { persist } from 'zustand/middleware';
-import { OidcProviderId } from '@/types';
 
 interface UserStoreState {
   authProviderId: OidcProviderId | null;
@@ -72,7 +73,7 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
         }),
     }),
     {
-      name: 'odigos-auth-storage',
+      name: STORAGE_KEYS.AUTH_STORAGE,
       partialize: (state) => ({
         authProviderId: state.authProviderId,
         idToken: state.idToken,

@@ -1,4 +1,7 @@
-export const CREATE_ACTION = `
+import type { VersionedRemoteFetch } from '@/types';
+
+export const CREATE_ACTION: VersionedRemoteFetch = {
+  'v1.11': `
   mutation CreateAction($action: ActionInput!) {
     createAction(action: $action) {
       id
@@ -63,9 +66,11 @@ export const CREATE_ACTION = `
       }
     }
   }
-`;
+`,
+};
 
-export const UPDATE_ACTION = `
+export const UPDATE_ACTION: VersionedRemoteFetch = {
+  'v1.11': `
   mutation UpdateAction($id: ID!, $action: ActionInput!) {
     updateAction(id: $id, action: $action) {
       id
@@ -129,10 +134,13 @@ export const UPDATE_ACTION = `
       }
     }
   }
-`;
+`,
+};
 
-export const DELETE_ACTION = `
+export const DELETE_ACTION: VersionedRemoteFetch = {
+  'v1.11': `
   mutation DeleteAction($id: ID!, $actionType: String!) {
     deleteAction(id: $id, actionType: $actionType)
   }
-`;
+`,
+};

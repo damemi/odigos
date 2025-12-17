@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useProxy } from '../proxy';
 import { useConfig } from '../config';
+import { useRemoteFetch } from '../proxy';
 import type { NamespaceInstrumentInput } from '@/types';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { GET_NAMESPACE, GET_NAMESPACES, PERSIST_NAMESPACES } from '@/graphql';
@@ -17,9 +17,9 @@ export const useNamespace = () => {
     addNotification({ type, title, message, hideFromHistory });
   };
 
-  const { fetch: queryAllNs } = useProxy<{ computePlatform?: { k8sActualNamespaces?: Namespace[] } }>(GET_NAMESPACES);
-  const { fetch: querySingleNs } = useProxy<{ computePlatform?: { k8sActualNamespace?: Namespace } }, { namespaceName: string }>(GET_NAMESPACE);
-  const { fetch: mutatePersist } = useProxy<{ persistK8sNamespaces: boolean }, NamespaceInstrumentInput>(PERSIST_NAMESPACES);
+  const { fetch: queryAllNs } = useRemoteFetch<{ computePlatform?: { k8sActualNamespaces?: Namespace[] } }>(GET_NAMESPACES);
+  const { fetch: querySingleNs } = useRemoteFetch<{ computePlatform?: { k8sActualNamespace?: Namespace } }, { namespaceName: string }>(GET_NAMESPACE);
+  const { fetch: mutatePersist } = useRemoteFetch<{ persistK8sNamespaces: boolean }, NamespaceInstrumentInput>(PERSIST_NAMESPACES);
 
   const fetchNamespaces = async () => {
     setEntitiesLoading(EntityTypes.Namespace, true);

@@ -1,25 +1,25 @@
 'use client';
 
 import React from 'react';
-import { UPDATE_REMOTE_CONFIG } from '@/graphql';
-import { StatusType } from '@odigos/ui-kit/types';
+import { useNotificationStore } from '@odigos/ui-kit/store';
 import { ComputePlatform, RemoteConfigInput } from '@/types';
-import { useNotificationStore, useSetupStore } from '@odigos/ui-kit/store';
-import { useComputePlatformsCRUD, useMultiProxy, useProxyCRUD, useProxyID } from '@/hooks';
+import { GET_REMOTE_CONFIG, UPDATE_REMOTE_CONFIG } from '@/graphql';
+import { type ConnectionRemoteConfig, StatusType } from '@odigos/ui-kit/types';
+import { useComputePlatformsCRUD, useProxy, useProxyCRUD, useRemoteFetch } from '@/hooks';
 import { ApplyConnectionsConfigurationsFunc, CentralConnections } from '@odigos/ui-kit/containers/v2';
 
 export default function Page() {
-  const { clearStore } = useSetupStore();
-  const { selectProxyID } = useProxyID();
+  const { selectProxy } = useProxy();
   const { deleteProxy } = useProxyCRUD();
   const { addNotification } = useNotificationStore();
   const { computePlatforms, getComputePlatforms } = useComputePlatformsCRUD();
-  const { fetchAll: updateRemoteConfig } = useMultiProxy<void, { config: RemoteConfigInput }>(UPDATE_REMOTE_CONFIG);
 
-  const onClickConnection = ({ id, status }: Pick<ComputePlatform, 'id' | 'status'>) => {
+  const { fetch: getRemoteConfig } = useRemoteFetch<{ remoteConfig: ConnectionRemoteConfig }, void>(GET_REMOTE_CONFIG, computePlatforms);
+  const { fetchMulti: updateRemoteConfig } = useRemoteFetch<void, { config: RemoteConfigInput }>(UPDATE_REMOTE_CONFIG, computePlatforms);
+
+  const onClickConnection = ({ id, status }: ComputePlatform) => {
     if (status === StatusType.Success) {
-      clearStore();
-      selectProxyID(id);
+      selectProxy(id);
     } else {
       addNotification({
         type: StatusType.Warning,
@@ -50,8 +50,13 @@ export default function Page() {
       tableRowsMaxHeight={'calc(100vh - 180px)'}
       connections={computePlatforms.length ? computePlatforms : undefined}
       getConnections={getComputePlatforms}
-      onClickConnection={(id) => onClickConnection({ id, status: StatusType.Success })}
+      onClickConnection={onClickConnection}
       deleteConnection={deleteConnection}
+      getConnectionRemoteConfig={async (id) => {
+        const { data } = await getRemoteConfig(undefined, id);
+        // TODO: support undefined in kit then remove the OR value
+        return data?.remoteConfig || { rollout: { automaticRolloutDisabled: false } };
+      }}
       applyConfigurations={applyConfigurations}
     />
   );

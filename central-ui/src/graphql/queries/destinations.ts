@@ -1,4 +1,7 @@
-export const GET_DESTINATIONS = `
+import type { VersionedRemoteFetch } from '@/types';
+
+export const GET_DESTINATIONS: VersionedRemoteFetch = {
+  'v1.11': `
   query GetDestinations {
     computePlatform {
       destinations {
@@ -38,9 +41,11 @@ export const GET_DESTINATIONS = `
       }
     }
   }
-`;
+`,
+};
 
-export const GET_DESTINATION_CATEGORIES = `
+export const GET_DESTINATION_CATEGORIES: VersionedRemoteFetch = {
+  'v1.11': `
   query GetDestinationCategories {
     destinationCategories {
       categories {
@@ -81,13 +86,16 @@ export const GET_DESTINATION_CATEGORIES = `
       }
     }
   }
-`;
+`,
+};
 
-export const GET_POTENTIAL_DESTINATIONS = `
+export const GET_POTENTIAL_DESTINATIONS: VersionedRemoteFetch = {
+  'v1.11': `
   query GetPotentialDestinations {
     potentialDestinations {
       type
       fields
     }
   }
-`;
+`,
+};

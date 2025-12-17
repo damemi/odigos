@@ -1,4 +1,7 @@
-export const GET_DESCRIBE_ODIGOS = `
+import type { VersionedRemoteFetch } from '@/types';
+
+export const GET_DESCRIBE_ODIGOS: VersionedRemoteFetch = {
+  'v1.11': `
   query DescribeOdigos {
     describeOdigos {
       odigosVersion {
@@ -153,9 +156,11 @@ export const GET_DESCRIBE_ODIGOS = `
       }
     }
   }
-`;
+`,
+};
 
-export const GET_DESCRIBE_SOURCE = `
+export const GET_DESCRIBE_SOURCE: VersionedRemoteFetch = {
+  'v1.12': `
   query DescribeSource($namespace: String!, $kind: String!, $name: String!) {
     describeSource(namespace: $namespace, kind: $kind, name: $name) {
       totalPods
@@ -241,4 +246,91 @@ export const GET_DESCRIBE_SOURCE = `
       }
     }
   }
-`;
+`,
+  'v1.11': `
+  query DescribeSource($namespace: String!, $kind: String!, $name: String!) {
+    describeSource(namespace: $namespace, kind: $kind, name: $name) {
+      totalPods
+      podsPhasesCount
+      pods {
+        podName {
+          name
+          value
+          status
+          explain
+        }
+        nodeName {
+          name
+          value
+          status
+          explain
+        }
+        phase {
+          name
+          value
+          status
+          explain
+        }
+        agentInjected {
+          name
+          value
+          status
+          explain
+        }
+        runningLatestWorkloadRevision {
+          name
+          value
+          status
+          explain
+        }
+        containers {
+          containerName {
+            name
+            value
+            status
+            explain
+          }
+          actualDevices {
+            name
+            value
+            status
+            explain
+          }
+          started {
+            name
+            value
+            status
+            explain
+          }
+          ready {
+            name
+            value
+            status
+            explain
+          }
+          instrumentationInstances {
+            healthy {
+              name
+              value
+              status
+              explain
+            }
+            message {
+              name
+              value
+              status
+              explain
+            }
+            identifyingAttributes {
+              name
+              value
+              status
+              explain
+            }
+          }
+        }
+      }
+    }
+  }
+`,
+};

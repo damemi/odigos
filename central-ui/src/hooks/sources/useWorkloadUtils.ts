@@ -1,5 +1,5 @@
-import { useProxy } from '../proxy';
 import { useConfig } from '../config';
+import { useRemoteFetch } from '../proxy';
 import { RESTART_POD, RESTART_WORKLOADS } from '@/graphql';
 import { getSseTargetFromId } from '@odigos/ui-kit/functions';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
@@ -20,8 +20,8 @@ export const useWorkloadUtils = (): UseWorkloadUtils => {
     addNotification({ type, title, message, crdType: EntityTypes.Source, target: id ? getSseTargetFromId(id, EntityTypes.Source) : undefined, hideFromHistory });
   };
 
-  const { fetch: mutateRestartWorkloads } = useProxy<{ restartWorkloads: boolean }, { sourceIds: WorkloadId[] }>(RESTART_WORKLOADS);
-  const { fetch: mutateRestartPod } = useProxy<{ restartPod: boolean }, { namespace: string; name: string }>(RESTART_POD);
+  const { fetch: mutateRestartWorkloads } = useRemoteFetch<{ restartWorkloads: boolean }, { sourceIds: WorkloadId[] }>(RESTART_WORKLOADS);
+  const { fetch: mutateRestartPod } = useRemoteFetch<{ restartPod: boolean }, { namespace: string; name: string }>(RESTART_POD);
 
   const restartWorkloads: UseWorkloadUtils['restartWorkloads'] = async (sourceIds) => {
     if (isReadonly) {

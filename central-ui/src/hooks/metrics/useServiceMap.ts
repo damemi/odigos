@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useProxy } from '../proxy';
+import { useRemoteFetch } from '../proxy';
 import { useSourceCRUD } from '../sources';
 import { GET_SERVICE_MAP } from '@/graphql';
 import type { ServiceMapSources } from '@odigos/ui-kit/types';
@@ -7,7 +7,7 @@ import type { ServiceMapSources } from '@odigos/ui-kit/types';
 export const useServiceMap = () => {
   const { sources } = useSourceCRUD();
 
-  const { data, fetch } = useProxy<{ getServiceMap: { services: ServiceMapSources } }>(GET_SERVICE_MAP);
+  const { data, fetch } = useRemoteFetch<{ getServiceMap: { services: ServiceMapSources } }>(GET_SERVICE_MAP);
 
   useEffect(() => {
     if (sources.length > 0) {

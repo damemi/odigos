@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useProxy } from '../proxy';
 import { useConfig } from '../config';
+import { useRemoteFetch } from '../proxy';
 import { GET_TOKENS, UPDATE_TOKEN } from '@/graphql';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
@@ -14,8 +14,8 @@ export const useTokenCRUD = () => {
     addNotification({ type, title, message, hideFromHistory });
   };
 
-  const { data, loading, fetch: queryAll } = useProxy<{ computePlatform?: { apiTokens?: TokenPayload[] } }>(GET_TOKENS);
-  const { fetch: mutateUpdate } = useProxy<{ computePlatform?: { apiTokens?: TokenPayload[] } }>(UPDATE_TOKEN);
+  const { data, loading, fetch: queryAll } = useRemoteFetch<{ computePlatform?: { apiTokens?: TokenPayload[] } }>(GET_TOKENS);
+  const { fetch: mutateUpdate } = useRemoteFetch<{ computePlatform?: { apiTokens?: TokenPayload[] } }>(UPDATE_TOKEN);
 
   const updateToken = async (token: string) => {
     if (isReadonly) {

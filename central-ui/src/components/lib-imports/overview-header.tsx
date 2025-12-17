@@ -8,13 +8,13 @@ import { ConnectionSelect } from '../connection-select';
 import { OdigosCentralLogoText } from '@odigos/ui-kit/icons';
 import { OtherStatusType, StatusType } from '@odigos/ui-kit/types';
 import { Header, Status, Tooltip } from '@odigos/ui-kit/components';
-import { useConfig, useDescribe, useProxyID, useTokenCRUD } from '@/hooks';
+import { useConfig, useDescribe, useProxy, useTokenCRUD } from '@/hooks';
 import { Badge as V2Badge, Header as V2Header } from '@odigos/ui-kit/components/v2';
 import { NotificationManager, SlackInvite, SystemOverview, ToggleDarkMode } from '@odigos/ui-kit/containers';
 
 const OverviewHeader = ({ v2 }: { v2?: boolean }) => {
   const router = useRouter();
-  const { proxyID } = useProxyID();
+  const { proxyID } = useProxy();
 
   const { isReadonly } = useConfig();
   const { fetchDescribeOdigos } = useDescribe();

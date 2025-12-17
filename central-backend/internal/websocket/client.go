@@ -18,7 +18,6 @@ import (
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
 	"github.com/odigos-io/central-backend/internal/ssehub"
 	"github.com/odigos-io/central-backend/internal/types"
-	"github.com/odigos-io/central-backend/internal/version"
 )
 
 const ProxyIDQueryParam = "proxyID"
@@ -56,10 +55,6 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 	currentVersion := r.URL.Query().Get(OdigosVersionQueryParam)
 	if currentVersion == "" {
 		http.Error(w, fmt.Sprintf("Missing parameter: %s", OdigosVersionQueryParam), http.StatusBadRequest)
-		return
-	}
-	if !version.IsVersionSupported(currentVersion) {
-		http.Error(w, fmt.Sprintf("Unsupported version: %s. Supported versions: %s - %s", currentVersion, version.MinSupportedVersion, version.MaxSupportedVersion), http.StatusUpgradeRequired)
 		return
 	}
 

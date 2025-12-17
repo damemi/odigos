@@ -1,3 +1,5 @@
 export const STORAGE_KEYS = {
-  SELECTED_DATA_STREAM: (proxyId: string) => `SELECTED_DATA_STREAM_${proxyId}`,
+  AUTH_STORAGE: 'odigos-auth-storage',
+  SELECTED_PROXY: 'SELECTED_PROXY',
+  SELECTED_DATA_STREAM: (proxyID?: string) => `SELECTED_DATA_STREAM_${proxyID}`,
 };

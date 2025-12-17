@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useProxy } from '../proxy';
 import { useConfig } from '../config';
+import { useRemoteFetch } from '../proxy';
 import { useNamespace } from '../namespaces';
 import { getSseTargetFromId } from '@odigos/ui-kit/functions';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
@@ -50,12 +50,12 @@ export const useSourceCRUD = (): UseSourceCrud => {
     });
   };
 
-  const { fetch: queryAll } = useProxy<{ computePlatform?: { sources?: Source[] } }>(GET_SOURCES);
-  const { fetch: queryById } = useProxy<{ computePlatform?: { source?: Source } }, { sourceId: WorkloadId }>(GET_SOURCE);
-  const { fetch: mutatePersistSources } = useProxy<{ persistK8sSources: boolean }, SourceInstrumentInput>(PERSIST_SOURCES);
-  const { fetch: mutateUpdate } = useProxy<{ updateK8sActualSource: boolean }, { sourceId: WorkloadId; patchSourceRequest: SourceFormData }>(UPDATE_SOURCE);
-  const { fetch: queryOtherConditions } = useProxy<{ sourceConditions: SourceConditions[] }>(GET_SOURCE_CONDITIONS);
-  const { fetch: querySourceLibraries } = useProxy<{ instrumentationInstanceComponents: InstrumentationInstanceComponent[] }, WorkloadId>(GET_SOURCE_LIBRARIES);
+  const { fetch: queryAll } = useRemoteFetch<{ computePlatform?: { sources?: Source[] } }>(GET_SOURCES);
+  const { fetch: queryById } = useRemoteFetch<{ computePlatform?: { source?: Source } }, { sourceId: WorkloadId }>(GET_SOURCE);
+  const { fetch: mutatePersistSources } = useRemoteFetch<{ persistK8sSources: boolean }, SourceInstrumentInput>(PERSIST_SOURCES);
+  const { fetch: mutateUpdate } = useRemoteFetch<{ updateK8sActualSource: boolean }, { sourceId: WorkloadId; patchSourceRequest: SourceFormData }>(UPDATE_SOURCE);
+  const { fetch: queryOtherConditions } = useRemoteFetch<{ sourceConditions: SourceConditions[] }>(GET_SOURCE_CONDITIONS);
+  const { fetch: querySourceLibraries } = useRemoteFetch<{ instrumentationInstanceComponents: InstrumentationInstanceComponent[] }, WorkloadId>(GET_SOURCE_LIBRARIES);
 
   const shouldFetchSource = (allowFetchDuringLoadTrue?: boolean) => {
     // We should not fetch if we are already fetching.

@@ -1,4 +1,7 @@
-export const GET_GATEWAY_INFO = `
+import type { VersionedRemoteFetch } from '@/types';
+
+export const GET_GATEWAY_INFO: VersionedRemoteFetch = {
+  'v1.12': `
   query GatewayDeploymentInfo {
     gatewayDeploymentInfo {
       status
@@ -32,9 +35,11 @@ export const GET_GATEWAY_INFO = `
       configMapYAML
     }
   }
-`;
+`,
+};
 
-export const GET_GATEWAY_PODS = `
+export const GET_GATEWAY_PODS: VersionedRemoteFetch = {
+  'v1.12': `
   query GatewayPods {
     gatewayPods {
       namespace
@@ -48,9 +53,11 @@ export const GET_GATEWAY_PODS = `
       image
     }
   }
-`;
+`,
+};
 
-export const GET_NODE_COLLECTOR_INFO = `
+export const GET_NODE_COLLECTOR_INFO: VersionedRemoteFetch = {
+  'v1.12': `
   query OdigletDaemonSetInfo {
     odigletDaemonSetInfo {
       status
@@ -75,9 +82,11 @@ export const GET_NODE_COLLECTOR_INFO = `
       configMapYAML
     }
   }
-`;
+`,
+};
 
-export const GET_NODE_COLLECTOR_PODS = `
+export const GET_NODE_COLLECTOR_PODS: VersionedRemoteFetch = {
+  'v1.12': `
   query OdigletPods {
     odigletPods {
       namespace
@@ -91,9 +100,11 @@ export const GET_NODE_COLLECTOR_PODS = `
       image
     }
   }
-`;
+`,
+};
 
-export const GET_COLLECTOR_POD_INFO = `
+export const GET_COLLECTOR_POD_INFO: VersionedRemoteFetch = {
+  'v1.12': `
   query GetCollectorPodDetails($namespace: String!, $name: String!) {
     collectorPod(namespace: $namespace, name: $name) {
       namespace
@@ -122,4 +133,5 @@ export const GET_COLLECTOR_POD_INFO = `
       manifestYAML
     }
   }
-`;
+`,
+};

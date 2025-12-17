@@ -1,13 +1,13 @@
 import { useEffect } from 'react';
-import { useProxy } from '../proxy';
 import { GET_CONFIG } from '@/graphql';
 import { useUserStore } from '@/store';
+import { useRemoteFetch } from '../proxy';
 import { Role, type FetchedConfig } from '@/types';
 import { InstallationMethod, Tier } from '@odigos/ui-kit/types';
 
 export const useConfig = () => {
   const { user, isAdmin } = useUserStore();
-  const { data, fetch } = useProxy<{ config?: FetchedConfig }>(GET_CONFIG);
+  const { data, fetch } = useRemoteFetch<{ config?: FetchedConfig }>(GET_CONFIG);
 
   useEffect(() => {
     if (!data?.config) fetch();

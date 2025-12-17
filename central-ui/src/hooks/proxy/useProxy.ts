@@ -1,67 +1,63 @@
-import { REMOTE_FETCH } from '@/graphql';
-import { useProxyID } from './useProxyID';
+import { useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { ROUTES } from '@/utils';
+import { useProxyStore } from '@/store';
 import { StatusType } from '@odigos/ui-kit/types';
-import { safeJsonParse } from '@odigos/ui-kit/functions';
-import { type ApolloError, useLazyQuery } from '@apollo/client';
-import { useInstrumentStore, useNotificationStore } from '@odigos/ui-kit/store';
-import { useCallback } from 'react';
+import { useComputePlatformsCRUD } from '../compute-platforms';
+import { useEntityStore, useSetupStore } from '@odigos/ui-kit/store';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyObj = Record<string, any>;
-
-interface UseProxy<ResT, ReqT> {
-  fetch: (variables?: ReqT, targetProxyID?: string) => Promise<{ data?: ResT }>;
-  loading: boolean;
-  error?: ApolloError;
-  data?: ResT;
+interface UseProxy {
+  proxyID?: string;
+  odigosVersion?: string;
+  selectProxy: (id: string) => void;
+  clearProxy: () => void;
 }
 
-const EMPTY_RESPONSE = { data: undefined };
+export const useProxy = (): UseProxy => {
+  const router = useRouter();
+  const pathname = usePathname();
 
-export const useProxy = <ResT = AnyObj, ReqT = AnyObj>(queryString: string): UseProxy<ResT, ReqT> => {
-  const { proxyID } = useProxyID();
-  const { addNotification } = useNotificationStore();
-  const { setInstrumentAwait, setInstrumentCount } = useInstrumentStore();
+  const { resetEntityStore } = useEntityStore();
+  const { clearStore: resetSetupStore } = useSetupStore();
+  const { computePlatforms } = useComputePlatformsCRUD();
+  const { proxyID, odigosVersion, setProxyStore, resetProxyStore } = useProxyStore();
 
-  const [remoteFetch, { data: cachedData, loading }] = useLazyQuery(REMOTE_FETCH);
+  const selectProxy = (id: string) => {
+    const found = computePlatforms.find((cp) => cp.id === id);
+    if (found) {
+      resetEntityStore();
+      resetSetupStore();
+      setProxyStore({ proxyID: id, odigosVersion: found?.odigosVersion });
+      router.push(ROUTES.OVERVIEW);
+    }
+  };
 
-  const fetch: UseProxy<ResT, ReqT>['fetch'] = useCallback(
-    async (variables, targetProxyID) => {
-      const effectiveProxyID = targetProxyID || proxyID;
-      if (!effectiveProxyID || !queryString) {
-        // addNotification({ type: StatusType.Error, title: 'Request Error', message: 'Unable to load data from the proxy. Please make sure your connection is configured correctly.' });
-        console.warn('no `proxyID` or `queryString` to load data from the proxy. Please make sure your connection is configured correctly.');
+  const clearProxy = (skipRedirect?: boolean) => {
+    resetEntityStore();
+    resetSetupStore();
+    resetProxyStore();
+    if (!skipRedirect) router.push(ROUTES.CONNECTIONS);
+  };
 
-        return EMPTY_RESPONSE;
-      }
+  // Reset proxyID if the connection is lost
+  useEffect(() => {
+    if (proxyID) {
+      const found = computePlatforms.find((cp) => cp.id === proxyID);
+      const connectionNotFound = computePlatforms.length && !found;
+      const connectionHasError = found?.status === StatusType.Error;
+      if (connectionNotFound || connectionHasError) clearProxy();
+    }
+  }, [proxyID, computePlatforms.length]);
 
-      const { data, error } = await remoteFetch({
-        variables: {
-          proxyID: effectiveProxyID,
-          query: queryString,
-          variables: variables || {},
-        },
-      });
-
-      if (error) {
-        addNotification({ type: StatusType.Error, title: error.name || 'API Error', message: error.cause?.message || error.message });
-
-        // it does not matter where the error comes from, we should reset global stores
-        setInstrumentAwait(false);
-        setInstrumentCount('sourcesToCreate', 0);
-        setInstrumentCount('sourcesCreated', 0);
-
-        return EMPTY_RESPONSE;
-      } else {
-        return safeJsonParse(data?.remoteFetch, EMPTY_RESPONSE);
-      }
-    },
-    [proxyID, queryString, remoteFetch, addNotification, setInstrumentAwait, setInstrumentCount],
-  );
+  // Reset proxyID if the pathname is connections
+  useEffect(() => {
+    if (pathname === ROUTES.CONNECTIONS) clearProxy(true);
+  }, [pathname]);
 
   return {
-    fetch,
-    loading,
-    data: safeJsonParse(cachedData?.remoteFetch, EMPTY_RESPONSE).data,
+    proxyID,
+    odigosVersion,
+    selectProxy,
+    clearProxy,
   };
 };

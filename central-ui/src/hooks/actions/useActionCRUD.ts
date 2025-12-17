@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useProxy } from '../proxy';
 import { useConfig } from '../config';
+import { useRemoteFetch } from '../proxy';
 import type { ActionInput, FetchedAction } from '@/types';
 import type { ActionFormData } from '@odigos/ui-kit/types';
 import { getSseTargetFromId } from '@odigos/ui-kit/functions';
@@ -54,10 +54,10 @@ export const useActionCRUD = (): UseActionCrud => {
     });
   };
 
-  const { fetch: queryAll } = useProxy<{ computePlatform?: { actions?: FetchedAction[] } }>(GET_ACTIONS);
-  const { fetch: mutateCreate } = useProxy<{ createAction: FetchedAction }, { action: ActionInput }>(CREATE_ACTION);
-  const { fetch: mutateUpdate } = useProxy<{ updateAction: FetchedAction }, { id: string; action: ActionInput }>(UPDATE_ACTION);
-  const { fetch: mutateDelete } = useProxy<{ deleteAction: boolean }>(DELETE_ACTION);
+  const { fetch: queryAll } = useRemoteFetch<{ computePlatform?: { actions?: FetchedAction[] } }>(GET_ACTIONS);
+  const { fetch: mutateCreate } = useRemoteFetch<{ createAction: FetchedAction }, { action: ActionInput }>(CREATE_ACTION);
+  const { fetch: mutateUpdate } = useRemoteFetch<{ updateAction: FetchedAction }, { id: string; action: ActionInput }>(UPDATE_ACTION);
+  const { fetch: mutateDelete } = useRemoteFetch<{ deleteAction: boolean }>(DELETE_ACTION);
 
   const fetchActions: UseActionCrud['fetchActions'] = async () => {
     setEntitiesLoading(EntityTypes.Action, true);

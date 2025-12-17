@@ -1,4 +1,7 @@
-export const GET_METRICS = `
+import type { VersionedRemoteFetch } from '@/types';
+
+export const GET_METRICS: VersionedRemoteFetch = {
+  'v1.11': `
   query GetOverviewMetrics {
     getOverviewMetrics {
       sources {
@@ -15,4 +18,5 @@ export const GET_METRICS = `
       }
     }
   }
-`
+`,
+};

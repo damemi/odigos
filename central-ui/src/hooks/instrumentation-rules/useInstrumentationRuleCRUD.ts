@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useProxy } from '../proxy';
 import { useConfig } from '../config';
+import { useRemoteFetch } from '../proxy';
 import { getSseTargetFromId } from '@odigos/ui-kit/functions';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { useEntityStore, useNotificationStore } from '@odigos/ui-kit/store';
@@ -32,10 +32,10 @@ export const useInstrumentationRuleCRUD = (): UseInstrumentationRuleCrud => {
     });
   };
 
-  const { fetch: queryAll } = useProxy<{ computePlatform?: { instrumentationRules?: InstrumentationRule[] } }>(GET_INSTRUMENTATION_RULES);
-  const { fetch: mutateCreate } = useProxy<{ createInstrumentationRule: InstrumentationRule }>(CREATE_INSTRUMENTATION_RULE);
-  const { fetch: mutateUpdate } = useProxy<{ updateInstrumentationRule: InstrumentationRule }>(UPDATE_INSTURMENTATION_RULE);
-  const { fetch: mutateDelete } = useProxy<{ deleteInstrumentationRule: boolean }>(DELETE_INSTURMENTATION_RULE);
+  const { fetch: queryAll } = useRemoteFetch<{ computePlatform?: { instrumentationRules?: InstrumentationRule[] } }>(GET_INSTRUMENTATION_RULES);
+  const { fetch: mutateCreate } = useRemoteFetch<{ createInstrumentationRule: InstrumentationRule }>(CREATE_INSTRUMENTATION_RULE);
+  const { fetch: mutateUpdate } = useRemoteFetch<{ updateInstrumentationRule: InstrumentationRule }>(UPDATE_INSTURMENTATION_RULE);
+  const { fetch: mutateDelete } = useRemoteFetch<{ deleteInstrumentationRule: boolean }>(DELETE_INSTURMENTATION_RULE);
 
   const fetchInstrumentationRules = async () => {
     setEntitiesLoading(EntityTypes.InstrumentationRule, true);

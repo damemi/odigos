@@ -1,18 +1,16 @@
 export const ROUTES = {
   ROOT: '/',
   SIGN_IN: '/signin',
-  CONNECTIONS: '/connections',
   UPDATE_YOUR_PASSWORD: '/update-password',
   ACCESS_MANAGEMENT: '/access-management',
-
-  OVERVIEW: (proxyID: string) => `/overview/${proxyID}`,
-  SOURCES: (proxyID: string) => `/sources/${proxyID}`,
-  DESTINATIONS: (proxyID: string) => `/destinations/${proxyID}`,
-  ACTIONS: (proxyID: string) => `/actions/${proxyID}`,
-  INSTRUMENTATION_RULES: (proxyID: string) => `/instrumentation-rules/${proxyID}`,
-
-  SERVICE_MAP: (proxyID: string) => `/service-map/${proxyID}`,
-  PIPELINE_COLLECTORS: (proxyID: string) => `/pipeline-collectors/${proxyID}`,
+  CONNECTIONS: '/connections',
+  OVERVIEW: '/overview',
+  SOURCES: '/sources',
+  DESTINATIONS: '/destinations',
+  ACTIONS: '/actions',
+  INSTRUMENTATION_RULES: '/instrumentation-rules',
+  SERVICE_MAP: '/service-map',
+  PIPELINE_COLLECTORS: '/pipeline-collectors',
 };
 
 const PROTOCOL = typeof window !== 'undefined' ? window.location.protocol : 'http';

@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { useProxy } from '../proxy';
+import { useRemoteFetch } from '../proxy';
 import { GET_POTENTIAL_DESTINATIONS } from '@/graphql';
 import { deepClone, safeJsonParse } from '@odigos/ui-kit/functions';
 import { useDestinationCategories } from './useDestinationCategories';
@@ -45,7 +45,7 @@ export const usePotentialDestinations = () => {
   const { configuredDestinations } = useSetupStore();
   const { categories } = useDestinationCategories();
 
-  const { fetch, loading, data } = useProxy<GetPotentialDestinationsData>(GET_POTENTIAL_DESTINATIONS);
+  const { fetch, loading, data } = useRemoteFetch<GetPotentialDestinationsData>(GET_POTENTIAL_DESTINATIONS);
 
   const potentialDestinations = useMemo(() => {
     if (!categories || !data?.potentialDestinations) return [];

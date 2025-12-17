@@ -3,11 +3,11 @@ import Theme from '@odigos/ui-kit/theme';
 import type { ComputePlatform } from '@/types';
 import styled, { css } from 'styled-components';
 import { StatusType } from '@odigos/ui-kit/types';
-import { useNotificationStore, useSelectedStore, useSetupStore } from '@odigos/ui-kit/store';
-import { useComputePlatformsCRUD, useProxyID } from '@/hooks';
+import { useComputePlatformsCRUD, useProxy } from '@/hooks';
 import { OverviewIcon, SearchIcon } from '@odigos/ui-kit/icons';
 import { useKeyDown, useOnClickOutside } from '@odigos/ui-kit/hooks';
 import { getPlatformIcon, getPlatformLabel } from '@odigos/ui-kit/functions';
+import { useNotificationStore, useSelectedStore } from '@odigos/ui-kit/store';
 import { Button, ExtendArrow, FlexRow, Input, SelectionButton, Text, VerticalScroll } from '@odigos/ui-kit/components';
 
 const Tab = styled(FlexRow)<{ $withSelect: boolean }>`
@@ -58,7 +58,7 @@ const AbsoluteContainer = styled.div`
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
-  z-index: 1;
+  z-index: 10000;
   background-color: ${({ theme }) => theme.colors.dropdown_bg};
   border: ${({ theme }) => `1px solid ${theme.colors.border}`};
   border-radius: 24px;
@@ -77,28 +77,17 @@ const FootWrap = styled.div`
 
 export const ConnectionSelect: React.FC = () => {
   const theme = Theme.useTheme();
-  const { clearStore } = useSetupStore();
   const { selectedConnection } = useSelectedStore();
   const { addNotification } = useNotificationStore();
-  const { proxyID, goSelectNewProxy, selectProxyID } = useProxyID();
+  const { proxyID, selectProxy, clearProxy } = useProxy();
   const { computePlatforms } = useComputePlatformsCRUD(proxyID);
 
   const [isOpen, setIsOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
 
-  const onClose = () => {
-    setIsOpen(false);
-  };
-
-  const onClickConnection = ({ id }: ComputePlatform) => {
-    clearStore();
-    selectProxyID(id);
-  };
-
-  const onClickAll = () => {
-    clearStore();
-    goSelectNewProxy();
-  };
+  const onClose = () => setIsOpen(false);
+  const onClickConnection = ({ id }: ComputePlatform) => selectProxy(id);
+  const onClickAll = () => clearProxy();
 
   const containerRef = useRef<HTMLDivElement>(null);
   useOnClickOutside(containerRef, onClose);

@@ -1,4 +1,7 @@
-export const GET_NAMESPACES = `
+import type { VersionedRemoteFetch } from '@/types';
+
+export const GET_NAMESPACES: VersionedRemoteFetch = {
+  'v1.11': `
   query GetNamespaces {
     computePlatform {
       k8sActualNamespaces {
@@ -8,9 +11,11 @@ export const GET_NAMESPACES = `
       }
     }
   }
-`;
+`,
+};
 
-export const GET_NAMESPACE = `
+export const GET_NAMESPACE: VersionedRemoteFetch = {
+  'v1.11': `
   query GetNamespace($namespaceName: String!) {
     computePlatform {
       k8sActualNamespace(name: $namespaceName) {
@@ -28,4 +33,5 @@ export const GET_NAMESPACE = `
       }
     }
   }
-`;
+`,
+};

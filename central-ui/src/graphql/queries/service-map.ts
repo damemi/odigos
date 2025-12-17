@@ -1,4 +1,7 @@
-export const GET_SERVICE_MAP = `
+import type { VersionedRemoteFetch } from '@/types';
+
+export const GET_SERVICE_MAP: VersionedRemoteFetch = {
+  'v1.11': `
   query GetServiceMap {
     getServiceMap {
       services {
@@ -11,4 +14,5 @@ export const GET_SERVICE_MAP = `
       }
     }
   }
-`;
+`,
+};

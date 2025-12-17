@@ -6,8 +6,8 @@ import { useTimeAgo } from '@odigos/ui-kit/hooks';
 import { TrashIcon } from '@odigos/ui-kit/icons';
 import { StatusType } from '@odigos/ui-kit/types';
 import { getPlatformIcon } from '@odigos/ui-kit/functions';
-import { useComputePlatformsCRUD, useProxyCRUD, useProxyID } from '@/hooks';
-import { useFilterStore, useNotificationStore, useSetupStore } from '@odigos/ui-kit/store';
+import { useComputePlatformsCRUD, useProxyCRUD, useProxy } from '@/hooks';
+import { useFilterStore, useNotificationStore } from '@odigos/ui-kit/store';
 import { CenterThis, DeleteWarning, DropdownOption, FadeLoader, FlexRow, IconButton, IconWrapped, InteractiveTable, NoDataFound, RowCell, Status } from '@odigos/ui-kit/components';
 
 export enum ConnectionsTableColumn {
@@ -24,20 +24,18 @@ export enum ConnectionsTableColumn {
 
 export const ConnectionsTable: React.FC = () => {
   const { isAdmin } = useUserStore();
+  const { selectProxy } = useProxy();
   const { formatTimeAgo } = useTimeAgo();
-  const { clearStore } = useSetupStore();
-  const { selectProxyID } = useProxyID();
   const { deleteProxy, deleting } = useProxyCRUD();
   const { addNotification } = useNotificationStore();
   const { searchText, platformTypes, statuses } = useFilterStore();
-  const { computePlatforms, loading, refetch } = useComputePlatformsCRUD();
+  const { computePlatforms, loading, getComputePlatforms } = useComputePlatformsCRUD();
 
   const [deleteOpenForCp, setDeleteOpenForCp] = useState<ComputePlatform | null>(null);
 
   const onClickRow = ({ id, status }: ComputePlatform) => {
     if (status === StatusType.Success) {
-      clearStore();
-      selectProxyID(id);
+      selectProxy(id);
     } else {
       addNotification({
         type: StatusType.Warning,
@@ -177,7 +175,7 @@ export const ConnectionsTable: React.FC = () => {
                 .catch(() => {})
                 .finally(() => {
                   setDeleteOpenForCp(null);
-                  refetch();
+                  getComputePlatforms();
                 });
             }}
             onDeny={() => {

@@ -19,13 +19,13 @@ export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, p
   navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.CONNECTIONS, ConnectionsIcon));
 
   if (proxyID) {
-    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.OVERVIEW(proxyID), OverviewIcon));
-    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.PIPELINE_COLLECTORS(proxyID), PipelineCollectorIcon));
-    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SERVICE_MAP(proxyID), ServiceMapIcon));
-    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SOURCES(proxyID), SourceIcon));
-    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.DESTINATIONS(proxyID), DestinationIcon));
-    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.ACTIONS(proxyID), ActionIcon));
-    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.INSTRUMENTATION_RULES(proxyID), InstrumentationRuleIcon));
+    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.OVERVIEW, OverviewIcon));
+    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.PIPELINE_COLLECTORS, PipelineCollectorIcon));
+    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SERVICE_MAP, ServiceMapIcon));
+    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SOURCES, SourceIcon));
+    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.DESTINATIONS, DestinationIcon));
+    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.ACTIONS, ActionIcon));
+    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.INSTRUMENTATION_RULES, InstrumentationRuleIcon));
   }
 
   navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.ACCESS_MANAGEMENT, UserSettingsIcon));

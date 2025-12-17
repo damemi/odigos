@@ -31,7 +31,7 @@ const PushRight = styled.div`
 
 export const ConnectionsActionsMenu = () => {
   const theme = Theme.useTheme();
-  const { computePlatforms, refetch, loading } = useComputePlatformsCRUD();
+  const { computePlatforms, getComputePlatforms, loading } = useComputePlatformsCRUD();
   const { searchText, setSearchText, statuses, setStatuses, platformTypes, setPlatformTypes, clearAll } = useFilterStore();
 
   // cleanup filters on unmount
@@ -109,7 +109,7 @@ export const ConnectionsActionsMenu = () => {
       </FlexRow>
 
       <PushRight>
-        <Button onClick={() => refetch()} disabled={loading}>
+        <Button onClick={() => getComputePlatforms()} disabled={loading}>
           <RefreshIcon fill={theme.text.primary} />
           {loading ? 'Refreshing...' : 'Refresh Connections'}
         </Button>

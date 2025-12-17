@@ -1,4 +1,7 @@
-export const GET_SOURCES = `
+import type { VersionedRemoteFetch } from '@/types';
+
+export const GET_SOURCES: VersionedRemoteFetch = {
+  'v1.11': `
   query GetSources {
     computePlatform {
       sources {
@@ -27,9 +30,11 @@ export const GET_SOURCES = `
       }
     }
   }
-`;
+`,
+};
 
-export const GET_SOURCE = `
+export const GET_SOURCE: VersionedRemoteFetch = {
+  'v1.12': `
   query GetSource($sourceId: K8sSourceId!) {
     computePlatform {
       source(sourceId: $sourceId) {
@@ -64,9 +69,46 @@ export const GET_SOURCE = `
       }
     }
   }
-`;
+`,
+  'v1.11': `
+  query GetSource($sourceId: K8sSourceId!) {
+    computePlatform {
+      source(sourceId: $sourceId) {
+        namespace
+        name
+        kind
+        dataStreamNames
+        selected
+        otelServiceName
+        containers {
+          containerName
+          language
+          runtimeVersion
+          overriden
+          instrumented
+          instrumentationMessage
+          otelDistroName
+        }
+        conditions {
+          status
+          type
+          reason
+          message
+          lastTransitionTime
+        }
+        workloadOdigosHealthStatus {
+          status
+          reasonEnum
+          message
+        }
+      }
+    }
+  }
+`,
+};
 
-export const GET_SOURCE_CONDITIONS = `
+export const GET_SOURCE_CONDITIONS: VersionedRemoteFetch = {
+  'v1.11': `
   query GetSourceConditions {
     sourceConditions {
       namespace
@@ -81,9 +123,11 @@ export const GET_SOURCE_CONDITIONS = `
       }
     }
   }
-`;
+`,
+};
 
-export const GET_SOURCE_LIBRARIES = `
+export const GET_SOURCE_LIBRARIES: VersionedRemoteFetch = {
+  'v1.11': `
   query GetSourceLibraries($namespace: String!, $kind: String!, $name: String!) {
     instrumentationInstanceComponents(namespace: $namespace, kind: $kind, name: $name) {
       name
@@ -93,4 +137,5 @@ export const GET_SOURCE_LIBRARIES = `
       }
     }
   }
-`;
+`,
+};

@@ -1,4 +1,4 @@
-import { useProxy } from '../proxy';
+import { useRemoteFetch } from '../proxy';
 import { GET_GATEWAY_INFO, GET_GATEWAY_PODS, GET_NODE_COLLECTOR_INFO, GET_NODE_COLLECTOR_PODS, GET_COLLECTOR_POD_INFO } from '@/graphql';
 import {
   type GatewayInfo,
@@ -21,11 +21,11 @@ interface UseCollectorsResult {
 }
 
 export const useCollectors = (): UseCollectorsResult => {
-  const { fetch: getGatewayInfo } = useProxy<{ gatewayDeploymentInfo?: GatewayInfo }, {}>(GET_GATEWAY_INFO);
-  const { fetch: getGatewayPods } = useProxy<{ gatewayPods?: PodInfo[] }, {}>(GET_GATEWAY_PODS);
-  const { fetch: getNodeCollectorInfo } = useProxy<{ odigletDaemonSetInfo?: NodeCollectoInfo }, {}>(GET_NODE_COLLECTOR_INFO);
-  const { fetch: getNodeCollectorPods } = useProxy<{ odigletPods?: PodInfo[] }, {}>(GET_NODE_COLLECTOR_PODS);
-  const { fetch: getExtendedPodInfo } = useProxy<{ collectorPod?: ExtendedPodInfo }, { namespace: string; name: string }>(GET_COLLECTOR_POD_INFO);
+  const { fetch: getGatewayInfo } = useRemoteFetch<{ gatewayDeploymentInfo?: GatewayInfo }, {}>(GET_GATEWAY_INFO);
+  const { fetch: getGatewayPods } = useRemoteFetch<{ gatewayPods?: PodInfo[] }, {}>(GET_GATEWAY_PODS);
+  const { fetch: getNodeCollectorInfo } = useRemoteFetch<{ odigletDaemonSetInfo?: NodeCollectoInfo }, {}>(GET_NODE_COLLECTOR_INFO);
+  const { fetch: getNodeCollectorPods } = useRemoteFetch<{ odigletPods?: PodInfo[] }, {}>(GET_NODE_COLLECTOR_PODS);
+  const { fetch: getExtendedPodInfo } = useRemoteFetch<{ collectorPod?: ExtendedPodInfo }, { namespace: string; name: string }>(GET_COLLECTOR_POD_INFO);
 
   return {
     getGatewayInfo: () => getGatewayInfo().then((result) => result.data?.gatewayDeploymentInfo),
