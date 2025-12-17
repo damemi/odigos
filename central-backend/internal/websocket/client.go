@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/google/uuid"
 
 	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/logger"
@@ -194,6 +196,175 @@ func (ws *WebSocketServer) SendGraphQLRequest(ctx context.Context, proxyID strin
 	}
 	conn := proxyConn.Conn
 
+	msg := WebSocketMessageToProxy{
+		Type:      MessageTypeGraphQLQuery,
+		Query:     request.Query,
+		Variables: request.Variables,
+		RequestId: request.RequestId,
+		IsAdmin:   request.IsAdmin,
+	}
+
+	jsonMsg, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	// If message is small enough, send it directly
+	if len(jsonMsg) <= MaxMessageSize {
+		return conn.Write(ctx, websocket.MessageText, jsonMsg)
+	}
+
+	// Message is too large - try to batch if it's a supported mutation
+	if strings.Contains(request.Query, "persistK8sSources") {
+		if err := ws.sendSourcesInBatches(ctx, conn, request, proxyID); err != nil {
+			logger.Log.Error("Failed to send sources in batches, trying as single message", "proxyID", proxyID, "error", err)
+			return conn.Write(ctx, websocket.MessageText, jsonMsg)
+		}
+		return nil
+	}
+
+	// For other large messages that can't be batched, log warning and try to send anyway
+	logger.Log.Warn("Sending large message that cannot be batched",
+		"proxyID", proxyID,
+		"requestID", request.RequestId,
+		"size", len(jsonMsg))
+	return conn.Write(ctx, websocket.MessageText, jsonMsg)
+}
+
+// sendSourcesInBatches splits a persistK8sSources mutation into smaller batches
+func (ws *WebSocketServer) sendSourcesInBatches(ctx context.Context, conn *websocket.Conn, request types.GqlRequestPayload, proxyID string) error {
+	// Extract sources array from variables
+	sourcesRaw, ok := request.Variables["sources"]
+	if !ok {
+		return errors.New("persistK8sSources mutation missing 'sources' variable")
+	}
+
+	sources, ok := sourcesRaw.([]interface{})
+	if !ok {
+		// Try to handle if it's already a typed slice
+		return errors.New("'sources' variable is not an array")
+	}
+
+	if len(sources) == 0 {
+		// Empty sources, send as-is
+		return ws.sendSingleMessage(ctx, conn, request)
+	}
+
+	// Calculate batch size by estimating per-item size
+	// Start with a reasonable batch size and adjust if needed
+	batchSize := ws.calculateBatchSize(request, sources)
+
+	logger.Log.Info("Batching large persistK8sSources request",
+		"proxyID", proxyID,
+		"originalRequestID", request.RequestId,
+		"totalSources", len(sources),
+		"batchSize", batchSize)
+
+	// Send sources in batches
+	for i := 0; i < len(sources); i += batchSize {
+		end := i + batchSize
+		if end > len(sources) {
+			end = len(sources)
+		}
+
+		batch := sources[i:end]
+
+		// Create a new request for this batch
+		batchVariables := make(map[string]interface{})
+		for k, v := range request.Variables {
+			if k == "sources" {
+				batchVariables[k] = batch
+			} else {
+				batchVariables[k] = v
+			}
+		}
+
+		// Generate a unique request ID for each batch
+		batchRequestID := fmt.Sprintf("%s-batch-%d", request.RequestId, i/batchSize)
+
+		batchRequest := types.GqlRequestPayload{
+			Query:     request.Query,
+			Variables: batchVariables,
+			RequestId: batchRequestID,
+			IsAdmin:   request.IsAdmin,
+		}
+
+		if err := ws.sendSingleMessage(ctx, conn, batchRequest); err != nil {
+			logger.Log.Error("Failed to send batch",
+				"proxyID", proxyID,
+				"batchRequestID", batchRequestID,
+				"batchIndex", i/batchSize,
+				"error", err)
+			return err
+		}
+
+		logger.Log.Debug("Sent batch",
+			"proxyID", proxyID,
+			"batchRequestID", batchRequestID,
+			"batchIndex", i/batchSize,
+			"batchSize", len(batch),
+			"totalSources", len(sources))
+	}
+
+	logger.Log.Info("Successfully sent all batches",
+		"proxyID", proxyID,
+		"originalRequestID", request.RequestId,
+		"totalBatches", (len(sources)+batchSize-1)/batchSize)
+
+	return nil
+}
+
+// calculateBatchSize determines how many items to include in each batch
+func (ws *WebSocketServer) calculateBatchSize(request types.GqlRequestPayload, sources []interface{}) int {
+	// Estimate the overhead (query, metadata, etc.) by creating a message with empty sources
+	testVariables := make(map[string]interface{})
+	for k, v := range request.Variables {
+		if k == "sources" {
+			testVariables[k] = []interface{}{}
+		} else {
+			testVariables[k] = v
+		}
+	}
+
+	testMsg := WebSocketMessageToProxy{
+		Type:      MessageTypeGraphQLQuery,
+		Query:     request.Query,
+		Variables: testVariables,
+		RequestId: uuid.New().String(), // Use a UUID to estimate typical request ID size
+		IsAdmin:   request.IsAdmin,
+	}
+
+	overheadJSON, _ := json.Marshal(testMsg)
+	overhead := len(overheadJSON)
+
+	// Estimate per-source size by sampling
+	sampleSize := min(10, len(sources))
+	totalSampleSize := 0
+	for i := 0; i < sampleSize; i++ {
+		itemJSON, _ := json.Marshal(sources[i])
+		totalSampleSize += len(itemJSON)
+	}
+	avgItemSize := totalSampleSize / sampleSize
+
+	// Add some buffer for JSON array syntax (commas, brackets)
+	avgItemSize += 2
+
+	// Calculate how many items fit in the max message size (with 20% safety margin)
+	availableSpace := int(float64(MaxMessageSize)*0.8) - overhead
+	if availableSpace <= 0 {
+		return 1 // Minimum batch size
+	}
+
+	batchSize := availableSpace / avgItemSize
+	if batchSize < 1 {
+		batchSize = 1
+	}
+
+	return batchSize
+}
+
+// sendSingleMessage sends a single GraphQL request message
+func (ws *WebSocketServer) sendSingleMessage(ctx context.Context, conn *websocket.Conn, request types.GqlRequestPayload) error {
 	msg := WebSocketMessageToProxy{
 		Type:      MessageTypeGraphQLQuery,
 		Query:     request.Query,

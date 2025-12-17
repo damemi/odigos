@@ -19,6 +19,8 @@ import (
 	"github.com/odigos-io/central-proxy/kube"
 )
 
+const MaxMessageSize = 10 * 1024 * 1024 // 10 MB
+
 // NewWebSocketClient creates a WebSocket client
 func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, clusterName string, odigosVersion string, tlsConfig *tls.Config) (*WebSocketClient, error) {
 	proxyID, err := config.GetOdigosDeploymentId(ctx, client)
@@ -52,8 +54,7 @@ func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, 
 	}
 
 	// Increase WebSocket Read Limit (default 32 KB is too low)
-	const maxMessageSize = 10 * 1024 * 1024 // 10 MB
-	conn.SetReadLimit(maxMessageSize)
+	conn.SetReadLimit(MaxMessageSize)
 
 	gqlClient := graphql.NewGraphQLClient()
 
@@ -252,6 +253,9 @@ func (w *WebSocketClient) handleReconnect(kubeClient *kube.Client) *websocket.Co
 			conn, _, err := websocket.Dial(w.ctx, u.String(), &dialer)
 
 			if err == nil {
+				// Set the same read limit as the initial connection
+				conn.SetReadLimit(MaxMessageSize)
+
 				logger.Log.Info("WebSocket reconnect successful",
 					"attempt", attempt,
 					"proxyID", proxyID,

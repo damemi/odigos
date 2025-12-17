@@ -1,6 +1,25 @@
 package websocketserver
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"os"
+	"strconv"
+)
+
+// DefaultMaxMessageSize is the maximum size of a WebSocket message (10MB).
+// Messages larger than this will be batched if possible.
+const DefaultMaxMessageSize = 10 * 1024 * 1024
+
+// MaxMessageSize can be configured via MAX_MESSAGE_SIZE environment variable for testing.
+var MaxMessageSize = DefaultMaxMessageSize
+
+func init() {
+	if envVal := os.Getenv("MAX_MESSAGE_SIZE"); envVal != "" {
+		if val, err := strconv.Atoi(envVal); err == nil && val > 0 {
+			MaxMessageSize = val
+		}
+	}
+}
 
 type WebSocketMessageToProxy struct {
 	Type      WebSocketMessageType `json:"type"`
