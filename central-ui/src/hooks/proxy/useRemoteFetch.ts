@@ -115,18 +115,20 @@ export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRem
         return EMPTY_RESPONSE_MULTI<ResT>();
       }
 
+      const targetConnections = connections.filter((cp) => proxyIDs.includes(cp.id));
       const versionedProxyIDs: {
-        [key in keyof VersionedRemoteFetch]?: { queryString: string; proxyIDs: string[] };
+        [key in keyof VersionedRemoteFetch]?: {
+          proxyIDs: string[];
+          queryString: string;
+        };
       } = {};
 
-      for (const { id, odigosVersion } of connections) {
+      for (const { id, odigosVersion } of targetConnections) {
         const queryString = getVersionedQuery(query, odigosVersion, addNotification);
-
         if (queryString) {
           const key = `v${trimVersion(odigosVersion)}` as keyof VersionedRemoteFetch;
-          if (!versionedProxyIDs[key]) {
-            versionedProxyIDs[key] = { queryString, proxyIDs: [] };
-          }
+
+          if (!versionedProxyIDs[key]) versionedProxyIDs[key] = { queryString, proxyIDs: [] };
           versionedProxyIDs[key]!.proxyIDs.push(id);
         }
       }
