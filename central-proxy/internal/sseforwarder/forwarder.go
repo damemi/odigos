@@ -17,12 +17,18 @@ func Start(ctx context.Context, wsClient *websocketserver.WebSocketClient) {
 		URL: sseURL,
 		OnMessage: func(b []byte) {
 			var parsed any
-			if err := json.Unmarshal(b, &parsed); err == nil {
-				_ = wsClient.Send(websocketserver.WebSocketMessageToCentralized{Type: websocketserver.MessageTypeSSEEvent, RequestId: "", Data: parsed})
+			var err error
+			if err = json.Unmarshal(b, &parsed); err == nil {
+				err = wsClient.Send(websocketserver.WebSocketMessageToCentralized{Type: websocketserver.MessageTypeSSEEvent, RequestId: "", Data: parsed})
 			} else {
-				_ = wsClient.Send(websocketserver.WebSocketMessageToCentralized{Type: websocketserver.MessageTypeSSEEvent, RequestId: "", Data: string(b)})
+				err = wsClient.Send(websocketserver.WebSocketMessageToCentralized{Type: websocketserver.MessageTypeSSEEvent, RequestId: "", Data: string(b)})
 			}
-			logger.Log.Info("SSE event received", "size", len(b))
+
+			if err != nil {
+				logger.Log.Error("Failed to forward SSE event", "error", err, "size", len(b))
+			} else {
+				logger.Log.Debug("SSE event forwarded", "size", len(b))
+			}
 		},
 	}
 
