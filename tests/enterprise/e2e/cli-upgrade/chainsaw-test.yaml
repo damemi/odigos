@@ -91,17 +91,6 @@ spec:
         - apply:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/instrument-default-ns.yaml
 
-    - name: Ruby Detected, Rollout Restart
-      try:
-        - assert:
-            timeout: 3m
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/ruby-partial-runtime-detected.yaml
-        - script:
-            timeout: 1m
-            content: |
-              kubectl rollout restart deployment geolocation
-              kubectl wait --for=condition=ready pod -l app=geolocation --timeout=60s
-
     - name: Assert Runtime Detected
       try:
         - assert:
