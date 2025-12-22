@@ -1,6 +1,4 @@
 import React, { useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import { ROUTES } from '@/utils';
 import { useStatusStore } from '../../store';
 import { AccountMenu } from '../account-menu';
 import { FORM_ALERTS } from '@odigos/ui-kit/constants';
@@ -13,15 +11,11 @@ import { Badge as V2Badge, Header as V2Header } from '@odigos/ui-kit/components/
 import { NotificationManager, SlackInvite, SystemOverview, ToggleDarkMode } from '@odigos/ui-kit/containers';
 
 const OverviewHeader = ({ v2 }: { v2?: boolean }) => {
-  const router = useRouter();
   const { proxyID } = useProxy();
-
   const { isReadonly } = useConfig();
   const { fetchDescribeOdigos } = useDescribe();
   const { tokens, updateToken } = useTokenCRUD();
   const { status, title, message } = useStatusStore();
-
-  const onClickAccessManagement = () => router.push(ROUTES.ACCESS_MANAGEMENT);
 
   const left = useMemo(() => {
     const arr = [<OdigosCentralLogoText key='logo' size={150} />];
@@ -62,7 +56,7 @@ const OverviewHeader = ({ v2 }: { v2?: boolean }) => {
     arr.push(...[<SlackInvite key='slack-invite' />, <AccountMenu key='account-menu' />]);
 
     return arr;
-  }, [v2, proxyID, tokens, updateToken, fetchDescribeOdigos, onClickAccessManagement]);
+  }, [v2, proxyID, tokens]);
 
   if (v2) {
     return <V2Header left={left} right={right} />;

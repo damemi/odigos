@@ -1,13 +1,11 @@
-import { useEffect } from 'react';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
+import { useNotificationStore } from '@odigos/ui-kit/store';
 import { ApolloError, useMutation, useQuery } from '@apollo/client';
 import { GET_COMPUTE_PLATFORMS, UPDATE_COMPUTE_PLATFORM } from '@/graphql';
-import { useNotificationStore, useSelectedStore } from '@odigos/ui-kit/store';
 import type { ComputePlatform, ComputePlatformInput, GeneralResult } from '@/types';
 
-export const useComputePlatformsCRUD = (selectedId?: string) => {
+export const useComputePlatformsCRUD = () => {
   const { addNotification } = useNotificationStore();
-  const { setSelectedConnection } = useSelectedStore();
 
   const onError = (error: ApolloError, crudType: Crud) => addNotification({ type: StatusType.Error, title: error.name || crudType, message: error.cause?.message || error.message });
 
@@ -27,13 +25,6 @@ export const useComputePlatformsCRUD = (selectedId?: string) => {
     refetch();
     return data?.updateComputePlatform;
   };
-
-  useEffect(() => {
-    if (!selectedId || !data?.computePlatforms) return;
-
-    const found = data.computePlatforms.find((cp) => cp.id === selectedId);
-    if (found) setSelectedConnection(found);
-  }, [selectedId, data?.computePlatforms]);
 
   return {
     getComputePlatforms,

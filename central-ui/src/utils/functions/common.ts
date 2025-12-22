@@ -20,14 +20,16 @@ type GetVersionedQuery = (query: VersionedRemoteFetch, odigosVersion: string, no
 
 export const getVersionedQuery: GetVersionedQuery = (query, odigosVersion, notify) => {
   // do not reverse this sort, or it will directly affect the targetVersion calculation
-  const supportedVersions = (Object.keys(query) as (keyof VersionedRemoteFetch)[]).sort((a, b) => trimVersion(a) - trimVersion(b));
+  const supportedVersions = (Object.keys(query) as (keyof VersionedRemoteFetch)[]).sort((a, b) => trimVersion(b) - trimVersion(a));
   const targetVersion = supportedVersions.find((supportedVersion) => trimVersion(odigosVersion) >= trimVersion(supportedVersion));
 
   if (!targetVersion) {
+    const minSupportedVersion = supportedVersions[supportedVersions.length - 1];
+
     notify?.({
       type: StatusType.Error,
       title: 'Upgrade Required',
-      message: `To use this feature, upgrade Proxy to Odigos ${supportedVersions[0]} or later. Current version: ${odigosVersion}.`,
+      message: `To use this feature, upgrade Proxy to Odigos ${minSupportedVersion} or later. Current version: ${odigosVersion}.`,
     });
 
     return undefined;

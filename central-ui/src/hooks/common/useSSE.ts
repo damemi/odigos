@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
+import { useProxy } from '../proxy';
+import { useStatusStore } from '@/store';
 import { getSSEEventsUrl } from '@/utils';
-import { useProxyStore, useStatusStore } from '@/store';
-import { useDestinationCRUD, useSourceCRUD } from '..';
+import { useSourceCRUD } from '../sources';
+import { useDestinationCRUD } from '../destinations';
 import { DISPLAY_TITLES } from '@odigos/ui-kit/constants';
 import { EntityTypes, StatusType, WorkloadId } from '@odigos/ui-kit/types';
 import { getIdFromSseTarget, safeJsonParse } from '@odigos/ui-kit/functions';
@@ -40,12 +42,12 @@ interface SseEvent {
 }
 
 export const useSSE = () => {
+  const { proxyID } = useProxy();
   const { setPendingItems } = usePendingStore();
   const { addNotification } = useNotificationStore();
   const { title, setStatusStore } = useStatusStore();
   const { fetchDestinations } = useDestinationCRUD();
   const { fetchSources, fetchSourceById } = useSourceCRUD();
-  const { proxyID } = useProxyStore();
 
   const retryCount = useRef(0);
   const maxRetries = 10;
@@ -57,6 +59,11 @@ export const useSSE = () => {
     }
 
     const connect = () => {
+      if (!proxyID) {
+        setStatusStore({ status: StatusType.Default, title: '', message: '' });
+        return;
+      }
+
       // If the current status in store is API Token related, we don't want to override it with the connected message
       if (title !== DISPLAY_TITLES.API_TOKEN) {
         setStatusStore({
@@ -108,10 +115,12 @@ export const useSSE = () => {
 
       es.onmessage = (e: MessageEvent) => {
         const data = safeJsonParse<SseEvent | null>(e.data, null);
-        const { type, data: sseData } = data || {};
+        const { type, data: sseData, cluster_id } = data || {};
+
+        const isThisCluster = cluster_id && cluster_id === proxyID;
         const isK8sClusterEvent = type && [EventTypes.K8S_CLUSTER_EVENT].includes(type);
 
-        if (isK8sClusterEvent) {
+        if (isThisCluster && isK8sClusterEvent) {
           const notification: NotifyPayload = {
             type: typeof sseData === 'object' ? sseData?.type : StatusType.Info,
             title: typeof sseData === 'object' ? sseData?.event || '' : '',
@@ -126,7 +135,7 @@ export const useSSE = () => {
           const isDestination = type === EventTypes.K8S_CLUSTER_EVENT && [OpenSourceCrdTypes.Destination].includes(notification.crdType);
 
           // do not notify for: connected, modified events, or sources that are still being instrumented
-          if ((notification.title || notification.message) && isK8sClusterEvent && !(isSource && isAwaitingInstrumentation) && notification.title !== OpenSourceEventTypes.MODIFIED) {
+          if ((notification.title || notification.message) && !(isSource && isAwaitingInstrumentation) && notification.title !== OpenSourceEventTypes.MODIFIED) {
             addNotification(notification);
           }
 
@@ -192,8 +201,8 @@ export const useSSE = () => {
 
     // Initialize event source connection
     const es = connect();
-    // Clean up event source on component unmount or when proxyID changes
-    return () => es.close();
+    // Clean up event source on component unmount
+    return () => es?.close();
   }, [proxyID]);
 
   return null;

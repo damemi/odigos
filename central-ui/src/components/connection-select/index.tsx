@@ -4,10 +4,10 @@ import type { ComputePlatform } from '@/types';
 import styled, { css } from 'styled-components';
 import { StatusType } from '@odigos/ui-kit/types';
 import { useComputePlatformsCRUD, useProxy } from '@/hooks';
+import { useNotificationStore } from '@odigos/ui-kit/store';
 import { OverviewIcon, SearchIcon } from '@odigos/ui-kit/icons';
 import { useKeyDown, useOnClickOutside } from '@odigos/ui-kit/hooks';
 import { getPlatformIcon, getPlatformLabel } from '@odigos/ui-kit/functions';
-import { useNotificationStore, useSelectedStore } from '@odigos/ui-kit/store';
 import { Button, ExtendArrow, FlexRow, Input, SelectionButton, Text, VerticalScroll } from '@odigos/ui-kit/components';
 
 const Tab = styled(FlexRow)<{ $withSelect: boolean }>`
@@ -77,10 +77,9 @@ const FootWrap = styled.div`
 
 export const ConnectionSelect: React.FC = () => {
   const theme = Theme.useTheme();
-  const { selectedConnection } = useSelectedStore();
   const { addNotification } = useNotificationStore();
-  const { proxyID, selectProxy, clearProxy } = useProxy();
-  const { computePlatforms } = useComputePlatformsCRUD(proxyID);
+  const { computePlatforms } = useComputePlatformsCRUD();
+  const { proxyID, proxyName, platformType, selectProxy, clearProxy } = useProxy();
 
   const [isOpen, setIsOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -95,13 +94,13 @@ export const ConnectionSelect: React.FC = () => {
 
   const withSelect = !!computePlatforms.length;
   const filtered = computePlatforms.filter(({ id }) => id.toLowerCase().includes(searchText));
-  const Icon = !!selectedConnection?.type ? getPlatformIcon(selectedConnection.type) : null;
+  const Icon = !!platformType ? getPlatformIcon(platformType) : null;
 
   return (
     <RelativeContainer ref={containerRef}>
       <Tab $withSelect={withSelect} onClick={() => setIsOpen((prev) => !prev)}>
         <LogoWrap>{!!Icon ? <Icon size={20} fill={theme.text.info} /> : <OverviewIcon fill={theme.text.info} />}</LogoWrap>
-        <Title>{selectedConnection?.name || selectedConnection?.id || 'no platform'}</Title>
+        <Title>{proxyName || proxyID || 'no platform'}</Title>
 
         {withSelect && (
           <PushToEnd>
@@ -118,7 +117,7 @@ export const ConnectionSelect: React.FC = () => {
 
           <VerticalScroll style={{ maxHeight: '240px' }}>
             {filtered.map(({ id, type, name, status }, idx) => {
-              const isSelected = selectedConnection?.id === id;
+              const isSelected = proxyID === id;
 
               return (
                 <SelectionButton

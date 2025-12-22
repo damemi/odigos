@@ -1,14 +1,16 @@
-import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { ROUTES } from '@/utils';
 import { useProxyStore } from '@/store';
-import { StatusType } from '@odigos/ui-kit/types';
 import { useComputePlatformsCRUD } from '../compute-platforms';
+import { PlatformType, StatusType } from '@odigos/ui-kit/types';
 import { useEntityStore, useSetupStore } from '@odigos/ui-kit/store';
 
 interface UseProxy {
   proxyID?: string;
+  proxyName?: string;
   odigosVersion?: string;
+  platformType?: PlatformType;
   selectProxy: (id: string) => void;
   clearProxy: () => void;
 }
@@ -20,14 +22,20 @@ export const useProxy = (): UseProxy => {
   const { resetEntityStore } = useEntityStore();
   const { clearStore: resetSetupStore } = useSetupStore();
   const { computePlatforms } = useComputePlatformsCRUD();
-  const { proxyID, odigosVersion, setProxyStore, resetProxyStore } = useProxyStore();
+  const { proxyID, proxyName, odigosVersion, platformType, setProxyStore, resetProxyStore } = useProxyStore();
 
   const selectProxy = (id: string) => {
     const found = computePlatforms.find((cp) => cp.id === id);
     if (found) {
       resetEntityStore();
       resetSetupStore();
-      setProxyStore({ proxyID: id, odigosVersion: found?.odigosVersion });
+      setProxyStore({
+        proxyID: id,
+        proxyName: found?.name,
+        odigosVersion: found?.odigosVersion,
+        platformType: found?.type,
+      });
+
       router.push(ROUTES.OVERVIEW);
     }
   };
@@ -56,7 +64,9 @@ export const useProxy = (): UseProxy => {
 
   return {
     proxyID,
+    proxyName,
     odigosVersion,
+    platformType,
     selectProxy,
     clearProxy,
   };

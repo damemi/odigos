@@ -15,7 +15,7 @@ export const useMetrics = () => {
     if (sources.length > 0 || destinations.length > 0) {
       fetch();
 
-      const interval = setInterval(fetch, 3000);
+      const interval = setInterval(fetch, 10000);
       return () => clearInterval(interval);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

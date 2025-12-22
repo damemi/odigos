@@ -39,6 +39,19 @@ export const GET_GATEWAY_INFO: VersionedRemoteFetch = {
 };
 
 export const GET_GATEWAY_PODS: VersionedRemoteFetch = {
+  'v1.13': `
+  query GatewayPods {
+    gatewayPods {
+      namespace
+      name
+      status
+      restartsCount
+      nodeName
+      creationTimestamp
+      image
+    }
+  }
+`,
   'v1.12': `
   query GatewayPods {
     gatewayPods {
@@ -86,6 +99,19 @@ export const GET_NODE_COLLECTOR_INFO: VersionedRemoteFetch = {
 };
 
 export const GET_NODE_COLLECTOR_PODS: VersionedRemoteFetch = {
+  'v1.13': `
+  query OdigletPods {
+    odigletPods {
+      namespace
+      name
+      status
+      restartsCount
+      nodeName
+      creationTimestamp
+      image
+    }
+  }
+`,
   'v1.12': `
   query OdigletPods {
     odigletPods {
@@ -104,6 +130,37 @@ export const GET_NODE_COLLECTOR_PODS: VersionedRemoteFetch = {
 };
 
 export const GET_COLLECTOR_POD_INFO: VersionedRemoteFetch = {
+  'v1.13': `
+  query GetCollectorPodDetails($namespace: String!, $name: String!) {
+    collectorPod(namespace: $namespace, name: $name) {
+      namespace
+      name
+      node
+      status
+      containers {
+        name
+        image
+        status
+        stateReason
+        ready
+        started
+        restarts
+        startedAt
+        resources {
+          requests {
+            cpu
+            memory
+          }
+          limits {
+            cpu
+            memory
+          }
+        }
+      }
+      manifestYAML
+    }
+  }
+`,
   'v1.12': `
   query GetCollectorPodDetails($namespace: String!, $name: String!) {
     collectorPod(namespace: $namespace, name: $name) {

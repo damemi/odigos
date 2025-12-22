@@ -89,9 +89,7 @@ const client = new ApolloClient({
     query: { fetchPolicy: 'cache-first' },
     mutate: { fetchPolicy: 'network-only' },
   },
-  cache: new InMemoryCache({
-    addTypename: false,
-  }),
+  cache: new InMemoryCache(),
 });
 
 export default client;

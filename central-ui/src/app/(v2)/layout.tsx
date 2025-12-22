@@ -18,7 +18,7 @@ function V2Layout({ children }: PropsWithChildren) {
 
   const router = useRouter();
   const pathname = usePathname();
-  const { proxyID, odigosVersion } = useProxy();
+  const { proxyID, odigosVersion, platformType } = useProxy();
 
   // TODO: remove this after migration to v2
   const theme = useTheme();
@@ -30,7 +30,7 @@ function V2Layout({ children }: PropsWithChildren) {
 
   return (
     <ErrorBoundary>
-      <OdigosProvider version={odigosVersion}>
+      <OdigosProvider version={odigosVersion} platformType={platformType}>
         <FlexColumn $gap={0}>
           <OverviewHeader v2 />
           <FlexRow $gap={0}>
