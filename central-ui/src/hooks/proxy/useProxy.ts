@@ -4,7 +4,7 @@ import { ROUTES } from '@/utils';
 import { useProxyStore } from '@/store';
 import { useComputePlatformsCRUD } from '../compute-platforms';
 import { PlatformType, StatusType } from '@odigos/ui-kit/types';
-import { useEntityStore, useSetupStore } from '@odigos/ui-kit/store';
+import { useEntityStore, useInstrumentStore, useSetupStore } from '@odigos/ui-kit/store';
 
 interface UseProxy {
   proxyID?: string;
@@ -21,14 +21,25 @@ export const useProxy = (): UseProxy => {
 
   const { resetEntityStore } = useEntityStore();
   const { clearStore: resetSetupStore } = useSetupStore();
-  const { computePlatforms } = useComputePlatformsCRUD();
+  const { setInstrumentAwait, setInstrumentCount } = useInstrumentStore();
   const { proxyID, proxyName, odigosVersion, platformType, setProxyStore, resetProxyStore } = useProxyStore();
+
+  const { computePlatforms } = useComputePlatformsCRUD();
+
+  const resetStores = () => {
+    resetEntityStore();
+    resetSetupStore();
+    setInstrumentAwait(false);
+    setInstrumentCount('sourcesToCreate', 0);
+    setInstrumentCount('sourcesCreated', 0);
+    setInstrumentCount('sourcesToDelete', 0);
+    setInstrumentCount('sourcesDeleted', 0);
+  };
 
   const selectProxy = (id: string) => {
     const found = computePlatforms.find((cp) => cp.id === id);
     if (found) {
-      resetEntityStore();
-      resetSetupStore();
+      resetStores();
       setProxyStore({
         proxyID: id,
         proxyName: found?.name,
@@ -41,8 +52,7 @@ export const useProxy = (): UseProxy => {
   };
 
   const clearProxy = (skipRedirect?: boolean) => {
-    resetEntityStore();
-    resetSetupStore();
+    resetStores();
     resetProxyStore();
     if (!skipRedirect) router.push(ROUTES.CONNECTIONS);
   };
