@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/consts"
@@ -196,6 +197,13 @@ func (r *queryResolver) RemoteFetch(ctx context.Context, proxyID string, query s
 	select {
 	case response := <-responseChan:
 		return response, nil
+	case <-time.After(2 * time.Minute):
+		platformName := proxyID
+		if name, ok := r.WebSocketServer.GetPlatformName(proxyID); ok {
+			platformName = name
+		}
+		logger.Log.Error("Timeout waiting for response from proxy", "proxyID", proxyID, "platformName", platformName, "requestId", requestId)
+		return "", fmt.Errorf("request timed out: cluster '%s' did not respond.", platformName)
 	case <-ctx.Done():
 		return "", ctx.Err()
 	}
