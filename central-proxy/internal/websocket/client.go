@@ -215,6 +215,19 @@ func (w *WebSocketClient) handleMessage(message []byte) {
 		resp, err := w.gqlClient.ForwardGraphQLRequest(w.ctx, parsedMessage.RequestId, parsedMessage.Query, parsedMessage.Variables, parsedMessage.IsAdmin)
 		if err != nil {
 			logger.Log.Error("Failed GraphQL request", "error", err, "request_id", parsedMessage.RequestId)
+
+			errorResponse := WebSocketMessageToCentralized{
+				Type:      MessageTypeGraphQLResponse,
+				RequestId: parsedMessage.RequestId,
+				Data: map[string]any{
+					"errors": []map[string]any{
+						{"message": err.Error()},
+					},
+				},
+			}
+			if sendErr := w.Send(errorResponse); sendErr != nil {
+				logger.Log.Error("Failed to send error response", "error", sendErr, "request_id", parsedMessage.RequestId)
+			}
 			return
 		}
 
