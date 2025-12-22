@@ -20,9 +20,15 @@ type Event struct {
 	Timestamp   int64           `json:"timestamp,omitempty"`
 }
 
+// ClientInfo holds information about a connected SSE client
+type ClientInfo struct {
+	ClusterID string
+	Channel   chan []byte
+}
+
 type Hub struct {
 	mu         sync.Mutex
-	clients    map[chan []byte]struct{}
+	clients    map[chan []byte]*ClientInfo
 	redis      *redisclient.RedisClient
 	instanceID string
 }
@@ -33,7 +39,7 @@ type redisEnvelope struct {
 }
 
 func NewWithRedis(r *redisclient.RedisClient, instanceID string) *Hub {
-	return &Hub{clients: make(map[chan []byte]struct{}), redis: r, instanceID: instanceID}
+	return &Hub{clients: make(map[chan []byte]*ClientInfo), redis: r, instanceID: instanceID}
 }
 
 func (h *Hub) StartRedisSSEBroadcast(ctx context.Context) {
@@ -69,7 +75,11 @@ func (h *Hub) broadcastLocal(ev Event) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	for ch := range h.clients {
+	for ch, clientInfo := range h.clients {
+		// Only send events to clients subscribed to this cluster
+		if clientInfo.ClusterID != "" && ev.ClusterID != "" && clientInfo.ClusterID != ev.ClusterID {
+			continue
+		}
 		select {
 		case ch <- b:
 		default:
@@ -78,6 +88,13 @@ func (h *Hub) broadcastLocal(ev Event) {
 }
 
 func (h *Hub) SSEHandler(w http.ResponseWriter, r *http.Request) {
+	// Parse clusterID from query parameters - required for filtering
+	clusterID := r.URL.Query().Get("clusterID")
+	if clusterID == "" {
+		http.Error(w, "clusterID query parameter is required", http.StatusBadRequest)
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -89,9 +106,15 @@ func (h *Hub) SSEHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ch := make(chan []byte, 32)
+	// Create channel and client info with cluster subscription
+	ch := make(chan []byte, 256)
+	clientInfo := &ClientInfo{
+		ClusterID: clusterID,
+		Channel:   ch,
+	}
+
 	h.mu.Lock()
-	h.clients[ch] = struct{}{}
+	h.clients[ch] = clientInfo
 	h.mu.Unlock()
 
 	fmt.Fprintf(w, "data: %s\n\n", `{"type":"connected","data":"ok"}`)

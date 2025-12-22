@@ -29,6 +29,12 @@ type RedisClient struct {
 func NewRedisClient(ctx context.Context) (*RedisClient, error) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr: config.Config.RedisAddr,
+		// Increased pool size to handle many concurrent cluster connections
+		// Default is 10 * runtime.GOMAXPROCS(0) which may not be enough for 60+ clusters
+		PoolSize:     300,
+		MinIdleConns: 20,
+		// Retry on transient failures
+		MaxRetries: 3,
 	})
 
 	_, err := rdb.Ping(ctx).Result()

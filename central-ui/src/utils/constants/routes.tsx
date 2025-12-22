@@ -26,3 +26,7 @@ export const API = {
   GRAPHQL_HTTP: `${BACKEND_HTTP_ORIGIN}/graphql`,
   SSE_EVENTS: `${BACKEND_HTTP_ORIGIN}/sse/events`,
 };
+
+// Returns SSE events URL with clusterID filter for server-side event filtering
+export const getSSEEventsUrl = (clusterID: string) =>
+  `${BACKEND_HTTP_ORIGIN}/sse/events?clusterID=${encodeURIComponent(clusterID)}`;

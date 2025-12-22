@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { API } from '@/utils';
-import { useStatusStore } from '@/store';
+import { getSSEEventsUrl } from '@/utils';
+import { useProxyStore, useStatusStore } from '@/store';
 import { useDestinationCRUD, useSourceCRUD } from '..';
 import { DISPLAY_TITLES } from '@odigos/ui-kit/constants';
 import { EntityTypes, StatusType, WorkloadId } from '@odigos/ui-kit/types';
@@ -45,11 +45,17 @@ export const useSSE = () => {
   const { title, setStatusStore } = useStatusStore();
   const { fetchDestinations } = useDestinationCRUD();
   const { fetchSources, fetchSourceById } = useSourceCRUD();
+  const { proxyID } = useProxyStore();
 
   const retryCount = useRef(0);
   const maxRetries = 10;
 
   useEffect(() => {
+    // Don't connect if no cluster is selected - server requires clusterID
+    if (!proxyID) {
+      return;
+    }
+
     const connect = () => {
       // If the current status in store is API Token related, we don't want to override it with the connected message
       if (title !== DISPLAY_TITLES.API_TOKEN) {
@@ -60,7 +66,7 @@ export const useSSE = () => {
         });
       }
 
-      const es = new EventSource(API.SSE_EVENTS);
+      const es = new EventSource(getSSEEventsUrl(proxyID));
 
       es.onopen = () => {
         // If the current status in store is API Token related, we don't want to override it with the connected message
@@ -186,9 +192,9 @@ export const useSSE = () => {
 
     // Initialize event source connection
     const es = connect();
-    // Clean up event source on component unmount
+    // Clean up event source on component unmount or when proxyID changes
     return () => es.close();
-  }, []);
+  }, [proxyID]);
 
   return null;
 };
