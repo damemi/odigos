@@ -2,7 +2,6 @@ import React, { useMemo } from 'react';
 import { useStatusStore } from '../../store';
 import { AccountMenu } from '../account-menu';
 import { FORM_ALERTS } from '@odigos/ui-kit/constants';
-import { ConnectionSelect } from '../connection-select';
 import { OdigosCentralLogoText } from '@odigos/ui-kit/icons';
 import { OtherStatusType, StatusType } from '@odigos/ui-kit/types';
 import { Header, Status, Tooltip } from '@odigos/ui-kit/components';
@@ -43,8 +42,6 @@ const OverviewHeader = ({ v2 }: { v2?: boolean }) => {
         );
       }
     }
-
-    arr.push(<ConnectionSelect key='connection-select' />);
 
     return arr;
   }, [v2, title, message, status, isReadonly]);
