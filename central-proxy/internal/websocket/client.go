@@ -111,6 +111,11 @@ func (w *WebSocketClient) Run(kubeClient *kube.Client) {
 		"version", w.version,
 		"url", w.url)
 
+	// Start health monitoring to detect dead connections early.
+	// Pings every 30s - if ping fails, forces connection close to trigger reconnection.
+	// This prevents "zombie" connections that appear connected but can't send/receive data.
+	w.startHealthCheck()
+
 	for {
 		select {
 		case <-w.ctx.Done():
@@ -152,12 +157,50 @@ func (w *WebSocketClient) Run(kubeClient *kube.Client) {
 				logger.Log.Info("WebSocket reconnected, resuming read loop",
 					"proxyID", w.proxyID,
 					"clusterName", w.clusterName)
+				// Start new health check goroutine for the new connection.
+				// This is safe because the old health check goroutine already exited when the connection failed.
+				// Each connection needs its own health monitor - this follows WebSocket best practices.
+				w.startHealthCheck()
 				continue
 			}
 
 			w.handleMessage(message)
 		}
 	}
+}
+
+// startHealthCheck runs a background goroutine that pings the WebSocket connection every 30 seconds.
+// This detects "zombie" connections that appear connected but can't actually send/receive data.
+// If a ping fails, it forces the connection to close, which triggers the main read loop to reconnect.
+// The health check goroutine exits after forcing a close and will be restarted after reconnection.
+func (w *WebSocketClient) startHealthCheck() {
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-w.ctx.Done():
+				return
+			case <-ticker.C:
+				if w.conn != nil {
+					if err := w.conn.Ping(w.ctx); err != nil {
+						logger.Log.Warn("WebSocket health check failed - connection may be dead",
+							"error", err,
+							"proxyID", w.proxyID,
+							"clusterName", w.clusterName)
+						// Force close connection to trigger reconnection in main read loop
+						w.conn.Close(websocket.StatusInternalError, "health check failed")
+						return // Exit health check goroutine, will be restarted after reconnect
+					} else {
+						logger.Log.Debug("WebSocket health check passed",
+							"proxyID", w.proxyID,
+							"clusterName", w.clusterName)
+					}
+				}
+			}
+		}
+	}()
 }
 
 func (w *WebSocketClient) handleMessage(message []byte) {
@@ -192,52 +235,62 @@ func (w *WebSocketClient) handleMessage(message []byte) {
 }
 
 func (w *WebSocketClient) handleReconnect(kubeClient *kube.Client) *websocket.Conn {
-	maxRetries := 10
 	baseDelay := 2 * time.Second
+	maxDelay := 30 * time.Second // Cap maximum delay
 
-	proxyID, err := config.GetOdigosDeploymentId(w.ctx, kubeClient)
-	if err != nil {
-		logger.Log.Error("Failed to get proxyID during reconnect", "error", err)
-		return nil
-	}
-
-	odigosVersion, err := config.GetOdigosVersion(w.ctx, kubeClient)
-	if err != nil {
-		logger.Log.Error("Failed to get version during reconnect", "error", err)
-		return nil
-	}
-
-	_, clusterName, err := config.GetCentralBackendURLAndClusterName(w.ctx, kubeClient)
-	if err != nil {
-		logger.Log.Error("Failed to get clusterName during reconnect", "error", err)
-		return nil
-	}
-
-	scheme := "ws"
-	if strings.HasSuffix(w.url, ":443") {
-		scheme = "wss"
-	}
-
-	u := url.URL{
-		Scheme:   scheme,
-		Host:     w.url,
-		Path:     "/ws/proxy",
-		RawQuery: fmt.Sprintf("proxyID=%s&platformName=%s&version=%s&platformType=%s", proxyID, clusterName, odigosVersion, consts.PlatformTypeK8sString),
-	}
-
-	for attempt := 1; attempt <= maxRetries; attempt++ {
+	for attempt := 1; ; attempt++ { // Infinite retries
 		select {
 		case <-w.ctx.Done():
 			logger.Log.Warn("Stopping reconnect attempts as context was canceled",
-				"proxyID", proxyID,
-				"clusterName", clusterName,
 				"attempt", attempt)
 			return nil
 		default:
+			// Refresh configuration on each attempt in case backend URL changed
+			proxyID, err := config.GetOdigosDeploymentId(w.ctx, kubeClient)
+			if err != nil {
+				logger.Log.Error("Failed to get proxyID during reconnect", "error", err, "attempt", attempt)
+				continue
+			}
+
+			odigosVersion, err := config.GetOdigosVersion(w.ctx, kubeClient)
+			if err != nil {
+				logger.Log.Error("Failed to get version during reconnect", "error", err, "attempt", attempt)
+				continue
+			}
+
+			centralBackendURL, clusterName, err := config.GetCentralBackendURLAndClusterName(w.ctx, kubeClient)
+			if err != nil {
+				logger.Log.Error("Failed to get backend URL during reconnect", "error", err, "attempt", attempt)
+				continue
+			}
+
+			// Update stored URL if it changed
+			w.url = centralBackendURL
+			w.clusterName = clusterName
+			w.version = odigosVersion
+
+			scheme := "ws"
+			if strings.HasSuffix(w.url, ":443") {
+				scheme = "wss"
+			}
+
+			u := url.URL{
+				Scheme:   scheme,
+				Host:     w.url,
+				Path:     "/ws/proxy",
+				RawQuery: fmt.Sprintf("proxyID=%s&platformName=%s&version=%s&platformType=%s", proxyID, clusterName, odigosVersion, consts.PlatformTypeK8sString),
+			}
+
+			// Linear backoff (2s×attempt) capped at 30s -
+			// starts fast for quick recovery, then steady for persistent outages
 			delay := baseDelay * time.Duration(attempt)
+			if delay > maxDelay {
+				delay = maxDelay
+			}
+
 			logger.Log.Info("Attempting WebSocket reconnect",
 				"attempt", attempt,
-				"delay", delay,
+				"delay", delay.String(),
 				"proxyID", proxyID,
 				"clusterName", clusterName,
 				"version", odigosVersion,
@@ -274,11 +327,4 @@ func (w *WebSocketClient) handleReconnect(kubeClient *kube.Client) *websocket.Co
 
 		}
 	}
-
-	logger.Log.Error("Max reconnect attempts reached, stopping WebSocket client",
-		"maxRetries", maxRetries,
-		"proxyID", proxyID,
-		"clusterName", clusterName,
-		"url", u.String())
-	return nil
 }

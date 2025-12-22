@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/odigos-io/central-proxy/internal/config"
 	"github.com/odigos-io/central-proxy/internal/logger"
@@ -24,40 +25,77 @@ func main() {
 	if err != nil {
 		logger.Fatal("Failed to create Kubernetes client", err)
 	}
-	centralBackendURL, clusterName, err := config.GetCentralBackendURLAndClusterName(ctx, client)
-	if err != nil {
-		logger.Fatal("Failed to get WebSocket URL from ConfigMap", err)
-	}
-	odigosVersion, err := config.GetOdigosVersion(ctx, client)
-	if err != nil {
-		logger.Fatal("Failed to get Odigos Version from ConfigMap", err)
-	}
 
-	logger.Log.Info("Initializing WebSocket client",
-		"centralBackendURL", centralBackendURL,
-		"clusterName", clusterName,
-		"odigosVersion", odigosVersion)
-
-	tlsConfig, err := config.GetTLSConfig()
-	if err != nil {
-		logger.Fatal("Failed to get TLS configuration", err)
-	}
-
-	wsClient, err := websocketserver.NewWebSocketClient(ctx, client, centralBackendURL, clusterName, odigosVersion, tlsConfig)
-	if err != nil {
-		logger.Fatal("Failed to init WebSocket Client", err)
-	}
-
-	logger.Log.Info("Starting WebSocket client read loop goroutine",
-		"clusterName", clusterName)
-	go wsClient.Run(client)
-
-	// Start SSE forwarder (connects to frontend backend and forwards over WS)
-	sseforwarder.Start(ctx, wsClient)
+	// Supervisor for the WebSocket connection
+	// The supervisor is responsible for restarting the WebSocket connection if it fails
+	// e.g if the backend is down, the supervisor will restart the WebSocket connection
+	go superviseWebSocketConnection(ctx, client)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	<-sigCh
 
 	logger.Log.Info("Shutting down Centralized Proxy...")
+}
+
+func superviseWebSocketConnection(ctx context.Context, client *kube.Client) {
+	supervisorRestartDelay := 5 * time.Second
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Log.Info("WebSocket supervisor shutting down")
+			return
+		default:
+			err := startWebSocketConnection(ctx, client)
+
+			if err != nil {
+				logger.Log.Warn("WebSocket connection failed, supervisor will retry",
+					"delay", supervisorRestartDelay.String())
+
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(supervisorRestartDelay):
+					// Wait before restarting to prevent spam restarts when backend is down.
+					// Use select instead of time.Sleep() to respect context cancellation -
+					// if shutdown signal comes during the delay, exit immediately rather than waiting.
+				}
+			}
+		}
+	}
+}
+
+func startWebSocketConnection(ctx context.Context, client *kube.Client) error {
+	centralBackendURL, clusterName, err := config.GetCentralBackendURLAndClusterName(ctx, client)
+	if err != nil {
+		return err
+	}
+	odigosVersion, err := config.GetOdigosVersion(ctx, client)
+	if err != nil {
+		return err
+	}
+
+	tlsConfig, err := config.GetTLSConfig()
+	if err != nil {
+		return err
+	}
+
+	wsClient, err := websocketserver.NewWebSocketClient(ctx, client, centralBackendURL, clusterName, odigosVersion, tlsConfig)
+	if err != nil {
+		return err
+	}
+
+	logger.Log.Info("WebSocket client connected, starting read loop",
+		"clusterName", clusterName)
+
+	// Start SSE forwarder (connects to frontend backend and forwards over WS)
+	sseforwarder.Start(ctx, wsClient)
+
+	// This blocks until the connection fails completely (should rarely happen now with infinite retries)
+	wsClient.Run(client)
+
+	// If we reach here, the WebSocket client stopped completely
+	logger.Log.Error("WebSocket client stopped completely - will be restarted by supervisor")
+	return err
 }
