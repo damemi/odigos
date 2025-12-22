@@ -94,7 +94,7 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 		PlatformType:  platformType,
 		OdigosVersion: currentVersion,
 	})
-	defer ws.cleanupConnection(ctx, proxyID)
+	defer ws.cleanupConnection(ctx, proxyID, conn)
 
 	if err := ws.redisClient.AddProxyConnection(ctx, proxyID, string(consts.StatusConnected)); err != nil {
 		logger.Log.Error("Failed to store connection in Redis", "error", err)
@@ -161,12 +161,28 @@ func (ws *WebSocketServer) listenForMessages(ctx context.Context, proxyID string
 	}
 }
 
-func (ws *WebSocketServer) cleanupConnection(ctx context.Context, proxyID string) {
+func (ws *WebSocketServer) cleanupConnection(ctx context.Context, proxyID string, oldConn *websocket.Conn) {
+	// Only cleanup if the stored connection is the SAME as the one being disconnected.
+	// This prevents a race condition where an old connection's cleanup runs after
+	// a new connection has already been established with the same proxyID.
 	connVal, ok := ws.proxyConnections.Load(proxyID)
-	if ok {
-		proxyConn := connVal.(*ProxyConnection)
-		logger.Log.Info("Cleaning up connection", "proxyID", proxyID, "platformName", proxyConn.PlatformName, "platformType", proxyConn.PlatformType)
+	if !ok {
+		// Already cleaned up or replaced by a newer connection
+		logger.Log.Info("Connection already cleaned up or replaced", "proxyID", proxyID)
+		return
 	}
+
+	proxyConn := connVal.(*ProxyConnection)
+
+	// Check if this is the same connection (not a newer one that reconnected)
+	if proxyConn.Conn != oldConn {
+		logger.Log.Info("Skipping cleanup - connection was replaced by a newer one",
+			"proxyID", proxyID,
+			"platformName", proxyConn.PlatformName)
+		return
+	}
+
+	logger.Log.Info("Cleaning up connection", "proxyID", proxyID, "platformName", proxyConn.PlatformName, "platformType", proxyConn.PlatformType)
 	ws.proxyConnections.Delete(proxyID)
 
 	if err := ws.redisClient.SetProxyConnectionStatus(ctx, proxyID, consts.StatusDisconnected); err != nil {
@@ -176,7 +192,6 @@ func (ws *WebSocketServer) cleanupConnection(ctx context.Context, proxyID string
 	if err := ws.redisClient.UpdateProxyLastSeen(ctx, proxyID, time.Now().Unix()); err != nil {
 		logger.Log.Warn("Failed to update proxy lastSeenAt on disconnect", "proxyID", proxyID, "error", err)
 	}
-
 }
 
 func (ws *WebSocketServer) SendGraphQLRequest(ctx context.Context, proxyID string, request types.GqlRequestPayload) error {
