@@ -7,19 +7,16 @@ import (
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/keycloak"
 	"github.com/odigos-io/central-backend/internal/logger"
-	redisclient "github.com/odigos-io/central-backend/internal/redis"
 	"github.com/odigos-io/central-backend/internal/utils"
 )
 
 type AdminService struct {
-	redisClient      *redisclient.RedisClient
 	adminCredentials *AdminCredentials
 	kcAdmin          *keycloak.KeycloakAdminService
 }
 
-func NewAdminService(redisClient *redisclient.RedisClient, adminCredentials *AdminCredentials) *AdminService {
+func NewAdminService(adminCredentials *AdminCredentials) *AdminService {
 	return &AdminService{
-		redisClient:      redisClient,
 		adminCredentials: adminCredentials,
 		kcAdmin:          keycloak.NewKeycloakAdminService(),
 	}
@@ -29,12 +26,37 @@ func (svc *AdminService) GetAdminToken() (string, error) {
 	return svc.kcAdmin.GetAdminToken(svc.adminCredentials.Username, svc.adminCredentials.Password)
 }
 
-func (svc *AdminService) GetToken(ctx context.Context) (string, error) {
-	isInitialized, err := svc.redisClient.GetSystemInitialized(ctx)
+// DetermineSystemInitialized checks if the system has been initialized by querying Keycloak
+// for non-admin, non-service-account users.
+func (svc *AdminService) DetermineSystemInitialized() bool {
+	adminToken, err := svc.GetAdminToken()
 	if err != nil {
-		logger.Log.Error("Failed to get system initialization status from cache", "error", err)
-		isInitialized = false
+		logger.Log.Error("Failed to get admin token to determine initialization state", "error", err)
+		return false
 	}
+
+	userService := keycloak.NewKeycloakUserService()
+	users, err := userService.ListUsers(adminToken)
+	if err != nil {
+		logger.Log.Error("Failed to list users from Keycloak to determine initialization state", "error", err)
+		return false
+	}
+
+	for _, u := range users {
+		if _, isServiceAccount := u["serviceAccountClientId"]; isServiceAccount {
+			continue
+		}
+		username, _ := u["username"].(string)
+		if username == svc.adminCredentials.Username {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func (svc *AdminService) GetToken(ctx context.Context) (string, error) {
+	isInitialized := svc.DetermineSystemInitialized()
 
 	if !isInitialized {
 		return svc.GetAdminToken()

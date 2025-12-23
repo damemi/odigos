@@ -56,11 +56,3 @@ const (
 	DefaultAdminUsername = "admin"
 	DefaultAdminPassword = "admin"
 )
-
-const (
-	SystemInitializedKey = "system:initialized"
-)
-
-const (
-	SystemInitializedTTL = 3600
-)

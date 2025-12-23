@@ -8,20 +8,17 @@ import (
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/keycloak"
 	"github.com/odigos-io/central-backend/internal/logger"
-	redisclient "github.com/odigos-io/central-backend/internal/redis"
 	"github.com/odigos-io/central-backend/internal/utils"
 )
 
 type UserService struct {
-	redisClient  *redisclient.RedisClient
 	adminService *AdminService
 	kcUser       *keycloak.KeycloakUserService
 	kcTeam       *keycloak.KeycloakTeamService
 }
 
-func NewUserService(redisClient *redisclient.RedisClient, adminService *AdminService) *UserService {
+func NewUserService(adminService *AdminService) *UserService {
 	return &UserService{
-		redisClient:  redisClient,
 		adminService: adminService,
 		kcUser:       keycloak.NewKeycloakUserService(),
 		kcTeam:       keycloak.NewKeycloakTeamService(),

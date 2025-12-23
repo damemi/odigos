@@ -67,12 +67,6 @@ func main() {
 		logger.Fatal("Failed to connect to Redis", err)
 	}
 
-	initialized := determineSystemInitialized(adminToken, adminCredentials.Username)
-
-	if setErr := redisClient.SetSystemInitialized(ctx, initialized); setErr != nil {
-		logger.Log.Error("Failed to set system initialization status", "error", setErr)
-	}
-
 	expirationChan, err := odigosauth.TokenExpirationChannel()
 	if err != nil {
 		logger.Fatal("Failed to get token expiration channel", err)
@@ -84,10 +78,10 @@ func main() {
 	centralSSEHub.StartRedisSSEBroadcast(ctx)
 	wsServer := websocketserver.NewWebSocketServer(redisClient, centralSSEHub)
 
-	adminService := services.NewAdminService(redisClient, adminCredentials)
-	userService := services.NewUserService(redisClient, adminService)
-	teamService := services.NewTeamService(redisClient, adminService)
-	authService := services.NewAuthService(redisClient, adminService, userService)
+	adminService := services.NewAdminService(adminCredentials)
+	userService := services.NewUserService(adminService)
+	teamService := services.NewTeamService(adminService)
+	authService := services.NewAuthService(adminService, userService)
 
 	gqlHandler := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
 		RedisClient:     redisClient,
@@ -108,27 +102,6 @@ func main() {
 		logger.Fatal("Failed to start server", err)
 	}
 
-}
-
-func determineSystemInitialized(adminToken, adminUsername string) bool {
-	userService := keycloak.NewKeycloakUserService()
-	users, err := userService.ListUsers(adminToken)
-	if err != nil {
-		logger.Log.Error("Failed to list users from Keycloak to determine initialization state", "error", err)
-		return false
-	}
-
-	for _, u := range users {
-		if _, isServiceAccount := u["serviceAccountClientId"]; isServiceAccount {
-			continue
-		}
-		username, _ := u["username"].(string)
-		if username == adminUsername {
-			continue
-		}
-		return true
-	}
-	return false
 }
 
 func newRouter(gqlHandler *handler.Server, wsServer *websocketserver.WebSocketServer, sseHub *ssehub.Hub) *gin.Engine {

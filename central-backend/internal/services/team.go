@@ -6,18 +6,15 @@ import (
 
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/keycloak"
-	redisclient "github.com/odigos-io/central-backend/internal/redis"
 )
 
 type TeamService struct {
-	redisClient  *redisclient.RedisClient
 	adminService *AdminService
 	kcTeam       *keycloak.KeycloakTeamService
 }
 
-func NewTeamService(redisClient *redisclient.RedisClient, adminService *AdminService) *TeamService {
+func NewTeamService(adminService *AdminService) *TeamService {
 	return &TeamService{
-		redisClient:  redisClient,
 		adminService: adminService,
 		kcTeam:       keycloak.NewKeycloakTeamService(),
 	}

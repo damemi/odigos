@@ -239,10 +239,7 @@ func (r *queryResolver) RemoteMultiFetch(ctx context.Context, proxyIDs []string,
 
 // SystemConfig is the resolver for the systemConfig field.
 func (r *queryResolver) SystemConfig(ctx context.Context) (*model.SystemConfig, error) {
-	isInitialized, err := r.RedisClient.GetSystemInitialized(ctx)
-	if err != nil {
-		isInitialized = false
-	}
+	isInitialized := r.AdminService.DetermineSystemInitialized()
 
 	// For now, use a hardcoded version.
 	version := "v1.0.0"

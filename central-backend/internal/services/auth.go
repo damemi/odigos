@@ -8,13 +8,11 @@ import (
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/keycloak"
 	"github.com/odigos-io/central-backend/internal/logger"
-	redisclient "github.com/odigos-io/central-backend/internal/redis"
 	"github.com/odigos-io/central-backend/internal/types"
 	"github.com/odigos-io/central-backend/internal/utils"
 )
 
 type AuthService struct {
-	redisClient  *redisclient.RedisClient
 	adminService *AdminService
 	userService  *UserService
 	kcUser       *keycloak.KeycloakUserService
@@ -22,9 +20,8 @@ type AuthService struct {
 	kcTeam       *keycloak.KeycloakTeamService
 }
 
-func NewAuthService(redisClient *redisclient.RedisClient, adminService *AdminService, userService *UserService) *AuthService {
+func NewAuthService(adminService *AdminService, userService *UserService) *AuthService {
 	return &AuthService{
-		redisClient:  redisClient,
 		adminService: adminService,
 		userService:  userService,
 		kcAuth:       keycloak.NewKeycloakAuthService(),
@@ -56,12 +53,7 @@ func (svc *AuthService) GetRedirectUrlForSignOut(ctx context.Context, idToken st
 }
 
 func (svc *AuthService) isFirstTimeSetup(ctx context.Context) bool {
-	isInitialized, err := svc.redisClient.GetSystemInitialized(ctx)
-	if err != nil {
-		logger.Log.Error("Failed to get system initialization status from cache", "error", err)
-		isInitialized = false
-	}
-
+	isInitialized := svc.adminService.DetermineSystemInitialized()
 	return !isInitialized
 }
 
@@ -99,11 +91,6 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 
 		logger.Log.Info("OAuth login successful", "userID", user.ID, "email", user.Email)
 
-		err = svc.redisClient.SetSystemInitialized(ctx, true)
-		if err != nil {
-			logger.Log.Error("Failed to set system as initialized", "error", err)
-		}
-
 		return &model.SignInResult{
 			IDToken:     &authResult.IDToken,
 			AccessToken: &authResult.AccessToken,
@@ -137,11 +124,6 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 		}
 
 		logger.Log.Info("First admin login successful", "email", email, "userID", user.ID)
-
-		err = svc.redisClient.SetSystemInitialized(ctx, true)
-		if err != nil {
-			logger.Log.Error("Failed to set system as initialized", "error", err)
-		}
 
 		return &model.SignInResult{
 			IDToken:     &authResult.IDToken,
