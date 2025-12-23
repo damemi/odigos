@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { useUserStore } from '@/store';
 import { OidcProviderId } from '@/types';
 import { useRouter } from 'next/navigation';
-import { useSessionRedirects } from '@/hooks';
 import { useAuth, useOidcProvider } from '@/hooks';
 import { Modal } from '@odigos/ui-kit/components/v2';
 import { FormContainer } from '@/components/auth/styled';
@@ -13,8 +12,6 @@ import { AuthForm, ChooseForm, OidcForm } from '@/components';
 import { CenterThis, FadeLoader, FlexRow } from '@odigos/ui-kit/components';
 
 export default function Page() {
-  useSessionRedirects();
-
   const router = useRouter();
   const { authProviderId, setAuthProviderId } = useUserStore();
   const { systemConfig, systemConfigLoading, signIn, loading: authLoading, error: authError } = useAuth();

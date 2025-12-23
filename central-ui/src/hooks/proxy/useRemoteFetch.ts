@@ -49,14 +49,6 @@ const EMPTY_RESPONSE_MULTI = <T>(error?: string): MultiFetchResponse<T> => ({
   failureCount: 0,
 });
 
-const onError = () => {
-  // it does not matter where the error comes from, we should reset global stores
-  const { setInstrumentAwait, setInstrumentCount } = useInstrumentStore.getState();
-  setInstrumentAwait(false);
-  setInstrumentCount('sourcesToCreate', 0);
-  setInstrumentCount('sourcesCreated', 0);
-};
-
 const mapMultiFetchResult = <T>(result: MultiFetchResult<string>): MultiFetchResult<T> => ({
   proxyID: result.proxyID,
   success: result.success,
@@ -67,6 +59,15 @@ const mapMultiFetchResult = <T>(result: MultiFetchResult<string>): MultiFetchRes
 export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRemoteFetch, connections: ComputePlatform[] = []): UseProxy<ResT, ReqT> => {
   const { proxyID, odigosVersion } = useProxy();
   const { addNotification } = useNotificationStore();
+  const { setInstrumentAwait, setInstrumentCount } = useInstrumentStore();
+
+  const resetStores = () => {
+    setInstrumentAwait(false);
+    setInstrumentCount('sourcesToCreate', 0);
+    setInstrumentCount('sourcesCreated', 0);
+    setInstrumentCount('sourcesToDelete', 0);
+    setInstrumentCount('sourcesDeleted', 0);
+  };
 
   const [remoteFetch, { data: cachedData, loading }] = useLazyQuery(REMOTE_FETCH);
   const [remoteMultiFetch, { data: cachedMultiData, loading: multiLoading }] = useLazyQuery(REMOTE_MULTI_FETCH);
@@ -96,9 +97,9 @@ export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRem
         },
       });
 
-      if (error) {
-        addNotification({ type: StatusType.Error, title: error.name || 'API Error', message: error.cause?.message || error.message });
-        onError();
+      if (error || !data?.remoteFetch) {
+        resetStores();
+        addNotification({ type: StatusType.Error, title: error?.name || 'API Error', message: error?.cause?.message || error?.message || 'Unknown error' });
 
         return EMPTY_RESPONSE_SINGLE;
       } else {

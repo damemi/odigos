@@ -1,11 +1,16 @@
-import React, { Fragment, useMemo } from 'react';
+import React, { Fragment, useMemo, useState } from 'react';
 import { type HandleSignIn } from '@/hooks';
 import { StatusType } from '@odigos/ui-kit/types';
 import * as STRINGS from '@/utils/constants/strings';
 import { useGenericForm } from '@odigos/ui-kit/hooks';
 import { FlexColumn } from '@odigos/ui-kit/components';
-import { Button, Input, Note } from '@odigos/ui-kit/components/v2';
+import { Button, ButtonSize, ButtonVariants, Input, Note } from '@odigos/ui-kit/components/v2';
 import { ConstrainedWidth, ErrorText, FormContainer, FormSubtitle, FormTitle } from '../styled';
+
+enum FormMode {
+  Login = 'login',
+  Register = 'register',
+}
 
 interface AuthFormProps {
   isFirstTime: boolean;
@@ -14,7 +19,7 @@ interface AuthFormProps {
   onSubmit: HandleSignIn;
 }
 
-const getFields = (isFirstTime: AuthFormProps['isFirstTime']) => {
+const getFields = (formMode: FormMode) => {
   const arr = [
     {
       name: 'email',
@@ -30,7 +35,7 @@ const getFields = (isFirstTime: AuthFormProps['isFirstTime']) => {
     },
   ];
 
-  if (isFirstTime) {
+  if (formMode === FormMode.Register) {
     arr.push({
       name: 'confirmPassword',
       type: 'password',
@@ -43,7 +48,8 @@ const getFields = (isFirstTime: AuthFormProps['isFirstTime']) => {
 };
 
 const AuthForm: React.FC<AuthFormProps> = ({ isFirstTime, loading, error, onSubmit }) => {
-  const fields = useMemo(() => getFields(isFirstTime), [isFirstTime]);
+  const [formMode, setFormMode] = useState<FormMode>(isFirstTime ? FormMode.Register : FormMode.Login);
+  const fields = useMemo(() => getFields(formMode), [formMode]);
 
   const { formData, handleFormChange, formErrors, handleErrorChange } = useGenericForm({
     email: '',
@@ -60,7 +66,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ isFirstTime, loading, error, onSubm
     if (!values.password) {
       errors.password = STRINGS.PASSWORD_REQUIRED;
     }
-    if (isFirstTime && values.confirmPassword !== values.password) {
+    if (formMode === FormMode.Register && values.confirmPassword !== values.password) {
       errors.confirmPassword = STRINGS.PASSWORDS_DO_NOT_MATCH;
     }
 
@@ -81,8 +87,8 @@ const AuthForm: React.FC<AuthFormProps> = ({ isFirstTime, loading, error, onSubm
   return (
     <FormContainer $gap={41} onSubmit={handleSubmit}>
       <FlexColumn $gap={16}>
-        <FormTitle>{isFirstTime ? STRINGS.SIGN_UP_ADMIN_TITLE : STRINGS.SIGN_IN}</FormTitle>
-        <FormSubtitle>{isFirstTime ? STRINGS.SIGN_UP_ADMIN_SUBTITLE_2 : STRINGS.SIGN_IN_SUBTITLE_2}</FormSubtitle>
+        <FormTitle>{formMode === FormMode.Register ? STRINGS.SIGN_UP_ADMIN_TITLE : STRINGS.SIGN_IN}</FormTitle>
+        <FormSubtitle>{formMode === FormMode.Register ? STRINGS.SIGN_UP_ADMIN_SUBTITLE_2 : STRINGS.SIGN_IN_SUBTITLE_2}</FormSubtitle>
       </FlexColumn>
 
       <ConstrainedWidth>
@@ -98,7 +104,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ isFirstTime, loading, error, onSubm
                 label={field.label}
                 required={field.required}
               />
-              {isFirstTime && field.name === 'email' && <Note status={StatusType.Default} message={STRINGS.SIGN_UP_ADMIN_DISCLAIMER} />}
+              {formMode === FormMode.Register && field.name === 'email' && <Note status={StatusType.Default} message={STRINGS.SIGN_UP_ADMIN_DISCLAIMER} />}
             </Fragment>
           ))}
         </FlexColumn>
@@ -106,7 +112,8 @@ const AuthForm: React.FC<AuthFormProps> = ({ isFirstTime, loading, error, onSubm
 
       <FlexColumn>
         {error && <ErrorText>{error}</ErrorText>}
-        <Button type='submit' loading={loading} label={isFirstTime ? STRINGS.SIGN_UP : STRINGS.SIGN_IN} />
+        <Button type='submit' fullWidth loading={loading} label={formMode === FormMode.Register ? STRINGS.SIGN_UP : STRINGS.SIGN_IN} />
+        {formMode === FormMode.Register && <Button type='button' variant={ButtonVariants.Text} size={ButtonSize.S} label='Already have an account?' onClick={() => setFormMode(FormMode.Login)} />}
       </FlexColumn>
     </FormContainer>
   );

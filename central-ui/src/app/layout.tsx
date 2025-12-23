@@ -2,7 +2,6 @@
 
 import React, { type PropsWithChildren } from 'react';
 import dynamic from 'next/dynamic';
-import { ROUTES } from '@/utils';
 import client from '@/lib/apollo-client';
 import { ApolloProvider } from '@apollo/client';
 import { useDarkMode } from '@odigos/ui-kit/store';
@@ -35,7 +34,7 @@ function RootLayout({ children }: PropsWithChildren) {
         <ThemeProvider>
           <ToastList />
           <ApolloProvider client={client}>
-            <ProtectedRoute signInPath={ROUTES.SIGN_IN}>{children}</ProtectedRoute>
+            <ProtectedRoute>{children}</ProtectedRoute>
           </ApolloProvider>
         </ThemeProvider>
       </body>

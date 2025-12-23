@@ -1,25 +1,29 @@
-import { type FC, type ReactNode, useEffect } from 'react';
-import { VERIFY_TOKEN } from '@/graphql';
+import { type FC, type ReactNode, useEffect, useMemo } from 'react';
+import { ROUTES } from '@/utils';
 import { useUserStore } from '@/store';
 import { GeneralResult } from '@/types';
+import { VERIFY_TOKEN } from '@/graphql';
 import { useMutation } from '@apollo/client';
 import { usePathname, useRouter } from 'next/navigation';
 import { CenterThis, FadeLoader } from '@odigos/ui-kit/components';
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  signInPath: string;
 }
 
-const ProtectedRoute: FC<ProtectedRouteProps> = ({ children, signInPath }) => {
+const ProtectedRoute: FC<ProtectedRouteProps> = ({ children }) => {
   const router = useRouter();
   const pathname = usePathname();
   const { accessToken, clearAuth } = useUserStore();
 
-  const isOnSignInPath = pathname === signInPath;
+  const isOnSignInPath = useMemo(() => pathname === ROUTES.SIGN_IN, [pathname]);
+
   const goToSignIn = () => {
     clearAuth();
-    router.push(signInPath);
+    router.push(ROUTES.SIGN_IN);
+  };
+  const goToConnections = () => {
+    router.push(ROUTES.CONNECTIONS);
   };
 
   const [verifyToken, { loading }] = useMutation<{ verifyToken: GeneralResult }, { token: string }>(VERIFY_TOKEN, {
@@ -30,20 +34,19 @@ const ProtectedRoute: FC<ProtectedRouteProps> = ({ children, signInPath }) => {
     onCompleted: (data) => {
       if (!data.verifyToken.success) {
         goToSignIn();
+      } else if (data.verifyToken.success && isOnSignInPath) {
+        goToConnections();
       }
     },
   });
 
   useEffect(() => {
-    if (isOnSignInPath) return;
-
-    // If signed in, verify the token
     if (accessToken) {
       verifyToken({ variables: { token: accessToken } });
-    } else {
+    } else if (!accessToken && !isOnSignInPath) {
       goToSignIn();
     }
-  }, [isOnSignInPath, accessToken]);
+  }, [accessToken, isOnSignInPath]);
 
   if (!isOnSignInPath && (loading || !accessToken)) {
     return (
