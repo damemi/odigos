@@ -13,12 +13,12 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-logr/logr"
-
 	"github.com/odigos-io/central-backend/graph"
 	"github.com/odigos-io/central-backend/internal/config"
 	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/keycloak"
 	"github.com/odigos-io/central-backend/internal/logger"
+	"github.com/odigos-io/central-backend/internal/metrics"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
 	"github.com/odigos-io/central-backend/internal/services"
 	"github.com/odigos-io/central-backend/internal/ssehub"
@@ -93,6 +93,9 @@ func main() {
 	}}))
 
 	router := newRouter(gqlHandler, wsServer, centralSSEHub)
+
+	// Initialize Prometheus metrics server (runs in background goroutine)
+	metrics.InitMetrics()
 
 	port := config.Config.ServerPort
 

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/odigos-io/central-backend/internal/consts"
+	"github.com/odigos-io/central-backend/internal/metrics"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
 )
 
@@ -95,6 +96,8 @@ func (h *Hub) SSEHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	const unknown = "unknown"
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -127,6 +130,18 @@ func (h *Hub) SSEHandler(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case b := <-ch:
+			// Extract cluster info from the event for metrics
+			var ev Event
+			eventClusterID, eventClusterName := unknown, unknown
+			if err := json.Unmarshal(b, &ev); err == nil {
+				if ev.ClusterID != "" {
+					eventClusterID = ev.ClusterID
+				}
+				if ev.ClusterName != "" {
+					eventClusterName = ev.ClusterName
+				}
+			}
+			metrics.SSEBroadcastRate.WithLabelValues(eventClusterID, eventClusterName).Inc()
 			fmt.Fprintf(w, "data: %s\n\n", string(b))
 			flusher.Flush()
 		case <-ticker.C:

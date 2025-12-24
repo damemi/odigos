@@ -11,6 +11,7 @@ import (
 type AppConfig struct {
 	RedisAddr            string
 	ServerPort           string
+	MetricsPort          string
 	CentralizedBackendID string
 }
 
@@ -20,6 +21,7 @@ func init() {
 	Config = AppConfig{
 		RedisAddr:            getRedisAddr(),
 		ServerPort:           GetEnv("SERVER_PORT", "8081"),
+		MetricsPort:          GetEnv("METRICS_PORT", "8082"),
 		CentralizedBackendID: utils.GenerateUUID(),
 	}
 }

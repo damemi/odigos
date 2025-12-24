@@ -16,6 +16,7 @@ import (
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/logger"
+	"github.com/odigos-io/central-backend/internal/metrics"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
 	"github.com/odigos-io/central-backend/internal/types"
 	"github.com/odigos-io/central-backend/internal/utils"
@@ -167,6 +168,8 @@ func (r *queryResolver) RemoteFetch(ctx context.Context, proxyID string, query s
 		responseChan <- response
 		return nil
 	})
+	metrics.RemoteFetchRequestsInProgress.Inc()
+	defer metrics.RemoteFetchRequestsInProgress.Dec()
 
 	// derive admin flag from the user token in context (ADMIN/OWNER)
 	isAdmin := false
