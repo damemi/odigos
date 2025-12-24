@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
+	"sync/atomic"
+	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/odigos-io/central-backend/internal/config"
@@ -22,11 +24,20 @@ func PublishJSON[T any](ctx context.Context, r *RedisClient, channel string, mes
 	return r.client.Publish(ctx, channel, b).Err()
 }
 
+// OnReconnectFunc is called when Redis reconnects after being unavailable.
+type OnReconnectFunc func(ctx context.Context)
+
 type RedisClient struct {
-	client *redis.Client
+	client         *redis.Client
+	onReconnect    OnReconnectFunc
+	lastResyncNano atomic.Int64
 }
 
+const resyncDebounceNanos = int64(5 * time.Second)
+
 func NewRedisClient(ctx context.Context) (*RedisClient, error) {
+	rc := &RedisClient{}
+
 	rdb := redis.NewClient(&redis.Options{
 		Addr: config.Config.RedisAddr,
 		// Increased pool size to handle many concurrent cluster connections
@@ -35,6 +46,24 @@ func NewRedisClient(ctx context.Context) (*RedisClient, error) {
 		MinIdleConns: 20,
 		// Retry on transient failures
 		MaxRetries: 3,
+		OnConnect: func(ctx context.Context, cn *redis.Conn) error {
+			// Debounce: Run the first reconnect and ignore the rest for 5 seconds.
+			now := time.Now().UnixNano()
+			last := rc.lastResyncNano.Load()
+			if now-last < resyncDebounceNanos {
+				return nil
+			}
+
+			if !rc.lastResyncNano.CompareAndSwap(last, now) {
+				return nil
+			}
+
+			logger.Log.Info("Redis reconnected, resyncing proxy keys")
+			if rc.onReconnect != nil {
+				rc.onReconnect(ctx)
+			}
+			return nil
+		},
 	})
 
 	_, err := rdb.Ping(ctx).Result()
@@ -42,9 +71,15 @@ func NewRedisClient(ctx context.Context) (*RedisClient, error) {
 		return nil, err
 	}
 
-	return &RedisClient{
-		client: rdb,
-	}, nil
+	rc.client = rdb
+
+	return rc, nil
+}
+
+// Sets a callback to be invoked when Redis reconnects after being unavailable.
+// Currently used to resync all proxy connections to Redis in case redis is lost.
+func (r *RedisClient) SetOnReconnect(fn OnReconnectFunc) {
+	r.onReconnect = fn
 }
 
 func (r *RedisClient) AddProxyConnection(ctx context.Context, proxyID, status string) error {

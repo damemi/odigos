@@ -30,6 +30,7 @@ type ProxyConnection struct {
 	PlatformName  string
 	PlatformType  consts.PlatformType
 	OdigosVersion string
+	ConnectedAt   int64
 }
 
 type WebSocketServer struct {
@@ -88,11 +89,13 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 	const maxMessageSize = 10 * 1024 * 1024 // 10 MB
 	conn.SetReadLimit(maxMessageSize)
 
+	now := time.Now().Unix()
 	ws.proxyConnections.Store(proxyID, &ProxyConnection{
 		Conn:          conn,
 		PlatformName:  platformName,
 		PlatformType:  platformType,
 		OdigosVersion: currentVersion,
+		ConnectedAt:   now,
 	})
 	defer ws.cleanupConnection(ctx, proxyID, conn)
 
@@ -101,7 +104,6 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	// Persist basic proxy metadata and initial timestamps
-	now := time.Now().Unix()
 	if err := ws.redisClient.SetProxyMetadata(ctx, proxyID, platformName, string(platformType), currentVersion); err != nil {
 		logger.Log.Warn("Failed to set proxy metadata", "proxyID", proxyID, "error", err)
 	}
@@ -430,4 +432,40 @@ func (ws *WebSocketServer) GetOdigosVersion(proxyID string) (string, bool) {
 		return "", false
 	}
 	return proxyConn.OdigosVersion, true
+}
+
+// In case redis is lost, we need to resync all proxy connections to Redis.
+func (ws *WebSocketServer) ResyncAllProxiesToRedis(ctx context.Context) {
+	var count int
+	ws.proxyConnections.Range(func(key, value interface{}) bool {
+		proxyID, ok := key.(string)
+		if !ok {
+			return true
+		}
+
+		proxyConn, ok := value.(*ProxyConnection)
+		if !ok {
+			return true
+		}
+
+		if err := ws.redisClient.AddProxyConnection(ctx, proxyID, string(consts.StatusConnected)); err != nil {
+			logger.Log.Error("Failed to resync proxy connection to Redis", "proxyID", proxyID, "error", err)
+			return true
+		}
+
+		if err := ws.redisClient.SetProxyMetadata(ctx, proxyID, proxyConn.PlatformName, string(proxyConn.PlatformType), proxyConn.OdigosVersion); err != nil {
+			logger.Log.Warn("Failed to resync proxy metadata", "proxyID", proxyID, "error", err)
+		}
+		if err := ws.redisClient.SetProxyConnectedAt(ctx, proxyID, proxyConn.ConnectedAt); err != nil {
+			logger.Log.Warn("Failed to resync proxy connectedAt", "proxyID", proxyID, "error", err)
+		}
+		if err := ws.redisClient.UpdateProxyLastSeen(ctx, proxyID, time.Now().Unix()); err != nil {
+			logger.Log.Warn("Failed to update proxy lastSeenAt during resync", "proxyID", proxyID, "error", err)
+		}
+
+		count++
+		return true
+	})
+
+	logger.Log.Info("Resynced all proxy connections to Redis", "count", count)
 }

@@ -78,6 +78,11 @@ func main() {
 	centralSSEHub.StartRedisSSEBroadcast(ctx)
 	wsServer := websocketserver.NewWebSocketServer(redisClient, centralSSEHub)
 
+	// Set up Redis reconnect callback to resync proxy keys after Redis restarts
+	redisClient.SetOnReconnect(func(ctx context.Context) {
+		wsServer.ResyncAllProxiesToRedis(ctx)
+	})
+
 	adminService := services.NewAdminService(adminCredentials)
 	userService := services.NewUserService(adminService)
 	teamService := services.NewTeamService(adminService)
