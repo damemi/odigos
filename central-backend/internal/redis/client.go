@@ -3,6 +3,7 @@ package redisclient
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"sync/atomic"
 	"time"
@@ -195,20 +196,42 @@ func (r *RedisClient) SubscribeToSSEBroadcast(ctx context.Context, channel strin
 	}
 }
 
-func (r *RedisClient) MarkAllConnectionsAsDisconnected(ctx context.Context) error {
-	pattern := consts.GetProxyConnectionsPattern()
-	keys, err := r.client.Keys(ctx, pattern).Result()
+// DeleteProxyKeysForBackend deletes all proxy-related keys for a specific backend ID
+func (r *RedisClient) DeleteProxyKeysForBackend(ctx context.Context, backendID string) error {
+	if backendID == "" {
+		return fmt.Errorf("backend ID cannot be empty")
+	}
+
+	// Delete proxy connection keys (proxy:{backendID}:*)
+	connectionPattern := fmt.Sprintf("proxy:%s:*", backendID)
+	connectionKeys, err := r.client.Keys(ctx, connectionPattern).Result()
 	if err != nil {
 		return err
 	}
 
-	for _, key := range keys {
-		err := r.client.Set(ctx, key, consts.StatusDisconnected, 0).Err()
-		if err != nil {
-			logger.Log.Error("Failed to remove connection from Redis", "key", key, "error", err)
-		}
+	// Delete proxy metadata keys (proxy-meta:{backendID}:*)
+	metadataPattern := fmt.Sprintf("proxy-meta:%s:*", backendID)
+	metadataKeys, err := r.client.Keys(ctx, metadataPattern).Result()
+	if err != nil {
+		return err
 	}
 
+	// Combine all keys to delete
+	allKeys := append(connectionKeys, metadataKeys...)
+
+	if len(allKeys) == 0 {
+		logger.Log.Info("No proxy keys found for backend", "backendID", backendID)
+		return nil
+	}
+
+	// Delete all found keys for this specific backend
+	err = r.client.Del(ctx, allKeys...).Err()
+	if err != nil {
+		logger.Log.Error("Failed to delete proxy keys for backend", "backendID", backendID, "connectionKeys", len(connectionKeys), "metadataKeys", len(metadataKeys), "error", err)
+		return err
+	}
+
+	logger.Log.Info("Deleted proxy keys for backend", "backendID", backendID, "connectionKeys", len(connectionKeys), "metadataKeys", len(metadataKeys), "total", len(allKeys))
 	return nil
 }
 
