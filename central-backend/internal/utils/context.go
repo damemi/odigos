@@ -105,3 +105,18 @@ func IsTokenExpired(token string) (bool, error) {
 
 	return time.Now().Unix() >= int64(exp), nil
 }
+
+func IsUserAdmin(ctx context.Context) bool {
+	isAdmin := false
+	if token := GetTokenFromContext(ctx); token != "" {
+		if roles, err := ExtractRolesFromToken(token); err == nil {
+			for _, role := range roles {
+				if strings.EqualFold(role, "ADMIN") || strings.EqualFold(role, "OWNER") {
+					isAdmin = true
+					break
+				}
+			}
+		}
+	}
+	return isAdmin
+}

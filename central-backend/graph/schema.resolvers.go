@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -161,8 +160,25 @@ func (r *mutationResolver) DeleteProxyConnection(ctx context.Context, proxyID st
 
 // RemoteFetch is the resolver for the remoteFetch field.
 func (r *queryResolver) RemoteFetch(ctx context.Context, proxyID string, query string, variables map[string]any) (string, error) {
-	responseChan := make(chan string, 1)
 	requestId := utils.GenerateUUID()
+	requestsChannel := consts.GetRequestsChannel(proxyID)
+	platformName := proxyID
+	if name, ok := r.WebSocketServer.GetPlatformName(proxyID); ok {
+		platformName = name
+	}
+
+	// Check if the proxy is subscribed to the requests channel before proceeding, this is to avoid sending requests to proxies that are not connected.
+	// Note: we don't need to check for subscribers in the response channel, because the central backend is the subscriber.
+	hasSubscribers, err := r.RedisClient.HasSubscribers(ctx, requestsChannel)
+	if err != nil {
+		logger.Log.Error("Failed to check channel subscribers", "proxyID", proxyID, "error", err)
+		return "", fmt.Errorf("failed to check cluster connectivity: %w", err)
+	}
+	if !hasSubscribers {
+		return "", fmt.Errorf("cluster '%s' is not connected", platformName)
+	}
+
+	responseChan := make(chan string, 1)
 	go r.RedisClient.SubscribeToResponses(ctx, proxyID, requestId, func(ctx context.Context, proxyID string, response string) error {
 		defer close(responseChan)
 		responseChan <- response
@@ -171,43 +187,28 @@ func (r *queryResolver) RemoteFetch(ctx context.Context, proxyID string, query s
 	metrics.RemoteFetchRequestsInProgress.Inc()
 	defer metrics.RemoteFetchRequestsInProgress.Dec()
 
-	// derive admin flag from the user token in context (ADMIN/OWNER)
-	isAdmin := false
-	if token := utils.GetTokenFromContext(ctx); token != "" {
-		if roles, err := utils.ExtractRolesFromToken(token); err == nil {
-			for _, role := range roles {
-				if strings.EqualFold(role, "ADMIN") || strings.EqualFold(role, "OWNER") {
-					isAdmin = true
-					break
-				}
-			}
-		}
-	}
-
-	requestPayload := types.GqlRequestPayload{
+	err = redisclient.PublishJSON(ctx, r.RedisClient, requestsChannel, types.GqlRequestPayload{
 		Query:     query,
 		RequestId: requestId,
 		Variables: variables,
-		IsAdmin:   isAdmin,
-	}
-	requestsChannel := consts.GetRequestsChannel(proxyID)
-	err := redisclient.PublishJSON(ctx, r.RedisClient, requestsChannel, requestPayload)
-
+		IsAdmin:   utils.IsUserAdmin(ctx),
+	})
 	if err != nil {
 		return "", err
 	}
 
 	select {
 	case response := <-responseChan:
+		// ✅ Success: The remote proxy responded. Return the response string.
 		return response, nil
+
 	case <-time.After(2 * time.Minute):
-		platformName := proxyID
-		if name, ok := r.WebSocketServer.GetPlatformName(proxyID); ok {
-			platformName = name
-		}
+		// ⏱️ Timeout: No response after 2 minutes. Logs an error with the human-readable platform name (if known) and returns a user-friendly error.
 		logger.Log.Error("Timeout waiting for response from proxy", "proxyID", proxyID, "platformName", platformName, "requestId", requestId)
-		return "", fmt.Errorf("request timed out: cluster '%s' did not respond.", platformName)
+		return "", fmt.Errorf("request timed out: cluster '%s' did not respond", platformName)
+
 	case <-ctx.Done():
+		// ❌ Context cancelled: The HTTP request was cancelled (e.g., client disconnected). Returns the context error.
 		return "", ctx.Err()
 	}
 }

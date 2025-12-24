@@ -220,6 +220,17 @@ func (r *RedisClient) Close() error {
 	return nil
 }
 
+// HasSubscribers checks if a Redis pub/sub channel has any active subscribers.
+// Uses the PUBSUB NUMSUB command to query subscriber count.
+func (r *RedisClient) HasSubscribers(ctx context.Context, channel string) (bool, error) {
+	result, err := r.client.PubSubNumSub(ctx, channel).Result()
+	if err != nil {
+		return false, err
+	}
+	count, exists := result[channel]
+	return exists && count > 0, nil
+}
+
 // ProxyMetadata holds durable proxy details and timestamps.
 type ProxyMetadata struct {
 	PlatformName  string
