@@ -34,6 +34,12 @@ runs:
       with:
         scope: odigos-io/enterprise-go-instrumentation
         identity: enterprise-ro
+    - name: Get ro Token for mysql ebpf
+      id: sts-ebpf-mysql
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: odigos-io/mysql-instrumentation
+        identity: enterprise-ro
     - name: Get ro Token for ebpf-core
       id: sts-ebpf-core
       uses: odigos-io/ci-core/sts@main
