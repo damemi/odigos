@@ -10,6 +10,30 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - name: Get ro Token for java ebpf
+      id: sts-ebpf-java
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: odigos-io/ebpf-java-instrumentation
+        identity: enterprise-ro
+    - name: Get ro Token for nodejs ebpf
+      id: sts-ebpf-nodejs
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: odigos-io/ebpf-nodejs-instrumentation
+        identity: enterprise-ro
+    - name: Get ro Token for python ebpf
+      id: sts-ebpf-python
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: odigos-io/ebpf-generic-instrumentation
+        identity: enterprise-ro
+    - name: Get ro Token for golang ebpf
+      id: sts-ebpf-golang
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: odigos-io/enterprise-go-instrumentation
+        identity: enterprise-ro
     - name: Get ro Token for ebpf-core
       id: sts-ebpf-core
       uses: odigos-io/ci-core/sts@main
