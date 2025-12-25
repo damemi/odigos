@@ -1,0 +1,81 @@
+name: Update Java eBPF Agents Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      java_ebpf_agents_version:
+        description: 'Version of the java ebpf agents to use (example: v0.11.0)'
+        required: true
+        type: string
+  repository_dispatch:
+    types:
+      - update-java-ebpf-agents-version
+
+permissions: read-all
+
+jobs:
+  update-version-and-create-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Get token for agent version updater workflow
+        id: sts
+        uses: odigos-io/ci-core/sts@main
+        with:
+          scope: odigos-io/odigos-enterprise
+          identity: agent-version-updater
+          output-git-config: 'false'
+
+      - name: Check out code
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+          token: ${{ steps.sts.outputs.GH_TOKEN }}
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            JAVA_EBPF_AGENTS_VERSION="${{ github.event.inputs.java_ebpf_agents_version }}"
+            echo "java_ebpf_agents_version=$JAVA_EBPF_AGENTS_VERSION" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            JAVA_EBPF_AGENTS_VERSION="${{ github.event.client_payload.java_ebpf_agents_version }}"
+            if [ -z "$JAVA_EBPF_AGENTS_VERSION" ]; then
+              echo "ERROR: java_ebpf_agents_version is required in client_payload"
+              exit 1
+            fi
+            echo "java_ebpf_agents_version=$JAVA_EBPF_AGENTS_VERSION" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update Java eBPF Agents Version
+        working-directory: ./odiglet
+        env:
+          JAVA_EBPF_AGENTS_VERSION: ${{ steps.version.outputs.java_ebpf_agents_version }}
+        run: |
+          make upgrade-java-ebpf-agents-version
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+        id: cpr
+        with:
+          token: ${{ steps.sts.outputs.GH_TOKEN }}
+          branch: update-java-ebpf-agents-version-${{ steps.version.outputs.java_ebpf_agents_version }}
+          title: "chore: update java ebpf agents version to ${{ steps.version.outputs.java_ebpf_agents_version }}"
+          body: |
+            This PR updates the java ebpf agents version in Dockerfile, debug.Dockerfile, and go.mod to ${{ steps.version.outputs.java_ebpf_agents_version }}.
+
+            **Triggered by:** ${{ github.event_name }}
+          commit-message: "chore: update java ebpf agents version to ${{ steps.version.outputs.java_ebpf_agents_version }}"
+          delete-branch: true
+          sign-commits: true
+
+      - name: Notify Slack
+        if: steps.cpr.outputs.pull-request-number != ''
+        uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
+        with: 
+          webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+          success-description: "Created PR to update Java eBPF agents version to ${{ steps.version.outputs.java_ebpf_agents_version }}. Please review and approve: ${{ steps.cpr.outputs.pull-request-url }}"
+          failure-description: "ERROR: Failed to create PR for updating Java eBPF agents version"
+          tag: ${{ steps.version.outputs.java_ebpf_agents_version }}

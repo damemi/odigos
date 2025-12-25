@@ -30,3 +30,28 @@ generate:
 		LIB_PATH=$$(go list -m -f '{{.Dir}}' $${lib%@*}) && \
 		make -C "$$LIB_PATH" generate; \
 	done
+
+.PHONY: upgrade-java-ebpf-agents-version
+upgrade-java-ebpf-agents-version:
+	@if [ -z "$(JAVA_EBPF_AGENTS_VERSION)" ]; then \
+		echo "ERROR: JAVA_EBPF_AGENTS_VERSION parameter is required. Usage: make upgrade-java-ebpf-agents-version JAVA_EBPF_AGENTS_VERSION=v0.10.13"; \
+		exit 1; \
+	fi
+	@echo "Updating java ebpf agents version to $(JAVA_EBPF_AGENTS_VERSION) in Dockerfile, debug.Dockerfile, and go.mod"
+	@if [ "$(shell uname)" = "Darwin" ]; then \
+		sed -i '' -E 's|java-ebpf-instrumentations:[0-9A-Za-z._-]+|java-ebpf-instrumentations:$(JAVA_EBPF_AGENTS_VERSION)|g' Dockerfile; \
+		sed -i '' -E 's|java-enterprise:[0-9A-Za-z._-]+|java-enterprise:$(JAVA_EBPF_AGENTS_VERSION)|g' Dockerfile; \
+		sed -i '' -E 's|java-ebpf-instrumentations:[0-9A-Za-z._-]+|java-ebpf-instrumentations:$(JAVA_EBPF_AGENTS_VERSION)|g' debug.Dockerfile; \
+		sed -i '' -E 's|java-enterprise:[0-9A-Za-z._-]+|java-enterprise:$(JAVA_EBPF_AGENTS_VERSION)|g' debug.Dockerfile; \
+	else \
+		sed -i -E 's|java-ebpf-instrumentations:[0-9A-Za-z._-]+|java-ebpf-instrumentations:$(JAVA_EBPF_AGENTS_VERSION)|g' Dockerfile; \
+		sed -i -E 's|java-enterprise:[0-9A-Za-z._-]+|java-enterprise:$(JAVA_EBPF_AGENTS_VERSION)|g' Dockerfile; \
+		sed -i -E 's|java-ebpf-instrumentations:[0-9A-Za-z._-]+|java-ebpf-instrumentations:$(JAVA_EBPF_AGENTS_VERSION)|g' debug.Dockerfile; \
+		sed -i -E 's|java-enterprise:[0-9A-Za-z._-]+|java-enterprise:$(JAVA_EBPF_AGENTS_VERSION)|g' debug.Dockerfile; \
+	fi
+	@echo "Updating Go module versions using go get"
+	@go get github.com/odigos-io/ebpf-java-instrumentation@$(JAVA_EBPF_AGENTS_VERSION)
+	@go get github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension@$(JAVA_EBPF_AGENTS_VERSION)
+	@echo "Running go mod tidy to clean up go.sum"
+	@go mod tidy
+	@echo "Successfully updated java ebpf agents version to $(JAVA_EBPF_AGENTS_VERSION) in Dockerfile, debug.Dockerfile, and go.mod"
