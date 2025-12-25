@@ -104,6 +104,6 @@ jobs:
         uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
         with:
           webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-          success-description: "Created PR to update Java eBPF agents version to ${{ steps.version.outputs.java_ebpf_agents_version }}. Please review and approve: ${{ steps.cpr.outputs.pull-request-url }}"
+          success-description: "Created PR to update Java eBPF agents version to ${{ steps.version.outputs.java_ebpf_agents_version }}. Please review and approve: ${{ steps.cpr.outputs.pull-request-url }}/changes"
           failure-description: "ERROR: Failed to create PR for updating Java eBPF agents version"
           tag: ${{ steps.version.outputs.java_ebpf_agents_version }}
