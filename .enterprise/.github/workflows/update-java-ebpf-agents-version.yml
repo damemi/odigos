@@ -20,14 +20,22 @@ jobs:
       id-token: write
 
     steps:
-      - name: Get ro tokens for dependencies
-        id: ro-sts
-        uses: ./.github/sts/dependencies_ro
+      - name: Get ro token for odigos-enterprise
+        id: sts-odigos-enterprise
+        uses: odigos-io/ci-core/sts@main
+        with:
+          scope: odigos-io/odigos-enterprise
+          identity: ro
 
       - name: Check out code
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           fetch-depth: 0
+          token: ${{ steps.sts-odigos-enterprise.outputs.GH_TOKEN }}
+
+      - name: Get ro tokens for dependencies
+        id: ro-sts
+        uses: ./.github/sts/dependencies_ro
 
       - name: Determine version
         id: version

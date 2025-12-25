@@ -10,12 +10,6 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - name: Get ro token for odigos-enterprise
-      id: sts-odigos-enterprise
-      uses: odigos-io/ci-core/sts@main
-      with:
-        scope: odigos-io/odigos-enterprise
-        identity: ro
     - name: Get ro Token for ebpf-core
       id: sts-ebpf-core
       uses: odigos-io/ci-core/sts@main
