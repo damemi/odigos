@@ -5,9 +5,9 @@ import { useNamespace } from '../namespaces';
 import { getSseTargetFromId } from '@odigos/ui-kit/functions';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
 import type { SourceConditions, SourceInstrumentInput } from '@/types';
-import { addConditionToSources, prepareNamespacePayloads, prepareSourcePayloads } from '@/utils';
-import { GET_SOURCE, GET_SOURCE_CONDITIONS, GET_SOURCE_LIBRARIES, GET_SOURCES, PERSIST_SOURCES, UPDATE_SOURCE } from '@/graphql';
-import { Crud, EntityTypes, StatusType, type SourceFormData, type Source, type WorkloadId, type InstrumentationInstanceComponent } from '@odigos/ui-kit/types';
+import { addAgentInjectionStatusToSources, addConditionToSources, prepareNamespacePayloads, prepareSourcePayloads } from '@/utils';
+import { GET_SOURCE, GET_SOURCE_CONDITIONS, GET_SOURCE_LIBRARIES, GET_SOURCES, GET_WORKLOADS, PERSIST_SOURCES, UPDATE_SOURCE } from '@/graphql';
+import { Crud, EntityTypes, StatusType, type SourceFormData, type Source, type WorkloadId, type InstrumentationInstanceComponent, Workload } from '@odigos/ui-kit/types';
 import {
   type NamespaceSelectionFormData,
   type SourceSelectionFormData,
@@ -56,6 +56,7 @@ export const useSourceCRUD = (): UseSourceCrud => {
   const { fetch: mutateUpdate } = useRemoteFetch<{ updateK8sActualSource: boolean }, { sourceId: WorkloadId; patchSourceRequest: SourceFormData }>(UPDATE_SOURCE);
   const { fetch: queryOtherConditions } = useRemoteFetch<{ sourceConditions: SourceConditions[] }>(GET_SOURCE_CONDITIONS);
   const { fetch: querySourceLibraries } = useRemoteFetch<{ instrumentationInstanceComponents: InstrumentationInstanceComponent[] }, WorkloadId>(GET_SOURCE_LIBRARIES);
+  const { fetch: queryWorkloads } = useRemoteFetch<{ workloads: Workload[] }, { filter?: WorkloadId }>(GET_WORKLOADS);
 
   const shouldFetchSource = (allowFetchDuringLoadTrue?: boolean) => {
     // We should not fetch if we are already fetching.
@@ -77,8 +78,7 @@ export const useSourceCRUD = (): UseSourceCrud => {
     if (toDeleteCount > 0 || toAddCount > 0) setInstrumentAwait(true);
   };
 
-  const fetchAllConditions = async () => {
-    const sourcesFromStore = useEntityStore.getState().sources;
+  const fetchAllConditions = async (allSources: Source[]) => {
     const { data } = await queryOtherConditions();
     const { sourceConditions } = data || {};
 
@@ -86,7 +86,25 @@ export const useSourceCRUD = (): UseSourceCrud => {
       const tempSources: Source[] = [];
 
       for (const item of sourceConditions) {
-        const updatedSource = addConditionToSources(item, sourcesFromStore);
+        const updatedSource = addConditionToSources(item, allSources);
+        if (updatedSource) tempSources.push(updatedSource);
+      }
+
+      addEntities(EntityTypes.Source, tempSources);
+    }
+  };
+
+  const fetchAllAgentInjectionStatuses = async (allSources: Source[]) => {
+    const reqPayload = allSources.length === 1 ? { filter: { namespace: allSources[0].namespace, kind: allSources[0].kind, name: allSources[0].name } } : undefined;
+
+    const { data } = await queryWorkloads(reqPayload);
+    const { workloads } = data || {};
+
+    if (workloads) {
+      const tempSources: Source[] = [];
+
+      for (const item of workloads) {
+        const updatedSource = addAgentInjectionStatusToSources(item, allSources);
         if (updatedSource) tempSources.push(updatedSource);
       }
 
@@ -104,7 +122,10 @@ export const useSourceCRUD = (): UseSourceCrud => {
     if (fetchedSources) {
       setEntities(EntityTypes.Source, fetchedSources);
       setEntitiesLoading(EntityTypes.Source, false);
-      if (fetchedSources.length) fetchAllConditions();
+      if (fetchedSources.length) {
+        fetchAllAgentInjectionStatuses(fetchedSources);
+        fetchAllConditions(fetchedSources);
+      }
     }
   };
 
@@ -116,6 +137,7 @@ export const useSourceCRUD = (): UseSourceCrud => {
 
     if (source) {
       addEntities(EntityTypes.Source, [source]);
+      fetchAllAgentInjectionStatuses([source]);
       return source;
     }
   };
