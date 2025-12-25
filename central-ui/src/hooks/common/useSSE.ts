@@ -1,10 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useProxy } from '../proxy';
-import { useStatusStore } from '@/store';
 import { getSSEEventsUrl } from '@/utils';
 import { useSourceCRUD } from '../sources';
 import { useDestinationCRUD } from '../destinations';
-import { DISPLAY_TITLES } from '@odigos/ui-kit/constants';
 import { EntityTypes, StatusType, WorkloadId } from '@odigos/ui-kit/types';
 import { getIdFromSseTarget, safeJsonParse } from '@odigos/ui-kit/functions';
 import { NotifyPayload, useInstrumentStore, useNotificationStore, usePendingStore } from '@odigos/ui-kit/store';
@@ -45,7 +43,6 @@ export const useSSE = () => {
   const { proxyID } = useProxy();
   const { setPendingItems } = usePendingStore();
   const { addNotification } = useNotificationStore();
-  const { title, setStatusStore } = useStatusStore();
   const { fetchDestinations } = useDestinationCRUD();
   const { fetchSources, fetchSourceById } = useSourceCRUD();
 
@@ -53,63 +50,24 @@ export const useSSE = () => {
   const maxRetries = 10;
 
   useEffect(() => {
-    // Don't connect if no cluster is selected - server requires clusterID
     if (!proxyID) {
       return;
     }
 
     const connect = () => {
-      if (!proxyID) {
-        setStatusStore({ status: StatusType.Default, title: '', message: '' });
-        return;
-      }
-
-      // If the current status in store is API Token related, we don't want to override it with the connected message
-      if (title !== DISPLAY_TITLES.API_TOKEN) {
-        setStatusStore({
-          status: StatusType.Default,
-          title: 'Connecting',
-          message: 'Connecting to the server',
-        });
-      }
-
       const es = new EventSource(getSSEEventsUrl(proxyID));
-
-      es.onopen = () => {
-        // If the current status in store is API Token related, we don't want to override it with the connected message
-        if (title !== DISPLAY_TITLES.API_TOKEN) {
-          setStatusStore({
-            status: StatusType.Success,
-            title: 'Connected',
-            message: 'Connected to the server',
-          });
-        }
-      };
 
       es.onerror = () => {
         es.close();
 
         if (retryCount.current < maxRetries) {
           retryCount.current += 1;
-          setStatusStore({
-            status: StatusType.Warning,
-            title: 'Disconnected',
-            message: `Disconnected from the server. Retrying connection (${retryCount.current})`,
-          });
+          console.warn(`Disconnected from the server. Retrying connection (${retryCount.current})`);
 
           // Retry connection with exponential backoff if below max retries
           setTimeout(() => connect(), Math.min(10000, 1000 * Math.pow(2, retryCount.current)));
         } else {
-          setStatusStore({
-            status: StatusType.Error,
-            title: `Connection lost on ${new Date().toLocaleString()}`,
-            message: 'Please reboot the application',
-          });
-          addNotification({
-            type: StatusType.Error,
-            title: 'Connection Error',
-            message: 'Connection to the server failed. Please reboot the application.',
-          });
+          console.error(`Connection lost on ${new Date().toLocaleString()}. Please reboot the application`);
         }
       };
 
