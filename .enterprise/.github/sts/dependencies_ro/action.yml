@@ -1,0 +1,30 @@
+name: "Dependencies RO STS"
+description: "Action to exchange OIDC tokens with STS for GitHub private repo access"
+
+outputs:
+  GIT_CONFIG_PATH:
+    description: "Path to git config file with credentials for accessing private repositories"
+    # all steps share the same config file
+    value: ${{ steps.sts-wasp-handshake.outputs.GIT_CONFIG_PATH }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Get ro token for odigos-enterprise
+      id: sts-odigos-enterprise
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: odigos-io/odigos-enterprise
+        identity: ro
+    - name: Get ro Token for ebpf-core
+      id: sts-ebpf-core
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: odigos-io/ebpf-core
+        identity: ro
+    - name: Get ro Token for wasp-handshake
+      id: sts-wasp-handshake
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: odigos-io/wasp-handshake
+        identity: ro
