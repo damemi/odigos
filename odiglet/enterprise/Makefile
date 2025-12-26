@@ -55,3 +55,23 @@ upgrade-java-ebpf-agents-version:
 	@echo "Running go mod tidy to clean up go.sum"
 	@go mod tidy
 	@echo "Successfully updated java ebpf agents version to $(JAVA_EBPF_AGENTS_VERSION) in Dockerfile, debug.Dockerfile, and go.mod"
+
+.PHONY: upgrade-nodejs-ebpf-agents-version
+upgrade-nodejs-ebpf-agents-version:
+	@if [ -z "$(NODEJS_EBPF_AGENTS_VERSION)" ]; then \
+		echo "ERROR: NODEJS_EBPF_AGENTS_VERSION parameter is required. Usage: make upgrade-nodejs-ebpf-agents-version NODEJS_EBPF_AGENTS_VERSION=v0.0.9"; \
+		exit 1; \
+	fi
+	@echo "Updating nodejs ebpf agents version to $(NODEJS_EBPF_AGENTS_VERSION) in Dockerfile, debug.Dockerfile, and go.mod"
+	@if [ "$(shell uname)" = "Darwin" ]; then \
+		sed -i '' -E 's|nodejs-enterprise:[0-9A-Za-z._-]+|nodejs-enterprise:$(NODEJS_EBPF_AGENTS_VERSION)|g' Dockerfile; \
+		sed -i '' -E 's|nodejs-enterprise:[0-9A-Za-z._-]+|nodejs-enterprise:$(NODEJS_EBPF_AGENTS_VERSION)|g' debug.Dockerfile; \
+	else \
+		sed -i -E 's|nodejs-enterprise:[0-9A-Za-z._-]+|nodejs-enterprise:$(NODEJS_EBPF_AGENTS_VERSION)|g' Dockerfile; \
+		sed -i -E 's|nodejs-enterprise:[0-9A-Za-z._-]+|nodejs-enterprise:$(NODEJS_EBPF_AGENTS_VERSION)|g' debug.Dockerfile; \
+	fi
+	@echo "Updating Go module versions using go get"
+	@go get github.com/odigos-io/ebpf-nodejs-instrumentation@$(NODEJS_EBPF_AGENTS_VERSION)
+	@echo "Running go mod tidy to clean up go.sum"
+	@go mod tidy
+	@echo "Successfully updated nodejs ebpf agents version to $(NODEJS_EBPF_AGENTS_VERSION) in Dockerfile, debug.Dockerfile, and go.mod"
