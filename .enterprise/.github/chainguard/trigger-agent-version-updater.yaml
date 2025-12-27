@@ -1,0 +1,5 @@
+issuer: https://token.actions.githubusercontent.com
+subject_pattern: repo:odigos-io/ebpf-nodejs-instrumentation:ref:.*
+
+permissions:
+  actions: write
