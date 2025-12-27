@@ -27,3 +27,6 @@ spec:
     spanMetrics:
       supported: true
       injectAsEnvVar: true
+  traces:
+    urlTemplatization:
+      supported: true
