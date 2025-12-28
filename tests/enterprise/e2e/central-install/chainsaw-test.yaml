@@ -1,0 +1,232 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: central-install
+spec:
+  description: This e2e test installs both Odigos OSS (odigos-test) and Odigos Central (odigos-central) via helm charts
+  skipDelete: true
+  steps:
+    - name: Prepare destination
+      try:
+        - apply:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/simple-trace-db-deployment.yaml
+
+    - name: Install - Simple Demo Apps
+      try:
+        - apply:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/install-simple-demo.yaml
+
+    - name: Install Odigos OSS
+      try:
+        - script:
+            timeout: 3m
+            content: |
+              # Install regular Odigos in odigos-test namespace
+              helm upgrade --install odigos \
+                ../../../../odigos/helm/odigos \
+                --create-namespace \
+                --namespace odigos-test \
+                --set image.tag=$IMAGE_TAG \
+                --set onPremToken=$ODIGOS_API_KEY \
+                --set clusterName=testing \
+                --set centralProxy.centralBackendURL="central-backend.odigos-central.svc.cluster.local:8081"
+
+              kubectl label namespace odigos-test odigos.io/system-object="true"
+
+    - name: Install Odigos Central
+      try:
+        - script:
+            timeout: 3m
+            content: |
+              # Install Odigos Central in odigos-central namespace
+              helm upgrade --install odigos-central \
+                ../../../../odigos/helm/odigos-central \
+                --create-namespace \
+                --namespace odigos-central \
+                --set image.tag=$IMAGE_TAG \
+                --set image.repository=registry.odigos.io/odigos-enterprise \
+                --set onPremToken=$ODIGOS_API_KEY \
+                --set auth.enabled=false \
+                --set keycloak.enabled=false \
+                --set auth.adminUsername=admin \
+                --set auth.adminPassword=admin
+
+              kubectl label namespace odigos-central odigos.io/system-object="true"
+
+    - name: Verify Odigos OSS Installation
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              echo "Starting Odigos OSS version check..."
+              export ACTUAL_VERSION=$(../../../../odigos/cli/odigos version --cluster)
+              echo "Actual Version: $ACTUAL_VERSION"
+              echo "Expected Version: $IMAGE_TAG"
+
+        - assert:
+            timeout: 6m
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/odigos-installed.yaml
+
+      catch:
+        - script:
+            content: |
+              echo "🔍 Listing all resources in namespace 'odigos-test'..."
+              kubectl get all -n odigos-test
+
+              echo "📝 Describing all resources in namespace 'odigos-test'..."
+              kubectl describe deployments -n odigos-test
+
+    - name: Verify Odigos Central Installation
+      try:
+        - assert:
+            timeout: 6m
+            file: ../../common/assert/odigos-central-installed.yaml
+
+      catch:
+        - script:
+            content: |
+              echo "🔍 Listing all resources in namespace 'odigos-central'..."
+              kubectl get all -n odigos-central
+
+              echo "📝 Describing deployments in namespace 'odigos-central'..."
+              kubectl describe deployments -n odigos-central
+
+    - name: Test Central GraphQL Integration By Instrumenting Namespace on the testing odigos installation
+      try:
+        - script:
+            timeout: 8m
+            content: |
+              ./test-central-graphql.sh
+
+    - name: Verify Node Odiglet label has been added
+      try:
+        - assert:
+            timeout: 30s
+            file: ../../common/assert/node-odiglet-label.yaml
+
+    - name: Assert Trace DB is up
+      try:
+        - assert:
+            timeout: 1m
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-trace-db-running.yaml
+
+    - name: Add Destination
+      try:
+        - apply:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/add-simple-trace-db-destination.yaml
+
+    - name: Assert - Simple Demo Apps Installed
+      try:
+        - assert:
+            timeout: 3m
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-installed.yaml
+
+    - name: Instrument Namespace
+      try:
+        - apply:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/instrument-default-ns.yaml
+
+    - name: Assert Runtime Detected
+      try:
+        - assert:
+            timeout: 3m
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-runtime-detected.yaml
+
+    - name: Odigos pipeline ready
+      try:
+        - assert:
+            timeout: 3m
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/pipeline-ready.yaml
+
+    - name: Simple-demo instrumented after destination added
+      try:
+        - assert:
+            timeout: 3m
+            file: ../../common/assert/instrumented-and-pipeline.yaml
+
+    - name: Generate Traffic
+      try:
+        - apply:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
+        - script:
+            timeout: 1m
+            content: |
+              kubectl wait --for=condition=complete job/$(kubectl get -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
+        - delete:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
+
+    - name: Wait For Trace
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              yaml=$(mktemp)
+              script=$(mktemp)
+              curl -sSL --retry 5 --retry-delay 5 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/wait-for-trace.yaml
+              curl -sSL --retry 5 --retry-delay 5 -o "$script" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh
+
+              while true; do
+                bash "$script" "$yaml"
+                if [ $? -eq 0 ]; then
+                  break
+                fi
+                sleep 1
+              done
+
+              rm -f "$yaml" "$script"
+      catch:
+        - script:
+            content: |
+              java_pod_name=$(kubectl get pods -n default -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | grep ^frontend)
+              kubectl logs $java_pod_name -n default
+
+    - name: Verify Trace - Context Propagation
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              yaml=$(mktemp)
+              script=$(mktemp)
+
+              curl -sSL --retry 5 --retry-delay 5 -o "$yaml" \
+                https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/context-propagation.yaml
+              curl -sSL --retry 5 --retry-delay 5 -o "$script" \
+                https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh
+
+              while true; do
+                bash "$script" "$yaml"
+                if [ $? -eq 0 ]; then
+                  break
+                fi
+                sleep 1
+              done
+
+              rm -f "$yaml" "$script"
+      catch:
+        - podLogs:
+            name: odiglet
+            namespace: odigos-test
+
+    - name: Verify Trace - Resource Attributes
+      try:
+        - script:
+            content: |
+              yaml=$(mktemp)
+              curl -sSL --retry 5 --retry-delay 5 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/resource-attributes.yaml
+              curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
+      catch:
+        - podLogs:
+            name: odiglet
+            namespace: odigos-test
+
+    - name: Verify Trace - Span Attributes
+      try:
+        - script:
+            content: |
+              yaml=$(mktemp)
+              curl -sSL --retry 5 --retry-delay 5 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/span-attributes.yaml
+              curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh | bash -s -- "$yaml"
+      catch:
+        - podLogs:
+            name: odiglet
+            namespace: odigos-system
