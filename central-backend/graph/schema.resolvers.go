@@ -175,6 +175,7 @@ func (r *queryResolver) RemoteFetch(ctx context.Context, proxyID string, query s
 		return "", fmt.Errorf("failed to check cluster connectivity: %w", err)
 	}
 	if !hasSubscribers {
+		logger.Log.Error("Cluster is not connected", "proxyID", proxyID)
 		return "", fmt.Errorf("cluster '%s' is not connected", platformName)
 	}
 

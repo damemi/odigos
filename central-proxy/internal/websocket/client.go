@@ -93,7 +93,12 @@ func (w *WebSocketClient) Send(data WebSocketMessageToCentralized) error {
 		return err
 	}
 
+	// Lock to ensure only one goroutine writes at a time.
+	// While coder/websocket is thread-safe, explicit locking makes concurrency obvious.
+	w.connMu.Lock()
 	err = w.conn.Write(w.ctx, websocket.MessageText, jsonData)
+	w.connMu.Unlock()
+
 	if err != nil {
 		logger.Log.Error("Failed to send WebSocket message",
 			"error", err,
@@ -164,7 +169,9 @@ func (w *WebSocketClient) Run(kubeClient *kube.Client) {
 				continue
 			}
 
-			w.handleMessage(message)
+			// Process each message concurrently to avoid blocking the read loop.
+			// This allows multiple GraphQL requests to be processed in parallel.
+			go w.handleMessage(message)
 		}
 	}
 }

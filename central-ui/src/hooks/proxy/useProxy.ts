@@ -51,10 +51,10 @@ export const useProxy = (): UseProxy => {
     }
   };
 
-  const clearProxy = (skipRedirect?: boolean) => {
+  const clearProxy = (opts?: { skipRedirect?: boolean }) => {
     resetStores();
     resetProxyStore();
-    if (!skipRedirect) router.push(ROUTES.CONNECTIONS);
+    if (!opts?.skipRedirect) router.push(ROUTES.CONNECTIONS);
   };
 
   // Reset proxyID if the connection is lost
@@ -69,7 +69,7 @@ export const useProxy = (): UseProxy => {
 
   // Reset proxyID if the pathname is connections
   useEffect(() => {
-    if (pathname === ROUTES.CONNECTIONS) clearProxy(true);
+    if (pathname === ROUTES.CONNECTIONS) clearProxy({ skipRedirect: true });
   }, [pathname]);
 
   return {

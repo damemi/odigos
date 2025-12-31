@@ -58,11 +58,12 @@ export const prepareSourcePayloads = (
         currentStreamName: currentStreamName || selectedStreamName,
       }));
 
-      const toDeleteFromStore: WorkloadId[] = [];
+      const toAddToStore: Source[] = [];
       const toUpdateInStore: Source[] = [];
+      const toDeleteFromStore: WorkloadId[] = [];
 
-      let toDeleteCount = 0;
       let toAddCount = 0;
+      let toDeleteCount = 0;
 
       for (const item of mappedItems) {
         const foundExisting = existingSources.find((src) => src.namespace === ns && src.name === item.name && src.kind === item.kind);
@@ -70,6 +71,8 @@ export const prepareSourcePayloads = (
         // Check if the instrumenting-source does not exist, this confirms an expected creation of the CRD
         if (item.selected && !foundExisting) {
           toAddCount++;
+          toAddToStore.push({ ...getWorkloadId(item), dataStreamNames: [selectedStreamName] });
+          // selected otelServiceName containers conditions
         }
         // Else the instrumenting-source should be updated in store to include the selected stream name
         else if (item.selected && foundExisting) {
@@ -88,8 +91,9 @@ export const prepareSourcePayloads = (
       }
 
       handleInstrumentationCount(toAddCount, toDeleteCount);
-      removeEntities(EntityTypes.Source, toDeleteFromStore);
+      addEntities(EntityTypes.Source, toAddToStore);
       addEntities(EntityTypes.Source, toUpdateInStore);
+      removeEntities(EntityTypes.Source, toDeleteFromStore);
 
       payload.sources.push(...mappedItems);
     }

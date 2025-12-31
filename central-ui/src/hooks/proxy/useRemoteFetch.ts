@@ -2,11 +2,11 @@ import { useCallback } from 'react';
 import { useProxy } from './useProxy';
 import { getVersionedQuery } from '@/utils';
 import { StatusType } from '@odigos/ui-kit/types';
+import { useNotificationStore } from '@odigos/ui-kit/store';
 import { REMOTE_FETCH, REMOTE_MULTI_FETCH } from '@/graphql';
 import { type ApolloError, useLazyQuery } from '@apollo/client';
 import type { ComputePlatform, VersionedRemoteFetch } from '@/types';
 import { safeJsonParse, trimVersion } from '@odigos/ui-kit/functions';
-import { useInstrumentStore, useNotificationStore } from '@odigos/ui-kit/store';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyObj = Record<string, any>;
@@ -59,15 +59,6 @@ const mapMultiFetchResult = <T>(result: MultiFetchResult<string>): MultiFetchRes
 export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRemoteFetch, connections: ComputePlatform[] = []): UseProxy<ResT, ReqT> => {
   const { proxyID, odigosVersion } = useProxy();
   const { addNotification } = useNotificationStore();
-  const { setInstrumentAwait, setInstrumentCount } = useInstrumentStore();
-
-  const resetStores = () => {
-    setInstrumentAwait(false);
-    setInstrumentCount('sourcesToCreate', 0);
-    setInstrumentCount('sourcesCreated', 0);
-    setInstrumentCount('sourcesToDelete', 0);
-    setInstrumentCount('sourcesDeleted', 0);
-  };
 
   const [remoteFetch, { data: cachedData, loading }] = useLazyQuery(REMOTE_FETCH);
   const [remoteMultiFetch, { data: cachedMultiData, loading: multiLoading }] = useLazyQuery(REMOTE_MULTI_FETCH);
@@ -98,9 +89,7 @@ export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRem
       });
 
       if (error || !data?.remoteFetch) {
-        resetStores();
         addNotification({ type: StatusType.Error, title: error?.name || 'API Error', message: error?.cause?.message || error?.message || 'Unknown error' });
-
         return EMPTY_RESPONSE_SINGLE;
       } else {
         return safeJsonParse(data?.remoteFetch, EMPTY_RESPONSE_SINGLE);

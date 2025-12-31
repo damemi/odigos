@@ -3,6 +3,7 @@ package websocketserver
 import (
 	"context"
 	"crypto/tls"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -21,6 +22,7 @@ type WebSocketClient struct {
 	ctx         context.Context
 	url         string
 	conn        *websocket.Conn
+	connMu      sync.Mutex // protects concurrent writes to conn
 	gqlClient   *graphql.GraphQLClient
 	proxyID     string
 	clusterName string
