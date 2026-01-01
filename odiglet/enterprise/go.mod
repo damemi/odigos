@@ -4,17 +4,17 @@ go 1.25.0
 
 require (
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.7
-	github.com/odigos-io/ebpf-java-instrumentation v0.11.1
-	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.11.1
+	github.com/odigos-io/ebpf-java-instrumentation v0.12.0-rc1
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v0.12.0-rc1
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.10
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
 	github.com/odigos-io/odigos/api v0.0.0
-	github.com/odigos-io/odigos/common v1.14.0-rc1.0.20251230151817-75d0af1f9e23
-	github.com/odigos-io/odigos/instrumentation v1.14.0-rc1.0.20251230151817-75d0af1f9e23
+	github.com/odigos-io/odigos/common v1.14.0-rc1.0.20260101142456-61f089e0877a
+	github.com/odigos-io/odigos/instrumentation v1.14.0-rc1.0.20260101142456-61f089e0877a
 	github.com/odigos-io/odigos/k8sutils v0.0.0
-	github.com/odigos-io/odigos/odiglet v1.14.0-rc1.0.20251230151817-75d0af1f9e23
+	github.com/odigos-io/odigos/odiglet v1.14.0-rc1.0.20260101142456-61f089e0877a
 	github.com/odigos-io/odigos/procdiscovery v0.0.0
 	github.com/odigos-io/wasp-handshake v0.0.0-20251125161815-ff3306f4add1
 	go.opentelemetry.io/auto v0.22.0
@@ -157,7 +157,7 @@ replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumen
 
 replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.14.0-rc1.0.20251230151817-75d0af1f9e23
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.14.0-rc1.0.20251230151817-75d0af1f9e23
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.14.0-rc1.0.20260101142456-61f089e0877a
 
 replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.14.0-rc1.0.20251230151817-75d0af1f9e23
 

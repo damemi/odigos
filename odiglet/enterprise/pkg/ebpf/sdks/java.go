@@ -50,6 +50,10 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 		opts = append(opts, auto.WithTraceIdSuffix(g.traceIdSuffix))
 	}
 
+	if settings.MetricsMap.HashMapOfMaps != nil {
+		opts = append(opts, auto.WithJVMMetrics(settings.MetricsMap.HashMapOfMaps))
+	}
+
 	inst, err := auto.NewInstrumentation(
 		ctx,
 		opts...,
