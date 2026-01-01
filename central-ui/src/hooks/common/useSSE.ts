@@ -160,8 +160,9 @@ export const useSSE = () => {
                 const statusMessage1 = 'Creating sources, please wait a moment...';
                 if (!priorityMessage && message !== statusMessage1) setStatusStore({ status: StatusType.Warning, message: statusMessage1, leftIcon: NotificationIcon });
 
-                const { sourcesCreated } = useInstrumentStore.getState();
+                const { sourcesToCreate, sourcesCreated } = useInstrumentStore.getState();
                 const totalCreated = sourcesCreated + Number(notification.message?.toString().replace(/[^\d]/g, '') || 0);
+                if (sourcesToCreate < totalCreated) setInstrumentCount('sourcesToCreate', totalCreated + 1);
                 setInstrumentCount('sourcesCreated', totalCreated);
 
                 handleEvent(OpenSourceEventTypes.ADDED, () => {
@@ -189,8 +190,9 @@ export const useSSE = () => {
               case OpenSourceEventTypes.DELETED:
                 if (!isAwaitingInstrumentation) setInstrumentAwait(true);
 
-                const { sourcesDeleted } = useInstrumentStore.getState();
+                const { sourcesToDelete, sourcesDeleted } = useInstrumentStore.getState();
                 const totalDeleted = sourcesDeleted + Number(notification.message?.toString().replace(/[^\d]/g, '') || 0);
+                if (sourcesToDelete < totalDeleted) setInstrumentCount('sourcesToDelete', totalDeleted + 1);
                 setInstrumentCount('sourcesDeleted', totalDeleted);
 
                 handleEvent(OpenSourceEventTypes.DELETED, () => {
