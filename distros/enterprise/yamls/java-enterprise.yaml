@@ -26,7 +26,7 @@ spec:
   agentMetrics:
     spanMetrics:
       supported: true
-      injectAsEnvVar: true
   traces:
     urlTemplatization:
       supported: true
+  configAsEnvVars: true
