@@ -87,6 +87,7 @@ func main() {
 	userService := services.NewUserService(adminService)
 	teamService := services.NewTeamService(adminService)
 	authService := services.NewAuthService(adminService, userService)
+	healthService := services.NewHealthService(redisClient, adminService, centralSSEHub)
 
 	gqlHandler := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
 		RedisClient:     redisClient,
@@ -95,6 +96,7 @@ func main() {
 		AuthService:     authService,
 		UserService:     userService,
 		TeamService:     teamService,
+		HealthService:   healthService,
 	}}))
 
 	router := newRouter(gqlHandler, wsServer, centralSSEHub)

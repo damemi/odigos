@@ -2,7 +2,10 @@ package services
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/odigos-io/central-backend/graph/model"
@@ -10,6 +13,7 @@ import (
 	"github.com/odigos-io/central-backend/internal/logger"
 	"github.com/odigos-io/central-backend/internal/types"
 	"github.com/odigos-io/central-backend/internal/utils"
+	"github.com/odigos-io/odigos/api/k8sconsts"
 )
 
 type AuthService struct {
@@ -68,6 +72,53 @@ func (svc *AuthService) VerifyToken(ctx context.Context, token string) (*model.G
 	}
 	return &model.GeneralResult{
 		Success: true,
+	}, nil
+}
+
+func extractJWTPayload(token string) (map[string]interface{}, error) {
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("invalid JWT token format")
+	}
+
+	// Decode the payload (second part of the JWT)
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode JWT payload: %w", err)
+	}
+
+	// Parse the payload as JSON
+	var payload map[string]interface{}
+	err = json.Unmarshal(payloadBytes, &payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JWT payload: %w", err)
+	}
+
+	return payload, nil
+}
+
+func (r *AuthService) APITokens(ctx context.Context) ([]*model.APIToken, error) {
+
+	token := os.Getenv(k8sconsts.OdigosOnpremTokenEnvName)
+	tokenPayload, err := extractJWTPayload(token)
+	if err != nil {
+		return nil, err
+	}
+
+	aud, _ := tokenPayload["aud"].(string)
+	// JWT iat/exp are numeric dates (seconds since epoch) and are commonly decoded as float64.
+	iatSec, _ := tokenPayload["iat"].(float64)
+	expSec, _ := tokenPayload["exp"].(float64)
+	issuedAtMs := int(int64(iatSec) * 1000)
+	expiresAtMs := int(int64(expSec) * 1000)
+
+	return []*model.APIToken{
+		{
+			Token:     token,
+			Name:      aud,
+			IssuedAt:  issuedAtMs,
+			ExpiresAt: expiresAtMs,
+		},
 	}, nil
 }
 

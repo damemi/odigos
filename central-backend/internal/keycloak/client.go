@@ -2,11 +2,13 @@ package keycloak
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 
+	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/consts"
 )
 
@@ -232,4 +234,39 @@ func createRoleIfNotExists(adminToken, keycloakHost, realm, roleName string) err
 
 	responseBody, _ := io.ReadAll(resp.Body)
 	return fmt.Errorf("unexpected status when checking role %s: %d, body: %s", roleName, resp.StatusCode, string(responseBody))
+}
+func (kc *KeycloakAdminService) HealthCheck(ctx context.Context) model.ServicesStatus {
+	// Use OIDC discovery endpoint - always available on port 8080 and indicates functional health
+	healthEndpoint := fmt.Sprintf("%s/realms/%s/.well-known/openid-configuration", kc.host, kc.realm)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthEndpoint, nil)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to create health check request: %v", err)
+		return model.ServicesStatus{
+			Status:  model.HealthStatusDown,
+			Message: &msg,
+		}
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		msg := fmt.Sprintf("Keycloak unreachable: %v", err)
+		return model.ServicesStatus{
+			Status:  model.HealthStatusDown,
+			Message: &msg,
+		}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return model.ServicesStatus{
+			Status:  model.HealthStatusHealthy,
+			Message: nil,
+		}
+	}
+
+	return model.ServicesStatus{
+		Status:  model.HealthStatusDown,
+		Message: nil,
+	}
 }

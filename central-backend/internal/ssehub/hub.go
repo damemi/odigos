@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/metrics"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
@@ -154,5 +155,22 @@ func (h *Hub) SSEHandler(w http.ResponseWriter, r *http.Request) {
 			close(ch)
 			return
 		}
+	}
+}
+
+// HealthCheck performs a health check on the SSE Hub
+func (h *Hub) HealthCheck(ctx context.Context) model.ServicesStatus {
+
+	if h == nil {
+		msg := "SSE Hub not initialized"
+		return model.ServicesStatus{
+			Status:  model.HealthStatusDown,
+			Message: &msg,
+		}
+	}
+
+	return model.ServicesStatus{
+		Status:  model.HealthStatusHealthy,
+		Message: nil,
 	}
 }

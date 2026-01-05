@@ -122,6 +122,34 @@ type RemoteFetchResult {
   error: String
 }
 
+type ServicesStatus {
+  status: HealthStatus!
+  message: String
+}
+
+enum HealthStatus {
+  HEALTHY
+  WARNING
+  DOWN
+}
+
+type BackendHealthStatus {
+  redisStatus: ServicesStatus!
+  keycloakStatus: ServicesStatus!
+  sseStatus: ServicesStatus!
+}
+
+type HealthQuery {
+  backend: BackendHealthStatus!
+}
+
+type ApiToken {
+  token: String!
+  name: String!
+  issuedAt: Int64!
+  expiresAt: Int64!
+}
+
 type Query {
   remoteFetch(proxyID: String!, query: String!, variables: JSON!): String!
   remoteMultiFetch(
@@ -130,13 +158,13 @@ type Query {
     variables: JSON!
   ): [RemoteFetchResult!]!
   systemConfig: SystemConfig!
-
+  apiTokens: [ApiToken!]!
   oidcSignInUrl(providerId: OidcProviderId!): String!
   signOutUrl(idToken: String): String
-
   computePlatforms: [ComputePlatform!]!
   users: [User!]!
   teams: [Team!]!
+  health: HealthQuery!
 }
 
 type Mutation {

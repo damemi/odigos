@@ -9,10 +9,15 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/config"
 	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/logger"
 	"github.com/odigos-io/central-backend/internal/types"
+)
+
+const (
+	SLOW_THRESHOLD_DURATION = 200 * time.Millisecond
 )
 
 // PublishJSON publishes a typed value as JSON without requiring interface{} at call sites.
@@ -241,6 +246,41 @@ func (r *RedisClient) Close() error {
 		return err
 	}
 	return nil
+}
+
+// HealthCheck performs a health check on the Redis connection
+func (r *RedisClient) HealthCheck(ctx context.Context) model.ServicesStatus {
+	if r.client == nil {
+		msg := "Redis client not initialized"
+		return model.ServicesStatus{
+			Status:  model.HealthStatusDown,
+			Message: &msg,
+		}
+	}
+	// Measure response time
+	start := time.Now()
+	_, err := r.client.Ping(ctx).Result()
+	duration := time.Since(start)
+
+	if err != nil {
+		msg := fmt.Sprintf("Redis ping failed: %v", err)
+		return model.ServicesStatus{
+			Status:  model.HealthStatusDown,
+			Message: &msg,
+		}
+	}
+
+	if duration > SLOW_THRESHOLD_DURATION {
+		msg := fmt.Sprintf("Redis is slow (response time: %dms)", duration.Milliseconds())
+		return model.ServicesStatus{
+			Status:  model.HealthStatusWarning,
+			Message: &msg,
+		}
+	}
+	return model.ServicesStatus{
+		Status:  model.HealthStatusHealthy,
+		Message: nil,
+	}
 }
 
 // HasSubscribers checks if a Redis pub/sub channel has any active subscribers.

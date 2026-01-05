@@ -47,6 +47,19 @@ type DirectiveRoot struct {
 }
 
 type ComplexityRoot struct {
+	ApiToken struct {
+		ExpiresAt func(childComplexity int) int
+		IssuedAt  func(childComplexity int) int
+		Name      func(childComplexity int) int
+		Token     func(childComplexity int) int
+	}
+
+	BackendHealthStatus struct {
+		KeycloakStatus func(childComplexity int) int
+		RedisStatus    func(childComplexity int) int
+		SseStatus      func(childComplexity int) int
+	}
+
 	ComputePlatform struct {
 		ConnectedAt   func(childComplexity int) int
 		ID            func(childComplexity int) int
@@ -70,6 +83,10 @@ type ComplexityRoot struct {
 		Success func(childComplexity int) int
 	}
 
+	HealthQuery struct {
+		Backend func(childComplexity int) int
+	}
+
 	Mutation struct {
 		CreateTeam             func(childComplexity int, input model.WriteTeamInput) int
 		CreateUser             func(childComplexity int, input model.WriteUserInput) int
@@ -86,7 +103,9 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
+		APITokens        func(childComplexity int) int
 		ComputePlatforms func(childComplexity int) int
+		Health           func(childComplexity int) int
 		OidcSignInURL    func(childComplexity int, providerID model.OidcProviderID) int
 		RemoteFetch      func(childComplexity int, proxyID string, query string, variables map[string]any) int
 		RemoteMultiFetch func(childComplexity int, proxyIDs []string, query string, variables map[string]any) int
@@ -101,6 +120,11 @@ type ComplexityRoot struct {
 		Error   func(childComplexity int) int
 		ProxyID func(childComplexity int) int
 		Success func(childComplexity int) int
+	}
+
+	ServicesStatus struct {
+		Message func(childComplexity int) int
+		Status  func(childComplexity int) int
 	}
 
 	SignInResult struct {
@@ -154,11 +178,13 @@ type QueryResolver interface {
 	RemoteFetch(ctx context.Context, proxyID string, query string, variables map[string]any) (string, error)
 	RemoteMultiFetch(ctx context.Context, proxyIDs []string, query string, variables map[string]any) ([]*model.RemoteFetchResult, error)
 	SystemConfig(ctx context.Context) (*model.SystemConfig, error)
+	APITokens(ctx context.Context) ([]*model.APIToken, error)
 	OidcSignInURL(ctx context.Context, providerID model.OidcProviderID) (string, error)
 	SignOutURL(ctx context.Context, idToken *string) (*string, error)
 	ComputePlatforms(ctx context.Context) ([]*model.ComputePlatform, error)
 	Users(ctx context.Context) ([]*model.User, error)
 	Teams(ctx context.Context) ([]*model.Team, error)
+	Health(ctx context.Context) (*model.HealthQuery, error)
 }
 
 type executableSchema struct {
@@ -179,6 +205,50 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	ec := executionContext{nil, e, 0, 0, nil}
 	_ = ec
 	switch typeName + "." + field {
+
+	case "ApiToken.expiresAt":
+		if e.complexity.ApiToken.ExpiresAt == nil {
+			break
+		}
+
+		return e.complexity.ApiToken.ExpiresAt(childComplexity), true
+	case "ApiToken.issuedAt":
+		if e.complexity.ApiToken.IssuedAt == nil {
+			break
+		}
+
+		return e.complexity.ApiToken.IssuedAt(childComplexity), true
+	case "ApiToken.name":
+		if e.complexity.ApiToken.Name == nil {
+			break
+		}
+
+		return e.complexity.ApiToken.Name(childComplexity), true
+	case "ApiToken.token":
+		if e.complexity.ApiToken.Token == nil {
+			break
+		}
+
+		return e.complexity.ApiToken.Token(childComplexity), true
+
+	case "BackendHealthStatus.keycloakStatus":
+		if e.complexity.BackendHealthStatus.KeycloakStatus == nil {
+			break
+		}
+
+		return e.complexity.BackendHealthStatus.KeycloakStatus(childComplexity), true
+	case "BackendHealthStatus.redisStatus":
+		if e.complexity.BackendHealthStatus.RedisStatus == nil {
+			break
+		}
+
+		return e.complexity.BackendHealthStatus.RedisStatus(childComplexity), true
+	case "BackendHealthStatus.sseStatus":
+		if e.complexity.BackendHealthStatus.SseStatus == nil {
+			break
+		}
+
+		return e.complexity.BackendHealthStatus.SseStatus(childComplexity), true
 
 	case "ComputePlatform.connectedAt":
 		if e.complexity.ComputePlatform.ConnectedAt == nil {
@@ -266,6 +336,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.GeneralResult.Success(childComplexity), true
+
+	case "HealthQuery.backend":
+		if e.complexity.HealthQuery.Backend == nil {
+			break
+		}
+
+		return e.complexity.HealthQuery.Backend(childComplexity), true
 
 	case "Mutation.createTeam":
 		if e.complexity.Mutation.CreateTeam == nil {
@@ -400,12 +477,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Mutation.VerifyToken(childComplexity, args["token"].(string)), true
 
+	case "Query.apiTokens":
+		if e.complexity.Query.APITokens == nil {
+			break
+		}
+
+		return e.complexity.Query.APITokens(childComplexity), true
 	case "Query.computePlatforms":
 		if e.complexity.Query.ComputePlatforms == nil {
 			break
 		}
 
 		return e.complexity.Query.ComputePlatforms(childComplexity), true
+	case "Query.health":
+		if e.complexity.Query.Health == nil {
+			break
+		}
+
+		return e.complexity.Query.Health(childComplexity), true
 	case "Query.oidcSignInUrl":
 		if e.complexity.Query.OidcSignInURL == nil {
 			break
@@ -493,6 +582,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.RemoteFetchResult.Success(childComplexity), true
+
+	case "ServicesStatus.message":
+		if e.complexity.ServicesStatus.Message == nil {
+			break
+		}
+
+		return e.complexity.ServicesStatus.Message(childComplexity), true
+	case "ServicesStatus.status":
+		if e.complexity.ServicesStatus.Status == nil {
+			break
+		}
+
+		return e.complexity.ServicesStatus.Status(childComplexity), true
 
 	case "SignInResult.accessToken":
 		if e.complexity.SignInResult.AccessToken == nil {
@@ -1035,6 +1137,227 @@ func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArg
 
 // region    **************************** field.gotpl *****************************
 
+func (ec *executionContext) _ApiToken_token(ctx context.Context, field graphql.CollectedField, obj *model.APIToken) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ApiToken_token,
+		func(ctx context.Context) (any, error) {
+			return obj.Token, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ApiToken_token(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ApiToken",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ApiToken_name(ctx context.Context, field graphql.CollectedField, obj *model.APIToken) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ApiToken_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ApiToken_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ApiToken",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ApiToken_issuedAt(ctx context.Context, field graphql.CollectedField, obj *model.APIToken) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ApiToken_issuedAt,
+		func(ctx context.Context) (any, error) {
+			return obj.IssuedAt, nil
+		},
+		nil,
+		ec.marshalNInt642int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ApiToken_issuedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ApiToken",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int64 does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ApiToken_expiresAt(ctx context.Context, field graphql.CollectedField, obj *model.APIToken) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ApiToken_expiresAt,
+		func(ctx context.Context) (any, error) {
+			return obj.ExpiresAt, nil
+		},
+		nil,
+		ec.marshalNInt642int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ApiToken_expiresAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ApiToken",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int64 does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BackendHealthStatus_redisStatus(ctx context.Context, field graphql.CollectedField, obj *model.BackendHealthStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BackendHealthStatus_redisStatus,
+		func(ctx context.Context) (any, error) {
+			return obj.RedisStatus, nil
+		},
+		nil,
+		ec.marshalNServicesStatus2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐServicesStatus,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BackendHealthStatus_redisStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BackendHealthStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "status":
+				return ec.fieldContext_ServicesStatus_status(ctx, field)
+			case "message":
+				return ec.fieldContext_ServicesStatus_message(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ServicesStatus", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BackendHealthStatus_keycloakStatus(ctx context.Context, field graphql.CollectedField, obj *model.BackendHealthStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BackendHealthStatus_keycloakStatus,
+		func(ctx context.Context) (any, error) {
+			return obj.KeycloakStatus, nil
+		},
+		nil,
+		ec.marshalNServicesStatus2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐServicesStatus,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BackendHealthStatus_keycloakStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BackendHealthStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "status":
+				return ec.fieldContext_ServicesStatus_status(ctx, field)
+			case "message":
+				return ec.fieldContext_ServicesStatus_message(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ServicesStatus", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BackendHealthStatus_sseStatus(ctx context.Context, field graphql.CollectedField, obj *model.BackendHealthStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_BackendHealthStatus_sseStatus,
+		func(ctx context.Context) (any, error) {
+			return obj.SseStatus, nil
+		},
+		nil,
+		ec.marshalNServicesStatus2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐServicesStatus,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_BackendHealthStatus_sseStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BackendHealthStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "status":
+				return ec.fieldContext_ServicesStatus_status(ctx, field)
+			case "message":
+				return ec.fieldContext_ServicesStatus_message(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ServicesStatus", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ComputePlatform_id(ctx context.Context, field graphql.CollectedField, obj *model.ComputePlatform) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1468,6 +1791,43 @@ func (ec *executionContext) fieldContext_GeneralResult_error(_ context.Context, 
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _HealthQuery_backend(ctx context.Context, field graphql.CollectedField, obj *model.HealthQuery) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_HealthQuery_backend,
+		func(ctx context.Context) (any, error) {
+			return obj.Backend, nil
+		},
+		nil,
+		ec.marshalNBackendHealthStatus2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐBackendHealthStatus,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_HealthQuery_backend(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "HealthQuery",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "redisStatus":
+				return ec.fieldContext_BackendHealthStatus_redisStatus(ctx, field)
+			case "keycloakStatus":
+				return ec.fieldContext_BackendHealthStatus_keycloakStatus(ctx, field)
+			case "sseStatus":
+				return ec.fieldContext_BackendHealthStatus_sseStatus(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type BackendHealthStatus", field.Name)
 		},
 	}
 	return fc, nil
@@ -2174,6 +2534,45 @@ func (ec *executionContext) fieldContext_Query_systemConfig(_ context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_apiTokens(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_apiTokens,
+		func(ctx context.Context) (any, error) {
+			return ec.resolvers.Query().APITokens(ctx)
+		},
+		nil,
+		ec.marshalNApiToken2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐAPITokenᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_apiTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "token":
+				return ec.fieldContext_ApiToken_token(ctx, field)
+			case "name":
+				return ec.fieldContext_ApiToken_name(ctx, field)
+			case "issuedAt":
+				return ec.fieldContext_ApiToken_issuedAt(ctx, field)
+			case "expiresAt":
+				return ec.fieldContext_ApiToken_expiresAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ApiToken", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_oidcSignInUrl(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -2395,6 +2794,39 @@ func (ec *executionContext) fieldContext_Query_teams(_ context.Context, field gr
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_health(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_health,
+		func(ctx context.Context) (any, error) {
+			return ec.resolvers.Query().Health(ctx)
+		},
+		nil,
+		ec.marshalNHealthQuery2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐHealthQuery,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_health(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "backend":
+				return ec.fieldContext_HealthQuery_backend(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type HealthQuery", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -2609,6 +3041,64 @@ func (ec *executionContext) _RemoteFetchResult_error(ctx context.Context, field 
 func (ec *executionContext) fieldContext_RemoteFetchResult_error(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "RemoteFetchResult",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ServicesStatus_status(ctx context.Context, field graphql.CollectedField, obj *model.ServicesStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ServicesStatus_status,
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		ec.marshalNHealthStatus2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐHealthStatus,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ServicesStatus_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ServicesStatus",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type HealthStatus does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ServicesStatus_message(ctx context.Context, field graphql.CollectedField, obj *model.ServicesStatus) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ServicesStatus_message,
+		func(ctx context.Context) (any, error) {
+			return obj.Message, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_ServicesStatus_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ServicesStatus",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -4975,6 +5465,109 @@ func (ec *executionContext) unmarshalInputWriteUserInput(ctx context.Context, ob
 
 // region    **************************** object.gotpl ****************************
 
+var apiTokenImplementors = []string{"ApiToken"}
+
+func (ec *executionContext) _ApiToken(ctx context.Context, sel ast.SelectionSet, obj *model.APIToken) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, apiTokenImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ApiToken")
+		case "token":
+			out.Values[i] = ec._ApiToken_token(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._ApiToken_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "issuedAt":
+			out.Values[i] = ec._ApiToken_issuedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expiresAt":
+			out.Values[i] = ec._ApiToken_expiresAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var backendHealthStatusImplementors = []string{"BackendHealthStatus"}
+
+func (ec *executionContext) _BackendHealthStatus(ctx context.Context, sel ast.SelectionSet, obj *model.BackendHealthStatus) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, backendHealthStatusImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("BackendHealthStatus")
+		case "redisStatus":
+			out.Values[i] = ec._BackendHealthStatus_redisStatus(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "keycloakStatus":
+			out.Values[i] = ec._BackendHealthStatus_keycloakStatus(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sseStatus":
+			out.Values[i] = ec._BackendHealthStatus_sseStatus(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var computePlatformImplementors = []string{"ComputePlatform"}
 
 func (ec *executionContext) _ComputePlatform(ctx context.Context, sel ast.SelectionSet, obj *model.ComputePlatform) graphql.Marshaler {
@@ -5112,6 +5705,45 @@ func (ec *executionContext) _GeneralResult(ctx context.Context, sel ast.Selectio
 			}
 		case "error":
 			out.Values[i] = ec._GeneralResult_error(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var healthQueryImplementors = []string{"HealthQuery"}
+
+func (ec *executionContext) _HealthQuery(ctx context.Context, sel ast.SelectionSet, obj *model.HealthQuery) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, healthQueryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("HealthQuery")
+		case "backend":
+			out.Values[i] = ec._HealthQuery_backend(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -5346,6 +5978,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "apiTokens":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_apiTokens(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "oidcSignInUrl":
 			field := field
 
@@ -5453,6 +6107,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "health":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_health(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "__type":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Query___type(ctx, field)
@@ -5509,6 +6185,47 @@ func (ec *executionContext) _RemoteFetchResult(ctx context.Context, sel ast.Sele
 			out.Values[i] = ec._RemoteFetchResult_data(ctx, field, obj)
 		case "error":
 			out.Values[i] = ec._RemoteFetchResult_error(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var servicesStatusImplementors = []string{"ServicesStatus"}
+
+func (ec *executionContext) _ServicesStatus(ctx context.Context, sel ast.SelectionSet, obj *model.ServicesStatus) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, servicesStatusImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ServicesStatus")
+		case "status":
+			out.Values[i] = ec._ServicesStatus_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "message":
+			out.Values[i] = ec._ServicesStatus_message(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -6091,6 +6808,70 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 
 // region    ***************************** type.gotpl *****************************
 
+func (ec *executionContext) marshalNApiToken2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐAPITokenᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.APIToken) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNApiToken2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐAPIToken(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNApiToken2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐAPIToken(ctx context.Context, sel ast.SelectionSet, v *model.APIToken) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ApiToken(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNBackendHealthStatus2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐBackendHealthStatus(ctx context.Context, sel ast.SelectionSet, v *model.BackendHealthStatus) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._BackendHealthStatus(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v any) (bool, error) {
 	res, err := graphql.UnmarshalBoolean(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -6189,9 +6970,49 @@ func (ec *executionContext) marshalNGeneralResult2ᚖgithubᚗcomᚋodigosᚑio�
 	return ec._GeneralResult(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNHealthQuery2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐHealthQuery(ctx context.Context, sel ast.SelectionSet, v model.HealthQuery) graphql.Marshaler {
+	return ec._HealthQuery(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNHealthQuery2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐHealthQuery(ctx context.Context, sel ast.SelectionSet, v *model.HealthQuery) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._HealthQuery(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNHealthStatus2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐHealthStatus(ctx context.Context, v any) (model.HealthStatus, error) {
+	var res model.HealthStatus
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNHealthStatus2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐHealthStatus(ctx context.Context, sel ast.SelectionSet, v model.HealthStatus) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) unmarshalNIdentityProviderInput2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐIdentityProviderInput(ctx context.Context, v any) (model.IdentityProviderInput, error) {
 	res, err := ec.unmarshalInputIdentityProviderInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNInt642int(ctx context.Context, v any) (int, error) {
+	res, err := graphql.UnmarshalInt(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNInt642int(ctx context.Context, sel ast.SelectionSet, v int) graphql.Marshaler {
+	_ = sel
+	res := graphql.MarshalInt(v)
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+	}
+	return res
 }
 
 func (ec *executionContext) unmarshalNJSON2map(ctx context.Context, v any) (map[string]any, error) {
@@ -6298,6 +7119,16 @@ func (ec *executionContext) unmarshalNRole2githubᚗcomᚋodigosᚑioᚋcentral�
 
 func (ec *executionContext) marshalNRole2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐRole(ctx context.Context, sel ast.SelectionSet, v model.Role) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNServicesStatus2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐServicesStatus(ctx context.Context, sel ast.SelectionSet, v *model.ServicesStatus) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ServicesStatus(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNSignInResult2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐSignInResult(ctx context.Context, sel ast.SelectionSet, v model.SignInResult) graphql.Marshaler {

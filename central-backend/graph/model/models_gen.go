@@ -9,6 +9,19 @@ import (
 	"strconv"
 )
 
+type APIToken struct {
+	Token     string `json:"token"`
+	Name      string `json:"name"`
+	IssuedAt  int    `json:"issuedAt"`
+	ExpiresAt int    `json:"expiresAt"`
+}
+
+type BackendHealthStatus struct {
+	RedisStatus    *ServicesStatus `json:"redisStatus"`
+	KeycloakStatus *ServicesStatus `json:"keycloakStatus"`
+	SseStatus      *ServicesStatus `json:"sseStatus"`
+}
+
 type ComputePlatform struct {
 	ID            string       `json:"id"`
 	Name          string       `json:"name"`
@@ -32,6 +45,10 @@ type GeneralResult struct {
 	Error   *string `json:"error,omitempty"`
 }
 
+type HealthQuery struct {
+	Backend *BackendHealthStatus `json:"backend"`
+}
+
 type IdentityProviderInput struct {
 	ProviderID   OidcProviderID `json:"providerId"`
 	ClientID     string         `json:"clientId"`
@@ -51,6 +68,11 @@ type RemoteFetchResult struct {
 	Success bool    `json:"success"`
 	Data    *string `json:"data,omitempty"`
 	Error   *string `json:"error,omitempty"`
+}
+
+type ServicesStatus struct {
+	Status  HealthStatus `json:"status"`
+	Message *string      `json:"message,omitempty"`
 }
 
 type SignInResult struct {
@@ -109,6 +131,63 @@ type WriteUserInput struct {
 	RemoveTeamIds            []*string `json:"removeTeamIds,omitempty"`
 	AddComputePlatformIds    []*string `json:"addComputePlatformIds,omitempty"`
 	RemoveComputePlatformIds []*string `json:"removeComputePlatformIds,omitempty"`
+}
+
+type HealthStatus string
+
+const (
+	HealthStatusHealthy HealthStatus = "HEALTHY"
+	HealthStatusWarning HealthStatus = "WARNING"
+	HealthStatusDown    HealthStatus = "DOWN"
+)
+
+var AllHealthStatus = []HealthStatus{
+	HealthStatusHealthy,
+	HealthStatusWarning,
+	HealthStatusDown,
+}
+
+func (e HealthStatus) IsValid() bool {
+	switch e {
+	case HealthStatusHealthy, HealthStatusWarning, HealthStatusDown:
+		return true
+	}
+	return false
+}
+
+func (e HealthStatus) String() string {
+	return string(e)
+}
+
+func (e *HealthStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = HealthStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid HealthStatus", str)
+	}
+	return nil
+}
+
+func (e HealthStatus) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *HealthStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e HealthStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 type OidcProviderID string
