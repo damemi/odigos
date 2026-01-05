@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"sync/atomic"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -34,12 +33,9 @@ func PublishJSON[T any](ctx context.Context, r *RedisClient, channel string, mes
 type OnReconnectFunc func(ctx context.Context)
 
 type RedisClient struct {
-	client         *redis.Client
-	onReconnect    OnReconnectFunc
-	lastResyncNano atomic.Int64
+	client      *redis.Client
+	onReconnect OnReconnectFunc
 }
-
-const resyncDebounceNanos = int64(5 * time.Second)
 
 func NewRedisClient(ctx context.Context) (*RedisClient, error) {
 	rc := &RedisClient{}
@@ -52,24 +48,6 @@ func NewRedisClient(ctx context.Context) (*RedisClient, error) {
 		MinIdleConns: 20,
 		// Retry on transient failures
 		MaxRetries: 3,
-		OnConnect: func(ctx context.Context, cn *redis.Conn) error {
-			// Debounce: Run the first reconnect and ignore the rest for 5 seconds.
-			now := time.Now().UnixNano()
-			last := rc.lastResyncNano.Load()
-			if now-last < resyncDebounceNanos {
-				return nil
-			}
-
-			if !rc.lastResyncNano.CompareAndSwap(last, now) {
-				return nil
-			}
-
-			logger.Log.Info("Redis reconnected, resyncing proxy keys")
-			if rc.onReconnect != nil {
-				rc.onReconnect(ctx)
-			}
-			return nil
-		},
 	})
 
 	_, err := rdb.Ping(ctx).Result()
@@ -80,6 +58,37 @@ func NewRedisClient(ctx context.Context) (*RedisClient, error) {
 	rc.client = rdb
 
 	return rc, nil
+}
+
+// StartHealthMonitor runs a background goroutine that monitors Redis health.
+// It calls onReconnect only when Redis transitions from unhealthy to healthy,
+// which indicates a Redis restart requiring data resync.
+func (r *RedisClient) StartHealthMonitor(ctx context.Context, interval time.Duration) {
+	wasHealthy := true
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			logger.Log.Info("Stopping Redis health monitor")
+			return
+		case <-ticker.C:
+			_, err := r.client.Ping(ctx).Result()
+			isHealthy := err == nil
+
+			if !wasHealthy && isHealthy {
+				logger.Log.Info("Redis reconnected after failure, resyncing proxy keys")
+				if r.onReconnect != nil {
+					r.onReconnect(ctx)
+				}
+			} else if wasHealthy && !isHealthy {
+				logger.Log.Warn("Redis connection lost", "error", err)
+			}
+
+			wasHealthy = isHealthy
+		}
+	}
 }
 
 // Sets a callback to be invoked when Redis reconnects after being unavailable.
