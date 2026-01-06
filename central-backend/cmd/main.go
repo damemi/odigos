@@ -83,10 +83,6 @@ func main() {
 		wsServer.ResyncAllProxiesToRedis(ctx)
 	})
 
-	// Start monitoring Redis health - only triggers resync on actual Redis failure recovery
-	// Using 3 second interval to detect quick restarts while keeping overhead minimal
-	go redisClient.StartHealthMonitor(ctx, 3*time.Second)
-
 	adminService := services.NewAdminService(adminCredentials)
 	userService := services.NewUserService(adminService)
 	teamService := services.NewTeamService(adminService)
