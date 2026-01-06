@@ -1,10 +1,10 @@
 import { type FC, type ReactNode, useEffect, useMemo } from 'react';
 import { ROUTES } from '@/utils';
 import { useUserStore } from '@/store';
-import { GeneralResult } from '@/types';
 import { VERIFY_TOKEN } from '@/graphql';
 import { useMutation } from '@apollo/client';
 import { usePathname, useRouter } from 'next/navigation';
+import { type GeneralResult, SignInStatus } from '@/types';
 import { CenterThis, FadeLoader } from '@odigos/ui-kit/components';
 
 interface ProtectedRouteProps {
@@ -14,13 +14,18 @@ interface ProtectedRouteProps {
 const ProtectedRoute: FC<ProtectedRouteProps> = ({ children }) => {
   const router = useRouter();
   const pathname = usePathname();
-  const { accessToken, clearAuth } = useUserStore();
+  const { accessToken, status, clearAuth } = useUserStore();
 
   const isOnSignInPath = useMemo(() => pathname === ROUTES.SIGN_IN, [pathname]);
+  const isNeedPasswordUpdate = useMemo(() => status === SignInStatus.PASSWORD_UPDATE_REQUIRED, [status]);
+  const isOnUpdatePasswordPath = useMemo(() => pathname === ROUTES.UPDATE_YOUR_PASSWORD, [pathname]);
 
   const goToSignIn = () => {
     clearAuth();
     router.push(ROUTES.SIGN_IN);
+  };
+  const goToUpdatePassword = () => {
+    router.push(ROUTES.UPDATE_YOUR_PASSWORD);
   };
   const goToConnections = () => {
     router.push(ROUTES.CONNECTIONS);
@@ -34,21 +39,25 @@ const ProtectedRoute: FC<ProtectedRouteProps> = ({ children }) => {
     onCompleted: (data) => {
       if (!data.verifyToken.success) {
         goToSignIn();
-      } else if (data.verifyToken.success && isOnSignInPath) {
-        goToConnections();
+      }
+
+      if (data.verifyToken.success) {
+        if (isNeedPasswordUpdate && !isOnUpdatePasswordPath) {
+          goToUpdatePassword();
+        }
+        if (isOnSignInPath) {
+          goToConnections();
+        }
       }
     },
   });
 
   useEffect(() => {
-    if (accessToken) {
-      verifyToken({ variables: { token: accessToken } });
-    } else if (!accessToken && !isOnSignInPath) {
-      goToSignIn();
-    }
+    if (!accessToken && !isOnSignInPath) goToSignIn();
+    if (accessToken) verifyToken({ variables: { token: accessToken } });
   }, [accessToken, isOnSignInPath]);
 
-  if (!isOnSignInPath && (loading || !accessToken)) {
+  if (!isOnSignInPath && !isOnUpdatePasswordPath && (loading || !accessToken)) {
     return (
       <CenterThis style={{ height: '100vh' }}>
         <FadeLoader scale={2} />

@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '@/utils';
 import { OidcProviderId } from '@/types';
-import { User, Role } from '@/types/auth';
 import { persist } from 'zustand/middleware';
+import { User, Role, SignInStatus } from '@/types/auth';
 
 interface UserStoreState {
   authProviderId: OidcProviderId | null;
@@ -10,6 +10,7 @@ interface UserStoreState {
   idToken: string | null; // for logout
   accessToken: string | null; // for backend auth
   user: User | null;
+  status: SignInStatus | null;
 
   lastAuthEmail: string | null;
   isAdmin: boolean;
@@ -17,7 +18,7 @@ interface UserStoreState {
 
 interface UserStoreActions {
   setAuthProviderId: (providerId: UserStoreState['authProviderId']) => void;
-  setAuth: (payload: { idToken: UserStoreState['idToken']; accessToken: UserStoreState['accessToken']; user: UserStoreState['user'] }) => void;
+  setAuth: (payload: Pick<UserStoreState, 'idToken' | 'accessToken' | 'user' | 'status'>) => void;
   clearAuth: () => void;
   updateUser: (payload: Partial<User>) => void;
   setLastAuthEmail: (email: string | null) => void;
@@ -30,6 +31,7 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
       idToken: null,
       accessToken: null,
       user: null,
+      status: null,
       isAdmin: false,
       lastAuthEmail: null,
 
@@ -38,11 +40,12 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
           authProviderId: providerId,
         }),
 
-      setAuth: ({ idToken, accessToken, user }) =>
+      setAuth: ({ idToken, accessToken, user, status }) =>
         set({
           idToken,
           accessToken,
           user,
+          status,
           isAdmin: user?.role && [Role.ADMIN, Role.OWNER].includes(user.role),
         }),
 
@@ -52,7 +55,9 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
           idToken: null,
           accessToken: null,
           user: null,
+          status: null,
           isAdmin: false,
+          lastAuthEmail: null,
         }),
 
       updateUser: (updates) => {
@@ -79,6 +84,7 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
         idToken: state.idToken,
         accessToken: state.accessToken,
         user: state.user,
+        status: state.status,
         isAdmin: state.isAdmin,
         lastAuthEmail: state.lastAuthEmail,
       }),

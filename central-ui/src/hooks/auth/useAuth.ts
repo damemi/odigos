@@ -30,6 +30,7 @@ export const useAuth = () => {
         idToken: idToken || '',
         accessToken: accessToken || '',
         user: user || null,
+        status,
       });
 
       switch (status) {
@@ -55,7 +56,6 @@ export const useAuth = () => {
 
       // Clear local auth state first
       clearAuth();
-      setLastAuthEmail(null);
 
       if (url) {
         // Use window.location.href for full browser navigation to Keycloak logout endpoint
@@ -78,6 +78,7 @@ export const useAuth = () => {
         idToken: idToken || '',
         accessToken: accessToken || '',
         user: user || null,
+        status: SignInStatus.SUCCESS,
       });
 
       setLastAuthEmail(null);
@@ -113,11 +114,6 @@ export const useAuth = () => {
     return user;
   }, []);
 
-  const getLastAuthEmail: GetLastAuthEmail = useCallback(() => {
-    const { lastAuthEmail } = useUserStore.getState();
-    return lastAuthEmail;
-  }, []);
-
   const handleSetInitialPassword: HandleSetInitialPassword = async (email, password) => {
     setError(null);
     try {
@@ -131,7 +127,6 @@ export const useAuth = () => {
     signIn: handleSignIn,
     signOut: handleSignOut,
     getCurrentUser,
-    getLastAuthEmail,
     setInitialPassword: handleSetInitialPassword,
     systemConfigLoading,
     systemConfig: systemConfigData?.systemConfig,
