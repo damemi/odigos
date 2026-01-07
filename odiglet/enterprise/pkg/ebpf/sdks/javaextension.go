@@ -48,6 +48,10 @@ func (p *JavaExtensionInstrumentationFactoryEnterprise) CreateInstrumentation(ct
 		opts = append(opts, auto.WithEventsBuffer(settings.TracesMap.Map, settings.TracesMap.ExternalReader))
 	}
 
+	if settings.MetricsMap.HashMapOfMaps != nil {
+		opts = append(opts, auto.WithJVMMetrics(settings.MetricsMap.HashMapOfMaps))
+	}
+
 	inst, err := auto.NewInstrumentation(ctx, opts...)
 	if err != nil {
 		log.Logger.Error(err, "instrumentation setup failed")
