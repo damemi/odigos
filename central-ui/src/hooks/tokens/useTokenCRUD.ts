@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useConfig } from '../config';
 import { useRemoteFetch } from '../proxy';
 import { GET_TOKENS, UPDATE_TOKEN } from '@/graphql';
@@ -32,9 +32,11 @@ export const useTokenCRUD = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const tokens = useMemo(() => data?.computePlatform?.apiTokens || [], [data?.computePlatform?.apiTokens?.length]);
+
   return {
     loading,
-    tokens: data?.computePlatform?.apiTokens || [],
+    tokens,
     updateToken,
   };
 };
