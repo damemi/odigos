@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       agents_category: 
-        description: "Category of the agents to update (supported values: java-ebpf, nodejs). agents are many times updated together (java-enterprise and java-ebpf-instrumentations, nodejs-enterprise and nodejs-community)."
+        description: "Category of the agents to update (supported values: java-ebpf, nodejs)"
         required: true
         type: string
       new_agent_version:
