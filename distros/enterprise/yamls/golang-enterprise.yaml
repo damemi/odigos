@@ -13,6 +13,9 @@ spec:
     This distribution is for Golang applications using Odigos enterprise version, with ebpf-based SDK and instrumentation libraries, additional features and libraries coverage.
   environmentVariables:
     staticVariables:
+    # The GODEBUG env var is not required after https://github.com/odigos-io/enterprise-go-instrumentation/pull/1839
+    # keeping it here for now for migration purposes, but can be removed once we have more confidence in the no restart feature.
+    # We will add this to new pods that should be instrumented but current no-restarted pods will work without it.
       - envName: GODEBUG
         envValue: 'tracebackancestors=5'
   # Device not needed in go, but adding the device mount here ensures Go pods are scheduled only on nodes with the Odiglet installed,
@@ -21,3 +24,4 @@ spec:
     device: 'instrumentation.odigos.io/generic'
     waspSupported: true
     k8sAttrsViaEnvVars: true
+    noRestartRequired: true
