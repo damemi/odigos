@@ -5,6 +5,7 @@ export * from './config';
 export * from './data-streams';
 export * from './describe';
 export * from './destinations';
+export * from './health';
 export * from './instrumentation-rules';
 export * from './metrics';
 export * from './namespaces';

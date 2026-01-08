@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useProxy } from '../proxy';
-import { useStatusStore } from '@/store';
+import { StatusKeys, useStatusStore } from '@/store';
 import { getSSEEventsUrl } from '@/utils';
 import { useSourceCRUD } from '../sources';
 import { StatusType } from '@odigos/ui-kit/types';
@@ -51,10 +51,7 @@ export const useSSE = () => {
   const { fetchDestinations } = useDestinationCRUD();
   const { setInstrumentAwait, setInstrumentCount } = useInstrumentStore();
 
-  const clearStatusMessage = () => {
-    const { priorityMessage } = useStatusStore.getState();
-    if (!priorityMessage) setStatusStore({ status: StatusType.Default, message: '', leftIcon: undefined });
-  };
+  const clearStatusMessage = () => setStatusStore(StatusKeys.Instrumentation, undefined);
 
   const maxRetries = 10;
   const retryCount = useRef(0);
@@ -151,14 +148,12 @@ export const useSSE = () => {
           // Handle specific CRD types
           if (isSource) {
             const { isAwaitingInstrumentation } = useInstrumentStore.getState();
-            const { priorityMessage, message } = useStatusStore.getState();
 
             switch (notification.title) {
               case OpenSourceEventTypes.ADDED:
                 if (!isAwaitingInstrumentation) setInstrumentAwait(true);
 
-                const statusMessage1 = 'Creating sources, please wait a moment...';
-                if (!priorityMessage && message !== statusMessage1) setStatusStore({ status: StatusType.Warning, message: statusMessage1, leftIcon: NotificationIcon });
+                setStatusStore(StatusKeys.Instrumentation, { status: StatusType.Warning, label: 'Creating sources, please wait a moment...', leftIcon: NotificationIcon });
 
                 const { sourcesToCreate, sourcesCreated } = useInstrumentStore.getState();
                 const totalCreated = sourcesCreated + Number(notification.message?.toString().replace(/[^\d]/g, '') || 0);
@@ -166,8 +161,7 @@ export const useSSE = () => {
                 setInstrumentCount('sourcesCreated', totalCreated);
 
                 handleEvent(OpenSourceEventTypes.ADDED, () => {
-                  const statusMessage2 = 'Instrumenting sources, please wait a moment...';
-                  if (!priorityMessage && message !== statusMessage2) setStatusStore({ status: StatusType.Warning, message: statusMessage2, leftIcon: NotificationIcon });
+                  setStatusStore(StatusKeys.Instrumentation, { status: StatusType.Warning, label: 'Instrumenting sources, please wait a moment...', leftIcon: NotificationIcon });
                   addNotification({ type: StatusType.Success, title: OpenSourceEventTypes.ADDED, message: `Successfully created ${totalCreated} sources` });
 
                   fetchSources();
