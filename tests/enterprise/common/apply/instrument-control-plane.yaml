@@ -1,0 +1,10 @@
+apiVersion: odigos.io/v1alpha1
+kind: Source
+metadata:
+  name: control-plane-instrumentation
+  namespace: kube-system
+spec:
+  workload:
+    kind: Namespace
+    name: kube-system
+    namespace: kube-system

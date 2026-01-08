@@ -166,6 +166,18 @@ jobs:
             kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
             wasp-enabled: true
             test-scenario: "helm-chart"
+          # control plane instrumentation. we test from k8s version 1.29
+          # we suppose to support go versions >=1.17 which is the case in k8s v1.25
+          # etcd go version satisfies the condition on k8s versions >= 1.26
+          # some go instrumentation features like stripped bin support with interfaces extraction
+          # and grpc context propagation do not work well enough in older go versions.
+          # Hence we set the min version to 1.29, this can be improved on the instrumentation side.
+          - kube-version: "1.29"
+            kind-image: "kindest/node:v1.29.0@sha256:eaa1450915475849a73a9227b8f201df25e55e268e5d619312131292e324d570"
+            test-scenario: "control-plane"
+          - kube-version: "1.32"
+            kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
+            test-scenario: "control-plane"
     steps:
       # we need the enterprise and oss to be siblings.
       # when using the default path and try to checkout the oss to be sibling, we get this:
@@ -367,7 +379,6 @@ jobs:
           chainsaw test odigos-enterprise/tests/e2e/${{ matrix.test-scenario }} --values - <<EOF
           k8sMinorVersion: ${MINOR_VERSION}
           EOF
-
 
       - name: Cluster diagnostics
         if: failure()

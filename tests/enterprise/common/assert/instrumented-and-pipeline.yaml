@@ -178,7 +178,7 @@ spec:
       (env[?name == 'OTEL_SERVICE_NAME']):
         - value: currency
       (env[?name == 'OTEL_RESOURCE_ATTRIBUTES']):
-        - "(regex_match('^k8s\\.pod\\.name=\\$\\(ODIGOS_POD_NAME\\),k8s\\.container\\.name=currency,k8s\\.namespace\\.name=default,k8s\\.deployment\\.name=currency,odigos\\.workload\\.kind=Deployment,k8s\\.replicaset\\.name=currency-[A-Za-z0-9]+,k8s\\.replicaset\\.uid=[A-Za-z0-9-]+$',value))": true
+        - "(regex_match('^k8s\\.pod\\.name=\\$\\(ODIGOS_POD_NAME\\),k8s\\.container\\.name=currency,k8s\\.namespace\\.name=default,k8s\\.deployment\\.name=currency,odigos\\.workload\\.kind=Deployment,odigos\\.workload\\.name=currency,k8s\\.replicaset\\.name=currency-[A-Za-z0-9]+,k8s\\.replicaset\\.uid=[A-Za-z0-9-]+$',value))": true
       (env[?name == 'OTEL_LOGS_EXPORTER']):
         - value: none
       (env[?name == 'OTEL_METRICS_EXPORTER']):
@@ -272,7 +272,7 @@ spec:
       (env[?name == 'OTEL_SERVICE_NAME']):
         - value: geolocation
       (env[?name == 'OTEL_RESOURCE_ATTRIBUTES']):
-        - "(regex_match('^k8s\\.pod\\.name=\\$\\(ODIGOS_POD_NAME\\),k8s\\.container\\.name=geolocation,k8s\\.namespace\\.name=default,k8s\\.deployment\\.name=geolocation,odigos\\.workload\\.kind=Deployment,k8s\\.replicaset\\.name=geolocation-[A-Za-z0-9]+,k8s\\.replicaset\\.uid=[A-Za-z0-9-]+$',value))": true
+        - "(regex_match('^k8s\\.pod\\.name=\\$\\(ODIGOS_POD_NAME\\),k8s\\.container\\.name=geolocation,k8s\\.namespace\\.name=default,k8s\\.deployment\\.name=geolocation,odigos\\.workload\\.kind=Deployment,odigos\\.workload\\.name=geolocation,k8s\\.replicaset\\.name=geolocation-[A-Za-z0-9]+,k8s\\.replicaset\\.uid=[A-Za-z0-9-]+$',value))": true
       (env[?name == 'OTEL_LOGS_EXPORTER']):
         - value: none
       (env[?name == 'OTEL_METRICS_EXPORTER']):
@@ -341,22 +341,7 @@ metadata:
   namespace: default
   labels:
     app: membership
-spec:
-  containers:
-    - name: membership
-      (env[?name == 'ODIGOS_CONTAINER_NAME']):
-        - value: "membership"
-      (env[?name == 'ODIGOS_DISTRO_NAME']):
-        - value: "golang-enterprise"
-      (env[?name == 'ODIGOS_POD_NAME']):
-        - valueFrom:
-            fieldRef:
-              apiVersion: v1
-              fieldPath: metadata.name
-      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
-        - value: "default"
-      (env[?name == 'GODEBUG']):
-        - value: "tracebackancestors=5"
+# go application should not be restarted, hence webhook modification are not expected
 status:
   containerStatuses:
     - name: membership
@@ -393,7 +378,7 @@ spec:
       (env[?name == 'OTEL_SERVICE_NAME']):
         - value: "pricing"
       (env[?name == 'OTEL_RESOURCE_ATTRIBUTES']):
-        - "(regex_match('^k8s\\.pod\\.name=\\$\\(ODIGOS_POD_NAME\\),k8s\\.container\\.name=pricing,k8s\\.namespace\\.name=default,k8s\\.deployment\\.name=pricing,odigos\\.workload\\.kind=Deployment,k8s\\.replicaset\\.name=pricing-[A-Za-z0-9]+,k8s\\.replicaset\\.uid=[A-Za-z0-9-]+$',value))": true
+        - "(regex_match('^k8s\\.pod\\.name=\\$\\(ODIGOS_POD_NAME\\),k8s\\.container\\.name=pricing,k8s\\.namespace\\.name=default,k8s\\.deployment\\.name=pricing,odigos\\.workload\\.kind=Deployment,odigos\\.workload\\.name=pricing,k8s\\.replicaset\\.name=pricing-[A-Za-z0-9]+,k8s\\.replicaset\\.uid=[A-Za-z0-9-]+$',value))": true
       (env[?name == 'CORECLR_ENABLE_PROFILING']):
         - value: "1"
       (env[?name == 'CORECLR_PROFILER']):
