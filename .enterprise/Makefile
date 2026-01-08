@@ -16,7 +16,7 @@ BUILD_DIR=.
 NO_CACHE?=
 
 ifeq ($(RHEL),true)
-    IMG_SUFFIX=-ubi9
+    IMG_SUFFIX=-rhel-certified
 
     # If TARGET is empty, set it to rhel
     ifeq ($(strip $(TARGET)),)
@@ -94,6 +94,22 @@ build-images-with-agents:
 .PHONY: build-images-rhel
 build-images-rhel:
 	$(MAKE) build-images RHEL=true TAG=$(TAG) ORG=$(ORG)
+
+.PHONY: push-images-rhel
+push-images-rhel:
+	$(MAKE) push-images RHEL=true TAG=$(TAG) ORG=$(ORG)
+
+.PHONY: push-images-with-agents-rhel
+push-images-with-agents-rhel:
+	$(MAKE) push-images-with-agents RHEL=true TAG=$(TAG) ORG=$(ORG)
+
+.PHONY: push-images
+push-images:
+	make push-odiglet push-instrumentor push-central-backend push-central-ui push-central-proxy TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)\
+
+.PHONY: push-images-with-agents
+push-images-with-agents:
+	make push-odiglet push-instrumentor push-agents TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
 
 push-image/%:
 	docker buildx build $(TARGET_FLAG) \

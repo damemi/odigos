@@ -53,7 +53,7 @@ jobs:
             || 'Dockerfile' }}
           context: ${{ matrix.service == 'central-ui' && 'central-ui' || '.' }}
           push: false
-          tags: registry.odigos.io/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-ubi9' || '' }}:${{ env.IMAGE_TAG }}
+          tags: registry.odigos.io/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.IMAGE_TAG }}
           provenance: false
           secrets: |
             github_token=${{ secrets.RELEASE_BOT_TOKEN }}
@@ -71,7 +71,7 @@ jobs:
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
           path: /tmp/${{ matrix.service }}-enterprise.tar
-          key: ${{ github.run_id }}-${{ matrix.service }}-enterprise-${{ matrix.rhel == 'true' && 'ubi9' || 'standard' }}
+          key: ${{ github.run_id }}-${{ matrix.service }}-enterprise-${{ matrix.rhel == 'true' && 'rhel-certified' || 'standard' }}
 
   build-oss-components-for-tests:
     runs-on: depot-ubuntu-24.04-4

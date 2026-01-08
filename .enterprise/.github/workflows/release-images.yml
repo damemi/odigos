@@ -118,9 +118,9 @@ jobs:
           context: ${{ matrix.service == 'central-ui' && 'central-ui' || '.' }}
           push: true
           tags: |
-            us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-ubi9' || '' }}:${{ env.ODIGOS_TAG }}
-            keyval/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-ubi9' || '' }}:${{ env.ODIGOS_TAG }}
-            ghcr.io/odigos-io/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-ubi9' || '' }}:${{ env.ODIGOS_TAG }}
+            us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.ODIGOS_TAG }}
+            keyval/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.ODIGOS_TAG }}
+            ghcr.io/odigos-io/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.ODIGOS_TAG }}
           build-args: |
             SERVICE_NAME=${{ matrix.service }}
             ODIGOS_VERSION=${{ env.ODIGOS_TAG }}
