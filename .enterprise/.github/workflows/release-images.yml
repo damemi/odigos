@@ -134,6 +134,7 @@ jobs:
           provenance: false
           target: >-
             ${{ matrix.service == 'agents' && matrix.rhel == 'true' && 'agents-rhel' ||
+                matrix.service == 'agents' && 'agents' ||
                 matrix.rhel == 'true' && 'rhel' ||
                 '' }}
           secrets: |

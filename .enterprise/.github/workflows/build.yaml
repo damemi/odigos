@@ -65,6 +65,7 @@ jobs:
             RHEL=${{ matrix.rhel }}
           target: >-
             ${{ matrix.service == 'agents' && matrix.rhel == 'true' && 'agents-rhel' ||
+                matrix.service == 'agents' && 'agents' ||
                 matrix.rhel == 'true' && 'rhel' ||
                 '' }}
       - name: Save enterprise component to cache
