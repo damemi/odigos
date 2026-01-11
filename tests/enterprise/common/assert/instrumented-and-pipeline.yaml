@@ -152,7 +152,7 @@ spec:
       (env[?name == 'ODIGOS_CONTAINER_NAME']):
         - value: currency
       (env[?name == 'ODIGOS_DISTRO_NAME']):
-        - value: php-enterprise
+        - value: php-community
       (env[?name == 'ODIGOS_POD_NAME']):
         - valueFrom:
             fieldRef:

@@ -49,23 +49,6 @@ ARG LEGACY_DOTNET_OTEL_VERSION=v0.4.0-beta.1
 ADD https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/$LEGACY_DOTNET_OTEL_VERSION/opentelemetry-dotnet-instrumentation-linux-musl.zip .
 RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetry-dotnet-instrumentation-linux-musl.zip
 
-######### PHP agents #########
-FROM --platform=$BUILDPLATFORM maniator/gh AS php-agents
-WORKDIR /php-agents
-ARG TARGETARCH
-ARG PHP_AGENT_VERSION="v0.2.0"
-ARG PHP_VERSIONS="8.1 8.2 8.3 8.4"
-ENV PHP_VERSIONS=${PHP_VERSIONS}
-# Clone agents repo (contains pre-compiled binaries, and pre-installed dependencies for each PHP version)
-RUN git clone https://github.com/odigos-io/opentelemetry-php \
-    && cd opentelemetry-php \
-    && git checkout tags/${PHP_AGENT_VERSION}
-# Move the pre-compiled binaries to the correct directories
-RUN for v in ${PHP_VERSIONS}; do \
-    mv opentelemetry-php/$v/bin/${TARGETARCH}/* opentelemetry-php/$v/; \
-    rm -rf opentelemetry-php/$v/bin; \
-    done
-
 
 ######### Ruby agents #########
 FROM --platform=$BUILDPLATFORM maniator/gh AS ruby-agents
@@ -116,10 +99,7 @@ COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v0.12.3 /ins
 COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v0.12.3 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
 
 # PHP
-COPY --from=php-agents /php-agents/opentelemetry-php/8.1 /instrumentations/php/8.1
-COPY --from=php-agents /php-agents/opentelemetry-php/8.2 /instrumentations/php/8.2
-COPY --from=php-agents /php-agents/opentelemetry-php/8.3 /instrumentations/php/8.3
-COPY --from=php-agents /php-agents/opentelemetry-php/8.4 /instrumentations/php/8.4
+COPY --from=public.ecr.aws/odigos/agents/php-community:v0.2.4 /instrumentations/php /instrumentations/php
 
 # Ruby
 COPY --from=ruby-agents /ruby-agents/opentelemetry-ruby/3.1 /instrumentations/ruby/3.1
