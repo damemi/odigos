@@ -89,8 +89,12 @@ export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRem
       });
 
       if (error || !data?.remoteFetch) {
-        addNotification({ type: StatusType.Error, title: error?.name || 'API Error', message: error?.cause?.message || error?.message || 'Unknown error' });
-        return EMPTY_RESPONSE_SINGLE;
+        const errorMessage = error?.cause?.message || error?.message;
+        if (errorMessage) addNotification({ type: StatusType.Error, title: error?.name || 'API Error', message: errorMessage });
+        return {
+          ...EMPTY_RESPONSE_SINGLE,
+          error: errorMessage,
+        };
       } else {
         return safeJsonParse(data?.remoteFetch, EMPTY_RESPONSE_SINGLE);
       }

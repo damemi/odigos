@@ -1,6 +1,4 @@
-import { useRouter } from 'next/navigation';
 import { useState, useCallback } from 'react';
-import { ROUTES } from '@/utils';
 import { useUserStore } from '@/store';
 import { useLazyQuery, useMutation, useQuery } from '@apollo/client';
 import { SignInPayload, SignInStatus, SystemConfig, User } from '@/types';
@@ -15,8 +13,6 @@ export type GetCurrentUser = () => User | null;
 export type GetLastAuthEmail = () => string | null;
 
 export const useAuth = () => {
-  const router = useRouter();
-
   const [error, setError] = useState<string | null>(null);
   const { setAuth, clearAuth, setLastAuthEmail } = useUserStore();
 
@@ -33,17 +29,7 @@ export const useAuth = () => {
         status,
       });
 
-      switch (status) {
-        case SignInStatus.SUCCESS:
-          setLastAuthEmail(null);
-          router.push(ROUTES.CONNECTIONS);
-          break;
-        case SignInStatus.PASSWORD_UPDATE_REQUIRED:
-          router.push(ROUTES.UPDATE_YOUR_PASSWORD);
-          break;
-        default:
-          break;
-      }
+      // Central UI redirect is handled in protected-route.tsx
     },
     onError: (error) => {
       setError(error.message);
@@ -62,7 +48,7 @@ export const useAuth = () => {
         // This ensures cookies are cleared. DO NOT use router.replace() as that's client-side only.
         window.location.href = url;
       } else {
-        router.push(ROUTES.SIGN_IN);
+        // Central UI redirect is handled in protected-route.tsx
       }
     },
     onError: (error) => {
@@ -74,6 +60,7 @@ export const useAuth = () => {
     onCompleted: (data) => {
       const { idToken, accessToken, user } = data.setInitialPassword;
 
+      setLastAuthEmail(null);
       setAuth({
         idToken: idToken || '',
         accessToken: accessToken || '',
@@ -81,8 +68,7 @@ export const useAuth = () => {
         status: SignInStatus.SUCCESS,
       });
 
-      setLastAuthEmail(null);
-      router.push(ROUTES.CONNECTIONS);
+      // Central UI redirect is handled in protected-route.tsx
     },
     onError: (error) => {
       setError(error.message);

@@ -1,13 +1,13 @@
 import { useEffect, useRef } from 'react';
 import { useProxy } from '../proxy';
-import { StatusKeys, useStatusStore } from '@/store';
 import { getSSEEventsUrl } from '@/utils';
 import { useSourceCRUD } from '../sources';
 import { StatusType } from '@odigos/ui-kit/types';
+import { StatusKeys, useStatusStore } from '@/store';
 import { useDestinationCRUD } from '../destinations';
 import { NotificationIcon } from '@odigos/ui-kit/icons';
 import { safeJsonParse } from '@odigos/ui-kit/functions';
-import { NotifyPayload, useInstrumentStore, useNotificationStore } from '@odigos/ui-kit/store';
+import { NotifyPayload, ProgressKeys, useNotificationStore, useProgressStore } from '@odigos/ui-kit/store';
 
 enum EventTypes {
   CONNECTED = 'connected',
@@ -49,7 +49,6 @@ export const useSSE = () => {
   const { setStatusStore } = useStatusStore();
   const { addNotification } = useNotificationStore();
   const { fetchDestinations } = useDestinationCRUD();
-  const { setInstrumentAwait, setInstrumentCount } = useInstrumentStore();
 
   const clearStatusMessage = () => setStatusStore(StatusKeys.Instrumentation, undefined);
 
@@ -147,33 +146,27 @@ export const useSSE = () => {
 
           // Handle specific CRD types
           if (isSource) {
-            const { isAwaitingInstrumentation } = useInstrumentStore.getState();
-
             switch (notification.title) {
               case OpenSourceEventTypes.ADDED:
-                if (!isAwaitingInstrumentation) setInstrumentAwait(true);
-
                 setStatusStore(StatusKeys.Instrumentation, { status: StatusType.Warning, label: 'Creating sources, please wait a moment...', leftIcon: NotificationIcon });
 
-                const { sourcesToCreate, sourcesCreated } = useInstrumentStore.getState();
-                const totalCreated = sourcesCreated + Number(notification.message?.toString().replace(/[^\d]/g, '') || 0);
-                if (sourcesToCreate < totalCreated) setInstrumentCount('sourcesToCreate', totalCreated + 1);
-                setInstrumentCount('sourcesCreated', totalCreated);
+                const newCreated = Number(notification.message?.toString().replace(/[^\d]/g, '') || 0);
+                useProgressStore.getState().addProgress(ProgressKeys.Instrumenting, newCreated);
 
                 handleEvent(OpenSourceEventTypes.ADDED, () => {
+                  const { progress, resetProgress } = useProgressStore.getState();
+                  addNotification({ type: StatusType.Success, title: OpenSourceEventTypes.ADDED, message: `Successfully created ${progress[ProgressKeys.Instrumenting]?.total} sources` });
                   setStatusStore(StatusKeys.Instrumentation, { status: StatusType.Warning, label: 'Instrumenting sources, please wait a moment...', leftIcon: NotificationIcon });
-                  addNotification({ type: StatusType.Success, title: OpenSourceEventTypes.ADDED, message: `Successfully created ${totalCreated} sources` });
+                  resetProgress(ProgressKeys.Instrumenting);
 
                   fetchSources();
-
-                  setInstrumentAwait(false);
-                  setInstrumentCount('sourcesToCreate', 0);
-                  setInstrumentCount('sourcesCreated', 0);
                 });
                 break;
 
               case OpenSourceEventTypes.MODIFIED:
-                if (!isAwaitingInstrumentation) {
+                const { progress } = useProgressStore.getState();
+
+                if (!progress[ProgressKeys.Instrumenting] && !progress[ProgressKeys.Uninstrumenting]) {
                   handleEvent(OpenSourceEventTypes.MODIFIED, () => {
                     clearStatusMessage();
                     fetchSources();
@@ -182,22 +175,17 @@ export const useSSE = () => {
                 break;
 
               case OpenSourceEventTypes.DELETED:
-                if (!isAwaitingInstrumentation) setInstrumentAwait(true);
-
-                const { sourcesToDelete, sourcesDeleted } = useInstrumentStore.getState();
-                const totalDeleted = sourcesDeleted + Number(notification.message?.toString().replace(/[^\d]/g, '') || 0);
-                if (sourcesToDelete < totalDeleted) setInstrumentCount('sourcesToDelete', totalDeleted + 1);
-                setInstrumentCount('sourcesDeleted', totalDeleted);
+                const newDeleted = Number(notification.message?.toString().replace(/[^\d]/g, '') || 0);
+                useProgressStore.getState().addProgress(ProgressKeys.Uninstrumenting, newDeleted);
 
                 handleEvent(OpenSourceEventTypes.DELETED, () => {
                   clearStatusMessage();
-                  addNotification({ type: StatusType.Success, title: OpenSourceEventTypes.DELETED, message: `Successfully deleted ${totalDeleted} sources` });
+
+                  const { progress, resetProgress } = useProgressStore.getState();
+                  addNotification({ type: StatusType.Success, title: OpenSourceEventTypes.DELETED, message: `Successfully deleted ${progress[ProgressKeys.Uninstrumenting]?.total} sources` });
+                  resetProgress(ProgressKeys.Uninstrumenting);
 
                   fetchSources();
-
-                  setInstrumentAwait(false);
-                  setInstrumentCount('sourcesToDelete', 0);
-                  setInstrumentCount('sourcesDeleted', 0);
                 });
                 break;
 

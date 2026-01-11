@@ -17,35 +17,33 @@ const ProtectedRoute: FC<ProtectedRouteProps> = ({ children }) => {
   const { accessToken, status, clearAuth } = useUserStore();
 
   const isOnSignInPath = useMemo(() => pathname === ROUTES.SIGN_IN, [pathname]);
-  const isNeedPasswordUpdate = useMemo(() => status === SignInStatus.PASSWORD_UPDATE_REQUIRED, [status]);
   const isOnUpdatePasswordPath = useMemo(() => pathname === ROUTES.UPDATE_YOUR_PASSWORD, [pathname]);
 
   const goToSignIn = () => {
     clearAuth();
-    router.push(ROUTES.SIGN_IN);
+    if (!isOnSignInPath) router.push(ROUTES.SIGN_IN);
   };
   const goToUpdatePassword = () => {
-    router.push(ROUTES.UPDATE_YOUR_PASSWORD);
+    if (!isOnUpdatePasswordPath) router.push(ROUTES.UPDATE_YOUR_PASSWORD);
   };
   const goToConnections = () => {
     router.push(ROUTES.CONNECTIONS);
   };
 
-  const [verifyToken, { loading }] = useMutation<{ verifyToken: GeneralResult }, { token: string }>(VERIFY_TOKEN, {
+  const [verifyToken, { data }] = useMutation<{ verifyToken: GeneralResult }, { token: string }>(VERIFY_TOKEN, {
     onError: (error) => {
       console.error(error);
       goToSignIn();
     },
-    onCompleted: (data) => {
-      if (!data.verifyToken.success) {
+    onCompleted: ({ verifyToken: { success } }) => {
+      if (!success) {
         goToSignIn();
       }
 
-      if (data.verifyToken.success) {
-        if (isNeedPasswordUpdate && !isOnUpdatePasswordPath) {
+      if (success) {
+        if (status === SignInStatus.PASSWORD_UPDATE_REQUIRED) {
           goToUpdatePassword();
-        }
-        if (isOnSignInPath) {
+        } else if (isOnSignInPath || isOnUpdatePasswordPath) {
           goToConnections();
         }
       }
@@ -53,11 +51,11 @@ const ProtectedRoute: FC<ProtectedRouteProps> = ({ children }) => {
   });
 
   useEffect(() => {
-    if (!accessToken && !isOnSignInPath) goToSignIn();
     if (accessToken) verifyToken({ variables: { token: accessToken } });
-  }, [accessToken, isOnSignInPath]);
+    else goToSignIn();
+  }, [accessToken]);
 
-  if (!isOnSignInPath && !isOnUpdatePasswordPath && (loading || !accessToken)) {
+  if (!data?.verifyToken && !isOnSignInPath) {
     return (
       <CenterThis style={{ height: '100vh' }}>
         <FadeLoader scale={2} />
