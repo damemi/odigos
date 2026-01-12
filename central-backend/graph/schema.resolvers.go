@@ -245,13 +245,11 @@ func (r *queryResolver) RemoteMultiFetch(ctx context.Context, proxyIDs []string,
 // SystemConfig is the resolver for the systemConfig field.
 func (r *queryResolver) SystemConfig(ctx context.Context) (*model.SystemConfig, error) {
 	isInitialized := r.AdminService.DetermineSystemInitialized()
-
-	// For now, use a hardcoded version.
-	version := "v1.0.0"
+	versionStr := r.ConfigService.GetOdigosCentralVersion(ctx)
 
 	return &model.SystemConfig{
 		IsInitialized: isInitialized,
-		Version:       version,
+		Version:       versionStr,
 	}, nil
 }
 

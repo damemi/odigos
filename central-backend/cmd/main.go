@@ -87,6 +87,7 @@ func main() {
 	userService := services.NewUserService(adminService)
 	teamService := services.NewTeamService(adminService)
 	authService := services.NewAuthService(adminService, userService)
+	ConfigService := services.NewConfigService()
 	healthService := services.NewHealthService(redisClient, adminService, centralSSEHub)
 
 	gqlHandler := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
@@ -96,6 +97,7 @@ func main() {
 		AuthService:     authService,
 		UserService:     userService,
 		TeamService:     teamService,
+		ConfigService:   ConfigService,
 		HealthService:   healthService,
 	}}))
 

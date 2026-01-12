@@ -13,5 +13,6 @@ type Resolver struct {
 	AuthService     *services.AuthService
 	UserService     *services.UserService
 	TeamService     *services.TeamService
+	ConfigService   *services.ConfigService
 	HealthService   *services.HealthService
 }

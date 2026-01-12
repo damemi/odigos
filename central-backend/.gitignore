@@ -1,3 +1,5 @@
 /central-backend
 /bin
 /licenses
+.gocache/
+.gomodcache/
