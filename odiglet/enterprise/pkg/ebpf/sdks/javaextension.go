@@ -111,5 +111,5 @@ func (p *JavaExtensionOtelEbpfSdk) ApplyConfig(ctx context.Context, conf instrum
 		})
 	}
 
-	return p.inst.ApplyDynamicConfig(probes)
+	return p.inst.ApplyDynamicConfig(dynamic.CustomInstrumentation(probes))
 }
