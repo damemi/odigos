@@ -23,3 +23,6 @@ spec:
         delimiter: ' '
     ldPreloadInjectionSupported: true
     k8sAttrsViaEnvVars: true
+  agentMetrics:
+    runtimeMetrics:
+      supported: true

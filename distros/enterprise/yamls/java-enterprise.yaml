@@ -26,6 +26,8 @@ spec:
   agentMetrics:
     spanMetrics:
       supported: true
+    runtimeMetrics:
+      supported: true
   traces:
     urlTemplatization:
       supported: true
