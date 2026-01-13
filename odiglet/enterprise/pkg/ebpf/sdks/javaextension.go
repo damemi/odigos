@@ -97,19 +97,29 @@ func (p *JavaExtensionOtelEbpfSdk) ApplyConfig(ctx context.Context, conf instrum
 		return fmt.Errorf("invalid config type, expected *odigosv1.SdkConfig, got %T", conf)
 	}
 
-	// Custom instrumentation is optional - if not configured, just skip
-	if sdkConfig.CustomInstrumentations == nil || sdkConfig.CustomInstrumentations.Java == nil {
-		log.Logger.V(0).Info("no custom instrumentation probes configured, skipping")
-		return nil
+	// Custom instrumentation - apply only if configured
+	if sdkConfig.CustomInstrumentations != nil && sdkConfig.CustomInstrumentations.Java != nil {
+		var probes []dynamic.CustomProbe
+		for _, probe := range sdkConfig.CustomInstrumentations.Java {
+			probes = append(probes, dynamic.CustomProbe{
+				ClassName:  probe.ClassName,
+				MethodName: probe.MethodName,
+			})
+		}
+		if err := p.inst.ApplyDynamicConfig(dynamic.CustomInstrumentation(probes)); err != nil {
+			return err
+		}
 	}
 
-	var probes []dynamic.CustomProbe
-	for _, probe := range sdkConfig.CustomInstrumentations.Java {
-		probes = append(probes, dynamic.CustomProbe{
-			ClassName:  probe.ClassName,
-			MethodName: probe.MethodName,
-		})
+	// JVM metrics - apply only if configured
+	if sdkConfig.RuntimeMetrics != nil {
+		jvmConfig := createJVMMetricsConfig(sdkConfig.RuntimeMetrics.Java)
+		if jvmConfig != nil {
+			if err := p.inst.ApplyDynamicConfig(dynamic.JVMMetricsProbe(*jvmConfig)); err != nil {
+				return err
+			}
+		}
 	}
 
-	return p.inst.ApplyDynamicConfig(dynamic.CustomInstrumentation(probes))
+	return nil
 }

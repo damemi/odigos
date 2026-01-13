@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/odigos-io/ebpf-java-instrumentation/jvmmetrics"
 	"github.com/odigos-io/ebpf-java-instrumentation/pkg/dynamic"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/consts"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
 
@@ -141,5 +143,38 @@ func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instru
 		}
 	}
 
-	return g.inst.ApplyDynamicConfig(dynamic.HTTPHeaders(headers))
+	err := g.inst.ApplyDynamicConfig(dynamic.HTTPHeaders(headers))
+	if err != nil {
+		return err
+	}
+
+	jvmConfig := createJVMMetricsConfig(sdkConfig.RuntimeMetrics.Java)
+	if jvmConfig != nil {
+		if err := g.inst.ApplyDynamicConfig(dynamic.JVMMetricsProbe(*jvmConfig)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func createJVMMetricsConfig(config *common.MetricsSourceAgentJavaRuntimeMetricsConfiguration) *jvmmetrics.JVMMetricsConfig {
+	if config == nil {
+		return nil
+	}
+
+	// Global disabled flag
+	jvmConfig := &jvmmetrics.JVMMetricsConfig{
+		Disabled: config.Disabled,
+	}
+
+	// Convert individual metrics
+	for _, metric := range config.Metrics {
+		jvmConfig.Metrics = append(jvmConfig.Metrics, jvmmetrics.MetricConfig{
+			Name:     metric.Name,
+			Disabled: metric.Disabled,
+		})
+	}
+
+	return jvmConfig
 }
