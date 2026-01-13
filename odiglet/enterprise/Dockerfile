@@ -49,27 +49,6 @@ ARG LEGACY_DOTNET_OTEL_VERSION=v0.4.0-beta.1
 ADD https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/$LEGACY_DOTNET_OTEL_VERSION/opentelemetry-dotnet-instrumentation-linux-musl.zip .
 RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetry-dotnet-instrumentation-linux-musl.zip
 
-
-######### Ruby agents #########
-FROM --platform=$BUILDPLATFORM maniator/gh AS ruby-agents
-WORKDIR /ruby-agents
-ARG TARGETARCH
-ARG RUBY_AGENT_VERSION="v0.0.5"
-ARG RUBY_VERSIONS="3.1 3.2 3.3 3.4"
-ENV RUBY_VERSIONS=${RUBY_VERSIONS}
-# Clone agents repo (contains pre-compiled binaries, and pre-installed dependencies for each Ruby version)
-RUN git clone https://github.com/odigos-io/opentelemetry-ruby \
-    && cd opentelemetry-ruby \
-    && git checkout tags/${RUBY_AGENT_VERSION}
-# Move the gems & binaries to the correct directories
-RUN for v in ${RUBY_VERSIONS}; do \
-    mv opentelemetry-ruby/$v/${TARGETARCH}/* opentelemetry-ruby/$v/; \
-    cp opentelemetry-ruby/Gemfile opentelemetry-ruby/$v/Gemfile; \
-    cp opentelemetry-ruby/index.rb opentelemetry-ruby/$v/index.rb; \
-    rm -rf opentelemetry-ruby/$v/amd64; \
-    rm -rf opentelemetry-ruby/$v/arm64; \
-    done
-
 ######### agents builder #########
 # combine all agents into a single image
 FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS agents-builder
@@ -102,10 +81,7 @@ COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v0.12.10 /instrumentati
 COPY --from=public.ecr.aws/odigos/agents/php-community:v0.2.4 /instrumentations/php /instrumentations/php
 
 # Ruby
-COPY --from=ruby-agents /ruby-agents/opentelemetry-ruby/3.1 /instrumentations/ruby/3.1
-COPY --from=ruby-agents /ruby-agents/opentelemetry-ruby/3.2 /instrumentations/ruby/3.2
-COPY --from=ruby-agents /ruby-agents/opentelemetry-ruby/3.3 /instrumentations/ruby/3.3
-COPY --from=ruby-agents /ruby-agents/opentelemetry-ruby/3.4 /instrumentations/ruby/3.4
+COPY --from=public.ecr.aws/odigos/agents/ruby-community:v0.0.7 /instrumentations/ruby /instrumentations/ruby
 
 # loader
 ARG TARGETARCH

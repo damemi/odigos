@@ -250,7 +250,7 @@ spec:
       (env[?name == 'ODIGOS_CONTAINER_NAME']):
         - value: geolocation
       (env[?name == 'ODIGOS_DISTRO_NAME']):
-        - value: ruby-enterprise
+        - value: ruby-community
       (env[?name == 'ODIGOS_POD_NAME']):
         - valueFrom:
             fieldRef:
