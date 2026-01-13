@@ -29,4 +29,6 @@ spec:
   traces:
     urlTemplatization:
       supported: true
+    spanRenamer:
+      supported: true
   configAsEnvVars: true
