@@ -19,47 +19,46 @@ spec:
     - name: Install Odigos latest release from GitHub for pre upgrade setup
       try:
         - script:
+            timeout: 5m
             content: |
               #!/bin/bash
 
-              # Define variables
-              REPO_URL="https://api.github.com/repos/odigos-io/odigos/releases/latest"
-              ARCH=$(uname -m) # Get the system architecture
-              OS=$(uname | tr '[:upper:]' '[:lower:]') # Get the OS name in lowercase
+              echo "🧼 Cleaning up any existing installation that might be left over from previous runs..."
+              ./odigos uninstall || true
 
-              # Convert architecture to match GitHub naming conventions if necessary
+              echo "📦 Updating Helm repositories..."
+              helm repo add odigos https://odigos-io.github.io/odigos/
+              helm repo update
+
+              echo "🔍 Fetching latest Odigos release from Helm Chart..."
+              IMAGE_TAG=$(helm search repo odigos | awk '$1 == "odigos/odigos" {print $3}')
+              if [[ -z "$IMAGE_TAG" ]]; then
+                echo "❌ ERROR: Failed to fetch latest release, aborting..."
+              else
+                echo "✅ Successfully fetched latest Odigos release from Helm Chart: $IMAGE_TAG"
+              fi
+
+              OS=$(uname | tr '[:upper:]' '[:lower:]') # Get the OS name in lowercase
+              ARCH=$(uname -m) # Get the system architecture, then convert match GitHub naming conventions
               if [ "$ARCH" = "x86_64" ]; then
                   ARCH="amd64"
               elif [ "$ARCH" = "aarch64" ]; then
                   ARCH="arm64"
               fi
 
-              # Fetch the release assets from GitHub API
-              ASSETS_JSON=$(curl -s --retry 5 --retry-delay 5 "$REPO_URL")
+              DOWNLOAD_URL="https://github.com/odigos-io/odigos/releases/download/${IMAGE_TAG}/cli_${IMAGE_TAG#v}_${OS}_${ARCH}.tar.gz"
+              echo "⬇️ Downloading Odigos $IMAGE_TAG from: $DOWNLOAD_URL"
+              # --retry X: retry up to X times
+              # --retry-delay X: wait X second between retries
+              # --retry-max-time X: maximum time to spend retrying (X seconds for download)
+              curl -L -o odigos-latest-cli.tar.gz --retry 5 --retry-delay 1 --retry-max-time 60 "$DOWNLOAD_URL"
+              tar -xvzf odigos-latest-cli.tar.gz
 
-              # Find the download URL that matches the OS and architecture
-              DOWNLOAD_URL=$(echo "$ASSETS_JSON" | grep "browser_download_url" | grep "$OS" | grep "$ARCH" | cut -d '"' -f 4)
-
-              # Check if the download URL was found
-              if [ -z "$DOWNLOAD_URL" ]; then
-                  echo "No matching release found for OS: $OS and Architecture: $ARCH"
-                  exit 1
-              fi
-
-              # Download the matched asset
-              curl -L --retry 5 --retry-delay 5 -o odigos-latest.tar.gz "$DOWNLOAD_URL"
-
-              # Extract the downloaded file
-              tar -xvzf odigos-latest.tar.gz
-
-              # cleanup any existing installation of odigos the might be left over from previous runs while developing
-              ./odigos uninstall
-
+              echo "🚀 Installing Odigos $IMAGE_TAG from CLI Binary..."
               ./odigos install --ns odigos-test --set onPremToken=$ODIGOS_API_KEY
               kubectl label namespace odigos-test odigos.io/system-object="true"
 
               ../../common/verify_odigos_installation.sh odigos-test
-            timeout: 5m # longer timeout since the images are being pulled from dockerhub
         - assert:
             timeout: 1m
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/odigos-installed.yaml
