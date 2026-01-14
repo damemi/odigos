@@ -11,6 +11,28 @@ env:
   BASE_BRANCH: ${{ github.base_ref }}
 
 jobs:
+  detect-changes:
+    name: Detect Changed Files
+    runs-on: ubuntu-latest
+    outputs:
+      central: ${{ steps.filter.outputs.central }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          persist-credentials: false
+
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 #v3.0.2
+        id: filter
+        with:
+          filters: |
+            central:
+              - 'central-backend/**'
+              - 'central-ui/**'
+              - 'central-proxy/**'
+              - 'tests/e2e/central-infrastructure/**'
+              - 'tests/e2e/central-install/**'
+              - 'tests/common/assert/odigos-central-installed.yaml'
+
   build-enterprise-components:
     name: build-enterprise-components (${{ matrix.service }}${{ matrix.rhel == 'true' && ', rhel' || '' }})
     runs-on: depot-ubuntu-24.04-4
@@ -137,6 +159,7 @@ jobs:
   kubernetes-tests:
     name: kubernetes-tests (${{ matrix.kube-version }}, ${{ matrix.test-scenario }}${{ matrix.wasp-enabled == true && ', with_wasp' || '' }})
     needs:
+      - detect-changes
       - build-enterprise-components
       - build-oss-components-for-tests
     runs-on: depot-ubuntu-24.04-4
@@ -152,6 +175,7 @@ jobs:
           - "helm-chart"
           - "cli-upgrade"
           - "central-install"
+          - "central-infrastructure"
         wasp-enabled: [false]
         include:
           - kube-version: "1.20.15"
@@ -180,15 +204,35 @@ jobs:
             kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
             test-scenario: "control-plane"
     steps:
+      # Check if this test scenario should run based on changed files
+      - name: Check if test should run
+        id: should-run
+        run: |
+          # Central tests only run if central-related files changed
+          if [[ "${{ matrix.test-scenario }}" == "central-install" || "${{ matrix.test-scenario }}" == "central-infrastructure" ]]; then
+            if [[ "${{ needs.detect-changes.outputs.central }}" != "true" ]]; then
+              echo "Skipping ${{ matrix.test-scenario }} - no central files changed"
+              echo "skip=true" >> $GITHUB_OUTPUT
+            else
+              echo "Running ${{ matrix.test-scenario }} - central files changed"
+              echo "skip=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "Running ${{ matrix.test-scenario }} - always runs"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       # we need the enterprise and oss to be siblings.
       # when using the default path and try to checkout the oss to be sibling, we get this:
       # Error: Repository path '/home/runner/work/odigos-enterprise/odigos' is not under '/home/runner/work/odigos-enterprise/odigos-enterprise'
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        if: steps.should-run.outputs.skip != 'true'
         with:
           path: odigos-enterprise
           persist-credentials: false
 
       - name: Set WASP_ENABLED environment variable
+        if: steps.should-run.outputs.skip != 'true'
         run: |
           if [ "${{ matrix.wasp-enabled }}" = "true" ]; then
             echo "WASP_ENABLED=true" >> "$GITHUB_ENV"
@@ -197,14 +241,17 @@ jobs:
           fi
 
       - name: Set up Helm
+        if: steps.should-run.outputs.skip != 'true'
         uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 #v4.3.0
         with:
           version: v3.9.0
 
       - name: Install chainsaw
+        if: steps.should-run.outputs.skip != 'true'
         uses: kyverno/action-install-chainsaw@f2b47b97dc889c12702113753d713f01ec268de5 #v0.2.12
 
       - name: Checkout Odigos OSS
+        if: steps.should-run.outputs.skip != 'true'
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
           repository: odigos-io/odigos
@@ -213,10 +260,12 @@ jobs:
           persist-credentials: false
 
       - name: Download Kind Config
+        if: steps.should-run.outputs.skip != 'true'
         run: |
           curl -o kind-config.yaml https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/kind-config.yaml
 
       - name: Create Kind Cluster
+        if: steps.should-run.outputs.skip != 'true'
         uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 #v1.12.0
         with:
           node_image: ${{ matrix.kind-image }}
@@ -225,12 +274,14 @@ jobs:
           config: kind-config.yaml
 
       - name: wait for cluster readiness
+        if: steps.should-run.outputs.skip != 'true'
         run: |
           kubectl wait --for=condition=Ready node --all --timeout=180s
           kubectl wait -n kube-system --for=condition=Ready pod --all --timeout=300s
           kubectl rollout status -n kube-system deployment/coredns --timeout=300s
 
       - name: Restore Odiglet Enterprise from Cache
+        if: steps.should-run.outputs.skip != 'true'
         id: restore-odiglet-cache
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
@@ -239,13 +290,14 @@ jobs:
           key: ${{ github.run_id }}-odiglet-enterprise-standard
 
       - name: Check if Odiglet cache was restored
-        if: steps.restore-odiglet-cache.outputs.cache-hit != 'true'
+        if: steps.should-run.outputs.skip != 'true' && steps.restore-odiglet-cache.outputs.cache-hit != 'true'
         run: |
           echo "❌ Cache miss for Odiglet Enterprise - this should not happen!"
           echo "Expected cache key: ${{ github.run_id }}-odiglet-enterprise-standard"
           exit 1
 
       - name: Restore Instrumentor Enterprise from Cache
+        if: steps.should-run.outputs.skip != 'true'
         id: restore-instrumentor-cache
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
@@ -254,13 +306,14 @@ jobs:
           key: ${{ github.run_id }}-instrumentor-enterprise-standard
 
       - name: Check if Instrumentor cache was restored
-        if: steps.restore-instrumentor-cache.outputs.cache-hit != 'true'
+        if: steps.should-run.outputs.skip != 'true' && steps.restore-instrumentor-cache.outputs.cache-hit != 'true'
         run: |
           echo "❌ Cache miss for Instrumentor Enterprise - this should not happen!"
           echo "Expected cache key: ${{ github.run_id }}-instrumentor-enterprise-standard"
           exit 1
 
       - name: Restore Odigos OSS Components from Cache
+        if: steps.should-run.outputs.skip != 'true'
         id: restore-oss-cache
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
@@ -274,14 +327,14 @@ jobs:
           key: ${{ github.run_id }}-odigos-oss-components
 
       - name: Check if OSS components cache was restored
-        if: steps.restore-oss-cache.outputs.cache-hit != 'true'
+        if: steps.should-run.outputs.skip != 'true' && steps.restore-oss-cache.outputs.cache-hit != 'true'
         run: |
           echo "❌ Cache miss for OSS components - this should not happen!"
           echo "Expected cache key: ${{ github.run_id }}-odigos-oss-components"
           exit 1
 
       - name: Restore Central Backend Enterprise from Cache
-        if: matrix.test-scenario == 'central-install'
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure')
         id: restore-central-backend-cache
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
@@ -290,14 +343,14 @@ jobs:
           key: ${{ github.run_id }}-central-backend-enterprise-standard
 
       - name: Check if Central Backend cache was restored
-        if: matrix.test-scenario == 'central-install' && steps.restore-central-backend-cache.outputs.cache-hit != 'true'
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure') && steps.restore-central-backend-cache.outputs.cache-hit != 'true'
         run: |
           echo "❌ Cache miss for Central Backend Enterprise - this should not happen!"
           echo "Expected cache key: ${{ github.run_id }}-central-backend-enterprise-standard"
           exit 1
 
       - name: Restore Central UI Enterprise from Cache
-        if: matrix.test-scenario == 'central-install'
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure')
         id: restore-central-ui-cache
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
@@ -306,14 +359,14 @@ jobs:
           key: ${{ github.run_id }}-central-ui-enterprise-standard
 
       - name: Check if Central UI cache was restored
-        if: matrix.test-scenario == 'central-install' && steps.restore-central-ui-cache.outputs.cache-hit != 'true'
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure') && steps.restore-central-ui-cache.outputs.cache-hit != 'true'
         run: |
           echo "❌ Cache miss for Central UI Enterprise - this should not happen!"
           echo "Expected cache key: ${{ github.run_id }}-central-ui-enterprise-standard"
           exit 1
 
       - name: Restore Central Proxy Enterprise from Cache
-        if: matrix.test-scenario == 'central-install'
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure')
         id: restore-central-proxy-cache
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
@@ -322,13 +375,14 @@ jobs:
           key: ${{ github.run_id }}-central-proxy-enterprise-standard
 
       - name: Check if Central Proxy cache was restored
-        if: matrix.test-scenario == 'central-install' && steps.restore-central-proxy-cache.outputs.cache-hit != 'true'
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure') && steps.restore-central-proxy-cache.outputs.cache-hit != 'true'
         run: |
           echo "❌ Cache miss for Central Proxy Enterprise - this should not happen!"
           echo "Expected cache key: ${{ github.run_id }}-central-proxy-enterprise-standard"
           exit 1
 
       - name: Load Odigos Components to Kind Cluster
+        if: steps.should-run.outputs.skip != 'true'
         run: |
           kind load image-archive /tmp/odiglet-enterprise.tar
           kind load image-archive /tmp/instrumentor-enterprise.tar
@@ -338,13 +392,14 @@ jobs:
           kind load image-archive /tmp/odigos-cli.tar
 
       - name: Load Central Components to Kind Cluster
-        if: matrix.test-scenario == 'central-install'
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure')
         run: |
           kind load image-archive /tmp/central-backend-enterprise.tar
           kind load image-archive /tmp/central-ui-enterprise.tar
           kind load image-archive /tmp/central-proxy-enterprise.tar
 
       - name: Load Latest UI Image from Container Registry
+        if: steps.should-run.outputs.skip != 'true'
         run: |
           # The UI will still be installed by the CLI with the TAG, but it's not used in the tests so no need to build it
           # following line is buggy since this url is paginated.
@@ -356,12 +411,14 @@ jobs:
           kind load docker-image registry.odigos.io/odigos-ui:${{ env.IMAGE_TAG }}
 
       - name: Copy CLI to Expected Path
+        if: steps.should-run.outputs.skip != 'true'
         run: |
           # Copy the CLI executable to the expected path which is in the OSS repo sibling to the enterprise repo
           cp /tmp/odigos-cli odigos/cli/odigos
           chmod +x odigos/cli/odigos
 
       - name: Run E2E Tests
+        if: steps.should-run.outputs.skip != 'true'
         env:
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
           ODIGOS_API_KEY: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
@@ -382,7 +439,7 @@ jobs:
           EOF
 
       - name: Cluster diagnostics
-        if: failure()
+        if: failure() && steps.should-run.outputs.skip != 'true'
         run: |
           echo "==== Nodes ===="; kubectl get nodes -o wide
           echo "==== Pods (all namespaces) ===="; kubectl get pods -A -o wide
@@ -393,13 +450,13 @@ jobs:
           done
 
       - name: Run diagnose command
-        if: ${{ failure() }}
+        if: failure() && steps.should-run.outputs.skip != 'true'
         run: |
           odigos/cli/odigos diagnose
         continue-on-error: true
 
       - name: Upload diagnose artifact
-        if: ${{ failure() }}
+        if: failure() && steps.should-run.outputs.skip != 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
         with:
           name: run-details-${{ matrix.test-scenario }}-${{ matrix.kube-version }}
