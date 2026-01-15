@@ -57,7 +57,7 @@ export const useDataStreamsCRUD = (): UseDataStreamsCrud => {
         }
       }
     },
-    [fetchDataStreamsQuery, proxyID, setDataStreams, setSelectedStreamName, setDataStreamsLoading],
+    [proxyID],
   );
 
   const updateDataStream: UseDataStreamsCrud['updateDataStream'] = async (dataStreamName, dataStream) => {
@@ -108,7 +108,7 @@ export const useDataStreamsCRUD = (): UseDataStreamsCrud => {
 
   useEffect(() => {
     if (!dataStreams.length && !dataStreamsLoading) fetchDataStreams();
-  }, [dataStreams.length, dataStreamsLoading, fetchDataStreams]);
+  }, []);
 
   return {
     dataStreamsLoading,
