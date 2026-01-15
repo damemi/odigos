@@ -99,13 +99,12 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 	})
 	defer ws.cleanupConnection(ctx, proxyID, conn)
 
-	if err := ws.redisClient.AddProxyConnection(ctx, proxyID, string(consts.StatusConnected)); err != nil {
-		logger.Log.Error("Failed to store connection in Redis", "error", err)
-		return
-	}
 	// Persist basic proxy metadata and initial timestamps
 	if err := ws.redisClient.SetProxyMetadata(ctx, proxyID, platformName, string(platformType), currentVersion); err != nil {
 		logger.Log.Warn("Failed to set proxy metadata", "proxyID", proxyID, "error", err)
+	}
+	if err := ws.redisClient.SetProxyMetadataStatus(ctx, proxyID, consts.StatusConnected); err != nil {
+		logger.Log.Warn("Failed to set proxy metadata status", "proxyID", proxyID, "error", err)
 	}
 	if err := ws.redisClient.SetProxyConnectedAt(ctx, proxyID, now); err != nil {
 		logger.Log.Warn("Failed to set proxy connectedAt", "proxyID", proxyID, "error", err)
@@ -187,8 +186,8 @@ func (ws *WebSocketServer) cleanupConnection(ctx context.Context, proxyID string
 	logger.Log.Info("Cleaning up connection", "proxyID", proxyID, "platformName", proxyConn.PlatformName, "platformType", proxyConn.PlatformType)
 	ws.proxyConnections.Delete(proxyID)
 
-	if err := ws.redisClient.SetProxyConnectionStatus(ctx, proxyID, consts.StatusDisconnected); err != nil {
-		logger.Log.Error("Failed to update proxy status in Redis", "proxyID", proxyID, "error", err)
+	if err := ws.redisClient.SetProxyMetadataStatus(ctx, proxyID, consts.StatusDisconnected); err != nil {
+		logger.Log.Error("Failed to update proxy metadata status in Redis", "proxyID", proxyID, "error", err)
 	}
 	// Record last seen on disconnect as well
 	if err := ws.redisClient.UpdateProxyLastSeen(ctx, proxyID, time.Now().Unix()); err != nil {
@@ -434,7 +433,6 @@ func (ws *WebSocketServer) GetOdigosVersion(proxyID string) (string, bool) {
 	return proxyConn.OdigosVersion, true
 }
 
-// In case redis is lost, we need to resync all proxy connections to Redis.
 func (ws *WebSocketServer) ResyncAllProxiesToRedis(ctx context.Context) {
 	var count int
 	ws.proxyConnections.Range(func(key, value interface{}) bool {
@@ -448,13 +446,11 @@ func (ws *WebSocketServer) ResyncAllProxiesToRedis(ctx context.Context) {
 			return true
 		}
 
-		if err := ws.redisClient.AddProxyConnection(ctx, proxyID, string(consts.StatusConnected)); err != nil {
-			logger.Log.Error("Failed to resync proxy connection to Redis", "proxyID", proxyID, "error", err)
-			return true
-		}
-
 		if err := ws.redisClient.SetProxyMetadata(ctx, proxyID, proxyConn.PlatformName, string(proxyConn.PlatformType), proxyConn.OdigosVersion); err != nil {
 			logger.Log.Warn("Failed to resync proxy metadata", "proxyID", proxyID, "error", err)
+		}
+		if err := ws.redisClient.SetProxyMetadataStatus(ctx, proxyID, consts.StatusConnected); err != nil {
+			logger.Log.Warn("Failed to resync proxy metadata status", "proxyID", proxyID, "error", err)
 		}
 		if err := ws.redisClient.SetProxyConnectedAt(ctx, proxyID, proxyConn.ConnectedAt); err != nil {
 			logger.Log.Warn("Failed to resync proxy connectedAt", "proxyID", proxyID, "error", err)

@@ -8,7 +8,6 @@ package graph
 import (
 	"context"
 	"fmt"
-	"slices"
 	"sync"
 	"time"
 
@@ -275,120 +274,7 @@ func (r *queryResolver) SignOutURL(ctx context.Context, idToken *string) (*strin
 
 // ComputePlatforms is the resolver for the computePlatforms field.
 func (r *queryResolver) ComputePlatforms(ctx context.Context) ([]*model.ComputePlatform, error) {
-	connectionKeys, err := r.RedisClient.ListProxyConnectionsKeys(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create a map of compute platforms without their users and teams
-	var cpMap = make(map[string]*model.ComputePlatform)
-	for _, key := range connectionKeys {
-		proxyID := consts.ExtractProxyIDFromConnectionKey(key)
-
-		status, err := r.RedisClient.GetProxyConnection(ctx, key)
-		if err != nil {
-			logger.Log.Error("Failed to get proxy connection status", "proxyID", proxyID, "error", err)
-			continue
-		}
-
-		platformName := consts.UnknownValue
-		if name, ok := r.WebSocketServer.GetPlatformName(proxyID); ok {
-			platformName = name
-		}
-
-		platformType := model.PlatformTypeK8s
-		if pType, ok := r.WebSocketServer.GetPlatformType(proxyID); ok {
-			switch pType {
-			case consts.PlatformTypeK8s:
-				platformType = model.PlatformTypeK8s
-			case consts.PlatformTypeVM:
-				platformType = model.PlatformTypeVM
-			default:
-				logger.Log.Warn("Unknown platform type, defaulting to k8s", "proxyID", proxyID, "platformType", pType)
-				platformType = model.PlatformTypeK8s
-			}
-		}
-
-		odigosVersion := consts.UnknownValue
-		if version, ok := r.WebSocketServer.GetOdigosVersion(proxyID); ok {
-			odigosVersion = version
-		}
-
-		cpMap[proxyID] = &model.ComputePlatform{
-			ID:            proxyID,
-			Name:          platformName,
-			OdigosVersion: odigosVersion,
-			Type:          platformType,
-			Status:        string(status),
-			Users:         []*model.User{},
-			Teams:         []*model.Team{},
-		}
-	}
-
-	// Append users to compute platforms
-	users, err := r.UserService.GetUsers(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, user := range users {
-		for _, cp := range user.ComputePlatforms {
-			// Ensure the compute platform exists in the map even if it has no active connection
-			if _, exists := cpMap[cp.ID]; !exists {
-				// For disconnected platforms, we can't determine the type, so default to k8s
-				cpMap[cp.ID] = &model.ComputePlatform{
-					ID:            cp.ID,
-					Name:          consts.UnknownValue,
-					OdigosVersion: consts.UnknownValue,
-					Type:          model.PlatformTypeK8s, // Default when connection info is not available
-					Status:        string(consts.StatusDisconnected),
-					Users:         []*model.User{},
-					Teams:         []*model.Team{},
-				}
-			}
-			if !slices.Contains(cpMap[cp.ID].Users, user) {
-				cpMap[cp.ID].Users = append(cpMap[cp.ID].Users, user)
-			}
-		}
-	}
-
-	// Append teams to compute platforms
-	teams, err := r.TeamService.GetTeams(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, team := range teams {
-		for _, cp := range team.ComputePlatforms {
-			// Ensure the compute platform exists in the map even if it has no active connection
-			if _, exists := cpMap[cp.ID]; !exists {
-				// For disconnected platforms, we can't determine the type, so default to k8s
-				cpMap[cp.ID] = &model.ComputePlatform{
-					ID:            cp.ID,
-					Name:          consts.UnknownValue,
-					OdigosVersion: consts.UnknownValue,
-					Type:          model.PlatformTypeK8s,
-					Status:        string(consts.StatusDisconnected),
-					Users:         []*model.User{},
-					Teams:         []*model.Team{},
-				}
-			}
-			if !slices.Contains(cpMap[cp.ID].Teams, team) {
-				cpMap[cp.ID].Teams = append(cpMap[cp.ID].Teams, team)
-			}
-		}
-	}
-	var cps []*model.ComputePlatform
-	for id, cp := range cpMap {
-		meta, err := r.RedisClient.GetProxyMetadata(ctx, id)
-		if err != nil {
-			logger.Log.Error("Failed to get proxy metadata", "proxyID", id, "error", err)
-			continue
-		}
-		if meta != nil {
-			applyProxyMetaToComputePlatform(cp, meta)
-		}
-		cps = append(cps, cp)
-	}
-	return cps, nil
+	return r.ComputePlatformService.ComputePlatforms(ctx, r.UserService, r.TeamService, r.WebSocketServer)
 }
 
 // Users is the resolver for the users field.

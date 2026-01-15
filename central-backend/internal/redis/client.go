@@ -20,6 +20,10 @@ const (
 	SLOW_THRESHOLD_DURATION = 200 * time.Millisecond
 )
 
+// RedisHashFieldValuesByKey represents results from Redis HGETALL across multiple hashes:
+// map[redisHashKey]map[field]value
+type RedisHashFieldValuesByKey = map[string]map[string]string
+
 // PublishJSON publishes a typed value as JSON without requiring interface{} at call sites.
 // This is a package-level helper because methods cannot declare type parameters.
 func PublishJSON[T any](ctx context.Context, r *RedisClient, channel string, message T) error {
@@ -40,6 +44,12 @@ type RedisClient struct {
 }
 
 const resyncDebounceNanos = int64(5 * time.Second)
+
+// scan count and batch size are used to scan the Redis database for keys and values in batches. 500 for faster scanning, 200 for batching.
+const (
+	scanCount = int64(500)
+	batchSize = 200
+)
 
 func NewRedisClient(ctx context.Context) (*RedisClient, error) {
 	rc := &RedisClient{}
@@ -88,40 +98,85 @@ func (r *RedisClient) SetOnReconnect(fn OnReconnectFunc) {
 	r.onReconnect = fn
 }
 
-func (r *RedisClient) AddProxyConnection(ctx context.Context, proxyID, status string) error {
-	key := consts.GetProxyConnectionChannelKey(proxyID)
-	return r.client.Set(ctx, key, status, 0).Err()
-}
-
-func (r *RedisClient) SetProxyConnectionStatus(ctx context.Context, proxyID string, status consts.ProxyConnectionStatus) error {
-	key := consts.GetProxyConnectionChannelKey(proxyID)
-	return r.client.Set(ctx, key, string(status), 0).Err()
-}
-
-func (r *RedisClient) GetProxyConnection(ctx context.Context, key string) (consts.ProxyConnectionStatus, error) {
-	result, err := r.client.Get(ctx, key).Result()
-	if err != nil {
-		return "", err
-	}
-	return consts.ProxyConnectionStatus(result), nil
-}
-
-func (r *RedisClient) ListProxyConnectionsKeys(ctx context.Context) ([]string, error) {
-	pattern := consts.GetProxyConnectionsPattern()
-	keys, err := r.client.Keys(ctx, pattern).Result()
-	if err != nil {
-		return nil, err
-	}
-	return keys, nil
-}
-
 func (r *RedisClient) DeleteProxyConnection(ctx context.Context, proxyID string) error {
-	key := consts.GetProxyConnectionChannelKey(proxyID)
-	result := r.client.Del(ctx, key)
+	metaKey := consts.GetProxyMetadataKey(proxyID) // proxy-meta:{backendID}:{proxyID}
+
+	result := r.client.Del(ctx, metaKey)
 	if result.Err() != nil {
 		return result.Err()
 	}
 	return nil
+}
+
+func (r *RedisClient) hgetAllBatch(ctx context.Context, keys []string) (RedisHashFieldValuesByKey, error) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	pipe := r.client.Pipeline()
+	cmds := make(map[string]*redis.StringStringMapCmd, len(keys))
+	for _, key := range keys {
+		cmds[key] = pipe.HGetAll(ctx, key)
+	}
+
+	if _, err := pipe.Exec(ctx); err != nil {
+		return nil, err
+	}
+
+	out := make(RedisHashFieldValuesByKey, len(keys))
+	for key, cmd := range cmds {
+		m, err := cmd.Result()
+		if err != nil {
+			return nil, err
+		}
+		out[key] = m
+	}
+	return out, nil
+}
+
+// GetProxyMetaKeyValues scans all proxy metadata hashes (proxy-meta:*)
+func (r *RedisClient) GetProxyMetaKeyValues(ctx context.Context) (RedisHashFieldValuesByKey, error) {
+	pattern := consts.GetProxyMetaConnectionsPattern()
+
+	result := make(RedisHashFieldValuesByKey)
+	var cursor uint64
+
+	batch := make([]string, 0, batchSize)
+	for {
+		keys, nextCursor, err := r.client.Scan(ctx, cursor, pattern, scanCount).Result()
+		if err != nil {
+			return nil, err
+		}
+
+		for _, key := range keys {
+			batch = append(batch, key)
+			if len(batch) >= batchSize {
+				m, err := r.hgetAllBatch(ctx, batch)
+				if err != nil {
+					return nil, err
+				}
+				for k, v := range m {
+					result[k] = v
+				}
+				batch = batch[:0]
+			}
+		}
+
+		cursor = nextCursor
+		if cursor == 0 {
+			break
+		}
+	}
+
+	if len(batch) > 0 {
+		m, err := r.hgetAllBatch(ctx, batch)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range m {
+			result[k] = v
+		}
+	}
+	return result, nil
 }
 
 func (r *RedisClient) SubscribeToRequests(ctx context.Context, proxyID string, handler func(ctx context.Context, proxyID string, request types.GqlRequestPayload) error) {
@@ -206,14 +261,6 @@ func (r *RedisClient) DeleteProxyKeysForBackend(ctx context.Context, backendID s
 	if backendID == "" {
 		return fmt.Errorf("backend ID cannot be empty")
 	}
-
-	// Delete proxy connection keys (proxy:{backendID}:*)
-	connectionPattern := fmt.Sprintf("proxy:%s:*", backendID)
-	connectionKeys, err := r.client.Keys(ctx, connectionPattern).Result()
-	if err != nil {
-		return err
-	}
-
 	// Delete proxy metadata keys (proxy-meta:{backendID}:*)
 	metadataPattern := fmt.Sprintf("proxy-meta:%s:*", backendID)
 	metadataKeys, err := r.client.Keys(ctx, metadataPattern).Result()
@@ -222,21 +269,20 @@ func (r *RedisClient) DeleteProxyKeysForBackend(ctx context.Context, backendID s
 	}
 
 	// Combine all keys to delete
-	allKeys := append(connectionKeys, metadataKeys...)
 
-	if len(allKeys) == 0 {
+	if len(metadataKeys) == 0 {
 		logger.Log.Info("No proxy keys found for backend", "backendID", backendID)
 		return nil
 	}
 
 	// Delete all found keys for this specific backend
-	err = r.client.Del(ctx, allKeys...).Err()
+	err = r.client.Del(ctx, metadataKeys...).Err()
 	if err != nil {
-		logger.Log.Error("Failed to delete proxy keys for backend", "backendID", backendID, "connectionKeys", len(connectionKeys), "metadataKeys", len(metadataKeys), "error", err)
+		logger.Log.Error("Failed to delete proxy keys for backend", "backendID", backendID, "metadataKeys", len(metadataKeys), "error", err)
 		return err
 	}
 
-	logger.Log.Info("Deleted proxy keys for backend", "backendID", backendID, "connectionKeys", len(connectionKeys), "metadataKeys", len(metadataKeys), "total", len(allKeys))
+	logger.Log.Info("Deleted proxy keys for backend", "backendID", backendID, "metadataKeys", len(metadataKeys), "total", len(metadataKeys))
 	return nil
 }
 
@@ -301,6 +347,7 @@ type ProxyMetadata struct {
 	OdigosVersion string
 	ConnectedAt   int64
 	LastSeenAt    int64
+	Status        consts.ProxyConnectionStatus
 }
 
 // SetProxyMetadata sets basic proxy metadata fields (name/type/version) without touching timestamps.
@@ -327,27 +374,8 @@ func (r *RedisClient) UpdateProxyLastSeen(ctx context.Context, proxyID string, l
 	return r.client.HSet(ctx, key, consts.ProxyMetaFieldLastSeenAt, strconv.FormatInt(lastSeenAt, 10)).Err()
 }
 
-// GetProxyMetadata returns proxy metadata if present. Missing fields will be empty/zero.
-func (r *RedisClient) GetProxyMetadata(ctx context.Context, proxyID string) (*ProxyMetadata, error) {
+// SetProxyMetadataStatus sets the connection status field inside proxy metadata hash.
+func (r *RedisClient) SetProxyMetadataStatus(ctx context.Context, proxyID string, status consts.ProxyConnectionStatus) error {
 	key := consts.GetProxyMetadataKey(proxyID)
-	m, err := r.client.HGetAll(ctx, key).Result()
-	if err != nil {
-		return nil, err
-	}
-	md := &ProxyMetadata{
-		PlatformName:  m[consts.ProxyMetaFieldPlatformName],
-		PlatformType:  m[consts.ProxyMetaFieldPlatformType],
-		OdigosVersion: m[consts.ProxyMetaFieldOdigosVersion],
-	}
-	if v := m[consts.ProxyMetaFieldConnectedAt]; v != "" {
-		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
-			md.ConnectedAt = n
-		}
-	}
-	if v := m[consts.ProxyMetaFieldLastSeenAt]; v != "" {
-		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
-			md.LastSeenAt = n
-		}
-	}
-	return md, nil
+	return r.client.HSet(ctx, key, consts.ProxyMetaFieldStatus, string(status)).Err()
 }
