@@ -16,6 +16,7 @@ import (
 	"github.com/odigos-io/central-backend/graph"
 	"github.com/odigos-io/central-backend/internal/config"
 	"github.com/odigos-io/central-backend/internal/consts"
+	"github.com/odigos-io/central-backend/internal/k8s"
 	"github.com/odigos-io/central-backend/internal/keycloak"
 	"github.com/odigos-io/central-backend/internal/logger"
 	"github.com/odigos-io/central-backend/internal/metrics"
@@ -34,7 +35,13 @@ func main() {
 
 	ctx := context.Background()
 
-	credentialsService, err := services.NewCredentialsService()
+	k8sClient, err := k8s.CreateClient()
+	if err != nil {
+		logger.Log.Error("Failed to create k8s client", "error", err)
+		k8sClient = nil
+	}
+
+	credentialsService, err := services.NewCredentialsService(k8sClient)
 	if err != nil {
 		logger.Fatal("Failed to initialize credentials service", err)
 	}
@@ -87,7 +94,7 @@ func main() {
 	userService := services.NewUserService(adminService)
 	teamService := services.NewTeamService(adminService)
 	authService := services.NewAuthService(adminService, userService)
-	ConfigService := services.NewConfigService()
+	ConfigService := services.NewConfigService(k8sClient)
 	healthService := services.NewHealthService(redisClient, adminService, centralSSEHub)
 	computePlatformService := services.NewComputePlatformService(redisClient)
 

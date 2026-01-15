@@ -16,10 +16,11 @@ import (
 // It is intentionally modeled as a service to allow future extensions
 // such as caching, watchers, or additional cluster-level config lookups.
 type ConfigService struct {
+	k8sClient *k8s.Client
 }
 
-func NewConfigService() *ConfigService {
-	return &ConfigService{}
+func NewConfigService(k8sClient *k8s.Client) *ConfigService {
+	return &ConfigService{k8sClient: k8sClient}
 }
 
 func GetCurrentNamespace() string {
@@ -28,14 +29,13 @@ func GetCurrentNamespace() string {
 }
 
 func (svc *ConfigService) GetOdigosCentralVersion(ctx context.Context) string {
-	client, err := k8s.CreateClient()
-	if err != nil {
-		logger.Log.Error("Failed to create k8s client for system version lookup", "error", err)
+	if svc.k8sClient == nil {
+		logger.Log.Error("k8s client is not initialized for system version lookup")
 		return "unknown"
 	}
 
 	currentNamespace := GetCurrentNamespace()
-	odigosDeployment, err := client.CoreV1().ConfigMaps(currentNamespace).Get(ctx, k8sconsts.OdigosCentralDeploymentConfigMapName, metav1.GetOptions{})
+	odigosDeployment, err := svc.k8sClient.CoreV1().ConfigMaps(currentNamespace).Get(ctx, k8sconsts.OdigosCentralDeploymentConfigMapName, metav1.GetOptions{})
 	if err != nil {
 		logger.Log.Error("Failed to get system version ConfigMap", "error", err, "namespace", currentNamespace, "configMap", k8sconsts.OdigosCentralDeploymentConfigMapName)
 		return "unknown"

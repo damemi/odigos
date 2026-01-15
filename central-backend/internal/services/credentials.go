@@ -31,7 +31,7 @@ type OidcCredentials struct {
 	TenantId     string
 }
 
-func NewCredentialsService() (*CredentialsService, error) {
+func NewCredentialsService(k8sClient *k8s.Client) (*CredentialsService, error) {
 	useK8sSecrets := os.Getenv("USE_K8S_SECRETS") == "true"
 
 	if !useK8sSecrets {
@@ -43,9 +43,8 @@ func NewCredentialsService() (*CredentialsService, error) {
 		}, nil
 	}
 
-	k8sClient, err := k8s.CreateClient()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create k8s client: %w", err)
+	if k8sClient == nil {
+		return nil, fmt.Errorf("USE_K8S_SECRETS is true but k8s client is not initialized")
 	}
 
 	namespace := config.GetEnv("KEYCLOAK_SECRET_NAMESPACE", consts.DefaultKeycloakSecretNamespace)
