@@ -166,13 +166,32 @@ func (r *queryResolver) RemoteFetch(ctx context.Context, proxyID string, query s
 		platformName = name
 	}
 
-	// Check if the proxy is subscribed to the requests channel before proceeding, this is to avoid sending requests to proxies that are not connected.
-	// Note: we don't need to check for subscribers in the response channel, because the central backend is the subscriber.
-	hasSubscribers, err := r.RedisClient.HasSubscribers(ctx, requestsChannel)
-	if err != nil {
-		logger.Log.Error("Failed to check channel subscribers", "proxyID", proxyID, "error", err)
-		return "", fmt.Errorf("failed to check cluster connectivity: %w", err)
+	// Check if the proxy is subscribed to the requests channel before proceeding.
+	// Retry with exponential backoff to handle race condition during Redis reconnection.
+	maxRetries := 3
+	retryDelay := 100 * time.Millisecond
+
+	var hasSubscribers bool
+	var err error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		hasSubscribers, err = r.RedisClient.HasSubscribers(ctx, requestsChannel)
+		if err != nil {
+			logger.Log.Error("Failed to check channel subscribers", "proxyID", proxyID, "error", err)
+			return "", fmt.Errorf("failed to check cluster connectivity: %w", err)
+		}
+		if hasSubscribers {
+			break
+		}
+		if attempt < maxRetries {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(retryDelay):
+				retryDelay *= 2
+			}
+		}
 	}
+
 	if !hasSubscribers {
 		logger.Log.Error("Cluster is not connected", "proxyID", proxyID)
 		return "", fmt.Errorf("cluster '%s' is not connected", platformName)

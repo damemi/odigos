@@ -26,11 +26,12 @@ const PlatformTypeQueryParam = "platformType"
 const OdigosVersionQueryParam = "version"
 
 type ProxyConnection struct {
-	Conn          *websocket.Conn
-	PlatformName  string
-	PlatformType  consts.PlatformType
-	OdigosVersion string
-	ConnectedAt   int64
+	Conn               *websocket.Conn
+	PlatformName       string
+	PlatformType       consts.PlatformType
+	OdigosVersion      string
+	ConnectedAt        int64
+	cancelSubscription context.CancelFunc // Used to cancel and restart Redis subscription on reconnect
 }
 
 type WebSocketServer struct {
@@ -89,13 +90,18 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 	const maxMessageSize = 10 * 1024 * 1024 // 10 MB
 	conn.SetReadLimit(maxMessageSize)
 
+	// Create a separate cancellable context for the Redis subscription
+	// This allows us to cancel and restart the subscription on Redis reconnect
+	subCtx, cancelSub := context.WithCancel(ctx)
+
 	now := time.Now().Unix()
 	ws.proxyConnections.Store(proxyID, &ProxyConnection{
-		Conn:          conn,
-		PlatformName:  platformName,
-		PlatformType:  platformType,
-		OdigosVersion: currentVersion,
-		ConnectedAt:   now,
+		Conn:               conn,
+		PlatformName:       platformName,
+		PlatformType:       platformType,
+		OdigosVersion:      currentVersion,
+		ConnectedAt:        now,
+		cancelSubscription: cancelSub,
 	})
 	defer ws.cleanupConnection(ctx, proxyID, conn)
 
@@ -113,7 +119,7 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 		logger.Log.Warn("Failed to update proxy lastSeenAt", "proxyID", proxyID, "error", err)
 	}
 
-	go ws.redisClient.SubscribeToRequests(ctx, proxyID, ws.SendGraphQLRequest)
+	go ws.redisClient.SubscribeToRequests(subCtx, proxyID, ws.SendGraphQLRequest)
 	ws.listenForMessages(ctx, proxyID, conn)
 }
 
@@ -181,6 +187,11 @@ func (ws *WebSocketServer) cleanupConnection(ctx context.Context, proxyID string
 			"proxyID", proxyID,
 			"platformName", proxyConn.PlatformName)
 		return
+	}
+
+	// Cancel the Redis subscription goroutine
+	if proxyConn.cancelSubscription != nil {
+		proxyConn.cancelSubscription()
 	}
 
 	logger.Log.Info("Cleaning up connection", "proxyID", proxyID, "platformName", proxyConn.PlatformName, "platformType", proxyConn.PlatformType)
@@ -446,6 +457,7 @@ func (ws *WebSocketServer) ResyncAllProxiesToRedis(ctx context.Context) {
 			return true
 		}
 
+		// Resync metadata only - subscriptions are self-healing and will reconnect automatically
 		if err := ws.redisClient.SetProxyMetadata(ctx, proxyID, proxyConn.PlatformName, string(proxyConn.PlatformType), proxyConn.OdigosVersion); err != nil {
 			logger.Log.Warn("Failed to resync proxy metadata", "proxyID", proxyID, "error", err)
 		}

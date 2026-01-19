@@ -181,31 +181,54 @@ func (r *RedisClient) GetProxyMetaKeyValues(ctx context.Context) (RedisHashField
 
 func (r *RedisClient) SubscribeToRequests(ctx context.Context, proxyID string, handler func(ctx context.Context, proxyID string, request types.GqlRequestPayload) error) {
 	requestsChannel := consts.GetRequestsChannel(proxyID)
-	sub := r.client.Subscribe(ctx, requestsChannel)
-	ch := sub.Channel()
+	retryDelay := time.Second
+	maxRetryDelay := 30 * time.Second
 
-	defer sub.Close()
-
+	// Outer loop: handles reconnection with exponential backoff
 	for {
-		select {
-		case <-ctx.Done():
+
+		if ctx.Err() != nil {
 			logger.Log.Info("Stopping Redis Requests subscription", "proxyID", proxyID)
 			return
-		case msg, ok := <-ch:
-			if !ok {
-				logger.Log.Warn("Redis request subscription channel closed unexpectedly", "proxyID", proxyID)
+		}
+
+		sub := r.client.Subscribe(ctx, requestsChannel)
+		ch := sub.Channel()
+
+		// Inner loop: handles message processing
+	innerLoop:
+		for {
+			select {
+			case <-ctx.Done():
+				sub.Close()
+				logger.Log.Info("Stopping Redis Requests subscription", "proxyID", proxyID)
 				return
-			}
+			case msg, ok := <-ch:
+				if !ok {
+					sub.Close()
+					logger.Log.Warn("Redis subscription lost, will reconnect", "proxyID", proxyID, "retryIn", retryDelay)
+					break innerLoop
+				}
 
-			var request types.GqlRequestPayload
-			if err := json.Unmarshal([]byte(msg.Payload), &request); err != nil {
-				logger.Log.Warn("Failed to unmarshal request", "error", err)
-				continue
-			}
+				retryDelay = time.Second
 
-			if err := handler(ctx, proxyID, request); err != nil {
-				logger.Log.Error("Failed to handle request", "error", err)
+				var request types.GqlRequestPayload
+				if err := json.Unmarshal([]byte(msg.Payload), &request); err != nil {
+					logger.Log.Warn("Failed to unmarshal request", "error", err)
+					continue
+				}
+
+				if err := handler(ctx, proxyID, request); err != nil {
+					logger.Log.Error("Failed to handle request", "error", err)
+				}
 			}
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(retryDelay):
+			retryDelay = min(retryDelay*2, maxRetryDelay)
 		}
 	}
 }
