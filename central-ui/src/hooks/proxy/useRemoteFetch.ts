@@ -1,10 +1,10 @@
 import { useCallback } from 'react';
 import { useProxy } from './useProxy';
 import { getVersionedQuery } from '@/utils';
+import { useLazyQuery } from '@apollo/client';
 import { StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { REMOTE_FETCH, REMOTE_MULTI_FETCH } from '@/graphql';
-import { type ApolloError, useLazyQuery } from '@apollo/client';
 import type { ComputePlatform, VersionedRemoteFetch } from '@/types';
 import { safeJsonParse, trimVersion } from '@odigos/ui-kit/functions';
 
@@ -30,8 +30,8 @@ export interface MultiFetchResponse<T> {
 interface UseProxy<ResT, ReqT> {
   fetch: (variables?: ReqT, targetProxyID?: string) => Promise<{ data?: ResT }>;
   fetchMulti: (proxyIDs: string[], variables?: ReqT) => Promise<MultiFetchResponse<ResT>>;
+  called: boolean;
   loading: boolean;
-  error?: ApolloError;
   data?: ResT;
   dataMulti?: MultiFetchResponse<ResT>[];
 }
@@ -60,8 +60,8 @@ export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRem
   const { proxyID, odigosVersion } = useProxy();
   const { addNotification } = useNotificationStore();
 
-  const [remoteFetch, { data: cachedData, loading }] = useLazyQuery(REMOTE_FETCH);
-  const [remoteMultiFetch, { data: cachedMultiData, loading: multiLoading }] = useLazyQuery(REMOTE_MULTI_FETCH);
+  const [remoteFetch, { data: cachedData, loading, called }] = useLazyQuery(REMOTE_FETCH);
+  const [remoteMultiFetch, { data: cachedMultiData, loading: multiLoading, called: multiCalled }] = useLazyQuery(REMOTE_MULTI_FETCH);
 
   const fetch: UseProxy<ResT, ReqT>['fetch'] = useCallback(
     async (variables, targetProxyID) => {
@@ -88,16 +88,15 @@ export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRem
         },
       });
 
-      if (error || !data?.remoteFetch) {
-        const errorMessage = error?.cause?.message || error?.message;
-        if (errorMessage) addNotification({ type: StatusType.Error, title: error?.name || 'API Error', message: errorMessage });
+      const errorMessage = error?.cause?.message || error?.message;
+      if (errorMessage) {
+        addNotification({ type: StatusType.Error, title: error?.name || 'API Error', message: errorMessage });
         return {
-          ...EMPTY_RESPONSE_SINGLE,
           error: errorMessage,
         };
-      } else {
-        return safeJsonParse(data?.remoteFetch, EMPTY_RESPONSE_SINGLE);
       }
+
+      return safeJsonParse(data?.remoteFetch, EMPTY_RESPONSE_SINGLE);
     },
     [query, proxyID, odigosVersion, connections, remoteFetch, addNotification],
   );
@@ -165,6 +164,7 @@ export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRem
   return {
     fetch,
     fetchMulti,
+    called: called || multiCalled,
     loading: loading || multiLoading,
     data: safeJsonParse<{ data?: ResT }>(cachedData?.remoteFetch, EMPTY_RESPONSE_SINGLE).data,
     dataMulti: cachedMultiData?.remoteMultiFetch ? cachedMultiData.remoteMultiFetch.map(mapMultiFetchResult<ResT>) : EMPTY_RESPONSE_MULTI<ResT>(),

@@ -14,7 +14,7 @@ export const useTokenCRUD = () => {
     addNotification({ type, title, message, hideFromHistory });
   };
 
-  const { data, loading, fetch: queryAll } = useRemoteFetch<{ computePlatform?: { apiTokens?: TokenPayload[] } }>(GET_TOKENS);
+  const { called, loading, data, fetch: queryAll } = useRemoteFetch<{ computePlatform?: { apiTokens?: TokenPayload[] } }>(GET_TOKENS);
   const { fetch: mutateUpdate } = useRemoteFetch<{ computePlatform?: { apiTokens?: TokenPayload[] } }>(UPDATE_TOKEN);
 
   const updateToken = async (token: string) => {
@@ -28,9 +28,8 @@ export const useTokenCRUD = () => {
   };
 
   useEffect(() => {
-    if (!data?.computePlatform?.apiTokens) queryAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!called) queryAll();
+  }, [called]);
 
   const tokens = useMemo(() => data?.computePlatform?.apiTokens || [], [data?.computePlatform?.apiTokens?.length]);
 
