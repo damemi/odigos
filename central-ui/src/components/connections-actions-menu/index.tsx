@@ -1,9 +1,8 @@
 'use client';
 
 import React, { useEffect, useMemo } from 'react';
-import styled from 'styled-components';
-import Theme from '@odigos/ui-kit/theme';
 import { useComputePlatformsCRUD } from '@/hooks';
+import styled, { useTheme } from 'styled-components';
 import { useFilterStore } from '@odigos/ui-kit/store';
 import { RefreshIcon, SearchIcon } from '@odigos/ui-kit/icons';
 import { Badge, Button, Divider, Dropdown, DropdownOption, DropdownProps, FlexRow, Input, Text } from '@odigos/ui-kit/components';
@@ -30,7 +29,7 @@ const PushRight = styled.div`
 `;
 
 export const ConnectionsActionsMenu = () => {
-  const theme = Theme.useTheme();
+  const theme = useTheme();
   const { computePlatforms, getComputePlatforms, loading } = useComputePlatformsCRUD();
   const { searchText, setSearchText, statuses, setStatuses, platformTypes, setPlatformTypes, clearAll } = useFilterStore();
 

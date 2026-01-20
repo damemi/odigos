@@ -7,7 +7,6 @@ import { useTheme } from 'styled-components';
 import { OverviewHeader } from '@/components';
 import { useDarkMode } from '@odigos/ui-kit/store';
 import { Navbar } from '@odigos/ui-kit/components/v2';
-import { OdigosProvider } from '@odigos/ui-kit/contexts';
 import { useProxy, useSSE, useTokenTracker } from '@/hooks';
 import { ErrorBoundary, FlexColumn, FlexRow } from '@odigos/ui-kit/components';
 
@@ -18,7 +17,7 @@ function V2Layout({ children }: PropsWithChildren) {
 
   const router = useRouter();
   const pathname = usePathname();
-  const { proxyID, odigosVersion, platformType } = useProxy();
+  const { proxyID } = useProxy();
 
   // TODO: remove this after migration to v2
   const theme = useTheme();
@@ -30,15 +29,13 @@ function V2Layout({ children }: PropsWithChildren) {
 
   return (
     <ErrorBoundary>
-      <OdigosProvider version={odigosVersion} platformType={platformType}>
-        <FlexColumn $gap={0}>
-          <OverviewHeader v2 />
-          <FlexRow $gap={0}>
-            <Navbar height='calc(100vh - 90px)' icons={getNavbarIcons(router, pathname, proxyID)} />
-            {children}
-          </FlexRow>
-        </FlexColumn>
-      </OdigosProvider>
+      <FlexColumn $gap={0}>
+        <OverviewHeader v2 />
+        <FlexRow $gap={0}>
+          <Navbar height='calc(100vh - 90px)' icons={getNavbarIcons(router, pathname, proxyID)} />
+          {children}
+        </FlexRow>
+      </FlexColumn>
     </ErrorBoundary>
   );
 }

@@ -1,10 +1,9 @@
 import React, { useState, type FC } from 'react';
-import type { Team, TeamInput } from '@/types';
-import styled from 'styled-components';
 import { TeamCard } from './team-card';
-import Theme from '@odigos/ui-kit/theme';
 import { Relative } from '@/components/styled';
+import type { Team, TeamInput } from '@/types';
 import { MembersCard } from '../cards/members-card';
+import styled, { useTheme } from 'styled-components';
 import { BUTTON_TEXTS } from '@odigos/ui-kit/constants';
 import { PlatformsCard } from '../cards/platforms-card';
 import { useGenericForm, usePopup } from '@odigos/ui-kit/hooks';
@@ -32,7 +31,7 @@ const ActionItem = styled(Text)`
 const DRAWER_WIDTH = '750px';
 
 const EditTeamDrawer: FC<EditTeamDrawerProps> = ({ team, onClose, onSave, onDelete }) => {
-  const theme = Theme.useTheme();
+  const theme = useTheme();
   const { popupRef, popupOpen, setPopupOpen } = usePopup();
   const { formData, handleFormChange, resetFormData, isFormDirty } = useGenericForm({
     name: team.name,

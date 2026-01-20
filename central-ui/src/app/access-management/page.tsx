@@ -1,10 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import styled from 'styled-components';
 import { useUserStore } from '@/store';
-import Theme from '@odigos/ui-kit/theme';
 import { PlusIcon } from '@odigos/ui-kit/icons';
+import styled, { useTheme } from 'styled-components';
 import { UsersTable, CreateUserModal } from '@/components';
 import { CreateTeamModal } from '@/components/modal/create-team-modal';
 import { ComputePlatformsTable, TeamsTable } from '@/components/tables';
@@ -38,7 +37,7 @@ const renderActiveTab = ({ activeTab }: { activeTab: AccessTab }) => {
 };
 
 export default function Page() {
-  const theme = Theme.useTheme();
+  const theme = useTheme();
   const { isAdmin } = useUserStore();
   const [activeTab, setActiveTab] = useState<AccessTab>(AccessTab.Users);
   const [createModalOpenFor, setCreateModalOpenFor] = useState<AccessTab | null>(null);

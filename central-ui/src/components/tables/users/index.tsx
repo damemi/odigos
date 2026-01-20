@@ -2,7 +2,7 @@ import React, { useMemo, useCallback, useState } from 'react';
 import * as UTILS from '@/utils';
 import { useUsersCRUD } from '@/hooks';
 import { useUserStore } from '@/store';
-import Theme from '@odigos/ui-kit/theme';
+import { useTheme } from 'styled-components';
 import { EditUserDrawer } from '@/components';
 import type { User, UserInput } from '@/types';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
@@ -19,7 +19,7 @@ export enum UserTableColumn {
 }
 
 export const UsersTable: React.FC = () => {
-  const theme = Theme.useTheme();
+  const theme = useTheme();
   const { isAdmin } = useUserStore();
   const { addNotification } = useNotificationStore();
   const { users, updateUser, updating, deleteUser, deleting } = useUsersCRUD();

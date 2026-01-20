@@ -1,10 +1,9 @@
 import React, { useState, type FC } from 'react';
 import type { User, UserInput } from '@/types';
-import styled from 'styled-components';
 import { UserCard } from './user-card';
-import Theme from '@odigos/ui-kit/theme';
 import { Relative } from '@/components/styled';
 import { TeamsCard } from '../cards/teams-card';
+import styled, { useTheme } from 'styled-components';
 import { BUTTON_TEXTS } from '@odigos/ui-kit/constants';
 import { useGenericForm, usePopup } from '@odigos/ui-kit/hooks';
 import { RotateArrowsIcon, TrashIcon, UserIcon } from '@odigos/ui-kit/icons';
@@ -31,7 +30,7 @@ const ActionItem = styled(Text)`
 const DRAWER_WIDTH = '750px';
 
 const EditUserDrawer: FC<EditUserDrawerProps> = ({ user, onClose, onSave, onDelete, onResetPassword }) => {
-  const theme = Theme.useTheme();
+  const theme = useTheme();
   const { popupRef, popupOpen, setPopupOpen } = usePopup();
   const { formData, handleFormChange, resetFormData, isFormDirty } = useGenericForm({
     email: user.email || '',

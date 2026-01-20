@@ -12,3 +12,15 @@ export const GET_CONFIG: VersionedRemoteFetch = {
   }
 `,
 };
+
+export const GET_EFFECTIVE_CONFIG: VersionedRemoteFetch = {
+  'v1.16': `
+  query GetEffectiveConfig {
+    effectiveConfig {
+      rollout {
+        automaticRolloutDisabled
+      }
+    }
+  }
+`,
+};

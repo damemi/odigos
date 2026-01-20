@@ -3,10 +3,10 @@
 import React from 'react';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { ComputePlatform, RemoteConfigInput } from '@/types';
-import { GET_REMOTE_CONFIG, UPDATE_REMOTE_CONFIG } from '@/graphql';
-import { type ConnectionRemoteConfig, StatusType } from '@odigos/ui-kit/types';
+import { GET_EFFECTIVE_CONFIG, UPDATE_REMOTE_CONFIG } from '@/graphql';
+import { type EffectiveConfig, StatusType } from '@odigos/ui-kit/types';
 import { useComputePlatformsCRUD, useProxy, useProxyCRUD, useRemoteFetch } from '@/hooks';
-import { ApplyConnectionsConfigurationsFunc, CentralConnections } from '@odigos/ui-kit/containers/v2';
+import { type ApplyConfigurationsFunc, CentralConnections } from '@odigos/ui-kit/containers/v2';
 
 export default function Page() {
   const { selectProxy } = useProxy();
@@ -14,7 +14,7 @@ export default function Page() {
   const { addNotification } = useNotificationStore();
   const { computePlatforms, getComputePlatforms } = useComputePlatformsCRUD();
 
-  const { fetch: getRemoteConfig } = useRemoteFetch<{ remoteConfig: ConnectionRemoteConfig }, void>(GET_REMOTE_CONFIG, computePlatforms);
+  const { fetch: fetchEffectiveConfig } = useRemoteFetch<{ effectiveConfig?: EffectiveConfig }, void>(GET_EFFECTIVE_CONFIG, computePlatforms);
   const { fetchMulti: updateRemoteConfig } = useRemoteFetch<void, { config: RemoteConfigInput }>(UPDATE_REMOTE_CONFIG, computePlatforms);
 
   const onClickConnection = ({ id, status }: ComputePlatform) => {
@@ -35,14 +35,13 @@ export default function Page() {
     return Promise.resolve();
   };
 
-  const applyConfigurations: ApplyConnectionsConfigurationsFunc = (ids, formData) => {
-    return updateRemoteConfig(ids, {
-      config: {
-        rollout: {
-          automaticRolloutDisabled: !formData.automaticRollout,
-        },
-      },
-    });
+  const getEffectiveConfig = async (proxyId: string) => {
+    const { data } = await fetchEffectiveConfig(undefined, proxyId);
+    return data?.effectiveConfig;
+  };
+
+  const applyConfigurations: ApplyConfigurationsFunc = (ids, formData) => {
+    return updateRemoteConfig(ids, { config: formData });
   };
 
   return (
@@ -52,11 +51,7 @@ export default function Page() {
       getConnections={getComputePlatforms}
       onClickConnection={onClickConnection}
       deleteConnection={deleteConnection}
-      getConnectionRemoteConfig={async (id) => {
-        const { data } = await getRemoteConfig(undefined, id);
-        // TODO: support undefined in kit then remove the OR value
-        return data?.remoteConfig || { rollout: { automaticRolloutDisabled: false } };
-      }}
+      getEffectiveConfig={getEffectiveConfig}
       applyConfigurations={applyConfigurations}
     />
   );

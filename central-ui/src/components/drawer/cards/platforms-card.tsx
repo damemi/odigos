@@ -1,5 +1,6 @@
 import React, { useState, type FC, useMemo } from 'react';
-import Theme from '@odigos/ui-kit/theme';
+import { useUserStore } from '@/store';
+import { useTheme } from 'styled-components';
 import type { ComputePlatform } from '@/types';
 import { useComputePlatformsCRUD } from '@/hooks';
 import { getPlatformIcon } from '@odigos/ui-kit/functions';
@@ -7,7 +8,6 @@ import { MinWidthWide, Relative } from '@/components/styled';
 import { DataCardContentColumn, DataCardContentRow } from './styled';
 import { MinusCircledIcon, PlusIcon, SearchIcon } from '@odigos/ui-kit/icons';
 import { DataCard, DataFinger, Dropdown, IconButton, Input, NoDataFound, PopupForm } from '@odigos/ui-kit/components';
-import { useUserStore } from '@/store';
 
 interface FormData {
   addComputePlatformIds: string[];
@@ -22,7 +22,7 @@ interface PlatformsCardProps {
 }
 
 const PlatformsCard: FC<PlatformsCardProps> = ({ currentComputePlatforms, formData, handleFormChange }) => {
-  const theme = Theme.useTheme();
+  const theme = useTheme();
   const { isAdmin } = useUserStore();
   const { computePlatforms } = useComputePlatformsCRUD();
 

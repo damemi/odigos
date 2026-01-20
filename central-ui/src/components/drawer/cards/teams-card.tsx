@@ -2,7 +2,7 @@ import React, { useState, type FC, useMemo } from 'react';
 import type { Team } from '@/types';
 import { useTeamsCRUD } from '@/hooks';
 import { useUserStore } from '@/store';
-import Theme from '@odigos/ui-kit/theme';
+import { useTheme } from 'styled-components';
 import { MEMBERS_COUNT, PLATFORMS_COUNT } from '@/utils';
 import { MinWidthWide, Relative } from '@/components/styled';
 import { DataCardContentColumn, DataCardContentRow } from './styled';
@@ -22,7 +22,7 @@ interface TeamsCardProps {
 }
 
 const TeamsCard: FC<TeamsCardProps> = ({ currentTeams, formData, handleFormChange }) => {
-  const theme = Theme.useTheme();
+  const theme = useTheme();
   const { teams } = useTeamsCRUD();
   const { isAdmin } = useUserStore();
 

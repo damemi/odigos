@@ -2,7 +2,7 @@ import React, { useMemo, useCallback, useState } from 'react';
 import * as UTILS from '@/utils';
 import { useUserStore } from '@/store';
 import { useTeamsCRUD } from '@/hooks';
-import Theme from '@odigos/ui-kit/theme';
+import { useTheme } from 'styled-components';
 import { EditTeamDrawer } from '@/components';
 import type { Team, TeamInput } from '@/types';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
@@ -20,7 +20,7 @@ export enum TeamsTableColumn {
 }
 
 export const TeamsTable: React.FC = () => {
-  const theme = Theme.useTheme();
+  const theme = useTheme();
   const { isAdmin } = useUserStore();
   const { addNotification } = useNotificationStore();
   const { teams, updateTeam, updating, deleteTeam, deleting } = useTeamsCRUD();

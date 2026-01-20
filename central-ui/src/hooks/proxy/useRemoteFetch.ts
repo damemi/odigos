@@ -78,7 +78,9 @@ export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRem
       }
 
       const queryString = getVersionedQuery(query, actualOdigosVersion, addNotification);
-      if (!queryString) return EMPTY_RESPONSE_SINGLE;
+      if (!queryString) {
+        return EMPTY_RESPONSE_SINGLE;
+      }
 
       const { data, error } = await remoteFetch({
         variables: {

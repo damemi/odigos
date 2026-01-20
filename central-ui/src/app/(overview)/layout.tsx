@@ -4,7 +4,9 @@ import React, { type PropsWithChildren } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import styled from 'styled-components';
 import { getNavbarIcons } from '@/utils';
+import { Tier } from '@odigos/ui-kit/types';
 import { OverviewHeader } from '@/components';
+import { OdigosProvider } from '@odigos/ui-kit/contexts';
 import { useProxy, useSSE, useTokenTracker } from '@/hooks';
 import { ErrorBoundary, FlexColumn, IconsNav } from '@odigos/ui-kit/components';
 
@@ -30,17 +32,19 @@ function Layout({ children }: PropsWithChildren) {
 
   const router = useRouter();
   const pathname = usePathname();
-  const { proxyID } = useProxy();
+  const { proxyID, platformType, odigosVersion } = useProxy();
 
   return (
     <ErrorBoundary>
-      <PageContent>
-        <OverviewHeader />
-        <Content>
-          <IconsNav orientation='vertical' mainIcons={getNavbarIcons(router, pathname, proxyID)} subIcons={[]} />
-          <div style={{ width: '100%' }}>{children}</div>
-        </Content>
-      </PageContent>
+      <OdigosProvider platformType={platformType} tier={Tier.Onprem} version={odigosVersion || ''}>
+        <PageContent>
+          <OverviewHeader />
+          <Content>
+            <IconsNav orientation='vertical' mainIcons={getNavbarIcons(router, pathname, proxyID)} subIcons={[]} />
+            <div style={{ width: '100%' }}>{children}</div>
+          </Content>
+        </PageContent>
+      </OdigosProvider>
     </ErrorBoundary>
   );
 }

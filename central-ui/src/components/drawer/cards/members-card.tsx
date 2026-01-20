@@ -2,7 +2,7 @@ import React, { useState, type FC, useMemo } from 'react';
 import type { User } from '@/types';
 import { useUsersCRUD } from '@/hooks';
 import { useUserStore } from '@/store';
-import Theme from '@odigos/ui-kit/theme';
+import { useTheme } from 'styled-components';
 import { MinWidthWide, Relative } from '@/components/styled';
 import { DataCardContentColumn, DataCardContentRow } from './styled';
 import { MinusCircledIcon, PlusIcon, SearchIcon, UserGroupIcon } from '@odigos/ui-kit/icons';
@@ -21,7 +21,7 @@ interface MembersCardProps {
 }
 
 const MembersCard: FC<MembersCardProps> = ({ currentUsers, formData, handleFormChange }) => {
-  const theme = Theme.useTheme();
+  const theme = useTheme();
   const { users } = useUsersCRUD();
   const { isAdmin } = useUserStore();
 
