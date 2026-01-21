@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useOdigos } from '@odigos/ui-kit/contexts';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { ComputePlatform, RemoteConfigInput } from '@/types';
 import { GET_EFFECTIVE_CONFIG, UPDATE_REMOTE_CONFIG } from '@/graphql';
@@ -9,6 +10,7 @@ import { useComputePlatformsCRUD, useProxy, useProxyCRUD, useRemoteFetch } from 
 import { type ApplyConfigurationsFunc, CentralConnections } from '@odigos/ui-kit/containers/v2';
 
 export default function Page() {
+  const { isVm } = useOdigos();
   const { selectProxy } = useProxy();
   const { deleteProxy } = useProxyCRUD();
   const { addNotification } = useNotificationStore();
@@ -51,8 +53,8 @@ export default function Page() {
       getConnections={getComputePlatforms}
       onClickConnection={onClickConnection}
       deleteConnection={deleteConnection}
-      getEffectiveConfig={getEffectiveConfig}
-      applyConfigurations={applyConfigurations}
+      getEffectiveConfig={isVm ? undefined : getEffectiveConfig}
+      applyConfigurations={isVm ? undefined : applyConfigurations}
     />
   );
 }

@@ -4,9 +4,9 @@ import React, { type PropsWithChildren } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import styled from 'styled-components';
 import { getNavbarIcons } from '@/utils';
-import { Tier } from '@odigos/ui-kit/types';
 import { OverviewHeader } from '@/components';
 import { OdigosProvider } from '@odigos/ui-kit/contexts';
+import { PlatformType, Tier } from '@odigos/ui-kit/types';
 import { useProxy, useSSE, useTokenTracker } from '@/hooks';
 import { ErrorBoundary, FlexColumn, IconsNav } from '@odigos/ui-kit/components';
 
@@ -40,7 +40,7 @@ function Layout({ children }: PropsWithChildren) {
         <PageContent>
           <OverviewHeader />
           <Content>
-            <IconsNav orientation='vertical' mainIcons={getNavbarIcons(router, pathname, proxyID)} subIcons={[]} />
+            <IconsNav orientation='vertical' mainIcons={getNavbarIcons(router, pathname, proxyID, platformType === PlatformType.Vm)} subIcons={[]} />
             <div style={{ width: '100%' }}>{children}</div>
           </Content>
         </PageContent>

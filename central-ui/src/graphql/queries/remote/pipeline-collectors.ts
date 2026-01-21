@@ -1,7 +1,9 @@
 import type { VersionedRemoteFetch } from '@/types';
+import { PlatformType } from '@odigos/ui-kit/types';
 
 export const GET_GATEWAY_INFO: VersionedRemoteFetch = {
-  'v1.12': `
+  [PlatformType.K8s]: {
+    'v1.12': `
   query GatewayDeploymentInfo {
     gatewayDeploymentInfo {
       status
@@ -34,12 +36,13 @@ export const GET_GATEWAY_INFO: VersionedRemoteFetch = {
       manifestYAML
       configMapYAML
     }
-  }
-`,
+  }`,
+  },
 };
 
 export const GET_GATEWAY_PODS: VersionedRemoteFetch = {
-  'v1.13': `
+  [PlatformType.K8s]: {
+    'v1.13': `
   query GatewayPods {
     gatewayPods {
       namespace
@@ -50,9 +53,8 @@ export const GET_GATEWAY_PODS: VersionedRemoteFetch = {
       creationTimestamp
       image
     }
-  }
-`,
-  'v1.12': `
+  }`,
+    'v1.12': `
   query GatewayPods {
     gatewayPods {
       namespace
@@ -65,12 +67,13 @@ export const GET_GATEWAY_PODS: VersionedRemoteFetch = {
       creationTimestamp
       image
     }
-  }
-`,
+  }`,
+  },
 };
 
 export const GET_NODE_COLLECTOR_INFO: VersionedRemoteFetch = {
-  'v1.12': `
+  [PlatformType.K8s]: {
+    'v1.12': `
   query OdigletDaemonSetInfo {
     odigletDaemonSetInfo {
       status
@@ -94,12 +97,13 @@ export const GET_NODE_COLLECTOR_INFO: VersionedRemoteFetch = {
       manifestYAML
       configMapYAML
     }
-  }
-`,
+  }`,
+  },
 };
 
 export const GET_NODE_COLLECTOR_PODS: VersionedRemoteFetch = {
-  'v1.13': `
+  [PlatformType.K8s]: {
+    'v1.13': `
   query OdigletPods {
     odigletPods {
       namespace
@@ -110,9 +114,8 @@ export const GET_NODE_COLLECTOR_PODS: VersionedRemoteFetch = {
       creationTimestamp
       image
     }
-  }
-`,
-  'v1.12': `
+  }`,
+    'v1.12': `
   query OdigletPods {
     odigletPods {
       namespace
@@ -125,12 +128,13 @@ export const GET_NODE_COLLECTOR_PODS: VersionedRemoteFetch = {
       creationTimestamp
       image
     }
-  }
-`,
+  }`,
+  },
 };
 
 export const GET_COLLECTOR_POD_INFO: VersionedRemoteFetch = {
-  'v1.13': `
+  [PlatformType.K8s]: {
+    'v1.13': `
   query GetCollectorPodDetails($namespace: String!, $name: String!) {
     collectorPod(namespace: $namespace, name: $name) {
       namespace
@@ -159,9 +163,8 @@ export const GET_COLLECTOR_POD_INFO: VersionedRemoteFetch = {
       }
       manifestYAML
     }
-  }
-`,
-  'v1.12': `
+  }`,
+    'v1.12': `
   query GetCollectorPodDetails($namespace: String!, $name: String!) {
     collectorPod(namespace: $namespace, name: $name) {
       namespace
@@ -189,6 +192,6 @@ export const GET_COLLECTOR_POD_INFO: VersionedRemoteFetch = {
       }
       manifestYAML
     }
-  }
-`,
+  }`,
+  },
 };

@@ -1,7 +1,9 @@
 import type { VersionedRemoteFetch } from '@/types';
+import { PlatformType } from '@odigos/ui-kit/types';
 
 export const GET_SERVICE_MAP: VersionedRemoteFetch = {
-  'v1.11': `
+  [PlatformType.K8s]: {
+    'v1.11': `
   query GetServiceMap {
     getServiceMap {
       services {
@@ -13,6 +15,6 @@ export const GET_SERVICE_MAP: VersionedRemoteFetch = {
         }
       }
     }
-  }
-`,
+  }`,
+  },
 };

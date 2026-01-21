@@ -52,8 +52,9 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
     if (data?.computePlatform?.destinations) {
       const { destinations: items } = data.computePlatform;
       setEntities(EntityTypes.Destination, mapFetchedDestinations(items));
-      setEntitiesLoading(EntityTypes.Destination, false);
     }
+
+    setEntitiesLoading(EntityTypes.Destination, false);
   };
 
   const createDestination: UseDestinationCrud['createDestination'] = async (destination) => {

@@ -1,7 +1,9 @@
 import type { VersionedRemoteFetch } from '@/types';
+import { PlatformType } from '@odigos/ui-kit/types';
 
 export const GET_INSTRUMENTATION_RULES: VersionedRemoteFetch = {
-  'v1.11': `
+  [PlatformType.K8s]: {
+    'v1.11': `
   query GetInstrumentationRules {
     computePlatform {
       instrumentationRules {
@@ -64,6 +66,6 @@ export const GET_INSTRUMENTATION_RULES: VersionedRemoteFetch = {
         }
       }
     }
-  }
-`,
+  }`,
+  },
 };

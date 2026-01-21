@@ -33,11 +33,18 @@ interface UseProxy<ResT, ReqT> {
   called: boolean;
   loading: boolean;
   data?: ResT;
-  dataMulti?: MultiFetchResponse<ResT>[];
+  dataMulti?: MultiFetchResult<ResT>[];
+}
+
+interface ParsedSingleResponse<ResT> {
+  request_id: string;
+  data?: ResT & { errors?: { message: string }[] };
 }
 
 const EMPTY_RESPONSE_SINGLE = {
+  request_id: '',
   data: undefined,
+  error: undefined,
 };
 
 const EMPTY_RESPONSE_MULTI = <T>(error?: string): MultiFetchResponse<T> => ({
@@ -57,10 +64,10 @@ const mapMultiFetchResult = <T>(result: MultiFetchResult<string>): MultiFetchRes
 });
 
 export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRemoteFetch, connections: ComputePlatform[] = []): UseProxy<ResT, ReqT> => {
-  const { proxyID, odigosVersion } = useProxy();
+  const { proxyID, odigosVersion, platformType } = useProxy();
   const { addNotification } = useNotificationStore();
 
-  const [remoteFetch, { data: cachedData, loading, called }] = useLazyQuery(REMOTE_FETCH);
+  const [remoteFetch, { data: cachedData, loading, called }] = useLazyQuery<{ remoteFetch?: string }>(REMOTE_FETCH);
   const [remoteMultiFetch, { data: cachedMultiData, loading: multiLoading, called: multiCalled }] = useLazyQuery(REMOTE_MULTI_FETCH);
 
   const fetch: UseProxy<ResT, ReqT>['fetch'] = useCallback(
@@ -71,18 +78,24 @@ export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRem
         return EMPTY_RESPONSE_SINGLE;
       }
 
+      const actualPlatformType = platformType || connections.find((cp) => cp.id === actualProxyId)?.type;
+      if (!actualPlatformType) {
+        console.warn('Missing required "platformType" for single-remote fetch!');
+        return EMPTY_RESPONSE_SINGLE;
+      }
+
       const actualOdigosVersion = odigosVersion || connections.find((cp) => cp.id === actualProxyId)?.odigosVersion;
       if (!actualOdigosVersion) {
         console.warn('Missing required "odigosVersion" for single-remote fetch!');
         return EMPTY_RESPONSE_SINGLE;
       }
 
-      const queryString = getVersionedQuery(query, actualOdigosVersion, addNotification);
+      const queryString = getVersionedQuery(query, actualPlatformType, actualOdigosVersion, addNotification);
       if (!queryString) {
         return EMPTY_RESPONSE_SINGLE;
       }
 
-      const { data, error } = await remoteFetch({
+      const { error, data } = await remoteFetch({
         variables: {
           proxyID: actualProxyId,
           query: queryString,
@@ -94,13 +107,14 @@ export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRem
       if (errorMessage) {
         addNotification({ type: StatusType.Error, title: error?.name || 'API Error', message: errorMessage });
         return {
+          ...EMPTY_RESPONSE_SINGLE,
           error: errorMessage,
         };
       }
 
-      return safeJsonParse(data?.remoteFetch, EMPTY_RESPONSE_SINGLE);
+      return safeJsonParse<ParsedSingleResponse<ResT>>(data?.remoteFetch, EMPTY_RESPONSE_SINGLE);
     },
-    [query, proxyID, odigosVersion, connections, remoteFetch, addNotification],
+    [query, proxyID, platformType, odigosVersion, connections, remoteFetch, addNotification],
   );
 
   const fetchMulti: UseProxy<ResT, ReqT>['fetchMulti'] = useCallback(
@@ -118,13 +132,13 @@ export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRem
         };
       } = {};
 
-      for (const { id, odigosVersion } of targetConnections) {
-        const queryString = getVersionedQuery(query, odigosVersion, addNotification);
+      for (const { id, type, odigosVersion: vers } of targetConnections) {
+        const queryString = getVersionedQuery(query, type, vers, addNotification);
         if (queryString) {
-          const key = `v${trimVersion(odigosVersion)}` as keyof VersionedRemoteFetch;
+          const versionKey = `v${trimVersion(vers)}` as keyof VersionedRemoteFetch;
 
-          if (!versionedProxyIDs[key]) versionedProxyIDs[key] = { queryString, proxyIDs: [] };
-          versionedProxyIDs[key]!.proxyIDs.push(id);
+          if (!versionedProxyIDs[versionKey]) versionedProxyIDs[versionKey] = { queryString, proxyIDs: [] };
+          versionedProxyIDs[versionKey]!.proxyIDs.push(id);
         }
       }
 
@@ -169,6 +183,6 @@ export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRem
     called: called || multiCalled,
     loading: loading || multiLoading,
     data: safeJsonParse<{ data?: ResT }>(cachedData?.remoteFetch, EMPTY_RESPONSE_SINGLE).data,
-    dataMulti: cachedMultiData?.remoteMultiFetch ? cachedMultiData.remoteMultiFetch.map(mapMultiFetchResult<ResT>) : EMPTY_RESPONSE_MULTI<ResT>(),
+    dataMulti: cachedMultiData?.remoteMultiFetch ? cachedMultiData.remoteMultiFetch.map(mapMultiFetchResult<ResT>) : [],
   };
 };

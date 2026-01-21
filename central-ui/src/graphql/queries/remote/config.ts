@@ -1,7 +1,9 @@
 import type { VersionedRemoteFetch } from '@/types';
+import { PlatformType } from '@odigos/ui-kit/types';
 
 export const GET_CONFIG: VersionedRemoteFetch = {
-  'v1.11': `
+  [PlatformType.K8s]: {
+    'v1.11': `
   query GetConfig {
     config {
       tier
@@ -9,12 +11,24 @@ export const GET_CONFIG: VersionedRemoteFetch = {
       installationMethod
       installationStatus
     }
-  }
-`,
+  }`,
+  },
+  [PlatformType.Vm]: {
+    'v0.1': `
+  query GetConfig {
+    config {
+      tier
+      readonly
+      installationMethod
+      installationStatus
+    }
+  }`,
+  },
 };
 
 export const GET_EFFECTIVE_CONFIG: VersionedRemoteFetch = {
-  'v1.16': `
+  [PlatformType.K8s]: {
+    'v1.16': `
   query GetEffectiveConfig {
     effectiveConfig {
       rollout {
@@ -23,4 +37,5 @@ export const GET_EFFECTIVE_CONFIG: VersionedRemoteFetch = {
     }
   }
 `,
+  },
 };

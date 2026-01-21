@@ -1,7 +1,9 @@
 import type { VersionedRemoteFetch } from '@/types';
+import { PlatformType } from '@odigos/ui-kit/types';
 
 export const CREATE_ACTION: VersionedRemoteFetch = {
-  'v1.11': `
+  [PlatformType.K8s]: {
+    'v1.11': `
   mutation CreateAction($action: ActionInput!) {
     createAction(action: $action) {
       id
@@ -31,7 +33,6 @@ export const CREATE_ACTION: VersionedRemoteFetch = {
         attributeNamesToDelete
         renames
         piiCategories
-
         samplingPercentage
         fallbackSamplingRatio
         endpointsFilters {
@@ -65,12 +66,13 @@ export const CREATE_ACTION: VersionedRemoteFetch = {
         lastTransitionTime
       }
     }
-  }
-`,
+  }`,
+  },
 };
 
 export const UPDATE_ACTION: VersionedRemoteFetch = {
-  'v1.11': `
+  [PlatformType.K8s]: {
+    'v1.11': `
   mutation UpdateAction($id: ID!, $action: ActionInput!) {
     updateAction(id: $id, action: $action) {
       id
@@ -133,14 +135,15 @@ export const UPDATE_ACTION: VersionedRemoteFetch = {
         lastTransitionTime
       }
     }
-  }
-`,
+  }`,
+  },
 };
 
 export const DELETE_ACTION: VersionedRemoteFetch = {
-  'v1.11': `
+  [PlatformType.K8s]: {
+    'v1.11': `
   mutation DeleteAction($id: ID!, $actionType: String!) {
     deleteAction(id: $id, actionType: $actionType)
-  }
-`,
+  }`,
+  },
 };

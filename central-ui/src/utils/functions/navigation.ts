@@ -13,19 +13,21 @@ const getPayloadForIcon = (router: AppRouterInstance, currentPath: string, targe
   };
 };
 
-export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, proxyID?: string) => {
+export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, proxyID?: string, isVm?: boolean) => {
   const navIcons: NavbarProps['icons'] = [];
 
   navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.CONNECTIONS, ConnectionsIcon));
 
   if (proxyID) {
     navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.OVERVIEW, OverviewIcon));
-    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SERVICE_MAP, ServiceMapIcon));
-    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.PIPELINE_COLLECTORS, PipelineCollectorIcon));
     // navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SOURCES, SourceIcon));
     // navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.DESTINATIONS, DestinationIcon));
     // navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.ACTIONS, ActionIcon));
     // navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.INSTRUMENTATION_RULES, InstrumentationRuleIcon));
+    if (!isVm) {
+      navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SERVICE_MAP, ServiceMapIcon));
+      navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.PIPELINE_COLLECTORS, PipelineCollectorIcon));
+    }
   }
 
   navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.ACCESS_MANAGEMENT, UserSettingsIcon));

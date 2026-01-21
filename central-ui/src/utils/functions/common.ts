@@ -1,7 +1,7 @@
-import { StatusType } from '@odigos/ui-kit/types';
 import { trimVersion } from '@odigos/ui-kit/functions';
 import { type NotifyPayload } from '@odigos/ui-kit/store';
 import { Role, type VersionedRemoteFetch } from '@/types';
+import { PlatformType, StatusType } from '@odigos/ui-kit/types';
 
 export const getStatusForRole = (role: Role): StatusType => {
   switch (role) {
@@ -16,23 +16,39 @@ export const getStatusForRole = (role: Role): StatusType => {
   }
 };
 
-type GetVersionedQuery = (query: VersionedRemoteFetch, odigosVersion: string, notify?: (notification: NotifyPayload) => void) => string | undefined;
+export const getVersionedQuery = (query: VersionedRemoteFetch, platformType?: PlatformType, odigosVersion?: string, notify?: (notification: NotifyPayload) => void): string | undefined => {
+  if (!platformType || !odigosVersion) return undefined;
 
-export const getVersionedQuery: GetVersionedQuery = (query, odigosVersion, notify) => {
   // do not reverse this sort, or it will directly affect the targetVersion calculation
-  const supportedVersions = (Object.keys(query) as (keyof VersionedRemoteFetch)[]).sort((a, b) => trimVersion(b) - trimVersion(a));
+  const supportedVersions = (Object.keys(query[platformType] || {}) as (keyof VersionedRemoteFetch[PlatformType])[]).sort((a, b) => trimVersion(b) - trimVersion(a));
+  const minSupportedVersion = supportedVersions[supportedVersions.length - 1];
   const targetVersion = supportedVersions.find((supportedVersion) => trimVersion(odigosVersion) >= trimVersion(supportedVersion));
 
   if (!targetVersion) {
-    const minSupportedVersion = supportedVersions[supportedVersions.length - 1];
+    // Extract any query string from the nested structure to parse the operation name for the error message.
+    // Example: query = { k8s: { 'v1.16': 'query GetSources(...) {...}' }, vm: { 'v0.1': '...' } }
+    //   -> firstPlatformQueries = { 'v1.16': 'query GetSources(...) {...}' }
+    //   -> anyQueryString = 'query GetSources(...) {...}'
+    const firstPlatformQueries = Object.values(query || {})[0] || {};
+    const anyQueryString = (Object.values(firstPlatformQueries)[0] as string) || '';
 
-    notify?.({
-      type: StatusType.Error,
-      title: 'Upgrade Required',
-      message: `To use this feature, upgrade Proxy to Odigos ${minSupportedVersion} or later. Current version: ${odigosVersion}.`,
-    });
+    const [_, operationName] = anyQueryString.replaceAll('\n', ' ').trim().split(' ');
+    const featureString = operationName ? `The "${operationName.split('(')[0]}"` : 'This';
 
-    return undefined;
+    if (minSupportedVersion) {
+      notify?.({
+        type: StatusType.Error,
+        title: 'Upgrade Required',
+        message: `${featureString} feature is not supported for "${odigosVersion}", please upgrade the Proxy to "${minSupportedVersion}" or later.`,
+      });
+    } else {
+      notify?.({
+        type: StatusType.Error,
+        title: 'Not Supported',
+        message: `${featureString} feature is not supported for "${platformType.toUpperCase()}" platform.`,
+      });
+    }
   }
-  return query[targetVersion];
+
+  return targetVersion ? query[platformType]?.[targetVersion] : undefined;
 };

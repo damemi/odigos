@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 import { useConfig } from '../config';
 import { useRemoteFetch } from '../proxy';
+import { useOdigos } from '@odigos/ui-kit/contexts';
 import type { ActionInput, FetchedAction } from '@/types';
-import type { ActionFormData } from '@odigos/ui-kit/types';
 import { getSseTargetFromId } from '@odigos/ui-kit/functions';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
+import { type ActionFormData, PlatformType } from '@odigos/ui-kit/types';
 import { useEntityStore, useNotificationStore } from '@odigos/ui-kit/store';
 import { CREATE_ACTION, DELETE_ACTION, GET_ACTIONS, UPDATE_ACTION } from '@/graphql';
 import { type Action, ActionType, Crud, EntityTypes, StatusType } from '@odigos/ui-kit/types';
@@ -39,6 +40,7 @@ const parseRenames = (action: FetchedAction): Action => {
 };
 
 export const useActionCRUD = (): UseActionCrud => {
+  const { isVm } = useOdigos();
   const { isReadonly } = useConfig();
   const { addNotification } = useNotificationStore();
   const { actionsLoading, setEntitiesLoading, actions, setEntities, removeEntities } = useEntityStore();
@@ -60,15 +62,18 @@ export const useActionCRUD = (): UseActionCrud => {
   const { fetch: mutateDelete } = useRemoteFetch<{ deleteAction: boolean }>(DELETE_ACTION);
 
   const fetchActions: UseActionCrud['fetchActions'] = async () => {
+    // we do this to prevent unwanted "toast errors" in the UI
+    if (isVm) return;
+
     setEntitiesLoading(EntityTypes.Action, true);
     const { data } = await queryAll();
 
     if (data?.computePlatform?.actions) {
       const { actions: items } = data.computePlatform;
-
       setEntities(EntityTypes.Action, items.map(parseRenames));
-      setEntitiesLoading(EntityTypes.Action, false);
     }
+
+    setEntitiesLoading(EntityTypes.Action, false);
   };
 
   const createAction: UseActionCrud['createAction'] = async (payload) => {

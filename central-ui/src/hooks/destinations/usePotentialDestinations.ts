@@ -1,5 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useRemoteFetch } from '../proxy';
+import { useOdigos } from '@odigos/ui-kit/contexts';
+import { PlatformType } from '@odigos/ui-kit/types';
 import { GET_POTENTIAL_DESTINATIONS } from '@/graphql';
 import { deepClone, safeJsonParse } from '@odigos/ui-kit/functions';
 import { useDestinationCategories } from './useDestinationCategories';
@@ -42,8 +44,9 @@ const checkIfConfigured = (
 };
 
 export const usePotentialDestinations = () => {
-  const { configuredDestinations } = useSetupStore();
+  const { isVm } = useOdigos();
   const { categories } = useDestinationCategories();
+  const { configuredDestinations } = useSetupStore();
 
   const { fetch, loading, data } = useRemoteFetch<GetPotentialDestinationsData>(GET_POTENTIAL_DESTINATIONS);
 
@@ -82,7 +85,7 @@ export const usePotentialDestinations = () => {
   }, [configuredDestinations, categories, data?.potentialDestinations]);
 
   useEffect(() => {
-    if (!data?.potentialDestinations) fetch();
+    if (!isVm && !data?.potentialDestinations) fetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

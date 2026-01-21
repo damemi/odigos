@@ -1,7 +1,9 @@
 import type { VersionedRemoteFetch } from '@/types';
+import { PlatformType } from '@odigos/ui-kit/types';
 
 export const GET_DESCRIBE_ODIGOS: VersionedRemoteFetch = {
-  'v1.11': `
+  [PlatformType.K8s]: {
+    'v1.11': `
   query DescribeOdigos {
     describeOdigos {
       odigosVersion {
@@ -155,12 +157,13 @@ export const GET_DESCRIBE_ODIGOS: VersionedRemoteFetch = {
         }
       }
     }
-  }
-`,
+  }`,
+  },
 };
 
 export const GET_DESCRIBE_SOURCE: VersionedRemoteFetch = {
-  'v1.12': `
+  [PlatformType.K8s]: {
+    'v1.12': `
   query DescribeSource($namespace: String!, $kind: String!, $name: String!) {
     describeSource(namespace: $namespace, kind: $kind, name: $name) {
       totalPods
@@ -245,9 +248,8 @@ export const GET_DESCRIBE_SOURCE: VersionedRemoteFetch = {
         manifestYAML
       }
     }
-  }
-`,
-  'v1.11': `
+  }`,
+    'v1.11': `
   query DescribeSource($namespace: String!, $kind: String!, $name: String!) {
     describeSource(namespace: $namespace, kind: $kind, name: $name) {
       totalPods
@@ -331,6 +333,6 @@ export const GET_DESCRIBE_SOURCE: VersionedRemoteFetch = {
         }
       }
     }
-  }
-`,
+  }`,
+  },
 };

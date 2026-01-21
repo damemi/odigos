@@ -2,12 +2,13 @@ import { useEffect } from 'react';
 import { useConfig } from '../config';
 import { useRemoteFetch } from '../proxy';
 import { useNamespace } from '../namespaces';
+import { useOdigos } from '@odigos/ui-kit/contexts';
 import { getSseTargetFromId } from '@odigos/ui-kit/functions';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
 import type { SourceConditions, SourceInstrumentInput } from '@/types';
 import { addAgentInjectionStatusToSources, addConditionToSources, prepareNamespacePayloads, prepareSourcePayloads } from '@/utils';
 import { GET_SOURCE, GET_SOURCE_CONDITIONS, GET_SOURCE_LIBRARIES, GET_SOURCES, GET_WORKLOADS, PERSIST_SOURCES, UPDATE_SOURCE } from '@/graphql';
-import { Crud, EntityTypes, StatusType, type SourceFormData, type Source, type WorkloadId, type InstrumentationInstanceComponent, Workload } from '@odigos/ui-kit/types';
+import { Crud, EntityTypes, StatusType, type SourceFormData, type Source, type WorkloadId, type InstrumentationInstanceComponent, Workload, PlatformType } from '@odigos/ui-kit/types';
 import {
   type NamespaceSelectionFormData,
   type SourceSelectionFormData,
@@ -30,6 +31,7 @@ interface UseSourceCrud {
 }
 
 export const useSourceCRUD = (): UseSourceCrud => {
+  const { isVm } = useOdigos();
   const { isReadonly } = useConfig();
   const { setProgress } = useProgressStore();
   const { persistNamespaces } = useNamespace();
@@ -75,6 +77,9 @@ export const useSourceCRUD = (): UseSourceCrud => {
   };
 
   const fetchAllConditions = async (allSources: Source[]) => {
+    // we do this to prevent unwanted "toast errors" in the UI
+    if (isVm) return;
+
     const { data } = await queryOtherConditions();
     const { sourceConditions } = data || {};
 
@@ -91,6 +96,9 @@ export const useSourceCRUD = (): UseSourceCrud => {
   };
 
   const fetchAllAgentInjectionStatuses = async (allSources: Source[]) => {
+    // we do this to prevent unwanted "toast errors" in the UI
+    if (isVm) return;
+
     const reqPayload = allSources.length === 1 ? { filter: { namespace: allSources[0].namespace, kind: allSources[0].kind, name: allSources[0].name } } : undefined;
 
     const { data } = await queryWorkloads(reqPayload);
@@ -116,12 +124,13 @@ export const useSourceCRUD = (): UseSourceCrud => {
 
     if (fetchedSources) {
       setEntities(EntityTypes.Source, fetchedSources);
-      setEntitiesLoading(EntityTypes.Source, false);
       if (fetchedSources.length) {
         fetchAllAgentInjectionStatuses(fetchedSources);
         fetchAllConditions(fetchedSources);
       }
     }
+
+    setEntitiesLoading(EntityTypes.Source, false);
   };
 
   const fetchSourceById = async (id: WorkloadId): Promise<Source | undefined> => {

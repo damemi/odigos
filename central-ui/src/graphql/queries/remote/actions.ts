@@ -1,7 +1,9 @@
 import type { VersionedRemoteFetch } from '@/types';
+import { PlatformType } from '@odigos/ui-kit/types';
 
 export const GET_ACTIONS: VersionedRemoteFetch = {
-  'v1.11': `
+  [PlatformType.K8s]: {
+    'v1.11': `
   query GetActions {
     computePlatform {
       actions {
@@ -32,7 +34,6 @@ export const GET_ACTIONS: VersionedRemoteFetch = {
           attributeNamesToDelete
           renames
           piiCategories
-
           samplingPercentage
           fallbackSamplingRatio
           endpointsFilters {
@@ -67,6 +68,6 @@ export const GET_ACTIONS: VersionedRemoteFetch = {
         }
       }
     }
-  }
-`,
+  }`,
+  },
 };

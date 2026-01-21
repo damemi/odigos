@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { AccountMenu } from '../account-menu';
+import { useOdigos } from '@odigos/ui-kit/contexts';
 import { FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { StatusKeys, useStatusStore } from '../../store';
 import { Header, Tooltip } from '@odigos/ui-kit/components';
@@ -11,6 +12,8 @@ import { NotificationManager, SlackInvite, SystemOverview, ToggleDarkMode } from
 
 const OverviewHeader = ({ v2 }: { v2?: boolean }) => {
   useHealth();
+
+  const { isVm } = useOdigos();
   const { isReadonly } = useConfig();
   const { proxyID, proxyName } = useProxy();
   const { fetchDescribeOdigos } = useDescribe();
@@ -61,11 +64,11 @@ const OverviewHeader = ({ v2 }: { v2?: boolean }) => {
   const right = useMemo(() => {
     const arr = [<NotificationManager key='notification-manager' />];
     if (!v2) arr.unshift(<ToggleDarkMode key='toggle-theme' />);
-    if (proxyID) arr.push(<SystemOverview key='system-overview' tokens={tokens} saveToken={updateToken} fetchDescribeOdigos={fetchDescribeOdigos} />);
+    if (!isVm && proxyID) arr.push(<SystemOverview key='system-overview' tokens={tokens} saveToken={updateToken} fetchDescribeOdigos={fetchDescribeOdigos} />);
     arr.push(...[<SlackInvite key='slack-invite' />, <AccountMenu key='account-menu' />]);
 
     return arr;
-  }, [v2, proxyID, proxyName, tokens]);
+  }, [v2, isVm, proxyID, proxyName, tokens]);
 
   if (v2) {
     return <V2Header left={left} right={right} />;

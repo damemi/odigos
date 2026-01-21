@@ -7,6 +7,8 @@ import { useTheme } from 'styled-components';
 import { OverviewHeader } from '@/components';
 import { useDarkMode } from '@odigos/ui-kit/store';
 import { Navbar } from '@odigos/ui-kit/components/v2';
+import { OdigosProvider } from '@odigos/ui-kit/contexts';
+import { PlatformType, Tier } from '@odigos/ui-kit/types';
 import { useProxy, useSSE, useTokenTracker } from '@/hooks';
 import { ErrorBoundary, FlexColumn, FlexRow } from '@odigos/ui-kit/components';
 
@@ -17,7 +19,7 @@ function V2Layout({ children }: PropsWithChildren) {
 
   const router = useRouter();
   const pathname = usePathname();
-  const { proxyID } = useProxy();
+  const { proxyID, platformType, odigosVersion } = useProxy();
 
   // TODO: remove this after migration to v2
   const theme = useTheme();
@@ -29,13 +31,16 @@ function V2Layout({ children }: PropsWithChildren) {
 
   return (
     <ErrorBoundary>
-      <FlexColumn $gap={0}>
-        <OverviewHeader v2 />
-        <FlexRow $gap={0}>
-          <Navbar height='calc(100vh - 90px)' icons={getNavbarIcons(router, pathname, proxyID)} />
-          {children}
-        </FlexRow>
-      </FlexColumn>
+      {/* provider is not needed for /connections page, but needed for others like /pipeline-collectors */}
+      <OdigosProvider platformType={platformType} tier={Tier.Onprem} version={odigosVersion || ''}>
+        <FlexColumn $gap={0}>
+          <OverviewHeader v2 />
+          <FlexRow $gap={0}>
+            <Navbar height='calc(100vh - 90px)' icons={getNavbarIcons(router, pathname, proxyID, platformType === PlatformType.Vm)} />
+            {children}
+          </FlexRow>
+        </FlexColumn>
+      </OdigosProvider>
     </ErrorBoundary>
   );
 }

@@ -1,8 +1,10 @@
-import { VersionedRemoteFetch } from '@/types';
+import type { VersionedRemoteFetch } from '@/types';
+import { PlatformType } from '@odigos/ui-kit/types';
 
 // TODO: add all fields and migrate away from GET_SOURCES
 export const GET_WORKLOADS: VersionedRemoteFetch = {
-  'v1.11': `
+  [PlatformType.K8s]: {
+    'v1.11': `
   query GetWorkloads($filter: WorkloadFilter) {
     workloads(filter: $filter) {
       id {
@@ -15,6 +17,6 @@ export const GET_WORKLOADS: VersionedRemoteFetch = {
         message
       }
     }
-  }
-`,
+  }`,
+  },
 };

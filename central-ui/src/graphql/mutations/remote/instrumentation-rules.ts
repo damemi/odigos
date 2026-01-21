@@ -1,7 +1,9 @@
 import type { VersionedRemoteFetch } from '@/types';
+import { PlatformType } from '@odigos/ui-kit/types';
 
 export const CREATE_INSTRUMENTATION_RULE: VersionedRemoteFetch = {
-  'v1.11': `
+  [PlatformType.K8s]: {
+    'v1.11': `
   mutation CreateInstrumentationRule($instrumentationRule: InstrumentationRuleInput!) {
     createInstrumentationRule(instrumentationRule: $instrumentationRule) {
       type
@@ -55,12 +57,13 @@ export const CREATE_INSTRUMENTATION_RULE: VersionedRemoteFetch = {
         }
       }
     }
-  }
-`,
+  }`,
+  },
 };
 
 export const UPDATE_INSTURMENTATION_RULE: VersionedRemoteFetch = {
-  'v1.11': `
+  [PlatformType.K8s]: {
+    'v1.11': `
   mutation UpdateInstrumentationRule($ruleId: ID!, $instrumentationRule: InstrumentationRuleInput!) {
     updateInstrumentationRule(ruleId: $ruleId, instrumentationRule: $instrumentationRule) {
       type
@@ -114,14 +117,15 @@ export const UPDATE_INSTURMENTATION_RULE: VersionedRemoteFetch = {
         }
       }
     }
-  }
-`,
+  }`,
+  },
 };
 
 export const DELETE_INSTURMENTATION_RULE: VersionedRemoteFetch = {
-  'v1.11': `
+  [PlatformType.K8s]: {
+    'v1.11': `
   mutation DeleteInstrumentationRule($ruleId: ID!) {
     deleteInstrumentationRule(ruleId: $ruleId)
-  }
-`,
+  }`,
+  },
 };

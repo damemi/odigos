@@ -28,8 +28,9 @@ export const useNamespace = () => {
     if (data?.computePlatform?.k8sActualNamespaces) {
       const { k8sActualNamespaces: items } = data.computePlatform;
       setEntities(EntityTypes.Namespace, items);
-      setEntitiesLoading(EntityTypes.Namespace, false);
     }
+
+    setEntitiesLoading(EntityTypes.Namespace, false);
   };
 
   const persistNamespaces = async (payload: NamespaceInstrumentInput) => {

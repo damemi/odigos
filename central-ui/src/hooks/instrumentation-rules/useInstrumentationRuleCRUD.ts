@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
 import { useConfig } from '../config';
 import { useRemoteFetch } from '../proxy';
+import { useOdigos } from '@odigos/ui-kit/contexts';
 import { getSseTargetFromId } from '@odigos/ui-kit/functions';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { useEntityStore, useNotificationStore } from '@odigos/ui-kit/store';
-import { Crud, EntityTypes, StatusType, type InstrumentationRule, type InstrumentationRuleFormData } from '@odigos/ui-kit/types';
 import { CREATE_INSTRUMENTATION_RULE, DELETE_INSTURMENTATION_RULE, GET_INSTRUMENTATION_RULES, UPDATE_INSTURMENTATION_RULE } from '@/graphql';
+import { Crud, EntityTypes, StatusType, type InstrumentationRule, type InstrumentationRuleFormData, PlatformType } from '@odigos/ui-kit/types';
 
 interface UseInstrumentationRuleCrud {
   instrumentationRules: InstrumentationRule[];
@@ -17,6 +18,7 @@ interface UseInstrumentationRuleCrud {
 }
 
 export const useInstrumentationRuleCRUD = (): UseInstrumentationRuleCrud => {
+  const { isVm } = useOdigos();
   const { isReadonly } = useConfig();
   const { addNotification } = useNotificationStore();
   const { instrumentationRulesLoading, setEntitiesLoading, instrumentationRules, setEntities, addEntities, removeEntities } = useEntityStore();
@@ -38,15 +40,18 @@ export const useInstrumentationRuleCRUD = (): UseInstrumentationRuleCrud => {
   const { fetch: mutateDelete } = useRemoteFetch<{ deleteInstrumentationRule: boolean }>(DELETE_INSTURMENTATION_RULE);
 
   const fetchInstrumentationRules = async () => {
+    // we do this to prevent unwanted "toast errors" in the UI
+    if (isVm) return;
+
     setEntitiesLoading(EntityTypes.InstrumentationRule, true);
     const { data } = await queryAll();
 
     if (data?.computePlatform?.instrumentationRules) {
       const { instrumentationRules: items } = data.computePlatform;
-
       setEntities(EntityTypes.InstrumentationRule, items);
-      setEntitiesLoading(EntityTypes.InstrumentationRule, false);
     }
+
+    setEntitiesLoading(EntityTypes.InstrumentationRule, false);
   };
 
   const createInstrumentationRule: UseInstrumentationRuleCrud['createInstrumentationRule'] = async (instrumentationRule) => {

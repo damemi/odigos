@@ -514,10 +514,10 @@
     "@emnapi/runtime" "^1.4.3"
     "@tybys/wasm-util" "^0.10.0"
 
-"@next/bundle-analyzer@^16.1.3":
-  version "16.1.3"
-  resolved "https://registry.yarnpkg.com/@next/bundle-analyzer/-/bundle-analyzer-16.1.3.tgz#5fa5e4541e5ae72b2a4bf69173c957c2be070aab"
-  integrity sha512-Nq6z7NhMg5X7aISpBXTUi7O3r/kvdXE6Ni9T+ofN2hI0qNNDa6ZIAZOezxcQu2M/I7QDIQ3Nd3FVN5MjSRWYqg==
+"@next/bundle-analyzer@^16.1.4":
+  version "16.1.4"
+  resolved "https://registry.yarnpkg.com/@next/bundle-analyzer/-/bundle-analyzer-16.1.4.tgz#1b3b4f10633ad2bf8d2bf2170eb25a0ce6fa291a"
+  integrity sha512-JpZKyFfPGVb9Vbbry0vhluvqAUbaGrI368Gjl5UZg+LEZhiBLc74Am+VEtjLp5RWxgn2dC1ymtQh+jeVu74WJQ==
   dependencies:
     webpack-bundle-analyzer "4.10.1"
 
@@ -526,10 +526,10 @@
   resolved "https://registry.yarnpkg.com/@next/env/-/env-15.5.9.tgz#53c2c34dc17cd87b61f70c6cc211e303123b2ab8"
   integrity sha512-4GlTZ+EJM7WaW2HEZcyU317tIQDjkQIyENDLxYJfSWlfqguN+dHkZgyQTV/7ykvobU7yEH5gKvreNrH4B6QgIg==
 
-"@next/eslint-plugin-next@16.1.3":
-  version "16.1.3"
-  resolved "https://registry.yarnpkg.com/@next/eslint-plugin-next/-/eslint-plugin-next-16.1.3.tgz#30ed96cfb5ecf20c3ffa99f9e9eeba15867584ba"
-  integrity sha512-MqBh3ltFAy0AZCRFVdjVjjeV7nEszJDaVIpDAnkQcn8U9ib6OEwkSnuK6xdYxMGPhV/Y4IlY6RbDipPOpLfBqQ==
+"@next/eslint-plugin-next@16.1.4":
+  version "16.1.4"
+  resolved "https://registry.yarnpkg.com/@next/eslint-plugin-next/-/eslint-plugin-next-16.1.4.tgz#dbc1a1197ad4f29f1f4d6eabf2af074930ceaff1"
+  integrity sha512-38WMjGP8y+1MN4bcZFs+GTcBe0iem5GGTzFE5GWW/dWdRKde7LOXH3lQT2QuoquVWyfl2S0fQRchGmeacGZ4Wg==
   dependencies:
     fast-glob "3.3.1"
 
@@ -599,10 +599,10 @@
   resolved "https://registry.yarnpkg.com/@nolyfill/is-core-module/-/is-core-module-1.0.39.tgz#3dc35ba0f1e66b403c00b39344f870298ebb1c8e"
   integrity sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==
 
-"@odigos/ui-kit@^0.0.175":
-  version "0.0.175"
-  resolved "https://registry.yarnpkg.com/@odigos/ui-kit/-/ui-kit-0.0.175.tgz#b6611364d0dae9c4d42ca7741dfe4098e55454f6"
-  integrity sha512-MmHcmvmNckScmj6yGCgitFFNPcdQ/RdJj/WgyHd/YaQzw2aBN9ktifHsgtBdz11vTWVHFS6eD2eY9LyELPLqWg==
+"@odigos/ui-kit@^0.0.176":
+  version "0.0.176"
+  resolved "https://registry.yarnpkg.com/@odigos/ui-kit/-/ui-kit-0.0.176.tgz#3ed6a4613c39a8c58f7ea0d01d795b51473b87a7"
+  integrity sha512-u3GUI3BCZmqh2b9u7aM+Z7xfOOFIbqayyalSfXpKZKeRSqOzjDXzhOqjBkGmPtqOZ7r0hnjBDWAd0wrPBJO/dw==
   dependencies:
     "@tanstack/react-virtual" "^3.13.17"
     "@xyflow/react" "^12.10.0"
@@ -1645,12 +1645,12 @@ escape-string-regexp@^4.0.0:
   resolved "https://registry.yarnpkg.com/escape-string-regexp/-/escape-string-regexp-4.0.0.tgz#14ba83a5d373e3d311e5afca29cf5bfad965bf34"
   integrity sha512-TtpcNJ3XAzx3Gq8sWRzJaVajRs0uVxA2YAkdb1jm2YkPz4G6egUFAyA3n5vtEIZefPk5Wa4UXbKuS5fKkJWdgA==
 
-eslint-config-next@16.1.3:
-  version "16.1.3"
-  resolved "https://registry.yarnpkg.com/eslint-config-next/-/eslint-config-next-16.1.3.tgz#c4d7ca401ca97394b294bb71153cda3116669b71"
-  integrity sha512-q2Z87VSsoJcv+vgR+Dm8NPRf+rErXcRktuBR5y3umo/j5zLjIWH7rqBCh3X804gUGKbOrqbgsLUkqDE35C93Gw==
+eslint-config-next@16.1.4:
+  version "16.1.4"
+  resolved "https://registry.yarnpkg.com/eslint-config-next/-/eslint-config-next-16.1.4.tgz#49e1a60c8ed2590807d761ffbbd76d033d50aaa4"
+  integrity sha512-iCrrNolUPpn/ythx0HcyNRfUBgTkaNBXByisKUbusPGCl8DMkDXXAu7exlSTSLGTIsH9lFE/c4s/3Qiyv2qwdA==
   dependencies:
-    "@next/eslint-plugin-next" "16.1.3"
+    "@next/eslint-plugin-next" "16.1.4"
     eslint-import-resolver-node "^0.3.6"
     eslint-import-resolver-typescript "^3.5.2"
     eslint-plugin-import "^2.32.0"
