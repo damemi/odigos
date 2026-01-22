@@ -2,13 +2,17 @@ package keycloak
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/consts"
+	"github.com/odigos-io/central-backend/internal/logger"
 )
 
 type KeycloakAdminService struct {
@@ -188,6 +192,64 @@ func (kc *KeycloakAdminService) UpdateIdentityProvider(adminUsername string, adm
 	}
 
 	return nil
+}
+
+func GetKeycloakAdminTokenWithRetry(ctx context.Context, shutdownCh <-chan struct{}, username, password string) (string, error) {
+	logger.Log.Info("Waiting for Keycloak to become ready")
+	var err error
+	kc := NewKeycloakAdminService()
+	start := time.Now()
+	attempt := 0
+	backoff := 1 * time.Second
+	maxBackoff := 30 * time.Second
+
+	for {
+		select {
+		case <-shutdownCh:
+			err = fmt.Errorf("shutdown signal received")
+			return "", err
+		default:
+		}
+
+		attempt++
+		// First, wait for Keycloak to be reachable/cancelable (HealthCheck uses context).
+		attemptCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		go func() {
+			select {
+			case <-shutdownCh:
+				cancel()
+			case <-attemptCtx.Done():
+			}
+		}()
+		h := kc.HealthCheck(attemptCtx)
+		cancel()
+
+		if h.Status == model.HealthStatusHealthy {
+			// Keycloak is up; now fetch token (no context support here by request).
+			adminToken, err := kc.GetAdminToken(username, password)
+			if err == nil {
+				logger.Log.Info("Successfully obtained Keycloak admin token", "attempt", attempt, "elapsed", time.Since(start))
+				return adminToken, nil
+			}
+		} else {
+			err = fmt.Errorf("keycloak healthcheck not healthy")
+		}
+
+		timer := time.NewTimer(backoff)
+		select {
+		case <-shutdownCh:
+			timer.Stop()
+			return "", fmt.Errorf("shutdown signal received")
+		case <-timer.C:
+		}
+
+		if backoff < maxBackoff {
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+		}
+	}
 }
 
 // getIDPConfig builds the IDP config map for the given configuration.

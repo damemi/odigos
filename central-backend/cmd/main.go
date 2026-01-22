@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -14,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-logr/logr"
 	"github.com/odigos-io/central-backend/graph"
+	"github.com/odigos-io/central-backend/internal/bootstrap"
 	"github.com/odigos-io/central-backend/internal/config"
 	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/k8s"
@@ -34,6 +33,7 @@ func main() {
 	odigosauth.AssertEnterpriseOdigosToken(logr.FromSlogHandler(logger.Log.Handler()))
 
 	ctx := context.Background()
+	shutdownCh := bootstrap.GetshutdownChannel()
 
 	k8sClient, err := k8s.CreateClient()
 	if err != nil {
@@ -50,9 +50,11 @@ func main() {
 		logger.Fatal("Failed to get admin credentials", err)
 	}
 
-	adminToken, err := keycloak.NewKeycloakAdminService().GetAdminToken(adminCredentials.Username, adminCredentials.Password)
+	// Block startup until Keycloak is reachable (infinite retries).
+	adminToken, err := keycloak.GetKeycloakAdminTokenWithRetry(ctx, shutdownCh, adminCredentials.Username, adminCredentials.Password)
 	if err != nil {
-		logger.Fatal("Failed to get admin token", err)
+		logger.Log.Info("Shutting down before Keycloak is ready", "error", err)
+		return
 	}
 
 	err = keycloak.CreateOdigosUIClient(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm)
@@ -79,7 +81,7 @@ func main() {
 		logger.Fatal("Failed to get token expiration channel", err)
 	}
 
-	go handleShutdown(ctx, redisClient, expirationChan)
+	go handleShutdown(ctx, shutdownCh, redisClient, expirationChan)
 
 	centralSSEHub := ssehub.NewWithRedis(redisClient, config.Config.CentralizedBackendID)
 	centralSSEHub.StartRedisSSEBroadcast(ctx)
@@ -162,14 +164,11 @@ func authContextMiddleware() gin.HandlerFunc {
 	}
 }
 
-func handleShutdown(ctx context.Context, redisClient *redisclient.RedisClient, tokenExpirationChan <-chan time.Time) {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
+func handleShutdown(ctx context.Context, shutdownCh <-chan struct{}, redisClient *redisclient.RedisClient, tokenExpirationChan <-chan time.Time) {
 	select {
 	case <-tokenExpirationChan:
 		logger.Log.Info("token has expired, shutting down server. Please contact Odigos support to renew your token.")
-	case <-sigChan:
+	case <-shutdownCh:
 		logger.Log.Info("got shutdown signal, shutting down server...")
 	}
 
