@@ -1,11 +1,11 @@
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '@/utils';
-import { OidcProviderId } from '@/types';
+import { AuthProviderId } from '@/types';
 import { persist } from 'zustand/middleware';
 import { User, Role, SignInStatus } from '@/types/auth';
 
 interface UserStoreState {
-  authProviderId: OidcProviderId | null;
+  authProviderId: AuthProviderId | null;
 
   idToken: string | null; // for logout
   accessToken: string | null; // for backend auth

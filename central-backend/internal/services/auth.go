@@ -34,22 +34,20 @@ func NewAuthService(adminService *AdminService, userService *UserService) *AuthS
 	}
 }
 
-func (svc *AuthService) GetRedirectUrlForSignIn(ctx context.Context, provider model.OidcProviderID) string {
-	providerID := provider.String()
-
-	idp, err := svc.adminService.GetIdentityProvider(providerID)
+func (svc *AuthService) GetRedirectUrlForSignInByProviderID(providerID model.AuthProviderID) (*string, error) {
+	providerIDStr := strings.ToLower(string(providerID))
+	idp, err := svc.adminService.GetIdentityProvider(providerIDStr)
 	if err != nil {
-		logger.Log.Error("Failed to get identity provider", "error", err)
-		return ""
+		return nil, err
 	}
 
-	// If identity provider is not found, return empty string
 	if idp == nil {
-		return ""
+		return nil, err
 	}
 
-	// If identity provider is found, return the redirect URL
-	return svc.kcAuth.GetRedirectUrlForSignIn(providerID)
+	url := svc.kcAuth.GetRedirectUrlForSignIn(providerIDStr)
+	return &url, nil
+
 }
 
 func (svc *AuthService) GetRedirectUrlForSignOut(ctx context.Context, idToken string) string {
@@ -128,14 +126,21 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 		return nil, fmt.Errorf("failed to get admin token: %w", err)
 	}
 
-	// OAuth code flow (when code is provided)
+	isFirstTimeSetup := svc.isFirstTimeSetup(ctx)
+
 	if code != "" {
 		authResult, err := svc.kcAuth.AuthenticateUser(adminToken, "", "", code)
 		if err != nil {
 			return nil, err
 		}
 
-		user, err := svc.buildUserModel(authResult.AccessToken, authResult.UserData, false)
+		if svc.adminService.NeedToSetAdminUser() {
+			if err := svc.kcUser.AddRealmRoleToUser(adminToken, authResult.UserData.Email, keycloak.RoleAdmin); err != nil {
+				return nil, fmt.Errorf("failed to assign admin role to first SSO user: %w", err)
+			}
+		}
+
+		user, err := svc.buildUserModel(adminToken, authResult.UserData, false)
 		if err != nil {
 			return nil, err
 		}
@@ -151,7 +156,7 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 	}
 
 	// Password-based flow (when email/password are provided)
-	if svc.isFirstTimeSetup(ctx) {
+	if isFirstTimeSetup {
 		logger.Log.Info("First-time setup detected, creating first admin user")
 
 		role := model.RoleAdmin
@@ -169,7 +174,7 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 			return nil, fmt.Errorf("failed to authenticate newly created admin: %w", err)
 		}
 
-		user, err := svc.buildUserModel(authResult.AccessToken, authResult.UserData, false)
+		user, err := svc.buildUserModel(adminToken, authResult.UserData, false)
 		if err != nil {
 			return nil, err
 		}
@@ -210,7 +215,7 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 		needsPasswordChange = false
 	}
 
-	user, err := svc.buildUserModel(authResult.AccessToken, authResult.UserData, needsPasswordChange)
+	user, err := svc.buildUserModel(adminToken, authResult.UserData, needsPasswordChange)
 	if err != nil {
 		return nil, err
 	}
@@ -326,12 +331,12 @@ func (svc *AuthService) authenticateUserWithNewPassword(ctx context.Context, ema
 	return authResult.IDToken, authResult.AccessToken, user, nil
 }
 
-func (svc *AuthService) buildUserModel(token string, userData types.UserSummary, needsPasswordChange bool) (*model.User, error) {
+func (svc *AuthService) buildUserModel(adminToken string, userData types.UserSummary, needsPasswordChange bool) (*model.User, error) {
 	userID := userData.ID
 	email := userData.Email
 	username := ""
 
-	roleStr, err := svc.kcUser.GetUserRole(token, userID)
+	roleStr, err := svc.kcUser.GetUserRole(adminToken, userID)
 	if err != nil {
 		logger.Log.Error("Failed to get user role", "userID", userID, "error", err)
 		roleStr = "user"
@@ -339,7 +344,7 @@ func (svc *AuthService) buildUserModel(token string, userData types.UserSummary,
 	role := utils.ConvertStringRoleToModel(roleStr)
 	logger.Log.Info("buildUserModel: resolved role for user", "userID", userID, "email", email, "roleStr", roleStr, "roleModel", role)
 
-	teams, err := svc.kcTeam.GetTeamsByUserID(token, userID)
+	teams, err := svc.kcTeam.GetTeamsByUserID(adminToken, userID)
 	if err != nil {
 		logger.Log.Error("Failed to get teams by user ID", "userID", userID, "error", err)
 		teams = []*model.Team{}

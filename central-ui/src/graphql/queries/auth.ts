@@ -1,8 +1,8 @@
 import { gql } from '@apollo/client';
 
-export const GET_OIDC_SIGN_IN_URL = gql`
-  query GetOidcSignInUrl($providerId: OidcProviderId!) {
-    oidcSignInUrl(providerId: $providerId)
+export const SIGN_IN_URL = gql`
+  query signInUrl($providerId: AuthProviderId!) {
+    signInUrl(providerId: $providerId)
   }
 `;
 

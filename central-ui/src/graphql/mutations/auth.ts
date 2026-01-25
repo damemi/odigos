@@ -9,6 +9,15 @@ export const ENSURE_IDENTITY_PROVIDER = gql`
   }
 `;
 
+export const ENSURE_SAML_IDENTITY_PROVIDER = gql`
+  mutation EnsureSamlIdentityProvider($input: SamlIdentityProviderInput!) {
+    ensureSamlIdentityProvider(input: $input) {
+      success
+      error
+    }
+  }
+`;
+
 export const VERIFY_TOKEN = gql`
   mutation VerifyToken($token: String!) {
     verifyToken(token: $token) {

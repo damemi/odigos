@@ -4,49 +4,48 @@ import * as STRINGS from '@/utils/constants/strings';
 import { useGenericForm } from '@odigos/ui-kit/hooks';
 import { FlexColumn } from '@odigos/ui-kit/components';
 import { VisualSuccess } from '@odigos/ui-kit/visuals';
-import { OIDC_PROVIDERS } from '@/utils/constants/oidc';
-import { type EnsureIdentityProvider } from '@/hooks/auth/useOidcProvider';
+import { AUTH_PROVIDERS } from '@/utils/constants/auth-providers';
 import { Button, ButtonTab, Input, Note } from '@odigos/ui-kit/components/v2';
-import { OidcProviderId, OidcProviderInput, OidcProviderOption } from '@/types';
+import { AuthProviderId, LoginType, AuthProviderInput, AuthProviderOption, EnsureIdentityProvider } from '@/types';
 import { ConstrainedWidth, ErrorText, FormContainer, FormSubtitle, FormTitle } from '../styled';
 import { StatusType } from '@odigos/ui-kit/types';
 
 interface OidcFormProps {
-  providerId: OidcProviderId;
+  providerId: AuthProviderId;
   loading?: boolean;
   error?: string;
   onCreate: EnsureIdentityProvider;
   isCreateSuccess: boolean;
   setIsCreateSuccess: Dispatch<SetStateAction<boolean>>;
-  onLogin: (providerId: OidcProviderId) => void;
+  onLogin: (providerId: AuthProviderId, loginType: LoginType) => void;
 }
 
 const VisualWrapper = styled.div`
   margin: 36px 0;
 `;
 
-const getFields = (provider: OidcProviderOption) => [
+const getFields = (provider: AuthProviderOption) => [
   {
-    name: 'clientId' as keyof OidcProviderInput,
+    name: 'clientId' as keyof AuthProviderInput,
     label: STRINGS.CLIENT_ID,
     tooltip: STRINGS.CLIENT_ID_TOOLTIP,
     required: true,
   },
   {
-    name: 'clientSecret' as keyof OidcProviderInput,
+    name: 'clientSecret' as keyof AuthProviderInput,
     type: 'password',
     label: STRINGS.CLIENT_SECRET,
     tooltip: STRINGS.CLIENT_SECRET_TOOLTIP,
     required: true,
   },
   {
-    name: 'discoveryUrl' as keyof OidcProviderInput,
+    name: 'discoveryUrl' as keyof AuthProviderInput,
     label: STRINGS.DISCOVERY_URL,
     tooltip: STRINGS.DISCOVERY_URL_TOOLTIP,
     required: true,
   },
   {
-    name: 'tenantId' as keyof OidcProviderInput,
+    name: 'tenantId' as keyof AuthProviderInput,
     label: STRINGS.TENANT_ID,
     tooltip: STRINGS.TENANT_ID_TOOLTIP,
     required: provider.requireTenantId || false,
@@ -54,10 +53,10 @@ const getFields = (provider: OidcProviderOption) => [
 ];
 
 const OidcForm: React.FC<OidcFormProps> = ({ providerId, loading, error, onCreate, isCreateSuccess, setIsCreateSuccess, onLogin }) => {
-  const provider = useMemo(() => OIDC_PROVIDERS.find((p) => p.providerId === providerId), [providerId]);
+  const provider = useMemo(() => AUTH_PROVIDERS.filter((p) => p.loginType === LoginType.OIDC).find((p) => p.providerId === providerId), [providerId]);
   const fields = useMemo(() => (provider ? getFields(provider) : []), [provider]);
 
-  const { formData, handleFormChange, formErrors, handleErrorChange } = useGenericForm<OidcProviderInput>({
+  const { formData, handleFormChange, formErrors, handleErrorChange } = useGenericForm<AuthProviderInput>({
     providerId,
     clientId: '',
     clientSecret: '',
@@ -116,7 +115,7 @@ const OidcForm: React.FC<OidcFormProps> = ({ providerId, loading, error, onCreat
 
         <ConstrainedWidth>
           <FlexColumn $gap={8}>
-            <ButtonTab label={`${STRINGS.LOGIN_WITH} ${provider.displayName}`} icon={provider.icon} loading={loading} onClick={() => onLogin(provider.providerId)} />
+            <ButtonTab label={`${STRINGS.LOGIN_WITH} ${provider.displayName}`} icon={provider.icon} loading={loading} onClick={() => onLogin(provider.providerId, LoginType.OIDC)} />
             <Note status={StatusType.Default} message={STRINGS.PROVIDER_REDIRECT_NOTICE(provider.displayName)} />
           </FlexColumn>
         </ConstrainedWidth>

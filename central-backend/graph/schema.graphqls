@@ -22,8 +22,18 @@ enum SignInStatus {
   PASSWORD_UPDATE_REQUIRED
 }
 
-enum OidcProviderId {
-  azure
+enum AuthProviderId {
+  AZURE
+  OKTA
+}
+
+
+
+input SamlIdentityProviderInput {
+  providerId: AuthProviderId!
+  idpEntityId: String!
+  singleSignOnServiceUrl: String!
+  signingCertificate: String!
 }
 
 type SystemConfig {
@@ -51,7 +61,7 @@ input WriteComputePlatformInput {
 }
 
 input IdentityProviderInput {
-  providerId: OidcProviderId!
+  providerId: AuthProviderId!
   clientId: String!
   clientSecret: String!
   discoveryUrl: String!
@@ -159,7 +169,7 @@ type Query {
   ): [RemoteFetchResult!]!
   systemConfig: SystemConfig!
   apiTokens: [ApiToken!]!
-  oidcSignInUrl(providerId: OidcProviderId!): String!
+  signInUrl(providerId: AuthProviderId!): String
   signOutUrl(idToken: String): String
   computePlatforms: [ComputePlatform!]!
   users: [User!]!
@@ -168,7 +178,10 @@ type Query {
 }
 
 type Mutation {
+  # Identity Provider for OIDC
   ensureIdentityProvider(input: IdentityProviderInput!): GeneralResult!
+  # Identity Provider for SAML
+  ensureSamlIdentityProvider(input: SamlIdentityProviderInput!): GeneralResult!
 
   signIn(email: String, password: String, code: String): SignInResult!
   setInitialPassword(email: String!, password: String!): SignInResult!

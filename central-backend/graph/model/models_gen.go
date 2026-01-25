@@ -50,7 +50,7 @@ type HealthQuery struct {
 }
 
 type IdentityProviderInput struct {
-	ProviderID   OidcProviderID `json:"providerId"`
+	ProviderID   AuthProviderID `json:"providerId"`
 	ClientID     string         `json:"clientId"`
 	ClientSecret string         `json:"clientSecret"`
 	DiscoveryURL string         `json:"discoveryUrl"`
@@ -68,6 +68,13 @@ type RemoteFetchResult struct {
 	Success bool    `json:"success"`
 	Data    *string `json:"data,omitempty"`
 	Error   *string `json:"error,omitempty"`
+}
+
+type SamlIdentityProviderInput struct {
+	ProviderID             AuthProviderID `json:"providerId"`
+	IdpEntityID            string         `json:"idpEntityId"`
+	SingleSignOnServiceURL string         `json:"singleSignOnServiceUrl"`
+	SigningCertificate     string         `json:"signingCertificate"`
 }
 
 type ServicesStatus struct {
@@ -133,6 +140,61 @@ type WriteUserInput struct {
 	RemoveComputePlatformIds []*string `json:"removeComputePlatformIds,omitempty"`
 }
 
+type AuthProviderID string
+
+const (
+	AuthProviderIDAzure AuthProviderID = "AZURE"
+	AuthProviderIDOkta  AuthProviderID = "OKTA"
+)
+
+var AllAuthProviderID = []AuthProviderID{
+	AuthProviderIDAzure,
+	AuthProviderIDOkta,
+}
+
+func (e AuthProviderID) IsValid() bool {
+	switch e {
+	case AuthProviderIDAzure, AuthProviderIDOkta:
+		return true
+	}
+	return false
+}
+
+func (e AuthProviderID) String() string {
+	return string(e)
+}
+
+func (e *AuthProviderID) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AuthProviderID(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AuthProviderId", str)
+	}
+	return nil
+}
+
+func (e AuthProviderID) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AuthProviderID) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AuthProviderID) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 type HealthStatus string
 
 const (
@@ -185,59 +247,6 @@ func (e *HealthStatus) UnmarshalJSON(b []byte) error {
 }
 
 func (e HealthStatus) MarshalJSON() ([]byte, error) {
-	var buf bytes.Buffer
-	e.MarshalGQL(&buf)
-	return buf.Bytes(), nil
-}
-
-type OidcProviderID string
-
-const (
-	OidcProviderIDAzure OidcProviderID = "azure"
-)
-
-var AllOidcProviderID = []OidcProviderID{
-	OidcProviderIDAzure,
-}
-
-func (e OidcProviderID) IsValid() bool {
-	switch e {
-	case OidcProviderIDAzure:
-		return true
-	}
-	return false
-}
-
-func (e OidcProviderID) String() string {
-	return string(e)
-}
-
-func (e *OidcProviderID) UnmarshalGQL(v any) error {
-	str, ok := v.(string)
-	if !ok {
-		return fmt.Errorf("enums must be strings")
-	}
-
-	*e = OidcProviderID(str)
-	if !e.IsValid() {
-		return fmt.Errorf("%s is not a valid OidcProviderId", str)
-	}
-	return nil
-}
-
-func (e OidcProviderID) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
-}
-
-func (e *OidcProviderID) UnmarshalJSON(b []byte) error {
-	s, err := strconv.Unquote(string(b))
-	if err != nil {
-		return err
-	}
-	return e.UnmarshalGQL(s)
-}
-
-func (e OidcProviderID) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

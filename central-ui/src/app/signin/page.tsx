@@ -1,48 +1,63 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useUserStore } from '@/store';
-import { OidcProviderId } from '@/types';
-import { useRouter } from 'next/navigation';
-import { useAuth, useOidcProvider } from '@/hooks';
+import { AuthProviderId, LoginType } from '@/types';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuth, useAuthProvider } from '@/hooks';
 import { Modal } from '@odigos/ui-kit/components/v2';
 import { FormContainer } from '@/components/auth/styled';
 import { VisualOdigosLogo } from '@odigos/ui-kit/visuals';
-import { AuthForm, ChooseForm, OidcForm } from '@/components';
+import { AuthForm, ChooseForm, OidcForm, SamlForm } from '@/components';
 import { CenterThis, FadeLoader, FlexRow } from '@odigos/ui-kit/components';
+import { AUTH_CODE_QUERY_PARAM } from '@/utils';
 
 export default function Page() {
   const router = useRouter();
   const { authProviderId, setAuthProviderId } = useUserStore();
-  const { systemConfig, systemConfigLoading, signIn, loading: authLoading, error: authError } = useAuth();
-  const { getOidcSignInUrl, ensureIdentityProvider, loading: oidcLoading, error: oidcError } = useOidcProvider();
+  const { systemConfig, systemConfigLoading, signIn, loading: authLoading, error: authError, getCurrentUser } = useAuth();
+  const { getSignInUrl, ensureIdentityProvider, ensureSamlIdentityProvider, loading: authProviderLoading, error: authProviderError } = useAuthProvider();
 
-  const [needToSetupOidc, setNeedToSetupOidc] = useState<boolean>(false);
-  const [oidcSetupSuccess, setOidcSetupSuccess] = useState<boolean>(false);
+  const [needToSetAuthProvider, setNeedToSetAuthProvider] = useState<LoginType | null>(null);
+  const [authSetupSuccess, setAuthSetupSuccess] = useState<boolean>(false);
+
+
+  const searchParams = useSearchParams();
+  const authCode = searchParams.get(AUTH_CODE_QUERY_PARAM);
+
+  useEffect(() => {
+    if (authCode) {
+      const signedInUser = getCurrentUser();
+      if (!signedInUser) signIn({ code: authCode });
+    }
+  }, [authCode]);
 
   const handleCleanup = () => {
     setAuthProviderId(null);
-    setNeedToSetupOidc(false);
-    setOidcSetupSuccess(false);
+    setNeedToSetAuthProvider(null);
+    setAuthSetupSuccess(false);
   };
 
-  const handleProviderClick = async (providerId: OidcProviderId) => {
-    setAuthProviderId(providerId);
-
-    if (providerId !== OidcProviderId.EMAIL) {
-      try {
-        const url = await getOidcSignInUrl(providerId);
-
-        if (url) {
-          router.replace(url);
-        } else {
-          setNeedToSetupOidc(true);
-        }
-      } catch (_err) {
-        console.error(_err);
+  const handleSignIn = async (providerId: AuthProviderId, loginType: LoginType) => {
+    try {
+      const url = await getSignInUrl(providerId);
+      if (url) {
+        router.replace(url);
+      } else {
+        setNeedToSetAuthProvider(loginType);
       }
+    } catch (_err) {
+      console.error(_err);
     }
-  };
+  }
+
+  const handleProviderClick = async (providerId: AuthProviderId, loginType?: LoginType) => {
+    setAuthProviderId(providerId);
+    if (!loginType) return;
+    await handleSignIn(providerId, loginType);
+  }
+
+
 
   if (systemConfigLoading) {
     return (
@@ -54,31 +69,46 @@ export default function Page() {
 
   const isFirstTime = systemConfig && !systemConfig.isInitialized;
 
+  let content = (
+    <FormContainer>
+      <CenterThis $height='100%'>
+        <FadeLoader scale={2} />
+      </CenterThis>
+    </FormContainer>
+  );
+  if (authProviderId === null) {
+    content = <ChooseForm isFirstTime={!!isFirstTime} loading={authLoading || authProviderLoading} onClick={handleProviderClick} />;
+  } else if (authProviderId === AuthProviderId.EMAIL) {
+    content = <AuthForm isFirstTime={!!isFirstTime} loading={authLoading || authProviderLoading} error={authError} onSubmit={signIn} />;
+  } else if (needToSetAuthProvider === LoginType.OIDC) {
+    content = (
+      <OidcForm
+        providerId={authProviderId}
+        loading={authProviderLoading}
+        error={authProviderError}
+        onCreate={ensureIdentityProvider}
+        isCreateSuccess={authSetupSuccess}
+        setIsCreateSuccess={setAuthSetupSuccess}
+        onLogin={handleProviderClick}
+      />
+    );
+  } else if (needToSetAuthProvider === LoginType.SAML) {
+    content = (
+      <SamlForm
+        providerId={authProviderId}
+        loading={authProviderLoading}
+        error={authProviderError}
+        onCreate={ensureSamlIdentityProvider}
+        isCreateSuccess={authSetupSuccess}
+        setIsCreateSuccess={setAuthSetupSuccess}
+        onLogin={handleProviderClick}
+      />
+    );
+  }
   return (
-    <Modal isOpen={true} onBack={authProviderId && !oidcSetupSuccess ? handleCleanup : undefined}>
+    <Modal isOpen={true} onBack={authProviderId && !(authSetupSuccess || authSetupSuccess) ? handleCleanup : undefined}>
       <FlexRow $alignItems='flex-start'>
-        {authProviderId === null ? (
-          <ChooseForm isFirstTime={!!isFirstTime} loading={authLoading || oidcLoading} onClick={handleProviderClick} />
-        ) : authProviderId === OidcProviderId.EMAIL ? (
-          <AuthForm isFirstTime={!!isFirstTime} loading={authLoading || oidcLoading} error={authError} onSubmit={signIn} />
-        ) : needToSetupOidc ? (
-          <OidcForm
-            providerId={authProviderId}
-            loading={oidcLoading}
-            error={oidcError}
-            onCreate={ensureIdentityProvider}
-            isCreateSuccess={oidcSetupSuccess}
-            setIsCreateSuccess={setOidcSetupSuccess}
-            onLogin={handleProviderClick}
-          />
-        ) : (
-          <FormContainer>
-            <CenterThis $height='100%'>
-              <FadeLoader scale={2} />
-            </CenterThis>
-          </FormContainer>
-        )}
-
+        {content}
         <VisualOdigosLogo />
       </FlexRow>
     </Modal>

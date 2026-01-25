@@ -36,6 +36,17 @@ func (r *mutationResolver) EnsureIdentityProvider(ctx context.Context, input mod
 	}, nil
 }
 
+// EnsureSamlIdentityProvider is the resolver for the ensureSamlIdentityProvider field.
+func (r *mutationResolver) EnsureSamlIdentityProvider(ctx context.Context, input model.SamlIdentityProviderInput) (*model.GeneralResult, error) {
+	err := r.AdminService.EnsureSamlIdentityProvider(&input)
+	if err != nil {
+		return nil, err
+	}
+	return &model.GeneralResult{
+		Success: true,
+	}, nil
+}
+
 // SignIn is the resolver for the signIn field.
 func (r *mutationResolver) SignIn(ctx context.Context, email *string, password *string, code *string) (*model.SignInResult, error) {
 	// Handle OAuth code flow
@@ -276,10 +287,9 @@ func (r *queryResolver) APITokens(ctx context.Context) ([]*model.APIToken, error
 	return r.AuthService.APITokens(ctx)
 }
 
-// OidcSignInURL is the resolver for the oidcSignInUrl field.
-func (r *queryResolver) OidcSignInURL(ctx context.Context, providerID model.OidcProviderID) (string, error) {
-	url := r.AuthService.GetRedirectUrlForSignIn(ctx, providerID)
-	return url, nil
+// SignInURL is the resolver for the signInUrl field.
+func (r *queryResolver) SignInURL(ctx context.Context, providerID model.AuthProviderID) (*string, error) {
+	return r.AuthService.GetRedirectUrlForSignInByProviderID(providerID)
 }
 
 // SignOut is the resolver for the signOut field.

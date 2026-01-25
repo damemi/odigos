@@ -52,7 +52,6 @@ func NewKeycloakAuthService() *KeycloakAuthService {
 
 func (kc *KeycloakAuthService) GetRedirectUrlForSignIn(provider string) string {
 	authURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/auth", kc.host, kc.realm)
-
 	queryParams := make(url.Values)
 	queryParams.Set("client_id", kc.client)
 	queryParams.Set("kc_idp_hint", provider)

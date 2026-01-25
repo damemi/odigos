@@ -51,6 +51,12 @@ export const TENANT_ID_TOOLTIP = 'An identifier that represents the organization
 export const CREATE_PROVIDER = 'Create Provider';
 export const CREATE_PROVIDER_TITLE = 'Set Up Identity Provider';
 export const CREATE_PROVIDER_SUBTITLE = 'Configure your identity provider for user authentication.';
+export const IDP_ENTITY_ID = 'IdP Entity ID';
+export const IDP_ENTITY_ID_REQUIRED = 'IdP Entity ID is required';
+export const SINGLE_SIGN_ON_SERVICE_URL = 'Single Sign-On Service URL';
+export const SINGLE_SIGN_ON_SERVICE_URL_REQUIRED = 'Single Sign-On Service URL is required';
+export const SIGNING_CERTIFICATE = 'Signing Certificate';
+export const SIGNING_CERTIFICATE_REQUIRED = 'Signing Certificate is required';
 
 // Auth form strings
 export const EMAIL = 'Email';
@@ -67,6 +73,9 @@ export const NEW_PASSWORD = 'New Password';
 export const UPDATE_PASSWORD = 'Update Password';
 export const UPDATE_YOUR_PASSWORD = 'Update Your Password';
 export const UPDATE_PASSWORD_SUBTITLE = 'Set a new password to continue.';
+
+// Auth code query param
+export const AUTH_CODE_QUERY_PARAM = 'code';
 
 // CP strings
 export const CONNECTIONS = 'Connections';
