@@ -148,10 +148,12 @@ func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instru
 		return err
 	}
 
-	jvmConfig := createJVMMetricsConfig(sdkConfig.RuntimeMetrics.Java)
-	if jvmConfig != nil {
-		if err := g.inst.ApplyDynamicConfig(dynamic.JVMMetricsProbe(*jvmConfig)); err != nil {
-			return err
+	if sdkConfig.RuntimeMetrics != nil {
+		jvmConfig := createJVMMetricsConfig(sdkConfig.RuntimeMetrics.Java)
+		if jvmConfig != nil {
+			if err := g.inst.ApplyDynamicConfig(dynamic.JVMMetricsProbe(*jvmConfig)); err != nil {
+				return err
+			}
 		}
 	}
 
