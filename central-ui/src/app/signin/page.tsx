@@ -21,7 +21,6 @@ export default function Page() {
   const [needToSetAuthProvider, setNeedToSetAuthProvider] = useState<LoginType | null>(null);
   const [authSetupSuccess, setAuthSetupSuccess] = useState<boolean>(false);
 
-
   const searchParams = useSearchParams();
   const authCode = searchParams.get(AUTH_CODE_QUERY_PARAM);
 
@@ -49,15 +48,13 @@ export default function Page() {
     } catch (_err) {
       console.error(_err);
     }
-  }
+  };
 
   const handleProviderClick = async (providerId: AuthProviderId, loginType?: LoginType) => {
     setAuthProviderId(providerId);
     if (!loginType) return;
     await handleSignIn(providerId, loginType);
-  }
-
-
+  };
 
   if (systemConfigLoading) {
     return (

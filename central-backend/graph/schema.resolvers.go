@@ -208,15 +208,19 @@ func (r *queryResolver) RemoteFetch(ctx context.Context, proxyID string, query s
 		return "", fmt.Errorf("cluster '%s' is not connected", platformName)
 	}
 
-	responseChan := make(chan string, 1)
-	go r.RedisClient.SubscribeToResponses(ctx, proxyID, requestId, func(ctx context.Context, proxyID string, response string) error {
-		defer close(responseChan)
-		responseChan <- response
-		return nil
-	})
+	// Subscribe to response channel FIRST and wait for confirmation.
+	// This prevents a race condition where the response could be published
+	// before the subscription is established, causing the response to be lost.
+	sub, msgChan, err := r.RedisClient.SubscribeToResponses(ctx, proxyID, requestId)
+	if err != nil {
+		return "", fmt.Errorf("failed to subscribe to response channel: %w", err)
+	}
+	defer sub.Close()
+
 	metrics.RemoteFetchRequestsInProgress.Inc()
 	defer metrics.RemoteFetchRequestsInProgress.Dec()
 
+	// NOW publish the request (subscription is guaranteed to be ready)
 	err = redisclient.PublishJSON(ctx, r.RedisClient, requestsChannel, types.GqlRequestPayload{
 		Query:     query,
 		RequestId: requestId,
@@ -228,9 +232,9 @@ func (r *queryResolver) RemoteFetch(ctx context.Context, proxyID string, query s
 	}
 
 	select {
-	case response := <-responseChan:
+	case msg := <-msgChan:
 		// ✅ Success: The remote proxy responded. Return the response string.
-		return response, nil
+		return msg.Payload, nil
 
 	case <-time.After(2 * time.Minute):
 		// ⏱️ Timeout: No response after 2 minutes. Logs an error with the human-readable platform name (if known) and returns a user-friendly error.

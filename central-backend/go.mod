@@ -18,7 +18,10 @@ require (
 	k8s.io/client-go v0.34.1
 )
 
-require github.com/prometheus/client_golang v1.23.2
+require (
+	github.com/alicebob/miniredis/v2 v2.36.1
+	github.com/prometheus/client_golang v1.23.2
+)
 
 require (
 	github.com/agnivade/levenshtein v1.2.1 // indirect
@@ -65,6 +68,7 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/arch v0.16.0 // indirect

@@ -233,30 +233,21 @@ func (r *RedisClient) SubscribeToRequests(ctx context.Context, proxyID string, h
 	}
 }
 
-func (r *RedisClient) SubscribeToResponses(ctx context.Context, proxyID string, requestId string, handler func(ctx context.Context, proxyID string, response string) error) {
-	redisResponsesChannelKey := consts.GetResponsesChannel(proxyID, requestId)
-	sub := r.client.Subscribe(ctx, redisResponsesChannelKey)
-	ch := sub.Channel()
+// SubscribeToResponses subscribes to a response channel and waits for Redis
+// to confirm the subscription before returning. This prevents a race condition where a response
+// could be published before the subscription is established.
+func (r *RedisClient) SubscribeToResponses(ctx context.Context, proxyID string, requestId string) (*redis.PubSub, <-chan *redis.Message, error) {
+	channel := consts.GetResponsesChannel(proxyID, requestId)
+	sub := r.client.Subscribe(ctx, channel)
 
-	defer sub.Close()
-
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Log.Info("Stopping Redis response subscription", "proxyID", proxyID)
-			return
-		case msg, ok := <-ch:
-			if !ok {
-				logger.Log.Warn("Redis response subscription channel closed unexpectedly", "proxyID", proxyID)
-				return
-			}
-			response := msg.Payload
-			if err := handler(ctx, proxyID, response); err != nil {
-				logger.Log.Error("Failed to handle response", "error", err)
-			}
-			return
-		}
+	// Wait for subscription confirmation from Redis
+	_, err := sub.Receive(ctx)
+	if err != nil {
+		sub.Close()
+		return nil, nil, fmt.Errorf("failed to confirm subscription: %w", err)
 	}
+
+	return sub, sub.Channel(), nil
 }
 
 func (r *RedisClient) SubscribeToSSEBroadcast(ctx context.Context, channel string, handler func(payload string)) {
