@@ -209,8 +209,15 @@ func (svc *UserService) GetUsers(ctx context.Context) ([]*model.User, error) {
 		return nil, err
 	}
 
+	adminUsername := svc.adminService.GetAdminUsername()
+
 	var result []*model.User
 	for _, userData := range users {
+		// Skip system admin and service accounts
+		if ShouldIgnoreKeycloakUser(userData, adminUsername) {
+			continue
+		}
+
 		user, err := svc.mapKeycloakUserToModel(userData, adminToken)
 		if err != nil {
 			return nil, err

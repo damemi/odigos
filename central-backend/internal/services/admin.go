@@ -15,7 +15,9 @@ type AdminService struct {
 	kcAdmin          *keycloak.KeycloakAdminService
 }
 
-func shouldIgnoreKeycloakUser(u map[string]any, adminUsername string) bool {
+// ShouldIgnoreKeycloakUser returns true for users that should be filtered out
+// from user listings (service accounts and the built-in admin user).
+func ShouldIgnoreKeycloakUser(u map[string]any, adminUsername string) bool {
 	// Ignore Keycloak service accounts and the built-in admin user.
 	if _, isServiceAccount := u["serviceAccountClientId"]; isServiceAccount {
 		return true
@@ -38,6 +40,11 @@ func (svc *AdminService) GetAdminToken() (string, error) {
 	return svc.kcAdmin.GetAdminToken(svc.adminCredentials.Username, svc.adminCredentials.Password)
 }
 
+// GetAdminUsername returns the configured Keycloak admin username.
+func (svc *AdminService) GetAdminUsername() string {
+	return svc.adminCredentials.Username
+}
+
 // DetermineSystemInitialized checks if the system has been initialized by querying Keycloak
 // for non-admin, non-service-account users.
 func (svc *AdminService) DetermineSystemInitialized() bool {
@@ -55,7 +62,7 @@ func (svc *AdminService) DetermineSystemInitialized() bool {
 	}
 
 	for _, u := range users {
-		if shouldIgnoreKeycloakUser(u, svc.adminCredentials.Username) {
+		if ShouldIgnoreKeycloakUser(u, svc.adminCredentials.Username) {
 			continue
 		}
 		return true
@@ -171,7 +178,7 @@ func (svc *AdminService) NeedToSetAdminUser() bool {
 	}
 
 	for _, u := range users {
-		if shouldIgnoreKeycloakUser(u, svc.adminCredentials.Username) {
+		if ShouldIgnoreKeycloakUser(u, svc.adminCredentials.Username) {
 			continue
 		}
 
