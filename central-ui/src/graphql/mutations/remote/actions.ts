@@ -20,10 +20,14 @@ export const CREATE_ACTION: VersionedRemoteFetch = {
         labelsAttributes {
           labelKey
           attributeKey
+          from
+          fromSources
         }
         annotationsAttributes {
           annotationKey
           attributeKey
+          from
+          fromSources
         }
         clusterAttributes {
           attributeName
@@ -89,10 +93,14 @@ export const UPDATE_ACTION: VersionedRemoteFetch = {
         labelsAttributes {
           labelKey
           attributeKey
+          from
+          fromSources
         }
         annotationsAttributes {
           annotationKey
           attributeKey
+          from
+          fromSources
         }
         clusterAttributes {
           attributeName

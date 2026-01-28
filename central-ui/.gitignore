@@ -12,6 +12,9 @@
 /.next/
 /out/
 
+.yalc
+yalc.lock
+
 # production
 /build
 

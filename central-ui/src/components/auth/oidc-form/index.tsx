@@ -1,14 +1,15 @@
 import React, { type Dispatch, type SetStateAction, useMemo } from 'react';
 import styled from 'styled-components';
+import { StatusType } from '@odigos/ui-kit/types';
+import { VSquareIcon } from '@odigos/ui-kit/icons';
 import * as STRINGS from '@/utils/constants/strings';
 import { useGenericForm } from '@odigos/ui-kit/hooks';
 import { FlexColumn } from '@odigos/ui-kit/components';
-import { VisualSuccess } from '@odigos/ui-kit/visuals';
+import { VisualGreenRings } from '@odigos/ui-kit/visuals';
 import { AUTH_PROVIDERS } from '@/utils/constants/auth-providers';
 import { Button, ButtonTab, Input, Note } from '@odigos/ui-kit/components/v2';
-import { AuthProviderId, LoginType, AuthProviderInput, AuthProviderOption, EnsureIdentityProvider } from '@/types';
 import { ConstrainedWidth, ErrorText, FormContainer, FormSubtitle, FormTitle } from '../styled';
-import { StatusType } from '@odigos/ui-kit/types';
+import { AuthProviderId, LoginType, AuthProviderInput, AuthProviderOption, EnsureIdentityProvider } from '@/types';
 
 interface OidcFormProps {
   providerId: AuthProviderId;
@@ -104,7 +105,7 @@ const OidcForm: React.FC<OidcFormProps> = ({ providerId, loading, error, onCreat
       <FormContainer $gap={59}>
         <FlexColumn $alignItems='center'>
           <VisualWrapper>
-            <VisualSuccess />
+            <VisualGreenRings scale={2.8} icon={VSquareIcon} />
           </VisualWrapper>
 
           <FlexColumn $gap={16}>

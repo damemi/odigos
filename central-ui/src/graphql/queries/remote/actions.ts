@@ -21,10 +21,14 @@ export const GET_ACTIONS: VersionedRemoteFetch = {
           labelsAttributes {
             labelKey
             attributeKey
+            from
+            fromSources
           }
           annotationsAttributes {
             annotationKey
             attributeKey
+            from
+            fromSources
           }
           clusterAttributes {
             attributeName
