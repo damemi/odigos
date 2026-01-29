@@ -49,7 +49,7 @@ func (p *JavaExtensionInstrumentationFactoryEnterprise) CreateInstrumentation(ct
 	}
 
 	if settings.MetricsMap.HashMapOfMaps != nil {
-		opts = append(opts, auto.WithJVMMetrics(settings.MetricsMap.HashMapOfMaps))
+		opts = append(opts, auto.WithJVMMetrics(settings.MetricsMap.HashMapOfMaps, settings.MetricsMap.AttributesMap))
 	}
 
 	inst, err := auto.NewInstrumentation(ctx, opts...)

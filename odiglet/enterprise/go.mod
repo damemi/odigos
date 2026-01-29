@@ -4,17 +4,17 @@ go 1.25.0
 
 require (
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.7
-	github.com/odigos-io/ebpf-java-instrumentation v1.13.4
-	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v1.13.4
+	github.com/odigos-io/ebpf-java-instrumentation v1.13.6
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v1.13.6
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.10
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
 	github.com/odigos-io/odigos/api v0.0.0
-	github.com/odigos-io/odigos/common v1.14.0-rc1.0.20260121144849-0c278ae384d7
-	github.com/odigos-io/odigos/instrumentation v1.14.0-rc1.0.20260121144849-0c278ae384d7
+	github.com/odigos-io/odigos/common v1.14.0-rc1.0.20260129101518-5c37c4e4a90a
+	github.com/odigos-io/odigos/instrumentation v1.14.0-rc1.0.20260129101518-5c37c4e4a90a
 	github.com/odigos-io/odigos/k8sutils v0.0.0
-	github.com/odigos-io/odigos/odiglet v1.14.0-rc1.0.20260121144849-0c278ae384d7
+	github.com/odigos-io/odigos/odiglet v1.14.0-rc1.0.20260129101518-5c37c4e4a90a
 	github.com/odigos-io/odigos/procdiscovery v0.0.0
 	github.com/odigos-io/wasp-handshake v0.0.0-20251125161815-ff3306f4add1
 	go.opentelemetry.io/auto v0.22.0
@@ -74,8 +74,8 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/odigos-io/ebpf-core v0.0.0-20251104134834-786baa57580f // indirect
-	github.com/odigos-io/odigos/distros v1.14.0-rc1.0.20260121144849-0c278ae384d7 // indirect
-	github.com/odigos-io/odigos/opampserver v1.14.0-rc1.0.20260121144849-0c278ae384d7 // indirect
+	github.com/odigos-io/odigos/distros v1.14.0-rc1.0.20260129101518-5c37c4e4a90a // indirect
+	github.com/odigos-io/odigos/opampserver v1.14.0-rc1.0.20260129101518-5c37c4e4a90a // indirect
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5 // indirect
 	github.com/odigos-io/runtime-detector v0.0.22 // indirect
 	github.com/parca-dev/parca-agent v0.9.1 // indirect
@@ -152,19 +152,19 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20260120141746-32d86af2b30a
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20260126092108-ef3a2e826eb1
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.14.0-rc1.0.20260121144849-0c278ae384d7
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.14.0-rc1.0.20260129101518-5c37c4e4a90a
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.14.0-rc1.0.20260121144849-0c278ae384d7
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.14.0-rc1.0.20260129101518-5c37c4e4a90a
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.14.0-rc1.0.20260121144849-0c278ae384d7
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.14.0-rc1.0.20260129101518-5c37c4e4a90a
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.14.0-rc1.0.20260121144849-0c278ae384d7
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.14.0-rc1.0.20260129101518-5c37c4e4a90a
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.14.0-rc1.0.20260121144849-0c278ae384d7
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.14.0-rc1.0.20260129101518-5c37c4e4a90a
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.14.0-rc1.0.20260121144849-0c278ae384d7
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.14.0-rc1.0.20260129101518-5c37c4e4a90a
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
