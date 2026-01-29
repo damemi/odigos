@@ -1,5 +1,5 @@
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { ROUTES } from '@/utils';
 import { useProxyStore } from '@/store';
 import { useComputePlatformsCRUD } from '../compute-platforms';
@@ -22,9 +22,15 @@ export const useProxy = (): UseProxy => {
   const { resetProgress } = useProgressStore();
   const { resetEntityStore } = useEntityStore();
   const { resetDataStreamStore } = useDataStreamStore();
-  const { computePlatforms } = useComputePlatformsCRUD();
   const { clearStore: resetSetupStore } = useSetupStore();
-  const { proxyID, proxyName, odigosVersion, platformType, setProxyStore, resetProxyStore } = useProxyStore();
+  const { proxyID: storedProxyID, proxyName, odigosVersion, platformType, setProxyStore, resetProxyStore } = useProxyStore();
+
+  const { computePlatforms } = useComputePlatformsCRUD();
+
+  // On out-of-proxy pages, treat proxyID as undefined immediately (before effects run)
+  // This prevents stale proxyID from triggering fetches before the cleanup effect runs
+  const isOutOfProxyPage = useMemo(() => [ROUTES.ROOT, ROUTES.CONNECTIONS, ROUTES.ACCESS_MANAGEMENT, ROUTES.SIGN_IN, ROUTES.UPDATE_YOUR_PASSWORD].includes(pathname), [pathname]);
+  const proxyID = isOutOfProxyPage ? undefined : storedProxyID;
 
   const resetStores = () => {
     resetSetupStore();
@@ -65,10 +71,12 @@ export const useProxy = (): UseProxy => {
     }
   }, [proxyID, computePlatforms.length]);
 
-  // Reset proxyID if the pathname is connections
+  // Clear the store when on out-of-proxy pages (cleanup for next navigation)
+  // Or navigate to the connections page if the proxyID is undefined
   useEffect(() => {
-    if (pathname === ROUTES.CONNECTIONS) clearProxy({ skipRedirect: true });
-  }, [pathname]);
+    if (isOutOfProxyPage) clearProxy({ skipRedirect: true });
+    else if (!isOutOfProxyPage && !proxyID) clearProxy();
+  }, [isOutOfProxyPage, proxyID]);
 
   return {
     proxyID,

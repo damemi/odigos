@@ -23,12 +23,7 @@ export default function Page() {
     if (status === StatusType.Success) {
       selectProxy(id);
     } else {
-      addNotification({
-        type: StatusType.Warning,
-        title: 'Connection lost',
-        message: 'Cannot connect to the platform',
-        hideFromHistory: true,
-      });
+      addNotification({ type: StatusType.Warning, title: 'Connection lost', message: 'Cannot connect to the platform', hideFromHistory: true });
     }
   };
 

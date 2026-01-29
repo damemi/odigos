@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { STORAGE_KEYS } from '@/utils';
-import { persist } from 'zustand/middleware';
 import { PlatformType } from '@odigos/ui-kit/types';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 interface ProxyStoreState {
   proxyID?: string;
@@ -42,6 +42,7 @@ export const useProxyStore = create<ProxyStoreState & ProxyStoreActions>()(
     }),
     {
       name: STORAGE_KEYS.SELECTED_PROXY,
+      storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         proxyID: state.proxyID,
         proxyName: state.proxyName,

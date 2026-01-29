@@ -1,48 +1,24 @@
 'use client';
 
 import React, { type PropsWithChildren, useEffect } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
-import { getNavbarIcons } from '@/utils';
 import { useTheme } from 'styled-components';
-import { OverviewHeader } from '@/components';
 import { useDarkMode } from '@odigos/ui-kit/store';
-import { Navbar } from '@odigos/ui-kit/components/v2';
-import { OdigosProvider } from '@odigos/ui-kit/contexts';
-import { PlatformType, Tier } from '@odigos/ui-kit/types';
-import { useProxy, useSSE, useTokenTracker } from '@/hooks';
-import { ErrorBoundary, FlexColumn, FlexRow } from '@odigos/ui-kit/components';
 
-function V2Layout({ children }: PropsWithChildren) {
-  // call important hooks that should run on page-mount
-  useSSE();
-  useTokenTracker();
+// TODO: remove this file after migration to v2
 
-  const router = useRouter();
-  const pathname = usePathname();
-  const { proxyID, platformType, odigosVersion } = useProxy();
+// V1 design has light-mode which is not yet supported in V2 design.
+// This is a temporary hack to make sure the V2 design uses dark mode and the correct bg-color...
 
-  // TODO: remove this after migration to v2
+function Layout({ children }: PropsWithChildren) {
   const theme = useTheme();
   const { darkMode, setDarkMode } = useDarkMode();
+
   useEffect(() => {
     if (!darkMode) setDarkMode(true);
     document.body.style.backgroundColor = theme.v2.colors.black['500'];
   }, [theme]);
 
-  return (
-    <ErrorBoundary>
-      {/* provider is not needed for /connections page, but needed for others like /pipeline-collectors */}
-      <OdigosProvider platformType={platformType} tier={Tier.Onprem} version={odigosVersion || ''}>
-        <FlexColumn $gap={0}>
-          <OverviewHeader v2 />
-          <FlexRow $gap={0}>
-            <Navbar height='calc(100vh - 90px)' icons={getNavbarIcons(router, pathname, proxyID, platformType === PlatformType.Vm)} />
-            {children}
-          </FlexRow>
-        </FlexColumn>
-      </OdigosProvider>
-    </ErrorBoundary>
-  );
+  return children;
 }
 
-export default V2Layout;
+export default Layout;

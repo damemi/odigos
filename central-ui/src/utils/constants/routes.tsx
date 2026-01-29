@@ -1,9 +1,12 @@
 export const ROUTES = {
+  // Out-of-proxy pages
   ROOT: '/',
   SIGN_IN: '/signin',
   UPDATE_YOUR_PASSWORD: '/update-password',
   ACCESS_MANAGEMENT: '/access-management',
   CONNECTIONS: '/connections',
+
+  // In-proxy pages
   OVERVIEW: '/overview',
   SOURCES: '/sources',
   DESTINATIONS: '/destinations',
@@ -28,5 +31,4 @@ export const API = {
 };
 
 // Returns SSE events URL with clusterID filter for server-side event filtering
-export const getSSEEventsUrl = (clusterID: string) =>
-  `${BACKEND_HTTP_ORIGIN}/sse/events?clusterID=${encodeURIComponent(clusterID)}`;
+export const getSSEEventsUrl = (clusterID: string) => `${BACKEND_HTTP_ORIGIN}/sse/events?clusterID=${encodeURIComponent(clusterID)}`;
