@@ -1,13 +1,12 @@
 import { useEffect } from 'react';
 import { GET_METRICS } from '@/graphql';
 import { useRemoteFetch } from '../proxy';
-import { useSourceCRUD } from '../sources';
 import type { Metrics } from '@odigos/ui-kit/types';
-import { useDestinationCRUD } from '../destinations';
+import { useEntityStore } from '@odigos/ui-kit/store';
 
 export const useMetrics = () => {
-  const { sources } = useSourceCRUD();
-  const { destinations } = useDestinationCRUD();
+  const sources = useEntityStore((state) => state.sources);
+  const destinations = useEntityStore((state) => state.destinations);
 
   const { data, fetch } = useRemoteFetch<{ getOverviewMetrics?: Metrics }>(GET_METRICS);
 
