@@ -4,7 +4,7 @@ import { ROUTES } from '@/utils';
 import { useProxyStore } from '@/store';
 import { useComputePlatformsCRUD } from '../compute-platforms';
 import { PlatformType, StatusType } from '@odigos/ui-kit/types';
-import { ProgressKeys, useEntityStore, useProgressStore, useSetupStore } from '@odigos/ui-kit/store';
+import { ProgressKeys, useDataStreamStore, useEntityStore, useProgressStore, useSetupStore } from '@odigos/ui-kit/store';
 
 interface UseProxy {
   proxyID?: string;
@@ -21,14 +21,15 @@ export const useProxy = (): UseProxy => {
 
   const { resetProgress } = useProgressStore();
   const { resetEntityStore } = useEntityStore();
+  const { resetDataStreamStore } = useDataStreamStore();
+  const { computePlatforms } = useComputePlatformsCRUD();
   const { clearStore: resetSetupStore } = useSetupStore();
   const { proxyID, proxyName, odigosVersion, platformType, setProxyStore, resetProxyStore } = useProxyStore();
 
-  const { computePlatforms } = useComputePlatformsCRUD();
-
   const resetStores = () => {
-    resetEntityStore();
     resetSetupStore();
+    resetEntityStore();
+    resetDataStreamStore();
     resetProgress(ProgressKeys.Instrumenting);
     resetProgress(ProgressKeys.Uninstrumenting);
   };

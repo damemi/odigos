@@ -108,7 +108,7 @@ export const useDataStreamsCRUD = (): UseDataStreamsCrud => {
 
   useEffect(() => {
     if (!dataStreams.length && !dataStreamsLoading) fetchDataStreams();
-  }, []);
+  }, [fetchDataStreams]);
 
   return {
     dataStreamsLoading,
