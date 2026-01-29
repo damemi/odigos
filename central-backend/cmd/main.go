@@ -81,7 +81,7 @@ func main() {
 		logger.Fatal("Failed to get token expiration channel", err)
 	}
 
-	go handleShutdown(ctx, shutdownCh, redisClient, expirationChan)
+	go handleShutdown(shutdownCh, redisClient, expirationChan)
 
 	centralSSEHub := ssehub.NewWithRedis(redisClient, config.Config.CentralizedBackendID)
 	centralSSEHub.StartRedisSSEBroadcast(ctx)
@@ -164,7 +164,7 @@ func authContextMiddleware() gin.HandlerFunc {
 	}
 }
 
-func handleShutdown(ctx context.Context, shutdownCh <-chan struct{}, redisClient *redisclient.RedisClient, tokenExpirationChan <-chan time.Time) {
+func handleShutdown(shutdownCh <-chan struct{}, redisClient *redisclient.RedisClient, tokenExpirationChan <-chan time.Time) {
 	select {
 	case <-tokenExpirationChan:
 		logger.Log.Info("token has expired, shutting down server. Please contact Odigos support to renew your token.")
@@ -172,17 +172,10 @@ func handleShutdown(ctx context.Context, shutdownCh <-chan struct{}, redisClient
 		logger.Log.Info("got shutdown signal, shutting down server...")
 	}
 
-	// Clean up proxy keys for this backend instance
-	currentBackendID := config.Config.CentralizedBackendID
-	if err := redisClient.DeleteProxyKeysForBackend(ctx, currentBackendID); err != nil {
-		logger.Log.Error("Failed to delete proxy keys for backend", "backendID", currentBackendID, "error", err)
-	}
-
 	err := redisClient.Close()
 	if err != nil {
 		logger.Log.Error("Failed to close Redis connection", "error", err)
 	}
-
 	logger.Log.Info("Redis connection closed")
 
 	os.Exit(0)

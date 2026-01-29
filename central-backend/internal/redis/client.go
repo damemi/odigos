@@ -270,36 +270,6 @@ func (r *RedisClient) SubscribeToSSEBroadcast(ctx context.Context, channel strin
 	}
 }
 
-// DeleteProxyKeysForBackend deletes all proxy-related keys for a specific backend ID
-func (r *RedisClient) DeleteProxyKeysForBackend(ctx context.Context, backendID string) error {
-	if backendID == "" {
-		return fmt.Errorf("backend ID cannot be empty")
-	}
-	// Delete proxy metadata keys (proxy-meta:{backendID}:*)
-	metadataPattern := fmt.Sprintf("proxy-meta:%s:*", backendID)
-	metadataKeys, err := r.client.Keys(ctx, metadataPattern).Result()
-	if err != nil {
-		return err
-	}
-
-	// Combine all keys to delete
-
-	if len(metadataKeys) == 0 {
-		logger.Log.Info("No proxy keys found for backend", "backendID", backendID)
-		return nil
-	}
-
-	// Delete all found keys for this specific backend
-	err = r.client.Del(ctx, metadataKeys...).Err()
-	if err != nil {
-		logger.Log.Error("Failed to delete proxy keys for backend", "backendID", backendID, "metadataKeys", len(metadataKeys), "error", err)
-		return err
-	}
-
-	logger.Log.Info("Deleted proxy keys for backend", "backendID", backendID, "metadataKeys", len(metadataKeys), "total", len(metadataKeys))
-	return nil
-}
-
 func (r *RedisClient) Close() error {
 	err := r.client.Close()
 	if err != nil {

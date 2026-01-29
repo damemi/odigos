@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/odigos-io/central-proxy/internal/logger"
 	"github.com/odigos-io/central-proxy/kube"
 	"github.com/odigos-io/odigos/api/k8sconsts"
@@ -51,7 +50,7 @@ func GetCentralBackendURLAndClusterName(ctx context.Context, kubeClient *kube.Cl
 
 func GetOdigosDeploymentId(ctx context.Context, kubeClient *kube.Client) (string, error) {
 	if !runningInCluster() {
-		return uuid.New().String(), nil
+		return DevDeploymentID(), nil
 	}
 	ns := env.GetCurrentNamespace()
 
