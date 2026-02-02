@@ -190,7 +190,8 @@ COPY --from=agents-builder /instrumentations/ .
 CMD ["/root/odiglet"]
 
 ######### Default Odiglet #########
-FROM gcr.io/distroless/base:latest
+# pinning the distroless base image to a specific commit since the hash after it broke rsync somehow.
+FROM gcr.io/distroless/base:3443777deec6bd5c58be682f286aefffd1c871ae
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/deviceplugin/deviceplugin /root/deviceplugin
 COPY --from=builder /tmp/grpc_health_probe /root/grpc_health_probe
