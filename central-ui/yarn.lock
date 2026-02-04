@@ -599,10 +599,10 @@
   resolved "https://registry.yarnpkg.com/@nolyfill/is-core-module/-/is-core-module-1.0.39.tgz#3dc35ba0f1e66b403c00b39344f870298ebb1c8e"
   integrity sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==
 
-"@odigos/ui-kit@^0.0.189":
-  version "0.0.189"
-  resolved "https://registry.yarnpkg.com/@odigos/ui-kit/-/ui-kit-0.0.189.tgz#020e21e01d748de44e08d2c183e600af9d8eb705"
-  integrity sha512-49qee+MeZ8MoTDMAvVWz20jaPVO37dcDkFzeRW1QEOiIyfNaPaZHN2UuMyrBL5siY2T1TDp/WVWri8CWETkUUg==
+"@odigos/ui-kit@^0.0.190":
+  version "0.0.190"
+  resolved "https://registry.yarnpkg.com/@odigos/ui-kit/-/ui-kit-0.0.190.tgz#9503b035586612c3aa75135c3f8d9d5c1ec9d7a4"
+  integrity sha512-MLKq+bgHFU4nSw6X/xMU4m+ccn7I4shWjYVATyG2YMza86NZSsG4jGUyE9DLriiS2yD/zAIQNNw/tJ6+RT5baQ==
   dependencies:
     "@tanstack/react-virtual" "^3.13.18"
     "@xyflow/react" "^12.10.0"
@@ -613,7 +613,7 @@
     react-dom "19.2.4"
     react-error-boundary "^6.1.0"
     styled-components "6.2.0"
-    zustand "^5.0.10"
+    zustand "^5.0.11"
 
 "@polka/url@^1.0.0-next.24":
   version "1.0.0-next.29"
@@ -3708,7 +3708,7 @@ zustand@^4.4.0:
   dependencies:
     use-sync-external-store "^1.2.2"
 
-zustand@^5.0.10:
-  version "5.0.10"
-  resolved "https://registry.yarnpkg.com/zustand/-/zustand-5.0.10.tgz#4db510c0c4c25a5f1ae43227b307ddf1641a3210"
-  integrity sha512-U1AiltS1O9hSy3rul+Ub82ut2fqIAefiSuwECWt6jlMVUGejvf+5omLcRBSzqbRagSM3hQZbtzdeRc6QVScXTg==
+zustand@^5.0.11:
+  version "5.0.11"
+  resolved "https://registry.yarnpkg.com/zustand/-/zustand-5.0.11.tgz#99f912e590de1ca9ce6c6d1cab6cdb1f034ab494"
+  integrity sha512-fdZY+dk7zn/vbWNCYmzZULHRrss0jx5pPFiOuMZ/5HJN6Yv3u+1Wswy/4MpZEkEGhtNH+pwxZB8OKgUBPzYAGg==

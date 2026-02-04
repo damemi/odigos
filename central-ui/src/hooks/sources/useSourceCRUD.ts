@@ -37,8 +37,8 @@ export const useSourceCRUD = (): UseSourceCrud => {
   const { persistNamespaces } = useNamespace();
   const { addNotification } = useNotificationStore();
   const { selectedStreamName } = useDataStreamStore();
+  const { setAvailableSources, setConfiguredSources, setConfiguredFutureApps } = useSetupStore();
   const { sourcesLoading, setEntitiesLoading, sources, setEntities, addEntities, removeEntities } = useEntityStore();
-  const { setFetchedAllNamespaces, setAvailableSources, setConfiguredSources, setConfiguredFutureApps } = useSetupStore();
 
   const notifyUser = (type: StatusType, title: string, message: string, id?: WorkloadId, hideFromHistory?: boolean) => {
     addNotification({
@@ -164,7 +164,6 @@ export const useSourceCRUD = (): UseSourceCrud => {
       await mutatePersistSources(persistSourcesPayloads);
       await persistNamespaces(persistNamespacesPayloads);
 
-      setFetchedAllNamespaces(false);
       setAvailableSources({});
       setConfiguredSources({});
       setConfiguredFutureApps({});

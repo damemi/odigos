@@ -4,10 +4,10 @@ import React from 'react';
 import { useOdigos } from '@odigos/ui-kit/contexts';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { ComputePlatform, RemoteConfigInput } from '@/types';
+import { CentralConnections } from '@odigos/ui-kit/containers/v2';
 import { GET_EFFECTIVE_CONFIG, UPDATE_REMOTE_CONFIG } from '@/graphql';
-import { type EffectiveConfig, StatusType } from '@odigos/ui-kit/types';
 import { useComputePlatformsCRUD, useProxy, useProxyCRUD, useRemoteFetch } from '@/hooks';
-import { type ApplyConfigurationsFunc, CentralConnections } from '@odigos/ui-kit/containers/v2';
+import { type EffectiveConfig, StatusType, type ApplyConfigurationsFunc } from '@odigos/ui-kit/types';
 
 export default function Page() {
   const { isVm } = useOdigos();
@@ -37,7 +37,7 @@ export default function Page() {
     return data?.effectiveConfig;
   };
 
-  const applyConfigurations: ApplyConfigurationsFunc = (ids, formData) => {
+  const applyConfigurations: ApplyConfigurationsFunc = (formData, ids) => {
     return updateRemoteConfig(ids, { config: formData });
   };
 
@@ -48,6 +48,7 @@ export default function Page() {
       getConnections={getComputePlatforms}
       onClickConnection={onClickConnection}
       deleteConnection={deleteConnection}
+      configMinSupportedVersion={1.16}
       getEffectiveConfig={isVm ? undefined : getEffectiveConfig}
       applyConfigurations={isVm ? undefined : applyConfigurations}
     />

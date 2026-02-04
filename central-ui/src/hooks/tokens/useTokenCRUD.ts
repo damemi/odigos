@@ -4,7 +4,7 @@ import { useRemoteFetch } from '../proxy';
 import { GET_TOKENS, UPDATE_TOKEN } from '@/graphql';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
-import { Crud, StatusType, type TokenPayload } from '@odigos/ui-kit/types';
+import { Crud, StatusType, UpdateTokenFunc, type TokenPayload } from '@odigos/ui-kit/types';
 
 export const useTokenCRUD = () => {
   const { isReadonly } = useConfig();
@@ -15,23 +15,29 @@ export const useTokenCRUD = () => {
   };
 
   const { called, loading, data, fetch: queryAll } = useRemoteFetch<{ computePlatform?: { apiTokens?: TokenPayload[] } }>(GET_TOKENS);
-  const { fetch: mutateUpdate } = useRemoteFetch<{ computePlatform?: { apiTokens?: TokenPayload[] } }>(UPDATE_TOKEN);
+  const { fetch: mutateUpdate } = useRemoteFetch<{ updateApiToken: boolean }>(UPDATE_TOKEN);
 
-  const updateToken = async (token: string) => {
+  const updateToken: UpdateTokenFunc = async (token) => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, true);
     } else {
-      await mutateUpdate({ token });
-      notifyUser(StatusType.Success, Crud.Update, 'API Token updated');
-      queryAll();
+      const { error, data } = await mutateUpdate({ token });
+
+      if (!error) {
+        notifyUser(StatusType.Success, Crud.Update, 'API Token updated');
+        queryAll();
+      }
+
+      return { error, data };
     }
+    return undefined;
   };
 
   useEffect(() => {
     if (!called) queryAll();
   }, [called]);
 
-  const tokens = useMemo(() => data?.computePlatform?.apiTokens || [], [data?.computePlatform?.apiTokens?.length]);
+  const tokens = useMemo(() => data?.computePlatform?.apiTokens || [], [data?.computePlatform?.apiTokens]);
 
   return {
     loading,

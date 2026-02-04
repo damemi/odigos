@@ -28,7 +28,7 @@ export interface MultiFetchResponse<T> {
 }
 
 interface UseProxy<ResT, ReqT> {
-  fetch: (variables?: ReqT, targetProxyID?: string) => Promise<{ data?: ResT }>;
+  fetch: (variables?: ReqT, targetProxyID?: string) => Promise<{ data?: ResT; error?: string }>;
   fetchMulti: (proxyIDs: string[], variables?: ReqT) => Promise<MultiFetchResponse<ResT>>;
   called: boolean;
   loading: boolean;
