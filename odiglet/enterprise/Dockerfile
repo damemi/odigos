@@ -46,8 +46,12 @@ RUN ARCH_SUFFIX=$(cat /tmp/arch_suffix) && \
 
 WORKDIR /legacy-dotnet-instrumentation
 ARG LEGACY_DOTNET_OTEL_VERSION=v0.4.0-beta.1
-ADD https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/$LEGACY_DOTNET_OTEL_VERSION/opentelemetry-dotnet-instrumentation-linux-musl.zip .
-RUN unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && rm opentelemetry-dotnet-instrumentation-linux-musl.zip
+ARG EXTENDED=false
+RUN if [ "$EXTENDED" = "true" ]; then \
+        wget https://github.com/open-telemetry/opentelemetry-dotnet-instrumentation/releases/download/$LEGACY_DOTNET_OTEL_VERSION/opentelemetry-dotnet-instrumentation-linux-musl.zip && \
+        unzip opentelemetry-dotnet-instrumentation-linux-musl.zip && \
+        rm opentelemetry-dotnet-instrumentation-linux-musl.zip; \
+    fi
 
 ######### agents builder #########
 # combine all agents into a single image
@@ -71,7 +75,13 @@ COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.0.10 /instrumentat
 
 # .NET
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
-COPY --from=dotnet-builder /legacy-dotnet-instrumentation /instrumentations/legacy-dotnet
+
+# Legacy .NET (only included in extended builds)
+ARG EXTENDED=false
+RUN --mount=type=bind,from=dotnet-builder,source=/legacy-dotnet-instrumentation,target=/legacy-dotnet-instrumentation \
+    if [ "$EXTENDED" = "true" ]; then \
+        cp -r /legacy-dotnet-instrumentation /instrumentations/legacy-dotnet; \
+    fi
 
 # Java
 COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v1.13.9 /instrumentations/java-ebpf /instrumentations/java-ebpf

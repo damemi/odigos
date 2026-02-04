@@ -18,6 +18,10 @@ jobs:
   release:
     strategy:
       matrix:
+        # Base matrix builds all services with extended=false (standard builds without legacy .NET)
+        # Base matrix: 12 builds (6 services × 2 rhel variants × extended=false)
+        # Extended=true odiglet builds are added via 'include' below: 2 additional builds
+        # Total: 14 builds
         service:
           [
             "odiglet",
@@ -28,10 +32,20 @@ jobs:
             "agents",
           ]
         rhel: ['true', 'false']
+        extended: ['false']
         include:
+          # Odiglet extended variants (with legacy .NET instrumentation)
           - service: odiglet
+            rhel: 'false'
+            extended: 'true'
             summary: "Odiglet for Odigos"
             description: "Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs."
+          - service: odiglet
+            rhel: 'true'
+            extended: 'true'
+            summary: "Odiglet for Odigos"
+            description: "Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs."
+          # Service descriptions
           - service: instrumentor
             summary: "Instrumentor for Odigos"
             description: "Instrumentor manages auto-instrumentation for workloads with Odigos."
@@ -66,8 +80,8 @@ jobs:
           TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
         with:
           webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-          success-description: "Start releasing Odigos enterprise component: ${{ matrix.service }}. (${{ matrix.rhel == 'true' && 'UBI9' || 'Standard' }} image)."
-          failure-description: "ERROR: starting enterprise component release: ${{ matrix.service }}. (${{ matrix.rhel == 'true' && 'UBI9' || 'Standard' }} image)"
+          success-description: "Start releasing Odigos enterprise component: ${{ matrix.service }}. (${{ matrix.rhel == 'true' && 'UBI9' || 'Standard' }} image${{ matrix.extended == 'true' && ' - Extended' || '' }})."
+          failure-description: "ERROR: starting enterprise component release: ${{ matrix.service }}. (${{ matrix.rhel == 'true' && 'UBI9' || 'Standard' }} image${{ matrix.extended == 'true' && ' - Extended' || '' }})"
           tag: ${{ env.TAG }}
 
       - name: Set up Docker Buildx
@@ -118,9 +132,9 @@ jobs:
           context: ${{ matrix.service == 'central-ui' && 'central-ui' || '.' }}
           push: true
           tags: |
-            us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.ODIGOS_TAG }}
-            keyval/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.ODIGOS_TAG }}
-            ghcr.io/odigos-io/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.ODIGOS_TAG }}
+            us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
+            keyval/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
+            ghcr.io/odigos-io/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
           build-args: |
             SERVICE_NAME=${{ matrix.service }}
             ODIGOS_VERSION=${{ env.ODIGOS_TAG }}
@@ -130,6 +144,7 @@ jobs:
             RELEASE=${{ env.ODIGOS_TAG }}
             LD_FLAGS=-s -w
             RHEL=${{ matrix.rhel }}
+            EXTENDED=${{ matrix.extended }}
           platforms: linux/amd64,linux/arm64
           provenance: false
           target: >-
@@ -147,8 +162,8 @@ jobs:
           TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
         with:
           webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-          success-description: "Odigos enterprise component ${{ matrix.service }} ${{ matrix.rhel == 'true' && 'UBI9' || 'Standard' }} image published to registry"
-          failure-description: "ERROR: failed to publish odigos enterprise component ${{ matrix.service }} ${{ matrix.rhel == 'true' && 'UBI9' || 'Standard' }} image to registry"
+          success-description: "Odigos enterprise component ${{ matrix.service }} ${{ matrix.rhel == 'true' && 'UBI9' || 'Standard' }} image${{ matrix.extended == 'true' && ' (Extended)' || '' }} published to registry"
+          failure-description: "ERROR: failed to publish odigos enterprise component ${{ matrix.service }} ${{ matrix.rhel == 'true' && 'UBI9' || 'Standard' }} image${{ matrix.extended == 'true' && ' (Extended)' || '' }} to registry"
           tag: ${{ env.TAG }}
 
   trigger-cli-release:
