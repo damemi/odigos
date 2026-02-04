@@ -68,6 +68,37 @@ export const GET_SOURCES: VersionedRemoteFetch = {
 
 export const GET_SOURCE: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
+    'v1.17': `
+  query GetSource($sourceId: K8sSourceId!) {
+    computePlatform {
+      source(sourceId: $sourceId) {
+        namespace
+        name
+        kind
+        dataStreamNames
+        selected
+        otelServiceName
+        containers {
+          containerName
+          language
+          runtimeVersion
+          overriden
+          instrumented
+          instrumentationMessage
+          otelDistroName
+        }
+        conditions {
+          status
+          type
+          reason
+          message
+          lastTransitionTime
+        }
+        manifestYAML
+        instrumentationConfigYAML
+      }
+    }
+  }`,
     'v1.12': `
   query GetSource($sourceId: K8sSourceId!) {
     computePlatform {

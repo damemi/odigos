@@ -139,8 +139,10 @@ export const useSourceCRUD = (): UseSourceCrud => {
 
     if (source) {
       addEntities(EntityTypes.Source, [source]);
-      fetchAllAgentInjectionStatuses([source]);
-      return source;
+      await fetchAllAgentInjectionStatuses([source]);
+      // Return the updated source from the store (with workloadOdigosHealthStatus merged)
+      const { sources: updatedSources } = useEntityStore.getState();
+      return updatedSources.find((s) => s.namespace === id.namespace && s.name === id.name && s.kind === id.kind) || source;
     }
   };
 

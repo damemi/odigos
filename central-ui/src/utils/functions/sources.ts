@@ -1,7 +1,7 @@
 import { getWorkloadId } from '@odigos/ui-kit/functions';
-import { EntityTypes, type WorkloadId, type Source, Workload } from '@odigos/ui-kit/types';
+import { EntityTypes, type WorkloadId, type Source } from '@odigos/ui-kit/types';
 import type { NamespaceSelectionFormData, SourceSelectionFormData } from '@odigos/ui-kit/store';
-import type { NamespaceInstrumentInput, SourceConditions, SourceInstrumentInput } from '@/types';
+import type { NamespaceInstrumentInput, SourceConditions, SourceInstrumentInput, WorkloadWithOdigosHealthStatus } from '@/types';
 
 export const addConditionToSources = ({ namespace, name, kind, conditions }: SourceConditions, sources: Source[]): Source | null => {
   const foundIdx = sources.findIndex((x) => x.namespace === namespace && x.name === name && x.kind === kind);
@@ -20,14 +20,24 @@ export const addConditionToSources = ({ namespace, name, kind, conditions }: Sou
   }
 };
 
-export const addAgentInjectionStatusToSources = ({ id: { namespace, name, kind }, podsAgentInjectionStatus }: Workload, sources: Source[]): Source | null => {
+export const addAgentInjectionStatusToSources = (
+  { id: { namespace, name, kind }, podsAgentInjectionStatus, workloadOdigosHealthStatus }: WorkloadWithOdigosHealthStatus,
+  sources: Source[],
+): Source | null => {
   const foundIdx = sources.findIndex((x) => x.namespace === namespace && x.name === name && x.kind === kind);
   if (foundIdx === -1) return null;
 
-  return {
+  const updatedSource = {
     ...sources[foundIdx],
     podsAgentInjectionStatus,
   };
+
+  if (workloadOdigosHealthStatus) {
+    // Only override if workload provides it (v1.17+), otherwise keep what source already has (v1.11-v1.16)
+    updatedSource.workloadOdigosHealthStatus = workloadOdigosHealthStatus;
+  }
+
+  return updatedSource;
 };
 
 export const prepareSourcePayloads = (
