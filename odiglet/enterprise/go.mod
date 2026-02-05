@@ -11,23 +11,23 @@ require (
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
 	github.com/odigos-io/odigos/api v0.0.0
-	github.com/odigos-io/odigos/common v1.16.8-pre4
-	github.com/odigos-io/odigos/instrumentation v1.16.8-pre4
+	github.com/odigos-io/odigos/common v1.16.8-pre4.0.20260204202127-f021fe6bb7d2
+	github.com/odigos-io/odigos/instrumentation v1.16.8-pre4.0.20260204202127-f021fe6bb7d2
 	github.com/odigos-io/odigos/k8sutils v0.0.0
-	github.com/odigos-io/odigos/odiglet v1.16.8-pre4
+	github.com/odigos-io/odigos/odiglet v1.16.8-pre4.0.20260204202127-f021fe6bb7d2
 	github.com/odigos-io/odigos/procdiscovery v0.0.0
 	github.com/odigos-io/wasp-handshake v0.0.0-20251125161815-ff3306f4add1
 	go.opentelemetry.io/auto v0.22.0
 	go.opentelemetry.io/otel v1.39.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.39.0
 	go.opentelemetry.io/otel/trace v1.39.0
-	k8s.io/client-go v0.34.1
+	k8s.io/client-go v0.34.2
 	sigs.k8s.io/controller-runtime v0.22.1
 )
 
 require (
 	github.com/argoproj/argo-rollouts v1.8.3 // indirect
-	github.com/openshift/api v0.0.0-20251103120323-33ccad512a44 // indirect
+	github.com/openshift/api v3.9.0+incompatible // indirect
 )
 
 require (
@@ -74,8 +74,8 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/odigos-io/ebpf-core v0.0.0-20251104134834-786baa57580f // indirect
-	github.com/odigos-io/odigos/distros v1.16.8-pre4 // indirect
-	github.com/odigos-io/odigos/opampserver v1.16.8-pre4 // indirect
+	github.com/odigos-io/odigos/distros v1.16.8-pre4.0.20260204202127-f021fe6bb7d2 // indirect
+	github.com/odigos-io/odigos/opampserver v1.16.8-pre4.0.20260204202127-f021fe6bb7d2 // indirect
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5 // indirect
 	github.com/odigos-io/runtime-detector v0.0.22 // indirect
 	github.com/parca-dev/parca-agent v0.9.1 // indirect
@@ -90,7 +90,7 @@ require (
 	github.com/samber/slog-common v0.19.0 // indirect
 	github.com/samber/slog-multi v1.5.0 // indirect
 	github.com/samber/slog-sampling v1.5.4 // indirect
-	github.com/spf13/pflag v1.0.6 // indirect
+	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/featuregate v1.50.0 // indirect
@@ -114,7 +114,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.39.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.27.0 // indirect
+	go.uber.org/zap v1.27.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/arch v0.23.0 // indirect
@@ -135,9 +135,9 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.34.1 // indirect
+	k8s.io/api v0.34.2 // indirect
 	k8s.io/apiextensions-apiserver v0.34.1 // indirect
-	k8s.io/apimachinery v0.34.1 // indirect
+	k8s.io/apimachinery v0.34.2 // indirect
 	k8s.io/cri-api v0.34.1 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b // indirect
@@ -153,19 +153,19 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20260203104334-8faf37e9a253
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20260204193931-6dd9db2e9ca5
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.16.8-pre4
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.16.8-pre4.0.20260204202127-f021fe6bb7d2
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.16.8-pre4
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.16.8-pre4.0.20260204202127-f021fe6bb7d2
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.16.8-pre4
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.16.8-pre4.0.20260204202127-f021fe6bb7d2
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.16.8-pre4
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.16.8-pre4.0.20260204202127-f021fe6bb7d2
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.16.8-pre4
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.16.8-pre4.0.20260204202127-f021fe6bb7d2
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.16.8-pre4
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.16.8-pre4.0.20260204202127-f021fe6bb7d2
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
