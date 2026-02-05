@@ -417,6 +417,139 @@
       "required": [],
       "title": "nodeSelector"
     },
+    "odiglet": {
+      "additionalProperties": false,
+      "description": "Configuration for the odiglet component.",
+      "properties": {
+        "odiglet": {
+          "additionalProperties": false,
+          "description": "Configuration for the odiglet container.",
+          "properties": {
+            "appArmorProfile": {
+              "additionalProperties": false,
+              "description": "apparmorProfile for the odiglet container when running as unPrivileged.\nthis will be ignored when running as privileged.",
+              "properties": {
+                "type": {
+                  "default": "Unconfined",
+                  "title": "type",
+                  "type": "string"
+                }
+              },
+              "required": [],
+              "title": "appArmorProfile"
+            },
+            "capabilities": {
+              "description": "capabilities to add to the odiglet container when running as unPrivileged - this will be ignored when running as privileged.\nSYS_ADMIN required when running in unprivileged mode if one of the following is true:\n 1. kernel version is older than 5.8 (In \u003e= 5.8 BPF and PERMON were added)\n 2. kernel.perf_event_paranoid sysctl is set to 2 or higher\nIPC_LOCK required for mmap of perf buffers\nSYS_RESOURCE required only for kernels \u003c 5.11, used for setting rlimit for BPF maps",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "required": []
+              },
+              "required": [],
+              "title": "capabilities"
+            },
+            "livenessProbe": {
+              "additionalProperties": false,
+              "properties": {
+                "httpGet": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "path": {
+                      "default": "/healthz",
+                      "title": "path",
+                      "type": "string"
+                    },
+                    "port": {
+                      "default": "55683",
+                      "description": "Prior to Kubernetes v1.26, Odigos uses host networking.\nIn some environments, different ports may already be in use on the host (e.g., due to other daemons or networking constraints).\nUse the following values to configure the readiness and liveness probe ports to avoid conflicts.",
+                      "required": [],
+                      "title": "port"
+                    }
+                  },
+                  "required": [],
+                  "title": "httpGet",
+                  "type": "object"
+                },
+                "initialDelaySeconds": {
+                  "default": 15,
+                  "title": "initialDelaySeconds",
+                  "type": "integer"
+                },
+                "periodSeconds": {
+                  "default": 20,
+                  "title": "periodSeconds",
+                  "type": "integer"
+                },
+                "timeoutSeconds": {
+                  "default": 10,
+                  "title": "timeoutSeconds",
+                  "type": "integer"
+                }
+              },
+              "required": [],
+              "title": "livenessProbe",
+              "type": "object"
+            },
+            "readinessProbe": {
+              "additionalProperties": false,
+              "properties": {
+                "httpGet": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "path": {
+                      "default": "/readyz",
+                      "title": "path",
+                      "type": "string"
+                    },
+                    "port": {
+                      "default": 55683,
+                      "title": "port",
+                      "type": "integer"
+                    }
+                  },
+                  "required": [],
+                  "title": "httpGet",
+                  "type": "object"
+                },
+                "periodSeconds": {
+                  "default": 10,
+                  "title": "periodSeconds",
+                  "type": "integer"
+                }
+              },
+              "required": [],
+              "title": "readinessProbe",
+              "type": "object"
+            }
+          },
+          "required": [],
+          "title": "odiglet"
+        }
+      },
+      "required": [],
+      "title": "odiglet"
+    },
     "podsWebhookTimeoutSeconds": {
       "default": 25,
       "title": "podsWebhookTimeoutSeconds",
@@ -522,6 +655,11 @@
       },
       "required": [],
       "title": "signals"
+    },
+    "traceIdSuffix": {
+      "default": "AA",
+      "title": "traceIdSuffix",
+      "type": "string"
     },
     "ui": {
       "default": "",
