@@ -39,9 +39,10 @@ interface UseProxy<ResT, ReqT> {
 interface ParsedSingleResponse<ResT> {
   request_id: string;
   data?: ResT & { errors?: { message: string }[] };
+  error?: string;
 }
 
-const EMPTY_RESPONSE_SINGLE = {
+const EMPTY_RESPONSE_SINGLE: ParsedSingleResponse<any> = {
   request_id: '',
   data: undefined,
   error: undefined,
@@ -103,7 +104,11 @@ export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRem
         },
       });
 
-      const errorMessage = error?.cause?.message || error?.message;
+      const parsedData = safeJsonParse<ParsedSingleResponse<ResT>>(data?.remoteFetch, EMPTY_RESPONSE_SINGLE);
+      const errorFromApi = parsedData.data?.errors?.length ? parsedData.data.errors.map((e) => e.message).join(', ') : undefined;
+      const errorFromApollo = error?.cause?.message || error?.message;
+      const errorMessage = errorFromApi || errorFromApollo;
+
       if (errorMessage) {
         addNotification({ type: StatusType.Error, title: error?.name || 'API Error', message: errorMessage });
         return {
@@ -112,7 +117,7 @@ export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRem
         };
       }
 
-      return safeJsonParse<ParsedSingleResponse<ResT>>(data?.remoteFetch, EMPTY_RESPONSE_SINGLE);
+      return parsedData;
     },
     [query, proxyID, platformType, odigosVersion, connections, remoteFetch, addNotification],
   );
