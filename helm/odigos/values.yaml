@@ -669,29 +669,24 @@ odiglet:
   # @schema
   # traceIdSuffix: 'AA'
 
+# @schema
+# description: Configuration for the data-collection container.
+# @schema
+dataCollection:
+
   # @schema
-  # description: Configuration for the data-collection container.
+  # description: |-
+  #   capabilities to add to the data-collection container when running as un privileged - this will be ignored when running as privileged.
+  #   SYS_ADMIN required when running in unprivileged mode if one of the following is true:
+  #    1. kernel version is older than 5.8 (In >= 5.8 BPF and PERMON were added)
+  #    2. kernel.perf_event_paranoid sysctl is set to 2 or higher
   # @schema
-  dataCollection:
-    # @schema
-    # description: capabilities to add to the data-collection container when running as un privileged - this will be ignored when running as privileged.
-    # @schema
-    capabilities:
-      # @schema
-      # description: |-
-      #   SYS_ADMIN required when running in unprivileged mode if one of the following is true:
-      #    1. kernel version is older than 5.8 (In >= 5.8 BPF and PERMON were added)
-      #    2. kernel.perf_event_paranoid sysctl is set to 2 or higher
-      # @schema
-      - SYS_ADMIN
-      - BPF
-      - PERFMON
-      - IPC_LOCK
-  # @schema
-  # description: Uncomment to override the global nodeSelector (values.nodeSelector) for this component
-  # @schema
-  # nodeSelector:
-  #   kubernetes.io/os: linux
+  capabilities:
+    - SYS_ADMIN
+    - BPF
+    - PERFMON
+    - IPC_LOCK
+
   # @schema
   # description: |-
   #   This toleration with 'Exists' operator and no key/effect specified
@@ -701,20 +696,12 @@ odiglet:
   tolerations:
     - operator: Exists
   affinity: {}
+
   # @schema
   # description: Priority class name. Set to empty string to disable.
   # @schema
   priorityClassName: 'system-node-critical'
-  # @schema
-  # description: Resource configuration for the odiglet daemonset
-  # @schema
-  # resources:
-  #   requests:
-  #     cpu: 10m
-  #     memory: 64Mi
-  #   limits:
-  #     cpu: 500m
-  #     memory: 512Mi
+
   # @schema
   # description: Configuration for the device plugin.
   # @schema
@@ -791,7 +778,6 @@ odiglet:
   # @schema
   disableGoCodeAttributes: false
 
-
   # @schema
   # description: |-
   #   extended controls whether to use the extended odiglet image variant which includes legacy .NET instrumentation.
@@ -799,6 +785,23 @@ odiglet:
   #   Default: false
   # @schema
   extended: false
+
+  # @schema
+  # description: Uncomment to override the global nodeSelector (values.nodeSelector) for this component
+  # @schema
+  # nodeSelector:
+  #   kubernetes.io/os: linux
+
+  # @schema
+  # description: Resource configuration for the odiglet daemonset
+  # @schema
+  # resources:
+  #   requests:
+  #     cpu: 10m
+  #     memory: 64Mi
+  #   limits:
+  #     cpu: 500m
+  #     memory: 512Mi
 
 # @schema
 # description: Configuration for the central proxy component.
