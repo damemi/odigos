@@ -9,8 +9,8 @@ require (
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/google/uuid v1.6.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/api v1.16.8-pre4.0.20260204202127-f021fe6bb7d2
-	github.com/odigos-io/odigos/common v1.16.8-pre4.0.20260204202127-f021fe6bb7d2
+	github.com/odigos-io/odigos/api v1.16.8-pre4.0.20260205095029-f22ae8dce53b
+	github.com/odigos-io/odigos/common v1.16.8-pre4.0.20260205095029-f22ae8dce53b
 	github.com/vektah/gqlparser/v2 v2.5.31
 	golang.org/x/sync v0.19.0
 	k8s.io/api v0.34.2
