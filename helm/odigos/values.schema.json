@@ -240,6 +240,134 @@
       "required": [],
       "title": "images"
     },
+    "instrumentor": {
+      "additionalProperties": false,
+      "description": "Configuration for the instrumentor component.",
+      "properties": {
+        "affinity": {
+          "additionalProperties": false,
+          "description": "affinity for the instrumentor deployment.",
+          "required": [],
+          "title": "affinity"
+        },
+        "agentEnvVarsInjectionMethod": {
+          "default": "",
+          "description": "how to add the required environment variables for instrumentation to a container\nloader: only try using the odigos loader which requires setting the LD_PRELOAD env var in the container manifest.\npod-manifest: add the environment variables to the container manifest.\nloader-fallback-to-pod-manifest: try using the odigos loader first, and if it fails, fallback to adding the environment variables to the container manifest.",
+          "required": [],
+          "title": "agentEnvVarsInjectionMethod"
+        },
+        "agentsInitContainerResources": {
+          "additionalProperties": false,
+          "description": "Resource configuration for the init container that is injected into user pods\nwhen using the k8s-init-container mount method.\nThe init container is responsible for copying the instrumentation agents to the shared volume.",
+          "properties": {
+            "limits": {
+              "additionalProperties": false,
+              "properties": {
+                "cpu": {
+                  "default": "300m",
+                  "title": "cpu",
+                  "type": "string"
+                },
+                "memory": {
+                  "default": "300Mi",
+                  "title": "memory",
+                  "type": "string"
+                }
+              },
+              "required": [],
+              "title": "limits",
+              "type": "object"
+            },
+            "requests": {
+              "additionalProperties": false,
+              "properties": {
+                "cpu": {
+                  "default": "300m",
+                  "title": "cpu",
+                  "type": "string"
+                },
+                "memory": {
+                  "default": "300Mi",
+                  "title": "memory",
+                  "type": "string"
+                }
+              },
+              "required": [],
+              "title": "requests",
+              "type": "object"
+            }
+          },
+          "required": [],
+          "title": "agentsInitContainerResources"
+        },
+        "checkDeviceHealthBeforeInjection": {
+          "default": "false",
+          "description": "checkDeviceHealthBeforeInjection is relevant only when mountMethod is k8s-virtual-device.\nbefore injecting odigos agent into a new pod, it will check that all odiglet \"deviceplugin\"\ncontainers are not in crash loop backoff.\nthis is to avoid adding a device (as resource request on a container)\nwhere an odiglet might not be able to provide the device on the node and fail k8s scheduling for instrumented pods on all nodes.",
+          "required": [],
+          "title": "checkDeviceHealthBeforeInjection"
+        },
+        "mountMethod": {
+          "default": "",
+          "description": "which mount method to use for odigos agent directory\nk8s-virtual-device: default method using a virtual device\nk8s-host-path: alternative which uses hostPath volume (recommended if supported, requires hostPath volume to be enabled in the cluster)\nk8s-init-container: alternative which uses an init container to copy the agent files to the shared volume",
+          "required": [],
+          "title": "mountMethod"
+        },
+        "resources": {
+          "additionalProperties": false,
+          "description": "resources for the instrumentor deployment.",
+          "properties": {
+            "limits": {
+              "additionalProperties": false,
+              "properties": {
+                "cpu": {
+                  "default": "500m",
+                  "title": "cpu",
+                  "type": "string"
+                },
+                "memory": {
+                  "default": "512Mi",
+                  "title": "memory",
+                  "type": "string"
+                }
+              },
+              "required": [],
+              "title": "limits",
+              "type": "object"
+            },
+            "requests": {
+              "additionalProperties": false,
+              "properties": {
+                "cpu": {
+                  "default": "10m",
+                  "title": "cpu",
+                  "type": "string"
+                },
+                "memory": {
+                  "default": "64Mi",
+                  "title": "memory",
+                  "type": "string"
+                }
+              },
+              "required": [],
+              "title": "requests",
+              "type": "object"
+            }
+          },
+          "required": [],
+          "title": "resources"
+        },
+        "tolerations": {
+          "description": "tolerations for the instrumentor deployment.",
+          "items": {
+            "required": []
+          },
+          "required": [],
+          "title": "tolerations"
+        }
+      },
+      "required": [],
+      "title": "instrumentor"
+    },
     "limitCPUm": {
       "default": "500",
       "description": "the CPU limit for the node collector daemonset.\nit will be embedded in the daemonset as a resource limit\nof the form \"cpu: \u003cvalue\u003em\".\ndefault value is 500m\nIf you set only limitCPUm, the requestCPUm will be set to the same value.",
@@ -280,110 +408,19 @@
       "additionalProperties": false,
       "description": "Uncomment to override the global nodeSelector (values.nodeSelector) for this component",
       "properties": {
-        "affinity": {
-          "additionalProperties": false,
-          "required": [],
-          "title": "affinity",
-          "type": "object"
-        },
-        "centralBackendURL": {
-          "default": "",
-          "description": "centralBackendURL:\n - This flag sets the URL of the central backend.\n - If not set, the UI will not connect to the central backend.",
-          "required": [],
-          "title": "centralBackendURL"
-        },
         "kubernetes.io/os": {
           "default": "linux",
           "title": "kubernetes.io/os",
-          "type": "string"
-        },
-        "oidcClientId": {
-          "default": "",
-          "title": "oidcClientId",
-          "type": "string"
-        },
-        "oidcClientSecret": {
-          "default": "",
-          "description": "oidcClientSecret:\n - This flag sets the client secret of the OIDC application.\n - If not set, the UI will not process OIDC authentication.",
-          "required": [],
-          "title": "oidcClientSecret"
-        },
-        "oidcTenantUrl": {
-          "default": "",
-          "title": "oidcTenantUrl",
-          "type": "string"
-        },
-        "resources": {
-          "additionalProperties": false,
-          "properties": {
-            "limits": {
-              "additionalProperties": false,
-              "properties": {
-                "cpu": {
-                  "default": "500m",
-                  "title": "cpu",
-                  "type": "string"
-                },
-                "memory": {
-                  "default": "512Mi",
-                  "title": "memory",
-                  "type": "string"
-                }
-              },
-              "required": [],
-              "title": "limits",
-              "type": "object"
-            },
-            "requests": {
-              "additionalProperties": false,
-              "properties": {
-                "cpu": {
-                  "default": "10m",
-                  "title": "cpu",
-                  "type": "string"
-                },
-                "memory": {
-                  "default": "64Mi",
-                  "title": "memory",
-                  "type": "string"
-                }
-              },
-              "required": [],
-              "title": "requests",
-              "type": "object"
-            }
-          },
-          "required": [],
-          "title": "resources",
-          "type": "object"
-        },
-        "tolerations": {
-          "items": {
-            "required": []
-          },
-          "title": "tolerations",
-          "type": "array"
-        },
-        "uiMode": {
-          "default": "default",
-          "description": "uiMode: 'default' or 'readonly'\n - This flag controls whether the UI should be in read-only mode.\n - Setting this to \"readonly\" will disable the ability to create, update, or delete objects in the UI.\n - If not set, the UI will be in default mode.",
-          "required": [],
-          "title": "uiMode"
-        },
-        "uiPaginationLimit": {
-          "default": "0",
-          "description": "uiPaginationLimit:\n - This flag controls the number of items to fetch per paginated-batch in the UI.\n - If not set, the UI will fetch 100 items per paginated-batch.",
-          "required": [],
-          "title": "uiPaginationLimit"
-        },
-        "uiRemoteUrl": {
-          "default": "",
-          "title": "uiRemoteUrl",
           "type": "string"
         }
       },
       "required": [],
       "title": "nodeSelector"
+    },
+    "podsWebhookTimeoutSeconds": {
+      "default": 25,
+      "title": "podsWebhookTimeoutSeconds",
+      "type": "integer"
     },
     "priorityClassName": {
       "default": "",
