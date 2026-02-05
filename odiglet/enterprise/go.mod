@@ -153,7 +153,7 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20260204193931-6dd9db2e9ca5
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v0.0.0-20260205064528-eeb3bab5f7c3
 
 replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.16.8-pre4.0.20260204202127-f021fe6bb7d2
 
