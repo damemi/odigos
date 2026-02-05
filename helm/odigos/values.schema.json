@@ -777,6 +777,54 @@
       "required": [],
       "title": "memoryLimiterSpikeLimitMiB"
     },
+    "metricsSources": {
+      "additionalProperties": false,
+      "description": "configuration for metrics sources (where odigos collects metrics from)\nonly relevant when a metrics destination is enabled",
+      "properties": {
+        "hostMetrics": {
+          "additionalProperties": false,
+          "description": "Configuration for host metrics collection.",
+          "properties": {
+            "disabled": {
+              "default": "false",
+              "description": "disable host metrics collection globally",
+              "required": [],
+              "title": "disabled"
+            },
+            "interval": {
+              "default": "10s",
+              "description": "set time interval for host metrics scraping\nformat is duration string (15s, 1m, etc)",
+              "required": [],
+              "title": "interval"
+            }
+          },
+          "required": [],
+          "title": "hostMetrics"
+        },
+        "kubeletStats": {
+          "additionalProperties": false,
+          "description": "Configuration for kubelet stats collection.",
+          "properties": {
+            "disabled": {
+              "default": "false",
+              "description": "disable kubelet stats collection globally",
+              "required": [],
+              "title": "disabled"
+            },
+            "interval": {
+              "default": "10s",
+              "description": "set time interval for kubelet stats scraping\nformat is duration string (15s, 1m, etc)",
+              "required": [],
+              "title": "interval"
+            }
+          },
+          "required": [],
+          "title": "kubeletStats"
+        }
+      },
+      "required": [],
+      "title": "metricsSources"
+    },
     "minReplicas": {
       "default": "1",
       "description": "The number of replicas for the cluster gateway collector deployment.\nAlso uses in MinReplicas the HPA config.",

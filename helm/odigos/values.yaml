@@ -999,32 +999,32 @@ metricsSources:
   # @schema
   hostMetrics:
     # @schema
-    # description: uncomment the next line to disable host metrics collection globally
+    # description: disable host metrics collection globally
     # @schema
-    #disabled: false
+    disabled: false
 
     # @schema
     # description: |-
     #   set time interval for host metrics scraping
     #   format is duration string (15s, 1m, etc)
     # @schema
-    # interval: '10s'
+    interval: '10s'
 
   # @schema
   # description: Configuration for kubelet stats collection.
   # @schema
   kubeletStats:
     # @schema
-    # description: uncomment the next line to disable kubelet stats collection globally
+    # description: disable kubelet stats collection globally
     # @schema
-    #disabled: false
+    disabled: false
 
     # @schema
     # description: |-
     #   set time interval for kubelet stats scraping
     #   format is duration string (15s, 1m, etc)
     # @schema
-    # interval: '10s'
+    interval: '10s'
 
   # @schema
   # description: Configuration for span metrics collection.
