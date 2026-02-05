@@ -807,6 +807,7 @@ dataCollection:
 # description: Configuration for the central proxy component.
 # @schema
 centralProxy:
+
   # @schema
   # description: Central backend URL where this proxy will forward data
   # @schema
@@ -823,32 +824,35 @@ centralProxy:
   # description: TLS Configuration
   # @schema
   tls:
+
     # @schema
     # description: Skip TLS certificate verification (for testing/self-signed certificates)
     # @schema
     skipVerify: false
 
     # @schema
-    # description: Secret name containing CA certificate (key: 'ca.crt')
+    # description: "Secret name containing CA certificate (key: 'ca.crt')"
     # @schema
     caSecretName: ''
 
     # @schema
-    # description: Secret name containing client certificate and key for mTLS (keys: 'tls.crt', 'tls.key')
+    # description: "Secret name containing client certificate and key for mTLS (keys: 'tls.crt', 'tls.key')"
     # @schema
     clientCertSecretName: ''
+
+  tolerations: []
+  affinity: {}
+
+  # @schema
+  # description: Priority class name. Set to use your existing cluster priority classes.
+  # @schema
+  # priorityClassName: ''
 
   # @schema
   # description: Uncomment to override the global nodeSelector (values.nodeSelector) for this component
   # @schema
   # nodeSelector:
   #   kubernetes.io/os: linux
-  tolerations: []
-  affinity: {}
-  # @schema
-  # description: Priority class name. Set to use your existing cluster priority classes.
-  # @schema
-  # priorityClassName: ''
 
 # @schema
 # description: Pod Security Policy
