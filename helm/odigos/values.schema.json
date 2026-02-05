@@ -8,6 +8,18 @@
       "required": [],
       "title": "ResourceSizePreset"
     },
+    "additionalDimensions": {
+      "items": {
+        "anyOf": [
+          {
+            "type": "string"
+          }
+        ],
+        "required": []
+      },
+      "title": "additionalDimensions",
+      "type": "array"
+    },
     "allowConcurrentAgents": {
       "additionalProperties": false,
       "description": "Setting for allowing Odigos to run concurrently with other agents",
@@ -525,6 +537,80 @@
       "required": [],
       "title": "dataCollection"
     },
+    "excludedResourceAttributes": {
+      "description": "set resource attributes to exclude from the span metrics",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "required": []
+      },
+      "required": [],
+      "title": "excludedResourceAttributes"
+    },
+    "explicitHistogramBuckets": {
+      "description": "set explicit histogram buckets for span metrics\nformat is duration string (1us, 2ms, 3s, 4m, 5h, 6d, etc)",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "required": []
+      },
+      "required": [],
+      "title": "explicitHistogramBuckets"
+    },
     "gke": {
       "additionalProperties": false,
       "description": "GKE-specific configuration.",
@@ -549,6 +635,12 @@
       "description": "the GOMEMLIMIT environment variable value for the node collector daemonset.\nthis is when go runtime will start garbage collection.\nif not specified, it will be set to 80% of the hard limit of the memory limiter.",
       "required": [],
       "title": "goMemLimitMiB"
+    },
+    "histogramDisabled": {
+      "default": "true",
+      "description": "uncomment the next line to disable histogram metrics collection (while still recording non-histogram span metrics)",
+      "required": [],
+      "title": "histogramDisabled"
     },
     "httpsProxyAddress": {
       "default": "",
@@ -605,6 +697,12 @@
       "description": "Per-component image overrides. When set, these full image URLs take precedence over\nthe constructed image name (imagePrefix + component + tag).\nThis is primarily used by the OpenShift operator with RELATED_IMAGE_* env vars.\nExample:\n  images:\n    autoscaler: registry.connect.redhat.com/odigos/odigos-autoscaler-ubi9:v1.0.0\n    collector: registry.connect.redhat.com/odigos/odigos-collector-ubi9:v1.0.0\nSupported component names: autoscaler, collector, ui, instrumentor, enterprise-instrumentor,\n  odiglet, enterprise-odiglet, scheduler, agents, enterprise-agents",
       "required": [],
       "title": "images"
+    },
+    "includedProcessInDimensions": {
+      "default": "true",
+      "description": "set if process level dimensions will be included in span metrics\nby default, process level metrics are not included\nwhen set to true - timeseries will be created for each process in a container\nwhen unset or set to false - timeseries will aggregate all processes into a single value per series",
+      "required": [],
+      "title": "includedProcessInDimensions"
     },
     "instrumentor": {
       "additionalProperties": false,
@@ -820,6 +918,26 @@
           },
           "required": [],
           "title": "kubeletStats"
+        },
+        "spanMetrics": {
+          "additionalProperties": false,
+          "description": "Configuration for span metrics collection.",
+          "properties": {
+            "disabled": {
+              "default": "false",
+              "description": "disable span metrics collection globally",
+              "required": [],
+              "title": "disabled"
+            },
+            "interval": {
+              "default": "60s",
+              "description": "set time interval for span metrics flushing\nformat is duration string (15s, 1m, etc)\ndefault is 60s",
+              "required": [],
+              "title": "interval"
+            }
+          },
+          "required": [],
+          "title": "spanMetrics"
         }
       },
       "required": [],
@@ -1045,6 +1163,22 @@
       "default": 250,
       "title": "requestMemoryMiB",
       "type": "integer"
+    },
+    "resourceMetricsKeyAttributes": {
+      "description": "Advanced configuration - avoid using unless you know what you are doing.\nThis list controls which resource attributes are included in the metric stream identity.\nThese attributes are used to determines how span metrics are grouped.",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "required": []
+      },
+      "required": [],
+      "title": "resourceMetricsKeyAttributes"
     },
     "resources": {
       "additionalProperties": false,

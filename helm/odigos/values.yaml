@@ -1031,9 +1031,9 @@ metricsSources:
   # @schema
   spanMetrics:
     # @schema
-    # description: uncomment the next line to disable span metrics collection globally
+    # description: disable span metrics collection globally
     # @schema
-    #disabled: false
+    disabled: false
 
     # @schema
     # description: |-
@@ -1041,7 +1041,7 @@ metricsSources:
     #   format is duration string (15s, 1m, etc)
     #   default is 60s
     # @schema
-    # interval: '60s'
+    interval: '60s'
 
     # @schema
     # description: |-
