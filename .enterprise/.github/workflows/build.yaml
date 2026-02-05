@@ -114,6 +114,41 @@ jobs:
         with:
           path: /tmp/${{ matrix.service }}-enterprise.tar
           key: ${{ github.run_id }}-${{ matrix.service }}-enterprise-${{ matrix.rhel == 'true' && 'rhel-certified' || 'standard' }}
+      
+      - name: Load Docker image for scanning
+        run: docker load -i /tmp/${{ matrix.service }}-enterprise.tar
+
+      - name: Scan image for vulnerabilities
+        id: scan
+        uses: odigos-io/ci-core/vulnerabilities-scanner@3ace0ddac40435dba0f98700af061f63c24442cd
+        with:
+          image: registry.odigos.io/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.IMAGE_TAG }}
+          severity-cutoff: "CRITICAL"
+        continue-on-error: true
+
+      - name: Save scan JSON results
+        if: always()
+        run: |
+          mkdir -p /tmp/scan-results
+          IMAGE_NAME="odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}"
+          
+          # Create a wrapper JSON with image metadata
+          cat > /tmp/scan-results/${IMAGE_NAME}.json << 'EOF'
+          ${{ steps.scan.outputs.results-json }}
+          EOF
+          
+          # Add image name to the JSON
+          jq --arg img "$IMAGE_NAME" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' /tmp/scan-results/${IMAGE_NAME}.json > /tmp/scan-results/${IMAGE_NAME}_enriched.json
+          mv /tmp/scan-results/${IMAGE_NAME}_enriched.json /tmp/scan-results/${IMAGE_NAME}.json
+
+      - name: Upload scan results JSON
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
+        with:
+          name: vuln-scan-result-${{ matrix.service }}-${{ matrix.rhel == 'true' && 'rhel' || 'standard' }}-${{ github.sha }}.json
+          path: /tmp/scan-results/*.json
+          retention-days: 30
+
 
   build-oss-components-for-tests:
     runs-on: depot-ubuntu-24.04-4
@@ -175,6 +210,91 @@ jobs:
           docker save registry.odigos.io/odigos-collector:${{ env.IMAGE_TAG }} -o /tmp/odigos-collector.tar
           docker save registry.odigos.io/odigos-cli:${{ env.IMAGE_TAG }} -o /tmp/odigos-cli.tar
 
+      - name: Scan autoscaler image for vulnerabilities
+        if: steps.cache-oss-components.outputs.cache-hit != 'true'
+        id: scan-autoscaler
+        uses: odigos-io/ci-core/vulnerabilities-scanner@3ace0ddac40435dba0f98700af061f63c24442cd
+        with:
+          image: registry.odigos.io/odigos-autoscaler:${{ env.IMAGE_TAG }}
+          severity-cutoff: "CRITICAL"
+        continue-on-error: true
+
+      - name: Save autoscaler scan JSON
+        if: always() && steps.cache-oss-components.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/scan-results
+          cat > /tmp/scan-results/odigos-autoscaler.json << 'EOF'
+          ${{ steps.scan-autoscaler.outputs.results-json }}
+          EOF
+          jq --arg img "odigos-autoscaler" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' /tmp/scan-results/odigos-autoscaler.json > /tmp/scan-results/odigos-autoscaler_enriched.json
+          mv /tmp/scan-results/odigos-autoscaler_enriched.json /tmp/scan-results/odigos-autoscaler.json
+
+      - name: Scan scheduler image for vulnerabilities
+        if: steps.cache-oss-components.outputs.cache-hit != 'true'
+        id: scan-scheduler
+        uses: odigos-io/ci-core/vulnerabilities-scanner@3ace0ddac40435dba0f98700af061f63c24442cd
+        with:
+          image: registry.odigos.io/odigos-scheduler:${{ env.IMAGE_TAG }}
+          severity-cutoff: "CRITICAL"
+        continue-on-error: true
+
+      - name: Save scheduler scan JSON
+        if: always() && steps.cache-oss-components.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/scan-results
+          cat > /tmp/scan-results/odigos-scheduler.json << 'EOF'
+          ${{ steps.scan-scheduler.outputs.results-json }}
+          EOF
+          jq --arg img "odigos-scheduler" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' /tmp/scan-results/odigos-scheduler.json > /tmp/scan-results/odigos-scheduler_enriched.json
+          mv /tmp/scan-results/odigos-scheduler_enriched.json /tmp/scan-results/odigos-scheduler.json
+
+      - name: Scan collector image for vulnerabilities
+        if: steps.cache-oss-components.outputs.cache-hit != 'true'
+        id: scan-collector
+        uses: odigos-io/ci-core/vulnerabilities-scanner@3ace0ddac40435dba0f98700af061f63c24442cd
+        with:
+          image: registry.odigos.io/odigos-collector:${{ env.IMAGE_TAG }}
+          severity-cutoff: "CRITICAL"
+        continue-on-error: true
+
+      - name: Save collector scan JSON
+        if: always() && steps.cache-oss-components.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/scan-results
+          cat > /tmp/scan-results/odigos-collector.json << 'EOF'
+          ${{ steps.scan-collector.outputs.results-json }}
+          EOF
+          jq --arg img "odigos-collector" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' /tmp/scan-results/odigos-collector.json > /tmp/scan-results/odigos-collector_enriched.json
+          mv /tmp/scan-results/odigos-collector_enriched.json /tmp/scan-results/odigos-collector.json
+
+      - name: Scan cli image for vulnerabilities
+        if: steps.cache-oss-components.outputs.cache-hit != 'true'
+        id: scan-cli
+        uses: odigos-io/ci-core/vulnerabilities-scanner@3ace0ddac40435dba0f98700af061f63c24442cd
+        with:
+          image: registry.odigos.io/odigos-cli:${{ env.IMAGE_TAG }}
+          severity-cutoff: "CRITICAL"
+        continue-on-error: true
+
+      - name: Save cli scan JSON
+        if: always() && steps.cache-oss-components.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/scan-results
+          cat > /tmp/scan-results/odigos-cli.json << 'EOF'
+          ${{ steps.scan-cli.outputs.results-json }}
+          EOF
+          jq --arg img "odigos-cli" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' /tmp/scan-results/odigos-cli.json > /tmp/scan-results/odigos-cli_enriched.json
+          mv /tmp/scan-results/odigos-cli_enriched.json /tmp/scan-results/odigos-cli.json
+
+      - name: Upload OSS scan results JSON
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
+        with:
+          name: vuln-scan-result-oss-components.json
+          path: /tmp/scan-results/*.json
+          retention-days: 30
+
+      
   kubernetes-tests:
     name: kubernetes-tests (${{ matrix.kube-version }}, ${{ matrix.test-scenario }}${{ matrix.wasp-enabled == true && ', with_wasp' || '' }})
     needs:
@@ -504,3 +624,33 @@ jobs:
           name: run-details-${{ matrix.test-scenario }}-${{ matrix.kube-version }}
           path: odigos_debug*.tar.gz
         continue-on-error: true
+
+  vulnerability-report:
+    name: Generate Vulnerability Report
+    needs: [build-enterprise-components, build-oss-components-for-tests]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download all scan JSON results
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 #v4.1.8
+        with:
+          pattern: vuln-scan-result-*
+          path: scan-results
+          merge-multiple: true
+
+      - name: Zip individual scan results
+        run: |
+          if [ -d "scan-results" ] && ls scan-results/*.json 1> /dev/null 2>&1; then
+            zip -j scan-results.zip scan-results/*.json
+            echo "Created zip with $(unzip -l scan-results.zip | grep -c '\.json') JSON files"
+          else
+            echo "No scan results to zip"
+            touch scan-results.zip
+          fi
+
+      - name: Upload scan results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
+        with:
+          name: vulnerability-report
+          path: scan-results.zip
+          retention-days: 90
