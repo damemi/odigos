@@ -8,6 +8,42 @@
       "required": [],
       "title": "ResourceSizePreset"
     },
+    "allowConcurrentAgents": {
+      "additionalProperties": false,
+      "description": "Setting for allowing Odigos to run concurrently with other agents",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "title": "allowConcurrentAgents"
+    },
+    "autoRollback": {
+      "additionalProperties": false,
+      "description": "Auto rollback settings\nThe auto‐rollback feature provides a stability window to test instrumented apps.\nAfter an application is instrumented, a grace period begins during which we allow the app (and its dependencies) to stabilize and start working.\nOnce the grace period has passed and we are within the stability window, we can decide to uninstrument a crashing application.",
+      "properties": {
+        "disabled": {
+          "default": false,
+          "title": "disabled",
+          "type": "boolean"
+        },
+        "graceTime": {
+          "default": "5m",
+          "title": "graceTime",
+          "type": "string"
+        },
+        "stabilityWindowTime": {
+          "default": "1h",
+          "title": "stabilityWindowTime",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "title": "autoRollback"
+    },
     "autoscaler": {
       "additionalProperties": false,
       "description": "Configuration for the autoscaler component.",
@@ -170,6 +206,24 @@
       },
       "required": [],
       "title": "centralProxy"
+    },
+    "certifiedImageTags": {
+      "default": false,
+      "title": "certifiedImageTags",
+      "type": "boolean"
+    },
+    "clickhouseDestinationJsonType": {
+      "additionalProperties": false,
+      "description": "Enable support for ClickHouse JSON column type when storing Odigos data.\nWhen set to true, Odigos will use a new schema with JSON-typed columns (requires ClickHouse v25.3+).\nIf set to false, the default schema using Map-type columns will be used instead.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "title": "clickhouseDestinationJsonType"
     },
     "clusterName": {
       "default": "",
@@ -471,6 +525,19 @@
       "required": [],
       "title": "dataCollection"
     },
+    "gke": {
+      "additionalProperties": false,
+      "description": "GKE-specific configuration.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "title": "gke"
+    },
     "global": {
       "description": "Global values are values that can be accessed from any chart or subchart by exactly the same name.",
       "required": [],
@@ -667,6 +734,19 @@
       "required": [],
       "title": "instrumentor"
     },
+    "karpenter": {
+      "additionalProperties": false,
+      "description": "Karpenter settings, before changing to true please modify the karpenter-node-template.yaml file\nto add the odigos-agent startupTaints configuration.\nhttps://docs.odigos.io/setup/odigos-with-karpenter",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "title": "karpenter"
+    },
     "limitCPUm": {
       "default": "500",
       "description": "the CPU limit for the node collector daemonset.\nit will be embedded in the daemonset as a resource limit\nof the form \"cpu: \u003cvalue\u003em\".\ndefault value is 500m\nIf you set only limitCPUm, the requestCPUm will be set to the same value.",
@@ -705,7 +785,7 @@
     },
     "nodeSelector": {
       "additionalProperties": false,
-      "description": "Uncomment to override the global nodeSelector (values.nodeSelector) for this component",
+      "description": "Global NodeSelector to apply to all Odigos components by default.\nIndividual components can override this by uncommenting their specific nodeSelector configuration.\nNote: Odigos will only be able to instrument workloads on the same nodes.",
       "properties": {
         "kubernetes.io/os": {
           "default": "linux",
@@ -849,6 +929,33 @@
       "required": [],
       "title": "odiglet"
     },
+    "openshift": {
+      "additionalProperties": false,
+      "description": "OpenShift-specific configuration.",
+      "properties": {
+        "enabled": {
+          "default": "false",
+          "description": "Controls whether to use OpenShift-specific settings and images.",
+          "required": [],
+          "title": "enabled"
+        }
+      },
+      "required": [],
+      "title": "openshift"
+    },
+    "pdb": {
+      "additionalProperties": false,
+      "description": "Pod Disruption Budgets (PDBs) help ensure high availability during voluntary disruptions like node drains or upgrades.\nWhen enabled, Odigos will deploy PDBs for its components based on their importance:\n- Critical components (e.g., instrumentor) will be protected with stricter disruption limits.\n- Non-critical components will use more relaxed budgets to allow operational flexibility.\nThis reflects Odigos' recommended defaults for maintaining observability continuity without blocking routine maintenance.\nPDBs are disabled by default and can be enabled in production environments where stability during disruptions is important.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "title": "pdb"
+    },
     "podsWebhookTimeoutSeconds": {
       "default": 25,
       "title": "podsWebhookTimeoutSeconds",
@@ -858,6 +965,27 @@
       "default": "",
       "title": "priorityClassName",
       "type": "string"
+    },
+    "profiles": {
+      "description": "List of profile names (array). Example (YAML): profiles: [PROFILE_NAME] | (CLI): --set profiles={PROFILE_NAME}",
+      "items": {
+        "required": []
+      },
+      "required": [],
+      "title": "profiles"
+    },
+    "psp": {
+      "additionalProperties": false,
+      "description": "Pod Security Policy",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "title": "psp"
     },
     "requestCPUm": {
       "default": "250",
@@ -913,6 +1041,19 @@
       "required": [],
       "title": "resources",
       "type": "object"
+    },
+    "rollout": {
+      "additionalProperties": false,
+      "description": "Odigos automatically triggers a one-time rollout for workloads when instrumenting or uninstrumenting, to apply changes.\nIf workload restarts are sensitive, this setting can be used to disable the automatic rollout.\nWhen disabled, users are responsible for manually triggering rollouts after adding or removing sources.\nAny new pods created after enabling or disabling the agent (via manual rollout, autoscaling, etc.)\nwill still have the agent injected, regardless of this setting.\nWhen set to true, all additional configurations related to automated rollouts or rollbacks are ignored.",
+      "properties": {
+        "automaticRolloutDisabled": {
+          "default": false,
+          "title": "automaticRolloutDisabled",
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "title": "rollout"
     },
     "scheduler": {
       "additionalProperties": false,
@@ -998,6 +1139,27 @@
       },
       "required": [],
       "title": "signals"
+    },
+    "telemetry": {
+      "additionalProperties": false,
+      "description": "Telemetry configuration for Odigos.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "title": "telemetry"
+    },
+    "topologySpreadConstraints": {
+      "description": "Refer to the official Kubernetes documentation for structure and field details:\nhttps://kubernetes.io/docs/concepts/scheduling-eviction/topology-spread-constraints/\n\nExample: Odigos components should be evenly spread across zones.\nNo need to set labelSelector manually — the Odigos Helm chart will apply it automatically.\ntopologySpreadConstraints:\n  - maxSkew: 1\n    topologyKey: \"topology.kubernetes.io/zone\"\n    whenUnsatisfiable: \"ScheduleAnyway\"",
+      "items": {
+        "required": []
+      },
+      "required": [],
+      "title": "topologySpreadConstraints"
     },
     "traceIdSuffix": {
       "default": "AA",
@@ -1139,6 +1301,19 @@
       },
       "required": [],
       "title": "userInstrumentationEnvs"
+    },
+    "wasp": {
+      "additionalProperties": false,
+      "description": "controls the wasp settings",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "enabled",
+          "type": "boolean"
+        }
+      },
+      "required": [],
+      "title": "wasp"
     }
   },
   "required": [],

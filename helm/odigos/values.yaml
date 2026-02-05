@@ -895,7 +895,7 @@ gke:
   enabled: false
 
 # @schema
-# description: List of profile names (array). Example (YAML): profiles: [PROFILE_NAME] | (CLI): --set profiles={PROFILE_NAME}
+# description: "List of profile names (array). Example (YAML): profiles: [PROFILE_NAME] | (CLI): --set profiles={PROFILE_NAME}"
 # @schema
 profiles: []
 
