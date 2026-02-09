@@ -14,7 +14,7 @@ require (
 	github.com/odigos-io/odigos/common v1.16.8-pre4.0.20260206151449-1866da41862a
 	github.com/odigos-io/odigos/instrumentation v1.16.8-pre4.0.20260206151449-1866da41862a
 	github.com/odigos-io/odigos/k8sutils v0.0.0
-	github.com/odigos-io/odigos/odiglet v1.16.8-pre4.0.20260206151449-1866da41862a
+	github.com/odigos-io/odigos/odiglet v1.16.8-pre4.0.20260209154213-20c95f613a0c
 	github.com/odigos-io/odigos/procdiscovery v0.0.0
 	github.com/odigos-io/wasp-handshake v0.0.0-20260208160636-919d4d5e7423
 	go.opentelemetry.io/auto v0.22.0
@@ -166,6 +166,8 @@ replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8su
 replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.16.8-pre4.0.20260206151449-1866da41862a
 
 replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.16.8-pre4.0.20260206151449-1866da41862a
+
+// replace github.com/odigos-io/odigos/odiglet => github.com/tamirdavid1/odigos/odiglet v0.0.0-20260209131538-f055f45e5817
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
