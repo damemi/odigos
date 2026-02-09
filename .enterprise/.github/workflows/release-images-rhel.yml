@@ -1,0 +1,115 @@
+name: Release Enterprise Components to Artifact Registry (RHEL)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Docker image tag"
+        required: true
+  repository_dispatch:
+    types: [publish_images_rhel]
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  release:
+    strategy:
+      matrix:
+        service:
+          - odiglet
+          - instrumentor
+          - central-proxy
+          - central-backend
+          - central-ui
+          - agents
+        extended: ['false']
+
+    runs-on: depot-ubuntu-24.04-4
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.tag || github.event.client_payload.tag }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 #v3.11.1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 #v3.6.0
+
+      - id: gcp-auth
+        name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@b7593ed2efd1c1617e1b0254da33b86225adb2a5 #v2.1.12
+        with:
+          token_format: access_token
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          access_token_lifetime: 1200s
+
+      - name: Login to Artifact Registry
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 #v3.5.0
+        with:
+          registry: us-central1-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.gcp-auth.outputs.access_token }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 #v3.5.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Enterprise Image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 #v6.18.0
+        env:
+          ODIGOS_TAG: ${{ github.event.inputs.tag || github.event.client_payload.tag }}
+        with:
+          file: >-
+            ${{ matrix.service == 'odiglet' && 'odiglet/Dockerfile'
+            || matrix.service == 'central-ui' && 'central-ui/Dockerfile'
+            || matrix.service == 'agents' && 'odiglet/Dockerfile'
+            || 'Dockerfile' }}
+          context: ${{ matrix.service == 'central-ui' && 'central-ui' || '.' }}
+          push: true
+          tags: |
+            us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}-rhel-certified:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
+            keyval/odigos-enterprise-${{ matrix.service }}-rhel-certified:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
+            ghcr.io/odigos-io/odigos-enterprise-${{ matrix.service }}-rhel-certified:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
+          build-args: |
+            SERVICE_NAME=${{ matrix.service }}
+            ODIGOS_VERSION=${{ env.ODIGOS_TAG }}
+            SUMMARY=${{ matrix.summary }}
+            DESCRIPTION=${{ matrix.description }}
+            VERSION=${{ env.ODIGOS_TAG }}
+            RELEASE=${{ env.ODIGOS_TAG }}
+            LD_FLAGS=-s -w
+            RHEL=true
+            EXTENDED=${{ matrix.extended }}
+          platforms: linux/amd64,linux/arm64
+          provenance: false
+          target: >-
+            ${{ matrix.service == 'agents' && 'agents-rhel' || 'rhel' }}
+          secrets: |
+            "github_token=${{ secrets.RELEASE_BOT_TOKEN }}"
+        
+  trigger-openshift-certification:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger OpenShift Preflight job
+        run: |
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.RELEASE_BOT_TOKEN }}" \
+            https://api.github.com/repos/odigos-io/odigos/dispatches \
+            -d '{"event_type": "openshift_preflight", "client_payload": {"tag": "${{ github.event.inputs.tag || github.event.client_payload.tag }}"}}'
