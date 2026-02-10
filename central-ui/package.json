@@ -37,5 +37,10 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "typescript": "^5"
+  },
+  "resolutions": {
+    "diff": "^5.2.2",
+    "glob": "^10.5.0",
+    "tar": "^7.5.7"
   }
 }
