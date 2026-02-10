@@ -56,6 +56,10 @@ CMD ["yarn", "start"]
 # 2️⃣ Runtime Stage: Serve with Next.js Built-in Server
 FROM node:22-alpine
 
+# Remove bundled npm to eliminate CVEs in its dependencies.
+# We only use yarn for "yarn start" in this image.
+RUN rm -rf /usr/local/lib/node_modules/npm
+
 # Set working directory
 WORKDIR /app
 
