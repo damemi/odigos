@@ -156,7 +156,7 @@ export const useSSE = () => {
                 handleEvent(OpenSourceEventTypes.ADDED, () => {
                   const { progress, resetProgress } = useProgressStore.getState();
                   addNotification({ type: StatusType.Success, title: OpenSourceEventTypes.ADDED, message: `Successfully created ${progress[ProgressKeys.Instrumenting]?.total} sources` });
-                  setStatusStore(StatusKeys.Instrumentation, { status: StatusType.Warning, label: 'Instrumenting sources, please wait a moment...', leftIcon: NotificationIcon });
+                  clearStatusMessage();
                   resetProgress(ProgressKeys.Instrumenting);
 
                   fetchSources();
@@ -165,10 +165,13 @@ export const useSSE = () => {
 
               case OpenSourceEventTypes.MODIFIED:
                 const { progress } = useProgressStore.getState();
-
                 if (!progress[ProgressKeys.Instrumenting] && !progress[ProgressKeys.Uninstrumenting]) {
+                  setStatusStore(StatusKeys.Instrumentation, { status: StatusType.Warning, label: 'Processing instrumentation, please wait a moment...', leftIcon: NotificationIcon });
+
                   handleEvent(OpenSourceEventTypes.MODIFIED, () => {
+                    addNotification({ type: StatusType.Success, title: OpenSourceEventTypes.MODIFIED, message: 'Instrumentation completed' });
                     clearStatusMessage();
+
                     fetchSources();
                   });
                 }
