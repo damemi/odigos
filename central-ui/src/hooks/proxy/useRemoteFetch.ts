@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useProxy } from './useProxy';
 import { getVersionedQuery } from '@/utils';
 import { useLazyQuery } from '@apollo/client';
@@ -33,7 +33,9 @@ interface UseProxy<ResT, ReqT> {
   called: boolean;
   loading: boolean;
   data?: ResT;
+  dataKey: string;
   dataMulti?: MultiFetchResult<ResT>[];
+  dataMultiKey: string;
 }
 
 interface ParsedSingleResponse<ResT> {
@@ -182,12 +184,22 @@ export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRem
     [query, connections, remoteMultiFetch, addNotification],
   );
 
+  const data = useMemo(() => safeJsonParse<{ data?: ResT }>(cachedData?.remoteFetch, EMPTY_RESPONSE_SINGLE).data, [cachedData?.remoteFetch]);
+  const dataMulti = useMemo(() => (cachedMultiData?.remoteMultiFetch ? cachedMultiData.remoteMultiFetch.map(mapMultiFetchResult<ResT>) : []), [cachedMultiData?.remoteMultiFetch]);
+
+  // these keys are meant to prevent unnecessary re-renders of effects etc. when the data is the same...
+  // string-based values for dependency arrays are more reliable than objects and arrays (because of reference equality).
+  const dataKey = useMemo(() => (data ? JSON.stringify(data) : ''), [data]);
+  const dataMultiKey = useMemo(() => (dataMulti ? JSON.stringify(dataMulti) : ''), [dataMulti]);
+
   return {
     fetch,
     fetchMulti,
     called: called || multiCalled,
     loading: loading || multiLoading,
-    data: safeJsonParse<{ data?: ResT }>(cachedData?.remoteFetch, EMPTY_RESPONSE_SINGLE).data,
-    dataMulti: cachedMultiData?.remoteMultiFetch ? cachedMultiData.remoteMultiFetch.map(mapMultiFetchResult<ResT>) : [],
+    data,
+    dataKey,
+    dataMulti,
+    dataMultiKey,
   };
 };

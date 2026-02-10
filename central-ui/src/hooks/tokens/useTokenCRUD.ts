@@ -14,7 +14,7 @@ export const useTokenCRUD = () => {
     addNotification({ type, title, message, hideFromHistory });
   };
 
-  const { called, loading, data, fetch: queryAll } = useRemoteFetch<{ computePlatform?: { apiTokens?: TokenPayload[] } }>(GET_TOKENS);
+  const { called, loading, data, dataKey, fetch: queryAll } = useRemoteFetch<{ computePlatform?: { apiTokens?: TokenPayload[] } }>(GET_TOKENS);
   const { fetch: mutateUpdate } = useRemoteFetch<{ updateApiToken: boolean }>(UPDATE_TOKEN);
 
   const updateToken: UpdateTokenFunc = async (token) => {
@@ -37,7 +37,7 @@ export const useTokenCRUD = () => {
     if (!called) queryAll();
   }, [called]);
 
-  const tokens = useMemo(() => data?.computePlatform?.apiTokens || [], [data?.computePlatform?.apiTokens]);
+  const tokens = useMemo(() => data?.computePlatform?.apiTokens || [], [dataKey]);
 
   return {
     loading,
