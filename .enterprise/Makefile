@@ -166,7 +166,7 @@ restart-central-ui:
 
 .PHONY: restart-central-proxy
 restart-central-proxy:
-	kubectl rollout restart deployment central-proxy -n odigos-central || true
+	kubectl rollout restart deployment central-proxy -n odigos-system || true
 
 .PHONY: restart-all
 restart-all:
