@@ -5,6 +5,7 @@ export const ENSURE_IDENTITY_PROVIDER = gql`
     ensureIdentityProvider(input: $input) {
       success
       error
+      callbackUrl
     }
   }
 `;
@@ -14,6 +15,7 @@ export const ENSURE_SAML_IDENTITY_PROVIDER = gql`
     ensureSamlIdentityProvider(input: $input) {
       success
       error
+      callbackUrl
     }
   }
 `;

@@ -1,13 +1,13 @@
-import React, { useMemo, type Dispatch, type SetStateAction } from 'react';
+import React, { useState, useMemo, type Dispatch, type SetStateAction } from 'react';
 import styled from 'styled-components';
 import { StatusType } from '@odigos/ui-kit/types';
 import { VSquareIcon } from '@odigos/ui-kit/icons';
 import * as STRINGS from '@/utils/constants/strings';
 import { useGenericForm } from '@odigos/ui-kit/hooks';
-import { FlexColumn } from '@odigos/ui-kit/components';
+import { FlexColumn, Tooltip } from '@odigos/ui-kit/components';
 import { VisualGreenRings } from '@odigos/ui-kit/visuals';
 import { AUTH_PROVIDERS } from '@/utils/constants/auth-providers';
-import { Button, ButtonTab, Input, Note } from '@odigos/ui-kit/components/v2';
+import { Button, ButtonTab, CliCommand, Input, Note } from '@odigos/ui-kit/components/v2';
 import { ConstrainedWidth, ErrorText, FormContainer, FormSubtitle, FormTitle } from '../styled';
 import { AuthProviderId, LoginType, type SamlIdentityProviderInput, EnsureSamlIdentityProvider } from '@/types';
 
@@ -25,7 +25,16 @@ const VisualWrapper = styled.div`
   margin: 36px 0;
 `;
 
+const FullWidthTooltip = styled.div`
+  width: 100%;
+  & > div {
+    width: 100%;
+  }
+`;
+
 const SamlForm: React.FC<SamlFormProps> = ({ providerId, loading, error, onCreate, isCreateSuccess, setIsCreateSuccess, onLogin }) => {
+  const [callbackUrl, setCallbackUrl] = useState<string | undefined>();
+  const [hasCopiedCallbackUrl, setHasCopiedCallbackUrl] = useState(false);
   const { formData, handleFormChange, formErrors, handleErrorChange } = useGenericForm<SamlIdentityProviderInput>({
     providerId,
     idpEntityId: '',
@@ -60,13 +69,13 @@ const SamlForm: React.FC<SamlFormProps> = ({ providerId, loading, error, onCreat
 
     const res = await onCreate(formData);
     if (res?.success) {
+      setCallbackUrl(res.callbackUrl);
       setIsCreateSuccess(true);
       // if we want to auto-redirect to the login page after creating the provider, we can do it here
       // onLogin(providerId);
     }
   };
-
-  if (isCreateSuccess && provider) {
+  if (provider && isCreateSuccess) {
     return (
       <FormContainer $gap={59}>
         <FlexColumn $alignItems='center'>
@@ -81,9 +90,21 @@ const SamlForm: React.FC<SamlFormProps> = ({ providerId, loading, error, onCreat
         </FlexColumn>
 
         <ConstrainedWidth>
-          <FlexColumn $gap={8}>
-            <ButtonTab label={`${STRINGS.LOGIN_WITH} SAML`} loading={loading} onClick={() => onLogin(providerId, LoginType.SAML)} />
-            <Note status={StatusType.Default} message={STRINGS.PROVIDER_REDIRECT_NOTICE('SAML')} />
+          <FlexColumn $gap={16}>
+            {callbackUrl && (
+              <FlexColumn $gap={8}>
+                <Note status={StatusType.Default} message={STRINGS.CALLBACK_URL_INSTRUCTIONS(provider.displayName)} />
+                <CliCommand value={callbackUrl} onDone={() => setHasCopiedCallbackUrl(true)} />
+              </FlexColumn>
+            )}
+
+            <FlexColumn $gap={8}>
+              <FullWidthTooltip>
+                <Tooltip text={!!callbackUrl && !hasCopiedCallbackUrl ? STRINGS.COPY_CALLBACK_URL_TOOLTIP : undefined}>
+                  <ButtonTab label={`${STRINGS.LOGIN_WITH} SAML`} loading={loading} disabled={!!callbackUrl && !hasCopiedCallbackUrl} onClick={() => onLogin(providerId, LoginType.SAML)} />
+                </Tooltip>
+              </FullWidthTooltip>
+            </FlexColumn>
           </FlexColumn>
         </ConstrainedWidth>
       </FormContainer>

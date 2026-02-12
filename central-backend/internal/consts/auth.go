@@ -16,6 +16,16 @@ func GetKeycloakHost() string {
 	return "http://localhost:8080"
 }
 
+// GetCentralBackendHost returns the browser-accessible central-backend URL.
+// Browser-facing Keycloak URLs (sign-in, sign-out) are routed through the backend's
+// reverse proxy, so they use the backend host instead of the Keycloak host directly.
+func GetCentralBackendHost() string {
+	if host := os.Getenv("CENTRAL_BACKEND_HOST"); host != "" {
+		return host
+	}
+	return "http://localhost:8081"
+}
+
 func GetCentralUIHost() string {
 	// TODO: make this env in install command
 	if host := os.Getenv("CENTRAL_UI_HOST"); host != "" {

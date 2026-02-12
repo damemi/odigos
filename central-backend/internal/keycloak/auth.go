@@ -16,7 +16,8 @@ import (
 )
 
 type KeycloakAuthService struct {
-	host                string
+	host                string // internal cluster URL for server-to-server calls
+	backendHost         string // central-backend URL for browser-facing redirect URLs (proxied to Keycloak)
 	realm               string
 	client              string
 	uiSignInRedirectUrl string
@@ -43,6 +44,7 @@ type TokenResponse struct {
 func NewKeycloakAuthService() *KeycloakAuthService {
 	return &KeycloakAuthService{
 		host:                consts.GetKeycloakHost(),
+		backendHost:         consts.GetCentralBackendHost(),
 		realm:               consts.KeycloakRealm,
 		client:              consts.ClientID,
 		uiSignInRedirectUrl: fmt.Sprintf("%s/signin", consts.GetCentralUIHost()),
@@ -51,7 +53,7 @@ func NewKeycloakAuthService() *KeycloakAuthService {
 }
 
 func (kc *KeycloakAuthService) GetRedirectUrlForSignIn(provider string) string {
-	authURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/auth", kc.host, kc.realm)
+	authURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/auth", kc.backendHost, kc.realm)
 	queryParams := make(url.Values)
 	queryParams.Set("client_id", kc.client)
 	queryParams.Set("kc_idp_hint", provider)
@@ -69,7 +71,7 @@ func (kc *KeycloakAuthService) GetRedirectUrlForSignIn(provider string) string {
 // 2. It can propagate logout to the external IDP (when idToken is provided)
 // 3. It prevents auto-login when trying to sign in with a different account
 func (kc *KeycloakAuthService) GetRedirectUrlForSignOut(idToken string) string {
-	logoutURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/logout", kc.host, kc.realm)
+	logoutURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/logout", kc.backendHost, kc.realm)
 
 	queryParams := make(url.Values)
 	queryParams.Set("client_id", kc.client)

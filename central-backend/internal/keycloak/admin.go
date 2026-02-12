@@ -375,6 +375,10 @@ func (kc *KeycloakAdminService) ConfigureSamlIdentityProvider(adminUsername stri
 		return fmt.Errorf("failed to configure SAML identity provider: status %d, response: %+v", resp.StatusCode, responseBody)
 	}
 
+	if err := kc.ensureSamlAttributeMappers(adminToken, config.ProviderAlias); err != nil {
+		logger.Log.Error("Failed to create SAML attribute mappers", "provider", config.ProviderAlias, "error", err)
+	}
+
 	return nil
 }
 
@@ -419,7 +423,120 @@ func (kc *KeycloakAdminService) UpdateIdentityProvider(adminUsername string, adm
 
 // UpdateSamlIdentityProvider updates an existing SAML IdP by alias using PUT.
 func (kc *KeycloakAdminService) UpdateSamlIdentityProvider(adminUsername string, adminPassword string, config *SamlIdentityProviderConfig) error {
-	return kc.updateIdentityProvider(adminUsername, adminPassword, config.ProviderAlias, getSamlIDPConfig(config), AuthProtocolSAML)
+	if err := kc.updateIdentityProvider(adminUsername, adminPassword, config.ProviderAlias, getSamlIDPConfig(config), AuthProtocolSAML); err != nil {
+		return err
+	}
+
+	adminToken, err := kc.GetAdminToken(adminUsername, adminPassword)
+	if err != nil {
+		return err
+	}
+
+	if err := kc.ensureSamlAttributeMappers(adminToken, config.ProviderAlias); err != nil {
+		logger.Log.Error("Failed to ensure SAML attribute mappers on update", "provider", config.ProviderAlias, "error", err)
+	}
+
+	return nil
+}
+
+type samlAttributeMapper struct {
+	Name          string
+	AttributeName string
+	UserAttribute string
+}
+
+// ensureSamlAttributeMappers creates standard SAML attribute mappers (email, firstName, lastName)
+// for the given identity provider. It skips mappers that already exist.
+func (kc *KeycloakAdminService) ensureSamlAttributeMappers(adminToken string, providerAlias string) error {
+	mappers := []samlAttributeMapper{
+		{
+			Name:          "email",
+			AttributeName: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+			UserAttribute: "email",
+		},
+		{
+			Name:          "firstName",
+			AttributeName: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
+			UserAttribute: "firstName",
+		},
+		{
+			Name:          "lastName",
+			AttributeName: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname",
+			UserAttribute: "lastName",
+		},
+	}
+
+	mappersURL := fmt.Sprintf("%s/admin/realms/%s/identity-provider/instances/%s/mappers", kc.host, kc.realm, providerAlias)
+
+	// Get existing mappers to avoid duplicates
+	req, err := http.NewRequest("GET", mappersURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create GET mappers request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to get existing mappers: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var existingMappers []map[string]any
+	if resp.StatusCode == http.StatusOK {
+		if err := json.NewDecoder(resp.Body).Decode(&existingMappers); err != nil {
+			return fmt.Errorf("failed to decode existing mappers: %w", err)
+		}
+	}
+
+	existingNames := make(map[string]bool)
+	for _, m := range existingMappers {
+		if name, ok := m["name"].(string); ok {
+			existingNames[name] = true
+		}
+	}
+
+	for _, mapper := range mappers {
+		if existingNames[mapper.Name] {
+			continue
+		}
+
+		payload := map[string]any{
+			"name":                     mapper.Name,
+			"identityProviderAlias":    providerAlias,
+			"identityProviderMapper":   "saml-user-attribute-idp-mapper",
+			"config": map[string]string{
+				"syncMode":       "FORCE",
+				"user.attribute": mapper.UserAttribute,
+				"attribute.name": mapper.AttributeName,
+			},
+		}
+
+		body, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("failed to marshal mapper %s: %w", mapper.Name, err)
+		}
+
+		req, err := http.NewRequest("POST", mappersURL, bytes.NewReader(body))
+		if err != nil {
+			return fmt.Errorf("failed to create mapper request for %s: %w", mapper.Name, err)
+		}
+		req.Header.Set("Authorization", "Bearer "+adminToken)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to create mapper %s: %w", mapper.Name, err)
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode != http.StatusCreated {
+			return fmt.Errorf("failed to create mapper %s: status %d", mapper.Name, resp.StatusCode)
+		}
+
+		logger.Log.Info("Created SAML attribute mapper", "provider", providerAlias, "mapper", mapper.Name)
+	}
+
+	return nil
 }
 
 func GetKeycloakAdminTokenWithRetry(ctx context.Context, shutdownCh <-chan struct{}, username, password string) (string, error) {

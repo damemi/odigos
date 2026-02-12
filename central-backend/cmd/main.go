@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -149,6 +152,12 @@ func newRouter(gqlHandler *handler.Server, wsServer *websocketserver.WebSocketSe
 	router.GET("/sse/events", func(c *gin.Context) { sseHub.SSEHandler(c.Writer, c.Request) })
 	router.POST("/graphql", authContextMiddleware(), func(c *gin.Context) { gqlHandler.ServeHTTP(c.Writer, c.Request) })
 
+	// Reverse proxy to Keycloak for browser-facing auth endpoints.
+	// This keeps Keycloak fully internal — the browser only talks to the central-backend.
+	kcProxy := newKeycloakReverseProxy(consts.GetKeycloakHost())
+	router.Any("/realms/*path", gin.WrapH(kcProxy))
+	router.Any("/resources/*path", gin.WrapH(kcProxy))
+
 	return router
 }
 
@@ -162,6 +171,34 @@ func authContextMiddleware() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+// newKeycloakReverseProxy creates a reverse proxy that forwards requests to the internal Keycloak service.
+// This allows the browser to interact with Keycloak through the central-backend without exposing Keycloak externally.
+func newKeycloakReverseProxy(keycloakHost string) http.Handler {
+	target, err := url.Parse(keycloakHost)
+	if err != nil {
+		logger.Fatal("Failed to parse Keycloak host URL", err)
+	}
+
+	proxy := httputil.NewSingleHostReverseProxy(target)
+
+	// Don't override req.Host — let the browser's original Host header (e.g. localhost:8081)
+	// pass through to Keycloak. With KC_HOSTNAME_STRICT=false, Keycloak uses this header
+	// to generate browser-facing URLs, so they automatically match whatever the user accesses.
+
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		// Rewrite Location headers that Keycloak may generate with its internal host,
+		// converting them to relative paths so the browser stays on the same origin.
+		location := resp.Header.Get("Location")
+		if location != "" {
+			location = strings.Replace(location, keycloakHost, "", 1)
+			resp.Header.Set("Location", location)
+		}
+		return nil
+	}
+
+	return proxy
 }
 
 func handleShutdown(shutdownCh <-chan struct{}, redisClient *redisclient.RedisClient, tokenExpirationChan <-chan time.Time) {

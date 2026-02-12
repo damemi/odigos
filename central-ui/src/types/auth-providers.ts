@@ -1,5 +1,5 @@
 import type { SVG } from '@odigos/ui-kit/types';
-import { GeneralResult } from './auth';
+import { IdentityProviderResult } from './auth';
 export enum LoginType {
   OIDC = 'oidc',
   SAML = 'saml',
@@ -20,8 +20,8 @@ export interface AuthProviderInput {
 }
 
 export type GetAuthSignInUrl = (providerId: AuthProviderId) => Promise<string | undefined>;
-export type EnsureIdentityProvider = (input: AuthProviderInput) => Promise<GeneralResult | undefined>;
-export type EnsureSamlIdentityProvider = (input: SamlIdentityProviderInput) => Promise<GeneralResult | undefined>;
+export type EnsureIdentityProvider = (input: AuthProviderInput) => Promise<IdentityProviderResult | undefined>;
+export type EnsureSamlIdentityProvider = (input: SamlIdentityProviderInput) => Promise<IdentityProviderResult | undefined>;
 export interface SamlIdentityProviderInput {
   providerId: AuthProviderId;
   idpEntityId: string;

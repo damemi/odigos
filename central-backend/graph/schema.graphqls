@@ -125,6 +125,12 @@ type GeneralResult {
   error: String
 }
 
+type IdentityProviderResult {
+  success: Boolean!
+  error: String
+  callbackUrl: String
+}
+
 type RemoteFetchResult {
   proxyID: String!
   success: Boolean!
@@ -179,9 +185,9 @@ type Query {
 
 type Mutation {
   # Identity Provider for OIDC
-  ensureIdentityProvider(input: IdentityProviderInput!): GeneralResult!
+  ensureIdentityProvider(input: IdentityProviderInput!): IdentityProviderResult!
   # Identity Provider for SAML
-  ensureSamlIdentityProvider(input: SamlIdentityProviderInput!): GeneralResult!
+  ensureSamlIdentityProvider(input: SamlIdentityProviderInput!): IdentityProviderResult!
 
   signIn(email: String, password: String, code: String): SignInResult!
   setInitialPassword(email: String!, password: String!): SignInResult!

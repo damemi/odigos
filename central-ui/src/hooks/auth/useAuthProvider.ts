@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useLazyQuery, useMutation } from '@apollo/client';
 import { ENSURE_IDENTITY_PROVIDER, ENSURE_SAML_IDENTITY_PROVIDER, SIGN_IN_URL,  } from '@/graphql';
-import type { GeneralResult, AuthProviderId, AuthProviderInput, SamlIdentityProviderInput, GetAuthSignInUrl, EnsureIdentityProvider, EnsureSamlIdentityProvider } from '@/types';
+import type { IdentityProviderResult, AuthProviderId, AuthProviderInput, SamlIdentityProviderInput, GetAuthSignInUrl, EnsureIdentityProvider, EnsureSamlIdentityProvider } from '@/types';
 
 interface GetAuthSignInUrlRequest {
   providerId: AuthProviderId;
@@ -13,8 +13,8 @@ interface SignInUrlResult {
 interface EnsureIdentityProviderRequest {
   input: AuthProviderInput;
 }
-interface EnsureIdentityProviderResult {
-  ensureIdentityProvider: GeneralResult;
+interface EnsureIdentityProviderResponse {
+  ensureIdentityProvider: IdentityProviderResult;
 }
 
 
@@ -22,8 +22,8 @@ interface EnsureIdentityProviderResult {
 interface EnsureSamlIdentityProviderRequest {
   input: SamlIdentityProviderInput;
 }
-interface EnsureSamlIdentityProviderResult {
-  ensureSamlIdentityProvider: GeneralResult;
+interface EnsureSamlIdentityProviderResponse {
+  ensureSamlIdentityProvider: IdentityProviderResult;
 }
 
 
@@ -37,13 +37,13 @@ export const useAuthProvider = () => {
       },
     });
 
-  const [ensureIdp, { loading: ensureIdpLoading, error: ensureIdpError }] = useMutation<EnsureIdentityProviderResult, EnsureIdentityProviderRequest>(ENSURE_IDENTITY_PROVIDER, {
+  const [ensureIdp, { loading: ensureIdpLoading, error: ensureIdpError }] = useMutation<EnsureIdentityProviderResponse, EnsureIdentityProviderRequest>(ENSURE_IDENTITY_PROVIDER, {
     onError: (error) => {
       console.error(error);
     },
   });
 
-  const [ensureSamlIdp, { loading: ensureSamlIdpLoading, error: ensureSamlIdpError }] = useMutation<EnsureSamlIdentityProviderResult, EnsureSamlIdentityProviderRequest>(
+  const [ensureSamlIdp, { loading: ensureSamlIdpLoading, error: ensureSamlIdpError }] = useMutation<EnsureSamlIdentityProviderResponse, EnsureSamlIdentityProviderRequest>(
     ENSURE_SAML_IDENTITY_PROVIDER,
     {
       onError: (error) => {

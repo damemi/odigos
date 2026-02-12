@@ -22,6 +22,12 @@ export interface GeneralResult {
   error?: string;
 }
 
+export interface IdentityProviderResult {
+  success: boolean;
+  error?: string;
+  callbackUrl?: string;
+}
+
 export interface SignInPayload {
   idToken?: string;
   accessToken?: string;

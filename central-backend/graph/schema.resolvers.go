@@ -8,6 +8,7 @@ package graph
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,28 +23,34 @@ import (
 )
 
 // EnsureIdentityProvider is the resolver for the ensureIdentityProvider field.
-func (r *mutationResolver) EnsureIdentityProvider(ctx context.Context, input model.IdentityProviderInput) (*model.GeneralResult, error) {
+func (r *mutationResolver) EnsureIdentityProvider(ctx context.Context, input model.IdentityProviderInput) (*model.IdentityProviderResult, error) {
 	err := r.AdminService.EnsureIdentityProvider(&input)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to ensure IDP: %s", err.Error())
-		return &model.GeneralResult{
+		return &model.IdentityProviderResult{
 			Success: false,
 			Error:   &errorMsg,
 		}, err
 	}
-	return &model.GeneralResult{
-		Success: true,
+	callbackURL := fmt.Sprintf("%s/realms/%s/broker/%s/endpoint",
+		consts.GetCentralBackendHost(), consts.KeycloakRealm, strings.ToLower(string(input.ProviderID)))
+	return &model.IdentityProviderResult{
+		Success:     true,
+		CallbackURL: &callbackURL,
 	}, nil
 }
 
 // EnsureSamlIdentityProvider is the resolver for the ensureSamlIdentityProvider field.
-func (r *mutationResolver) EnsureSamlIdentityProvider(ctx context.Context, input model.SamlIdentityProviderInput) (*model.GeneralResult, error) {
+func (r *mutationResolver) EnsureSamlIdentityProvider(ctx context.Context, input model.SamlIdentityProviderInput) (*model.IdentityProviderResult, error) {
 	err := r.AdminService.EnsureSamlIdentityProvider(&input)
 	if err != nil {
 		return nil, err
 	}
-	return &model.GeneralResult{
-		Success: true,
+	callbackURL := fmt.Sprintf("%s/realms/%s/broker/%s/endpoint",
+		consts.GetCentralBackendHost(), consts.KeycloakRealm, strings.ToLower(string(input.ProviderID)))
+	return &model.IdentityProviderResult{
+		Success:     true,
+		CallbackURL: &callbackURL,
 	}, nil
 }
 

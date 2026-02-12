@@ -35,6 +35,9 @@ export const CONTINUE_WITH_EMAIL = 'Continue with Email';
 export const PROVIDER_CREATED_SUCCESS = 'Provider Created Successfully!';
 export const PROVIDER_CREATED_SUCCESS_SUBTITLE = (displayName: string) => `Use your ${displayName} credentials to authenticate and register the admin account for this environment`;
 export const PROVIDER_REDIRECT_NOTICE = (displayName: string) => `Use your ${displayName} credentials to authenticate and register the admin account for this environment`;
+export const CALLBACK_URL_LABEL = 'Callback URL (ACS URL)';
+export const CALLBACK_URL_INSTRUCTIONS = (displayName: string) => `Copy this URL and add it to your ${displayName} application settings as the callback or ACS URL.`;
+export const COPY_CALLBACK_URL_TOOLTIP = 'Please copy the callback URL above before proceeding to login.';
 
 export const CLIENT_ID = 'Client ID';
 export const CLIENT_ID_REQUIRED = 'Client ID is required';

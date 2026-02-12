@@ -57,6 +57,12 @@ type IdentityProviderInput struct {
 	TenantID     string         `json:"tenantId"`
 }
 
+type IdentityProviderResult struct {
+	Success     bool    `json:"success"`
+	Error       *string `json:"error,omitempty"`
+	CallbackURL *string `json:"callbackUrl,omitempty"`
+}
+
 type Mutation struct {
 }
 

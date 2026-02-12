@@ -87,6 +87,12 @@ type ComplexityRoot struct {
 		Backend func(childComplexity int) int
 	}
 
+	IdentityProviderResult struct {
+		CallbackURL func(childComplexity int) int
+		Error       func(childComplexity int) int
+		Success     func(childComplexity int) int
+	}
+
 	Mutation struct {
 		CreateTeam                 func(childComplexity int, input model.WriteTeamInput) int
 		CreateUser                 func(childComplexity int, input model.WriteUserInput) int
@@ -162,8 +168,8 @@ type ComplexityRoot struct {
 }
 
 type MutationResolver interface {
-	EnsureIdentityProvider(ctx context.Context, input model.IdentityProviderInput) (*model.GeneralResult, error)
-	EnsureSamlIdentityProvider(ctx context.Context, input model.SamlIdentityProviderInput) (*model.GeneralResult, error)
+	EnsureIdentityProvider(ctx context.Context, input model.IdentityProviderInput) (*model.IdentityProviderResult, error)
+	EnsureSamlIdentityProvider(ctx context.Context, input model.SamlIdentityProviderInput) (*model.IdentityProviderResult, error)
 	SignIn(ctx context.Context, email *string, password *string, code *string) (*model.SignInResult, error)
 	SetInitialPassword(ctx context.Context, email string, password string) (*model.SignInResult, error)
 	VerifyToken(ctx context.Context, token string) (*model.GeneralResult, error)
@@ -345,6 +351,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.HealthQuery.Backend(childComplexity), true
+
+	case "IdentityProviderResult.callbackUrl":
+		if e.complexity.IdentityProviderResult.CallbackURL == nil {
+			break
+		}
+
+		return e.complexity.IdentityProviderResult.CallbackURL(childComplexity), true
+	case "IdentityProviderResult.error":
+		if e.complexity.IdentityProviderResult.Error == nil {
+			break
+		}
+
+		return e.complexity.IdentityProviderResult.Error(childComplexity), true
+	case "IdentityProviderResult.success":
+		if e.complexity.IdentityProviderResult.Success == nil {
+			break
+		}
+
+		return e.complexity.IdentityProviderResult.Success(childComplexity), true
 
 	case "Mutation.createTeam":
 		if e.complexity.Mutation.CreateTeam == nil {
@@ -1858,6 +1883,93 @@ func (ec *executionContext) fieldContext_HealthQuery_backend(_ context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _IdentityProviderResult_success(ctx context.Context, field graphql.CollectedField, obj *model.IdentityProviderResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_IdentityProviderResult_success,
+		func(ctx context.Context) (any, error) {
+			return obj.Success, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_IdentityProviderResult_success(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "IdentityProviderResult",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _IdentityProviderResult_error(ctx context.Context, field graphql.CollectedField, obj *model.IdentityProviderResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_IdentityProviderResult_error,
+		func(ctx context.Context) (any, error) {
+			return obj.Error, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_IdentityProviderResult_error(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "IdentityProviderResult",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _IdentityProviderResult_callbackUrl(ctx context.Context, field graphql.CollectedField, obj *model.IdentityProviderResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_IdentityProviderResult_callbackUrl,
+		func(ctx context.Context) (any, error) {
+			return obj.CallbackURL, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_IdentityProviderResult_callbackUrl(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "IdentityProviderResult",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_ensureIdentityProvider(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1869,7 +1981,7 @@ func (ec *executionContext) _Mutation_ensureIdentityProvider(ctx context.Context
 			return ec.resolvers.Mutation().EnsureIdentityProvider(ctx, fc.Args["input"].(model.IdentityProviderInput))
 		},
 		nil,
-		ec.marshalNGeneralResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐGeneralResult,
+		ec.marshalNIdentityProviderResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐIdentityProviderResult,
 		true,
 		true,
 	)
@@ -1884,11 +1996,13 @@ func (ec *executionContext) fieldContext_Mutation_ensureIdentityProvider(ctx con
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "success":
-				return ec.fieldContext_GeneralResult_success(ctx, field)
+				return ec.fieldContext_IdentityProviderResult_success(ctx, field)
 			case "error":
-				return ec.fieldContext_GeneralResult_error(ctx, field)
+				return ec.fieldContext_IdentityProviderResult_error(ctx, field)
+			case "callbackUrl":
+				return ec.fieldContext_IdentityProviderResult_callbackUrl(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type GeneralResult", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type IdentityProviderResult", field.Name)
 		},
 	}
 	defer func() {
@@ -1916,7 +2030,7 @@ func (ec *executionContext) _Mutation_ensureSamlIdentityProvider(ctx context.Con
 			return ec.resolvers.Mutation().EnsureSamlIdentityProvider(ctx, fc.Args["input"].(model.SamlIdentityProviderInput))
 		},
 		nil,
-		ec.marshalNGeneralResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐGeneralResult,
+		ec.marshalNIdentityProviderResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐIdentityProviderResult,
 		true,
 		true,
 	)
@@ -1931,11 +2045,13 @@ func (ec *executionContext) fieldContext_Mutation_ensureSamlIdentityProvider(ctx
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "success":
-				return ec.fieldContext_GeneralResult_success(ctx, field)
+				return ec.fieldContext_IdentityProviderResult_success(ctx, field)
 			case "error":
-				return ec.fieldContext_GeneralResult_error(ctx, field)
+				return ec.fieldContext_IdentityProviderResult_error(ctx, field)
+			case "callbackUrl":
+				return ec.fieldContext_IdentityProviderResult_callbackUrl(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type GeneralResult", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type IdentityProviderResult", field.Name)
 		},
 	}
 	defer func() {
@@ -5887,6 +6003,49 @@ func (ec *executionContext) _HealthQuery(ctx context.Context, sel ast.SelectionS
 	return out
 }
 
+var identityProviderResultImplementors = []string{"IdentityProviderResult"}
+
+func (ec *executionContext) _IdentityProviderResult(ctx context.Context, sel ast.SelectionSet, obj *model.IdentityProviderResult) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, identityProviderResultImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("IdentityProviderResult")
+		case "success":
+			out.Values[i] = ec._IdentityProviderResult_success(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "error":
+			out.Values[i] = ec._IdentityProviderResult_error(ctx, field, obj)
+		case "callbackUrl":
+			out.Values[i] = ec._IdentityProviderResult_callbackUrl(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var mutationImplementors = []string{"Mutation"}
 
 func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
@@ -7131,6 +7290,20 @@ func (ec *executionContext) marshalNHealthStatus2githubᚗcomᚋodigosᚑioᚋce
 func (ec *executionContext) unmarshalNIdentityProviderInput2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐIdentityProviderInput(ctx context.Context, v any) (model.IdentityProviderInput, error) {
 	res, err := ec.unmarshalInputIdentityProviderInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNIdentityProviderResult2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐIdentityProviderResult(ctx context.Context, sel ast.SelectionSet, v model.IdentityProviderResult) graphql.Marshaler {
+	return ec._IdentityProviderResult(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNIdentityProviderResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐIdentityProviderResult(ctx context.Context, sel ast.SelectionSet, v *model.IdentityProviderResult) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._IdentityProviderResult(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNInt642int(ctx context.Context, v any) (int, error) {
