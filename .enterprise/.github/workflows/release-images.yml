@@ -19,9 +19,9 @@ jobs:
     strategy:
       matrix:
         # Base matrix builds all services with extended=false (standard builds without legacy .NET)
-        # Base matrix: 12 builds (6 services × 2 rhel variants × extended=false)
-        # Extended=true odiglet builds are added via 'include' below: 2 additional builds
-        # Total: 14 builds
+        # Base matrix: 6 builds (6 services × extended=false)
+        # Extended=true odiglet and agents builds are added via 'include' below: 2 additional builds
+        # Total: 8 builds
         service:
           [
             "odiglet",
@@ -38,6 +38,11 @@ jobs:
             extended: 'true'
             summary: "Odiglet for Odigos"
             description: "Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs."
+          # Agents extended variants (with legacy .NET instrumentation)
+          - service: agents
+            extended: 'true'
+            summary: "Odigos Enterprise Agents"
+            description: "The Odigos Agents used to copy Odigos agent relevant files into the user workloads."
           # Service descriptions
           - service: instrumentor
             summary: "Instrumentor for Odigos"
@@ -51,9 +56,6 @@ jobs:
           - service: central-ui
             summary: "Central UI for Odigos"
             description: "Central UI is the web interface for Odigos Central, providing a user-friendly way to manage and visualize the data collected by Odigos."
-          - service: agents
-            summary: "Odigos Enterprise Agents"
-            description: "The Odigos Agents used to copy Odigos agent relevant files into the user workloads."
 
     runs-on: depot-ubuntu-24.04-4
     steps:
