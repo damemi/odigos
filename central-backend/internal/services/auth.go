@@ -36,18 +36,17 @@ func NewAuthService(adminService *AdminService, userService *UserService) *AuthS
 
 func (svc *AuthService) GetRedirectUrlForSignInByProviderID(providerID model.AuthProviderID) (*string, error) {
 	providerIDStr := strings.ToLower(string(providerID))
+
 	idp, err := svc.adminService.GetIdentityProvider(providerIDStr)
 	if err != nil {
 		return nil, err
 	}
-
 	if idp == nil {
 		return nil, err
 	}
 
 	url := svc.kcAuth.GetRedirectUrlForSignIn(providerIDStr)
 	return &url, nil
-
 }
 
 func (svc *AuthService) GetRedirectUrlForSignOut(ctx context.Context, idToken string) string {

@@ -27,8 +27,6 @@ enum AuthProviderId {
   OKTA
 }
 
-
-
 input SamlIdentityProviderInput {
   providerId: AuthProviderId!
   idpEntityId: String!
@@ -60,7 +58,7 @@ input WriteComputePlatformInput {
   removeTeamIds: [String]
 }
 
-input IdentityProviderInput {
+input OidcIdentityProviderInput {
   providerId: AuthProviderId!
   clientId: String!
   clientSecret: String!
@@ -185,9 +183,13 @@ type Query {
 
 type Mutation {
   # Identity Provider for OIDC
-  ensureIdentityProvider(input: IdentityProviderInput!): IdentityProviderResult!
+  ensureOidcIdentityProvider(
+    input: OidcIdentityProviderInput!
+  ): IdentityProviderResult!
   # Identity Provider for SAML
-  ensureSamlIdentityProvider(input: SamlIdentityProviderInput!): IdentityProviderResult!
+  ensureSamlIdentityProvider(
+    input: SamlIdentityProviderInput!
+  ): IdentityProviderResult!
 
   signIn(email: String, password: String, code: String): SignInResult!
   setInitialPassword(email: String!, password: String!): SignInResult!

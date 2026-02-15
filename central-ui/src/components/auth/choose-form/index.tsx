@@ -1,29 +1,32 @@
-import React, { FC } from 'react';
-import { AuthProviderId, LoginType } from '@/types';
+import React, { FC, useMemo } from 'react';
 import { EmailIcon } from '@odigos/ui-kit/icons';
+import { AuthProviderId, LoginType } from '@/types';
 import * as STRINGS from '@/utils/constants/strings';
 import { FlexColumn } from '@odigos/ui-kit/components';
 import { ButtonTab } from '@odigos/ui-kit/components/v2';
+import { AUTH_PROVIDERS } from '@/utils/constants/auth-providers';
 import { ConstrainedWidth, FormContainer, FormSubtitle, FormTitle } from '../styled';
-import { AUTH_PROVIDERS, } from '@/utils/constants/auth-providers';
+
 interface ChooseFormProps {
   isFirstTime: boolean;
   loading: boolean;
   onClick: (providerId: AuthProviderId, loginType?: LoginType) => void;
 }
 
-
 const ChooseForm: FC<ChooseFormProps> = ({ isFirstTime, loading, onClick }) => {
-
-  const authProvidersBtnsToRender = AUTH_PROVIDERS.filter((provider) => provider.isFeatureActive).map((provider) => (
-    <ButtonTab
-      key={provider.providerId}
-      label={`${STRINGS.CONTINUE_WITH} ${provider.displayName}`}
-      icon={provider.icon}
-      loading={loading}
-      onClick={() => onClick(provider.providerId, provider.loginType)}
-    />
-  ))
+  const authProvidersBtnsToRender = useMemo(
+    () =>
+      AUTH_PROVIDERS.map((provider) => (
+        <ButtonTab
+          key={provider.providerId}
+          label={`${STRINGS.CONTINUE_WITH} ${provider.displayName}`}
+          icon={provider.icon}
+          loading={loading}
+          onClick={() => onClick(provider.providerId, provider.loginType)}
+        />
+      )),
+    [loading],
+  );
 
   return (
     <FormContainer $gap={121}>
@@ -35,7 +38,6 @@ const ChooseForm: FC<ChooseFormProps> = ({ isFirstTime, loading, onClick }) => {
       <ConstrainedWidth>
         <FlexColumn $gap={12}>
           <ButtonTab label={`${STRINGS.CONTINUE_WITH} ${STRINGS.EMAIL}`} icon={EmailIcon} loading={loading} onClick={() => onClick(AuthProviderId.EMAIL)} />
-          {/* TODO: uncomment this when OIDC providers are supported (need roles & groups to be implemented) */}
           {authProvidersBtnsToRender}
         </FlexColumn>
       </ConstrainedWidth>

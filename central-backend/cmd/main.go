@@ -183,9 +183,15 @@ func newKeycloakReverseProxy(keycloakHost string) http.Handler {
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
 
-	// Don't override req.Host — let the browser's original Host header (e.g. localhost:8081)
-	// pass through to Keycloak. With KC_HOSTNAME_STRICT=false, Keycloak uses this header
-	// to generate browser-facing URLs, so they automatically match whatever the user accesses.
+	// Wrap the default Director to add X-Forwarded-* headers.
+	// With KC_PROXY=edge, Keycloak trusts these to build browser-facing URLs
+	// (e.g. the /broker/{alias}/login redirect during OIDC flows).
+	originalDirector := proxy.Director
+	proxy.Director = func(req *http.Request) {
+		originalDirector(req)
+		req.Header.Set("X-Forwarded-Proto", "http")
+		req.Header.Set("X-Forwarded-Host", req.Host)
+	}
 
 	proxy.ModifyResponse = func(resp *http.Response) error {
 		// Rewrite Location headers that Keycloak may generate with its internal host,

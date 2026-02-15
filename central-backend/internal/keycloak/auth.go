@@ -186,6 +186,12 @@ func (kc *KeycloakAuthService) AuthenticateUser(adminToken string, email string,
 		userID := getString(userInfo, "sub")
 		userEmail := getString(userInfo, "email")
 
+		// Azure AD may not include the "email" claim; fall back to "preferred_username"
+		// which typically contains the user's UPN (e.g. user@domain.com).
+		if userEmail == "" {
+			userEmail = getString(userInfo, "preferred_username")
+		}
+
 		if userID == "" {
 			return nil, fmt.Errorf("user ID (sub) not found in userinfo response")
 		}

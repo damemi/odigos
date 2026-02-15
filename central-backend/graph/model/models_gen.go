@@ -49,14 +49,6 @@ type HealthQuery struct {
 	Backend *BackendHealthStatus `json:"backend"`
 }
 
-type IdentityProviderInput struct {
-	ProviderID   AuthProviderID `json:"providerId"`
-	ClientID     string         `json:"clientId"`
-	ClientSecret string         `json:"clientSecret"`
-	DiscoveryURL string         `json:"discoveryUrl"`
-	TenantID     string         `json:"tenantId"`
-}
-
 type IdentityProviderResult struct {
 	Success     bool    `json:"success"`
 	Error       *string `json:"error,omitempty"`
@@ -64,6 +56,14 @@ type IdentityProviderResult struct {
 }
 
 type Mutation struct {
+}
+
+type OidcIdentityProviderInput struct {
+	ProviderID   AuthProviderID `json:"providerId"`
+	ClientID     string         `json:"clientId"`
+	ClientSecret string         `json:"clientSecret"`
+	DiscoveryURL string         `json:"discoveryUrl"`
+	TenantID     string         `json:"tenantId"`
 }
 
 type Query struct {

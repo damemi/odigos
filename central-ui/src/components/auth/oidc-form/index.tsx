@@ -9,13 +9,13 @@ import { VisualGreenRings } from '@odigos/ui-kit/visuals';
 import { AUTH_PROVIDERS } from '@/utils/constants/auth-providers';
 import { Button, ButtonTab, CliCommand, Input, Note } from '@odigos/ui-kit/components/v2';
 import { ConstrainedWidth, ErrorText, FormContainer, FormSubtitle, FormTitle } from '../styled';
-import { AuthProviderId, LoginType, AuthProviderInput, AuthProviderOption, EnsureIdentityProvider } from '@/types';
+import { AuthProviderId, LoginType, OidcIdentityProviderInput, AuthProviderOption, EnsureOidcIdentityProvider } from '@/types';
 
 interface OidcFormProps {
   providerId: AuthProviderId;
   loading?: boolean;
   error?: string;
-  onCreate: EnsureIdentityProvider;
+  onCreate: EnsureOidcIdentityProvider;
   isCreateSuccess: boolean;
   setIsCreateSuccess: Dispatch<SetStateAction<boolean>>;
   onLogin: (providerId: AuthProviderId, loginType: LoginType) => void;
@@ -34,26 +34,26 @@ const FullWidthTooltip = styled.div`
 
 const getFields = (provider: AuthProviderOption) => [
   {
-    name: 'clientId' as keyof AuthProviderInput,
+    name: 'clientId' as keyof OidcIdentityProviderInput,
     label: STRINGS.CLIENT_ID,
     tooltip: STRINGS.CLIENT_ID_TOOLTIP,
     required: true,
   },
   {
-    name: 'clientSecret' as keyof AuthProviderInput,
+    name: 'clientSecret' as keyof OidcIdentityProviderInput,
     type: 'password',
     label: STRINGS.CLIENT_SECRET,
     tooltip: STRINGS.CLIENT_SECRET_TOOLTIP,
     required: true,
   },
   {
-    name: 'discoveryUrl' as keyof AuthProviderInput,
+    name: 'discoveryUrl' as keyof OidcIdentityProviderInput,
     label: STRINGS.DISCOVERY_URL,
     tooltip: STRINGS.DISCOVERY_URL_TOOLTIP,
     required: true,
   },
   {
-    name: 'tenantId' as keyof AuthProviderInput,
+    name: 'tenantId' as keyof OidcIdentityProviderInput,
     label: STRINGS.TENANT_ID,
     tooltip: STRINGS.TENANT_ID_TOOLTIP,
     required: provider.requireTenantId || false,
@@ -66,7 +66,7 @@ const OidcForm: React.FC<OidcFormProps> = ({ providerId, loading, error, onCreat
   const provider = useMemo(() => AUTH_PROVIDERS.filter((p) => p.loginType === LoginType.OIDC).find((p) => p.providerId === providerId), [providerId]);
   const fields = useMemo(() => (provider ? getFields(provider) : []), [provider]);
 
-  const { formData, handleFormChange, formErrors, handleErrorChange } = useGenericForm<AuthProviderInput>({
+  const { formData, handleFormChange, formErrors, handleErrorChange } = useGenericForm<OidcIdentityProviderInput>({
     providerId,
     clientId: '',
     clientSecret: '',

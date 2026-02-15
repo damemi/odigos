@@ -1,5 +1,6 @@
 import type { SVG } from '@odigos/ui-kit/types';
 import { IdentityProviderResult } from './auth';
+
 export enum LoginType {
   OIDC = 'oidc',
   SAML = 'saml',
@@ -11,7 +12,7 @@ export enum AuthProviderId {
   OKTA = 'OKTA',
 }
 
-export interface AuthProviderInput {
+export interface OidcIdentityProviderInput {
   providerId: AuthProviderId;
   clientId: string;
   clientSecret: string;
@@ -19,9 +20,6 @@ export interface AuthProviderInput {
   tenantId: string;
 }
 
-export type GetAuthSignInUrl = (providerId: AuthProviderId) => Promise<string | undefined>;
-export type EnsureIdentityProvider = (input: AuthProviderInput) => Promise<IdentityProviderResult | undefined>;
-export type EnsureSamlIdentityProvider = (input: SamlIdentityProviderInput) => Promise<IdentityProviderResult | undefined>;
 export interface SamlIdentityProviderInput {
   providerId: AuthProviderId;
   idpEntityId: string;
@@ -29,13 +27,15 @@ export interface SamlIdentityProviderInput {
   signingCertificate: string;
 }
 
+export type GetAuthSignInUrl = (providerId: AuthProviderId) => Promise<string | undefined>;
+export type EnsureOidcIdentityProvider = (input: OidcIdentityProviderInput) => Promise<IdentityProviderResult | undefined>;
+export type EnsureSamlIdentityProvider = (input: SamlIdentityProviderInput) => Promise<IdentityProviderResult | undefined>;
+
 export interface AuthProviderOption {
   providerId: AuthProviderId;
   displayName: string;
   icon: SVG;
   discoveryUrl?: string;
   requireTenantId?: boolean;
-  isFeatureActive?: boolean;
   loginType?: LoginType;
 }
-

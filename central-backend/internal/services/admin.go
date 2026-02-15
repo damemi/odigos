@@ -100,29 +100,28 @@ func (svc *AdminService) GetIdentityProvider(providerID string) (*keycloak.Ident
 	return svc.kcAdmin.GetIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, providerID)
 }
 
-func (svc *AdminService) EnsureIdentityProvider(config *model.IdentityProviderInput) error {
+func (svc *AdminService) EnsureOidcIdentityProvider(config *model.OidcIdentityProviderInput) error {
 	if config.ProviderID == "" || config.ClientID == "" || config.ClientSecret == "" || config.DiscoveryURL == "" || config.TenantID == "" {
-		return fmt.Errorf("invalid identity provider configuration, missing required fields")
+		return fmt.Errorf("invalid OIDC identity provider configuration, missing required fields")
 	}
 
-	identityProvider, err := svc.kcAdmin.GetIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, string(config.ProviderID))
+	identityProvider, err := svc.kcAdmin.GetIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, strings.ToLower(string(config.ProviderID)))
 	if err != nil {
 		return fmt.Errorf("failed to get identity provider: %w", err)
 	}
 
 	// If provider does not exist, create it
 	if identityProvider == nil {
-		return svc.kcAdmin.ConfigureIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, convertIdentityProviderInputToKeycloakConfig(config))
+		return svc.kcAdmin.ConfigureIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, convertOidcIdentityProviderInputToKeycloakConfig(config))
 	}
 
 	// If provider exists, update it
-	return svc.kcAdmin.UpdateIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, convertIdentityProviderInputToKeycloakConfig(config))
-
+	return svc.kcAdmin.UpdateIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, convertOidcIdentityProviderInputToKeycloakConfig(config))
 }
 
-func convertIdentityProviderInputToKeycloakConfig(input *model.IdentityProviderInput) *keycloak.IdentityProviderConfig {
+func convertOidcIdentityProviderInputToKeycloakConfig(input *model.OidcIdentityProviderInput) *keycloak.IdentityProviderConfig {
 	return &keycloak.IdentityProviderConfig{
-		ProviderAlias: string(input.ProviderID),
+		ProviderAlias: strings.ToLower(string(input.ProviderID)),
 		ClientID:      input.ClientID,
 		ClientSecret:  input.ClientSecret,
 		DiscoveryURL:  input.DiscoveryURL,

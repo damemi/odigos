@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useLazyQuery, useMutation } from '@apollo/client';
-import { ENSURE_IDENTITY_PROVIDER, ENSURE_SAML_IDENTITY_PROVIDER, SIGN_IN_URL,  } from '@/graphql';
-import type { IdentityProviderResult, AuthProviderId, AuthProviderInput, SamlIdentityProviderInput, GetAuthSignInUrl, EnsureIdentityProvider, EnsureSamlIdentityProvider } from '@/types';
+import { ENSURE_OIDC_IDENTITY_PROVIDER, ENSURE_SAML_IDENTITY_PROVIDER, SIGN_IN_URL } from '@/graphql';
+import type { IdentityProviderResult, AuthProviderId, OidcIdentityProviderInput, SamlIdentityProviderInput, GetAuthSignInUrl, EnsureOidcIdentityProvider, EnsureSamlIdentityProvider } from '@/types';
 
 interface GetAuthSignInUrlRequest {
   providerId: AuthProviderId;
@@ -10,14 +10,12 @@ interface SignInUrlResult {
   signInUrl: string;
 }
 
-interface EnsureIdentityProviderRequest {
-  input: AuthProviderInput;
+interface EnsureOidcIdentityProviderRequest {
+  input: OidcIdentityProviderInput;
 }
-interface EnsureIdentityProviderResponse {
-  ensureIdentityProvider: IdentityProviderResult;
+interface EnsureOidcIdentityProviderResponse {
+  ensureOidcIdentityProvider: IdentityProviderResult;
 }
-
-
 
 interface EnsureSamlIdentityProviderRequest {
   input: SamlIdentityProviderInput;
@@ -26,18 +24,14 @@ interface EnsureSamlIdentityProviderResponse {
   ensureSamlIdentityProvider: IdentityProviderResult;
 }
 
-
-
-
 export const useAuthProvider = () => {
+  const [signInUrl, { loading: getUrlLoading, error: getUrlError }] = useLazyQuery<SignInUrlResult, GetAuthSignInUrlRequest>(SIGN_IN_URL, {
+    onError: (error) => {
+      console.error(error);
+    },
+  });
 
-    const [signInUrl, { loading: getUrlLoading, error: getUrlError }] = useLazyQuery<SignInUrlResult, GetAuthSignInUrlRequest>(SIGN_IN_URL, {
-      onError: (error) => {
-        console.error(error);
-      },
-    });
-
-  const [ensureIdp, { loading: ensureIdpLoading, error: ensureIdpError }] = useMutation<EnsureIdentityProviderResponse, EnsureIdentityProviderRequest>(ENSURE_IDENTITY_PROVIDER, {
+  const [ensureOidcIdp, { loading: ensureIdpLoading, error: ensureIdpError }] = useMutation<EnsureOidcIdentityProviderResponse, EnsureOidcIdentityProviderRequest>(ENSURE_OIDC_IDENTITY_PROVIDER, {
     onError: (error) => {
       console.error(error);
     },
@@ -57,11 +51,9 @@ export const useAuthProvider = () => {
     return data?.signInUrl;
   }, []);
 
-
-
-  const ensureIdentityProvider: EnsureIdentityProvider = async (input) => {
-    const { data } = await ensureIdp({ variables: { input } });
-    return data?.ensureIdentityProvider;
+  const ensureOidcIdentityProvider: EnsureOidcIdentityProvider = async (input) => {
+    const { data } = await ensureOidcIdp({ variables: { input } });
+    return data?.ensureOidcIdentityProvider;
   };
 
   const ensureSamlIdentityProvider: EnsureSamlIdentityProvider = async (input) => {
@@ -70,10 +62,10 @@ export const useAuthProvider = () => {
   };
 
   return {
-    loading: getUrlLoading || ensureIdpLoading  || ensureSamlIdpLoading,
-    error: (getUrlError || ensureIdpError  || ensureSamlIdpError)?.message,
+    loading: getUrlLoading || ensureIdpLoading || ensureSamlIdpLoading,
+    error: (getUrlError || ensureIdpError || ensureSamlIdpError)?.message,
     getSignInUrl,
-    ensureIdentityProvider,
+    ensureOidcIdentityProvider,
     ensureSamlIdentityProvider,
   };
 };

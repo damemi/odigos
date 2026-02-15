@@ -2,21 +2,21 @@
 
 import React, { useState, useEffect } from 'react';
 import { useUserStore } from '@/store';
-import { AuthProviderId, LoginType } from '@/types';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { AUTH_CODE_QUERY_PARAM } from '@/utils';
 import { useAuth, useAuthProvider } from '@/hooks';
+import { AuthProviderId, LoginType } from '@/types';
 import { Modal } from '@odigos/ui-kit/components/v2';
 import { FormContainer } from '@/components/auth/styled';
 import { VisualOdigosLogo } from '@odigos/ui-kit/visuals';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AuthForm, ChooseForm, OidcForm, SamlForm } from '@/components';
 import { CenterThis, FadeLoader, FlexRow } from '@odigos/ui-kit/components';
-import { AUTH_CODE_QUERY_PARAM } from '@/utils';
 
 export default function Page() {
   const router = useRouter();
   const { authProviderId, setAuthProviderId } = useUserStore();
   const { systemConfig, systemConfigLoading, signIn, loading: authLoading, error: authError, getCurrentUser } = useAuth();
-  const { getSignInUrl, ensureIdentityProvider, ensureSamlIdentityProvider, loading: authProviderLoading, error: authProviderError } = useAuthProvider();
+  const { getSignInUrl, ensureOidcIdentityProvider, ensureSamlIdentityProvider, loading: authProviderLoading, error: authProviderError } = useAuthProvider();
 
   const [needToSetAuthProvider, setNeedToSetAuthProvider] = useState<LoginType | null>(null);
   const [authSetupSuccess, setAuthSetupSuccess] = useState<boolean>(false);
@@ -83,7 +83,7 @@ export default function Page() {
         providerId={authProviderId}
         loading={authProviderLoading}
         error={authProviderError}
-        onCreate={ensureIdentityProvider}
+        onCreate={ensureOidcIdentityProvider}
         isCreateSuccess={authSetupSuccess}
         setIsCreateSuccess={setAuthSetupSuccess}
         onLogin={handleProviderClick}

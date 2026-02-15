@@ -1,8 +1,8 @@
 import { gql } from '@apollo/client';
 
-export const ENSURE_IDENTITY_PROVIDER = gql`
-  mutation EnsureIdentityProvider($input: IdentityProviderInput!) {
-    ensureIdentityProvider(input: $input) {
+export const ENSURE_OIDC_IDENTITY_PROVIDER = gql`
+  mutation EnsureOidcIdentityProvider($input: OidcIdentityProviderInput!) {
+    ensureOidcIdentityProvider(input: $input) {
       success
       error
       callbackUrl

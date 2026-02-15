@@ -99,7 +99,7 @@ type ComplexityRoot struct {
 		DeleteProxyConnection      func(childComplexity int, proxyID string) int
 		DeleteTeam                 func(childComplexity int, teamID string) int
 		DeleteUser                 func(childComplexity int, userID string) int
-		EnsureIdentityProvider     func(childComplexity int, input model.IdentityProviderInput) int
+		EnsureOidcIdentityProvider func(childComplexity int, input model.OidcIdentityProviderInput) int
 		EnsureSamlIdentityProvider func(childComplexity int, input model.SamlIdentityProviderInput) int
 		SetInitialPassword         func(childComplexity int, email string, password string) int
 		SignIn                     func(childComplexity int, email *string, password *string, code *string) int
@@ -168,7 +168,7 @@ type ComplexityRoot struct {
 }
 
 type MutationResolver interface {
-	EnsureIdentityProvider(ctx context.Context, input model.IdentityProviderInput) (*model.IdentityProviderResult, error)
+	EnsureOidcIdentityProvider(ctx context.Context, input model.OidcIdentityProviderInput) (*model.IdentityProviderResult, error)
 	EnsureSamlIdentityProvider(ctx context.Context, input model.SamlIdentityProviderInput) (*model.IdentityProviderResult, error)
 	SignIn(ctx context.Context, email *string, password *string, code *string) (*model.SignInResult, error)
 	SetInitialPassword(ctx context.Context, email string, password string) (*model.SignInResult, error)
@@ -426,17 +426,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.DeleteUser(childComplexity, args["userID"].(string)), true
-	case "Mutation.ensureIdentityProvider":
-		if e.complexity.Mutation.EnsureIdentityProvider == nil {
+	case "Mutation.ensureOidcIdentityProvider":
+		if e.complexity.Mutation.EnsureOidcIdentityProvider == nil {
 			break
 		}
 
-		args, err := ec.field_Mutation_ensureIdentityProvider_args(ctx, rawArgs)
+		args, err := ec.field_Mutation_ensureOidcIdentityProvider_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.complexity.Mutation.EnsureIdentityProvider(childComplexity, args["input"].(model.IdentityProviderInput)), true
+		return e.complexity.Mutation.EnsureOidcIdentityProvider(childComplexity, args["input"].(model.OidcIdentityProviderInput)), true
 	case "Mutation.ensureSamlIdentityProvider":
 		if e.complexity.Mutation.EnsureSamlIdentityProvider == nil {
 			break
@@ -766,7 +766,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	opCtx := graphql.GetOperationContext(ctx)
 	ec := executionContext{opCtx, e, 0, 0, make(chan graphql.DeferredResult)}
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
-		ec.unmarshalInputIdentityProviderInput,
+		ec.unmarshalInputOidcIdentityProviderInput,
 		ec.unmarshalInputSamlIdentityProviderInput,
 		ec.unmarshalInputWriteComputePlatformInput,
 		ec.unmarshalInputWriteTeamInput,
@@ -942,10 +942,10 @@ func (ec *executionContext) field_Mutation_deleteUser_args(ctx context.Context, 
 	return args, nil
 }
 
-func (ec *executionContext) field_Mutation_ensureIdentityProvider_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_Mutation_ensureOidcIdentityProvider_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNIdentityProviderInput2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐIdentityProviderInput)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input", ec.unmarshalNOidcIdentityProviderInput2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐOidcIdentityProviderInput)
 	if err != nil {
 		return nil, err
 	}
@@ -1970,15 +1970,15 @@ func (ec *executionContext) fieldContext_IdentityProviderResult_callbackUrl(_ co
 	return fc, nil
 }
 
-func (ec *executionContext) _Mutation_ensureIdentityProvider(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+func (ec *executionContext) _Mutation_ensureOidcIdentityProvider(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
 		ec.OperationContext,
 		field,
-		ec.fieldContext_Mutation_ensureIdentityProvider,
+		ec.fieldContext_Mutation_ensureOidcIdentityProvider,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Mutation().EnsureIdentityProvider(ctx, fc.Args["input"].(model.IdentityProviderInput))
+			return ec.resolvers.Mutation().EnsureOidcIdentityProvider(ctx, fc.Args["input"].(model.OidcIdentityProviderInput))
 		},
 		nil,
 		ec.marshalNIdentityProviderResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐIdentityProviderResult,
@@ -1987,7 +1987,7 @@ func (ec *executionContext) _Mutation_ensureIdentityProvider(ctx context.Context
 	)
 }
 
-func (ec *executionContext) fieldContext_Mutation_ensureIdentityProvider(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Mutation_ensureOidcIdentityProvider(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Mutation",
 		Field:      field,
@@ -2012,7 +2012,7 @@ func (ec *executionContext) fieldContext_Mutation_ensureIdentityProvider(ctx con
 		}
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Mutation_ensureIdentityProvider_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+	if fc.Args, err = ec.field_Mutation_ensureOidcIdentityProvider_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -5411,8 +5411,8 @@ func (ec *executionContext) fieldContext___Type_isOneOf(_ context.Context, field
 
 // region    **************************** input.gotpl *****************************
 
-func (ec *executionContext) unmarshalInputIdentityProviderInput(ctx context.Context, obj any) (model.IdentityProviderInput, error) {
-	var it model.IdentityProviderInput
+func (ec *executionContext) unmarshalInputOidcIdentityProviderInput(ctx context.Context, obj any) (model.OidcIdentityProviderInput, error) {
+	var it model.OidcIdentityProviderInput
 	asMap := map[string]any{}
 	for k, v := range obj.(map[string]any) {
 		asMap[k] = v
@@ -6065,9 +6065,9 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Mutation")
-		case "ensureIdentityProvider":
+		case "ensureOidcIdentityProvider":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
-				return ec._Mutation_ensureIdentityProvider(ctx, field)
+				return ec._Mutation_ensureOidcIdentityProvider(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -7287,11 +7287,6 @@ func (ec *executionContext) marshalNHealthStatus2githubᚗcomᚋodigosᚑioᚋce
 	return v
 }
 
-func (ec *executionContext) unmarshalNIdentityProviderInput2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐIdentityProviderInput(ctx context.Context, v any) (model.IdentityProviderInput, error) {
-	res, err := ec.unmarshalInputIdentityProviderInput(ctx, v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
 func (ec *executionContext) marshalNIdentityProviderResult2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐIdentityProviderResult(ctx context.Context, sel ast.SelectionSet, v model.IdentityProviderResult) graphql.Marshaler {
 	return ec._IdentityProviderResult(ctx, sel, &v)
 }
@@ -7342,6 +7337,11 @@ func (ec *executionContext) marshalNJSON2map(ctx context.Context, sel ast.Select
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) unmarshalNOidcIdentityProviderInput2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐOidcIdentityProviderInput(ctx context.Context, v any) (model.OidcIdentityProviderInput, error) {
+	res, err := ec.unmarshalInputOidcIdentityProviderInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNPlatformType2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐPlatformType(ctx context.Context, v any) (model.PlatformType, error) {

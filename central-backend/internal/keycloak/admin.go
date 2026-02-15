@@ -134,6 +134,7 @@ type oidcIdentityProviderConfig struct {
 	SyncMode              string
 	ValidateSignature     string
 	UseJwksURL            string
+	DefaultScope          string
 
 	AuthorizationURL string
 	TokenURL         string
@@ -175,6 +176,9 @@ func (c oidcIdentityProviderConfig) ToConfigMap() map[string]string {
 		"syncMode":              c.SyncMode,
 		"validateSignature":     c.ValidateSignature,
 		"useJwksUrl":            c.UseJwksURL,
+	}
+	if c.DefaultScope != "" {
+		out["defaultScope"] = c.DefaultScope
 	}
 
 	// Keep exact same key names as before.
@@ -340,6 +344,10 @@ func (kc *KeycloakAdminService) ConfigureIdentityProvider(adminUsername string, 
 		return fmt.Errorf("failed to configure identity provider: status %d, response: %+v", resp.StatusCode, responseBody)
 	}
 
+	if err := kc.ensureOidcAttributeMappers(adminToken, config.ProviderAlias); err != nil {
+		logger.Log.Error("Failed to create OIDC attribute mappers", "provider", config.ProviderAlias, "error", err)
+	}
+
 	return nil
 }
 
@@ -418,7 +426,20 @@ func (kc *KeycloakAdminService) updateIdentityProvider(adminUsername string, adm
 
 // UpdateIdentityProvider updates an existing IdP by alias using PUT.
 func (kc *KeycloakAdminService) UpdateIdentityProvider(adminUsername string, adminPassword string, config *IdentityProviderConfig) error {
-	return kc.updateIdentityProvider(adminUsername, adminPassword, config.ProviderAlias, getIDPConfig(config), AuthProtocolOIDC)
+	if err := kc.updateIdentityProvider(adminUsername, adminPassword, config.ProviderAlias, getIDPConfig(config), AuthProtocolOIDC); err != nil {
+		return err
+	}
+
+	adminToken, err := kc.GetAdminToken(adminUsername, adminPassword)
+	if err != nil {
+		return err
+	}
+
+	if err := kc.ensureOidcAttributeMappers(adminToken, config.ProviderAlias); err != nil {
+		logger.Log.Error("Failed to ensure OIDC attribute mappers on update", "provider", config.ProviderAlias, "error", err)
+	}
+
+	return nil
 }
 
 // UpdateSamlIdentityProvider updates an existing SAML IdP by alias using PUT.
@@ -539,6 +560,98 @@ func (kc *KeycloakAdminService) ensureSamlAttributeMappers(adminToken string, pr
 	return nil
 }
 
+type oidcAttributeMapper struct {
+	Name      string
+	ClaimName string
+	UserAttr  string
+}
+
+// ensureOidcAttributeMappers creates standard OIDC attribute mappers (email, firstName, lastName)
+// for the given identity provider. It skips mappers that already exist.
+func (kc *KeycloakAdminService) ensureOidcAttributeMappers(adminToken string, providerAlias string) error {
+	mappers := []oidcAttributeMapper{
+		// Azure AD often does not return the "email" claim even with the email scope.
+		// Map "preferred_username" (UPN) to email first as a fallback, then let the
+		// real "email" claim overwrite it if present.
+		{Name: "email-from-upn", ClaimName: "preferred_username", UserAttr: "email"},
+		{Name: "email", ClaimName: "email", UserAttr: "email"},
+		{Name: "firstName", ClaimName: "given_name", UserAttr: "firstName"},
+		{Name: "lastName", ClaimName: "family_name", UserAttr: "lastName"},
+	}
+
+	mappersURL := fmt.Sprintf("%s/admin/realms/%s/identity-provider/instances/%s/mappers", kc.host, kc.realm, providerAlias)
+
+	// Get existing mappers to avoid duplicates
+	req, err := http.NewRequest("GET", mappersURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create GET mappers request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to get existing mappers: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var existingMappers []map[string]any
+	if resp.StatusCode == http.StatusOK {
+		if err := json.NewDecoder(resp.Body).Decode(&existingMappers); err != nil {
+			return fmt.Errorf("failed to decode existing mappers: %w", err)
+		}
+	}
+
+	existingNames := make(map[string]bool)
+	for _, m := range existingMappers {
+		if name, ok := m["name"].(string); ok {
+			existingNames[name] = true
+		}
+	}
+
+	for _, mapper := range mappers {
+		if existingNames[mapper.Name] {
+			continue
+		}
+
+		payload := map[string]any{
+			"name":                   mapper.Name,
+			"identityProviderAlias":  providerAlias,
+			"identityProviderMapper": "oidc-user-attribute-idp-mapper",
+			"config": map[string]string{
+				"syncMode":       "FORCE",
+				"claim":          mapper.ClaimName,
+				"user.attribute": mapper.UserAttr,
+			},
+		}
+
+		body, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("failed to marshal mapper %s: %w", mapper.Name, err)
+		}
+
+		req, err := http.NewRequest("POST", mappersURL, bytes.NewReader(body))
+		if err != nil {
+			return fmt.Errorf("failed to create mapper request for %s: %w", mapper.Name, err)
+		}
+		req.Header.Set("Authorization", "Bearer "+adminToken)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("failed to create mapper %s: %w", mapper.Name, err)
+		}
+		resp.Body.Close()
+
+		if resp.StatusCode != http.StatusCreated {
+			return fmt.Errorf("failed to create mapper %s: status %d", mapper.Name, resp.StatusCode)
+		}
+
+		logger.Log.Info("Created OIDC attribute mapper", "provider", providerAlias, "mapper", mapper.Name)
+	}
+
+	return nil
+}
+
 func GetKeycloakAdminTokenWithRetry(ctx context.Context, shutdownCh <-chan struct{}, username, password string) (string, error) {
 	logger.Log.Info("Waiting for Keycloak to become ready")
 	var err error
@@ -611,6 +724,7 @@ func getIDPConfig(config *IdentityProviderConfig) IdentityProviderUpsertPayload 
 		SyncMode:              "FORCE",
 		ValidateSignature:     "true",
 		UseJwksURL:            "true",
+		DefaultScope:          "openid email profile",
 	}
 
 	// Proactively populate endpoints from discovery so they are present even if KC doesn't import automatically

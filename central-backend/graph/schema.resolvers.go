@@ -22,9 +22,9 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// EnsureIdentityProvider is the resolver for the ensureIdentityProvider field.
-func (r *mutationResolver) EnsureIdentityProvider(ctx context.Context, input model.IdentityProviderInput) (*model.IdentityProviderResult, error) {
-	err := r.AdminService.EnsureIdentityProvider(&input)
+// EnsureOidcIdentityProvider is the resolver for the ensureOidcIdentityProvider field.
+func (r *mutationResolver) EnsureOidcIdentityProvider(ctx context.Context, input model.OidcIdentityProviderInput) (*model.IdentityProviderResult, error) {
+	err := r.AdminService.EnsureOidcIdentityProvider(&input)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to ensure IDP: %s", err.Error())
 		return &model.IdentityProviderResult{
@@ -32,8 +32,9 @@ func (r *mutationResolver) EnsureIdentityProvider(ctx context.Context, input mod
 			Error:   &errorMsg,
 		}, err
 	}
-	callbackURL := fmt.Sprintf("%s/realms/%s/broker/%s/endpoint",
-		consts.GetCentralBackendHost(), consts.KeycloakRealm, strings.ToLower(string(input.ProviderID)))
+
+	callbackURL := fmt.Sprintf("%s/realms/%s/broker/%s/endpoint", consts.GetCentralBackendHost(), consts.KeycloakRealm, strings.ToLower(string(input.ProviderID)))
+
 	return &model.IdentityProviderResult{
 		Success:     true,
 		CallbackURL: &callbackURL,
@@ -46,8 +47,9 @@ func (r *mutationResolver) EnsureSamlIdentityProvider(ctx context.Context, input
 	if err != nil {
 		return nil, err
 	}
-	callbackURL := fmt.Sprintf("%s/realms/%s/broker/%s/endpoint",
-		consts.GetCentralBackendHost(), consts.KeycloakRealm, strings.ToLower(string(input.ProviderID)))
+
+	callbackURL := fmt.Sprintf("%s/realms/%s/broker/%s/endpoint", consts.GetCentralBackendHost(), consts.KeycloakRealm, strings.ToLower(string(input.ProviderID)))
+
 	return &model.IdentityProviderResult{
 		Success:     true,
 		CallbackURL: &callbackURL,
