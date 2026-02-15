@@ -98,7 +98,7 @@ COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v1.13.16 /instrumentati
 COPY --from=public.ecr.aws/odigos/agents/php-community:v0.2.5 /instrumentations/php /instrumentations/php
 
 # Ruby
-COPY --from=public.ecr.aws/odigos/agents/ruby-community:v0.0.7 /instrumentations/ruby /instrumentations/ruby
+COPY --from=public.ecr.aws/odigos/agents/ruby-community:v0.0.8 /instrumentations/ruby /instrumentations/ruby
 
 # loader
 ARG ODIGOS_LOADER_VERSION=v0.0.6
