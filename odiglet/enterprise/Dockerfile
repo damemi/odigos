@@ -84,8 +84,8 @@ RUN --mount=type=bind,from=dotnet-builder,source=/legacy-dotnet-instrumentation,
     fi
 
 # Java
-COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v1.13.16 /instrumentations/java-ebpf /instrumentations/java-ebpf
-COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v1.13.16 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v1.13.17 /instrumentations/java-ebpf /instrumentations/java-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v1.13.17 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
 
 # PHP
 COPY --from=public.ecr.aws/odigos/agents/php-community:v0.2.5 /instrumentations/php /instrumentations/php

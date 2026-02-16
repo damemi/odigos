@@ -148,6 +148,20 @@ func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instru
 		return err
 	}
 
+	// Custom instrumentation probes
+	if sdkConfig.CustomInstrumentations != nil && sdkConfig.CustomInstrumentations.Java != nil {
+		var probes []dynamic.CustomProbe
+		for _, probe := range sdkConfig.CustomInstrumentations.Java {
+			probes = append(probes, dynamic.CustomProbe{
+				ClassName:  probe.ClassName,
+				MethodName: probe.MethodName,
+			})
+		}
+		if err := g.inst.ApplyDynamicConfig(dynamic.CustomInstrumentation(probes)); err != nil {
+			return err
+		}
+	}
+
 	if sdkConfig.RuntimeMetrics != nil {
 		jvmConfig := createJVMMetricsConfig(sdkConfig.RuntimeMetrics.Java)
 		if jvmConfig != nil {
