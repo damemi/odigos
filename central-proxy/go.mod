@@ -1,6 +1,6 @@
 module github.com/odigos-io/central-proxy
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/odigos-io/odigos/api v1.18.0-pre3.0.20260221170831-ea222f4a6257
