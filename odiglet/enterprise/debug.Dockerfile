@@ -1,4 +1,4 @@
-ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.10
+ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.11
 
 FROM python:3.11 AS python-builder
 WORKDIR /python-instrumentation
