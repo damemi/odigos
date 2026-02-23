@@ -1,4 +1,4 @@
-ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.11
+ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.12
 
 ######### python builder #########
 FROM python:3.11.9 AS python-builder
