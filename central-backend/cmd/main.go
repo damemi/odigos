@@ -189,7 +189,11 @@ func newKeycloakReverseProxy(keycloakHost string) http.Handler {
 	originalDirector := proxy.Director
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
-		req.Header.Set("X-Forwarded-Proto", "http")
+		proto := req.Header.Get("X-Forwarded-Proto")
+		if proto == "" {
+			proto = "http"
+		}
+		req.Header.Set("X-Forwarded-Proto", proto)
 		req.Header.Set("X-Forwarded-Host", req.Host)
 	}
 
