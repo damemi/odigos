@@ -10,4 +10,5 @@ export type SourceConditions = WorkloadId & { conditions: Condition[] };
 // Extended Workload type that includes workloadOdigosHealthStatus for v1.16+ API
 export type WorkloadWithOdigosHealthStatus = Workload & {
   workloadOdigosHealthStatus?: Source['workloadOdigosHealthStatus'];
+  rollbackOccurred?: boolean;
 };

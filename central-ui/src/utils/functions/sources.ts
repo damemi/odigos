@@ -21,7 +21,7 @@ export const addConditionToSources = ({ namespace, name, kind, conditions }: Sou
 };
 
 export const addAgentInjectionStatusToSources = (
-  { id: { namespace, name, kind }, podsAgentInjectionStatus, workloadOdigosHealthStatus }: WorkloadWithOdigosHealthStatus,
+  { id: { namespace, name, kind }, podsAgentInjectionStatus, workloadOdigosHealthStatus, rollbackOccurred }: WorkloadWithOdigosHealthStatus,
   sources: Source[],
 ): Source | null => {
   const foundIdx = sources.findIndex((x) => x.namespace === namespace && x.name === name && x.kind === kind);
@@ -30,6 +30,7 @@ export const addAgentInjectionStatusToSources = (
   const updatedSource = {
     ...sources[foundIdx],
     podsAgentInjectionStatus,
+    rollbackOccurred,
   };
 
   if (workloadOdigosHealthStatus) {

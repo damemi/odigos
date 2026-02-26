@@ -28,9 +28,9 @@ const OverviewModalsAndDrawers = () => {
   const { fetchDescribeSource } = useDescribe();
   const { testConnection } = useTestConnection();
   const { categories } = useDestinationCategories();
-  const { restartWorkloads, restartPod } = useWorkloadUtils();
   const { potentialDestinations } = usePotentialDestinations();
   const { createAction, updateAction, deleteAction } = useActionCRUD();
+  const { restartWorkloads, restartPod, recoverFromRollback } = useWorkloadUtils();
   const { createDestination, updateDestination, deleteDestination } = useDestinationCRUD();
   const { persistSources, updateSource, fetchSourceById, fetchSourceLibraries } = useSourceCRUD();
   const { createInstrumentationRule, updateInstrumentationRule, deleteInstrumentationRule } = useInstrumentationRuleCRUD();
@@ -56,6 +56,7 @@ const OverviewModalsAndDrawers = () => {
         persistSources={persistSources}
         restartWorkloads={restartWorkloads}
         restartPod={restartPod}
+        recoverFromRollback={recoverFromRollback}
         updateSource={updateSource}
         fetchSourceById={fetchSourceById}
         fetchSourceDescribe={fetchDescribeSource}
