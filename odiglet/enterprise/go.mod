@@ -4,8 +4,8 @@ go 1.26.0
 
 require (
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.7
-	github.com/odigos-io/ebpf-java-instrumentation v1.13.20
-	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v1.13.20
+	github.com/odigos-io/ebpf-java-instrumentation v1.13.21
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v1.13.21
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.14
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
@@ -62,7 +62,7 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/pprof v0.0.0-20260115054156-294ebfa9ad83 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/grafana/jvmtools v0.0.3 // indirect
+	github.com/grafana/jvmtools v0.0.5 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.3 // indirect
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
 	github.com/hashicorp/go-version v1.8.0 // indirect
