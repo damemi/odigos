@@ -12,9 +12,9 @@ require (
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
 	github.com/odigos-io/odigos/api v0.0.0
 	github.com/odigos-io/odigos/common v1.18.0-pre3.0.20260226181111-d2130d30fd4a
-	github.com/odigos-io/odigos/instrumentation v1.18.0-pre3.0.20260226181111-d2130d30fd4a
+	github.com/odigos-io/odigos/instrumentation v1.18.0-pre3.0.20260302080435-b6666cb370d1
 	github.com/odigos-io/odigos/k8sutils v0.0.0
-	github.com/odigos-io/odigos/odiglet v1.18.0-pre3.0.20260226181111-d2130d30fd4a
+	github.com/odigos-io/odigos/odiglet v1.18.0-pre3.0.20260302080435-b6666cb370d1
 	github.com/odigos-io/odigos/procdiscovery v0.0.0
 	github.com/odigos-io/wasp-handshake v0.0.0-20260208160636-919d4d5e7423
 	go.opentelemetry.io/auto v0.22.0
@@ -77,7 +77,7 @@ require (
 	github.com/odigos-io/odigos/distros v1.18.0-pre3.0.20260226181111-d2130d30fd4a // indirect
 	github.com/odigos-io/odigos/opampserver v1.18.0-pre3.0.20260226181111-d2130d30fd4a // indirect
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5 // indirect
-	github.com/odigos-io/runtime-detector v0.0.22 // indirect
+	github.com/odigos-io/runtime-detector v0.0.23 // indirect
 	github.com/parca-dev/parca-agent v0.9.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
