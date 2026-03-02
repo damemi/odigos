@@ -120,7 +120,7 @@ jobs:
 
       - name: Scan image for vulnerabilities
         id: scan
-        uses: odigos-io/ci-core/vulnerabilities-scanner@3ace0ddac40435dba0f98700af061f63c24442cd
+        uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
           image: registry.odigos.io/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.IMAGE_TAG }}
           severity-cutoff: "CRITICAL"
@@ -213,7 +213,7 @@ jobs:
       - name: Scan autoscaler image for vulnerabilities
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
         id: scan-autoscaler
-        uses: odigos-io/ci-core/vulnerabilities-scanner@3ace0ddac40435dba0f98700af061f63c24442cd
+        uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
           image: registry.odigos.io/odigos-autoscaler:${{ env.IMAGE_TAG }}
           severity-cutoff: "CRITICAL"
@@ -232,7 +232,7 @@ jobs:
       - name: Scan scheduler image for vulnerabilities
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
         id: scan-scheduler
-        uses: odigos-io/ci-core/vulnerabilities-scanner@3ace0ddac40435dba0f98700af061f63c24442cd
+        uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
           image: registry.odigos.io/odigos-scheduler:${{ env.IMAGE_TAG }}
           severity-cutoff: "CRITICAL"
@@ -251,7 +251,7 @@ jobs:
       - name: Scan collector image for vulnerabilities
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
         id: scan-collector
-        uses: odigos-io/ci-core/vulnerabilities-scanner@3ace0ddac40435dba0f98700af061f63c24442cd
+        uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
           image: registry.odigos.io/odigos-collector:${{ env.IMAGE_TAG }}
           severity-cutoff: "CRITICAL"
@@ -270,7 +270,7 @@ jobs:
       - name: Scan cli image for vulnerabilities
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
         id: scan-cli
-        uses: odigos-io/ci-core/vulnerabilities-scanner@3ace0ddac40435dba0f98700af061f63c24442cd
+        uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
           image: registry.odigos.io/odigos-cli:${{ env.IMAGE_TAG }}
           severity-cutoff: "CRITICAL"
