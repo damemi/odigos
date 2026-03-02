@@ -295,8 +295,14 @@ func (kc *KeycloakTeamService) mapKeycloakGroupToTeam(group KeycloakGroup) (*mod
 		} else if legacy, ok := group.Attributes["description"]; ok && len(legacy) > 0 {
 			description = &legacy[0]
 		}
-		// Note: compute platforms will be populated by the team repository layer
-		// since it needs to resolve platform IDs to actual ComputePlatform objects
+
+		if cpValues, exists := group.Attributes[consts.TeamAttributeComputePlatforms]; exists {
+			for _, cpID := range cpValues {
+				if cpID != "" {
+					computePlatforms = append(computePlatforms, &model.ComputePlatform{ID: cpID})
+				}
+			}
+		}
 	}
 
 	return &model.Team{

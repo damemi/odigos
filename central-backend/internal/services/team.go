@@ -202,7 +202,20 @@ func (svc *TeamService) GetTeams(ctx context.Context) ([]*model.Team, error) {
 		return nil, fmt.Errorf("failed to get admin token: %w", err)
 	}
 
-	return svc.kcTeam.ListTeams(adminToken)
+	teams, err := svc.kcTeam.ListTeams(adminToken)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, team := range teams {
+		users, err := svc.kcTeam.GetUsersForTeam(adminToken, team.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get users for team %s: %w", team.ID, err)
+		}
+		team.Users = users
+	}
+
+	return teams, nil
 }
 
 func (svc *TeamService) GetUsersForTeam(ctx context.Context, teamID string) ([]*model.User, error) {
