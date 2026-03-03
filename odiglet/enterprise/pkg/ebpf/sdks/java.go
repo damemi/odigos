@@ -1,14 +1,21 @@
 package sdks
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/odigos-io/ebpf-java-instrumentation/jvmmetrics"
 	"github.com/odigos-io/ebpf-java-instrumentation/pkg/dynamic"
+	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/consts"
+	"github.com/odigos-io/odigos/distros/distro"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
 
 	auto "github.com/odigos-io/ebpf-java-instrumentation"
@@ -17,17 +24,42 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 )
 
+const (
+	agentJarDistroOptionName  = "agentJarName"
+)
+
 type JavaOtelEbpfSdkEnterprise struct {
 	inst   *auto.Instrumentation
 	config instrumentation.Config
 }
 
 type JavaInstrumentationFactoryEnterprise struct {
-	traceIdSuffix uint8
+	traceIdSuffix       uint8
+	agentJarName        string
+	// location where the agent relevant files are located on the host
+	agentFilesSourceDir string
 }
 
-func NewJavaInstrumentationFactoryEnterprise(traceIdSuffix uint8) instrumentation.Factory {
-	return &JavaInstrumentationFactoryEnterprise{traceIdSuffix: traceIdSuffix}
+func NewJavaInstrumentationFactoryEnterprise(traceIdSuffix uint8, otelDistro *distro.OtelDistro) (instrumentation.Factory, error) {
+	if otelDistro == nil {
+		return nil, errors.New("otel distro is nil")
+	}
+	agentJar, exists := distro.RuntimeAgentOptionValue(otelDistro, agentJarDistroOptionName)
+	if !exists || agentJar == "" {
+		return nil, errors.New("agent jar name not found in distro options")
+	}
+	if len(otelDistro.RuntimeAgent.DirectoryNames) != 1 {
+		return nil, fmt.Errorf("unexpected number of runtime agent directory names, expected 1, got %d", len(otelDistro.RuntimeAgent.DirectoryNames))
+	}
+	// in order to support instrumentation of java processes without a restart,
+	// we are going to copy the required java agent files from the odiglet container filesystem into the target process filesystem.
+	agentDirOnHost := otelDistro.RuntimeAgent.DirectoryNames[0]
+	sourceDir := strings.ReplaceAll(agentDirOnHost, distro.AgentPlaceholderDirectory, k8sconsts.OdigletContainerAgentDirectory)
+	return &JavaInstrumentationFactoryEnterprise{
+		traceIdSuffix:       traceIdSuffix,
+		agentJarName:        agentJar,
+		agentFilesSourceDir: sourceDir,
+	}, nil
 }
 
 func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
@@ -56,6 +88,32 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 		opts = append(opts, auto.WithJVMMetrics(settings.MetricsMap.HashMapOfMaps, settings.MetricsMap.AttributesMap))
 	}
 
+	// check if the ODIGOS_POD_NAME is present in the target process environment variables.
+	// if it does, it means this process is from a pod that went through our mutating webhook - indicating it should have all the required files
+	// for the java agent and the JAVA_TOOL_OPTION env var set in one of the supported env injection methods.
+	// if it does not, this is an instrumentation of a running process, and we need to make sure the java agent required files are accessible for the
+	// target process, and do the attach dynamically with jattach.
+	// note: we do not check the JAVA_TOOL_OPTIONS env var here since it can be added by LD_PRELOAD method, which will not reflect in proc fs.
+	odigosEnvPresent, err := isEnvValPresent(pid, k8sconsts.OdigosEnvVarPodName)
+	if err != nil {
+		log.Logger.Error(err, "failed to check if native lib is loaded")
+		return nil, err
+	}
+	if !odigosEnvPresent {
+		if err := process.InjectDirToProcessTempDir(pid, g.agentFilesSourceDir, false); err != nil {
+			return nil, err
+		}
+		opts = append(opts, auto.WithDynamicAttachment(
+			&auto.DynamicAttachConfig{
+				AgentJarPath: filepath.Join(
+					os.TempDir(),
+					filepath.Base(g.agentFilesSourceDir),
+					g.agentJarName,
+				),
+			},
+		))
+	}
+
 	inst, err := auto.NewInstrumentation(
 		ctx,
 		opts...,
@@ -71,6 +129,16 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 	}
 
 	return javaInstWrapper, nil
+}
+
+func isEnvValPresent(pid int, envVarName string) (bool, error) {
+	pidEnvironPath := filepath.Join(process.HostProcDir(), fmt.Sprintf("%d", pid), "environ")
+	contents, err := os.ReadFile(pidEnvironPath)
+	if err != nil {
+		return false, fmt.Errorf("failed to read environ for pid:%d error:%w", pid, err)
+	}
+
+	return bytes.Index(contents, []byte(envVarName)) != -1, nil
 }
 
 func (g *JavaOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.Status, error) {

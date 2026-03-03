@@ -1,12 +1,15 @@
 package main
 
 import (
+	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	_ "net/http/pprof"
 	"os"
 	"strconv"
 
+	"github.com/odigos-io/odigos/distros"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
@@ -21,8 +24,8 @@ import (
 	"github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	"github.com/odigos-io/odigos/odiglet/pkg/log"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
-	waspserver "github.com/odigos-io/wasp-handshake/server"
 	commonwasp "github.com/odigos-io/wasp-handshake/common"
+	waspserver "github.com/odigos-io/wasp-handshake/server"
 )
 
 const (
@@ -80,7 +83,7 @@ func main() {
 		}
 	}
 
-	factories, err := ebpfInstrumentationFactories(uint8(suffix), waspEnabled)
+	factories, err := ebpfInstrumentationFactories(uint8(suffix), waspEnabled, enterpriseDistrosProvider.Getter)
 	if err != nil {
 		log.Logger.Error(err, "failed to set up ebpf factories")
 		os.Exit(1)
@@ -118,7 +121,7 @@ func main() {
 	log.Logger.V(0).Info("odiglet exiting")
 }
 
-func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool) (map[string]commonInstrumentation.Factory, error) {
+func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distros.Getter) (map[string]commonInstrumentation.Factory, error) {
 	var wp commonwasp.MapsProvider
 	if waspEnabled {
 		wp = waspserver.NewServer(slog.Default(), k8sconsts.OdigletWaspServicePort, process.HostProcDir())
@@ -132,9 +135,19 @@ func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool) (map[string]co
 		return nil, err
 	}
 
+	d := getter.GetDistroByName("java-ebpf-instrumentations")
+	if d == nil {
+		return nil, errors.New("java-ebpf-instrumentations distro not found")
+	}
+
+	javaEbpfFactory, err := sdks.NewJavaInstrumentationFactoryEnterprise(suffix, d)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create java ebpf factory: %w", err)
+	}
+
 	return map[string]commonInstrumentation.Factory{
 		"golang-enterprise":          goFactory,
-		"java-ebpf-instrumentations": sdks.NewJavaInstrumentationFactoryEnterprise(suffix),
+		"java-ebpf-instrumentations": javaEbpfFactory,
 		"java-enterprise":            sdks.NewJavaExtensionInstrumentationFactoryEnterprise(),
 		"python-enterprise":          sdks.NewPythonInstrumentationFactoryEnterprise(),
 		"nodejs-enterprise":          sdks.NewNodeJSInstrumentationFactoryEnterprise(),
