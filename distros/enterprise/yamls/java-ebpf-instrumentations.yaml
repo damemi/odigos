@@ -16,6 +16,9 @@ spec:
       - "{{ODIGOS_AGENTS_DIR}}/java-ebpf"
     fileOpenTriggers:
       - "{{ODIGOS_AGENTS_DIR}}/java-ebpf/tracing_probes.so"
+    options:
+     - name: agentJarName
+       value: "dtrace-injector.jar"
     device: 'instrumentation.odigos.io/generic'
     environmentVariables:
       - envName: JAVA_TOOL_OPTIONS
@@ -23,6 +26,7 @@ spec:
         delimiter: ' '
     ldPreloadInjectionSupported: true
     k8sAttrsViaEnvVars: true
+    noRestartRequired: true
   agentMetrics:
     runtimeMetrics:
       supported: true
