@@ -121,10 +121,10 @@ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=
-github.com/odigos-io/odigos/api v1.18.0-pre3.0.20260226181111-d2130d30fd4a h1:vtumSG7/ptzq5YXvvTeXy8OrRpDPElpXfBs3vCUf0Qg=
-github.com/odigos-io/odigos/api v1.18.0-pre3.0.20260226181111-d2130d30fd4a/go.mod h1:JNAbHStlScYlpRyeMSrEInFOBnMMsGc0oB/4BD42YYo=
-github.com/odigos-io/odigos/common v1.18.0-pre3.0.20260226181111-d2130d30fd4a h1:N2r+FSut1R2rZp+VdIfcZdRaNstBVLdyYQOHpBstSeE=
-github.com/odigos-io/odigos/common v1.18.0-pre3.0.20260226181111-d2130d30fd4a/go.mod h1:cktk0i9cFUl9pZLLHIVx9i0k7D0rUSbt+PXSvcqsXGg=
+github.com/odigos-io/odigos/api v1.18.0-pre3.0.20260303160603-23536e5c153a h1:sh7jOew2awx1XVug7TUNw93QWArGSRP3EZ6j/vimr0E=
+github.com/odigos-io/odigos/api v1.18.0-pre3.0.20260303160603-23536e5c153a/go.mod h1:i4UwPooMvZbtPvfCWOh+UTci7Q+fDg4KflvfrZsqOQ0=
+github.com/odigos-io/odigos/common v1.18.0-pre3.0.20260303160603-23536e5c153a h1:opv+hmjVbUO+Pve7J4SduMndquAos/IPDSz9IuEbspE=
+github.com/odigos-io/odigos/common v1.18.0-pre3.0.20260303160603-23536e5c153a/go.mod h1:8ncno0vYC0dM17kb3CSqL7HfiLVJJ87Z3RRmV/H/luc=
 github.com/onsi/ginkgo v1.16.5 h1:8xi0RTUf59SOSfEtZMvwTvXYMzG4gV23XVHOZiXNtnE=
 github.com/onsi/ginkgo v1.16.5/go.mod h1:+E8gABHa3K6zRBolWtd+ROzc/U5bkGt0FwiG042wbpU=
 github.com/onsi/ginkgo/v2 v2.25.1 h1:Fwp6crTREKM+oA6Cz4MsO8RhKQzs2/gOIVOUscMAfZY=
@@ -212,8 +212,8 @@ golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a/go.mod h1:STP8DvDyc/dI5b8T5h
 golang.org/x/sys v0.0.0-20190412213103-97732733099d/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20200930185726-fdedc70b468f/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.6.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
-golang.org/x/sys v0.39.0 h1:CvCKL8MeisomCi6qNZ+wbb0DN9E5AATixKsvNtMoMFk=
-golang.org/x/sys v0.39.0/go.mod h1:OgkHotnGiDImocRcuBABYBEXf8A9a87e/uXjp9XT3ks=
+golang.org/x/sys v0.40.0 h1:DBZZqJ2Rkml6QMQsZywtnjnnGvHza6BTfYFWY9kjEWQ=
+golang.org/x/sys v0.40.0/go.mod h1:OgkHotnGiDImocRcuBABYBEXf8A9a87e/uXjp9XT3ks=
 golang.org/x/term v0.38.0 h1:PQ5pkm/rLO6HnxFR7N2lJHOZX6Kez5Y1gDSJla6jo7Q=
 golang.org/x/term v0.38.0/go.mod h1:bSEAKrOT1W+VSu9TSCMtoGEOUcKxOKgl3LE5QEF/xVg=
 golang.org/x/text v0.3.0/go.mod h1:NqM8EUOU14njkJ3fqMW+pc6Ldnwhi/IjpwHt7yyuwOQ=
