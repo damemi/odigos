@@ -53,7 +53,7 @@ jobs:
           go test ./... -v -race
 
   build-enterprise-components:
-    name: build-enterprise-components (${{ matrix.service }}${{ matrix.rhel == 'true' && ', rhel' || '' }})
+    name: build-enterprise-components (${{ matrix.service }}${{ matrix.rhel == 'true' && ', rhel' || '' }}${{ matrix.extended == 'true' && ', extended' || '' }})
     runs-on: depot-ubuntu-24.04-4
     strategy:
       matrix:
@@ -67,6 +67,21 @@ jobs:
             agents,
           ]
         rhel: ['true', 'false']
+        # extended: ['false'] is needed so that standard builds have extended=false explicitly.
+        # Without it, the include entries below (extended: 'true') would match existing
+        # rhel:false combinations and merge into them instead of creating new jobs.
+        extended: ['false']
+        include:
+          # Extended builds (odiglet + agents with EXTENDED=true) are needed for
+          # important-customers tests that set odiglet.extended=true in their helm config.
+          # These mirror the -extended tag variants published in release-images.yml.
+          # extended: 'true' does not exist in the base matrix values, so these create new jobs.
+          - service: odiglet
+            rhel: 'false'
+            extended: 'true'
+          - service: agents
+            rhel: 'false'
+            extended: 'true'
 
     steps:
       - name: Print tests run info
@@ -94,16 +109,17 @@ jobs:
             || 'Dockerfile' }}
           context: ${{ matrix.service == 'central-ui' && 'central-ui' || '.' }}
           push: false
-          tags: registry.odigos.io/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.IMAGE_TAG }}
+          tags: registry.odigos.io/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.IMAGE_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
           provenance: false
           secrets: |
             github_token=${{ secrets.RELEASE_BOT_TOKEN }}
           cache-to: type=local,mode=max,dest=${{ matrix.service }}-enterprise-cache
           cache-from: type=local,src=${{ matrix.service }}-enterprise-cache
-          outputs: type=docker,dest=/tmp/${{ matrix.service }}-enterprise.tar
+          outputs: type=docker,dest=/tmp/${{ matrix.service }}-enterprise${{ matrix.extended == 'true' && '-extended' || '' }}.tar
           build-args: |
             SERVICE_NAME=${{ matrix.service }}
             RHEL=${{ matrix.rhel }}
+            EXTENDED=${{ matrix.extended || 'false' }}
           target: >-
             ${{ matrix.service == 'agents' && matrix.rhel == 'true' && 'agents-rhel' ||
                 matrix.service == 'agents' && 'agents' ||
@@ -112,17 +128,17 @@ jobs:
       - name: Save enterprise component to cache
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
-          path: /tmp/${{ matrix.service }}-enterprise.tar
-          key: ${{ github.run_id }}-${{ matrix.service }}-enterprise-${{ matrix.rhel == 'true' && 'rhel-certified' || 'standard' }}
-      
+          path: /tmp/${{ matrix.service }}-enterprise${{ matrix.extended == 'true' && '-extended' || '' }}.tar
+          key: ${{ github.run_id }}-${{ matrix.service }}-enterprise-${{ matrix.extended == 'true' && 'extended' || (matrix.rhel == 'true' && 'rhel-certified' || 'standard') }}
+
       - name: Load Docker image for scanning
-        run: docker load -i /tmp/${{ matrix.service }}-enterprise.tar
+        run: docker load -i /tmp/${{ matrix.service }}-enterprise${{ matrix.extended == 'true' && '-extended' || '' }}.tar
 
       - name: Scan image for vulnerabilities
         id: scan
         uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
-          image: registry.odigos.io/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.IMAGE_TAG }}
+          image: registry.odigos.io/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.IMAGE_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
           severity-cutoff: "CRITICAL"
         continue-on-error: true
 
@@ -130,13 +146,13 @@ jobs:
         if: always()
         run: |
           mkdir -p /tmp/scan-results
-          IMAGE_NAME="odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}"
-          
+          IMAGE_NAME="odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}${{ matrix.extended == 'true' && '-extended' || '' }}"
+
           # Create a wrapper JSON with image metadata
           cat > /tmp/scan-results/${IMAGE_NAME}.json << 'EOF'
           ${{ steps.scan.outputs.results-json }}
           EOF
-          
+
           # Add image name to the JSON
           jq --arg img "$IMAGE_NAME" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' /tmp/scan-results/${IMAGE_NAME}.json > /tmp/scan-results/${IMAGE_NAME}_enriched.json
           mv /tmp/scan-results/${IMAGE_NAME}_enriched.json /tmp/scan-results/${IMAGE_NAME}.json
@@ -145,7 +161,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
         with:
-          name: vuln-scan-result-${{ matrix.service }}-${{ matrix.rhel == 'true' && 'rhel' || 'standard' }}-${{ github.sha }}.json
+          name: vuln-scan-result-${{ matrix.service }}-${{ matrix.extended == 'true' && 'extended' || (matrix.rhel == 'true' && 'rhel' || 'standard') }}-${{ github.sha }}.json
           path: /tmp/scan-results/*.json
           retention-days: 30
 
@@ -294,9 +310,9 @@ jobs:
           path: /tmp/scan-results/*.json
           retention-days: 30
 
-      
+
   kubernetes-tests:
-    name: kubernetes-tests (${{ matrix.kube-version }}, ${{ matrix.test-scenario }}${{ matrix.wasp-enabled == true && ', with_wasp' || '' }})
+    name: kubernetes-tests (${{ matrix.kube-version }}, ${{ matrix.test-scenario }}${{ matrix.customer != '' && format(', {0}', matrix.customer) || '' }}${{ matrix.wasp-enabled == true && ', with_wasp' || '' }})
     needs:
       - detect-changes
       - build-enterprise-components
@@ -343,6 +359,19 @@ jobs:
           - kube-version: "1.32"
             kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
             test-scenario: "control-plane"
+          # important-customers: one entry per customer, only runs on release PRs (release-bot-* → releases/*).
+          # To add a customer: duplicate an entry below and set customer to the slug defined in
+          # tests/e2e/important-customers/customers.sh (e.g. greatwall).
+          - kube-version: "1.32"
+            kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
+            test-scenario: "important-customers"
+            wasp-enabled: false
+            customer: "greatwall"
+          - kube-version: "1.32"
+            kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
+            test-scenario: "important-customers"
+            wasp-enabled: false
+            customer: "kratos"
     steps:
       # Check if this test scenario should run based on changed files
       - name: Check if test should run
@@ -356,6 +385,17 @@ jobs:
             else
               echo "Running ${{ matrix.test-scenario }} - central files changed"
               echo "skip=false" >> $GITHUB_OUTPUT
+            fi
+          # important-customers only runs on release PRs: head branch release-bot-* → base branch releases/*
+          elif [[ "${{ matrix.test-scenario }}" == "important-customers" ]]; then
+            HEAD_REF="${{ github.head_ref }}"
+            BASE_REF="${{ github.base_ref }}"
+            if [[ "$HEAD_REF" == release-bot-* && "$BASE_REF" == releases/* ]]; then
+              echo "Running important-customers - release PR detected (head: $HEAD_REF, base: $BASE_REF)"
+              echo "skip=false" >> $GITHUB_OUTPUT
+            else
+              echo "Skipping important-customers - not a release PR (head: $HEAD_REF, base: $BASE_REF)"
+              echo "skip=true" >> $GITHUB_OUTPUT
             fi
           else
             echo "Running ${{ matrix.test-scenario }} - always runs"
@@ -452,6 +492,24 @@ jobs:
           echo "Expected cache key: ${{ github.run_id }}-instrumentor-enterprise-standard"
           exit 1
 
+      - name: Restore Extended Odiglet from Cache
+        if: steps.should-run.outputs.skip != 'true'
+        id: restore-odiglet-extended-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: /tmp/odiglet-enterprise-extended.tar
+          fail-on-cache-miss: true
+          key: ${{ github.run_id }}-odiglet-enterprise-extended
+
+      - name: Restore Extended Agents from Cache
+        if: steps.should-run.outputs.skip != 'true'
+        id: restore-agents-extended-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: /tmp/agents-enterprise-extended.tar
+          fail-on-cache-miss: true
+          key: ${{ github.run_id }}-agents-enterprise-extended
+
       - name: Restore Odigos OSS Components from Cache
         if: steps.should-run.outputs.skip != 'true'
         id: restore-oss-cache
@@ -525,7 +583,9 @@ jobs:
         if: steps.should-run.outputs.skip != 'true'
         run: |
           kind load image-archive /tmp/odiglet-enterprise.tar
+          kind load image-archive /tmp/odiglet-enterprise-extended.tar
           kind load image-archive /tmp/instrumentor-enterprise.tar
+          kind load image-archive /tmp/agents-enterprise-extended.tar
           kind load image-archive /tmp/odigos-autoscaler.tar
           kind load image-archive /tmp/odigos-scheduler.tar
           kind load image-archive /tmp/odigos-collector.tar
@@ -598,6 +658,7 @@ jobs:
 
           chainsaw test odigos-enterprise/tests/e2e/${{ matrix.test-scenario }} --values - <<EOF
           k8sMinorVersion: ${MINOR_VERSION}
+          customer: "${{ matrix.customer }}"
           EOF
 
       - name: Cluster diagnostics

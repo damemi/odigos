@@ -1,0 +1,187 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: important-customers
+spec:
+  description: |
+    E2E test for an important customer configuration.
+    The customer slug is passed via chainsaw --values (customer: <slug>).
+    Helm flags for each customer are declared in customers.sh.
+    Only runs on release PRs (head branch: release-bot-*, base branch: releases/*).
+  skipDelete: true
+  steps:
+    - name: Prepare destination
+      try:
+        - apply:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/simple-trace-db-deployment.yaml
+
+    - name: Install - Simple Demo Apps
+      try:
+        - apply:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/install-simple-demo.yaml
+
+    - name: Install Odigos
+      try:
+        - script:
+            timeout: 3m
+            env:
+              - name: CUSTOMER
+                value: ($values.customer)
+            content: |
+              bash -s << 'BASH_EOF'
+              set -e
+              source ./customers.sh
+              declare -n sets="${CUSTOMER}_helm_sets"
+              bash ../../common/scripts/helm-install.sh "${sets[@]}"
+              BASH_EOF
+
+    - name: Verify Odigos Installation
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              echo "Starting Odigos version check..."
+              export ACTUAL_VERSION=$(../../../../odigos/cli/odigos version --cluster)
+              echo "Actual Version: $ACTUAL_VERSION"
+              echo "Expected Version: $IMAGE_TAG"
+
+        - script:
+            env:
+              - name: CUSTOMER
+                value: ($values.customer)
+            content: |
+              bash -s << 'BASH_EOF'
+              set -e
+              source ./customers.sh
+              assert_file_var="${CUSTOMER}_odigos_installed_assert_file"
+              assert_file="${!assert_file_var}"
+              curl -sSL --retry 5 --retry-delay 5 \
+                -o /tmp/odigos-installed-assert.yaml \
+                "https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/${assert_file}"
+              BASH_EOF
+
+        - assert:
+            timeout: 6m
+            file: /tmp/odigos-installed-assert.yaml
+
+      catch:
+        - script:
+            content: |
+              echo "Listing all resources in namespace 'odigos-test'..."
+              kubectl get all -n odigos-test
+              kubectl describe deployments -n odigos-test
+
+    - name: Assert Trace DB is up
+      try:
+        - assert:
+            timeout: 1m
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-trace-db-running.yaml
+
+    - name: Add Destination
+      try:
+        - apply:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/add-simple-trace-db-destination.yaml
+
+    - name: Assert - Simple Demo Apps Installed
+      try:
+        - assert:
+            timeout: 3m
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-installed.yaml
+
+    - name: Instrument Namespace
+      try:
+        - apply:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/instrument-default-ns.yaml
+
+    - name: Assert Runtime Detected
+      try:
+        - assert:
+            timeout: 3m
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-runtime-detected.yaml
+
+    - name: Odigos pipeline ready
+      try:
+        - assert:
+            timeout: 3m
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/pipeline-ready.yaml
+
+    - name: Simple-demo instrumented after destination added
+      try:
+        - script:
+            env:
+              - name: CUSTOMER
+                value: ($values.customer)
+            content: |
+              bash -s << 'BASH_EOF'
+              set -e
+              source ./customers.sh
+              custom_file_var="${CUSTOMER}_instrumented_assert_file"
+              custom_file="${!custom_file_var}"
+              cp "$custom_file" /tmp/simple-demo-instrumented-assert.yaml
+              BASH_EOF
+        - assert:
+            timeout: 3m
+            file: /tmp/simple-demo-instrumented-assert.yaml
+
+    - name: Generate Traffic
+      try:
+        - apply:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
+        - script:
+            timeout: 1m
+            content: |
+              kubectl wait --for=condition=complete job/$(kubectl get -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
+        - delete:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
+
+    - name: Wait For Trace
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              yaml=$(mktemp)
+              script=$(mktemp)
+              curl -sSL --retry 5 --retry-delay 5 -o "$yaml" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/wait-for-trace.yaml
+              curl -sSL --retry 5 --retry-delay 5 -o "$script" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh
+
+              while true; do
+                bash "$script" "$yaml"
+                if [ $? -eq 0 ]; then
+                  break
+                fi
+                sleep 1
+              done
+
+              rm -f "$yaml" "$script"
+      catch:
+        - script:
+            content: |
+              java_pod_name=$(kubectl get pods -n default -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | grep ^frontend)
+              kubectl logs $java_pod_name -n default
+
+    - name: Verify Trace - Context Propagation
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              yaml=$(mktemp)
+              script=$(mktemp)
+
+              curl -sSL --retry 5 --retry-delay 5 -o "$yaml" \
+                https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/queries/context-propagation.yaml
+              curl -sSL --retry 5 --retry-delay 5 -o "$script" \
+                https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh
+
+              while true; do
+                bash "$script" "$yaml"
+                if [ $? -eq 0 ]; then
+                  break
+                fi
+                sleep 1
+              done
+
+              rm -f "$yaml" "$script"
+      catch:
+        - podLogs:
+            name: odiglet
+            namespace: odigos-test
