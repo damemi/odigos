@@ -39,6 +39,7 @@
     "typescript": "^5"
   },
   "resolutions": {
+    "ajv": "^6.14.0",
     "diff": "^5.2.2",
     "glob": "^10.5.0",
     "tar": "^7.5.7"
