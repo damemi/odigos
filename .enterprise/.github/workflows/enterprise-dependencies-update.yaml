@@ -14,11 +14,13 @@ jobs:
           persist-credentials: false
 
       - name: update all dependencies
+        env:
+          GITHUB_EVENT_CLIENT_PAYLOAD_GOLANG_ENTERPRISE_TAG: ${{ github.event.client_payload.golang_enterprise_tag }}
         run: |
           git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
           go env -w GOPRIVATE=github.com/odigos-io/*
           make update-odigos-oss-mod-deps-all OSS_TAG=main
-          make update-golang-enterprise-deps
+          make update-golang-enterprise-deps GOLANG_ENTERPRISE_TAG="${GITHUB_EVENT_CLIENT_PAYLOAD_GOLANG_ENTERPRISE_TAG}"
  
       - name: github preperation
         id: github_preperation

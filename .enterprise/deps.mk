@@ -56,6 +56,8 @@ update-odigos-oss-mod-deps-all:
 # 1. syncer bot that updates all dependencies to the latest on this repo main branch
 # 2. forking to a new release branch (e.g. releases/v1.X.0 at which point we want the latest agent once)
 # 3. run manually - for development to pull in latest agent once
+
+GOLANG_ENTERPRISE_TAG ?= main
 .PHONY: update-golang-enterprise-deps
 update-golang-enterprise-deps:
 	@echo "🔄 Updating enterprise Go dependencies in odiglet..."
@@ -68,7 +70,7 @@ update-golang-enterprise-deps:
 			-v "$$HOST_PATH":/workspace \
 			alpine:latest \
 			sh -c "cd /workspace/odiglet && \
-				sed -i -E 's|replace go\.opentelemetry\.io/auto => github\.com/odigos-io/enterprise-go-instrumentation .*|replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation main|' go.mod"; \
+				sed -i -E 's|replace go\.opentelemetry\.io/auto => github\.com/odigos-io/enterprise-go-instrumentation .*|replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation $(GOLANG_ENTERPRISE_TAG)|' go.mod && \
 		cd odiglet && go mod tidy; \
 		echo "✅ Enterprise Go dependencies updated to main"; \
 	else \
