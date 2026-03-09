@@ -70,9 +70,9 @@ update-golang-enterprise-deps:
 			-v "$$HOST_PATH":/workspace \
 			alpine:latest \
 			sh -c "cd /workspace/odiglet && \
-				sed -i -E 's|replace go\.opentelemetry\.io/auto => github\.com/odigos-io/enterprise-go-instrumentation .*|replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation $(GOLANG_ENTERPRISE_TAG)|' go.mod && \
+				sed -i -E 's|replace go\.opentelemetry\.io/auto => github\.com/odigos-io/enterprise-go-instrumentation .*|replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation $(GOLANG_ENTERPRISE_TAG)|' go.mod"; \
 		cd odiglet && go mod tidy; \
-		echo "✅ Enterprise Go dependencies updated to main"; \
+		echo "✅ Enterprise Go dependencies updated to $(GOLANG_ENTERPRISE_TAG)"; \
 	else \
 		echo "❌ odiglet/go.mod not found"; \
 		exit 1; \
