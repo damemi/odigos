@@ -57,7 +57,7 @@ update-odigos-oss-mod-deps-all:
 # 2. forking to a new release branch (e.g. releases/v1.X.0 at which point we want the latest agent once)
 # 3. run manually - for development to pull in latest agent once
 
-GOLANG_ENTERPRISE_TAG ?= main
+GOLANG_ENTERPRISE_TAG := $(if $(GOLANG_ENTERPRISE_TAG),$(GOLANG_ENTERPRISE_TAG),main)
 .PHONY: update-golang-enterprise-deps
 update-golang-enterprise-deps:
 	@echo "🔄 Updating enterprise Go dependencies in odiglet..."

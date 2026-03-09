@@ -1,6 +1,6 @@
 name: Update Odigos Dependencies
 
-on:   
+on:
   repository_dispatch:
     types: [process_update_dependencies_pr]
   workflow_dispatch:
@@ -13,15 +13,22 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: update all dependencies
-        env:
-          GITHUB_EVENT_CLIENT_PAYLOAD_GOLANG_ENTERPRISE_TAG: ${{ github.event.client_payload.golang_enterprise_tag }}
+      - name: update dependencies (all but enterprise-go-instrumentation)
         run: |
           git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
           go env -w GOPRIVATE=github.com/odigos-io/*
           make update-odigos-oss-mod-deps-all OSS_TAG=main
+
+      # Update enterprise-go-instrumentation only if the golang_enterprise_tag is provided
+      - name: update enterprise-go-instrumentation
+        env:
+          GITHUB_EVENT_CLIENT_PAYLOAD_GOLANG_ENTERPRISE_TAG: ${{ github.event.client_payload.golang_enterprise_tag }}
+          GOPRIVATE: github.com/odigos-io/*
+        if: ${{ github.event.client_payload.golang_enterprise_tag != '' }}
+        run: |
+          git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
           make update-golang-enterprise-deps GOLANG_ENTERPRISE_TAG="${GITHUB_EVENT_CLIENT_PAYLOAD_GOLANG_ENTERPRISE_TAG}"
- 
+
       - name: github preperation
         id: github_preperation
         run: |
@@ -40,12 +47,12 @@ jobs:
           if [ ! -z "$EXISTING_PR" ]; then
               gh pr close $EXISTING_PR --delete-branch
           fi
-          
+
           BRANCH_EXISTS=$(git ls-remote --heads origin ${STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME})
           if [ ! -z "$BRANCH_EXISTS" ]; then
               git push origin --delete ${STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME}
           fi
-          
+
       - name: create dependencies update pr
         id: create_dependencies_update_pr
         env:
@@ -68,15 +75,15 @@ jobs:
 
           # Extract PR number from PR_LINK
           PR_NUMBER=$(echo "$PR_LINK" | awk -F '/' '{print $NF}')
-          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV  
-        
+          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
+
       - name: Add bot label to PR
         env:
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
           PR_NUMBER: ${{ env.PR_NUMBER }}
         run: |
           curl -X POST -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/labels -d '{"labels": ["dependencies-syncer-bot"]}'
-      
+
       - name: Enable Auto Merge on PR
         env:
           GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
@@ -102,7 +109,6 @@ jobs:
           GITHUB_EVENT_CLIENT_PAYLOAD_SOURCE_PR_URL: ${{ github.event.client_payload.source_pr_url }}
           GITHUB_EVENT_CLIENT_PAYLOAD_PR_CREATOR: ${{ github.event.client_payload.pr_creator }}
 
-
       - name: Notify Slack on Failure
         if: failure()
         env:
@@ -117,7 +123,7 @@ jobs:
             echo "SLACK_ENTERPRISE_SYNC_URL is missing!"
             exit 1
           fi
-          
+
           # Set default values if SOURCE_PR_LINK or PR_CREATOR are missing
           SOURCE_PR_LINK=${SOURCE_PR_LINK:-"Not available"}
           PR_CREATOR=${PR_CREATOR:-"Unknown"}
