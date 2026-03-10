@@ -1,0 +1,63 @@
+# Manually run to regenerate and update the release notes for an existing tag.
+# Use when you want to refresh the body of a GitHub release (e.g. after fixing
+# the release-notes logic or adding more release-note blocks).
+#
+# Trigger: Actions → Update release notes → Run workflow → enter tag (e.g. v1.17.0-rc1)
+
+name: Update release notes
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag of the release to update (e.g. v1.17.0 or v1.17.0-rc1)"
+        required: true
+        type: string
+      release_branch:
+        description: "Branch to use for release note scope (e.g. main)"
+        required: false
+        default: main
+        type: string
+      dry_run:
+        description: "Just generate and preview the release notes, don't upload or update the release."
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  id-token: write  # required for STS (github-release-updater)
+
+jobs:
+  update-release-notes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get STS token
+        id: sts
+        uses: odigos-io/ci-core/sts@main
+        with:
+          scope: ${{ github.repository }}
+          identity: github-release-updater
+
+      - name: Generate and update release notes
+        id: generate-notes
+        uses: odigos-io/ci-core/generate-release-notes@main
+        with:
+          tag: ${{ inputs.tag }}
+          release-branch: ${{ inputs.release_branch }}
+          sts_identity: github-release-updater
+          dry-run: ${{ inputs.dry_run }}
+
+      - name: Download release notes artifact (dry run)
+        if: inputs.dry_run == true
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
+      - name: Preview release notes (dry run)
+        if: inputs.dry_run == true
+        run: |
+          echo "## Generated release notes (preview)"
+          echo "Full: release-notes.md | Truncated for GH body: release-notes-gh.md"
+          echo '```'
+          cat release-notes/release-notes.md
+          echo '```'

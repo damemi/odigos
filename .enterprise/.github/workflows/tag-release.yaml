@@ -4,16 +4,26 @@ on:
   pull_request:
     types: [closed]
 
+permissions:
+  id-token: write  # required for STS (github-release-updater)
+
 jobs:
   release-job:
     runs-on: ubuntu-latest
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release-bot')
     steps:
+    - name: Get STS token
+      id: sts
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: ${{ github.repository }}
+        identity: github-release-updater
+
     - name: Checkout code
       uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
       with:
         token: ${{ secrets.RELEASE_BOT_TOKEN }}
-        ref: ${{ github.event.pull_request.head.ref }}
+        ref: ${{ github.event.pull_request.base.ref }}
 
     - name: Extract Version from PR Comment
       env:
@@ -40,6 +50,34 @@ jobs:
           VERSION=${STEPS_EXTRACT_VERSION_OUTPUTS_VERSION}
           git tag $VERSION
           git push --tags
+
+    - name: Generate release notes
+      id: generate-notes
+      continue-on-error: true
+      uses: odigos-io/ci-core/generate-release-notes@main
+      with:
+        tag: ${{ steps.extract-version.outputs.version }}
+        release-branch: ${{ github.event.pull_request.base.ref }}
+        sts_identity: github-release-updater
+        dry-run: "true"
+
+    - name: Download release notes artifact
+      if: steps.generate-notes.outcome == 'success'
+      uses: actions/download-artifact@v4
+      with:
+        name: release-notes
+
+    - name: Create or update GitHub release
+      if: steps.generate-notes.outcome == 'success'
+      env:
+        GH_TOKEN: ${{ steps.sts.outputs.GH_TOKEN }}
+      run: |
+        TAG="${{ steps.extract-version.outputs.version }}"
+        # Use truncated body (release-notes-gh.md) and full notes (release-notes.md) from generate-release-notes artifact
+        if ! gh release create "$TAG" --notes-file release-notes/release-notes-gh.md; then
+          gh release edit "$TAG" --notes-file release-notes/release-notes-gh.md
+        fi
+        gh release upload "$TAG" release-notes/release-notes.md --clobber
 
     - name: Notify Slack
       if: always()
