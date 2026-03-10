@@ -3,3 +3,4 @@ subject_pattern: repo:odigos-io/odigos-enterprise:ref:.*
 
 permissions:
   contents: write
+  pull_requests: read
