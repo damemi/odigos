@@ -63,21 +63,23 @@ jobs:
 
     - name: Download release notes artifact
       if: steps.generate-notes.outcome == 'success'
+      continue-on-error: true
       uses: actions/download-artifact@v4
       with:
         name: release-notes
 
     - name: Create or update GitHub release
       if: steps.generate-notes.outcome == 'success'
+      continue-on-error: true
       env:
         GH_TOKEN: ${{ steps.sts.outputs.GH_TOKEN }}
       run: |
         TAG="${{ steps.extract-version.outputs.version }}"
-        # Use truncated body (release-notes-gh.md) and full notes (release-notes.md) from generate-release-notes artifact
-        if ! gh release create "$TAG" --notes-file release-notes/release-notes-gh.md; then
-          gh release edit "$TAG" --notes-file release-notes/release-notes-gh.md
+        # Artifact extracts to workspace root: release-notes.md and release-notes-gh.md (per action upload path)
+        if ! gh release create "$TAG" --notes-file release-notes-gh.md; then
+          gh release edit "$TAG" --notes-file release-notes-gh.md
         fi
-        gh release upload "$TAG" release-notes/release-notes.md --clobber
+        gh release upload "$TAG" release-notes.md --clobber
 
     - name: Notify Slack
       if: always()
