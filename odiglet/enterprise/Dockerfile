@@ -1,21 +1,5 @@
 ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.12
 
-######### python builder #########
-FROM python:3.11.9 AS python-builder
-ARG ODIGOS_VERSION
-WORKDIR /python-instrumentation
-ADD odiglet/agents/python/requirements.txt .
-RUN mkdir workspace && pip install -r requirements.txt --target workspace
-RUN echo "VERSION = \"$ODIGOS_VERSION\";" > /python-instrumentation/workspace/initializer/version.py
-
-# Enterprise version of ebpf-generic-instrumentation
-ARG EBPF_GENERIC_VERSION="v0.0.7"
-RUN apt update -y && apt install -y systemtap-sdt-dev
-RUN --mount=type=secret,id=github_token \
-    git clone -b ${EBPF_GENERIC_VERSION} https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-generic-instrumentation.git \
-    && cd ebpf-generic-instrumentation
-RUN mkdir enterprise-workspace && pip install --target enterprise-workspace ./ebpf-generic-instrumentation/dtrace-injector
-
 ######### dotnet builder #########
 FROM --platform=$BUILDPLATFORM busybox:1.36.1 AS dotnet-builder
 WORKDIR /dotnet-instrumentation
@@ -64,10 +48,10 @@ ADD https://github.com/open-telemetry/opentelemetry-java-instrumentation/release
 RUN chmod 644 /instrumentations/java/javaagent.jar
 
 # Python
-COPY --from=python-builder /python-instrumentation/workspace /instrumentations/python
+COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.66 /python-instrumentation/workspace /instrumentations/python
 
 # Python eBPF
-COPY --from=python-builder /python-instrumentation/enterprise-workspace /instrumentations/python-ebpf
+COPY --from=public.ecr.aws/odigos/agents/python-ebpf:v0.0.8 /python-instrumentation/enterprise-workspace /instrumentations/python-ebpf
 
 # nodejs-enterprise
 COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.0.14 /instrumentations/opentelemetry-node /instrumentations/opentelemetry-node
