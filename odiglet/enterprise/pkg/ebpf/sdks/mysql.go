@@ -7,7 +7,7 @@ import (
 	auto "github.com/odigos-io/mysql-instrumentation"
 	"github.com/odigos-io/odigos/common/consts"
 	"github.com/odigos-io/odigos/instrumentation"
-	"github.com/odigos-io/odigos/odiglet/pkg/log"
+	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 )
 
@@ -28,7 +28,7 @@ func (g *MySQLInstrumentationFactoryEnterprise) CreateInstrumentation(ctx contex
 		otlptracegrpc.WithEndpoint(fmt.Sprintf("localhost:%d", consts.OTLPPort)),
 	)
 	if err != nil {
-		log.Logger.Error(err, "failed to create exporter")
+		commonlogger.LoggerCompat().With("subsystem", "ebpfmysql").Error("failed to create exporter", "error", err)
 		return nil, err
 	}
 
@@ -40,7 +40,7 @@ func (g *MySQLInstrumentationFactoryEnterprise) CreateInstrumentation(ctx contex
 		auto.WithTraceExporter(defaultExporter),
 	)
 	if err != nil {
-		log.Logger.Error(err, "instrumentation setup failed")
+		commonlogger.LoggerCompat().With("subsystem", "ebpfmysql").Error("instrumentation setup failed", "error", err)
 		return nil, err
 	}
 

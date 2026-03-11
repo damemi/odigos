@@ -28,10 +28,12 @@ import (
 	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/consts"
 	"github.com/odigos-io/odigos/instrumentation"
+	commonlogger "github.com/odigos-io/odigos/common/logger"
 	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
-	"github.com/odigos-io/odigos/odiglet/pkg/log"
 	wasp "github.com/odigos-io/wasp-handshake/common"
 )
+
+var log = commonlogger.LoggerCompat().With("subsystem", "ebpfgosdk")
 
 const rsaPublicKeyString = `-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmMXVUgppNeHZA507GFX3
@@ -85,7 +87,7 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 		// If the file is empty, use default offsets
 		if info.Size() == 0 {
 			g.offsetFileBytes = []byte{}
-			log.Logger.Info("no custom Go offsets loaded, falling back to default offsets")
+			log.Info("no custom Go offsets loaded, falling back to default offsets")
 			return nil
 		}
 
@@ -104,7 +106,7 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 			}
 			timestamp = data["timestamp"]
 
-			log.Logger.Info("using custom Go offsets file", "timestamp", timestamp)
+			log.Info("using custom Go offsets file", "timestamp", timestamp)
 
 			g.offsetFileBytes = file
 			g.offsetLastModified = info.ModTime()
@@ -113,7 +115,7 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 		// if the env var isn't set, clear the local offset file
 		// this allows switching back to in-memory offsets by deleting the env var
 		g.offsetFileBytes = []byte{}
-		log.Logger.Info("custom Go offsets file env var not set, falling back to default offsets")
+		log.Info("custom Go offsets file env var not set, falling back to default offsets")
 	}
 
 	return nil
@@ -134,7 +136,7 @@ func podNameFromSettings(settings instrumentation.Settings) string {
 func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
 	err := g.updateLocalOffsets()
 	if err != nil {
-		log.Logger.Error(err, "failed to update custom Go offsets, attempting to continue with default offsets")
+		log.Error("failed to update custom Go offsets, attempting to continue with default offsets", "error", err)
 		g.offsetFileBytes = []byte{}
 	}
 
@@ -144,7 +146,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 		otlptracegrpc.WithEndpoint(fmt.Sprintf("localhost:%d", consts.OTLPPort)),
 	)
 	if err != nil {
-		log.Logger.Error(err, "failed to create exporter")
+		log.Error("failed to create exporter", "error", err)
 		return nil, err
 	}
 
@@ -179,10 +181,10 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 
 	if g.waspMapsProvider != nil {
 		if podName = podNameFromSettings(settings); podName != "" {
-			log.Logger.V(0).Info("using wasp handshake for Go process", "pod", podName)
+			log.Info("using wasp handshake for Go process", "pod", podName)
 			waspMaps, err = g.waspMapsProvider.Release(podName, pid)
 			if err != nil {
-				log.Logger.Error(err, "failed to acquire wasp maps")
+					log.Error("failed to acquire wasp maps", "error", err)
 			} else {
 				opts = append(opts, auto.WithWASPHandshakeMaps(waspMaps))
 			}
@@ -197,7 +199,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 		opts...,
 	)
 	if err != nil {
-		log.Logger.Error(err, "instrumentation setup failed")
+		log.Error("instrumentation setup failed", "error", err)
 		if waspMaps != nil {
 			// return ownership of the wasp maps to the provider in case we failed to instrument this process
 			err = errors.Join(err, g.waspMapsProvider.Take(podName, waspMaps))
@@ -219,7 +221,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 	// payload collection as part of the initial configuration to the config provider.
 	err = goInstWrapper.configPayloadCollection(settings.InitialConfig)
 	if err != nil {
-		log.Logger.Error(err, "failed to apply payload collection config based on initial config")
+		log.Error("failed to apply payload collection config based on initial config", "error", err)
 	}
 
 	return goInstWrapper, nil
@@ -345,9 +347,9 @@ func (g *GoOtelEbpfSdkEnterprise) configHttpHeadersCollection(config instrumenta
 		// need to check if "*" is specified in either the default or specific library config and if so, replace the header keys with all supported keys
 		serverHeaders = checkForAllHeadersKey(serverHeaders, allkeys)
 		if serverHeaders != nil && serverHeaders.HeaderKeys != nil {
-			log.Logger.V(0).Info("Merging net/http server header keys with default header keys", "mergedHeaderKeys", serverHeaders.HeaderKeys)
+			log.Info("Merging net/http server header keys with default header keys", "mergedHeaderKeys", serverHeaders.HeaderKeys)
 			for _, key := range serverHeaders.HeaderKeys {
-				log.Logger.V(0).Info("net/http server header key to collect", "headerKey", key)
+				log.Info("net/http server header key to collect", "headerKey", key)
 				err := g.configBool("net/http", fmt.Sprintf("http.header.%s", strings.ToLower(key)), trace.SpanKindServer, true)
 				if err != nil {
 					return err
@@ -371,9 +373,9 @@ func (g *GoOtelEbpfSdkEnterprise) configHttpHeadersCollection(config instrumenta
 		// need to check if "*" is specified in either the default or specific library config and if so, replace the header keys with all supported keys
 		clientHeaders = checkForAllHeadersKey(clientHeaders, allkeys)
 		if clientHeaders != nil && clientHeaders.HeaderKeys != nil {
-			log.Logger.V(0).Info("Merging net/http client header keys with default header keys", "mergedHeaderKeys", clientHeaders.HeaderKeys)
+			log.Info("Merging net/http client header keys with default header keys", "mergedHeaderKeys", clientHeaders.HeaderKeys)
 			for _, key := range clientHeaders.HeaderKeys {
-				log.Logger.V(0).Info("net/http client header key to collect", "headerKey", key)
+				log.Info("net/http client header key to collect", "headerKey", key)
 				err := g.configBool("net/http", fmt.Sprintf("http.header.%s", strings.ToLower(key)), trace.SpanKindClient, true)
 				if err != nil {
 					return err
@@ -391,7 +393,7 @@ func checkForAllHeadersKey(rule *instrumentationrules.HttpHeadersCollection, all
 		for _, key := range rule.HeaderKeys {
 			if key == "*" {
 				// if * is specified, we collect all supported headers
-				log.Logger.V(0).Info("Header key to collect is '*', collecting all supported headers")
+				log.Info("Header key to collect is '*', collecting all supported headers")
 				rule.HeaderKeys = allkeys
 				break
 			}
@@ -413,7 +415,7 @@ func (g *GoOtelEbpfSdkEnterprise) configPayloadCollection(config instrumentation
 		SpanKind:                   common.ServerSpanKind,
 	})
 	collectResponseNetHttpServer := payloadCollectionNetHttpServer.HttpResponse != nil
-	log.Logger.V(0).Info("Applying config to golang net/http server", "collectResponse", collectResponseNetHttpServer)
+	log.Info("Applying config to golang net/http server", "collectResponse", collectResponseNetHttpServer)
 	err := g.configBool("net/http", "http.body", trace.SpanKindServer, collectResponseNetHttpServer)
 	if err != nil {
 		return err
@@ -426,7 +428,7 @@ func (g *GoOtelEbpfSdkEnterprise) configPayloadCollection(config instrumentation
 	collectRequestNetHttpClient := payloadCollectionNetHttpClient.HttpRequest != nil
 	collectResponseNetHttpClient := payloadCollectionNetHttpClient.HttpResponse != nil
 
-	log.Logger.V(0).Info("Applying config to golang net/http client", "collectResponse", collectResponseNetHttpClient, "collectRequest", collectRequestNetHttpClient)
+	log.Info("Applying config to golang net/http client", "collectResponse", collectResponseNetHttpClient, "collectRequest", collectRequestNetHttpClient)
 	err = g.configBool("net/http", "http.body", trace.SpanKindClient, collectRequestNetHttpClient)
 	if err != nil {
 		return err
@@ -438,7 +440,7 @@ func (g *GoOtelEbpfSdkEnterprise) configPayloadCollection(config instrumentation
 		SpanKind:                   common.ClientSpanKind,
 	})
 	collectDbQueryDatabaseSql := payloadCollectionNetDatabaseSql.DbQuery != nil
-	log.Logger.V(0).Info("Applying config to golang database/sql", "collectDbQuery", collectDbQueryDatabaseSql)
+	log.Info("Applying config to golang database/sql", "collectDbQuery", collectDbQueryDatabaseSql)
 	err = g.configBool("database/sql", "db.query.text", trace.SpanKindClient, collectDbQueryDatabaseSql)
 	if err != nil {
 		return err
@@ -450,7 +452,7 @@ func (g *GoOtelEbpfSdkEnterprise) configPayloadCollection(config instrumentation
 		SpanKind:                   common.ClientSpanKind,
 	})
 	collectDbQueryJackcPgx := payloadCollectionNetJackcPgx.DbQuery != nil
-	log.Logger.V(0).Info("Applying config to golang github.com/jackc/pgx", "collectDbQuery", collectDbQueryJackcPgx)
+	log.Info("Applying config to golang github.com/jackc/pgx", "collectDbQuery", collectDbQueryJackcPgx)
 	err = g.configBool("github.com/jackc/pgx", "db.query.text", trace.SpanKindClient, collectDbQueryJackcPgx)
 	if err != nil {
 		return err
@@ -462,7 +464,7 @@ func (g *GoOtelEbpfSdkEnterprise) configPayloadCollection(config instrumentation
 		SpanKind:                   common.ClientSpanKind,
 	})
 	collectDbQueryClickhouse := payloadCollectionClickhouse.DbQuery != nil
-	log.Logger.V(0).Info("Applying config to golang github.com/ClickHouse/clickhouse-go/v2", "collectDbQuery", collectDbQueryClickhouse)
+	log.Info("Applying config to golang github.com/ClickHouse/clickhouse-go/v2", "collectDbQuery", collectDbQueryClickhouse)
 	err = g.configBool("github.com/ClickHouse/clickhouse-go/v2", "db.query.text", trace.SpanKindClient, collectDbQueryClickhouse)
 	if err != nil {
 		return err
@@ -474,7 +476,7 @@ func (g *GoOtelEbpfSdkEnterprise) configPayloadCollection(config instrumentation
 		SpanKind:                   common.ClientSpanKind,
 	})
 	collectDbQueryCassandra := payloadCollectionCassandra.DbQuery != nil
-	log.Logger.V(0).Info("Applying config to golang github.com/gocql/gocql", "collectDbQuery", collectDbQueryCassandra)
+	log.Info("Applying config to golang github.com/gocql/gocql", "collectDbQuery", collectDbQueryCassandra)
 	err = g.configBool("github.com/gocql/gocql", "db.query.text", trace.SpanKindClient, collectDbQueryCassandra)
 	if err != nil {
 		return err
@@ -486,7 +488,7 @@ func (g *GoOtelEbpfSdkEnterprise) configPayloadCollection(config instrumentation
 		SpanKind:                   common.ProducerSpanKind,
 	})
 	collectKafkaMessageKafka := payloadCollectionKafka.Messaging != nil
-	log.Logger.V(0).Info("Applying config to golang github.com/segmentio/kafka-go producer", "collectKafkaMessage", collectKafkaMessageKafka)
+	log.Info("Applying config to golang github.com/segmentio/kafka-go producer", "collectKafkaMessage", collectKafkaMessageKafka)
 	err = g.configBool("github.com/segmentio/kafka-go", "messaging.message.body", trace.SpanKindProducer, collectKafkaMessageKafka)
 	if err != nil {
 		return err
@@ -498,7 +500,7 @@ func (g *GoOtelEbpfSdkEnterprise) configPayloadCollection(config instrumentation
 		SpanKind:                   common.ConsumerSpanKind,
 	})
 	collectKafkaMessageKafkaConsumer := payloadCollectionKafkaConsumer.Messaging != nil
-	log.Logger.V(0).Info("Applying config to golang github.com/segmentio/kafka-go consumer", "collectKafkaMessage", collectKafkaMessageKafkaConsumer)
+	log.Info("Applying config to golang github.com/segmentio/kafka-go consumer", "collectKafkaMessage", collectKafkaMessageKafkaConsumer)
 	err = g.configBool("github.com/segmentio/kafka-go", "messaging.message.body", trace.SpanKindConsumer, collectKafkaMessageKafkaConsumer)
 	return err
 }
@@ -550,7 +552,7 @@ func convertToGoInstrumentationConfig(sdkConfig instrumentation.Config) (goAutoC
 	}
 	ic := goAutoConfig.InstrumentationConfig{}
 	if sdkConfig == nil {
-		log.Logger.V(0).Info("No SDK config provided for Go instrumentation, using default")
+		log.Info("No SDK config provided for Go instrumentation, using default")
 		return ic, nil
 	}
 	ic.InstrumentationLibraryConfigs = make(map[goAutoConfig.InstrumentationLibraryID]goAutoConfig.InstrumentationLibrary)

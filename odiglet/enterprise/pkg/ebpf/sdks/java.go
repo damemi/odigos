@@ -20,7 +20,7 @@ import (
 
 	auto "github.com/odigos-io/ebpf-java-instrumentation"
 	"github.com/odigos-io/odigos/instrumentation"
-	"github.com/odigos-io/odigos/odiglet/pkg/log"
+	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 )
 
@@ -69,7 +69,7 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 		otlptracegrpc.WithEndpoint(fmt.Sprintf("localhost:%d", consts.OTLPPort)),
 	)
 	if err != nil {
-		log.Logger.Error(err, "failed to create exporter")
+		commonlogger.LoggerCompat().With("subsystem", "ebpfjava").Error("failed to create exporter", "error", err)
 		return nil, err
 	}
 
@@ -96,7 +96,7 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 	// note: we do not check the JAVA_TOOL_OPTIONS env var here since it can be added by LD_PRELOAD method, which will not reflect in proc fs.
 	odigosEnvPresent, err := isEnvValPresent(pid, k8sconsts.OdigosEnvVarPodName)
 	if err != nil {
-		log.Logger.Error(err, "failed to check if native lib is loaded")
+		commonlogger.LoggerCompat().With("subsystem", "ebpfjava").Error("failed to check if native lib is loaded", "error", err)
 		return nil, err
 	}
 	if !odigosEnvPresent {
@@ -119,7 +119,7 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 		opts...,
 	)
 	if err != nil {
-		log.Logger.Error(err, "instrumentation setup failed")
+		commonlogger.LoggerCompat().With("subsystem", "ebpfjava").Error("instrumentation setup failed", "error", err)
 		return nil, err
 	}
 
@@ -165,7 +165,7 @@ func (g *JavaOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.S
 			}
 		}
 
-		log.Logger.V(0).Info("Java instrumentation loaded",
+		commonlogger.LoggerCompat().With("subsystem", "ebpfjava").Info("Java instrumentation loaded",
 			"nativeLibLoaded", javaStatus.NativeLibLoaded,
 			"byteBuddyClassCount", javaStatus.ByteBuddyClassCount,
 			"byteBuddyAuxiliaryCount", javaStatus.ByteBuddyAuxiliaryCount,
@@ -190,7 +190,7 @@ func (g *JavaOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 
 func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instrumentation.Config) error {
 	if conf == nil {
-		log.Logger.V(0).Info("got nil config, skipping")
+		commonlogger.LoggerCompat().With("subsystem", "ebpfjava").Info("got nil config, skipping")
 		return nil
 	}
 

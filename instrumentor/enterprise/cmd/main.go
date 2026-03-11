@@ -18,12 +18,20 @@ import (
 
 	"github.com/odigos-io/odigos-enterprise/instrumentor/wasp"
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
+	commonlogger "github.com/odigos-io/odigos/common/logger"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	_ "net/http/pprof"
 )
+
+func getLogLevel() string {
+	if lvl := os.Getenv("ODIGOS_LOG_LEVEL"); lvl != "" {
+		return lvl
+	}
+	return "info"
+}
 
 func main() {
 	managerOptions := controllers.KubeManagerOptions{}
@@ -46,7 +54,9 @@ func main() {
 	zapLogger = bridge.AttachToZapLogger(zapLogger)
 	logger := zapr.NewLogger(zapLogger)
 
-	odigosauth.AssertEnterpriseOdigosToken(logger)
+	commonlogger.Init(getLogLevel(), "instrumentor")
+	commonlogger.UpdateInstance(zapLogger)
+	odigosauth.AssertEnterpriseOdigosToken(commonlogger.LoggerCompat())
 
 	managerOptions.Logger = logger
 

@@ -18,11 +18,11 @@ import (
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/sdks"
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
 	"github.com/odigos-io/odigos/api/k8sconsts"
+	commonlogger "github.com/odigos-io/odigos/common/logger"
 	commonInstrumentation "github.com/odigos-io/odigos/instrumentation"
 	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 	"github.com/odigos-io/odigos/odiglet"
 	"github.com/odigos-io/odigos/odiglet/pkg/ebpf"
-	"github.com/odigos-io/odigos/odiglet/pkg/log"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
 	commonwasp "github.com/odigos-io/wasp-handshake/common"
 	waspserver "github.com/odigos-io/wasp-handshake/server"
@@ -31,6 +31,13 @@ import (
 const (
 	configUpdatesBufferSize = 10
 )
+
+func getLogLevel() string {
+	if lvl := os.Getenv("ODIGOS_LOG_LEVEL"); lvl != "" {
+		return lvl
+	}
+	return "info"
+}
 
 func main() {
 	var healthProbeBindPort int
@@ -56,21 +63,20 @@ func main() {
 		odiglet.OdigletInitPhase(clientset)
 	}
 
-	if err := log.Init(); err != nil {
-		panic(err)
-	}
-	log.Logger.V(0).Info("Starting odiglet enterprise")
+	commonlogger.Init(getLogLevel(), "odiglet")
+	logger := commonlogger.LoggerCompat().With("subsystem", "startup")
+	logger.Info("Starting odiglet enterprise")
 
-	odigosauth.AssertEnterpriseOdigosToken(log.Logger)
+	odigosauth.AssertEnterpriseOdigosToken(commonlogger.LoggerCompat())
 
 	if err := env.Load(); err != nil {
-		log.Logger.Error(err, "Failed to load env")
+		logger.Error("Failed to load env", "error", err)
 		os.Exit(1)
 	}
 
 	enterpriseDistrosProvider, err := enterprisedistros.NewEnterpriseProvider()
 	if err != nil {
-		log.Logger.Error(err, "Failed to create enterprise distros getter")
+		logger.Error("Failed to create enterprise distros getter", "error", err)
 		os.Exit(1)
 	}
 
@@ -78,14 +84,14 @@ func main() {
 	if traceIdSuffix != "" {
 		suffix, err = strconv.ParseUint(traceIdSuffix, 16, 8)
 		if err != nil {
-			log.Logger.Error(err, "failed to parse TRACE_ID_SUFFIX")
+			logger.Error("failed to parse TRACE_ID_SUFFIX", "error", err)
 			os.Exit(1)
 		}
 	}
 
 	factories, err := ebpfInstrumentationFactories(uint8(suffix), waspEnabled, enterpriseDistrosProvider.Getter)
 	if err != nil {
-		log.Logger.Error(err, "failed to set up ebpf factories")
+		logger.Error("failed to set up ebpf factories", "error", err)
 		os.Exit(1)
 	}
 
@@ -97,14 +103,14 @@ func main() {
 
 	o, err := odiglet.New(clientset, instrumentationManagerOptions)
 	if err != nil {
-		log.Logger.Error(err, "Failed to initialize odiglet")
+		logger.Error("Failed to initialize odiglet", "error", err)
 		os.Exit(1)
 	}
 
 	ctx := signals.SetupSignalHandler()
 	expirationChan, err := odigosauth.TokenExpirationChannel()
 	if err != nil {
-		log.Logger.Error(err, "Failed to get token expiration channel")
+		logger.Error("Failed to get token expiration channel", "error", err)
 		os.Exit(1)
 	}
 	go func() {
@@ -112,13 +118,13 @@ func main() {
 		case <-ctx.Done():
 			return
 		case <-expirationChan:
-			log.Logger.Info("Odigos token has expired, shutting down odiglet. Please contact Odigos support to renew your token.")
+			logger.Info("Odigos token has expired, shutting down odiglet. Please contact Odigos support to renew your token.")
 			os.Exit(1)
 		}
 	}()
 	o.Run(ctx)
 
-	log.Logger.V(0).Info("odiglet exiting")
+	logger.Info("odiglet exiting")
 }
 
 func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distros.Getter) (map[string]commonInstrumentation.Factory, error) {
