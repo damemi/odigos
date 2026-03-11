@@ -13,7 +13,6 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/go-logr/logr"
 	"github.com/odigos-io/central-backend/graph"
 	"github.com/odigos-io/central-backend/internal/bootstrap"
 	"github.com/odigos-io/central-backend/internal/config"
@@ -28,12 +27,21 @@ import (
 	"github.com/odigos-io/central-backend/internal/utils"
 	websocketserver "github.com/odigos-io/central-backend/internal/websocket"
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
+	commonlogger "github.com/odigos-io/odigos/common/logger"
 )
+
+func getLogLevel() string {
+	if lvl := os.Getenv("ODIGOS_LOG_LEVEL"); lvl != "" {
+		return lvl
+	}
+	return "info"
+}
 
 func main() {
 	logger.InitLogger()
 	logger.Log.Info("Starting Central Backend Service...")
-	odigosauth.AssertEnterpriseOdigosToken(logr.FromSlogHandler(logger.Log.Handler()))
+	commonlogger.Init(getLogLevel(), "central-backend")
+	odigosauth.AssertEnterpriseOdigosToken(commonlogger.LoggerCompat())
 
 	ctx := context.Background()
 	shutdownCh := bootstrap.GetshutdownChannel()
