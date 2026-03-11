@@ -6,15 +6,21 @@ import { useNotificationStore } from '@odigos/ui-kit/store';
 import { ComputePlatform, RemoteConfigInput } from '@/types';
 import { CentralConnections } from '@odigos/ui-kit/containers/v2';
 import { GET_EFFECTIVE_CONFIG, UPDATE_REMOTE_CONFIG } from '@/graphql';
-import { useComputePlatformsCRUD, useProxy, useProxyCRUD, useRemoteFetch } from '@/hooks';
 import { type EffectiveConfig, StatusType, type ApplyConfigurationsFunc } from '@odigos/ui-kit/types';
+import { useComputePlatformsCRUD, useProxy, useProxyCRUD, useRemoteFetch, useSnapshots } from '@/hooks';
+
+// TODO: move all fetch logic to an API Context, goal is to remove all clutter and prop-drilling
 
 export default function Page() {
   const { isVm } = useOdigos();
+  const { computePlatforms, getComputePlatforms } = useComputePlatformsCRUD();
+
   const { selectProxy } = useProxy();
   const { deleteProxy } = useProxyCRUD();
   const { addNotification } = useNotificationStore();
-  const { computePlatforms, getComputePlatforms } = useComputePlatformsCRUD();
+  // const { createAction } = useActionCRUD(computePlatforms);
+  // const { createInstrumentationRule } = useInstrumentationRuleCRUD(computePlatforms);
+  const { getAllClusterSnapshots, bulkPersistSources } = useSnapshots(computePlatforms);
 
   const { fetch: fetchEffectiveConfig } = useRemoteFetch<{ effectiveConfig?: EffectiveConfig }, void>(GET_EFFECTIVE_CONFIG, computePlatforms);
   const { fetchMulti: updateRemoteConfig } = useRemoteFetch<void, { config: RemoteConfigInput }>(UPDATE_REMOTE_CONFIG, computePlatforms);
@@ -51,6 +57,16 @@ export default function Page() {
       configMinSupportedVersion={1.16}
       getEffectiveConfig={isVm ? undefined : getEffectiveConfig}
       applyConfigurations={isVm ? undefined : applyConfigurations}
+      snapshotMinSupportedVersion={1.2}
+      getAllClusterSnapshots={isVm ? undefined : getAllClusterSnapshots}
+      persistSources={isVm ? undefined : bulkPersistSources}
+      // TODO: wait for test-connection, new "selected" area, and for create func type update - then add these props
+      // getDestinationCategories={getDestinationCategories}
+      // getPotentialDestinations={getPotentialDestinations}
+      // createDestination={createDestination}
+      // TODO: uncomment these when ready release the features
+      // createAction={isVm ? undefined : createAction}
+      // createInstrumentationRule={isVm ? undefined : createInstrumentationRule}
     />
   );
 }

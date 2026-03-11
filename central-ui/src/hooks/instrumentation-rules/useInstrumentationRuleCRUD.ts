@@ -1,23 +1,24 @@
 import { useEffect } from 'react';
 import { useConfig } from '../config';
 import { useRemoteFetch } from '../proxy';
+import type { ComputePlatform } from '@/types';
 import { useOdigos } from '@odigos/ui-kit/contexts';
 import { getSseTargetFromId } from '@odigos/ui-kit/functions';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { useEntityStore, useNotificationStore } from '@odigos/ui-kit/store';
 import { CREATE_INSTRUMENTATION_RULE, DELETE_INSTURMENTATION_RULE, GET_INSTRUMENTATION_RULES, UPDATE_INSTURMENTATION_RULE } from '@/graphql';
-import { Crud, EntityTypes, StatusType, type InstrumentationRule, type InstrumentationRuleFormData, PlatformType } from '@odigos/ui-kit/types';
+import { Crud, EntityTypes, StatusType, type InstrumentationRule, type InstrumentationRuleFormData, type CreateInstrumentationRuleFunc } from '@odigos/ui-kit/types';
 
 interface UseInstrumentationRuleCrud {
   instrumentationRules: InstrumentationRule[];
   instrumentationRulesLoading: boolean;
   fetchInstrumentationRules: () => void;
-  createInstrumentationRule: (instrumentationRule: InstrumentationRuleFormData) => void;
+  createInstrumentationRule: CreateInstrumentationRuleFunc;
   updateInstrumentationRule: (ruleId: string, instrumentationRule: InstrumentationRuleFormData) => void;
   deleteInstrumentationRule: (ruleId: string) => void;
 }
 
-export const useInstrumentationRuleCRUD = (): UseInstrumentationRuleCrud => {
+export const useInstrumentationRuleCRUD = (connections?: ComputePlatform[]): UseInstrumentationRuleCrud => {
   const { isVm } = useOdigos();
   const { isReadonly } = useConfig();
   const { addNotification } = useNotificationStore();
@@ -35,7 +36,7 @@ export const useInstrumentationRuleCRUD = (): UseInstrumentationRuleCrud => {
   };
 
   const { fetch: queryAll } = useRemoteFetch<{ computePlatform?: { instrumentationRules?: InstrumentationRule[] } }>(GET_INSTRUMENTATION_RULES);
-  const { fetch: mutateCreate } = useRemoteFetch<{ createInstrumentationRule: InstrumentationRule }>(CREATE_INSTRUMENTATION_RULE);
+  const { fetch: mutateCreate, fetchMulti: mutateCreateMulti } = useRemoteFetch<{ createInstrumentationRule: InstrumentationRule }>(CREATE_INSTRUMENTATION_RULE, connections);
   const { fetch: mutateUpdate } = useRemoteFetch<{ updateInstrumentationRule: InstrumentationRule }>(UPDATE_INSTURMENTATION_RULE);
   const { fetch: mutateDelete } = useRemoteFetch<{ deleteInstrumentationRule: boolean }>(DELETE_INSTURMENTATION_RULE);
 
@@ -54,10 +55,24 @@ export const useInstrumentationRuleCRUD = (): UseInstrumentationRuleCrud => {
     setEntitiesLoading(EntityTypes.InstrumentationRule, false);
   };
 
-  const createInstrumentationRule: UseInstrumentationRuleCrud['createInstrumentationRule'] = async (instrumentationRule) => {
+  const createInstrumentationRule: UseInstrumentationRuleCrud['createInstrumentationRule'] = async (instrumentationRule, connectionIds) => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
+      if (connectionIds?.length) {
+        // use multi-remote
+        const res = await mutateCreateMulti(connectionIds, { instrumentationRule });
+        const error = res.error;
+        if (error) {
+          notifyUser(StatusType.Error, Crud.Create, error);
+          return { error };
+        } else {
+          // no need to handle data, mutli proxy is a feature for non-proxy pages
+          notifyUser(StatusType.Success, Crud.Create, 'Successfully created rule');
+        }
+      }
+
+      // use single-remote
       const res = await mutateCreate({ instrumentationRule });
       const rule = res.data?.createInstrumentationRule;
       if (rule) {

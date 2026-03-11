@@ -1,0 +1,35 @@
+# Cluster snapshot types for multi-cluster state aggregation
+
+type WorkloadSnapshot {
+  namespace: String!
+  name: String!
+  kind: String!
+  selected: Boolean!
+  otelServiceName: String
+  healthStatus: String
+}
+
+type NamespaceSnapshot {
+  name: String!
+  selected: Boolean
+  workloads: [WorkloadSnapshot!]!
+}
+
+type ClusterSnapshot {
+  clusterId: String!
+  clusterName: String!
+  timestamp: Int64!
+  namespaces: [NamespaceSnapshot!]!
+}
+
+type MultiClusterWorkloadsView {
+  clusters: [ClusterSnapshot!]!
+  totalWorkloads: Int!
+  totalNamespaces: Int!
+  lastUpdated: Int64!
+}
+
+extend type Query {
+  clusterSnapshot(clusterId: String!): ClusterSnapshot
+  allClusterSnapshots: MultiClusterWorkloadsView!
+}

@@ -11,6 +11,7 @@ export * from './metrics';
 export * from './namespaces';
 export * from './pipeline-collectors';
 export * from './proxy';
+export * from './snapshots';
 export * from './sources';
 export * from './teams';
 export * from './tokens';

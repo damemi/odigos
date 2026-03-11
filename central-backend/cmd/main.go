@@ -23,6 +23,7 @@ import (
 	"github.com/odigos-io/central-backend/internal/metrics"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
 	"github.com/odigos-io/central-backend/internal/services"
+	"github.com/odigos-io/central-backend/internal/snapshotworker"
 	"github.com/odigos-io/central-backend/internal/ssehub"
 	"github.com/odigos-io/central-backend/internal/utils"
 	websocketserver "github.com/odigos-io/central-backend/internal/websocket"
@@ -92,11 +93,16 @@ func main() {
 		logger.Fatal("Failed to get token expiration channel", err)
 	}
 
-	go handleShutdown(shutdownCh, redisClient, expirationChan)
-
-	centralSSEHub := ssehub.NewWithRedis(redisClient, config.Config.CentralizedBackendID)
+	centralSSEHub := ssehub.NewWithRedis(redisClient, config.Config.InstanceID)
 	centralSSEHub.StartRedisSSEBroadcast(ctx)
-	wsServer := websocketserver.NewWebSocketServer(redisClient, centralSSEHub)
+
+	// Create and start snapshot worker pool for multi-cluster state aggregation
+	snapshotPool := snapshotworker.NewWorkerPool(redisClient, 10, 500) // 10 workers, queue size 500
+	snapshotPool.Start()
+
+	go handleShutdown(shutdownCh, redisClient, snapshotPool, expirationChan)
+
+	wsServer := websocketserver.NewWebSocketServer(redisClient, centralSSEHub, snapshotPool)
 
 	// Set up Redis reconnect callback to resync proxy keys after Redis restarts
 	redisClient.SetOnReconnect(func(ctx context.Context) {
@@ -181,6 +187,29 @@ func authContextMiddleware() gin.HandlerFunc {
 	}
 }
 
+func handleShutdown(shutdownCh <-chan struct{}, redisClient *redisclient.RedisClient, snapshotPool *snapshotworker.WorkerPool, tokenExpirationChan <-chan time.Time) {
+
+	select {
+	case <-tokenExpirationChan:
+		logger.Log.Info("token has expired, shutting down server. Please contact Odigos support to renew your token.")
+	case <-shutdownCh:
+		logger.Log.Info("got shutdown signal, shutting down server...")
+	}
+
+	// Stop snapshot worker pool
+	if snapshotPool != nil {
+		snapshotPool.Stop()
+	}
+
+	err := redisClient.Close()
+	if err != nil {
+		logger.Log.Error("Failed to close Redis connection", "error", err)
+	}
+	logger.Log.Info("Redis connection closed")
+
+	os.Exit(0)
+}
+
 // newKeycloakReverseProxy creates a reverse proxy that forwards requests to the internal Keycloak service.
 // This allows the browser to interact with Keycloak through the central-backend without exposing Keycloak externally.
 func newKeycloakReverseProxy(keycloakHost string) http.Handler {
@@ -217,21 +246,4 @@ func newKeycloakReverseProxy(keycloakHost string) http.Handler {
 	}
 
 	return proxy
-}
-
-func handleShutdown(shutdownCh <-chan struct{}, redisClient *redisclient.RedisClient, tokenExpirationChan <-chan time.Time) {
-	select {
-	case <-tokenExpirationChan:
-		logger.Log.Info("token has expired, shutting down server. Please contact Odigos support to renew your token.")
-	case <-shutdownCh:
-		logger.Log.Info("got shutdown signal, shutting down server...")
-	}
-
-	err := redisClient.Close()
-	if err != nil {
-		logger.Log.Error("Failed to close Redis connection", "error", err)
-	}
-	logger.Log.Info("Redis connection closed")
-
-	os.Exit(0)
 }

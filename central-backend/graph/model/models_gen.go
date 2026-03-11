@@ -22,6 +22,13 @@ type BackendHealthStatus struct {
 	SseStatus      *ServicesStatus `json:"sseStatus"`
 }
 
+type ClusterSnapshot struct {
+	ClusterID   string               `json:"clusterId"`
+	ClusterName string               `json:"clusterName"`
+	Timestamp   int                  `json:"timestamp"`
+	Namespaces  []*NamespaceSnapshot `json:"namespaces"`
+}
+
 type ComputePlatform struct {
 	ID            string       `json:"id"`
 	Name          string       `json:"name"`
@@ -55,7 +62,20 @@ type IdentityProviderResult struct {
 	CallbackURL *string `json:"callbackUrl,omitempty"`
 }
 
+type MultiClusterWorkloadsView struct {
+	Clusters        []*ClusterSnapshot `json:"clusters"`
+	TotalWorkloads  int32              `json:"totalWorkloads"`
+	TotalNamespaces int32              `json:"totalNamespaces"`
+	LastUpdated     int                `json:"lastUpdated"`
+}
+
 type Mutation struct {
+}
+
+type NamespaceSnapshot struct {
+	Name      string              `json:"name"`
+	Selected  *bool               `json:"selected,omitempty"`
+	Workloads []*WorkloadSnapshot `json:"workloads"`
 }
 
 type OidcIdentityProviderInput struct {
@@ -118,6 +138,15 @@ type User struct {
 	NeedsPasswordChange bool               `json:"needsPasswordChange"`
 	Teams               []*Team            `json:"teams"`
 	ComputePlatforms    []*ComputePlatform `json:"computePlatforms"`
+}
+
+type WorkloadSnapshot struct {
+	Namespace       string  `json:"namespace"`
+	Name            string  `json:"name"`
+	Kind            string  `json:"kind"`
+	Selected        bool    `json:"selected"`
+	OtelServiceName *string `json:"otelServiceName,omitempty"`
+	HealthStatus    *string `json:"healthStatus,omitempty"`
 }
 
 type WriteComputePlatformInput struct {

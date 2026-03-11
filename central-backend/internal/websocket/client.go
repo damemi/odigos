@@ -16,6 +16,7 @@ import (
 	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/logger"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
+	"github.com/odigos-io/central-backend/internal/snapshotworker"
 	"github.com/odigos-io/central-backend/internal/ssehub"
 	"github.com/odigos-io/central-backend/internal/types"
 )
@@ -35,13 +36,18 @@ type ProxyConnection struct {
 }
 
 type WebSocketServer struct {
-	proxyConnections sync.Map
-	redisClient      *redisclient.RedisClient
-	sseHub           *ssehub.Hub
+	proxyConnections   sync.Map
+	redisClient        *redisclient.RedisClient
+	sseHub             *ssehub.Hub
+	snapshotWorkerPool *snapshotworker.WorkerPool
 }
 
-func NewWebSocketServer(redisClient *redisclient.RedisClient, sseHub *ssehub.Hub) *WebSocketServer {
-	return &WebSocketServer{redisClient: redisClient, sseHub: sseHub}
+func NewWebSocketServer(redisClient *redisclient.RedisClient, sseHub *ssehub.Hub, snapshotWorkerPool *snapshotworker.WorkerPool) *WebSocketServer {
+	return &WebSocketServer{
+		redisClient:        redisClient,
+		sseHub:             sseHub,
+		snapshotWorkerPool: snapshotWorkerPool,
+	}
 }
 
 func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Request) {
@@ -156,6 +162,8 @@ func (ws *WebSocketServer) listenForMessages(ctx context.Context, proxyID string
 				}
 				ws.sseHub.Broadcast(ev)
 			}
+		case MessageTypeClusterSnapshot:
+			ws.handleClusterSnapshot(proxyID, parsedMessage.Data)
 		default:
 			// fall through to existing publishing behavior
 		}
@@ -444,6 +452,31 @@ func (ws *WebSocketServer) GetOdigosVersion(proxyID string) (string, bool) {
 	return proxyConn.OdigosVersion, true
 }
 
+func (ws *WebSocketServer) handleClusterSnapshot(proxyID string, data json.RawMessage) {
+	if ws.snapshotWorkerPool == nil {
+		logger.Log.Warn("Received cluster snapshot but worker pool is not initialized", "proxyID", proxyID)
+		return
+	}
+
+	// Get platform name for the cluster
+	clusterName := proxyID
+	if name, ok := ws.GetPlatformName(proxyID); ok && name != "" {
+		clusterName = name
+	}
+
+	job := snapshotworker.SnapshotJob{
+		ClusterID:   proxyID,
+		ClusterName: clusterName,
+		Timestamp:   time.Now().Unix(),
+		Data:        data,
+	}
+
+	if !ws.snapshotWorkerPool.Submit(job) {
+		logger.Log.Warn("Failed to submit snapshot job - queue full", "proxyID", proxyID)
+	}
+}
+
+// In case redis is lost, we need to resync all proxy connections to Redis.
 func (ws *WebSocketServer) ResyncAllProxiesToRedis(ctx context.Context) {
 	var count int
 	ws.proxyConnections.Range(func(key, value interface{}) bool {

@@ -42,6 +42,7 @@ type WebSocketMessageType string
 type GraphQLVariables = map[string]any
 
 const (
-	MessageTypeGraphQLQuery WebSocketMessageType = "graphql_query"
-	MessageTypeSSEEvent     WebSocketMessageType = "sse_event"
+	MessageTypeGraphQLQuery    WebSocketMessageType = "graphql_query"
+	MessageTypeSSEEvent        WebSocketMessageType = "sse_event"
+	MessageTypeClusterSnapshot WebSocketMessageType = "cluster_snapshot"
 )

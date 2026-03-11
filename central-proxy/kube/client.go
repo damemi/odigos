@@ -3,6 +3,7 @@ package kube
 import (
 	"os"
 
+	odigosclientset "github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -10,6 +11,7 @@ import (
 
 type Client struct {
 	kubernetes.Interface
+	OdigosClient odigosclientset.Interface
 }
 
 func CreateClient() (*Client, error) {
@@ -34,7 +36,13 @@ func CreateClient() (*Client, error) {
 		return nil, err
 	}
 
+	odigosClient, err := odigosclientset.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Client{
-		Interface: clientset,
+		Interface:    clientset,
+		OdigosClient: odigosClient,
 	}, nil
 }

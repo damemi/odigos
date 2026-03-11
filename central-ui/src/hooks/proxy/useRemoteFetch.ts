@@ -14,8 +14,8 @@ type AnyObj = Record<string, any>;
 interface MultiFetchResult<T> {
   proxyID: string;
   success: boolean;
-  error?: string;
   data?: T;
+  error?: string;
 }
 
 export interface MultiFetchResponse<T> {
@@ -59,12 +59,16 @@ const EMPTY_RESPONSE_MULTI = <T>(error?: string): MultiFetchResponse<T> => ({
   failureCount: 0,
 });
 
-const mapMultiFetchResult = <T>(result: MultiFetchResult<string>): MultiFetchResult<T> => ({
-  proxyID: result.proxyID,
-  success: result.success,
-  data: result.data ? safeJsonParse<{ data?: T }>(result.data, { data: undefined }).data : undefined,
-  error: result.error,
-});
+const mapMultiFetchResult = <T>(result: MultiFetchResult<string>): MultiFetchResult<T> => {
+  const parsedData = result.data ? safeJsonParse<{ data?: T & { errors?: { message: string }[] } }>(result.data, { data: undefined }).data : undefined;
+  const error = parsedData?.errors?.length ? parsedData.errors.map((e) => e.message).join(', ') : undefined;
+
+  return {
+    ...result,
+    data: parsedData,
+    error,
+  };
+};
 
 export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRemoteFetch, connections: ComputePlatform[] = []): UseProxy<ResT, ReqT> => {
   const { proxyID, odigosVersion, platformType } = useProxy();
@@ -152,7 +156,7 @@ export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRem
       const results: MultiFetchResult<ResT>[] = [];
 
       for await (const { proxyIDs, queryString } of Object.values(versionedProxyIDs)) {
-        const { data, error } = await remoteMultiFetch({
+        const { error: errorFromApollo, data } = await remoteMultiFetch({
           variables: {
             proxyIDs,
             query: queryString,
@@ -160,20 +164,21 @@ export const useRemoteFetch = <ResT = AnyObj, ReqT = AnyObj>(query: VersionedRem
           },
         });
 
-        if (error) {
-          addNotification({ type: StatusType.Error, title: error.name || 'API Error', message: error.cause?.message || error.message });
-          // return EMPTY_RESPONSE_MULTI<ResT>(error.cause?.message || error.message);
+        if (errorFromApollo) {
+          addNotification({ type: StatusType.Error, title: errorFromApollo?.name || 'API Error', message: errorFromApollo?.cause?.message || errorFromApollo?.message });
         }
 
-        if (data) {
-          results.push(...(data?.remoteMultiFetch || []).map(mapMultiFetchResult<ResT>));
+        if (data?.remoteMultiFetch) {
+          data.remoteMultiFetch.map(mapMultiFetchResult<ResT>).forEach((r: MultiFetchResult<ResT>) => results.push(r));
         }
       }
 
       const successCount = results.filter((r) => r.success).length;
       const failureCount = results.length - successCount;
+      const error = Array.from(new Set(results.filter((r) => !!r.error).map((r) => r.error))).join(', ');
 
       return {
+        error,
         results,
         allSucceeded: failureCount === 0,
         anySucceeded: successCount > 0,

@@ -12,7 +12,7 @@ type AppConfig struct {
 	RedisAddr            string
 	ServerPort           string
 	MetricsPort          string
-	CentralizedBackendID string
+	InstanceID string
 }
 
 var Config AppConfig
@@ -22,7 +22,7 @@ func init() {
 		RedisAddr:            getRedisAddr(),
 		ServerPort:           GetEnv("SERVER_PORT", "8081"),
 		MetricsPort:          GetEnv("METRICS_PORT", "8082"),
-		CentralizedBackendID: utils.GenerateUUID(),
+		InstanceID: utils.GenerateUUID(),
 	}
 }
 

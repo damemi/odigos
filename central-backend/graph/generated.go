@@ -60,6 +60,13 @@ type ComplexityRoot struct {
 		SseStatus      func(childComplexity int) int
 	}
 
+	ClusterSnapshot struct {
+		ClusterID   func(childComplexity int) int
+		ClusterName func(childComplexity int) int
+		Namespaces  func(childComplexity int) int
+		Timestamp   func(childComplexity int) int
+	}
+
 	ComputePlatform struct {
 		ConnectedAt   func(childComplexity int) int
 		ID            func(childComplexity int) int
@@ -93,6 +100,13 @@ type ComplexityRoot struct {
 		Success     func(childComplexity int) int
 	}
 
+	MultiClusterWorkloadsView struct {
+		Clusters        func(childComplexity int) int
+		LastUpdated     func(childComplexity int) int
+		TotalNamespaces func(childComplexity int) int
+		TotalWorkloads  func(childComplexity int) int
+	}
+
 	Mutation struct {
 		CreateTeam                 func(childComplexity int, input model.WriteTeamInput) int
 		CreateUser                 func(childComplexity int, input model.WriteUserInput) int
@@ -109,17 +123,25 @@ type ComplexityRoot struct {
 		VerifyToken                func(childComplexity int, token string) int
 	}
 
+	NamespaceSnapshot struct {
+		Name      func(childComplexity int) int
+		Selected  func(childComplexity int) int
+		Workloads func(childComplexity int) int
+	}
+
 	Query struct {
-		APITokens        func(childComplexity int) int
-		ComputePlatforms func(childComplexity int) int
-		Health           func(childComplexity int) int
-		RemoteFetch      func(childComplexity int, proxyID string, query string, variables map[string]any) int
-		RemoteMultiFetch func(childComplexity int, proxyIDs []string, query string, variables map[string]any) int
-		SignInURL        func(childComplexity int, providerID model.AuthProviderID) int
-		SignOutURL       func(childComplexity int, idToken *string) int
-		SystemConfig     func(childComplexity int) int
-		Teams            func(childComplexity int) int
-		Users            func(childComplexity int) int
+		APITokens           func(childComplexity int) int
+		AllClusterSnapshots func(childComplexity int) int
+		ClusterSnapshot     func(childComplexity int, clusterID string) int
+		ComputePlatforms    func(childComplexity int) int
+		Health              func(childComplexity int) int
+		RemoteFetch         func(childComplexity int, proxyID string, query string, variables map[string]any) int
+		RemoteMultiFetch    func(childComplexity int, proxyIDs []string, query string, variables map[string]any) int
+		SignInURL           func(childComplexity int, providerID model.AuthProviderID) int
+		SignOutURL          func(childComplexity int, idToken *string) int
+		SystemConfig        func(childComplexity int) int
+		Teams               func(childComplexity int) int
+		Users               func(childComplexity int) int
 	}
 
 	RemoteFetchResult struct {
@@ -165,6 +187,15 @@ type ComplexityRoot struct {
 		Teams               func(childComplexity int) int
 		Username            func(childComplexity int) int
 	}
+
+	WorkloadSnapshot struct {
+		HealthStatus    func(childComplexity int) int
+		Kind            func(childComplexity int) int
+		Name            func(childComplexity int) int
+		Namespace       func(childComplexity int) int
+		OtelServiceName func(childComplexity int) int
+		Selected        func(childComplexity int) int
+	}
 }
 
 type MutationResolver interface {
@@ -193,6 +224,8 @@ type QueryResolver interface {
 	Users(ctx context.Context) ([]*model.User, error)
 	Teams(ctx context.Context) ([]*model.Team, error)
 	Health(ctx context.Context) (*model.HealthQuery, error)
+	ClusterSnapshot(ctx context.Context, clusterID string) (*model.ClusterSnapshot, error)
+	AllClusterSnapshots(ctx context.Context) (*model.MultiClusterWorkloadsView, error)
 }
 
 type executableSchema struct {
@@ -257,6 +290,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.BackendHealthStatus.SseStatus(childComplexity), true
+
+	case "ClusterSnapshot.clusterId":
+		if e.complexity.ClusterSnapshot.ClusterID == nil {
+			break
+		}
+
+		return e.complexity.ClusterSnapshot.ClusterID(childComplexity), true
+	case "ClusterSnapshot.clusterName":
+		if e.complexity.ClusterSnapshot.ClusterName == nil {
+			break
+		}
+
+		return e.complexity.ClusterSnapshot.ClusterName(childComplexity), true
+	case "ClusterSnapshot.namespaces":
+		if e.complexity.ClusterSnapshot.Namespaces == nil {
+			break
+		}
+
+		return e.complexity.ClusterSnapshot.Namespaces(childComplexity), true
+	case "ClusterSnapshot.timestamp":
+		if e.complexity.ClusterSnapshot.Timestamp == nil {
+			break
+		}
+
+		return e.complexity.ClusterSnapshot.Timestamp(childComplexity), true
 
 	case "ComputePlatform.connectedAt":
 		if e.complexity.ComputePlatform.ConnectedAt == nil {
@@ -370,6 +428,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.IdentityProviderResult.Success(childComplexity), true
+
+	case "MultiClusterWorkloadsView.clusters":
+		if e.complexity.MultiClusterWorkloadsView.Clusters == nil {
+			break
+		}
+
+		return e.complexity.MultiClusterWorkloadsView.Clusters(childComplexity), true
+	case "MultiClusterWorkloadsView.lastUpdated":
+		if e.complexity.MultiClusterWorkloadsView.LastUpdated == nil {
+			break
+		}
+
+		return e.complexity.MultiClusterWorkloadsView.LastUpdated(childComplexity), true
+	case "MultiClusterWorkloadsView.totalNamespaces":
+		if e.complexity.MultiClusterWorkloadsView.TotalNamespaces == nil {
+			break
+		}
+
+		return e.complexity.MultiClusterWorkloadsView.TotalNamespaces(childComplexity), true
+	case "MultiClusterWorkloadsView.totalWorkloads":
+		if e.complexity.MultiClusterWorkloadsView.TotalWorkloads == nil {
+			break
+		}
+
+		return e.complexity.MultiClusterWorkloadsView.TotalWorkloads(childComplexity), true
 
 	case "Mutation.createTeam":
 		if e.complexity.Mutation.CreateTeam == nil {
@@ -515,12 +598,48 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Mutation.VerifyToken(childComplexity, args["token"].(string)), true
 
+	case "NamespaceSnapshot.name":
+		if e.complexity.NamespaceSnapshot.Name == nil {
+			break
+		}
+
+		return e.complexity.NamespaceSnapshot.Name(childComplexity), true
+	case "NamespaceSnapshot.selected":
+		if e.complexity.NamespaceSnapshot.Selected == nil {
+			break
+		}
+
+		return e.complexity.NamespaceSnapshot.Selected(childComplexity), true
+	case "NamespaceSnapshot.workloads":
+		if e.complexity.NamespaceSnapshot.Workloads == nil {
+			break
+		}
+
+		return e.complexity.NamespaceSnapshot.Workloads(childComplexity), true
+
 	case "Query.apiTokens":
 		if e.complexity.Query.APITokens == nil {
 			break
 		}
 
 		return e.complexity.Query.APITokens(childComplexity), true
+	case "Query.allClusterSnapshots":
+		if e.complexity.Query.AllClusterSnapshots == nil {
+			break
+		}
+
+		return e.complexity.Query.AllClusterSnapshots(childComplexity), true
+	case "Query.clusterSnapshot":
+		if e.complexity.Query.ClusterSnapshot == nil {
+			break
+		}
+
+		args, err := ec.field_Query_clusterSnapshot_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.ClusterSnapshot(childComplexity, args["clusterId"].(string)), true
 	case "Query.computePlatforms":
 		if e.complexity.Query.ComputePlatforms == nil {
 			break
@@ -758,6 +877,43 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.User.Username(childComplexity), true
 
+	case "WorkloadSnapshot.healthStatus":
+		if e.complexity.WorkloadSnapshot.HealthStatus == nil {
+			break
+		}
+
+		return e.complexity.WorkloadSnapshot.HealthStatus(childComplexity), true
+	case "WorkloadSnapshot.kind":
+		if e.complexity.WorkloadSnapshot.Kind == nil {
+			break
+		}
+
+		return e.complexity.WorkloadSnapshot.Kind(childComplexity), true
+	case "WorkloadSnapshot.name":
+		if e.complexity.WorkloadSnapshot.Name == nil {
+			break
+		}
+
+		return e.complexity.WorkloadSnapshot.Name(childComplexity), true
+	case "WorkloadSnapshot.namespace":
+		if e.complexity.WorkloadSnapshot.Namespace == nil {
+			break
+		}
+
+		return e.complexity.WorkloadSnapshot.Namespace(childComplexity), true
+	case "WorkloadSnapshot.otelServiceName":
+		if e.complexity.WorkloadSnapshot.OtelServiceName == nil {
+			break
+		}
+
+		return e.complexity.WorkloadSnapshot.OtelServiceName(childComplexity), true
+	case "WorkloadSnapshot.selected":
+		if e.complexity.WorkloadSnapshot.Selected == nil {
+			break
+		}
+
+		return e.complexity.WorkloadSnapshot.Selected(childComplexity), true
+
 	}
 	return 0, false
 }
@@ -867,7 +1023,7 @@ func (ec *executionContext) introspectType(name string) (*introspection.Type, er
 	return introspection.WrapTypeFromDef(ec.Schema(), ec.Schema().Types[name]), nil
 }
 
-//go:embed "schema.graphqls"
+//go:embed "schema.graphqls" "snapshot.graphqls"
 var sourcesFS embed.FS
 
 func sourceData(filename string) string {
@@ -880,6 +1036,7 @@ func sourceData(filename string) string {
 
 var sources = []*ast.Source{
 	{Name: "schema.graphqls", Input: sourceData("schema.graphqls"), BuiltIn: false},
+	{Name: "snapshot.graphqls", Input: sourceData("snapshot.graphqls"), BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
@@ -1068,6 +1225,17 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 		return nil, err
 	}
 	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_clusterSnapshot_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "clusterId", ec.unmarshalNString2string)
+	if err != nil {
+		return nil, err
+	}
+	args["clusterId"] = arg0
 	return args, nil
 }
 
@@ -1403,6 +1571,130 @@ func (ec *executionContext) fieldContext_BackendHealthStatus_sseStatus(_ context
 				return ec.fieldContext_ServicesStatus_message(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ServicesStatus", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ClusterSnapshot_clusterId(ctx context.Context, field graphql.CollectedField, obj *model.ClusterSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ClusterSnapshot_clusterId,
+		func(ctx context.Context) (any, error) {
+			return obj.ClusterID, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ClusterSnapshot_clusterId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ClusterSnapshot",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ClusterSnapshot_clusterName(ctx context.Context, field graphql.CollectedField, obj *model.ClusterSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ClusterSnapshot_clusterName,
+		func(ctx context.Context) (any, error) {
+			return obj.ClusterName, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ClusterSnapshot_clusterName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ClusterSnapshot",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ClusterSnapshot_timestamp(ctx context.Context, field graphql.CollectedField, obj *model.ClusterSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ClusterSnapshot_timestamp,
+		func(ctx context.Context) (any, error) {
+			return obj.Timestamp, nil
+		},
+		nil,
+		ec.marshalNInt642int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ClusterSnapshot_timestamp(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ClusterSnapshot",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int64 does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ClusterSnapshot_namespaces(ctx context.Context, field graphql.CollectedField, obj *model.ClusterSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_ClusterSnapshot_namespaces,
+		func(ctx context.Context) (any, error) {
+			return obj.Namespaces, nil
+		},
+		nil,
+		ec.marshalNNamespaceSnapshot2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐNamespaceSnapshotᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_ClusterSnapshot_namespaces(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ClusterSnapshot",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "name":
+				return ec.fieldContext_NamespaceSnapshot_name(ctx, field)
+			case "selected":
+				return ec.fieldContext_NamespaceSnapshot_selected(ctx, field)
+			case "workloads":
+				return ec.fieldContext_NamespaceSnapshot_workloads(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type NamespaceSnapshot", field.Name)
 		},
 	}
 	return fc, nil
@@ -1965,6 +2257,132 @@ func (ec *executionContext) fieldContext_IdentityProviderResult_callbackUrl(_ co
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MultiClusterWorkloadsView_clusters(ctx context.Context, field graphql.CollectedField, obj *model.MultiClusterWorkloadsView) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MultiClusterWorkloadsView_clusters,
+		func(ctx context.Context) (any, error) {
+			return obj.Clusters, nil
+		},
+		nil,
+		ec.marshalNClusterSnapshot2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐClusterSnapshotᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MultiClusterWorkloadsView_clusters(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MultiClusterWorkloadsView",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "clusterId":
+				return ec.fieldContext_ClusterSnapshot_clusterId(ctx, field)
+			case "clusterName":
+				return ec.fieldContext_ClusterSnapshot_clusterName(ctx, field)
+			case "timestamp":
+				return ec.fieldContext_ClusterSnapshot_timestamp(ctx, field)
+			case "namespaces":
+				return ec.fieldContext_ClusterSnapshot_namespaces(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ClusterSnapshot", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MultiClusterWorkloadsView_totalWorkloads(ctx context.Context, field graphql.CollectedField, obj *model.MultiClusterWorkloadsView) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MultiClusterWorkloadsView_totalWorkloads,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalWorkloads, nil
+		},
+		nil,
+		ec.marshalNInt2int32,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MultiClusterWorkloadsView_totalWorkloads(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MultiClusterWorkloadsView",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MultiClusterWorkloadsView_totalNamespaces(ctx context.Context, field graphql.CollectedField, obj *model.MultiClusterWorkloadsView) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MultiClusterWorkloadsView_totalNamespaces,
+		func(ctx context.Context) (any, error) {
+			return obj.TotalNamespaces, nil
+		},
+		nil,
+		ec.marshalNInt2int32,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MultiClusterWorkloadsView_totalNamespaces(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MultiClusterWorkloadsView",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MultiClusterWorkloadsView_lastUpdated(ctx context.Context, field graphql.CollectedField, obj *model.MultiClusterWorkloadsView) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_MultiClusterWorkloadsView_lastUpdated,
+		func(ctx context.Context) (any, error) {
+			return obj.LastUpdated, nil
+		},
+		nil,
+		ec.marshalNInt642int,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_MultiClusterWorkloadsView_lastUpdated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MultiClusterWorkloadsView",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int64 does not have child fields")
 		},
 	}
 	return fc, nil
@@ -2595,6 +3013,107 @@ func (ec *executionContext) fieldContext_Mutation_deleteProxyConnection(ctx cont
 	return fc, nil
 }
 
+func (ec *executionContext) _NamespaceSnapshot_name(ctx context.Context, field graphql.CollectedField, obj *model.NamespaceSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_NamespaceSnapshot_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_NamespaceSnapshot_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "NamespaceSnapshot",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _NamespaceSnapshot_selected(ctx context.Context, field graphql.CollectedField, obj *model.NamespaceSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_NamespaceSnapshot_selected,
+		func(ctx context.Context) (any, error) {
+			return obj.Selected, nil
+		},
+		nil,
+		ec.marshalOBoolean2ᚖbool,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_NamespaceSnapshot_selected(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "NamespaceSnapshot",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _NamespaceSnapshot_workloads(ctx context.Context, field graphql.CollectedField, obj *model.NamespaceSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_NamespaceSnapshot_workloads,
+		func(ctx context.Context) (any, error) {
+			return obj.Workloads, nil
+		},
+		nil,
+		ec.marshalNWorkloadSnapshot2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐWorkloadSnapshotᚄ,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_NamespaceSnapshot_workloads(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "NamespaceSnapshot",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "namespace":
+				return ec.fieldContext_WorkloadSnapshot_namespace(ctx, field)
+			case "name":
+				return ec.fieldContext_WorkloadSnapshot_name(ctx, field)
+			case "kind":
+				return ec.fieldContext_WorkloadSnapshot_kind(ctx, field)
+			case "selected":
+				return ec.fieldContext_WorkloadSnapshot_selected(ctx, field)
+			case "otelServiceName":
+				return ec.fieldContext_WorkloadSnapshot_otelServiceName(ctx, field)
+			case "healthStatus":
+				return ec.fieldContext_WorkloadSnapshot_healthStatus(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type WorkloadSnapshot", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_remoteFetch(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -3010,6 +3529,96 @@ func (ec *executionContext) fieldContext_Query_health(_ context.Context, field g
 				return ec.fieldContext_HealthQuery_backend(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type HealthQuery", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_clusterSnapshot(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_clusterSnapshot,
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().ClusterSnapshot(ctx, fc.Args["clusterId"].(string))
+		},
+		nil,
+		ec.marshalOClusterSnapshot2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐClusterSnapshot,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_clusterSnapshot(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "clusterId":
+				return ec.fieldContext_ClusterSnapshot_clusterId(ctx, field)
+			case "clusterName":
+				return ec.fieldContext_ClusterSnapshot_clusterName(ctx, field)
+			case "timestamp":
+				return ec.fieldContext_ClusterSnapshot_timestamp(ctx, field)
+			case "namespaces":
+				return ec.fieldContext_ClusterSnapshot_namespaces(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type ClusterSnapshot", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_clusterSnapshot_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_allClusterSnapshots(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_Query_allClusterSnapshots,
+		func(ctx context.Context) (any, error) {
+			return ec.resolvers.Query().AllClusterSnapshots(ctx)
+		},
+		nil,
+		ec.marshalNMultiClusterWorkloadsView2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐMultiClusterWorkloadsView,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_Query_allClusterSnapshots(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "clusters":
+				return ec.fieldContext_MultiClusterWorkloadsView_clusters(ctx, field)
+			case "totalWorkloads":
+				return ec.fieldContext_MultiClusterWorkloadsView_totalWorkloads(ctx, field)
+			case "totalNamespaces":
+				return ec.fieldContext_MultiClusterWorkloadsView_totalNamespaces(ctx, field)
+			case "lastUpdated":
+				return ec.fieldContext_MultiClusterWorkloadsView_lastUpdated(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MultiClusterWorkloadsView", field.Name)
 		},
 	}
 	return fc, nil
@@ -3960,6 +4569,180 @@ func (ec *executionContext) fieldContext_User_computePlatforms(_ context.Context
 				return ec.fieldContext_ComputePlatform_teams(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type ComputePlatform", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _WorkloadSnapshot_namespace(ctx context.Context, field graphql.CollectedField, obj *model.WorkloadSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_WorkloadSnapshot_namespace,
+		func(ctx context.Context) (any, error) {
+			return obj.Namespace, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_WorkloadSnapshot_namespace(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "WorkloadSnapshot",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _WorkloadSnapshot_name(ctx context.Context, field graphql.CollectedField, obj *model.WorkloadSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_WorkloadSnapshot_name,
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_WorkloadSnapshot_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "WorkloadSnapshot",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _WorkloadSnapshot_kind(ctx context.Context, field graphql.CollectedField, obj *model.WorkloadSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_WorkloadSnapshot_kind,
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		ec.marshalNString2string,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_WorkloadSnapshot_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "WorkloadSnapshot",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _WorkloadSnapshot_selected(ctx context.Context, field graphql.CollectedField, obj *model.WorkloadSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_WorkloadSnapshot_selected,
+		func(ctx context.Context) (any, error) {
+			return obj.Selected, nil
+		},
+		nil,
+		ec.marshalNBoolean2bool,
+		true,
+		true,
+	)
+}
+
+func (ec *executionContext) fieldContext_WorkloadSnapshot_selected(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "WorkloadSnapshot",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _WorkloadSnapshot_otelServiceName(ctx context.Context, field graphql.CollectedField, obj *model.WorkloadSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_WorkloadSnapshot_otelServiceName,
+		func(ctx context.Context) (any, error) {
+			return obj.OtelServiceName, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_WorkloadSnapshot_otelServiceName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "WorkloadSnapshot",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _WorkloadSnapshot_healthStatus(ctx context.Context, field graphql.CollectedField, obj *model.WorkloadSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		ec.fieldContext_WorkloadSnapshot_healthStatus,
+		func(ctx context.Context) (any, error) {
+			return obj.HealthStatus, nil
+		},
+		nil,
+		ec.marshalOString2ᚖstring,
+		true,
+		false,
+	)
+}
+
+func (ec *executionContext) fieldContext_WorkloadSnapshot_healthStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "WorkloadSnapshot",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -5804,6 +6587,60 @@ func (ec *executionContext) _BackendHealthStatus(ctx context.Context, sel ast.Se
 	return out
 }
 
+var clusterSnapshotImplementors = []string{"ClusterSnapshot"}
+
+func (ec *executionContext) _ClusterSnapshot(ctx context.Context, sel ast.SelectionSet, obj *model.ClusterSnapshot) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, clusterSnapshotImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ClusterSnapshot")
+		case "clusterId":
+			out.Values[i] = ec._ClusterSnapshot_clusterId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "clusterName":
+			out.Values[i] = ec._ClusterSnapshot_clusterName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "timestamp":
+			out.Values[i] = ec._ClusterSnapshot_timestamp(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "namespaces":
+			out.Values[i] = ec._ClusterSnapshot_namespaces(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var computePlatformImplementors = []string{"ComputePlatform"}
 
 func (ec *executionContext) _ComputePlatform(ctx context.Context, sel ast.SelectionSet, obj *model.ComputePlatform) graphql.Marshaler {
@@ -6046,6 +6883,60 @@ func (ec *executionContext) _IdentityProviderResult(ctx context.Context, sel ast
 	return out
 }
 
+var multiClusterWorkloadsViewImplementors = []string{"MultiClusterWorkloadsView"}
+
+func (ec *executionContext) _MultiClusterWorkloadsView(ctx context.Context, sel ast.SelectionSet, obj *model.MultiClusterWorkloadsView) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, multiClusterWorkloadsViewImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MultiClusterWorkloadsView")
+		case "clusters":
+			out.Values[i] = ec._MultiClusterWorkloadsView_clusters(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalWorkloads":
+			out.Values[i] = ec._MultiClusterWorkloadsView_totalWorkloads(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalNamespaces":
+			out.Values[i] = ec._MultiClusterWorkloadsView_totalNamespaces(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastUpdated":
+			out.Values[i] = ec._MultiClusterWorkloadsView_lastUpdated(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var mutationImplementors = []string{"Mutation"}
 
 func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
@@ -6153,6 +7044,52 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteProxyConnection(ctx, field)
 			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var namespaceSnapshotImplementors = []string{"NamespaceSnapshot"}
+
+func (ec *executionContext) _NamespaceSnapshot(ctx context.Context, sel ast.SelectionSet, obj *model.NamespaceSnapshot) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, namespaceSnapshotImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("NamespaceSnapshot")
+		case "name":
+			out.Values[i] = ec._NamespaceSnapshot_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "selected":
+			out.Values[i] = ec._NamespaceSnapshot_selected(ctx, field, obj)
+		case "workloads":
+			out.Values[i] = ec._NamespaceSnapshot_workloads(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -6400,6 +7337,47 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_health(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "clusterSnapshot":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_clusterSnapshot(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "allClusterSnapshots":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_allClusterSnapshots(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}
@@ -6733,6 +7711,64 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var workloadSnapshotImplementors = []string{"WorkloadSnapshot"}
+
+func (ec *executionContext) _WorkloadSnapshot(ctx context.Context, sel ast.SelectionSet, obj *model.WorkloadSnapshot) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, workloadSnapshotImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("WorkloadSnapshot")
+		case "namespace":
+			out.Values[i] = ec._WorkloadSnapshot_namespace(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._WorkloadSnapshot_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._WorkloadSnapshot_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "selected":
+			out.Values[i] = ec._WorkloadSnapshot_selected(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "otelServiceName":
+			out.Values[i] = ec._WorkloadSnapshot_otelServiceName(ctx, field, obj)
+		case "healthStatus":
+			out.Values[i] = ec._WorkloadSnapshot_healthStatus(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -7181,6 +8217,60 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
+func (ec *executionContext) marshalNClusterSnapshot2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐClusterSnapshotᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ClusterSnapshot) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNClusterSnapshot2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐClusterSnapshot(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNClusterSnapshot2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐClusterSnapshot(ctx context.Context, sel ast.SelectionSet, v *model.ClusterSnapshot) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._ClusterSnapshot(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNComputePlatform2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐComputePlatformᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ComputePlatform) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
@@ -7301,6 +8391,22 @@ func (ec *executionContext) marshalNIdentityProviderResult2ᚖgithubᚗcomᚋodi
 	return ec._IdentityProviderResult(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNInt2int32(ctx context.Context, v any) (int32, error) {
+	res, err := graphql.UnmarshalInt32(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNInt2int32(ctx context.Context, sel ast.SelectionSet, v int32) graphql.Marshaler {
+	_ = sel
+	res := graphql.MarshalInt32(v)
+	if res == graphql.Null {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+	}
+	return res
+}
+
 func (ec *executionContext) unmarshalNInt642int(ctx context.Context, v any) (int, error) {
 	res, err := graphql.UnmarshalInt(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -7337,6 +8443,74 @@ func (ec *executionContext) marshalNJSON2map(ctx context.Context, sel ast.Select
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) marshalNMultiClusterWorkloadsView2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐMultiClusterWorkloadsView(ctx context.Context, sel ast.SelectionSet, v model.MultiClusterWorkloadsView) graphql.Marshaler {
+	return ec._MultiClusterWorkloadsView(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNMultiClusterWorkloadsView2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐMultiClusterWorkloadsView(ctx context.Context, sel ast.SelectionSet, v *model.MultiClusterWorkloadsView) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MultiClusterWorkloadsView(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNNamespaceSnapshot2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐNamespaceSnapshotᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.NamespaceSnapshot) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNNamespaceSnapshot2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐNamespaceSnapshot(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNNamespaceSnapshot2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐNamespaceSnapshot(ctx context.Context, sel ast.SelectionSet, v *model.NamespaceSnapshot) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._NamespaceSnapshot(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNOidcIdentityProviderInput2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐOidcIdentityProviderInput(ctx context.Context, v any) (model.OidcIdentityProviderInput, error) {
@@ -7623,6 +8797,60 @@ func (ec *executionContext) marshalNUser2ᚖgithubᚗcomᚋodigosᚑioᚋcentral
 		return graphql.Null
 	}
 	return ec._User(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNWorkloadSnapshot2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐWorkloadSnapshotᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.WorkloadSnapshot) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNWorkloadSnapshot2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐWorkloadSnapshot(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNWorkloadSnapshot2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐWorkloadSnapshot(ctx context.Context, sel ast.SelectionSet, v *model.WorkloadSnapshot) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._WorkloadSnapshot(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNWriteComputePlatformInput2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐWriteComputePlatformInput(ctx context.Context, v any) (model.WriteComputePlatformInput, error) {
@@ -7921,6 +9149,13 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	_ = ctx
 	res := graphql.MarshalBoolean(*v)
 	return res
+}
+
+func (ec *executionContext) marshalOClusterSnapshot2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐClusterSnapshot(ctx context.Context, sel ast.SelectionSet, v *model.ClusterSnapshot) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ClusterSnapshot(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOInt642ᚖint(ctx context.Context, v any) (*int, error) {

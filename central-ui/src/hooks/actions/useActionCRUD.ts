@@ -3,11 +3,11 @@ import { useConfig } from '../config';
 import { useRemoteFetch } from '../proxy';
 import { useOdigos } from '@odigos/ui-kit/contexts';
 import { stripNullFields } from '@/utils';
-import type { ActionInput, FetchedAction } from '@/types';
 import { getSseTargetFromId } from '@odigos/ui-kit/functions';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
-import { type ActionFormData, PlatformType } from '@odigos/ui-kit/types';
+import type { ActionInput, ComputePlatform, FetchedAction } from '@/types';
 import { useEntityStore, useNotificationStore } from '@odigos/ui-kit/store';
+import { type ActionFormData, type CreateActionFunc } from '@odigos/ui-kit/types';
 import { CREATE_ACTION, DELETE_ACTION, GET_ACTIONS, UPDATE_ACTION } from '@/graphql';
 import { type Action, ActionType, Crud, EntityTypes, StatusType } from '@odigos/ui-kit/types';
 
@@ -15,7 +15,7 @@ interface UseActionCrud {
   actions: Action[];
   actionsLoading: boolean;
   fetchActions: () => void;
-  createAction: (action: ActionFormData) => void;
+  createAction: CreateActionFunc;
   updateAction: (id: string, action: ActionFormData) => void;
   deleteAction: (id: string, actionType: ActionType) => void;
 }
@@ -40,7 +40,7 @@ const parseRenames = (action: FetchedAction): Action => {
   };
 };
 
-export const useActionCRUD = (): UseActionCrud => {
+export const useActionCRUD = (connections?: ComputePlatform[]): UseActionCrud => {
   const { isVm } = useOdigos();
   const { isReadonly } = useConfig();
   const { addNotification } = useNotificationStore();
@@ -58,7 +58,7 @@ export const useActionCRUD = (): UseActionCrud => {
   };
 
   const { fetch: queryAll } = useRemoteFetch<{ computePlatform?: { actions?: FetchedAction[] } }>(GET_ACTIONS);
-  const { fetch: mutateCreate } = useRemoteFetch<{ createAction: FetchedAction }, { action: ActionInput }>(CREATE_ACTION);
+  const { fetch: mutateCreate, fetchMulti: mutateCreateMulti } = useRemoteFetch<{ createAction: FetchedAction }, { action: ActionInput }>(CREATE_ACTION, connections);
   const { fetch: mutateUpdate } = useRemoteFetch<{ updateAction: FetchedAction }, { id: string; action: ActionInput }>(UPDATE_ACTION);
   const { fetch: mutateDelete } = useRemoteFetch<{ deleteAction: boolean }>(DELETE_ACTION);
 
@@ -77,15 +77,28 @@ export const useActionCRUD = (): UseActionCrud => {
     setEntitiesLoading(EntityTypes.Action, false);
   };
 
-  const createAction: UseActionCrud['createAction'] = async (payload) => {
+  const createAction: UseActionCrud['createAction'] = async (payload, connectionIds) => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
+      if (connectionIds?.length) {
+        // use multi-remote
+        const res = await mutateCreateMulti(connectionIds, { action: stringifyRenames(payload) });
+        const error = res.error;
+        if (error) {
+          notifyUser(StatusType.Error, Crud.Create, error);
+          return { error };
+        } else {
+          // no need to handle data, mutli proxy is a feature for non-proxy pages
+          notifyUser(StatusType.Success, Crud.Create, 'Successfully created action');
+        }
+      }
+
+      // use single-remote
       const res = await mutateCreate({ action: stringifyRenames(payload) });
       const action = res.data?.createAction;
       if (action) {
         const { id, type } = action;
-        // addEntities(EntityTypes.Action, [action]);
         fetchActions(); // refetch because of conditions
         notifyUser(StatusType.Success, Crud.Create, `Successfully created "${type}" action`, id);
       }

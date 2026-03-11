@@ -8,7 +8,10 @@ const (
 	DevDeploymentIDDefault       = "dev-proxy-id"
 )
 
-func DevCentralBackendURL() string { return DevCentralBackendHostDefault }
-func DevClusterName() string       { return DevClusterNameDefault }
-func DevVersion() string           { return DevVersionValue }
-func DevDeploymentID() string      { return DevDeploymentIDDefault }
+var DevIgnoredNamespacesValue = []string{"kube-system", "kube-public", "kube-node-lease", "odigos-system"}
+
+func DevCentralBackendURL() string   { return DevCentralBackendHostDefault }
+func DevClusterName() string         { return DevClusterNameDefault }
+func DevVersion() string             { return DevVersionValue }
+func DevIgnoredNamespaces() []string { return DevIgnoredNamespacesValue }
+func DevDeploymentID() string        { return DevDeploymentIDDefault }

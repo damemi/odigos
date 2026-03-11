@@ -86,6 +86,26 @@ func GetOdigosVersion(ctx context.Context, kubeClient *kube.Client) (string, err
 	return version, nil
 }
 
+// GetIgnoredNamespaces returns the list of namespaces to ignore from the Odigos configuration
+func GetIgnoredNamespaces(ctx context.Context, kubeClient *kube.Client) ([]string, error) {
+	if !runningInCluster() {
+		return DevIgnoredNamespaces(), nil
+	}
+	ns := env.GetCurrentNamespace()
+
+	configMap, err := kubeClient.CoreV1().ConfigMaps(ns).Get(ctx, consts.OdigosConfigurationName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Odigos config: %w", err)
+	}
+
+	var odigosConfig common.OdigosConfiguration
+	if err := yaml.Unmarshal([]byte(configMap.Data[consts.OdigosConfigurationFileName]), &odigosConfig); err != nil {
+		return nil, fmt.Errorf("failed to parse Odigos config: %w", err)
+	}
+
+	return odigosConfig.IgnoredNamespaces, nil
+}
+
 const tlsBaseDir = "/etc/tls"
 
 // validateTLSFilePath ensures the file path is within the allowed TLS directory

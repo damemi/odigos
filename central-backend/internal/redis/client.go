@@ -363,3 +363,85 @@ func (r *RedisClient) SetProxyMetadataStatus(ctx context.Context, proxyID string
 	key := consts.GetProxyMetadataKey(proxyID)
 	return r.client.HSet(ctx, key, consts.ProxyMetaFieldStatus, string(status)).Err()
 }
+
+type ClusterSnapshotData struct {
+	ClusterID   string `json:"cluster_id"`
+	ClusterName string `json:"cluster_name"`
+	Data        []byte `json:"data"`
+	Timestamp   int64  `json:"timestamp"`
+}
+
+// SetClusterSnapshot stores a cluster snapshot in Redis.
+// The snapshot is stored as a hash with data, timestamp, and cluster name fields.
+func (r *RedisClient) SetClusterSnapshot(ctx context.Context, clusterID string, clusterName string, data []byte, timestamp int64) error {
+	key := consts.GetClusterSnapshotKey(clusterID)
+	return r.client.HSet(
+		ctx,
+		key,
+		consts.SnapshotFieldData, string(data),
+		consts.SnapshotFieldTimestamp, strconv.FormatInt(timestamp, 10),
+		consts.SnapshotFieldClusterName, clusterName,
+	).Err()
+}
+
+// GetClusterSnapshot retrieves a cluster snapshot from Redis.
+// Returns nil if the snapshot doesn't exist.
+func (r *RedisClient) GetClusterSnapshot(ctx context.Context, clusterID string) (*ClusterSnapshotData, error) {
+	key := consts.GetClusterSnapshotKey(clusterID)
+	m, err := r.client.HGetAll(ctx, key).Result()
+	if err != nil {
+		return nil, err
+	}
+	if len(m) == 0 {
+		return nil, nil // No snapshot exists
+	}
+
+	snapshot := &ClusterSnapshotData{
+		ClusterID:   clusterID,
+		ClusterName: m[consts.SnapshotFieldClusterName],
+		Data:        []byte(m[consts.SnapshotFieldData]),
+	}
+
+	if v := m[consts.SnapshotFieldTimestamp]; v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			snapshot.Timestamp = n
+		}
+	}
+
+	return snapshot, nil
+}
+
+// GetAllClusterSnapshots retrieves all cluster snapshots from Redis.
+// Returns a map of clusterID -> ClusterSnapshotData.
+func (r *RedisClient) GetAllClusterSnapshots(ctx context.Context) (map[string]*ClusterSnapshotData, error) {
+	pattern := consts.GetClusterSnapshotsPattern()
+	keys, err := r.client.Keys(ctx, pattern).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]*ClusterSnapshotData)
+	for _, key := range keys {
+		clusterID := consts.ExtractClusterIDFromSnapshotKey(key)
+		if clusterID == "" {
+			continue
+		}
+
+		snapshot, err := r.GetClusterSnapshot(ctx, clusterID)
+		if err != nil {
+			logger.Log.Warn("Failed to get cluster snapshot", "clusterID", clusterID, "error", err)
+			continue
+		}
+		if snapshot != nil {
+			result[clusterID] = snapshot
+		}
+	}
+
+	return result, nil
+}
+
+// DeleteClusterSnapshot removes a cluster snapshot from Redis.
+func (r *RedisClient) DeleteClusterSnapshot(ctx context.Context, clusterID string) error {
+	key := consts.GetClusterSnapshotKey(clusterID)
+	return r.client.Del(ctx, key).Err()
+}

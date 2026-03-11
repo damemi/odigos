@@ -109,6 +109,38 @@ func (w *WebSocketClient) Send(data WebSocketMessageToCentralized) error {
 	return err
 }
 
+// SendSnapshot sends a compressed cluster snapshot over the WebSocket connection
+func (w *WebSocketClient) SendSnapshot(msg *WebSocketMessageToCentralized) error {
+	if w.conn == nil {
+		logger.Log.Warn("Attempted to send snapshot but connection is nil",
+			"proxyID", w.proxyID)
+		return nil
+	}
+
+	jsonData, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	err = w.conn.Write(w.ctx, websocket.MessageText, jsonData)
+	if err != nil {
+		logger.Log.Error("Failed to send snapshot",
+			"error", err,
+			"proxyID", w.proxyID)
+	}
+	return err
+}
+
+// GetProxyID returns the proxy ID (used as cluster ID for snapshots)
+func (w *WebSocketClient) GetProxyID() string {
+	return w.proxyID
+}
+
+// GetClusterName returns the cluster name
+func (w *WebSocketClient) GetClusterName() string {
+	return w.clusterName
+}
+
 func (w *WebSocketClient) Run(kubeClient *kube.Client) {
 	logger.Log.Info("WebSocket client read loop started",
 		"proxyID", w.proxyID,

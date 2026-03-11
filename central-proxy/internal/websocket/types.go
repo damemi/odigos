@@ -16,6 +16,7 @@ const (
 	MessageTypeGraphQLQuery    WebSocketMessageType = "graphql_query"
 	MessageTypeGraphQLResponse WebSocketMessageType = "graphql_response"
 	MessageTypeSSEEvent        WebSocketMessageType = "sse_event"
+	MessageTypeClusterSnapshot WebSocketMessageType = "cluster_snapshot"
 )
 
 type WebSocketClient struct {

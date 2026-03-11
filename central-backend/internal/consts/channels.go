@@ -19,12 +19,31 @@ func GetProxyMetaConnectionsPattern() string {
 }
 
 func GetSSEBroadcastChannel() string {
-	centralizedBackendID := config.Config.CentralizedBackendID
-	return fmt.Sprintf("ui.sse.broadcast:%s", centralizedBackendID)
+	return fmt.Sprintf("ui.sse.broadcast:%s", config.Config.InstanceID)
 }
 
-// Proxy metadata (durable info such as name, type, version, timestamps)
 func GetProxyMetadataKey(proxyID string) string {
-	centralizedBackendID := config.Config.CentralizedBackendID
-	return fmt.Sprintf("proxy-meta:%s:%s", centralizedBackendID, proxyID)
+	return fmt.Sprintf("proxy-meta:%s", proxyID)
 }
+
+func GetClusterSnapshotKey(clusterID string) string {
+	return fmt.Sprintf("cluster-snapshot:%s", clusterID)
+}
+
+func GetClusterSnapshotsPattern() string {
+	return "cluster-snapshot:*"
+}
+
+func ExtractClusterIDFromSnapshotKey(key string) string {
+	const prefix = "cluster-snapshot:"
+	if len(key) > len(prefix) {
+		return key[len(prefix):]
+	}
+	return ""
+}
+
+const (
+	SnapshotFieldData        = "data"
+	SnapshotFieldTimestamp   = "timestamp"
+	SnapshotFieldClusterName = "cluster_name"
+)
