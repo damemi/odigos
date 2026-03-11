@@ -4,7 +4,7 @@ package config
 const (
 	DevCentralBackendHostDefault = "localhost:8081"
 	DevClusterNameDefault        = "local"
-	DevVersionValue              = "v1.13.0"
+	DevVersionValue              = "v1.20.0"
 	DevDeploymentIDDefault       = "dev-proxy-id"
 )
 

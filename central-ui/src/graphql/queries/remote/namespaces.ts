@@ -28,6 +28,31 @@ export const GET_NAMESPACES: VersionedRemoteFetch = {
   },
 };
 
+export const GET_NAMESPACES_WITH_WORKLOADS: VersionedRemoteFetch = {
+  [PlatformType.K8s]: {
+    'v1.20': `
+  query GetNamespacesWithWorkloads {
+    namespaces {
+      name
+      markedForInstrumentation
+      dataStreamNames
+      workloads {
+        id {
+          namespace
+          kind
+          name
+        }
+        markedForInstrumentation {
+          markedForInstrumentation
+        }
+        dataStreamNames
+        numberOfInstances
+      }
+    }
+  }`,
+  },
+};
+
 export const GET_NAMESPACE: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
     'v1.11': `

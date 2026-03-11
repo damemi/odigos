@@ -1,8 +1,104 @@
 import { getWorkloadId } from '@odigos/ui-kit/functions';
-import { EntityTypes, type WorkloadId, type Source } from '@odigos/ui-kit/types';
+import {
+  EntityTypes,
+  DesiredStateProgress,
+  StatusType,
+  OtherStatus,
+  type WorkloadId,
+  type Source,
+  type SourceContainer,
+  type Condition,
+  type DesiredConditionStatus,
+  type ProgrammingLanguages,
+  type OtelDistroName,
+} from '@odigos/ui-kit/types';
 import type { NamespaceSelectionFormData, SourceSelectionFormData } from '@odigos/ui-kit/store';
-import type { NamespaceInstrumentInput, SourceConditions, SourceInstrumentInput, WorkloadWithOdigosHealthStatus } from '@/types';
+import type { NamespaceInstrumentInput, SourceConditions, SourceInstrumentInput, WorkloadResponse, WorkloadWithOdigosHealthStatus, K8sWorkloadContainerResponse, K8sWorkloadConditions } from '@/types';
 
+function mapDesiredStatusToConditionStatus(status: DesiredStateProgress): StatusType | OtherStatus {
+  switch (status) {
+    case DesiredStateProgress.Failure:
+      return StatusType.Error;
+    case DesiredStateProgress.Notice:
+      return StatusType.Warning;
+    case DesiredStateProgress.Pending:
+    case DesiredStateProgress.Waiting:
+      return OtherStatus.Loading;
+    case DesiredStateProgress.Unsupported:
+    case DesiredStateProgress.Disabled:
+      return OtherStatus.Disabled;
+    case DesiredStateProgress.Error:
+    case DesiredStateProgress.Success:
+    case DesiredStateProgress.Irrelevant:
+    case DesiredStateProgress.Unknown:
+    default:
+      return StatusType.Default;
+  }
+}
+
+function mapContainerToSourceContainer(c: K8sWorkloadContainerResponse): SourceContainer {
+  return {
+    containerName: c.containerName,
+    language: (c.runtimeInfo?.language?.toLowerCase() ?? 'unknown') as ProgrammingLanguages,
+    runtimeVersion: c.runtimeInfo?.runtimeVersion ?? '',
+    overriden: c.overrides != null,
+    instrumented: c.agentEnabled?.agentEnabled ?? false,
+    instrumentationMessage: c.agentEnabled?.agentEnabledStatus?.message ?? '',
+    otelDistroName: (c.agentEnabled?.otelDistroName as OtelDistroName) ?? null,
+  };
+}
+
+function mapConditionsToConditionArray(conditions: K8sWorkloadConditions | null): Condition[] | null {
+  if (!conditions) return null;
+
+  const result: Condition[] = [];
+  const fields: (keyof K8sWorkloadConditions)[] = ['runtimeDetection', 'agentInjectionEnabled', 'rollout', 'agentInjected', 'processesAgentHealth', 'expectingTelemetry'];
+
+  for (const field of fields) {
+    const dcs: DesiredConditionStatus | null = conditions[field];
+    if (!dcs) continue;
+
+    result.push({
+      type: dcs.name ?? field,
+      status: mapDesiredStatusToConditionStatus(dcs.status),
+      reason: dcs.reasonEnum ?? null,
+      message: dcs.message ?? null,
+      lastTransitionTime: '',
+    });
+  }
+
+  return result.length > 0 ? result : null;
+}
+
+export function mapWorkloadToSource(w: WorkloadResponse): Source {
+  return {
+    namespace: w.id.namespace,
+    kind: w.id.kind,
+    name: w.id.name,
+    selected: w.markedForInstrumentation?.markedForInstrumentation ?? false,
+    otelServiceName: w.serviceName ?? '',
+    numberOfInstances: w.numberOfInstances ?? undefined,
+    dataStreamNames: w.dataStreamNames,
+    containers: w.containers ? w.containers.map(mapContainerToSourceContainer) : null,
+    conditions: mapConditionsToConditionArray(w.conditions),
+    detectedLanguages: w.runtimeInfo?.detectedLanguages?.map((lang) => lang.toLowerCase() as ProgrammingLanguages) ?? null,
+    workloadOdigosHealthStatus: w.workloadOdigosHealthStatus ?? null,
+    podsAgentInjectionStatus: w.podsAgentInjectionStatus,
+    rollbackOccurred: w.rollbackOccurred,
+  };
+}
+
+export function sortSources(sources: Source[]): Source[] {
+  return [...sources].sort((a, b) => {
+    const ns = a.namespace.localeCompare(b.namespace);
+    if (ns !== 0) return ns;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+// @deprecated-legacy-api(v1.20) - Remove addConditionToSources and
+// addAgentInjectionStatusToSources when min supported proxy >= v1.20.
+// Also remove SourceConditions and WorkloadWithOdigosHealthStatus from the import above.
 export const addConditionToSources = ({ namespace, name, kind, conditions }: SourceConditions, sources: Source[]): Source | null => {
   const foundIdx = sources.findIndex((x) => x.namespace === namespace && x.name === name && x.kind === kind);
   if (foundIdx === -1) return null;
@@ -34,7 +130,6 @@ export const addAgentInjectionStatusToSources = (
   };
 
   if (workloadOdigosHealthStatus) {
-    // Only override if workload provides it (v1.17+), otherwise keep what source already has (v1.11-v1.16)
     updatedSource.workloadOdigosHealthStatus = workloadOdigosHealthStatus;
   }
 

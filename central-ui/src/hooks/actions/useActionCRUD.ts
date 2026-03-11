@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useConfig } from '../config';
 import { useRemoteFetch } from '../proxy';
 import { useOdigos } from '@odigos/ui-kit/contexts';
+import { stripNullFields } from '@/utils';
 import type { ActionInput, FetchedAction } from '@/types';
 import { getSseTargetFromId } from '@odigos/ui-kit/functions';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
@@ -20,13 +21,13 @@ interface UseActionCrud {
 }
 
 const stringifyRenames = (action: ActionFormData): ActionInput => {
-  return {
+  return stripNullFields({
     ...action,
     fields: {
       ...action.fields,
       renames: action.fields.renames ? JSON.stringify(action.fields.renames) : null,
     },
-  };
+  });
 };
 
 const parseRenames = (action: FetchedAction): Action => {

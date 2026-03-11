@@ -1,16 +1,75 @@
 import type { VersionedRemoteFetch } from '@/types';
 import { PlatformType } from '@odigos/ui-kit/types';
 
-// TODO: add all fields and migrate away from GET_SOURCES
-export const GET_WORKLOADS: VersionedRemoteFetch = {
-  [PlatformType.K8s]: {
-    'v1.19': `
-  query GetWorkloads($filter: WorkloadFilter) {
-    workloads(filter: $filter) {
+const WORKLOAD_FIELDS = `
       id {
         namespace
         kind
         name
+      }
+      serviceName
+      dataStreamNames
+      numberOfInstances
+      markedForInstrumentation {
+        markedForInstrumentation
+      }
+      runtimeInfo {
+        detectedLanguages
+      }
+      containers {
+        containerName
+        runtimeInfo {
+          language
+          runtimeVersion
+        }
+        agentEnabled {
+          agentEnabled
+          agentEnabledStatus {
+            message
+          }
+          otelDistroName
+        }
+        overrides {
+          containerName
+        }
+      }
+      conditions {
+        runtimeDetection {
+          name
+          status
+          reasonEnum
+          message
+        }
+        agentInjectionEnabled {
+          name
+          status
+          reasonEnum
+          message
+        }
+        rollout {
+          name
+          status
+          reasonEnum
+          message
+        }
+        agentInjected {
+          name
+          status
+          reasonEnum
+          message
+        }
+        processesAgentHealth {
+          name
+          status
+          reasonEnum
+          message
+        }
+        expectingTelemetry {
+          name
+          status
+          reasonEnum
+          message
+        }
       }
       workloadOdigosHealthStatus {
         name
@@ -19,10 +78,19 @@ export const GET_WORKLOADS: VersionedRemoteFetch = {
         message
       }
       podsAgentInjectionStatus {
+        name
         status
+        reasonEnum
         message
       }
-      rollbackOccurred
+      rollbackOccurred`;
+
+export const GET_WORKLOADS: VersionedRemoteFetch = {
+  [PlatformType.K8s]: {
+    'v1.20': `
+  query GetWorkloads($filter: WorkloadFilter) {
+    workloads(filter: $filter) {
+${WORKLOAD_FIELDS}
     }
   }`,
     'v1.17': `
@@ -57,6 +125,17 @@ export const GET_WORKLOADS: VersionedRemoteFetch = {
         status
         message
       }
+    }
+  }`,
+  },
+};
+
+export const GET_WORKLOADS_BY_IDS: VersionedRemoteFetch = {
+  [PlatformType.K8s]: {
+    'v1.20': `
+  query GetWorkloadsByIds($ids: [K8sWorkloadIdInput!]!) {
+    workloadsByIds(ids: $ids) {
+${WORKLOAD_FIELDS}
     }
   }`,
   },

@@ -51,7 +51,7 @@ export const RESTART_POD: VersionedRemoteFetch = {
 
 export const RECOVER_FROM_ROLLBACK: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
-    'v1.19': `
+    'v1.20': `
   mutation RecoverFromRollbackForWorkload($sourceId: K8sSourceId!) {
     recoverFromRollbackForWorkload(sourceId: $sourceId)
   }`,

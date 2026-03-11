@@ -3,6 +3,22 @@ import { type NotifyPayload } from '@odigos/ui-kit/store';
 import { Role, type VersionedRemoteFetch } from '@/types';
 import { PlatformType, StatusType } from '@odigos/ui-kit/types';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function stripNullFields<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) return obj.map(stripNullFields) as T;
+  if (typeof obj === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, any>)) {
+      if (value !== null && value !== undefined) {
+        result[key] = stripNullFields(value);
+      }
+    }
+    return result as T;
+  }
+  return obj;
+}
+
 export const getStatusForRole = (role: Role): StatusType => {
   switch (role) {
     case Role.VIEWER:

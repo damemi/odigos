@@ -227,6 +227,26 @@ export const GET_SOURCE_CONDITIONS: VersionedRemoteFetch = {
   },
 };
 
+export const GET_PEER_SOURCES: VersionedRemoteFetch = {
+  [PlatformType.K8s]: {
+    'v1.21': `
+  query GetPeerSources($serviceName: String!) {
+    peerSources(serviceName: $serviceName) {
+      inbound {
+        serviceName
+        requests
+        dateTime
+      }
+      outbound {
+        serviceName
+        requests
+        dateTime
+      }
+    }
+  }`,
+  },
+};
+
 export const GET_SOURCE_LIBRARIES: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
     'v1.11': `

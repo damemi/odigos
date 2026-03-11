@@ -2,12 +2,10 @@ import { useEffect, useRef } from 'react';
 import { useProxy } from '../proxy';
 import { getSSEEventsUrl } from '@/utils';
 import { useSourceCRUD } from '../sources';
-import { StatusType } from '@odigos/ui-kit/types';
-import { StatusKeys, useStatusStore } from '@/store';
+import { EntityTypes, StatusType, type WorkloadId } from '@odigos/ui-kit/types';
 import { useDestinationCRUD } from '../destinations';
-import { NotificationIcon } from '@odigos/ui-kit/icons';
-import { safeJsonParse } from '@odigos/ui-kit/functions';
-import { NotifyPayload, ProgressKeys, useNotificationStore, useProgressStore } from '@odigos/ui-kit/store';
+import { getIdFromSseTarget, safeJsonParse } from '@odigos/ui-kit/functions';
+import { type NotifyPayload, useEntityStore, useNotificationStore, useProgressStore, ProgressKeys } from '@odigos/ui-kit/store';
 
 enum EventTypes {
   CONNECTED = 'connected',
@@ -29,7 +27,8 @@ interface OpenSourceSSE {
   crdType: OpenSourceCrdTypes;
   event: OpenSourceEventTypes;
   data: string;
-  target: string;
+  target?: string; // @deprecated-legacy-api(v1.20) - Remove when min supported proxy >= v1.20
+  targets?: string[];
   type: StatusType;
 }
 
@@ -41,63 +40,58 @@ interface SseEvent {
   timestamp?: number;
 }
 
+interface DebouncedEvent {
+  handler: NodeJS.Timeout | null;
+  targets: string[];
+}
+
 const EVENT_DEBOUNCE_MS = 5000;
 
 export const useSSE = () => {
   const { proxyID } = useProxy();
-  const { fetchSources } = useSourceCRUD();
-  const { setStatusStore } = useStatusStore();
+  const { fetchSources, fetchSourcesByTargets } = useSourceCRUD();
   const { addNotification } = useNotificationStore();
   const { fetchDestinations } = useDestinationCRUD();
-
-  const clearStatusMessage = () => setStatusStore(StatusKeys.Instrumentation, undefined);
+  const { removeEntities } = useEntityStore();
 
   const maxRetries = 10;
   const retryCount = useRef(0);
 
-  const eventsRef = useRef<
-    | {
-        [eventType in OpenSourceEventTypes]?: {
-          handler: NodeJS.Timeout | null;
-          timestamp: number | null;
-        };
-      }
-    | null
-  >(null);
+  const eventsRef = useRef<Partial<Record<OpenSourceEventTypes, DebouncedEvent>> | null>(null);
 
   const resetEventHandler = (eventType: OpenSourceEventTypes) => {
-    if (eventsRef.current && eventsRef.current[eventType]) {
-      if (eventsRef.current?.[eventType]?.handler) {
+    if (eventsRef.current?.[eventType]) {
+      if (eventsRef.current[eventType]!.handler) {
         clearTimeout(eventsRef.current[eventType]!.handler as NodeJS.Timeout);
         eventsRef.current[eventType]!.handler = null;
       }
-      eventsRef.current[eventType]!.timestamp = null;
+      eventsRef.current[eventType]!.targets = [];
     }
   };
 
-  const handleEvent = (eventType: OpenSourceEventTypes, successCallback: () => void) => {
+  const handleEvent = (eventType: OpenSourceEventTypes, targets: string[], successCallback: (accumulatedTargets: string[]) => void) => {
     if (!eventsRef.current) {
-      eventsRef.current = {
-        [eventType]: {
-          handler: null,
-          timestamp: null,
-        },
-      };
-    } else if (!eventsRef.current[eventType]) {
-      eventsRef.current[eventType] = {
-        handler: null,
-        timestamp: null,
-      };
+      eventsRef.current = {};
+    }
+    if (!eventsRef.current[eventType]) {
+      eventsRef.current[eventType] = { handler: null, targets: [] };
     }
 
-    if (eventsRef.current![eventType]!.handler) clearTimeout(eventsRef.current![eventType]!.handler as NodeJS.Timeout);
-    eventsRef.current![eventType]!.timestamp = Date.now();
+    const entry = eventsRef.current[eventType]!;
 
-    // if last message was over `EVENT_DEBOUNCE_MS` time ago - fetch all sources.
-    // once the condition is met, or a new event is received, the handler is cleared.
-    eventsRef.current[eventType]!.handler = setTimeout(() => {
+    const existing = new Set(entry.targets);
+    for (const t of targets) {
+      if (t && !existing.has(t)) {
+        entry.targets.push(t);
+      }
+    }
+
+    if (entry.handler) clearTimeout(entry.handler as NodeJS.Timeout);
+
+    entry.handler = setTimeout(() => {
+      const accumulated = [...entry.targets];
       resetEventHandler(eventType);
-      successCallback();
+      successCallback(accumulated);
     }, EVENT_DEBOUNCE_MS);
   };
 
@@ -125,54 +119,59 @@ export const useSSE = () => {
         const { type, data: sseData, cluster_id } = data || {};
 
         const isThisCluster = cluster_id && cluster_id === proxyID;
-        const isK8sClusterEvent = type && [EventTypes.K8S_CLUSTER_EVENT].includes(type);
+        const isK8sClusterEvent = type && type === EventTypes.K8S_CLUSTER_EVENT;
 
         if (isThisCluster && isK8sClusterEvent) {
+          const targets: string[] =
+            typeof sseData === 'object' && Array.isArray(sseData?.targets)
+              ? sseData.targets
+              : // @deprecated-legacy-api(v1.20) - Remove this fallback to single target
+                typeof sseData === 'object' && sseData?.target
+                ? [sseData.target]
+                : [];
+
           const notification: NotifyPayload = {
             type: typeof sseData === 'object' ? sseData?.type : StatusType.Info,
             title: typeof sseData === 'object' ? sseData?.event || '' : '',
             message: typeof sseData === 'object' ? sseData?.data || '' : sseData,
             crdType: typeof sseData === 'object' ? sseData?.crdType || '' : '',
-            target: typeof sseData === 'object' ? sseData?.target || '' : '',
           };
 
-          const isSource = type === EventTypes.K8S_CLUSTER_EVENT && [OpenSourceCrdTypes.InstrumentationConfig].includes(notification.crdType);
-          const isDestination = type === EventTypes.K8S_CLUSTER_EVENT && [OpenSourceCrdTypes.Destination].includes(notification.crdType);
+          const isConnected = notification.crdType === EventTypes.CONNECTED;
+          const isSource = notification.crdType === OpenSourceCrdTypes.InstrumentationConfig;
+          const isDestination = notification.crdType === OpenSourceCrdTypes.Destination;
 
-          // do not notify for: connected, modified events, or sources
-          if ((notification.title || notification.message) && notification.title !== OpenSourceEventTypes.MODIFIED && !isSource) {
+          if ((notification.title || notification.message) && !isConnected && notification.title !== OpenSourceEventTypes.MODIFIED && !isSource) {
             addNotification(notification);
           }
 
-          // Handle specific CRD types
           if (isSource) {
             switch (notification.title) {
               case OpenSourceEventTypes.ADDED:
-                setStatusStore(StatusKeys.Instrumentation, { status: StatusType.Warning, label: 'Creating sources, please wait a moment...', leftIcon: NotificationIcon });
-
                 const newCreated = Number(notification.message?.toString().replace(/[^\d]/g, '') || 0);
                 useProgressStore.getState().addProgress(ProgressKeys.Instrumenting, newCreated);
 
-                handleEvent(OpenSourceEventTypes.ADDED, () => {
-                  const { progress, resetProgress } = useProgressStore.getState();
-                  addNotification({ type: StatusType.Success, title: OpenSourceEventTypes.ADDED, message: `Successfully created ${progress[ProgressKeys.Instrumenting]?.total} sources` });
-                  clearStatusMessage();
+                handleEvent(OpenSourceEventTypes.ADDED, targets, (accumulatedTargets) => {
+                  const { resetProgress } = useProgressStore.getState();
                   resetProgress(ProgressKeys.Instrumenting);
 
-                  fetchSources();
+                  if (accumulatedTargets.length > 0) {
+                    fetchSourcesByTargets(accumulatedTargets);
+                  } else {
+                    fetchSources();
+                  }
                 });
                 break;
 
               case OpenSourceEventTypes.MODIFIED:
                 const { progress } = useProgressStore.getState();
                 if (!progress[ProgressKeys.Instrumenting] && !progress[ProgressKeys.Uninstrumenting]) {
-                  setStatusStore(StatusKeys.Instrumentation, { status: StatusType.Warning, label: 'Processing instrumentation, please wait a moment...', leftIcon: NotificationIcon });
-
-                  handleEvent(OpenSourceEventTypes.MODIFIED, () => {
-                    addNotification({ type: StatusType.Success, title: OpenSourceEventTypes.MODIFIED, message: 'Instrumentation completed' });
-                    clearStatusMessage();
-
-                    fetchSources();
+                  handleEvent(OpenSourceEventTypes.MODIFIED, targets, (accumulatedTargets) => {
+                    if (accumulatedTargets.length > 0) {
+                      fetchSourcesByTargets(accumulatedTargets);
+                    } else {
+                      fetchSources();
+                    }
                   });
                 }
                 break;
@@ -181,14 +180,16 @@ export const useSSE = () => {
                 const newDeleted = Number(notification.message?.toString().replace(/[^\d]/g, '') || 0);
                 useProgressStore.getState().addProgress(ProgressKeys.Uninstrumenting, newDeleted);
 
-                handleEvent(OpenSourceEventTypes.DELETED, () => {
-                  clearStatusMessage();
-
-                  const { progress, resetProgress } = useProgressStore.getState();
-                  addNotification({ type: StatusType.Success, title: OpenSourceEventTypes.DELETED, message: `Successfully deleted ${progress[ProgressKeys.Uninstrumenting]?.total} sources` });
+                handleEvent(OpenSourceEventTypes.DELETED, targets, (accumulatedTargets) => {
+                  const { resetProgress } = useProgressStore.getState();
                   resetProgress(ProgressKeys.Uninstrumenting);
 
-                  fetchSources();
+                  if (accumulatedTargets.length > 0) {
+                    const ids = accumulatedTargets.map((t) => getIdFromSseTarget(t, EntityTypes.Source) as WorkloadId).filter((id) => id.namespace && id.name && id.kind);
+                    removeEntities(EntityTypes.Source, ids);
+                  } else {
+                    fetchSources();
+                  }
                 });
                 break;
 
@@ -196,12 +197,13 @@ export const useSSE = () => {
                 break;
             }
           } else if (isDestination) {
-            fetchDestinations();
+            handleEvent(OpenSourceEventTypes.MODIFIED, targets, () => {
+              fetchDestinations();
+            });
           } else {
-            console.warn('Unhandled SSE:', e.data);
+            console.warn('Unhandled SSE for CRD type:', notification.crdType);
           }
 
-          // Reset retry count on successful connection
           retryCount.current = 0;
         }
       };
@@ -209,13 +211,10 @@ export const useSSE = () => {
       return es;
     };
 
-    // Initialize event source connection
     const es = connect();
-    // Clean up event source on component unmount
     return () => {
       es?.close();
       Object.values(OpenSourceEventTypes).forEach((eventType) => resetEventHandler(eventType));
-      clearStatusMessage();
     };
   }, [proxyID]);
 

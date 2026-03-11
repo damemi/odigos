@@ -24,7 +24,7 @@ import {
 } from '@/hooks';
 
 const OverviewModalsAndDrawers = () => {
-  const { fetchNamespace } = useNamespace();
+  const { fetchNamespacesWithWorkloads } = useNamespace();
   const { fetchDescribeSource } = useDescribe();
   const { testConnection } = useTestConnection();
   const { categories } = useDestinationCategories();
@@ -32,13 +32,13 @@ const OverviewModalsAndDrawers = () => {
   const { createAction, updateAction, deleteAction } = useActionCRUD();
   const { restartWorkloads, restartPod, recoverFromRollback } = useWorkloadUtils();
   const { createDestination, updateDestination, deleteDestination } = useDestinationCRUD();
-  const { persistSources, updateSource, fetchSourceById, fetchSourceLibraries } = useSourceCRUD();
+  const { persistSources, updateSource, fetchSourceById, fetchSourceLibraries, fetchPeerSources } = useSourceCRUD();
   const { createInstrumentationRule, updateInstrumentationRule, deleteInstrumentationRule } = useInstrumentationRuleCRUD();
 
   return (
     <>
       {/* modals */}
-      <SourceModal fetchSingleNamespace={fetchNamespace} persistSources={persistSources} />
+      <SourceModal fetchNamespacesWithWorkloads={fetchNamespacesWithWorkloads} persistSources={persistSources} />
       <DestinationModal
         isOnboarding={false}
         categories={categories}
@@ -61,6 +61,7 @@ const OverviewModalsAndDrawers = () => {
         fetchSourceById={fetchSourceById}
         fetchSourceDescribe={fetchDescribeSource}
         fetchSourceLibraries={fetchSourceLibraries}
+        fetchPeerSources={fetchPeerSources}
       />
       <DestinationDrawer categories={categories} updateDestination={updateDestination} deleteDestination={deleteDestination} testConnection={testConnection} />
       <InstrumentationRuleDrawer updateInstrumentationRule={updateInstrumentationRule} deleteInstrumentationRule={deleteInstrumentationRule} />
