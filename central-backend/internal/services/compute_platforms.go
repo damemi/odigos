@@ -226,7 +226,7 @@ func toModelPlatformType(pType string) (model.PlatformType, bool) {
 
 func extractProxyIDFromProxyMetaKey(key string) string {
 	parts := strings.Split(key, ":")
-	if len(parts) < 3 {
+	if len(parts) < 2 {
 		return ""
 	}
 	return parts[len(parts)-1]
