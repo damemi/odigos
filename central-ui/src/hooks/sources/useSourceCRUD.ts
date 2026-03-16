@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
 import { useConfig } from '../config';
-import { useProxy, useRemoteFetch } from '../proxy';
+import { useRemoteFetch } from '../proxy';
 import { useNamespace } from '../namespaces';
-import { getIdFromSseTarget, getSseTargetFromId, trimVersion } from '@odigos/ui-kit/functions';
+import { useOdigos } from '@odigos/ui-kit/contexts';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
+import { getIdFromSseTarget, getSseTargetFromId, trimVersion } from '@odigos/ui-kit/functions';
 import type { SourceConditions, SourceInstrumentInput, WorkloadResponse, WorkloadWithOdigosHealthStatus } from '@/types';
 import { addAgentInjectionStatusToSources, addConditionToSources, mapWorkloadToSource, sortSources, prepareNamespacePayloads, prepareSourcePayloads } from '@/utils';
 import { GET_PEER_SOURCES, GET_SOURCE, GET_SOURCE_CONDITIONS, GET_SOURCE_LIBRARIES, GET_SOURCES, GET_WORKLOADS, GET_WORKLOADS_BY_IDS, PERSIST_SOURCES, UPDATE_SOURCE } from '@/graphql';
@@ -35,7 +36,7 @@ interface UseSourceCrud {
 }
 
 export const useSourceCRUD = (): UseSourceCrud => {
-  const { odigosVersion } = useProxy();
+  const { version, isVm } = useOdigos();
   const { isReadonly } = useConfig();
   const { setProgress } = useProgressStore();
   const { persistNamespaces } = useNamespace();
@@ -48,7 +49,7 @@ export const useSourceCRUD = (): UseSourceCrud => {
   // The isV120Plus check, legacy query hooks (queryAllSources, queryOtherConditions,
   // queryLegacyWorkloads), and helper functions (fetchAllConditions, fetchAllAgentInjectionStatuses)
   // are only needed for proxies < v1.20. When removed, keep only the v1.20+ path in each function.
-  const isV120Plus = odigosVersion ? trimVersion(odigosVersion) >= V120 : false;
+  const isV120Plus = trimVersion(version) >= V120;
 
   const notifyUser = (type: StatusType, title: string, message: string, id?: WorkloadId, hideFromHistory?: boolean) => {
     addNotification({
@@ -94,6 +95,9 @@ export const useSourceCRUD = (): UseSourceCrud => {
 
   // Legacy helpers for < v1.20 - enrich sources with conditions and injection status
   const fetchAllConditions = async (allSources: Source[]) => {
+    // we do this to prevent unwanted "toast errors" in the UI
+    if (isVm) return;
+
     const { data } = await queryOtherConditions();
     const { sourceConditions } = data || {};
     if (sourceConditions) {
@@ -107,6 +111,9 @@ export const useSourceCRUD = (): UseSourceCrud => {
   };
 
   const fetchAllAgentInjectionStatuses = async (allSources: Source[]) => {
+    // we do this to prevent unwanted "toast errors" in the UI
+    if (isVm) return;
+
     const reqPayload = allSources.length === 1 ? { filter: { namespace: allSources[0].namespace, kind: allSources[0].kind, name: allSources[0].name } } : undefined;
     const { data } = await queryLegacyWorkloads(reqPayload);
     const { workloads } = data || {};
@@ -152,9 +159,7 @@ export const useSourceCRUD = (): UseSourceCrud => {
       return;
     }
 
-    const ids = targets
-      .map((t) => getIdFromSseTarget(t, EntityTypes.Source) as WorkloadId)
-      .filter((id) => id.namespace && id.name && id.kind);
+    const ids = targets.map((t) => getIdFromSseTarget(t, EntityTypes.Source) as WorkloadId).filter((id) => id.namespace && id.name && id.kind);
 
     if (ids.length === 0) return;
 
