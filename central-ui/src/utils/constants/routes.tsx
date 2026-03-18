@@ -16,19 +16,13 @@ export const ROUTES = {
   PIPELINE_COLLECTORS: '/pipeline-collectors',
 };
 
-const PROTOCOL = typeof window !== 'undefined' ? window.location.protocol : 'http';
-const HOSTNAME = typeof window !== 'undefined' ? window.location.hostname : '';
-const IS_INGRESSED_DOMAIN = HOSTNAME && HOSTNAME !== 'localhost';
-
-const BACKEND_PORT = 8081;
-const BACKEND_WS_ORIGIN = IS_INGRESSED_DOMAIN ? `ws://${HOSTNAME}` : `ws://localhost:${BACKEND_PORT}`;
-const BACKEND_HTTP_ORIGIN = IS_INGRESSED_DOMAIN ? `${PROTOCOL}//${HOSTNAME}` : `http://localhost:${BACKEND_PORT}`;
+const ORIGIN = typeof window !== 'undefined' ? window.location.origin : '';
+const WS_ORIGIN = typeof window !== 'undefined' ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}` : '';
 
 export const API = {
-  GRAPHQL_WS: `${BACKEND_WS_ORIGIN}/graphql`,
-  GRAPHQL_HTTP: `${BACKEND_HTTP_ORIGIN}/graphql`,
-  SSE_EVENTS: `${BACKEND_HTTP_ORIGIN}/sse/events`,
+  GRAPHQL_WS: `${WS_ORIGIN}/graphql`,
+  GRAPHQL_HTTP: `${ORIGIN}/graphql`,
+  SSE_EVENTS: `${ORIGIN}/sse/events`,
 };
 
-// Returns SSE events URL with clusterID filter for server-side event filtering
-export const getSSEEventsUrl = (clusterID: string) => `${BACKEND_HTTP_ORIGIN}/sse/events?clusterID=${encodeURIComponent(clusterID)}`;
+export const getSSEEventsUrl = (clusterID: string) => `${ORIGIN}/sse/events?clusterID=${encodeURIComponent(clusterID)}`;
