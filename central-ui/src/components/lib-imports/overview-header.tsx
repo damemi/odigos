@@ -5,7 +5,7 @@ import { FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { StatusKeys, useStatusStore } from '../../store';
 import { SystemDrawer } from '@odigos/ui-kit/containers/v2';
 import { Header, Tooltip } from '@odigos/ui-kit/components';
-import { OdigosCentralLogoText, TerminalIcon } from '@odigos/ui-kit/icons';
+import { OdigosLogoTextCentral, TerminalIcon } from '@odigos/ui-kit/icons';
 import { OtherStatusType, StatusType } from '@odigos/ui-kit/types';
 import { useConfig, useDescribe, useHealth, useProxy, useTokenCRUD } from '@/hooks';
 import { IconButton, Badge as V2Badge, Header as V2Header } from '@odigos/ui-kit/components/v2';
@@ -28,7 +28,7 @@ const OverviewHeader = ({ v2 }: { v2?: boolean }) => {
   const instrumentationStatus = useStatusStore((state) => state[StatusKeys.Instrumentation]);
 
   const left = useMemo(() => {
-    const arr = [<OdigosCentralLogoText key='logo' size={150} />];
+    const arr = [<OdigosLogoTextCentral key='logo' size={150} />];
 
     if (proxyName) {
       arr.push(<V2Badge key='proxy-name' status={StatusType.Default} label={proxyName} />);

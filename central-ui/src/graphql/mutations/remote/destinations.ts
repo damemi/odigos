@@ -37,7 +37,7 @@ export const CREATE_DESTINATION: VersionedRemoteFetch = {
         type
         reason
         message
-        lastTransitionTime
+
       }
     }
   }`,
@@ -77,7 +77,7 @@ export const CREATE_DESTINATION: VersionedRemoteFetch = {
         type
         reason
         message
-        lastTransitionTime
+
       }
     }
   }`,

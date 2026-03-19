@@ -63,7 +63,7 @@ function mapConditionsToConditionArray(conditions: K8sWorkloadConditions | null)
       status: mapDesiredStatusToConditionStatus(dcs.status),
       reason: dcs.reasonEnum ?? null,
       message: dcs.message ?? null,
-      lastTransitionTime: '',
+
     });
   }
 

@@ -19,7 +19,7 @@ export const GET_INSTRUMENTATION_RULES: VersionedRemoteFetch = {
           type
           reason
           message
-          lastTransitionTime
+
         }
         payloadCollection {
           httpRequest {

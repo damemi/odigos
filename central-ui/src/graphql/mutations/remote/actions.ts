@@ -67,7 +67,7 @@ export const CREATE_ACTION: VersionedRemoteFetch = {
         type
         reason
         message
-        lastTransitionTime
+
       }
     }
   }`,
@@ -131,7 +131,7 @@ export const CREATE_ACTION: VersionedRemoteFetch = {
         type
         reason
         message
-        lastTransitionTime
+
       }
     }
   }`,
@@ -204,7 +204,7 @@ export const UPDATE_ACTION: VersionedRemoteFetch = {
         type
         reason
         message
-        lastTransitionTime
+
       }
     }
   }`,
@@ -268,7 +268,7 @@ export const UPDATE_ACTION: VersionedRemoteFetch = {
         type
         reason
         message
-        lastTransitionTime
+
       }
     }
   }`,

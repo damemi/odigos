@@ -27,7 +27,7 @@ export const GET_SOURCES: VersionedRemoteFetch = {
           type
           reason
           message
-          lastTransitionTime
+
         }
       }
     }
@@ -58,7 +58,7 @@ export const GET_SOURCES: VersionedRemoteFetch = {
           type
           reason
           message
-          lastTransitionTime
+
         }
       }
     }
@@ -92,7 +92,7 @@ export const GET_SOURCE: VersionedRemoteFetch = {
           type
           reason
           message
-          lastTransitionTime
+
         }
         manifestYAML
         instrumentationConfigYAML
@@ -123,7 +123,7 @@ export const GET_SOURCE: VersionedRemoteFetch = {
           type
           reason
           message
-          lastTransitionTime
+
         }
         workloadOdigosHealthStatus {
           status
@@ -158,7 +158,7 @@ export const GET_SOURCE: VersionedRemoteFetch = {
           type
           reason
           message
-          lastTransitionTime
+
         }
         workloadOdigosHealthStatus {
           status
@@ -194,7 +194,7 @@ export const GET_SOURCE: VersionedRemoteFetch = {
           type
           reason
           message
-          lastTransitionTime
+
         }
         workloadOdigosHealthStatus {
           status
@@ -220,7 +220,7 @@ export const GET_SOURCE_CONDITIONS: VersionedRemoteFetch = {
         type
         reason
         message
-        lastTransitionTime
+
       }
     }
   }`,

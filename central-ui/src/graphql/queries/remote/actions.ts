@@ -68,7 +68,7 @@ export const GET_ACTIONS: VersionedRemoteFetch = {
           type
           reason
           message
-          lastTransitionTime
+
         }
       }
     }
@@ -134,7 +134,7 @@ export const GET_ACTIONS: VersionedRemoteFetch = {
           type
           reason
           message
-          lastTransitionTime
+
         }
       }
     }

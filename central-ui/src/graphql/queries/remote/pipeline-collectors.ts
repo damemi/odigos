@@ -17,7 +17,7 @@ export const GET_GATEWAY_INFO: VersionedRemoteFetch = {
           type
           reason
           message
-          lastTransitionTime
+
         }
       }
       resources {
