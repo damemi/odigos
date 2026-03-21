@@ -1,0 +1,70 @@
+name: Generate On-Prem Token
+
+on:
+  workflow_dispatch:
+    inputs:
+      jwt_audience:
+        description: "The audience of the token (e.g. customer/organization name)"
+        required: true
+        type: string
+      token_expiry_days:
+        description: "Number of days the token is valid for (default: 30)"
+        required: false
+        default: "30"
+        type: string
+      odigos_profiles:
+        description: "Comma-separated list of client profiles (e.g. kratos,code-attributes)"
+        required: false
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  generate-token:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: onprem-token-generator/go.mod
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/onprem-token-generator
+          aws-region: us-east-1
+
+      - name: Fetch private key from SSM
+        id: ssm
+        run: |
+          PRIVATE_KEY=$(aws ssm get-parameter --region us-east-1 --name onprem-jwts-private-key --with-decryption --query Parameter.Value --output text)
+          echo "::add-mask::$PRIVATE_KEY"
+          echo "private_key<<EOFKEY" >> "$GITHUB_OUTPUT"
+          echo "$PRIVATE_KEY" >> "$GITHUB_OUTPUT"
+          echo "EOFKEY" >> "$GITHUB_OUTPUT"
+
+      - name: Generate token
+        id: generate
+        working-directory: onprem-token-generator
+        env:
+          PRIVATE_KEY: ${{ steps.ssm.outputs.private_key }}
+          JWT_AUDIENCE: ${{ inputs.jwt_audience }}
+          TOKEN_EXPIRY_DAYS: ${{ inputs.token_expiry_days }}
+          ODIGOS_PROFILES: ${{ inputs.odigos_profiles }}
+        run: |
+          go run . 2>&1 | tee token_output.txt
+          TOKEN=$(grep 'Token:' token_output.txt | sed 's/.*Token: //')
+          echo "$TOKEN" > token.txt
+          rm token_output.txt
+
+      - name: Upload token as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: onprem-token-${{ inputs.jwt_audience }}
+          path: onprem-token-generator/token.txt
+          retention-days: 1
