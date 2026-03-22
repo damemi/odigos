@@ -1,4 +1,5 @@
 name: Generate On-Prem Token
+run-name: "Generate On-Prem Token - { aud: ${{ inputs.jwt_audience }}, expires: ${{ inputs.token_expiry_days }}d, profiles: [${{ inputs.odigos_profiles || 'none' }}] }"
 
 on:
   workflow_dispatch:
@@ -13,7 +14,16 @@ on:
         default: "30"
         type: string
       odigos_profiles:
-        description: "Comma-separated list of client profiles (e.g. kratos,code-attributes)"
+        description: >-
+          Comma-separated list of client profiles. Available:
+          kratos, greatwall, category-attributes, code-attributes, copy-scope,
+          hostname-as-podname, full-payload-collection, db-payload-collection,
+          query-operation-detector, semconv, semconvdynamo, semconvredis,
+          reduce-span-name-cardinality, allow_concurrent_agents,
+          java-ebpf-instrumentations, java-native-instrumentations,
+          legacy-dotnet-instrumentation, mount-method-k8s-host-path,
+          mount-method-k8s-virtual-device, pod-manifest-env-var-injection,
+          disable-gin, small-batches
         required: false
         type: string
 
@@ -26,44 +36,86 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version-file: onprem-token-generator/go.mod
 
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/onprem-token-generator
           aws-region: us-east-1
 
       - name: Fetch private key from SSM
-        id: ssm
         run: |
-          PRIVATE_KEY=$(aws ssm get-parameter --region us-east-1 --name onprem-jwts-private-key --with-decryption --query Parameter.Value --output text)
-          echo "::add-mask::$PRIVATE_KEY"
-          echo "private_key<<EOFKEY" >> "$GITHUB_OUTPUT"
-          echo "$PRIVATE_KEY" >> "$GITHUB_OUTPUT"
-          echo "EOFKEY" >> "$GITHUB_OUTPUT"
+          KEYFILE=$(mktemp)
+          aws ssm get-parameter --region us-east-1 --name onprem-jwts-private-key --with-decryption --query Parameter.Value --output text > "$KEYFILE"
+          echo "KEYFILE=$KEYFILE" >> "$GITHUB_ENV"
 
       - name: Generate token
         id: generate
         working-directory: onprem-token-generator
         env:
-          PRIVATE_KEY: ${{ steps.ssm.outputs.private_key }}
+          PRIVATE_KEY_FILE: ${{ env.KEYFILE }}
           JWT_AUDIENCE: ${{ inputs.jwt_audience }}
           TOKEN_EXPIRY_DAYS: ${{ inputs.token_expiry_days }}
           ODIGOS_PROFILES: ${{ inputs.odigos_profiles }}
         run: |
-          go run . 2>&1 | tee token_output.txt
+          go run . 2> token_output.txt
           TOKEN=$(grep 'Token:' token_output.txt | sed 's/.*Token: //')
           echo "$TOKEN" > token.txt
-          rm token_output.txt
+          rm -f token_output.txt "$PRIVATE_KEY_FILE"
+
+      - name: Write job summary
+        working-directory: onprem-token-generator
+        run: |
+          TOKEN=$(cat token.txt)
+          B64_HDR=$(echo "$TOKEN" | cut -d. -f1 | tr '_-' '/+')
+          PAD_HDR=$(( (4 - ${#B64_HDR} % 4) % 4 ))
+          HEADER=$(printf "%s%.*s" "$B64_HDR" "$PAD_HDR" "====" | base64 -d)
+          B64=$(echo "$TOKEN" | cut -d. -f2 | tr '_-' '/+')
+          PAD=$(( (4 - ${#B64} % 4) % 4 ))
+          PAYLOAD=$(printf "%s%.*s" "$B64" "$PAD" "====" | base64 -d)
+          AUD=$(echo "$PAYLOAD" | jq -r '.aud')
+          ISS=$(echo "$PAYLOAD" | jq -r '.iss')
+          SUB=$(echo "$PAYLOAD" | jq -r '.sub')
+          IAT=$(echo "$PAYLOAD" | jq -r '.iat')
+          EXP=$(echo "$PAYLOAD" | jq -r '.exp')
+          PROFILES=$(echo "$PAYLOAD" | jq -r '.profiles // [] | join(", ")')
+          IAT_HUMAN=$(date -u -d "@$IAT" '+%Y-%m-%d %H:%M UTC')
+          EXP_HUMAN=$(date -u -d "@$EXP" '+%Y-%m-%d %H:%M UTC')
+          {
+            echo "### Generated Token Details"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| **Audience** | \`$AUD\` |"
+            echo "| **Issuer** | \`$ISS\` |"
+            echo "| **Subject** | \`$SUB\` |"
+            echo "| **Issued At** | \`$IAT_HUMAN\` |"
+            echo "| **Expires** | \`$EXP_HUMAN\` |"
+            echo "| **Profiles** | \`$PROFILES\` |"
+            echo ""
+            echo "<details><summary>Raw JWT header</summary>"
+            echo ""
+            echo '```json'
+            echo "$HEADER" | jq .
+            echo '```'
+            echo "</details>"
+            echo ""
+            echo "<details><summary>Raw JWT payload</summary>"
+            echo ""
+            echo '```json'
+            echo "$PAYLOAD" | jq .
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload token as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: onprem-token-${{ inputs.jwt_audience }}
           path: onprem-token-generator/token.txt

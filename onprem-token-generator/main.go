@@ -67,10 +67,18 @@ func getExpTime() (int64, error) {
 }
 
 func main() {
-	// Get the private key from environment variable
-	privateKeyPEM, exists := os.LookupEnv("PRIVATE_KEY")
-	if !exists {
-		log.Fatal("Environment variable PRIVATE_KEY is not set.")
+	// Get the private key from a file or environment variable
+	var privateKeyPEM string
+	if keyFile, exists := os.LookupEnv("PRIVATE_KEY_FILE"); exists {
+		data, err := os.ReadFile(keyFile)
+		if err != nil {
+			log.Fatal("Could not read private key file:", err)
+		}
+		privateKeyPEM = string(data)
+	} else if val, exists := os.LookupEnv("PRIVATE_KEY"); exists {
+		privateKeyPEM = val
+	} else {
+		log.Fatal("Either PRIVATE_KEY_FILE or PRIVATE_KEY environment variable must be set.")
 	}
 
 	// Parse the private key
@@ -104,9 +112,12 @@ func main() {
 	// client profile
 	profiles, exists := os.LookupEnv("ODIGOS_PROFILES")
 	if exists {
-		profiles := strings.Split(profiles, ",")
-		verifyProfiles(&profiles)
-		claims["profiles"] = profiles
+		parts := strings.Split(profiles, ",")
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		verifyProfiles(&parts)
+		claims["profiles"] = parts
 	}
 
 	// audience
