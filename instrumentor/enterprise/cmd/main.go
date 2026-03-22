@@ -7,7 +7,6 @@ import (
 	"github.com/odigos-io/odigos-enterprise/distros"
 
 	"github.com/odigos-io/odigos/instrumentor/controllers"
-	"github.com/odigos-io/odigos/instrumentor/sdks"
 
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
@@ -59,9 +58,6 @@ func main() {
 	odigosauth.AssertEnterpriseOdigosToken(commonlogger.LoggerCompat())
 
 	managerOptions.Logger = logger
-
-	// TODO: remove once the webhook stops using the default SDKs from the sdks package
-	sdks.SetDefaultSDKs()
 
 	logger.Info("Starting Odigos Enterprise Instrumentor")
 

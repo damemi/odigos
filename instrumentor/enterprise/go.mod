@@ -6,10 +6,10 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.22.0-pre2.0.20260319140610-a8d39d617022
-	github.com/odigos-io/odigos/common v1.22.0-pre2.0.20260319140610-a8d39d617022
-	github.com/odigos-io/odigos/instrumentor v1.22.0-pre2.0.20260319140610-a8d39d617022
-	github.com/odigos-io/odigos/k8sutils v1.22.0-pre2.0.20260319140610-a8d39d617022
+	github.com/odigos-io/odigos/api v1.22.0-pre2.0.20260322153354-73bf21a91b22
+	github.com/odigos-io/odigos/common v1.22.0-pre2.0.20260322153354-73bf21a91b22
+	github.com/odigos-io/odigos/instrumentor v1.22.0-pre2.0.20260322153354-73bf21a91b22
+	github.com/odigos-io/odigos/k8sutils v1.22.0-pre2.0.20260322153354-73bf21a91b22
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5
 	github.com/odigos-io/wasp-handshake v0.0.0-20251125161815-ff3306f4add1
 	k8s.io/api v0.34.2
@@ -103,10 +103,10 @@ replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.22.0-pre2.0.20260319140610-a8d39d617022
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.22.0-pre2.0.20260322153354-73bf21a91b22
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.22.0-pre2.0.20260319140610-a8d39d617022
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.22.0-pre2.0.20260322153354-73bf21a91b22
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.22.0-pre2.0.20260319140610-a8d39d617022
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.22.0-pre2.0.20260322153354-73bf21a91b22
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.22.0-pre2.0.20260319140610-a8d39d617022
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.22.0-pre2.0.20260322153354-73bf21a91b22
