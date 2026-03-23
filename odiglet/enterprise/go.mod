@@ -6,7 +6,7 @@ require (
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.7
 	github.com/odigos-io/ebpf-java-instrumentation v1.13.24-0.20260316111129-ff5d7c771125
 	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension v1.13.24-0.20260316111129-ff5d7c771125
-	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.14
+	github.com/odigos-io/ebpf-nodejs-instrumentation v0.0.15
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
