@@ -54,7 +54,7 @@ WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
 COPY odigosauth/ odigosauth/
 COPY distros/ distros/
 WORKDIR ./odiglet/
-ENV GOPRIVATE=github.com/odigos-io/enterprise-go-instrumentation,github.com/odigos-io/ebpf-java-instrumentation
+ENV GOPRIVATE=github.com/odigos-io/enterprise-go-instrumentation,github.com/odigos-io/ebpf-java-instrumentation/v2
 # Pre-copy/cache go.mod for pre-downloading dependencies and only redownloading
 COPY odiglet/go.mod odiglet/go.sum ./
 RUN --mount=type=cache,target=/go/pkg \
@@ -91,8 +91,8 @@ COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.0.15 /instrumentat
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
 
 # Java
-COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v1.13.23 /instrumentations/java-ebpf /instrumentations/java-ebpf
-COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v1.13.23 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.0.0-rc2 /instrumentations/java-ebpf /instrumentations/java-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.0.0-rc2 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
 
 # PHP
 COPY --from=public.ecr.aws/odigos/agents/php-community:v0.2.6 /instrumentations/php /instrumentations/php

@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/odigos-io/ebpf-java-instrumentation/jvmmetrics"
-	"github.com/odigos-io/ebpf-java-instrumentation/pkg/dynamic"
+	"github.com/odigos-io/ebpf-java-instrumentation/v2/jvmmetrics"
+	"github.com/odigos-io/ebpf-java-instrumentation/v2/pkg/dynamic"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common"
@@ -18,7 +18,7 @@ import (
 	"github.com/odigos-io/odigos/distros/distro"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
 
-	auto "github.com/odigos-io/ebpf-java-instrumentation"
+	auto "github.com/odigos-io/ebpf-java-instrumentation/v2"
 	"github.com/odigos-io/odigos/instrumentation"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"

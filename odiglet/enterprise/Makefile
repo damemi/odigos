@@ -1,8 +1,8 @@
 .PHONY: build-odiglet generate build-modular-docker build-final-docker
 
 LIBRARIES := go.opentelemetry.io/auto \
-			github.com/odigos-io/ebpf-java-instrumentation \
-			github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension \
+			github.com/odigos-io/ebpf-java-instrumentation/v2 \
+			github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 \
 			github.com/odigos-io/ebpf-generic-instrumentation \
 			github.com/odigos-io/ebpf-nodejs-instrumentation \
 			github.com/odigos-io/mysql-instrumentation \
@@ -50,8 +50,8 @@ upgrade-java-ebpf-agents-version:
 		sed -i -E 's|java-enterprise:[0-9A-Za-z._-]+|java-enterprise:$(JAVA_EBPF_AGENTS_VERSION)|g' debug.Dockerfile; \
 	fi
 	@echo "Updating Go module versions using go get"
-	@go get github.com/odigos-io/ebpf-java-instrumentation@$(JAVA_EBPF_AGENTS_VERSION)
-	@go get github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension@$(JAVA_EBPF_AGENTS_VERSION)
+	@go get github.com/odigos-io/ebpf-java-instrumentation/v2@$(JAVA_EBPF_AGENTS_VERSION)
+	@go get github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2@$(JAVA_EBPF_AGENTS_VERSION)
 	@echo "Running go mod tidy to clean up go.sum"
 	@go mod tidy
 	@echo "Successfully updated java ebpf agents version to $(JAVA_EBPF_AGENTS_VERSION) in Dockerfile, debug.Dockerfile, and go.mod"

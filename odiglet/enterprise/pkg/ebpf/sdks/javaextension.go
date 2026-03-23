@@ -7,9 +7,9 @@ import (
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common/consts"
 
-	auto "github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension"
-	"github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/pkg/dynamic"
-	"github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/pkg/opentelemetry"
+	auto "github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2"
+	"github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2/pkg/dynamic"
+	"github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2/pkg/opentelemetry"
 	"github.com/odigos-io/odigos/instrumentation"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"

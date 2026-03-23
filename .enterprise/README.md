@@ -32,7 +32,7 @@ for example, you can point to your own branch of `ebpf-java-instrumentation`, un
 ```
 require (
     ...
-	github.com/odigos-io/ebpf-java-instrumentation <your branch name>
+	github.com/odigos-io/ebpf-java-instrumentation/v2 <your branch name>
     ...
 )
 ```
@@ -71,8 +71,8 @@ the use of different Go modules as dependencies makes Go Workspaces essential fo
 The modules currently used are:
 
 * `github.com/odigos-io/enterprise-go-instrumentation`
-* `github.com/odigos-io/ebpf-java-instrumentation`
-* `github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension`
+* `github.com/odigos-io/ebpf-java-instrumentation/v2`
+* `github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2`
 * `github.com/odigos-io/ebpf-nodejs-instrumentation`
 * `github.com/odigos-io/mysql-instrumentation`
 * `github.com/odigos-io/runtime-detector`
