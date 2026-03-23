@@ -6,29 +6,26 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
-	"encoding/base64"
-	"encoding/json"
-	"encoding/pem"
-
 	"go.opentelemetry.io/auto"
 	goAutoConfig "go.opentelemetry.io/auto/config"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
-	"go.opentelemetry.io/otel/trace"
-	apitrace "go.opentelemetry.io/otel/trace"
 
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/api/odigos/v1alpha1/instrumentationrules"
 	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/consts"
-	"github.com/odigos-io/odigos/instrumentation"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
+	"github.com/odigos-io/odigos/instrumentation"
 	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	wasp "github.com/odigos-io/wasp-handshake/common"
 )
@@ -184,7 +181,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 			log.Info("using wasp handshake for Go process", "pod", podName)
 			waspMaps, err = g.waspMapsProvider.Release(podName, pid)
 			if err != nil {
-					log.Error("failed to acquire wasp maps", "error", err)
+				log.Error("failed to acquire wasp maps", "error", err)
 			} else {
 				opts = append(opts, auto.WithWASPHandshakeMaps(waspMaps))
 			}
@@ -213,15 +210,6 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 		waspMaps:         waspMaps,
 		waspMapsProvider: g.waspMapsProvider,
 		podName:          podName,
-	}
-
-	// payload collection configuration is done separately from the general config because of the deprecated ConfigBool method
-	// that is used to set the payload collection configuration.
-	// Once we replace the ConfigBool method with the generic config provider, we can remove this and pass the
-	// payload collection as part of the initial configuration to the config provider.
-	err = goInstWrapper.configPayloadCollection(settings.InitialConfig)
-	if err != nil {
-		log.Error("failed to apply payload collection config based on initial config", "error", err)
 	}
 
 	return goInstWrapper, nil
@@ -262,247 +250,13 @@ func (g *GoOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 	return err
 }
 
-// Deprecated: this function will be removed in the future once we'll move to the generic config provider
-func (g *GoOtelEbpfSdkEnterprise) configBool(instrumentedModuleName string, optionKey string, spanKind apitrace.SpanKind, optionValue bool) error {
-
-	// temporary workaround to avoid setting a config option that is not supported with this instance
-	supportedConfigOptions := g.inst.GetConfigOptions()
-	if _, ok := supportedConfigOptions[instrumentedModuleName]; !ok {
-		// noop, in case the instrumentation library has not been loaded
-		return nil
-	}
-	for _, option := range supportedConfigOptions[instrumentedModuleName] {
-		if option.OptionKey == optionKey && option.SpanKind == spanKind {
-			return g.inst.ConfigBool(instrumentedModuleName, optionKey, spanKind, optionValue)
-		}
-	}
-	// if we get here, it means none of the options matched thus this config is not supported
-	// make it a silent noop
-	return nil
-}
-
 func (g *GoOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, sdkConfig instrumentation.Config) error {
-	// We do the payload collection configuration separately from the general config because of the deprecated ConfigBool method
-	// that is used to set the payload collection configuration.
-	// Once we replace the ConfigBool method with the generic config provider, we can merge the two methods.
-	payloadCollectionErr := g.configPayloadCollection(sdkConfig)
-
 	updatedConfig, convertErr := convertToGoInstrumentationConfig(sdkConfig)
 	if convertErr != nil {
-		return errors.Join(payloadCollectionErr, convertErr)
-	}
-	httpHeadersCollectionErr := g.configHttpHeadersCollection(sdkConfig)
-	if httpHeadersCollectionErr != nil {
-		return errors.Join(payloadCollectionErr, httpHeadersCollectionErr)
+		return convertErr
 	}
 
 	return g.cp.SendConfig(ctx, updatedConfig)
-}
-
-func mergeHttpHeadersCollectionrules(rule1 *instrumentationrules.HttpHeadersCollection, rule2 *instrumentationrules.HttpHeadersCollection) *instrumentationrules.HttpHeadersCollection {
-	if rule1 == nil {
-		return rule2
-	} else if rule2 == nil {
-		return rule1
-	}
-
-	mergedRules := instrumentationrules.HttpHeadersCollection{}
-
-	// Merge the headers collection rules
-	var mergedHeaders []string
-	if rule1.HeaderKeys != nil {
-		mergedHeaders = append(mergedHeaders, rule1.HeaderKeys...)
-	}
-
-	if rule2.HeaderKeys != nil {
-		mergedHeaders = append(mergedHeaders, rule2.HeaderKeys...)
-	}
-
-	mergedRules.HeaderKeys = mergedHeaders
-	return &mergedRules
-}
-
-func (g *GoOtelEbpfSdkEnterprise) configHttpHeadersCollection(config instrumentation.Config) error {
-	sdkConfig, ok := config.(*odigosv1.SdkConfig)
-	if !ok {
-		return fmt.Errorf("invalid config type, expected *odigosv1.SdkConfig, got %T", sdkConfig)
-	}
-	// We currntly support Content-Encoding and Content-Length and Content-Encoding
-	allkeys := []string{"content-encoding", "content-length", "content-type"}
-	// In case of default headers collection, we apply the config to all libraries that support headers collection
-	// Specific library configs will override the default config
-
-	// specific instructions for the go libraries:
-	// net/http server
-	libConfig := findInstrumentationLibraryConfig(sdkConfig, odigosv1.InstrumentationLibraryId{
-		InstrumentationLibraryName: "net/http",
-		SpanKind:                   common.ServerSpanKind,
-	})
-	var libHeadersCollection *instrumentationrules.HttpHeadersCollection
-	if libConfig != nil && libConfig.HeadersCollection != nil {
-		libHeadersCollection = libConfig.HeadersCollection
-	}
-	serverHeaders := mergeHttpHeadersCollectionrules(sdkConfig.DefaultHeadersCollection, libHeadersCollection)
-	if serverHeaders != nil {
-		// need to check if "*" is specified in either the default or specific library config and if so, replace the header keys with all supported keys
-		serverHeaders = checkForAllHeadersKey(serverHeaders, allkeys)
-		if serverHeaders != nil && serverHeaders.HeaderKeys != nil {
-			log.Info("Merging net/http server header keys with default header keys", "mergedHeaderKeys", serverHeaders.HeaderKeys)
-			for _, key := range serverHeaders.HeaderKeys {
-				log.Info("net/http server header key to collect", "headerKey", key)
-				err := g.configBool("net/http", fmt.Sprintf("http.header.%s", strings.ToLower(key)), trace.SpanKindServer, true)
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-	// net/http client
-	libConfig = findInstrumentationLibraryConfig(sdkConfig, odigosv1.InstrumentationLibraryId{
-		InstrumentationLibraryName: "net/http",
-		SpanKind:                   common.ClientSpanKind,
-	})
-	var libclientHeadersCollection *instrumentationrules.HttpHeadersCollection
-	if libConfig != nil && libConfig.HeadersCollection != nil {
-		libclientHeadersCollection = libConfig.HeadersCollection
-	}
-
-	clientHeaders := mergeHttpHeadersCollectionrules(sdkConfig.DefaultHeadersCollection, libclientHeadersCollection)
-
-	if clientHeaders != nil {
-		// need to check if "*" is specified in either the default or specific library config and if so, replace the header keys with all supported keys
-		clientHeaders = checkForAllHeadersKey(clientHeaders, allkeys)
-		if clientHeaders != nil && clientHeaders.HeaderKeys != nil {
-			log.Info("Merging net/http client header keys with default header keys", "mergedHeaderKeys", clientHeaders.HeaderKeys)
-			for _, key := range clientHeaders.HeaderKeys {
-				log.Info("net/http client header key to collect", "headerKey", key)
-				err := g.configBool("net/http", fmt.Sprintf("http.header.%s", strings.ToLower(key)), trace.SpanKindClient, true)
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-	return nil
-}
-func checkForAllHeadersKey(rule *instrumentationrules.HttpHeadersCollection, allkeys []string) *instrumentationrules.HttpHeadersCollection {
-	if rule == nil {
-		return rule
-	}
-	if rule.HeaderKeys != nil {
-		for _, key := range rule.HeaderKeys {
-			if key == "*" {
-				// if * is specified, we collect all supported headers
-				log.Info("Header key to collect is '*', collecting all supported headers")
-				rule.HeaderKeys = allkeys
-				break
-			}
-		}
-	}
-	return rule
-}
-
-func (g *GoOtelEbpfSdkEnterprise) configPayloadCollection(config instrumentation.Config) error {
-	sdkConfig, ok := config.(*odigosv1.SdkConfig)
-	if !ok {
-		return fmt.Errorf("invalid config type, expected *odigosv1.SdkConfig, got %T", sdkConfig)
-	}
-	// specific instructions for the go libraries:
-
-	// net/http server
-	payloadCollectionNetHttpServer := getPayloadCollectionConfig(sdkConfig, odigosv1.InstrumentationLibraryId{
-		InstrumentationLibraryName: "net/http",
-		SpanKind:                   common.ServerSpanKind,
-	})
-	collectResponseNetHttpServer := payloadCollectionNetHttpServer.HttpResponse != nil
-	log.Info("Applying config to golang net/http server", "collectResponse", collectResponseNetHttpServer)
-	err := g.configBool("net/http", "http.body", trace.SpanKindServer, collectResponseNetHttpServer)
-	if err != nil {
-		return err
-	}
-	// net/http client
-	payloadCollectionNetHttpClient := getPayloadCollectionConfig(sdkConfig, odigosv1.InstrumentationLibraryId{
-		InstrumentationLibraryName: "net/http",
-		SpanKind:                   common.ClientSpanKind,
-	})
-	collectRequestNetHttpClient := payloadCollectionNetHttpClient.HttpRequest != nil
-	collectResponseNetHttpClient := payloadCollectionNetHttpClient.HttpResponse != nil
-
-	log.Info("Applying config to golang net/http client", "collectResponse", collectResponseNetHttpClient, "collectRequest", collectRequestNetHttpClient)
-	err = g.configBool("net/http", "http.body", trace.SpanKindClient, collectRequestNetHttpClient)
-	if err != nil {
-		return err
-	}
-
-	// database/sql
-	payloadCollectionNetDatabaseSql := getPayloadCollectionConfig(sdkConfig, odigosv1.InstrumentationLibraryId{
-		InstrumentationLibraryName: "database/sql",
-		SpanKind:                   common.ClientSpanKind,
-	})
-	collectDbQueryDatabaseSql := payloadCollectionNetDatabaseSql.DbQuery != nil
-	log.Info("Applying config to golang database/sql", "collectDbQuery", collectDbQueryDatabaseSql)
-	err = g.configBool("database/sql", "db.query.text", trace.SpanKindClient, collectDbQueryDatabaseSql)
-	if err != nil {
-		return err
-	}
-
-	// github.com/jackc/pgx
-	payloadCollectionNetJackcPgx := getPayloadCollectionConfig(sdkConfig, odigosv1.InstrumentationLibraryId{
-		InstrumentationLibraryName: "github.com/jackc/pgx",
-		SpanKind:                   common.ClientSpanKind,
-	})
-	collectDbQueryJackcPgx := payloadCollectionNetJackcPgx.DbQuery != nil
-	log.Info("Applying config to golang github.com/jackc/pgx", "collectDbQuery", collectDbQueryJackcPgx)
-	err = g.configBool("github.com/jackc/pgx", "db.query.text", trace.SpanKindClient, collectDbQueryJackcPgx)
-	if err != nil {
-		return err
-	}
-
-	// github.com/ClickHouse/clickhouse-go/v2
-	payloadCollectionClickhouse := getPayloadCollectionConfig(sdkConfig, odigosv1.InstrumentationLibraryId{
-		InstrumentationLibraryName: "github.com/ClickHouse/clickhouse-go/v2",
-		SpanKind:                   common.ClientSpanKind,
-	})
-	collectDbQueryClickhouse := payloadCollectionClickhouse.DbQuery != nil
-	log.Info("Applying config to golang github.com/ClickHouse/clickhouse-go/v2", "collectDbQuery", collectDbQueryClickhouse)
-	err = g.configBool("github.com/ClickHouse/clickhouse-go/v2", "db.query.text", trace.SpanKindClient, collectDbQueryClickhouse)
-	if err != nil {
-		return err
-	}
-
-	// casandra
-	payloadCollectionCassandra := getPayloadCollectionConfig(sdkConfig, odigosv1.InstrumentationLibraryId{
-		InstrumentationLibraryName: "github.com/gocql/gocql",
-		SpanKind:                   common.ClientSpanKind,
-	})
-	collectDbQueryCassandra := payloadCollectionCassandra.DbQuery != nil
-	log.Info("Applying config to golang github.com/gocql/gocql", "collectDbQuery", collectDbQueryCassandra)
-	err = g.configBool("github.com/gocql/gocql", "db.query.text", trace.SpanKindClient, collectDbQueryCassandra)
-	if err != nil {
-		return err
-	}
-
-	// kafka producer
-	payloadCollectionKafka := getPayloadCollectionConfig(sdkConfig, odigosv1.InstrumentationLibraryId{
-		InstrumentationLibraryName: "github.com/segmentio/kafka-go",
-		SpanKind:                   common.ProducerSpanKind,
-	})
-	collectKafkaMessageKafka := payloadCollectionKafka.Messaging != nil
-	log.Info("Applying config to golang github.com/segmentio/kafka-go producer", "collectKafkaMessage", collectKafkaMessageKafka)
-	err = g.configBool("github.com/segmentio/kafka-go", "messaging.message.body", trace.SpanKindProducer, collectKafkaMessageKafka)
-	if err != nil {
-		return err
-	}
-
-	// kafka consumer
-	payloadCollectionKafkaConsumer := getPayloadCollectionConfig(sdkConfig, odigosv1.InstrumentationLibraryId{
-		InstrumentationLibraryName: "github.com/segmentio/kafka-go",
-		SpanKind:                   common.ConsumerSpanKind,
-	})
-	collectKafkaMessageKafkaConsumer := payloadCollectionKafkaConsumer.Messaging != nil
-	log.Info("Applying config to golang github.com/segmentio/kafka-go consumer", "collectKafkaMessage", collectKafkaMessageKafkaConsumer)
-	err = g.configBool("github.com/segmentio/kafka-go", "messaging.message.body", trace.SpanKindConsumer, collectKafkaMessageKafkaConsumer)
-	return err
 }
 
 func mergeBooleanConfigValues(defaultValue *bool, libValue *bool) bool {
@@ -586,11 +340,19 @@ func convertToGoInstrumentationConfig(sdkConfig instrumentation.Config) (goAutoC
 			}
 		}
 
+		var payloadCollection goAutoConfig.PayloadConfig
+		if ilc.PayloadCollection != nil {
+			payloadCollection = convertPayloadCollection(ilc.PayloadCollection)
+		}
+
 		ic.InstrumentationLibraryConfigs[libID] = goAutoConfig.InstrumentationLibrary{
 			TracesEnabled:  tracesEnabled,
 			CodeAttributes: codeAttributes,
+			Payload:        &payloadCollection,
 		}
 	}
+
+	// defaults
 	ic.DefaultCodeAttributes = convertCodeAttributesToInstrumentationConfig(config.DefaultCodeAttributes)
 	if config.DefaultTraceConfig != nil && config.DefaultTraceConfig.Disabled != nil {
 		ic.DefaultTracesDisabled = *config.DefaultTraceConfig.Disabled
@@ -607,53 +369,39 @@ func convertToGoInstrumentationConfig(sdkConfig instrumentation.Config) (goAutoC
 		}
 	}
 
+	if config.DefaultHeadersCollection != nil {
+		// note: currently the CRD has no notion of response vs request headers
+		ic.HTTPHeaders.RequestKeys = config.DefaultHeadersCollection.HeaderKeys
+		ic.HTTPHeaders.ResponseKeys = config.DefaultHeadersCollection.HeaderKeys
+	}
+
+	if payloadConfig := config.DefaultPayloadCollection; payloadConfig != nil {
+		ic.Payload = convertPayloadCollection(payloadConfig)
+	}
+
 	// TODO: take sampling config from the CR
 	// sampling is not yet supported in the enterprise go instrumentation
 	//  ic.Sampler = auto.DefaultSampler()
 	return ic, nil
 }
 
-func getPayloadCollectionConfig(spec *odigosv1.SdkConfig, instrumentationLibraryId odigosv1.InstrumentationLibraryId) instrumentationrules.PayloadCollection {
-
-	// for each library, we use the content from the libraries config if there is any,
-	// otherwise we take the default config from the SDK config.
-
-	instrumentationLibraryConfig := findInstrumentationLibraryConfig(spec, instrumentationLibraryId)
-	var instLibPayloadCollection *instrumentationrules.PayloadCollection
-	if instrumentationLibraryConfig != nil {
-		instLibPayloadCollection = instrumentationLibraryConfig.PayloadCollection
-	}
-	return mergePayloadConfigs(spec.DefaultPayloadCollection, instLibPayloadCollection)
-}
-
-func findInstrumentationLibraryConfig(spec *odigosv1.SdkConfig, instrumentationLibraryId odigosv1.InstrumentationLibraryId) *odigosv1.InstrumentationLibraryConfig {
-	for _, libConfig := range spec.InstrumentationLibraryConfigs {
-		if libConfig.InstrumentationLibraryId == instrumentationLibraryId {
-			return &libConfig
+func convertPayloadCollection(payloadConfig *instrumentationrules.PayloadCollection) goAutoConfig.PayloadConfig {
+	goPayloadConfig := goAutoConfig.PayloadConfig{}
+	if payloadConfig != nil {
+		if payloadConfig.HttpRequest != nil {
+			goPayloadConfig.HTTPRequest = &goAutoConfig.HTTPPayloadCollectionSettings{Enabled: true}
+		}
+		if payloadConfig.HttpResponse != nil {
+			goPayloadConfig.HTTPResponse = &goAutoConfig.HTTPPayloadCollectionSettings{Enabled: true}
+		}
+		if payloadConfig.DbQuery != nil {
+			goPayloadConfig.DbQuery = &goAutoConfig.DbQuerySettings{Enabled: true}
+		}
+		if payloadConfig.Messaging != nil {
+			goPayloadConfig.Messaging = &goAutoConfig.MessagingSettings{Enabled: true}
 		}
 	}
-	return nil
-}
-
-func mergePayloadConfigs(defaultConfig *instrumentationrules.PayloadCollection, libConfig *instrumentationrules.PayloadCollection) instrumentationrules.PayloadCollection {
-	mergedConfig := instrumentationrules.PayloadCollection{}
-	if defaultConfig != nil {
-		mergedConfig = *defaultConfig
-	}
-
-	// if there is a libConfig, we override the default config with the libConfig
-	if libConfig != nil {
-		if libConfig.HttpRequest != nil {
-			mergedConfig.HttpRequest = libConfig.HttpRequest
-		}
-		if libConfig.HttpResponse != nil {
-			mergedConfig.HttpResponse = libConfig.HttpResponse
-		}
-		if libConfig.DbQuery != nil {
-			mergedConfig.DbQuery = libConfig.DbQuery
-		}
-	}
-	return mergedConfig
+	return goPayloadConfig
 }
 
 func readAndVerifyOffsetsFile(path string) ([]byte, error) {
