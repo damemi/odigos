@@ -1,3 +1,9 @@
+// Package sdks hosts Odigos eBPF SDK factories used by odiglet.
+//
+// OBI (OpenTelemetry eBPF) and the Go OpenTelemetry eBPF auto-instrumentation SDK
+// (go.opentelemetry.io/auto) run in the same odiglet process. OBI is started with
+// instrumenter.WithPinIncomingTraceMap so incoming_trace_map is pinned for Go auto
+// (LoadPinnedMap on the conventional path under BPFFS).
 package sdks
 
 import (
@@ -38,7 +44,10 @@ func (f *OBIInstrumentationFactory) ensureOBIStarted(ctx context.Context) error 
 		f.selector = discover.NewDynamicPIDSelector()
 		f.obiCfg = obiConfigForOdigos()
 		go func() {
-			err := instrumenter.Run(ctx, f.obiCfg, instrumenter.WithDynamicPIDSelector(f.selector))
+			err := instrumenter.Run(ctx, f.obiCfg,
+				instrumenter.WithDynamicPIDSelector(f.selector),
+				instrumenter.WithPinIncomingTraceMap(),
+			)
 			if err != nil && ctx.Err() == nil {
 				obiLog.Error("OBI instrumenter exited with error", "err", err)
 			}
