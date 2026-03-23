@@ -13,7 +13,7 @@ export const useServiceMap = () => {
     if (sources.length > 0) {
       fetch();
 
-      const interval = setInterval(fetch, 3000);
+      const interval = setInterval(fetch, 15000);
       return () => clearInterval(interval);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
