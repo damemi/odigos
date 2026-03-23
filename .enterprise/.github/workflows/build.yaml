@@ -602,10 +602,7 @@ jobs:
         if: steps.should-run.outputs.skip != 'true'
         run: |
           # The UI will still be installed by the CLI with the TAG, but it's not used in the tests so no need to build it
-          # following line is buggy since this url is paginated.
-          # since the image is not used for test, I am using a fix version until it is addressed.
-          LATEST_TAG=v1.3.2
-          # LATEST_TAG=$(curl -s "https://artifactregistry.us-central1.rep.googleapis.com/v1/projects/odigos-cloud/locations/us-central1/repositories/components/packages/odigos-ui/tags" | jq -r '[.tags[].name | capture(".*/(?<tag>v[0-9\\.]+)$").tag] | sort | last')
+          LATEST_TAG=$(curl -s "https://artifactregistry.us-central1.rep.googleapis.com/v1/projects/odigos-cloud/locations/us-central1/repositories/components/packages/odigos-ui/tags?pageSize=1000" | jq -r '[.tags[].name | capture(".*/(?<tag>v[0-9\\.]+)$").tag] | sort_by(split(".") | map(ltrimstr("v") | tonumber)) | last')
           docker pull "registry.odigos.io/odigos-ui:$LATEST_TAG"
           docker tag "registry.odigos.io/odigos-ui:$LATEST_TAG" registry.odigos.io/odigos-ui:${{ env.IMAGE_TAG }}
           kind load docker-image registry.odigos.io/odigos-ui:${{ env.IMAGE_TAG }}
