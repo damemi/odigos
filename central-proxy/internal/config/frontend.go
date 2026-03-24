@@ -1,16 +1,23 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strings"
+
+	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 )
 
 const (
-	FrontendLocalDefaultBase     = "http://localhost:8085/"
-	FrontendInClusterDefaultBase = "http://ui.odigos-system:3000/"
-	FrontendGraphQLPath          = "graphql"
-	FrontendEventsPath           = "api/events"
+	FrontendLocalDefaultBase = "http://localhost:8085/"
+	FrontendGraphQLPath      = "graphql"
+	FrontendEventsPath       = "api/events"
 )
+
+func frontendInClusterBaseURL() string {
+	ns := env.GetCurrentNamespace()
+	return fmt.Sprintf("http://ui.%s:3000/", ns)
+}
 
 func FrontendBaseURL() string {
 	val := os.Getenv("FRONTEND_BACKEND_URL")
@@ -26,7 +33,7 @@ func FrontendBaseURL() string {
 	if os.Getenv("KUBERNETES_SERVICE_HOST") == "" {
 		return FrontendLocalDefaultBase
 	}
-	return FrontendInClusterDefaultBase
+	return frontendInClusterBaseURL()
 }
 
 func FrontendGraphQLURL() string {
