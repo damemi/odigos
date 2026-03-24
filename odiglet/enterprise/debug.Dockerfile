@@ -2,11 +2,8 @@ ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.12
 
 FROM python:3.11 AS python-builder
 WORKDIR /python-instrumentation
-ADD odiglet/agents/python/requirements.txt .
-RUN mkdir workspace && pip install --target workspace -r requirements.txt
-
 # Enterprise version of ebpf-generic-instrumentation
-ARG EBPF_GENERIC_VERSION="v0.0.7"
+ARG EBPF_GENERIC_VERSION="v0.0.9"
 RUN apt update -y && apt install -y systemtap-sdt-dev
 RUN --mount=type=secret,id=github_token \
     git clone -b ${EBPF_GENERIC_VERSION} https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-generic-instrumentation.git \
@@ -78,7 +75,8 @@ ADD https://github.com/open-telemetry/opentelemetry-java-instrumentation/release
 RUN chmod 644 /instrumentations/java/javaagent.jar
 
 # Python
-COPY --from=python-builder /python-instrumentation/workspace /instrumentations/python
+COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.71-py3.8 /python-instrumentation/workspace /instrumentations/python3.8
+COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.70 /python-instrumentation/workspace /instrumentations/python
 
 # Python eBPF
 COPY --from=python-builder /python-instrumentation/enterprise-workspace /instrumentations/python-ebpf
@@ -101,7 +99,7 @@ COPY --from=public.ecr.aws/odigos/agents/php-community:v0.2.6 /instrumentations/
 COPY --from=public.ecr.aws/odigos/agents/ruby-community:v0.0.8 /instrumentations/ruby /instrumentations/ruby
 
 # loader
-ARG ODIGOS_LOADER_VERSION=v0.0.6
+ARG ODIGOS_LOADER_VERSION=v0.0.7
 RUN wget --directory-prefix=loader https://storage.googleapis.com/odigos-loader/$ODIGOS_LOADER_VERSION/$TARGETARCH/loader.so
 
 # Note that we do not pass --platform=$BUILDPLATFORM here because we want to build for the target platform
