@@ -56,6 +56,9 @@ CMD ["yarn", "start"]
 # 2️⃣ Runtime Stage: Serve with Next.js Built-in Server
 FROM node:22-alpine
 
+# Upgrade all Alpine packages to pick up security fixes (e.g. zlib CVE-2026-27171).
+RUN apk upgrade --no-cache
+
 # Remove bundled npm to eliminate CVEs in its dependencies.
 # We only use yarn for "yarn start" in this image.
 RUN rm -rf /usr/local/lib/node_modules/npm
