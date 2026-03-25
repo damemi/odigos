@@ -25,11 +25,15 @@ const Content = styled.div`
   height: 100%;
 `;
 
-function Layout({ children }: PropsWithChildren) {
-  // call important hooks that should run on page-mount
+// this is needed in the returned JSX to inherit values from odigos provider and not lose them in the root of the layout
+const Listeners = () => {
   useSSE();
   useTokenTracker();
 
+  return null;
+};
+
+function Layout({ children }: PropsWithChildren) {
   const router = useRouter();
   const pathname = usePathname();
   const { proxyID, platformType, odigosVersion } = useProxy();
@@ -37,6 +41,7 @@ function Layout({ children }: PropsWithChildren) {
   return (
     <ErrorBoundary>
       <OdigosProvider platformType={platformType} tier={Tier.Onprem} version={odigosVersion || ''}>
+        <Listeners />
         <PageContent>
           <OverviewHeader />
           <Content>

@@ -133,4 +133,40 @@ if [ "$PERSIST_SUCCESS" != "true" ]; then
 fi
 
 echo "✅ Namespace instrumentation successful!"
+
+echo "🧹 Cleaning up: un-instrumenting namespace via remoteFetch..."
+CLEANUP_RESULT=$(curl -s -X POST "http://localhost:8083/graphql" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d "{
+    \"query\": \"query RemoteFetch(\$proxyID: String!, \$query: String!, \$variables: JSON!) { remoteFetch(proxyID: \$proxyID, query: \$query, variables: \$variables) }\",
+    \"variables\": {
+      \"proxyID\": \"$PROXY_ID\",
+      \"query\": \"mutation PersistNamespaces(\$namespaces: [PersistNamespaceItemInput!]!) { persistK8sNamespaces(namespaces: \$namespaces) }\",
+      \"variables\": {
+        \"namespaces\": [
+          {
+            \"namespace\": \"default\",
+            \"selected\": false,
+            \"currentStreamName\": \"\"
+          }
+        ]
+      }
+    }
+  }")
+
+CLEANUP_RESPONSE=$(echo "$CLEANUP_RESULT" | jq -r '.data.remoteFetch // ""')
+CLEANUP_SUCCESS=$(echo "$CLEANUP_RESPONSE" | jq -r '.data.persistK8sNamespaces // false')
+if [ "$CLEANUP_SUCCESS" = "true" ]; then
+  echo "✅ Namespace un-instrumented successfully"
+else
+  echo "⚠️ Namespace un-instrumentation response: $CLEANUP_RESPONSE"
+fi
+
+echo "🧹 Deleting any remaining namespace-level Source CRs in default namespace..."
+kubectl get sources -n default -o json | jq -r '.items[] | select(.spec.workload.kind == "Namespace") | .metadata.name' | while read -r src; do
+  echo "  Deleting source/$src"
+  kubectl delete source "$src" -n default --ignore-not-found
+done
+
 echo "🎉 Central GraphQL Integration Test Complete!"
