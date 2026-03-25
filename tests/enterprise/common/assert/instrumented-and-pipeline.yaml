@@ -198,6 +198,8 @@ status:
       started: true
   phase: Running
 ---
+# frontend pod - java-ebpf-instrumentations distro has noRestartRequired: true,
+# so the pod is NOT restarted and no env vars or resource limits are injected.
 apiVersion: v1
 kind: Pod
 metadata:
@@ -207,24 +209,6 @@ metadata:
 spec:
   containers:
     - name: frontend
-      resources:
-        limits:
-          instrumentation.odigos.io/generic: "1"
-        requests:
-          instrumentation.odigos.io/generic: "1"
-      (env[?name == 'ODIGOS_CONTAINER_NAME']):
-        - value: "frontend"
-      (env[?name == 'ODIGOS_DISTRO_NAME']):
-        - value: "java-enterprise"
-      (env[?name == 'ODIGOS_POD_NAME']):
-        - valueFrom:
-            fieldRef:
-              apiVersion: v1
-              fieldPath: metadata.name
-      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
-        - value: "default"
-      (env[?name == 'LD_PRELOAD']):
-        - value: "/var/odigos/loader/loader.so"
 status:
   containerStatuses:
     - name: frontend
