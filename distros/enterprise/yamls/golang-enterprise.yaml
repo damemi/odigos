@@ -11,6 +11,7 @@ spec:
   displayName: Golang Enterprise eBPF Instrumentation
   description: |
     This distribution is for Golang applications using Odigos enterprise version, with ebpf-based SDK and instrumentation libraries, additional features and libraries coverage.
+  isEbpf: true
   environmentVariables:
     staticVariables:
     # The GODEBUG env var is not required after https://github.com/odigos-io/enterprise-go-instrumentation/pull/1839

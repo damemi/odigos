@@ -11,6 +11,7 @@ spec:
   displayName: Node.js Enterprise eBPF Processing
   description: |
     This distribution is for Node.js applications using an efficient eBPF-based SDK, and native instrumentation libraries from the OpenTelemetry community.
+  isEbpf: true
   environmentVariables:
     opAmpClientEnvironments: true
     appendOdigosVariables:

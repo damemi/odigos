@@ -12,6 +12,7 @@ spec:
   displayName: Python Enterprise eBPF Processing
   description: |
     This distribution is for Python applications using OpenTelemetry native instrumentation libraries and eBPF SDK with enterprise features and capabilities.
+  isEbpf: true
   environmentVariables:
     opAmpClientEnvironments: true
     staticVariables:

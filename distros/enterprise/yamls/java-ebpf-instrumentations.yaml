@@ -15,6 +15,7 @@ spec:
         replacePattern: "{{ORIGINAL_ENV_VALUE}} -javaagent:{{ODIGOS_AGENTS_DIR}}/java-ebpf/dtrace-injector.jar"
   description: |
     This distribution is for JVM-based applications (Java, Scala, Kotlin, etc.) using eBPF based SDK and eBPF enterprise instrumentation libraries.
+  isEbpf: true
   runtimeAgent:
     directoryNames:
       - "{{ODIGOS_AGENTS_DIR}}/java-ebpf"

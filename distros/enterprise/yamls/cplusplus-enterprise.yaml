@@ -8,7 +8,7 @@ spec:
   displayName: CPlusPlus Enterprise eBPF Instrumentation
   description: |
     This distribution is for CPlusPlus applications using Odigos enterprise version, with ebpf-based SDK and instrumentation libraries, additional features and libraries coverage.
-
+  isEbpf: true
   # Device not needed in cpp, but adding the device mount here ensures CplusPlus pods are scheduled only on nodes with the Odiglet installed,
   # since we intentionally skip setting node affinity when the mount method is 'virtual device'.
   runtimeAgent:
