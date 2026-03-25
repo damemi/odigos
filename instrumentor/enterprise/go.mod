@@ -6,10 +6,10 @@ require (
 	github.com/go-logr/zapr v1.3.0
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.23.0-pre0.0.20260324134457-f29460796e42
+	github.com/odigos-io/odigos/api v1.23.0-pre0.0.20260325141340-1ede3167b059
 	github.com/odigos-io/odigos/common v1.23.0-pre3
-	github.com/odigos-io/odigos/instrumentor v1.23.0-pre0.0.20260324134457-f29460796e42
-	github.com/odigos-io/odigos/k8sutils v1.23.0-pre0.0.20260324134457-f29460796e42
+	github.com/odigos-io/odigos/instrumentor v1.23.0-pre0.0.20260325141340-1ede3167b059
+	github.com/odigos-io/odigos/k8sutils v1.23.0-pre0.0.20260325141340-1ede3167b059
 	github.com/odigos-io/opentelemetry-zap-bridge v0.0.5
 	github.com/odigos-io/wasp-handshake v0.0.0-20251125161815-ff3306f4add1
 	k8s.io/api v0.35.0
@@ -103,10 +103,10 @@ replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.23.0-pre0.0.20260324134457-f29460796e42
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.23.0-pre0.0.20260325141340-1ede3167b059
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.23.0-pre0.0.20260324134457-f29460796e42
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.23.0-pre0.0.20260325141340-1ede3167b059
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.23.0-pre0.0.20260324134457-f29460796e42
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.23.0-pre0.0.20260325141340-1ede3167b059
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.23.0-pre0.0.20260324134457-f29460796e42
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.23.0-pre0.0.20260325141340-1ede3167b059
