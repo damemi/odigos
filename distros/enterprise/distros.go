@@ -20,7 +20,7 @@ func (o *entepriseDefaulter) GetDefaultDistroNames() map[common.ProgrammingLangu
 		common.JavascriptProgrammingLanguage: "nodejs-enterprise",
 		common.PythonProgrammingLanguage:     "python-enterprise",
 		common.DotNetProgrammingLanguage:     "dotnet-community",
-		common.JavaProgrammingLanguage:       "java-enterprise",
+		common.JavaProgrammingLanguage:       "java-ebpf-instrumentations",
 		common.GoProgrammingLanguage:         "golang-enterprise",
 		common.MySQLProgrammingLanguage:      "mysql-enterprise",
 		common.PhpProgrammingLanguage:        "php-community",
