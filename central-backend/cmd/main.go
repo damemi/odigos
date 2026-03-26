@@ -14,6 +14,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/odigos-io/central-backend/graph"
+	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/bootstrap"
 	"github.com/odigos-io/central-backend/internal/config"
 	"github.com/odigos-io/central-backend/internal/consts"
@@ -63,24 +64,14 @@ func main() {
 	}
 
 	// Block startup until Keycloak is reachable (infinite retries).
-	adminToken, err := keycloak.GetKeycloakAdminTokenWithRetry(ctx, shutdownCh, adminCredentials.Username, adminCredentials.Password)
+	_, err = keycloak.GetKeycloakAdminTokenWithRetry(ctx, shutdownCh, adminCredentials.Username, adminCredentials.Password)
 	if err != nil {
 		logger.Log.Info("Shutting down before Keycloak is ready", "error", err)
 		return
 	}
 
-	err = keycloak.CreateOdigosUIClient(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm)
-	if err != nil {
-		logger.Fatal("Failed to create odigos-ui client", err)
-	}
-
-	err = keycloak.EnsureRequiredRoles(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm)
-	if err != nil {
-		logger.Fatal("Failed to ensure required roles", err)
-	}
-
-	if err := keycloak.EnsureAccessTokenLifespan(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, consts.GetAccessTokenLifespanSeconds()); err != nil {
-		logger.Log.Error("Failed to ensure access token lifespan", "error", err)
+	if err := ensureKeycloakState(adminCredentials.Username, adminCredentials.Password); err != nil {
+		logger.Fatal("Failed to initialize Keycloak state", err)
 	}
 
 	redisClient, err := redisclient.NewRedisClient(ctx)
@@ -99,6 +90,8 @@ func main() {
 	// Create and start snapshot worker pool for multi-cluster state aggregation
 	snapshotPool := snapshotworker.NewWorkerPool(redisClient, 10, 500) // 10 workers, queue size 500
 	snapshotPool.Start()
+
+	go watchKeycloakHealth(ctx, shutdownCh, adminCredentials.Username, adminCredentials.Password)
 
 	go handleShutdown(shutdownCh, redisClient, snapshotPool, expirationChan)
 
@@ -208,6 +201,57 @@ func handleShutdown(shutdownCh <-chan struct{}, redisClient *redisclient.RedisCl
 	logger.Log.Info("Redis connection closed")
 
 	os.Exit(0)
+}
+
+func ensureKeycloakState(username, password string) error {
+	kc := keycloak.NewKeycloakAdminService()
+	adminToken, err := kc.GetAdminToken(username, password)
+	if err != nil {
+		return fmt.Errorf("failed to get admin token: %w", err)
+	}
+	if err := keycloak.CreateOdigosUIClient(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm); err != nil {
+		return fmt.Errorf("failed to ensure client: %w", err)
+	}
+	if err := keycloak.EnsureRequiredRoles(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm); err != nil {
+		return fmt.Errorf("failed to ensure roles: %w", err)
+	}
+	if err := keycloak.EnsureAccessTokenLifespan(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, consts.GetAccessTokenLifespanSeconds()); err != nil {
+		return fmt.Errorf("failed to ensure token lifespan: %w", err)
+	}
+	return nil
+}
+
+// watchKeycloakHealth monitors Keycloak and re-runs setup when it recovers after being down.
+// This handles the case where Keycloak restarts and loses its ephemeral H2 state.
+func watchKeycloakHealth(ctx context.Context, shutdownCh <-chan struct{}, username, password string) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	kc := keycloak.NewKeycloakAdminService()
+	wasDown := false
+	for {
+		select {
+		case <-ticker.C:
+			status := kc.HealthCheck(ctx)
+			if status.Status != model.HealthStatusHealthy {
+				if !wasDown {
+					logger.Log.Warn("Keycloak became unreachable")
+				}
+				wasDown = true
+				continue
+			}
+			if wasDown {
+				logger.Log.Info("Keycloak recovered, re-running setup")
+				if err := ensureKeycloakState(username, password); err != nil {
+					logger.Log.Error("Failed to re-initialize Keycloak state after recovery", "error", err)
+				} else {
+					logger.Log.Info("Keycloak state re-initialized successfully")
+				}
+				wasDown = false
+			}
+		case <-shutdownCh:
+			return
+		}
+	}
 }
 
 // newKeycloakReverseProxy creates a reverse proxy that forwards requests to the internal Keycloak service.
