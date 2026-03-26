@@ -26,6 +26,26 @@ jobs:
           - central-ui
           - agents
         extended: ['false']
+        # Required for RHEL/OpenShift label build-args (matches odigos publish-modules-rhel.yml).
+        include:
+          - service: odiglet
+            summary: "Odiglet for Odigos"
+            description: "Odiglet is the core component of Odigos managing auto-instrumentation. This image requires a root user to load and manage eBPF programs."
+          - service: instrumentor
+            summary: "Instrumentor for Odigos"
+            description: "Instrumentor manages auto-instrumentation for workloads with Odigos."
+          - service: central-proxy
+            summary: "Central Proxy for Odigos"
+            description: "Central Proxy connects Odigos in workload clusters to Odigos Central."
+          - service: central-backend
+            summary: "Central Backend for Odigos"
+            description: "Central Backend provides the API and coordination for Odigos Central multi-cluster management."
+          - service: central-ui
+            summary: "Central UI for Odigos"
+            description: "Central UI provides the web application for managing Odigos Central."
+          - service: agents
+            summary: "Odigos Enterprise Agents"
+            description: "The Odigos Agents used to copy Odigos agent relevant files into the user workloads."
 
     runs-on: depot-ubuntu-24.04-4
     steps:
