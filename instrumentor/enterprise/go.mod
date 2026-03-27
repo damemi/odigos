@@ -1,6 +1,6 @@
 module github.com/odigos-io/odigos-enterprise/instrumentor
 
-go 1.26.0
+go 1.26.1
 
 require (
 	github.com/go-logr/zapr v1.3.0

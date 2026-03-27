@@ -1,6 +1,6 @@
 module github.com/odigos-io/odigos-enterprise/odiglet
 
-go 1.26.0
+go 1.26.1
 
 require (
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.7
