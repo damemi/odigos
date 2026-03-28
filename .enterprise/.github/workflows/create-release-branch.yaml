@@ -9,23 +9,28 @@ on:
   repository_dispatch:
     types: [ensure-release-branch]
 
-permissions:
-  contents: write
+permissions: read-all
 
 jobs:
   ensure-release-branch:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
+
+      - name: Get STS token
+        id: sts
+        uses: odigos-io/ci-core/sts@main
+        with:
+          scope: ${{ github.repository }}
+          identity: create-release-branch
+          output-git-config: 'true'
+
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          # token: ${{ secrets.RELEASE_BOT_TOKEN }} # uncomment if needed
-
-      - name: Configure Git
-        run: |
-          git config --global user.email "bot@keyval.dev"
-          git config --global user.name "Odigos Release Bot"
+          token: ${{ steps.sts.outputs.GH_TOKEN }}
 
       - name: Determine BRANCH input
         id: inputs
