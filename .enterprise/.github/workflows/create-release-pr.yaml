@@ -9,35 +9,39 @@ on:
   repository_dispatch:
     types: [create_release_pr]
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: read-all
 
 jobs:
   create_release_pr:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      GOPRIVATE: github.com/odigos-io/*
     steps:
       - name: Determine Tag Value
-        id: set-tag
+        id: tag
         env:
           GITHUB_EVENT_INPUTS_TAG: ${{ github.event.inputs.tag }}
           GITHUB_EVENT_CLIENT_PAYLOAD_TAG: ${{ github.event.client_payload.tag }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "TAG=${GITHUB_EVENT_INPUTS_TAG}" >> $GITHUB_ENV
+            TAG="${GITHUB_EVENT_INPUTS_TAG}"
           elif [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "TAG=${GITHUB_EVENT_CLIENT_PAYLOAD_TAG}" >> $GITHUB_ENV
+            TAG="${GITHUB_EVENT_CLIENT_PAYLOAD_TAG}"
           else
             echo "Unknown event type"
             exit 1
           fi
 
-          echo "Resolved TAG: ${{ env.TAG }}"
+          echo "release_tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Resolved TAG: ${TAG}"
 
       - name: Derive base branch from TAG
         id: base
         env:
-          TAG: ${{ env.TAG }}
+          TAG: ${{ steps.tag.outputs.release_tag }}
         run: |
           # If the tag is v1.1.1 (with minor and patch) or rc we will release it from the release/VERSION branch
           # If the tag is pre release tag -pre i.e. v1.1.1-pre we will release it from the main branch
@@ -57,40 +61,34 @@ jobs:
           fi
 
           echo "Using base branch: $BASE_BRANCH"
-          echo "BASE_BRANCH=$BASE_BRANCH" >> $GITHUB_ENV
-
+          echo "base_branch_name=$BASE_BRANCH" >> $GITHUB_OUTPUT
 
       - name: Notify Slack (start)
         if: always()
         uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
         with:
           webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-          success-description: "Start creating release PR for enterprise repo on branch ${{ env.BASE_BRANCH }}"
+          success-description: "Start creating release PR for enterprise repo on branch ${{ steps.base.outputs.base_branch_name }}"
           failure-description: "ERROR: during creating release PR for enterprise repo"
-          tag: ${{ env.TAG }}
+          tag: ${{ steps.tag.outputs.release_tag }}
 
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Authenticate git pushes
-        run: |
-          git config --global user.email "bot@keyval.dev"
-          git config --global user.name "Odigos Release Bot"
-          # authenticate pushes via HTTPS using the bot token
-          git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      - name: Get ro tokens for dependencies
+        id: ro-sts
+        uses: ./.github/sts/dependencies_ro
 
       - name: Ensure base branch exists locally and checkout
-        env:
-          BASE_BRANCH: ${{ env.BASE_BRANCH }}
         run: |
-          git fetch origin "${BASE_BRANCH}" || true
-          if git ls-remote --heads origin "${BASE_BRANCH}" | grep -q "refs/heads/${BASE_BRANCH}$"; then
-            git checkout "${BASE_BRANCH}"
-            git pull --ff-only origin "${BASE_BRANCH}"
+          git fetch origin "${{ steps.base.outputs.base_branch_name }}" || true
+          if git ls-remote --heads origin "${{ steps.base.outputs.base_branch_name }}" | grep -q "refs/heads/${{ steps.base.outputs.base_branch_name }}$"; then
+            git checkout "${{ steps.base.outputs.base_branch_name }}"
+            git pull --ff-only origin "${{ steps.base.outputs.base_branch_name }}"
           else
-            echo "ERROR: Base branch '${BASE_BRANCH}' not found on origin."
+            echo "ERROR: Base branch '${{ steps.base.outputs.base_branch_name }}' not found on origin."
             echo "If TAG is an RC, ensure the releases/* branch was created earlier."
             exit 1
           fi
@@ -101,83 +99,58 @@ jobs:
           go-version-file: ./odiglet/go.mod
 
       - name: update all dependencies
-        env:
-          OSS_TAG: ${{ env.TAG }}
         run: |
-          git config --global url."https://${{ secrets.RELEASE_BOT_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          go env -w GOPRIVATE=github.com/odigos-io/*
-          make update-odigos-oss-mod-deps-all OSS_TAG=${OSS_TAG}
+          make update-odigos-oss-mod-deps-all OSS_TAG=${{ steps.tag.outputs.release_tag }}
 
       - name: Prepare PR branch metadata
         id: prep
-        env:
-          TAG: ${{ env.TAG }}
         run: |
           BRANCH_PREFIX="release-bot-"
-          echo "branch_name=${BRANCH_PREFIX}${TAG}" >> $GITHUB_OUTPUT
+          echo "release_pr_branch_name=${BRANCH_PREFIX}${{ steps.tag.outputs.release_tag }}" >> $GITHUB_OUTPUT
 
-      - name: Delete existing PR/branch if present
+      - name: Get create-pull-request token
+        id: cpr-sts
+        uses: odigos-io/ci-core/sts@main
+        with:
+          scope: odigos-io/odigos-enterprise
+          identity: create-release-pr
+          output-git-config: 'true'
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@8
+        id: cpr
+        with:
+          token: ${{ steps.cpr-sts.outputs.GH_TOKEN }}
+          base: ${{ steps.base.outputs.base_branch_name }}
+          branch: ${{ steps.prep.outputs.release_pr_branch_name }}
+          title: "chore: automatic release ${{ steps.tag.outputs.release_tag }}"
+          body: |
+            Follow-up PR for Odigos release to upgrade enterprise components.
+
+            Version: ${{ steps.tag.outputs.release_tag }}
+
+            **Triggered by:** ${{ github.event_name }}
+          commit-message: "chore: bump odigos dependencies to ${{ steps.tag.outputs.release_tag }}"
+          delete-branch: true
+          sign-commits: true
+          labels: |
+            release-bot
+
+      - name: Enable Pull Request Automerge
+        if: steps.cpr.outputs.pull-request-operation == 'created' || steps.cpr.outputs.pull-request-operation == 'updated'
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
-          BASE_BRANCH: ${{ env.BASE_BRANCH }}
-          PR_BRANCH: ${{ steps.prep.outputs.branch_name }}
+          GH_TOKEN: ${{ steps.cpr-sts.outputs.GH_TOKEN }}
         run: |
-          # Close existing PR against the computed base branch and delete remote branch if it exists
-          EXISTING_PR=$(gh pr list --head "${PR_BRANCH}" --base "${BASE_BRANCH}" --state open --json number --jq '.[0].number')
-          if [ -n "$EXISTING_PR" ]; then
-            gh pr close "$EXISTING_PR" --delete-branch || true
+          PR="${{ steps.cpr.outputs.pull-request-number }}"
+          if [ -z "$PR" ]; then
+            echo "No pull-request-number; skipping automerge."
+            exit 0
           fi
-
-          if git ls-remote --heads origin "${PR_BRANCH}" | grep -q "refs/heads/${PR_BRANCH}$"; then
-            git push origin --delete "${PR_BRANCH}" || true
+          if [ "$(gh pr view "$PR" --json autoMergeRequest --jq '.autoMergeRequest != null')" = "true" ]; then
+            echo "Auto-merge already enabled for PR #$PR; skipping."
+            exit 0
           fi
-
-      - name: Create PR branch, commit changes, push
-        env:
-          PR_BRANCH: ${{ steps.prep.outputs.branch_name }}
-          TAG: ${{ env.TAG }}
-        run: |
-          git checkout -b "${PR_BRANCH}"
-          git add .
-          git commit -m "chore: bump odigos dependencies to ${TAG}"
-          git push origin "${PR_BRANCH}"
-
-      - name: Create PR to base branch
-        id: pr
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
-          BASE_BRANCH: ${{ env.BASE_BRANCH }}
-          PR_BRANCH: ${{ steps.prep.outputs.branch_name }}
-          TAG: ${{ env.TAG }}
-        run: |
-          PR_LINK=$(gh pr create \
-            --title "chore: automatic release ${TAG}" \
-            --body "Follow-up PR for Odigos release to upgrade enterprise components.\nVersion: ${TAG}" \
-            --base "${BASE_BRANCH}" \
-            --head "${PR_BRANCH}")
-          echo "PR_LINK=$PR_LINK" >> $GITHUB_ENV
-
-          # Extract PR number from link
-          PR_NUMBER=$(echo "$PR_LINK" | awk -F '/' '{print $NF}')
-          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
-
-      - name: Add bot label to PR
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
-          PR_NUMBER: ${{ env.PR_NUMBER }}
-        run: |
-          curl -X POST \
-            -H "Authorization: token $GH_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/labels" \
-            -d '{"labels": ["release-bot"]}'
-
-      - name: Enable Auto Merge on PR
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
-          PR_LINK: ${{ env.PR_LINK }}
-        run: |
-          gh pr merge "${PR_LINK}" --auto --squash
+          gh pr merge --squash --auto "$PR"
 
       - name: Notify Slack
         if: always()
@@ -186,5 +159,5 @@ jobs:
           webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
           success-description: "Odigos release PR for odigos enterprise repo created"
           failure-description: "ERROR: failed to create release PR for odigos enterprise repo"
-          tag: ${{ env.TAG }}
-          release-pr-link: ${{ env.PR_LINK }}
+          tag: ${{ steps.tag.outputs.release_tag }}
+          release-pr-link: ${{ steps.cpr.outputs.pull-request-url }}
