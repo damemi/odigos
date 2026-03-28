@@ -10,17 +10,14 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
-	"github.com/go-logr/zapr"
-	bridge "github.com/odigos-io/opentelemetry-zap-bridge"
-
 	"github.com/odigos-io/odigos/instrumentor"
 
 	"github.com/odigos-io/odigos-enterprise/instrumentor/wasp"
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	_ "net/http/pprof"
 )
@@ -33,6 +30,9 @@ func getLogLevel() string {
 }
 
 func main() {
+	commonlogger.Init(getLogLevel(), "instrumentor")
+	logger := commonlogger.LoggerCompat().With("subsystem", "startup")
+
 	managerOptions := controllers.KubeManagerOptions{}
 	var telemetryDisabled bool
 
@@ -42,42 +42,32 @@ func main() {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&telemetryDisabled, "telemetry-disabled", false, "Disable telemetry")
-
-	opts := ctrlzap.Options{
-		Development: true,
-	}
-	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	zapLogger := ctrlzap.NewRaw(ctrlzap.UseFlagOptions(&opts))
-	zapLogger = bridge.AttachToZapLogger(zapLogger)
-	logger := zapr.NewLogger(zapLogger)
+	ctrl.SetLogger(commonlogger.ToLogr())
+	managerOptions.Logger = commonlogger.ToLogr()
 
-	commonlogger.Init(getLogLevel(), "instrumentor")
-	commonlogger.UpdateInstance(zapLogger)
 	odigosauth.AssertEnterpriseOdigosToken(commonlogger.LoggerCompat())
-
-	managerOptions.Logger = logger
 
 	logger.Info("Starting Odigos Enterprise Instrumentor")
 
 	dp, err := distros.NewEnterpriseProvider()
 	if err != nil {
-		logger.Error(err, "Failed to initialize distribution provider")
+		logger.Error("Failed to initialize distribution provider", "err", err)
 		os.Exit(1)
 	}
 
 	// always pass the wasp mutator function, it will only be invoked if wasp is opt in in the effective configuration
 	i, err := instrumentor.New(managerOptions, dp, wasp.PodMutator)
 	if err != nil {
-		logger.Error(err, "Failed to initialize instrumentor")
+		logger.Error("Failed to initialize instrumentor", "err", err)
 		os.Exit(1)
 	}
 
 	ctx := signals.SetupSignalHandler()
 	expirationChan, err := odigosauth.TokenExpirationChannel()
 	if err != nil {
-		logger.Error(err, "Failed to get token expiration channel")
+		logger.Error("Failed to get token expiration channel", "err", err)
 		os.Exit(1)
 	}
 	go func() {
@@ -85,11 +75,11 @@ func main() {
 		case <-ctx.Done():
 			return
 		case <-expirationChan:
-			logger.V(0).Info("Odigos token has expired, shutting down instrumentor. Please contact Odigos support to renew your token.")
+			logger.Info("Odigos token has expired, shutting down instrumentor. Please contact Odigos support to renew your token.")
 			os.Exit(1)
 		}
 	}()
 
 	i.Run(ctx, telemetryDisabled)
-	logger.V(0).Info("instrumentor exiting")
+	logger.Info("instrumentor exiting")
 }
