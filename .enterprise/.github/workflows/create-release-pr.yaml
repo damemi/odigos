@@ -83,6 +83,10 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.sts-ro-odigos-enterprise.outputs.GH_TOKEN }}
 
+      - name: Get ro tokens for dependencies
+        id: ro-sts
+        uses: ./.github/sts/dependencies_ro  
+
       - name: Ensure base branch exists locally and checkout
         run: |
           git fetch origin "${{ steps.base.outputs.base_branch_name }}" || true
