@@ -85,7 +85,7 @@ jobs:
 
       - name: Get ro tokens for dependencies
         id: ro-sts
-        uses: ./.github/sts/dependencies_ro
+        uses: ./.github/sts/ro
 
       - name: Ensure base branch exists locally and checkout
         run: |
