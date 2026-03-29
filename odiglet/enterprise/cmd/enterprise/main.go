@@ -58,12 +58,14 @@ func main() {
 		panic(err)
 	}
 
+	// Must run before OdigletInitPhase: LoggerCompat() is a no-op until Init (init container only runs that path).
+	commonlogger.Init(getLogLevel(), "odiglet")
+
 	// If started in init mode
 	if len(os.Args) == 2 && os.Args[1] == "init" {
 		odiglet.OdigletInitPhase(clientset)
 	}
 
-	commonlogger.Init(getLogLevel(), "odiglet")
 	logger := commonlogger.LoggerCompat().With("subsystem", "startup")
 	logger.Info("Starting odiglet enterprise")
 
