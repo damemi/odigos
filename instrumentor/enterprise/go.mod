@@ -5,10 +5,10 @@ go 1.26.1
 require (
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.23.0-pre8
-	github.com/odigos-io/odigos/common v1.23.0-pre8
-	github.com/odigos-io/odigos/instrumentor v1.23.0-pre8
-	github.com/odigos-io/odigos/k8sutils v1.23.0-pre8
+	github.com/odigos-io/odigos/api v1.23.0-pre8.0.20260329103529-37b3c8ff92eb
+	github.com/odigos-io/odigos/common v1.23.0-pre8.0.20260329103529-37b3c8ff92eb
+	github.com/odigos-io/odigos/instrumentor v1.23.0-pre8.0.20260329103529-37b3c8ff92eb
+	github.com/odigos-io/odigos/k8sutils v1.23.0-pre8.0.20260329103529-37b3c8ff92eb
 	github.com/odigos-io/wasp-handshake v0.0.0-20251125161815-ff3306f4add1
 	k8s.io/api v0.35.0
 	k8s.io/client-go v0.35.0
@@ -46,7 +46,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/odigos-io/odigos/distros v1.23.0-pre8 // indirect
+	github.com/odigos-io/odigos/distros v1.23.0-pre8.0.20260329103529-37b3c8ff92eb // indirect
 	github.com/open-policy-agent/cert-controller v0.14.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
@@ -91,10 +91,10 @@ replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.23.0-pre8
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.23.0-pre8.0.20260329103529-37b3c8ff92eb
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.23.0-pre8
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.23.0-pre8.0.20260329103529-37b3c8ff92eb
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.23.0-pre8
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.23.0-pre8.0.20260329103529-37b3c8ff92eb
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.23.0-pre8
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.23.0-pre8.0.20260329103529-37b3c8ff92eb
