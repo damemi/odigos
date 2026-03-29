@@ -156,6 +156,7 @@ func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distro
 		"java-ebpf-instrumentations": javaEbpfFactory,
 		"java-enterprise":            sdks.NewJavaExtensionInstrumentationFactoryEnterprise(),
 		"python-enterprise":          sdks.NewPythonInstrumentationFactoryEnterprise(),
+		"python-enterprise3.8":       sdks.NewPythonInstrumentationFactoryEnterprise(),
 		"nodejs-enterprise":          sdks.NewNodeJSInstrumentationFactoryEnterprise(),
 		"mysql-enterprise":           sdks.NewMySQLInstrumentationFactoryEnterprise(),
 		// dotnet, ruby and php are using native instrumentation and does not have ebpf instrumentation.
