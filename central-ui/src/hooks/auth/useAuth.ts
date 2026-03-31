@@ -6,11 +6,8 @@ import { SIGN_IN, SET_INITIAL_PASSWORD, GET_SYSTEM_CONFIG, GET_SIGN_OUT_URL } fr
 
 export type HandleSignIn = (credentials: { email?: string; password?: string; code?: string }) => void;
 export type HandleSetInitialPassword = (email: string, password: string) => void;
-export type HandleSignOut = () => void;
-export type Logout = () => void;
-export type IsAuthenticated = () => boolean;
+export type HandleSignOut = () => Promise<void>;
 export type GetCurrentUser = () => User | null;
-export type GetLastAuthEmail = () => string | null;
 
 export const useAuth = () => {
   const [error, setError] = useState<string | null>(null);
