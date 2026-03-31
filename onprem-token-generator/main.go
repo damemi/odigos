@@ -22,12 +22,16 @@ const (
 
 func verifyProfiles(clientProfiles *[]string) {
 	var validProfiles []string
-
+	var stagedProfile string
 	for _, profile := range *clientProfiles {
-		if _, exists := profiles.ProfilesByName[common.ProfileName(profile)]; exists {
-			validProfiles = append(validProfiles, profile)
+		stagedProfile = strings.TrimSpace(profile)
+		if stagedProfile == "" {
+			continue
+		}
+		if _, exists := profiles.ProfilesByName[common.ProfileName(stagedProfile)]; exists {
+			validProfiles = append(validProfiles, stagedProfile)
 		} else {
-			fmt.Printf("\033[31mERROR\033[0m %s is invalid client profile, aborting\n", profile)
+			fmt.Printf("\033[31mERROR\033[0m %s is invalid client profile, aborting\n", stagedProfile)
 			os.Exit(1)
 		}
 	}
