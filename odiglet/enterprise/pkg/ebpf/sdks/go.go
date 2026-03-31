@@ -30,8 +30,6 @@ import (
 	wasp "github.com/odigos-io/wasp-handshake/common"
 )
 
-var log = commonlogger.LoggerCompat().With("subsystem", "ebpfgosdk")
-
 const rsaPublicKeyString = `-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmMXVUgppNeHZA507GFX3
 Pg2c+p95AFOJ1SY1OYklZoHYu3wEsx0mdsr2shSXMMvsbekMTlyeJ4L5SUgGLDyh
@@ -57,6 +55,7 @@ type GoInstrumentationFactoryEnterprise struct {
 	offsetFileBytes    []byte
 	waspMapsProvider   wasp.MapsProvider
 	traceIdSuffix      uint8
+	logger             *commonlogger.OdigosLogger
 }
 
 func NewGoInstrumentationFactoryEnterprise(traceIdSuffix uint8, ws wasp.MapsProvider) (instrumentation.Factory, error) {
@@ -64,6 +63,7 @@ func NewGoInstrumentationFactoryEnterprise(traceIdSuffix uint8, ws wasp.MapsProv
 		offsetLastModified: time.Time{},
 		waspMapsProvider:   ws,
 		traceIdSuffix:      traceIdSuffix,
+		logger:             commonlogger.LoggerCompat().With("subsystem", "ebpfgosdk"),
 	}
 	err := g.updateLocalOffsets()
 	if err != nil {
@@ -84,7 +84,7 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 		// If the file is empty, use default offsets
 		if info.Size() == 0 {
 			g.offsetFileBytes = []byte{}
-			log.Info("no custom Go offsets loaded, falling back to default offsets")
+			g.logger.Info("no custom Go offsets loaded, falling back to default offsets")
 			return nil
 		}
 
@@ -103,7 +103,7 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 			}
 			timestamp = data["timestamp"]
 
-			log.Info("using custom Go offsets file", "timestamp", timestamp)
+			g.logger.Info("using custom Go offsets file", "timestamp", timestamp)
 
 			g.offsetFileBytes = file
 			g.offsetLastModified = info.ModTime()
@@ -112,7 +112,7 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 		// if the env var isn't set, clear the local offset file
 		// this allows switching back to in-memory offsets by deleting the env var
 		g.offsetFileBytes = []byte{}
-		log.Info("custom Go offsets file env var not set, falling back to default offsets")
+		g.logger.Info("custom Go offsets file env var not set, falling back to default offsets")
 	}
 
 	return nil
@@ -133,7 +133,7 @@ func podNameFromSettings(settings instrumentation.Settings) string {
 func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
 	err := g.updateLocalOffsets()
 	if err != nil {
-		log.Error("failed to update custom Go offsets, attempting to continue with default offsets", "error", err)
+		g.logger.Error("failed to update custom Go offsets, attempting to continue with default offsets", "error", err)
 		g.offsetFileBytes = []byte{}
 	}
 
@@ -143,7 +143,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 		otlptracegrpc.WithEndpoint(fmt.Sprintf("localhost:%d", consts.OTLPPort)),
 	)
 	if err != nil {
-		log.Error("failed to create exporter", "error", err)
+		g.logger.Error("failed to create exporter", "error", err)
 		return nil, err
 	}
 
@@ -178,10 +178,10 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 
 	if g.waspMapsProvider != nil {
 		if podName = podNameFromSettings(settings); podName != "" {
-			log.Info("using wasp handshake for Go process", "pod", podName)
+			g.logger.Info("using wasp handshake for Go process", "pod", podName)
 			waspMaps, err = g.waspMapsProvider.Release(podName, pid)
 			if err != nil {
-				log.Error("failed to acquire wasp maps", "error", err)
+				g.logger.Error("failed to acquire wasp maps", "error", err)
 			} else {
 				opts = append(opts, auto.WithWASPHandshakeMaps(waspMaps))
 			}
@@ -196,7 +196,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 		opts...,
 	)
 	if err != nil {
-		log.Error("instrumentation setup failed", "error", err)
+		g.logger.Error("instrumentation setup failed", "error", err)
 		if waspMaps != nil {
 			// return ownership of the wasp maps to the provider in case we failed to instrument this process
 			err = errors.Join(err, g.waspMapsProvider.Take(podName, waspMaps))
@@ -306,7 +306,6 @@ func convertToGoInstrumentationConfig(sdkConfig instrumentation.Config) (goAutoC
 	}
 	ic := goAutoConfig.InstrumentationConfig{}
 	if sdkConfig == nil {
-		log.Info("No SDK config provided for Go instrumentation, using default")
 		return ic, nil
 	}
 	ic.InstrumentationLibraryConfigs = make(map[goAutoConfig.InstrumentationLibraryID]goAutoConfig.InstrumentationLibrary)
