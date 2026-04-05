@@ -49,7 +49,7 @@ RUN chmod 644 /instrumentations/java/javaagent.jar
 
 # Python
 COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.71-py3.8 /python-instrumentation/workspace /instrumentations/python3.8
-COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.73 /python-instrumentation/workspace /instrumentations/python
+COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.74 /python-instrumentation/workspace /instrumentations/python
 
 # Python eBPF
 COPY --from=public.ecr.aws/odigos/agents/python-ebpf:v0.0.9 /python-instrumentation/enterprise-workspace /instrumentations/python-ebpf
