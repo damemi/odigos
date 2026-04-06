@@ -5,8 +5,6 @@ import { useUserStore } from '@/store';
 import { PlusIcon } from '@odigos/ui-kit/icons';
 import styled, { useTheme } from 'styled-components';
 import { UsersTable, CreateUserModal } from '@/components';
-import { CreateTeamModal } from '@/components/modal/create-team-modal';
-import { ComputePlatformsTable, TeamsTable } from '@/components/tables';
 import { Button, TabList, Tab, FlexRow } from '@odigos/ui-kit/components';
 
 const Container = styled.div`
@@ -22,15 +20,15 @@ const PushRight = styled.div`
 
 enum AccessTab {
   Users = 'Users',
-  Teams = 'Teams',
-  Compute = 'Compute Platforms',
+  // Teams = 'Teams',
+  // Compute = 'Compute Platforms',
 }
 
 const renderActiveTab = ({ activeTab }: { activeTab: AccessTab }) => {
   const tabFactories: Record<AccessTab, () => React.ReactNode> = {
     [AccessTab.Users]: () => <UsersTable />,
-    [AccessTab.Teams]: () => <TeamsTable />,
-    [AccessTab.Compute]: () => <ComputePlatformsTable />,
+    // [AccessTab.Teams]: () => <TeamsTable />,
+    // [AccessTab.Compute]: () => <ComputePlatformsTable />,
   };
 
   return (tabFactories[activeTab] || tabFactories[AccessTab.Users])();
@@ -44,8 +42,8 @@ export default function Page() {
 
   const tabs: Tab[] = [
     { label: AccessTab.Users, selected: activeTab === AccessTab.Users, onClick: () => setActiveTab(AccessTab.Users) },
-    { label: AccessTab.Teams, selected: activeTab === AccessTab.Teams, onClick: () => setActiveTab(AccessTab.Teams) },
-    { label: AccessTab.Compute, selected: activeTab === AccessTab.Compute, onClick: () => setActiveTab(AccessTab.Compute) },
+    // { label: AccessTab.Teams, selected: activeTab === AccessTab.Teams, onClick: () => setActiveTab(AccessTab.Teams) },
+    // { label: AccessTab.Compute, selected: activeTab === AccessTab.Compute, onClick: () => setActiveTab(AccessTab.Compute) },
   ];
 
   const onClickCreate = () => setCreateModalOpenFor(activeTab);
@@ -56,7 +54,8 @@ export default function Page() {
       <FlexRow>
         <TabList tabs={tabs} />
 
-        {activeTab !== AccessTab.Compute && isAdmin && (
+        {/* {activeTab !== AccessTab.Compute && isAdmin && ( */}
+        {isAdmin && (
           <PushRight>
             <Button onClick={onClickCreate}>
               <PlusIcon fill={theme.text.primary} />
@@ -69,7 +68,7 @@ export default function Page() {
       {renderActiveTab({ activeTab })}
 
       <CreateUserModal isOpen={createModalOpenFor === AccessTab.Users} onClose={onClickCloseCreate} />
-      <CreateTeamModal isOpen={createModalOpenFor === AccessTab.Teams} onClose={onClickCloseCreate} />
+      {/* <CreateTeamModal isOpen={createModalOpenFor === AccessTab.Teams} onClose={onClickCloseCreate} /> */}
     </Container>
   );
 }

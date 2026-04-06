@@ -14,7 +14,7 @@ export enum UserTableColumn {
   Icon = 'icon',
   User = 'user',
   Role = 'role',
-  Teams = 'teams',
+  // Teams = 'teams',
   Actions = 'actions',
 }
 
@@ -68,7 +68,7 @@ export const UsersTable: React.FC = () => {
       { key: UserTableColumn.Icon, title: '' },
       { key: UserTableColumn.User, title: UTILS.USERS, sortable: true },
       { key: UserTableColumn.Role, title: UTILS.ROLE, sortable: true },
-      { key: UserTableColumn.Teams, title: UTILS.TEAMS, sortable: true },
+      // { key: UserTableColumn.Teams, title: UTILS.TEAMS, sortable: true },
       // TODO: uncomment when user attributes are implemented
       // { key: UserTableColumn.Platforms, title: UTILS.COMPUTE_PLATFORMS, sortable: true },
     ];
@@ -97,10 +97,10 @@ export const UsersTable: React.FC = () => {
             columnKey: UserTableColumn.Role,
             component: () => <Tag type={UTILS.getStatusForRole(user.role)}>{user.role}</Tag>,
           },
-          {
-            columnKey: UserTableColumn.Teams,
-            value: UTILS.TEAMS_COUNT(user.teams?.length || 0),
-          },
+          // {
+          //   columnKey: UserTableColumn.Teams,
+          //   value: UTILS.TEAMS_COUNT(user.teams?.length || 0),
+          // },
           // TODO: uncomment when user attributes are implemented
           // {
           //   columnKey: UserTableColumn.Platforms,

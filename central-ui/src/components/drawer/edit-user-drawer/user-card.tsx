@@ -1,8 +1,8 @@
 import React, { type FC } from 'react';
 import { Role, User } from '@/types';
 import { useUserStore } from '@/store';
-import { ROLE, ROLE_OPTIONS, TEAMS_COUNT, TEAMS } from '@/utils';
-import { DataCard, Dropdown, Text } from '@odigos/ui-kit/components';
+import { ROLE, ROLE_OPTIONS } from '@/utils';
+import { DataCard, Dropdown } from '@odigos/ui-kit/components';
 import { DataCardCellStretch, DataCardCellTitle, DataCardContentRow, DataCardContentCell } from '../cards/styled';
 
 interface FormData {
@@ -16,10 +16,10 @@ interface UserCardProps {
   handleFormChange: (key: keyof FormData, value: any) => void;
 }
 
-const UserCard: FC<UserCardProps> = ({ user, formData, handleFormChange }) => {
+const UserCard: FC<UserCardProps> = ({ user: _, formData, handleFormChange }) => {
   const { isAdmin } = useUserStore();
 
-  const teamsCount = user.teams?.length || 0;
+  // const teamsCount = user.teams?.length || 0;
   // TODO: uncomment when user attributes are implemented
   // const platformsCount = user.computePlatforms?.length || 0;
 
@@ -40,10 +40,10 @@ const UserCard: FC<UserCardProps> = ({ user, formData, handleFormChange }) => {
             />
           </DataCardCellStretch>
         </DataCardContentCell>
-        <DataCardContentCell>
+        {/* <DataCardContentCell>
           <DataCardCellTitle>{TEAMS}</DataCardCellTitle>
           <Text>{TEAMS_COUNT(teamsCount)}</Text>
-        </DataCardContentCell>
+        </DataCardContentCell> */}
         {/* TODO: uncomment when user attributes are implemented */}
         {/* <DataCardContentCell>
           <DataCardCellTitle>{COMPUTE_PLATFORMS}</DataCardCellTitle>

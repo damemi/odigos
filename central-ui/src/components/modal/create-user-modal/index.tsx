@@ -24,8 +24,8 @@ interface CreateUserModalProps {
 const INITIAL_FORM_DATA: CreateUserFormData = {
   [CreateUserFormField.Email]: '',
   [CreateUserFormField.Role]: ROLE_OPTIONS.find((opt) => opt.id === Role.VIEWER)!,
-  [CreateUserFormField.Teams]: [],
-  [CreateUserFormField.ComputePlatforms]: [],
+  // [CreateUserFormField.Teams]: [],
+  // [CreateUserFormField.ComputePlatforms]: [],
 };
 
 export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose }) => {
@@ -54,9 +54,9 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClos
         email: formData[CreateUserFormField.Email],
         role: formData[CreateUserFormField.Role].id as Role,
         password: undefined,
-        addTeamIds: formData[CreateUserFormField.Teams].map(({ id }) => id as string),
+        addTeamIds: [], // formData[CreateUserFormField.Teams].map(({ id }) => id as string),
         removeTeamIds: [],
-        addComputePlatformIds: formData[CreateUserFormField.ComputePlatforms].map(({ id }) => id as string),
+        addComputePlatformIds: [], // formData[CreateUserFormField.ComputePlatforms].map(({ id }) => id as string),
         removeComputePlatformIds: [],
       });
 

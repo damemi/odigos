@@ -1,7 +1,6 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Role } from '@/types';
 import { ROLE_OPTIONS } from '@/utils';
-import { useTeamsCRUD } from '@/hooks';
 import { StatusType } from '@odigos/ui-kit/types';
 import * as STRINGS from '@/utils/constants/strings';
 import { Input, Dropdown, NotificationNote, Text, DropdownOption } from '@odigos/ui-kit/components';
@@ -17,8 +16,8 @@ export enum CreateUserFormField {
 export interface CreateUserFormData {
   [CreateUserFormField.Email]: string;
   [CreateUserFormField.Role]: DropdownOption<Role>;
-  [CreateUserFormField.Teams]: DropdownOption[];
-  [CreateUserFormField.ComputePlatforms]: DropdownOption[];
+  // [CreateUserFormField.Teams]: DropdownOption[];
+  // [CreateUserFormField.ComputePlatforms]: DropdownOption[];
 }
 
 interface CreateUserFormProps {
@@ -30,9 +29,8 @@ interface CreateUserFormProps {
 }
 
 export const CreateUserForm: React.FC<CreateUserFormProps> = ({ formData, errors, creating, onChange, onSubmit }) => {
-  const { teams } = useTeamsCRUD();
-
-  const teamOptions: DropdownOption[] = useMemo(() => teams.map((team) => ({ id: team.id, value: team.name })), [teams]);
+  // const { teams } = useTeamsCRUD();
+  // const teamOptions: DropdownOption[] = useMemo(() => teams.map((team) => ({ id: team.id, value: team.name })), [teams]);
 
   const isSubmitDisabled = !formData[CreateUserFormField.Email] || creating;
 
@@ -65,7 +63,7 @@ export const CreateUserForm: React.FC<CreateUserFormProps> = ({ formData, errors
           />
         </Half>
       </Row>
-      <Row>
+      {/* <Row>
         <Half>
           <Dropdown
             title={STRINGS.TEAMS}
@@ -82,7 +80,7 @@ export const CreateUserForm: React.FC<CreateUserFormProps> = ({ formData, errors
             isMulti
           />
         </Half>
-      </Row>
+      </Row> */}
       <ButtonContainer>
         <CreateButton type='submit' disabled={isSubmitDisabled}>
           {creating ? STRINGS.CREATING : STRINGS.CREATE_USER}

@@ -2,7 +2,6 @@ import React, { useState, type FC } from 'react';
 import type { User, UserInput } from '@/types';
 import { UserCard } from './user-card';
 import { Relative } from '@/components/styled';
-import { TeamsCard } from '../cards/teams-card';
 import styled, { useTheme } from 'styled-components';
 import { BUTTON_TEXTS } from '@odigos/ui-kit/constants';
 import { useGenericForm, usePopup } from '@odigos/ui-kit/hooks';
@@ -98,7 +97,7 @@ const EditUserDrawer: FC<EditUserDrawerProps> = ({ user, onClose, onSave, onDele
       >
         <FlexColumn $gap={24}>
           <UserCard user={user} formData={formData} handleFormChange={handleFormChange} />
-          <TeamsCard currentTeams={user.teams || []} formData={formData} handleFormChange={handleFormChange} />
+          {/* <TeamsCard currentTeams={user.teams || []} formData={formData} handleFormChange={handleFormChange} /> */}
         </FlexColumn>
       </Drawer>
 
