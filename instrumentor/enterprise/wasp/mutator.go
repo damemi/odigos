@@ -9,7 +9,7 @@ import (
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 	"github.com/odigos-io/odigos/common"
-	"github.com/odigos-io/wasp-handshake/sender"
+	"github.com/odigos-io/ebpf-core/pkg/wasp"
 )
 
 const (
@@ -44,11 +44,11 @@ func PodMutator(pod *corev1.Pod, config common.OdigosConfiguration) error {
 		Image: fmt.Sprintf("%s/%s:%s", config.ImagePrefix, waspInitContainerImageName, waspInitContainerImageVersion),
 		Env: []corev1.EnvVar{
 			{
-				Name:  sender.TargetAddressEnvName,
+				Name:  wasp.TargetAddressEnvName,
 				Value: fmt.Sprintf("http://%s.%s:%d", k8sconsts.OdigletLocalTrafficServiceName, odigosNamespace, k8sconsts.OdigletWaspServicePort),
 			},
 			{
-				Name: sender.PodNameEnvName,
+				Name: wasp.PodNameEnvName,
 				ValueFrom: &corev1.EnvVarSource{
 					FieldRef: &corev1.ObjectFieldSelector{
 						FieldPath: "metadata.name",
@@ -56,7 +56,7 @@ func PodMutator(pod *corev1.Pod, config common.OdigosConfiguration) error {
 				},
 			},
 			{
-				Name: sender.PodUIDEnvName,
+				Name: wasp.PodUIDEnvName,
 				ValueFrom: &corev1.EnvVarSource{
 					FieldRef: &corev1.ObjectFieldSelector{
 						FieldPath: "metadata.uid",

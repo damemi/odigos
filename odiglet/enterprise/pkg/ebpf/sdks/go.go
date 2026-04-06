@@ -20,6 +20,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 
+	"github.com/odigos-io/ebpf-core/pkg/wasp"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/api/odigos/v1alpha1/instrumentationrules"
 	"github.com/odigos-io/odigos/common"
@@ -27,7 +28,6 @@ import (
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/instrumentation"
 	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
-	wasp "github.com/odigos-io/wasp-handshake/common"
 )
 
 const rsaPublicKeyString = `-----BEGIN PUBLIC KEY-----

@@ -6,6 +6,8 @@ github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
 github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
+github.com/cilium/ebpf v0.19.0 h1:Ro/rE64RmFBeA9FGjcTc+KmCeY6jXmryu6FfnzPRIao=
+github.com/cilium/ebpf v0.19.0/go.mod h1:fLCgMo3l8tZmAdM3B2XqdFzXBpwkcSTroaVqN08OWVY=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=
@@ -30,6 +32,8 @@ github.com/go-openapi/jsonreference v0.21.0 h1:Rs+Y7hSXT83Jacb7kFyjn4ijOuVGSvOdF
 github.com/go-openapi/jsonreference v0.21.0/go.mod h1:LmZmgsrTkVg9LG4EaHeY8cBDslNPMo06cago5JNLkm4=
 github.com/go-openapi/swag v0.23.0 h1:vsEVJDUo2hPJ2tu0/Xc+4noaxyEffXNIs3cOULZ+GrE=
 github.com/go-openapi/swag v0.23.0/go.mod h1:esZ8ITTYEsH1V2trKHjAN8Ai7xHb8RV+YSZ577vPjgQ=
+github.com/go-quicktest/qt v1.101.1-0.20240301121107-c6c8733fa1e6 h1:teYtXy9B7y5lHTp8V9KPxpYRAVA7dozigQcMiBust1s=
+github.com/go-quicktest/qt v1.101.1-0.20240301121107-c6c8733fa1e6/go.mod h1:p4lGIVX+8Wa6ZPNDvqcxq36XpUDLh42FLetFU7odllI=
 github.com/go-task/slim-sprig/v3 v3.0.0 h1:sUs3vkvUymDpBKi3qH1YSqBQk9+9D/8M2mN1vB6EwHI=
 github.com/go-task/slim-sprig/v3 v3.0.0/go.mod h1:W848ghGpv3Qj3dhTPRyJypKRiqCdHZiAzKg9hl15HA8=
 github.com/gogo/protobuf v1.3.2 h1:Ov1cvc58UF3b5XjBnZv7+opcTcQFZebYjWzi34vdm4Q=
@@ -77,6 +81,8 @@ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=
+github.com/odigos-io/ebpf-core v0.1.0 h1:Y2cG3i4ttjRwuaDOGZZapgySwr5lRPGS2M/MoSy6pco=
+github.com/odigos-io/ebpf-core v0.1.0/go.mod h1:O4tZSSz1HBdRZqPqVXK0Hz5GYmhw+aPId9+cu/Uq6gc=
 github.com/odigos-io/odigos/api v1.23.0-pre8.0.20260329103529-37b3c8ff92eb h1:2Q72MH4wncup+zBQ33+8s1ebkc2e47XROBy+rm5Yx9M=
 github.com/odigos-io/odigos/api v1.23.0-pre8.0.20260329103529-37b3c8ff92eb/go.mod h1:YatVIM5ul8M2KsDnyqxWIKH0EVBUpsTl0zrtIZIW5p0=
 github.com/odigos-io/odigos/common v1.23.0-pre8.0.20260329103529-37b3c8ff92eb h1:7rT3T76fmJhTLQvoJ4sAwRx584XV5vUZitg6htKqISk=
@@ -87,8 +93,6 @@ github.com/odigos-io/odigos/instrumentor v1.23.0-pre8.0.20260329103529-37b3c8ff9
 github.com/odigos-io/odigos/instrumentor v1.23.0-pre8.0.20260329103529-37b3c8ff92eb/go.mod h1:JkMQtE8ZxuRp+W/UEcV/d90HCEaCDg53F/SLfo/tbGc=
 github.com/odigos-io/odigos/k8sutils v1.23.0-pre8.0.20260329103529-37b3c8ff92eb h1:dSstoVj8v/N0mX0S79pBYWFVBGCEyJ+hzp26o+EbSAY=
 github.com/odigos-io/odigos/k8sutils v1.23.0-pre8.0.20260329103529-37b3c8ff92eb/go.mod h1:CuX9rfUZD/7j/z8BwooxG4mCt7kRoVgFieFZaceVqF0=
-github.com/odigos-io/wasp-handshake v0.0.0-20251125161815-ff3306f4add1 h1:sk413IFjZSjAoA/8M8s4H0e1StiZ+6gvL0DPrD7Dbp0=
-github.com/odigos-io/wasp-handshake v0.0.0-20251125161815-ff3306f4add1/go.mod h1:zH2C6EOXuMD21e5r/zUtARBMvLKT9v2RW7WQf2Hjd/E=
 github.com/onsi/ginkgo v1.16.5 h1:8xi0RTUf59SOSfEtZMvwTvXYMzG4gV23XVHOZiXNtnE=
 github.com/onsi/ginkgo v1.16.5/go.mod h1:+E8gABHa3K6zRBolWtd+ROzc/U5bkGt0FwiG042wbpU=
 github.com/onsi/ginkgo/v2 v2.27.2 h1:LzwLj0b89qtIy6SSASkzlNvX6WktqurSHwkk2ipF/Ns=

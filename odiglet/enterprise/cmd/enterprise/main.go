@@ -24,8 +24,8 @@ import (
 	"github.com/odigos-io/odigos/odiglet"
 	"github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
-	commonwasp "github.com/odigos-io/wasp-handshake/common"
-	waspserver "github.com/odigos-io/wasp-handshake/server"
+	"github.com/odigos-io/ebpf-core/pkg/wasp"
+	waspserver "github.com/odigos-io/ebpf-core/pkg/wasp/server"
 )
 
 const (
@@ -130,7 +130,7 @@ func main() {
 }
 
 func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distros.Getter) (map[string]commonInstrumentation.Factory, error) {
-	var wp commonwasp.MapsProvider
+	var wp wasp.MapsProvider
 	if waspEnabled {
 		wp = waspserver.NewServer(slog.Default(), k8sconsts.OdigletWaspServicePort, process.HostProcDir())
 		if server, ok := wp.(*waspserver.Server); ok {

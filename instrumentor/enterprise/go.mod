@@ -3,13 +3,13 @@ module github.com/odigos-io/odigos-enterprise/instrumentor
 go 1.26.1
 
 require (
+	github.com/odigos-io/ebpf-core v0.1.0
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
 	github.com/odigos-io/odigos/api v1.23.0-pre8.0.20260329103529-37b3c8ff92eb
 	github.com/odigos-io/odigos/common v1.23.0-pre8.0.20260329103529-37b3c8ff92eb
 	github.com/odigos-io/odigos/instrumentor v1.23.0-pre8.0.20260329103529-37b3c8ff92eb
 	github.com/odigos-io/odigos/k8sutils v1.23.0-pre8.0.20260329103529-37b3c8ff92eb
-	github.com/odigos-io/wasp-handshake v0.0.0-20251125161815-ff3306f4add1
 	k8s.io/api v0.35.0
 	k8s.io/client-go v0.35.0
 	sigs.k8s.io/controller-runtime v0.22.1
@@ -21,8 +21,10 @@ require (
 )
 
 require (
+	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/cilium/ebpf v0.19.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
