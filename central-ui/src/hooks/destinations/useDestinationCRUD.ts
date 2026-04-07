@@ -12,8 +12,8 @@ interface UseDestinationCrud {
   destinations: Destination[];
   destinationsLoading: boolean;
   fetchDestinations: () => Promise<void>;
-  createDestination: (destination: DestinationFormData) => Promise<void>;
-  updateDestination: (id: string, destination: DestinationFormData) => Promise<void>;
+  createDestination: (destination: DestinationFormData) => Promise<{ error?: string } | undefined>;
+  updateDestination: (id: string, destination: DestinationFormData) => Promise<{ error?: string } | undefined>;
   deleteDestination: (id: string) => Promise<void>;
 }
 
@@ -60,25 +60,26 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
   const createDestination: UseDestinationCrud['createDestination'] = async (destination) => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
-    } else {
-      await mutateCreate({ destination: mapNoUndefinedFields(destination, selectedStreamName) });
-      // !! no "fetch", and no "notifyUser"
-      // !! we should wait for SSE to handle that
+      return { error: FORM_ALERTS.READONLY_WARNING };
     }
+    const { error } = await mutateCreate({ destination: mapNoUndefinedFields(destination, selectedStreamName) });
+    if (error) return { error };
+    return undefined;
   };
 
   const updateDestination: UseDestinationCrud['updateDestination'] = async (id, destination) => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
-    } else {
-      const { data } = await mutateUpdate({ id, destination: mapNoUndefinedFields(destination, selectedStreamName) });
-
-      if (data?.updateDestination) {
-        notifyUser(StatusType.Success, Crud.Update, `Successfully updated "${destination.type}" destination`, id);
-        // !! no "fetch"
-        // !! we should wait for SSE to handle that
-      }
+      return { error: FORM_ALERTS.READONLY_WARNING };
     }
+    const { data, error } = await mutateUpdate({ id, destination: mapNoUndefinedFields(destination, selectedStreamName) });
+
+    if (error) return { error };
+
+    if (data?.updateDestination) {
+      notifyUser(StatusType.Success, Crud.Update, `Successfully updated "${destination.type}" destination`, id);
+    }
+    return undefined;
   };
 
   const deleteDestination: UseDestinationCrud['deleteDestination'] = async (id) => {

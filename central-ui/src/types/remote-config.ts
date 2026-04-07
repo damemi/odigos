@@ -1,10 +1,4 @@
-// Remote configuration managed by central-backend
-// These settings take precedence over Helm values and persist through upgrades
+import type { EffectiveConfigInput } from '@odigos/ui-kit/types';
 
-interface RolloutInput {
-  automaticRolloutDisabled?: boolean;
-}
-
-export interface RemoteConfigInput {
-  rollout?: RolloutInput;
-}
+/** GraphQL `RemoteConfigInput` — fields supported by `updateRemoteConfig` on the proxy. */
+export type RemoteConfigInput = Pick<Partial<EffectiveConfigInput>, 'rollout'>;

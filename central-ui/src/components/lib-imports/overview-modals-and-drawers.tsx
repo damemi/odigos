@@ -1,19 +1,22 @@
-import React from 'react';
+import React, { useCallback } from 'react';
+import { useModalStore } from '@odigos/ui-kit/store';
+import { EntityTypes } from '@odigos/ui-kit/types';
+import { ActionDrawer, DestinationDrawer, InstrumentationRuleDrawer, SourceDrawer } from '@odigos/ui-kit/containers';
 import {
-  ActionDrawer,
-  ActionModal,
-  DataStreamModal,
-  DestinationDrawer,
-  DestinationModal,
-  InstrumentationRuleDrawer,
-  InstrumentationRuleModal,
-  SourceDrawer,
-  SourceModal,
-} from '@odigos/ui-kit/containers';
+  AddActionDrawer,
+  AddDestinationDrawer,
+  AddRuleDrawer,
+  AddSourceDrawer,
+  AddActionFormContextProvider,
+  AddDestinationFormContextProvider,
+  AddRuleFormContextProvider,
+  AddSourceFormContextProvider,
+} from '@odigos/ui-kit/containers/v2';
 import {
   useActionCRUD,
   useDescribe,
   useDestinationCategories,
+  useDestinationCategoriesLegacy,
   useDestinationCRUD,
   useInstrumentationRuleCRUD,
   useNamespace,
@@ -24,34 +27,53 @@ import {
 } from '@/hooks';
 
 const OverviewModalsAndDrawers = () => {
-  const { fetchNamespacesWithWorkloads } = useNamespace();
+  const { currentModal, setCurrentModal } = useModalStore();
+
   const { fetchDescribeSource } = useDescribe();
   const { testConnection } = useTestConnection();
-  const { categories } = useDestinationCategories();
-  const { potentialDestinations } = usePotentialDestinations();
+  const { fetchNamespacesWithWorkloads } = useNamespace();
+  const { categories } = useDestinationCategoriesLegacy();
+  const { getDestinationCategories } = useDestinationCategories();
+  const { getPotentialDestinations } = usePotentialDestinations();
   const { createAction, updateAction, deleteAction } = useActionCRUD();
   const { restartWorkloads, restartPod, recoverFromRollback } = useWorkloadUtils();
   const { createDestination, updateDestination, deleteDestination } = useDestinationCRUD();
-  const { persistSources, updateSource, fetchSourceById, fetchSourceLibraries, fetchPeerSources } = useSourceCRUD();
   const { createInstrumentationRule, updateInstrumentationRule, deleteInstrumentationRule } = useInstrumentationRuleCRUD();
+  const { persistSources, persistSourcesV2, updateSource, fetchSourceById, fetchSourceLibraries, fetchPeerSources } = useSourceCRUD();
+
+  const handleCloseModal = useCallback(() => setCurrentModal(''), [setCurrentModal]);
 
   return (
     <>
-      {/* modals */}
-      <SourceModal fetchNamespacesWithWorkloads={fetchNamespacesWithWorkloads} persistSources={persistSources} />
-      <DestinationModal
-        isOnboarding={false}
-        categories={categories}
-        potentialDestinations={potentialDestinations}
-        createDestination={createDestination}
-        updateDestination={updateDestination}
-        deleteDestination={deleteDestination}
-        testConnection={testConnection}
-      />
-      <InstrumentationRuleModal createInstrumentationRule={createInstrumentationRule} />
-      <ActionModal createAction={createAction} />
+      {currentModal === EntityTypes.Source && (
+        <AddSourceFormContextProvider fetchNamespacesWithWorkloads={fetchNamespacesWithWorkloads}>
+          <AddSourceDrawer onClose={handleCloseModal} persistSources={persistSourcesV2} withOverlay />
+        </AddSourceFormContextProvider>
+      )}
+      {currentModal === EntityTypes.Destination && (
+        <AddDestinationFormContextProvider>
+          <AddDestinationDrawer
+            onClose={handleCloseModal}
+            getDestinationCategories={getDestinationCategories}
+            getPotentialDestinations={getPotentialDestinations}
+            testConnection={testConnection}
+            createDestination={createDestination}
+            updateDestination={updateDestination}
+            withOverlay
+          />
+        </AddDestinationFormContextProvider>
+      )}
+      {currentModal === EntityTypes.InstrumentationRule && (
+        <AddRuleFormContextProvider>
+          <AddRuleDrawer onClose={handleCloseModal} createInstrumentationRule={createInstrumentationRule} withOverlay />
+        </AddRuleFormContextProvider>
+      )}
+      {currentModal === EntityTypes.Action && (
+        <AddActionFormContextProvider>
+          <AddActionDrawer onClose={handleCloseModal} createAction={createAction} withOverlay />
+        </AddActionFormContextProvider>
+      )}
 
-      {/* drawers */}
       <SourceDrawer
         persistSources={persistSources}
         restartWorkloads={restartWorkloads}
@@ -66,7 +88,6 @@ const OverviewModalsAndDrawers = () => {
       <DestinationDrawer categories={categories} updateDestination={updateDestination} deleteDestination={deleteDestination} testConnection={testConnection} />
       <InstrumentationRuleDrawer updateInstrumentationRule={updateInstrumentationRule} deleteInstrumentationRule={deleteInstrumentationRule} />
       <ActionDrawer updateAction={updateAction} deleteAction={deleteAction} />
-      <DataStreamModal />
     </>
   );
 };

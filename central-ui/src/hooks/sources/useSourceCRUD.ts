@@ -5,10 +5,21 @@ import { useNamespace } from '../namespaces';
 import { useOdigos } from '@odigos/ui-kit/contexts';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { getIdFromSseTarget, getSseTargetFromId, trimVersion } from '@odigos/ui-kit/functions';
-import type { SourceConditions, SourceInstrumentInput, WorkloadResponse, WorkloadWithOdigosHealthStatus } from '@/types';
+import type { NamespaceInstrumentInput, SourceConditions, SourceInstrumentInput, WorkloadResponse, WorkloadWithOdigosHealthStatus } from '@/types';
 import { addAgentInjectionStatusToSources, addConditionToSources, mapWorkloadToSource, sortSources, prepareNamespacePayloads, prepareSourcePayloads } from '@/utils';
 import { GET_PEER_SOURCES, GET_SOURCE, GET_SOURCE_CONDITIONS, GET_SOURCE_LIBRARIES, GET_SOURCES, GET_WORKLOADS, GET_WORKLOADS_BY_IDS, PERSIST_SOURCES, UPDATE_SOURCE } from '@/graphql';
-import { Crud, EntityTypes, StatusType, type PeerSources, type SourceFormData, type Source, type WorkloadId, type InstrumentationInstanceComponent, type Workload } from '@odigos/ui-kit/types';
+import {
+  Crud,
+  EntityTypes,
+  StatusType,
+  type PeerSources,
+  type PersistSourceInput,
+  type SourceFormData,
+  type Source,
+  type WorkloadId,
+  type InstrumentationInstanceComponent,
+  type Workload,
+} from '@odigos/ui-kit/types';
 import {
   type NamespaceSelectionFormData,
   type SourceSelectionFormData,
@@ -32,6 +43,7 @@ interface UseSourceCrud {
   fetchSourceLibraries: (id: WorkloadId) => Promise<{ data?: { instrumentationInstanceComponents: InstrumentationInstanceComponent[] } }>;
   fetchPeerSources: (serviceName: string) => Promise<{ data?: { peerSources: PeerSources } }>;
   persistSources: (selectAppsList: SourceSelectionFormData, futureSelectAppsList: NamespaceSelectionFormData) => Promise<void>;
+  persistSourcesV2: (payload: PersistSourceInput) => Promise<{ error?: string } | undefined>;
   updateSource: (sourceId: WorkloadId, payload: SourceFormData) => Promise<void>;
 }
 
@@ -233,6 +245,46 @@ export const useSourceCRUD = (): UseSourceCrud => {
     }
   };
 
+  const persistSourcesV2: UseSourceCrud['persistSourcesV2'] = async (input) => {
+    if (isReadonly) {
+      notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
+      return { error: FORM_ALERTS.READONLY_WARNING };
+    }
+
+    const entries = Object.entries(input);
+    const errors: string[] = [];
+
+    for await (const [_, inputs] of entries) {
+      const workloadSources: SourceInstrumentInput = { sources: [] };
+      const namespaceSources: NamespaceInstrumentInput = { namespaces: [] };
+
+      for (const source of inputs) {
+        if (source.name && source.kind) {
+          workloadSources.sources.push({
+            namespace: source.namespace,
+            name: source.name,
+            kind: source.kind,
+            selected: source.selected,
+            currentStreamName: source.currentStreamName,
+          });
+        } else {
+          namespaceSources.namespaces.push({
+            namespace: source.namespace,
+            selected: source.selected,
+            currentStreamName: source.currentStreamName,
+          });
+        }
+      }
+
+      if (namespaceSources.namespaces.length > 0) await persistNamespaces(namespaceSources);
+      if (workloadSources.sources.length > 0) await mutatePersistSources(workloadSources);
+    }
+
+    return {
+      error: errors.length > 0 ? `Failed to persist sources in ${errors.length} clusters: ${errors.join(', ')}` : undefined,
+    };
+  };
+
   const updateSource: UseSourceCrud['updateSource'] = async (sourceId, payload) => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
@@ -258,6 +310,7 @@ export const useSourceCRUD = (): UseSourceCrud => {
     fetchSourceLibraries: querySourceLibraries,
     fetchPeerSources: (serviceName: string) => queryPeerSources({ serviceName }),
     persistSources,
+    persistSourcesV2,
     updateSource,
   };
 };

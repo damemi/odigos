@@ -3,6 +3,7 @@ export * from './data-streams';
 export * from './destinations';
 export * from './instrumentation-rules';
 export * from './namespaces';
+export * from './local-ui-config';
 export * from './remote-config';
 export * from './sources';
 export * from './tokens';

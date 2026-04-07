@@ -1,10 +1,10 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useRemoteFetch } from '../proxy';
 import { useOdigos } from '@odigos/ui-kit/contexts';
-import { PlatformType } from '@odigos/ui-kit/types';
 import { GET_POTENTIAL_DESTINATIONS } from '@/graphql';
 import { deepClone, safeJsonParse } from '@odigos/ui-kit/functions';
-import { useDestinationCategories } from './useDestinationCategories';
+import type { GetPotentialDestinationsResult } from '@odigos/ui-kit/types';
+import { useDestinationCategoriesLegacy } from './useDestinationCategoriesLegacy';
 import { type ISetupState, useSetupStore } from '@odigos/ui-kit/store';
 
 interface PotentialDestination {
@@ -45,10 +45,15 @@ const checkIfConfigured = (
 
 export const usePotentialDestinations = () => {
   const { isVm } = useOdigos();
-  const { categories } = useDestinationCategories();
+  const { categories } = useDestinationCategoriesLegacy();
   const { configuredDestinations } = useSetupStore();
 
   const { fetch, loading, data } = useRemoteFetch<GetPotentialDestinationsData>(GET_POTENTIAL_DESTINATIONS);
+
+  const getPotentialDestinations = useCallback(async (): Promise<GetPotentialDestinationsResult | undefined> => {
+    const { data: res } = await fetch();
+    return res as GetPotentialDestinationsResult | undefined;
+  }, [fetch]);
 
   const potentialDestinations = useMemo(() => {
     if (!categories || !data?.potentialDestinations) return [];
@@ -92,5 +97,6 @@ export const usePotentialDestinations = () => {
   return {
     loading,
     potentialDestinations,
+    getPotentialDestinations,
   };
 };

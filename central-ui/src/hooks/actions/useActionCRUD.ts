@@ -80,29 +80,29 @@ export const useActionCRUD = (connections?: ComputePlatform[]): UseActionCrud =>
   const createAction: UseActionCrud['createAction'] = async (payload, connectionIds) => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
-    } else {
-      if (connectionIds?.length) {
-        // use multi-remote
-        const res = await mutateCreateMulti(connectionIds, { action: stringifyRenames(payload) });
-        const error = res.error;
-        if (error) {
-          notifyUser(StatusType.Error, Crud.Create, error);
-          return { error };
-        } else {
-          // no need to handle data, mutli proxy is a feature for non-proxy pages
-          notifyUser(StatusType.Success, Crud.Create, 'Successfully created action');
-        }
-      }
-
-      // use single-remote
-      const res = await mutateCreate({ action: stringifyRenames(payload) });
-      const action = res.data?.createAction;
-      if (action) {
-        const { id, type } = action;
-        fetchActions(); // refetch because of conditions
-        notifyUser(StatusType.Success, Crud.Create, `Successfully created "${type}" action`, id);
-      }
+      return { error: FORM_ALERTS.READONLY_WARNING };
     }
+    if (connectionIds?.length) {
+      const res = await mutateCreateMulti(connectionIds, { action: stringifyRenames(payload) });
+      const error = res.error;
+      if (error) {
+        notifyUser(StatusType.Error, Crud.Create, error);
+        return { error };
+      }
+      notifyUser(StatusType.Success, Crud.Create, 'Successfully created action');
+      return undefined;
+    }
+
+    const res = await mutateCreate({ action: stringifyRenames(payload) });
+    const action = res.data?.createAction;
+    if (action) {
+      const { id, type } = action;
+      fetchActions();
+      notifyUser(StatusType.Success, Crud.Create, `Successfully created "${type}" action`, id);
+      return undefined;
+    }
+    if (res.error) return { error: res.error };
+    return undefined;
   };
 
   const updateAction: UseActionCrud['updateAction'] = async (id, payload) => {

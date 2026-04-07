@@ -58,29 +58,30 @@ export const useInstrumentationRuleCRUD = (connections?: ComputePlatform[]): Use
   const createInstrumentationRule: UseInstrumentationRuleCrud['createInstrumentationRule'] = async (instrumentationRule, connectionIds) => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
+      return { error: FORM_ALERTS.READONLY_WARNING };
     } else {
       if (connectionIds?.length) {
-        // use multi-remote
         const res = await mutateCreateMulti(connectionIds, { instrumentationRule });
         const error = res.error;
         if (error) {
           notifyUser(StatusType.Error, Crud.Create, error);
           return { error };
-        } else {
-          // no need to handle data, mutli proxy is a feature for non-proxy pages
-          notifyUser(StatusType.Success, Crud.Create, 'Successfully created rule');
         }
+        notifyUser(StatusType.Success, Crud.Create, 'Successfully created rule');
+        return undefined;
       }
 
-      // use single-remote
       const res = await mutateCreate({ instrumentationRule });
       const rule = res.data?.createInstrumentationRule;
       if (rule) {
         const { ruleId, type } = rule;
         addEntities(EntityTypes.InstrumentationRule, [rule]);
         notifyUser(StatusType.Success, Crud.Create, `Successfully created "${type}" rule`, ruleId);
+        return undefined;
       }
+      if (res.error) return { error: res.error };
     }
+    return undefined;
   };
 
   const updateInstrumentationRule: UseInstrumentationRuleCrud['updateInstrumentationRule'] = async (ruleId, instrumentationRule) => {
