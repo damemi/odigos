@@ -47,7 +47,7 @@ RUN --mount=type=secret,id=github_token \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
 
 WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
-# Copyy local modules required by the build
+# Copy local modules required by the build
 COPY odigosauth/ odigosauth/
 COPY distros/ distros/
 WORKDIR ./odiglet/
@@ -69,37 +69,40 @@ RUN go install github.com/go-delve/delve/cmd/dlv@latest
 
 WORKDIR /instrumentations
 
-# Java
+# java-community
 ARG JAVA_OTEL_VERSION=v1.29.0
 ADD https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/$JAVA_OTEL_VERSION/opentelemetry-javaagent.jar /instrumentations/java/javaagent.jar
 RUN chmod 644 /instrumentations/java/javaagent.jar
 
-# Python
+# python-community/python-community3.8
 COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.71-py3.8 /python-instrumentation/workspace /instrumentations/python3.8
 COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.70 /python-instrumentation/workspace /instrumentations/python
 
-# Python eBPF
+# python-enterprise
 COPY --from=python-builder /python-instrumentation/enterprise-workspace /instrumentations/python-ebpf
 
 # nodejs-enterprise
 COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.0.15 /instrumentations/opentelemetry-node /instrumentations/opentelemetry-node
 COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.0.15 /instrumentations/nodejs-ebpf /instrumentations/nodejs-ebpf
+# nodejs-enterprise-14
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.16 /instrumentations/opentelemetry-node-14 /instrumentations/opentelemetry-node-14
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.16 /instrumentations/nodejs-ebpf-14 /instrumentations/nodejs-ebpf-14
 
-# .NET
+# dotnet-community
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
 
-# Java
+# java-ebpf-instrumentations
 COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.2.0 /instrumentations/java-ebpf /instrumentations/java-ebpf
 COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.2.0 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
 
-# PHP
+# php-community
 COPY --from=public.ecr.aws/odigos/agents/php-community:v0.3.0 /instrumentations/php /instrumentations/php
 
-# Ruby
+# ruby-community
 COPY --from=public.ecr.aws/odigos/agents/ruby-community:v0.0.8 /instrumentations/ruby /instrumentations/ruby
 
 # loader
-ARG ODIGOS_LOADER_VERSION=v0.0.7
+ARG ODIGOS_LOADER_VERSION=v0.0.8
 RUN wget --directory-prefix=loader https://storage.googleapis.com/odigos-loader/$ODIGOS_LOADER_VERSION/$TARGETARCH/loader.so
 
 # Note that we do not pass --platform=$BUILDPLATFORM here because we want to build for the target platform

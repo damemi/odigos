@@ -14,6 +14,8 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
+	"github.com/odigos-io/ebpf-core/pkg/wasp"
+	waspserver "github.com/odigos-io/ebpf-core/pkg/wasp/server"
 	enterprisedistros "github.com/odigos-io/odigos-enterprise/distros"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/sdks"
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
@@ -24,8 +26,6 @@ import (
 	"github.com/odigos-io/odigos/odiglet"
 	"github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
-	"github.com/odigos-io/ebpf-core/pkg/wasp"
-	waspserver "github.com/odigos-io/ebpf-core/pkg/wasp/server"
 )
 
 const (
@@ -153,13 +153,17 @@ func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distro
 		return nil, fmt.Errorf("failed to create java ebpf factory: %w", err)
 	}
 
+	pythonEbpfFactory := sdks.NewPythonInstrumentationFactoryEnterprise()
+	nodejsEbpfFactory := sdks.NewNodeJSInstrumentationFactoryEnterprise()
+
 	return map[string]commonInstrumentation.Factory{
 		"golang-enterprise":          goFactory,
 		"java-ebpf-instrumentations": javaEbpfFactory,
 		"java-enterprise":            sdks.NewJavaExtensionInstrumentationFactoryEnterprise(),
-		"python-enterprise":          sdks.NewPythonInstrumentationFactoryEnterprise(),
-		"python-enterprise3.8":       sdks.NewPythonInstrumentationFactoryEnterprise(),
-		"nodejs-enterprise":          sdks.NewNodeJSInstrumentationFactoryEnterprise(),
+		"python-enterprise":          pythonEbpfFactory,
+		"python-enterprise3.8":       pythonEbpfFactory,
+		"nodejs-enterprise":          nodejsEbpfFactory,
+		"nodejs-enterprise-14":       nodejsEbpfFactory,
 		"mysql-enterprise":           sdks.NewMySQLInstrumentationFactoryEnterprise(),
 		// dotnet, ruby and php are using native instrumentation and does not have ebpf instrumentation.
 	}, nil
