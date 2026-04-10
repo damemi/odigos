@@ -7,7 +7,8 @@ spec:
   language: javascript
   runtimeEnvironments:
     - name: nodejs
-      supportedVersions: '>= 14'
+      supportedVersions: '>= 18'
+  fallbackDistro: nodejs-enterprise-14
   displayName: Node.js Enterprise eBPF Processing
   description: |
     This distribution is for Node.js applications using an efficient eBPF-based SDK, and native instrumentation libraries from the OpenTelemetry community.
@@ -29,7 +30,5 @@ spec:
   traces:
     headSampling:
       supported: true
-      urlPathAttributeKey: "http.target"
-      httpRequestMethodAttributeKey: "http.method"
     headersCollection:
       supported: true
