@@ -32,3 +32,5 @@ spec:
       supported: true
     headersCollection:
       supported: true
+    payloadCollection:
+      supported: true
