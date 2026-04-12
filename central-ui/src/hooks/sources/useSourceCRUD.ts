@@ -291,7 +291,11 @@ export const useSourceCRUD = (): UseSourceCrud => {
     } else {
       notifyUser(StatusType.Default, 'Pending', 'Updating source...', undefined, true);
 
-      const { data } = await mutateUpdate({ sourceId, patchSourceRequest: payload });
+      const { data } = await mutateUpdate({
+        sourceId,
+        patchSourceRequest: { ...payload, currentStreamName: selectedStreamName },
+      });
+
       if (data?.updateK8sActualSource) notifyUser(StatusType.Success, Crud.Update, `Successfully updated "${sourceId.name}" source`, sourceId);
     }
   };
