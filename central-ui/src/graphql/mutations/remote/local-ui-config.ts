@@ -10,3 +10,13 @@ export const UPDATE_LOCAL_UI_CONFIG: VersionedRemoteFetch = {
 `,
   },
 };
+
+export const RESET_LOCAL_UI_CONFIG_TO_FACTORY_DEFAULTS: VersionedRemoteFetch = {
+  [PlatformType.K8s]: {
+    'v1.24': `
+  mutation ResetLocalUiConfigToFactoryDefaults {
+    resetLocalUiConfigToFactoryDefaults
+  }
+`,
+  },
+};
