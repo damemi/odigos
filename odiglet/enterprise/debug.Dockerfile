@@ -85,8 +85,8 @@ COPY --from=python-builder /python-instrumentation/enterprise-workspace /instrum
 COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.2.0 /instrumentations/opentelemetry-node /instrumentations/opentelemetry-node
 COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.2.0 /instrumentations/nodejs-ebpf /instrumentations/nodejs-ebpf
 # nodejs-enterprise-14
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.17 /instrumentations/opentelemetry-node-14 /instrumentations/opentelemetry-node-14
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.17 /instrumentations/nodejs-ebpf-14 /instrumentations/nodejs-ebpf-14
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.18 /instrumentations/opentelemetry-node-14 /instrumentations/opentelemetry-node-14
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.18 /instrumentations/nodejs-ebpf-14 /instrumentations/nodejs-ebpf-14
 
 # dotnet-community
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
