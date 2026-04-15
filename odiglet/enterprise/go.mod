@@ -1,6 +1,6 @@
 module github.com/odigos-io/odigos-enterprise/odiglet
 
-go 1.26.1
+go 1.26.2
 
 require (
 	github.com/odigos-io/ebpf-core v0.1.0
