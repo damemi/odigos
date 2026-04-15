@@ -184,7 +184,8 @@ push-image/%:
 	--build-arg SUMMARY="$(SUMMARY)" \
 	--build-arg DESCRIPTION="$(DESCRIPTION)" \
 	--build-arg LD_FLAGS="$(LD_FLAGS)" \
-	--build-arg RHEL="$(RHEL)"
+	--build-arg RHEL="$(RHEL)" \
+	--no-cache
 
 .PHONY: push-operator
 push-operator:
@@ -220,7 +221,7 @@ push-agents:
 
 .PHONY: push-images
 push-images:
-	make push-autoscaler push-scheduler push-odiglet push-instrumentor push-collector push-ui TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
+	make push-autoscaler push-scheduler push-agents push-odiglet push-instrumentor push-collector push-ui TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
 
 .PHONY: push-images-rhel
 push-images-rhel:
