@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -95,15 +96,16 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 				return err
 			}
 
-			var timestamp interface{}
-			var data map[string]interface{}
-			err = json.Unmarshal(file, &data)
-			if err != nil {
+			// Only decode the fields we need for logging; avoid map[string]interface{}
+			// which allocates for the entire offsets document.
+			var meta struct {
+				Timestamp json.RawMessage `json:"timestamp"`
+			}
+			if err := json.Unmarshal(file, &meta); err != nil {
 				return err
 			}
-			timestamp = data["timestamp"]
 
-			g.logger.Info("using custom Go offsets file", "timestamp", timestamp)
+			g.logger.Info("using custom Go offsets file", "timestamp", string(meta.Timestamp))
 
 			g.offsetFileBytes = file
 			g.offsetLastModified = info.ModTime()
@@ -444,9 +446,12 @@ func readAndVerifyOffsetsFile(path string) ([]byte, error) {
 		return nil, errors.New("Public key is not of type RSA")
 	}
 
-	hash := sha256.Sum256([]byte(originalContent))
+	h := sha256.New()
+	if _, err := io.WriteString(h, originalContent); err != nil {
+		return nil, err
+	}
 
-	err = rsa.VerifyPKCS1v15(rsaPublicKey, crypto.SHA256, hash[:], signature)
+	err = rsa.VerifyPKCS1v15(rsaPublicKey, crypto.SHA256, h.Sum(nil), signature)
 	if err != nil {
 		return nil, err
 	}
