@@ -96,7 +96,7 @@ COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.5.0 /inst
 COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.5.0 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
 
 # php-community
-COPY --from=public.ecr.aws/odigos/agents/php-community:v0.3.0 /instrumentations/php /instrumentations/php
+COPY --from=public.ecr.aws/odigos/agents/php-community:v0.3.2 /instrumentations/php /instrumentations/php
 
 # ruby-community
 COPY --from=public.ecr.aws/odigos/agents/ruby-community:v0.0.8 /instrumentations/ruby /instrumentations/ruby
