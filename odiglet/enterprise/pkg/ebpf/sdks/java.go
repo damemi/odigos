@@ -239,6 +239,22 @@ func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instru
 		}
 	}
 
+	kafkaBodyEnabled := false
+	if pc := sdkConfig.DefaultPayloadCollection; pc != nil && pc.Messaging != nil {
+		kafkaBodyEnabled = true
+	}
+	if !kafkaBodyEnabled {
+		for _, library := range sdkConfig.InstrumentationLibraryConfigs {
+			if library.PayloadCollection != nil && library.PayloadCollection.Messaging != nil {
+				kafkaBodyEnabled = true
+				break
+			}
+		}
+	}
+	if err := g.inst.ApplyDynamicConfig(dynamic.KafkaMessageBody(dynamic.KafkaMessageBodyEvent(kafkaBodyEnabled))); err != nil {
+		return err
+	}
+
 	return nil
 }
 
