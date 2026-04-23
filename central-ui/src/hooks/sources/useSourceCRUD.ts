@@ -188,28 +188,29 @@ export const useSourceCRUD = (): UseSourceCrud => {
   };
 
   const fetchSourceById = async (id: WorkloadId): Promise<Source | undefined> => {
-    const { data: sourceData } = await queryById({ sourceId: id });
-    const { source } = sourceData?.computePlatform || {};
-
-    if (!source) return undefined;
-
     if (isV120Plus) {
-      const { data: workloadData } = await queryWorkloads({ filter: { namespace: id.namespace, kind: id.kind, name: id.name } });
-      const workload = workloadData?.workloads?.[0];
+      // Aligned with odigos standalone (commit 710ac114d): single round-trip via queryWorkloadsByIds
+      // returns the full workload payload (containers, conditions, agent status, rollback) plus
+      // the base source identity — no need for the separate GET_SOURCE + GET_WORKLOADS calls.
+      // Fall back to GET_SOURCE only if the workloads-by-ids path yields nothing (e.g. the source
+      // exists but has no workload metadata yet).
+      const { data } = await queryWorkloadsByIds({ ids: [{ namespace: id.namespace, kind: id.kind, name: id.name }] });
+      const workload = data?.workloadsByIds?.[0];
 
       if (workload) {
         const mapped = mapWorkloadToSource(workload);
-        const enrichedSource: Source = {
-          ...source,
-          workloadOdigosHealthStatus: mapped.workloadOdigosHealthStatus,
-          podsAgentInjectionStatus: mapped.podsAgentInjectionStatus,
-          rollbackOccurred: mapped.rollbackOccurred,
-        };
-        addEntities(EntityTypes.Source, [enrichedSource]);
-        return enrichedSource;
+        addEntities(EntityTypes.Source, [mapped]);
+        return mapped;
       }
-    } else {
-      // @deprecated-legacy-api(v1.20) - Remove this else branch
+    }
+
+    // Legacy path (< v1.20) and v1.20+ fallback when workloadsByIds returns empty
+    const { data: sourceData } = await queryById({ sourceId: id });
+    const { source } = sourceData?.computePlatform || {};
+    if (!source) return undefined;
+
+    if (!isV120Plus) {
+      // @deprecated-legacy-api(v1.20) - Remove this branch when min supported proxy >= v1.20
       addEntities(EntityTypes.Source, [source]);
       await fetchAllAgentInjectionStatuses([source]);
       const { sources: updatedSources } = useEntityStore.getState();

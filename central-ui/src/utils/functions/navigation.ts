@@ -9,6 +9,7 @@ import {
   InstrumentationRuleIcon,
   OverviewIcon,
   PipelineCollectorIcon,
+  SamplingIcon,
   ServiceMapIcon,
   SettingsIcon,
   SourceIcon,
@@ -40,6 +41,7 @@ export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, p
 
       navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SERVICE_MAP, ServiceMapIcon));
       navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.PIPELINE_COLLECTORS, PipelineCollectorIcon));
+      navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SAMPLING, SamplingIcon));
       navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SETTINGS, SettingsIcon));
     }
   }

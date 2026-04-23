@@ -7,15 +7,15 @@ import { useConfigYamls, useEffectiveConfig, useUpdateLocalUiConfig } from '@/ho
 
 export default function Page() {
   const { configYamls, configYamlsLoading } = useConfigYamls();
-  const { updateLocalUiConfig, loading: saveLoading } = useUpdateLocalUiConfig();
-  const { effectiveConfig, effectiveConfigLoading, getEffectiveConfig } = useEffectiveConfig([], true);
+  const { updateLocalUiConfig, loading: saveLoading, resetLocalUiConfigToFactoryDefaults } = useUpdateLocalUiConfig();
+  const { effectiveConfig, effectiveConfigLoading, refetchEffectiveConfig } = useEffectiveConfig([], true);
 
   const onSave = useCallback(
     async (config: LocalUiConfigInput) => {
       await updateLocalUiConfig(config);
-      await getEffectiveConfig();
+      await refetchEffectiveConfig();
     },
-    [updateLocalUiConfig, getEffectiveConfig],
+    [updateLocalUiConfig, refetchEffectiveConfig],
   );
 
   return (
@@ -24,8 +24,10 @@ export default function Page() {
       minSupportedVersion={1.2}
       configYamls={configYamls}
       configYamlsLoading={configYamlsLoading}
-      effectiveConfig={effectiveConfig}
+      effectiveConfig={effectiveConfig ?? null}
       effectiveConfigLoading={effectiveConfigLoading}
+      refetch={refetchEffectiveConfig}
+      factoryReset={resetLocalUiConfigToFactoryDefaults}
       onSave={onSave}
       saveLoading={saveLoading}
     />

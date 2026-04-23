@@ -13,30 +13,30 @@
   },
   "dependencies": {
     "@apollo/client": "^3.13.9",
-    "@odigos/ui-kit": "0.0.217",
-    "graphql": "^16.12.0",
+    "@odigos/ui-kit": "0.0.223",
+    "graphql": "^16.13.2",
     "graphql-ws": "^6.0.7",
-    "next": "^15.5.14",
+    "next": "15.5.14",
     "picomatch": "4.0.3",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
     "styled-components": "6.3.12",
     "ws": "8.19.0",
-    "zustand": "^5.0.11"
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@next/bundle-analyzer": "^16.1.6",
-    "@types/node": "^25",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@next/bundle-analyzer": "^16.2.4",
+    "@types/node": "25.6.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
     "@types/styled-components": "^5.1.36",
     "babel-plugin-styled-components": "^2.1.4",
     "check-peer-dependencies": "^4.3.4",
     "cross-env": "^10.1.0",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.6",
-    "typescript": "^5"
+    "eslint": "9.39.2",
+    "eslint-config-next": "16.2.4",
+    "typescript": "5.9.3"
   },
   "resolutions": {
     "ajv": "^6.14.0",

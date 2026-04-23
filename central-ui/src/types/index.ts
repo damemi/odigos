@@ -6,5 +6,6 @@ export * from './destinations';
 export * from './namespaces';
 export * from './remote-config';
 export * from './auth-providers';
+export * from './sampling';
 export * from './sources';
 export * from './auth';

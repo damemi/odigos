@@ -20,12 +20,68 @@ interface UseActionCrud {
   deleteAction: (id: string, actionType: ActionType) => void;
 }
 
+// Drops items from a *-attributes array whose `from` field is missing/empty,
+// mirroring the validation the backend expects (empty "from" is invalid).
+const sanitizeFromArray = <T extends { from?: string | null }>(arr?: T[]) => {
+  if (!Array.isArray(arr)) return arr as unknown as T[] | undefined;
+  return arr.map((item) => {
+    const fromVal = (item as { from?: unknown }).from as string | undefined;
+    const hasValidFrom = typeof fromVal === 'string' && fromVal.trim().length > 0;
+    if (!hasValidFrom) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { from: _from, ...rest } = item as Record<string, unknown>;
+      return rest as T;
+    }
+    return item;
+  });
+};
+
+// Strips blank entries from URL-templatization groups so the backend doesn't
+// reject the whole action for having an empty "kind" / "template" somewhere.
+const sanitizeUrlTemplatizationGroups = (
+  groups: ActionFormData['fields']['urlTemplatizationRulesGroups'],
+): ActionFormData['fields']['urlTemplatizationRulesGroups'] => {
+  if (!Array.isArray(groups)) return groups;
+
+  return groups.map((group) => {
+    const sanitizedGroup = { ...group };
+
+    const kind = sanitizedGroup.filterK8sWorkloadKind as string | undefined | null;
+    if (kind === '') {
+      sanitizedGroup.filterK8sWorkloadKind = undefined;
+    }
+
+    if (Array.isArray(sanitizedGroup.workloadFilters)) {
+      const validFilters = sanitizedGroup.workloadFilters.filter(
+        (f) => f.kind && typeof f.kind === 'string' && f.kind.trim() !== '',
+      );
+      sanitizedGroup.workloadFilters = validFilters.length > 0 ? validFilters : undefined;
+    }
+
+    if (Array.isArray(sanitizedGroup.templatizationRules)) {
+      sanitizedGroup.templatizationRules = sanitizedGroup.templatizationRules.filter(
+        (r) => r.template && typeof r.template === 'string' && r.template.trim() !== '',
+      );
+    }
+
+    return sanitizedGroup;
+  });
+};
+
 const stringifyRenames = (action: ActionFormData): ActionInput => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any
+  const { id: _id, conditions: _conditions, ...actionInput } = action as ActionFormData & { id?: string; conditions?: unknown };
+
   return stripNullFields({
-    ...action,
+    ...actionInput,
     fields: {
       ...action.fields,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      labelsAttributes: sanitizeFromArray(action.fields.labelsAttributes as any),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      annotationsAttributes: sanitizeFromArray(action.fields.annotationsAttributes as any),
       renames: action.fields.renames ? JSON.stringify(action.fields.renames) : null,
+      urlTemplatizationRulesGroups: sanitizeUrlTemplatizationGroups(action.fields.urlTemplatizationRulesGroups),
     },
   });
 };

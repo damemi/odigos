@@ -83,6 +83,8 @@ export const useEffectiveConfig = (computePlatforms: ComputePlatform[] = [], aut
 
   return {
     getEffectiveConfig,
+    // Alias matching the naming used by odigos standalone and ui-kit v2 Settings props.
+    refetchEffectiveConfig: getEffectiveConfig,
     effectiveConfig,
     effectiveConfigLoading,
   };

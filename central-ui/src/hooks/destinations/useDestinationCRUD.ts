@@ -64,6 +64,9 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
     }
     const { error } = await mutateCreate({ destination: mapNoUndefinedFields(destination, selectedStreamName) });
     if (error) return { error };
+    // Refetch immediately instead of waiting for SSE (backend throttle + client-side debounce
+    // can delay the overview update by several seconds and make it appear empty).
+    await fetchDestinations();
     return undefined;
   };
 
@@ -78,6 +81,7 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
 
     if (data?.updateDestination) {
       notifyUser(StatusType.Success, Crud.Update, `Successfully updated "${destination.type}" destination`, id);
+      await fetchDestinations();
     }
     return undefined;
   };
@@ -87,8 +91,7 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
       await mutateDelete({ id, currentStreamName: selectedStreamName });
-      // !! no "fetch", and no "notifyUser"
-      // !! we should wait for SSE to handle that
+      await fetchDestinations();
     }
   };
 

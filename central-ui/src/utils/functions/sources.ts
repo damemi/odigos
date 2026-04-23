@@ -18,6 +18,7 @@ import type { NamespaceInstrumentInput, SourceConditions, SourceInstrumentInput,
 function mapDesiredStatusToConditionStatus(status: DesiredStateProgress): StatusType | OtherStatus {
   switch (status) {
     case DesiredStateProgress.Failure:
+    case DesiredStateProgress.Error:
       return StatusType.Error;
     case DesiredStateProgress.Notice:
       return StatusType.Warning;
@@ -27,12 +28,12 @@ function mapDesiredStatusToConditionStatus(status: DesiredStateProgress): Status
     case DesiredStateProgress.Unsupported:
     case DesiredStateProgress.Disabled:
       return OtherStatus.Disabled;
-    case DesiredStateProgress.Error:
     case DesiredStateProgress.Success:
+      return StatusType.Success;
     case DesiredStateProgress.Irrelevant:
     case DesiredStateProgress.Unknown:
     default:
-      return StatusType.Default;
+      return StatusType.Info;
   }
 }
 

@@ -5,5 +5,6 @@ export * from './instrumentation-rules';
 export * from './namespaces';
 export * from './local-ui-config';
 export * from './remote-config';
+export * from './sampling';
 export * from './sources';
 export * from './tokens';

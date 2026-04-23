@@ -85,8 +85,38 @@ const WORKLOAD_FIELDS = `
       }
       rollbackOccurred`;
 
+// Slim listing query: only fields needed for the sources table.
+// Detailed payload (containers, conditions, agent status, rollback) lives in GET_WORKLOADS_BY_IDS.
+// Kept as a separate shape from WORKLOAD_FIELDS to avoid unnecessary data-transfer on list calls.
 export const GET_WORKLOADS: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
+    'v1.24': `
+  query GetWorkloads($filter: WorkloadFilter) {
+    workloads(filter: $filter) {
+      id {
+        namespace
+        kind
+        name
+      }
+      serviceName
+      dataStreamNames
+      runtimeInfo {
+        detectedLanguages
+      }
+      workloadOdigosHealthStatus {
+        name
+        status
+        reasonEnum
+        message
+      }
+      podsAgentInjectionStatus {
+        name
+        status
+        reasonEnum
+        message
+      }
+    }
+  }`,
     'v1.20': `
   query GetWorkloads($filter: WorkloadFilter) {
     workloads(filter: $filter) {
