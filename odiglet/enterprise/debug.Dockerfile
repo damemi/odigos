@@ -76,7 +76,7 @@ RUN chmod 644 /instrumentations/java/javaagent.jar
 
 # python-community/python-community3.8
 COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.72-py3.8 /instrumentations/python3.8 /instrumentations/python3.8
-COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.78 /instrumentations/python /instrumentations/python
+COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.80 /instrumentations/python /instrumentations/python
 
 # python-enterprise
 COPY --from=python-builder /python-instrumentation/enterprise-workspace /instrumentations/python-ebpf
