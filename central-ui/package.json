@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@apollo/client": "^3.13.9",
-    "@odigos/ui-kit": "0.0.223",
+    "@odigos/ui-kit": "0.0.224",
     "graphql": "^16.13.2",
     "graphql-ws": "^6.0.7",
     "next": "15.5.14",

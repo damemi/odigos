@@ -2,23 +2,12 @@ import { ROUTES } from '../constants';
 import { SVG } from '@odigos/ui-kit/types';
 import { NavbarProps } from '@odigos/ui-kit/components/v2';
 import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import {
-  ActionIcon,
-  ConnectionsIcon,
-  DestinationIcon,
-  InstrumentationRuleIcon,
-  OverviewIcon,
-  PipelineCollectorIcon,
-  SamplingIcon,
-  ServiceMapIcon,
-  SettingsIcon,
-  SourceIcon,
-  UserSettingsIcon,
-} from '@odigos/ui-kit/icons';
+import { ConnectionsIcon, OverviewIcon, PipelineCollectorIcon, SamplingIcon, ServiceMapIcon, SettingsIcon, UserSettingsIcon } from '@odigos/ui-kit/icons';
 
-const getPayloadForIcon = (router: AppRouterInstance, currentPath: string, targetPath: string, icon: SVG): NavbarProps['icons'][number] => {
+const getPayloadForIcon = (router: AppRouterInstance, currentPath: string, targetPath: string, label: string, icon: SVG): NavbarProps['icons'][number] => {
   return {
     id: targetPath,
+    label,
     icon,
     selected: currentPath === targetPath,
     onClick: () => router.push(targetPath),
@@ -28,25 +17,20 @@ const getPayloadForIcon = (router: AppRouterInstance, currentPath: string, targe
 export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, proxyID?: string, isVm?: boolean) => {
   const navIcons: NavbarProps['icons'] = [];
 
-  navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.CONNECTIONS, ConnectionsIcon));
+  navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.CONNECTIONS, 'Connections', ConnectionsIcon));
 
   if (proxyID) {
-    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.OVERVIEW, OverviewIcon));
-    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SOURCES, SourceIcon));
-    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.DESTINATIONS, DestinationIcon));
+    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.OVERVIEW, 'Overview', OverviewIcon));
 
     if (!isVm) {
-      navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.ACTIONS, ActionIcon));
-      navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.INSTRUMENTATION_RULES, InstrumentationRuleIcon));
-
-      navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SERVICE_MAP, ServiceMapIcon));
-      navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.PIPELINE_COLLECTORS, PipelineCollectorIcon));
-      navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SAMPLING, SamplingIcon));
-      navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SETTINGS, SettingsIcon));
+      navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SERVICE_MAP, 'Service Map', ServiceMapIcon));
+      navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.PIPELINE_COLLECTORS, 'Collectors Pipeline', PipelineCollectorIcon));
+      // navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SAMPLING, 'Sampling Rules', SamplingIcon));
+      navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SETTINGS, 'Settings', SettingsIcon));
     }
   }
 
-  navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.ACCESS_MANAGEMENT, UserSettingsIcon));
+  navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.ACCESS_MANAGEMENT, 'Access Management', UserSettingsIcon));
 
   return navIcons;
 };

@@ -8,10 +8,6 @@ export const ROUTES = {
 
   // In-proxy pages
   OVERVIEW: '/overview',
-  SOURCES: '/sources',
-  DESTINATIONS: '/destinations',
-  ACTIONS: '/actions',
-  INSTRUMENTATION_RULES: '/instrumentation-rules',
   SERVICE_MAP: '/service-map',
   PIPELINE_COLLECTORS: '/pipeline-collectors',
   SAMPLING: '/sampling',
