@@ -5,10 +5,11 @@ import (
 
 	auto "github.com/odigos-io/ebpf-nodejs-instrumentation"
 	"github.com/odigos-io/ebpf-nodejs-instrumentation/pkg/opentelemetry"
+	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/instrumentation"
 	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 	"github.com/odigos-io/odigos/k8sutils/pkg/service"
-	commonlogger "github.com/odigos-io/odigos/common/logger"
+	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 )
 
@@ -23,20 +24,29 @@ func NewNodeJSInstrumentationFactoryEnterprise() instrumentation.Factory {
 }
 
 func (n *NodeJSInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
-	c := otlptracegrpc.NewClient(otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint(service.LocalTrafficOTLPGrpcDataCollectionEndpoint(env.Current.NodeIP)))
-	exporter, err := opentelemetry.New(ctx, c)
-	if err != nil {
-		commonlogger.LoggerCompat().With("subsystem", "ebpfnodejs").Error("failed to create exporter", "error", err)
-		return nil, err
+	var instrumentationOption auto.InstrumentationOption
+
+	// Fallback to sending via otel exporter and not ebpf if the map is nil
+	if settings.TracesMap.Map == nil {
+		c := otlptracegrpc.NewClient(otlptracegrpc.WithInsecure(),
+			otlptracegrpc.WithEndpoint(service.LocalTrafficOTLPGrpcDataCollectionEndpoint(env.Current.NodeIP)))
+		exporter, err := opentelemetry.New(ctx, c)
+		if err != nil {
+			commonlogger.LoggerCompat().With("subsystem", "ebpfnodejs").Error("failed to create exporter", "error", err)
+			return nil, err
+		}
+		instrumentationOption = auto.WithTraceExporter(exporter)
+	} else {
+		instrumentationOption = auto.WithEventsBuffer(settings.TracesMap.Map, settings.TracesMap.ExternalReader)
 	}
 
 	inst, err := auto.NewInstrumentation(
 		ctx,
 		auto.WithPID(pid),
-		auto.WithResourceAttributes(settings.ResourceAttributes...),
 		auto.WithServiceName(settings.ServiceName),
-		auto.WithTraceExporter(exporter),
+		auto.WithResourceAttributes(settings.ResourceAttributes...),
+		auto.WithProcFS(process.HostProcDir()),
+		instrumentationOption,
 	)
 
 	if err != nil {
