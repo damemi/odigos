@@ -6,9 +6,9 @@ require (
 	github.com/odigos-io/ebpf-core v0.1.0
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.24.0-pre0.0.20260423075821-5ff813ff1058
+	github.com/odigos-io/odigos/api v1.24.0-pre0.0.20260427094934-aff674210556
 	github.com/odigos-io/odigos/common v1.24.0-pre0.0.20260423075821-5ff813ff1058
-	github.com/odigos-io/odigos/instrumentor v1.24.0-pre0.0.20260423075821-5ff813ff1058
+	github.com/odigos-io/odigos/instrumentor v1.24.0-pre0.0.20260427094934-aff674210556
 	github.com/odigos-io/odigos/k8sutils v1.24.0-pre0.0.20260423075821-5ff813ff1058
 	k8s.io/api v0.35.2
 	k8s.io/client-go v0.35.2
@@ -103,10 +103,10 @@ replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.24.0-pre0.0.20260423075821-5ff813ff1058
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.24.0-pre0.0.20260427094934-aff674210556
 
 replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.24.0-pre0.0.20260423075821-5ff813ff1058
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.24.0-pre0.0.20260423075821-5ff813ff1058
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.24.0-pre0.0.20260427094934-aff674210556
 
 replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.24.0-pre0.0.20260423075821-5ff813ff1058
