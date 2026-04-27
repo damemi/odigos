@@ -34,4 +34,6 @@ spec:
       supported: true
     spanRenamer:
       supported: true
+    codeAttributes:
+      supported: true
   configAsEnvVars: true

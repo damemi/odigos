@@ -30,3 +30,6 @@ spec:
       - "{{ODIGOS_AGENTS_DIR}}/python-ebpf/pythonUSDT.abi3.so"
     k8sAttrsViaEnvVars: true
     ldPreloadInjectionSupported: true
+  traces:
+    codeAttributes:
+      supported: true

@@ -26,3 +26,6 @@ spec:
     waspSupported: true
     k8sAttrsViaEnvVars: true
     noRestartRequired: true
+  traces:
+    codeAttributes:
+      supported: true
