@@ -63,17 +63,23 @@ export const useEffectiveConfig = (computePlatforms: ComputePlatform[] = [], aut
   const [effectiveConfig, setEffectiveConfig] = useState<EffectiveConfig | undefined>(undefined);
   const [effectiveConfigLoading, setEffectiveConfigLoading] = useState(false);
 
-  const getEffectiveConfig = useCallback(async (): Promise<EffectiveConfig | undefined> => {
-    setEffectiveConfigLoading(true);
+  // `id` lets callers fetch a specific connection's config (e.g. the bulk-edit drawer on /connections,
+  // where proxyID from the store is intentionally undefined). Falls back to the active proxyID for
+  // in-proxy pages like /settings that call this without args.
+  const getEffectiveConfig = useCallback(
+    async (id?: string): Promise<EffectiveConfig | undefined> => {
+      setEffectiveConfigLoading(true);
 
-    const { data: res } = await fetchEffectiveConfig(undefined, proxyID);
-    const mapped = mapLegacyEffectiveConfig(res?.effectiveConfig);
+      const { data: res } = await fetchEffectiveConfig(undefined, id || proxyID);
+      const mapped = mapLegacyEffectiveConfig(res?.effectiveConfig);
 
-    setEffectiveConfigLoading(false);
-    setEffectiveConfig(mapped);
+      setEffectiveConfigLoading(false);
+      setEffectiveConfig(mapped);
 
-    return mapped;
-  }, [fetchEffectiveConfig, proxyID]);
+      return mapped;
+    },
+    [fetchEffectiveConfig, proxyID],
+  );
 
   useEffect(() => {
     if (autoFetch && !effectiveConfig) {
