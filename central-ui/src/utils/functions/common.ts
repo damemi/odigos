@@ -1,6 +1,6 @@
 import { trimVersion } from '@odigos/ui-kit/functions';
 import { type NotifyPayload } from '@odigos/ui-kit/store';
-import { Role, type VersionedRemoteFetch } from '@/types';
+import { Role, type ComputePlatform, type VersionedRemoteFetch } from '@/types';
 import { PlatformType, StatusType } from '@odigos/ui-kit/types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -67,4 +67,16 @@ export const getVersionedQuery = (query: VersionedRemoteFetch, platformType?: Pl
   }
 
   return targetVersion ? query[platformType]?.[targetVersion] : undefined;
+};
+
+/**
+ * Pick a fallback proxy ID for cross-cluster queries that need any working cluster.
+ * Returns the first connection that is K8s-platform and has a successful (live) connection.
+ *
+ * Used by destination-info hooks (categories, auto-detected destinations, test connection)
+ * when invoked from the central connections page where no proxy is selected.
+ */
+export const pickFallbackProxyID = (connections: ComputePlatform[] = []): string | undefined => {
+  const found = connections.find((c) => c.type === PlatformType.K8s && c.status === StatusType.Success);
+  return found?.id;
 };

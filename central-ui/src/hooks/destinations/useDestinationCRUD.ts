@@ -1,19 +1,21 @@
 import { useEffect } from 'react';
 import { useConfig } from '../config';
+import { useProxyStore } from '@/store';
 import { useRemoteFetch } from '../proxy';
-import { mapFetchedDestinations } from '@/utils';
+import { mapFetchedDestinations, pickFallbackProxyID } from '@/utils';
 import { getSseTargetFromId } from '@odigos/ui-kit/functions';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { useDataStreamStore, useEntityStore, useNotificationStore } from '@odigos/ui-kit/store';
 import { CREATE_DESTINATION, DELETE_DESTINATION, GET_DESTINATIONS, UPDATE_DESTINATION } from '@/graphql';
-import { EntityTypes, type Destination, type DestinationFormData, StatusType, Crud } from '@odigos/ui-kit/types';
+import { EntityTypes, type Destination, type DestinationFormData, StatusType, Crud, type CreateDestinationFunc, type UpdateDestinationFunc } from '@odigos/ui-kit/types';
+import type { ComputePlatform } from '@/types';
 
 interface UseDestinationCrud {
   destinations: Destination[];
   destinationsLoading: boolean;
   fetchDestinations: () => Promise<void>;
-  createDestination: (destination: DestinationFormData) => Promise<{ error?: string } | undefined>;
-  updateDestination: (id: string, destination: DestinationFormData) => Promise<{ error?: string } | undefined>;
+  createDestination: CreateDestinationFunc;
+  updateDestination: UpdateDestinationFunc;
   deleteDestination: (id: string) => Promise<void>;
 }
 
@@ -23,11 +25,19 @@ const mapNoUndefinedFields = (destination: DestinationFormData, selectedStreamNa
   currentStreamName: selectedStreamName,
 });
 
-export const useDestinationCRUD = (): UseDestinationCrud => {
+/**
+ * @param connections Optional list of all known compute platforms. Required
+ * when the hook is used from a page that drives bulk operations across
+ * multiple clusters (e.g. the central connections page) — both for resolving
+ * a fallback proxy on single-cluster calls and for fanning create/update
+ * mutations out via `fetchMulti`.
+ */
+export const useDestinationCRUD = (connections: ComputePlatform[] = []): UseDestinationCrud => {
   const { isReadonly } = useConfig();
+  const { proxyID } = useProxyStore();
   const { addNotification } = useNotificationStore();
   const { selectedStreamName } = useDataStreamStore();
-  const { destinationsLoading, setEntitiesLoading, destinations, setEntities, addEntities } = useEntityStore();
+  const { destinationsLoading, setEntitiesLoading, destinations, setEntities } = useEntityStore();
 
   const notifyUser = (type: StatusType, title: string, message: string, id?: string, hideFromHistory?: boolean) => {
     addNotification({
@@ -41,8 +51,11 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
   };
 
   const { fetch: queryAll } = useRemoteFetch<{ computePlatform: { destinations: Destination[] } }>(GET_DESTINATIONS);
-  const { fetch: mutateCreate } = useRemoteFetch<{ createNewDestination: Destination }, { destination: DestinationFormData }>(CREATE_DESTINATION);
-  const { fetch: mutateUpdate } = useRemoteFetch<{ updateDestination: { id: string } }, { id: string; destination: DestinationFormData }>(UPDATE_DESTINATION);
+  const { fetch: mutateCreate, fetchMulti: mutateCreateMulti } = useRemoteFetch<{ createNewDestination: Destination }, { destination: DestinationFormData }>(CREATE_DESTINATION, connections);
+  const { fetch: mutateUpdate, fetchMulti: mutateUpdateMulti } = useRemoteFetch<{ updateDestination: { id: string } }, { id: string; destination: DestinationFormData }>(
+    UPDATE_DESTINATION,
+    connections,
+  );
   const { fetch: mutateDelete } = useRemoteFetch<{ deleteDestination: boolean }, { id: string; currentStreamName: string }>(DELETE_DESTINATION);
 
   const fetchDestinations = async () => {
@@ -57,12 +70,26 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
     setEntitiesLoading(EntityTypes.Destination, false);
   };
 
-  const createDestination: UseDestinationCrud['createDestination'] = async (destination) => {
+  const createDestination: CreateDestinationFunc = async (destination, connectionIds) => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
       return { error: FORM_ALERTS.READONLY_WARNING };
     }
-    const { error } = await mutateCreate({ destination: mapNoUndefinedFields(destination, selectedStreamName) });
+
+    const payload = { destination: mapNoUndefinedFields(destination, selectedStreamName) };
+
+    if (connectionIds?.length) {
+      const res = await mutateCreateMulti(connectionIds, payload);
+      if (res.error) {
+        notifyUser(StatusType.Error, Crud.Create, res.error);
+        return { error: res.error };
+      }
+      notifyUser(StatusType.Success, Crud.Create, `Successfully created "${destination.type}" destination`);
+      return undefined;
+    }
+
+    const targetProxyID = proxyID || pickFallbackProxyID(connections);
+    const { error } = await mutateCreate(payload, targetProxyID);
     if (error) return { error };
     // Refetch immediately instead of waiting for SSE (backend throttle + client-side debounce
     // can delay the overview update by several seconds and make it appear empty).
@@ -70,12 +97,26 @@ export const useDestinationCRUD = (): UseDestinationCrud => {
     return undefined;
   };
 
-  const updateDestination: UseDestinationCrud['updateDestination'] = async (id, destination) => {
+  const updateDestination: UpdateDestinationFunc = async (id, destination, connectionIds) => {
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
       return { error: FORM_ALERTS.READONLY_WARNING };
     }
-    const { data, error } = await mutateUpdate({ id, destination: mapNoUndefinedFields(destination, selectedStreamName) });
+
+    const payload = { id, destination: mapNoUndefinedFields(destination, selectedStreamName) };
+
+    if (connectionIds?.length) {
+      const res = await mutateUpdateMulti(connectionIds, payload);
+      if (res.error) {
+        notifyUser(StatusType.Error, Crud.Update, res.error);
+        return { error: res.error };
+      }
+      notifyUser(StatusType.Success, Crud.Update, `Successfully updated "${destination.type}" destination`, id);
+      return undefined;
+    }
+
+    const targetProxyID = proxyID || pickFallbackProxyID(connections);
+    const { data, error } = await mutateUpdate(payload, targetProxyID);
 
     if (error) return { error };
 

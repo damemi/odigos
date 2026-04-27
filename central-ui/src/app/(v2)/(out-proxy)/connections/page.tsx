@@ -6,7 +6,20 @@ import { StatusType } from '@odigos/ui-kit/types';
 import { useOdigos } from '@odigos/ui-kit/contexts';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { CentralConnections } from '@odigos/ui-kit/containers/v2';
-import { useComputePlatformsCRUD, useEffectiveConfig, useProxy, useProxyCRUD, useUpdateRemoteConfig, useSnapshots, useActionCRUD, useInstrumentationRuleCRUD } from '@/hooks';
+import {
+  useComputePlatformsCRUD,
+  useEffectiveConfig,
+  useProxy,
+  useProxyCRUD,
+  useUpdateRemoteConfig,
+  useSnapshots,
+  useActionCRUD,
+  useInstrumentationRuleCRUD,
+  useDestinationCategories,
+  usePotentialDestinations,
+  useTestConnection,
+  useDestinationCRUD,
+} from '@/hooks';
 
 // TODO: move all fetch logic to an API Context, goal is to remove all clutter and prop-drilling
 
@@ -31,10 +44,10 @@ export default function Page() {
     return Promise.resolve();
   };
 
-  // const { testConnection } = useTestConnection();
-  // const { getDestinationCategories } = useDestinationCategories();
-  // const { getPotentialDestinations } = usePotentialDestinations();
-  // const { createDestination, updateDestination } = useDestinationCRUD();
+  const { testConnection } = useTestConnection(computePlatforms);
+  const { getDestinationCategories } = useDestinationCategories(computePlatforms);
+  const { getPotentialDestinations } = usePotentialDestinations(computePlatforms);
+  const { createDestination, updateDestination } = useDestinationCRUD(computePlatforms);
 
   const { createAction } = useActionCRUD(computePlatforms);
   const { getEffectiveConfig } = useEffectiveConfig(computePlatforms);
@@ -57,13 +70,11 @@ export default function Page() {
       persistSources={isVm ? undefined : bulkPersistSources}
       createAction={isVm ? undefined : createAction}
       createInstrumentationRule={isVm ? undefined : createInstrumentationRule}
-
-      // TODO: fix get logic, requires proxy ID which we don't have at this point
-      // getDestinationCategories={getDestinationCategories}
-      // getPotentialDestinations={getPotentialDestinations}
-      // testConnection={testConnection}
-      // createDestination={createDestination}
-      // updateDestination={updateDestination}
+      getDestinationCategories={isVm ? undefined : getDestinationCategories}
+      getPotentialDestinations={isVm ? undefined : getPotentialDestinations}
+      testConnection={isVm ? undefined : testConnection}
+      createDestination={isVm ? undefined : createDestination}
+      updateDestination={isVm ? undefined : updateDestination}
     />
   );
 }

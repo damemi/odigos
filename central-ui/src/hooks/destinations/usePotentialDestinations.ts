@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo } from 'react';
+import { useProxyStore } from '@/store';
 import { useRemoteFetch } from '../proxy';
+import { pickFallbackProxyID } from '@/utils';
+import type { ComputePlatform } from '@/types';
 import { useOdigos } from '@odigos/ui-kit/contexts';
 import { GET_POTENTIAL_DESTINATIONS } from '@/graphql';
 import { deepClone, safeJsonParse } from '@odigos/ui-kit/functions';
+import { type ISetupState, useSetupStore } from '@odigos/ui-kit/store';
 import type { GetPotentialDestinationsResult } from '@odigos/ui-kit/types';
 import { useDestinationCategoriesLegacy } from './useDestinationCategoriesLegacy';
-import { type ISetupState, useSetupStore } from '@odigos/ui-kit/store';
 
 interface PotentialDestination {
   type: string;
@@ -43,17 +46,26 @@ const checkIfConfigured = (
   return fieldsMatch;
 };
 
-export const usePotentialDestinations = () => {
+/**
+ * @param connections Optional list of all known compute platforms. When the
+ * hook is called from a page without a selected proxy (e.g. the central
+ * connections page) we fall back to the first successful K8s connection — the
+ * issue PLAT-906 explicitly accepts using one cluster's auto-detected
+ * destinations as a representative for "all".
+ */
+export const usePotentialDestinations = (connections: ComputePlatform[] = []) => {
   const { isVm } = useOdigos();
-  const { categories } = useDestinationCategoriesLegacy();
+  const { proxyID } = useProxyStore();
+  const { categories } = useDestinationCategoriesLegacy(connections);
   const { configuredDestinations } = useSetupStore();
 
-  const { fetch, loading, data } = useRemoteFetch<GetPotentialDestinationsData>(GET_POTENTIAL_DESTINATIONS);
+  const { fetch, loading, data } = useRemoteFetch<GetPotentialDestinationsData>(GET_POTENTIAL_DESTINATIONS, connections);
 
   const getPotentialDestinations = useCallback(async (): Promise<GetPotentialDestinationsResult | undefined> => {
-    const { data: res } = await fetch();
+    const targetProxyID = proxyID || pickFallbackProxyID(connections);
+    const { data: res } = await fetch(undefined, targetProxyID);
     return res as GetPotentialDestinationsResult | undefined;
-  }, [fetch]);
+  }, [fetch, proxyID, connections]);
 
   const potentialDestinations = useMemo(() => {
     if (!categories || !data?.potentialDestinations) return [];
@@ -90,7 +102,9 @@ export const usePotentialDestinations = () => {
   }, [configuredDestinations, categories, data?.potentialDestinations]);
 
   useEffect(() => {
-    if (!isVm && !data?.potentialDestinations) fetch();
+    if (isVm || data?.potentialDestinations) return;
+    const targetProxyID = proxyID || pickFallbackProxyID(connections);
+    if (targetProxyID) fetch(undefined, targetProxyID);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
