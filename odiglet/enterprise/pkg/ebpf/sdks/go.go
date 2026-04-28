@@ -152,6 +152,9 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 	// Fetch initial config based on the InstrumentationConfig CR
 	initialConfig, err := convertToGoInstrumentationConfig(settings.InitialConfig)
 	if err != nil {
+		if shutdownErr := defaultExporter.Shutdown(ctx); shutdownErr != nil {
+			g.logger.Error("failed to shutdown exporter after config error", "error", shutdownErr)
+		}
 		return nil, fmt.Errorf("invalid initial config type, expected *odigosv1.SdkConfig, got %T", settings.InitialConfig)
 	}
 
@@ -199,6 +202,9 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 	)
 	if err != nil {
 		g.logger.Error("instrumentation setup failed", "error", err)
+		if shutdownErr := defaultExporter.Shutdown(ctx); shutdownErr != nil {
+			g.logger.Error("failed to shutdown exporter after instrumentation setup failure", "error", shutdownErr)
+		}
 		if waspMaps != nil {
 			// return ownership of the wasp maps to the provider in case we failed to instrument this process
 			err = errors.Join(err, g.waspMapsProvider.Take(podName, waspMaps))
