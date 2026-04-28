@@ -9,7 +9,9 @@
     "build": "cross-env NODE_ENV=production next build --turbopack",
     "build:analyze": "cross-env ANALYZE=true next build --turbopack",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "cy:run": "cypress run --e2e -q",
+    "cy:open": "cypress open --e2e -b electron"
   },
   "dependencies": {
     "@apollo/client": "^3.13.9",
@@ -34,6 +36,7 @@
     "babel-plugin-styled-components": "^2.1.4",
     "check-peer-dependencies": "^4.3.4",
     "cross-env": "^10.1.0",
+    "cypress": "^15.14.1",
     "eslint": "9.39.2",
     "eslint-config-next": "16.2.4",
     "typescript": "5.9.3"
