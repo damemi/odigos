@@ -3,7 +3,7 @@ module github.com/odigos-io/odigos-enterprise/odiglet
 go 1.26.2
 
 require (
-	github.com/odigos-io/ebpf-core v0.1.0
+	github.com/odigos-io/ebpf-core v0.3.0
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.7
 	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.5.2
 	github.com/odigos-io/ebpf-java-instrumentation/v2 v2.5.2
@@ -281,7 +281,7 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v1.9.0
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v1.12.0
 
 replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.24.0-pre0.0.20260427154914-60b72b57503a
 
