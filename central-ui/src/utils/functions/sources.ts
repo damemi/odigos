@@ -1,4 +1,6 @@
 import { getWorkloadId } from '@odigos/ui-kit/functions';
+import type { NamespaceSelectionFormData, SourceSelectionFormData } from '@odigos/ui-kit/store';
+import type { NamespaceInstrumentInput, SourceConditions, SourceInstrumentInput, WorkloadResponse, WorkloadWithOdigosHealthStatus, K8sWorkloadConditions } from '@/types';
 import {
   EntityTypes,
   DesiredStateProgress,
@@ -6,14 +8,11 @@ import {
   OtherStatus,
   type WorkloadId,
   type Source,
-  type SourceContainer,
   type Condition,
   type DesiredConditionStatus,
   type ProgrammingLanguages,
   type OtelDistroName,
 } from '@odigos/ui-kit/types';
-import type { NamespaceSelectionFormData, SourceSelectionFormData } from '@odigos/ui-kit/store';
-import type { NamespaceInstrumentInput, SourceConditions, SourceInstrumentInput, WorkloadResponse, WorkloadWithOdigosHealthStatus, K8sWorkloadContainerResponse, K8sWorkloadConditions } from '@/types';
 
 function mapDesiredStatusToConditionStatus(status: DesiredStateProgress): StatusType | OtherStatus {
   switch (status) {
@@ -37,18 +36,10 @@ function mapDesiredStatusToConditionStatus(status: DesiredStateProgress): Status
   }
 }
 
-function mapContainerToSourceContainer(c: K8sWorkloadContainerResponse): SourceContainer {
-  return {
-    containerName: c.containerName,
-    language: (c.runtimeInfo?.language?.toLowerCase() ?? 'unknown') as ProgrammingLanguages,
-    runtimeVersion: c.runtimeInfo?.runtimeVersion ?? '',
-    overriden: c.overrides != null,
-    instrumented: c.agentEnabled?.agentEnabled ?? false,
-    instrumentationMessage: c.agentEnabled?.agentEnabledStatus?.message ?? '',
-    otelDistroName: (c.agentEnabled?.otelDistroName as OtelDistroName) ?? null,
-  };
-}
-
+// Flattens the GraphQL `K8sWorkloadConditions` object into the ui-kit's
+// `Condition[]`. We keep this as the only nontrivial transform on the
+// workload→source path because the ui-kit consumes conditions as an array
+// across many components.
 function mapConditionsToConditionArray(conditions: K8sWorkloadConditions | null): Condition[] | null {
   if (!conditions) return null;
 
@@ -64,13 +55,15 @@ function mapConditionsToConditionArray(conditions: K8sWorkloadConditions | null)
       status: mapDesiredStatusToConditionStatus(dcs.status),
       reason: dcs.reasonEnum ?? null,
       message: dcs.message ?? null,
-
     });
   }
 
   return result.length > 0 ? result : null;
 }
 
+// Thin adapter from the GraphQL `K8sWorkload` shape to the ui-kit's `Source`.
+// All container-level fields pass through unchanged because the GraphQL
+// container shape is now structurally identical to `SourceContainer`.
 export function mapWorkloadToSource(w: WorkloadResponse): Source {
   return {
     namespace: w.id.namespace,
@@ -80,9 +73,9 @@ export function mapWorkloadToSource(w: WorkloadResponse): Source {
     otelServiceName: w.serviceName ?? '',
     numberOfInstances: w.numberOfInstances ?? undefined,
     dataStreamNames: w.dataStreamNames,
-    containers: w.containers ? w.containers.map(mapContainerToSourceContainer) : null,
+    containers: w.containers,
     conditions: mapConditionsToConditionArray(w.conditions),
-    detectedLanguages: w.runtimeInfo?.detectedLanguages?.map((lang) => lang.toLowerCase() as ProgrammingLanguages) ?? null,
+    detectedLanguages: (w.runtimeInfo?.detectedLanguages as ProgrammingLanguages[] | null) ?? null,
     workloadOdigosHealthStatus: w.workloadOdigosHealthStatus ?? null,
     podsAgentInjectionStatus: w.podsAgentInjectionStatus,
     rollbackOccurred: w.rollbackOccurred,
@@ -96,6 +89,42 @@ export function sortSources(sources: Source[]): Source[] {
     return a.name.localeCompare(b.name);
   });
 }
+
+// @deprecated-legacy-api(v1.20) - the GraphQL `K8sActualSource` shape used by
+// proxies < v1.20 returns container fields flat (language, runtimeVersion,
+// instrumented, instrumentationMessage, otelDistroName, overriden). Lift them
+// into the nested ui-kit `SourceContainer` shape so downstream code can be
+// shape-agnostic. Remove this when min supported proxy >= v1.20.
+export interface LegacySourceContainer {
+  containerName: string;
+  language: ProgrammingLanguages;
+  runtimeVersion: string;
+  overriden?: boolean;
+  instrumented: boolean;
+  instrumentationMessage: string;
+  otelDistroName?: OtelDistroName | null;
+}
+
+export interface LegacySource extends Omit<Source, 'containers'> {
+  containers: LegacySourceContainer[] | null;
+}
+
+export const mapLegacySourceToSource = (s: LegacySource): Source => {
+  return {
+    ...s,
+    containers:
+      s.containers?.map((c) => ({
+        containerName: c.containerName,
+        runtimeInfo: { language: c.language, runtimeVersion: c.runtimeVersion },
+        agentEnabled: {
+          agentEnabled: c.instrumented,
+          agentEnabledStatus: { message: c.instrumentationMessage },
+          otelDistroName: c.otelDistroName ?? null,
+        },
+        overrides: c.overriden ? { containerName: c.containerName, runtimeInfo: { language: c.language, runtimeVersion: c.runtimeVersion } } : null,
+      })) ?? null,
+  };
+};
 
 // @deprecated-legacy-api(v1.20) - Remove addConditionToSources and
 // addAgentInjectionStatusToSources when min supported proxy >= v1.20.

@@ -6,8 +6,17 @@ import { useOdigos } from '@odigos/ui-kit/contexts';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { getIdFromSseTarget, getSseTargetFromId, trimVersion } from '@odigos/ui-kit/functions';
 import type { NamespaceInstrumentInput, SourceConditions, SourceInstrumentInput, WorkloadResponse, WorkloadWithOdigosHealthStatus } from '@/types';
-import { addAgentInjectionStatusToSources, addConditionToSources, mapWorkloadToSource, sortSources, prepareNamespacePayloads, prepareSourcePayloads } from '@/utils';
 import { GET_PEER_SOURCES, GET_SOURCE, GET_SOURCE_CONDITIONS, GET_SOURCE_LIBRARIES, GET_SOURCES, GET_WORKLOADS, GET_WORKLOADS_BY_IDS, PERSIST_SOURCES, UPDATE_SOURCE } from '@/graphql';
+import {
+  addAgentInjectionStatusToSources,
+  addConditionToSources,
+  type LegacySource,
+  mapLegacySourceToSource,
+  mapWorkloadToSource,
+  sortSources,
+  prepareNamespacePayloads,
+  prepareSourcePayloads,
+} from '@/utils';
 import {
   Crud,
   EntityTypes,
@@ -78,13 +87,16 @@ export const useSourceCRUD = (): UseSourceCrud => {
   const { fetch: queryWorkloads } = useRemoteFetch<{ workloads: WorkloadResponse[] }, { filter?: { markedForInstrumentation?: boolean } & Partial<WorkloadId> }>(GET_WORKLOADS);
   const { fetch: queryWorkloadsByIds } = useRemoteFetch<{ workloadsByIds: WorkloadResponse[] }, { ids: { namespace: string; kind: string; name: string }[] }>(GET_WORKLOADS_BY_IDS);
 
-  // legacy queries (< v1.20)
-  const { fetch: queryAllSources } = useRemoteFetch<{ computePlatform?: { sources?: Source[] } }>(GET_SOURCES);
+  // legacy queries (< v1.20). The GraphQL `K8sActualSource` shape returns
+  // container fields flat; we lift them into the nested ui-kit `SourceContainer`
+  // shape via `mapLegacySourceToSource` before storing.
+  const { fetch: queryAllSources } = useRemoteFetch<{ computePlatform?: { sources?: LegacySource[] } }>(GET_SOURCES);
   const { fetch: queryOtherConditions } = useRemoteFetch<{ sourceConditions: SourceConditions[] }>(GET_SOURCE_CONDITIONS);
   const { fetch: queryLegacyWorkloads } = useRemoteFetch<{ workloads: Workload[] }, { filter?: WorkloadId }>(GET_WORKLOADS);
 
-  // shared queries
-  const { fetch: queryById } = useRemoteFetch<{ computePlatform?: { source?: Source } }, { sourceId: WorkloadId }>(GET_SOURCE);
+  // shared queries — `GET_SOURCE` returns the legacy `K8sActualSource` shape on
+  // every supported version, so its container fields always need to be lifted.
+  const { fetch: queryById } = useRemoteFetch<{ computePlatform?: { source?: LegacySource } }, { sourceId: WorkloadId }>(GET_SOURCE);
   const { fetch: mutatePersistSources } = useRemoteFetch<{ persistK8sSources: boolean }, SourceInstrumentInput>(PERSIST_SOURCES);
   const { fetch: mutateUpdate } = useRemoteFetch<{ updateK8sActualSource: boolean }, { sourceId: WorkloadId; patchSourceRequest: SourceFormData }>(UPDATE_SOURCE);
   const { fetch: querySourceLibraries } = useRemoteFetch<{ instrumentationInstanceComponents: InstrumentationInstanceComponent[] }, WorkloadId>(GET_SOURCE_LIBRARIES);
@@ -153,10 +165,13 @@ export const useSourceCRUD = (): UseSourceCrud => {
       const { data } = await queryAllSources();
       const { sources: fetchedSources } = data?.computePlatform || {};
       if (fetchedSources) {
-        setEntities(EntityTypes.Source, fetchedSources);
-        if (fetchedSources.length) {
-          fetchAllAgentInjectionStatuses(fetchedSources);
-          fetchAllConditions(fetchedSources);
+        // Legacy proxies (< v1.20) return container fields flat. Lift them into
+        // the nested ui-kit `SourceContainer` shape.
+        const mappedSources = fetchedSources.map(mapLegacySourceToSource);
+        setEntities(EntityTypes.Source, mappedSources);
+        if (mappedSources.length) {
+          fetchAllAgentInjectionStatuses(mappedSources);
+          fetchAllConditions(mappedSources);
         }
       }
     }
@@ -204,21 +219,24 @@ export const useSourceCRUD = (): UseSourceCrud => {
       }
     }
 
-    // Legacy path (< v1.20) and v1.20+ fallback when workloadsByIds returns empty
+    // Legacy path (< v1.20) and v1.20+ fallback when workloadsByIds returns empty.
+    // `GET_SOURCE` always returns the legacy `K8sActualSource` shape, so we lift
+    // its container fields into the nested ui-kit `SourceContainer` shape.
     const { data: sourceData } = await queryById({ sourceId: id });
     const { source } = sourceData?.computePlatform || {};
     if (!source) return undefined;
+    const mapped = mapLegacySourceToSource(source);
 
     if (!isV120Plus) {
       // @deprecated-legacy-api(v1.20) - Remove this branch when min supported proxy >= v1.20
-      addEntities(EntityTypes.Source, [source]);
-      await fetchAllAgentInjectionStatuses([source]);
+      addEntities(EntityTypes.Source, [mapped]);
+      await fetchAllAgentInjectionStatuses([mapped]);
       const { sources: updatedSources } = useEntityStore.getState();
-      return updatedSources.find((s) => s.namespace === id.namespace && s.name === id.name && s.kind === id.kind) || source;
+      return updatedSources.find((s) => s.namespace === id.namespace && s.name === id.name && s.kind === id.kind) || mapped;
     }
 
-    addEntities(EntityTypes.Source, [source]);
-    return source;
+    addEntities(EntityTypes.Source, [mapped]);
+    return mapped;
   };
 
   const persistSources: UseSourceCrud['persistSources'] = async (selectAppsList, futureSelectAppsList) => {

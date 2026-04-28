@@ -31,6 +31,10 @@ const WORKLOAD_FIELDS = `
         }
         overrides {
           containerName
+          runtimeInfo {
+            language
+            runtimeVersion
+          }
         }
       }
       conditions {

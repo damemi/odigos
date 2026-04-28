@@ -1,5 +1,5 @@
 import type { SelectedSource } from '@odigos/ui-kit/store';
-import type { Condition, DesiredConditionStatus, Source, Workload, WorkloadId } from '@odigos/ui-kit/types';
+import type { Condition, DesiredConditionStatus, Source, SourceContainer, Workload, WorkloadId } from '@odigos/ui-kit/types';
 
 export interface SourceInstrumentInput {
   sources: Omit<SelectedSource, 'numberOfInstances'>[];
@@ -13,24 +13,9 @@ export type WorkloadWithOdigosHealthStatus = Workload & {
   rollbackOccurred?: boolean;
 };
 
-export interface K8sWorkloadRuntimeInfo {
-  language: string;
-  runtimeVersion: string | null;
-}
-
-export interface K8sWorkloadAgentEnabled {
-  agentEnabled: boolean;
-  agentEnabledStatus: { message: string };
-  otelDistroName: string | null;
-}
-
-export interface K8sWorkloadContainerResponse {
-  containerName: string;
-  runtimeInfo: K8sWorkloadRuntimeInfo | null;
-  agentEnabled: K8sWorkloadAgentEnabled | null;
-  overrides: { containerName: string } | null;
-}
-
+// Mirrors the GraphQL `K8sWorkloadConditions` shape. Stays a central-ui-local
+// type because the ui-kit's `Source.conditions` is a flat `Condition[]` array,
+// so this shape needs to be flattened during the workload→source mapping.
 export interface K8sWorkloadConditions {
   runtimeDetection: DesiredConditionStatus | null;
   agentInjectionEnabled: DesiredConditionStatus | null;
@@ -40,6 +25,9 @@ export interface K8sWorkloadConditions {
   expectingTelemetry: DesiredConditionStatus | null;
 }
 
+// The shape of `K8sWorkload` we actually consume. The container shape mirrors
+// the ui-kit's `SourceContainer` exactly so we can pass it through the mapper
+// without any per-field copying.
 export interface WorkloadResponse {
   id: WorkloadId;
   serviceName: string | null;
@@ -47,7 +35,7 @@ export interface WorkloadResponse {
   numberOfInstances: number | null;
   markedForInstrumentation: { markedForInstrumentation: boolean | null };
   runtimeInfo: { detectedLanguages: string[] | null } | null;
-  containers: K8sWorkloadContainerResponse[] | null;
+  containers: SourceContainer[] | null;
   conditions: K8sWorkloadConditions | null;
   workloadOdigosHealthStatus: DesiredConditionStatus | null;
   podsAgentInjectionStatus: DesiredConditionStatus | null;
