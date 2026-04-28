@@ -31,6 +31,7 @@ jobs:
               - 'central-proxy/**'
               - 'tests/e2e/central-infrastructure/**'
               - 'tests/e2e/central-install/**'
+              - 'tests/e2e/central-ui/**'
               - 'tests/common/assert/odigos-central-installed.yaml'
 
   unit-tests:
@@ -66,22 +67,22 @@ jobs:
             central-backend,
             agents,
           ]
-        rhel: ['true', 'false']
+        rhel: ["true", "false"]
         # extended: ['false'] is needed so that standard builds have extended=false explicitly.
         # Without it, the include entries below (extended: 'true') would match existing
         # rhel:false combinations and merge into them instead of creating new jobs.
-        extended: ['false']
+        extended: ["false"]
         include:
           # Extended builds (odiglet + agents with EXTENDED=true) are needed for
           # important-customers tests that set odiglet.extended=true in their helm config.
           # These mirror the -extended tag variants published in release-images.yml.
           # extended: 'true' does not exist in the base matrix values, so these create new jobs.
           - service: odiglet
-            rhel: 'false'
-            extended: 'true'
+            rhel: "false"
+            extended: "true"
           - service: agents
-            rhel: 'false'
-            extended: 'true'
+            rhel: "false"
+            extended: "true"
 
     steps:
       - name: Print tests run info
@@ -164,7 +165,6 @@ jobs:
           name: vuln-scan-result-${{ matrix.service }}-${{ matrix.extended == 'true' && 'extended' || (matrix.rhel == 'true' && 'rhel' || 'standard') }}-${{ github.sha }}.json
           path: /tmp/scan-results/*.json
           retention-days: 30
-
 
   build-oss-components-for-tests:
     runs-on: depot-ubuntu-24.04-4
@@ -310,7 +310,6 @@ jobs:
           path: /tmp/scan-results/*.json
           retention-days: 30
 
-
   kubernetes-tests:
     name: kubernetes-tests (${{ matrix.kube-version }}, ${{ matrix.test-scenario }}${{ matrix.customer != '' && format(', {0}', matrix.customer) || '' }}${{ matrix.wasp-enabled == true && ', with_wasp' || '' }})
     needs:
@@ -318,6 +317,10 @@ jobs:
       - build-enterprise-components
       - build-oss-components-for-tests
     runs-on: depot-ubuntu-24.04-4
+    # Belt-and-suspenders cap. Individual chainsaw steps already enforce
+    # their own timeouts; this prevents any pathological hang from running
+    # out the GH job default of 6 hours.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -331,6 +334,7 @@ jobs:
           - "cli-upgrade"
           - "central-install"
           - "central-infrastructure"
+          - "central-ui"
         wasp-enabled: [false]
         include:
           - kube-version: "1.21.12"
@@ -378,7 +382,7 @@ jobs:
         id: should-run
         run: |
           # Central tests only run if central-related files changed
-          if [[ "${{ matrix.test-scenario }}" == "central-install" || "${{ matrix.test-scenario }}" == "central-infrastructure" ]]; then
+          if [[ "${{ matrix.test-scenario }}" == "central-install" || "${{ matrix.test-scenario }}" == "central-infrastructure" || "${{ matrix.test-scenario }}" == "central-ui" ]]; then
             if [[ "${{ needs.detect-changes.outputs.central }}" != "true" ]]; then
               echo "Skipping ${{ matrix.test-scenario }} - no central files changed"
               echo "skip=true" >> $GITHUB_OUTPUT
@@ -532,7 +536,7 @@ jobs:
           exit 1
 
       - name: Restore Central Backend Enterprise from Cache
-        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure')
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui')
         id: restore-central-backend-cache
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
@@ -541,14 +545,14 @@ jobs:
           key: ${{ github.run_id }}-central-backend-enterprise-standard
 
       - name: Check if Central Backend cache was restored
-        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure') && steps.restore-central-backend-cache.outputs.cache-hit != 'true'
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui') && steps.restore-central-backend-cache.outputs.cache-hit != 'true'
         run: |
           echo "❌ Cache miss for Central Backend Enterprise - this should not happen!"
           echo "Expected cache key: ${{ github.run_id }}-central-backend-enterprise-standard"
           exit 1
 
       - name: Restore Central UI Enterprise from Cache
-        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure')
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui')
         id: restore-central-ui-cache
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
@@ -557,14 +561,14 @@ jobs:
           key: ${{ github.run_id }}-central-ui-enterprise-standard
 
       - name: Check if Central UI cache was restored
-        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure') && steps.restore-central-ui-cache.outputs.cache-hit != 'true'
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui') && steps.restore-central-ui-cache.outputs.cache-hit != 'true'
         run: |
           echo "❌ Cache miss for Central UI Enterprise - this should not happen!"
           echo "Expected cache key: ${{ github.run_id }}-central-ui-enterprise-standard"
           exit 1
 
       - name: Restore Central Proxy Enterprise from Cache
-        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure')
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui')
         id: restore-central-proxy-cache
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
@@ -573,7 +577,7 @@ jobs:
           key: ${{ github.run_id }}-central-proxy-enterprise-standard
 
       - name: Check if Central Proxy cache was restored
-        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure') && steps.restore-central-proxy-cache.outputs.cache-hit != 'true'
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui') && steps.restore-central-proxy-cache.outputs.cache-hit != 'true'
         run: |
           echo "❌ Cache miss for Central Proxy Enterprise - this should not happen!"
           echo "Expected cache key: ${{ github.run_id }}-central-proxy-enterprise-standard"
@@ -592,7 +596,7 @@ jobs:
           kind load image-archive /tmp/odigos-cli.tar
 
       - name: Load Central Components to Kind Cluster
-        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure')
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui')
         run: |
           kind load image-archive /tmp/central-backend-enterprise.tar
           kind load image-archive /tmp/central-ui-enterprise.tar
