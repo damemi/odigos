@@ -602,9 +602,24 @@ jobs:
           kind load image-archive /tmp/central-ui-enterprise.tar
           kind load image-archive /tmp/central-proxy-enterprise.tar
 
+      - name: Load Latest UI Image from Container Registry
+        if: steps.should-run.outputs.skip != 'true'
+        run: |
+          # The UI will still be installed by the CLI with the TAG, but it's not used in the tests so no need to build it
+          LATEST_TAG=$(curl -s "https://artifactregistry.us-central1.rep.googleapis.com/v1/projects/odigos-cloud/locations/us-central1/repositories/components/packages/odigos-ui/tags?pageSize=1000" | jq -r '[.tags[].name | capture(".*/(?<tag>v[0-9\\.]+)$").tag] | sort_by(split(".") | map(ltrimstr("v") | tonumber)) | last')
+          docker pull "registry.odigos.io/odigos-ui:$LATEST_TAG"
+          docker tag "registry.odigos.io/odigos-ui:$LATEST_TAG" registry.odigos.io/odigos-ui:${{ env.IMAGE_TAG }}
+          kind load docker-image registry.odigos.io/odigos-ui:${{ env.IMAGE_TAG }}
+
+      - name: Copy CLI to Expected Path
+        if: steps.should-run.outputs.skip != 'true'
+        run: |
+          # Copy the CLI executable to the expected path which is in the OSS repo sibling to the enterprise repo
+          cp /tmp/odigos-cli odigos/cli/odigos
+          chmod +x odigos/cli/odigos
+
       - name: Get latest release tag for branch from Helm
         id: get-latest-tag
-        if: steps.should-run.outputs.skip != 'true'
         run: |
           echo "📦 Updating Helm repositories..."
           helm repo add odigos https://odigos-io.github.io/odigos/ || true
@@ -623,27 +638,6 @@ jobs:
           fi
           echo "LATEST_RELEASE_TAG=$LATEST_RELEASE_TAG" >> $GITHUB_OUTPUT
           echo "Latest release tag for branch $BRANCH: $LATEST_RELEASE_TAG"
-
-      - name: Load UI Image (matching chart version)
-        if: steps.should-run.outputs.skip != 'true'
-        run: |
-          TAG="${{ steps.get-latest-tag.outputs.LATEST_RELEASE_TAG }}"
-          if [[ -z "$TAG" ]]; then
-            echo "::error::LATEST_RELEASE_TAG is empty — cannot resolve UI image tag for this branch."
-            echo "Base ref: ${{ github.base_ref || github.ref_name }}"
-            exit 1
-          fi
-          echo "Loading UI image registry.odigos.io/odigos-ui:$TAG"
-          docker pull "registry.odigos.io/odigos-ui:$TAG"
-          docker tag "registry.odigos.io/odigos-ui:$TAG" registry.odigos.io/odigos-ui:${{ env.IMAGE_TAG }}
-          kind load docker-image registry.odigos.io/odigos-ui:${{ env.IMAGE_TAG }}
-
-      - name: Copy CLI to Expected Path
-        if: steps.should-run.outputs.skip != 'true'
-        run: |
-          # Copy the CLI executable to the expected path which is in the OSS repo sibling to the enterprise repo
-          cp /tmp/odigos-cli odigos/cli/odigos
-          chmod +x odigos/cli/odigos
 
       - name: Run E2E Tests
         if: steps.should-run.outputs.skip != 'true'
