@@ -31,3 +31,6 @@ spec:
   agentMetrics:
     runtimeMetrics:
       supported: true
+  traces:
+    customInstrumentations:
+      supported: true
