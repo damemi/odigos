@@ -3,10 +3,11 @@ module github.com/odigos-io/odigos-enterprise/odiglet
 go 1.26.2
 
 require (
-	github.com/odigos-io/ebpf-core v0.3.0
+	github.com/cilium/ebpf v0.20.0
+	github.com/odigos-io/ebpf-core v0.4.0
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.7
-	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.5.2
-	github.com/odigos-io/ebpf-java-instrumentation/v2 v2.5.2
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.6.0
+	github.com/odigos-io/ebpf-java-instrumentation/v2 v2.6.0
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.5.0
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
@@ -71,7 +72,6 @@ require (
 	github.com/caarlos0/env/v9 v9.0.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/cilium/ebpf v0.20.0 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containers/common v0.64.2 // indirect
@@ -222,7 +222,7 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.67.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.67.0 // indirect
 	go.opentelemetry.io/obi v0.8.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.18.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.19.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.19.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.43.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.43.0 // indirect

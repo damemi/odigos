@@ -14,9 +14,11 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
+	cilumebpf "github.com/cilium/ebpf"
 	"github.com/odigos-io/ebpf-core/pkg/wasp"
 	waspserver "github.com/odigos-io/ebpf-core/pkg/wasp/server"
 	enterprisedistros "github.com/odigos-io/odigos-enterprise/distros"
+	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/logcapture"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/sdks"
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
 	"github.com/odigos-io/odigos/api/k8sconsts"
@@ -102,6 +104,12 @@ func main() {
 		Factories:                  factories,
 		DistributionGetter:         enterpriseDistrosProvider.Getter,
 		OdigletHealthProbeBindPort: healthProbeBindPort,
+		OnLogsMapCreated: func(m *cilumebpf.Map) {
+			logcapture.GetInstance().SetExternalLogsMap(m)
+		},
+		LogsAttrSubscribe: func() (<-chan string, []string) {
+			return logcapture.GetInstance().SubscribeAttrs()
+		},
 	}
 
 	o, err := odiglet.New(clientset, instrumentationManagerOptions)
@@ -158,8 +166,8 @@ func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distro
 	nodejsEbpfFactory := sdks.NewNodeJSInstrumentationFactoryEnterprise()
 
 	return map[string]commonInstrumentation.Factory{
-		"golang-enterprise":                  goFactory,
-		"java-ebpf-instrumentations":         javaEbpfFactory,
+		"golang-enterprise":                  logcapture.WrapFactory(goFactory),
+		"java-ebpf-instrumentations":         logcapture.WrapFactory(javaEbpfFactory),
 		"java-enterprise":                    sdks.NewJavaExtensionInstrumentationFactoryEnterprise(),
 		"python-enterprise":                  pythonEbpfFactory,
 		"python-enterprise3.8":               pythonEbpfFactory,

@@ -22,6 +22,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 
 	"github.com/odigos-io/ebpf-core/pkg/wasp"
+	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/logcapture"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/api/odigos/v1alpha1/instrumentationrules"
 	"github.com/odigos-io/odigos/common"
@@ -240,7 +241,25 @@ func (g *GoOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.Sta
 	for probeID, err := range probeLoadStatus {
 		status.Components[fmt.Sprintf("%s/%s", probeID.InstrumentedPkg, probeID.SpanKind.String())] = err
 	}
+
 	return status, nil
+}
+
+// PrepareLogCapture attaches the Go goroutine-id map and runtime offsets to the
+// log capture manager so logs emitted from this process can be correlated with
+// their originating span. Invoked by logCaptureDecorator immediately before
+// RegisterProcess.
+func (g *GoOtelEbpfSdkEnterprise) PrepareLogCapture(ctx context.Context, pid int) {
+	scMap := g.inst.GetGoroutineIdToScMap()
+	if scMap == nil {
+		return
+	}
+	goidPos, ancestorsPos, err := g.inst.GetGoRuntimeOffsets()
+	if err != nil {
+		commonlogger.LoggerCompat().With("subsystem", "ebpfgosdk").Info("failed to get Go runtime offsets for log correlation", "pid", pid, "error", err)
+		return
+	}
+	logcapture.GetInstance().AddGoroutineMap(uint32(pid), scMap, goidPos, ancestorsPos)
 }
 
 func (g *GoOtelEbpfSdkEnterprise) Run(ctx context.Context) error {
@@ -263,7 +282,6 @@ func (g *GoOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, sdkConfig ins
 	if convertErr != nil {
 		return convertErr
 	}
-
 	return g.cp.SendConfig(ctx, updatedConfig)
 }
 

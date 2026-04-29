@@ -11,6 +11,8 @@ import (
 
 	"github.com/odigos-io/ebpf-java-instrumentation/v2/jvmmetrics"
 	"github.com/odigos-io/ebpf-java-instrumentation/v2/pkg/dynamic"
+	"github.com/odigos-io/ebpf-java-instrumentation/v2/pkg/mapmanager"
+	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/logcapture"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common"
@@ -19,13 +21,13 @@ import (
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
 
 	auto "github.com/odigos-io/ebpf-java-instrumentation/v2"
-	"github.com/odigos-io/odigos/instrumentation"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
+	"github.com/odigos-io/odigos/instrumentation"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 )
 
 const (
-	agentJarDistroOptionName  = "agentJarName"
+	agentJarDistroOptionName = "agentJarName"
 )
 
 type JavaOtelEbpfSdkEnterprise struct {
@@ -34,8 +36,8 @@ type JavaOtelEbpfSdkEnterprise struct {
 }
 
 type JavaInstrumentationFactoryEnterprise struct {
-	traceIdSuffix       uint8
-	agentJarName        string
+	traceIdSuffix uint8
+	agentJarName  string
 	// location where the agent relevant files are located on the host
 	agentFilesSourceDir string
 }
@@ -151,9 +153,7 @@ func (g *JavaOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.S
 		Components: make(map[string]error),
 	}
 
-	// Convert Java instrumentation status to odiglet status format
 	if javaStatus != nil {
-		// Add library components
 		for _, lib := range javaStatus.Libraries {
 			isLoaded := lib.ClassCount > 0
 			isTransformed := len(lib.AdviceClasses) > 0
@@ -188,6 +188,15 @@ func (g *JavaOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 	return g.inst.Close()
 }
 
+// PrepareLogCapture attaches the global Linux TID span map so logs emitted
+// from this Java process can be correlated with their originating span.
+// Invoked by logCaptureDecorator immediately before RegisterProcess.
+func (g *JavaOtelEbpfSdkEnterprise) PrepareLogCapture(ctx context.Context, pid int) {
+	if spanMap := mapmanager.GetInstance().GetGlobalLinuxTidMap(); spanMap != nil {
+		logcapture.GetInstance().AddSpanMap(uint32(pid), spanMap)
+	}
+}
+
 func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instrumentation.Config) error {
 	if conf == nil {
 		commonlogger.LoggerCompat().With("subsystem", "ebpfjava").Info("got nil config, skipping")
@@ -216,7 +225,6 @@ func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instru
 		return err
 	}
 
-	// Custom instrumentation probes
 	if sdkConfig.CustomInstrumentations != nil && sdkConfig.CustomInstrumentations.Java != nil {
 		var probes []dynamic.CustomProbe
 		for _, probe := range sdkConfig.CustomInstrumentations.Java {
@@ -263,12 +271,10 @@ func createJVMMetricsConfig(config *common.MetricsSourceAgentJavaRuntimeMetricsC
 		return nil
 	}
 
-	// Global disabled flag
 	jvmConfig := &jvmmetrics.JVMMetricsConfig{
 		Disabled: config.Disabled,
 	}
 
-	// Convert individual metrics
 	for _, metric := range config.Metrics {
 		jvmConfig.Metrics = append(jvmConfig.Metrics, jvmmetrics.MetricConfig{
 			Name:     metric.Name,

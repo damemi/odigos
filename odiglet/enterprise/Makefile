@@ -14,6 +14,7 @@ OBI_RELEASE_BASE := https://github.com/open-telemetry/opentelemetry-ebpf-instrum
 LIBRARIES := go.opentelemetry.io/auto \
 			github.com/odigos-io/ebpf-java-instrumentation/v2 \
 			github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 \
+			github.com/odigos-io/ebpf-core \
 			github.com/odigos-io/ebpf-generic-instrumentation \
 			github.com/odigos-io/ebpf-nodejs-instrumentation \
 			github.com/odigos-io/mysql-instrumentation \
