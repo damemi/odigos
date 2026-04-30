@@ -16,9 +16,9 @@ import (
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common"
-	"github.com/odigos-io/odigos/common/consts"
 	"github.com/odigos-io/odigos/distros/distro"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
+	"google.golang.org/grpc"
 
 	auto "github.com/odigos-io/ebpf-java-instrumentation/v2"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
@@ -40,9 +40,13 @@ type JavaInstrumentationFactoryEnterprise struct {
 	agentJarName  string
 	// location where the agent relevant files are located on the host
 	agentFilesSourceDir string
+	otlpConn            *grpc.ClientConn
 }
 
-func NewJavaInstrumentationFactoryEnterprise(traceIdSuffix uint8, otelDistro *distro.OtelDistro) (instrumentation.Factory, error) {
+func NewJavaInstrumentationFactoryEnterprise(traceIdSuffix uint8, otelDistro *distro.OtelDistro, otlpConn *grpc.ClientConn) (instrumentation.Factory, error) {
+	if otlpConn == nil {
+		return nil, errNoOTLPConn
+	}
 	if otelDistro == nil {
 		return nil, errors.New("otel distro is nil")
 	}
@@ -61,14 +65,14 @@ func NewJavaInstrumentationFactoryEnterprise(traceIdSuffix uint8, otelDistro *di
 		traceIdSuffix:       traceIdSuffix,
 		agentJarName:        agentJar,
 		agentFilesSourceDir: sourceDir,
+		otlpConn:            otlpConn,
 	}, nil
 }
 
 func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
 	defaultExporter, err := otlptracegrpc.New(
 		ctx,
-		otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint(fmt.Sprintf("localhost:%d", consts.OTLPPort)),
+		otlptracegrpc.WithGRPCConn(g.otlpConn),
 	)
 	if err != nil {
 		commonlogger.LoggerCompat().With("subsystem", "ebpfjava").Error("failed to create exporter", "error", err)

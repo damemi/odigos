@@ -9,7 +9,10 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/odigos-io/odigos/common/consts"
 	"github.com/odigos-io/odigos/distros"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
@@ -94,7 +97,29 @@ func main() {
 		}
 	}
 
-	factories, err := ebpfInstrumentationFactories(uint8(suffix), waspEnabled, enterpriseDistrosProvider.Getter)
+	// create a single gRPC connection that will be shared across instrumentations
+	// of different processes and different languages.
+	// this allows us to keep a single connection to the local collector.
+	// we share the underlying connection transport, but each instrumentation can have
+	// its own exporter with its own lifecycle.
+	// using WithGRPCConn when creating the exporter allows us to manage the lifecycle of this connection
+	// which is open the entire lifecycle of the odiglet.
+	otlpCommonConn, err := grpc.NewClient(
+		fmt.Sprintf("localhost:%d", consts.OTLPPort),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		logger.Error("failed to create a gRPC connection to local collector", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		err := otlpCommonConn.Close()
+		if err != nil {
+			logger.Error("failed to close common OTLP connection", "error", err)
+		}
+	}()
+
+	factories, err := ebpfInstrumentationFactories(uint8(suffix), waspEnabled, enterpriseDistrosProvider.Getter, otlpCommonConn)
 	if err != nil {
 		logger.Error("failed to set up ebpf factories", "error", err)
 		os.Exit(1)
@@ -138,7 +163,7 @@ func main() {
 	logger.Info("odiglet exiting")
 }
 
-func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distros.Getter) (map[string]commonInstrumentation.Factory, error) {
+func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distros.Getter, otlpConn *grpc.ClientConn) (map[string]commonInstrumentation.Factory, error) {
 	var wp wasp.MapsProvider
 	if waspEnabled {
 		wp = waspserver.NewServer(slog.Default(), k8sconsts.OdigletWaspServicePort, process.HostProcDir())
@@ -147,7 +172,7 @@ func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distro
 		}
 	}
 
-	goFactory, err := sdks.NewGoInstrumentationFactoryEnterprise(suffix, wp)
+	goFactory, err := sdks.NewGoInstrumentationFactoryEnterprise(suffix, wp, otlpConn)
 	if err != nil {
 		return nil, err
 	}
@@ -157,13 +182,16 @@ func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distro
 		return nil, errors.New("java-ebpf-instrumentations distro not found")
 	}
 
-	javaEbpfFactory, err := sdks.NewJavaInstrumentationFactoryEnterprise(suffix, d)
+	javaEbpfFactory, err := sdks.NewJavaInstrumentationFactoryEnterprise(suffix, d, otlpConn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create java ebpf factory: %w", err)
 	}
-
 	pythonEbpfFactory := sdks.NewPythonInstrumentationFactoryEnterprise()
 	nodejsEbpfFactory := sdks.NewNodeJSInstrumentationFactoryEnterprise()
+	mysqlFactory, err := sdks.NewMySQLInstrumentationFactoryEnterprise(otlpConn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create MySql instrumentation factory: %w", err)
+	}
 
 	return map[string]commonInstrumentation.Factory{
 		"golang-enterprise":                  logcapture.WrapFactory(goFactory),
@@ -173,7 +201,7 @@ func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distro
 		"python-enterprise3.8":               pythonEbpfFactory,
 		"nodejs-enterprise":                  nodejsEbpfFactory,
 		"nodejs-enterprise-14":               nodejsEbpfFactory,
-		"mysql-enterprise":                   sdks.NewMySQLInstrumentationFactoryEnterprise(),
+		"mysql-enterprise":                   mysqlFactory,
 		"opentelemetry-ebpf-instrumentation": obi.NewOBIInstrumentationFactory(),
 		// dotnet, ruby and php are using native instrumentation and does not have ebpf instrumentation.
 	}, nil

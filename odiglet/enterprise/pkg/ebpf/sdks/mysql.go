@@ -2,30 +2,33 @@ package sdks
 
 import (
 	"context"
-	"fmt"
 
 	auto "github.com/odigos-io/mysql-instrumentation"
-	"github.com/odigos-io/odigos/common/consts"
-	"github.com/odigos-io/odigos/instrumentation"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
+	"github.com/odigos-io/odigos/instrumentation"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"google.golang.org/grpc"
 )
 
 type MySQLOtelEbpfSdkEnterprise struct {
 	inst *auto.Instrumentation
 }
 
-type MySQLInstrumentationFactoryEnterprise struct{}
+type MySQLInstrumentationFactoryEnterprise struct {
+	otlpConn *grpc.ClientConn
+}
 
-func NewMySQLInstrumentationFactoryEnterprise() instrumentation.Factory {
-	return &MySQLInstrumentationFactoryEnterprise{}
+func NewMySQLInstrumentationFactoryEnterprise(otlpConn *grpc.ClientConn) (instrumentation.Factory, error) {
+	if otlpConn == nil {
+		return nil, errNoOTLPConn
+	}
+	return &MySQLInstrumentationFactoryEnterprise{otlpConn: otlpConn}, nil
 }
 
 func (g *MySQLInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
 	defaultExporter, err := otlptracegrpc.New(
 		ctx,
-		otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint(fmt.Sprintf("localhost:%d", consts.OTLPPort)),
+		otlptracegrpc.WithGRPCConn(g.otlpConn),
 	)
 	if err != nil {
 		commonlogger.LoggerCompat().With("subsystem", "ebpfmysql").Error("failed to create exporter", "error", err)

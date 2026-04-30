@@ -20,13 +20,13 @@ import (
 	goAutoConfig "go.opentelemetry.io/auto/config"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	"google.golang.org/grpc"
 
 	"github.com/odigos-io/ebpf-core/pkg/wasp"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/logcapture"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/api/odigos/v1alpha1/instrumentationrules"
 	"github.com/odigos-io/odigos/common"
-	"github.com/odigos-io/odigos/common/consts"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/instrumentation"
 	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
@@ -58,14 +58,19 @@ type GoInstrumentationFactoryEnterprise struct {
 	waspMapsProvider   wasp.MapsProvider
 	traceIdSuffix      uint8
 	logger             *commonlogger.OdigosLogger
+	otlpConn           *grpc.ClientConn
 }
 
-func NewGoInstrumentationFactoryEnterprise(traceIdSuffix uint8, ws wasp.MapsProvider) (instrumentation.Factory, error) {
+func NewGoInstrumentationFactoryEnterprise(traceIdSuffix uint8, ws wasp.MapsProvider, otlpConn *grpc.ClientConn) (instrumentation.Factory, error) {
+	if otlpConn == nil {
+		return nil, errNoOTLPConn
+	}
 	g := &GoInstrumentationFactoryEnterprise{
 		offsetLastModified: time.Time{},
 		waspMapsProvider:   ws,
 		traceIdSuffix:      traceIdSuffix,
 		logger:             commonlogger.LoggerCompat().With("subsystem", "ebpfgosdk"),
+		otlpConn:           otlpConn,
 	}
 	err := g.updateLocalOffsets()
 	if err != nil {
@@ -142,8 +147,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 
 	defaultExporter, err := otlptracegrpc.New(
 		ctx,
-		otlptracegrpc.WithInsecure(),
-		otlptracegrpc.WithEndpoint(fmt.Sprintf("localhost:%d", consts.OTLPPort)),
+		otlptracegrpc.WithGRPCConn(g.otlpConn),
 	)
 	if err != nil {
 		g.logger.Error("failed to create exporter", "error", err)
