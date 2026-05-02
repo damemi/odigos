@@ -6,14 +6,13 @@ WORKDIR /workspace
 COPY distros/ distros/
 COPY odigosauth/ odigosauth/
 
-RUN --mount=type=secret,id=github_token \
-    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
-
 WORKDIR /workspace/$SERVICE_NAME
 RUN mkdir -p /workspace/build
 # Pre-copy/cache go.mod for pre-downloading dependencies and only redownloading
 COPY $SERVICE_NAME/go.mod $SERVICE_NAME/go.sum ./
-RUN --mount=type=cache,target=/go/pkg \
+RUN --mount=type=secret,id=github_token \
+    --mount=type=cache,target=/go/pkg \
+    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
     go mod download && go mod verify
 # Copy rest of source code
 COPY $SERVICE_NAME/ .
@@ -21,9 +20,14 @@ COPY $SERVICE_NAME/ .
 ARG TARGETARCH
 ARG LD_FLAGS
 ARG RHEL=false
-RUN go mod tidy
-RUN --mount=type=cache,target=/root/.cache/go-build \
+RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/go/pkg \
+    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
+    go mod tidy
+RUN --mount=type=secret,id=github_token \
+    --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg \
+    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
     CGO_ENABLED=0 GOARCH=$TARGETARCH \
     go build -ldflags="${LD_FLAGS}" -a -o /workspace/build/$SERVICE_NAME cmd/main.go
 

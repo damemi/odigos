@@ -43,9 +43,6 @@ RUN ARCH_SUFFIX=$(cat /tmp/arch_suffix) && \
 
 FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS builder
 
-RUN --mount=type=secret,id=github_token \
-    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
-
 WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
 # Copy local modules required by the build
 COPY odigosauth/ odigosauth/
@@ -54,14 +51,18 @@ WORKDIR ./odiglet/
 ENV GOPRIVATE=github.com/odigos-io/enterprise-go-instrumentation,github.com/odigos-io/ebpf-java-instrumentation/v2
 # Pre-copy/cache go.mod for pre-downloading dependencies and only redownloading
 COPY odiglet/go.mod odiglet/go.sum ./
-RUN --mount=type=cache,target=/go/pkg \
+RUN --mount=type=secret,id=github_token \
+    --mount=type=cache,target=/go/pkg \
+    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
     go mod download
 # Copy rest of source code for odiglet
 COPY odiglet/ .
 
 ARG TARGETARCH
-RUN --mount=type=cache,target=/root/.cache/go-build \
+RUN --mount=type=secret,id=github_token \
+    --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
+    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
     GOOS=linux GOARCH=$TARGETARCH make debug-build-odiglet
 
 # Install delve

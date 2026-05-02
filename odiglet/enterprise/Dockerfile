@@ -91,9 +91,6 @@ RUN wget --directory-prefix=loader https://storage.googleapis.com/odigos-loader/
 ######### Odiglet builder #########
 FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS builder
 
-RUN --mount=type=secret,id=github_token \
-    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/"
-
 WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
 # Copyy local modules required by the build
 COPY odigosauth/ odigosauth/
@@ -106,15 +103,19 @@ ARG TARGETARCH
 ARG LD_FLAGS
 ARG RHEL=false
 ENV GOINSECURE=go.opentelemetry.io*
-RUN --mount=type=cache,target=/root/.cache/go-build \
+RUN --mount=type=secret,id=github_token \
+    --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
+    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
     GOOS=linux GOARCH=$TARGETARCH LD_FLAGS="${LD_FLAGS}" make build-odiglet
 
 # Build deviceplugin binary
 WORKDIR /go/src/github.com/odigos-io/odigos-enterprise/deviceplugin
 COPY deviceplugin/ .
-RUN --mount=type=cache,target=/root/.cache/go-build \
+RUN --mount=type=secret,id=github_token \
+    --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
+    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
     GOOS=linux GOARCH=$TARGETARCH go build -o deviceplugin ./cmd
 
 # Download grpc_health_probe this is used by the deviceplugin container to check if the deviceplugin is healthy

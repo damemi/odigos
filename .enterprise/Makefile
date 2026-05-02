@@ -1,4 +1,5 @@
 TAG ?= $(shell odigos version --cluster 2>/dev/null || odigos version --cli 2>/dev/null || helm search repo odigos 2>/dev/null | awk '$$1 == "odigos/odigos" {print $$3}')
+GITHUB_TOKEN ?= $(shell gh auth token)
 
 # Include dependency update targets
 include deps.mk
@@ -33,6 +34,10 @@ endif
 
 .PHONY: build-image/%
 build-image/%:
+	@if [ -z "$(GITHUB_TOKEN)" ]; then \
+		echo "❌ GITHUB_TOKEN is not set. Export a GitHub PAT with access to odigos-io private repos (required for go mod download inside the image)."; \
+		exit 1; \
+	fi
 	docker build $(TARGET_FLAG) \
 	-t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
 	--secret id=github_token,env=GITHUB_TOKEN \
