@@ -154,10 +154,19 @@ spec:
 
     # NOTE: `chainsaw script` buffers stdout until the script exits, so when
     # this step is cancelled mid-run the chainsaw log shows nothing about
-    # what cypress was doing. We work around this by tee'ing yarn output to
-    # a log file inside the central-ui dir; the catch step then dumps the
-    # tail of that file even on hang/timeout, giving us a clear picture of
+    # what cypress was doing. We work around this by writing yarn output to
+    # log files inside the central-ui dir; the catch step then dumps the
+    # tail of those files even on hang/timeout, giving us a clear picture of
     # which spec was executing when things stopped.
+    #
+    # We deliberately AVOID `cmd | tee log` here because:
+    #  1. chainsaw runs `script:` content under `/usr/bin/sh` (dash), so
+    #     `set -o pipefail` is rejected ("Illegal option").
+    #  2. Without pipefail, the pipeline's exit code is tee's (always 0),
+    #     so cypress failures are silently swallowed and the whole chainsaw
+    #     step becomes a no-op for assertions.
+    # A direct redirect `cmd > log 2>&1` propagates the command's exit code
+    # naturally and is POSIX-portable.
     - name: Run Cypress tests
       try:
         - script:
@@ -188,10 +197,11 @@ spec:
               done
 
               cd ../../../central-ui
-              # Tee yarn output so the catch step can print whatever cypress
-              # managed to log even if the chainsaw script is cancelled.
-              yarn install --no-cache 2>&1 | tee yarn-install.log
-              yarn cy:run 2>&1 | tee cy-run.log
+              # Direct redirect (not `| tee`) so the command's exit code
+              # propagates and a failing install / cypress run fails the step.
+              # The `catch:` block below tails these files for diagnostics.
+              yarn install --no-cache > yarn-install.log 2>&1
+              yarn cy:run > cy-run.log 2>&1
       catch:
         - script:
             content: |

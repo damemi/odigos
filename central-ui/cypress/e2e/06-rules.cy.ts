@@ -1,5 +1,5 @@
 import { CRD_NAMES, DATA_IDS, NAMESPACES, ROUTES, SELECTED_ENTITIES, TEXTS } from '../constants';
-import { awaitToast, deleteEntity, getCrdById, getCrdIds, handleExceptions, signInAndSelectProxy, updateEntity, visitPage, waitForGraphqlOperation } from '../functions';
+import { awaitToast, deleteV2Entity, getCrdById, getCrdIds, handleExceptions, signInAndSelectProxy, updateV2Entity, visitPage, waitForGraphqlOperation } from '../functions';
 
 const namespace = NAMESPACES.ODIGOS;
 const crdName = CRD_NAMES.INSTRUMENTATION_RULE;
@@ -39,14 +39,16 @@ describe('Instrumentation Rules CRUD (via Central UI → Proxy)', () => {
     getCrdIds({ namespace, crdName, expectedError: '', expectedLength: totalEntities });
   });
 
-  it(`Should update ${totalEntities} rules via the Central UI, and notify locally`, () => {
+  it(`Should update ${totalEntities} rules via the v2 edit-rule-drawer, and notify locally`, () => {
     visitPage(ROUTES.OVERVIEW, () => {
       SELECTED_ENTITIES.INSTRUMENTATION_RULES.forEach((ruleType) => {
-        updateEntity(
+        updateV2Entity(
           {
+            // rules are fetched in random order, so we locate the row by the type text it shows
             nodeId: 'div',
             nodeContains: ruleType,
-            fieldKey: DATA_IDS.TITLE,
+            prefix: DATA_IDS.RULE_DRAWER_PREFIX,
+            fieldKey: DATA_IDS.RULE_NAME_INPUT,
             fieldValue: TEXTS.UPDATED_NAME,
           },
           () => {
@@ -67,13 +69,14 @@ describe('Instrumentation Rules CRUD (via Central UI → Proxy)', () => {
     });
   });
 
-  it(`Should delete ${totalEntities} rules via the Central UI, and notify locally`, () => {
+  it(`Should delete ${totalEntities} rules via the v2 edit-rule-drawer, and notify locally`, () => {
     visitPage(ROUTES.OVERVIEW, () => {
       SELECTED_ENTITIES.INSTRUMENTATION_RULES.forEach((ruleType) => {
-        deleteEntity(
+        deleteV2Entity(
           {
             nodeId: 'div',
             nodeContains: ruleType,
+            prefix: DATA_IDS.RULE_DRAWER_PREFIX,
             warnModalTitle: TEXTS.INSTRUMENTATION_RULE_WARN_MODAL_TITLE,
           },
           () => {

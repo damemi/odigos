@@ -131,7 +131,17 @@ export const useDestinationCRUD = (connections: ComputePlatform[] = []): UseDest
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
+      // Resolve the destination's type before the mutation so we can include
+      // it in the success toast — once `fetchDestinations` runs the entity is
+      // gone from the store and we'd lose this context.
+      const type = destinations.find((d) => d.id === id)?.destinationType.type;
       await mutateDelete({ id, currentStreamName: selectedStreamName });
+      // Unlike the OSS webapp, where the success toast flows from the
+      // `destination_watcher` via SSE, in central-ui the watcher lives in the
+      // proxy cluster and that SSE event doesn't reach the central-ui
+      // frontend. Emit the notification client-side so the UX (and e2e) match
+      // what we already do for action / rule / sampling deletes.
+      notifyUser(StatusType.Success, Crud.Delete, `Successfully deleted "${type ?? id}" destination`, id);
       await fetchDestinations();
     }
   };

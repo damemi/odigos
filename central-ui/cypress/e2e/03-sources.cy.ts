@@ -61,7 +61,7 @@ describe('Sources CRUD (via Central UI → Proxy)', () => {
     });
   });
 
-  it(`Should update the name of 1 source via the Central UI, and notify locally`, () => {
+  it(`Should update the name of 1 source via the v2 edit-source-drawer, and notify locally`, () => {
     visitPage(ROUTES.OVERVIEW, () => {
       SELECTED_ENTITIES.NAMESPACE_SOURCES.slice(indexForUpdatedSource, indexForUpdatedSource + 1).forEach(({ name, kind }) => {
         updateEntity(

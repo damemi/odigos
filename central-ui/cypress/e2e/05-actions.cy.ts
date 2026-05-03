@@ -1,5 +1,5 @@
 import { CRD_NAMES, DATA_IDS, NAMESPACES, ROUTES, SELECTED_ENTITIES, TEXTS } from '../constants';
-import { awaitToast, deleteEntity, getCrdById, getCrdIds, handleExceptions, signInAndSelectProxy, updateEntity, visitPage, waitForGraphqlOperation } from '../functions';
+import { awaitToast, deleteV2Entity, getCrdById, getCrdIds, handleExceptions, signInAndSelectProxy, updateV2Entity, visitPage, waitForGraphqlOperation } from '../functions';
 
 const namespace = NAMESPACES.ODIGOS;
 const crdName = CRD_NAMES.ACTION;
@@ -99,14 +99,16 @@ describe('Actions CRUD (via Central UI → Proxy)', () => {
     getCrdIds({ namespace, crdName, expectedError: '', expectedLength: totalEntities });
   });
 
-  it(`Should update ${totalEntities} actions via the Central UI, and notify locally`, () => {
+  it(`Should update ${totalEntities} actions via the v2 edit-action-drawer, and notify locally`, () => {
     visitPage(ROUTES.OVERVIEW, () => {
       SELECTED_ENTITIES.ACTIONS.forEach((actionType) => {
-        updateEntity(
+        updateV2Entity(
           {
+            // actions are fetched in random order, so we locate the row by the type text it shows
             nodeId: 'div',
             nodeContains: actionType,
-            fieldKey: DATA_IDS.TITLE,
+            prefix: DATA_IDS.ACTION_DRAWER_PREFIX,
+            fieldKey: DATA_IDS.ACTION_NAME_INPUT,
             fieldValue: TEXTS.UPDATED_NAME,
           },
           () => {
@@ -127,13 +129,14 @@ describe('Actions CRUD (via Central UI → Proxy)', () => {
     });
   });
 
-  it(`Should delete ${totalEntities} actions via the Central UI, and notify locally`, () => {
+  it(`Should delete ${totalEntities} actions via the v2 edit-action-drawer, and notify locally`, () => {
     visitPage(ROUTES.OVERVIEW, () => {
       SELECTED_ENTITIES.ACTIONS.forEach((actionType) => {
-        deleteEntity(
+        deleteV2Entity(
           {
             nodeId: 'div',
             nodeContains: actionType,
+            prefix: DATA_IDS.ACTION_DRAWER_PREFIX,
             warnModalTitle: TEXTS.ACTION_WARN_MODAL_TITLE,
           },
           () => {

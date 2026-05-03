@@ -41,9 +41,14 @@ describe('Select Connection', () => {
 
       cy.location('pathname', { timeout: 30000 }).should('eq', ROUTES.OVERVIEW);
 
-      cy.window().then((win) => {
-        const raw = win.localStorage.getItem('SELECTED_PROXY');
-        expect(raw, 'SELECTED_PROXY in localStorage').to.be.a('string');
+      // `useProxyStore` is configured with zustand's persist middleware
+      // backed by `sessionStorage` (see `central-ui/src/store/useProxyStore.ts`),
+      // not localStorage. Persistence is async (a microtask after the state
+      // mutation), so the redirect to /overview can race the write —
+      // `cy.window().should(callback)` retries until the store hand-off lands.
+      cy.window().should((win) => {
+        const raw = win.sessionStorage.getItem('SELECTED_PROXY');
+        expect(raw, 'SELECTED_PROXY in sessionStorage').to.be.a('string');
         const parsed = JSON.parse(raw as string);
         expect(parsed?.state?.proxyName, 'persisted proxyName').to.eq(PROXY.NAME);
         expect(parsed?.state?.proxyID, 'persisted proxyID').to.be.a('string');

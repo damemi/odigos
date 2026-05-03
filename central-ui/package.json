@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@apollo/client": "^3.13.9",
-    "@odigos/ui-kit": "0.0.225",
+    "@odigos/ui-kit": "0.0.226",
     "graphql": "^16.13.2",
     "graphql-ws": "^6.0.7",
     "next": "15.5.14",
@@ -36,7 +36,7 @@
     "babel-plugin-styled-components": "^2.1.4",
     "check-peer-dependencies": "^4.3.4",
     "cross-env": "^10.1.0",
-    "cypress": "^15.14.1",
+    "cypress": "^15.14.2",
     "eslint": "9.39.2",
     "eslint-config-next": "16.2.4",
     "typescript": "5.9.3"
