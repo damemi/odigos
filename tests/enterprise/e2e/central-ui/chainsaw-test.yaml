@@ -41,6 +41,37 @@ spec:
 
               kubectl label namespace odigos-test odigos.io/system-object="true"
 
+    # Patch the OSS `odigos-deployment` ConfigMap so `ODIGOS_VERSION` matches
+    # the actual schema served by the registry-pulled OSS UI image (which is
+    # the latest released `odigos-ui:vX.Y.Z`, retagged to `:e2e-test` by CI).
+    #
+    # Why this is needed:
+    #   - The helm chart sets `ODIGOS_VERSION = .Values.image.tag`, which in
+    #     CI is the string "e2e-test". Central UI feeds that into
+    #     `trimVersion()` to pick a versioned GraphQL query, but
+    #     `trimVersion("e2e-test")` extracts the `2` from `e2e` and treats
+    #     it as major version 2 (=20000), so it always picks the *newest*
+    #     query — which references fields added on the OSS `main` branch
+    #     that the latest *released* UI image doesn't have yet.
+    #   - Pinning ODIGOS_VERSION to the latest released helm tag aligns
+    #     Central UI's versioned query selector with the schema actually
+    #     served by the deployed UI pod, so `EffectiveConfig` resolves
+    #     cleanly instead of failing on unknown fields.
+    #
+    # Restarting central-proxy is required because it reads `ODIGOS_VERSION`
+    # from this ConfigMap on startup and reports it to central-backend over
+    # the WebSocket; without a restart the ConfigMap edit has no effect.
+    - name: Override ODIGOS_VERSION to match OSS UI image
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              kubectl patch configmap odigos-deployment -n odigos-test \
+                --type merge \
+                -p "{\"data\":{\"ODIGOS_VERSION\":\"$LATEST_RELEASE_TAG\"}}"
+              kubectl rollout restart deployment/central-proxy -n odigos-test
+              kubectl rollout status deployment/central-proxy -n odigos-test --timeout=2m
+
     # Install Odigos Central. Mirrors the helm flow documented at
     #   https://docs.odigos.io/central/installation
     # — Keycloak's admin password is auto-generated per the docs, and we
@@ -211,9 +242,9 @@ spec:
               echo "==== yarn install (last 50 lines) ===="
               tail -n 50 central-ui/yarn-install.log 2>/dev/null \
                 || tail -n 50 ../../../central-ui/yarn-install.log 2>/dev/null || true
-              echo "==== cypress run (last 200 lines) ===="
-              tail -n 200 central-ui/cy-run.log 2>/dev/null \
-                || tail -n 200 ../../../central-ui/cy-run.log 2>/dev/null || true
+              echo "==== cypress run (full log) ===="
+              cat central-ui/cy-run.log 2>/dev/null \
+                || cat ../../../central-ui/cy-run.log 2>/dev/null || true
               echo "==== central-ui pod logs ===="
               kubectl logs deploy/central-ui -n odigos-central --tail=300 || true
               echo "==== central-backend pod logs ===="

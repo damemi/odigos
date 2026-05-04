@@ -46,6 +46,69 @@ const LEGACY_FIELD_PATHS: Record<string, string> = {
 // didn't expose the field.
 const setFieldKeys = new Set<string>();
 
+// Tracks dot-paths actually returned (with a non-null/non-undefined value) by
+// the proxy's `EffectiveConfig` response on the most recent page load.
+// Populated by `collectEffectiveConfigKeys` and consulted by the refresh-time
+// `verify*` helpers below.
+//
+// The legacy `setFieldKeys` gate alone isn't sufficient: a field can be
+// publishable by `configYamls` (so it renders, accepts input, and is saved
+// to `odigos-local-ui-config`) yet absent from the proxy's GraphQL schema for
+// `EffectiveConfig` — which means the saved value never round-trips back into
+// the form on refresh. The canonical example today is
+// `rollout.maxConcurrentRollouts`: v1.24 OSS UI's `RolloutConfig` schema
+// doesn't include it (it was added in the OSS PR shipping alongside this one),
+// so Central UI's v1.24 versioned `GetEffectiveConfig` query doesn't request
+// it. Once the proxy is on a release that includes the field, it will appear
+// in `effectiveConfigKeys` automatically and the verify will start running —
+// no test edits needed.
+const effectiveConfigKeys = new Set<string>();
+
+// Walks the `effectiveConfig` object from a captured `GetEffectiveConfig`
+// response and populates `effectiveConfigKeys` with the dot-paths that have
+// non-null/non-undefined leaf values. Arrays count as a single leaf value
+// (their contents aren't expanded).
+//
+// The wire shape is `{ data: { remoteFetch: '<json string>' } }` because the
+// query is forwarded through central-backend's `remoteFetch` resolver; the
+// inner string parses to the regular Apollo response shape
+// `{ data: { effectiveConfig: { ... } } }`.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const collectEffectiveConfigKeys = (interception: any) => {
+  effectiveConfigKeys.clear();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let inner: any;
+  try {
+    const data = interception?.response?.body?.data;
+    const remoteFetchStr = data?.remoteFetch;
+    inner = typeof remoteFetchStr === 'string' ? JSON.parse(remoteFetchStr) : data;
+  } catch {
+    return;
+  }
+  const ec = inner?.data?.effectiveConfig;
+  if (!ec || typeof ec !== 'object') return;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const walk = (obj: any, prefix: string) => {
+    Object.entries(obj).forEach(([k, v]) => {
+      if (v === null || v === undefined) return;
+      const path = prefix ? `${prefix}.${k}` : k;
+      if (typeof v === 'object' && !Array.isArray(v)) {
+        walk(v, path);
+      } else {
+        effectiveConfigKeys.add(path);
+      }
+    });
+  };
+  walk(ec, '');
+};
+
+// True when a field's saved value is expected to round-trip via the current
+// proxy's `EffectiveConfig` response — i.e. either we haven't captured the
+// response yet (`size === 0`, defensive default) OR the path is present in
+// the captured response. Used as the second gate (after `setFieldKeys`) on
+// refresh-time `verify*` helpers.
+const fieldRoundTrips = (fieldPath: string) => effectiveConfigKeys.size === 0 || effectiveConfigKeys.has(fieldPath);
+
 const fieldExists = ($body: JQuery<HTMLElement>, dataId: string) => $body.find(`[data-id="${dataId}"]`).length > 0;
 
 // Resolves `fieldPath` to whichever path the proxy actually rendered:
@@ -116,7 +179,12 @@ const setTimeInput = (fieldPath: string, value: string) => {
   withFieldPath(fieldPath, '-unit', (path) => {
     cy.get(DATA_IDS.SETTINGS_FIELD(path)).click().focused().clear().type(num);
     cy.get(DATA_IDS.SETTINGS_FIELD(`${path}-unit`)).click();
-    cy.get(DATA_IDS.SETTINGS_FIELD(`${path}-unit`)).parent().parent().parent().contains(unitLabel).click();
+    cy.get(DATA_IDS.SETTINGS_FIELD(`${path}-unit`))
+      .parent()
+      .parent()
+      .parent()
+      .contains(unitLabel)
+      .click();
   });
 };
 
@@ -140,6 +208,7 @@ const addMultiInputValue = (fieldPath: string, value: string) => {
 
 const verifyInput = (fieldPath: string, expectedValue: string) => {
   if (!setFieldKeys.has(fieldPath)) return;
+  if (!fieldRoundTrips(fieldPath)) return;
   withFieldPath(fieldPath, '', (path) => {
     cy.get(DATA_IDS.SETTINGS_FIELD(path)).should('have.value', expectedValue);
   });
@@ -147,6 +216,7 @@ const verifyInput = (fieldPath: string, expectedValue: string) => {
 
 const verifyTimeInput = (fieldPath: string, expectedValue: string) => {
   if (!setFieldKeys.has(fieldPath)) return;
+  if (!fieldRoundTrips(fieldPath)) return;
   const match = expectedValue.match(/^(\d+)\s*(ms|s|m|h)$/i);
   if (!match) throw new Error(`verifyTimeInput: invalid time value "${expectedValue}"`);
   const [, num, unit] = match;
@@ -160,13 +230,27 @@ const verifyTimeInput = (fieldPath: string, expectedValue: string) => {
 
 const verifyDropdown = (fieldPath: string, expectedLabel: string) => {
   if (!setFieldKeys.has(fieldPath)) return;
+  if (!fieldRoundTrips(fieldPath)) return;
   withFieldPath(fieldPath, '', (path) => {
     cy.get(DATA_IDS.SETTINGS_FIELD(path)).should('have.value', `Selected: ${expectedLabel}`);
   });
 };
 
+// Toggle exposes its boolean state via the `data-toggle-value` attribute on the
+// element with `data-id={fieldPath}`. Using the attribute keeps the assertion
+// independent of styling/layout. Skips silently if the field wasn't actually
+// exercised (e.g. the proxy schema didn't render it).
+const verifyToggle = (fieldPath: string, expectedValue: boolean) => {
+  if (!setFieldKeys.has(fieldPath)) return;
+  if (!fieldRoundTrips(fieldPath)) return;
+  withFieldPath(fieldPath, '', (path) => {
+    cy.get(DATA_IDS.SETTINGS_FIELD(path)).should('have.attr', 'data-toggle-value', expectedValue ? 'true' : 'false');
+  });
+};
+
 const verifyMultiInputContains = (fieldPath: string, expectedValue: string) => {
   if (!setFieldKeys.has(fieldPath)) return;
+  if (!fieldRoundTrips(fieldPath)) return;
   withFieldPath(fieldPath, '', (path) => {
     cy.get(DATA_IDS.SETTINGS_FIELD(path))
       .find('input')
@@ -393,16 +477,50 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
 
   it('Should display saved values in UI fields after page refresh', () => {
     visitPage(ROUTES.SETTINGS, () => {
-      waitForGraphqlOperation('GetEffectiveConfig').then(() => {
+      waitForGraphqlOperation('GetEffectiveConfig').then((interception) => {
+        // Capture which fields the proxy actually returned so the verifiers
+        // below can skip ones that don't round-trip on the current schema
+        // (e.g. `rollout.maxConcurrentRollouts` on legacy v1.24 proxies).
+        collectEffectiveConfigKeys(interception);
+
         cy.get(DATA_IDS.SETTINGS_SAVE).should('not.exist');
         cy.get(DATA_IDS.SETTINGS_CANCEL).should('not.exist');
 
+        // Each verifier silently skips when the proxy schema didn't expose the
+        // field during the update (see `setFieldKeys` / `withFieldPath` above),
+        // or when the proxy's EffectiveConfig response doesn't carry the field
+        // back (see `effectiveConfigKeys` / `fieldRoundTrips`), so this block
+        // is safe across legacy and current proxy versions.
+
+        // ─ General ─
         verifyInput('clusterName', testClusterName);
+        // Note: telemetryEnabled is intentionally skipped here. The Go struct uses a
+        // plain bool with json omitempty, so toggling it to false is not serialized
+        // to the local-ui-config YAML, and mergeConfigs only applies the overlay when
+        // the overlay value is true. As a result, flipping the UI toggle to false does
+        // not propagate into the effective config, and after refresh the UI still
+        // renders the helm-default value (true). This is a known limitation tracked
+        // separately; verifying it here would always fail.
+
+        // ─ Instrumentation ─
         verifyDropdown('instrumentor.agentEnvVarsInjectionMethod', 'pod-manifest');
+        verifyToggle('allowConcurrentAgents.enabled', true);
+        verifyToggle('instrumentor.checkDeviceHealthBeforeInjection', true);
+        verifyToggle('wasp.enabled', true);
+
+        // ─ Rollout & Rollback ─
+        verifyToggle('rollout.automaticRolloutDisabled', true);
+        verifyInput('rollout.maxConcurrentRollouts', '5');
+        verifyToggle('autoRollback.disabled', true);
         verifyTimeInput('autoRollback.graceTime', '60s');
         verifyTimeInput('autoRollback.stabilityWindowTime', '120s');
+
+        // ─ Namespaces & Filtering ─
         verifyMultiInputContains('ignoredNamespaces', 'cypress-test-ns');
         verifyMultiInputContains('ignoredContainers', 'cypress-test-container');
+        verifyToggle('ignoreOdigosNamespace', false);
+
+        // ─ Component Log Levels ─
         verifyDropdown('componentLogLevels.default', 'debug');
         verifyDropdown('componentLogLevels.autoscaler', 'debug');
         verifyDropdown('componentLogLevels.scheduler', 'debug');
@@ -411,6 +529,17 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
         verifyDropdown('componentLogLevels.deviceplugin', 'debug');
         verifyDropdown('componentLogLevels.ui', 'debug');
         verifyDropdown('componentLogLevels.collector', 'debug');
+
+        // ─ Sampling ─
+        verifyToggle('sampling.dryRun', true);
+        verifyToggle('sampling.spanSamplingAttributes.disabled', true);
+        verifyToggle('sampling.spanSamplingAttributes.samplingCategoryDisabled', true);
+        verifyToggle('sampling.spanSamplingAttributes.traceDecidingRuleDisabled', true);
+        verifyToggle('sampling.spanSamplingAttributes.spanDecisionAttributesDisabled', true);
+        verifyToggle('sampling.tailSampling.disabled', true);
+        verifyTimeInput('sampling.tailSampling.traceAggregationWaitDuration', '45s');
+        verifyToggle('sampling.k8sHealthProbesSampling.enabled', true);
+        verifyInput('sampling.k8sHealthProbesSampling.keepPercentage', '50');
       });
     });
   });

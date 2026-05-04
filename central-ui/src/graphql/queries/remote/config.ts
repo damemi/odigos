@@ -28,6 +28,184 @@ export const GET_CONFIG: VersionedRemoteFetch = {
 
 export const GET_EFFECTIVE_CONFIG: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
+    'v1.25': `
+  query GetEffectiveConfig {
+    effectiveConfig {
+      configVersion
+      telemetryEnabled
+      openshiftEnabled
+      ignoredNamespaces
+      ignoredContainers
+      ignoreOdigosNamespace
+      psp
+      imagePrefix
+      skipWebhookIssuerCreation
+      collectorGateway {
+        minReplicas
+        maxReplicas
+        requestMemoryMiB
+        limitMemoryMiB
+        requestCPUm
+        limitCPUm
+        memoryLimiterLimitMiB
+        memoryLimiterSpikeLimitMiB
+        goMemLimitMiB
+        serviceGraphDisabled
+        clusterMetricsEnabled
+        httpsProxyAddress
+        nodeSelector
+      }
+      collectorNode {
+        collectorOwnMetricsPort
+        requestMemoryMiB
+        limitMemoryMiB
+        requestCPUm
+        limitCPUm
+        memoryLimiterLimitMiB
+        memoryLimiterSpikeLimitMiB
+        goMemLimitMiB
+        k8sNodeLogsDirectory
+        enableDataCompression
+        otlpExporterConfiguration {
+          enableDataCompression
+          timeout
+          retryOnFailure {
+            enabled
+            initialInterval
+            maxInterval
+            maxElapsedTime
+          }
+        }
+      }
+      profiles
+      allowConcurrentAgents {
+        enabled
+      }
+      uiMode
+      uiPaginationLimit
+      uiRemoteUrl
+      centralBackendURL
+      clusterName
+      instrumentor {
+        mountMethod
+        agentEnvVarsInjectionMethod
+        checkDeviceHealthBeforeInjection
+      }
+      customContainerRuntimeSocketPath
+      userInstrumentationEnvs {
+        languages
+      }
+      nodeSelector
+      karpenter {
+        enabled
+      }
+      rollout {
+        automaticRolloutDisabled
+        maxConcurrentRollouts
+      }
+      autoRollback {
+        disabled
+        graceTime
+        stabilityWindowTime
+      }
+      oidc {
+        tenantUrl
+        clientId
+        clientSecret
+      }
+      odigletHealthProbeBindPort
+      goAutoOffsetsCron
+      goAutoOffsetsMode
+      clickhouseJsonTypeEnabled
+      resourceSizePreset
+      wasp {
+        enabled
+      }
+      metricsSources {
+        spanMetrics {
+          disabled
+          interval
+          metricsExpiration
+          additionalDimensions
+          histogramDisabled
+          histogramBuckets
+          includedProcessInDimensions
+          excludedResourceAttributes
+          resourceMetricsKeyAttributes
+        }
+        hostMetrics {
+          disabled
+          interval
+        }
+        kubeletStats {
+          disabled
+          interval
+        }
+        odigosOwnMetrics {
+          interval
+        }
+        agentMetrics {
+          spanMetrics {
+            enabled
+          }
+          runtimeMetrics {
+            java {
+              disabled
+              metrics {
+                name
+                disabled
+              }
+            }
+          }
+        }
+      }
+      agentsInitContainerResources {
+        requestCPUm
+        limitCPUm
+        requestMemoryMiB
+        limitMemoryMiB
+      }
+      traceIdSuffix
+      allowedTestConnectionHosts
+      odigosOwnTelemetryStore {
+        metricsStoreDisabled
+      }
+      imagePullSecrets
+      componentLogLevels {
+        default
+        autoscaler
+        scheduler
+        instrumentor
+        odiglet
+        deviceplugin
+        ui
+        collector
+      }
+      sampling {
+        dryRun
+        spanSamplingAttributes {
+          disabled
+          samplingCategoryDisabled
+          traceDecidingRuleDisabled
+          spanDecisionAttributesDisabled
+        }
+        tailSampling {
+          disabled
+          traceAggregationWaitDuration
+        }
+        k8sHealthProbesSampling {
+          enabled
+          keepPercentage
+        }
+      }
+      provenance {
+        helmPath
+        reconciledFrom
+      }
+      manifestYAML
+    }
+  }
+`,
     'v1.24': `
   query GetEffectiveConfig {
     effectiveConfig {
