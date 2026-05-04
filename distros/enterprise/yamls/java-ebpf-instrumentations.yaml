@@ -31,6 +31,9 @@ spec:
   agentMetrics:
     runtimeMetrics:
       supported: true
+  logs:
+    ebpfLogCapture:
+      supported: true
   traces:
     customInstrumentations:
       supported: true

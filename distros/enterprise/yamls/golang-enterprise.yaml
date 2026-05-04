@@ -26,6 +26,9 @@ spec:
     waspSupported: true
     k8sAttrsViaEnvVars: true
     noRestartRequired: true
+  logs:
+    ebpfLogCapture:
+      supported: true
   traces:
     codeAttributes:
       supported: true
