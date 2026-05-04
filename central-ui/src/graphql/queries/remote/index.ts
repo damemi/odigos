@@ -7,6 +7,7 @@ export * from './instrumentation-rules';
 export * from './metrics';
 export * from './namespaces';
 export * from './pipeline-collectors';
+export * from './profiling';
 export * from './sampling';
 export * from './service-map';
 export * from './sources';

@@ -8,9 +8,11 @@ import {
   useDescribe,
   useDestinationCategories,
   useDestinationCRUD,
+  useEffectiveConfig,
   useInstrumentationRuleCRUD,
   useNamespace,
   usePotentialDestinations,
+  useProfiling,
   useSourceCRUD,
   useTestConnection,
   useWorkloadUtils,
@@ -23,11 +25,13 @@ const OverviewModalsAndDrawers = () => {
 
   const { fetchDescribeSource } = useDescribe();
   const { testConnection } = useTestConnection();
+  const { effectiveConfig } = useEffectiveConfig();
   const { fetchNamespacesWithWorkloads } = useNamespace();
   const { getDestinationCategories } = useDestinationCategories();
   const { getPotentialDestinations } = usePotentialDestinations();
   const { createAction, updateAction, deleteAction } = useActionCRUD();
   const { restartWorkloads, restartPod, recoverFromRollback } = useWorkloadUtils();
+  const { fetchProfilingSlots, enableProfiling, fetchSourceProfiling } = useProfiling();
   const { createDestination, updateDestination, deleteDestination } = useDestinationCRUD();
   const { createInstrumentationRule, updateInstrumentationRule, deleteInstrumentationRule } = useInstrumentationRuleCRUD();
   const { persistSources, persistSourcesV2, updateSource, fetchSourceById, fetchSourceLibraries, fetchPeerSources } = useSourceCRUD();
@@ -72,6 +76,25 @@ const OverviewModalsAndDrawers = () => {
       )}
 
       {drawerType === EntityTypes.Source && drawerEntityId && (
+        // <SourceEditFormContextProvider>
+        //   <EditSourceDrawer
+        //     onClose={handleCloseDrawer}
+        //     sourceId={drawerEntityId as WorkloadId}
+        //     persistSources={persistSources}
+        //     restartWorkloads={restartWorkloads}
+        //     restartPod={restartPod}
+        //     recoverFromRollback={recoverFromRollback}
+        //     updateSource={updateSource}
+        //     fetchSourceById={fetchSourceById}
+        //     fetchSourceDescribe={fetchDescribeSource}
+        //     fetchSourceLibraries={fetchSourceLibraries}
+        //     fetchPeerSources={fetchPeerSources}
+        //     profilingEnabled={effectiveConfig?.profiling?.enabled || false}
+        //     enableProfiling={enableProfiling}
+        //     fetchSourceProfiling={fetchSourceProfiling}
+        //     fetchProfilingSlots={fetchProfilingSlots}
+        //   />
+        // </SourceEditFormContextProvider>
         <SourceDrawer
           persistSources={persistSources}
           restartWorkloads={restartWorkloads}
@@ -82,6 +105,10 @@ const OverviewModalsAndDrawers = () => {
           fetchSourceDescribe={fetchDescribeSource}
           fetchSourceLibraries={fetchSourceLibraries}
           fetchPeerSources={fetchPeerSources}
+          profilingEnabled={effectiveConfig?.profiling?.enabled || false}
+          enableProfiling={enableProfiling}
+          fetchSourceProfiling={fetchSourceProfiling}
+          fetchProfilingSlots={fetchProfilingSlots}
         />
       )}
       {drawerType === EntityTypes.Destination && drawerEntityId && (

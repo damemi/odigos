@@ -198,6 +198,9 @@ export const GET_EFFECTIVE_CONFIG: VersionedRemoteFetch = {
           keepPercentage
         }
       }
+      profiling {
+        enabled
+      }
       provenance {
         helmPath
         reconciledFrom

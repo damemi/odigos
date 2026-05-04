@@ -10,6 +10,7 @@ export * from './instrumentation-rules';
 export * from './metrics';
 export * from './namespaces';
 export * from './pipeline-collectors';
+export * from './profiling';
 export * from './proxy';
 export * from './sampling';
 export * from './snapshots';

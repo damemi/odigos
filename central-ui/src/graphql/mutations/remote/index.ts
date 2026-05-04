@@ -4,6 +4,7 @@ export * from './destinations';
 export * from './instrumentation-rules';
 export * from './namespaces';
 export * from './local-ui-config';
+export * from './profiling';
 export * from './remote-config';
 export * from './sampling';
 export * from './sources';
