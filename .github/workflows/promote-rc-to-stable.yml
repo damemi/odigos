@@ -225,6 +225,22 @@ jobs:
           event-type: release_cli
           client-payload: '{"tag": "${{ env.STABLE_TAG }}"}'
 
+      - name: Get enterprise dispatch sts token
+        id: sts-trigger-enterprise
+        uses: odigos-io/ci-core/sts@main
+        with:
+          scope: odigos-io/odigos
+          identity: trigger-release
+          output-git-config: "false"
+
+      - name: Trigger Enterprise Promote RC to Stable
+        uses: peter-evans/repository-dispatch@v4
+        with:
+          token: ${{ steps.sts-trigger-enterprise.outputs.GH_TOKEN }}
+          repository: odigos-io/odigos-enterprise
+          event-type: promote_rc_to_stable
+          client-payload: '{"tag": "${{ env.RC_TAG }}"}'
+
       - name: Notify Slack
         if: always()
         uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
