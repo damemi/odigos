@@ -193,6 +193,7 @@ func (r *RedisClient) SubscribeToRequests(ctx context.Context, proxyID string, h
 		}
 
 		sub := r.client.Subscribe(ctx, requestsChannel)
+		retryDelay = time.Second
 		ch := sub.Channel()
 
 		// Inner loop: handles message processing
