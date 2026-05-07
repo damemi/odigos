@@ -33,3 +33,5 @@ spec:
   traces:
     codeAttributes:
       supported: true
+    headSampling:
+      supported: true
