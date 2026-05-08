@@ -10,6 +10,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/discover"
 	"go.opentelemetry.io/obi/pkg/config"
+	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/instrumenter"
 	"go.opentelemetry.io/obi/pkg/obi"
 )
@@ -44,6 +45,12 @@ func obiConfigForOdigos() *obi.Config {
 	// Export traces to the node collector (same node as odiglet). Use http scheme for insecure gRPC.
 	// Protocol is inferred from port (4317 -> gRPC) by OBI.
 	cfg.Traces.TracesEndpoint = fmt.Sprintf("http://localhost:%d", consts.OTLPPort)
+	// Enable DNS tracing in addition to the OBI defaults. DefaultConfig is a package-level
+	// var, so allocate a fresh slice to avoid mutating the shared default.
+	cfg.Traces.Instrumentations = append(
+		append([]instrumentations.Instrumentation(nil), cfg.Traces.Instrumentations...),
+		instrumentations.InstrumentationDNS,
+	)
 	return &cfg
 }
 
