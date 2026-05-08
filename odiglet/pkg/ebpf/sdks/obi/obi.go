@@ -10,6 +10,7 @@ import (
 
 	"go.opentelemetry.io/obi/pkg/appolly/discover"
 	"go.opentelemetry.io/obi/pkg/config"
+	"go.opentelemetry.io/obi/pkg/export"
 	"go.opentelemetry.io/obi/pkg/export/instrumentations"
 	"go.opentelemetry.io/obi/pkg/instrumenter"
 	"go.opentelemetry.io/obi/pkg/obi"
@@ -42,15 +43,21 @@ func NewOBIInstrumentationFactory() *OBIInstrumentationFactory {
 func obiConfigForOdigos() *obi.Config {
 	cfg := obi.DefaultConfig
 	cfg.EBPF.ContextPropagation = config.ContextPropagationHeaders
-	// Export traces to the node collector (same node as odiglet). Use http scheme for insecure gRPC.
-	// Protocol is inferred from port (4317 -> gRPC) by OBI.
-	cfg.Traces.TracesEndpoint = fmt.Sprintf("http://localhost:%d", consts.OTLPPort)
+	// Export traces and metrics to the node collector (same node as odiglet). Use http scheme
+	// for insecure gRPC; protocol is inferred from port (4317 -> gRPC) by OBI.
+	nodeOTLP := fmt.Sprintf("http://localhost:%d", consts.OTLPPort)
+	cfg.Traces.TracesEndpoint = nodeOTLP
+	cfg.OTELMetrics.MetricsEndpoint = nodeOTLP
 	// Enable DNS tracing in addition to the OBI defaults. DefaultConfig is a package-level
 	// var, so allocate a fresh slice to avoid mutating the shared default.
 	cfg.Traces.Instrumentations = append(
 		append([]instrumentations.Instrumentation(nil), cfg.Traces.Instrumentations...),
 		instrumentations.InstrumentationDNS,
 	)
+	// Activate the netolly pipeline by adding FeatureNetwork to Metrics.Features. Combined
+	// with OTELMetrics.MetricsEndpoint above, this satisfies otelNetO11yEnabled() in OBI and
+	// turns on FeatureNetO11y (host-wide flow capture on every odiglet node).
+	cfg.Metrics.Features |= export.FeatureNetwork
 	return &cfg
 }
 
