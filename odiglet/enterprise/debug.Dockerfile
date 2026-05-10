@@ -3,7 +3,7 @@ ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.16
 FROM python:3.11 AS python-builder
 WORKDIR /python-instrumentation
 # Enterprise version of ebpf-generic-instrumentation
-ARG EBPF_GENERIC_VERSION="v0.0.9"
+ARG EBPF_GENERIC_VERSION="v0.0.11"
 RUN apt update -y && apt install -y systemtap-sdt-dev
 RUN --mount=type=secret,id=github_token \
     git clone -b ${EBPF_GENERIC_VERSION} https://$(cat /run/secrets/github_token)@github.com/odigos-io/ebpf-generic-instrumentation.git \
@@ -77,7 +77,7 @@ RUN chmod 644 /instrumentations/java/javaagent.jar
 
 # python-community/python-community3.8
 COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.73-py3.8 /instrumentations/python3.8 /instrumentations/python3.8
-COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.81 /instrumentations/python /instrumentations/python
+COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.82 /instrumentations/python /instrumentations/python
 
 # python-enterprise
 COPY --from=python-builder /python-instrumentation/enterprise-workspace /instrumentations/python-ebpf
