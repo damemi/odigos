@@ -15,21 +15,21 @@
   },
   "dependencies": {
     "@apollo/client": "^3.13.9",
-    "@odigos/ui-kit": "0.0.230",
+    "@odigos/ui-kit": "0.0.233",
     "graphql": "^16.13.2",
-    "graphql-ws": "^6.0.7",
+    "graphql-ws": "^6.0.8",
     "next": "15.5.14",
-    "picomatch": "4.0.3",
+    "picomatch": "4.0.4",
     "react": "19.2.5",
     "react-dom": "19.2.5",
     "styled-components": "6.3.12",
     "ws": "8.19.0",
-    "zustand": "^5.0.12"
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@next/bundle-analyzer": "^16.2.4",
-    "@types/node": "25.6.0",
+    "@next/bundle-analyzer": "^16.2.6",
+    "@types/node": "25.6.2",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@types/styled-components": "^5.1.36",
@@ -38,7 +38,7 @@
     "cross-env": "^10.1.0",
     "cypress": "^15.14.2",
     "eslint": "9.39.2",
-    "eslint-config-next": "16.2.4",
+    "eslint-config-next": "16.2.6",
     "typescript": "5.9.3"
   },
   "resolutions": {
