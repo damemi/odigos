@@ -26,6 +26,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/logcapture"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/api/odigos/v1alpha1/instrumentationrules"
+	commonapisampling "github.com/odigos-io/odigos/common/api/sampling"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/instrumentation"
 	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
@@ -319,6 +320,7 @@ func convertToGoInstrumentationConfig(config instrumentation.Config) (goAutoConf
 	if containerConfig == nil || containerConfig.Traces == nil {
 		return ic, nil
 	}
+
 	traces := containerConfig.Traces
 
 	if traces.TraceVerbosity != nil {
@@ -358,6 +360,10 @@ func convertToGoInstrumentationConfig(config instrumentation.Config) (goAutoConf
 		ic.Payload = convertPayloadCollection(traces.PayloadCollection)
 	}
 
+	if traces.HeadSampling != nil {
+		ic.HeadSampling = convertHeadSampling(traces.HeadSampling)
+	}
+
 	return ic, nil
 }
 
@@ -378,6 +384,45 @@ func convertPayloadCollection(payloadConfig *instrumentationrules.PayloadCollect
 		}
 	}
 	return goPayloadConfig
+}
+
+func convertHeadSampling(hs *odigosv1.HeadSamplingConfig) *goAutoConfig.HeadSamplingConfig {
+	cfg := &goAutoConfig.HeadSamplingConfig{
+		DryRun:          hs.DryRun,
+		SpanMetricsMode: goAutoConfig.SpanMetricsMode(hs.SpanMetricsMode),
+	}
+	for _, no := range hs.NoisyOperations {
+		cfg.NoisyOperations = append(cfg.NoisyOperations, convertNoisyOperation(no))
+	}
+	return cfg
+}
+
+func convertNoisyOperation(no commonapisampling.NoisyOperation) goAutoConfig.NoisyOperationRule {
+	rule := goAutoConfig.NoisyOperationRule{
+		ID:               no.Id,
+		Name:             no.Name,
+		Disabled:         no.Disabled,
+		PercentageAtMost: no.PercentageAtMost,
+	}
+	if no.Operation != nil {
+		rule.Operation = &goAutoConfig.HeadSamplingOperationMatcher{}
+		if no.Operation.HttpServer != nil {
+			rule.Operation.HTTPServer = &goAutoConfig.HeadSamplingHTTPServerMatcher{
+				Route:       no.Operation.HttpServer.Route,
+				RoutePrefix: no.Operation.HttpServer.RoutePrefix,
+				Method:      no.Operation.HttpServer.Method,
+			}
+		}
+		if no.Operation.HttpClient != nil {
+			rule.Operation.HTTPClient = &goAutoConfig.HeadSamplingHTTPClientMatcher{
+				ServerAddress:       no.Operation.HttpClient.ServerAddress,
+				TemplatedPath:       no.Operation.HttpClient.TemplatedPath,
+				TemplatedPathPrefix: no.Operation.HttpClient.TemplatedPathPrefix,
+				Method:              no.Operation.HttpClient.Method,
+			}
+		}
+	}
+	return rule
 }
 
 func readAndVerifyOffsetsFile(path string) ([]byte, error) {
