@@ -295,6 +295,8 @@ replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/o
 
 replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.26.0-pre1
 
+replace github.com/odigos-io/odigos/odiglet => github.com/tamirdavid1/odigos/odiglet v0.0.0-20260510135620-7fc04e4ad937
+
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
 replace github.com/odigos-io/odigos-enterprise/distros => ../distros

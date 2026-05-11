@@ -207,21 +207,14 @@ func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instru
 		return nil
 	}
 
-	sdkConfig, ok := conf.(*odigosv1.SdkConfig)
+	containerConfig, ok := conf.(*odigosv1.ContainerAgentConfig)
 	if !ok {
-		return fmt.Errorf("invalid config type, expected *odigosv1.SdkConfig, got %T", conf)
+		return fmt.Errorf("invalid config type, expected *odigosv1.ContainerAgentConfig, got %T", conf)
 	}
 
-	// TODO(edenfed): config per library is not implement in java-eBPF yet. merge all libraries
 	var headers []string
-	if sdkConfig.DefaultHeadersCollection != nil && sdkConfig.DefaultHeadersCollection.HeaderKeys != nil {
-		headers = sdkConfig.DefaultHeadersCollection.HeaderKeys
-	}
-
-	for _, library := range sdkConfig.InstrumentationLibraryConfigs {
-		if library.HeadersCollection != nil && library.HeadersCollection.HeaderKeys != nil {
-			headers = append(headers, library.HeadersCollection.HeaderKeys...)
-		}
+	if containerConfig.Traces != nil && containerConfig.Traces.HeadersCollection != nil {
+		headers = containerConfig.Traces.HeadersCollection.HttpHeaderKeys
 	}
 
 	err := g.inst.ApplyDynamicConfig(dynamic.HTTPHeaders(headers))
@@ -229,9 +222,9 @@ func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instru
 		return err
 	}
 
-	if sdkConfig.CustomInstrumentations != nil && sdkConfig.CustomInstrumentations.Java != nil {
+	if containerConfig.Traces != nil && containerConfig.Traces.CustomInstrumentations != nil && containerConfig.Traces.CustomInstrumentations.Java != nil {
 		var probes []dynamic.CustomProbe
-		for _, probe := range sdkConfig.CustomInstrumentations.Java {
+		for _, probe := range containerConfig.Traces.CustomInstrumentations.Java {
 			probes = append(probes, dynamic.CustomProbe{
 				ClassName:  probe.ClassName,
 				MethodName: probe.MethodName,
@@ -242,8 +235,8 @@ func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instru
 		}
 	}
 
-	if sdkConfig.RuntimeMetrics != nil {
-		jvmConfig := createJVMMetricsConfig(sdkConfig.RuntimeMetrics.Java)
+	if containerConfig.Metrics != nil && containerConfig.Metrics.RuntimeMetrics != nil {
+		jvmConfig := createJVMMetricsConfig(containerConfig.Metrics.RuntimeMetrics.Java)
 		if jvmConfig != nil {
 			if err := g.inst.ApplyDynamicConfig(dynamic.JVMMetricsProbe(*jvmConfig)); err != nil {
 				return err
@@ -252,16 +245,8 @@ func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instru
 	}
 
 	kafkaBodyEnabled := false
-	if pc := sdkConfig.DefaultPayloadCollection; pc != nil && pc.Messaging != nil {
+	if containerConfig.Traces != nil && containerConfig.Traces.PayloadCollection != nil && containerConfig.Traces.PayloadCollection.Messaging != nil {
 		kafkaBodyEnabled = true
-	}
-	if !kafkaBodyEnabled {
-		for _, library := range sdkConfig.InstrumentationLibraryConfigs {
-			if library.PayloadCollection != nil && library.PayloadCollection.Messaging != nil {
-				kafkaBodyEnabled = true
-				break
-			}
-		}
 	}
 	if err := g.inst.ApplyDynamicConfig(dynamic.KafkaMessageBody(dynamic.KafkaMessageBodyEvent(kafkaBodyEnabled))); err != nil {
 		return err

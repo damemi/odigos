@@ -104,13 +104,14 @@ func isEnabled(conf instrumentation.Config) bool {
 	if conf == nil {
 		return false
 	}
-	sdkConfig, ok := conf.(*odigosv1.SdkConfig)
+	containerConfig, ok := conf.(*odigosv1.ContainerAgentConfig)
 	if !ok {
 		return false
 	}
-	return sdkConfig.EbpfLogCapture != nil &&
-		sdkConfig.EbpfLogCapture.Enabled != nil &&
-		*sdkConfig.EbpfLogCapture.Enabled
+	return containerConfig.Logs != nil &&
+		containerConfig.Logs.EbpfLogCapture != nil &&
+		containerConfig.Logs.EbpfLogCapture.Enabled != nil &&
+		*containerConfig.Logs.EbpfLogCapture.Enabled
 }
 
 func packResourceAttributes(serviceName string, attrs []attribute.KeyValue) string {

@@ -92,15 +92,14 @@ func (p *JavaExtensionOtelEbpfSdk) ApplyConfig(ctx context.Context, conf instrum
 		return nil
 	}
 
-	sdkConfig, ok := conf.(*odigosv1.SdkConfig)
+	containerConfig, ok := conf.(*odigosv1.ContainerAgentConfig)
 	if !ok {
-		return fmt.Errorf("invalid config type, expected *odigosv1.SdkConfig, got %T", conf)
+		return fmt.Errorf("invalid config type, expected *odigosv1.ContainerAgentConfig, got %T", conf)
 	}
 
-	// Custom instrumentation - apply only if configured
-	if sdkConfig.CustomInstrumentations != nil && sdkConfig.CustomInstrumentations.Java != nil {
+	if containerConfig.Traces != nil && containerConfig.Traces.CustomInstrumentations != nil && containerConfig.Traces.CustomInstrumentations.Java != nil {
 		var probes []dynamic.CustomProbe
-		for _, probe := range sdkConfig.CustomInstrumentations.Java {
+		for _, probe := range containerConfig.Traces.CustomInstrumentations.Java {
 			probes = append(probes, dynamic.CustomProbe{
 				ClassName:  probe.ClassName,
 				MethodName: probe.MethodName,
@@ -111,9 +110,8 @@ func (p *JavaExtensionOtelEbpfSdk) ApplyConfig(ctx context.Context, conf instrum
 		}
 	}
 
-	// JVM metrics - apply only if configured
-	if sdkConfig.RuntimeMetrics != nil {
-		jvmConfig := createJVMMetricsConfig(sdkConfig.RuntimeMetrics.Java)
+	if containerConfig.Metrics != nil && containerConfig.Metrics.RuntimeMetrics != nil {
+		jvmConfig := createJVMMetricsConfig(containerConfig.Metrics.RuntimeMetrics.Java)
 		if jvmConfig != nil {
 			if err := p.inst.ApplyDynamicConfig(dynamic.JVMMetricsProbe(*jvmConfig)); err != nil {
 				return err
