@@ -40,3 +40,5 @@ spec:
       supported: true
     traceVerbosity:
       disablingOdigosAgentLibrariesSupported: true
+    headSampling:
+      supported: true
