@@ -72,6 +72,6 @@ func (n *NodeJSOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 }
 
 // Not implemented
-func (n *NodeJSOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, sdkConfig instrumentation.Config) error {
+func (n *NodeJSOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, containerConfig instrumentation.Config) error {
 	return nil
 }

@@ -65,6 +65,6 @@ func (g *MySQLOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 }
 
 // Not implemented
-func (g *MySQLOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, sdkConfig instrumentation.Config) error {
+func (g *MySQLOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, containerConfig instrumentation.Config) error {
 	return nil
 }

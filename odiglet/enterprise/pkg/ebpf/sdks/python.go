@@ -5,10 +5,10 @@ import (
 
 	auto "github.com/odigos-io/ebpf-generic-instrumentation"
 	"github.com/odigos-io/ebpf-generic-instrumentation/pkg/opentelemetry"
+	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/instrumentation"
 	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 	"github.com/odigos-io/odigos/k8sutils/pkg/service"
-	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 )
@@ -74,6 +74,6 @@ func (p *PythonOtelEbpfSdkEnterprise) Close(_ context.Context) error {
 }
 
 // Not implemented
-func (p *PythonOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, sdkConfig instrumentation.Config) error {
+func (p *PythonOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, containerConfig instrumentation.Config) error {
 	return nil
 }

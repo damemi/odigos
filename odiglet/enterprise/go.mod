@@ -17,7 +17,7 @@ require (
 	github.com/odigos-io/odigos/distros v1.26.0-pre1
 	github.com/odigos-io/odigos/instrumentation v1.26.0-pre1
 	github.com/odigos-io/odigos/k8sutils v0.0.0
-	github.com/odigos-io/odigos/odiglet v1.26.0-pre1
+	github.com/odigos-io/odigos/odiglet v1.26.0-pre1.0.20260511134119-cc8a9075bf61
 	github.com/odigos-io/odigos/odiglet/pkg/ebpf/sdks/obi v0.0.0-20260427154914-60b72b57503a
 	github.com/odigos-io/odigos/procdiscovery v0.0.0
 	go.opentelemetry.io/auto v0.22.0
@@ -283,19 +283,17 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v1.13.0
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.26.0-pre1
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.26.0-pre1.0.20260511134119-cc8a9075bf61
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.26.0-pre1
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.26.0-pre1.0.20260511134119-cc8a9075bf61
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.26.0-pre1
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.26.0-pre1.0.20260511134119-cc8a9075bf61
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.26.0-pre1
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.26.0-pre1.0.20260511134119-cc8a9075bf61
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.26.0-pre1
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.26.0-pre1.0.20260511134119-cc8a9075bf61
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.26.0-pre1
-
-replace github.com/odigos-io/odigos/odiglet => github.com/tamirdavid1/odigos/odiglet v0.0.0-20260510135620-7fc04e4ad937
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.26.0-pre1.0.20260511134119-cc8a9075bf61
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 

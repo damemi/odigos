@@ -280,8 +280,8 @@ func (g *GoOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 	return err
 }
 
-func (g *GoOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, sdkConfig instrumentation.Config) error {
-	updatedConfig, convertErr := convertToGoInstrumentationConfig(sdkConfig)
+func (g *GoOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, containerConfig instrumentation.Config) error {
+	updatedConfig, convertErr := convertToGoInstrumentationConfig(containerConfig)
 	if convertErr != nil {
 		return convertErr
 	}
