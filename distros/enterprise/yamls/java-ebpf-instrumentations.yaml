@@ -37,3 +37,7 @@ spec:
   traces:
     customInstrumentations:
       supported: true
+    headersCollection:
+      supported: true
+    payloadCollection:
+      supported: true
