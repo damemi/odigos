@@ -16,7 +16,7 @@ spec:
     opAmpClientEnvironments: true
     appendOdigosVariables:
       - envName: NODE_OPTIONS
-        replacePattern: "{{ORIGINAL_ENV_VALUE}} --require {{ODIGOS_AGENTS_DIR}}/nodejs-ebpf/autoinstrumentation.js"
+        replacePattern: "{{ORIGINAL_ENV_VALUE}} --require {{ODIGOS_AGENTS_DIR}}/nodejs-ebpf-14/autoinstrumentation.js"
   runtimeAgent:
     directoryNames:
       - "{{ODIGOS_AGENTS_DIR}}/nodejs-ebpf-14"
