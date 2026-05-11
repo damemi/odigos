@@ -383,6 +383,25 @@ export const GET_EFFECTIVE_CONFIG: VersionedRemoteFetch = {
 
 export const GET_CONFIG_YAMLS: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
+    'v1.26': `
+    query GetConfigYamls {
+      configYamls {
+        name
+        displayName
+        fields {
+          displayName
+          componentType
+          isHelmOnly
+          isEnterpriseOnly
+          description
+          helmValuePath
+          docsLink
+          componentProps
+          renderCondition
+        }
+      }
+    }
+  `,
     'v1.24': `
     query GetConfigYamls {
       configYamls {
