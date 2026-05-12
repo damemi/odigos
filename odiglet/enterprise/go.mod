@@ -6,7 +6,7 @@ require (
 	github.com/cilium/ebpf v0.20.0
 	github.com/odigos-io/ebpf-core v0.6.0
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.7
-	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.8.0
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.10.0
 	github.com/odigos-io/ebpf-java-instrumentation/v2 v2.8.0
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.6.0
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
