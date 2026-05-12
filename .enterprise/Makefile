@@ -1,5 +1,6 @@
 TAG ?= $(shell odigos version --cluster 2>/dev/null || odigos version --cli 2>/dev/null || helm search repo odigos 2>/dev/null | awk '$$1 == "odigos/odigos" {print $$3}')
 GITHUB_TOKEN ?= $(shell gh auth token)
+export GITHUB_TOKEN
 
 # Include dependency update targets
 include deps.mk
