@@ -38,4 +38,6 @@ spec:
       supported: true
     customInstrumentations:
       supported: true
+    headSampling:
+      supported: true
   configAsEnvVars: true
