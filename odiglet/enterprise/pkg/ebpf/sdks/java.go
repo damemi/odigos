@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,6 +34,7 @@ const (
 type JavaOtelEbpfSdkEnterprise struct {
 	inst   *auto.Instrumentation
 	config instrumentation.Config
+	logger *slog.Logger
 }
 
 type JavaInstrumentationFactoryEnterprise struct {
@@ -41,6 +43,8 @@ type JavaInstrumentationFactoryEnterprise struct {
 	// location where the agent relevant files are located on the host
 	agentFilesSourceDir string
 	otlpConn            *grpc.ClientConn
+	// logger is shared across every *auto.Instrumentation
+	logger *slog.Logger
 }
 
 func NewJavaInstrumentationFactoryEnterprise(traceIdSuffix uint8, otelDistro *distro.OtelDistro, otlpConn *grpc.ClientConn) (instrumentation.Factory, error) {
@@ -66,6 +70,7 @@ func NewJavaInstrumentationFactoryEnterprise(traceIdSuffix uint8, otelDistro *di
 		agentJarName:        agentJar,
 		agentFilesSourceDir: sourceDir,
 		otlpConn:            otlpConn,
+		logger:              slog.New(commonlogger.NewSlogHandler("ebpfjava")),
 	}, nil
 }
 
@@ -75,7 +80,7 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 		otlptracegrpc.WithGRPCConn(g.otlpConn),
 	)
 	if err != nil {
-		commonlogger.LoggerCompat().With("subsystem", "ebpfjava").Error("failed to create exporter", "error", err)
+		g.logger.Error("failed to create exporter", "error", err)
 		return nil, err
 	}
 
@@ -85,6 +90,7 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 		auto.WithServiceName(settings.ServiceName),
 		auto.WithTraceExporter(defaultExporter),
 		auto.WithProcFS(process.HostProcDir()),
+		auto.WithLogger(g.logger),
 	}
 	if g.traceIdSuffix != 0 {
 		opts = append(opts, auto.WithTraceIdSuffix(g.traceIdSuffix))
@@ -102,7 +108,7 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 	// note: we do not check the JAVA_TOOL_OPTIONS env var here since it can be added by LD_PRELOAD method, which will not reflect in proc fs.
 	odigosEnvPresent, err := isEnvValPresent(pid, k8sconsts.OdigosEnvVarPodName)
 	if err != nil {
-		commonlogger.LoggerCompat().With("subsystem", "ebpfjava").Error("failed to check if native lib is loaded", "error", err)
+		g.logger.Error("failed to check if native lib is loaded", "error", err)
 		return nil, err
 	}
 	if !odigosEnvPresent {
@@ -125,13 +131,14 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 		opts...,
 	)
 	if err != nil {
-		commonlogger.LoggerCompat().With("subsystem", "ebpfjava").Error("instrumentation setup failed", "error", err)
+		g.logger.Error("instrumentation setup failed", "error", err)
 		return nil, err
 	}
 
 	javaInstWrapper := &JavaOtelEbpfSdkEnterprise{
 		inst:   inst,
 		config: settings.InitialConfig,
+		logger: g.logger,
 	}
 
 	return javaInstWrapper, nil
@@ -169,7 +176,7 @@ func (g *JavaOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.S
 			}
 		}
 
-		commonlogger.LoggerCompat().With("subsystem", "ebpfjava").Info("Java instrumentation loaded",
+		g.logger.Info("Java instrumentation loaded",
 			"nativeLibLoaded", javaStatus.NativeLibLoaded,
 			"byteBuddyClassCount", javaStatus.ByteBuddyClassCount,
 			"byteBuddyAuxiliaryCount", javaStatus.ByteBuddyAuxiliaryCount,
@@ -203,7 +210,7 @@ func (g *JavaOtelEbpfSdkEnterprise) PrepareLogCapture(ctx context.Context, pid i
 
 func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instrumentation.Config) error {
 	if conf == nil {
-		commonlogger.LoggerCompat().With("subsystem", "ebpfjava").Info("got nil config, skipping")
+		g.logger.Info("got nil config, skipping")
 		return nil
 	}
 

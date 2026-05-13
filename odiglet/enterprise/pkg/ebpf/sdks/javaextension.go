@@ -3,6 +3,7 @@ package sdks
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common/consts"
@@ -10,8 +11,8 @@ import (
 	auto "github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2"
 	"github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2/pkg/dynamic"
 	"github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2/pkg/opentelemetry"
-	"github.com/odigos-io/odigos/instrumentation"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
+	"github.com/odigos-io/odigos/instrumentation"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 )
@@ -19,12 +20,20 @@ import (
 type JavaExtensionOtelEbpfSdk struct {
 	inst   *auto.Instrumentation
 	config instrumentation.Config
+	logger *slog.Logger
 }
 
-type JavaExtensionInstrumentationFactoryEnterprise struct{}
+type JavaExtensionInstrumentationFactoryEnterprise struct {
+	// logger is shared across every *auto.Instrumentation this factory
+	// creates so the underlying otel_agent_extension library does not
+	// allocate a new logger per instrumented process.
+	logger *slog.Logger
+}
 
 func NewJavaExtensionInstrumentationFactoryEnterprise() instrumentation.Factory {
-	return &JavaExtensionInstrumentationFactoryEnterprise{}
+	return &JavaExtensionInstrumentationFactoryEnterprise{
+		logger: slog.New(commonlogger.NewSlogHandler("ebpfjavaext")),
+	}
 }
 
 func (p *JavaExtensionInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
@@ -33,6 +42,7 @@ func (p *JavaExtensionInstrumentationFactoryEnterprise) CreateInstrumentation(ct
 		auto.WithResourceAttributes(settings.ResourceAttributes...),
 		auto.WithServiceName(settings.ServiceName),
 		auto.WithProcFS(process.HostProcDir()),
+		auto.WithLogger(p.logger),
 	}
 
 	if settings.TracesMap.Map == nil {
@@ -40,7 +50,7 @@ func (p *JavaExtensionInstrumentationFactoryEnterprise) CreateInstrumentation(ct
 			otlptracegrpc.WithEndpoint(fmt.Sprintf("localhost:%d", consts.OTLPPort)))
 		exporter, err := opentelemetry.New(ctx, c)
 		if err != nil {
-			commonlogger.LoggerCompat().With("subsystem", "ebpfjavaext").Error("failed to create exporter", "error", err)
+			p.logger.Error("failed to create exporter", "error", err)
 			return nil, err
 		}
 		opts = append(opts, auto.WithTraceExporter(exporter))
@@ -54,13 +64,14 @@ func (p *JavaExtensionInstrumentationFactoryEnterprise) CreateInstrumentation(ct
 
 	inst, err := auto.NewInstrumentation(ctx, opts...)
 	if err != nil {
-		commonlogger.LoggerCompat().With("subsystem", "ebpfjavaext").Error("instrumentation setup failed", "error", err)
+		p.logger.Error("instrumentation setup failed", "error", err)
 		return nil, err
 	}
 
 	javaInstWrapper := &JavaExtensionOtelEbpfSdk{
 		inst:   inst,
 		config: settings.InitialConfig,
+		logger: p.logger,
 	}
 
 	return javaInstWrapper, nil
@@ -88,7 +99,7 @@ func (p *JavaExtensionOtelEbpfSdk) Close(ctx context.Context) error {
 
 func (p *JavaExtensionOtelEbpfSdk) ApplyConfig(ctx context.Context, conf instrumentation.Config) error {
 	if conf == nil {
-		commonlogger.LoggerCompat().With("subsystem", "ebpfjavaext").Info("got nil config, skipping custom instrumentation")
+		p.logger.Info("got nil config, skipping custom instrumentation")
 		return nil
 	}
 

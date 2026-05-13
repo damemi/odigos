@@ -268,10 +268,10 @@ github.com/odigos-io/ebpf-core v0.6.0 h1:tL6dTpS4p5PsaOSbRrVLfB1IlDA18GFCZpy1Uqj
 github.com/odigos-io/ebpf-core v0.6.0/go.mod h1:mDM8V1E/vHfbkGLvJjCetRvKMMlicjcof4CzWiSTQjE=
 github.com/odigos-io/ebpf-generic-instrumentation v0.0.7 h1:51zdc/IKL03luxMCDpS2UdO3HB9ibOY0D/2hg8PqXos=
 github.com/odigos-io/ebpf-generic-instrumentation v0.0.7/go.mod h1:rPRq+px5xiYPDMAUvqaWcgGL1XwOrQf7lr4JxVIsEE4=
-github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.10.0 h1:sxNf3plJjyWkhtc0g2AMChAaLUYkG8aPNx0rpQIpLTI=
-github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.10.0/go.mod h1:QAuO5mANhxmGVTqFfL1PAHuc/Z02zZrk9/Whn+vK128=
-github.com/odigos-io/ebpf-java-instrumentation/v2 v2.8.0 h1:BHip4AkwBt7G1WfunLqW0pz9vgnKuMmRGAnaJ6qSpWs=
-github.com/odigos-io/ebpf-java-instrumentation/v2 v2.8.0/go.mod h1:TiDjewbsi90fBFgSTVFyB+etu5Hu9iWIq38fT3YAnpY=
+github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.11.0 h1:AQGlb4rVYBW1N/4xPhd31ttUHDVBdoJg3UxAS67VYtQ=
+github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.11.0/go.mod h1:QAuO5mANhxmGVTqFfL1PAHuc/Z02zZrk9/Whn+vK128=
+github.com/odigos-io/ebpf-java-instrumentation/v2 v2.11.0 h1:JsszQUnnritUG/qcUUNo9J0pXTPnRoRJLnivb0e1M6I=
+github.com/odigos-io/ebpf-java-instrumentation/v2 v2.11.0/go.mod h1:TiDjewbsi90fBFgSTVFyB+etu5Hu9iWIq38fT3YAnpY=
 github.com/odigos-io/ebpf-nodejs-instrumentation v0.7.0 h1:ZPfFGe3Fs9So9RMbD/yBjbdtRdNxK6lBXZFMA4+CJTg=
 github.com/odigos-io/ebpf-nodejs-instrumentation v0.7.0/go.mod h1:nHsKMoeafXbNHQiS9P7E3+gPH8EiMnS0WyAr1xgAVtU=
 github.com/odigos-io/enterprise-go-instrumentation v1.15.0 h1:g4bci6IDrEf3IL/3l0+x9VHd4QXmXzlw5EAmBohfUoA=
