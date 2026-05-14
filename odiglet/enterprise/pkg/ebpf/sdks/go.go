@@ -352,8 +352,8 @@ func convertToGoInstrumentationConfig(config instrumentation.Config) (goAutoConf
 
 	if traces.HeadersCollection != nil {
 		// note: currently the CRD has no notion of response vs request headers
-		ic.HTTPHeaders.RequestKeys = traces.HeadersCollection.HttpHeaderKeys
-		ic.HTTPHeaders.ResponseKeys = traces.HeadersCollection.HttpHeaderKeys
+		ic.HTTPHeaders.RequestKeys = traces.HeadersCollection.HeaderKeys
+		ic.HTTPHeaders.ResponseKeys = traces.HeadersCollection.HeaderKeys
 	}
 
 	if traces.PayloadCollection != nil {
@@ -386,7 +386,7 @@ func convertPayloadCollection(payloadConfig *instrumentationrules.PayloadCollect
 	return goPayloadConfig
 }
 
-func convertHeadSampling(hs *odigosv1.HeadSamplingConfig) *goAutoConfig.HeadSamplingConfig {
+func convertHeadSampling(hs *commonapisampling.HeadSamplingConfig) *goAutoConfig.HeadSamplingConfig {
 	cfg := &goAutoConfig.HeadSamplingConfig{
 		DryRun:          hs.DryRun,
 		SpanMetricsMode: goAutoConfig.SpanMetricsMode(hs.SpanMetricsMode),

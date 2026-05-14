@@ -221,7 +221,7 @@ func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instru
 
 	var headers []string
 	if containerConfig.Traces != nil && containerConfig.Traces.HeadersCollection != nil {
-		headers = containerConfig.Traces.HeadersCollection.HttpHeaderKeys
+		headers = containerConfig.Traces.HeadersCollection.HeaderKeys
 	}
 
 	err := g.inst.ApplyDynamicConfig(dynamic.HTTPHeaders(headers))
