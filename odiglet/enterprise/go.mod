@@ -13,7 +13,7 @@ require (
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
 	github.com/odigos-io/odigos/api v0.0.0
-	github.com/odigos-io/odigos/common v1.26.0-pre1.0.20260512105133-ba95aa5ef5a9
+	github.com/odigos-io/odigos/common v1.26.0-pre1.0.20260513134233-a295988cff49
 	github.com/odigos-io/odigos/distros v1.26.0-pre1.0.20260512105133-ba95aa5ef5a9
 	github.com/odigos-io/odigos/instrumentation v1.26.0-pre1.0.20260512105133-ba95aa5ef5a9
 	github.com/odigos-io/odigos/k8sutils v0.0.0
@@ -283,10 +283,6 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v1.15.0
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.26.0-pre1.0.20260512105133-ba95aa5ef5a9
-
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.26.0-pre1.0.20260512105133-ba95aa5ef5a9
-
 replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.26.0-pre1.0.20260512105133-ba95aa5ef5a9
 
 replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.26.0-pre1.0.20260512105133-ba95aa5ef5a9
@@ -304,3 +300,7 @@ replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 // Newer compute releases dropped the nested metadata package; this replace removes the ambiguity.
 // Added during OBI change
 replace cloud.google.com/go/compute => cloud.google.com/go/compute v1.57.0
+
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.26.0-pre1.0.20260513134233-a295988cff49
+
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.26.0-pre1.0.20260513134233-a295988cff49

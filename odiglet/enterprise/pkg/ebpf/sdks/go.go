@@ -25,11 +25,11 @@ import (
 	"github.com/odigos-io/ebpf-core/pkg/wasp"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/logcapture"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
-	"github.com/odigos-io/odigos/api/odigos/v1alpha1/instrumentationrules"
+	"github.com/odigos-io/odigos/common/api/instrumentationrules"
 	commonapisampling "github.com/odigos-io/odigos/common/api/sampling"
+	"github.com/odigos-io/odigos/common/configprovider"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/instrumentation"
-	odigosebpf "github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 )
 
 const rsaPublicKeyString = `-----BEGIN PUBLIC KEY-----
@@ -46,7 +46,7 @@ var offsetsFilePathEnv = "OTEL_GO_OFFSETS_FILE"
 
 type GoOtelEbpfSdkEnterprise struct {
 	inst             *auto.Instrumentation
-	cp               *odigosebpf.ConfigProvider[goAutoConfig.InstrumentationConfig]
+	cp               *configprovider.ConfigProvider[goAutoConfig.InstrumentationConfig]
 	waspMaps         *wasp.Maps
 	waspMapsProvider wasp.MapsProvider
 	podName          string
@@ -163,7 +163,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 		return nil, fmt.Errorf("invalid initial config type, expected *odigosv1.ContainerAgentConfig, got %T", settings.InitialConfig)
 	}
 
-	cp := odigosebpf.NewConfigProvider(initialConfig)
+	cp := configprovider.NewConfigProvider(initialConfig)
 
 	// TODO: once we have all the desired functionality in the generic config provider this code should
 	// be refactored to call the OSS Odiglet factory

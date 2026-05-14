@@ -6,10 +6,10 @@ require (
 	github.com/odigos-io/ebpf-core v0.1.0
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v1.26.0-pre1.0.20260512105133-ba95aa5ef5a9
-	github.com/odigos-io/odigos/common v1.26.0-pre1.0.20260512105133-ba95aa5ef5a9
-	github.com/odigos-io/odigos/instrumentor v1.26.0-pre1.0.20260512105133-ba95aa5ef5a9
-	github.com/odigos-io/odigos/k8sutils v1.26.0-pre1.0.20260512105133-ba95aa5ef5a9
+	github.com/odigos-io/odigos/api v1.26.0-pre1.0.20260513134233-a295988cff49
+	github.com/odigos-io/odigos/common v1.26.0-pre1.0.20260513134233-a295988cff49
+	github.com/odigos-io/odigos/instrumentor v1.26.0-pre1.0.20260513134233-a295988cff49
+	github.com/odigos-io/odigos/k8sutils v1.26.0-pre1.0.20260513134233-a295988cff49
 	k8s.io/api v0.35.2
 	k8s.io/client-go v0.35.2
 	sigs.k8s.io/controller-runtime v0.23.3
@@ -103,10 +103,10 @@ replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.26.0-pre1.0.20260512105133-ba95aa5ef5a9
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.26.0-pre1.0.20260513134233-a295988cff49
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.26.0-pre1.0.20260512105133-ba95aa5ef5a9
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.26.0-pre1.0.20260513134233-a295988cff49
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.26.0-pre1.0.20260512105133-ba95aa5ef5a9
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.26.0-pre1.0.20260513134233-a295988cff49
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.26.0-pre1.0.20260512105133-ba95aa5ef5a9
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.26.0-pre1.0.20260513134233-a295988cff49
