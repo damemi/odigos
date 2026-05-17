@@ -94,6 +94,8 @@ jobs:
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           access_token_lifetime: 1200s
 
+      # Single registry host; WIF access token authorizes push to public (components)
+      # and private (components-private) repositories.
       - name: Login to Artifact Registry
         uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 #v3.5.0
         with:
@@ -128,6 +130,7 @@ jobs:
           push: true
           tags: |
             us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
+            us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-enterprise-${{ matrix.service }}:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
             keyval/odigos-enterprise-${{ matrix.service }}:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
             ghcr.io/odigos-io/odigos-enterprise-${{ matrix.service }}:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
           build-args: |
