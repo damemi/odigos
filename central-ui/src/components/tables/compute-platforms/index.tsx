@@ -1,5 +1,6 @@
-import React, { useMemo, useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import * as UTILS from '@/utils';
+import { IconCircle } from '../styled';
 import { useUserStore } from '@/store';
 import { EditIcon } from '@odigos/ui-kit/icons';
 import { useComputePlatformsCRUD } from '@/hooks';
@@ -8,7 +9,7 @@ import { getPlatformIcon } from '@odigos/ui-kit/functions';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import type { ComputePlatform, ComputePlatformInput } from '@/types';
 import { EditComputePlatformDrawer } from '@/components/drawer/edit-compute-platform-drawer';
-import { CenterThis, FlexRow, IconButton, IconWrapped, InteractiveTable, NoDataFound, RowCell } from '@odigos/ui-kit/components';
+import { Table, TableVariant, type TableProps, type TableRow } from '@odigos/ui-kit/components/v2';
 
 export enum ComputePlatformsTableColumn {
   Icon = 'icon',
@@ -16,7 +17,6 @@ export enum ComputePlatformsTableColumn {
   Type = 'type',
   Members = 'members',
   Teams = 'teams',
-  Actions = 'actions',
 }
 
 export const ComputePlatformsTable: React.FC = () => {
@@ -44,79 +44,65 @@ export const ComputePlatformsTable: React.FC = () => {
     [updating, updateComputePlatform, addNotification],
   );
 
-  const columns = useMemo(() => {
-    const arr = [
-      { key: ComputePlatformsTableColumn.Icon, title: '' },
-      { key: ComputePlatformsTableColumn.Name, title: UTILS.NAME, sortable: true },
-      { key: ComputePlatformsTableColumn.Type, title: UTILS.TYPE, sortable: true },
+  const columns: TableProps['columns'] = useMemo(
+    () => [
+      { key: ComputePlatformsTableColumn.Icon, label: '', noSort: true, noFilter: true },
+      { key: ComputePlatformsTableColumn.Name, label: UTILS.NAME },
+      { key: ComputePlatformsTableColumn.Type, label: UTILS.TYPE },
       // TODO: uncomment when user attributes are implemented
-      // { key: ComputePlatformsTableColumn.Members, title: UTILS.MEMBERS, sortable: true },
-      { key: ComputePlatformsTableColumn.Teams, title: UTILS.TEAMS, sortable: true },
-    ];
+      // { key: ComputePlatformsTableColumn.Members, label: UTILS.MEMBERS },
+      { key: ComputePlatformsTableColumn.Teams, label: UTILS.TEAMS },
+    ],
+    [],
+  );
 
-    if (isAdmin) {
-      arr.push({ key: ComputePlatformsTableColumn.Actions, title: UTILS.ACTIONS });
-    }
+  const rows: TableProps['rows'] = useMemo(
+    () =>
+      computePlatforms.map((cp) => {
+        const PlatformIcon = getPlatformIcon(cp.type);
+        const PlatformIconCell: React.FC = () => (
+          <IconCircle>
+            <PlatformIcon size={20} />
+          </IconCircle>
+        );
 
-    return arr;
-  }, [isAdmin]);
+        return {
+          onClick: () => setEditOpenForCP(cp),
+          cells: [
+            { key: ComputePlatformsTableColumn.Icon, rawValue: '', component: PlatformIconCell },
+            { key: ComputePlatformsTableColumn.Name, rawValue: cp.name },
+            { key: ComputePlatformsTableColumn.Type, rawValue: cp.type },
+            // TODO: uncomment when user attributes are implemented
+            // { key: ComputePlatformsTableColumn.Members, rawValue: UTILS.MEMBERS_COUNT(cp.users?.length || 0) },
+            { key: ComputePlatformsTableColumn.Teams, rawValue: UTILS.TEAMS_COUNT(cp.teams?.length || 0) },
+          ],
+        };
+      }),
+    [computePlatforms],
+  );
 
-  const rows = useMemo(() => {
-    const arr = computePlatforms.map((cp) => {
-      const row = {
-        onClick: () => setEditOpenForCP(cp),
-        cells: [
-          {
-            columnKey: ComputePlatformsTableColumn.Icon,
-            component: () => <IconWrapped icon={() => getPlatformIcon(cp.type)({ size: 24 })} />,
-          },
-          {
-            columnKey: ComputePlatformsTableColumn.Name,
-            value: cp.name,
-          },
-          {
-            columnKey: ComputePlatformsTableColumn.Type,
-            value: cp.type,
-          },
-          // TODO: uncomment when user attributes are implemented
-          // {
-          //   columnKey: ComputePlatformsTableColumn.Members,
-          //   value: UTILS.MEMBERS_COUNT(cp.users?.length || 0),
-          // },
-          {
-            columnKey: ComputePlatformsTableColumn.Teams,
-            value: UTILS.TEAMS_COUNT(cp.teams?.length || 0),
-          },
-        ] as RowCell[],
-      };
+  const getRowActions: TableProps['getRowActions'] = useCallback(
+    ({ cells }: TableRow) => {
+      if (!isAdmin) return [];
 
-      if (isAdmin) {
-        row.cells.push({
-          columnKey: ComputePlatformsTableColumn.Actions,
-          component: () => (
-            <FlexRow>
-              <IconButton onClick={() => setEditOpenForCP(cp)} tooltip='Edit compute platform'>
-                <EditIcon />
-              </IconButton>
-            </FlexRow>
-          ),
-        });
-      }
+      const cp = computePlatforms.find((c) => c.name === cells.find((cell) => cell.key === ComputePlatformsTableColumn.Name)?.rawValue);
+      if (!cp) return [];
 
-      return row;
-    });
-
-    return arr;
-  }, [computePlatforms]);
+      return [
+        {
+          id: `edit-${cp.id}`,
+          tooltip: 'Edit compute platform',
+          rightIcon: EditIcon,
+          onClick: () => setEditOpenForCP(cp),
+        },
+      ];
+    },
+    [isAdmin, computePlatforms],
+  );
 
   return (
     <>
-      <InteractiveTable columns={columns} rows={rows} />
-      {!rows.length && (
-        <CenterThis style={{ marginTop: '2rem' }}>
-          <NoDataFound />
-        </CenterThis>
-      )}
+      <Table variant={TableVariant.Pretty} columns={columns} rows={rows} noDataProps={{ title: 'No data found' }} getRowActions={isAdmin ? getRowActions : undefined} />
 
       {editOpenForCP && (
         <EditComputePlatformDrawer

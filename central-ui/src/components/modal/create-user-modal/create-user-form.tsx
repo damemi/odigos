@@ -3,8 +3,8 @@ import { Role } from '@/types';
 import { ROLE_OPTIONS } from '@/utils';
 import { StatusType } from '@odigos/ui-kit/types';
 import * as STRINGS from '@/utils/constants/strings';
-import { Input, Dropdown, NotificationNote, Text, DropdownOption } from '@odigos/ui-kit/components';
-import { Form, ButtonContainer, CreateButton, DescriptionTextWrapper, Row, Half } from './create-user-modal.styled';
+import { DropDown, Input, Note, Typography, TypographySize } from '@odigos/ui-kit/components/v2';
+import { ButtonContainer, CreateButton, DescriptionTextWrapper, Form, Half, Row } from './create-user-modal.styled';
 
 export enum CreateUserFormField {
   Email = 'email',
@@ -15,76 +15,53 @@ export enum CreateUserFormField {
 
 export interface CreateUserFormData {
   [CreateUserFormField.Email]: string;
-  [CreateUserFormField.Role]: DropdownOption<Role>;
-  // [CreateUserFormField.Teams]: DropdownOption[];
-  // [CreateUserFormField.ComputePlatforms]: DropdownOption[];
+  [CreateUserFormField.Role]: Role;
+  // [CreateUserFormField.Teams]: string[];
+  // [CreateUserFormField.ComputePlatforms]: string[];
 }
 
 interface CreateUserFormProps {
   formData: CreateUserFormData;
   errors: Partial<Record<keyof CreateUserFormData, string>>;
   creating: boolean;
-  onChange: (field: CreateUserFormField, value: string | DropdownOption<Role> | DropdownOption[]) => void;
+  onChange: (field: CreateUserFormField, value: string) => void;
   onSubmit: (e: React.FormEvent) => void;
 }
 
 export const CreateUserForm: React.FC<CreateUserFormProps> = ({ formData, errors, creating, onChange, onSubmit }) => {
-  // const { teams } = useTeamsCRUD();
-  // const teamOptions: DropdownOption[] = useMemo(() => teams.map((team) => ({ id: team.id, value: team.name })), [teams]);
-
   const isSubmitDisabled = !formData[CreateUserFormField.Email] || creating;
 
   return (
     <Form onSubmit={onSubmit}>
       <DescriptionTextWrapper>
-        <Text size={14}>{STRINGS.CREATE_USER_FORM_DESCRIPTION_1}</Text>
-        <Text size={14}>{STRINGS.CREATE_USER_FORM_DESCRIPTION_2}</Text>
+        <Typography size={TypographySize.S}>{STRINGS.CREATE_USER_FORM_DESCRIPTION_1}</Typography>
+        <Typography size={TypographySize.S}>{STRINGS.CREATE_USER_FORM_DESCRIPTION_2}</Typography>
       </DescriptionTextWrapper>
       <Row>
         <Half>
           <Input
-            title={STRINGS.EMAIL}
+            label={STRINGS.EMAIL}
             required
             value={formData[CreateUserFormField.Email]}
             onChange={(e) => onChange(CreateUserFormField.Email, e.target.value)}
             placeholder={STRINGS.EMAIL_PLACEHOLDER}
             type='email'
           />
-          {errors[CreateUserFormField.Email] && <NotificationNote type={StatusType.Error} title={STRINGS.ERROR} message={errors[CreateUserFormField.Email]} />}
+          {errors[CreateUserFormField.Email] && <Note status={StatusType.Error} message={errors[CreateUserFormField.Email] as string} />}
         </Half>
         <Half>
-          <Dropdown
-            title={STRINGS.ROLE + ' *'}
-            value={formData[CreateUserFormField.Role]}
-            onSelect={(option) => onChange(CreateUserFormField.Role, option as DropdownOption<Role>)}
-            options={ROLE_OPTIONS}
-            placeholder={STRINGS.ROLE}
+          <DropDown
+            label={STRINGS.ROLE}
             required
+            options={ROLE_OPTIONS}
+            values={[formData[CreateUserFormField.Role]]}
+            setValues={([value]) => onChange(CreateUserFormField.Role, value ?? Role.VIEWER)}
+            placeholder={STRINGS.ROLE}
           />
         </Half>
       </Row>
-      {/* <Row>
-        <Half>
-          <Dropdown
-            title={STRINGS.TEAMS}
-            value={formData[CreateUserFormField.Teams]}
-            onSelect={(value) => onChange(CreateUserFormField.Teams, formData[CreateUserFormField.Teams].concat([value]))}
-            onDeselect={(value) =>
-              onChange(
-                CreateUserFormField.Teams,
-                formData[CreateUserFormField.Teams].filter(({ id }) => id !== value.id),
-              )
-            }
-            options={teamOptions}
-            placeholder={STRINGS.CHOOSE_TEAM}
-            isMulti
-          />
-        </Half>
-      </Row> */}
       <ButtonContainer>
-        <CreateButton type='submit' disabled={isSubmitDisabled}>
-          {creating ? STRINGS.CREATING : STRINGS.CREATE_USER}
-        </CreateButton>
+        <CreateButton type='submit' disabled={isSubmitDisabled} loading={creating} label={creating ? STRINGS.CREATING : STRINGS.CREATE_USER} />
       </ButtonContainer>
     </Form>
   );

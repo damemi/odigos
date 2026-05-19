@@ -1,8 +1,8 @@
 import React, { type FC } from 'react';
 import type { ComputePlatform } from '@/types';
-import { DataCard, Text } from '@odigos/ui-kit/components';
 import { MEMBERS_COUNT, TEAMS, TYPE } from '@/utils';
-import { DataCardCellTitle, DataCardContentRow, DataCardContentCell } from '../cards/styled';
+import { DataCard, Typography } from '@odigos/ui-kit/components/v2';
+import { DataCardCellTitle, DataCardContentCell, DataCardContentRow } from '../cards/styled';
 
 interface PlatformCardProps {
   computePlatform: ComputePlatform;
@@ -14,20 +14,20 @@ const PlatformCard: FC<PlatformCardProps> = ({ computePlatform }) => {
   const teamsCount = computePlatform.teams?.length || 0;
 
   return (
-    <DataCard title=''>
+    <DataCard>
       <DataCardContentRow>
         <DataCardContentCell>
           <DataCardCellTitle>{TYPE}</DataCardCellTitle>
-          <Text>{computePlatform.type}</Text>
+          <Typography>{computePlatform.type}</Typography>
         </DataCardContentCell>
         {/* TODO: uncomment when user attributes are implemented */}
         {/* <DataCardContentCell>
           <DataCardCellTitle>{USERS}</DataCardCellTitle>
-          <Text>{USERS_COUNT(usersCount)}</Text>
+          <Typography>{USERS_COUNT(usersCount)}</Typography>
         </DataCardContentCell> */}
         <DataCardContentCell>
           <DataCardCellTitle>{TEAMS}</DataCardCellTitle>
-          <Text>{MEMBERS_COUNT(teamsCount)}</Text>
+          <Typography>{MEMBERS_COUNT(teamsCount)}</Typography>
         </DataCardContentCell>
       </DataCardContentRow>
     </DataCard>

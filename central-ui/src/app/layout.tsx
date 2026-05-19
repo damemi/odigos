@@ -4,15 +4,12 @@ import React, { type PropsWithChildren } from 'react';
 import dynamic from 'next/dynamic';
 import client from '@/lib/apollo-client';
 import { ApolloProvider } from '@apollo/client';
-import { useDarkMode } from '@odigos/ui-kit/store';
 import { ToastList } from '@odigos/ui-kit/containers';
 
 const ThemeProvider = dynamic(() => import('@/lib/theme-provider'), { ssr: false });
 const ProtectedRoute = dynamic(() => import('@/components/auth/protected-route'), { ssr: false });
 
 function RootLayout({ children }: PropsWithChildren) {
-  const { darkMode } = useDarkMode();
-
   return (
     <html lang='en'>
       <head>
@@ -28,7 +25,7 @@ function RootLayout({ children }: PropsWithChildren) {
           width: '100vw',
           minHeight: '100vh',
           margin: 0,
-          backgroundColor: darkMode ? '#111111' : '#EEEEEE',
+          backgroundColor: '#151618',
         }}
       >
         <ThemeProvider>

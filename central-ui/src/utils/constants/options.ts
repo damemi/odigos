@@ -1,8 +1,8 @@
 import { Role } from '@/types';
-import type { DropdownOption } from '@odigos/ui-kit/components';
+import type { DropDataOption } from '@odigos/ui-kit/components/v2';
 
-export const ROLE_OPTIONS: DropdownOption<Role>[] = [
-  { id: Role.ADMIN, value: Role.ADMIN },
-  { id: Role.MAINTAINER, value: Role.MAINTAINER },
-  { id: Role.VIEWER, value: Role.VIEWER },
+export const ROLE_OPTIONS: DropDataOption[] = [
+  { id: Role.ADMIN, label: Role.ADMIN },
+  { id: Role.MAINTAINER, label: Role.MAINTAINER },
+  { id: Role.VIEWER, label: Role.VIEWER },
 ];

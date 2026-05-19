@@ -1,14 +1,16 @@
-import React, { useMemo, useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import * as UTILS from '@/utils';
+import { IconCircle } from '../styled';
 import { useUserStore } from '@/store';
 import { useTeamsCRUD } from '@/hooks';
 import { useTheme } from 'styled-components';
 import { EditTeamDrawer } from '@/components';
 import type { Team, TeamInput } from '@/types';
+import type { SVG } from '@odigos/ui-kit/types';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { EditIcon, TrashIcon, UserGroupIcon } from '@odigos/ui-kit/icons';
-import { CenterThis, DeleteWarning, FlexRow, IconButton, IconWrapped, InteractiveTable, NoDataFound, RowCell } from '@odigos/ui-kit/components';
+import { Table, TableVariant, WarningModal, type TableProps, type TableRow } from '@odigos/ui-kit/components/v2';
 
 export enum TeamsTableColumn {
   Icon = 'icon',
@@ -16,7 +18,6 @@ export enum TeamsTableColumn {
   Description = 'description',
   Members = 'members',
   Platforms = 'platforms',
-  Actions = 'actions',
 }
 
 export const TeamsTable: React.FC = () => {
@@ -64,80 +65,70 @@ export const TeamsTable: React.FC = () => {
     [deleting, deleteTeam, addNotification],
   );
 
-  const columns = useMemo(() => {
-    const arr = [
-      { key: TeamsTableColumn.Icon, title: '' },
-      { key: TeamsTableColumn.Name, title: UTILS.NAME, sortable: true },
-      { key: TeamsTableColumn.Description, title: UTILS.DESCRIPTION, sortable: true },
-      { key: TeamsTableColumn.Members, title: UTILS.MEMBERS, sortable: true },
-      { key: TeamsTableColumn.Platforms, title: UTILS.COMPUTE_PLATFORMS, sortable: true },
-    ];
+  const columns: TableProps['columns'] = useMemo(
+    () => [
+      { key: TeamsTableColumn.Icon, label: '', noSort: true, noFilter: true },
+      { key: TeamsTableColumn.Name, label: UTILS.NAME },
+      { key: TeamsTableColumn.Description, label: UTILS.DESCRIPTION },
+      { key: TeamsTableColumn.Members, label: UTILS.MEMBERS },
+      { key: TeamsTableColumn.Platforms, label: UTILS.COMPUTE_PLATFORMS },
+    ],
+    [],
+  );
 
-    if (isAdmin) {
-      arr.push({ key: TeamsTableColumn.Actions, title: UTILS.ACTIONS });
-    }
+  const rows: TableProps['rows'] = useMemo(
+    () =>
+      teams.map((team) => {
+        const TeamIconCell: React.FC = () => (
+          <IconCircle>
+            <UserGroupIcon strokeWidth={2} size={20} />
+          </IconCircle>
+        );
 
-    return arr;
-  }, [isAdmin]);
+        return {
+          onClick: () => setEditOpenForTeam(team),
+          cells: [
+            { key: TeamsTableColumn.Icon, rawValue: '', component: TeamIconCell },
+            { key: TeamsTableColumn.Name, rawValue: team.name },
+            { key: TeamsTableColumn.Description, rawValue: team.description ?? '' },
+            { key: TeamsTableColumn.Members, rawValue: UTILS.MEMBERS_COUNT(team.users?.length || 0) },
+            { key: TeamsTableColumn.Platforms, rawValue: UTILS.PLATFORMS_COUNT(team.computePlatforms?.length || 0) },
+          ],
+        };
+      }),
+    [teams],
+  );
 
-  const rows = useMemo(() => {
-    const arr = teams.map((team) => {
-      const row = {
-        onClick: () => setEditOpenForTeam(team),
-        cells: [
-          {
-            columnKey: TeamsTableColumn.Icon,
-            component: () => <IconWrapped icon={() => <UserGroupIcon strokeWidth={2} size={24} />} />,
-          },
-          {
-            columnKey: TeamsTableColumn.Name,
-            value: team.name,
-          },
-          {
-            columnKey: TeamsTableColumn.Description,
-            value: team.description,
-          },
-          {
-            columnKey: TeamsTableColumn.Members,
-            value: UTILS.MEMBERS_COUNT(team.users?.length || 0),
-          },
-          {
-            columnKey: TeamsTableColumn.Platforms,
-            value: UTILS.PLATFORMS_COUNT(team.computePlatforms?.length || 0),
-          },
-        ] as RowCell[],
-      };
+  const getRowActions: TableProps['getRowActions'] = useCallback(
+    ({ cells }: TableRow) => {
+      if (!isAdmin) return [];
 
-      if (isAdmin) {
-        row.cells.push({
-          columnKey: TeamsTableColumn.Actions,
-          component: () => (
-            <FlexRow>
-              <IconButton onClick={() => setEditOpenForTeam(team)} tooltip='Edit team'>
-                <EditIcon />
-              </IconButton>
-              <IconButton onClick={() => setDeleteOpenForTeam(team)} tooltip='Delete team'>
-                <TrashIcon fill={theme.text.error} />
-              </IconButton>
-            </FlexRow>
-          ),
-        });
-      }
+      const team = teams.find((t) => t.name === cells.find((c) => c.key === TeamsTableColumn.Name)?.rawValue);
+      if (!team) return [];
 
-      return row;
-    });
+      const TrashFilled: SVG = (props) => <TrashIcon fill={theme.text.error} {...props} />;
 
-    return arr;
-  }, [teams, theme.text.error, isAdmin]);
+      return [
+        {
+          id: `edit-${team.id}`,
+          tooltip: 'Edit team',
+          rightIcon: EditIcon,
+          onClick: () => setEditOpenForTeam(team),
+        },
+        {
+          id: `delete-${team.id}`,
+          tooltip: 'Delete team',
+          rightIcon: TrashFilled,
+          onClick: () => setDeleteOpenForTeam(team),
+        },
+      ];
+    },
+    [isAdmin, teams, theme.text.error],
+  );
 
   return (
     <>
-      <InteractiveTable columns={columns} rows={rows} />
-      {!rows.length && (
-        <CenterThis style={{ marginTop: '2rem' }}>
-          <NoDataFound />
-        </CenterThis>
-      )}
+      <Table variant={TableVariant.Pretty} columns={columns} rows={rows} noDataProps={{ title: 'No data found' }} getRowActions={isAdmin ? getRowActions : undefined} />
 
       {editOpenForTeam && (
         <EditTeamDrawer
@@ -156,16 +147,22 @@ export const TeamsTable: React.FC = () => {
         />
       )}
 
-      <DeleteWarning
+      <WarningModal
         isOpen={deleteOpenForTeam !== null}
-        name={deleteOpenForTeam?.name || deleteOpenForTeam?.id}
-        onApprove={() => {
-          handleDeleteTeam(deleteOpenForTeam?.id as string);
-          setDeleteOpenForTeam(null);
-          setEditOpenForTeam(null);
+        title='Delete team'
+        description={`Are you sure you want to delete "${deleteOpenForTeam?.name || deleteOpenForTeam?.id || ''}"?`}
+        onClose={() => setDeleteOpenForTeam(null)}
+        approveButton={{
+          label: 'Delete',
+          onClick: () => {
+            handleDeleteTeam(deleteOpenForTeam?.id as string);
+            setDeleteOpenForTeam(null);
+            setEditOpenForTeam(null);
+          },
         }}
-        onDeny={() => {
-          setDeleteOpenForTeam(null);
+        denyButton={{
+          label: 'Cancel',
+          onClick: () => setDeleteOpenForTeam(null),
         }}
       />
     </>

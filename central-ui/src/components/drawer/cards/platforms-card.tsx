@@ -1,13 +1,15 @@
-import React, { useState, type FC, useMemo } from 'react';
+import React, { useMemo, useState, type FC } from 'react';
 import { useUserStore } from '@/store';
 import { useTheme } from 'styled-components';
 import type { ComputePlatform } from '@/types';
+import type { SVG } from '@odigos/ui-kit/types';
 import { useComputePlatformsCRUD } from '@/hooks';
 import { getPlatformIcon } from '@odigos/ui-kit/functions';
 import { MinWidthWide, Relative } from '@/components/styled';
-import { DataCardContentColumn, DataCardContentRow } from './styled';
-import { MinusCircledIcon, PlusIcon, SearchIcon } from '@odigos/ui-kit/icons';
-import { DataCard, DataFinger, Dropdown, IconButton, Input, NoDataFound, PopupForm } from '@odigos/ui-kit/components';
+import { PopupForm, Tooltip } from '@odigos/ui-kit/components';
+import { MinusCircledIcon, PlusIcon } from '@odigos/ui-kit/icons';
+import { Badge, DropDown, IconButton, IconButtonSize, NoData, Search, Typography, TypographyColor, TypographySize } from '@odigos/ui-kit/components/v2';
+import { DataCardContentColumn, DataCardContentRow, ListCard, ListCardHeader, ListCardHeaderLeft, ListCardHeaderRight, ListRow, ListRowMain, ListRowText } from './styled';
 
 interface FormData {
   addComputePlatformIds: string[];
@@ -17,8 +19,7 @@ interface FormData {
 interface PlatformsCardProps {
   currentComputePlatforms: ComputePlatform[];
   formData: FormData;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handleFormChange: (key: keyof FormData, value: any) => void;
+  handleFormChange: (key: keyof FormData, value: string[]) => void;
 }
 
 const PlatformsCard: FC<PlatformsCardProps> = ({ currentComputePlatforms, formData, handleFormChange }) => {
@@ -37,30 +38,32 @@ const PlatformsCard: FC<PlatformsCardProps> = ({ currentComputePlatforms, formDa
       }) || [];
 
     formData.addComputePlatformIds.forEach((id) => {
-      const user = computePlatforms.find((user) => user.id === id);
-      const exists = arr.find((user) => user.id === id);
-      if (user && !exists) {
-        arr.push(user);
+      const cp = computePlatforms.find((cp) => cp.id === id);
+      const exists = arr.find((cp) => cp.id === id);
+      if (cp && !exists) {
+        arr.push(cp);
       }
     });
 
     return arr;
   }, [currentComputePlatforms, search, computePlatforms, formData]);
 
-  return (
-    <DataCard
-      title='Compute Platforms'
-      titleBadge={currentComputePlatforms.length}
-      action={
-        <>
-          <Input icon={SearchIcon} placeholder='Search...' value={search} onChange={(e) => setSearch(e.target.value)} />
+  const RemoveIcon = useMemo<SVG>(() => {
+    const Cmp: SVG = (props) => <MinusCircledIcon fill={theme.text.error} {...props} />;
+    return Cmp;
+  }, [theme]);
 
+  return (
+    <ListCard>
+      <ListCardHeader>
+        <ListCardHeaderLeft>
+          <Typography>Compute Platforms</Typography>
+          <Badge label={currentComputePlatforms.length} />
+        </ListCardHeaderLeft>
+        <ListCardHeaderRight>
+          <Search value={search} onChange={setSearch} placeholder='Search...' />
           <Relative>
-            {isAdmin && (
-              <IconButton size={32} onClick={toggleAdd} withBorder>
-                <PlusIcon />
-              </IconButton>
-            )}
+            {isAdmin && <IconButton icon={PlusIcon} size={IconButtonSize.M} onClick={toggleAdd} />}
 
             <PopupForm
               flipX
@@ -77,86 +80,73 @@ const PlatformsCard: FC<PlatformsCardProps> = ({ currentComputePlatforms, formDa
               }}
             >
               <MinWidthWide>
-                <Dropdown
-                  showSearch
-                  isMulti
-                  options={computePlatforms.map((cp) => ({ id: cp.id, value: cp.name }))}
-                  value={formData.addComputePlatformIds.map((id) => {
-                    const cp = computePlatforms.find((cp) => cp.id === id);
-                    return { id, value: cp?.name || cp?.id };
-                  })}
-                  onSelect={({ id }) => {
-                    if (id) {
-                      if (formData.removeComputePlatformIds.includes(id)) {
-                        const newRemoveComputePlatformIds = formData.removeComputePlatformIds.filter((str) => str !== id);
-                        handleFormChange('removeComputePlatformIds', newRemoveComputePlatformIds);
-                      }
+                <DropDown
+                  withSearch
+                  withMultiSelect
+                  options={computePlatforms.map((cp) => ({ id: cp.id, label: cp.name }))}
+                  values={formData.addComputePlatformIds}
+                  setValues={(ids) => {
+                    const filtered = ids.filter((id) => !currentComputePlatforms.find((cp) => cp.id === id));
+                    handleFormChange('addComputePlatformIds', filtered);
 
-                      const foundAdd = formData.addComputePlatformIds.find((str) => str === id);
-                      const foundCurrent = currentComputePlatforms.find((cp) => cp.id === id);
-                      if (!foundAdd && !foundCurrent) {
-                        const newAddComputePlatformIds = [...formData.addComputePlatformIds, id];
-                        handleFormChange('addComputePlatformIds', newAddComputePlatformIds);
-                      }
-                    }
-                  }}
-                  onDeselect={({ id }) => {
-                    if (id) {
-                      if (formData.addComputePlatformIds.includes(id)) {
-                        const newAddComputePlatformIds = formData.addComputePlatformIds.filter((str) => str !== id);
-                        handleFormChange('addComputePlatformIds', newAddComputePlatformIds);
-                      }
-                      // note: do not handle the 'remove' list here, it's not needed
+                    const removed = formData.removeComputePlatformIds.filter((id) => !ids.includes(id));
+                    if (removed.length !== formData.removeComputePlatformIds.length) {
+                      handleFormChange('removeComputePlatformIds', removed);
                     }
                   }}
                 />
               </MinWidthWide>
             </PopupForm>
           </Relative>
-        </>
-      }
-    >
+        </ListCardHeaderRight>
+      </ListCardHeader>
+
       {!filteredPlatforms.length ? (
         <DataCardContentRow $justifyContent='center'>
-          <NoDataFound subTitle={search ? undefined : ''} />
+          <NoData subTitle={search ? undefined : ''} />
         </DataCardContentRow>
       ) : (
         <DataCardContentColumn>
-          {filteredPlatforms?.map(({ id, name, type }) => (
-            <DataFinger
-              key={`platform-${id}`}
-              title={name}
-              subTitle={type}
-              icons={[getPlatformIcon(type)]}
-              renderActions={
-                isAdmin
-                  ? () => (
-                      <IconButton
-                        tooltip='Remove compute platform'
-                        onClick={() => {
-                          if (formData.addComputePlatformIds.includes(id)) {
-                            const newAddComputePlatformIds = formData.addComputePlatformIds.filter((str) => str !== id);
-                            handleFormChange('addComputePlatformIds', newAddComputePlatformIds);
-                          }
+          {filteredPlatforms.map(({ id, name, type }) => {
+            const PlatformIcon = getPlatformIcon(type);
+            return (
+              <ListRow key={`platform-${id}`}>
+                <ListRowMain>
+                  <PlatformIcon size={16} />
+                  <ListRowText>
+                    <Typography size={TypographySize.S}>{name}</Typography>
+                    <Typography size={TypographySize.XS} color={TypographyColor.Secondary}>
+                      {type}
+                    </Typography>
+                  </ListRowText>
+                </ListRowMain>
+                {isAdmin && (
+                  <Tooltip text='Remove compute platform'>
+                    <IconButton
+                      icon={RemoveIcon}
+                      size={IconButtonSize.S}
+                      onClick={() => {
+                        if (formData.addComputePlatformIds.includes(id)) {
+                          const newAddComputePlatformIds = formData.addComputePlatformIds.filter((str) => str !== id);
+                          handleFormChange('addComputePlatformIds', newAddComputePlatformIds);
+                        }
 
-                          const foundRemove = formData.removeComputePlatformIds.find((str) => str === id);
-                          const foundCurrent = currentComputePlatforms.find((cp) => cp.id === id);
-                          if (!foundRemove && foundCurrent) {
-                            const newRemoveComputePlatformIds = formData.removeComputePlatformIds.filter((str) => str !== id);
-                            handleFormChange('removeComputePlatformIds', newRemoveComputePlatformIds);
-                          }
-                        }}
-                      >
-                        <MinusCircledIcon fill={theme.text.error} />
-                      </IconButton>
-                    )
-                  : undefined
-              }
-            />
-          ))}
+                        const foundRemove = formData.removeComputePlatformIds.find((str) => str === id);
+                        const foundCurrent = currentComputePlatforms.find((cp) => cp.id === id);
+                        if (!foundRemove && foundCurrent) {
+                          const newRemoveComputePlatformIds = [...formData.removeComputePlatformIds, id];
+                          handleFormChange('removeComputePlatformIds', newRemoveComputePlatformIds);
+                        }
+                      }}
+                    />
+                  </Tooltip>
+                )}
+              </ListRow>
+            );
+          })}
         </DataCardContentColumn>
       )}
-    </DataCard>
+    </ListCard>
   );
 };
 

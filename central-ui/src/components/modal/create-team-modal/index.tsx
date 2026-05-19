@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useTeamsCRUD } from '@/hooks';
+import { Modal } from '@odigos/ui-kit/components';
 import { StatusType } from '@odigos/ui-kit/types';
 import * as STRINGS from '@/utils/constants/strings';
 import { useGenericForm } from '@odigos/ui-kit/hooks';
 import { FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { ModalContent } from './create-team-modal.styled';
 import { useNotificationStore } from '@odigos/ui-kit/store';
-import { DropdownOption, Modal } from '@odigos/ui-kit/components';
 import { TeamCreatedSuccessfully } from './team-created-successfully';
 import { CreateTeamForm, type CreateTeamFormData, CreateTeamFormField } from './create-team-form';
 
@@ -49,9 +49,9 @@ export const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClos
       const resData = await createTeam({
         name: formData[CreateTeamFormField.Name],
         description: formData[CreateTeamFormField.Description],
-        addUserIds: formData[CreateTeamFormField.Members].map(({ id }) => id as string),
+        addUserIds: formData[CreateTeamFormField.Members],
         removeUserIds: [],
-        addComputePlatformIds: formData[CreateTeamFormField.ComputePlatforms].map(({ id }) => id as string),
+        addComputePlatformIds: formData[CreateTeamFormField.ComputePlatforms],
         removeComputePlatformIds: [],
       });
 
@@ -74,7 +74,7 @@ export const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClos
     onClose();
   };
 
-  const handleInputChange = (field: CreateTeamFormField, value: string | DropdownOption[]) => {
+  const handleInputChange = (field: CreateTeamFormField, value: string | string[]) => {
     handleFormChange(field, value);
     handleErrorChange(field, undefined);
   };

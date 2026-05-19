@@ -1,17 +1,17 @@
 import React, { useMemo, useState } from 'react';
-import { AccountMenu } from '../account-menu';
+import { AccountMenu } from './account-menu';
 import { useOdigos } from '@odigos/ui-kit/contexts';
+import { Tooltip } from '@odigos/ui-kit/components';
 import { FORM_ALERTS } from '@odigos/ui-kit/constants';
-import { StatusKeys, useStatusStore } from '../../store';
+import { StatusKeys, useStatusStore } from '../store';
 import { SystemDrawer } from '@odigos/ui-kit/containers/v2';
-import { Header, Tooltip } from '@odigos/ui-kit/components';
-import { OdigosLogoTextCentral, TerminalIcon } from '@odigos/ui-kit/icons';
+import { NotificationManager } from '@odigos/ui-kit/containers';
 import { OtherStatusType, StatusType } from '@odigos/ui-kit/types';
+import { OdigosLogoTextCentral, TerminalIcon } from '@odigos/ui-kit/icons';
 import { useConfig, useDescribe, useHealth, useProxy, useTokenCRUD } from '@/hooks';
 import { IconButton, Badge as V2Badge, Header as V2Header } from '@odigos/ui-kit/components/v2';
-import { NotificationManager, SlackInvite, ToggleDarkMode } from '@odigos/ui-kit/containers';
 
-const OverviewHeader = ({ v2 }: { v2?: boolean }) => {
+export const OverviewHeader = () => {
   useHealth();
 
   const { isVm } = useOdigos();
@@ -56,7 +56,7 @@ const OverviewHeader = ({ v2 }: { v2?: boolean }) => {
     }
 
     return arr;
-  }, [v2, proxyName, isReadonly, backendStatus?.label, instrumentationStatus?.label]);
+  }, [proxyName, isReadonly, backendStatus, instrumentationStatus]);
 
   const right = useMemo(() => {
     const arr = [];
@@ -69,29 +69,17 @@ const OverviewHeader = ({ v2 }: { v2?: boolean }) => {
       );
     }
 
-    if (!v2) arr.push(<ToggleDarkMode key='toggle-theme' />);
     arr.push(<NotificationManager key='notification-manager' />);
     if (!isVm && proxyID) arr.push(<IconButton key='system-drawer' icon={TerminalIcon} onClick={toggleSystemDrawer} />);
-    arr.push(...[<SlackInvite key='slack-invite' />, <AccountMenu key='account-menu' />]);
+    arr.push(<AccountMenu key='account-menu' />);
 
     return arr;
-  }, [v2, isVm, proxyID, tokenStatus?.label]);
-
-  if (v2) {
-    return (
-      <>
-        <V2Header left={left} right={right} />
-        <SystemDrawer key='system-overview' isOpen={isSystemDrawerOpen} onClose={toggleSystemDrawer} fetchDescribeOdigos={fetchDescribeOdigos} token={tokens[0]} updateToken={updateToken} />
-      </>
-    );
-  }
+  }, [isVm, proxyID, tokenStatus]);
 
   return (
     <>
-      <Header left={left} right={right} />
+      <V2Header left={left} right={right} />
       <SystemDrawer key='system-overview' isOpen={isSystemDrawerOpen} onClose={toggleSystemDrawer} fetchDescribeOdigos={fetchDescribeOdigos} token={tokens[0]} updateToken={updateToken} />
     </>
   );
 };
-
-export { OverviewHeader };

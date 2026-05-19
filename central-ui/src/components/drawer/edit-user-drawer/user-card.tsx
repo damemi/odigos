@@ -2,8 +2,8 @@ import React, { type FC } from 'react';
 import { Role, User } from '@/types';
 import { useUserStore } from '@/store';
 import { ROLE, ROLE_OPTIONS } from '@/utils';
-import { DataCard, Dropdown } from '@odigos/ui-kit/components';
-import { DataCardCellStretch, DataCardCellTitle, DataCardContentRow, DataCardContentCell } from '../cards/styled';
+import { DataCard, DropDown } from '@odigos/ui-kit/components/v2';
+import { DataCardCellStretch, DataCardCellTitle, DataCardContentCell, DataCardContentRow } from '../cards/styled';
 
 interface FormData {
   role: Role;
@@ -12,8 +12,7 @@ interface FormData {
 interface UserCardProps {
   user: User;
   formData: FormData;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handleFormChange: (key: keyof FormData, value: any) => void;
+  handleFormChange: (key: keyof FormData, value: Role) => void;
 }
 
 const UserCard: FC<UserCardProps> = ({ user: _, formData, handleFormChange }) => {
@@ -24,30 +23,29 @@ const UserCard: FC<UserCardProps> = ({ user: _, formData, handleFormChange }) =>
   // const platformsCount = user.computePlatforms?.length || 0;
 
   return (
-    <DataCard title=''>
+    <DataCard>
       <DataCardContentRow>
         <DataCardContentCell>
           <DataCardCellTitle>{ROLE}</DataCardCellTitle>
           <DataCardCellStretch>
-            <Dropdown
+            <DropDown
               placeholder={ROLE}
               options={ROLE_OPTIONS}
               disabled={!isAdmin}
-              value={ROLE_OPTIONS.find(({ id }) => id === formData.role)}
-              onSelect={(opt) => handleFormChange('role', opt.id)}
-              onDeselect={() => {}}
+              values={[formData.role]}
+              setValues={([value]) => handleFormChange('role', (value as Role) ?? Role.VIEWER)}
               required
             />
           </DataCardCellStretch>
         </DataCardContentCell>
         {/* <DataCardContentCell>
           <DataCardCellTitle>{TEAMS}</DataCardCellTitle>
-          <Text>{TEAMS_COUNT(teamsCount)}</Text>
+          <Typography>{TEAMS_COUNT(teamsCount)}</Typography>
         </DataCardContentCell> */}
         {/* TODO: uncomment when user attributes are implemented */}
         {/* <DataCardContentCell>
           <DataCardCellTitle>{COMPUTE_PLATFORMS}</DataCardCellTitle>
-          <Text>{PLATFORMS_COUNT(platformsCount)}</Text>
+          <Typography>{PLATFORMS_COUNT(platformsCount)}</Typography>
         </DataCardContentCell> */}
       </DataCardContentRow>
     </DataCard>

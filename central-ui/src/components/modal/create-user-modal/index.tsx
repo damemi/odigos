@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
-import { ROLE_OPTIONS } from '@/utils';
-import { useUsersCRUD } from '@/hooks';
 import { Role } from '@/types';
+import { useUsersCRUD } from '@/hooks';
+import { Modal } from '@odigos/ui-kit/components';
 import { StatusType } from '@odigos/ui-kit/types';
 import * as STRINGS from '@/utils/constants/strings';
 import { useGenericForm } from '@odigos/ui-kit/hooks';
 import { ModalContent } from './create-user-modal.styled';
 import { useNotificationStore } from '@odigos/ui-kit/store';
-import { DropdownOption, Modal } from '@odigos/ui-kit/components';
 import { UserCreatedSuccessfully } from './user-created-successfully';
 import { CreateUserForm, CreateUserFormData, CreateUserFormField } from './create-user-form';
 
@@ -23,7 +22,7 @@ interface CreateUserModalProps {
 
 const INITIAL_FORM_DATA: CreateUserFormData = {
   [CreateUserFormField.Email]: '',
-  [CreateUserFormField.Role]: ROLE_OPTIONS.find((opt) => opt.id === Role.VIEWER)!,
+  [CreateUserFormField.Role]: Role.VIEWER,
   // [CreateUserFormField.Teams]: [],
   // [CreateUserFormField.ComputePlatforms]: [],
 };
@@ -52,11 +51,11 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClos
     try {
       const resData = await createUser({
         email: formData[CreateUserFormField.Email],
-        role: formData[CreateUserFormField.Role].id as Role,
+        role: formData[CreateUserFormField.Role],
         password: undefined,
-        addTeamIds: [], // formData[CreateUserFormField.Teams].map(({ id }) => id as string),
+        addTeamIds: [], // formData[CreateUserFormField.Teams],
         removeTeamIds: [],
-        addComputePlatformIds: [], // formData[CreateUserFormField.ComputePlatforms].map(({ id }) => id as string),
+        addComputePlatformIds: [], // formData[CreateUserFormField.ComputePlatforms],
         removeComputePlatformIds: [],
       });
 
@@ -84,7 +83,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClos
     onClose();
   };
 
-  const handleInputChange = (field: CreateUserFormField, value: string | DropdownOption<Role> | DropdownOption[]) => {
+  const handleInputChange = (field: CreateUserFormField, value: string) => {
     handleFormChange(field, value);
     handleErrorChange(field, undefined);
   };

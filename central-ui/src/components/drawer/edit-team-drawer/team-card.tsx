@@ -1,9 +1,9 @@
 import React, { type FC } from 'react';
 import type { Team } from '@/types';
 import { useUserStore } from '@/store';
-import { DataCard, Text, TextArea } from '@odigos/ui-kit/components';
-import { COMPUTE_PLATFORMS, DESCRIPTION, MEMBERS_COUNT, MEMBERS, PLATFORMS_COUNT } from '@/utils';
-import { DataCardCellStretch, DataCardCellTitle, DataCardContentRow, DataCardContentCell } from '../cards/styled';
+import { DataCard, TextArea, Typography } from '@odigos/ui-kit/components/v2';
+import { COMPUTE_PLATFORMS, DESCRIPTION, MEMBERS, MEMBERS_COUNT, PLATFORMS_COUNT } from '@/utils';
+import { DataCardCellStretch, DataCardCellTitle, DataCardContentCell, DataCardContentRow } from '../cards/styled';
 
 interface FormData {
   description: string;
@@ -12,8 +12,7 @@ interface FormData {
 interface TeamCardProps {
   team: Team;
   formData: FormData;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handleFormChange: (key: keyof FormData, value: any) => void;
+  handleFormChange: (key: keyof FormData, value: string) => void;
 }
 
 const TeamCard: FC<TeamCardProps> = ({ team, formData, handleFormChange }) => {
@@ -23,7 +22,7 @@ const TeamCard: FC<TeamCardProps> = ({ team, formData, handleFormChange }) => {
   const platformsCount = team.computePlatforms?.length || 0;
 
   return (
-    <DataCard title=''>
+    <DataCard>
       <DataCardContentRow>
         <DataCardContentCell>
           <DataCardCellTitle>{DESCRIPTION}</DataCardCellTitle>
@@ -33,11 +32,11 @@ const TeamCard: FC<TeamCardProps> = ({ team, formData, handleFormChange }) => {
         </DataCardContentCell>
         <DataCardContentCell>
           <DataCardCellTitle>{MEMBERS}</DataCardCellTitle>
-          <Text>{MEMBERS_COUNT(usersCount)}</Text>
+          <Typography>{MEMBERS_COUNT(usersCount)}</Typography>
         </DataCardContentCell>
         <DataCardContentCell>
           <DataCardCellTitle>{COMPUTE_PLATFORMS}</DataCardCellTitle>
-          <Text>{PLATFORMS_COUNT(platformsCount)}</Text>
+          <Typography>{PLATFORMS_COUNT(platformsCount)}</Typography>
         </DataCardContentCell>
       </DataCardContentRow>
     </DataCard>

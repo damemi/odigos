@@ -12,6 +12,7 @@ const Container = styled.div`
   display: flex;
   flex-direction: column;
   gap: 24px;
+  height: stretch;
 `;
 
 const PushRight = styled.div`

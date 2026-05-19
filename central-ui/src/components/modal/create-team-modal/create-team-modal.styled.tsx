@@ -1,5 +1,5 @@
 import styled from 'styled-components';
-import { Button, Text } from '@odigos/ui-kit/components';
+import { Button, Typography } from '@odigos/ui-kit/components/v2';
 
 export const ModalContent = styled.div`
   padding: 24px;
@@ -38,7 +38,7 @@ export const RoleDescriptionContainer = styled.div`
   border-left: 3px solid ${({ theme }) => theme.colors.info};
 `;
 
-export const RoleDescriptionText = styled(Text)`
+export const RoleDescriptionText = styled(Typography)`
   margin: 0;
   line-height: 1.4;
 `;
@@ -66,7 +66,7 @@ export const SuccessContainer = styled.div`
   gap: 16px;
 `;
 
-export const SuccessTitle = styled(Text)`
+export const SuccessTitle = styled(Typography)`
   text-align: center;
   font-size: 20px;
   font-style: normal;
@@ -74,7 +74,7 @@ export const SuccessTitle = styled(Text)`
   line-height: 28px;
 `;
 
-export const SuccessSubtitle = styled(Text)`
+export const SuccessSubtitle = styled(Typography)`
   color: var(--color-text-medium, #b8b8b8);
   text-align: center;
   font-size: 14px;

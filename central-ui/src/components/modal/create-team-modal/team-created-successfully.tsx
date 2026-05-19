@@ -1,18 +1,30 @@
 import React from 'react';
+import styled from 'styled-components';
 import { UserGroupIcon } from '@odigos/ui-kit/icons';
-import { IconWrapped } from '@odigos/ui-kit/components';
-import { SuccessContainer, SuccessTitle, SuccessSubtitle, DoneButton } from './create-team-modal.styled';
-import { TEAM_CREATED_SUCCESS, TEAM_CREATED_SUCCESS_SUBTITLE, DONE } from '@/utils';
+import { DONE, TEAM_CREATED_SUCCESS, TEAM_CREATED_SUCCESS_SUBTITLE } from '@/utils';
+import { DoneButton, SuccessContainer, SuccessSubtitle, SuccessTitle } from './create-team-modal.styled';
 
 interface TeamCreatedSuccessfullyProps {
   name: string;
   onDone: () => void;
 }
 
+const IconCircle = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  background: ${({ theme }) => theme.v2.colors.silver['800']};
+`;
+
 export const TeamCreatedSuccessfully: React.FC<TeamCreatedSuccessfullyProps> = ({ name, onDone }) => {
   return (
     <SuccessContainer>
-      <IconWrapped size={48} icon={() => <UserGroupIcon size={32} />} />
+      <IconCircle>
+        <UserGroupIcon size={32} />
+      </IconCircle>
       <SuccessTitle>{TEAM_CREATED_SUCCESS}</SuccessTitle>
       <SuccessSubtitle>
         {TEAM_CREATED_SUCCESS_SUBTITLE(name)
@@ -25,9 +37,7 @@ export const TeamCreatedSuccessfully: React.FC<TeamCreatedSuccessfullyProps> = (
           ))}
       </SuccessSubtitle>
 
-      <DoneButton type='button' onClick={onDone}>
-        {DONE}
-      </DoneButton>
+      <DoneButton type='button' onClick={onDone} label={DONE} />
     </SuccessContainer>
   );
 };
