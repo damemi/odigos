@@ -83,12 +83,12 @@ COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.84 /instrumentati
 COPY --from=python-builder /python-instrumentation/enterprise-workspace /instrumentations/python-ebpf
 
 # nodejs-enterprise
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.7.0 /instrumentations/opentelemetry-node /instrumentations/opentelemetry-node
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.7.0 /instrumentations/nodejs-ebpf /instrumentations/nodejs-ebpf
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.7.0 /instrumentations/nodejs-community /instrumentations/nodejs-community
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.8.0 /instrumentations/opentelemetry-node /instrumentations/opentelemetry-node
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.8.0 /instrumentations/nodejs-ebpf /instrumentations/nodejs-ebpf
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.8.0 /instrumentations/nodejs-community /instrumentations/nodejs-community
 # nodejs-enterprise-14
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.18 /instrumentations/opentelemetry-node-14 /instrumentations/opentelemetry-node-14
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.18 /instrumentations/nodejs-ebpf-14 /instrumentations/nodejs-ebpf-14
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.20 /instrumentations/opentelemetry-node-14 /instrumentations/opentelemetry-node-14
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.20 /instrumentations/nodejs-ebpf-14 /instrumentations/nodejs-ebpf-14
 
 # dotnet-community
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
