@@ -20,6 +20,7 @@ export const ACCESS_MANAGEMENT = 'Access Management';
 export const SIGN_IN = 'Sign In';
 export const SIGN_IN_SUBTITLE_1 = 'Log in to your Odigos Central account.';
 export const SIGN_IN_SUBTITLE_2 = 'Log in to your Odigos Central account using an email and password.';
+export const SIGN_OUT = 'Sign out';
 export const SIGN_UP = 'Sign Up';
 export const SIGN_UP_SUBTITLE_1 = 'Create your first user for this environment.';
 export const SIGN_UP_SUBTITLE_2 = 'Create your first user using an email and password.';
@@ -117,3 +118,6 @@ export const TEAM_CREATED_SUCCESS = 'Team Created Successfully!';
 export const TEAM_CREATED_SUCCESS_SUBTITLE = (name: string) => `Team "${name}" has been created successfully.`;
 export const CREATE_TEAM_FORM_DESCRIPTION_1 = 'Add a new team to your Odigos environment.';
 export const CREATE_TEAM_FORM_DESCRIPTION_2 = 'Link them to relevant teams or compute platforms.';
+
+// App info strings
+export const VERSION_LABEL = (version: string) => `Version: ${version}`;

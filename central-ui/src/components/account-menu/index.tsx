@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuth } from '@/hooks';
 import { useUserStore } from '@/store';
 import { usePopup } from '@odigos/ui-kit/hooks';
+import * as STRINGS from '@/utils/constants/strings';
 import styled, { useTheme } from 'styled-components';
 import { Popup, Divider } from '@odigos/ui-kit/components';
 import { Button, ButtonVariants, Typography, TypographySize } from '@odigos/ui-kit/components/v2';
@@ -23,11 +24,17 @@ const UserAvatar = styled.div`
   }
 `;
 
+const MenuFooter = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`;
+
 export const AccountMenu: React.FC = () => {
   const theme = useTheme();
 
-  const { signOut } = useAuth();
   const { user } = useUserStore();
+  const { systemConfig, signOut } = useAuth();
   const { popupRef, popupOpen, setPopupOpen } = usePopup();
 
   const togglePopup = () => setPopupOpen((prev) => !prev);
@@ -43,10 +50,17 @@ export const AccountMenu: React.FC = () => {
 
       <Popup ref={popupRef} isOpen={popupOpen} top={52} right={44} padding='12px 16px'>
         <Typography align='center' size={TypographySize.XXS}>
-          {user?.email || 'User'}
+          {user?.email || STRINGS.USER}
         </Typography>
         <Divider />
-        <Button label='Sign out' onClick={handleLogout} variant={ButtonVariants.Text} />
+        <MenuFooter>
+          <Button label={STRINGS.SIGN_OUT} onClick={handleLogout} variant={ButtonVariants.Secondary} />
+          {systemConfig?.version && (
+            <Typography color={theme.v2.colors.grey['200']} size={TypographySize.XXS}>
+              {STRINGS.VERSION_LABEL(systemConfig.version)}
+            </Typography>
+          )}
+        </MenuFooter>
       </Popup>
     </>
   );
