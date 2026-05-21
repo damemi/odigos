@@ -1,5 +1,5 @@
 issuer: https://token.actions.githubusercontent.com
-subject_pattern: repo:odigos-io/(ebpf-.*-instrumentation|enterprise-go-instrumentation):ref:refs/(tags/.*|heads/main)
+subject_pattern: repo:odigos-io/(ebpf-.*-instrumentation|enterprise-go-instrumentation|odigos-opentelemetry-python):ref:refs/(tags/.*|heads/main)
 
 permissions:
 

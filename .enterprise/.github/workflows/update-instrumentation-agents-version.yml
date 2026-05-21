@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       agents_category: 
-        description: "Category of the agents to update (supported values: java-ebpf, nodejs)"
+        description: "Category of the agents to update (supported values: java-ebpf, nodejs, python)"
         required: true
         type: string
       new_agent_version:
@@ -60,23 +60,18 @@ jobs:
           # Normalize agents category and determine agent type
           AGENTS_CATEGORY_LOWER=$(echo "$AGENTS_CATEGORY" | tr '[:upper:]' '[:lower:]')
           
-          if [ "$AGENTS_CATEGORY_LOWER" = "java-ebpf-instrumentations" ] || \
-             [ "$AGENTS_CATEGORY_LOWER" = "java-enterprise" ] || \
-             [ "$AGENTS_CATEGORY_LOWER" = "java-ebpf" ]; then
-            AGENT_TYPE="java-ebpf"
-            echo "agent_type=java-ebpf" >> $GITHUB_OUTPUT
-            echo "agent_version=$AGENT_VERSION" >> $GITHUB_OUTPUT
-          elif [ "$AGENTS_CATEGORY_LOWER" = "nodejs-enterprise" ] || \
-               [ "$AGENTS_CATEGORY_LOWER" = "nodejs" ] || \
-               [ "$AGENTS_CATEGORY_LOWER" = "nodejs-ebpf" ]; then
-            AGENT_TYPE="nodejs"
-            echo "agent_type=nodejs" >> $GITHUB_OUTPUT
-            echo "agent_version=$AGENT_VERSION" >> $GITHUB_OUTPUT
-          else
-            echo "ERROR: Invalid agents_category '$AGENTS_CATEGORY'. Supported values: java-ebpf-instrumentations, java-enterprise, java-ebpf, nodejs-enterprise, nodejs, nodejs-ebpf"
-            exit 1
-          fi
-          
+          case "$AGENTS_CATEGORY_LOWER" in
+            java-ebpf-instrumentations|java-enterprise|java-ebpf) AGENT_TYPE="java-ebpf" ;;
+            nodejs-enterprise|nodejs|nodejs-ebpf)                 AGENT_TYPE="nodejs" ;;
+            python|python-community)                              AGENT_TYPE="python-community" ;;
+            *)
+              echo "ERROR: Invalid agents_category '$AGENTS_CATEGORY'. Supported values: java-ebpf-instrumentations, java-enterprise, java-ebpf, nodejs-enterprise, nodejs, nodejs-ebpf, python, python-community"
+              exit 1
+              ;;
+          esac
+
+          echo "agent_type=$AGENT_TYPE" >> $GITHUB_OUTPUT
+          echo "agent_version=$AGENT_VERSION" >> $GITHUB_OUTPUT
           echo "agents_category=$AGENTS_CATEGORY" >> $GITHUB_OUTPUT
 
       - name: Set up Go
@@ -91,16 +86,25 @@ jobs:
       - name: Update Agent Version
         working-directory: ./odiglet
         run: |
-          if [ "${{ steps.agent.outputs.agent_type }}" = "java-ebpf" ]; then
-            export JAVA_EBPF_AGENTS_VERSION="${{ steps.agent.outputs.agent_version }}"
-            make upgrade-java-ebpf-agents-version
-          elif [ "${{ steps.agent.outputs.agent_type }}" = "nodejs" ]; then
-            export NODEJS_EBPF_AGENTS_VERSION="${{ steps.agent.outputs.agent_version }}"
-            make upgrade-nodejs-ebpf-agents-version
-          else
-            echo "ERROR: Unknown agent type: ${{ steps.agent.outputs.agent_type }}"
-            exit 1
-          fi
+          case "${{ steps.agent.outputs.agent_type }}" in
+            java-ebpf)
+              export JAVA_EBPF_AGENTS_VERSION="${{ steps.agent.outputs.agent_version }}"
+              make upgrade-java-ebpf-agents-version
+              ;;
+            nodejs)
+              export NODEJS_EBPF_AGENTS_VERSION="${{ steps.agent.outputs.agent_version }}"
+              make upgrade-nodejs-ebpf-agents-version
+              ;;
+            python-community)
+              # python-community ships two image tags, so it calls a specific make target to avoid updating both
+              export PYTHON_COMMUNITY_AGENTS_VERSION="${{ steps.agent.outputs.agent_version }}"
+              make upgrade-python-community-agents-version
+              ;;
+            *)
+              echo "ERROR: Unknown agent type: ${{ steps.agent.outputs.agent_type }}"
+              exit 1
+              ;;
+          esac
 
       - name: Get agent version updater token
         id: agent-version-sts

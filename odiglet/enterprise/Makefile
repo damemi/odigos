@@ -109,3 +109,20 @@ upgrade-nodejs-ebpf-agents-version:
 	@echo "Running go mod tidy to clean up go.sum"
 	@go mod tidy
 	@echo "Successfully updated nodejs ebpf agents version to $(NODEJS_EBPF_AGENTS_VERSION) in Dockerfile, debug.Dockerfile, and go.mod"
+
+# python-community has two image tags pinned in the dockerfiles, this upgrades the specific agent version that needs to be updated and not python3.8
+.PHONY: upgrade-python-community-agents-version
+upgrade-python-community-agents-version:
+	@if [ -z "$(PYTHON_COMMUNITY_AGENTS_VERSION)" ]; then \
+		echo "ERROR: PYTHON_COMMUNITY_AGENTS_VERSION parameter is required. Usage: make upgrade-python-community-agents-version PYTHON_COMMUNITY_AGENTS_VERSION=v0.1.66"; \
+		exit 1; \
+	fi
+	@echo "Updating python-community agents version to $(PYTHON_COMMUNITY_AGENTS_VERSION) in Dockerfile and debug.Dockerfile (preserving -py3.8 pin)"
+	@if [ "$(shell uname)" = "Darwin" ]; then \
+		sed -i '' -E 's|python-community:[0-9A-Za-z._-]+( +/instrumentations/python )|python-community:$(PYTHON_COMMUNITY_AGENTS_VERSION)\1|g' Dockerfile; \
+		sed -i '' -E 's|python-community:[0-9A-Za-z._-]+( +/instrumentations/python )|python-community:$(PYTHON_COMMUNITY_AGENTS_VERSION)\1|g' debug.Dockerfile; \
+	else \
+		sed -i -E 's|python-community:[0-9A-Za-z._-]+( +/instrumentations/python )|python-community:$(PYTHON_COMMUNITY_AGENTS_VERSION)\1|g' Dockerfile; \
+		sed -i -E 's|python-community:[0-9A-Za-z._-]+( +/instrumentations/python )|python-community:$(PYTHON_COMMUNITY_AGENTS_VERSION)\1|g' debug.Dockerfile; \
+	fi
+	@echo "Successfully updated python-community agents version to $(PYTHON_COMMUNITY_AGENTS_VERSION) in Dockerfile and debug.Dockerfile"
