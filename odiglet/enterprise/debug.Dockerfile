@@ -59,11 +59,19 @@ RUN --mount=type=secret,id=github_token \
 COPY odiglet/ .
 
 ARG TARGETARCH
+ARG LD_FLAGS
 RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
     GOOS=linux GOARCH=$TARGETARCH make debug-build-odiglet
+
+# CSI driver (same as production odiglet image; required when mountMethod is k8s-csi-driver)
+RUN --mount=type=secret,id=github_token \
+    --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg \
+    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
+    GOOS=linux GOARCH=$TARGETARCH go build -ldflags="${LD_FLAGS}" -o odigos-csi-driver github.com/odigos-io/odigos/odiglet/cmd/csi-driver
 
 # Install delve
 RUN go install github.com/go-delve/delve/cmd/dlv@latest
@@ -112,6 +120,7 @@ FROM ${ODIGLET_BASE_IMAGE} AS rsync-base
 
 FROM registry.fedoraproject.org/fedora-minimal:38
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
+COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odigos-csi-driver /root/odigos-csi-driver
 COPY --from=builder /go/bin/dlv /root/dlv
 # Copy statically compiled rsync (no shared libraries needed)
 COPY --from=rsync-base /usr/bin/rsync /usr/bin/rsync
