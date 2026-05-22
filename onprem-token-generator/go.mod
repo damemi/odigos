@@ -16,6 +16,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.42.0 // indirect
 )
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.26.0-pre1.0.20260521130045-622e22e4e002
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.26.0-pre1.0.20260522192239-a1a50eee3008
 
-replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v1.26.0-pre1.0.20260521130045-622e22e4e002
+replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v1.26.0-pre1.0.20260522192239-a1a50eee3008
