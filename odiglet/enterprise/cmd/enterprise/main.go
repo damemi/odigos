@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -32,10 +33,6 @@ import (
 	"github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	"github.com/odigos-io/odigos/odiglet/pkg/ebpf/sdks/obi"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
-)
-
-const (
-	configUpdatesBufferSize = 10
 )
 
 func getLogLevel() string {
@@ -144,6 +141,15 @@ func main() {
 	}
 
 	ctx := signals.SetupSignalHandler()
+
+	o.AddRunnable(odiglet.Runnable{
+		Name:         "go offsets watcher",
+		PropagateErr: true,
+		Run: func(runCtx context.Context) error {
+			return sdks.WatchGoOffsets(runCtx, o.InstrumentationRequests(), logger)
+		},
+	})
+
 	expirationChan, err := odigosauth.TokenExpirationChannel()
 	if err != nil {
 		logger.Error("Failed to get token expiration channel", "error", err)
@@ -158,6 +164,7 @@ func main() {
 			os.Exit(1)
 		}
 	}()
+
 	o.Run(ctx)
 
 	logger.Info("odiglet exiting")
@@ -194,7 +201,7 @@ func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distro
 	}
 
 	return map[string]commonInstrumentation.Factory{
-		"golang-enterprise":                  logcapture.WrapFactory(goFactory),
+		sdks.GoEnterpriseDistroName:          logcapture.WrapFactory(goFactory),
 		"java-ebpf-instrumentations":         logcapture.WrapFactory(javaEbpfFactory),
 		"java-enterprise":                    sdks.NewJavaExtensionInstrumentationFactoryEnterprise(),
 		"python-enterprise":                  pythonEbpfFactory,

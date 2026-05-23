@@ -30,6 +30,7 @@ import (
 	"github.com/odigos-io/odigos/common/configprovider"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/instrumentation"
+	"github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 )
 
 const rsaPublicKeyString = `-----BEGIN PUBLIC KEY-----
@@ -42,7 +43,16 @@ eNabH8dpHROXDm8+N9JI/yMWUChnQe9oqSiCNj/xc5VYaFrdLCbpsBGRT7lVL9fC
 bwIDAQAB
 -----END PUBLIC KEY-----`
 
-var offsetsFilePathEnv = "OTEL_GO_OFFSETS_FILE"
+var GoOffsetsFilePathEnv = "OTEL_GO_OFFSETS_FILE"
+
+// goOffsetsWatchInterval is how often WatchGoOffsets polls the offsets file for changes.
+// Polling is used (rather than fsnotify) because the file is typically mounted from a Kubernetes
+// ConfigMap, which updates the file via an atomic rename of the parent directory; the resulting
+// fsnotify events are fragile across implementations whereas an os.Stat call is reliable.
+const goOffsetsWatchInterval = 30 * time.Second
+
+// GoEnterpriseDistroName is the OTel distribution name registered for the enterprise Go eBPF SDK.
+const GoEnterpriseDistroName = "golang-enterprise"
 
 type GoOtelEbpfSdkEnterprise struct {
 	inst             *auto.Instrumentation
@@ -72,17 +82,15 @@ func NewGoInstrumentationFactoryEnterprise(traceIdSuffix uint8, ws wasp.MapsProv
 		logger:             commonlogger.LoggerCompat().With("subsystem", "ebpfgosdk"),
 		otlpConn:           otlpConn,
 	}
-	err := g.updateLocalOffsets()
-	if err != nil {
+	if err := g.updateLocalOffsets(); err != nil {
 		return nil, err
 	}
-
 	return g, nil
 }
 
 func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 	// if the offsets file var is set, check if it has been modified
-	if path := os.Getenv(offsetsFilePathEnv); path != "" {
+	if path := os.Getenv(GoOffsetsFilePathEnv); path != "" {
 		info, err := os.Stat(path)
 		if err != nil {
 			return err
@@ -124,6 +132,58 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 	}
 
 	return nil
+}
+
+// WatchGoOffsets polls the custom Go offsets file (OTEL_GO_OFFSETS_FILE) for changes and, on each
+// detected update, asks the OSS instrumentation manager to retry failed Go instrumentations. It
+// blocks until ctx is canceled. If OTEL_GO_OFFSETS_FILE is not set, it returns immediately.
+func WatchGoOffsets(ctx context.Context, requestsChannel ebpf.K8sInstrumentationRequests, logger *commonlogger.OdigosLogger) error {
+	path := os.Getenv(GoOffsetsFilePathEnv)
+	if path == "" {
+		logger.Info("custom Go offsets file env var not set, not watching for changes")
+		return nil
+	}
+
+	var lastSeen time.Time
+	if info, err := os.Stat(path); err == nil {
+		lastSeen = info.ModTime()
+	}
+
+	ticker := time.NewTicker(goOffsetsWatchInterval)
+	defer ticker.Stop()
+
+	logger.Info("watching custom Go offsets file for changes", "path", path, "interval", goOffsetsWatchInterval)
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			info, err := os.Stat(path)
+			if err != nil {
+				if !os.IsNotExist(err) {
+					logger.Debug("failed to stat custom Go offsets file", "path", path, "error", err)
+				}
+				continue
+			}
+			if !info.ModTime().After(lastSeen) {
+				continue
+			}
+			modTime := info.ModTime()
+
+			req := instrumentation.Request[ebpf.K8sProcessGroup, ebpf.K8sConfigGroup, *ebpf.K8sProcessDetails]{
+				RetryDistros: []string{GoEnterpriseDistroName},
+			}
+			select {
+			case requestsChannel <- req:
+				lastSeen = modTime
+				logger.Info("detected custom Go offsets file change, requesting retry of failed Go instrumentations", "modtime", modTime)
+			case <-ctx.Done():
+				return nil
+			default:
+				logger.Info("instrumentation requests channel full, dropping Go offsets retry signal", "modtime", modTime)
+			}
+		}
+	}
 }
 
 func podNameFromSettings(settings instrumentation.Settings) string {
