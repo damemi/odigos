@@ -1,0 +1,16 @@
+apiVersion: e2e.tests.odigos.io/v1
+kind: TraceTest
+description: |
+  This test verifies that the membership service (Go) spans contain code attributes
+  (code.filepath, code.function, code.lineno, code.namespace) after applying
+  custom instrumentation rules and generating traffic.
+query: |
+  length([?(
+    span.serviceName == 'membership' &&
+    span.spanAttributes."code.filepath" == '/workspace/main.go' &&
+    span.spanAttributes."code.function" == 'main.main.func1' &&
+    span.spanAttributes."code.lineno" &&
+    span.spanAttributes."code.namespace" == 'main'
+  )]) > `0`
+expected:
+  count: 1

@@ -1,0 +1,14 @@
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationRule
+metadata:
+  name: code-attribute-instrumentation-rule
+  namespace: odigos-test
+spec:
+  codeAttributes:
+    column: true
+    filePath: true
+    function: true
+    lineNumber: true
+    namespace: true
+    stackTrace: true
+  ruleName: code-attribute

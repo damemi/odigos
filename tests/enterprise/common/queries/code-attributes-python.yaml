@@ -1,0 +1,17 @@
+apiVersion: e2e.tests.odigos.io/v1
+kind: TraceTest
+description: |
+  This test verifies that the inventory service (Python) spans contain code attributes
+  (code.filepath, code.function, code.lineno, code.namespace, code.stacktrace) after
+  applying custom instrumentation rules and generating traffic.
+query: |
+  length([?(
+    span.serviceName == 'inventory' &&
+    span.spanAttributes."code.filepath" == '/app/inventory/main.py' &&
+    span.spanAttributes."code.function" == 'buy_product' &&
+    span.spanAttributes."code.lineno" &&
+    span.spanAttributes."code.namespace" == '__main__' &&
+    span.spanAttributes."code.stacktrace"
+  )]) > `0`
+expected:
+  count: 1
