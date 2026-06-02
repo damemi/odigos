@@ -138,7 +138,7 @@ func (m *Manager) RegisterProcess(ctx context.Context, pid int, packedAttrs stri
 			m.currentAttrs = make(map[uint32]string)
 		}
 		m.currentAttrs[uint32(pid)] = packedAttrs
-		m.notifyAttr(unixfd.EncodeLogsAttrRegister(uint32(pid), packedAttrs))
+		m.notifyAttr(unixfd.EncodeAttrRegister(uint32(pid), packedAttrs))
 	}
 
 	opts := m.processOpts[uint32(pid)]
@@ -163,7 +163,7 @@ func (m *Manager) UnregisterProcess(pid int) {
 	delete(m.processOpts, uint32(pid))
 
 	delete(m.currentAttrs, uint32(pid))
-	m.notifyAttr(unixfd.EncodeLogsAttrUnregister(uint32(pid)))
+	m.notifyAttr(unixfd.EncodeAttrUnregister(uint32(pid)))
 }
 
 // pidNSInode reads our PID namespace inode so the BPF CO-RE walk can translate
@@ -191,7 +191,7 @@ func (m *Manager) SubscribeAttrs() (<-chan string, []string) {
 	m.mu.Lock()
 	snapshot := make([]string, 0, len(m.currentAttrs))
 	for pid, attrs := range m.currentAttrs {
-		snapshot = append(snapshot, unixfd.EncodeLogsAttrRegister(pid, attrs))
+		snapshot = append(snapshot, unixfd.EncodeAttrRegister(pid, attrs))
 	}
 	m.mu.Unlock()
 

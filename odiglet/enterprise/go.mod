@@ -14,11 +14,11 @@ require (
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
 	github.com/odigos-io/odigos/api v0.0.0
-	github.com/odigos-io/odigos/common v1.26.0-pre1.0.20260522192239-a1a50eee3008
-	github.com/odigos-io/odigos/distros v1.26.0-pre1.0.20260522192239-a1a50eee3008
-	github.com/odigos-io/odigos/instrumentation v1.26.0-pre1.0.20260522192239-a1a50eee3008
+	github.com/odigos-io/odigos/common v1.28.0-pre0
+	github.com/odigos-io/odigos/distros v1.28.0-pre0
+	github.com/odigos-io/odigos/instrumentation v1.28.0-pre0
 	github.com/odigos-io/odigos/k8sutils v0.0.0
-	github.com/odigos-io/odigos/odiglet v1.26.0-pre1.0.20260522192239-a1a50eee3008
+	github.com/odigos-io/odigos/odiglet v1.28.0-pre0
 	github.com/odigos-io/odigos/odiglet/pkg/ebpf/sdks/obi v0.0.0-20260427154914-60b72b57503a
 	github.com/odigos-io/odigos/procdiscovery v0.0.0
 	go.opentelemetry.io/auto v0.22.0
@@ -32,6 +32,8 @@ require (
 
 require (
 	github.com/argoproj/argo-rollouts v1.8.3 // indirect
+	github.com/coreos/go-systemd/v22 v22.6.0 // indirect
+	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
 	github.com/go-openapi/swag/cmdutils v0.25.5 // indirect
 	github.com/go-openapi/swag/conv v0.25.5 // indirect
 	github.com/go-openapi/swag/fileutils v0.25.5 // indirect
@@ -43,7 +45,12 @@ require (
 	github.com/go-openapi/swag/stringutils v0.25.5 // indirect
 	github.com/go-openapi/swag/typeutils v0.25.5 // indirect
 	github.com/go-openapi/swag/yamlutils v0.25.5 // indirect
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/moby/sys/userns v0.1.0 // indirect
+	github.com/opencontainers/cgroups v0.0.6 // indirect
 	github.com/openshift/api v3.9.0+incompatible // indirect
+	github.com/sirupsen/logrus v1.9.3 // indirect
+	go.uber.org/zap/exp v0.3.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
 
@@ -141,7 +148,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/mostynb/go-grpc-compression v1.2.3 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/odigos-io/odigos/opampserver v1.26.0-pre1.0.20260522192239-a1a50eee3008 // indirect
+	github.com/odigos-io/odigos/opampserver v1.28.0-pre0 // indirect
 	github.com/odigos-io/runtime-detector v0.0.25 // indirect
 	github.com/ohler55/ojg v1.28.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
@@ -285,13 +292,13 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v1.16.0
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.26.0-pre1.0.20260522192239-a1a50eee3008
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.28.0-pre0
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.26.0-pre1.0.20260522192239-a1a50eee3008
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.28.0-pre0
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.26.0-pre1.0.20260522192239-a1a50eee3008
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.28.0-pre0
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.26.0-pre1.0.20260522192239-a1a50eee3008
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.28.0-pre0
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
@@ -303,6 +310,6 @@ replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 // Added during OBI change
 replace cloud.google.com/go/compute => cloud.google.com/go/compute v1.57.0
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.26.0-pre1.0.20260522192239-a1a50eee3008
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.28.0-pre0
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.26.0-pre1.0.20260522192239-a1a50eee3008
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.28.0-pre0
