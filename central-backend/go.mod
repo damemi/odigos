@@ -8,8 +8,8 @@ require (
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/google/uuid v1.6.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/api v1.26.0-pre1.0.20260522192239-a1a50eee3008
-	github.com/odigos-io/odigos/common v1.26.0-pre1.0.20260522192239-a1a50eee3008
+	github.com/odigos-io/odigos/api v1.28.0-pre0
+	github.com/odigos-io/odigos/common v1.28.0-pre0
 	github.com/vektah/gqlparser/v2 v2.5.32
 	golang.org/x/sync v0.20.0
 	k8s.io/api v0.35.2
@@ -79,6 +79,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.42.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.1 // indirect
+	go.uber.org/zap/exp v0.3.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/arch v0.16.0 // indirect
