@@ -3,9 +3,10 @@
 import React, { useState } from 'react';
 import { useUserStore } from '@/store';
 import { PlusIcon } from '@odigos/ui-kit/icons';
+import { FlexRow } from '@odigos/ui-kit/components';
 import styled, { useTheme } from 'styled-components';
 import { UsersTable, CreateUserModal } from '@/components';
-import { Button, TabList, Tab, FlexRow } from '@odigos/ui-kit/components';
+import { Button, Segment, type SegmentProps, SegmentVariant } from '@odigos/ui-kit/components/v2';
 
 const Container = styled.div`
   flex: 1;
@@ -41,11 +42,7 @@ export default function Page() {
   const [activeTab, setActiveTab] = useState<AccessTab>(AccessTab.Users);
   const [createModalOpenFor, setCreateModalOpenFor] = useState<AccessTab | null>(null);
 
-  const tabs: Tab[] = [
-    { label: AccessTab.Users, selected: activeTab === AccessTab.Users, onClick: () => setActiveTab(AccessTab.Users) },
-    // { label: AccessTab.Teams, selected: activeTab === AccessTab.Teams, onClick: () => setActiveTab(AccessTab.Teams) },
-    // { label: AccessTab.Compute, selected: activeTab === AccessTab.Compute, onClick: () => setActiveTab(AccessTab.Compute) },
-  ];
+  const tabs: SegmentProps['options'] = [{ value: AccessTab.Users, label: AccessTab.Users }];
 
   const onClickCreate = () => setCreateModalOpenFor(activeTab);
   const onClickCloseCreate = () => setCreateModalOpenFor(null);
@@ -53,15 +50,11 @@ export default function Page() {
   return (
     <Container>
       <FlexRow>
-        <TabList tabs={tabs} />
+        <Segment variant={SegmentVariant.Underline} options={tabs} selected={activeTab} setSelected={setActiveTab} />
 
-        {/* {activeTab !== AccessTab.Compute && isAdmin && ( */}
         {isAdmin && (
           <PushRight>
-            <Button onClick={onClickCreate}>
-              <PlusIcon fill={theme.text.primary} />
-              {`create ${activeTab.substring(0, activeTab.length - 1)}`.toUpperCase()}
-            </Button>
+            <Button leftIcon={PlusIcon} label={`create ${activeTab.substring(0, activeTab.length - 1)}`.toUpperCase()} onClick={onClickCreate} />
           </PushRight>
         )}
       </FlexRow>
@@ -69,7 +62,6 @@ export default function Page() {
       {renderActiveTab({ activeTab })}
 
       <CreateUserModal isOpen={createModalOpenFor === AccessTab.Users} onClose={onClickCloseCreate} />
-      {/* <CreateTeamModal isOpen={createModalOpenFor === AccessTab.Teams} onClose={onClickCloseCreate} /> */}
     </Container>
   );
 }

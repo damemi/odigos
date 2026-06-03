@@ -7,10 +7,9 @@ import { useTimeAgo } from '@odigos/ui-kit/hooks';
 import { StatusType } from '@odigos/ui-kit/types';
 import { getPlatformIcon } from '@odigos/ui-kit/functions';
 import { TrashIcon, VIcon, XIcon } from '@odigos/ui-kit/icons';
-import type { DropdownOption } from '@odigos/ui-kit/components';
 import { useComputePlatformsCRUD, useProxy, useProxyCRUD } from '@/hooks';
 import { useFilterStore, useNotificationStore } from '@odigos/ui-kit/store';
-import { Badge, Table, TableVariant, WarningModal, type TableProps } from '@odigos/ui-kit/components/v2';
+import { Badge, Table, TableVariant, WarningModal, type TableProps, DropDataOption } from '@odigos/ui-kit/components/v2';
 
 export enum ConnectionsTableColumn {
   Id = 'id',
@@ -66,8 +65,8 @@ export const ConnectionsTable: React.FC = () => {
       computePlatforms.filter(
         ({ id, name, type, status }) =>
           (!searchText || id.toLowerCase().includes(searchText) || (name && name.toLowerCase().includes(searchText))) &&
-          (!platformTypes?.length || platformTypes.find((opt: DropdownOption) => opt.id === type)) &&
-          (!statuses?.length || statuses.find((opt: DropdownOption) => opt.id === status)),
+          (!platformTypes?.length || platformTypes.find((opt: DropDataOption) => opt.id === type)) &&
+          (!statuses?.length || statuses.find((opt: DropDataOption) => opt.id === status)),
       ),
     [computePlatforms, searchText, platformTypes, statuses],
   );

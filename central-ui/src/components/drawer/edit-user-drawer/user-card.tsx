@@ -1,9 +1,10 @@
 import React, { type FC } from 'react';
 import { Role, User } from '@/types';
 import { useUserStore } from '@/store';
+import styled from 'styled-components';
 import { ROLE, ROLE_OPTIONS } from '@/utils';
-import { DataCard, DropDown } from '@odigos/ui-kit/components/v2';
-import { DataCardCellStretch, DataCardCellTitle, DataCardContentCell, DataCardContentRow } from '../cards/styled';
+import { FlexColumn, FlexRow } from '@odigos/ui-kit/components';
+import { DataCard, DropDown, Typography } from '@odigos/ui-kit/components/v2';
 
 interface FormData {
   role: Role;
@@ -15,12 +16,27 @@ interface UserCardProps {
   handleFormChange: (key: keyof FormData, value: Role) => void;
 }
 
+const DataCardContentRow = styled(FlexRow)`
+  width: 100%;
+  gap: 36px;
+  align-items: flex-start;
+`;
+
+const DataCardContentCell = styled(FlexColumn)`
+  line-height: 30px;
+`;
+
+const DataCardCellTitle = styled(Typography)`
+  color: ${({ theme }) => theme.v2.colors.silver['400']};
+  font-size: 12px;
+`;
+
+const DataCardCellStretch = styled.div`
+  width: 300px;
+`;
+
 const UserCard: FC<UserCardProps> = ({ user: _, formData, handleFormChange }) => {
   const { isAdmin } = useUserStore();
-
-  // const teamsCount = user.teams?.length || 0;
-  // TODO: uncomment when user attributes are implemented
-  // const platformsCount = user.computePlatforms?.length || 0;
 
   return (
     <DataCard>

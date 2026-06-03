@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { AccountMenu } from './account-menu';
+import { TerminalIcon } from '@odigos/ui-kit/icons';
 import { useOdigos } from '@odigos/ui-kit/contexts';
 import { Tooltip } from '@odigos/ui-kit/components';
-import { FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { StatusKeys, useStatusStore } from '../store';
+import { FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { SystemDrawer } from '@odigos/ui-kit/containers/v2';
-import { NotificationManager } from '@odigos/ui-kit/containers';
+import { OdigosLogoTextByTier } from '@odigos/ui-kit/snippets/v2';
 import { OtherStatusType, StatusType } from '@odigos/ui-kit/types';
-import { OdigosLogoTextCentral, TerminalIcon } from '@odigos/ui-kit/icons';
 import { useConfig, useDescribe, useHealth, useProxy, useTokenCRUD } from '@/hooks';
 import { IconButton, Badge as V2Badge, Header as V2Header } from '@odigos/ui-kit/components/v2';
 
@@ -28,7 +28,7 @@ export const OverviewHeader = () => {
   const instrumentationStatus = useStatusStore((state) => state[StatusKeys.Instrumentation]);
 
   const left = useMemo(() => {
-    const arr = [<OdigosLogoTextCentral key='logo' size={150} />];
+    const arr = [<OdigosLogoTextByTier key='logo' size={200} central />];
 
     if (proxyName) {
       arr.push(<V2Badge key='proxy-name' status={StatusType.Default} label={proxyName} />);
@@ -68,9 +68,9 @@ export const OverviewHeader = () => {
         </Tooltip>,
       );
     }
-
-    arr.push(<NotificationManager key='notification-manager' />);
-    if (!isVm && proxyID) arr.push(<IconButton key='system-drawer' icon={TerminalIcon} onClick={toggleSystemDrawer} />);
+    if (!isVm && proxyID) {
+      arr.push(<IconButton key='system-drawer' icon={TerminalIcon} onClick={toggleSystemDrawer} />);
+    }
     arr.push(<AccountMenu key='account-menu' />);
 
     return arr;

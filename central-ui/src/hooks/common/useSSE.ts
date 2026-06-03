@@ -156,7 +156,7 @@ export const useSSE = () => {
                   resetProgress(ProgressKeys.Instrumenting);
 
                   if (accumulatedTargets.length > 0) {
-                    fetchSourcesByTargets(accumulatedTargets);
+                    fetchSourcesByTargets(accumulatedTargets, { slim: true });
                   } else {
                     fetchSources();
                   }
@@ -168,7 +168,7 @@ export const useSSE = () => {
                 if (!progress[ProgressKeys.Instrumenting] && !progress[ProgressKeys.Uninstrumenting]) {
                   handleEvent(OpenSourceEventTypes.MODIFIED, targets, (accumulatedTargets) => {
                     if (accumulatedTargets.length > 0) {
-                      fetchSourcesByTargets(accumulatedTargets);
+                      fetchSourcesByTargets(accumulatedTargets, { slim: true });
                     } else {
                       fetchSources();
                     }

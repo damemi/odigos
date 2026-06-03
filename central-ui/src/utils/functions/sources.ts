@@ -1,100 +1,25 @@
 import { getWorkloadId } from '@odigos/ui-kit/functions';
 import type { NamespaceSelectionFormData, SourceSelectionFormData } from '@odigos/ui-kit/store';
-import type { NamespaceInstrumentInput, SourceConditions, SourceInstrumentInput, WorkloadResponse, WorkloadWithOdigosHealthStatus, K8sWorkloadConditions } from '@/types';
+import type { NamespaceInstrumentInput, SourceConditions, SourceInstrumentInput, WorkloadWithOdigosHealthStatus } from '@/types';
 import {
   EntityTypes,
   DesiredStateProgress,
   StatusType,
   OtherStatus,
   type WorkloadId,
-  type Source,
+  type Workload,
   type Condition,
   type DesiredConditionStatus,
+  type K8sWorkloadConditions,
   type ProgrammingLanguages,
   type OtelDistroName,
 } from '@odigos/ui-kit/types';
 
-function mapDesiredStatusToConditionStatus(status: DesiredStateProgress): StatusType | OtherStatus {
-  switch (status) {
-    case DesiredStateProgress.Failure:
-    case DesiredStateProgress.Error:
-      return StatusType.Error;
-    case DesiredStateProgress.Notice:
-      return StatusType.Warning;
-    case DesiredStateProgress.Pending:
-    case DesiredStateProgress.Waiting:
-      return OtherStatus.Loading;
-    case DesiredStateProgress.Unsupported:
-    case DesiredStateProgress.Disabled:
-      return OtherStatus.Disabled;
-    case DesiredStateProgress.Success:
-      return StatusType.Success;
-    case DesiredStateProgress.Irrelevant:
-    case DesiredStateProgress.Unknown:
-    default:
-      return StatusType.Info;
-  }
-}
-
-// Flattens the GraphQL `K8sWorkloadConditions` object into the ui-kit's
-// `Condition[]`. We keep this as the only nontrivial transform on the
-// workload→source path because the ui-kit consumes conditions as an array
-// across many components.
-function mapConditionsToConditionArray(conditions: K8sWorkloadConditions | null): Condition[] | null {
-  if (!conditions) return null;
-
-  const result: Condition[] = [];
-  const fields: (keyof K8sWorkloadConditions)[] = ['runtimeDetection', 'agentInjectionEnabled', 'rollout', 'agentInjected', 'processesAgentHealth', 'expectingTelemetry'];
-
-  for (const field of fields) {
-    const dcs: DesiredConditionStatus | null = conditions[field];
-    if (!dcs) continue;
-
-    result.push({
-      type: dcs.name ?? field,
-      status: mapDesiredStatusToConditionStatus(dcs.status),
-      reason: dcs.reasonEnum ?? null,
-      message: dcs.message ?? null,
-    });
-  }
-
-  return result.length > 0 ? result : null;
-}
-
-// Thin adapter from the GraphQL `K8sWorkload` shape to the ui-kit's `Source`.
-// All container-level fields pass through unchanged because the GraphQL
-// container shape is now structurally identical to `SourceContainer`.
-export function mapWorkloadToSource(w: WorkloadResponse): Source {
-  return {
-    namespace: w.id.namespace,
-    kind: w.id.kind,
-    name: w.id.name,
-    selected: w.markedForInstrumentation?.markedForInstrumentation ?? false,
-    otelServiceName: w.serviceName ?? '',
-    numberOfInstances: w.numberOfInstances ?? undefined,
-    dataStreamNames: w.dataStreamNames,
-    containers: w.containers,
-    conditions: mapConditionsToConditionArray(w.conditions),
-    detectedLanguages: (w.runtimeInfo?.detectedLanguages as ProgrammingLanguages[] | null) ?? null,
-    workloadOdigosHealthStatus: w.workloadOdigosHealthStatus ?? null,
-    podsAgentInjectionStatus: w.podsAgentInjectionStatus,
-    rollbackOccurred: w.rollbackOccurred,
-  };
-}
-
-export function sortSources(sources: Source[]): Source[] {
-  return [...sources].sort((a, b) => {
-    const ns = a.namespace.localeCompare(b.namespace);
-    if (ns !== 0) return ns;
-    return a.name.localeCompare(b.name);
-  });
-}
-
 // @deprecated-legacy-api(v1.20) - the GraphQL `K8sActualSource` shape used by
 // proxies < v1.20 returns container fields flat (language, runtimeVersion,
 // instrumented, instrumentationMessage, otelDistroName, overriden). Lift them
-// into the nested ui-kit `SourceContainer` shape so downstream code can be
-// shape-agnostic. Remove this when min supported proxy >= v1.20.
+// into the nested ui-kit `Workload`/`K8sWorkloadContainer` shape so downstream
+// code can be shape-agnostic. Remove this when min supported proxy >= v1.20.
 export interface LegacySourceContainer {
   containerName: string;
   language: ProgrammingLanguages;
@@ -105,58 +30,149 @@ export interface LegacySourceContainer {
   otelDistroName?: OtelDistroName | null;
 }
 
-export interface LegacySource extends Omit<Source, 'containers'> {
+// @deprecated-legacy-api(v1.20) - matches the flat `K8sActualSource` GraphQL
+// shape returned by proxies < v1.20.
+export interface LegacySource extends WorkloadId {
+  selected?: boolean;
+  otelServiceName?: string;
+  numberOfInstances?: number | null;
+  dataStreamNames?: string[] | null;
   containers: LegacySourceContainer[] | null;
+  conditions?: Condition[] | null;
+  workloadOdigosHealthStatus?: DesiredConditionStatus | null;
+  detectedLanguages?: ProgrammingLanguages[] | null;
+  podsAgentInjectionStatus?: DesiredConditionStatus | null;
+  podsHealthStatus?: DesiredConditionStatus | null;
+  rollbackOccurred?: boolean;
 }
 
-export const mapLegacySourceToSource = (s: LegacySource): Source => {
+// Placeholder used for required Workload statuses that legacy sources do not provide.
+// The legacy enrichment helpers (addConditionToSources / addAgentInjectionStatusToSources)
+// fill these in via follow-up queries when available.
+const legacyPlaceholderStatus: DesiredConditionStatus = {
+  status: DesiredStateProgress.Unknown,
+  message: '',
+};
+
+const emptyWorkloadConditions = (): K8sWorkloadConditions => ({
+  runtimeDetection: null,
+  agentInjectionEnabled: null,
+  rollout: null,
+  agentInjected: null,
+  processesAgentHealth: null,
+  expectingTelemetry: null,
+});
+
+// @deprecated-legacy-api(v1.20) - Lift the flat `K8sActualSource` shape into
+// the nested ui-kit `Workload` shape so the store can stay homogeneous.
+// Required Workload fields that legacy sources don't carry are filled with
+// placeholders; the legacy enrichment helpers below patch the real values in.
+export const mapLegacySourceToWorkload = (s: LegacySource): Workload => {
   return {
-    ...s,
+    id: { namespace: s.namespace, kind: s.kind, name: s.name },
+    serviceName: s.otelServiceName ?? null,
+    workloadOdigosHealthStatus: s.workloadOdigosHealthStatus ?? legacyPlaceholderStatus,
+    conditions: s.conditions?.length ? mergeConditionsIntoWorkloadConditions(emptyWorkloadConditions(), s.conditions) : emptyWorkloadConditions(),
+    markedForInstrumentation: { markedForInstrumentation: null },
+    runtimeInfo: s.detectedLanguages ? { detectedLanguages: s.detectedLanguages } : null,
     containers:
       s.containers?.map((c) => ({
         containerName: c.containerName,
         runtimeInfo: { language: c.language, runtimeVersion: c.runtimeVersion },
         agentEnabled: {
           agentEnabled: c.instrumented,
-          agentEnabledStatus: { message: c.instrumentationMessage },
+          agentEnabledStatus: { ...legacyPlaceholderStatus, message: c.instrumentationMessage },
           otelDistroName: c.otelDistroName ?? null,
         },
-        overrides: c.overriden ? { containerName: c.containerName, runtimeInfo: { language: c.language, runtimeVersion: c.runtimeVersion } } : null,
+        overrides: c.overriden ? { containerName: c.containerName, runtimeInfo: { language: c.language, runtimeVersion: c.runtimeVersion }, otelDistroName: c.otelDistroName ?? null } : null,
       })) ?? null,
+    pods: null,
+    podsAgentInjectionStatus: s.podsAgentInjectionStatus ?? legacyPlaceholderStatus,
+    podsOdigosHealthStatus: s.podsHealthStatus ?? legacyPlaceholderStatus,
+    telemetryMetrics: [],
+    dataStreamNames: s.dataStreamNames ?? [],
+    numberOfInstances: s.numberOfInstances,
+    autoRollback: {
+      rollbackOccurred: s.rollbackOccurred ?? false,
+      autoRollbackStatus: { ...legacyPlaceholderStatus },
+    },
   };
 };
+
+// @deprecated-legacy-api(v1.20) - Reverse mapping from the ui-kit's flat
+// `StatusType`/`OtherStatus` back to the GraphQL `DesiredStateProgress` enum.
+// Used by the legacy condition enrichment path; remove once legacy paths are gone.
+function statusTypeToDesiredStateProgress(status: StatusType | OtherStatus): DesiredStateProgress {
+  switch (status) {
+    case StatusType.Error:
+      return DesiredStateProgress.Error;
+    case StatusType.Warning:
+      return DesiredStateProgress.Notice;
+    case OtherStatus.Loading:
+      return DesiredStateProgress.Pending;
+    case OtherStatus.Disabled:
+      return DesiredStateProgress.Disabled;
+    case StatusType.Success:
+      return DesiredStateProgress.Success;
+    case StatusType.Info:
+    default:
+      return DesiredStateProgress.Unknown;
+  }
+}
+
+// @deprecated-legacy-api(v1.20) - Merges a list of flat `Condition` entries
+// (from the legacy `GET_SOURCE_CONDITIONS` query) into the nested
+// `K8sWorkloadConditions` shape that `Workload.conditions` now uses.
+// Conditions whose name doesn't match a known field are dropped.
+function mergeConditionsIntoWorkloadConditions(base: K8sWorkloadConditions, conditions: Condition[]): K8sWorkloadConditions {
+  const result = { ...base };
+  const knownFields = new Set<keyof K8sWorkloadConditions>(['runtimeDetection', 'agentInjectionEnabled', 'rollout', 'agentInjected', 'processesAgentHealth', 'expectingTelemetry']);
+
+  for (const c of conditions) {
+    const rawKey = c.name || c.type;
+    if (!rawKey) continue;
+
+    const fieldName = (rawKey.charAt(0).toLowerCase() + rawKey.slice(1)) as keyof K8sWorkloadConditions;
+    if (!knownFields.has(fieldName)) continue;
+
+    result[fieldName] = {
+      name: c.name,
+      status: statusTypeToDesiredStateProgress(c.status),
+      reasonEnum: c.reason,
+      message: c.message ?? '',
+    };
+  }
+
+  return result;
+}
 
 // @deprecated-legacy-api(v1.20) - Remove addConditionToSources and
 // addAgentInjectionStatusToSources when min supported proxy >= v1.20.
 // Also remove SourceConditions and WorkloadWithOdigosHealthStatus from the import above.
-export const addConditionToSources = ({ namespace, name, kind, conditions }: SourceConditions, sources: Source[]): Source | null => {
-  const foundIdx = sources.findIndex((x) => x.namespace === namespace && x.name === name && x.kind === kind);
+export const addConditionToSources = ({ namespace, name, kind, conditions }: SourceConditions, sources: Workload[]): Workload | null => {
+  const foundIdx = sources.findIndex((x) => x.id.namespace === namespace && x.id.name === name && x.id.kind === kind);
   if (foundIdx === -1) return null;
 
-  if (sources[foundIdx].conditions) {
-    return {
-      ...sources[foundIdx],
-      conditions: (sources[foundIdx]?.conditions || []).concat(conditions),
-    };
-  } else {
-    return {
-      ...sources[foundIdx],
-      conditions,
-    };
-  }
+  return {
+    ...sources[foundIdx],
+    conditions: mergeConditionsIntoWorkloadConditions(sources[foundIdx].conditions ?? emptyWorkloadConditions(), conditions),
+  };
 };
 
 export const addAgentInjectionStatusToSources = (
-  { id: { namespace, name, kind }, podsAgentInjectionStatus, workloadOdigosHealthStatus, rollbackOccurred }: WorkloadWithOdigosHealthStatus,
-  sources: Source[],
-): Source | null => {
-  const foundIdx = sources.findIndex((x) => x.namespace === namespace && x.name === name && x.kind === kind);
+  { id: { namespace, name, kind }, podsAgentInjectionStatus, workloadOdigosHealthStatus, autoRollback }: WorkloadWithOdigosHealthStatus,
+  sources: Workload[],
+): Workload | null => {
+  const foundIdx = sources.findIndex((x) => x.id.namespace === namespace && x.id.name === name && x.id.kind === kind);
   if (foundIdx === -1) return null;
 
-  const updatedSource = {
+  const updatedSource: Workload = {
     ...sources[foundIdx],
     podsAgentInjectionStatus,
-    rollbackOccurred,
+    autoRollback: {
+      rollbackOccurred: autoRollback?.rollbackOccurred ?? sources[foundIdx].autoRollback?.rollbackOccurred ?? false,
+      autoRollbackStatus: { ...legacyPlaceholderStatus },
+    },
   };
 
   if (workloadOdigosHealthStatus) {
@@ -168,11 +184,11 @@ export const addAgentInjectionStatusToSources = (
 
 export const prepareSourcePayloads = (
   selectAppsList: SourceSelectionFormData,
-  existingSources: Source[],
+  existingSources: Workload[],
   selectedStreamName: string,
   handleInstrumentationCount: (toAddCount: number, toDeleteCount: number) => void,
   removeEntities: (entityType: EntityTypes, entityIds: WorkloadId[]) => void,
-  addEntities: (entityType: EntityTypes, entities: Source[]) => void,
+  addEntities: (entityType: EntityTypes, entities: Workload[]) => void,
 ) => {
   let isEmpty = true;
   const payload: SourceInstrumentInput = { sources: [] };
@@ -181,48 +197,46 @@ export const prepareSourcePayloads = (
     if (items.length) {
       isEmpty = false;
 
-      const mappedItems = items.map(({ namespace, name, kind, selected, currentStreamName }) => ({
-        namespace,
-        name,
-        kind,
+      const mappedItems = items.map(({ id, selected, currentStreamName }) => ({
+        namespace: id.namespace,
+        name: id.name,
+        kind: id.kind,
         // this is to map selected=undefined to selected=false
         selected: selected === undefined ? false : selected,
-
         // currentStreamName comes from the UI Kit, if it's missing we use selectedStreamName as a fallback,
         // we could rely on only the selectedStreamName, but if we want to override the selected then we need to use the currentStreamName
         // (for example - if we want to have a single page to manage all groups, then we need to override the selected)
         currentStreamName: currentStreamName || selectedStreamName,
       }));
 
-      const toAddToStore: Source[] = [];
-      const toUpdateInStore: Source[] = [];
+      const toAddToStore: Workload[] = [];
+      const toUpdateInStore: Workload[] = [];
       const toDeleteFromStore: WorkloadId[] = [];
 
       let toAddCount = 0;
       let toDeleteCount = 0;
 
       for (const item of mappedItems) {
-        const foundExisting = existingSources.find((src) => src.namespace === ns && src.name === item.name && src.kind === item.kind);
+        const foundExisting = existingSources.find((src) => src.id.namespace === ns && src.id.name === item.name && src.id.kind === item.kind);
 
         // Check if the instrumenting-source does not exist, this confirms an expected creation of the CRD
         if (item.selected && !foundExisting) {
           toAddCount++;
           toAddToStore.push({ ...getWorkloadId(item), dataStreamNames: [selectedStreamName] });
-          // selected otelServiceName containers conditions
         }
         // Else the instrumenting-source should be updated in store to include the selected stream name
         else if (item.selected && foundExisting) {
-          toUpdateInStore.push({ ...foundExisting, dataStreamNames: foundExisting.dataStreamNames.concat([selectedStreamName]) });
+          toUpdateInStore.push({ ...foundExisting, dataStreamNames: (foundExisting.dataStreamNames || []).concat([selectedStreamName]) });
         }
 
         // Check if the uninstrumenting-source has 1 or none data streams, this confirms an expected deletion of the CRD
-        else if (!item.selected && foundExisting && foundExisting.dataStreamNames.length <= 1) {
+        else if (!item.selected && foundExisting && (foundExisting.dataStreamNames || []).length <= 1) {
           toDeleteCount++;
           toDeleteFromStore.push(getWorkloadId(foundExisting));
         }
         // Else the uninstrumenting-source should be updated in store to exclude the selected stream name
         else if (!item.selected && foundExisting) {
-          toUpdateInStore.push({ ...foundExisting, dataStreamNames: foundExisting.dataStreamNames.filter((name) => name !== selectedStreamName) });
+          toUpdateInStore.push({ ...foundExisting, dataStreamNames: (foundExisting.dataStreamNames || []).filter((name) => name !== selectedStreamName) });
         }
       }
 

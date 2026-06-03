@@ -1,12 +1,11 @@
 import React, { useState, type FC } from 'react';
-import type { User, UserInput } from '@/types';
 import { UserCard } from './user-card';
-import { Relative } from '@/components/styled';
-import styled, { useTheme } from 'styled-components';
+import type { User, UserInput } from '@/types';
+import { UserIcon } from '@odigos/ui-kit/icons';
+import { useGenericForm } from '@odigos/ui-kit/hooks';
+import { FlexColumn } from '@odigos/ui-kit/components';
 import { BUTTON_TEXTS } from '@odigos/ui-kit/constants';
-import { useGenericForm, usePopup } from '@odigos/ui-kit/hooks';
-import { RotateArrowsIcon, TrashIcon, UserIcon } from '@odigos/ui-kit/icons';
-import { CancelWarning, Drawer, FlexColumn, IconButton, Popup, Text } from '@odigos/ui-kit/components';
+import { ButtonVariants, Drawer, WarningModal } from '@odigos/ui-kit/components/v2';
 
 interface EditUserDrawerProps {
   user: User;
@@ -16,21 +15,7 @@ interface EditUserDrawerProps {
   onResetPassword: () => void;
 }
 
-const ActionItem = styled(Text)`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  &:hover {
-    text-decoration: underline;
-  }
-`;
-
-const DRAWER_WIDTH = '750px';
-
 const EditUserDrawer: FC<EditUserDrawerProps> = ({ user, onClose, onSave, onDelete, onResetPassword }) => {
-  const theme = useTheme();
-  const { popupRef, popupOpen, setPopupOpen } = usePopup();
   const { formData, handleFormChange, resetFormData, isFormDirty } = useGenericForm({
     email: user.email || '',
     role: user.role,
@@ -53,63 +38,65 @@ const EditUserDrawer: FC<EditUserDrawerProps> = ({ user, onClose, onSave, onDele
   return (
     <>
       <Drawer
-        width={DRAWER_WIDTH}
         isOpen
-        onClose={() => handleWithCancelWarning(onClose)}
         header={{
-          icons: [UserIcon],
+          onClose: () => handleWithCancelWarning(onClose),
+          icon: UserIcon,
           title: user.email,
           actions: [
-            <Relative key='actions'>
-              <IconButton withBorder onClick={() => setPopupOpen((prev) => !prev)}>
-                <Text size={10}>•••</Text>
-              </IconButton>
-              <Popup ref={popupRef} isOpen={popupOpen} top={36} right={0} padding='24px'>
-                <FlexColumn $gap={12}>
-                  <ActionItem size={14} onClick={onResetPassword}>
-                    <RotateArrowsIcon /> Reset Password
-                  </ActionItem>
-                  <ActionItem size={14} color={theme.text.error} onClick={onDelete}>
-                    <TrashIcon /> Delete User
-                  </ActionItem>
-                </FlexColumn>
-              </Popup>
-            </Relative>,
+            {
+              id: 'reset-password',
+              label: 'Reset Password',
+              onClick: onResetPassword,
+            },
+            {
+              id: 'delete-user',
+              label: 'Delete User',
+              onClick: onDelete,
+            },
           ],
         }}
         footer={{
-          isOpen: isFormDirty,
-          centerButtons: [
-            {
-              'data-id': 'drawer-cancel',
-              variant: 'secondary',
-              onClick: () => handleWithCancelWarning(resetFormData),
-              children: BUTTON_TEXTS.CANCEL,
-            },
-            {
-              'data-id': 'drawer-save',
-              variant: 'primary',
-              onClick: () => onSave(formData),
-              children: BUTTON_TEXTS.SAVE,
-            },
-          ],
+          actions: isFormDirty
+            ? [
+                {
+                  'data-id': 'drawer-cancel',
+                  variant: ButtonVariants.Secondary,
+                  label: BUTTON_TEXTS.CANCEL,
+                  onClick: () => handleWithCancelWarning(resetFormData),
+                },
+                {
+                  'data-id': 'drawer-save',
+                  variant: ButtonVariants.Primary,
+                  label: BUTTON_TEXTS.SAVE,
+                  onClick: () => onSave(formData),
+                },
+              ]
+            : [],
         }}
       >
         <FlexColumn $gap={24}>
           <UserCard user={user} formData={formData} handleFormChange={handleFormChange} />
-          {/* <TeamsCard currentTeams={user.teams || []} formData={formData} handleFormChange={handleFormChange} /> */}
         </FlexColumn>
       </Drawer>
 
-      <CancelWarning
+      <WarningModal
         isOpen={cancelWarningOpen}
-        name={user.email}
-        onApprove={() => {
-          cancelApproveCallback?.();
-          setCancelWarningOpen(false);
+        title={`Discard changes?`}
+        description={`You have unsaved changes.\nIf you cancel now, your changes won't be saved.`}
+        onClose={() => setCancelWarningOpen(false)}
+        approveButton={{
+          label: 'Approve',
+          onClick: () => {
+            cancelApproveCallback?.();
+            setCancelWarningOpen(false);
+          },
         }}
-        onDeny={() => {
-          setCancelWarningOpen(false);
+        denyButton={{
+          label: 'Deny',
+          onClick: () => {
+            setCancelWarningOpen(false);
+          },
         }}
       />
     </>

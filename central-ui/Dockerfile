@@ -6,9 +6,17 @@ WORKDIR /app
 
 # Copy package.json and yarn.lock for dependency installation
 COPY package.json yarn.lock ./
+COPY .yalc* ./.yalc/
 
-# Install dependencies
-RUN yarn install --frozen-lockfile
+# This allows us to deploy the UI to local clusters with the yalc-linked version of the UI kit.
+RUN if [ -d .yalc ] && [ "$(ls -A .yalc 2>/dev/null)" ]; then \
+      echo "Using yalc"; \
+      npm install -g yalc; \
+      yarn install; \
+    else \
+      echo "Using frozen lockfile"; \
+      yarn install --frozen-lockfile; \
+    fi
 
 # Copy application source code
 COPY . .

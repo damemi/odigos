@@ -1,5 +1,5 @@
 import { CRD_NAMES, DATA_IDS, NAMESPACES, ROUTES, SELECTED_ENTITIES, TEXTS } from '../constants';
-import { awaitToast, findCrdId, getCrdById, getCrdIds, handleExceptions, signInAndSelectProxy, updateEntity, visitPage, waitForGraphqlOperation } from '../functions';
+import { awaitToast, findCrdId, getCrdById, getCrdIds, handleExceptions, signInAndSelectProxy, updateV2Entity, visitPage, waitForGraphqlOperation } from '../functions';
 
 // All cluster-side assertions target the proxy's namespaces (which live on
 // the same kind cluster as central in the chainsaw test setup).
@@ -64,9 +64,10 @@ describe('Sources CRUD (via Central UI → Proxy)', () => {
   it(`Should update the name of 1 source via the v2 edit-source-drawer, and notify locally`, () => {
     visitPage(ROUTES.OVERVIEW, () => {
       SELECTED_ENTITIES.NAMESPACE_SOURCES.slice(indexForUpdatedSource, indexForUpdatedSource + 1).forEach(({ name, kind }) => {
-        updateEntity(
+        updateV2Entity(
           {
             nodeId: DATA_IDS.SOURCE_NODE({ namespace, name, kind }),
+            prefix: DATA_IDS.SOURCE_DRAWER_PREFIX,
             fieldKey: DATA_IDS.SOURCE_TITLE,
             fieldValue: TEXTS.UPDATED_NAME,
           },

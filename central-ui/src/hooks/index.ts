@@ -7,6 +7,7 @@ export * from './data-streams';
 export * from './describe';
 export * from './destinations';
 export * from './instrumentation-rules';
+export * from './k8s-manifest';
 export * from './metrics';
 export * from './namespaces';
 export * from './pipeline-collectors';

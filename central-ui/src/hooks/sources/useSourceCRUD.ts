@@ -5,18 +5,20 @@ import { useNamespace } from '../namespaces';
 import { useOdigos } from '@odigos/ui-kit/contexts';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { getIdFromSseTarget, getSseTargetFromId, trimVersion } from '@odigos/ui-kit/functions';
-import type { NamespaceInstrumentInput, SourceConditions, SourceInstrumentInput, WorkloadResponse, WorkloadWithOdigosHealthStatus } from '@/types';
-import { GET_PEER_SOURCES, GET_SOURCE, GET_SOURCE_CONDITIONS, GET_SOURCE_LIBRARIES, GET_SOURCES, GET_WORKLOADS, GET_WORKLOADS_BY_IDS, PERSIST_SOURCES, UPDATE_SOURCE } from '@/graphql';
+import type { NamespaceInstrumentInput, SourceConditions, SourceInstrumentInput, WorkloadWithOdigosHealthStatus } from '@/types';
+import { addAgentInjectionStatusToSources, addConditionToSources, type LegacySource, mapLegacySourceToWorkload, prepareNamespacePayloads, prepareSourcePayloads } from '@/utils';
 import {
-  addAgentInjectionStatusToSources,
-  addConditionToSources,
-  type LegacySource,
-  mapLegacySourceToSource,
-  mapWorkloadToSource,
-  sortSources,
-  prepareNamespacePayloads,
-  prepareSourcePayloads,
-} from '@/utils';
+  GET_PEER_SOURCES,
+  GET_SOURCE,
+  GET_SOURCE_CONDITIONS,
+  GET_SOURCE_LIBRARIES,
+  GET_SOURCES,
+  GET_WORKLOADS,
+  GET_WORKLOADS_BY_IDS,
+  GET_WORKLOADS_BY_IDS_SLIM,
+  PERSIST_SOURCES,
+  UPDATE_SOURCE,
+} from '@/graphql';
 import {
   Crud,
   EntityTypes,
@@ -24,7 +26,6 @@ import {
   type PeerSources,
   type PersistSourceInput,
   type SourceFormData,
-  type Source,
   type WorkloadId,
   type InstrumentationInstanceComponent,
   type Workload,
@@ -44,11 +45,11 @@ const V120 = trimVersion('v1.20');
 const MAX_INDIVIDUAL_FETCH = 50;
 
 interface UseSourceCrud {
-  sources: Source[];
+  sources: Workload[];
   sourcesLoading: boolean;
   fetchSources: () => Promise<void>;
-  fetchSourcesByTargets: (targets: string[]) => Promise<void>;
-  fetchSourceById: (id: WorkloadId, bypassPaginationLoader?: boolean) => Promise<Source | undefined>;
+  fetchSourcesByTargets: (targets: string[], options?: { slim?: boolean }) => Promise<void>;
+  fetchSourceById: (id: WorkloadId, bypassPaginationLoader?: boolean) => Promise<Workload | undefined>;
   fetchSourceLibraries: (id: WorkloadId) => Promise<{ data?: { instrumentationInstanceComponents: InstrumentationInstanceComponent[] } }>;
   fetchPeerSources: (serviceName: string) => Promise<{ data?: { peerSources: PeerSources } }>;
   persistSources: (selectAppsList: SourceSelectionFormData, futureSelectAppsList: NamespaceSelectionFormData) => Promise<void>;
@@ -84,12 +85,13 @@ export const useSourceCRUD = (): UseSourceCrud => {
   };
 
   // v1.20+ queries
-  const { fetch: queryWorkloads } = useRemoteFetch<{ workloads: WorkloadResponse[] }, { filter?: { markedForInstrumentation?: boolean } & Partial<WorkloadId> }>(GET_WORKLOADS);
-  const { fetch: queryWorkloadsByIds } = useRemoteFetch<{ workloadsByIds: WorkloadResponse[] }, { ids: { namespace: string; kind: string; name: string }[] }>(GET_WORKLOADS_BY_IDS);
+  const { fetch: queryWorkloads } = useRemoteFetch<{ workloads: Workload[] }, { filter?: { markedForInstrumentation?: boolean } & Partial<WorkloadId> }>(GET_WORKLOADS);
+  const { fetch: queryWorkloadsByIds } = useRemoteFetch<{ workloadsByIds: Workload[] }, { ids: { namespace: string; kind: string; name: string }[] }>(GET_WORKLOADS_BY_IDS);
+  const { fetch: queryWorkloadsByIdsSlim } = useRemoteFetch<{ workloadsByIds: Workload[] }, { ids: { namespace: string; kind: string; name: string }[] }>(GET_WORKLOADS_BY_IDS_SLIM);
 
   // legacy queries (< v1.20). The GraphQL `K8sActualSource` shape returns
-  // container fields flat; we lift them into the nested ui-kit `SourceContainer`
-  // shape via `mapLegacySourceToSource` before storing.
+  // container fields flat; we lift them into the nested ui-kit `Workload`
+  // shape via `mapLegacySourceToWorkload` before storing.
   const { fetch: queryAllSources } = useRemoteFetch<{ computePlatform?: { sources?: LegacySource[] } }>(GET_SOURCES);
   const { fetch: queryOtherConditions } = useRemoteFetch<{ sourceConditions: SourceConditions[] }>(GET_SOURCE_CONDITIONS);
   const { fetch: queryLegacyWorkloads } = useRemoteFetch<{ workloads: Workload[] }, { filter?: WorkloadId }>(GET_WORKLOADS);
@@ -118,14 +120,14 @@ export const useSourceCRUD = (): UseSourceCrud => {
   };
 
   // Legacy helpers for < v1.20 - enrich sources with conditions and injection status
-  const fetchAllConditions = async (allSources: Source[]) => {
+  const fetchAllConditions = async (allSources: Workload[]) => {
     // we do this to prevent unwanted "toast errors" in the UI
     if (isVm) return;
 
     const { data } = await queryOtherConditions();
     const { sourceConditions } = data || {};
     if (sourceConditions) {
-      const tempSources: Source[] = [];
+      const tempSources: Workload[] = [];
       for (const item of sourceConditions) {
         const updatedSource = addConditionToSources(item, allSources);
         if (updatedSource) tempSources.push(updatedSource);
@@ -134,15 +136,15 @@ export const useSourceCRUD = (): UseSourceCrud => {
     }
   };
 
-  const fetchAllAgentInjectionStatuses = async (allSources: Source[]) => {
+  const fetchAllAgentInjectionStatuses = async (allSources: Workload[]) => {
     // we do this to prevent unwanted "toast errors" in the UI
     if (isVm) return;
 
-    const reqPayload = allSources.length === 1 ? { filter: { namespace: allSources[0].namespace, kind: allSources[0].kind, name: allSources[0].name } } : undefined;
+    const reqPayload = allSources.length === 1 ? { filter: { namespace: allSources[0].id.namespace, kind: allSources[0].id.kind, name: allSources[0].id.name } } : undefined;
     const { data } = await queryLegacyWorkloads(reqPayload);
     const { workloads } = data || {};
     if (workloads) {
-      const tempSources: Source[] = [];
+      const tempSources: Workload[] = [];
       for (const item of workloads) {
         const updatedSource = addAgentInjectionStatusToSources(item as WorkloadWithOdigosHealthStatus, allSources);
         if (updatedSource) tempSources.push(updatedSource);
@@ -157,8 +159,7 @@ export const useSourceCRUD = (): UseSourceCrud => {
     if (isV120Plus) {
       const { data } = await queryWorkloads({ filter: { markedForInstrumentation: true } });
       if (data?.workloads) {
-        const mappedSources = sortSources(data.workloads.map(mapWorkloadToSource));
-        setEntities(EntityTypes.Source, mappedSources);
+        setEntities(EntityTypes.Source, data.workloads);
       }
     } else {
       // @deprecated-legacy-api(v1.20) - Remove this else branch
@@ -166,8 +167,8 @@ export const useSourceCRUD = (): UseSourceCrud => {
       const { sources: fetchedSources } = data?.computePlatform || {};
       if (fetchedSources) {
         // Legacy proxies (< v1.20) return container fields flat. Lift them into
-        // the nested ui-kit `SourceContainer` shape.
-        const mappedSources = fetchedSources.map(mapLegacySourceToSource);
+        // the nested ui-kit `Workload` shape.
+        const mappedSources = fetchedSources.map(mapLegacySourceToWorkload);
         setEntities(EntityTypes.Source, mappedSources);
         if (mappedSources.length) {
           fetchAllAgentInjectionStatuses(mappedSources);
@@ -179,7 +180,8 @@ export const useSourceCRUD = (): UseSourceCrud => {
     setEntitiesLoading(EntityTypes.Source, false);
   };
 
-  const fetchSourcesByTargets = async (targets: string[]) => {
+  const fetchSourcesByTargets: UseSourceCrud['fetchSourcesByTargets'] = async (targets, options) => {
+    const { slim = false } = options || {};
     // @deprecated-legacy-api(v1.20) - Remove this early-return branch
     if (!isV120Plus) {
       await fetchSources();
@@ -195,14 +197,14 @@ export const useSourceCRUD = (): UseSourceCrud => {
       return;
     }
 
-    const { data } = await queryWorkloadsByIds({ ids: ids.map(({ namespace, kind, name }) => ({ namespace, kind, name })) });
+    const { data } = await (slim ? queryWorkloadsByIdsSlim : queryWorkloadsByIds)({ ids: ids.map(({ namespace, kind, name }) => ({ namespace, kind, name })) });
 
     if (data?.workloadsByIds) {
-      addEntities(EntityTypes.Source, data.workloadsByIds.map(mapWorkloadToSource));
+      addEntities(EntityTypes.Source, data.workloadsByIds);
     }
   };
 
-  const fetchSourceById = async (id: WorkloadId): Promise<Source | undefined> => {
+  const fetchSourceById = async (id: WorkloadId): Promise<Workload | undefined> => {
     if (isV120Plus) {
       // Aligned with odigos standalone (commit 710ac114d): single round-trip via queryWorkloadsByIds
       // returns the full workload payload (containers, conditions, agent status, rollback) plus
@@ -213,26 +215,25 @@ export const useSourceCRUD = (): UseSourceCrud => {
       const workload = data?.workloadsByIds?.[0];
 
       if (workload) {
-        const mapped = mapWorkloadToSource(workload);
-        addEntities(EntityTypes.Source, [mapped]);
-        return mapped;
+        addEntities(EntityTypes.Source, [workload]);
+        return workload;
       }
     }
 
     // Legacy path (< v1.20) and v1.20+ fallback when workloadsByIds returns empty.
     // `GET_SOURCE` always returns the legacy `K8sActualSource` shape, so we lift
-    // its container fields into the nested ui-kit `SourceContainer` shape.
+    // its container fields into the nested ui-kit `Workload` shape.
     const { data: sourceData } = await queryById({ sourceId: id });
     const { source } = sourceData?.computePlatform || {};
     if (!source) return undefined;
-    const mapped = mapLegacySourceToSource(source);
+    const mapped = mapLegacySourceToWorkload(source);
 
     if (!isV120Plus) {
       // @deprecated-legacy-api(v1.20) - Remove this branch when min supported proxy >= v1.20
       addEntities(EntityTypes.Source, [mapped]);
       await fetchAllAgentInjectionStatuses([mapped]);
       const { sources: updatedSources } = useEntityStore.getState();
-      return updatedSources.find((s) => s.namespace === id.namespace && s.name === id.name && s.kind === id.kind) || mapped;
+      return updatedSources.find((s) => s.id.namespace === id.namespace && s.id.name === id.name && s.id.kind === id.kind) || mapped;
     }
 
     addEntities(EntityTypes.Source, [mapped]);

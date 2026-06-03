@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Role } from '@/types';
 import { useUsersCRUD } from '@/hooks';
-import { Modal } from '@odigos/ui-kit/components';
 import { StatusType } from '@odigos/ui-kit/types';
 import * as STRINGS from '@/utils/constants/strings';
 import { useGenericForm } from '@odigos/ui-kit/hooks';
@@ -9,6 +8,7 @@ import { ModalContent } from './create-user-modal.styled';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { UserCreatedSuccessfully } from './user-created-successfully';
 import { CreateUserForm, CreateUserFormData, CreateUserFormField } from './create-user-form';
+import { Modal, Typography, TypographySize, TypographyVariants } from '@odigos/ui-kit/components/v2';
 
 enum CreateUserModalState {
   Form = 'form',
@@ -23,8 +23,6 @@ interface CreateUserModalProps {
 const INITIAL_FORM_DATA: CreateUserFormData = {
   [CreateUserFormField.Email]: '',
   [CreateUserFormField.Role]: Role.VIEWER,
-  // [CreateUserFormField.Teams]: [],
-  // [CreateUserFormField.ComputePlatforms]: [],
 };
 
 export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClose }) => {
@@ -53,9 +51,9 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClos
         email: formData[CreateUserFormField.Email],
         role: formData[CreateUserFormField.Role],
         password: undefined,
-        addTeamIds: [], // formData[CreateUserFormField.Teams],
+        addTeamIds: [],
         removeTeamIds: [],
-        addComputePlatformIds: [], // formData[CreateUserFormField.ComputePlatforms],
+        addComputePlatformIds: [],
         removeComputePlatformIds: [],
       });
 
@@ -89,7 +87,10 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClos
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} header={{ title: STRINGS.CREATE_USER }}>
+    <Modal isOpen={isOpen} onClose={handleClose}>
+      <Typography variant={TypographyVariants.H2} size={TypographySize.L}>
+        {STRINGS.CREATE_USER}
+      </Typography>
       <ModalContent>
         {modalState === CreateUserModalState.Form ? (
           <CreateUserForm formData={formData} errors={formErrors} creating={creating} onChange={handleInputChange} onSubmit={handleSubmit} />

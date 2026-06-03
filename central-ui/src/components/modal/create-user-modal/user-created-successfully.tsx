@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { StatusType } from '@odigos/ui-kit/types';
-import { CopyText } from '@odigos/ui-kit/snippets';
-import { Note } from '@odigos/ui-kit/components/v2';
+import { CliCommand, Note } from '@odigos/ui-kit/components/v2';
 import { DONE, SIGN_UP_PASSWORD_DISCLAIMER, USER_CREATED_SUCCESS, USER_CREATED_SUCCESS_SUBTITLE } from '@/utils';
 import { DoneButton, PasswordInputWrapper, SuccessContainer, SuccessSubtitle, SuccessTitle } from './create-user-modal.styled';
 
@@ -29,7 +28,7 @@ export const UserCreatedSuccessfully: React.FC<UserCreatedSuccessfullyProps> = (
       </SuccessSubtitle>
 
       <PasswordInputWrapper>
-        <CopyText value={password} callbackCopyDone={() => setDone(true)} />
+        <CliCommand value={password} onDone={() => setDone(true)} />
       </PasswordInputWrapper>
       <Note status={StatusType.Default} message={SIGN_UP_PASSWORD_DISCLAIMER} />
 
