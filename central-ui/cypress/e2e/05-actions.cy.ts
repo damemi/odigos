@@ -44,42 +44,6 @@ describe('Actions CRUD (via Central UI → Proxy)', () => {
           case 'PiiMasking': {
             break;
           }
-          case 'ErrorSampler': {
-            cy.get('input[data-id=fallbackSamplingRatio]').type('1');
-            break;
-          }
-          case 'ProbabilisticSampler': {
-            cy.get('input[data-id=samplingPercentage]').type('1');
-            break;
-          }
-          case 'LatencySampler': {
-            cy.get('tbody').find('input[placeholder="e.g. my-service"]').type('service');
-            cy.get('tbody').find('input[placeholder="e.g. /api/v1/users"]').type('/path');
-            cy.get('tbody').find('input[placeholder="e.g. 1000"]').type('1');
-            cy.get('tbody').find('input[placeholder="e.g. 100"]').type('1');
-            break;
-          }
-          case 'ServiceNameSampler': {
-            cy.get('tbody').find('input[placeholder="e.g. my-service"]').type('service');
-            cy.get('tbody').find('input[placeholder="e.g. 10"]').type('1');
-            cy.get('tbody').find('input[placeholder="e.g. 100"]').type('1');
-            break;
-          }
-          case 'SpanAttributeSampler': {
-            cy.get('[data-id=attributeFilters]').find('input[data-id=serviceName]').type('service');
-            cy.get('[data-id=attributeFilters]').find('input[data-id=attributeKey]').type('attribute');
-            cy.get('[data-id=attributeFilters]').find('input[data-id=fallbackSamplingRatio]').first().type('1');
-
-            cy.get('[data-id=attributeFilters]').find('input[data-id=condition]').scrollIntoView().click({ force: true });
-            cy.get('[data-id=option-stringCondition]').click({ force: true });
-
-            cy.get('[data-id=attributeFilters]').find('input[data-id=operation]').scrollIntoView().click({ force: true });
-            cy.get('[data-id=option-equals]').click({ force: true });
-
-            cy.get('[data-id=attributeFilters]').find('input[data-id=expectedValue]').type('x');
-            break;
-          }
-
           default: {
             cy.get('unknown action').should('eq', true);
             break;
