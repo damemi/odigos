@@ -7,8 +7,8 @@ require (
 	github.com/container-storage-interface/spec v1.10.0
 	github.com/odigos-io/ebpf-core v0.6.0
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.7
-	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.15.0
-	github.com/odigos-io/ebpf-java-instrumentation/v2 v2.15.0
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.19.0
+	github.com/odigos-io/ebpf-java-instrumentation/v2 v2.19.0
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.9.0
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
@@ -254,15 +254,15 @@ require (
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/arch v0.25.0 // indirect
-	golang.org/x/crypto v0.49.0 // indirect
+	golang.org/x/crypto v0.51.0 // indirect
 	golang.org/x/exp v0.0.0-20260112195511-716be5621a96 // indirect
-	golang.org/x/mod v0.34.0 // indirect
-	golang.org/x/net v0.52.0 // indirect
+	golang.org/x/mod v0.35.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/term v0.41.0 // indirect
-	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/term v0.43.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9 // indirect

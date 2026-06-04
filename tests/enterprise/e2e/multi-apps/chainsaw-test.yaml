@@ -51,6 +51,26 @@ spec:
             timeout: 3m
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-installed.yaml
 
+    - name: Add Code Attribute Instrumentation Rule
+      try:
+        - apply:
+            file: ../../common/apply/add-code-attribute-instrumentation-rule.yaml
+
+    - name: Add Custom Instrumentation Rule
+      try:
+        - apply:
+            file: ../../common/apply/add-custom-instrumentation-rule.yaml
+
+    - name: Add HTTP Headers Rule
+      try:
+        - apply:
+            file: ../../common/apply/add-http-headers-rule.yaml
+    
+    - name: Add Payload Collection Rule
+      try:
+        - apply:
+            file: ../../common/apply/add-payload-collection.yaml
+
     - name: Instrument Namespace
       try:
         - apply:
@@ -82,33 +102,6 @@ spec:
         - script:
             content: |
               kubectl describe pods -n default
-  
-    - name: Add Code Attribute Instrumentation Rule
-      try:
-        - apply:
-            file: ../../common/apply/add-code-attribute-instrumentation-rule.yaml
-
-    - name: Add Custom Instrumentation Rule
-      try:
-        - apply:
-            file: ../../common/apply/add-custom-instrumentation-rule.yaml
-
-    - name: Add HTTP Headers Rule
-      try:
-        - apply:
-            file: ../../common/apply/add-http-headers-rule.yaml
-    
-    - name: Add Payload Collection Rule
-      try:
-        - apply:
-            file: ../../common/apply/add-payload-collection.yaml
-
-    - name: Going to sleep for 20 seconds to let the rules take effect in the instrumentation pipeline
-      try:
-        - script:
-            timeout: 25s
-            content: |
-              sleep 20
 
     - name: Generate Traffic
       try:

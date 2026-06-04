@@ -2,13 +2,14 @@ apiVersion: e2e.tests.odigos.io/v1
 kind: TraceTest
 description: |
   This test verifies that payload collection is working correctly.
-  It checks that the coupon service has http.response.payload attribute and
-  that the membership service has http.response.body with the expected JSON value.
+  It checks that the membership service has http.response.body containing the
+  isMember response. The boolean value is not deterministic across runs, so we
+  only assert that the isMember payload key was captured.
 query: |
   length([?(
     span.serviceName == 'membership' &&
     span.spanAttributes."http.response.body" &&
-    contains(span.spanAttributes."http.response.body", '{"isMember":false}')
+    contains(span.spanAttributes."http.response.body", 'isMember')
   )]) > `0`
 expected:
   count: 1
