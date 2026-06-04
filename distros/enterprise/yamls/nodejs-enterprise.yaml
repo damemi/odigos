@@ -28,6 +28,8 @@ spec:
     k8sAttrsViaEnvVars: true
     ldPreloadInjectionSupported: true
   traces:
+    codeAttributes:
+      supported: true
     headSampling:
       supported: true
     headersCollection:
