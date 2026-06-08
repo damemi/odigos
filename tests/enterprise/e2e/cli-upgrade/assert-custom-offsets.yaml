@@ -51,6 +51,8 @@ spec:
               name: odigos-pro
         - name: GOMEMLIMIT
           (value != null): true
+        - name: ODIGOS_CGROUP_ROOT
+          value: /host/sys/fs/cgroup
     - name: data-collection
       securityContext:
         privileged: true

@@ -22,6 +22,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"google.golang.org/grpc"
 
+	"github.com/odigos-io/ebpf-core/pkg/collection"
 	"github.com/odigos-io/ebpf-core/pkg/wasp"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/logcapture"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
@@ -314,8 +315,11 @@ func (g *GoOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.Sta
 // their originating span. Invoked by logCaptureDecorator immediately before
 // RegisterProcess.
 func (g *GoOtelEbpfSdkEnterprise) PrepareLogCapture(ctx context.Context, pid int) {
-	scMap := g.inst.GetGoroutineIdToScMap()
-	if scMap == nil {
+	scMap, err := collection.LookupSharedMap(auto.GoroutineIdToScMapName, collection.WithProcessScope(pid))
+	if err != nil {
+		if !errors.Is(err, collection.ErrSharedMapNotFound) {
+			commonlogger.LoggerCompat().With("subsystem", "ebpfgosdk").Info("failed to look up goroutine sc map for log correlation", "pid", pid, "error", err)
+		}
 		return
 	}
 	goidPos, ancestorsPos, err := g.inst.GetGoRuntimeOffsets()

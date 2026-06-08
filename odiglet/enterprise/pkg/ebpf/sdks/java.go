@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/odigos-io/ebpf-core/pkg/collection"
 	"github.com/odigos-io/ebpf-java-instrumentation/v2/jvmmetrics"
 	"github.com/odigos-io/ebpf-java-instrumentation/v2/pkg/dynamic"
-	"github.com/odigos-io/ebpf-java-instrumentation/v2/pkg/mapmanager"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/logcapture"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
@@ -203,9 +203,15 @@ func (g *JavaOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 // from this Java process can be correlated with their originating span.
 // Invoked by logCaptureDecorator immediately before RegisterProcess.
 func (g *JavaOtelEbpfSdkEnterprise) PrepareLogCapture(ctx context.Context, pid int) {
-	if spanMap := mapmanager.GetInstance().GetGlobalLinuxTidMap(); spanMap != nil {
-		logcapture.GetInstance().AddSpanMap(uint32(pid), spanMap)
+	spanMap, err := collection.LookupSharedMap(auto.ActiveSpanByLinuxTidMapName, collection.WithGlobalScope())
+	if err != nil {
+		// Not loaded yet (no Java probe attached) is expected; only surface real errors.
+		if !errors.Is(err, collection.ErrSharedMapNotFound) {
+			g.logger.Info("failed to look up span map for log correlation", "pid", pid, "error", err)
+		}
+		return
 	}
+	logcapture.GetInstance().AddSpanMap(uint32(pid), spanMap)
 }
 
 func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instrumentation.Config) error {
