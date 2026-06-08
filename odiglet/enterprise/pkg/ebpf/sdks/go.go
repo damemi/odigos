@@ -290,20 +290,20 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 
 func (g *GoOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.Status, error) {
 	probeLoadStatus, err := g.inst.Load(ctx)
+	status := instrumentation.Status{
+		Components: make(map[string]error),
+	}
+	for probeID, err := range probeLoadStatus {
+		status.Components[fmt.Sprintf("%s/%s", probeID.InstrumentedPkg, probeID.SpanKind.String())] = err
+	}
+
 	if err != nil {
 		if g.waspMaps != nil {
 			// if we failed to load, and the instrumentation took ownership over the wasp maps
 			// we return ownership back to the provider
 			err = errors.Join(err, g.waspMapsProvider.Take(g.podName, g.waspMaps))
 		}
-		return instrumentation.Status{}, err
-	}
-
-	status := instrumentation.Status{
-		Components: make(map[string]error),
-	}
-	for probeID, err := range probeLoadStatus {
-		status.Components[fmt.Sprintf("%s/%s", probeID.InstrumentedPkg, probeID.SpanKind.String())] = err
+		return status, err
 	}
 
 	return status, nil
