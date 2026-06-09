@@ -165,7 +165,11 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   it('Should update the Noisy Operation rule name', () => {
     visitPage(ROUTES.SAMPLING, () => {
       waitForGraphqlOperation('GetSamplingRules').then(() => {
-        cy.contains(NOISY_RULE_NAME).click();
+        // The ui-kit Table renders a hidden MeasurementLayer that duplicates
+        // text from auto-width column cells (rule names live in such a column)
+        // BEFORE the visible row in DOM order. Scope to `:visible` so the
+        // click resolves to the real row and not the hidden duplicate.
+        cy.contains(':visible', NOISY_RULE_NAME).click();
         cy.get(DATA_IDS.SAMPLING_VIEW_BTN_EDIT).click();
 
         cy.get('input[name=sampling-input-rule-name]')
@@ -191,7 +195,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
         cy.contains('button', 'Highly Relevant Operations').click();
         cy.wait(500);
 
-        cy.contains(HIGHLY_RELEVANT_RULE_NAME).click();
+        cy.contains(':visible', HIGHLY_RELEVANT_RULE_NAME).click();
         cy.get(DATA_IDS.SAMPLING_VIEW_BTN_EDIT).click();
 
         cy.get('input[name=sampling-input-rule-name]')
@@ -217,7 +221,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
         cy.contains('button', 'Cost Reduction').click();
         cy.wait(500);
 
-        cy.contains(COST_REDUCTION_RULE_NAME).click();
+        cy.contains(':visible', COST_REDUCTION_RULE_NAME).click();
         cy.get(DATA_IDS.SAMPLING_VIEW_BTN_EDIT).click();
 
         cy.get('input[name=sampling-input-rule-name]')
@@ -271,7 +275,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   it('Should delete the Noisy Operation rule via the view drawer', () => {
     visitPage(ROUTES.SAMPLING, () => {
       waitForGraphqlOperation('GetSamplingRules').then(() => {
-        cy.contains(NOISY_RULE_NAME + UPDATED_SUFFIX).click();
+        cy.contains(':visible', NOISY_RULE_NAME + UPDATED_SUFFIX).click();
         cy.get(DATA_IDS.SAMPLING_VIEW_BTN_DELETE).click();
         cy.contains('button', 'Delete').click();
 
@@ -290,7 +294,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
         cy.contains('button', 'Highly Relevant Operations').click();
         cy.wait(500);
 
-        cy.contains(HIGHLY_RELEVANT_RULE_NAME + UPDATED_SUFFIX).click();
+        cy.contains(':visible', HIGHLY_RELEVANT_RULE_NAME + UPDATED_SUFFIX).click();
         cy.get(DATA_IDS.SAMPLING_VIEW_BTN_DELETE).click();
         cy.contains('button', 'Delete').click();
 
@@ -309,7 +313,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
         cy.contains('button', 'Cost Reduction').click();
         cy.wait(500);
 
-        cy.contains(COST_REDUCTION_RULE_NAME + UPDATED_SUFFIX).click();
+        cy.contains(':visible', COST_REDUCTION_RULE_NAME + UPDATED_SUFFIX).click();
         cy.get(DATA_IDS.SAMPLING_VIEW_BTN_DELETE).click();
         cy.contains('button', 'Delete').click();
 

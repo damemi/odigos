@@ -3,11 +3,11 @@ import { useConfig } from '../config';
 import { useRemoteFetch } from '../proxy';
 import type { ComputePlatform } from '@/types';
 import { useOdigos } from '@odigos/ui-kit/contexts';
-import { getSseTargetFromId } from '@odigos/ui-kit/functions';
 import { DISPLAY_TITLES, FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { useEntityStore, useNotificationStore } from '@odigos/ui-kit/store';
 import { CREATE_INSTRUMENTATION_RULE, DELETE_INSTURMENTATION_RULE, GET_INSTRUMENTATION_RULES, UPDATE_INSTURMENTATION_RULE } from '@/graphql';
 import { Crud, EntityTypes, StatusType, type InstrumentationRule, type InstrumentationRuleFormData, type CreateInstrumentationRuleFunc } from '@odigos/ui-kit/types';
+import { adaptInstrumentationRuleFromWire, adaptInstrumentationRuleInputForWire, getSseTargetFromId, type InstrumentationRuleInputWire, type InstrumentationRuleWire } from '@odigos/ui-kit/functions';
 
 interface UseInstrumentationRuleCrud {
   instrumentationRules: InstrumentationRule[];
@@ -35,9 +35,18 @@ export const useInstrumentationRuleCRUD = (connections?: ComputePlatform[]): Use
     });
   };
 
-  const { fetch: queryAll } = useRemoteFetch<{ computePlatform?: { instrumentationRules?: InstrumentationRule[] } }>(GET_INSTRUMENTATION_RULES);
-  const { fetch: mutateCreate, fetchMulti: mutateCreateMulti } = useRemoteFetch<{ createInstrumentationRule: InstrumentationRule }>(CREATE_INSTRUMENTATION_RULE, connections);
-  const { fetch: mutateUpdate } = useRemoteFetch<{ updateInstrumentationRule: InstrumentationRule }>(UPDATE_INSTURMENTATION_RULE);
+  // Wire shapes are the row-per-criterion `sourcesScopes` form returned by the
+  // GraphQL backend; we adapt to the kit's spec-shape `sourceScopes` at the
+  // boundary so everything downstream (entity store, drawers, forms) sees a
+  // single canonical shape.
+  const { fetch: queryAll } = useRemoteFetch<{ computePlatform?: { instrumentationRules?: InstrumentationRuleWire[] } }>(GET_INSTRUMENTATION_RULES);
+  const { fetch: mutateCreate, fetchMulti: mutateCreateMulti } = useRemoteFetch<{ createInstrumentationRule: InstrumentationRuleWire }, { instrumentationRule: InstrumentationRuleInputWire }>(
+    CREATE_INSTRUMENTATION_RULE,
+    connections,
+  );
+  const { fetch: mutateUpdate } = useRemoteFetch<{ updateInstrumentationRule: InstrumentationRuleWire }, { ruleId: string; instrumentationRule: InstrumentationRuleInputWire }>(
+    UPDATE_INSTURMENTATION_RULE,
+  );
   const { fetch: mutateDelete } = useRemoteFetch<{ deleteInstrumentationRule: boolean }>(DELETE_INSTURMENTATION_RULE);
 
   const fetchInstrumentationRules = async () => {
@@ -48,7 +57,7 @@ export const useInstrumentationRuleCRUD = (connections?: ComputePlatform[]): Use
     const { data } = await queryAll();
 
     if (data?.computePlatform?.instrumentationRules) {
-      const { instrumentationRules: items } = data.computePlatform;
+      const items = data.computePlatform.instrumentationRules.map(adaptInstrumentationRuleFromWire);
       setEntities(EntityTypes.InstrumentationRule, items);
     }
 
@@ -60,8 +69,9 @@ export const useInstrumentationRuleCRUD = (connections?: ComputePlatform[]): Use
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
       return { error: FORM_ALERTS.READONLY_WARNING };
     } else {
+      const wireInput = adaptInstrumentationRuleInputForWire(instrumentationRule);
       if (connectionIds?.length) {
-        const res = await mutateCreateMulti(connectionIds, { instrumentationRule });
+        const res = await mutateCreateMulti(connectionIds, { instrumentationRule: wireInput });
         const error = res.error;
         if (error) {
           notifyUser(StatusType.Error, Crud.Create, error);
@@ -71,9 +81,10 @@ export const useInstrumentationRuleCRUD = (connections?: ComputePlatform[]): Use
         return undefined;
       }
 
-      const res = await mutateCreate({ instrumentationRule });
-      const rule = res.data?.createInstrumentationRule;
-      if (rule) {
+      const res = await mutateCreate({ instrumentationRule: wireInput });
+      const wireRule = res.data?.createInstrumentationRule;
+      if (wireRule) {
+        const rule = adaptInstrumentationRuleFromWire(wireRule);
         const { ruleId, type } = rule;
         addEntities(EntityTypes.InstrumentationRule, [rule]);
         notifyUser(StatusType.Success, Crud.Create, `Successfully created "${type}" rule`, ruleId);
@@ -88,9 +99,10 @@ export const useInstrumentationRuleCRUD = (connections?: ComputePlatform[]): Use
     if (isReadonly) {
       notifyUser(StatusType.Warning, DISPLAY_TITLES.READONLY, FORM_ALERTS.READONLY_WARNING, undefined, true);
     } else {
-      const res = await mutateUpdate({ ruleId, instrumentationRule });
-      const rule = res.data?.updateInstrumentationRule;
-      if (rule) {
+      const res = await mutateUpdate({ ruleId, instrumentationRule: adaptInstrumentationRuleInputForWire(instrumentationRule) });
+      const wireRule = res.data?.updateInstrumentationRule;
+      if (wireRule) {
+        const rule = adaptInstrumentationRuleFromWire(wireRule);
         const { ruleId, type } = rule;
         addEntities(EntityTypes.InstrumentationRule, [rule]);
         notifyUser(StatusType.Success, Crud.Update, `Successfully updated "${type}" rule`, ruleId);

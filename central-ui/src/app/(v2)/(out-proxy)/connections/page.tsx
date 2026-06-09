@@ -57,7 +57,6 @@ export default function Page() {
 
   return (
     <CentralConnections
-      tableRowsMaxHeight={'calc(100vh - 180px)'}
       connections={computePlatforms.length ? computePlatforms : undefined}
       getConnections={getComputePlatforms}
       onClickConnection={onClickConnection}

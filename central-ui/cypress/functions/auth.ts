@@ -68,8 +68,15 @@ export const selectTestProxy = () => {
   // Wait for the connections list to populate. The chainsaw setup installs
   // the proxy with clusterName=PROXY.NAME, which appears as a row in the
   // table. Status must be "Connection live" before clicking is allowed.
+  //
+  // The ui-kit Table renders a hidden MeasurementLayer (visibility: hidden)
+  // that duplicates the text of cells in auto-width columns (e.g. the Status
+  // badge) BEFORE the visible row in the DOM. Plain `cy.contains('Connection
+  // live')` would resolve to that hidden duplicate and fail the visibility
+  // / click assertions, so scope text lookups inside auto-width columns to
+  // `:visible` elements only.
   cy.contains(PROXY.NAME, { timeout: 60000 }).should('be.visible');
-  cy.contains('Connection live', { timeout: 60000 }).should('be.visible');
+  cy.contains(':visible', 'Connection live', { timeout: 60000 }).should('be.visible');
   cy.contains(PROXY.NAME).click();
 
   // selectProxy() pushes us to /overview.

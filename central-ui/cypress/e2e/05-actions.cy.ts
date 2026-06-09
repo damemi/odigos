@@ -44,6 +44,18 @@ describe('Actions CRUD (via Central UI → Proxy)', () => {
           case 'PiiMasking': {
             break;
           }
+          // NOTE: `ExtractAttribute` is excluded from SELECTED_ENTITIES.ACTIONS
+          // until v1.29.0 — see the comment there. When re-enabling, restore
+          // the case below as well:
+          //
+          // case 'ExtractAttribute': {
+          //   // Default mode is "Preset extract" with the first row's dataFormat=json
+          //   // already selected, so we just fill lookupKey + targetAttributeName to
+          //   // make a valid action.
+          //   cy.get('[data-id=extract-row-0]').find('input[data-id=extract-row-0-lookupKey]').type('task_id');
+          //   cy.get('[data-id=extract-row-0]').find('input[data-id=extract-row-0-targetAttributeName]').type('extracted.json.task_id');
+          //   break;
+          // }
           default: {
             cy.get('unknown action').should('eq', true);
             break;

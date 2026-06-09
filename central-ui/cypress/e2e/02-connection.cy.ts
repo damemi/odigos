@@ -26,7 +26,11 @@ describe('Select Connection', () => {
   it(`Should show the test proxy "${PROXY.NAME}" as a live connection`, () => {
     visitPage(ROUTES.CONNECTIONS, () => {
       cy.contains(PROXY.NAME, { timeout: 60000 }).should('be.visible');
-      cy.contains('Connection live', { timeout: 60000 }).should('be.visible');
+      // The ui-kit Table renders a hidden MeasurementLayer that duplicates
+      // text from auto-width column cells (e.g. the Status badge) BEFORE
+      // the visible row in DOM order. Scope to `:visible` so we resolve the
+      // real badge instead of the hidden duplicate.
+      cy.contains(':visible', 'Connection live', { timeout: 60000 }).should('be.visible');
     });
   });
 
@@ -36,7 +40,7 @@ describe('Select Connection', () => {
   it('Should select the proxy, redirect to /overview, and persist the SELECTED_PROXY', () => {
     visitPage(ROUTES.CONNECTIONS, () => {
       cy.contains(PROXY.NAME, { timeout: 60000 }).should('be.visible');
-      cy.contains('Connection live', { timeout: 60000 }).should('be.visible');
+      cy.contains(':visible', 'Connection live', { timeout: 60000 }).should('be.visible');
       cy.contains(PROXY.NAME).click();
 
       cy.location('pathname', { timeout: 30000 }).should('eq', ROUTES.OVERVIEW);
