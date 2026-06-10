@@ -49,5 +49,4 @@ jobs:
           pr-title: ${{ needs.extract-versions.outputs.pr_title }}
           pr-user-login: ${{ needs.extract-versions.outputs.pr_user_login }}
           original-pr-body: ${{ needs.extract-versions.outputs.original_pr_body }}
-          release-branch-suffix: .x
           slack-webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
