@@ -632,9 +632,21 @@ jobs:
             VERSION_PREFIX=$(echo "$BRANCH" | sed -E 's|releases/v([0-9]+\.[0-9]+)\..*|\1|')
             echo "Release branch detected, looking for v${VERSION_PREFIX}.* in Helm"
             LATEST_RELEASE_TAG=$(helm search repo odigos/odigos --versions | awk -v prefix="^v${VERSION_PREFIX}\\\\." '$1 == "odigos/odigos" && $3 ~ prefix {print $3; exit}')
+            # On the first rc of a new version line (e.g. v1.29.0-rc0 on releases/v1.29.0),
+            # no stable v1.29.* chart is published yet (and `helm search` hides prereleases),
+            # so the search above is empty. Fall back to the latest overall stable chart,
+            # which matches the latest released images used by the e2e tests.
+            if [[ -z "$LATEST_RELEASE_TAG" ]]; then
+              echo "No stable v${VERSION_PREFIX}.* chart found, falling back to latest overall Helm chart version"
+              LATEST_RELEASE_TAG=$(helm search repo odigos/odigos | awk '$1 == "odigos/odigos" {print $3}')
+            fi
           else
             echo "Non-release branch, using latest Helm chart version"
             LATEST_RELEASE_TAG=$(helm search repo odigos/odigos | awk '$1 == "odigos/odigos" {print $3}')
+          fi
+          if [[ -z "$LATEST_RELEASE_TAG" ]]; then
+            echo "❌ ERROR: Failed to determine LATEST_RELEASE_TAG from Helm"
+            exit 1
           fi
           echo "LATEST_RELEASE_TAG=$LATEST_RELEASE_TAG" >> $GITHUB_OUTPUT
           echo "Latest release tag for branch $BRANCH: $LATEST_RELEASE_TAG"
