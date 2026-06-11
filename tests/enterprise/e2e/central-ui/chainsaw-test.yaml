@@ -66,6 +66,13 @@ spec:
         - script:
             timeout: 1m
             content: |
+              # Never patch with an empty value: components like the autoscaler
+              # read ODIGOS_VERSION at startup and os.Exit(1) when it is empty,
+              # which puts them in a permanent CrashLoopBackOff.
+              if [ -z "$LATEST_RELEASE_TAG" ]; then
+                echo "❌ LATEST_RELEASE_TAG is empty, refusing to patch ODIGOS_VERSION"
+                exit 1
+              fi
               kubectl patch configmap odigos-deployment -n odigos-test \
                 --type merge \
                 -p "{\"data\":{\"ODIGOS_VERSION\":\"$LATEST_RELEASE_TAG\"}}"
@@ -103,6 +110,14 @@ spec:
               kubectl get all -n odigos-test
               echo "📝 Describing all deployments in namespace 'odigos-test'..."
               kubectl describe deployments -n odigos-test
+              echo "📜 Dumping logs of non-ready pods in namespace 'odigos-test'..."
+              for POD in $(kubectl get pods -n odigos-test \
+                -o jsonpath='{range .items[?(@.status.containerStatuses[0].ready==false)]}{.metadata.name}{"\n"}{end}'); do
+                echo "---- logs: $POD (current) ----"
+                kubectl logs "$POD" -n odigos-test --all-containers --tail=100 || true
+                echo "---- logs: $POD (previous) ----"
+                kubectl logs "$POD" -n odigos-test --all-containers --tail=100 --previous || true
+              done
 
     - name: Verify Odigos Central Installation
       try:
