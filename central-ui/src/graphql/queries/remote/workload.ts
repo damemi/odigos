@@ -189,7 +189,7 @@ export const GET_WORKLOADS_BY_IDS_SLIM: VersionedRemoteFetch = {
 
 export const GET_WORKLOADS_BY_IDS: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
-    'v1.28': `
+    'v1.30': `
   query GetWorkloadsByIds($ids: [K8sWorkloadIdInput!]!) {
     workloadsByIds(ids: $ids) {
       id {
@@ -299,6 +299,96 @@ export const GET_WORKLOADS_BY_IDS: VersionedRemoteFetch = {
           runtimeInfo {
             language
             runtimeVersion
+          }
+        }
+        agentConfig {
+          traces {
+            headSampling {
+              dryRun
+              spanMetricsMode
+              noisyOperations {
+                ruleId
+                name
+                disabled
+                operation {
+                  httpServer {
+                    route
+                    routePrefix
+                    method
+                  }
+                  httpClient {
+                    serverAddress
+                    templatedPath
+                    templatedPathPrefix
+                    method
+                  }
+                }
+                percentageAtMost
+              }
+            }
+          }
+        }
+        collectorConfig {
+          tailSampling {
+            noisyOperations {
+              ruleId
+              name
+              disabled
+              operation {
+                httpServer {
+                  route
+                  routePrefix
+                  method
+                }
+                httpClient {
+                  serverAddress
+                  templatedPath
+                  templatedPathPrefix
+                  method
+                }
+              }
+              percentageAtMost
+            }
+            highlyRelevantOperations {
+              ruleId
+              name
+              disabled
+              error
+              durationAtLeastMs
+              operation {
+                httpServer {
+                  route
+                  routePrefix
+                  method
+                }
+                kafkaConsumer {
+                  kafkaTopic
+                }
+                kafkaProducer {
+                  kafkaTopic
+                }
+              }
+              percentageAtLeast
+            }
+            costReductionRules {
+              ruleId
+              name
+              disabled
+              operation {
+                httpServer {
+                  route
+                  routePrefix
+                  method
+                }
+                kafkaConsumer {
+                  kafkaTopic
+                }
+                kafkaProducer {
+                  kafkaTopic
+                }
+              }
+              percentageAtMost
+            }
           }
         }
       }
