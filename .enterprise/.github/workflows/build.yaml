@@ -351,6 +351,7 @@ jobs:
           - "central-install"
           - "central-infrastructure"
           - "central-ui"
+          - "mount-method"
         wasp-enabled: [false]
         include:
           - kube-version: "1.21.12"
@@ -462,7 +463,16 @@ jobs:
       - name: Download Kind Config
         if: steps.should-run.outputs.skip != 'true'
         run: |
-          curl -o kind-config.yaml https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/kind-config.yaml
+          # Most scenarios use the shared OSS kind-config. A scenario can override it
+          # by shipping its own kind-config.yaml in its test dir (e.g. mount-method
+          # ships one with extra worker nodes for its restart-heavy workload). Use that
+          # file if present, otherwise download the shared OSS config from main.
+          scenario_config="odigos-enterprise/tests/e2e/${{ matrix.test-scenario }}/kind-config.yaml"
+          if [ -f "$scenario_config" ]; then
+            cp "$scenario_config" kind-config.yaml
+          else
+            curl -o kind-config.yaml https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/kind-config.yaml
+          fi
 
       - name: Create Kind Cluster
         if: steps.should-run.outputs.skip != 'true'
@@ -546,6 +556,16 @@ jobs:
           fail-on-cache-miss: true
           key: ${{ github.run_id }}-agents-enterprise-extended
 
+      # When testing the init-container mount method we need the non-extended agents image too
+      - name: Restore Agents Enterprise from Cache
+        if: steps.should-run.outputs.skip != 'true'
+        id: restore-agents-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: /tmp/agents-enterprise.tar
+          fail-on-cache-miss: true
+          key: ${{ github.run_id }}-agents-enterprise-standard
+
       - name: Restore Odigos OSS Components from Cache
         if: steps.should-run.outputs.skip != 'true'
         id: restore-oss-cache
@@ -621,6 +641,7 @@ jobs:
           kind load image-archive /tmp/odiglet-enterprise.tar
           kind load image-archive /tmp/odiglet-enterprise-extended.tar
           kind load image-archive /tmp/instrumentor-enterprise.tar
+          kind load image-archive /tmp/agents-enterprise.tar
           kind load image-archive /tmp/agents-enterprise-extended.tar
           kind load image-archive /tmp/odigos-autoscaler.tar
           kind load image-archive /tmp/odigos-scheduler.tar
