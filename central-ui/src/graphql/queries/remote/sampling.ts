@@ -52,7 +52,11 @@ const COST_REDUCTION_RULE_FIELDS = `
 
 export const GET_SAMPLING_RULES: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
-    'v1.24': `
+    // The `sourceScopes { sources/namespaces/languages }` shape only exists
+    // from v1.26. v1.24/v1.25 expose the older `SourcesScope` shape
+    // (workloadName/Kind/Namespace/Language), so gate this query at v1.26 to
+    // avoid sending an unsupported selection set to those proxies.
+    'v1.26': `
   query GetSamplingRules {
     sampling {
       configs {

@@ -13,6 +13,8 @@ import {
   type K8sWorkloadConditions,
   type ProgrammingLanguages,
   type OtelDistroName,
+  type Namespace,
+  type K8sResourceKind,
 } from '@odigos/ui-kit/types';
 
 // @deprecated-legacy-api(v1.20) - the GraphQL `K8sActualSource` shape used by
@@ -180,6 +182,45 @@ export const addAgentInjectionStatusToSources = (
   }
 
   return updatedSource;
+};
+
+// @deprecated-legacy-api(v1.20) - legacy `K8sActualSource` shape returned
+// nested under `K8sActualNamespace.sources` by proxies < v1.20. Uses
+// `selected` instead of `markedForInstrumentation`.
+export interface LegacyK8sActualSource {
+  namespace: string;
+  kind: string;
+  name: string;
+  dataStreamNames: string[];
+  selected: boolean;
+  numberOfInstances: number | null;
+}
+
+// @deprecated-legacy-api(v1.20) - legacy `K8sActualNamespace` shape returned
+// by proxies < v1.20. Uses `selected` instead of `markedForInstrumentation`
+// and a flat `sources` field instead of the v1.20+ nested `workloads`.
+export interface LegacyK8sActualNamespace {
+  name: string;
+  selected: boolean;
+  dataStreamNames: string[];
+  sources?: LegacyK8sActualSource[];
+}
+
+// @deprecated-legacy-api(v1.20) - converts the legacy `K8sActualNamespace`
+// shape into the v1.20+ `Namespace` shape that the ui-kit now consumes.
+// Remove when min supported proxy >= v1.20.
+export const legacyNamespaceToNamespace = (ns: LegacyK8sActualNamespace): Namespace => {
+  return {
+    name: ns.name,
+    markedForInstrumentation: ns.selected,
+    dataStreamNames: ns.dataStreamNames,
+    workloads: ns.sources?.map((s) => ({
+      id: { namespace: s.namespace, kind: s.kind as K8sResourceKind | '', name: s.name },
+      markedForInstrumentation: { markedForInstrumentation: s.selected },
+      dataStreamNames: s.dataStreamNames,
+      numberOfInstances: s.numberOfInstances,
+    })),
+  };
 };
 
 export const prepareSourcePayloads = (

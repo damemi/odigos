@@ -8,6 +8,7 @@ export interface VersionedRemoteFetch {
     'v1.26'?: string;
     'v1.25'?: string;
     'v1.24'?: string;
+    'v1.23'?: string;
     'v1.22'?: string;
     'v1.21'?: string;
     'v1.20'?: string;

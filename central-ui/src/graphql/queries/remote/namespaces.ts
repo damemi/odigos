@@ -1,27 +1,51 @@
 import type { VersionedRemoteFetch } from '@/types';
 import { PlatformType } from '@odigos/ui-kit/types';
 
-export const GET_NAMESPACES: VersionedRemoteFetch = {
+// @deprecated-legacy-api(v1.20) - combined legacy "namespaces with workloads"
+// query used by the central-ui adapter when the proxy is < v1.20. The v1.20+
+// `namespaces { workloads }` field does not exist on legacy proxies; instead
+// `K8sActualNamespace` exposes a nested `sources` list. Requesting it inline
+// here lets the kit's single declarative `useApiQuery('GET_NAMESPACES_WITH_WORKLOADS')`
+// be satisfied with one round-trip (the old hook did an N+1: all-namespaces
+// then one query per namespace). The adapter maps the legacy shape into the
+// v1.20+ `Namespace` shape via `legacyNamespaceToNamespace`.
+export const GET_NAMESPACES_WITH_SOURCES: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
     'v1.11': `
-  query GetNamespaces {
+  query GetNamespacesWithSources {
     computePlatform {
       k8sActualNamespaces {
         name
         selected
         dataStreamNames
+        sources {
+          namespace
+          kind
+          name
+          dataStreamNames
+          selected
+          numberOfInstances
+        }
       }
     }
   }`,
   },
   [PlatformType.Vm]: {
     'v0.1': `
-  query GetNamespaces {
+  query GetNamespacesWithSources {
     computePlatform {
       k8sActualNamespaces {
         name
         selected
         dataStreamNames
+        sources {
+          namespace
+          kind
+          name
+          dataStreamNames
+          selected
+          numberOfInstances
+        }
       }
     }
   }`,
@@ -47,49 +71,6 @@ export const GET_NAMESPACES_WITH_WORKLOADS: VersionedRemoteFetch = {
         }
         dataStreamNames
         numberOfInstances
-      }
-    }
-  }`,
-  },
-};
-
-export const GET_NAMESPACE: VersionedRemoteFetch = {
-  [PlatformType.K8s]: {
-    'v1.11': `
-  query GetNamespace($namespaceName: String!) {
-    computePlatform {
-      k8sActualNamespace(name: $namespaceName) {
-        name
-        selected
-        dataStreamNames
-        sources {
-          namespace
-          kind
-          name
-          dataStreamNames
-          selected
-          numberOfInstances
-        }
-      }
-    }
-  }`,
-  },
-  [PlatformType.Vm]: {
-    'v0.1': `
-  query GetNamespace($namespaceName: String!) {
-    computePlatform {
-      k8sActualNamespace(name: $namespaceName) {
-        name
-        selected
-        dataStreamNames
-        sources {
-          namespace
-          kind
-          name
-          dataStreamNames
-          selected
-          numberOfInstances
-        }
       }
     }
   }`,

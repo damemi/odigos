@@ -270,6 +270,14 @@ func (w *WebSocketClient) handleMessage(message []byte) {
 			return
 		}
 
+		// GraphQL-level errors (e.g. gqlparser "unknown field" on variable
+		// coercion) now arrive inside `resp["errors"]` with full path/locations
+		// rather than as a transport error. Log them so the proxy side is
+		// diagnosable too instead of silently forwarding a failed operation.
+		if gqlErrs, ok := resp["errors"]; ok {
+			logger.Log.Error("GraphQL response contains errors", "errors", gqlErrs, "request_id", parsedMessage.RequestId)
+		}
+
 		response := WebSocketMessageToCentralized{
 			Type:      MessageTypeGraphQLResponse,
 			Data:      resp,

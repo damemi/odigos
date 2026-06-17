@@ -420,7 +420,10 @@ export const GET_CONFIG_YAMLS: VersionedRemoteFetch = {
       }
     }
   `,
-    'v1.11': `
+    // `configYamls` was introduced in v1.23 (#4467). Proxies older than this
+    // don't define the query at all, so there is no v1.11 bucket — older
+    // proxies resolve to `undefined` and the op is gated off (no request).
+    'v1.23': `
   query GetConfigYamls {
     configYamls {
       name

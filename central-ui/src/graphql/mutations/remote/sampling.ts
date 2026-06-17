@@ -5,7 +5,9 @@ import { PlatformType } from '@odigos/ui-kit/types';
 
 export const CREATE_NOISY_OPERATION_RULE: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
-    'v1.24': `
+    // `sourceScopes { sources/namespaces/languages }` shape is v1.26+ (older
+    // proxies expose the legacy SourcesScope shape). Gate at v1.26.
+    'v1.26': `
   mutation CreateNoisyOperationRule($samplingId: ID!, $rule: NoisyOperationRuleInput!) {
     createNoisyOperationRule(samplingId: $samplingId, rule: $rule) {
       ruleId
@@ -29,7 +31,8 @@ export const CREATE_NOISY_OPERATION_RULE: VersionedRemoteFetch = {
 
 export const UPDATE_NOISY_OPERATION_RULE: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
-    'v1.24': `
+    // `sourceScopes` selection is v1.26+ (see CreateNoisyOperationRule).
+    'v1.26': `
   mutation UpdateNoisyOperationRule($samplingId: ID!, $ruleId: ID!, $rule: NoisyOperationRuleInput!) {
     updateNoisyOperationRule(samplingId: $samplingId, ruleId: $ruleId, rule: $rule) {
       ruleId
@@ -64,7 +67,8 @@ export const DELETE_NOISY_OPERATION_RULE: VersionedRemoteFetch = {
 
 export const CREATE_HIGHLY_RELEVANT_OPERATION_RULE: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
-    'v1.24': `
+    // `sourceScopes` selection is v1.26+ (see CreateNoisyOperationRule).
+    'v1.26': `
   mutation CreateHighlyRelevantOperationRule($samplingId: ID!, $rule: HighlyRelevantOperationRuleInput!) {
     createHighlyRelevantOperationRule(samplingId: $samplingId, rule: $rule) {
       ruleId
@@ -91,7 +95,8 @@ export const CREATE_HIGHLY_RELEVANT_OPERATION_RULE: VersionedRemoteFetch = {
 
 export const UPDATE_HIGHLY_RELEVANT_OPERATION_RULE: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
-    'v1.24': `
+    // `sourceScopes` selection is v1.26+ (see CreateNoisyOperationRule).
+    'v1.26': `
   mutation UpdateHighlyRelevantOperationRule($samplingId: ID!, $ruleId: ID!, $rule: HighlyRelevantOperationRuleInput!) {
     updateHighlyRelevantOperationRule(samplingId: $samplingId, ruleId: $ruleId, rule: $rule) {
       ruleId
@@ -129,7 +134,8 @@ export const DELETE_HIGHLY_RELEVANT_OPERATION_RULE: VersionedRemoteFetch = {
 
 export const CREATE_COST_REDUCTION_RULE: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
-    'v1.24': `
+    // `sourceScopes` selection is v1.26+ (see CreateNoisyOperationRule).
+    'v1.26': `
   mutation CreateCostReductionRule($samplingId: ID!, $rule: CostReductionRuleInput!) {
     createCostReductionRule(samplingId: $samplingId, rule: $rule) {
       ruleId
@@ -154,7 +160,8 @@ export const CREATE_COST_REDUCTION_RULE: VersionedRemoteFetch = {
 
 export const UPDATE_COST_REDUCTION_RULE: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
-    'v1.24': `
+    // `sourceScopes` selection is v1.26+ (see CreateNoisyOperationRule).
+    'v1.26': `
   mutation UpdateCostReductionRule($samplingId: ID!, $ruleId: ID!, $rule: CostReductionRuleInput!) {
     updateCostReductionRule(samplingId: $samplingId, ruleId: $ruleId, rule: $rule) {
       ruleId

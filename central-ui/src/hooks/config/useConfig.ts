@@ -1,6 +1,6 @@
 import { useUserStore } from '@/store';
 import { Role } from '@/types';
-import { useApiQuery } from '@odigos/ui-kit/contexts/odigos-api';
+import { useOdigosApi } from '@odigos/ui-kit/contexts/odigos-api';
 
 /**
  * Fetches the active proxy's `FetchedConfig` (tier / readonly /
@@ -13,7 +13,7 @@ import { useApiQuery } from '@odigos/ui-kit/contexts/odigos-api';
  */
 export const useConfig = () => {
   const { user, isAdmin } = useUserStore();
-  const { data: config } = useApiQuery('GET_CONFIG');
+  const { data: config } = useOdigosApi().configApi.useEffectiveConfig();
 
   const isReadonly = user?.role === Role.VIEWER || (!!config?.readonly && !isAdmin);
 

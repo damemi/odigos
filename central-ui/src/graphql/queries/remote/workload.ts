@@ -178,7 +178,10 @@ export const GET_WORKLOADS_BY_IDS_SLIM: VersionedRemoteFetch = {
       ${WORKLOAD_FIELDS_SLIM}
     }
   }`,
-    'v1.20': `
+    // `workloadsByIds` / `K8sWorkloadIdInput` were introduced in v1.21. Older
+    // proxies use the legacy per-id `run` path in the adapter; v1.20 has no
+    // workloadsByIds query, so the lowest modern bucket must be v1.21.
+    'v1.21': `
   query GetWorkloadsByIdsSlim($ids: [K8sWorkloadIdInput!]!) {
     workloadsByIds(ids: $ids) {
       ${WORKLOAD_FIELDS}
@@ -463,7 +466,9 @@ export const GET_WORKLOADS_BY_IDS: VersionedRemoteFetch = {
       }
     }
   }`,
-    'v1.20': `
+    // `workloadsByIds` / `K8sWorkloadIdInput` were introduced in v1.21 (v1.20
+    // has neither). Pre-v1.21 proxies resolve via the legacy per-id `run` path.
+    'v1.21': `
   query GetWorkloadsByIds($ids: [K8sWorkloadIdInput!]!) {
     workloadsByIds(ids: $ids) {
 ${WORKLOAD_FIELDS}
