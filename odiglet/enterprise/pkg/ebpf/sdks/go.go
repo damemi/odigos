@@ -236,6 +236,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 		auto.WithTraceExporter(defaultExporter),
 		auto.WithGlobal(),
 		auto.WithConfigProvider(cp),
+		auto.WithServiceIdentifyingAttrs(identifyingAttributeSet(settings.ResourceAttributes...)...),
 	}
 
 	if len(g.offsetFileBytes) > 0 {
