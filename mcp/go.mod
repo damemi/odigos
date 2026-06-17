@@ -58,8 +58,8 @@ require (
 require (
 	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/odigos-io/odigos/api v1.30.0-pre2.0.20260617070520-becb830746a6
-	github.com/odigos-io/odigos/common v1.30.0-pre2.0.20260617070520-becb830746a6 // indirect
+	github.com/odigos-io/odigos/api v1.30.0-pre2.0.20260617121516-bfc5da9bb14b
+	github.com/odigos-io/odigos/common v1.30.0-pre2.0.20260617121516-bfc5da9bb14b // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect

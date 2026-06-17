@@ -20,4 +20,6 @@ import (
 func Register(s *server.MCPServer, b provider.Backend) {
 	registerSources(s, b)
 	registerDestinations(s, b)
+	registerActions(s, b)
+	registerRules(s, b)
 }
