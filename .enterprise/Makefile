@@ -65,6 +65,13 @@ build-odiglet-with-otel_agents:
 build-instrumentor:
 	$(MAKE) build-image/instrumentor SUMMARY="Instrumentor for Odigos" DESCRIPTION="Instrumentor manages auto-instrumentation for workloads with Odigos." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
+# Enterprise UI image: the OSS Odigos web frontend wrapped as an enterprise
+# build. Uses its own Dockerfile (ui/Dockerfile) because it also runs a
+# Node.js yarn build stage for the webapp.
+.PHONY: build-ui
+build-ui:
+	$(MAKE) build-image/ui DOCKERFILE=ui/Dockerfile SUMMARY="Enterprise UI for Odigos" DESCRIPTION="Enterprise build of the Odigos web frontend." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
 .PHONY: build-central-backend
 build-central-backend:
 	$(MAKE) build-image/central-backend SUMMARY="Central Backend for Odigos" DESCRIPTION="Central Backend is the core component of Odigos Central, responsible for managing the data flow from the cluster to the ui." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
@@ -87,7 +94,7 @@ build-agents:
 
 .PHONY: build-images
 build-images:
-	make build-odiglet build-instrumentor TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
+	make build-odiglet build-instrumentor build-ui TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
 
 .PHONY: build-central-images
 build-central-images:
@@ -111,7 +118,7 @@ push-images-with-agents-rhel:
 
 .PHONY: push-images
 push-images:
-	make push-odiglet push-instrumentor push-central-backend push-central-ui push-central-proxy TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)\
+	make push-odiglet push-instrumentor push-ui push-central-backend push-central-ui push-central-proxy TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)\
 
 .PHONY: push-images-with-agents
 push-images-with-agents:
@@ -139,6 +146,10 @@ push-odiglet:
 push-instrumentor:
 	$(MAKE) push-image/instrumentor SUMMARY="Instrumentor for Odigos" DESCRIPTION="Instrumentor manages auto-instrumentation for workloads with Odigos." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
+.PHONY: push-ui
+push-ui:
+	$(MAKE) push-image/ui DOCKERFILE=ui/Dockerfile SUMMARY="Enterprise UI for Odigos" DESCRIPTION="Enterprise build of the Odigos web frontend." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
 .PHONY: push-agents
 push-agents:
 	$(MAKE) push-image/agents DOCKERFILE=odiglet/$(DOCKERFILE) TARGET=agents SUMMARY="Odigos Enterprise Agents" DESCRIPTION="The Odigos Agents used to copy Odigos agent relevant files into the user workloads." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
@@ -161,6 +172,10 @@ restart-odiglet:
 .PHONY: restart-instrumentor
 restart-instrumentor:
 	kubectl rollout restart deployment odigos-instrumentor -n odigos-system || true
+
+.PHONY: restart-ui
+restart-ui:
+	kubectl rollout restart deployment odigos-ui -n odigos-system || true
 
 .PHONY: restart-central-backend
 restart-central-backend:

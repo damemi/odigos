@@ -35,8 +35,15 @@ jobs:
               - 'tests/common/assert/odigos-central-installed.yaml'
 
   unit-tests:
-    name: Unit Tests (central-backend)
+    name: Unit Tests (${{ matrix.module }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Every Go module that carries its own tests. The enterprise UI + shared
+        # MCP modules live in their own go.mod, so they need explicit entries —
+        # central-backend's `go test ./...` does not reach them.
+        module: [central-backend, mcp, ui]
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
@@ -45,13 +52,19 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 #v5.5.0
         with:
-          go-version-file: "central-backend/go.mod"
-          cache-dependency-path: "central-backend/go.sum"
+          go-version-file: "${{ matrix.module }}/go.mod"
+          cache-dependency-path: "${{ matrix.module }}/go.sum"
 
       - name: Run unit tests
+        # The ui module pins OSS at the odigos commit that carries the importable
+        # frontend/server package and McpAccessMode; -mod=mod lets the module
+        # graph resolve it (and fall back to a direct fetch) until that lands in a
+        # tagged release that the default proxy serves.
+        env:
+          GOFLAGS: -mod=mod
         run: |
-          cd central-backend
-          go test ./... -v -race
+          cd ${{ matrix.module }}
+          go test ./... -race
 
   build-enterprise-components:
     name: build-enterprise-components (${{ matrix.service }}${{ matrix.rhel == 'true' && ', rhel' || '' }}${{ matrix.extended == 'true' && ', extended' || '' }})
@@ -63,6 +76,7 @@ jobs:
             odiglet,
             instrumentor,
             central-ui,
+            ui,
             central-proxy,
             central-backend,
             agents,
@@ -106,6 +120,7 @@ jobs:
           file: >-
             ${{ matrix.service == 'odiglet' && 'odiglet/Dockerfile'
             || matrix.service == 'central-ui' && 'central-ui/Dockerfile'
+            || matrix.service == 'ui' && 'ui/Dockerfile'
             || matrix.service == 'agents' && 'odiglet/Dockerfile'
             || 'Dockerfile' }}
           context: ${{ matrix.service == 'central-ui' && 'central-ui' || '.' }}
@@ -121,6 +136,7 @@ jobs:
             SERVICE_NAME=${{ matrix.service }}
             RHEL=${{ matrix.rhel }}
             EXTENDED=${{ matrix.extended || 'false' }}
+            ODIGOS_VERSION=main
           target: >-
             ${{ matrix.service == 'agents' && matrix.rhel == 'true' && 'agents-rhel' ||
                 matrix.service == 'agents' && 'agents' ||
@@ -496,6 +512,22 @@ jobs:
           echo "Expected cache key: ${{ github.run_id }}-instrumentor-enterprise-standard"
           exit 1
 
+      - name: Restore UI Enterprise from Cache
+        if: steps.should-run.outputs.skip != 'true'
+        id: restore-ui-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: /tmp/ui-enterprise.tar
+          fail-on-cache-miss: true
+          key: ${{ github.run_id }}-ui-enterprise-standard
+
+      - name: Check if UI cache was restored
+        if: steps.should-run.outputs.skip != 'true' && steps.restore-ui-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "❌ Cache miss for UI Enterprise - this should not happen!"
+          echo "Expected cache key: ${{ github.run_id }}-ui-enterprise-standard"
+          exit 1
+
       - name: Restore Extended Odiglet from Cache
         if: steps.should-run.outputs.skip != 'true'
         id: restore-odiglet-extended-cache
@@ -594,6 +626,7 @@ jobs:
           kind load image-archive /tmp/odigos-scheduler.tar
           kind load image-archive /tmp/odigos-collector.tar
           kind load image-archive /tmp/odigos-cli.tar
+          kind load image-archive /tmp/ui-enterprise.tar
 
       - name: Load Central Components to Kind Cluster
         if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui')

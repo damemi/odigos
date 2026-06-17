@@ -21,6 +21,7 @@ jobs:
         service:
           - odiglet
           - instrumentor
+          - ui
           - central-proxy
           - central-backend
           - central-ui
@@ -43,6 +44,9 @@ jobs:
           - service: central-ui
             summary: "Central UI for Odigos"
             description: "Central UI provides the web application for managing Odigos Central."
+          - service: ui
+            summary: "Enterprise UI for Odigos"
+            description: "Enterprise build of the Odigos web frontend."
           - service: agents
             summary: "Odigos Enterprise Agents"
             description: "The Odigos Agents used to copy Odigos agent relevant files into the user workloads."
@@ -114,6 +118,7 @@ jobs:
           file: >-
             ${{ matrix.service == 'odiglet' && 'odiglet/Dockerfile'
             || matrix.service == 'central-ui' && 'central-ui/Dockerfile'
+            || matrix.service == 'ui' && 'ui/Dockerfile'
             || matrix.service == 'agents' && 'odiglet/Dockerfile'
             || 'Dockerfile' }}
           context: ${{ matrix.service == 'central-ui' && 'central-ui' || '.' }}
