@@ -4,7 +4,8 @@ import { ROUTES } from '@/utils';
 import { useProxyStore } from '@/store';
 import { useComputePlatformsCRUD } from '../compute-platforms';
 import { PlatformType, StatusType } from '@odigos/ui-kit/types';
-import { ProgressKeys, useDataStreamStore, useEntityStore, useProgressStore, useSetupStore } from '@odigos/ui-kit/store';
+import { useOdigosApi } from '@odigos/ui-kit/contexts/odigos-api';
+import { ProgressKeys, useDataStreamStore, useProgressStore, useSetupStore } from '@odigos/ui-kit/store';
 
 interface UseProxy {
   proxyID?: string;
@@ -19,8 +20,8 @@ export const useProxy = (): UseProxy => {
   const router = useRouter();
   const pathname = usePathname();
 
+  const { resetCache } = useOdigosApi();
   const { resetProgress } = useProgressStore();
-  const { resetEntityStore } = useEntityStore();
   const { resetDataStreamStore } = useDataStreamStore();
   const { clearStore: resetSetupStore } = useSetupStore();
   const { proxyID: storedProxyID, proxyName, odigosVersion, platformType, setProxyStore, resetProxyStore } = useProxyStore();
@@ -34,7 +35,10 @@ export const useProxy = (): UseProxy => {
 
   const resetStores = () => {
     resetSetupStore();
-    resetEntityStore();
+    // Drop all entity data cached against the previous proxy; the
+    // kit's domain hooks will re-fetch on next render under the
+    // new proxyID. (Not awaited — `clearStore` is fire-and-forget.)
+    resetCache();
     resetDataStreamStore();
     resetProgress(ProgressKeys.Instrumenting);
     resetProgress(ProgressKeys.Uninstrumenting);

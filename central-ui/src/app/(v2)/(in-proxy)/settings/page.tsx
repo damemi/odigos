@@ -1,34 +1,8 @@
 'use client';
 
-import React, { useCallback } from 'react';
+import React from 'react';
 import { Settings } from '@odigos/ui-kit/containers/v2';
-import type { LocalUiConfigInput } from '@odigos/ui-kit/types';
-import { useConfigYamls, useEffectiveConfig, useUpdateLocalUiConfig } from '@/hooks';
 
 export default function Page() {
-  const { configYamls, configYamlsLoading } = useConfigYamls();
-  const { updateLocalUiConfig, loading: saveLoading, resetLocalUiConfigToFactoryDefaults } = useUpdateLocalUiConfig();
-  const { effectiveConfig, effectiveConfigLoading, refetchEffectiveConfig } = useEffectiveConfig([], true);
-
-  const onSave = useCallback(
-    async (config: LocalUiConfigInput) => {
-      await updateLocalUiConfig(config);
-      await refetchEffectiveConfig();
-    },
-    [updateLocalUiConfig, refetchEffectiveConfig],
-  );
-
-  return (
-    <Settings
-      minSupportedVersion={1.2}
-      configYamls={configYamls}
-      configYamlsLoading={configYamlsLoading}
-      effectiveConfig={effectiveConfig ?? null}
-      effectiveConfigLoading={effectiveConfigLoading}
-      refetch={refetchEffectiveConfig}
-      factoryReset={resetLocalUiConfigToFactoryDefaults}
-      onSave={onSave}
-      saveLoading={saveLoading}
-    />
-  );
+  return <Settings minSupportedVersion={1.2} />;
 }

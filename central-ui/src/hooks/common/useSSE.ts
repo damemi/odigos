@@ -1,11 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { useProxy } from '../proxy';
 import { getSSEEventsUrl } from '@/utils';
-import { useSourceCRUD } from '../sources';
-import { EntityTypes, StatusType, type WorkloadId } from '@odigos/ui-kit/types';
-import { useDestinationCRUD } from '../destinations';
-import { getIdFromSseTarget, safeJsonParse } from '@odigos/ui-kit/functions';
-import { type NotifyPayload, useEntityStore, useNotificationStore, useProgressStore, ProgressKeys } from '@odigos/ui-kit/store';
+import { StatusType } from '@odigos/ui-kit/types';
+import { safeJsonParse } from '@odigos/ui-kit/functions';
+import { useOdigosApi } from '@odigos/ui-kit/contexts/odigos-api';
+import { type NotifyPayload, useNotificationStore, useProgressStore, ProgressKeys } from '@odigos/ui-kit/store';
 
 enum EventTypes {
   CONNECTED = 'connected',
@@ -49,10 +48,11 @@ const EVENT_DEBOUNCE_MS = 5000;
 
 export const useSSE = () => {
   const { proxyID } = useProxy();
-  const { fetchSources, fetchSourcesByTargets } = useSourceCRUD();
   const { addNotification } = useNotificationStore();
-  const { fetchDestinations } = useDestinationCRUD();
-  const { removeEntities } = useEntityStore();
+  const { sourcesApi, destinationsApi } = useOdigosApi();
+  const fetchSources = sourcesApi.fetchAll;
+  const fetchSourcesByTargets = sourcesApi.fetchByTargets;
+  const fetchDestinations = destinationsApi.fetchAll;
 
   const maxRetries = 10;
   const retryCount = useRef(0);
@@ -101,6 +101,10 @@ export const useSSE = () => {
     const connect = () => {
       const es = new EventSource(getSSEEventsUrl(proxyID));
 
+      es.onopen = () => {
+        retryCount.current = 0;
+      };
+
       es.onerror = () => {
         es.close();
 
@@ -141,7 +145,11 @@ export const useSSE = () => {
           const isSource = notification.crdType === OpenSourceCrdTypes.InstrumentationConfig;
           const isDestination = notification.crdType === OpenSourceCrdTypes.Destination;
 
-          if ((notification.title || notification.message) && !isConnected && notification.title !== OpenSourceEventTypes.MODIFIED && !isSource) {
+          // Destination create/delete success toasts are dispatched client-side
+          // by the kit's `useDestinationsApi` (consistent with sources and every
+          // other entity). Exclude them here so we don't double-notify; the
+          // destination branch below still drives the refetch.
+          if ((notification.title || notification.message) && !isConnected && notification.title !== OpenSourceEventTypes.MODIFIED && !isSource && !isDestination) {
             addNotification(notification);
           }
 
@@ -180,16 +188,17 @@ export const useSSE = () => {
                 const newDeleted = Number(notification.message?.toString().replace(/[^\d]/g, '') || 0);
                 useProgressStore.getState().addProgress(ProgressKeys.Uninstrumenting, newDeleted);
 
-                handleEvent(OpenSourceEventTypes.DELETED, targets, (accumulatedTargets) => {
+                handleEvent(OpenSourceEventTypes.DELETED, targets, () => {
                   const { resetProgress } = useProgressStore.getState();
                   resetProgress(ProgressKeys.Uninstrumenting);
 
-                  if (accumulatedTargets.length > 0) {
-                    const ids = accumulatedTargets.map((t) => getIdFromSseTarget(t, EntityTypes.Source) as WorkloadId).filter((id) => id.namespace && id.name && id.kind);
-                    removeEntities(EntityTypes.Source, ids);
-                  } else {
-                    fetchSources();
-                  }
+                  // Re-fetch the canonical list — Apollo's cache write
+                  // broadcasts to every active `useApiQuery('GET_WORKLOADS')`
+                  // subscriber and the deleted workloads disappear from
+                  // the response. The kit no longer exposes a per-id
+                  // eviction primitive (`removeEntities`) — that lived
+                  // on the deleted entity store.
+                  fetchSources();
                 });
                 break;
 

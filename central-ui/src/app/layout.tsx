@@ -2,9 +2,8 @@
 
 import React, { type PropsWithChildren } from 'react';
 import dynamic from 'next/dynamic';
-import client from '@/lib/apollo-client';
-import { ApolloProvider } from '@apollo/client';
 import { ToastList } from '@odigos/ui-kit/containers';
+import OdigosApiAdapter from '@/lib/odigos-api-adapter';
 
 const ThemeProvider = dynamic(() => import('@/lib/theme-provider'), { ssr: false });
 const ProtectedRoute = dynamic(() => import('@/components/auth/protected-route'), { ssr: false });
@@ -30,9 +29,9 @@ function RootLayout({ children }: PropsWithChildren) {
       >
         <ThemeProvider>
           <ToastList />
-          <ApolloProvider client={client}>
+          <OdigosApiAdapter>
             <ProtectedRoute>{children}</ProtectedRoute>
-          </ApolloProvider>
+          </OdigosApiAdapter>
         </ThemeProvider>
       </body>
     </html>

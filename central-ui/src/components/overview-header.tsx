@@ -5,10 +5,10 @@ import { useOdigos } from '@odigos/ui-kit/contexts';
 import { Tooltip } from '@odigos/ui-kit/components';
 import { StatusKeys, useStatusStore } from '../store';
 import { FORM_ALERTS } from '@odigos/ui-kit/constants';
+import { useConfig, useHealth, useProxy } from '@/hooks';
 import { SystemDrawer } from '@odigos/ui-kit/containers/v2';
 import { OdigosLogoTextByTier } from '@odigos/ui-kit/snippets/v2';
 import { OtherStatusType, StatusType } from '@odigos/ui-kit/types';
-import { useConfig, useDescribe, useHealth, useProxy, useTokenCRUD } from '@/hooks';
 import { IconButton, Badge as V2Badge, Header as V2Header } from '@odigos/ui-kit/components/v2';
 
 export const OverviewHeader = () => {
@@ -17,8 +17,6 @@ export const OverviewHeader = () => {
   const { isVm } = useOdigos();
   const { isReadonly } = useConfig();
   const { proxyID, proxyName } = useProxy();
-  const { fetchDescribeOdigos } = useDescribe();
-  const { tokens, updateToken } = useTokenCRUD();
 
   const [isSystemDrawerOpen, setIsSystemDrawerOpen] = useState(false);
   const toggleSystemDrawer = () => setIsSystemDrawerOpen((prev) => !prev);
@@ -79,7 +77,7 @@ export const OverviewHeader = () => {
   return (
     <>
       <V2Header left={left} right={right} />
-      <SystemDrawer key='system-overview' isOpen={isSystemDrawerOpen} onClose={toggleSystemDrawer} fetchDescribeOdigos={fetchDescribeOdigos} token={tokens[0]} updateToken={updateToken} />
+      <SystemDrawer key='system-overview' isOpen={isSystemDrawerOpen} onClose={toggleSystemDrawer} />
     </>
   );
 };

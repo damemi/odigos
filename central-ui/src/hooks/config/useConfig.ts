@@ -1,22 +1,21 @@
-import { useEffect } from 'react';
-import { GET_CONFIG } from '@/graphql';
 import { useUserStore } from '@/store';
-import { useRemoteFetch } from '../proxy';
-import { Role, type FetchedConfig } from '@/types';
+import { Role } from '@/types';
+import { useApiQuery } from '@odigos/ui-kit/contexts/odigos-api';
 
+/**
+ * Fetches the active proxy's `FetchedConfig` (tier / readonly /
+ * installation*) via the kit's typed `GET_CONFIG` slot and combines it
+ * with the local user's role to derive `isReadonly`.
+ *
+ * Apollo handles caching + reactive re-render — there's nothing to
+ * narrow at the call site because the kit's slot is bare-typed
+ * (`Operation<FetchedConfig, undefined>`).
+ */
 export const useConfig = () => {
   const { user, isAdmin } = useUserStore();
-  const { called, data, fetch } = useRemoteFetch<{ config?: FetchedConfig }>(GET_CONFIG);
+  const { data: config } = useApiQuery('GET_CONFIG');
 
-  useEffect(() => {
-    if (!called) fetch();
-  }, [called]);
+  const isReadonly = user?.role === Role.VIEWER || (!!config?.readonly && !isAdmin);
 
-  const config = data?.config;
-  const isReadonly = user?.role === Role.VIEWER || (data?.config?.readonly && !isAdmin);
-
-  return {
-    config,
-    isReadonly,
-  };
+  return { config, isReadonly };
 };
