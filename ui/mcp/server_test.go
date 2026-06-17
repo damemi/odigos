@@ -7,14 +7,18 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/odigos-io/odigos-enterprise/ui/mcp/k8s"
 )
 
 // TestToolsListReadOnly drives the real /mcp handler with a tools/list
-// JSON-RPC call and asserts the catalog is exactly the two showcase tools and
-// that both advertise read-only annotations (so a read-only-mode agent and the
-// MCP client both see them as non-mutating).
+// JSON-RPC call and asserts the canonical shared read tools are mounted and
+// advertise read-only annotations (so a read-only-mode agent and the MCP
+// client both see them as non-mutating). The full k8s catalog is mounted too;
+// we don't pin an exact count here. tools/list does not invoke handlers, so a
+// zero Deps bundle is sufficient.
 func TestToolsListReadOnly(t *testing.T) {
-	srv := httptest.NewServer(Handler())
+	srv := httptest.NewServer(Handler(k8s.Deps{}))
 	defer srv.Close()
 
 	body := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
@@ -54,27 +58,28 @@ func TestToolsListReadOnly(t *testing.T) {
 		t.Fatalf("unmarshal %q: %v", payload, err)
 	}
 
-	want := map[string]bool{"list_enabled_sources": false, "list_destinations": false}
-	if len(out.Result.Tools) != len(want) {
-		t.Fatalf("got %d tools, want %d", len(out.Result.Tools), len(want))
+	// The canonical shared read tools must be present and read-only.
+	wantReadOnly := map[string]bool{
+		"list_sources":               false,
+		"list_destinations":          false,
+		"list_actions":               false,
+		"list_instrumentation_rules": false,
+	}
+	if len(out.Result.Tools) <= len(wantReadOnly) {
+		t.Fatalf("got %d tools, want the shared catalog + the k8s-only catalog", len(out.Result.Tools))
 	}
 	for _, tool := range out.Result.Tools {
-		seen, known := want[tool.Name]
-		if !known {
-			t.Errorf("unexpected tool %q", tool.Name)
+		if _, ok := wantReadOnly[tool.Name]; !ok {
 			continue
 		}
-		if seen {
-			t.Errorf("duplicate tool %q", tool.Name)
-		}
-		want[tool.Name] = true
+		wantReadOnly[tool.Name] = true
 		if tool.Annotations.ReadOnlyHint == nil || !*tool.Annotations.ReadOnlyHint {
 			t.Errorf("tool %q: readOnlyHint = %v, want true", tool.Name, tool.Annotations.ReadOnlyHint)
 		}
 	}
-	for name, seen := range want {
+	for name, seen := range wantReadOnly {
 		if !seen {
-			t.Errorf("missing tool %q", name)
+			t.Errorf("missing shared tool %q", name)
 		}
 	}
 }

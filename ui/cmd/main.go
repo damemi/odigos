@@ -17,6 +17,7 @@ import (
 
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
 	"github.com/odigos-io/odigos-enterprise/ui/mcp"
+	"github.com/odigos-io/odigos-enterprise/ui/mcp/k8s"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/odigos-io/odigos/common"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
@@ -111,8 +112,18 @@ func mcpEnabled(ctx context.Context) bool {
 	return cfg.McpEnabled == nil || *cfg.McpEnabled
 }
 
-// mountMCP wires the in-process MCP server onto the gin router. It runs in the
-// same process as the UI and reuses the frontend's shared kube client.
-func mountMCP(r *gin.Engine, _ *server.Deps) {
-	r.Any("/mcp", gin.WrapH(mcp.Handler()))
+// mountMCP wires the in-process MCP server onto the gin router. It lives here, in
+// the enterprise UI binary, on purpose: MCP is an enterprise-only surface, so
+// mounting it in this binary (the community UI never calls mountMCP) is what gates
+// it to enterprise. It runs in the same process as the UI and reuses the frontend's
+// shared kube client plus the bootstrap deps (metrics / prometheus / profile-store)
+// the k8s-only tools need.
+func mountMCP(r *gin.Engine, deps *server.Deps) {
+	r.Any("/mcp", gin.WrapH(mcp.Handler(k8s.Deps{
+		Logger:          deps.Logger,
+		MetricsConsumer: deps.OdigosMetrics,
+		PromAPI:         deps.PromAPI,
+		K8sCacheClient:  deps.K8sCacheClient,
+		ProfileStore:    deps.ProfileStore,
+	})))
 }
