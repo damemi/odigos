@@ -192,7 +192,7 @@ export const GET_WORKLOADS_BY_IDS_SLIM: VersionedRemoteFetch = {
 
 export const GET_WORKLOADS_BY_IDS: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
-    'v1.30': `
+    'v1.29': `
   query GetWorkloadsByIds($ids: [K8sWorkloadIdInput!]!) {
     workloadsByIds(ids: $ids) {
       id {

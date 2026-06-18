@@ -140,12 +140,8 @@ func (svc *UserService) UpdateUser(ctx context.Context, userID string, input *mo
 	if err != nil {
 		return nil, err
 	}
-	oldRole := user.Role
 
-	err = svc.kcUser.UpdateUser(adminToken, userID, input)
-	if err != nil {
-		return nil, err
-	}
+	oldRole := user.Role
 	err = svc.kcUser.RemoveRealmRoleFromUser(adminToken, *email, strings.ToLower(string(oldRole)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to remove role: %w", err)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -14,6 +15,9 @@ type contextKey string
 const (
 	tokenKey contextKey = "token"
 )
+
+// ErrForbidden is returned when a caller lacks the required role for an action.
+var ErrForbidden = errors.New("forbidden: you do not have permission to perform this action")
 
 func GetTokenFromContext(ctx context.Context) string {
 	if token, ok := ctx.Value(tokenKey).(string); ok {
@@ -119,4 +123,15 @@ func IsUserAdmin(ctx context.Context) bool {
 		}
 	}
 	return isAdmin
+}
+
+// RequireAdmin returns ErrForbidden unless the caller carries an ADMIN or OWNER
+// role in their JWT. Use this to guard access-management mutations (user CRUD,
+// password resets, identity providers) so they cannot be reached by lower-privilege
+// roles such as MAINTAINER or VIEWER, even via a direct API call.
+func RequireAdmin(ctx context.Context) error {
+	if !IsUserAdmin(ctx) {
+		return ErrForbidden
+	}
+	return nil
 }

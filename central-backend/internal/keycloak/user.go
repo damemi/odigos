@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/consts"
 )
 
@@ -361,38 +360,6 @@ func (kc *KeycloakUserService) RemoveRealmRoleFromUser(token string, email, role
 	if resp.StatusCode != StatusNoContent {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to remove role from user: %s", string(body))
-	}
-	return nil
-}
-
-func (kc *KeycloakUserService) UpdateUser(token string, userID string, input *model.WriteUserInput) error {
-	// Only marshal fields that Keycloak expects, not the full input (which may include "role" etc.)
-	payload := make(map[string]interface{})
-	if input.Email != nil {
-		payload["email"] = *input.Email
-		payload["username"] = *input.Email
-	}
-	// Add more fields as needed, but do NOT include "role" or other non-Keycloak fields
-
-	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", kc.host, kc.realm, userID)
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequest("PUT", url, bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed to update user: %s", string(body))
 	}
 	return nil
 }

@@ -37,9 +37,10 @@
  *     same floor-to-bucket rule as `getVersionedQuery`.
  */
 
-import React, { type FC, type PropsWithChildren, useMemo } from 'react';
+import React, { type FC, type PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react';
 import { createClient } from 'graphql-ws';
 import { onError } from '@apollo/client/link/error';
+import { useConfig } from '@/hooks/config/useConfig';
 import { useUserStore, useProxyStore } from '@/store';
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { safeJsonParse, trimVersion } from '@odigos/ui-kit/functions';
@@ -974,9 +975,7 @@ const operations: OdigosApiOperations = {
   },
 };
 
-interface AdapterProps extends PropsWithChildren {
-  context?: OperationContext;
-}
+type AdapterProps = PropsWithChildren;
 
 const INITIAL_CONTEXT: OperationContext = {
   platformType: PlatformType.K8s,
@@ -990,24 +989,44 @@ const isAuthErrorMessage = (message?: string) => {
   return lower.includes('authentication required') || lower.includes('authentication expired') || lower.includes('http 401');
 };
 
-const OdigosApiAdapter: FC<AdapterProps> = ({ children, context }) => {
-  // Read proxy state directly from the zustand store (no Apollo dependency).
-  // This breaks the circular dependency where the adapter wants the active
-  // proxy info to seed `OperationContext`, but `useProxy` itself depends on
-  // Apollo (via `useComputePlatformsCRUD`) which is what the adapter mounts.
-  const proxyID = useProxyStore((s) => s.proxyID);
-  const platformType = useProxyStore((s) => s.platformType);
-  const odigosVersion = useProxyStore((s) => s.odigosVersion);
+/**
+ * Lifts `useConfig().isReadonly` (VIEWER role, or deployment-readonly for
+ * non-admins) up into the adapter so it can be threaded into the
+ * `OperationContext`. The kit's domain hooks short-circuit every mutation
+ * when `ctx.isReadonly` is true, so this is what actually blocks viewers
+ * from writing.
+ *
+ * It must live INSIDE `<OdigosApiProvider>` because `useConfig` reads the
+ * effective config through `useOdigosApi()`. The underlying
+ * `GET_EFFECTIVE_CONFIG` op is gated on a selected proxy, so on out-of-proxy
+ * pages (sign-in, /access-management) no query fires and `isReadonly` falls
+ * back to the pure role check.
+ *
+ * Named `ConfigSync` to mirror the equivalent component in the OSS webapp.
+ */
+const ConfigSync: FC<{ onChange: (ctx: OperationContext) => void }> = ({ onChange }) => {
+  const { config, isReadonly } = useConfig();
+  const { proxyID, platformType, odigosVersion } = useProxyStore();
 
-  const resolvedContext = useMemo<OperationContext>(() => {
-    if (context) return context;
-    return {
-      ...INITIAL_CONTEXT,
+  useEffect(() => {
+    onChange({
       proxyID,
-      platformType: platformType ?? PlatformType.K8s,
-      version: odigosVersion ?? 'v0.0.0',
-    };
-  }, [context, proxyID, platformType, odigosVersion]);
+      platformType: platformType || config?.platformType || INITIAL_CONTEXT.platformType,
+      tier: config?.tier || INITIAL_CONTEXT.tier,
+      version: odigosVersion || config?.odigosVersion || INITIAL_CONTEXT.version,
+      isReadonly,
+    });
+  }, [proxyID, platformType, odigosVersion, config?.platformType, config?.tier, config?.odigosVersion, isReadonly, onChange]);
+
+  return null;
+};
+
+const OdigosApiAdapter: FC<AdapterProps> = ({ children }) => {
+  // Context is synced from `GET_CONFIG` by <ConfigSync> (below, inside the
+  // provider). The `context` prop still overrides it when supplied.
+  const [syncedContext, setSyncedContext] = useState<OperationContext>(INITIAL_CONTEXT);
+  // Stable callback so <ConfigSync>'s effect doesn't re-fire each render.
+  const onContextChange = useCallback((ctx: OperationContext) => setSyncedContext(ctx), []);
 
   const apolloConfig = useMemo(() => {
     // WS link is constructed once and passed in — keeps `graphql-ws` out of the kit's
@@ -1066,7 +1085,8 @@ const OdigosApiAdapter: FC<AdapterProps> = ({ children, context }) => {
   }, []);
 
   return (
-    <OdigosApiProvider apolloConfig={apolloConfig} operations={operations} context={resolvedContext}>
+    <OdigosApiProvider apolloConfig={apolloConfig} operations={operations} context={syncedContext}>
+      <ConfigSync onChange={onContextChange} />
       {children}
     </OdigosApiProvider>
   );

@@ -85,7 +85,7 @@ export const UsersTable: React.FC = () => {
         const RoleCell: React.FC = () => <Badge status={UTILS.getStatusForRole(user.role)} label={user.role} />;
 
         return {
-          onClick: () => setEditOpenForUser(user),
+          onClick: isAdmin ? () => setEditOpenForUser(user) : undefined,
           cells: [
             { key: UserTableColumn.Icon, rawValue: '', component: UserIconCell },
             { key: UserTableColumn.User, rawValue: user.email },
@@ -94,7 +94,7 @@ export const UsersTable: React.FC = () => {
           ],
         };
       }),
-    [users],
+    [users, isAdmin],
   );
 
   const getRowActions: TableProps['getRowActions'] = useCallback(

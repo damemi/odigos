@@ -131,31 +131,52 @@ func (r *mutationResolver) UpdateComputePlatform(ctx context.Context, id string,
 
 // CreateUser is the resolver for the createUser field.
 func (r *mutationResolver) CreateUser(ctx context.Context, input model.WriteUserInput) (*model.CreateUserResult, error) {
+	// User management is restricted to ADMIN/OWNER. MAINTAINER and VIEWER must not
+	// be able to create users, even via a direct API call.
+	if err := utils.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	return r.UserService.CreateUser(ctx, &input)
 }
 
 // UpdateUser is the resolver for the updateUser field.
 func (r *mutationResolver) UpdateUser(ctx context.Context, userID string, input model.WriteUserInput) (*model.GeneralResult, error) {
+	if err := utils.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	return r.UserService.UpdateUser(ctx, userID, &input)
 }
 
 // DeleteUser is the resolver for the deleteUser field.
 func (r *mutationResolver) DeleteUser(ctx context.Context, userID string) (*model.GeneralResult, error) {
+	if err := utils.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	return r.UserService.DeleteUser(ctx, userID)
 }
 
 // CreateTeam is the resolver for the createTeam field.
 func (r *mutationResolver) CreateTeam(ctx context.Context, input model.WriteTeamInput) (*model.GeneralResult, error) {
+	// Team management is access-management and is restricted to ADMIN/OWNER.
+	if err := utils.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	return r.TeamService.CreateTeam(&input)
 }
 
 // UpdateTeam is the resolver for the updateTeam field.
 func (r *mutationResolver) UpdateTeam(ctx context.Context, teamID string, input model.WriteTeamInput) (*model.GeneralResult, error) {
+	if err := utils.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	return r.TeamService.UpdateTeam(teamID, &input)
 }
 
 // DeleteTeam is the resolver for the deleteTeam field.
 func (r *mutationResolver) DeleteTeam(ctx context.Context, teamID string) (*model.GeneralResult, error) {
+	if err := utils.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	return r.TeamService.DeleteTeam(ctx, teamID)
 }
 

@@ -1,5 +1,6 @@
 import React, { useState, type FC } from 'react';
 import { UserCard } from './user-card';
+import { useUserStore } from '@/store';
 import type { User, UserInput } from '@/types';
 import { UserIcon } from '@odigos/ui-kit/icons';
 import { useGenericForm } from '@odigos/ui-kit/hooks';
@@ -16,6 +17,9 @@ interface EditUserDrawerProps {
 }
 
 const EditUserDrawer: FC<EditUserDrawerProps> = ({ user, onClose, onSave, onDelete, onResetPassword }) => {
+  // User management (edit role / delete / reset password) is restricted to ADMIN/OWNER.
+  // MAINTAINER and VIEWER can open the drawer to view details, but cannot modify anything.
+  const { isAdmin } = useUserStore();
   const { formData, handleFormChange, resetFormData, isFormDirty } = useGenericForm({
     email: user.email || '',
     role: user.role,
@@ -43,36 +47,39 @@ const EditUserDrawer: FC<EditUserDrawerProps> = ({ user, onClose, onSave, onDele
           onClose: () => handleWithCancelWarning(onClose),
           icon: UserIcon,
           title: user.email,
-          actions: [
-            {
-              id: 'reset-password',
-              label: 'Reset Password',
-              onClick: onResetPassword,
-            },
-            {
-              id: 'delete-user',
-              label: 'Delete User',
-              onClick: onDelete,
-            },
-          ],
-        }}
-        footer={{
-          actions: isFormDirty
+          actions: isAdmin
             ? [
                 {
-                  'data-id': 'drawer-cancel',
-                  variant: ButtonVariants.Secondary,
-                  label: BUTTON_TEXTS.CANCEL,
-                  onClick: () => handleWithCancelWarning(resetFormData),
+                  id: 'reset-password',
+                  label: 'Reset Password',
+                  onClick: onResetPassword,
                 },
                 {
-                  'data-id': 'drawer-save',
-                  variant: ButtonVariants.Primary,
-                  label: BUTTON_TEXTS.SAVE,
-                  onClick: () => onSave(formData),
+                  id: 'delete-user',
+                  label: 'Delete User',
+                  onClick: onDelete,
                 },
               ]
             : [],
+        }}
+        footer={{
+          actions:
+            isAdmin && isFormDirty
+              ? [
+                  {
+                    'data-id': 'drawer-cancel',
+                    variant: ButtonVariants.Secondary,
+                    label: BUTTON_TEXTS.CANCEL,
+                    onClick: () => handleWithCancelWarning(resetFormData),
+                  },
+                  {
+                    'data-id': 'drawer-save',
+                    variant: ButtonVariants.Primary,
+                    label: BUTTON_TEXTS.SAVE,
+                    onClick: () => onSave(formData),
+                  },
+                ]
+              : [],
         }}
       >
         <FlexColumn $gap={24}>
