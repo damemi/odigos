@@ -93,6 +93,8 @@ func reconcileWorkload(ctx context.Context, c client.Client, icName string, name
 	err = c.Get(ctx, client.ObjectKey{Namespace: namespace, Name: icName}, &ic)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
+			logger.Debug("instrumentation config not found during agentenabled reconcile, checking uninstrument rollout",
+				"icName", icName, "workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind)
 			// instrumentation config is deleted, trigger a rollout for the associated workload
 			// this should happen once per workload, as the instrumentation config is deleted
 			rolloutResult, doErr := rollout.Do(ctx, c, nil, pw, conf, distroProvider, rolloutConcurrencyLimiter)

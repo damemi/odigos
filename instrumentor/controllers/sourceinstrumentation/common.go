@@ -267,11 +267,16 @@ func syncRegexSourceWorkloads(
 // If it is instrumented, it will attempt to create an InstrumentationConfig if one does not exist,
 // or update the existing InstrumentationConfig if necessary.
 func syncWorkload(ctx context.Context, k8sClient client.Client, scheme *runtime.Scheme, pw k8sconsts.PodWorkload) (ctrl.Result, error) {
-	logger := commonlogger.FromContext(ctx)
+	logger := commonlogger.FromContext(ctx).WithName("syncWorkload")
+
+	logger.Debug("reconciling workload instrumentation",
+		"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind)
 
 	obj := workload.ClientObjectFromWorkloadKind(pw.Kind)
 	err := k8sClient.Get(ctx, client.ObjectKey{Name: pw.Name, Namespace: pw.Namespace}, obj)
 	if err != nil {
+		logger.Debug("workload object not found, skipping sync",
+			"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind, "err", err)
 		// if err is not nil it means obj is invalid, so we must return.
 		// instrumentation config has the workload as owner, so it will be deleted automatically by k8s,
 		// thus NotFound is expected and we can return without error.
@@ -281,10 +286,14 @@ func syncWorkload(ctx context.Context, k8sClient client.Client, scheme *runtime.
 	sources, err := odigosv1.GetSources(ctx, k8sClient, pw)
 	enabled, markedForInstrumentationCondition, err := sourceutils.IsObjectInstrumentedBySource(ctx, sources, err)
 	if err != nil {
+		logger.Debug("failed to evaluate source coverage",
+			"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind, "err", err)
 		return ctrl.Result{}, err
 	}
 
 	if !enabled {
+		logger.Debug("workload is not covered by an active source, deleting instrumentation config if present",
+			"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind)
 		return ctrl.Result{}, deleteWorkloadInstrumentationConfig(ctx, k8sClient, pw)
 	}
 
@@ -341,18 +350,28 @@ func syncWorkload(ctx context.Context, k8sClient client.Client, scheme *runtime.
 	}
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
+			logger.Debug("failed to get instrumentation config",
+				"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind, "icName", instConfigName, "err", err)
 			return ctrl.Result{}, err
 		}
 
+		logger.Debug("instrumentation config not found, creating",
+			"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind, "icName", instConfigName)
 		ic, err = createInstrumentationConfigForWorkload(ctx, k8sClient, instConfigName, pw.Namespace, obj, scheme, containers, hashString, desiredServiceName, desiredDataStreamsLabels, rollbackRecoveryAtAnnotation)
 		if err != nil {
 			if apierrors.IsAlreadyExists(err) {
+				logger.Debug("instrumentation config create raced with another writer, requeueing",
+					"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind, "icName", instConfigName)
 				// If we hit AlreadyExists here, we just hit a race in the api/cache and want to requeue. No need to log an error
 				return ctrl.Result{Requeue: true}, nil
 			}
+			logger.Debug("failed to create instrumentation config",
+				"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind, "icName", instConfigName, "err", err)
 			return ctrl.Result{}, err
 		}
 	} else {
+		logger.Debug("instrumentation config already exists, checking for spec updates",
+			"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind, "icName", instConfigName)
 		// update the instrumentation config with the new containers overrides only if it changed.
 		dataStreamsChanged := updateDatastreamLabels(ic, desiredDataStreamsLabels)
 		containerOverridesChanged := updateContainerOverride(ic, containers, hashString)
@@ -379,6 +398,9 @@ func syncWorkload(ctx context.Context, k8sClient client.Client, scheme *runtime.
 			return k8sutils.K8SUpdateErrorHandler(err)
 		}
 	}
+
+	logger.Debug("syncWorkload completed",
+		"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind, "icName", instConfigName)
 
 	return ctrl.Result{}, nil
 }

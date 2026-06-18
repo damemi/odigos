@@ -126,6 +126,9 @@ func (p *PodsWebhook) injectOdigos(ctx context.Context, pod *corev1.Pod, req adm
 	err = p.Get(ctx, client.ObjectKey{Namespace: pw.Namespace, Name: icName}, &ic)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
+			logger.Debug("pod admission skipped: instrumentation config not found",
+				"pod", pod.Name, "namespace", pod.Namespace,
+				"workload", pw.Name, "workloadKind", pw.Kind, "icName", icName)
 			// instrumentationConfig does not exist, this pod does not belong to any odigos workloads
 			return ErrNotOdigablePod
 		}

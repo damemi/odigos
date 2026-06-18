@@ -9,6 +9,7 @@ import (
 	cr_predicate "sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	commonlogger "github.com/odigos-io/odigos/common/logger"
 	sourceutils "github.com/odigos-io/odigos/k8sutils/pkg/source"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 )
@@ -36,28 +37,49 @@ func (p MissingInstrumentationConfigPredicate) Generic(e event.GenericEvent) boo
 }
 
 func (p MissingInstrumentationConfigPredicate) workloadMissingInstrumentationConfig(obj client.Object) bool {
+	logger := commonlogger.LoggerCompat().With("subsystem", "missing-ic-predicate")
+
 	if obj == nil {
+		logger.Debug("rejecting update event: object is nil")
 		return false
 	}
 
 	pw, err := workload.PodWorkloadFromObject(obj)
 	if err != nil {
+		logger.Debug("rejecting update event: unsupported workload object",
+			"namespace", obj.GetNamespace(), "name", obj.GetName(), "err", err)
 		return false
 	}
 
 	icName := workload.CalculateWorkloadRuntimeObjectName(pw.Name, pw.Kind)
 	ic := &odigosv1.InstrumentationConfig{}
 	err = p.Client.Get(context.Background(), client.ObjectKey{Namespace: pw.Namespace, Name: icName}, ic)
+	if err == nil {
+		logger.Debug("rejecting update event: instrumentation config already exists",
+			"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind, "icName", icName)
+		return false
+	}
 	if !apierrors.IsNotFound(err) {
+		logger.Debug("rejecting update event: failed to get instrumentation config",
+			"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind, "icName", icName, "err", err)
 		return false
 	}
 
 	sources, err := odigosv1.GetSources(context.Background(), p.Client, pw)
 	enabled, _, err := sourceutils.IsObjectInstrumentedBySource(context.Background(), sources, err)
-	if err != nil || !enabled {
+	if err != nil {
+		logger.Debug("rejecting update event: failed to evaluate source coverage",
+			"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind, "err", err)
+		return false
+	}
+	if !enabled {
+		logger.Debug("rejecting update event: workload is not covered by an active source",
+			"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind, "icName", icName)
 		return false
 	}
 
+	logger.Debug("allowing update event: instrumentation config missing and source still applies",
+		"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind, "icName", icName)
 	return true
 }
 

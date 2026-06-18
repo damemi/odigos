@@ -85,6 +85,9 @@ func Do(ctx context.Context, c client.Client, ic *odigosv1alpha1.Instrumentation
 	}
 
 	if ic == nil {
+		logger.Debug("rollout.Do invoked with nil instrumentation config",
+			"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind)
+
 		// If ic is nil and the PodWorkload is missing the odigos.io/agents-meta-hash label,
 		// it means it is a rolled back application that shouldn't be rolled out again.
 		hasAgents, agentsErr := workloadHasOdigosAgents(ctx, c, workloadObj)
@@ -93,8 +96,8 @@ func Do(ctx context.Context, c client.Client, ic *odigosv1alpha1.Instrumentation
 			return RolloutResult{}, agentsErr
 		}
 		if !hasAgents {
-			logger.Info("skipping rollout - workload already runs without odigos agents",
-				"workload", pw.Name, "namespace", pw.Namespace)
+			logger.Debug("skipping rollout - no non-terminating pods with odigos agent labels",
+				"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind)
 			return RolloutResult{}, nil
 		}
 
@@ -104,8 +107,8 @@ func Do(ctx context.Context, c client.Client, ic *odigosv1alpha1.Instrumentation
 			return RolloutResult{}, instrumentedErr
 		}
 		if stillInstrumented {
-			logger.Info("skipping uninstrumentation rollout - workload is still covered by an active source",
-				"workload", pw.Name, "namespace", pw.Namespace)
+			logger.Debug("skipping uninstrumentation rollout - workload is still covered by an active source",
+				"workload", pw.Name, "namespace", pw.Namespace, "kind", pw.Kind)
 			return RolloutResult{}, nil
 		}
 
@@ -452,11 +455,23 @@ func workloadHasOdigosAgents(ctx context.Context, c client.Client, obj client.Ob
 
 	// Ignore terminating pods — during a replace they still carry the hash label from the
 	// previous generation and must not trigger an uninstrumentation rollout.
+	activePods := 0
+	terminatingPods := 0
 	for i := range pods.Items {
 		pod := &pods.Items[i]
 		if pod.DeletionTimestamp != nil {
+			terminatingPods++
 			continue
 		}
+		activePods++
+	}
+
+	logger := commonlogger.FromContext(ctx).WithName("workloadHasOdigosAgents")
+	logger.Debug("checked workload pods for odigos agent labels",
+		"namespace", obj.GetNamespace(), "workload", obj.GetName(),
+		"matchingPods", len(pods.Items), "activePods", activePods, "terminatingPods", terminatingPods)
+
+	if activePods > 0 {
 		return true, nil
 	}
 
