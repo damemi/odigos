@@ -133,35 +133,6 @@ func Test_NoRollout_ICNil_StillCoveredByNamespaceSource(t *testing.T) {
 	assertWorkloadNotRestarted(t, s.ctx, fakeClient, pw)
 }
 
-func Test_NoRollout_ICNil_TerminatingInstrumentedPodOnly(t *testing.T) {
-	// Arrange: replace left only a terminating pod with the hash; new pods are plain.
-	s := newTestSetup()
-	deployment := testutil.NewMockTestDeployment(s.ns, "test-deployment")
-	pw := k8sconsts.PodWorkload{Name: deployment.Name, Namespace: deployment.Namespace, Kind: k8sconsts.WorkloadKindDeployment}
-	now := metav1.Now()
-	terminatingPod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "terminating-pod",
-			Namespace: s.ns.Name,
-			Labels: map[string]string{
-				"app.kubernetes.io/name":            deployment.Name,
-				k8sconsts.OdigosAgentsMetaHashLabel: "abc123",
-			},
-			DeletionTimestamp: &now,
-			Finalizers:        []string{"test-finalizer"},
-		},
-	}
-
-	fakeClient := s.newFakeClient(deployment, terminatingPod)
-	var ic *odigosv1alpha1.InstrumentationConfig
-	rateLimiter := newRolloutConcurrencyLimiterNoLimit()
-
-	rolloutResult, err := rollout.Do(s.ctx, fakeClient, ic, pw, s.conf, s.distroProvider, rateLimiter)
-
-	assertNoStatusChange(t, rolloutResult, err)
-	assertWorkloadNotRestarted(t, s.ctx, fakeClient, pw)
-}
-
 func Test_TriggeredRollout_DistributionRequiresRollout(t *testing.T) {
 	// Arrange: IC with distribution that requires rollout (e.g. eBPF-based instrumentation)
 	s := newTestSetup()

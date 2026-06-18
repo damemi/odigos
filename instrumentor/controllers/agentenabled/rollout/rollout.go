@@ -450,17 +450,7 @@ func workloadHasOdigosAgents(ctx context.Context, c client.Client, obj client.Ob
 		return false, fmt.Errorf("workloadHasOdigosAgents: listing pods failed: %w", err)
 	}
 
-	// Ignore terminating pods — during a replace they still carry the hash label from the
-	// previous generation and must not trigger an uninstrumentation rollout.
-	for i := range pods.Items {
-		pod := &pods.Items[i]
-		if pod.DeletionTimestamp != nil {
-			continue
-		}
-		return true, nil
-	}
-
-	return false, nil
+	return len(pods.Items) > 0, nil
 }
 
 func workloadStillMarkedForInstrumentation(ctx context.Context, c client.Client, pw k8sconsts.PodWorkload) (bool, error) {
