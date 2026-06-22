@@ -55,10 +55,12 @@ import {
   // @deprecated-legacy-api(v1.20) - legacy <v1.20 shape mappers, used only by
   // the `wrapVersioned` legacy branches below. Remove with the legacy paths.
   mapLegacySourceToWorkload,
+  mapCombinedLegacySourceToWorkload,
   addAgentInjectionStatusToSources,
   legacyNamespaceToNamespace,
   type LegacySource,
   type LegacyK8sActualNamespace,
+  type CombinedLegacySourceEnvelope,
 } from '@/utils';
 import {
   OdigosApiProvider,
@@ -203,6 +205,7 @@ import {
   GET_SERVICE_MAP,
   GET_SOURCES_WITH_STATUS,
   GET_SOURCE,
+  GET_SOURCE_WITH_DETAILS,
   GET_PEER_SOURCES,
   GET_SOURCE_LIBRARIES,
   GET_TOKENS,
@@ -659,25 +662,29 @@ const legacySourcesToWorkloads = (legacyData: unknown): GetWorkloadsData => {
   return { workloads: mergeAgentInjection(workloads, env?.workloads) };
 };
 
-// @deprecated-legacy-api(v1.20) — legacy source-by-id executor: for each id
-// fetch `GET_SOURCE` (containers + conditions + health), then enrich
-// agent-injection from a single legacy `GET_WORKLOADS` (K8s only).
+// @deprecated-legacy-api(v1.20) — legacy source-by-id executor. `workloadsByIds`
+// / `K8sWorkloadIdInput` only exist on v1.21+, so for older proxies we resolve
+// each id through the combined `GET_SOURCE_WITH_DETAILS` query — a single
+// REMOTE_FETCH round-trip that folds the old standalone GET_SOURCE_BY_ID +
+// GET_SOURCE_CONDITIONS + GET_SOURCE_LIBRARIES + workloads queries together —
+// then maps the envelope into the v1.20+ `Workload` shape. This keeps the
+// source drawer's data (containers, conditions, agent-injection, instrumentation
+// libraries) intact on legacy proxies, matching `GET_WORKLOADS_BY_IDS`.
 const runLegacySourcesByIds = async (client: ApolloClient<unknown>, vars: GetWorkloadsByIdsVars | undefined, ctx: OperationContext): Promise<{ data?: GetWorkloadsByIdsData; error?: string }> => {
   const ids = vars?.ids ?? [];
   if (!ids.length) return { data: { workloadsByIds: [] } };
 
-  const sourceOp = wrapRemote<{ computePlatform?: { source?: LegacySource } }, { sourceId: WorkloadId }>(GET_SOURCE);
+  const sourceOp = wrapRemote<CombinedLegacySourceEnvelope, { sourceId: WorkloadId; namespace: string; kind: string; name: string }>(GET_SOURCE_WITH_DETAILS);
   const fetched: Workload[] = [];
   for (const id of ids) {
-    const res = await runRemoteSingle(client, sourceOp, { sourceId: id }, ctx);
-    const src = res.data?.computePlatform?.source;
-    if (src) fetched.push(mapLegacySourceToWorkload(src));
-  }
-
-  if (ctx.platformType === PlatformType.K8s && fetched.length) {
-    const workloadsOp = wrapRemote<{ workloads?: WorkloadWithOdigosHealthStatus[] }, GetWorkloadsVars>(GET_WORKLOADS);
-    const wlRes = await runRemoteSingle(client, workloadsOp, { filter: { markedForInstrumentation: true } }, ctx);
-    return { data: { workloadsByIds: mergeAgentInjection(fetched, wlRes.data?.workloads) } };
+    const res = await runRemoteSingle(
+      client,
+      sourceOp,
+      { sourceId: { namespace: id.namespace, kind: id.kind, name: id.name } as WorkloadId, namespace: id.namespace, kind: id.kind, name: id.name },
+      ctx,
+    );
+    const workload = mapCombinedLegacySourceToWorkload(res.data);
+    if (workload) fetched.push(workload);
   }
 
   return { data: { workloadsByIds: fetched } };

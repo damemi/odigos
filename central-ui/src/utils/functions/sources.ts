@@ -11,6 +11,10 @@ import {
   type Condition,
   type DesiredConditionStatus,
   type K8sWorkloadConditions,
+  type K8sWorkloadPod,
+  type InstrumentationInstanceComponent,
+  type DescribeSource,
+  type EntityProperty,
   type ProgrammingLanguages,
   type OtelDistroName,
   type Namespace,
@@ -182,6 +186,106 @@ export const addAgentInjectionStatusToSources = (
   }
 
   return updatedSource;
+};
+
+// @deprecated-legacy-api(v1.20) - decoded envelope of the combined
+// `GET_SOURCE_WITH_DETAILS` query (proxies < v1.20). Each piece mirrors one of
+// the old standalone queries the central-ui used to fire separately:
+//   - `computePlatform.source`            -> GET_SOURCE_BY_ID (flat K8sActualSource)
+//   - `sourceConditions`                  -> GET_SOURCE_CONDITIONS
+//   - `instrumentationInstanceComponents` -> GET_SOURCE_LIBRARIES
+//   - `workloads`                         -> the agent-injection / health rows
+export interface CombinedLegacySourceEnvelope {
+  computePlatform?: { source?: LegacySource | null } | null;
+  sourceConditions?: SourceConditions[] | null;
+  instrumentationInstanceComponents?: InstrumentationInstanceComponent[] | null;
+  // Only the `pods` tree is selected by the combined query; type as a partial.
+  describeSource?: Pick<DescribeSource, 'pods'> | null;
+  workloads?: WorkloadWithOdigosHealthStatus[] | null;
+}
+
+// @deprecated-legacy-api(v1.20) - the describe `EntityProperty` carries its
+// value as a string; the workload booleans we map into are plain booleans.
+const boolFromProp = (prop?: EntityProperty | null): boolean => prop?.value?.toLowerCase() === 'true';
+
+// @deprecated-legacy-api(v1.20) - the redesigned (`_v2`) source drawer surfaces
+// pods (and their per-process instrumentation libraries) under
+// `pods[].containers[].processes[].instrumentations[]` — on v1.20+ this comes
+// straight from `workloadsByIds`. Legacy proxies don't return pods on the
+// workload query, but the old `describeSource` query does, so we map its live
+// pod tree into the modern `Workload.pods` shape (real pod / container / process
+// data, no fabrication). The flat `instrumentationInstanceComponents` (detected
+// libraries, which describe doesn't break down per-process) are attached to each
+// mapped process so the drawer's "Instrumentation Libraries" tab stays populated.
+const mapDescribePodsToWorkloadPods = (describe: Pick<DescribeSource, 'pods'> | null | undefined, libraries: InstrumentationInstanceComponent[]): K8sWorkloadPod[] => {
+  const pods = describe?.pods;
+  if (!pods?.length) return [];
+
+  const instrumentations = libraries.map((lib) => ({ name: lib.name, healthy: lib.healthy ?? null, message: lib.message ?? null }));
+
+  return pods.map((pod) => ({
+    podName: pod.podName?.value ?? '',
+    nodeName: pod.nodeName?.value ?? '',
+    startTime: '',
+    agentInjected: boolFromProp(pod.agentInjected),
+    containers: (pod.containers ?? []).map((container) => ({
+      containerName: container.containerName?.value ?? '',
+      otelDistroName: (container.actualDevices?.value || null) as OtelDistroName | null,
+      started: boolFromProp(container.started),
+      ready: boolFromProp(container.ready),
+      processes: (container.instrumentationInstances ?? []).map((instance) => {
+        const healthy = boolFromProp(instance.healthy);
+        return {
+          healthy,
+          healthStatus: {
+            status: healthy ? DesiredStateProgress.Success : DesiredStateProgress.Error,
+            message: instance.message?.value ?? '',
+          },
+          identifyingAttributes: (instance.identifyingAttributes ?? []).map((attr) => ({ name: attr.name, value: attr.value })),
+          // describe gives no per-process library breakdown on legacy proxies, so
+          // surface the source's detected libraries on every process (best effort).
+          instrumentations: instrumentations.length ? instrumentations : null,
+        };
+      }),
+    })),
+  }));
+};
+
+// @deprecated-legacy-api(v1.20) - map the combined `GET_SOURCE_WITH_DETAILS`
+// envelope into a single v1.20+ `Workload` (the shape produced by
+// `GET_WORKLOADS_BY_IDS` / GET_WORKLOAD_BY_ID) so the source drawer renders the
+// same data on legacy proxies as it does on modern ones:
+//   1. flat source           -> base Workload (containers + inline conditions)
+//   2. sourceConditions       -> merged workload-level conditions
+//   3. workloads injection    -> agent-injection + odigos health status
+//   4. describeSource pods     -> real pod / container / process tree
+//   5. instrumentation libs    -> instrumentations attached to mapped processes
+// Remove when min supported proxy >= v1.20.
+export const mapCombinedLegacySourceToWorkload = (env: CombinedLegacySourceEnvelope | null | undefined): Workload | undefined => {
+  const source = env?.computePlatform?.source;
+  if (!source) return undefined;
+
+  let workload = mapLegacySourceToWorkload(source);
+
+  // Merge the additional workload-level conditions (rollout / agent-injection-
+  // enabled / ...) keyed by namespace/kind/name onto the base source conditions.
+  const matchedConditions = env?.sourceConditions?.find((c) => c.namespace === source.namespace && c.name === source.name && c.kind === source.kind);
+  if (matchedConditions) {
+    workload = addConditionToSources(matchedConditions, [workload]) ?? workload;
+  }
+
+  // Merge the agent-injection / odigos-health status from the workloads rows.
+  const matchedInjection = env?.workloads?.find((w) => w.id.namespace === source.namespace && w.id.name === source.name && w.id.kind === source.kind);
+  if (matchedInjection) {
+    workload = addAgentInjectionStatusToSources(matchedInjection, [workload]) ?? workload;
+  }
+
+  // Surface real pods (K8s only; VM has no `describeSource`) from the describe
+  // query, attaching the detected instrumentation libraries to each process.
+  const pods = mapDescribePodsToWorkloadPods(env?.describeSource, env?.instrumentationInstanceComponents ?? []);
+  if (pods.length) workload = { ...workload, pods };
+
+  return workload;
 };
 
 // @deprecated-legacy-api(v1.20) - legacy `K8sActualSource` shape returned
