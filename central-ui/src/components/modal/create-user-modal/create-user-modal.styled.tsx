@@ -79,10 +79,35 @@ export const SuccessSubtitle = styled(Typography)`
   text-align: center;
   font-size: 14px;
   line-height: 24px;
+  white-space: pre-line;
 `;
 
 export const PasswordInputWrapper = styled.div`
   max-width: 360px;
+`;
+
+// Verbatim, case-preserving password field.
+// Note: do NOT use the ui-kit CliCommand component here — it lowercases its value
+// for both display and copy, which corrupts the case-sensitive generated password.
+export const PasswordBox = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 360px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background-color: ${({ theme }) => theme.colors.translucent_bg};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+`;
+
+export const PasswordText = styled(Typography)`
+  flex: 1;
+  font-family: monospace;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  user-select: all;
+  word-break: break-all;
 `;
 
 export const DoneButton = styled(Button)`

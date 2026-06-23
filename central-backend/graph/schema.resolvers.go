@@ -182,6 +182,12 @@ func (r *mutationResolver) DeleteTeam(ctx context.Context, teamID string) (*mode
 
 // DeleteProxyConnection is the resolver for the deleteProxyConnection field.
 func (r *mutationResolver) DeleteProxyConnection(ctx context.Context, proxyID string) (*model.GeneralResult, error) {
+	// Deleting a proxy connection is infrastructure management restricted to ADMIN/OWNER.
+	// MAINTAINER and VIEWER must not be able to delete connections, even via a direct API call.
+	if err := utils.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
+
 	err := r.RedisClient.DeleteProxyConnection(ctx, proxyID)
 	if err != nil {
 		errorMsg := "Failed to delete proxy connection: " + err.Error()
@@ -255,7 +261,7 @@ func (r *queryResolver) RemoteFetch(ctx context.Context, proxyID string, query s
 		Query:     query,
 		RequestId: requestId,
 		Variables: variables,
-		IsAdmin:   utils.IsUserAdmin(ctx),
+		IsAdmin:   utils.IsUserEditor(ctx),
 	})
 	if err != nil {
 		return "", err

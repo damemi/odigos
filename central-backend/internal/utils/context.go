@@ -125,6 +125,24 @@ func IsUserAdmin(ctx context.Context) bool {
 	return isAdmin
 }
 
+// IsUserEditor reports whether the requesting user may edit product configuration
+// (sources, destinations, actions, etc.). This includes ADMIN, OWNER and MAINTAINER.
+// User management and other admin-only operations should keep using IsUserAdmin.
+func IsUserEditor(ctx context.Context) bool {
+	isEditor := false
+	if token := GetTokenFromContext(ctx); token != "" {
+		if roles, err := ExtractRolesFromToken(token); err == nil {
+			for _, role := range roles {
+				if strings.EqualFold(role, "ADMIN") || strings.EqualFold(role, "OWNER") || strings.EqualFold(role, "MAINTAINER") {
+					isEditor = true
+					break
+				}
+			}
+		}
+	}
+	return isEditor
+}
+
 // RequireAdmin returns ErrForbidden unless the caller carries an ADMIN or OWNER
 // role in their JWT. Use this to guard access-management mutations (user CRUD,
 // password resets, identity providers) so they cannot be reached by lower-privilege

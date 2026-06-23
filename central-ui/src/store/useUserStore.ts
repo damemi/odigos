@@ -14,6 +14,7 @@ interface UserStoreState {
 
   lastAuthEmail: string | null;
   isAdmin: boolean;
+  canEdit: boolean;
 }
 
 interface UserStoreActions {
@@ -33,6 +34,7 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
       user: null,
       status: null,
       isAdmin: false,
+      canEdit: false,
       lastAuthEmail: null,
 
       setAuthProviderId: (providerId) =>
@@ -46,7 +48,8 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
           accessToken,
           user,
           status,
-          isAdmin: user?.role && [Role.ADMIN, Role.OWNER].includes(user.role),
+          isAdmin: !!user?.role && [Role.ADMIN, Role.OWNER].includes(user.role),
+          canEdit: !!user?.role && [Role.ADMIN, Role.OWNER, Role.MAINTAINER].includes(user.role),
         }),
 
       clearAuth: () =>
@@ -57,6 +60,7 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
           user: null,
           status: null,
           isAdmin: false,
+          canEdit: false,
           lastAuthEmail: null,
         }),
 
@@ -68,6 +72,7 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
           set({
             user: nextUser,
             isAdmin: effectiveRole === Role.ADMIN || effectiveRole === Role.OWNER,
+            canEdit: effectiveRole === Role.ADMIN || effectiveRole === Role.OWNER || effectiveRole === Role.MAINTAINER,
           });
         }
       },
@@ -86,6 +91,7 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
         user: state.user,
         status: state.status,
         isAdmin: state.isAdmin,
+        canEdit: state.canEdit,
         lastAuthEmail: state.lastAuthEmail,
       }),
     },
