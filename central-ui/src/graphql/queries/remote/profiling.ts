@@ -21,9 +21,9 @@ export const GET_PROFILING_SLOTS: VersionedRemoteFetch = {
 export const GET_SOURCE_PROFILING: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
     'v1.25': `
-  query GetSourceProfiling($sourceId: K8sSourceId!) {
+  query GetSourceProfiling($namespace: String!, $kind: K8sResourceKind!, $name: String!) {
     computePlatform {
-      source(sourceId: $sourceId) {
+      source(sourceId: { namespace: $namespace, kind: $kind, name: $name }) {
         profiling {
           profileJson
         }

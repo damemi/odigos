@@ -862,6 +862,22 @@ const withActionRenames = <TData, TVars>(op: Operation<TData, TVars>): Operation
   transformResult: (raw, ctx) => parseActionRenamesInData(op.transformResult ? op.transformResult(raw, ctx) : (raw as TData | undefined)),
 });
 
+// Wrap the remote-config mutation so the kit's `{ formData, connectionIds }`
+// slot input is translated into the proxy's `$config: RemoteConfigInput!`
+// shape before the inner variables are embedded in the RemoteFetch. The proxy
+// applies the config to its own cluster; `connectionIds` only selects which
+// proxies the RemoteFetch is addressed to (resolved from `ctx`), so it is
+// intentionally dropped from the inner variables. `RemoteConfigInput` is
+// `Pick<EffectiveConfigInput, 'rollout'>`, so only `rollout` is forwarded.
+const withRemoteConfigVars = <TData,>(op: Operation<TData, UpdateRemoteConfigVars>): Operation<TData, UpdateRemoteConfigVars> => {
+  const toWire = (vars: UpdateRemoteConfigVars | undefined) => ({ config: { rollout: vars?.formData?.rollout } }) as unknown as UpdateRemoteConfigVars;
+  return {
+    ...op,
+    transformVariables: op.transformVariables ? (vars, ctx) => op.transformVariables!(toWire(vars), ctx) : undefined,
+    transformVariablesMulti: op.transformVariablesMulti ? (proxyIDs, vars, ctx) => op.transformVariablesMulti!(proxyIDs, toWire(vars), ctx) : undefined,
+  };
+};
+
 const operations: OdigosApiOperations = {
   // sources / workloads
   //
@@ -1032,7 +1048,7 @@ const operations: OdigosApiOperations = {
       (d as { computePlatform?: { effectiveConfig?: EffectiveConfig } })?.computePlatform?.effectiveConfig,
   ),
   GET_CONFIG_YAMLS: wrapVersioned<GetConfigYamlsData, undefined>(GET_CONFIG_YAMLS),
-  UPDATE_REMOTE_CONFIG: wrapVersioned<UpdateRemoteConfigResult, UpdateRemoteConfigVars>(UPDATE_REMOTE_CONFIG),
+  UPDATE_REMOTE_CONFIG: withRemoteConfigVars(wrapVersioned<UpdateRemoteConfigResult, UpdateRemoteConfigVars>(UPDATE_REMOTE_CONFIG)),
   UPDATE_LOCAL_UI_CONFIG: wrapVersioned<UpdateLocalUiConfigResult, UpdateLocalUiConfigVars>(UPDATE_LOCAL_UI_CONFIG),
   RESET_LOCAL_UI_CONFIG_TO_FACTORY_DEFAULTS: wrapVersioned<ResetLocalUiConfigResult, undefined>(RESET_LOCAL_UI_CONFIG_TO_FACTORY_DEFAULTS),
 
