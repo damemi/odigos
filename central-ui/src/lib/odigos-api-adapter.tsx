@@ -33,8 +33,8 @@
  *     migrating off the central-ui-native `VersionedRemoteFetch` strings
  *     toward the vmagent codegen `dialects` registry, use these to feed
  *     printed `DocumentNode`s straight into `Operation.document(ctx)`. The
- *     kit will pick the right dialect bucket per `ctx.version` using the
- *     same floor-to-bucket rule as `getVersionedQuery`.
+ *     kit will pick the right dialect bucket per `ctx.schemaVersion ??
+ *     ctx.version` using the same floor-to-bucket rule as `getVersionedQuery`.
  */
 
 import React, { type FC, type PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react';
@@ -48,6 +48,20 @@ import { PlatformType, Tier, type Action } from '@odigos/ui-kit/types';
 import { GraphQLError } from 'graphql';
 import { ApolloLink, type ApolloClient, type DocumentNode } from '@apollo/client';
 import type { VersionedRemoteFetch, WorkloadWithOdigosHealthStatus } from '@/types';
+import { vmQuery, type VmSelect } from '@/graphql/remote/vm-dialect';
+import { buildVmPersistSources, mapVmSourceResult, mapVmSourcesToWorkloads, mapVmWorkloadReportsToNamespaces, vmUpdateSourceVariables } from '@/graphql/remote/vm-sources';
+import {
+  mapVmDestinationTypesToCategories,
+  mapVmDestinations,
+  vmCreateDestinationResult,
+  vmCreateDestinationVariables,
+  vmDeleteDestinationResult,
+  vmDeleteDestinationVariables,
+  vmTestConnectionResult,
+  vmTestConnectionVariables,
+  vmUpdateDestinationResult,
+  vmUpdateDestinationVariables,
+} from '@/graphql/remote/vm-destinations';
 import {
   API,
   ROUTES,
@@ -315,6 +329,20 @@ interface RemoteParsedPayload<T> {
  */
 const resolveProxyID = (ctx: OperationContext): string | undefined => ctx.proxyID ?? ctx.connectionIds?.[0];
 
+// Local superset of the kit's `OperationContext` that also carries the GraphQL
+// dialect/schema version. VM proxies report their agents-api schema version
+// separately from the vm-agent binary version, so `ctx.version` stays the
+// agent version (what the user sees as "installed") while `schemaVersion`
+// drives dialect/bucket selection. The published kit doesn't declare this
+// field yet; once it does (it's added to the kit's `OperationContext`), this
+// alias collapses to `OperationContext` and the casts below become no-ops.
+type ProxyOperationContext = OperationContext & { schemaVersion?: string };
+
+// Version used to pick the GraphQL document/dialect bucket. VM proxies use the
+// reported schema version; everything else falls back to the agent version
+// (k8s never sets `schemaVersion`, so this equals `ctx.version` there).
+const dialectVersion = (ctx: OperationContext): string => (ctx as ProxyOperationContext).schemaVersion ?? ctx.version;
+
 // ---------------------------------------------------------------------------
 // Version-aware input sanitizing.
 //
@@ -388,6 +416,11 @@ const transformDrift = (value: unknown, strip: Set<string>, mapScopes: boolean):
 // for the out-of-proxy (`v0.0.0`) context.
 const sanitizeVariablesForVersion = (vars: unknown, ctx: OperationContext): Record<string, unknown> => {
   const base = (vars ?? {}) as Record<string, unknown>;
+  // These are k8s odigos-version drift shims (field stripping / scope mapping).
+  // VM dialect documents are already correct per schema version, and a VM v0.x
+  // version would otherwise falsely trip every `minVersion` gate, so this is a
+  // no-op for non-k8s platforms.
+  if (ctx.platformType !== PlatformType.K8s) return base;
   const v = trimVersion(ctx.version);
   if (!(v > 0)) return base;
   const strip = new Set(STRIP_INPUT_FIELDS.filter((f) => v < f.minVersion).map((f) => f.name));
@@ -396,6 +429,28 @@ const sanitizeVariablesForVersion = (vars: unknown, ctx: OperationContext): Reco
   return transformDrift(base, strip, mapScopes) as Record<string, unknown>;
 };
 
+// VM proxies resolve their GraphQL document straight from the published vmagent
+// dialect registry (floored by `ctx.schemaVersion`), not the hand-written k8s
+// `VersionedRemoteFetch` buckets. A `VmSpec` is how a single operation maps onto
+// that surface:
+//   - `select`        — pick a static dialect document (reads + single mutations).
+//   - `buildQuery`    — build a query string dynamically for a bulk op with no
+//                       single VM document (e.g. PERSIST_SOURCES fans out into
+//                       one combined, aliased create/delete mutation).
+//   - `transformVariables` / `transformResult` — shape-map the agents-api
+//                       request/response to the kit's slot shape.
+//   - `unsupported`   — VM has no equivalent (e.g. namespace persist); makes
+//                       `canRun` short-circuit on VM proxies.
+// `select` and `buildQuery` are mutually exclusive. Operations without a VmSpec
+// keep their k8s-only behavior (no VM bucket -> `canRun` is false on VM).
+interface VmSpec<TData, TVars> {
+  select?: VmSelect;
+  buildQuery?: (vars: TVars, ctx: OperationContext) => string;
+  transformVariables?: (vars: TVars, ctx: OperationContext) => Record<string, unknown>;
+  transformResult?: (data: unknown, ctx: OperationContext) => TData | undefined;
+  unsupported?: boolean;
+}
+
 // Generic `<TData, TVars>` lets each call site declare the exact
 // server-side response and request shapes for that operation, so
 // every kit slot's `Operation<TData, TVars>` lines up. We deliberately
@@ -403,82 +458,117 @@ const sanitizeVariablesForVersion = (vars: unknown, ctx: OperationContext): Reco
 // both, which keeps the slot type strictly typed end-to-end (any
 // missing-generic call site becomes a TypeScript error rather than
 // silently degrading to `unknown` data flowing through the kit).
-const wrapRemote = <TData, TVars>(versioned: VersionedRemoteFetch, extract?: (envelope: unknown) => TData | undefined): Operation<TData, TVars> => ({
-  document: REMOTE_FETCH,
-  // Every REMOTE_FETCH op needs a target proxy: either the currently
-  // selected one (`ctx.proxyID`, in-proxy pages) OR a connections-scope
-  // selection (`ctx.connectionIds`, the bulk drawers + EditConfigDrawer on
-  // `/connections`). On out-of-proxy pages with NEITHER (sign-in,
-  // `/access-management`, the bare connections list before any selection)
-  // `ctx.proxyID` is undefined and `getVersionedQuery` has no version to
-  // resolve, so dispatching would send an empty
-  // `RemoteFetch($proxyID, $query, $variables)` with both required vars
-  // missing — the backend rejects it, and if the store is reset mid-flight
-  // (proxy navigation) Apollo throws "Store reset while query was in
-  // flight". The kit honors this guard by skipping the query entirely
-  // (no network request, no observer).
-  canRun: (ctx) => !!resolveProxyID(ctx) && !!getVersionedQuery(versioned, ctx.platformType, ctx.version),
-  transformVariables: (vars, ctx) => ({
-    // In connections scope there's no single "selected" proxy — the bulk
-    // drawers pass `connectionIds`. We use the first as the coordinator
-    // proxy the REMOTE_FETCH is addressed to; ops that genuinely fan out
-    // server-side (e.g. `updateRemoteConfig`) also receive the full
-    // `connectionIds` list inside their own `variables`.
-    proxyID: resolveProxyID(ctx),
-    query: getVersionedQuery(versioned, ctx.platformType, ctx.version),
-    variables: sanitizeVariablesForVersion(vars, ctx),
-  }),
-  transformResult: (raw): TData | undefined => {
-    const remoteFetch = (raw as RemoteFetchResponse | null | undefined)?.remoteFetch;
-    if (typeof remoteFetch !== 'string') return undefined;
-    const parsed = safeJsonParse<RemoteParsedPayload<TData>>(remoteFetch, { data: undefined });
-    // Inner GraphQL errors are nested at `data.errors`; never surface that
-    // envelope as valid data (the `remoteFetchErrorLink` lifts these to a
-    // top-level Apollo error so the kit toasts the failure).
-    if (innerRemoteErrors(parsed).length) return undefined;
-    if (!parsed?.data) return undefined;
-    return extract ? extract(parsed.data) : (parsed.data as TData);
-  },
-  documentMulti: REMOTE_MULTI_FETCH,
-  // Group all proxies under the active context's version. The legacy
-  // `useRemoteFetch.fetchMulti` supported mixed-version fan-out by reading
-  // each proxy's reported version from the connections list and grouping
-  // accordingly; that subtlety is preserved as a follow-up so the kit's
-  // runner stays simple. For now the fan-out uses ctx.version + ctx.platformType,
-  // which matches today's behavior for in-proxy CRUD calls.
-  transformVariablesMulti: (proxyIDs, vars, ctx): MultiFetchGroup[] => {
-    const queryString = getVersionedQuery(versioned, ctx.platformType, ctx.version);
-    if (!queryString) return [];
+const wrapRemote = <TData, TVars>(versioned: VersionedRemoteFetch, extract?: (envelope: unknown) => TData | undefined, vm?: VmSpec<TData, TVars>): Operation<TData, TVars> => {
+  const isVm = (ctx: OperationContext): boolean => ctx.platformType === PlatformType.Vm && !!vm;
 
-    return [
-      {
-        document: REMOTE_MULTI_FETCH,
-        variables: { proxyIDs, query: queryString, variables: sanitizeVariablesForVersion(vars, ctx) },
-        proxyIDs,
-      },
-    ];
-  },
-  // Map the REMOTE_MULTI_FETCH response array of `{ proxyID, success, data, error }`
-  // into the kit's `MultiFetchResult[]`, parsing the stringified JSON `data` per row.
-  transformMultiResult: (raw): MultiFetchResult<TData>[] => {
-    const rows = (raw as RemoteMultiFetchResponse | null | undefined)?.remoteMultiFetch ?? [];
-    return rows.map((row) => {
-      const parsed = row.data ? safeJsonParse<RemoteParsedPayload<TData>>(row.data, {}) : undefined;
-      // Per-proxy GraphQL errors are nested at `data.errors` inside each row's
-      // stringified payload (the top-level `errors` sibling is typically empty);
-      // treat their presence as a failed row rather than silently dropping data.
-      const innerErrors = innerRemoteErrors(parsed);
-      const errFromApi = innerErrors.length ? innerErrors.join(', ') : undefined;
-      const data = parsed?.data && !innerErrors.length ? (extract ? extract(parsed.data) : (parsed.data as TData)) : undefined;
-      return {
-        proxyID: row.proxyID,
-        success: row.success && !innerErrors.length,
-        data,
-        error: errFromApi ?? row.error,
-      };
-    });
-  },
-});
+  // Resolve the GraphQL query string for the active context. VM ops resolve
+  // from the dialect registry (`select`) or build it dynamically (`buildQuery`,
+  // which needs the variables); k8s floors the `VersionedRemoteFetch` bucket map.
+  const resolveQuery = (ctx: OperationContext, vars?: TVars): string | undefined => {
+    if (isVm(ctx)) {
+      if (vm!.unsupported) return undefined;
+      if (vm!.buildQuery) return vars === undefined ? undefined : vm!.buildQuery(vars, ctx);
+      if (vm!.select) return vmQuery(ctx, vm!.select);
+      return undefined;
+    }
+    return getVersionedQuery(versioned, ctx.platformType, dialectVersion(ctx));
+  };
+
+  const resolveVariables = (vars: TVars, ctx: OperationContext): Record<string, unknown> => {
+    if (isVm(ctx) && vm!.transformVariables) return vm!.transformVariables(vars, ctx);
+    return sanitizeVariablesForVersion(vars, ctx);
+  };
+
+  const mapResult = (innerData: unknown, ctx: OperationContext): TData | undefined => {
+    if (isVm(ctx) && vm!.transformResult) return vm!.transformResult(innerData, ctx);
+    return extract ? extract(innerData) : (innerData as TData);
+  };
+
+  return {
+    document: REMOTE_FETCH,
+    // Every REMOTE_FETCH op needs a target proxy: either the currently
+    // selected one (`ctx.proxyID`, in-proxy pages) OR a connections-scope
+    // selection (`ctx.connectionIds`, the bulk drawers + EditConfigDrawer on
+    // `/connections`). On out-of-proxy pages with NEITHER (sign-in,
+    // `/access-management`, the bare connections list before any selection)
+    // `ctx.proxyID` is undefined and there's no version to resolve, so
+    // dispatching would send an empty `RemoteFetch($proxyID, $query,
+    // $variables)` with both required vars missing — the backend rejects it,
+    // and if the store is reset mid-flight (proxy navigation) Apollo throws
+    // "Store reset while query was in flight". The kit honors this guard by
+    // skipping the query entirely (no network request, no observer).
+    canRun: (ctx) => {
+      if (!resolveProxyID(ctx)) return false;
+      if (isVm(ctx)) {
+        if (vm!.unsupported) return false;
+        // `buildQuery` ops can't form their query without vars at canRun time;
+        // the dialect always resolves, so a selected VM proxy is enough.
+        return !!vm!.buildQuery || !!resolveQuery(ctx);
+      }
+      return !!getVersionedQuery(versioned, ctx.platformType, dialectVersion(ctx));
+    },
+    transformVariables: (vars, ctx) => ({
+      // In connections scope there's no single "selected" proxy — the bulk
+      // drawers pass `connectionIds`. We use the first as the coordinator
+      // proxy the REMOTE_FETCH is addressed to; ops that genuinely fan out
+      // server-side (e.g. `updateRemoteConfig`) also receive the full
+      // `connectionIds` list inside their own `variables`.
+      proxyID: resolveProxyID(ctx),
+      query: resolveQuery(ctx, vars),
+      variables: resolveVariables(vars, ctx),
+    }),
+    transformResult: (raw, ctx): TData | undefined => {
+      const remoteFetch = (raw as RemoteFetchResponse | null | undefined)?.remoteFetch;
+      if (typeof remoteFetch !== 'string') return undefined;
+      const parsed = safeJsonParse<RemoteParsedPayload<TData>>(remoteFetch, { data: undefined });
+      // Inner GraphQL errors are nested at `data.errors`; never surface that
+      // envelope as valid data (the `remoteFetchErrorLink` lifts these to a
+      // top-level Apollo error so the kit toasts the failure).
+      if (innerRemoteErrors(parsed).length) return undefined;
+      if (!parsed?.data) return undefined;
+      return mapResult(parsed.data, ctx);
+    },
+    documentMulti: REMOTE_MULTI_FETCH,
+    // Group all proxies under the active context's version. The legacy
+    // `useRemoteFetch.fetchMulti` supported mixed-version fan-out by reading
+    // each proxy's reported version from the connections list and grouping
+    // accordingly; that subtlety is preserved as a follow-up so the kit's
+    // runner stays simple. For now the fan-out uses ctx.version + ctx.platformType,
+    // which matches today's behavior for in-proxy CRUD calls.
+    transformVariablesMulti: (proxyIDs, vars, ctx): MultiFetchGroup[] => {
+      const queryString = resolveQuery(ctx, vars as TVars);
+      if (!queryString) return [];
+
+      return [
+        {
+          document: REMOTE_MULTI_FETCH,
+          variables: { proxyIDs, query: queryString, variables: resolveVariables(vars as TVars, ctx) },
+          proxyIDs,
+        },
+      ];
+    },
+    // Map the REMOTE_MULTI_FETCH response array of `{ proxyID, success, data, error }`
+    // into the kit's `MultiFetchResult[]`, parsing the stringified JSON `data` per row.
+    transformMultiResult: (raw, ctx): MultiFetchResult<TData>[] => {
+      const rows = (raw as RemoteMultiFetchResponse | null | undefined)?.remoteMultiFetch ?? [];
+      return rows.map((row) => {
+        const parsed = row.data ? safeJsonParse<RemoteParsedPayload<TData>>(row.data, {}) : undefined;
+        // Per-proxy GraphQL errors are nested at `data.errors` inside each row's
+        // stringified payload (the top-level `errors` sibling is typically empty);
+        // treat their presence as a failed row rather than silently dropping data.
+        const innerErrors = innerRemoteErrors(parsed);
+        const errFromApi = innerErrors.length ? innerErrors.join(', ') : undefined;
+        const data = parsed?.data && !innerErrors.length ? mapResult(parsed.data, ctx) : undefined;
+        return {
+          proxyID: row.proxyID,
+          success: row.success && !innerErrors.length,
+          data,
+          error: errFromApi ?? row.error,
+        };
+      });
+    },
+  };
+};
 
 // ---------------------------------------------------------------------------
 // Legacy (< v1.20) proxy support.
@@ -492,7 +582,10 @@ const wrapRemote = <TData, TVars>(versioned: VersionedRemoteFetch, extract?: (en
 // `trimVersion('v1.20')` → numeric floor used to gate the legacy paths.
 const V120 = trimVersion('v1.20');
 
-const isLegacyProxy = (ctx: OperationContext): boolean => trimVersion(ctx.version) < V120;
+// The legacy (< v1.20) combined-query path is a k8s-only concern. VM proxies
+// report v0.x agent versions that would otherwise all read as "legacy k8s", so
+// gate on platform first — VM never takes the k8s legacy path.
+const isLegacyProxy = (ctx: OperationContext): boolean => ctx.platformType === PlatformType.K8s && trimVersion(ctx.version) < V120;
 
 // @deprecated-legacy-api(v1.20) — true only when a *real, selected* proxy is
 // older than v1.20. Excludes the `v0.0.0` "no proxy selected" default
@@ -588,8 +681,13 @@ interface LegacySpec<TData, TVars> {
  *     (`run`) behavior. `canRun` additionally requires the legacy query string
  *     to resolve for single-query legacy ops.
  */
-const wrapVersioned = <TData, TVars>(modern: VersionedRemoteFetch, extract?: (envelope: unknown) => TData | undefined, legacy?: LegacySpec<TData, TVars>): Operation<TData, TVars> => {
-  const base = wrapRemote<TData, TVars>(modern, extract);
+const wrapVersioned = <TData, TVars>(
+  modern: VersionedRemoteFetch,
+  extract?: (envelope: unknown) => TData | undefined,
+  legacy?: LegacySpec<TData, TVars>,
+  vm?: VmSpec<TData, TVars>,
+): Operation<TData, TVars> => {
+  const base = wrapRemote<TData, TVars>(modern, extract, vm);
   if (!legacy) return base;
 
   const op: Operation<TData, TVars> = {
@@ -600,9 +698,10 @@ const wrapVersioned = <TData, TVars>(modern: VersionedRemoteFetch, extract?: (en
         // `run` executors resolve their own per-step queries; single-query
         // legacy needs its combined query string to exist for this version.
         if (legacy.run) return true;
-        return !!legacy.query && !!getVersionedQuery(legacy.query, ctx.platformType, ctx.version);
+        return !!legacy.query && !!getVersionedQuery(legacy.query, ctx.platformType, dialectVersion(ctx));
       }
-      return !!getVersionedQuery(modern, ctx.platformType, ctx.version);
+      // Modern path (incl. VM): defer to the base op, which is dialect/VM-aware.
+      return base.canRun!(ctx);
     },
   };
 
@@ -611,7 +710,7 @@ const wrapVersioned = <TData, TVars>(modern: VersionedRemoteFetch, extract?: (en
       if (isLegacyProxy(ctx)) {
         return {
           proxyID: resolveProxyID(ctx),
-          query: getVersionedQuery(legacy.query!, ctx.platformType, ctx.version),
+          query: getVersionedQuery(legacy.query!, ctx.platformType, dialectVersion(ctx)),
           variables: legacy.variables ? legacy.variables(vars, ctx) : {},
         };
       }
@@ -770,41 +869,100 @@ const operations: OdigosApiOperations = {
   // to a single combined query (`computePlatform.sources` + `workloads`
   // injection rows) mapped into `Workload`s. By-id resolves via a multi-step
   // `run` (one `GET_SOURCE` per id + a single agent-injection enrichment).
-  GET_WORKLOADS: wrapVersioned<GetWorkloadsData, GetWorkloadsVars | undefined>(GET_WORKLOADS, undefined, {
-    query: GET_SOURCES_WITH_STATUS,
-    map: (data) => legacySourcesToWorkloads(data),
+  GET_WORKLOADS: wrapVersioned<GetWorkloadsData, GetWorkloadsVars | undefined>(
+    GET_WORKLOADS,
+    undefined,
+    { query: GET_SOURCES_WITH_STATUS, map: (data) => legacySourcesToWorkloads(data) },
+    // VM: the flat agents-api `sources` list mapped into the kit's `Workload` shape.
+    { select: (d) => d.GetSourcesDocument, transformResult: (data) => mapVmSourcesToWorkloads(data) },
+  ),
+  // VM: no by-id endpoint — resolve the flat agents-api `sources` list and map
+  // into `Workload`s under `workloadsByIds`. The kit's `fetchById` `.find()`s the
+  // requested id out of the result (and SSE `fetchByTargets` refreshes the list
+  // via `fetchAll` afterward), so returning the full set is correct and cheap.
+  GET_WORKLOADS_BY_IDS: wrapVersioned<GetWorkloadsByIdsData, GetWorkloadsByIdsVars>(
+    GET_WORKLOADS_BY_IDS,
+    undefined,
+    { run: (client, vars, ctx) => runLegacySourcesByIds(client, vars, ctx) },
+    { select: (d) => d.GetSourcesDocument, transformResult: (data) => ({ workloadsByIds: mapVmSourcesToWorkloads(data).workloads }) },
+  ),
+  GET_WORKLOADS_BY_IDS_SLIM: wrapVersioned<GetWorkloadsByIdsData, GetWorkloadsByIdsVars>(
+    GET_WORKLOADS_BY_IDS_SLIM,
+    undefined,
+    { run: (client, vars, ctx) => runLegacySourcesByIds(client, vars, ctx) },
+    { select: (d) => d.GetSourcesDocument, transformResult: (data) => ({ workloadsByIds: mapVmSourcesToWorkloads(data).workloads }) },
+  ),
+  // VM: by-name `source(name)`; central-ui's `WorkloadId.name` is the source name.
+  GET_SOURCE: wrapVersioned<{ source?: Workload }, WorkloadId>(GET_SOURCE, undefined, undefined, {
+    select: (d) => d.GetSourceDocument,
+    transformVariables: (vars) => ({ name: vars.name }),
+    transformResult: (data) => mapVmSourceResult(data),
   }),
-  GET_WORKLOADS_BY_IDS: wrapVersioned<GetWorkloadsByIdsData, GetWorkloadsByIdsVars>(GET_WORKLOADS_BY_IDS, undefined, {
-    run: (client, vars, ctx) => runLegacySourcesByIds(client, vars, ctx),
-  }),
-  GET_WORKLOADS_BY_IDS_SLIM: wrapVersioned<GetWorkloadsByIdsData, GetWorkloadsByIdsVars>(GET_WORKLOADS_BY_IDS_SLIM, undefined, {
-    run: (client, vars, ctx) => runLegacySourcesByIds(client, vars, ctx),
-  }),
-  GET_SOURCE: wrapVersioned<{ source?: Workload }, WorkloadId>(GET_SOURCE),
   GET_SOURCE_LIBRARIES: wrapVersioned<GetSourceLibrariesData, GetSourceLibrariesVars>(GET_SOURCE_LIBRARIES),
   GET_PEER_SOURCES: wrapVersioned<{ peerSources?: PeerSources }, GetPeerSourcesVars>(GET_PEER_SOURCES),
-  PERSIST_SOURCES: wrapVersioned<PersistSourcesResult, PersistSourcesVars>(PERSIST_SOURCES),
-  UPDATE_SOURCE: wrapVersioned<{ updateK8sActualSource: boolean }, UpdateSourceVars>(UPDATE_SOURCE),
+  // VM: no bulk persist op — fan out into one combined, aliased
+  // createSource/deleteSource mutation (enable -> create, disable -> delete).
+  PERSIST_SOURCES: wrapVersioned<PersistSourcesResult, PersistSourcesVars>(PERSIST_SOURCES, undefined, undefined, {
+    buildQuery: (vars) => buildVmPersistSources(vars).query,
+    transformVariables: (vars) => buildVmPersistSources(vars).variables,
+    transformResult: () => ({ persistK8sSources: true }),
+  }),
+  // VM: `updateSource(input: UpdateSourceInput!)`.
+  UPDATE_SOURCE: wrapVersioned<{ updateK8sActualSource: boolean }, UpdateSourceVars>(UPDATE_SOURCE, undefined, undefined, {
+    select: (d) => d.UpdateSourceDocument,
+    transformVariables: (vars) => vmUpdateSourceVariables(vars),
+    transformResult: () => ({ updateK8sActualSource: true }),
+  }),
   RESTART_WORKLOADS: wrapVersioned<{ restartWorkloads: boolean }, RestartWorkloadsVars>(RESTART_WORKLOADS),
   RESTART_POD: wrapVersioned<{ restartPod: boolean }, RestartPodVars>(RESTART_POD),
   RECOVER_FROM_ROLLBACK: wrapVersioned<{ recoverFromRollbackForWorkload: boolean }, RecoverFromRollbackVars>(RECOVER_FROM_ROLLBACK),
 
   // destinations
-  GET_DESTINATIONS: wrapVersioned<GetDestinationsData, undefined>(GET_DESTINATIONS),
+  // VM: the agents-api destination surface — `destinations`/`destinationTypes`
+  // reads + per-destination create/update/delete/testConnection — resolved from
+  // the versioned vmagent dialect registry and shape-mapped (see vm-destinations).
+  GET_DESTINATIONS: wrapVersioned<GetDestinationsData, undefined>(GET_DESTINATIONS, undefined, undefined, {
+    select: (d) => d.GetDestinationsDocument,
+    transformResult: (data) => mapVmDestinations(data),
+  }),
   // Kit slot types are `Operation<GetDestinationCategoriesResult, undefined>`
   // and `Operation<GetPotentialDestinationsResult, undefined>` — bind
   // them explicitly here so the kit consumer never sees `unknown`.
-  GET_DESTINATION_CATEGORIES: wrapVersioned<GetDestinationCategoriesResult, undefined>(GET_DESTINATION_CATEGORIES),
+  // VM: `destinationTypes` (flat catalog) -> the kit's category catalog.
+  GET_DESTINATION_CATEGORIES: wrapVersioned<GetDestinationCategoriesResult, undefined>(GET_DESTINATION_CATEGORIES, undefined, undefined, {
+    select: (d) => d.GetDestinationTypesDocument,
+    transformResult: (data) => mapVmDestinationTypesToCategories(data),
+  }),
+  // No VM equivalent for `potentialDestinations` (k8s auto-detect); VM `canRun`
+  // is false (no VM bucket), so the op is simply unavailable there.
   GET_POTENTIAL_DESTINATIONS: wrapVersioned<GetPotentialDestinationsResult, undefined>(GET_POTENTIAL_DESTINATIONS),
-  CREATE_DESTINATION: wrapVersioned<CreateDestinationResult, CreateDestinationVars>(CREATE_DESTINATION),
-  UPDATE_DESTINATION: wrapVersioned<UpdateDestinationData, UpdateDestinationVars>(UPDATE_DESTINATION),
-  DELETE_DESTINATION: wrapVersioned<DeleteDestinationResult, DeleteDestinationVars>(DELETE_DESTINATION),
+  CREATE_DESTINATION: wrapVersioned<CreateDestinationResult, CreateDestinationVars>(CREATE_DESTINATION, undefined, undefined, {
+    select: (d) => d.CreateDestinationDocument,
+    transformVariables: (vars) => vmCreateDestinationVariables(vars),
+    transformResult: (data) => vmCreateDestinationResult(data),
+  }),
+  UPDATE_DESTINATION: wrapVersioned<UpdateDestinationData, UpdateDestinationVars>(UPDATE_DESTINATION, undefined, undefined, {
+    select: (d) => d.UpdateDestinationDocument,
+    transformVariables: (vars) => vmUpdateDestinationVariables(vars),
+    transformResult: (data) => vmUpdateDestinationResult(data),
+  }),
+  DELETE_DESTINATION: wrapVersioned<DeleteDestinationResult, DeleteDestinationVars>(DELETE_DESTINATION, undefined, undefined, {
+    select: (d) => d.DeleteDestinationDocument,
+    transformVariables: (vars) => vmDeleteDestinationVariables(vars),
+    transformResult: (data) => vmDeleteDestinationResult(data),
+  }),
   TEST_DESTINATION_CONNECTION: {
-    ...wrapVersioned<TestConnectionResponse, TestDestinationConnectionVars>(TEST_DESTINATION_CONNECTION),
+    // VM uses the agents-api `TestConnection` document + input; both k8s and VM
+    // return the result under `testConnectionForDestination`, dug out below.
+    ...wrapVersioned<TestConnectionResponse, TestDestinationConnectionVars>(TEST_DESTINATION_CONNECTION, undefined, undefined, {
+      select: (d) => d.TestConnectionDocument,
+      transformVariables: (vars) => vmTestConnectionVariables(vars),
+    }),
     // The test-connection mutation's GraphQL shape returns the result
     // under `testConnectionForDestination`, not the wrapper's default
     // `data` field. Override `transformResult` to dig that one extra level.
-    transformResult: (raw): TestConnectionResponse | undefined => {
+    transformResult: (raw, ctx): TestConnectionResponse | undefined => {
+      if (ctx.platformType === PlatformType.Vm) return vmTestConnectionResult(parseRemoteFetchData(raw));
       const remoteFetch = (raw as RemoteFetchResponse | null | undefined)?.remoteFetch;
       if (typeof remoteFetch !== 'string') return undefined;
       const parsed = safeJsonParse<{ data?: { testConnectionForDestination?: TestConnectionResponse } }>(remoteFetch, { data: undefined });
@@ -845,8 +1003,13 @@ const operations: OdigosApiOperations = {
       query: GET_NAMESPACES_WITH_SOURCES,
       map: (data) => legacyNamespacesToNamespaces(data),
     },
+    // VM: the "Add Sources" drawer is a discovery view, so resolve to
+    // `workloadReports` (discoverable workloads), grouped by kind into the kit's
+    // namespace+workload shape (the left column is relabeled "Kinds").
+    { select: (d) => d.GetWorkloadReportsDocument, transformResult: (data) => mapVmWorkloadReportsToNamespaces(data) },
   ),
-  PERSIST_NAMESPACES: wrapVersioned<PersistNamespacesResult, PersistNamespacesVars>(PERSIST_NAMESPACES),
+  // VM has no namespace concept, so the bulk namespace persist is unsupported.
+  PERSIST_NAMESPACES: wrapVersioned<PersistNamespacesResult, PersistNamespacesVars>(PERSIST_NAMESPACES, undefined, undefined, { unsupported: true }),
 
   // k8s manifest — wire field is `k8sManifest` (a top-level string); we
   // also accept the legacy `k8sActualManifest`/`manifest` names as
@@ -973,7 +1136,10 @@ const operations: OdigosApiOperations = {
     // to the legacy `k8sActualNamespaces { … sources }` combined query. This
     // mirrors the pre-v1.20 behavior (the drawer always used per-proxy
     // namespaces, never cluster snapshots).
-    canRun: (ctx) => !isLegacySelectedProxy(ctx),
+    // Also block for VM: cluster snapshots are a k8s cross-cluster aggregate.
+    // The kit already routes VM through `GET_NAMESPACES_WITH_WORKLOADS`, but
+    // guard here too so a stale/k8s-defaulted context can never run it for a VM.
+    canRun: (ctx) => ctx.platformType !== PlatformType.Vm && !isLegacySelectedProxy(ctx),
     transformResult: (raw) => (raw as { allClusterSnapshots?: AllClusterSnapshots } | null | undefined)?.allClusterSnapshots,
   },
   GET_CLUSTER_SNAPSHOT: {
@@ -1010,30 +1176,49 @@ const isAuthErrorMessage = (message?: string) => {
  * back to the pure role check.
  *
  * Named `ConfigSync` to mirror the equivalent component in the OSS webapp.
+ * Also resolves the VM-specific context fields (`schemaVersion` + a
+ * `graphqlSchemaVersion`-derived `platformType` fallback) from the proxy store.
  */
-const ConfigSync: FC<{ onChange: (ctx: OperationContext) => void }> = ({ onChange }) => {
+const ConfigSync: FC<{ onChange: (ctx: ProxyOperationContext) => void }> = ({ onChange }) => {
   const { config, isReadonly } = useConfig();
-  const { proxyID, platformType, odigosVersion } = useProxyStore();
+  // Read proxy state directly from the zustand store (no Apollo dependency).
+  const { proxyID, platformType, odigosVersion, graphqlSchemaVersion } = useProxyStore();
 
   useEffect(() => {
+    // `platformType` can be briefly unset (store rehydration / navigation
+    // timing). VM proxies always report a non-null `graphqlSchemaVersion` while
+    // k8s proxies never do, so use it as a deterministic fallback — otherwise the
+    // kit's capabilities (`canFetchSnapshots = !isVm`) flip to k8s and the Add
+    // Sources drawer wrongly fetches the cluster-wide snapshot for a VM.
+    const resolvedPlatformType = platformType || config?.platformType || (graphqlSchemaVersion ? PlatformType.Vm : INITIAL_CONTEXT.platformType);
+    // Two versions travel in the context, and they differ for VM proxies:
+    //   - `version`       = the agent binary version (what the user sees as the
+    //                       installed agent); always `odigosVersion`.
+    //   - `schemaVersion` = the GraphQL dialect VM proxies report separately
+    //                       (`graphqlSchemaVersion`); drives dialect/bucket
+    //                       selection via `dialectVersion(ctx)`. Left undefined
+    //                       for k8s, which keeps selecting buckets by `version`.
+    //                       When a VM proxy reports no schema version (older
+    //                       vm-agent), `dialectVersion` falls back to `version`.
     onChange({
       proxyID,
-      platformType: platformType || config?.platformType || INITIAL_CONTEXT.platformType,
+      platformType: resolvedPlatformType,
       tier: config?.tier || INITIAL_CONTEXT.tier,
       version: odigosVersion || config?.odigosVersion || INITIAL_CONTEXT.version,
+      schemaVersion: resolvedPlatformType === PlatformType.Vm ? (graphqlSchemaVersion ?? undefined) : undefined,
       isReadonly,
     });
-  }, [proxyID, platformType, odigosVersion, config?.platformType, config?.tier, config?.odigosVersion, isReadonly, onChange]);
+  }, [proxyID, platformType, odigosVersion, graphqlSchemaVersion, config?.platformType, config?.tier, config?.odigosVersion, isReadonly, onChange]);
 
   return null;
 };
 
 const OdigosApiAdapter: FC<AdapterProps> = ({ children }) => {
-  // Context is synced from `GET_CONFIG` by <ConfigSync> (below, inside the
-  // provider). The `context` prop still overrides it when supplied.
-  const [syncedContext, setSyncedContext] = useState<OperationContext>(INITIAL_CONTEXT);
+  // Context is synced from `GET_CONFIG` + proxy store by <ConfigSync> (below,
+  // inside the provider).
+  const [syncedContext, setSyncedContext] = useState<ProxyOperationContext>(INITIAL_CONTEXT);
   // Stable callback so <ConfigSync>'s effect doesn't re-fire each render.
-  const onContextChange = useCallback((ctx: OperationContext) => setSyncedContext(ctx), []);
+  const onContextChange = useCallback((ctx: ProxyOperationContext) => setSyncedContext(ctx), []);
 
   const apolloConfig = useMemo(() => {
     // WS link is constructed once and passed in — keeps `graphql-ws` out of the kit's

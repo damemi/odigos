@@ -31,12 +31,7 @@ export const GET_TOKENS: VersionedRemoteFetch = {
     'v0.1': `
   query GetTokens {
     computePlatform {
-      apiTokens {
-        token
-        name
-        issuedAt
-        expiresAt
-      }
+      apiTokens
     }
   }`,
   },

@@ -83,14 +83,21 @@ func buildComputePlatformsFromProxyConnections(
 			odigosVersion = version
 		}
 
+		var graphqlSchemaVersion *string
+		if v, ok := wsServer.GetGraphQLSchemaVersion(proxyID); ok && v != "" {
+			schemaVersion := v
+			graphqlSchemaVersion = &schemaVersion
+		}
+
 		cpMap[proxyID] = &model.ComputePlatform{
-			ID:            proxyID,
-			Name:          platformName,
-			OdigosVersion: odigosVersion,
-			Type:          platformType,
-			Status:        string(meta.Status),
-			Users:         []*model.User{},
-			Teams:         []*model.Team{},
+			ID:                   proxyID,
+			Name:                 platformName,
+			OdigosVersion:        odigosVersion,
+			GraphqlSchemaVersion: graphqlSchemaVersion,
+			Type:                 platformType,
+			Status:               string(meta.Status),
+			Users:                []*model.User{},
+			Teams:                []*model.Team{},
 		}
 	}
 	return cpMap
@@ -167,10 +174,11 @@ func (svc *ComputePlatformService) GetAllProxyMetadata(ctx context.Context) (map
 		}
 
 		builtMetadata := &redisclient.ProxyMetadata{
-			PlatformName:  value[consts.ProxyMetaFieldPlatformName],
-			PlatformType:  value[consts.ProxyMetaFieldPlatformType],
-			OdigosVersion: value[consts.ProxyMetaFieldOdigosVersion],
-			Status:        consts.ProxyConnectionStatus(value[consts.ProxyMetaFieldStatus]),
+			PlatformName:         value[consts.ProxyMetaFieldPlatformName],
+			PlatformType:         value[consts.ProxyMetaFieldPlatformType],
+			OdigosVersion:        value[consts.ProxyMetaFieldOdigosVersion],
+			GraphQLSchemaVersion: value[consts.ProxyMetaFieldGraphQLSchemaVersion],
+			Status:               consts.ProxyConnectionStatus(value[consts.ProxyMetaFieldStatus]),
 		}
 		if connectedAtValue := value[consts.ProxyMetaFieldConnectedAt]; connectedAtValue != "" {
 			if connectedAt, err := strconv.ParseInt(connectedAtValue, 10, 64); err == nil {
@@ -199,6 +207,10 @@ func applyProxyMetaToComputePlatform(cp *model.ComputePlatform, meta *redisclien
 	}
 	if cp.OdigosVersion == consts.UnknownValue && meta.OdigosVersion != "" {
 		cp.OdigosVersion = meta.OdigosVersion
+	}
+	if cp.GraphqlSchemaVersion == nil && meta.GraphQLSchemaVersion != "" {
+		schemaVersion := meta.GraphQLSchemaVersion
+		cp.GraphqlSchemaVersion = &schemaVersion
 	}
 	if mapped, ok := toModelPlatformType(string(meta.PlatformType)); ok {
 		cp.Type = mapped

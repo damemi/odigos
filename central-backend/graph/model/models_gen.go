@@ -30,15 +30,16 @@ type ClusterSnapshot struct {
 }
 
 type ComputePlatform struct {
-	ID            string       `json:"id"`
-	Name          string       `json:"name"`
-	OdigosVersion string       `json:"odigosVersion"`
-	Type          PlatformType `json:"type"`
-	Status        string       `json:"status"`
-	ConnectedAt   *int         `json:"connectedAt,omitempty"`
-	LastSeenAt    *int         `json:"lastSeenAt,omitempty"`
-	Users         []*User      `json:"users"`
-	Teams         []*Team      `json:"teams"`
+	ID                   string       `json:"id"`
+	Name                 string       `json:"name"`
+	OdigosVersion        string       `json:"odigosVersion"`
+	GraphqlSchemaVersion *string      `json:"graphqlSchemaVersion,omitempty"`
+	Type                 PlatformType `json:"type"`
+	Status               string       `json:"status"`
+	ConnectedAt          *int         `json:"connectedAt,omitempty"`
+	LastSeenAt           *int         `json:"lastSeenAt,omitempty"`
+	Users                []*User      `json:"users"`
+	Teams                []*Team      `json:"teams"`
 }
 
 type CreateUserResult struct {

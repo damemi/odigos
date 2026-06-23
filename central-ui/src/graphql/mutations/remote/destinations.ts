@@ -72,13 +72,7 @@ export const CREATE_DESTINATION: VersionedRemoteFetch = {
           }
         }
       }
-      conditions {
-        status
-        type
-        reason
-        message
-
-      }
+      conditions
     }
   }`,
   },

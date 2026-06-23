@@ -30,26 +30,9 @@ export const GET_NAMESPACES_WITH_SOURCES: VersionedRemoteFetch = {
     }
   }`,
   },
-  [PlatformType.Vm]: {
-    'v0.1': `
-  query GetNamespacesWithSources {
-    computePlatform {
-      k8sActualNamespaces {
-        name
-        selected
-        dataStreamNames
-        sources {
-          namespace
-          kind
-          name
-          dataStreamNames
-          selected
-          numberOfInstances
-        }
-      }
-    }
-  }`,
-  },
+  // VM proxies synthesize namespaces from the versioned vmagent `GetSources`
+  // dialect document (see the VmSpec on GET_NAMESPACES_WITH_WORKLOADS in
+  // odigos-api-adapter), not from a hand-written bucket here.
 };
 
 export const GET_NAMESPACES_WITH_WORKLOADS: VersionedRemoteFetch = {

@@ -25,14 +25,19 @@ const ProxyIDQueryParam = "proxyID"
 const PlatformNameQueryParam = "platformName"
 const PlatformTypeQueryParam = "platformType"
 const OdigosVersionQueryParam = "version"
+const GraphQLSchemaVersionQueryParam = "graphqlSchemaVersion"
 
 type ProxyConnection struct {
-	Conn               *websocket.Conn
-	PlatformName       string
-	PlatformType       consts.PlatformType
-	OdigosVersion      string
-	ConnectedAt        int64
-	cancelSubscription context.CancelFunc // Used to cancel and restart Redis subscription on reconnect
+	Conn         *websocket.Conn
+	PlatformName string
+	PlatformType consts.PlatformType
+	OdigosVersion string
+	// GraphQLSchemaVersion is the agents-api GraphQL schema version reported by VM
+	// proxies. It selects which agents-api dialect the UI uses for this proxy.
+	// Empty for k8s proxies, which don't report it.
+	GraphQLSchemaVersion string
+	ConnectedAt          int64
+	cancelSubscription   context.CancelFunc // Used to cancel and restart Redis subscription on reconnect
 }
 
 type WebSocketServer struct {
@@ -83,6 +88,10 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Optional: VM proxies report the agents-api GraphQL schema version so the UI
+	// can pick the right dialect. k8s proxies don't send it, so it's not required.
+	graphqlSchemaVersion := r.URL.Query().Get(GraphQLSchemaVersionQueryParam)
+
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		CompressionMode: websocket.CompressionDisabled,
 	})
@@ -102,17 +111,18 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 
 	now := time.Now().Unix()
 	ws.proxyConnections.Store(proxyID, &ProxyConnection{
-		Conn:               conn,
-		PlatformName:       platformName,
-		PlatformType:       platformType,
-		OdigosVersion:      currentVersion,
-		ConnectedAt:        now,
-		cancelSubscription: cancelSub,
+		Conn:                 conn,
+		PlatformName:         platformName,
+		PlatformType:         platformType,
+		OdigosVersion:        currentVersion,
+		GraphQLSchemaVersion: graphqlSchemaVersion,
+		ConnectedAt:          now,
+		cancelSubscription:   cancelSub,
 	})
 	defer ws.cleanupConnection(ctx, proxyID, conn)
 
 	// Persist basic proxy metadata and initial timestamps
-	if err := ws.redisClient.SetProxyMetadata(ctx, proxyID, platformName, string(platformType), currentVersion); err != nil {
+	if err := ws.redisClient.SetProxyMetadata(ctx, proxyID, platformName, string(platformType), currentVersion, graphqlSchemaVersion); err != nil {
 		logger.Log.Warn("Failed to set proxy metadata", "proxyID", proxyID, "error", err)
 	}
 	if err := ws.redisClient.SetProxyMetadataStatus(ctx, proxyID, consts.StatusConnected); err != nil {
@@ -452,6 +462,19 @@ func (ws *WebSocketServer) GetOdigosVersion(proxyID string) (string, bool) {
 	return proxyConn.OdigosVersion, true
 }
 
+func (ws *WebSocketServer) GetGraphQLSchemaVersion(proxyID string) (string, bool) {
+	connValue, ok := ws.proxyConnections.Load(proxyID)
+	if !ok {
+		return "", false
+	}
+
+	proxyConn, ok := connValue.(*ProxyConnection)
+	if !ok {
+		return "", false
+	}
+	return proxyConn.GraphQLSchemaVersion, true
+}
+
 func (ws *WebSocketServer) handleClusterSnapshot(proxyID string, data json.RawMessage) {
 	if ws.snapshotWorkerPool == nil {
 		logger.Log.Warn("Received cluster snapshot but worker pool is not initialized", "proxyID", proxyID)
@@ -491,7 +514,7 @@ func (ws *WebSocketServer) ResyncAllProxiesToRedis(ctx context.Context) {
 		}
 
 		// Resync metadata only - subscriptions are self-healing and will reconnect automatically
-		if err := ws.redisClient.SetProxyMetadata(ctx, proxyID, proxyConn.PlatformName, string(proxyConn.PlatformType), proxyConn.OdigosVersion); err != nil {
+		if err := ws.redisClient.SetProxyMetadata(ctx, proxyID, proxyConn.PlatformName, string(proxyConn.PlatformType), proxyConn.OdigosVersion, proxyConn.GraphQLSchemaVersion); err != nil {
 			logger.Log.Warn("Failed to resync proxy metadata", "proxyID", proxyID, "error", err)
 		}
 		if err := ws.redisClient.SetProxyMetadataStatus(ctx, proxyID, consts.StatusConnected); err != nil {

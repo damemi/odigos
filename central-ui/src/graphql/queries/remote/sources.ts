@@ -98,36 +98,9 @@ export const GET_SOURCES_WITH_STATUS: VersionedRemoteFetch = {
     }
   }`,
   },
-  [PlatformType.Vm]: {
-    'v0.1': `
-  query GetSourcesWithStatus {
-    computePlatform {
-      sources {
-        namespace
-        name
-        kind
-        dataStreamNames
-        selected
-        otelServiceName
-        containers {
-          containerName
-          language
-          runtimeVersion
-          overriden
-          instrumented
-          instrumentationMessage
-          otelDistroName
-        }
-        conditions {
-          status
-          type
-          reason
-          message
-        }
-      }
-    }
-  }`,
-  },
+  // VM proxies resolve sources from the versioned `@odigos/vmagent-api-apollo-client`
+  // dialect registry (see the VmSpec on GET_WORKLOADS in odigos-api-adapter), not
+  // from a hand-written bucket here.
 };
 
 export const GET_SOURCE: VersionedRemoteFetch = {
@@ -233,42 +206,8 @@ export const GET_SOURCE: VersionedRemoteFetch = {
     }
   }`,
   },
-  [PlatformType.Vm]: {
-    'v0.1': `
-  query GetSource($sourceId: K8sSourceId!) {
-    computePlatform {
-      source(sourceId: $sourceId) {
-        namespace
-        name
-        kind
-        dataStreamNames
-        selected
-        otelServiceName
-        containers {
-          containerName
-          language
-          runtimeVersion
-          overriden
-          instrumented
-          instrumentationMessage
-          otelDistroName
-        }
-        conditions {
-          status
-          type
-          reason
-          message
-
-        }
-        workloadOdigosHealthStatus {
-          status
-          reasonEnum
-          message
-        }
-      }
-    }
-  }`,
-  },
+  // VM proxies resolve the by-name source from the versioned vmagent dialect
+  // registry (see the VmSpec on GET_SOURCE in odigos-api-adapter).
 };
 
 // @deprecated-legacy-api(v1.20) - combined legacy "source by id" query used by

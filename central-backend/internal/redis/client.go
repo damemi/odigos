@@ -327,16 +327,18 @@ func (r *RedisClient) HasSubscribers(ctx context.Context, channel string) (bool,
 
 // ProxyMetadata holds durable proxy details and timestamps.
 type ProxyMetadata struct {
-	PlatformName  string
-	PlatformType  string
-	OdigosVersion string
-	ConnectedAt   int64
-	LastSeenAt    int64
-	Status        consts.ProxyConnectionStatus
+	PlatformName         string
+	PlatformType         string
+	OdigosVersion        string
+	GraphQLSchemaVersion string
+	ConnectedAt          int64
+	LastSeenAt           int64
+	Status               consts.ProxyConnectionStatus
 }
 
 // SetProxyMetadata sets basic proxy metadata fields (name/type/version) without touching timestamps.
-func (r *RedisClient) SetProxyMetadata(ctx context.Context, proxyID, name, platformType, version string) error {
+// graphqlSchemaVersion is the agents-api schema version reported by VM proxies (empty for k8s proxies).
+func (r *RedisClient) SetProxyMetadata(ctx context.Context, proxyID, name, platformType, version, graphqlSchemaVersion string) error {
 	key := consts.GetProxyMetadataKey(proxyID)
 	return r.client.HSet(
 		ctx,
@@ -344,6 +346,7 @@ func (r *RedisClient) SetProxyMetadata(ctx context.Context, proxyID, name, platf
 		consts.ProxyMetaFieldPlatformName, name,
 		consts.ProxyMetaFieldPlatformType, platformType,
 		consts.ProxyMetaFieldOdigosVersion, version,
+		consts.ProxyMetaFieldGraphQLSchemaVersion, graphqlSchemaVersion,
 	).Err()
 }
 

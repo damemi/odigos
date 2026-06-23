@@ -20,9 +20,8 @@ export interface VersionedRemoteFetch {
     'v1.12'?: string;
     'v1.11'?: string;
   };
-  [PlatformType.Vm]?: {
-    'v0.1'?: string;
-  };
+  // Per agents-api dialect (e.g. v0.6.0, v0.8.0, v0.10.0) or legacy v0.1 hand-written queries.
+  [PlatformType.Vm]?: Record<string, string>;
 }
 
 export interface PaginatedData<T = unknown> {

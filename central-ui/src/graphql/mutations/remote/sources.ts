@@ -8,12 +8,6 @@ export const PERSIST_SOURCES: VersionedRemoteFetch = {
     persistK8sSources(sources: $sources)
   }`,
   },
-  [PlatformType.Vm]: {
-    'v0.1': `
-  mutation PersistSources($sources: [PersistNamespaceSourceInput!]!) {
-    persistVmSources(sources: $sources)
-  }`,
-  },
 };
 
 export const UPDATE_SOURCE: VersionedRemoteFetch = {
@@ -21,12 +15,6 @@ export const UPDATE_SOURCE: VersionedRemoteFetch = {
     'v1.11': `
   mutation UpdateK8sActualSource($sourceId: K8sSourceId!, $patchSourceRequest: PatchSourceRequestInput!) {
     updateK8sActualSource(sourceId: $sourceId, patchSourceRequest: $patchSourceRequest)
-  }`,
-  },
-  [PlatformType.Vm]: {
-    'v0.1': `
-  mutation UpdateSource($sourceId: SourceId!, $patchSourceRequest: PatchSourceRequestInput!) {
-    updateSource(sourceId: $sourceId, patchSourceRequest: $patchSourceRequest)
   }`,
   },
 };

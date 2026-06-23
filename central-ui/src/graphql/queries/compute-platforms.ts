@@ -6,6 +6,7 @@ export const GET_COMPUTE_PLATFORMS = gql`
       id
       name
       odigosVersion
+      graphqlSchemaVersion
       type
       status
       connectedAt
