@@ -1,6 +1,6 @@
 module github.com/odigos-io/central-proxy
 
-go 1.26.2
+go 1.26.4
 
 require (
 	github.com/google/uuid v1.6.0
@@ -27,7 +27,6 @@ require (
 	github.com/go-openapi/swag/typeutils v0.25.4 // indirect
 	github.com/go-openapi/swag/yamlutils v0.25.4 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/matryer/is v1.4.1 // indirect
 	github.com/openshift/api v3.9.0+incompatible // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
@@ -51,12 +50,10 @@ require (
 	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/hashicorp/go-version v1.8.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/machinebox/graphql v0.2.2
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/odigos-io/odigos/common v1.30.0-pre2
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/otel v1.42.0 // indirect

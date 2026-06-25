@@ -1,6 +1,6 @@
 module github.com/odigos-io/central-backend
 
-go 1.26.2
+go 1.26.4
 
 require (
 	github.com/99designs/gqlgen v0.17.91
