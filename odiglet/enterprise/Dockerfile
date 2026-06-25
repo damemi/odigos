@@ -201,7 +201,7 @@ CMD ["/root/odiglet"]
 
 ######### Default Odiglet #########
 # pinning the distroless base image to a specific commit since the hash after it broke rsync somehow.
-FROM gcr.io/distroless/base:3443777deec6bd5c58be682f286aefffd1c871ae
+FROM gcr.io/distroless/base-debian12@sha256:e7e678c88c59e70e105a46549bb3fbfb3d732ee3b4afd3a19fdab2e15afaa6b3
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odigos-csi-driver /root/odigos-csi-driver
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/deviceplugin/deviceplugin /root/deviceplugin
