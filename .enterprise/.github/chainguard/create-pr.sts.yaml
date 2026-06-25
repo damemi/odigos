@@ -1,5 +1,7 @@
 issuer: https://token.actions.githubusercontent.com
-subject_pattern: repo:odigos-io/odigos-enterprise:ref:.*
+subject: repo:odigos-io/odigos-enterprise:ref:refs/heads/main
+claim_pattern:
+  event_name: push
 
 permissions:
   contents: write

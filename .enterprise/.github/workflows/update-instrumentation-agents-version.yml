@@ -3,8 +3,8 @@ name: Update Instrumentation Agents Version
 on:
   workflow_dispatch:
     inputs:
-      agents_category: 
-        description: "Category of the agents to update (supported values: java-ebpf, nodejs, python)"
+      instrumentation_agent:
+        description: "Canonical agent category (e.g. java-ebpf, nodejs-enterprise, python, python-ebpf, php, ruby, golang)"
         required: true
         type: string
       new_agent_version:
@@ -17,133 +17,62 @@ on:
 
 permissions: read-all
 
+concurrency:
+  group: agents-version-${{ github.repository }}
+  cancel-in-progress: false
+
 jobs:
   update-version-and-create-pr:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
-
+      contents: read
     steps:
-      - name: Get ro token for odigos-enterprise
-        id: sts-odigos-enterprise
+      - name: Resolve inputs
+        id: in
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CAT="${{ github.event.inputs.instrumentation_agent }}"
+            VER="${{ github.event.inputs.new_agent_version }}"
+          else
+            CAT="${{ github.event.client_payload.instrumentation_agent }}"
+            VER="${{ github.event.client_payload.new_agent_version }}"
+          fi
+          if [ -z "$CAT" ] || [ -z "$VER" ]; then
+            echo "ERROR: instrumentation_agent and new_agent_version are required"
+            exit 1
+          fi
+          echo "instrumentation_agent=$CAT" >> "$GITHUB_OUTPUT"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+
+      - name: Get ro token
+        id: sts
         uses: odigos-io/ci-core/sts@main
         with:
-          scope: odigos-io/odigos-enterprise
+          scope: ${{ github.repository }}
           identity: ro
 
       - name: Check out code
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ steps.sts-odigos-enterprise.outputs.GH_TOKEN }}
+          token: ${{ steps.sts.outputs.GH_TOKEN }}
 
-      - name: Get ro tokens for dependencies
-        id: ro-sts
+      - name: Get ro tokens for private module dependencies
         uses: ./.github/sts/dependencies_ro
 
-      - name: Determine agent type and version
-        id: agent
-        run: |
-          # Extract agents_category and new_agent_version from inputs
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            AGENTS_CATEGORY="${{ github.event.inputs.agents_category }}"
-            AGENT_VERSION="${{ github.event.inputs.new_agent_version }}"
-          elif [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            AGENTS_CATEGORY="${{ github.event.client_payload.agents_category }}"
-            AGENT_VERSION="${{ github.event.client_payload.new_agent_version }}"
-            if [ -z "$AGENTS_CATEGORY" ] || [ -z "$AGENT_VERSION" ]; then
-              echo "ERROR: agents_category and new_agent_version are required in client_payload"
-              exit 1
-            fi
-          fi
-          
-          # Normalize agents category and determine agent type
-          AGENTS_CATEGORY_LOWER=$(echo "$AGENTS_CATEGORY" | tr '[:upper:]' '[:lower:]')
-          
-          case "$AGENTS_CATEGORY_LOWER" in
-            java-ebpf-instrumentations|java-enterprise|java-ebpf) AGENT_TYPE="java-ebpf" ;;
-            nodejs-enterprise|nodejs|nodejs-ebpf)                 AGENT_TYPE="nodejs" ;;
-            python|python-community)                              AGENT_TYPE="python-community" ;;
-            *)
-              echo "ERROR: Invalid agents_category '$AGENTS_CATEGORY'. Supported values: java-ebpf-instrumentations, java-enterprise, java-ebpf, nodejs-enterprise, nodejs, nodejs-ebpf, python, python-community"
-              exit 1
-              ;;
-          esac
-
-          echo "agent_type=$AGENT_TYPE" >> $GITHUB_OUTPUT
-          echo "agent_version=$AGENT_VERSION" >> $GITHUB_OUTPUT
-          echo "agents_category=$AGENTS_CATEGORY" >> $GITHUB_OUTPUT
-
       - name: Set up Go
-        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        uses: actions/setup-go@v5
         with:
           go-version-file: ./odiglet/go.mod
 
       - name: Set GOPRIVATE
-        run: |
-          echo "GOPRIVATE=github.com/odigos-io/*" >> $GITHUB_ENV
+        run: echo "GOPRIVATE=github.com/odigos-io/*" >> "$GITHUB_ENV"
 
-      - name: Update Agent Version
-        working-directory: ./odiglet
-        run: |
-          case "${{ steps.agent.outputs.agent_type }}" in
-            java-ebpf)
-              export JAVA_EBPF_AGENTS_VERSION="${{ steps.agent.outputs.agent_version }}"
-              make upgrade-java-ebpf-agents-version
-              ;;
-            nodejs)
-              export NODEJS_EBPF_AGENTS_VERSION="${{ steps.agent.outputs.agent_version }}"
-              make upgrade-nodejs-ebpf-agents-version
-              ;;
-            python-community)
-              # python-community ships two image tags, so it calls a specific make target to avoid updating both
-              export PYTHON_COMMUNITY_AGENTS_VERSION="${{ steps.agent.outputs.agent_version }}"
-              make upgrade-python-community-agents-version
-              ;;
-            *)
-              echo "ERROR: Unknown agent type: ${{ steps.agent.outputs.agent_type }}"
-              exit 1
-              ;;
-          esac
-
-      - name: Get agent version updater token
-        id: agent-version-sts
-        uses: odigos-io/ci-core/sts@main
+      - name: Update agent version and open PR
+        uses: odigos-io/ci-core/apply-agent-version-update@main
         with:
-          scope: odigos-io/odigos-enterprise
-          identity: agent-version-updater
-          output-git-config: 'false'
-
-      - name: Create pull request
-        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
-        id: cpr
-        with:
-          token: ${{ steps.agent-version-sts.outputs.GH_TOKEN }}
-          branch: update-${{ steps.agent.outputs.agent_type }}-agents-version-${{ steps.agent.outputs.agent_version }}
-          title: "chore: update ${{ steps.agent.outputs.agents_category }} version to ${{ steps.agent.outputs.agent_version }}"
-          body: |
-            This PR updates the ${{ steps.agent.outputs.agents_category }} version in Dockerfile, debug.Dockerfile, and go.mod to ${{ steps.agent.outputs.agent_version }}.
-
-            **Triggered by:** ${{ github.event_name }}
-          commit-message: "chore: update ${{ steps.agent.outputs.agents_category }} version to ${{ steps.agent.outputs.agent_version }}"
-          delete-branch: true
-          sign-commits: true
-          labels: |
-            new-agent-version
-            release-bot
-          
-      - name: Enable Pull Request Automerge
-        if: steps.cpr.outputs.pull-request-operation == 'created'
-        uses: peter-evans/enable-pull-request-automerge@a660677d5469627102a1c1e11409dd063606628d
-        with:
-          token: ${{ steps.agent-version-sts.outputs.GH_TOKEN }}
-          pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
-          merge-method: squash
-
-      - name: Notify Slack
-        if: steps.cpr.outputs.pull-request-number != ''
-        uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
-        with:
+          instrumentation_agent: ${{ steps.in.outputs.instrumentation_agent }}
+          version: ${{ steps.in.outputs.version }}
+          make_dir: odiglet
           webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-          success-description: "Created PR to update ${{ steps.agent.outputs.agents_category }} version to ${{ steps.agent.outputs.agent_version }}. Please review and approve: ${{ steps.cpr.outputs.pull-request-url }}/changes"
-          failure-description: "ERROR: Failed to create PR for updating ${{ steps.agent.outputs.agents_category }} version"
