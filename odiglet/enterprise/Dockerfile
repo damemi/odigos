@@ -1,4 +1,4 @@
-ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.16
+ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.17
 
 ######### dotnet builder #########
 FROM --platform=$BUILDPLATFORM busybox:1.36.1 AS dotnet-builder
@@ -127,7 +127,7 @@ RUN --mount=type=secret,id=github_token \
     GOOS=linux GOARCH=$TARGETARCH go build -o deviceplugin ./cmd
 
 # Download grpc_health_probe this is used by the deviceplugin container to check if the deviceplugin is healthy
-ARG GRPC_HEALTH_PROBE_VERSION=v0.4.48
+ARG GRPC_HEALTH_PROBE_VERSION=v0.4.52
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
         GRPC_ARCH="arm64"; \
     else \

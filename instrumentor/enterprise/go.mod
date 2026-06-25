@@ -1,6 +1,6 @@
 module github.com/odigos-io/odigos-enterprise/instrumentor
 
-go 1.26.2
+go 1.26.4
 
 require (
 	github.com/odigos-io/ebpf-core v0.1.0

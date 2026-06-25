@@ -1,6 +1,6 @@
 module github.com/odigos-io/odigos-enterprise/ui
 
-go 1.26.2
+go 1.26.4
 
 require (
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0-00010101000000-000000000000
