@@ -105,6 +105,10 @@ func main() {
 	adminService := services.NewAdminService(adminCredentials)
 	userService := services.NewUserService(adminService)
 	teamService := services.NewTeamService(adminService)
+	roleMappingService := services.NewRoleMappingService(adminService)
+	// Best-effort migration of any legacy per-group IdP mappers into the aggregated
+	// per-(claimName, role) format. Idempotent; safe to run on every startup.
+	go roleMappingService.ReconcileExistingMappers()
 	authService := services.NewAuthService(adminService, userService)
 	ConfigService := services.NewConfigService(k8sClient)
 	healthService := services.NewHealthService(redisClient, adminService, centralSSEHub)
@@ -117,6 +121,7 @@ func main() {
 		AuthService:            authService,
 		UserService:            userService,
 		TeamService:            teamService,
+		RoleMappingService:     roleMappingService,
 		HealthService:          healthService,
 		ComputePlatformService: computePlatformService,
 		ConfigService:          ConfigService,

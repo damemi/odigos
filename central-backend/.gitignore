@@ -3,3 +3,4 @@
 /licenses
 .gocache/
 .gomodcache/
+cmd/odigos-backend

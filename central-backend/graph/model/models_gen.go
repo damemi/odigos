@@ -53,6 +53,15 @@ type GeneralResult struct {
 	Error   *string `json:"error,omitempty"`
 }
 
+type GroupRoleMapping struct {
+	ID          string         `json:"id"`
+	ProviderID  AuthProviderID `json:"providerId"`
+	ClaimName   string         `json:"claimName"`
+	ClaimValue  string         `json:"claimValue"`
+	Role        Role           `json:"role"`
+	DisplayName *string        `json:"displayName,omitempty"`
+}
+
 type HealthQuery struct {
 	Backend *BackendHealthStatus `json:"backend"`
 }
@@ -155,6 +164,14 @@ type WriteComputePlatformInput struct {
 	RemoveUserIds []*string `json:"removeUserIds,omitempty"`
 	AddTeamIds    []*string `json:"addTeamIds,omitempty"`
 	RemoveTeamIds []*string `json:"removeTeamIds,omitempty"`
+}
+
+type WriteGroupRoleMappingInput struct {
+	ProviderID  AuthProviderID `json:"providerId"`
+	ClaimName   *string        `json:"claimName,omitempty"`
+	ClaimValue  string         `json:"claimValue"`
+	Role        Role           `json:"role"`
+	DisplayName *string        `json:"displayName,omitempty"`
 }
 
 type WriteTeamInput struct {

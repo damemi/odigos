@@ -19,6 +19,9 @@ const (
 // ErrForbidden is returned when a caller lacks the required role for an action.
 var ErrForbidden = errors.New("forbidden: you do not have permission to perform this action")
 
+// ErrUnauthenticated is returned when a caller presents no valid credentials.
+var ErrUnauthenticated = errors.New("unauthenticated: a valid session is required")
+
 func GetTokenFromContext(ctx context.Context) string {
 	if token, ok := ctx.Value(tokenKey).(string); ok {
 		return token
@@ -150,6 +153,20 @@ func IsUserEditor(ctx context.Context) bool {
 func RequireAdmin(ctx context.Context) error {
 	if !IsUserAdmin(ctx) {
 		return ErrForbidden
+	}
+	return nil
+}
+
+// RequireAuth returns ErrUnauthenticated unless the caller presents a non-expired
+// JWT in context. Use it to guard read endpoints that should be visible to any
+// signed-in user (any role) but not to anonymous callers.
+func RequireAuth(ctx context.Context) error {
+	token := GetTokenFromContext(ctx)
+	if token == "" {
+		return ErrUnauthenticated
+	}
+	if expired, err := IsTokenExpired(token); err != nil || expired {
+		return ErrUnauthenticated
 	}
 	return nil
 }

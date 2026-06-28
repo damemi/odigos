@@ -36,6 +36,23 @@ func ConvertStringRoleToModel(roleStr string) model.Role {
 	}
 }
 
+// ConvertModelRoleToString maps a GraphQL Role enum to the lowercase Keycloak
+// realm role name (inverse of ConvertStringRoleToModel).
+func ConvertModelRoleToString(role model.Role) string {
+	switch role {
+	case model.RoleOwner:
+		return "owner"
+	case model.RoleAdmin:
+		return "admin"
+	case model.RoleMaintainer:
+		return "maintainer"
+	case model.RoleViewer:
+		return "viewer"
+	default:
+		return "viewer"
+	}
+}
+
 func ConvertStringPtrsToStrings(input []*string) []string {
 	output := make([]string, 0, len(input))
 	for _, s := range input {
