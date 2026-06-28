@@ -88,10 +88,10 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClos
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose}>
-      <Typography variant={TypographyVariants.H2} size={TypographySize.L}>
-        {STRINGS.CREATE_USER}
-      </Typography>
       <ModalContent>
+        <Typography variant={TypographyVariants.H2} size={TypographySize.L}>
+          {STRINGS.CREATE_USER}
+        </Typography>
         {modalState === CreateUserModalState.Form ? (
           <CreateUserForm formData={formData} errors={formErrors} creating={creating} onChange={handleInputChange} onSubmit={handleSubmit} />
         ) : (

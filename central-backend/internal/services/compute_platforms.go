@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -157,6 +158,15 @@ func toComputePlatformsSlice(cpMap map[string]*model.ComputePlatform) []*model.C
 	for _, cp := range cpMap {
 		cps = append(cps, cp)
 	}
+	// Go map iteration order is randomized, so sort to keep the connection list
+	// stable across requests. Sort by name (what the user sees) with ID as a
+	// stable tie-breaker.
+	sort.Slice(cps, func(i, j int) bool {
+		if cps[i].Name != cps[j].Name {
+			return cps[i].Name < cps[j].Name
+		}
+		return cps[i].ID < cps[j].ID
+	})
 	return cps
 }
 

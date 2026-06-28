@@ -2,6 +2,9 @@ import styled from 'styled-components';
 import { Button, Typography } from '@odigos/ui-kit/components/v2';
 
 export const ModalContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   padding: 24px;
   min-width: 734px;
 `;
