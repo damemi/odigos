@@ -5,7 +5,6 @@ import {
   EntityTypes,
   DesiredStateProgress,
   StatusType,
-  OtherStatus,
   type WorkloadId,
   type Workload,
   type Condition,
@@ -106,17 +105,17 @@ export const mapLegacySourceToWorkload = (s: LegacySource): Workload => {
 };
 
 // @deprecated-legacy-api(v1.20) - Reverse mapping from the ui-kit's flat
-// `StatusType`/`OtherStatus` back to the GraphQL `DesiredStateProgress` enum.
+// `StatusType` back to the GraphQL `DesiredStateProgress` enum.
 // Used by the legacy condition enrichment path; remove once legacy paths are gone.
-function statusTypeToDesiredStateProgress(status: StatusType | OtherStatus): DesiredStateProgress {
+function statusTypeToDesiredStateProgress(status: StatusType): DesiredStateProgress {
   switch (status) {
     case StatusType.Error:
       return DesiredStateProgress.Error;
     case StatusType.Warning:
       return DesiredStateProgress.Notice;
-    case OtherStatus.Loading:
+    case StatusType.Loading:
       return DesiredStateProgress.Pending;
-    case OtherStatus.Disabled:
+    case StatusType.Disabled:
       return DesiredStateProgress.Disabled;
     case StatusType.Success:
       return DesiredStateProgress.Success;

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { AccountMenu } from './account-menu';
+import { StatusType } from '@odigos/ui-kit/types';
 import { TerminalIcon } from '@odigos/ui-kit/icons';
 import { useOdigos } from '@odigos/ui-kit/contexts';
 import { Tooltip } from '@odigos/ui-kit/components';
@@ -8,7 +9,6 @@ import { FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { useConfig, useHealth, useProxy } from '@/hooks';
 import { SystemDrawer } from '@odigos/ui-kit/containers/v2';
 import { OdigosLogoTextByTier } from '@odigos/ui-kit/snippets/v2';
-import { OtherStatusType, StatusType } from '@odigos/ui-kit/types';
 import { IconButton, Badge as V2Badge, Header as V2Header } from '@odigos/ui-kit/components/v2';
 
 export const OverviewHeader = () => {
@@ -34,7 +34,7 @@ export const OverviewHeader = () => {
     if (isReadonly) {
       arr.push(
         <Tooltip key='readonly' text={FORM_ALERTS.READONLY_WARNING}>
-          <V2Badge status={OtherStatusType.Disabled} label='Read Only' />
+          <V2Badge status={StatusType.Disabled} label='Read Only' />
         </Tooltip>,
       );
     }
