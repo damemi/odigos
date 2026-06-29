@@ -2,6 +2,7 @@ export * from './remote';
 export * from './auth';
 export * from './compute-platforms';
 export * from './health';
+export * from './role-mappings';
 export * from './snapshots';
 export * from './system';
 export * from './teams';

@@ -4,6 +4,7 @@ export * from './compute-platforms';
 export * from './destinations';
 export * from './namespaces';
 export * from './remote-config';
+export * from './role-mappings';
 export * from './auth-providers';
 export * from './sampling';
 export * from './sources';

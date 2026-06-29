@@ -18,6 +18,7 @@ export * from './common';
 export * from './compute-platforms';
 export * from './config';
 export * from './proxy';
+export * from './role-mappings';
 export * from './teams';
 export * from './tokens';
 export * from './users';

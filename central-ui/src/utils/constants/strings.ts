@@ -13,7 +13,12 @@ export const ACTIONS = 'Actions';
 export const CREATING = 'Creating';
 export const UPDATING = 'Updating';
 export const CANCEL = 'Cancel';
+export const DELETE = 'Delete';
 export const DONE = 'Done';
+export const APPROVE = 'Approve';
+export const DENY = 'Deny';
+export const DISCARD_CHANGES_TITLE = 'Discard changes?';
+export const DISCARD_CHANGES_DESCRIPTION = "You have unsaved changes.\nIf you cancel now, your changes won't be saved.";
 
 // Auth strings
 export const ACCESS_MANAGEMENT = 'Access Management';
@@ -118,6 +123,29 @@ export const TEAM_CREATED_SUCCESS = 'Team Created Successfully!';
 export const TEAM_CREATED_SUCCESS_SUBTITLE = (name: string) => `Team "${name}" has been created successfully.`;
 export const CREATE_TEAM_FORM_DESCRIPTION_1 = 'Add a new team to your Odigos environment.';
 export const CREATE_TEAM_FORM_DESCRIPTION_2 = 'Link them to relevant teams or compute platforms.';
+
+// Role mapping strings
+export const ROLE_MAPPING = 'Role Mapping';
+export const ROLE_MAPPINGS = 'Role Mappings';
+export const GROUP = 'Group';
+export const CREATE_ROLE_MAPPING = 'Create Role Mapping';
+export const CLAIM_VALUE = 'Group';
+export const CLAIM_VALUE_PLACEHOLDER = 'Azure group object ID or name';
+export const CLAIM_VALUE_REQUIRED = 'Group is required';
+export const CLAIM_VALUE_TOOLTIP = 'The group identifier emitted by your identity provider (e.g. Azure/Entra group object ID or display name).';
+export const DISPLAY_NAME = 'Display Name';
+export const DISPLAY_NAME_PLACEHOLDER = 'e.g. odigos-admins';
+export const DISPLAY_NAME_TOOLTIP = 'Optional friendly name shown in the table instead of the group ID. Does not affect matching.';
+export const CLAIM_NAME = 'Claim Name';
+export const CLAIM_NAME_PLACEHOLDER = 'groups';
+export const CLAIM_NAME_TOOLTIP = 'The token claim that carries group membership. Defaults to "groups".';
+export const EDIT_ROLE_MAPPING = 'Edit role mapping';
+export const DELETE_ROLE_MAPPING = 'Delete role mapping';
+export const DELETE_MAPPING = 'Delete Mapping';
+export const DELETE_ROLE_MAPPING_CONFIRM = (name: string) => `Are you sure you want to delete the mapping for "${name}"?`;
+export const CREATE_ROLE_MAPPING_ERROR = 'Failed to create role mapping. Please try again.';
+export const CREATE_ROLE_MAPPING_FORM_DESCRIPTION_1 = 'Map an identity provider group to an Odigos role.';
+export const CREATE_ROLE_MAPPING_FORM_DESCRIPTION_2 = 'Users in this group are granted the selected role on sign-in. Highest privilege wins across groups.';
 
 // App info strings
 export const VERSION_LABEL = (version: string) => `Version: ${version}`;

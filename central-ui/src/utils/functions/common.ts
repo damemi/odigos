@@ -1,5 +1,6 @@
 import { trimVersion } from '@odigos/ui-kit/functions';
 import { type NotifyPayload } from '@odigos/ui-kit/store';
+import { TagVariants } from '@odigos/ui-kit/components/v2';
 import { Role, type ComputePlatform, type VersionedRemoteFetch } from '@/types';
 import { PlatformType, StatusType } from '@odigos/ui-kit/types';
 
@@ -19,16 +20,33 @@ export function stripNullFields<T>(obj: T): T {
   return obj;
 }
 
+// Per-role badge colors, matching the Figma design:
+//   Viewer -> info (blue), Maintainer -> warning (yellow), Admin -> success (teal).
 export const getStatusForRole = (role: Role): StatusType => {
   switch (role) {
     case Role.VIEWER:
       return StatusType.Info;
     case Role.ADMIN:
-      return StatusType.Error;
+      return StatusType.Success;
     case Role.MAINTAINER:
       return StatusType.Warning;
     case Role.OWNER:
       return StatusType.Default;
+  }
+};
+
+// Per-role Tag variants, matching the Figma "Tags" style (subtle dark bg + light text):
+//   Viewer -> blue, Maintainer -> yellow, Admin -> green, Owner -> purple.
+export const getTagVariantForRole = (role: Role): TagVariants => {
+  switch (role) {
+    case Role.VIEWER:
+      return TagVariants.Blue;
+    case Role.ADMIN:
+      return TagVariants.Green;
+    case Role.MAINTAINER:
+      return TagVariants.Yellow;
+    case Role.OWNER:
+      return TagVariants.Purple;
   }
 };
 
