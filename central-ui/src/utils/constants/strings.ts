@@ -110,6 +110,9 @@ export const USER_CREATED_SUCCESS_SUBTITLE = (email: string) => `A new user acco
 export const CREATE_USER_ERROR = 'Failed to create user. Please try again.';
 export const CREATE_USER_FORM_DESCRIPTION_1 = 'Add a new user to your Odigos environment.';
 export const CREATE_USER_FORM_DESCRIPTION_2 = 'Assign their role and link them to relevant members or compute platforms.';
+export const EDIT_USER = 'Edit user';
+export const DELETE_USER = 'Delete user';
+export const DELETE_USER_CONFIRM = (name: string) => `Are you sure you want to delete "${name}"?`;
 
 // Team strings
 export const TEAM = 'Team';

@@ -10,7 +10,7 @@ import type { SVG } from '@odigos/ui-kit/types';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { EditIcon, TrashIcon, UserIcon } from '@odigos/ui-kit/icons';
-import { Badge, Table, TableVariant, WarningModal, type TableProps, type TableRow } from '@odigos/ui-kit/components/v2';
+import { Tag, Table, TableVariant, Typography, TypographySize, WarningModal, type TableProps, type TableRow } from '@odigos/ui-kit/components/v2';
 
 export enum UserTableColumn {
   Icon = 'icon',
@@ -67,8 +67,8 @@ export const UsersTable: React.FC = () => {
   const columns: TableProps['columns'] = useMemo(
     () => [
       { key: UserTableColumn.Icon, label: '', noSort: true, noFilter: true },
-      { key: UserTableColumn.User, label: UTILS.USERS },
-      { key: UserTableColumn.Role, label: UTILS.ROLE },
+      { key: UserTableColumn.User, label: UTILS.EMAIL, minWidth: 240, noSort: true, noFilter: true },
+      { key: UserTableColumn.Role, label: UTILS.ROLE, flex: 1, noSort: true, noFilter: true },
       // { key: UserTableColumn.Teams, label: UTILS.TEAMS },
     ],
     [],
@@ -82,13 +82,18 @@ export const UsersTable: React.FC = () => {
             <UserIcon strokeWidth={2} size={20} />
           </IconCircle>
         );
-        const RoleCell: React.FC = () => <Badge status={UTILS.getStatusForRole(user.role)} label={user.role} />;
+        const EmailCell: React.FC = () => (
+          <Typography size={TypographySize.XS} nowrap>
+            {user.email}
+          </Typography>
+        );
+        const RoleCell: React.FC = () => <Tag variant={UTILS.getTagVariantForRole(user.role)} label={UTILS.ROLE_LABELS[user.role] ?? user.role} />;
 
         return {
           onClick: isAdmin ? () => setEditOpenForUser(user) : undefined,
           cells: [
             { key: UserTableColumn.Icon, rawValue: '', component: UserIconCell },
-            { key: UserTableColumn.User, rawValue: user.email },
+            { key: UserTableColumn.User, rawValue: user.email, component: EmailCell },
             { key: UserTableColumn.Role, rawValue: user.role, component: RoleCell },
             // { key: UserTableColumn.Teams, rawValue: UTILS.TEAMS_COUNT(user.teams?.length || 0) },
           ],
@@ -109,13 +114,13 @@ export const UsersTable: React.FC = () => {
       return [
         {
           id: `edit-${user.id}`,
-          tooltip: 'Edit user',
+          tooltip: UTILS.EDIT_USER,
           rightIcon: EditIcon,
           onClick: () => setEditOpenForUser(user),
         },
         {
           id: `delete-${user.id}`,
-          tooltip: 'Delete user',
+          tooltip: UTILS.DELETE_USER,
           rightIcon: TrashFilled,
           onClick: () => setDeleteOpenForUser(user),
         },
@@ -150,11 +155,11 @@ export const UsersTable: React.FC = () => {
 
       <WarningModal
         isOpen={deleteOpenForUser !== null}
-        title='Delete user'
-        description={`Are you sure you want to delete "${(deleteOpenForUser?.username || deleteOpenForUser?.email || deleteOpenForUser?.id) ?? ''}"?`}
+        title={UTILS.DELETE_USER}
+        description={UTILS.DELETE_USER_CONFIRM((deleteOpenForUser?.username || deleteOpenForUser?.email || deleteOpenForUser?.id) ?? '')}
         onClose={() => setDeleteOpenForUser(null)}
         approveButton={{
-          label: 'Delete',
+          label: UTILS.DELETE,
           onClick: () => {
             handleDeleteUser(deleteOpenForUser?.id as string);
             setDeleteOpenForUser(null);
@@ -162,7 +167,7 @@ export const UsersTable: React.FC = () => {
           },
         }}
         denyButton={{
-          label: 'Cancel',
+          label: UTILS.CANCEL,
           onClick: () => setDeleteOpenForUser(null),
         }}
       />

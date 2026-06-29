@@ -20,21 +20,6 @@ export function stripNullFields<T>(obj: T): T {
   return obj;
 }
 
-// Per-role badge colors, matching the Figma design:
-//   Viewer -> info (blue), Maintainer -> warning (yellow), Admin -> success (teal).
-export const getStatusForRole = (role: Role): StatusType => {
-  switch (role) {
-    case Role.VIEWER:
-      return StatusType.Info;
-    case Role.ADMIN:
-      return StatusType.Success;
-    case Role.MAINTAINER:
-      return StatusType.Warning;
-    case Role.OWNER:
-      return StatusType.Default;
-  }
-};
-
 // Per-role Tag variants, matching the Figma "Tags" style (subtle dark bg + light text):
 //   Viewer -> blue, Maintainer -> yellow, Admin -> green, Owner -> purple.
 export const getTagVariantForRole = (role: Role): TagVariants => {
