@@ -28,6 +28,7 @@ spec:
     ldPreloadInjectionSupported: true
     k8sAttrsViaEnvVars: true
     noRestartRequired: true
+    waspSupported: true
   agentMetrics:
     runtimeMetrics:
       supported: true
