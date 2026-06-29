@@ -189,7 +189,7 @@ func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distro
 		return nil, errors.New("java-ebpf-instrumentations distro not found")
 	}
 
-	javaEbpfFactory, err := sdks.NewJavaInstrumentationFactoryEnterprise(suffix, d, otlpConn)
+	javaEbpfFactory, err := sdks.NewJavaInstrumentationFactoryEnterprise(suffix, d, wp, otlpConn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create java ebpf factory: %w", err)
 	}

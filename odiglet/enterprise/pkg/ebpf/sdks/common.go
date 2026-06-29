@@ -3,6 +3,7 @@ package sdks
 import (
 	"errors"
 
+	"github.com/odigos-io/odigos/instrumentation"
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.30.0"
 )
@@ -26,4 +27,16 @@ func identifyingAttributeSet(attrs ...attribute.KeyValue) []attribute.KeyValue {
 		}
 	}
 	return identifyingAttrs
+}
+
+func podNameFromSettings(settings instrumentation.Settings) string {
+	// getting the pod name from resource attributes is not the most elegant way of doing this
+	// consider the instrumentation.Settings is declared in OSS, and we don't want to put too much details there
+	for _, kv := range settings.ResourceAttributes {
+		if kv.Key == semconv.K8SPodNameKey {
+			return kv.Value.AsString()
+		}
+	}
+
+	return ""
 }

@@ -19,7 +19,6 @@ import (
 	"go.opentelemetry.io/auto"
 	goAutoConfig "go.opentelemetry.io/auto/config"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"google.golang.org/grpc"
 
 	"github.com/odigos-io/ebpf-core/pkg/collection"
@@ -185,18 +184,6 @@ func WatchGoOffsets(ctx context.Context, requestsChannel ebpf.K8sInstrumentation
 			}
 		}
 	}
-}
-
-func podNameFromSettings(settings instrumentation.Settings) string {
-	// getting the pod name from resource attributes is not the most elegant way of doing this
-	// consider the instrumentation.Settings is declared in OSS, and we don't want to put too much details there
-	for _, kv := range settings.ResourceAttributes {
-		if kv.Key == semconv.K8SPodNameKey {
-			return kv.Value.AsString()
-		}
-	}
-
-	return ""
 }
 
 func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {

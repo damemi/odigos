@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/odigos-io/ebpf-core/pkg/collection"
+	"github.com/odigos-io/ebpf-core/pkg/wasp"
 	"github.com/odigos-io/ebpf-java-instrumentation/v2/jvmmetrics"
 	"github.com/odigos-io/ebpf-java-instrumentation/v2/pkg/dynamic"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/logcapture"
@@ -32,9 +33,12 @@ const (
 )
 
 type JavaOtelEbpfSdkEnterprise struct {
-	inst   *auto.Instrumentation
-	config instrumentation.Config
-	logger *slog.Logger
+	inst             *auto.Instrumentation
+	config           instrumentation.Config
+	logger           *slog.Logger
+	waspMaps         *wasp.Maps
+	waspMapsProvider wasp.MapsProvider
+	podName          string
 }
 
 type JavaInstrumentationFactoryEnterprise struct {
@@ -44,10 +48,11 @@ type JavaInstrumentationFactoryEnterprise struct {
 	agentFilesSourceDir string
 	otlpConn            *grpc.ClientConn
 	// logger is shared across every *auto.Instrumentation
-	logger *slog.Logger
+	logger           *slog.Logger
+	waspMapsProvider wasp.MapsProvider
 }
 
-func NewJavaInstrumentationFactoryEnterprise(traceIdSuffix uint8, otelDistro *distro.OtelDistro, otlpConn *grpc.ClientConn) (instrumentation.Factory, error) {
+func NewJavaInstrumentationFactoryEnterprise(traceIdSuffix uint8, otelDistro *distro.OtelDistro, ws wasp.MapsProvider, otlpConn *grpc.ClientConn) (instrumentation.Factory, error) {
 	if otlpConn == nil {
 		return nil, errNoOTLPConn
 	}
@@ -66,6 +71,7 @@ func NewJavaInstrumentationFactoryEnterprise(traceIdSuffix uint8, otelDistro *di
 	agentDirOnHost := otelDistro.RuntimeAgent.DirectoryNames[0]
 	sourceDir := strings.ReplaceAll(agentDirOnHost, distro.AgentPlaceholderDirectory, k8sconsts.OdigletContainerAgentDirectory)
 	return &JavaInstrumentationFactoryEnterprise{
+		waspMapsProvider:    ws,
 		traceIdSuffix:       traceIdSuffix,
 		agentJarName:        agentJar,
 		agentFilesSourceDir: sourceDir,
@@ -126,19 +132,43 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 		))
 	}
 
+	var (
+		waspMaps *wasp.Maps
+		podName  string
+	)
+
+	if g.waspMapsProvider != nil {
+		if podName = podNameFromSettings(settings); podName != "" {
+			g.logger.Info("using wasp handshake for Java process", "pod", podName)
+			waspMaps, err = g.waspMapsProvider.Release(podName, pid)
+			if err != nil {
+				g.logger.Error("failed to acquire wasp maps", "error", err)
+			} else {
+				opts = append(opts, auto.WithWASPHandshakeMaps(waspMaps))
+			}
+		}
+	}
+
 	inst, err := auto.NewInstrumentation(
 		ctx,
 		opts...,
 	)
 	if err != nil {
 		g.logger.Error("instrumentation setup failed", "error", err)
+		if waspMaps != nil {
+			// return ownership of the wasp maps to the provider in case we failed to instrument this process
+			err = errors.Join(err, g.waspMapsProvider.Take(podName, waspMaps))
+		}
 		return nil, err
 	}
 
 	javaInstWrapper := &JavaOtelEbpfSdkEnterprise{
-		inst:   inst,
-		config: settings.InitialConfig,
-		logger: g.logger,
+		inst:             inst,
+		config:           settings.InitialConfig,
+		logger:           g.logger,
+		waspMaps:         waspMaps,
+		waspMapsProvider: g.waspMapsProvider,
+		podName:          podName,
 	}
 
 	return javaInstWrapper, nil
@@ -157,6 +187,11 @@ func isEnvValPresent(pid int, envVarName string) (bool, error) {
 func (g *JavaOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.Status, error) {
 	javaStatus, err := g.inst.Load(ctx)
 	if err != nil {
+		if g.waspMaps != nil {
+			// if we failed to load, and the instrumentation took ownership over the wasp maps
+			// we return ownership back to the provider
+			err = errors.Join(err, g.waspMapsProvider.Take(g.podName, g.waspMaps))
+		}
 		return instrumentation.Status{}, err
 	}
 
@@ -196,7 +231,14 @@ func (g *JavaOtelEbpfSdkEnterprise) Run(ctx context.Context) error {
 }
 
 func (g *JavaOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
-	return g.inst.Close()
+	var err error
+	if g.waspMaps != nil {
+		// if the instrumentation had ownership of wasp maps - return ownership to the provider
+		// this will allow us to re-use the wasp maps if a new instrumentation is required in the same pod after this.
+		err = errors.Join(err, g.waspMapsProvider.Take(g.podName, g.waspMaps))
+	}
+	err = errors.Join(err, g.inst.Close())
+	return err
 }
 
 // PrepareLogCapture attaches the global Linux TID span map so logs emitted
