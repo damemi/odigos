@@ -86,14 +86,18 @@ func GetOdigosVersion(ctx context.Context, kubeClient *kube.Client) (string, err
 	return version, nil
 }
 
-// GetIgnoredNamespaces returns the list of namespaces to ignore from the Odigos configuration
+// GetIgnoredNamespaces returns the list of namespaces to ignore from the Odigos configuration.
+// It reads the effective config (not the raw odigos-configuration) so the list includes the
+// namespaces the scheduler merges in automatically - the default ignored namespaces and, on
+// OpenShift clusters, the openshift-* system namespaces. Reading the raw config here caused those
+// system/OpenShift namespaces to leak into the central snapshot.
 func GetIgnoredNamespaces(ctx context.Context, kubeClient *kube.Client) ([]string, error) {
 	if !runningInCluster() {
 		return DevIgnoredNamespaces(), nil
 	}
 	ns := env.GetCurrentNamespace()
 
-	configMap, err := kubeClient.CoreV1().ConfigMaps(ns).Get(ctx, consts.OdigosConfigurationName, metav1.GetOptions{})
+	configMap, err := kubeClient.CoreV1().ConfigMaps(ns).Get(ctx, consts.OdigosEffectiveConfigName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Odigos config: %w", err)
 	}

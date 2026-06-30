@@ -1160,6 +1160,17 @@ const operations: OdigosApiOperations = {
   },
   GET_CLUSTER_SNAPSHOT: {
     document: GET_CLUSTER_SNAPSHOT as DocumentNode,
+    // The kit's `useSnapshots()` resolves to THIS single-cluster slot whenever a
+    // specific proxy is selected (in-proxy pages — e.g. the overview's
+    // AddSourceDrawer), scoping the drawer to the selected cluster instead of
+    // listing every connected cluster (PLAT-1255). Snapshots are keyed by
+    // proxyID server-side (`clusterId === proxyID`, see central-backend's
+    // websocket client), so the kit passes `{ clusterId: ctx.proxyID }`. Mirror
+    // GET_ALL_CLUSTER_SNAPSHOTS' guard so a legacy (< v1.20) or VM proxy is
+    // blocked here too and the kit falls back to the per-proxy
+    // `GET_NAMESPACES_WITH_WORKLOADS` path rather than querying a snapshot the
+    // backend can't build.
+    canRun: (ctx) => ctx.platformType !== PlatformType.Vm && !isLegacySelectedProxy(ctx),
     transformResult: (raw) => (raw as { clusterSnapshot?: ClusterSnapshot } | null | undefined)?.clusterSnapshot,
   },
 };
