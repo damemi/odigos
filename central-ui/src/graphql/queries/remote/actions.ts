@@ -1,6 +1,36 @@
 import type { VersionedRemoteFetch } from '@/types';
 import { PlatformType } from '@odigos/ui-kit/types';
 
+// Dynamic action-type catalog (YAML-driven) introduced in odigos v1.31 (the
+// `actionTypes` resolver is unreleased as of v1.30.x). Proxies older than that
+// have no bucket here -> `getVersionedQuery` returns undefined -> `canRun` is
+// false and the kit falls back to its hard-coded ACTION_OPTIONS.
+export const GET_ACTION_TYPES: VersionedRemoteFetch = {
+  [PlatformType.K8s]: {
+    'v1.31': `
+  query GetActionTypes {
+    actionTypes {
+      type
+      displayName
+      description
+      allowedSignals
+      docsUrl
+      fields {
+        name
+        displayName
+        componentType
+        componentProperties
+        initialValue
+        renderCondition
+      }
+    }
+  }`,
+  },
+  // VM proxies resolve the action catalog from the versioned vmagent
+  // `actionTypes` dialect document (see the VmSpec on GET_ACTION_TYPES in
+  // odigos-api-adapter).
+};
+
 export const GET_ACTIONS: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
     'v1.29': `

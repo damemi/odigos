@@ -63,6 +63,35 @@ import {
   vmUpdateDestinationVariables,
 } from '@/graphql/remote/vm-destinations';
 import {
+  mapVmInstrumentationRules,
+  vmCreateInstrumentationRuleResult,
+  vmCreateInstrumentationRuleVariables,
+  vmDeleteInstrumentationRuleResult,
+  vmDeleteInstrumentationRuleVariables,
+  vmUpdateInstrumentationRuleResult,
+  vmUpdateInstrumentationRuleVariables,
+} from '@/graphql/remote/vm-instrumentation-rules';
+import {
+  mapVmActions,
+  vmCreateActionResult,
+  vmCreateActionVariables,
+  vmDeleteActionResult,
+  vmDeleteActionVariables,
+  vmUpdateActionResult,
+  vmUpdateActionVariables,
+} from '@/graphql/remote/vm-actions';
+import { mapVmActionTypesToOptions } from '@/graphql/remote/vm-action-types';
+import type {
+  CreateActionMutation,
+  CreateInstrumentationRuleMutation,
+  DeleteActionMutation,
+  DeleteInstrumentationRuleMutation,
+  GetActionsQuery,
+  GetInstrumentationRulesQuery,
+  UpdateActionMutation,
+  UpdateInstrumentationRuleMutation,
+} from '@odigos/vmagent-api-apollo-client';
+import {
   API,
   ROUTES,
   getVersionedQuery,
@@ -169,6 +198,7 @@ import type {
   NodeCollectoInfo,
   NoisyOperationRuleInput,
   PeerSources,
+  GetActionTypesResult,
   GetDestinationCategoriesResult,
   GetPotentialDestinationsResult,
   PodInfo,
@@ -195,6 +225,7 @@ import {
   GET_SYSTEM_CONFIG,
   // versioned (REMOTE_FETCH-wrapped) operations
   GET_ACTIONS,
+  GET_ACTION_TYPES,
   GET_CONFIG,
   GET_CONFIG_YAMLS,
   GET_DATA_STREAMS,
@@ -854,6 +885,52 @@ const parseActionRenamesInData = <T,>(data: T | undefined): T | undefined => {
   return data;
 };
 
+// Root-level safety net for the kit's "transformVariables runs outside the
+// runner's try/catch" gap.
+//
+// The kit executes an operation one of two ways:
+//   - via `Operation.run`, which it ALWAYS wraps in try/catch, OR
+//   - via its default `transformVariables -> client.{query,mutate}` path, where
+//     `transformVariables` is called BEFORE the try block.
+//
+// So any throw from a `transformVariables` (e.g. a VM builder rejecting an
+// action type with no VM equivalent, or a rule with an empty required
+// collection) escapes as an unhandled rejection that silently aborts the
+// save/refetch with only a console error. By giving EVERY operation a `run`,
+// we move execution onto the guarded path for all operations — current and
+// future — so validation errors always surface as normal error toasts without
+// every call site having to remember to opt in.
+//
+// `run` delegates to `runRemoteSingle` (the same single-REMOTE_FETCH executor
+// the legacy paths already use): for reads it's identical to the kit's default
+// (`client.query`, network-only); for the REMOTE_FETCH-wrapped "mutations" the
+// outer document is a `query RemoteFetch` either way, so the wire request is
+// unchanged. Operations that already define their own `run` (the legacy
+// multi-step executors) are left untouched — the kit already guards those.
+const withGuardedRun = <TData, TVars>(op: Operation<TData, TVars>): Operation<TData, TVars> => {
+  if (op.run) return op;
+  return {
+    ...op,
+    run: async (client, vars, ctx) => {
+      try {
+        return await runRemoteSingle(client, op, vars, ctx);
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+  };
+};
+
+// Apply `withGuardedRun` to every operation in the map so the guard is a root
+// behavior of the adapter rather than an opt-in per operation.
+const withGuardedRuns = (ops: OdigosApiOperations): OdigosApiOperations => {
+  const guarded = {} as Record<string, Operation<unknown, unknown> | undefined>;
+  for (const [key, op] of Object.entries(ops)) {
+    guarded[key] = op ? (withGuardedRun(op as Operation<unknown, unknown>) as Operation<unknown, unknown>) : op;
+  }
+  return guarded as unknown as OdigosApiOperations;
+};
+
 // Wrap a REMOTE_FETCH-backed action op so `renames` is stringified before the
 // inner variables are embedded, and parsed back out of the inner response.
 const withActionRenames = <TData, TVars>(op: Operation<TData, TVars>): Operation<TData, TVars> => ({
@@ -878,7 +955,7 @@ const withRemoteConfigVars = <TData,>(op: Operation<TData, UpdateRemoteConfigVar
   };
 };
 
-const operations: OdigosApiOperations = {
+const operations: OdigosApiOperations = withGuardedRuns({
   // sources / workloads
   //
   // Legacy < v1.20: the kit always asks for `GET_WORKLOADS`; here it resolves
@@ -988,16 +1065,70 @@ const operations: OdigosApiOperations = {
 
   // actions. `renames` is a JSON-string on the wire; (de)serialize it so the
   // kit's object-shaped `renames` survives the proxy round-trip (see helpers above).
-  GET_ACTIONS: withActionRenames(wrapVersioned<GetActionsData, undefined>(GET_ACTIONS)),
-  CREATE_ACTION: withActionRenames(wrapVersioned<CreateActionResult, CreateActionVars>(CREATE_ACTION)),
-  UPDATE_ACTION: withActionRenames(wrapVersioned<UpdateActionResult, UpdateActionVars>(UPDATE_ACTION)),
-  DELETE_ACTION: wrapVersioned<DeleteActionResult, DeleteActionVars>(DELETE_ACTION),
+  // VM: only URL templatization maps across both surfaces — VM-only action types
+  // (processorAddition / spanMetrics) are filtered out of reads and the k8s-only
+  // kit types have no VM equivalent (see vm-actions). `renames` is a k8s-only
+  // RenameAttribute concern, so `withActionRenames` is a no-op on VM.
+  GET_ACTIONS: withActionRenames(
+    wrapVersioned<GetActionsData, undefined>(GET_ACTIONS, undefined, undefined, {
+      select: (d) => d.GetActionsDocument,
+      transformResult: (data) => mapVmActions(data as GetActionsQuery),
+    }),
+  ),
+  // Dynamic action-type catalog (YAML-driven). K8s: introduced in odigos v1.31 —
+  // older proxies have no bucket, so `canRun` is false and the kit falls back to
+  // its hard-coded ACTION_OPTIONS. VM: resolved from the vmagent `actionTypes`
+  // dialect document (graceful no-op on dialects that predate it) and mapped to
+  // the kit's catalog shape (VM-only types dropped, see vm-action-types).
+  GET_ACTION_TYPES: wrapVersioned<GetActionTypesResult, undefined>(GET_ACTION_TYPES, undefined, undefined, {
+    select: (d) => d.GetActionTypesDocument,
+    transformResult: (data) => mapVmActionTypesToOptions(data),
+  }),
+  CREATE_ACTION: withActionRenames(
+    wrapVersioned<CreateActionResult, CreateActionVars>(CREATE_ACTION, undefined, undefined, {
+      select: (d) => d.CreateActionDocument,
+      transformVariables: (vars) => vmCreateActionVariables(vars),
+      transformResult: (data) => vmCreateActionResult(data as CreateActionMutation),
+    }),
+  ),
+  UPDATE_ACTION: withActionRenames(
+    wrapVersioned<UpdateActionResult, UpdateActionVars>(UPDATE_ACTION, undefined, undefined, {
+      select: (d) => d.UpdateActionDocument,
+      transformVariables: (vars) => vmUpdateActionVariables(vars),
+      transformResult: (data) => vmUpdateActionResult(data as UpdateActionMutation),
+    }),
+  ),
+  DELETE_ACTION: wrapVersioned<DeleteActionResult, DeleteActionVars>(DELETE_ACTION, undefined, undefined, {
+    select: (d) => d.DeleteActionDocument,
+    transformVariables: (vars) => vmDeleteActionVariables(vars),
+    transformResult: (data) => vmDeleteActionResult(data as DeleteActionMutation),
+  }),
 
   // instrumentation rules
-  GET_INSTRUMENTATION_RULES: wrapVersioned<GetInstrumentationRulesData, undefined>(GET_INSTRUMENTATION_RULES),
-  CREATE_INSTRUMENTATION_RULE: wrapVersioned<CreateInstrumentationRuleResult, CreateInstrumentationRuleVars>(CREATE_INSTRUMENTATION_RULE),
-  UPDATE_INSTRUMENTATION_RULE: wrapVersioned<UpdateInstrumentationRuleResult, UpdateInstrumentationRuleVars>(UPDATE_INSTURMENTATION_RULE),
-  DELETE_INSTRUMENTATION_RULE: wrapVersioned<DeleteInstrumentationRuleResult, DeleteInstrumentationRuleVars>(DELETE_INSTURMENTATION_RULE),
+  // VM: the agents-api rule surface — `instrumentationRules` read + per-rule
+  // create/update/delete — resolved from the versioned vmagent dialect registry
+  // and shape-mapped (see vm-instrumentation-rules). The VM rule model is
+  // narrower than k8s (global rules, no scopes/notes/disabled, boolean
+  // payload-collection), so those fields map to neutral defaults.
+  GET_INSTRUMENTATION_RULES: wrapVersioned<GetInstrumentationRulesData, undefined>(GET_INSTRUMENTATION_RULES, undefined, undefined, {
+    select: (d) => d.GetInstrumentationRulesDocument,
+    transformResult: (data) => mapVmInstrumentationRules(data as GetInstrumentationRulesQuery),
+  }),
+  CREATE_INSTRUMENTATION_RULE: wrapVersioned<CreateInstrumentationRuleResult, CreateInstrumentationRuleVars>(CREATE_INSTRUMENTATION_RULE, undefined, undefined, {
+    select: (d) => d.CreateInstrumentationRuleDocument,
+    transformVariables: (vars) => vmCreateInstrumentationRuleVariables(vars),
+    transformResult: (data) => vmCreateInstrumentationRuleResult(data as CreateInstrumentationRuleMutation),
+  }),
+  UPDATE_INSTRUMENTATION_RULE: wrapVersioned<UpdateInstrumentationRuleResult, UpdateInstrumentationRuleVars>(UPDATE_INSTURMENTATION_RULE, undefined, undefined, {
+    select: (d) => d.UpdateInstrumentationRuleDocument,
+    transformVariables: (vars) => vmUpdateInstrumentationRuleVariables(vars),
+    transformResult: (data) => vmUpdateInstrumentationRuleResult(data as UpdateInstrumentationRuleMutation),
+  }),
+  DELETE_INSTRUMENTATION_RULE: wrapVersioned<DeleteInstrumentationRuleResult, DeleteInstrumentationRuleVars>(DELETE_INSTURMENTATION_RULE, undefined, undefined, {
+    select: (d) => d.DeleteInstrumentationRuleDocument,
+    transformVariables: (vars) => vmDeleteInstrumentationRuleVariables(vars),
+    transformResult: (data) => vmDeleteInstrumentationRuleResult(data as DeleteInstrumentationRuleMutation),
+  }),
 
   // data streams
   GET_DATA_STREAMS: wrapVersioned<GetDataStreamsData, undefined>(GET_DATA_STREAMS),
@@ -1173,7 +1304,7 @@ const operations: OdigosApiOperations = {
     canRun: (ctx) => ctx.platformType !== PlatformType.Vm && !isLegacySelectedProxy(ctx),
     transformResult: (raw) => (raw as { clusterSnapshot?: ClusterSnapshot } | null | undefined)?.clusterSnapshot,
   },
-};
+});
 
 type AdapterProps = PropsWithChildren;
 

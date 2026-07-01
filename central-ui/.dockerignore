@@ -9,3 +9,9 @@
 **/.turbo
 **/.venv
 **/*.tgz
+
+# yalc-linked packages (e.g. @odigos/vmagent-api-apollo-client) ship their prebuilt
+# dist/ and are consumed via file:.yalc/* in package.json. The broad ignores above
+# (notably **/dist and **/node_modules) would strip that output from the build
+# context, so re-include the whole .yalc tree.
+!.yalc/**
