@@ -302,13 +302,10 @@ spec:
         - value: "default"
       (env[?name == 'OTEL_PYTHON_CONFIGURATOR']):
         - value: "ebpf"
-      (env[?name == 'NODE_IP']):
-        - valueFrom:
-            fieldRef:
-              apiVersion: v1
-              fieldPath: status.hostIP
-      (env[?name == 'ODIGOS_OPAMP_SERVER_HOST']):
-        - (($values.k8sMinorVersion < `26` && value == '$(NODE_IP):4320') || value == 'odiglet-local.odigos-test:4320'): true
+      # OpAMP transport selection depends on the instrumentor version: fresh installs on this branch pick unix (ODIGOS_OPAMP_UNIX_SOCKET), 
+      # while cli-upgrade pods instrumented by the previous release still have the http var (ODIGOS_OPAMP_SERVER_HOST). Accept either.
+      (env[?name == 'ODIGOS_OPAMP_UNIX_SOCKET' || name == 'ODIGOS_OPAMP_SERVER_HOST']):
+        - ((name == 'ODIGOS_OPAMP_UNIX_SOCKET' && value == '/var/odigos/exchange/exchange.sock') || (name == 'ODIGOS_OPAMP_SERVER_HOST' && (($values.k8sMinorVersion < `26` && value == '$(NODE_IP):4320') || value == 'odiglet-local.odigos-test:4320'))): true
       (env[?name == 'LD_PRELOAD']):
         - value: "/var/odigos/loader/loader.so"
 status:
