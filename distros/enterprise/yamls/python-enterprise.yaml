@@ -36,3 +36,6 @@ spec:
       supported: true
     headSampling:
       supported: true
+  ownDiagnostics:
+    odigosAgentOwnLogerSupported: true
+    openTelemetryComponentsLoggerSupported: true
