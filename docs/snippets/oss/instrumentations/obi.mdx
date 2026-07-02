@@ -135,8 +135,7 @@ traces and metrics can be enabled without requiring the same distro or lifecycle
 | Signal | OBI pipeline | Enabled in Odigos when | Applies to |
 | ------ | ------------ | ---------------------- | ---------- |
 | **Traces** | [AppO11y](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/tree/main/pkg/appolly) (application protocol tracing) | The `opentelemetry-ebpf-instrumentation` distro is selected for the container. DNS lookup traces are included by default for the OBI distro | Processes instrumented with the OBI distro only |
-| **Network metrics** | [NetO11y](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/tree/main/pkg/netolly) (point-to-point flow bytes) | An [InstrumentationRule](/oss/pipeline/rules/introduction) with `metricsConfig.networkMetrics.enabled: true` (optionally scoped via `scopes`) | Any successfully instrumented process on the node (Go, Java, OBI, etc.) |
-| **Stats metrics** | [StatsO11y](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/tree/main/pkg/statsolly) (host-level TCP statistics such as RTT and failed connections) | An InstrumentationRule with `metricsConfig.statsMetrics.enabled: true` (optionally scoped via `scopes`) | Same as network metrics |
+| **Network metrics** | [NetO11y](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/tree/main/pkg/netolly) (point-to-point flow bytes) and [StatsO11y](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/tree/main/pkg/statsolly) (TCP statistics such as RTT and failed connections) | An [InstrumentationRule](/oss/pipeline/rules/introduction) with `networkMetrics.enabled: true` (optionally scoped via `scopes`) | Any successfully instrumented process on the node (Go, Java, OBI, etc.) |
 
 All OBI telemetry that Odigos collects is exported over OTLP to the odiglet node collector (`localhost:4317`), then
 follows the same Odigos pipeline as other workload telemetry.
@@ -154,8 +153,8 @@ metricsSources:
     disabled: false
 ```
 
-**Enabling network and stats metrics:** Create an `InstrumentationRule` in the Odigos installation namespace (typically
-`odigos-system`) with `metricsConfig`. See [Metrics Config](/oss/pipeline/rules/metricsconfig) for configuration options,
+**Enabling network metrics:** Create an `InstrumentationRule` in the Odigos installation namespace (typically
+`odigos-system`) with `networkMetrics.enabled: true`. See [Network Metrics](/oss/pipeline/rules/networkmetrics) for configuration options,
 examples, and verification steps.
 
 Multiple rules merge with OR semantics (if any rule enables a signal, it is enabled). Workload scoping via `scopes` is
@@ -164,8 +163,9 @@ optional — omit it to apply cluster-wide.
 ### Network metrics
 
 Network metrics describe bytes sent and received between endpoints (pods, services, nodes, and related Kubernetes
-metadata). Enable cluster infrastructure with `metricsSources.networkMetrics.disabled: false`, then enable collection with an
-InstrumentationRule `metricsConfig.networkMetrics` toggle (cluster-wide or scoped via `scopes`).
+metadata), along with TCP-level statistics such as round-trip time and failed connection attempts. Enable cluster
+infrastructure with `metricsSources.networkMetrics.disabled: false`, then enable collection with an
+InstrumentationRule `networkMetrics.enabled: true` toggle (cluster-wide or scoped via `scopes`).
 
 <CardGroup cols={2}>
   <Card
@@ -200,8 +200,7 @@ InstrumentationRule `metricsConfig.networkMetrics` toggle (cluster-wide or scope
 
 ### Stats metrics
 
-Stats metrics capture TCP-level statistics between endpoints, including round-trip time and failed connection
-attempts. Enable with an InstrumentationRule `metricsConfig.statsMetrics` toggle (cluster-wide or scoped via `scopes`).
+Stats metrics (`obi.stat.tcp.rtt`, `obi.stat.tcp.failed.connections`, and related series) are collected together with network flow metrics when the Network Metrics rule is enabled.
 
 <CardGroup cols={2}>
   <Card

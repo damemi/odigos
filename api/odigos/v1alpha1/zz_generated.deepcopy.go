@@ -1463,9 +1463,9 @@ func (in *InstrumentationRuleSpec) DeepCopyInto(out *InstrumentationRuleSpec) {
 		*out = new(instrumentationrules.EbpfLogCapture)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.MetricsConfig != nil {
-		in, out := &in.MetricsConfig, &out.MetricsConfig
-		*out = new(instrumentationrules.MetricsConfig)
+	if in.NetworkMetrics != nil {
+		in, out := &in.NetworkMetrics, &out.NetworkMetrics
+		*out = new(instrumentationrules.NetworkMetrics)
 		(*in).DeepCopyInto(*out)
 	}
 	if in.TraceVerbosity != nil {

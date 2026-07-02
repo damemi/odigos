@@ -25,7 +25,7 @@ var _ instrumentation.Factory = (*Manager)(nil)
 
 // Manager owns the shared OBI instrumenter and implements instrumentation.Factory for the OBI distro.
 // Run waits until ctx is canceled, then stops the instrumenter. CreateInstrumentation handles OBI traces for the OBI distro.
-// SyncMetrics attaches network/stats metrics for any instrumented process when enabled via InstrumentationRule metricsConfig.
+// SyncMetrics attaches network flow and TCP stats metrics for any instrumented process when enabled via InstrumentationRule networkMetrics.
 //
 // PID selection updates are not synchronized here. They are invoked from the instrumentation manager
 // event loop (Load/Close and lifecycle callbacks), which processes one event at a time.
@@ -58,32 +58,15 @@ func (m *Manager) CreateInstrumentation(_ context.Context, pid int, _ instrument
 
 // SyncMetrics enables or disables network and stats metrics for pid based on per-workload metrics configuration.
 func (m *Manager) SyncMetrics(pid int, metrics *agentsignalconfig.AgentMetricsConfig) {
-	if pid <= 0 || metrics == nil {
-		m.removeMetricsPIDs(pid, true, true)
-		m.maybeStopInstrumenter()
-		return
-	}
-
-	networkMetricsEnabled := instrumentationrules.MetricSignalEnabled(metrics.NetworkMetrics)
-	statsMetricsEnabled := instrumentationrules.MetricSignalEnabled(metrics.StatsMetrics)
-
-	if !networkMetricsEnabled && !statsMetricsEnabled {
-		m.removeMetricsPIDs(pid, true, true)
+	if pid <= 0 || metrics == nil || !instrumentationrules.NetworkMetricsEnabled(metrics.NetworkMetrics) {
+		m.removeNetworkMetricsPIDs(pid)
 		m.maybeStopInstrumenter()
 		return
 	}
 
 	m.ensureInstrumenterRunning()
-	if networkMetricsEnabled {
-		m.selector.NetworkMetrics().AddPIDs(uint32(pid))
-	} else {
-		m.selector.NetworkMetrics().RemovePIDs(uint32(pid))
-	}
-	if statsMetricsEnabled {
-		m.selector.StatsMetrics().AddPIDs(uint32(pid))
-	} else {
-		m.selector.StatsMetrics().RemovePIDs(uint32(pid))
-	}
+	m.selector.NetworkMetrics().AddPIDs(uint32(pid))
+	m.selector.StatsMetrics().AddPIDs(uint32(pid))
 }
 
 // Run waits until ctx is canceled, then stops the OBI instrumenter.
@@ -119,13 +102,9 @@ func (p *processInstrumentation) ApplyConfig(context.Context, instrumentation.Co
 	return nil
 }
 
-func (m *Manager) removeMetricsPIDs(pid int, networkMetricsEnabled, statsMetricsEnabled bool) {
-	if networkMetricsEnabled {
-		m.selector.NetworkMetrics().RemovePIDs(uint32(pid))
-	}
-	if statsMetricsEnabled {
-		m.selector.StatsMetrics().RemovePIDs(uint32(pid))
-	}
+func (m *Manager) removeNetworkMetricsPIDs(pid int) {
+	m.selector.NetworkMetrics().RemovePIDs(uint32(pid))
+	m.selector.StatsMetrics().RemovePIDs(uint32(pid))
 }
 
 func obiConfigForOdigos() *obipkg.Config {

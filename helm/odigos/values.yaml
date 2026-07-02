@@ -1399,7 +1399,7 @@ metricsSources:
   # @schema
   # description: |-
   #   Network flow metrics infrastructure. When not disabled, odiglet runs with hostNetwork.
-  #   Per-workload collection is enabled via InstrumentationRule metricsConfig.
+  #   Per-workload collection is enabled via InstrumentationRule networkMetrics.
   # @schema
   networkMetrics:
     # @schema

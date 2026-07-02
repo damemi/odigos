@@ -190,7 +190,7 @@
                       "oss/pipeline/rules/headerscollection",
                       "oss/pipeline/rules/payloadcollection",
                       "oss/pipeline/rules/custominstrumentation",
-                      "oss/pipeline/rules/metricsconfig"
+                      "oss/pipeline/rules/networkmetrics"
                     ]
                   },
                   {
@@ -519,7 +519,7 @@
                       "enterprise/pipeline/rules/headerscollection",
                       "enterprise/pipeline/rules/payloadcollection",
                       "enterprise/pipeline/rules/custominstrumentation",
-                      "enterprise/pipeline/rules/metricsconfig"
+                      "enterprise/pipeline/rules/networkmetrics"
                     ]
                   },
                   {

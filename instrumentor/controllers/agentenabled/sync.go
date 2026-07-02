@@ -292,7 +292,7 @@ func updateInstrumentationConfigSpec(ctx context.Context, c client.Client, pw k8
 			agentConfig.Metrics = dynamicContainerConfigs.AgentMetricsConfig
 			agentConfig.Logs = dynamicContainerConfigs.AgentLogsConfig
 			agentConfig.AgentDiagnostics = dynamicContainerConfigs.AgentDiagnostics
-			metrics.ApplyRuleMetricsConfig(&agentConfig.Metrics, &rulesForContainer)
+			metrics.ApplyRuleNetworkMetrics(&agentConfig.Metrics, &rulesForContainer)
 		}
 		containersConfig = append(containersConfig, agentConfig)
 
