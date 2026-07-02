@@ -103,10 +103,6 @@ func NewManager(
 		LogsMap:                 logsMap,
 		LogsAttrSubscribe:       opts.LogsAttrSubscribe,
 	}
-	if opts.OBIManager != nil {
-		managerOpts.ProcessLifecycleCallback = obiProcessLifecycleCallback(opts.OBIManager, client)
-		managerOpts.ProcessConfigCallback = obiProcessConfigCallback(opts.OBIManager)
-	}
 
 	// Add file open triggers from all distributions.
 	// This is required to avoid race conditions in which we would attempt to instrument a process

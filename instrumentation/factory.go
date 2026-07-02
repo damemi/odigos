@@ -83,8 +83,27 @@ type Instrumentation interface {
 	ApplyConfig(ctx context.Context, config Config) error
 }
 
+// ReportSuppression instructs a Reporter not to surface a Status, and records why. It is set by an
+// instrumentation that attaches to a process whose status is owned and reported by someone else
+// (e.g. OBI network metrics on a natively-instrumented process), where reporting again would
+// produce a duplicate or conflicting report. The reporter needs no knowledge of the instrumentation
+// that produced the status; it only reads this directive.
+type ReportSuppression struct {
+	// Reason is a short, human-readable explanation of why the status is not reported. Surfaced in
+	// logs to make suppressed reports discoverable.
+	Reason string
+
+	// OwnedBy names the agent or source that owns and reports the process's status instead, when
+	// known. Optional; intended for logs and diagnostics.
+	OwnedBy string
+}
+
 // Status is used to identify the status of an instrumentation and its libraries.
 type Status struct {
 	// Components is a map of component names (such as instrumentation library names) to their status.
 	Components map[string]error
+
+	// Suppression, when non-nil, tells the reporter to skip reporting this status and explains why.
+	// A nil Suppression (the zero value) means the status is reported normally.
+	Suppression *ReportSuppression
 }

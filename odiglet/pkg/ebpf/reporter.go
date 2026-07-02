@@ -7,6 +7,7 @@ import (
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/instrumentation"
 	instance "github.com/odigos-io/odigos/k8sutils/pkg/instrumentation_instance"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
@@ -66,6 +67,21 @@ func (r *k8sReporter) OnInit(ctx context.Context, pid int, err error, e *K8sProc
 func (r *k8sReporter) OnLoad(ctx context.Context, pid int, err error, e *K8sProcessDetails, status instrumentation.Status) error {
 	if err != nil {
 		return r.updateInstrumentationInstanceStatus(ctx, e, pid, InstrumentationUnhealthy, FailedToLoad, err.Error(), status)
+	}
+
+	// The status may direct the reporter to skip reporting eg OBI network metrics attached to a
+	// natively-instrumented process, whose InstrumentationInstance is owned and reported by the
+	// native agent. Reporting again would create a duplicate/conflicting instance.
+	if status.Suppression != nil {
+		commonlogger.LoggerCompat().With("subsystem", "ebpf-reporter").Debug(
+			"skipping instrumentation status report",
+			"pod", e.Pod.Name,
+			"container", e.ContainerName,
+			"pid", pid,
+			"reason", status.Suppression.Reason,
+			"ownedBy", status.Suppression.OwnedBy,
+		)
+		return nil
 	}
 
 	msg := fmt.Sprintf("Successfully loaded eBPF probes to pod: %s container: %s", e.Pod.Name, e.ContainerName)

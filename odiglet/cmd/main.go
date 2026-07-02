@@ -102,7 +102,7 @@ func main() {
 		OBIManager:                 obiManager,
 	}
 
-	factories, err := ebpfInstrumentationFactories(otlpCommonConn, obiManager)
+	factories, err := ebpfInstrumentationFactories(otlpCommonConn, obiManager, dg)
 	if err != nil {
 		logger.Error("failed to create ebpf factories: %w", err)
 		os.Exit(1)
@@ -120,13 +120,31 @@ func main() {
 	logger.Info("odiglet exiting")
 }
 
-func ebpfInstrumentationFactories(otlpCommon *grpc.ClientConn, obiManager *obi.Manager) (map[string]commonInstrumentation.Factory, error) {
+// ebpfInstrumentationFactories builds the distro -> factory map used by the instrumentation manager.
+//
+// Every distro is registered explicitly so that OBI network metrics can be attached uniformly:
+//   - the OBI distro gets OBI traces (+ metrics) via TracesFactory,
+//   - eBPF distros with their own instrumentation (Go) are wrapped so OBI adds metrics alongside,
+//   - every remaining (natively-instrumented) distro gets OBI metrics-only via MetricsFactory.
+func ebpfInstrumentationFactories(otlpCommon *grpc.ClientConn, obiManager *obi.Manager, dg *distros.Getter) (map[string]commonInstrumentation.Factory, error) {
 	goFactory, err := sdks.NewGoInstrumentationFactory(otlpCommon)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create go instrumentation factory: %w", err)
 	}
-	return map[string]commonInstrumentation.Factory{
-		"golang-community": goFactory,
-		obi.DistroName:     obiManager,
-	}, nil
+
+	factories := map[string]commonInstrumentation.Factory{
+		"golang-community": obiManager.Wrap(goFactory),
+		obi.DistroName:     obiManager.TracesFactory(),
+	}
+
+	// Any distro without a dedicated eBPF factory is instrumented natively by its own agent; attach
+	// OBI network metrics to it (enabled per-workload via the networkMetrics InstrumentationRule).
+	for _, d := range dg.GetAllDistros() {
+		if _, ok := factories[d.Name]; ok {
+			continue
+		}
+		factories[d.Name] = obiManager.MetricsFactory()
+	}
+
+	return factories, nil
 }
