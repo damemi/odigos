@@ -63,8 +63,8 @@ export const mapVmRuleToInstrumentationRule = (rule: VmRule): InstrumentationRul
     ruleId: rule.name,
     ruleName: rule.name,
     type: toKitRuleType(rule.ruleType),
-    notes: '',
-    disabled: false,
+    notes: rule.notes ?? '',
+    disabled: !rule.enabled,
     mutable: true,
     profileName: '',
     sourceScopes: null,
@@ -152,20 +152,18 @@ type VmRuleInput = CreateInstrumentationRuleVars['instrumentationRule'];
 const payloadKindHasAdvancedOptions = (kind: { mimeTypes?: string[] | null; maxPayloadLength?: number | null; dropPartialPayloads?: boolean | null } | null | undefined): boolean =>
   !!kind && ((kind.mimeTypes?.length ?? 0) > 0 || kind.maxPayloadLength != null || kind.dropPartialPayloads === true);
 
-// The VM agents-api rule schema is far narrower than the kit's k8s rule model:
-// `CreateInstrumentationRuleInput`/`UpdateInstrumentationRuleInput` only carry
-// `name`, `ruleType`, and the per-type config branch. Every other field the kit
-// form can set (disabled, notes, source scopes, workloads, conditions, a mutable
-// display name, payload-collection advanced options, ...) has NO VM equivalent,
-// so it would be silently dropped here and never reflected on read. Silently
-// losing them is dangerous (e.g. a "disabled" rule stays active), so reject the
-// mutation up front with a clear, itemized error instead of dropping data. The
-// root `withGuardedRuns` wrapper turns this throw into a normal error toast.
+// The VM agents-api rule schema is narrower than the kit's k8s rule model.
+// `CreateInstrumentationRuleInput`/`UpdateInstrumentationRuleInput` carry
+// `name`, `ruleType`, `enabled`, `notes`, and the per-type config branch — but
+// NOT the k8s-only targeting fields (source scopes, workloads, conditions,
+// instrumentation libraries), a mutable display name, or the payload-collection
+// advanced options. Those would be silently dropped here and never reflected on
+// read, so reject the mutation up front with a clear, itemized error instead of
+// dropping data. The root `withGuardedRuns` wrapper turns this throw into a
+// normal error toast.
 const assertVmSupportedRuleFields = (rule: VmRuleInput, opts?: { ruleId?: string }): void => {
   const unsupported: string[] = [];
 
-  if (rule.disabled) unsupported.push('disabling a rule (VM rules are always active)');
-  if (stripEmpty(rule.notes)) unsupported.push('notes');
   if (opts?.ruleId && stripEmpty(rule.ruleName) && rule.ruleName !== opts.ruleId) unsupported.push('renaming a rule');
   if ((rule.sourcesScopes?.length ?? 0) > 0) unsupported.push('source scopes');
   if ((rule.workloads?.length ?? 0) > 0) unsupported.push('workloads');
@@ -242,16 +240,31 @@ const buildVmRuleConfig = (rule: CreateInstrumentationRuleVars['instrumentationR
 };
 
 export const vmCreateInstrumentationRuleVariables = (vars: CreateInstrumentationRuleVars): Record<string, unknown> => {
-  assertVmSupportedRuleFields(vars.instrumentationRule);
+  const rule = vars.instrumentationRule;
+  assertVmSupportedRuleFields(rule);
   // VM requires a non-empty resource `name` (it doubles as the id); generate one
-  // when the kit form leaves the rule name blank.
-  const input: CreateInstrumentationRuleInput = { name: stripEmpty(vars.instrumentationRule.ruleName) ?? generateId(), ...buildVmRuleConfig(vars.instrumentationRule) };
+  // when the kit form leaves the rule name blank. `enabled` is required by the
+  // schema (the kit models the inverse `disabled`); `notes` is optional.
+  const notes = stripEmpty(rule.notes);
+  const input: CreateInstrumentationRuleInput = {
+    name: stripEmpty(rule.ruleName) ?? generateId(),
+    enabled: !rule.disabled,
+    ...(notes ? { notes } : {}),
+    ...buildVmRuleConfig(rule),
+  };
   return { input };
 };
 
 export const vmUpdateInstrumentationRuleVariables = (vars: UpdateInstrumentationRuleVars): Record<string, unknown> => {
-  assertVmSupportedRuleFields(vars.instrumentationRule, { ruleId: vars.ruleId });
-  const input: UpdateInstrumentationRuleInput = { name: vars.ruleId, ...buildVmRuleConfig(vars.instrumentationRule) };
+  const rule = vars.instrumentationRule;
+  assertVmSupportedRuleFields(rule, { ruleId: vars.ruleId });
+  const notes = stripEmpty(rule.notes);
+  const input: UpdateInstrumentationRuleInput = {
+    name: vars.ruleId,
+    enabled: !rule.disabled,
+    ...(notes ? { notes } : {}),
+    ...buildVmRuleConfig(rule),
+  };
   return { input };
 };
 

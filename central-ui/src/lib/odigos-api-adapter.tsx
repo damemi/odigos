@@ -81,6 +81,7 @@ import {
   vmUpdateActionVariables,
 } from '@/graphql/remote/vm-actions';
 import { mapVmActionTypesToOptions } from '@/graphql/remote/vm-action-types';
+import { mapVmRuleTypesToOptions } from '@/graphql/remote/vm-rule-types';
 import type {
   CreateActionMutation,
   CreateInstrumentationRuleMutation,
@@ -199,6 +200,7 @@ import type {
   NoisyOperationRuleInput,
   PeerSources,
   GetActionTypesResult,
+  GetInstrumentationRuleTypesResult,
   GetDestinationCategoriesResult,
   GetPotentialDestinationsResult,
   PodInfo,
@@ -235,6 +237,7 @@ import {
   GET_DESTINATION_CATEGORIES,
   GET_EFFECTIVE_CONFIG,
   GET_INSTRUMENTATION_RULES,
+  GET_INSTRUMENTATION_RULE_TYPES,
   GET_K8S_MANIFEST,
   GET_METRICS,
   GET_NAMESPACES_WITH_WORKLOADS,
@@ -1113,6 +1116,16 @@ const operations: OdigosApiOperations = withGuardedRuns({
   GET_INSTRUMENTATION_RULES: wrapVersioned<GetInstrumentationRulesData, undefined>(GET_INSTRUMENTATION_RULES, undefined, undefined, {
     select: (d) => d.GetInstrumentationRulesDocument,
     transformResult: (data) => mapVmInstrumentationRules(data as GetInstrumentationRulesQuery),
+  }),
+  // Dynamic rule-type catalog (YAML-driven), mirroring GET_ACTION_TYPES. K8s:
+  // introduced in odigos v1.31 — older proxies have no bucket, so `canRun` is
+  // false and the kit falls back to its hard-coded INSTRUMENTATION_RULE_OPTIONS.
+  // VM: resolved from the vmagent `instrumentationRuleTypes` dialect document
+  // (graceful no-op on dialects that predate it) and mapped to the kit's catalog
+  // shape (VM-only types dropped, see vm-rule-types).
+  GET_INSTRUMENTATION_RULE_TYPES: wrapVersioned<GetInstrumentationRuleTypesResult, undefined>(GET_INSTRUMENTATION_RULE_TYPES, undefined, undefined, {
+    select: (d) => d.GetInstrumentationRuleTypesDocument,
+    transformResult: (data) => mapVmRuleTypesToOptions(data),
   }),
   CREATE_INSTRUMENTATION_RULE: wrapVersioned<CreateInstrumentationRuleResult, CreateInstrumentationRuleVars>(CREATE_INSTRUMENTATION_RULE, undefined, undefined, {
     select: (d) => d.CreateInstrumentationRuleDocument,
