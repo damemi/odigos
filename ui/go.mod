@@ -5,9 +5,11 @@ go 1.26.4
 require (
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/actions v0.0.0-20260702104303-0dfb202b966e
 	github.com/odigos-io/odigos/api v1.30.0-pre2.0.20260617121516-bfc5da9bb14b
 	github.com/odigos-io/odigos/common v1.30.0-pre2.0.20260617121516-bfc5da9bb14b
 	github.com/odigos-io/odigos/frontend v0.0.0-20260617121516-bfc5da9bb14b
+	github.com/odigos-io/odigos/instrumentationrules v0.0.0-20260702104303-0dfb202b966e
 	github.com/odigos-io/odigos/profiles v0.0.0-20260617121516-bfc5da9bb14b
 	k8s.io/klog/v2 v2.140.0
 	sigs.k8s.io/controller-runtime v0.24.1
@@ -383,6 +385,10 @@ require (
 replace github.com/hashicorp/memberlist => github.com/grafana/memberlist v0.3.1-0.20251126142931-6f9f62ab6f86
 
 replace gopkg.in/yaml.v3 => github.com/colega/go-yaml-yaml v0.0.0-20220720105220-255a8d16d094
+
+replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v0.0.0-20260702104303-0dfb202b966e
+
+replace github.com/odigos-io/odigos/instrumentationrules => github.com/odigos-io/odigos/instrumentationrules v0.0.0-20260702104303-0dfb202b966e
 
 replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v0.0.0-20260617121516-bfc5da9bb14b
 

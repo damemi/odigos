@@ -58,11 +58,13 @@ COPY $SERVICE_NAME/ .
 # Repoint the local-dev path replaces (../../odigos/X) to the cloned OSS at
 # /workspace/oss/<X>. CI/build environments don't have an ../../odigos checkout.
 RUN go mod edit \
+      -replace github.com/odigos-io/odigos/actions=/workspace/oss/actions \
       -replace github.com/odigos-io/odigos/api=/workspace/oss/api \
       -replace github.com/odigos-io/odigos/common=/workspace/oss/common \
       -replace github.com/odigos-io/odigos/config=/workspace/oss/config \
       -replace github.com/odigos-io/odigos/destinations=/workspace/oss/destinations \
       -replace github.com/odigos-io/odigos/distros=/workspace/oss/distros \
+      -replace github.com/odigos-io/odigos/instrumentationrules=/workspace/oss/instrumentationrules \
       -replace github.com/odigos-io/odigos/k8sutils=/workspace/oss/k8sutils \
       -replace github.com/odigos-io/odigos/odigosauth=/workspace/oss/odigosauth \
       -replace github.com/odigos-io/odigos/profiles=/workspace/oss/profiles \
