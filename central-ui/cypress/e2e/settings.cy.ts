@@ -313,6 +313,9 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
         cy.contains('Component Log Levels').should('exist');
         cy.contains('Sampling').should('exist');
         cy.contains('Advanced').should('exist');
+        // The effective config YAML moved behind a "Show Config YAML" toolbar action
+        // that opens a drawer titled "Effective Config YAML".
+        cy.contains('Show Config YAML').should('exist').click();
         cy.contains('Effective Config YAML').should('exist');
       });
     });
@@ -552,7 +555,17 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
   it('Should reset settings via the Reset button and confirm modal', () => {
     visitPage(ROUTES.SETTINGS, () => {
       waitForGraphqlOperation('GetEffectiveConfig').then(() => {
-        cy.contains('button', 'Reset').click();
+        // Reset is now an icon-only toolbar action (tooltip "Reset to defaults") — the last
+        // button in the settings toolbar actions group (anchored via the labeled "Show Config YAML").
+        cy.contains('Show Config YAML')
+          .parents()
+          .filter((_i, el) => el.querySelectorAll('button').length >= 3)
+          .first()
+          .find('button')
+          .last()
+          .click({ force: true });
+
+        // Confirm the reset warning modal
         cy.contains('button', 'Approve').click();
 
         awaitToast({ message: TEXTS.NOTIF_CONFIG_RESET });

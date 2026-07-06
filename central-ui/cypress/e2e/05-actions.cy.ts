@@ -28,17 +28,21 @@ describe('Actions CRUD (via Central UI → Proxy)', () => {
             break;
           }
           case 'AddClusterInfo': {
-            cy.get('[data-id=clusterAttributes]').find('input[placeholder="Attribute name"]').type('key');
-            cy.get('[data-id=clusterAttributes]').find('input[placeholder="Attribute value"]').type('val');
+            // The dynamic table cells expose the column keyName as the input's
+            // data-id (see ui-kit InputTable -> Input), so target those instead
+            // of the (now catalog-defined) placeholder text.
+            cy.get('[data-id=clusterAttributes]').find('input[data-id=attributeName]').type('key');
+            cy.get('[data-id=clusterAttributes]').find('input[data-id=attributeStringValue]').type('val');
             break;
           }
           case 'DeleteAttribute': {
-            cy.get('[data-id=attributeNamesToDelete]').find('input').type('test');
+            cy.get('[data-id=attributeNamesToDelete]').find('input').first().type('test');
             break;
           }
           case 'RenameAttribute': {
-            cy.get('[data-id=renames]').find('input[placeholder="Old key"]').type('1');
-            cy.get('[data-id=renames]').find('input[placeholder="New key"]').type('one');
+            // `renames` renders as a key/value table that persists as an object map.
+            cy.get('[data-id=renames]').find('input[data-id=key]').first().type('old.attr');
+            cy.get('[data-id=renames]').find('input[data-id=value]').first().type('new.attr');
             break;
           }
           case 'PiiMasking': {
