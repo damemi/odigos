@@ -22,7 +22,11 @@ import (
 )
 
 type InstrumentationManagerOptions struct {
-	Factories                  map[string]instrumentation.Factory
+	Factories map[string]instrumentation.Factory
+	// Middleware are factories run in a pre-instrument stage for every process, regardless of distro,
+	// and are never reported (e.g. OBI network metrics, eBPF log capture). See
+	// instrumentation.ManagerOptions.Middleware.
+	Middleware                 []instrumentation.Factory
 	DistributionGetter         *distros.Getter
 	OdigletHealthProbeBindPort int
 	// OnLogsMapCreated is an optional callback invoked after the logs eBPF map is created.
@@ -93,6 +97,7 @@ func NewManager(
 
 		Logger:                  logger,
 		Factories:               opts.Factories,
+		Middleware:              opts.Middleware,
 		Handler:                 newHandler(client, opts.DistributionGetter),
 		DetectorOptions:         detector.DefaultK8sDetectorOptions(appendEnvVarSlice),
 		ConfigUpdates:           configUpdates,

@@ -22,18 +22,16 @@ import (
 const DistroName = "opentelemetry-ebpf-instrumentation"
 
 // Manager owns the shared OBI instrumenter and its dynamic PID selector. It does not implement
-// instrumentation.Factory directly; instead it hands out purpose-built factories:
+// instrumentation.Factory directly; instead it hands out two purpose-built factories:
 //
-//   - TracesFactory   - for the OBI distro itself: OBI attaches traces (and network metrics when
-//     enabled by the workload's InstrumentationRule). OBI owns the process's status.
-//   - MetricsFactory  - for natively-instrumented distros (Java, Python, Node, ...): OBI attaches
-//     only network metrics. The native agent owns the process's status, so OBI's instrumentation
-//     is reported as auxiliary (no InstrumentationInstance is created for it).
-//   - Wrap(base)      - for other eBPF distros (e.g. Go): the base factory owns traces and status,
-//     and OBI rides along to add network metrics.
+//   - TracesFactory   - the primary factory for the OBI distro. It attaches OBI trace probes only.
+//     As the OBI distro's explicit instrumentation it reports status normally, like any other distro.
+//   - MetricsFactory  - registered as pre-instrument middleware in the instrumentation manager. It
+//     attaches OBI network + TCP stats metrics to any process, gated per-workload by the
+//     networkMetrics InstrumentationRule. Middleware is never reported.
 //
-// All three drive the same shared instrumenter through the dynamic PID selector. PID selection
-// updates are not synchronized here; they are invoked from the instrumentation manager event loop
+// Both drive the same shared instrumenter through the dynamic PID selector. PID selection updates
+// are not synchronized here; they are invoked from the instrumentation manager event loop
 // (Load/Close/ApplyConfig), which processes one event at a time.
 type Manager struct {
 	logger *commonlogger.OdigosLogger
@@ -54,29 +52,17 @@ func NewManager() *Manager {
 	}
 }
 
-// TracesFactory returns the factory for the OBI distro: OBI attaches traces and, when enabled,
-// network metrics. The resulting instrumentation owns the process's reported status.
+// TracesFactory returns the primary factory for the OBI distro. It attaches OBI trace probes only.
+// As the OBI distro's explicit instrumentation, it reports status like any other distro's factory.
 func (m *Manager) TracesFactory() instrumentation.Factory {
-	return &factory{manager: m, traces: true}
+	return &tracesFactory{manager: m}
 }
 
-// MetricsFactory returns a factory that attaches only OBI network metrics to a process that is
-// instrumented natively by another agent. The native agent owns and reports the process's status,
-// so OBI's status is suppressed (no duplicate InstrumentationInstance is produced).
+// MetricsFactory returns the factory registered as pre-instrument middleware. It attaches OBI
+// network + TCP stats metrics to a process, gated per-workload by the networkMetrics
+// InstrumentationRule. Its status is never reported.
 func (m *Manager) MetricsFactory() instrumentation.Factory {
-	return &factory{
-		manager: m,
-		suppression: &instrumentation.ReportSuppression{
-			Reason:  "supplemental OBI network metrics; the process's instrumentation status is owned by its native agent",
-			OwnedBy: "native instrumentation agent",
-		},
-	}
-}
-
-// Wrap returns a factory that runs base (e.g. the Go eBPF instrumentation) and additionally attaches
-// OBI network metrics. The base instrumentation owns traces and the reported status.
-func (m *Manager) Wrap(base instrumentation.Factory) instrumentation.Factory {
-	return &factory{manager: m, base: base}
+	return &metricsFactory{manager: m}
 }
 
 // Run waits until ctx is canceled, then stops the OBI instrumenter.
@@ -86,111 +72,91 @@ func (m *Manager) Run(ctx context.Context) error {
 	return ctx.Err()
 }
 
-var _ instrumentation.Factory = (*factory)(nil)
+var (
+	_ instrumentation.Factory = (*tracesFactory)(nil)
+	_ instrumentation.Factory = (*metricsFactory)(nil)
+)
 
-type factory struct {
+// tracesFactory is the OBI distro's primary factory.
+type tracesFactory struct {
 	manager *Manager
-	// traces indicates OBI should attach its own trace probes (the OBI distro).
-	traces bool
-	// base is an optional wrapped factory (e.g. Go) that owns traces and status for the process.
-	base instrumentation.Factory
-	// suppression, when non-nil, suppresses the reported status of instrumentations created without
-	// a base factory. When a base factory is wrapped, the base owns the reported status and this is
-	// unused.
-	suppression *instrumentation.ReportSuppression
 }
 
-func (f *factory) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
-	var base instrumentation.Instrumentation
-	if f.base != nil {
-		b, err := f.base.CreateInstrumentation(ctx, pid, settings)
-		if err != nil {
-			return nil, err
-		}
-		base = b
-	}
-
-	return &processInstrumentation{
-		manager:        f.manager,
-		pid:            pid,
-		traces:         f.traces,
-		base:           base,
-		networkMetrics: networkMetricsEnabled(settings.InitialConfig),
-		suppression:    f.suppression,
-	}, nil
+func (f *tracesFactory) CreateInstrumentation(_ context.Context, pid int, _ instrumentation.Settings) (instrumentation.Instrumentation, error) {
+	return &tracesInstrumentation{manager: f.manager, pid: pid}, nil
 }
 
-type processInstrumentation struct {
+type tracesInstrumentation struct {
 	manager *Manager
 	pid     int
-
-	traces         bool
-	networkMetrics bool
-	suppression    *instrumentation.ReportSuppression
-	base           instrumentation.Instrumentation
 }
 
-func (p *processInstrumentation) Load(ctx context.Context) (instrumentation.Status, error) {
-	var status instrumentation.Status
-	if p.base != nil {
-		s, err := p.base.Load(ctx)
-		if err != nil {
-			// The owning instrumentation failed to load; do not attach OBI metrics to it.
-			return s, err
-		}
-		// The base instrumentation owns the process's reported status.
-		status = s
-	} else {
-		status.Suppression = p.suppression
-	}
-
-	if p.traces || p.networkMetrics {
-		p.manager.ensureInstrumenterRunning()
-		if p.traces {
-			p.manager.selector.Traces().AddPIDs(uint32(p.pid))
-		}
-		if p.networkMetrics {
-			p.manager.selector.NetworkMetrics().AddPIDs(uint32(p.pid))
-			p.manager.selector.StatsMetrics().AddPIDs(uint32(p.pid))
-		}
-	}
-
-	return status, nil
+func (t *tracesInstrumentation) Load(context.Context) (instrumentation.Status, error) {
+	t.manager.ensureInstrumenterRunning()
+	t.manager.selector.Traces().AddPIDs(uint32(t.pid))
+	return instrumentation.Status{}, nil
 }
 
-func (p *processInstrumentation) Run(ctx context.Context) error {
-	if p.base != nil {
-		return p.base.Run(ctx)
-	}
+func (t *tracesInstrumentation) Run(ctx context.Context) error {
 	<-ctx.Done()
 	return nil
 }
 
-func (p *processInstrumentation) Close(ctx context.Context) error {
-	var err error
-	if p.base != nil {
-		err = p.base.Close(ctx)
-	}
-	if p.traces {
-		p.manager.selector.Traces().RemovePIDs(uint32(p.pid))
-	}
-	p.manager.removeNetworkMetricsPIDs(p.pid)
-	p.manager.maybeStopInstrumenter()
-	return err
+func (t *tracesInstrumentation) Close(context.Context) error {
+	t.manager.selector.Traces().RemovePIDs(uint32(t.pid))
+	t.manager.maybeStopInstrumenter()
+	return nil
 }
 
-func (p *processInstrumentation) ApplyConfig(ctx context.Context, config instrumentation.Config) error {
-	var err error
-	if p.base != nil {
-		err = p.base.ApplyConfig(ctx, config)
-	}
+func (t *tracesInstrumentation) ApplyConfig(context.Context, instrumentation.Config) error {
+	return nil
+}
 
-	p.networkMetrics = networkMetricsEnabled(config)
-	p.manager.setNetworkMetrics(p.pid, p.networkMetrics)
-	if !p.traces && !p.networkMetrics && p.base == nil {
-		p.manager.maybeStopInstrumenter()
+// metricsFactory is registered as pre-instrument middleware; it applies to every process (network
+// metrics can be enabled on any workload) and gates attachment by config.
+type metricsFactory struct {
+	manager *Manager
+}
+
+func (f *metricsFactory) CreateInstrumentation(_ context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
+	return &metricsInstrumentation{
+		manager: f.manager,
+		pid:     pid,
+		enabled: networkMetricsEnabled(settings.InitialConfig),
+	}, nil
+}
+
+type metricsInstrumentation struct {
+	manager *Manager
+	pid     int
+	enabled bool
+}
+
+func (mi *metricsInstrumentation) Load(context.Context) (instrumentation.Status, error) {
+	if mi.enabled {
+		mi.manager.ensureInstrumenterRunning()
+		mi.manager.selector.NetworkMetrics().AddPIDs(uint32(mi.pid))
+		mi.manager.selector.StatsMetrics().AddPIDs(uint32(mi.pid))
 	}
-	return err
+	return instrumentation.Status{}, nil
+}
+
+func (mi *metricsInstrumentation) Run(ctx context.Context) error {
+	<-ctx.Done()
+	return nil
+}
+
+func (mi *metricsInstrumentation) Close(context.Context) error {
+	mi.manager.removeNetworkMetricsPIDs(mi.pid)
+	mi.manager.maybeStopInstrumenter()
+	return nil
+}
+
+func (mi *metricsInstrumentation) ApplyConfig(_ context.Context, config instrumentation.Config) error {
+	mi.enabled = networkMetricsEnabled(config)
+	mi.manager.setNetworkMetrics(mi.pid, mi.enabled)
+	mi.manager.maybeStopInstrumenter()
+	return nil
 }
 
 // networkMetricsEnabled reports whether the workload's per-container config enables OBI network metrics.

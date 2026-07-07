@@ -59,23 +59,57 @@ type Request[processGroup ProcessGroup, configGroup ConfigGroup, processDetails 
 	RetryDistros        []string
 }
 
+// middlewareInstance is a running pre-instrument middleware for a process. cancel stops its Run
+// loop; the manager holds it so the middleware can be torn down when the process exits (its Close
+// releases subsystem resources, cancel unblocks Run).
+type middlewareInstance struct {
+	inst   Instrumentation
+	cancel context.CancelFunc
+}
+
 type instrumentationDetails[processGroup ProcessGroup, configGroup ConfigGroup, processDetails ProcessDetails[processGroup, configGroup]] struct {
 	// we want to track the instrumentation even if it failed to load, to be able to report the error
 	// and clean up the reporter resources once the process exits.
-	// hence, this might be nil if the instrumentation failed to load.
+	// hence, this might be nil if the instrumentation failed to load, or if the process has no
+	// primary factory and is instrumented by middleware only.
 	inst Instrumentation
-	pd   processDetails
-	cg   configGroup
-	pg   processGroup
+
+	// middleware holds the pre-instrument middleware instrumentations attached to this process
+	// (e.g. OBI network metrics, eBPF log capture). They are run and reconfigured alongside the
+	// primary but are never reported.
+	middleware []middlewareInstance
+
+	// distro is set only when the manager owns a reportable primary instrumentation for this process
+	// (i.e. its distribution had a primary factory). It is nil for middleware-only processes (e.g.
+	// OBI network metrics on a natively-instrumented process), whose status is owned by whatever
+	// natively instruments them. A nil distro therefore means "the manager never created an
+	// InstrumentationInstance for this process", so it must not report or delete one on exit. When
+	// set, it doubles as the distribution used for metric attribution.
+	distro *distro.OtelDistro
+
+	pd processDetails
+	cg configGroup
+	pg processGroup
 }
 
 type ManagerOptions[processGroup ProcessGroup, configGroup ConfigGroup, processDetails ProcessDetails[processGroup, configGroup]] struct {
 	// Factories is a map of Odigos Otel distribution names to their corresponding instrumentation factories.
 	//
 	// The manager will use this map to create new instrumentations based on the process event.
-	// If a process event is received and the distribution name is not found in this map,
-	// the manager will ignore the event.
+	// A process whose distribution name is not found in this map has no primary instrumentation;
+	// it is still run through the pre-instrument Middleware stage, and if any middleware attaches to
+	// it, the process is instrumented by middleware only. If neither applies, the event is ignored.
 	Factories map[string]Factory
+
+	// Middleware is a list of factories run in a pre-instrument stage, at the start of the
+	// instrumentation flow and before the primary-factory lookup. Each middleware factory inspects
+	// the process (via Settings) and returns an Instrumentation to attach, or (nil, nil) to opt out.
+	//
+	// Middleware applies to every process regardless of its distro (including processes whose distro
+	// has no primary Factory), which is how cross-cutting eBPF signals like OBI network metrics and
+	// eBPF log capture are attached uniformly. Middleware is loaded, run, reconfigured and closed by
+	// the manager alongside the primary, but its status is never reported.
+	Middleware []Factory
 
 	// Handler is used to resolve details, config group, OTel distribution and settings for the instrumentation
 	// based on the process event.
@@ -135,6 +169,7 @@ type manager[processGroup ProcessGroup, configGroup ConfigGroup, processDetails 
 	detector   detector.Detector
 	handler    *Handler[processGroup, configGroup, processDetails]
 	factories  map[string]Factory
+	middleware []Factory
 	logger     *commonlogger.OdigosLogger
 
 	// all the created instrumentations by pid,
@@ -204,6 +239,7 @@ func NewManager[processGroup ProcessGroup, configGroup ConfigGroup, processDetai
 		detector:              detector,
 		handler:               handler,
 		factories:             options.Factories,
+		middleware:            options.Middleware,
 		logger:                logger,
 		detailsByPid:          make(map[int]*instrumentationDetails[processGroup, configGroup, processDetails]),
 		detailsByConfigGroup:  map[configGroup]map[int]*instrumentationDetails[processGroup, configGroup, processDetails]{},
@@ -236,8 +272,18 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) runEventLoop(ctx co
 						m.logger.Error("failed to close instrumentation", "err", err, "pid", pid)
 					}
 				}
-				if err := m.handler.Reporter.OnExit(ctx, pid, details.pd); err != nil {
-					m.logger.Error("failed to report instrumentation exit", "err", err)
+				for _, mw := range details.middleware {
+					mw.cancel()
+					if err := mw.inst.Close(ctx); err != nil {
+						m.logger.Error("failed to close middleware instrumentation", "err", err, "pid", pid)
+					}
+				}
+				// See cleanInstrumentation: a nil distro marks a middleware-only process the manager
+				// never reported, so it must not be deleted here.
+				if details.distro != nil {
+					if err := m.handler.Reporter.OnExit(ctx, pid, details.pd); err != nil {
+						m.logger.Error("failed to report instrumentation exit", "err", err)
+					}
 				}
 			}
 		}
@@ -474,13 +520,23 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) cleanInstrumentatio
 		if err != nil {
 			m.logger.Error("failed to close instrumentation", "err", err)
 		}
-		distribution, _ := details.pd.Distribution(ctx)
-		m.metrics.instrumentedProcesses.Add(ctx, -1, metric.WithAttributeSet(m.metricsAttributeSet(distribution)))
+		m.metrics.instrumentedProcesses.Add(ctx, -1, metric.WithAttributeSet(m.metricsAttributeSet(details.distro)))
 	}
 
-	err := m.handler.Reporter.OnExit(ctx, pid, details.pd)
-	if err != nil {
-		m.logger.Error("failed to report instrumentation exit", "err", err)
+	for _, mw := range details.middleware {
+		mw.cancel()
+		if err := mw.inst.Close(ctx); err != nil {
+			m.logger.Error("failed to close middleware instrumentation", "err", err, "pid", pid)
+		}
+	}
+
+	// A nil distro marks a middleware-only process the manager never reported (owned by whatever
+	// natively instruments it), so exiting it here must not delete an instance the manager never
+	// created. Only report exit for processes we actually reported (non-nil distro).
+	if details.distro != nil {
+		if err := m.handler.Reporter.OnExit(ctx, pid, details.pd); err != nil {
+			m.logger.Error("failed to report instrumentation exit", "err", err)
+		}
 	}
 
 	m.stopTrackInstrumentation(pid)
@@ -525,12 +581,8 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) tryInstrument(ctx c
 		return errors.Join(err, errFailedToGetProcessGroup)
 	}
 
-	factory, found := m.factories[otelDistro.Name]
-	if !found {
-		return errNoInstrumentationFactory
-	}
-
-	// Fetch initial settings for the instrumentation (SettingsGetter interface requires logr.Logger)
+	// Fetch initial settings for the instrumentation (SettingsGetter interface requires logr.Logger).
+	// Resolved before the primary-factory lookup because the pre-instrument middleware also needs them.
 	settings, err := m.handler.SettingsGetter.Settings(ctx, commonlogger.ToLogr().WithName("ebpf-instrumentation-manager"), pd, otelDistro)
 	if err != nil {
 		// for k8s instrumentation config CR will be queried to get the settings
@@ -559,6 +611,32 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) tryInstrument(ctx c
 		ExternalReader: true,
 	}
 
+	// Pre-instrument stage: run the registered middleware (e.g. OBI network metrics, eBPF log
+	// capture). Middleware applies regardless of distro and is never reported. Reuse any middleware
+	// already running for this pid (e.g. when retrying a previously failed primary) so we don't
+	// double-attach.
+	var middleware []middlewareInstance
+	if existing, ok := m.detailsByPid[pid]; ok && len(existing.middleware) > 0 {
+		middleware = existing.middleware
+	} else {
+		middleware = m.startMiddleware(ctx, pid, settings)
+	}
+
+	factory, hasFactory := m.factories[otelDistro.Name]
+	if !hasFactory {
+		if len(middleware) == 0 {
+			// No primary instrumentation and no middleware attached; nothing to do. Expected for
+			// some language/sdk combinations without eBPF support.
+			return errNoInstrumentationFactory
+		}
+		// Middleware-only: the process has no primary factory but is supplementally instrumented
+		// (e.g. OBI network metrics). Its status is owned by whatever natively instruments it, so
+		// the manager never reports it - we track it with a nil distribution to mark it unreported.
+		m.startTrackInstrumentation(ctx, pid, nil, middleware, pd, processGroup, configGroup, nil)
+		m.logger.Info("process instrumented by middleware only", "pid", pid, "distroName", otelDistro.Name)
+		return nil
+	}
+
 	inst, initErr := factory.CreateInstrumentation(ctx, pid, settings)
 	reporterErr := m.handler.Reporter.OnInit(ctx, pid, initErr, pd)
 	if reporterErr != nil {
@@ -568,7 +646,7 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) tryInstrument(ctx c
 		// we need to track the instrumentation even if the initialization failed.
 		// consider a reporter which writes a persistent record for a failed/successful init
 		// we need to notify the reporter once that PID exits to clean up the resources - hence we track it.
-		m.startTrackInstrumentation(ctx, pid, nil, pd, processGroup, configGroup, otelDistro)
+		m.startTrackInstrumentation(ctx, pid, nil, middleware, pd, processGroup, configGroup, otelDistro)
 		m.logger.Error("failed to initialize instrumentation", "err", initErr, "language", otelDistro.Language, "distroName", otelDistro.Name)
 		// TODO: should we return here the initialize error? or the handler error? or both?
 		return initErr
@@ -584,13 +662,13 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) tryInstrument(ctx c
 		// consider a reporter which writes a persistent record for a failed/successful load
 		// we need to notify the reporter once that PID exits to clean up the resources - hence we track it.
 		// saving the inst as nil marking the instrumentation failed to load, and is not valid to run/configure/close.
-		m.startTrackInstrumentation(ctx, pid, nil, pd, processGroup, configGroup, otelDistro)
+		m.startTrackInstrumentation(ctx, pid, nil, middleware, pd, processGroup, configGroup, otelDistro)
 		m.logger.Error("failed to load instrumentation", "err", loadErr, "language", otelDistro.Language, "distroName", otelDistro.Name)
 		// TODO: should we return here the load error? or the instance write error? or both?
 		return loadErr
 	}
 
-	m.startTrackInstrumentation(ctx, pid, inst, pd, processGroup, configGroup, otelDistro)
+	m.startTrackInstrumentation(ctx, pid, inst, middleware, pd, processGroup, configGroup, otelDistro)
 	m.logger.Info("instrumentation loaded", "pid", pid, "process group details", pd)
 
 	go func() {
@@ -607,10 +685,44 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) tryInstrument(ctx c
 	return nil
 }
 
+// startMiddleware runs the pre-instrument stage for a process: each registered middleware factory is
+// asked to create an instrumentation ((nil, nil) means it does not apply), which is then loaded and
+// run. Middleware failures are logged and skipped so they never block instrumentation, and middleware
+// status is never reported. Each middleware gets its own context so it can be stopped when the
+// process exits, independently of the manager's lifetime.
+func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) startMiddleware(ctx context.Context, pid int, settings Settings) []middlewareInstance {
+	var running []middlewareInstance
+	for _, mf := range m.middleware {
+		inst, err := mf.CreateInstrumentation(ctx, pid, settings)
+		if err != nil {
+			m.logger.Info("pre-instrument middleware failed to create instrumentation, skipping", "pid", pid, "err", err)
+			continue
+		}
+		if inst == nil {
+			// middleware does not apply to this process
+			continue
+		}
+		if _, err := inst.Load(ctx); err != nil {
+			m.logger.Error("pre-instrument middleware failed to load, skipping", "pid", pid, "err", err)
+			continue
+		}
+
+		runCtx, cancel := context.WithCancel(ctx)
+		running = append(running, middlewareInstance{inst: inst, cancel: cancel})
+		go func(inst Instrumentation, runCtx context.Context) {
+			if err := inst.Run(runCtx); err != nil && !errors.Is(err, context.Canceled) {
+				m.logger.Error("pre-instrument middleware run failed", "pid", pid, "err", err)
+			}
+		}(inst, runCtx)
+	}
+	return running
+}
+
 func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) startTrackInstrumentation(
 	ctx context.Context,
 	pid int,
 	inst Instrumentation,
+	middleware []middlewareInstance,
 	processDetails ProcessDetails,
 	processGroup ProcessGroup,
 	configGroup ConfigGroup,
@@ -620,10 +732,12 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) startTrackInstrumen
 	prevHadInst := hadPrev && prevDetails.inst != nil
 
 	instDetails := &instrumentationDetails[ProcessGroup, ConfigGroup, ProcessDetails]{
-		inst: inst,
-		pd:   processDetails,
-		cg:   configGroup,
-		pg:   processGroup,
+		inst:       inst,
+		middleware: middleware,
+		distro:     distribution,
+		pd:         processDetails,
+		cg:         configGroup,
+		pg:         processGroup,
 	}
 	m.detailsByPid[pid] = instDetails
 
@@ -641,16 +755,18 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) startTrackInstrumen
 		m.detailsByProcessGroup[processGroup][pid] = instDetails
 	}
 
-	metricAttributeSet := m.metricsAttributeSet(distribution)
+	// distribution is set only for primary instrumentations (nil for middleware-only), so both cases
+	// below imply a non-nil distribution and metricsAttributeSet is safe to compute.
 	switch {
-	case inst == nil && !hadPrev:
-		// First time we are tracking this pid and the attempt failed; count it once.
-		m.metrics.failedInstrumentations.Add(ctx, 1, metric.WithAttributeSet(metricAttributeSet))
+	case distribution != nil && inst == nil && !hadPrev:
+		// A primary factory was present but its init/load failed (no live inst); count the failure
+		// once. Middleware-only tracking (nil distribution) is not a failure.
+		m.metrics.failedInstrumentations.Add(ctx, 1, metric.WithAttributeSet(m.metricsAttributeSet(distribution)))
 	case inst != nil && !prevHadInst:
 		// Transition from "not instrumented" (either never seen or previously failed) to
 		// "instrumented". failedInstrumentations is a monotonic counter so we don't decrement
 		// it; we just record the successful instrumentation.
-		m.metrics.instrumentedProcesses.Add(ctx, 1, metric.WithAttributeSet(metricAttributeSet))
+		m.metrics.instrumentedProcesses.Add(ctx, 1, metric.WithAttributeSet(m.metricsAttributeSet(distribution)))
 	}
 }
 
@@ -684,12 +800,17 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) applyInstrumentatio
 	}
 
 	for _, instDetails := range configGroupInstrumentations {
-		if instDetails.inst == nil {
-			continue
-		}
 		m.logger.Info("applying configuration to instrumentation", "process group details", instDetails.pd, "configGroup", configGroup)
-		applyErr := instDetails.inst.ApplyConfig(ctx, config)
-		err = errors.Join(err, applyErr)
+		if instDetails.inst != nil {
+			applyErr := instDetails.inst.ApplyConfig(ctx, config)
+			err = errors.Join(err, applyErr)
+		}
+		// Fan out to the process's middleware too (e.g. so OBI network metrics can be toggled on/off
+		// via config, including for middleware-only processes that have no primary instrumentation).
+		for _, mw := range instDetails.middleware {
+			applyErr := mw.inst.ApplyConfig(ctx, config)
+			err = errors.Join(err, applyErr)
+		}
 	}
 	return err
 }
