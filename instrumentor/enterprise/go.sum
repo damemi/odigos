@@ -4,6 +4,8 @@ github.com/argoproj/argo-rollouts v1.8.3 h1:blbtQva4IK9r6gFh+dWkCrLnFdPOWiv9ubQY
 github.com/argoproj/argo-rollouts v1.8.3/go.mod h1:kCAUvIfMGfOyVf3lvQbBt0nqQn4Pd+zB5/YwKv+UBa8=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
+github.com/blumamir/odigos/instrumentor v0.0.0-20260708091320-2cb6c1b6b6dc h1:7cUIdg2sNw4r/JA0s7e9FBaJ9Gbgz3XvwyJsdzKANiY=
+github.com/blumamir/odigos/instrumentor v0.0.0-20260708091320-2cb6c1b6b6dc/go.mod h1:cKw3QZzZUZj7PpJ1TXEApz+DTcbg5j6DDDysOdT5Jaw=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
 github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/cilium/ebpf v0.20.0 h1:atwWj9d3NffHyPZzVlx3hmw1on5CLe9eljR8VuHTwhM=
@@ -113,8 +115,6 @@ github.com/odigos-io/odigos/common v1.30.0-pre2 h1:eGFUnYgyB22w9MWUR3oxaakTvY/qK
 github.com/odigos-io/odigos/common v1.30.0-pre2/go.mod h1:vFHVrElkdAJ6hX1arI4K2WwuYC7Qsg7CzsTdRaB220w=
 github.com/odigos-io/odigos/distros v1.30.0-pre2 h1:6mGM8TibfrnQDekC7Z8IHqJeefL2mIY7BH+pP3Xc1Zo=
 github.com/odigos-io/odigos/distros v1.30.0-pre2/go.mod h1:Cc7UJLOSeK/Ljstgc+lS11BhF7Jp0h3tAZrZvi0SGtM=
-github.com/odigos-io/odigos/instrumentor v1.30.0-pre2 h1:6OkBXqKTPwLtDjStzfZVvIEZ6x/imrhXwGIjcVk/q68=
-github.com/odigos-io/odigos/instrumentor v1.30.0-pre2/go.mod h1:4W4DM+LyG87jOixzEI5kBj2h08Jqpfwty5lf+7Q66II=
 github.com/odigos-io/odigos/k8sutils v1.30.0-pre2 h1:KsAeWgY4g7tK6bI7mFgd2lIctDVXQCtKeNh4iVJD0qY=
 github.com/odigos-io/odigos/k8sutils v1.30.0-pre2/go.mod h1:6055XlKxkLtDzyhi9hKoF+J04hoKvAJ0rZFRB2vcfFs=
 github.com/onsi/ginkgo v1.16.5 h1:8xi0RTUf59SOSfEtZMvwTvXYMzG4gV23XVHOZiXNtnE=

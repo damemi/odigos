@@ -104,10 +104,12 @@ replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.30.0-pre2
+replace github.com/odigos-io/odigos/api => github.com/blumamir/odigos/api v0.0.0-20260708091320-2cb6c1b6b6dc
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.30.0-pre2
+replace github.com/odigos-io/odigos/distros => github.com/blumamir/odigos/distros v0.0.0-20260708091320-2cb6c1b6b6dc
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.30.0-pre2
+replace github.com/odigos-io/odigos/k8sutils => github.com/blumamir/odigos/k8sutils v0.0.0-20260708091320-2cb6c1b6b6dc
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.30.0-pre2
+replace github.com/odigos-io/odigos/common => github.com/blumamir/odigos/common v0.0.0-20260708091320-2cb6c1b6b6dc
+
+replace github.com/odigos-io/odigos/instrumentor => github.com/blumamir/odigos/instrumentor v0.0.0-20260708091320-2cb6c1b6b6dc
