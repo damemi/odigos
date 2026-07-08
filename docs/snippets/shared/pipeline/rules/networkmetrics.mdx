@@ -96,3 +96,18 @@ Apply with:
 ```shell
 kubectl apply -f network-metrics-scoped.yaml
 ```
+
+## Exported Metrics
+
+When this rule is enabled, the following metrics are exported for matching workloads:
+
+| Name (OpenTelemetry) | Name (Prometheus) | Type | Unit | Description |
+| -------------------- | ----------------- | ---- | ---- | ----------- |
+| `odigos.network.flow.bytes` | `odigos_network_flow_bytes_total` | Counter | bytes | Bytes sent from a source network endpoint to a destination network endpoint |
+| `odigos.network.inter.zone.bytes` | `odigos_network_inter_zone_bytes_total` | Counter | bytes | Bytes flowing between cloud availability zones in your cluster (Kubernetes only) |
+| `odigos.stat.tcp.rtt` | `odigos_stat_tcp_rtt_seconds` | Histogram | seconds | TCP round-trip time (RTT) latency observed between network endpoints |
+| `odigos.stat.tcp.failed.connections` | `odigos_stat_tcp_failed_connections_total` | Counter | 1 | Failed TCP connection attempts between endpoints, labeled by failure reason |
+
+<Note>
+  These metrics are collected using [OBI](https://opentelemetry.io/docs/zero-code/obi). See the [OBI instrumentation guide](/oss/instrumentations/obi) to learn more about the collectors, metric families, and available attributes.
+</Note>

@@ -140,6 +140,14 @@ traces and metrics can be enabled without requiring the same distro or lifecycle
 All OBI telemetry that Odigos collects is exported over OTLP to the odiglet node collector (`localhost:4317`), then
 follows the same Odigos pipeline as other workload telemetry.
 
+<Note>
+  For consistency and discoverability alongside other Odigos telemetry, the node collector rewrites the
+  `obi` prefix of OBI metric names to `odigos`. Metrics named `obi.*` are exported as `odigos.*` (and the
+  Prometheus form `obi_*` as `odigos_*`). For example, `obi.network.flow.bytes` is exported as
+  `odigos.network.flow.bytes`. Metric names referenced in the OBI documentation below use the `obi`
+  prefix; account for this rename when building dashboards or queries.
+</Note>
+
 OBI does not need to be selected as the traces distro for an app to use OBI metrics, see below.
 
 ### Configuration
