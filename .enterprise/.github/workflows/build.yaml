@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       central: ${{ steps.filter.outputs.central }}
+      skip-enterprise-k8s: ${{ steps.connector-only.outputs.skip }}
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
@@ -33,9 +34,32 @@ jobs:
               - 'tests/e2e/central-install/**'
               - 'tests/e2e/central-ui/**'
               - 'tests/common/assert/odigos-central-installed.yaml'
+            outside-connectors:
+              - '**'
+              - '!connectors/**'
+              - '!connector-postgres/**'
+              - '!connector-runtime/**'
+
+      - name: Check connector-only changes
+        id: connector-only
+        env:
+          OUTSIDE: ${{ steps.filter.outputs.outside-connectors }}
+        run: |
+          # OUTSIDE is true only when a changed file lives outside the connector
+          # directories. When it is false, every change is confined to one or more
+          # connector dirs, so we can skip the odigos-central, odigos-enterprise,
+          # and k8s tests.
+          if [ "$OUTSIDE" = "true" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping odigos-central, odigos-enterprise, and k8s tests - changes are only in connector directories"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
 
   unit-tests:
     name: Unit Tests (${{ matrix.module }})
+    needs: detect-changes
+    if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -68,6 +92,8 @@ jobs:
 
   build-enterprise-components:
     name: build-enterprise-components (${{ matrix.service }}${{ matrix.rhel == 'true' && ', rhel' || '' }}${{ matrix.extended == 'true' && ', extended' || '' }})
+    needs: detect-changes
+    if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     runs-on: depot-ubuntu-24.04-4
     strategy:
       matrix:
@@ -183,6 +209,8 @@ jobs:
           retention-days: 30
 
   build-oss-components-for-tests:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     runs-on: depot-ubuntu-24.04-4
     steps:
       - name: Checkout Odigos OSS
@@ -332,6 +360,7 @@ jobs:
       - detect-changes
       - build-enterprise-components
       - build-oss-components-for-tests
+    if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     runs-on: depot-ubuntu-24.04-4
     # Belt-and-suspenders cap. Individual chainsaw steps already enforce
     # their own timeouts; this prevents any pathological hang from running
@@ -755,9 +784,9 @@ jobs:
 
   vulnerability-report:
     name: Generate Vulnerability Report
-    needs: [build-enterprise-components, build-oss-components-for-tests]
+    needs: [detect-changes, build-enterprise-components, build-oss-components-for-tests]
     runs-on: ubuntu-latest
-    if: always()
+    if: always() && needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     steps:
       - name: Download all scan JSON results
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 #v4.1.8

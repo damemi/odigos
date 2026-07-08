@@ -5,3 +5,18 @@ dist/
 go.work.sum
 go.work
 .env
+
+# Compiled binaries / dev-build outputs (e.g. `make build-connector-*-dev` writes `<module>/build/<bin>`).
+build/
+*.exe
+
+# Go test / coverage artifacts.
+*.test
+*.out
+coverage.txt
+
+# Connectors — never commit compiled connector binaries or local build context. The connector specs
+# and migrations ARE source and must stay tracked.
+connectors/*/build/
+connector-runtime/build/
+connector-postgres/build/

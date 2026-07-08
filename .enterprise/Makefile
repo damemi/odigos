@@ -42,7 +42,7 @@ build-image/%:
 	docker build $(TARGET_FLAG) \
 	-t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
 	--secret id=github_token,env=GITHUB_TOKEN \
-	--build-arg SERVICE_NAME="$*" \
+	--build-arg SERVICE_NAME="$(if $(SERVICE_NAME),$(SERVICE_NAME),$*)" \
 	--build-arg ODIGOS_VERSION=$(TAG) \
 	--build-arg SUMMARY="Odiglet for Odigos" \
 	--build-arg DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." \
@@ -92,6 +92,177 @@ build-agents:
 		DESCRIPTION="The Odigos Agents used to copy Odigos agent relevant files into the user workloads." \
 		TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
+############################################
+# Cloud connectors (platformType = connector)
+#
+# Go connector images compile inside Docker (no host build/ artifacts). GITHUB_TOKEN is required for
+# private module download. connector-runtime also needs a sibling odigos checkout via ODIGOS_CONTEXT
+# (default ../odigos) until odigos/api is published with OdigosCloudConnector.
+############################################
+ODIGOS_CONTEXT ?= ../odigos
+
+.PHONY: build-connector-runtime
+build-connector-runtime:
+	@if [ -z "$(GITHUB_TOKEN)" ]; then \
+		echo "❌ GITHUB_TOKEN is not set. Export a GitHub PAT with access to odigos-io private repos."; \
+		exit 1; \
+	fi
+	docker build $(TARGET_FLAG) \
+		-t $(ORG)/odigos-enterprise-connector-runtime$(IMG_SUFFIX):$(TAG) \
+		-f connector-runtime/Dockerfile \
+		--build-context odigos=$(ODIGOS_CONTEXT) \
+		--secret id=github_token,env=GITHUB_TOKEN \
+		--build-arg LD_FLAGS="$(LD_FLAGS)" \
+		. $(NO_CACHE)
+
+.PHONY: build-connector-aws
+build-connector-aws:
+	@if [ -z "$(GITHUB_TOKEN)" ]; then \
+		echo "❌ GITHUB_TOKEN is not set. Export a GitHub PAT with access to odigos-io private repos."; \
+		exit 1; \
+	fi
+	docker build $(TARGET_FLAG) \
+		-t $(ORG)/odigos-enterprise-connector-aws$(IMG_SUFFIX):$(TAG) \
+		-f connectors/providers/aws/Dockerfile \
+		--secret id=github_token,env=GITHUB_TOKEN \
+		--build-arg LD_FLAGS="$(LD_FLAGS)" \
+		. $(NO_CACHE)
+
+# connector-postgres is a plain Docker image (PostgreSQL + goose + migrations); it needs no Go build
+# or GITHUB_TOKEN, so it does not go through build-image/%.
+.PHONY: build-connector-postgres
+build-connector-postgres:
+	docker build -t $(ORG)/odigos-enterprise-connector-postgres$(IMG_SUFFIX):$(TAG) connector-postgres -f connector-postgres/Dockerfile $(NO_CACHE)
+
+# Validate the connector-postgres goose migrations parse (up/down annotations well-formed, versions
+# unique/ordered). CI runs the same target. Requires Docker only — no local goose/Postgres install.
+.PHONY: validate-db-migrations
+validate-db-migrations:
+	docker run --rm -v "$(CURDIR)/connector-postgres/migrations:/migrations" golang:1.23 \
+		sh -c 'CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@latest && goose -dir /migrations validate'
+
+.PHONY: build-connector-runtime-dev
+build-connector-runtime-dev: build-connector-runtime
+
+.PHONY: build-connector-aws-dev
+build-connector-aws-dev: build-connector-aws
+
+.PHONY: build-connector-images
+build-connector-images:
+	make build-connector-postgres build-connector-runtime build-connector-aws TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
+# Build every image the cloud-connectors dev stack needs: the central images plus postgres and the
+# connector services (all built inside Docker).
+.PHONY: build-connector-stack
+build-connector-stack:
+	make build-central-backend build-central-ui TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	make build-connector-postgres build-connector-runtime build-connector-aws TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
+.PHONY: load-connector-stack-to-kind
+load-connector-stack-to-kind:
+	make load-to-kind-central-backend load-to-kind-central-ui load-to-kind-connector-postgres load-to-kind-connector-runtime load-to-kind-connector-aws ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
+
+.PHONY: push-connector-runtime
+push-connector-runtime:
+	@if [ -z "$(GITHUB_TOKEN)" ]; then \
+		echo "❌ GITHUB_TOKEN is not set. Export a GitHub PAT with access to odigos-io private repos."; \
+		exit 1; \
+	fi
+	docker buildx build $(TARGET_FLAG) \
+		--platform linux/amd64,linux/arm64/v8 \
+		-t $(ORG)/odigos-enterprise-connector-runtime$(IMG_SUFFIX):$(TAG) \
+		-f connector-runtime/Dockerfile \
+		--build-context odigos=$(ODIGOS_CONTEXT) \
+		--secret id=github_token,env=GITHUB_TOKEN \
+		--build-arg LD_FLAGS="$(LD_FLAGS)" \
+		--push \
+		. $(NO_CACHE)
+
+.PHONY: push-connector-aws
+push-connector-aws:
+	@if [ -z "$(GITHUB_TOKEN)" ]; then \
+		echo "❌ GITHUB_TOKEN is not set. Export a GitHub PAT with access to odigos-io private repos."; \
+		exit 1; \
+	fi
+	docker buildx build $(TARGET_FLAG) \
+		--platform linux/amd64,linux/arm64/v8 \
+		-t $(ORG)/odigos-enterprise-connector-aws$(IMG_SUFFIX):$(TAG) \
+		-f connectors/providers/aws/Dockerfile \
+		--secret id=github_token,env=GITHUB_TOKEN \
+		--build-arg LD_FLAGS="$(LD_FLAGS)" \
+		--push \
+		. $(NO_CACHE)
+
+.PHONY: push-connector-postgres
+push-connector-postgres:
+	docker buildx build --push --platform linux/amd64,linux/arm64/v8 -t $(ORG)/odigos-enterprise-connector-postgres$(IMG_SUFFIX):$(TAG) connector-postgres -f connector-postgres/Dockerfile
+
+.PHONY: load-connectors-to-kind
+load-connectors-to-kind:
+	make load-to-kind-connector-postgres load-to-kind-connector-runtime load-to-kind-connector-aws ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
+
+.PHONY: restart-connector-runtime
+restart-connector-runtime:
+	kubectl rollout restart deployment connector-runtime -n odigos-central || true
+
+.PHONY: restart-connector-postgres
+restart-connector-postgres:
+	kubectl rollout restart deployment odigos-connector-postgres -n odigos-central || true
+
+# Restart connector-aws workload pods (created by connector-runtime from OdigosCloudConnector CRs).
+# Set CONNECTOR=<cr-name> to restart one connector; defaults to all AWS connectors in the namespace.
+.PHONY: restart-connector-aws
+restart-connector-aws:
+	@selector="odigos.io/provider=aws"; \
+	if [ -n "$(CONNECTOR)" ]; then selector="odigos.io/cloud-connector=$(CONNECTOR)"; fi; \
+	echo "restarting connector deployments in $(ODIGOS_CENTRAL_NS) ($$selector)"; \
+	kubectl rollout restart deployment -n $(ODIGOS_CENTRAL_NS) -l "$$selector"
+
+# Port-forward a connector pod's odictl CLI WebSocket (/ws) to localhost:23678, then drive it from
+# odictl (~/code/vm-agent/cmd/odictl) with no flags: `cd ~/code/vm-agent/cmd/odictl && go run .`.
+# Set CONNECTOR=<deployment/pod> (defaults to the first connector pod in the namespace).
+CONNECTOR ?=
+.PHONY: port-forward-connector-aws
+port-forward-connector-aws:
+	@target="$(CONNECTOR)"; \
+	if [ -z "$$target" ]; then \
+		target=$$(kubectl -n $(ODIGOS_CENTRAL_NS) get pods -l odigos.io/provider=aws -o jsonpath='{.items[0].metadata.name}'); \
+	fi; \
+	echo "port-forwarding $$target 23678:23678 (run odictl with no flags to connect)"; \
+	kubectl -n $(ODIGOS_CENTRAL_NS) port-forward "$$target" 23678:23678
+
+# One-command dev stack for cloud connectors, entirely via Helm: builds every required image, loads
+# them into kind, and installs the odigos-central chart with central-ui + connector-runtime + Postgres
+# (cloudConnectors enabled). Requires GITHUB_TOKEN (central image builds) and ONPREM_TOKEN (enterprise).
+# Override CENTRAL_CHART to point at your odigos-central chart checkout.
+CENTRAL_CHART ?= ../odigos/helm/odigos-central
+ODIGOS_CENTRAL_NS ?= odigos-central
+KIND_CLUSTER ?= kind
+ONPREM_TOKEN ?=
+
+.PHONY: ensure-kind
+ensure-kind:
+	@kind get clusters 2>/dev/null | grep -qx "$(KIND_CLUSTER)" || { echo "creating kind cluster '$(KIND_CLUSTER)'..."; kind create cluster --name $(KIND_CLUSTER); }
+
+.PHONY: connector-dev-up
+connector-dev-up: ensure-kind
+	@test -n "$(ONPREM_TOKEN)" || { echo "❌ Set ONPREM_TOKEN=<your odigos enterprise token> (and GITHUB_TOKEN for central image builds)."; exit 1; }
+	make build-connector-stack TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	make load-connector-stack-to-kind TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	helm upgrade --install odigos-central $(CENTRAL_CHART) -n $(ODIGOS_CENTRAL_NS) --create-namespace \
+		--set image.tag=$(TAG) --set onPremToken=$(ONPREM_TOKEN) --set cloudConnectors.enabled=true
+	@echo "✅ Stack up in namespace $(ODIGOS_CENTRAL_NS) (central-ui + central-backend + connector-runtime + postgres)."
+	@echo "   central-ui:        kubectl -n $(ODIGOS_CENTRAL_NS) port-forward svc/central-ui 3000:3000  # http://localhost:3000"
+	@echo "   apply a connector: kubectl apply -f <your-OdigosCloudConnector>.yaml -n $(ODIGOS_CENTRAL_NS)"
+	@echo "   discovered data:   kubectl -n $(ODIGOS_CENTRAL_NS) port-forward svc/<connector-workload> 9090:8080  # then POST /graphql"
+
+.PHONY: connector-dev-down
+connector-dev-down:
+	kubectl delete odigoscloudconnectors --all -n $(ODIGOS_CENTRAL_NS) --ignore-not-found || true
+	helm upgrade --install odigos-central $(CENTRAL_CHART) -n $(ODIGOS_CENTRAL_NS) \
+		--set image.tag=$(TAG) --set onPremToken=$(ONPREM_TOKEN) --set cloudConnectors.enabled=false
+	@echo "✅ connectors disabled (PostgreSQL PVC retained; delete it manually to wipe state)."
+
 .PHONY: build-images
 build-images:
 	make build-odiglet build-instrumentor build-ui TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
@@ -130,7 +301,7 @@ push-image/%:
 	--secret id=github_token,env=GITHUB_TOKEN \
 	$(if $(filter true,$(PUSH_IMAGE)),--push,) \
 	$(if $(filter true,$(GCP_MARKETPLACE)),--annotation="index:com.googleapis.cloudmarketplace.product.service.name=services/odigos.endpoints.odigos-public.cloud.goog",) \
-	--build-arg SERVICE_NAME="$*" \
+	--build-arg SERVICE_NAME="$(if $(SERVICE_NAME),$(SERVICE_NAME),$*)" \
 	--build-arg VERSION=$(TAG) \
 	--build-arg RELEASE=$(TAG) \
 	--build-arg SUMMARY="$(SUMMARY)" \
@@ -225,6 +396,12 @@ deploy-central-ui:
 deploy-central-proxy:
 	make build-central-proxy TAG=$(TAG) && make load-to-kind-central-proxy TAG=$(TAG) && make restart-central-proxy
 
+.PHONY: deploy-connector-aws
+deploy-connector-aws:
+	make build-connector-aws TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) && \
+	make load-to-kind-connector-aws TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) && \
+	make restart-connector-aws
+
 .PHONY: deploy
 deploy:
 	make build-images TAG=$(TAG) && make load-to-kind TAG=$(TAG) && make restart-odiglet && make restart-instrumentor
@@ -242,7 +419,7 @@ ecr-login:
 build-tag-push-ecr-image/%:
 	docker build --platform linux/amd64 -t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
 	--secret id=github_token,env=GITHUB_TOKEN \
-	--build-arg SERVICE_NAME="$*" \
+	--build-arg SERVICE_NAME="$(if $(SERVICE_NAME),$(SERVICE_NAME),$*)" \
 	--build-arg ODIGOS_VERSION=$(TAG) \
 	--build-arg VERSION=$(TAG) \
 	--build-arg RELEASE=$(TAG) \
