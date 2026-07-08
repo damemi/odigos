@@ -32,6 +32,7 @@ spec:
       supported: true
     headSampling:
       supported: true
+      httpQueryParamsSupported: true
     headersCollection:
       supported: true
     payloadCollection:
