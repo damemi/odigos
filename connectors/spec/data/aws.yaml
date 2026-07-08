@@ -1,0 +1,218 @@
+provider: aws
+displayName: Amazon Web Services
+
+# Provider boundary and non-secret connector configuration (not authentication).
+# The connector scans every region enabled in the account (resolved at runtime via ec2:DescribeRegions),
+# so there is no region selection field.
+connector:
+  fields:
+    - name: accountId
+      displayName: AWS Account ID
+      componentType: input
+      required: true
+      tooltip: The 12-digit AWS account this connector manages.
+
+# Authentication: composable methods. Base methods establish caller identity; assume-role adds
+# cross-account role assumption on top of a base method (workload identity or static keys).
+auth:
+  permissions:
+    - sts:GetCallerIdentity
+  methods:
+    - id: workload-identity
+      displayName: Pod / workload identity
+      description: >-
+        Uses the connector pod's ambient credentials (e.g. IRSA). No credentials Secret keys are
+        required.
+      fields: []
+
+    - id: static-keys
+      displayName: Access keys
+      description: Long-lived or temporary IAM access keys stored in the credentials Secret.
+      fields:
+        - name: accessKeyId
+          displayName: Access Key ID
+          componentType: input
+          required: true
+          showInUi: true
+          envVar: AWS_ACCESS_KEY_ID
+        - name: secretAccessKey
+          displayName: Secret Access Key
+          componentType: input
+          secret: true
+          required: true
+          showInUi: true
+          envVar: AWS_SECRET_ACCESS_KEY
+        - name: sessionToken
+          displayName: Session Token
+          componentType: input
+          secret: true
+          required: false
+          showInUi: false
+          tooltip: Required only for temporary access keys.
+          envVar: AWS_SESSION_TOKEN
+
+    - id: assume-role
+      displayName: Assume IAM role
+      description: >-
+        Assumes a cross-account role after establishing base credentials via workload identity or
+        static keys.
+      baseMethods:
+        - workload-identity
+        - static-keys
+      fields:
+        - name: roleArn
+          displayName: IAM Role ARN
+          componentType: input
+          required: true
+          showInUi: true
+          tooltip: ARN of the cross-account role Odigos assumes.
+          envVar: ODIGOS_AWS_ROLE_ARN
+        - name: externalId
+          displayName: External ID
+          componentType: input
+          required: false
+          showInUi: true
+          tooltip: External ID enforced in the role's trust policy (recommended with role ARN).
+          envVar: ODIGOS_AWS_EXTERNAL_ID
+
+# Two parallel hierarchies (domains), completely separate, sharing only the codebase and running pod.
+# Each domain owns a `discovery` feature (enumerate its resources) plus a second feature for acting on
+# them; which feature/type pairs actually run is selected per connector by spec.capabilities on the CR.
+#   workloads        -> discovery + instrumentation (instrument a discovered workload directly).
+#   computePlatforms -> discovery + installation    (install a separate Odigos agent onto the platform).
+# A type is declared under its domain's discovery, and referenced by name under the domain's second
+# feature. Every type name is unique across both domains.
+
+# workloads: directly-instrumentable resources — discovered, then instrumented in place.
+workloads:
+  discovery:
+    enabled: true
+    displayName: Workload discovery
+    description: >-
+      Enumerate Lambda functions and ECS/Fargate tasks across every region enabled in the account, so
+      they can be surfaced as Odigos Source candidates.
+    # Baseline permission, not tied to a type: enumerate the account's enabled regions to scan.
+    permissions:
+      - ec2:DescribeRegions
+    types:
+      - name: aws.lambda
+        displayName: AWS Lambda
+        description: List Lambda functions in each configured region.
+        permissions:
+          - lambda:ListFunctions
+      # Fargate task discovery runs ONE region scan (clusters + Fargate tasks). EC2-backed tasks are NOT
+      # discovered — ecs-cluster instrumentation is delivered by the cluster agent, a different solution.
+      - name: aws.fargate-task
+        displayName: Amazon ECS (Fargate task)
+        description: >-
+          Discover Fargate tasks per region. The per-workload instrumentation unit (sidecar). A single
+          ECS scan enumerates clusters and Fargate tasks.
+        permissions:
+          - ecs:ListClusters
+          - ecs:DescribeClusters
+          - ecs:ListServices
+          - ecs:DescribeServices
+          - ecs:ListTasks
+          - ecs:DescribeTasks
+
+  # instrumentation: instrument a discovered workload DIRECTLY. Each type references a workload-discovery
+  # type and declares how instrumentation is injected. Gated on an OTLP destination.
+  #   aws.lambda        -> service (Lambda layer/extension on the function itself)
+  #   aws.fargate-task  -> sidecar (each Fargate task receives an instrumentation sidecar) — not yet built
+  instrumentation:
+    enabled: true
+    displayName: Workload instrumentation
+    description: >-
+      Attach OpenTelemetry instrumentation directly to discovered workloads. The method depends on the
+      resource type: Lambda is instrumented at the service level, ECS Fargate via a per-task sidecar.
+      Requires an OTLP destination.
+    types:
+      - name: aws.lambda
+        displayName: AWS Lambda
+        description: Attach an OpenTelemetry layer/extension and OTEL_* configuration to the function.
+        method: service
+        permissions:
+          - lambda:GetFunctionConfiguration
+          - lambda:UpdateFunctionConfiguration
+          - lambda:GetLayerVersion
+          - lambda:ListLayers
+          - lambda:PublishLayerVersion
+          - lambda:DeleteLayerVersion
+      - name: aws.fargate-task
+        displayName: Amazon ECS (Fargate task)
+        description: Inject an instrumentation sidecar container into each Fargate task definition.
+        method: sidecar
+        # The Fargate sidecar injection is not built yet. Declared (discoverable, permissions documented)
+        # but inert: the connector does not run it and reports such workloads as NotImplemented.
+        implemented: false
+        permissions:
+          - ecs:DescribeTaskDefinition
+          - ecs:RegisterTaskDefinition
+          - ecs:UpdateService
+
+# computePlatforms: managed environments — discovered, then a separate Odigos agent is installed onto
+# them. Installation is NOT supported yet, so discovered compute platforms are reported but never
+# instrumented (surfaced as NotImplemented).
+computePlatforms:
+  discovery:
+    enabled: true
+    displayName: Compute-platform discovery
+    description: >-
+      Detect managed environments — EC2-backed and Fargate ECS clusters, EKS clusters and EC2 instances —
+      across every region enabled in the account, so they can be surfaced as compute-platform candidates.
+    # Baseline permission, not tied to a type: enumerate the account's enabled regions to scan.
+    permissions:
+      - ec2:DescribeRegions
+    types:
+      - name: aws.ecs-cluster
+        displayName: Amazon ECS (EC2 cluster)
+        description: >-
+          Detect EC2-backed ECS clusters per region (clusters with registered EC2 container instances).
+          The cluster is the unit; a global Odigos ecs-agent would be installed on it.
+        permissions:
+          - ecs:ListClusters
+          - ecs:DescribeClusters
+      - name: aws.fargate-cluster
+        displayName: Amazon ECS (Fargate cluster)
+        description: >-
+          Detect ECS clusters that run Fargate tasks per region. A cluster grouping over Fargate tasks
+          used to report Odigos coverage; no agent is installed — the per-task sidecar (aws.fargate-task)
+          does the instrumentation.
+        permissions:
+          - ecs:ListClusters
+          - ecs:DescribeClusters
+      - name: aws.eks
+        displayName: Amazon EKS (Kubernetes)
+        description: >-
+          Detect EKS clusters per region. Instrumented by installing Odigos for Kubernetes (odiglet) in
+          the cluster.
+        permissions:
+          - eks:ListClusters
+          - eks:DescribeCluster
+      - name: aws.ec2
+        displayName: Amazon EC2 (VM)
+        description: >-
+          Detect EC2 instances per region. Instrumented by installing the Odigos VM agent on the instance.
+        permissions:
+          - ec2:DescribeInstances
+
+  # installation: install a separate Odigos agent onto a discovered compute platform (the ECS-EC2 cluster
+  # agent, Odigos for Kubernetes on EKS, or the EC2 VM agent). This is NOT supported yet, so it declares no
+  # types: discovered compute platforms are reported but never instrumented (surfaced as NotImplemented).
+  # When support lands, each installable compute-platform type is referenced here with its install method
+  # (method: agent) and the IAM permissions the install requires.
+  installation:
+    enabled: false
+    displayName: Compute-platform installation
+    description: >-
+      Install a separate Odigos agent onto a discovered compute platform (ECS-EC2 cluster agent, Odigos
+      for Kubernetes on EKS, the Odigos VM agent on EC2). Not supported yet.
+    types: []
+
+# gateway: connector-wide collector wiring; not part of either domain. Implemented in a later phase.
+gateway:
+  enabled: false
+  displayName: Gateway / collector wiring
+  description: >-
+    Wire instrumented workloads to managed-otelcol regional collectors. Implemented in a later phase.
+  types: []
