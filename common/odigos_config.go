@@ -382,9 +382,9 @@ type MetricsSourceSpanMetricsConfiguration struct {
 
 // +kubebuilder:object:generate=true
 type MetricsSourceNetworkMetricsConfiguration struct {
-	// When true, odiglet does not run with hostNetwork for network flow collection.
-	// When false or unset, odiglet enables the network metrics infrastructure (hostNetwork).
-	Disabled *bool `json:"disabled,omitempty"`
+	// When true, odiglet runs with hostNetwork to enable the network flow metrics infrastructure.
+	// When false or unset, the infrastructure is disabled (network metrics are opt-in).
+	Enabled *bool `json:"enabled,omitempty"`
 }
 
 // +kubebuilder:object:generate=true

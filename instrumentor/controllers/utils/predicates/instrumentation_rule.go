@@ -2,7 +2,6 @@ package predicates
 
 import (
 	odigosv1alpha1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
-	"github.com/odigos-io/odigos/common/api/instrumentationrules"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
@@ -18,7 +17,7 @@ func isRuleRelevantForAgentInjection(spec *odigosv1alpha1.InstrumentationRuleSpe
 		spec.CodeAttributes != nil ||
 		spec.EbpfLogCapture != nil ||
 		spec.AgentDiagnostics != nil ||
-		(spec.NetworkMetrics != nil && instrumentationrules.NetworkMetricsEnabled(spec.NetworkMetrics))
+		spec.NetworkMetrics != nil
 }
 
 func (o AgentInjectionRelevantRulesPredicate) Create(e event.CreateEvent) bool {

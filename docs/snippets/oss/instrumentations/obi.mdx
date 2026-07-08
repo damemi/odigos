@@ -119,7 +119,7 @@ Learn more in the upstream docs:
 Odigos configures OBI header-based context propagation (`context_propagation: headers`). For encrypted traffic and
 multi-service propagation limits, see the upstream distributed tracing guide linked above.
 
-When `metricsSources.networkMetrics.disabled` is `false`, the odiglet DaemonSet runs with `hostNetwork: true` (required for OBI
+When `metricsSources.networkMetrics.enabled` is `true`, the odiglet DaemonSet runs with `hostNetwork: true` (required for OBI
 network flow collection). Stats metrics do not require host networking.
 
 ### Limitations
@@ -135,7 +135,7 @@ traces and metrics can be enabled without requiring the same distro or lifecycle
 | Signal | OBI pipeline | Enabled in Odigos when | Applies to |
 | ------ | ------------ | ---------------------- | ---------- |
 | **Traces** | [AppO11y](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/tree/main/pkg/appolly) (application protocol tracing) | The `opentelemetry-ebpf-instrumentation` distro is selected for the container. DNS lookup traces are included by default for the OBI distro | Processes instrumented with the OBI distro only |
-| **Network metrics** | [NetO11y](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/tree/main/pkg/netolly) (point-to-point flow bytes) and [StatsO11y](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/tree/main/pkg/statsolly) (TCP statistics such as RTT and failed connections) | An [InstrumentationRule](/oss/pipeline/rules/introduction) with `networkMetrics.enabled: true` (optionally scoped via `scopes`) | Any successfully instrumented process on the node (Go, Java, OBI, etc.) |
+| **Network metrics** | [NetO11y](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/tree/main/pkg/netolly) (point-to-point flow bytes) and [StatsO11y](https://github.com/open-telemetry/opentelemetry-ebpf-instrumentation/tree/main/pkg/statsolly) (TCP statistics such as RTT and failed connections) | An [InstrumentationRule](/oss/pipeline/rules/introduction) with `networkMetrics` set (optionally scoped via `scopes`) | Any process, regardless of language or distro (Go, Java, OBI, etc.) |
 
 All OBI telemetry that Odigos collects is exported over OTLP to the odiglet node collector (`localhost:4317`), then
 follows the same Odigos pipeline as other workload telemetry.
@@ -145,16 +145,16 @@ OBI does not need to be selected as the traces distro for an app to use OBI metr
 ### Configuration
 
 **Network metrics infrastructure (cluster-wide):** OBI network flow collection requires odiglet `hostNetwork`. Enable the
-infrastructure in Helm by setting `metricsSources.networkMetrics.disabled` to `false` (it defaults to `true`):
+infrastructure in Helm by setting `metricsSources.networkMetrics.enabled` to `true` (it defaults to disabled):
 
 ```yaml
 metricsSources:
   networkMetrics:
-    disabled: false
+    enabled: true
 ```
 
 **Enabling network metrics:** Create an `InstrumentationRule` in the Odigos installation namespace (typically
-`odigos-system`) with `networkMetrics.enabled: true`. See [Network Metrics](/oss/pipeline/rules/networkmetrics) for configuration options,
+`odigos-system`) with a `networkMetrics` block. See [Network Metrics](/oss/pipeline/rules/networkmetrics) for configuration options,
 examples, and verification steps.
 
 Multiple rules merge with OR semantics (if any rule enables a signal, it is enabled). Workload scoping via `scopes` is
@@ -164,30 +164,23 @@ optional — omit it to apply cluster-wide.
 
 Network metrics describe bytes sent and received between endpoints (pods, services, nodes, and related Kubernetes
 metadata), along with TCP-level statistics such as round-trip time and failed connection attempts. Enable cluster
-infrastructure with `metricsSources.networkMetrics.disabled: false`, then enable collection with an
-InstrumentationRule `networkMetrics.enabled: true` toggle (cluster-wide or scoped via `scopes`).
+infrastructure with `metricsSources.networkMetrics.enabled: true`, then enable collection with an
+InstrumentationRule `networkMetrics` block (cluster-wide or scoped via `scopes`).
+
+<Warning>
+  Network metrics are collected per process. In environments where a workload runs many processes,
+  enabling network metrics can significantly increase the number of emitted metric series and the
+  overall cardinality of your metrics. Monitor your metrics cardinality after enabling network metrics,
+  and scope the rule via `scopes` to limit it to the workloads that need it.
+</Warning>
 
 <CardGroup cols={2}>
   <Card
     title="Network metrics overview"
     icon="chart-network"
-    href="https://opentelemetry.io/docs/zero-code/obi/network/"
+    href="https://opentelemetry.io/docs/zero-code/obi/network/#network-metrics"
   >
     Flow and inter-zone metric families, attributes, and aggregation behavior.
-  </Card>
-  <Card
-    title="Network metrics configuration"
-    icon="sliders"
-    href="https://opentelemetry.io/docs/zero-code/obi/network/config/"
-  >
-    YAML and environment variables for direction, CIDR breakdown, caching, and more.
-  </Card>
-  <Card
-    title="Network metrics quickstart"
-    icon="rocket"
-    href="https://opentelemetry.io/docs/zero-code/obi/network/quickstart/"
-  >
-    End-to-end setup example for generating network metrics.
   </Card>
   <Card
     title="Exported metric names"
@@ -218,3 +211,5 @@ Stats metrics (`obi.stat.tcp.rtt`, `obi.stat.tcp.failed.connections`, and relate
     How OBI groups metrics into `network`, `stats`, `stats_tcp_rtt`, and related feature flags.
   </Card>
 </CardGroup>
+
+Network flow and TCP stats metrics export interval defaults to 60 seconds.

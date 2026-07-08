@@ -894,13 +894,13 @@
         },
         "networkMetrics": {
           "additionalProperties": false,
-          "description": "Network flow metrics infrastructure. When not disabled, odiglet runs with hostNetwork.\nPer-workload collection is enabled via InstrumentationRule networkMetrics.",
+          "description": "Network flow metrics infrastructure. When enabled, odiglet runs with hostNetwork.\nPer-workload collection is enabled via InstrumentationRule networkMetrics.",
           "properties": {
-            "disabled": {
-              "default": "true",
-              "description": "set disabled true to turn off network metrics infrastructure (hostNetwork on odiglet).",
+            "enabled": {
+              "default": "false",
+              "description": "set enabled true to turn on network metrics infrastructure (hostNetwork on odiglet). defaults to disabled.",
               "required": [],
-              "title": "disabled"
+              "title": "enabled"
             }
           },
           "required": [],

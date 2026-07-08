@@ -172,7 +172,7 @@ func New(clientset *kubernetes.Clientset, instrumentationMgrOpts ebpf.Instrument
 
 func (o *Odiglet) builtInRunnables(ebpfDone chan struct{}, logger *commonlogger.OdigosLogger) []Runnable {
 	odigosNs := env.GetCurrentNamespace()
-	runnables := append([]Runnable{},
+	runnables := []Runnable{
 		Runnable{
 			Name: "pprof server",
 			// if we fail to start the pprof server, don't return an error as it is not critical
@@ -227,7 +227,7 @@ func (o *Odiglet) builtInRunnables(ebpfDone chan struct{}, logger *commonlogger.
 				return err
 			},
 		},
-	)
+	}
 	if o.obiManager != nil {
 		runnables = append(runnables, Runnable{
 			Name:         "OBI manager",

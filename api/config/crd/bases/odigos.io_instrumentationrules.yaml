@@ -257,11 +257,6 @@ spec:
               networkMetrics:
                 description: Configure network flow and TCP stats metrics for scoped
                   workloads.
-                properties:
-                  enabled:
-                    description: Enabled enables network flow and TCP stats metrics
-                      for scoped workloads.
-                    type: boolean
                 type: object
               notes:
                 description: 'A free-form text field that allows you to attach notes

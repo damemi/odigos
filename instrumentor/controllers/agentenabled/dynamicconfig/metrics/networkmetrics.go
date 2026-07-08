@@ -2,11 +2,14 @@ package metrics
 
 import (
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
-	"github.com/odigos-io/odigos/common/api/agentsignalconfig"
 	"github.com/odigos-io/odigos/common/api/instrumentationrules"
 )
 
-func CalculateRuleNetworkMetrics(irls *[]odigosv1.InstrumentationRule) *instrumentationrules.NetworkMetrics {
+// CalculateNetworkMetricsConfig returns the network flow and TCP stats metrics config for a container
+// based on its InstrumentationRules. Enablement is per-workload and presence-based: if any matching
+// rule sets networkMetrics, metrics are collected (OR semantics). A nil result means network metrics
+// are not collected for the container.
+func CalculateNetworkMetricsConfig(irls *[]odigosv1.InstrumentationRule) *instrumentationrules.NetworkMetrics {
 	if irls == nil {
 		return nil
 	}
@@ -19,22 +22,8 @@ func CalculateRuleNetworkMetrics(irls *[]odigosv1.InstrumentationRule) *instrume
 }
 
 func mergeNetworkMetrics(existing, incoming *instrumentationrules.NetworkMetrics) *instrumentationrules.NetworkMetrics {
-	if incoming == nil || !instrumentationrules.NetworkMetricsEnabled(incoming) {
+	if incoming == nil {
 		return existing
 	}
-	enabled := true
-	return &instrumentationrules.NetworkMetrics{Enabled: &enabled}
-}
-
-func ApplyRuleNetworkMetrics(agentMetrics **agentsignalconfig.AgentMetricsConfig, irls *[]odigosv1.InstrumentationRule) {
-	ruleNetworkMetrics := CalculateRuleNetworkMetrics(irls)
-	if ruleNetworkMetrics == nil {
-		return
-	}
-
-	if *agentMetrics == nil {
-		*agentMetrics = &agentsignalconfig.AgentMetricsConfig{}
-	}
-
-	(*agentMetrics).NetworkMetrics = ruleNetworkMetrics.DeepCopy()
+	return incoming.DeepCopy()
 }

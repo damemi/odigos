@@ -170,11 +170,6 @@ spec:
                         networkMetrics:
                           description: NetworkMetrics enables network flow and TCP
                             stats metrics for this container.
-                          properties:
-                            enabled:
-                              description: Enabled enables network flow and TCP stats
-                                metrics for scoped workloads.
-                              type: boolean
                           type: object
                         runtimeMetrics:
                           description: |-
