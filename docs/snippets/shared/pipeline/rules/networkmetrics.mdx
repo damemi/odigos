@@ -6,13 +6,8 @@ Learn more about the underlying collectors and metric families in the [OBI instr
 
 <Warning>
   Before enabling **network metrics**, please note the following:
-  - Network flow collection requires odiglet to run with `hostNetwork`. Enable the cluster infrastructure in Helm by setting `metricsSources.networkMetrics.enabled` to `true` (it defaults to disabled).
-  - Network metrics add eBPF overhead on host interfaces. Scope rules to specific sources when possible.
+  - Enable the cluster infrastructure in Helm by setting `metricsSources.networkMetrics.enabled` to `true` (it defaults to disabled).
 </Warning>
-
-<Info>
-  Create `InstrumentationRule` resources in the Odigos installation namespace (typically `odigos-system`). Rules in other namespaces are not picked up by Odigos.
-</Info>
 
 ## Configuration Options
 
@@ -40,6 +35,10 @@ metricsSources:
 The InstrumentationRule alone is not enough for network flow metrics without that Helm setting.
 
 ## Basic Example
+
+<Info>
+  Create `InstrumentationRule` resources in the Odigos installation namespace (typically `odigos-system`). Rules in other namespaces are not picked up by Odigos.
+</Info>
 
 The following example enables network metrics cluster-wide for all workloads.
 

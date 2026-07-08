@@ -119,9 +119,6 @@ Learn more in the upstream docs:
 Odigos configures OBI header-based context propagation (`context_propagation: headers`). For encrypted traffic and
 multi-service propagation limits, see the upstream distributed tracing guide linked above.
 
-When `metricsSources.networkMetrics.enabled` is `true`, the odiglet DaemonSet runs with `hostNetwork: true` (required for OBI
-network flow collection). Stats metrics do not require host networking.
-
 ### Limitations
 
 OBI's instrumentation is based on HTTP header propagation. For encrypted traffic, context propagation will not work unless both
