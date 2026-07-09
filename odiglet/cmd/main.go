@@ -10,7 +10,6 @@ import (
 	"github.com/odigos-io/odigos/odiglet"
 	"github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	"github.com/odigos-io/odigos/odiglet/pkg/ebpf/sdks"
-	"github.com/odigos-io/odigos/odiglet/pkg/ebpf/sdks/obi"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"k8s.io/client-go/kubernetes"
@@ -94,27 +93,19 @@ func main() {
 		}
 	}()
 
-	obiManager := obi.NewManager()
-
-	instrumentationManagerOptions := ebpf.InstrumentationManagerOptions{
-		DistributionGetter:         dg,
-		OdigletHealthProbeBindPort: healthProbeBindPort,
-		OBIManager:                 obiManager,
-		// OBI network metrics run as a supplemental factory: they attach to every instrumented
-		// process (enabled per-workload via the networkMetrics InstrumentationRule) regardless of
-		// distro, and set Status.SkipReport so they are not reported.
-		SupplementalFactories: map[string]commonInstrumentation.Factory{
-			obi.MetricsFactoryName: obiManager.MetricsFactory(),
-		},
-	}
-
-	factories, err := ebpfInstrumentationFactories(otlpCommonConn, obiManager)
+	factories, err := ebpfInstrumentationFactories(otlpCommonConn)
 	if err != nil {
 		logger.Error("failed to create ebpf factories: %w", err)
 		os.Exit(1)
 	}
 
-	instrumentationManagerOptions.Factories = factories
+	// OBI (traces distro + network-metrics supplemental) is wired centrally in odiglet.New, since
+	// it is identical for OSS and enterprise.
+	instrumentationManagerOptions := ebpf.InstrumentationManagerOptions{
+		Factories:                  factories,
+		DistributionGetter:         dg,
+		OdigletHealthProbeBindPort: healthProbeBindPort,
+	}
 
 	o, err := odiglet.New(clientset, instrumentationManagerOptions)
 	if err != nil {
@@ -129,10 +120,10 @@ func main() {
 // ebpfInstrumentationFactories builds the distro -> factory map used by the instrumentation
 // manager. Only distros with a dedicated eBPF instrumentation are listed.
 //
-// Natively-instrumented distros have no factory of their own; they are picked up by the
-// supplemental factories (OBI network metrics), which are wired separately via
-// InstrumentationManagerOptions.SupplementalFactories and apply to every applicable process.
-func ebpfInstrumentationFactories(otlpCommon *grpc.ClientConn, obiManager *obi.Manager) (map[string]commonInstrumentation.Factory, error) {
+// OBI (the traces distro factory and the network-metrics supplemental factory) is not listed here;
+// it is wired centrally in odiglet.New since it is identical for OSS and enterprise. Natively-
+// instrumented distros have no factory of their own and are picked up by supplemental factories.
+func ebpfInstrumentationFactories(otlpCommon *grpc.ClientConn) (map[string]commonInstrumentation.Factory, error) {
 	goFactory, err := sdks.NewGoInstrumentationFactory(otlpCommon)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create go instrumentation factory: %w", err)
@@ -140,6 +131,5 @@ func ebpfInstrumentationFactories(otlpCommon *grpc.ClientConn, obiManager *obi.M
 
 	return map[string]commonInstrumentation.Factory{
 		"golang-community": goFactory,
-		obi.DistroName:     obiManager.TracesFactory(),
 	}, nil
 }

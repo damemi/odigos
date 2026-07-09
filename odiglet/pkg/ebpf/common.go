@@ -15,7 +15,6 @@ import (
 	"github.com/odigos-io/odigos/distros/distro"
 	"github.com/odigos-io/odigos/instrumentation"
 	"github.com/odigos-io/odigos/odiglet/pkg/detector"
-	obisdk "github.com/odigos-io/odigos/odiglet/pkg/ebpf/sdks/obi"
 
 	processdetector "github.com/odigos-io/runtime-detector"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,8 +35,6 @@ type InstrumentationManagerOptions struct {
 	OnLogsMapCreated func(*cilumebpf.Map)
 	// LogsAttrSubscribe streams per-process resource attributes to the collector.
 	LogsAttrSubscribe func() (updates <-chan string, snapshot []string)
-	// OBIManager coordinates the shared OBI instrumenter and dynamic PID selector.
-	OBIManager *obisdk.Manager
 }
 
 // NewManager creates a new instrumentation manager for eBPF which is configured to work with Kubernetes.
