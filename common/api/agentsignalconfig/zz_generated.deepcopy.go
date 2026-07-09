@@ -62,7 +62,7 @@ func (in *AgentMetricsConfig) DeepCopyInto(out *AgentMetricsConfig) {
 	}
 	if in.NetworkMetrics != nil {
 		in, out := &in.NetworkMetrics, &out.NetworkMetrics
-		*out = new(instrumentationrules.NetworkMetrics)
+		*out = new(instrumentationrules.NetworkMetricsConfig)
 		**out = **in
 	}
 }

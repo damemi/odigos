@@ -94,7 +94,7 @@ type AgentMetricsConfig struct {
 	RuntimeMetrics *common.MetricsSourceAgentRuntimeMetricsConfiguration `json:"runtimeMetrics,omitempty"`
 
 	// NetworkMetrics enables network flow and TCP stats metrics for this container.
-	NetworkMetrics *instrumentationrules.NetworkMetrics `json:"networkMetrics,omitempty"`
+	NetworkMetrics *instrumentationrules.NetworkMetricsConfig `json:"networkMetrics,omitempty"`
 }
 
 // all "logs" related configuration for an agent running on any process in a specific container.

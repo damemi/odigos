@@ -9,21 +9,21 @@ import (
 // based on its InstrumentationRules. Enablement is per-workload and presence-based: if any matching
 // rule sets networkMetrics, metrics are collected (OR semantics). A nil result means network metrics
 // are not collected for the container.
-func CalculateNetworkMetricsConfig(irls *[]odigosv1.InstrumentationRule) *instrumentationrules.NetworkMetrics {
+func CalculateNetworkMetricsConfig(irls *[]odigosv1.InstrumentationRule) *instrumentationrules.NetworkMetricsConfig {
 	if irls == nil {
 		return nil
 	}
 
-	var result *instrumentationrules.NetworkMetrics
+	var result *instrumentationrules.NetworkMetricsConfig
 	for _, irl := range *irls {
 		result = mergeNetworkMetrics(result, irl.Spec.NetworkMetrics)
 	}
 	return result
 }
 
-func mergeNetworkMetrics(existing, incoming *instrumentationrules.NetworkMetrics) *instrumentationrules.NetworkMetrics {
+func mergeNetworkMetrics(existing, incoming *instrumentationrules.NetworkMetricsConfig) *instrumentationrules.NetworkMetricsConfig {
 	if incoming == nil {
 		return existing
 	}
-	return incoming.DeepCopy()
+	return incoming
 }

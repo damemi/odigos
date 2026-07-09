@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
-	"github.com/odigos-io/odigos/common/api/instrumentationrules"
 	"github.com/odigos-io/odigos/common/consts"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/instrumentation"
@@ -190,7 +189,8 @@ func networkMetricsEnabled(config instrumentation.Config) bool {
 	if !ok || cc == nil || cc.Metrics == nil {
 		return false
 	}
-	return instrumentationrules.NetworkMetricsEnabled(cc.Metrics.NetworkMetrics)
+	// Enablement is presence-based: a non-nil NetworkMetrics means metrics are collected.
+	return cc.Metrics.NetworkMetrics != nil
 }
 
 func (m *Manager) setNetworkMetrics(pid int, enabled bool) {

@@ -1465,7 +1465,7 @@ func (in *InstrumentationRuleSpec) DeepCopyInto(out *InstrumentationRuleSpec) {
 	}
 	if in.NetworkMetrics != nil {
 		in, out := &in.NetworkMetrics, &out.NetworkMetrics
-		*out = new(instrumentationrules.NetworkMetrics)
+		*out = new(instrumentationrules.NetworkMetricsConfig)
 		**out = **in
 	}
 	if in.TraceVerbosity != nil {

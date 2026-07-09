@@ -93,7 +93,7 @@ type InstrumentationRuleSpec struct {
 	EbpfLogCapture *instrumentationrules.EbpfLogCapture `json:"ebpfLogCapture,omitempty"`
 
 	// Configure network flow and TCP stats metrics for scoped workloads.
-	NetworkMetrics *instrumentationrules.NetworkMetrics `json:"networkMetrics,omitempty"`
+	NetworkMetrics *instrumentationrules.NetworkMetricsConfig `json:"networkMetrics,omitempty"`
 
 	// Configure the verbosity of the traces for the library.
 	TraceVerbosity *instrumentationrules.TraceVerbosity `json:"traceVerbosity,omitempty"`

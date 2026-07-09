@@ -2,7 +2,6 @@ package collectorconfig
 
 import (
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
-	"github.com/odigos-io/odigos/common/api/instrumentationrules"
 	"github.com/odigos-io/odigos/common/config"
 )
 
@@ -115,7 +114,8 @@ func AnyNetworkMetricsEnabled(sources *odigosv1.InstrumentationConfigList) bool 
 	for i := range sources.Items {
 		for j := range sources.Items[i].Spec.Containers {
 			metrics := sources.Items[i].Spec.Containers[j].Metrics
-			if metrics != nil && instrumentationrules.NetworkMetricsEnabled(metrics.NetworkMetrics) {
+			// Enablement is presence-based: a non-nil NetworkMetrics means metrics are collected.
+			if metrics != nil && metrics.NetworkMetrics != nil {
 				return true
 			}
 		}

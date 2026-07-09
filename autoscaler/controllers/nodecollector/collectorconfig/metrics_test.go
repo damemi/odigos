@@ -61,7 +61,7 @@ func TestAnyNetworkMetricsEnabled(t *testing.T) {
 				Containers: []odigosv1.ContainerAgentConfig{
 					{Metrics: &agentsignalconfig.AgentMetricsConfig{}},
 					{Metrics: &agentsignalconfig.AgentMetricsConfig{
-						NetworkMetrics: &instrumentationrules.NetworkMetrics{},
+						NetworkMetrics: &instrumentationrules.NetworkMetricsConfig{},
 					}},
 				},
 			}},

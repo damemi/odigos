@@ -894,11 +894,11 @@
         },
         "networkMetrics": {
           "additionalProperties": false,
-          "description": "Network flow metrics infrastructure. When enabled, odiglet runs with hostNetwork.\nPer-workload collection is enabled via InstrumentationRule networkMetrics.",
+          "description": "Configuration for network flow and TCP stats metrics collection.",
           "properties": {
             "enabled": {
               "default": "false",
-              "description": "set enabled true to turn on network metrics infrastructure (hostNetwork on odiglet). defaults to disabled.",
+              "description": "When enabled, network flow and TCP stats metrics can be collected per workload by applying a\nnetworkMetrics InstrumentationRule. Enabling this requires odiglet to run with host network\naccess (hostNetwork) so it can observe traffic on the node's network interfaces; enable it\nonly if running odiglet on the host network is acceptable in your environment. Defaults to disabled.",
               "required": [],
               "title": "enabled"
             }
