@@ -89,11 +89,11 @@ type Status struct {
 	Components map[string]error
 
 	// SkipReport tells the manager not to report this instrumentation's load/run lifecycle
-	// (OnInit/OnLoad/OnRun) to the Reporter. Supplemental instrumentations that apply to a process
+	// (OnInit/OnLoad/OnRun) to the Reporter. Generic instrumentations that apply to a process
 	// which is (or may be) instrumented by something else - e.g. OBI network metrics or eBPF log
 	// capture - set this so they never create or update an InstrumentationInstance they don't own;
 	// the status of such a process is owned by its distro-factory instrumentation (if any). Set it
 	// consistently, including in the status returned alongside a load error: the manager honors it on
-	// a failed load too, so a supplemental stays silent rather than clobbering the owner's status.
+	// a failed load too, so a generic instrumentation stays silent rather than clobbering the owner's status.
 	SkipReport bool
 }

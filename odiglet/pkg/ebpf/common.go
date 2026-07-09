@@ -22,11 +22,11 @@ import (
 
 type InstrumentationManagerOptions struct {
 	Factories map[string]instrumentation.Factory
-	// SupplementalFactories are factories run for every process regardless of distro, in addition to
+	// GenericFactories are factories run for every process regardless of distro, in addition to
 	// the factory selected by the process's distribution (e.g. OBI network metrics, eBPF log
 	// capture). They control whether they report via Status.SkipReport.
-	// See instrumentation.ManagerOptions.SupplementalFactories.
-	SupplementalFactories      map[string]instrumentation.Factory
+	// See instrumentation.ManagerOptions.GenericFactories.
+	GenericFactories           map[string]instrumentation.Factory
 	DistributionGetter         *distros.Getter
 	OdigletHealthProbeBindPort int
 	// OnLogsMapCreated is an optional callback invoked after the logs eBPF map is created.
@@ -95,7 +95,7 @@ func NewManager(
 
 		Logger:                  logger,
 		Factories:               opts.Factories,
-		SupplementalFactories:   opts.SupplementalFactories,
+		GenericFactories:        opts.GenericFactories,
 		Handler:                 newHandler(client, opts.DistributionGetter),
 		DetectorOptions:         detector.DefaultK8sDetectorOptions(appendEnvVarSlice),
 		ConfigUpdates:           configUpdates,

@@ -21,7 +21,7 @@ import (
 // DistroName is the Odigos Otel distribution name for OBI trace instrumentation.
 const DistroName = "opentelemetry-ebpf-instrumentation"
 
-// MetricsFactoryName is the name the OBI network-metrics supplemental factory is registered under in
+// MetricsFactoryName is the name the OBI network-metrics generic factory is registered under in
 // the instrumentation manager. It is an internal key (not a distribution) and must not collide with
 // any distribution name.
 const MetricsFactoryName = "opentelemetry-ebpf-instrumentation-network-metrics"
@@ -31,7 +31,7 @@ const MetricsFactoryName = "opentelemetry-ebpf-instrumentation-network-metrics"
 //
 //   - TracesFactory   - the factory for the OBI distro. It attaches OBI trace probes only. As the
 //     OBI distro's explicit instrumentation it reports status normally, like any other distro.
-//   - MetricsFactory  - registered as a supplemental factory in the instrumentation manager. It
+//   - MetricsFactory  - registered as a generic factory in the instrumentation manager. It
 //     attaches OBI network + TCP stats metrics to any process, gated per-workload by the
 //     networkMetrics InstrumentationRule, and sets Status.SkipReport so it is not reported.
 //
@@ -82,7 +82,7 @@ func (m *Manager) TracesFactory() instrumentation.Factory {
 	return &tracesFactory{manager: m}
 }
 
-// MetricsFactory returns the supplemental factory that attaches OBI network + TCP stats metrics to
+// MetricsFactory returns the generic factory that attaches OBI network + TCP stats metrics to
 // a process, gated per-workload by the networkMetrics InstrumentationRule. It sets Status.SkipReport
 // so its status is not reported.
 func (m *Manager) MetricsFactory() instrumentation.Factory {
@@ -144,7 +144,7 @@ func (t *tracesInstrumentation) ApplyConfig(context.Context, instrumentation.Con
 	return nil
 }
 
-// metricsFactory is a supplemental factory; it applies to every process (network metrics can be
+// metricsFactory is a generic factory; it applies to every process (network metrics can be
 // enabled on any workload), gates attachment by config, and does not report (Status.SkipReport).
 type metricsFactory struct {
 	manager *Manager

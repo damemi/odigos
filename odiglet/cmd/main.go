@@ -99,7 +99,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// OBI (traces distro + network-metrics supplemental) is wired centrally in odiglet.New, since
+	// OBI (traces distro + network-metrics generic) is wired centrally in odiglet.New, since
 	// it is identical for OSS and enterprise.
 	instrumentationManagerOptions := ebpf.InstrumentationManagerOptions{
 		Factories:                  factories,
@@ -120,9 +120,9 @@ func main() {
 // ebpfInstrumentationFactories builds the distro -> factory map used by the instrumentation
 // manager. Only distros with a dedicated eBPF instrumentation are listed.
 //
-// OBI (the traces distro factory and the network-metrics supplemental factory) is not listed here;
+// OBI (the traces distro factory and the network-metrics generic factory) is not listed here;
 // it is wired centrally in odiglet.New since it is identical for OSS and enterprise. Natively-
-// instrumented distros have no factory of their own and are picked up by supplemental factories.
+// instrumented distros have no factory of their own and are picked up by generic factories.
 func ebpfInstrumentationFactories(otlpCommon *grpc.ClientConn) (map[string]commonInstrumentation.Factory, error) {
 	goFactory, err := sdks.NewGoInstrumentationFactory(otlpCommon)
 	if err != nil {

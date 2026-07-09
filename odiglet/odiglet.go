@@ -101,7 +101,7 @@ const (
 // manager options. OBI is wired identically for OSS and enterprise, so it lives here rather than
 // being duplicated in each odiglet main:
 //   - the OBI traces factory, registered as an explicit distribution (obisdk.DistroName), and
-//   - the OBI network-metrics supplemental factory (obisdk.MetricsFactoryName), which applies to
+//   - the OBI network-metrics generic factory (obisdk.MetricsFactoryName), which applies to
 //     every process, is enabled per-workload via the networkMetrics InstrumentationRule, and sets
 //     Status.SkipReport so it is never reported.
 //
@@ -112,10 +112,10 @@ func setupOBI(opts *ebpf.InstrumentationManagerOptions) *obisdk.Manager {
 		opts.Factories = map[string]commonInstrumentation.Factory{}
 	}
 	opts.Factories[obisdk.DistroName] = obiManager.TracesFactory()
-	if opts.SupplementalFactories == nil {
-		opts.SupplementalFactories = map[string]commonInstrumentation.Factory{}
+	if opts.GenericFactories == nil {
+		opts.GenericFactories = map[string]commonInstrumentation.Factory{}
 	}
-	opts.SupplementalFactories[obisdk.MetricsFactoryName] = obiManager.MetricsFactory()
+	opts.GenericFactories[obisdk.MetricsFactoryName] = obiManager.MetricsFactory()
 	return obiManager
 }
 

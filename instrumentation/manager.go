@@ -60,7 +60,7 @@ type Request[processGroup ProcessGroup, configGroup ConfigGroup, processDetails 
 
 type instrumentationDetails[processGroup ProcessGroup, configGroup ConfigGroup, processDetails ProcessDetails[processGroup, configGroup]] struct {
 	// insts holds every loaded instrumentation for the process, keyed by the name of the factory that
-	// produced it: a distro factory under its distribution name, a supplemental factory (e.g. OBI
+	// produced it: a distro factory under its distribution name, a generic factory (e.g. OBI
 	// network metrics, eBPF log capture, which apply to every process regardless of distro) under its
 	// registered name. They are run, reconfigured and closed uniformly; whether each reports its
 	// lifecycle is decided per-instrumentation by the Status.SkipReport it returns from Load.
@@ -69,7 +69,7 @@ type instrumentationDetails[processGroup ProcessGroup, configGroup ConfigGroup, 
 	// "is the distro loaded?" is answered by looking up the distribution name (which is also what a
 	// RetryDistros request names). A retry re-runs whatever has no entry here (the factories that
 	// failed before), leaving the already-loaded ones untouched; a failed factory attached nothing,
-	// so re-running it needs no prior Close. Factory names share one namespace, so a supplemental
+	// so re-running it needs no prior Close. Factory names share one namespace, so a generic
 	// factory must not be registered under a distribution name.
 	insts map[string]Instrumentation
 
@@ -83,20 +83,20 @@ type ManagerOptions[processGroup ProcessGroup, configGroup ConfigGroup, processD
 	//
 	// The manager uses this map to create the instrumentation selected by a process's distribution.
 	// A distribution with no entry here simply has no factory of its own; the process may still be
-	// instrumented by SupplementalFactories. If neither applies, the event is ignored.
+	// instrumented by GenericFactories. If neither applies, the event is ignored.
 	Factories map[string]Factory
 
-	// SupplementalFactories maps a name to a factory that applies to every process, in addition to
+	// GenericFactories maps a name to a factory that applies to every process, in addition to
 	// (and independently of) the factory selected by the process's distribution - including processes
 	// whose distribution has no factory at all. This is how cross-cutting eBPF signals like OBI
 	// network metrics and eBPF log capture are attached uniformly. Names share a namespace with the
-	// distribution names in Factories, so a supplemental factory must not reuse a distribution name.
+	// distribution names in Factories, so a generic factory must not reuse a distribution name.
 	//
 	// Each is asked to create an Instrumentation via CreateInstrumentation and may return (nil, nil)
 	// to opt out of a given process. They are loaded, run, reconfigured and closed exactly like any
 	// other instrumentation; whether each reports its lifecycle is decided per-instrumentation by
 	// the Status.SkipReport it returns from Load.
-	SupplementalFactories map[string]Factory
+	GenericFactories map[string]Factory
 
 	// Handler is used to resolve details, config group, OTel distribution and settings for the instrumentation
 	// based on the process event.
@@ -152,12 +152,12 @@ type Manager interface {
 type manager[processGroup ProcessGroup, configGroup ConfigGroup, processDetails ProcessDetails[processGroup, configGroup]] struct {
 	// channel for receiving process events,
 	// used to detect new processes and process exits, and handle their instrumentation accordingly.
-	procEvents            <-chan detector.ProcessEvent
-	detector              detector.Detector
-	handler               *Handler[processGroup, configGroup, processDetails]
-	factories             map[string]Factory
-	supplementalFactories map[string]Factory
-	logger                *commonlogger.OdigosLogger
+	procEvents       <-chan detector.ProcessEvent
+	detector         detector.Detector
+	handler          *Handler[processGroup, configGroup, processDetails]
+	factories        map[string]Factory
+	genericFactories map[string]Factory
+	logger           *commonlogger.OdigosLogger
 
 	// all the created instrumentations by pid,
 	// this map is not concurrent safe, so it should be accessed only from the main event loop
@@ -226,7 +226,7 @@ func NewManager[processGroup ProcessGroup, configGroup ConfigGroup, processDetai
 		detector:              detector,
 		handler:               handler,
 		factories:             options.Factories,
-		supplementalFactories: options.SupplementalFactories,
+		genericFactories:      options.GenericFactories,
 		logger:                logger,
 		detailsByPid:          make(map[int]*instrumentationDetails[processGroup, configGroup, processDetails]),
 		detailsByConfigGroup:  map[configGroup]map[int]*instrumentationDetails[processGroup, configGroup, processDetails]{},
@@ -486,7 +486,7 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) metricsAttributeSet
 // distroLoadState resolves the process's owned distribution and reports whether its distro factory
 // currently has a loaded instrumentation (an entry in details.insts under the distribution name).
 // distribution is the one the manager accounts the process's self metrics under; it is nil when the
-// distro has no factory of its own (an unresolved distro, or one instrumented only by supplemental
+// distro has no factory of its own (an unresolved distro, or one instrumented only by generic
 // factories), in which case loaded is always false. The factory lookup resolves ownership, so metric
 // accounting stays consistent between the increment (at instrument time) and the decrement (on exit).
 func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) distroLoadState(ctx context.Context, details *instrumentationDetails[ProcessGroup, ConfigGroup, ProcessDetails]) (distribution *distro.OtelDistro, loaded bool) {
@@ -539,7 +539,7 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) isInstrumented(ctx 
 		return false
 	}
 	// Instrumented once the distro factory has loaded (has an entry in insts). A process with no factory
-	// of its own (distribution == nil, instrumented only by supplemental factories) has nothing to
+	// of its own (distribution == nil, instrumented only by generic factories) has nothing to
 	// retry via the distro-keyed mechanism, so it is considered instrumented and left alone.
 	distribution, loaded := m.distroLoadState(ctx, details)
 	return distribution == nil || loaded
@@ -580,17 +580,17 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) tryInstrument(ctx c
 	}
 
 	// The factories that apply to this process: the distro's own factory, if it has one, plus the
-	// supplemental factories (which apply to every process regardless of distro, e.g. OBI network
+	// generic factories (which apply to every process regardless of distro, e.g. OBI network
 	// metrics or eBPF log capture). A process with nothing to run is ignored.
-	toRun := make(map[string]Factory, len(m.supplementalFactories)+1)
+	toRun := make(map[string]Factory, len(m.genericFactories)+1)
 	if factory, ok := m.factories[otelDistro.Name]; ok {
 		toRun[otelDistro.Name] = factory
 	}
-	for name, f := range m.supplementalFactories {
+	for name, f := range m.genericFactories {
 		toRun[name] = f
 	}
 	if len(toRun) == 0 {
-		// No factory for this distro and no supplemental factories. Expected for some language/sdk
+		// No factory for this distro and no generic factories. Expected for some language/sdk
 		// combinations without eBPF support.
 		return errNoInstrumentationFactory
 	}
@@ -643,10 +643,10 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) tryInstrument(ctx c
 		inst, initErr := f.CreateInstrumentation(ctx, pid, settings)
 		if initErr != nil {
 			// A failed create has no status to consult, so it always reports: only a distro is
-			// expected to fail to create (a supplemental opts out with a nil instrumentation rather
-			// than an error), so this never touches an InstrumentationInstance a supplemental doesn't
+			// expected to fail to create (a generic opts out with a nil instrumentation rather
+			// than an error), so this never touches an InstrumentationInstance a generic doesn't
 			// own. A failed factory attached nothing, so the pid stays a retry candidate. Every
-			// factory's error - distro and supplemental alike - is collected and returned together.
+			// factory's error - distro and generic alike - is collected and returned together.
 			if reporterErr := m.handler.Reporter.OnInit(ctx, pid, initErr, pd); reporterErr != nil {
 				m.logger.Error("failed to report instrumentation init", "err", reporterErr, "pid", pid, "process group details", pd)
 			}
@@ -659,7 +659,7 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) tryInstrument(ctx c
 		}
 
 		status, loadErr := inst.Load(ctx)
-		// Report the load unless the instrumentation opts out via Status.SkipReport - a supplemental
+		// Report the load unless the instrumentation opts out via Status.SkipReport - a generic
 		// sets this so it never touches an InstrumentationInstance it doesn't own. The flag is honored
 		// on a failed load too, since the status is the instrumentation's own return value.
 		if !status.SkipReport {
@@ -730,7 +730,7 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) startTrackInstrumen
 	}
 
 	// Self metrics are attributed to the process's distribution and only tracked when its distro has
-	// a factory (processes instrumented only by supplemental factories are not counted). Both the
+	// a factory (processes instrumented only by generic factories are not counted). Both the
 	// current and previous loaded state come from the distribution's entry in insts.
 	distribution, loaded := m.distroLoadState(ctx, instDetails)
 	if distribution == nil {
@@ -782,7 +782,7 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) applyInstrumentatio
 
 	for _, instDetails := range configGroupInstrumentations {
 		m.logger.Info("applying configuration to instrumentation", "process group details", instDetails.pd, "configGroup", configGroup)
-		// Fan out to every instrumentation of the process, distro factory and supplemental alike
+		// Fan out to every instrumentation of the process, distro factory and generic alike
 		// (e.g. so OBI network metrics can be toggled on/off via config, including for processes
 		// that have no factory of their own).
 		for _, inst := range instDetails.insts {
