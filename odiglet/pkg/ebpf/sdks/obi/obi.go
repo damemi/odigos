@@ -57,6 +57,25 @@ func NewManager() *Manager {
 	}
 }
 
+// obiConfigForOdigos returns a minimal OBI config that enables App O11y and exports to the node
+// collector. PIDs are supplied dynamically via the DynamicPIDSelector.
+func obiConfigForOdigos() *obipkg.Config {
+	cfg := obipkg.DefaultConfig
+	cfg.EBPF.ContextPropagation = obiconfig.ContextPropagationHeaders
+
+	// Export traces to the node collector (same node as odiglet). Use http scheme for insecure gRPC.
+	// Protocol is inferred from port (4317 -> gRPC) by OBI.
+	collectorEndpoint := fmt.Sprintf("http://localhost:%d", consts.OTLPPort)
+	cfg.Traces.TracesEndpoint = collectorEndpoint
+	cfg.OTELMetrics.MetricsEndpoint = collectorEndpoint
+
+	cfg.Traces.Instrumentations = append(cfg.Traces.Instrumentations, instrumentations.InstrumentationDNS)
+
+	cfg.Metrics.Features = export.FeatureNetwork | export.FeatureStats
+
+	return &cfg
+}
+
 // TracesFactory returns the factory for the OBI distro. It attaches OBI trace probes only. As the
 // OBI distro's explicit instrumentation, it reports status like any other distro's factory.
 func (m *Manager) TracesFactory() instrumentation.Factory {
@@ -209,21 +228,6 @@ func (m *Manager) setNetworkMetrics(pid int, enabled bool) {
 func (m *Manager) removeNetworkMetricsPIDs(pid int) {
 	m.selector.NetworkMetrics().RemovePIDs(uint32(pid))
 	m.selector.StatsMetrics().RemovePIDs(uint32(pid))
-}
-
-func obiConfigForOdigos() *obipkg.Config {
-	cfg := obipkg.DefaultConfig
-	cfg.EBPF.ContextPropagation = obiconfig.ContextPropagationHeaders
-
-	collectorEndpoint := fmt.Sprintf("http://localhost:%d", consts.OTLPPort)
-	cfg.Traces.TracesEndpoint = collectorEndpoint
-	cfg.OTELMetrics.MetricsEndpoint = collectorEndpoint
-
-	cfg.Traces.Instrumentations = append(cfg.Traces.Instrumentations, instrumentations.InstrumentationDNS)
-
-	cfg.Metrics.Features = export.FeatureNetwork | export.FeatureStats
-
-	return &cfg
 }
 
 func (m *Manager) ensureInstrumenterRunning() {
