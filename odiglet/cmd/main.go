@@ -100,11 +100,11 @@ func main() {
 		DistributionGetter:         dg,
 		OdigletHealthProbeBindPort: healthProbeBindPort,
 		OBIManager:                 obiManager,
-		// OBI network metrics run as pre-instrument middleware: they attach to every instrumented
+		// OBI network metrics run as a supplemental factory: they attach to every instrumented
 		// process (enabled per-workload via the networkMetrics InstrumentationRule) regardless of
-		// distro, and are never reported.
-		Middleware: []commonInstrumentation.Factory{
-			obiManager.MetricsFactory(),
+		// distro, and set Status.SkipReport so they are not reported.
+		SupplementalFactories: map[string]commonInstrumentation.Factory{
+			obi.MetricsFactoryName: obiManager.MetricsFactory(),
 		},
 	}
 
@@ -126,12 +126,12 @@ func main() {
 	logger.Info("odiglet exiting")
 }
 
-// ebpfInstrumentationFactories builds the distro -> primary factory map used by the instrumentation
+// ebpfInstrumentationFactories builds the distro -> factory map used by the instrumentation
 // manager. Only distros with a dedicated eBPF instrumentation are listed.
 //
-// Natively-instrumented distros have no primary factory; they are picked up by the pre-instrument
-// middleware (OBI network metrics), which is wired separately via
-// InstrumentationManagerOptions.Middleware and applies to every applicable process.
+// Natively-instrumented distros have no factory of their own; they are picked up by the
+// supplemental factories (OBI network metrics), which are wired separately via
+// InstrumentationManagerOptions.SupplementalFactories and apply to every applicable process.
 func ebpfInstrumentationFactories(otlpCommon *grpc.ClientConn, obiManager *obi.Manager) (map[string]commonInstrumentation.Factory, error) {
 	goFactory, err := sdks.NewGoInstrumentationFactory(otlpCommon)
 	if err != nil {

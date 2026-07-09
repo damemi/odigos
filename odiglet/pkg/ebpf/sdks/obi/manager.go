@@ -3,6 +3,7 @@ package obi
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common/api/instrumentationrules"
@@ -21,14 +22,19 @@ import (
 // DistroName is the Odigos Otel distribution name for OBI trace instrumentation.
 const DistroName = "opentelemetry-ebpf-instrumentation"
 
+// MetricsFactoryName is the name the OBI network-metrics supplemental factory is registered under in
+// the instrumentation manager. It is an internal key (not a distribution) and must not collide with
+// any distribution name.
+const MetricsFactoryName = "opentelemetry-ebpf-instrumentation-network-metrics"
+
 // Manager owns the shared OBI instrumenter and its dynamic PID selector. It does not implement
 // instrumentation.Factory directly; instead it hands out two purpose-built factories:
 //
-//   - TracesFactory   - the primary factory for the OBI distro. It attaches OBI trace probes only.
-//     As the OBI distro's explicit instrumentation it reports status normally, like any other distro.
-//   - MetricsFactory  - registered as pre-instrument middleware in the instrumentation manager. It
+//   - TracesFactory   - the factory for the OBI distro. It attaches OBI trace probes only. As the
+//     OBI distro's explicit instrumentation it reports status normally, like any other distro.
+//   - MetricsFactory  - registered as a supplemental factory in the instrumentation manager. It
 //     attaches OBI network + TCP stats metrics to any process, gated per-workload by the
-//     networkMetrics InstrumentationRule. Middleware is never reported.
+//     networkMetrics InstrumentationRule, and sets Status.SkipReport so it is not reported.
 //
 // Both drive the same shared instrumenter through the dynamic PID selector. PID selection updates
 // are not synchronized here; they are invoked from the instrumentation manager event loop
@@ -52,15 +58,15 @@ func NewManager() *Manager {
 	}
 }
 
-// TracesFactory returns the primary factory for the OBI distro. It attaches OBI trace probes only.
-// As the OBI distro's explicit instrumentation, it reports status like any other distro's factory.
+// TracesFactory returns the factory for the OBI distro. It attaches OBI trace probes only. As the
+// OBI distro's explicit instrumentation, it reports status like any other distro's factory.
 func (m *Manager) TracesFactory() instrumentation.Factory {
 	return &tracesFactory{manager: m}
 }
 
-// MetricsFactory returns the factory registered as pre-instrument middleware. It attaches OBI
-// network + TCP stats metrics to a process, gated per-workload by the networkMetrics
-// InstrumentationRule. Its status is never reported.
+// MetricsFactory returns the supplemental factory that attaches OBI network + TCP stats metrics to
+// a process, gated per-workload by the networkMetrics InstrumentationRule. It sets Status.SkipReport
+// so its status is not reported.
 func (m *Manager) MetricsFactory() instrumentation.Factory {
 	return &metricsFactory{manager: m}
 }
@@ -77,18 +83,20 @@ var (
 	_ instrumentation.Factory = (*metricsFactory)(nil)
 )
 
-// tracesFactory is the OBI distro's primary factory.
+// tracesFactory is the factory for the OBI distro.
 type tracesFactory struct {
 	manager *Manager
 }
 
 func (f *tracesFactory) CreateInstrumentation(_ context.Context, pid int, _ instrumentation.Settings) (instrumentation.Instrumentation, error) {
-	return &tracesInstrumentation{manager: f.manager, pid: pid}, nil
+	return &tracesInstrumentation{manager: f.manager, pid: pid, done: make(chan struct{})}, nil
 }
 
 type tracesInstrumentation struct {
-	manager *Manager
-	pid     int
+	manager   *Manager
+	pid       int
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 func (t *tracesInstrumentation) Load(context.Context) (instrumentation.Status, error) {
@@ -97,12 +105,18 @@ func (t *tracesInstrumentation) Load(context.Context) (instrumentation.Status, e
 	return instrumentation.Status{}, nil
 }
 
+// Run blocks until the manager stops (ctx) or the process exits (Close), keeping the OBI
+// instrumenter alive while the PID is selected. The shared instrumenter itself runs in the Manager.
 func (t *tracesInstrumentation) Run(ctx context.Context) error {
-	<-ctx.Done()
+	select {
+	case <-ctx.Done():
+	case <-t.done:
+	}
 	return nil
 }
 
 func (t *tracesInstrumentation) Close(context.Context) error {
+	t.closeOnce.Do(func() { close(t.done) })
 	t.manager.selector.Traces().RemovePIDs(uint32(t.pid))
 	t.manager.maybeStopInstrumenter()
 	return nil
@@ -112,8 +126,8 @@ func (t *tracesInstrumentation) ApplyConfig(context.Context, instrumentation.Con
 	return nil
 }
 
-// metricsFactory is registered as pre-instrument middleware; it applies to every process (network
-// metrics can be enabled on any workload) and gates attachment by config.
+// metricsFactory is a supplemental factory; it applies to every process (network metrics can be
+// enabled on any workload), gates attachment by config, and does not report (Status.SkipReport).
 type metricsFactory struct {
 	manager *Manager
 }
@@ -123,13 +137,16 @@ func (f *metricsFactory) CreateInstrumentation(_ context.Context, pid int, setti
 		manager: f.manager,
 		pid:     pid,
 		enabled: networkMetricsEnabled(settings.InitialConfig),
+		done:    make(chan struct{}),
 	}, nil
 }
 
 type metricsInstrumentation struct {
-	manager *Manager
-	pid     int
-	enabled bool
+	manager   *Manager
+	pid       int
+	enabled   bool
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 func (mi *metricsInstrumentation) Load(context.Context) (instrumentation.Status, error) {
@@ -138,15 +155,23 @@ func (mi *metricsInstrumentation) Load(context.Context) (instrumentation.Status,
 		mi.manager.selector.NetworkMetrics().AddPIDs(uint32(mi.pid))
 		mi.manager.selector.StatsMetrics().AddPIDs(uint32(mi.pid))
 	}
-	return instrumentation.Status{}, nil
+	// OBI network metrics apply to any process (enabled per-workload via the networkMetrics
+	// InstrumentationRule) and do not own the process's InstrumentationInstance. Skip reporting so we
+	// don't create/delete a status owned by whatever instruments the process.
+	return instrumentation.Status{SkipReport: true}, nil
 }
 
+// Run blocks until the manager stops (ctx) or the process exits (Close).
 func (mi *metricsInstrumentation) Run(ctx context.Context) error {
-	<-ctx.Done()
+	select {
+	case <-ctx.Done():
+	case <-mi.done:
+	}
 	return nil
 }
 
 func (mi *metricsInstrumentation) Close(context.Context) error {
+	mi.closeOnce.Do(func() { close(mi.done) })
 	mi.manager.removeNetworkMetricsPIDs(mi.pid)
 	mi.manager.maybeStopInstrumenter()
 	return nil
