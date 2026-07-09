@@ -162,7 +162,7 @@ jobs:
             SERVICE_NAME=${{ matrix.service }}
             RHEL=${{ matrix.rhel }}
             EXTENDED=${{ matrix.extended || 'false' }}
-            ODIGOS_VERSION=main
+            ODIGOS_OSS_REF=${{ env.BASE_BRANCH }}
           target: >-
             ${{ matrix.service == 'agents' && matrix.rhel == 'true' && 'agents-rhel' ||
                 matrix.service == 'agents' && 'agents' ||

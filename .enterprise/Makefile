@@ -43,7 +43,7 @@ build-image/%:
 	-t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
 	--secret id=github_token,env=GITHUB_TOKEN \
 	--build-arg SERVICE_NAME="$(if $(SERVICE_NAME),$(SERVICE_NAME),$*)" \
-	--build-arg ODIGOS_VERSION=$(TAG) \
+	--build-arg ODIGOS_OSS_REF=$(TAG) \
 	--build-arg SUMMARY="Odiglet for Odigos" \
 	--build-arg DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." \
 	--build-arg VERSION=$(TAG) \
@@ -420,7 +420,7 @@ build-tag-push-ecr-image/%:
 	docker build --platform linux/amd64 -t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
 	--secret id=github_token,env=GITHUB_TOKEN \
 	--build-arg SERVICE_NAME="$(if $(SERVICE_NAME),$(SERVICE_NAME),$*)" \
-	--build-arg ODIGOS_VERSION=$(TAG) \
+	--build-arg ODIGOS_OSS_REF=$(TAG) \
 	--build-arg VERSION=$(TAG) \
 	--build-arg RELEASE=$(TAG) \
 	--build-arg SUMMARY="$(SUMMARY)" \

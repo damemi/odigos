@@ -130,7 +130,7 @@ jobs:
             quay.io/odigos/odigos-enterprise-${{ matrix.service }}-rhel-certified:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
           build-args: |
             SERVICE_NAME=${{ matrix.service }}
-            ODIGOS_VERSION=${{ env.ODIGOS_TAG }}
+            ODIGOS_OSS_REF=${{ env.ODIGOS_TAG }}
             SUMMARY=${{ matrix.summary }}
             DESCRIPTION=${{ matrix.description }}
             VERSION=${{ env.ODIGOS_TAG }}

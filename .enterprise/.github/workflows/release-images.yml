@@ -140,7 +140,7 @@ jobs:
             ghcr.io/odigos-io/odigos-enterprise-${{ matrix.service }}:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
           build-args: |
             SERVICE_NAME=${{ matrix.service }}
-            ODIGOS_VERSION=${{ env.ODIGOS_TAG }}
+            ODIGOS_OSS_REF=${{ env.ODIGOS_TAG }}
             LD_FLAGS=-s -w
             RHEL=false
             EXTENDED=${{ matrix.extended }}
