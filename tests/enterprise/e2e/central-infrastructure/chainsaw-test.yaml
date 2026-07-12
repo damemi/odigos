@@ -9,7 +9,7 @@ spec:
     - name: Install Odigos Central
       try:
         - script:
-            timeout: 3m
+            timeout: 1m10s
             content: |
               # Install Odigos Central in odigos-central namespace
               helm upgrade --install odigos-central \
@@ -27,7 +27,7 @@ spec:
     - name: Verify Odigos Central Installation
       try:
         - assert:
-            timeout: 6m
+            timeout: 2m50s
             file: ../../common/assert/odigos-central-installed.yaml
 
       catch:
@@ -42,7 +42,7 @@ spec:
     - name: Test Central Backend Infrastructure
       try:
         - script:
-            timeout: 2m
+            timeout: 1m20s
             content: |
               ./test-infrastructure.sh
 
