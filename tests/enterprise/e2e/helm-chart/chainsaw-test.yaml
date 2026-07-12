@@ -19,7 +19,7 @@ spec:
     - name: Install Odigos
       try:
         - script:
-            timeout: 3m
+            timeout: 1m10s
             content: |
               # use the helm chart from main repo which is expected to be in a sibling directory to this repo
               helm upgrade --install odigos \
@@ -61,7 +61,7 @@ spec:
     - name: Verify Odigos Installation
       try:
         - script:
-            timeout: 1m
+            timeout: 1m10s
             content: |
               echo "Starting Odigos version check..."
               export ACTUAL_VERSION=$(../../../../odigos/cli/odigos version --cluster)
@@ -69,11 +69,11 @@ spec:
               echo "Expected Version: $IMAGE_TAG"
 
         - assert:
-            timeout: 6m
+            timeout: 3m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/odigos-installed.yaml
 
         - assert:
-            timeout: 2m
+            timeout: 3m10s
             file: initial-go-offeset-job-applied.yaml
 
       catch:
@@ -88,13 +88,13 @@ spec:
     - name: Verify Node Odiglet label has been added
       try:
         - assert:
-            timeout: 30s
+            timeout: 1m10s
             file: ../../common/assert/node-odiglet-label.yaml
 
     - name: Assert Trace DB is up
       try:
         - assert:
-            timeout: 1m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-trace-db-running.yaml
 
     - name: Add Destination
@@ -105,7 +105,7 @@ spec:
     - name: Assert - Simple Demo Apps Installed
       try:
         - assert:
-            timeout: 3m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-installed.yaml
 
     - name: Instrument Namespace
@@ -116,19 +116,19 @@ spec:
     - name: Assert Runtime Detected
       try:
         - assert:
-            timeout: 3m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-runtime-detected.yaml
 
     - name: Odigos pipeline ready
       try:
         - assert:
-            timeout: 3m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/pipeline-ready.yaml
 
     - name: Simple-demo instrumented after destination added
       try:
         - assert:
-            timeout: 3m
+            timeout: 1m30s
             file: ../../common/assert/instrumented-and-pipeline.yaml
 
     - name: Generate Traffic
@@ -136,7 +136,7 @@ spec:
         - apply:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
         - script:
-            timeout: 1m
+            timeout: 1m10s
             content: |
               kubectl wait --for=condition=complete job/$(kubectl get -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
         - delete:
@@ -145,7 +145,7 @@ spec:
     - name: Wait For Trace
       try:
         - script:
-            timeout: 1m
+            timeout: 1m10s
             content: |
               yaml=$(mktemp)
               script=$(mktemp)
@@ -170,7 +170,7 @@ spec:
     - name: Verify Trace - Context Propagation
       try:
         - script:
-            timeout: 1m
+            timeout: 1m10s
             content: |
               yaml=$(mktemp)
               script=$(mktemp)

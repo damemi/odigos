@@ -19,7 +19,7 @@ spec:
     - name: Install Odigos latest release from GitHub for pre upgrade setup
       try:
         - script:
-            timeout: 5m
+            timeout: 2m20s
             content: |
               #!/bin/bash
 
@@ -80,7 +80,7 @@ spec:
 
               ../../common/verify_odigos_installation.sh odigos-test
         - assert:
-            timeout: 5m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/odigos-installed.yaml
       catch:
         - script:
@@ -90,19 +90,19 @@ spec:
     - name: Verify node Odiglet installed label has been added
       try:
         - assert:
-            timeout: 30s
+            timeout: 1m10s
             file: ../../common/assert/node-odiglet-label.yaml
 
     - name: Assert Trace DB is up
       try:
         - assert:
-            timeout: 1m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-trace-db-running.yaml
 
     - name: Assert - Simple Demo Apps Installed
       try:
         - assert:
-            timeout: 3m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-installed.yaml
 
     - name: Instrument Namespace
@@ -113,7 +113,7 @@ spec:
     - name: Assert Runtime Detected
       try:
         - assert:
-            timeout: 3m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-runtime-detected.yaml
 
     - name: Add Destination
@@ -124,7 +124,7 @@ spec:
     - name: Assert instrumented and pipeline ready
       try:
         - assert:
-            timeout: 3m
+            timeout: 1m30s
             file: ../../common/assert/instrumented-and-pipeline.yaml
       catch:
         - script:
@@ -137,28 +137,28 @@ spec:
         - script:
             content: ../../../../odigos/cli/odigos pro update-offsets
         - assert:
-            timeout: 3m
+            timeout: 1m10s
             file: assert-custom-offsets.yaml
 
     - name: Upgrade to HEAD version with the current compiled cli
       try:
         - script:
-            timeout: 3m
+            timeout: 1m10s
             content: ../../../../odigos/cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY
         - assert:
-            timeout: 3m
+            timeout: 3m20s
             file: assert-odigos-upgraded-with-custom-offsets.yaml
 
     - name: Assert simple demo apps ready after upgrade
       try:
         - assert:
-            timeout: 3m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-installed.yaml
 
     - name: Instrumented and pipeline ready after upgrade
       try:
         - assert:
-            timeout: 3m
+            timeout: 1m10s
             file: ../../common/assert/instrumented-and-pipeline.yaml
       catch:
         - script:
@@ -171,7 +171,7 @@ spec:
         - apply:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
         - script:
-            timeout: 1m
+            timeout: 1m10s
             content: |
               kubectl wait --for=condition=complete job/$(kubectl get -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
         - delete:
@@ -180,7 +180,7 @@ spec:
     - name: Wait For Trace
       try:
         - script:
-            timeout: 1m
+            timeout: 1m10s
             content: |
               yaml=$(mktemp)
               script=$(mktemp)
@@ -206,7 +206,7 @@ spec:
     - name: Verify Trace - Context Propagation
       try:
         - script:
-            timeout: 1m
+            timeout: 1m10s
             content: |
               yaml=$(mktemp)
               script=$(mktemp)

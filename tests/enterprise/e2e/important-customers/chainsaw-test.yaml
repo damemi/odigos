@@ -23,7 +23,7 @@ spec:
     - name: Install Odigos
       try:
         - script:
-            timeout: 3m
+            timeout: 1m10s
             env:
               - name: CUSTOMER
                 value: ($values.customer)
@@ -38,7 +38,7 @@ spec:
     - name: Verify Odigos Installation
       try:
         - script:
-            timeout: 1m
+            timeout: 1m10s
             content: |
               echo "Starting Odigos version check..."
               export ACTUAL_VERSION=$(../../../../odigos/cli/odigos version --cluster)
@@ -61,7 +61,7 @@ spec:
               BASH_EOF
 
         - assert:
-            timeout: 6m
+            timeout: 2m30s
             file: /tmp/odigos-installed-assert.yaml
 
       catch:
@@ -74,7 +74,7 @@ spec:
     - name: Assert Trace DB is up
       try:
         - assert:
-            timeout: 1m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-trace-db-running.yaml
 
     - name: Add Destination
@@ -85,7 +85,7 @@ spec:
     - name: Assert - Simple Demo Apps Installed
       try:
         - assert:
-            timeout: 3m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-installed.yaml
 
     - name: Instrument Namespace
@@ -96,13 +96,13 @@ spec:
     - name: Assert Runtime Detected
       try:
         - assert:
-            timeout: 3m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-runtime-detected.yaml
 
     - name: Odigos pipeline ready
       try:
         - assert:
-            timeout: 3m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/pipeline-ready.yaml
 
     - name: Simple-demo instrumented after destination added
@@ -120,7 +120,7 @@ spec:
               cp "$custom_file" /tmp/simple-demo-instrumented-assert.yaml
               BASH_EOF
         - assert:
-            timeout: 3m
+            timeout: 1m30s
             file: /tmp/simple-demo-instrumented-assert.yaml
 
     - name: Generate Traffic
@@ -128,7 +128,7 @@ spec:
         - apply:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
         - script:
-            timeout: 1m
+            timeout: 1m10s
             content: |
               kubectl wait --for=condition=complete job/$(kubectl get -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
         - delete:
@@ -137,7 +137,7 @@ spec:
     - name: Wait For Trace
       try:
         - script:
-            timeout: 1m
+            timeout: 1m10s
             content: |
               yaml=$(mktemp)
               script=$(mktemp)
@@ -162,7 +162,7 @@ spec:
     - name: Verify Trace - Context Propagation
       try:
         - script:
-            timeout: 1m
+            timeout: 1m10s
             content: |
               yaml=$(mktemp)
               script=$(mktemp)

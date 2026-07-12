@@ -19,33 +19,33 @@ spec:
     - name: '[1 - Setup] Install Odigos'
       try:
         - script:
-            timeout: 4m
+            timeout: 3m10s
             content: |
               echo "Installing Odigos with tag $IMAGE_TAG"
               ../../../../odigos/cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-init-container
               kubectl label namespace odigos-test odigos.io/system-object="true"
               curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/verify_odigos_installation.sh | bash -s -- odigos-test
         - assert:
-            timeout: 3m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/odigos-installed-no-device-plugin.yaml
 
     - name: '[1 - Setup] Assert config set successfully with init container mount method'
       try:
         - script:
-            timeout: 30s
+            timeout: 1m10s
             content: curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert_config_value.sh | bash -s -- -k mountMethod -v k8s-init-container
 
     - name: '[1 - Setup] Assert - Simple Demo Apps Installed'
       try:
         - assert:
-            timeout: 3m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-installed.yaml
 
     # device-plugin container is dropped from the odiglet pod once a mount method is set, so wait for the rollout, and then assert it is no longer present.
     - name: '[1 - Setup] Odiglet ready with init container mount method'
       try:
         - script:
-            timeout: 5m
+            timeout: 1m10s
             content: |
               sleep 5
               kubectl rollout status daemonset/odiglet -n odigos-test --timeout=5m
@@ -55,7 +55,7 @@ spec:
     - name: '[1 - Setup] Assert Trace DB is up'
       try:
         - assert:
-            timeout: 1m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-trace-db-running.yaml
 
     - name: '[1 - Setup] Add Destination'
@@ -71,22 +71,22 @@ spec:
     - name: '[2 - Workload Instrumentation] Assert Runtime Detected'
       try:
         - assert:
-            timeout: 2m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-runtime-detected.yaml
 
     - name: '[2 - Workload Instrumentation] Odigos pipeline ready'
       try:
         - assert:
-            timeout: 1m
+            timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/pipeline-ready.yaml
 
     - name: '[2 - Workload Instrumentation] Simple-demo instrumented after destination added'
       try:
         - assert:
-            timeout: 3m
+            timeout: 1m30s
             file: 02-simple-demo-instrumented.yaml
         - script:
-            timeout: 2m
+            timeout: 1m10s
             content: curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/wait_for_rollout.sh | bash
       catch:
         - script:
@@ -101,7 +101,7 @@ spec:
     - name: '[2 - Workload Instrumentation] Generate traffic and wait for trace'
       try:
         - script:
-            timeout: 3m
+            timeout: 1m20s
             content: bash traffic-and-trace.sh {{BASE_BRANCH}}
       catch:
         - script:
@@ -112,7 +112,7 @@ spec:
     - name: '[3 - Host Path Test] Switch to host-path mount method'
       try:
         - script:
-            timeout: 3m
+            timeout: 1m10s
             content: |
               ../../../../odigos/cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-host-path
               curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert_config_value.sh | bash -s -- -k mountMethod -v k8s-host-path
@@ -120,16 +120,16 @@ spec:
     - name: '[3 - Host Path Test] Odiglet ready with host-path'
       try:
         - script:
-            timeout: 5m
+            timeout: 2m50s
             content: kubectl rollout status daemonset/odiglet -n odigos-test --timeout=5m
         - assert:
-            timeout: 2m
+            timeout: 1m10s
             file: 03-odiglet-ready-with-host-path.yaml
 
     - name: '[3 - Host Path Test] Restart workloads to pick up host-path volumes'
       try:
         - script:
-            timeout: 3m
+            timeout: 1m30s
             content: |
               # Restart every simple-demo deployment so it re-injects with the current mount method.
               kubectl rollout restart deployment -n default
@@ -140,13 +140,13 @@ spec:
     - name: '[3 - Host Path Test] Verify host-path volumes are mounted correctly'
       try:
         - assert:
-            timeout: 2m
+            timeout: 1m10s
             file: 03-simple-demo-instrumented-with-host-path.yaml
 
     - name: '[4 - CSI Driver Test] Switch to CSI driver mount method'
       try:
         - script:
-            timeout: 3m
+            timeout: 1m10s
             content: |
               ../../../../odigos/cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-csi-driver
               curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert_config_value.sh | bash -s -- -k mountMethod -v k8s-csi-driver
@@ -154,16 +154,16 @@ spec:
     - name: '[4 - CSI Driver Test] Odiglet ready with CSI driver'
       try:
         - script:
-            timeout: 5m
+            timeout: 2m10s
             content: kubectl rollout status daemonset/odiglet -n odigos-test --timeout=5m
         - assert:
-            timeout: 2m
+            timeout: 1m10s
             file: 04-odiglet-ready-with-csi-driver.yaml
 
     - name: '[4 - CSI Driver Test] Restart trace DB for fresh data'
       try:
         - script:
-            timeout: 2m
+            timeout: 1m40s
             content: |
               kubectl delete pod -l app=simple-trace-db -n traces
               kubectl wait --for=condition=Ready pod -l app=simple-trace-db -n traces --timeout=2m
@@ -171,7 +171,7 @@ spec:
     - name: '[4 - CSI Driver Test] Restart workloads to pick up CSI volumes'
       try:
         - script:
-            timeout: 3m
+            timeout: 1m30s
             content: |
               # Restart every simple-demo deployment so it re-injects with the current mount method.
               kubectl rollout restart deployment -n default
@@ -182,22 +182,22 @@ spec:
     - name: '[4 - CSI Driver Test] Verify CSI volumes are mounted correctly'
       try:
         - assert:
-            timeout: 2m
+            timeout: 1m10s
             file: 04-simple-demo-instrumented-with-csi.yaml
 
     - name: '[4 - CSI Driver Test] Generate traffic and wait for trace'
       try:
         - script:
-            timeout: 3m
+            timeout: 1m20s
             content: bash traffic-and-trace.sh {{BASE_BRANCH}}
 
     - name: 'Uninstall Odigos'
       try:
         - script:
-            timeout: 2m
+            timeout: 1m40s
             content: ../../../../odigos/cli/odigos uninstall --ns odigos-test
         - script:
-            timeout: 1m
+            timeout: 1m20s
             content: |
               for i in $(seq 1 10); do
                 if curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert_odigos_uninstalled.sh | bash; then
