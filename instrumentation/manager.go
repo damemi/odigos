@@ -59,21 +59,17 @@ type Request[processGroup ProcessGroup, configGroup ConfigGroup, processDetails 
 }
 
 type instrumentationDetails[processGroup ProcessGroup, configGroup ConfigGroup, processDetails ProcessDetails[processGroup, configGroup]] struct {
-	// insts is keyed by the name of the factory that produced the entry: a distro factory under its
-	// distribution name, a generic factory (e.g. OBI network metrics, eBPF log capture, which apply
-	// to every process regardless of distro) under its registered name. A non-nil value is a loaded
-	// instrumentation; a nil value marks a factory that was attempted but failed to init/load - the
-	// pid is still tracked so the reporter is notified on exit, and the factory stays a retry
-	// candidate. A factory that opted out (created no instrumentation) has no entry. Values are run,
-	// reconfigured and closed uniformly, guarding for nil; whether each reports its lifecycle is
-	// decided per-instrumentation by the Status.SkipReport it returns from Load.
-	//
-	// The map is the single source of truth for load state, with no separate flag: "is the distro
-	// loaded?" is a non-nil lookup of the distribution name (which is also what a RetryDistros request
-	// names). A retry re-runs whatever is not loaded (a nil or absent entry), leaving loaded ones
-	// untouched. Factory names share one namespace, so a generic factory must not be registered under
-	// a distribution name.
-	insts map[string]Instrumentation
+	// distroInst is the instrumentation produced by the process's distro factory - the main
+	// instrumentation path. We track the process even when this is nil (the distro failed to
+	// initialize/load) so the reporter is notified once the process exits, and so a failed distro is
+	// a retry candidate.
+	distroInst Instrumentation
+	// genericInsts holds the instrumentations produced by the generic factories (e.g. OBI network
+	// metrics, eBPF log capture) that apply to every process regardless of its distro. They are kept
+	// off the main path: their lifecycle is never reported and they are never retried, so only the
+	// successfully loaded ones are tracked here - purely so they can be reconfigured and closed
+	// alongside the process.
+	genericInsts []Instrumentation
 
 	pd processDetails
 	cg configGroup
@@ -88,16 +84,19 @@ type ManagerOptions[processGroup ProcessGroup, configGroup ConfigGroup, processD
 	// instrumented by GenericFactories. If neither applies, the event is ignored.
 	Factories map[string]Factory
 
-	// GenericFactories maps a name to a factory that applies to every process, in addition to
-	// (and independently of) the factory selected by the process's distribution - including processes
-	// whose distribution has no factory at all. This is how cross-cutting eBPF signals like OBI
-	// network metrics and eBPF log capture are attached uniformly. Names share a namespace with the
-	// distribution names in Factories, so a generic factory must not reuse a distribution name.
+	// GenericFactories maps a name to a factory that applies to every process regardless of its
+	// distribution. It can add eBPF capabilities to all instrumented processes even if they don't
+	// have an active eBPF instrumentation, and can be applied on top of existing instrumented
+	// processes. This is how cross-cutting eBPF signals like OBI network metrics and eBPF log capture
+	// are attached uniformly.
 	//
-	// Each is asked to create an Instrumentation via CreateInstrumentation and may return (nil, nil)
-	// to opt out of a given process. They are loaded, run, reconfigured and closed exactly like any
-	// other instrumentation; whether each reports its lifecycle is decided per-instrumentation by
-	// the Status.SkipReport it returns from Load.
+	// They are handled off the main instrumentation path (see loadGenericInstrumentations). A generic
+	// factory that does not apply to a process at all returns ErrFactoryNotApplicable from
+	// CreateInstrumentation and is skipped; a factory that applies but may be disabled by config
+	// instead returns an Instrumentation that gates its own attachment in Load (so it can be toggled
+	// later via ApplyConfig). Unlike distro factories, their lifecycle is never reported to the
+	// Reporter and a failure is never retried - it is logged and dropped. They are only reconfigured
+	// and closed alongside the process.
 	GenericFactories map[string]Factory
 
 	// Handler is used to resolve details, config group, OTel distribution and settings for the instrumentation
@@ -157,7 +156,7 @@ type manager[processGroup ProcessGroup, configGroup ConfigGroup, processDetails 
 	procEvents       <-chan detector.ProcessEvent
 	detector         detector.Detector
 	handler          *Handler[processGroup, configGroup, processDetails]
-	factories        map[string]Factory
+	distroFactories  map[string]Factory
 	genericFactories map[string]Factory
 	logger           *commonlogger.OdigosLogger
 
@@ -227,7 +226,7 @@ func NewManager[processGroup ProcessGroup, configGroup ConfigGroup, processDetai
 		procEvents:            procEvents,
 		detector:              detector,
 		handler:               handler,
-		factories:             options.Factories,
+		distroFactories:       options.Factories,
 		genericFactories:      options.GenericFactories,
 		logger:                logger,
 		detailsByPid:          make(map[int]*instrumentationDetails[processGroup, configGroup, processDetails]),
@@ -256,13 +255,14 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) runEventLoop(ctx co
 				m.logger.Error("context canceled while cleaning up instrumentations before shutdown", "err", ctx.Err())
 				return
 			default:
-				for _, inst := range details.insts {
-					if inst == nil {
-						// a factory that failed to init/load is tracked as a nil entry
-						continue
-					}
-					if err := inst.Close(ctx); err != nil {
+				if details.distroInst != nil {
+					if err := details.distroInst.Close(ctx); err != nil {
 						m.logger.Error("failed to close instrumentation", "err", err, "pid", pid)
+					}
+				}
+				for _, inst := range details.genericInsts {
+					if err := inst.Close(ctx); err != nil {
+						m.logger.Error("failed to close generic instrumentation", "err", err, "pid", pid)
 					}
 				}
 				if err := m.handler.Reporter.OnExit(ctx, pid, details.pd); err != nil {
@@ -340,13 +340,13 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) runEventLoop(ctx co
 
 // instrumentFromDetails runs tryInstrument for each (pid, pd) that is not already instrumented,
 // then re-arms the process detector for successes. Duplicate or in-flight requests are skipped via
-// isInstrumented; tracked entries whose distro factory failed are retried.
+// isInstrumentedByDistro; tracked entries whose distro factory failed are retried.
 func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) instrumentFromDetails(ctx context.Context, byPid map[int]ProcessDetails) {
 	var tracked []int
 	for pid, pd := range byPid {
 		// Handle duplicate requests gracefully; this can happen when external systems such as
 		// k8s controllers re-send instrumentation for an already-live process.
-		if m.isInstrumented(ctx, pid) {
+		if m.isInstrumentedByDistro(ctx, pid) {
 			continue
 		}
 		m.logger.Info("attempting instrumentation", "pid", pid, "process details", pd)
@@ -377,14 +377,17 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) failedProcessDetail
 	// Snapshot into a new map first; tryInstrument re-enters startTrackInstrumentation and
 	// mutates detailsByPid for the same pid.
 	for pid, details := range m.detailsByPid {
-		// Only a distro whose factory has not loaded is a retry candidate: retries are keyed by the
-		// requested distributions (RetryDistros, matched below), so a loaded distro, or a process with
-		// no distro factory of its own, is not retried here.
-		distribution, loaded := m.distroLoadState(ctx, details)
-		if distribution == nil || loaded {
+		// Only a distro factory that was attempted and failed (distroInst == nil) is a retry
+		// candidate. A generic-only process (no distro factory) also has distroInst == nil, but it is
+		// filtered out downstream by isInstrumentedByDistro in instrumentFromDetails, so it is never retried.
+		if details.distroInst != nil {
 			continue
 		}
 		if len(wanted) > 0 {
+			distribution, err := details.pd.Distribution(ctx)
+			if err != nil || distribution == nil {
+				continue
+			}
 			if _, ok := wanted[distribution.Name]; !ok {
 				continue
 			}
@@ -489,25 +492,6 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) metricsAttributeSet
 	)
 }
 
-// distroLoadState resolves the process's owned distribution and reports whether its distro factory
-// currently has a loaded instrumentation (a non-nil entry in details.insts under the distribution name).
-// distribution is the one the manager accounts the process's self metrics under; it is nil when the
-// distro has no factory of its own (an unresolved distro, or one instrumented only by generic
-// factories), in which case loaded is always false. The factory lookup resolves ownership, so metric
-// accounting stays consistent between the increment (at instrument time) and the decrement (on exit).
-func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) distroLoadState(ctx context.Context, details *instrumentationDetails[ProcessGroup, ConfigGroup, ProcessDetails]) (distribution *distro.OtelDistro, loaded bool) {
-	d, err := details.pd.Distribution(ctx)
-	if err != nil || d == nil {
-		return nil, false
-	}
-	if _, hasFactory := m.factories[d.Name]; !hasFactory {
-		return nil, false
-	}
-	// A nil entry means the distro factory was attempted but failed, so it is not loaded.
-	loaded = details.insts[d.Name] != nil
-	return d, loaded
-}
-
 func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) cleanInstrumentation(ctx context.Context, pid int) {
 	details, found := m.detailsByPid[pid]
 	if !found {
@@ -517,26 +501,26 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) cleanInstrumentatio
 
 	m.logger.Info("cleaning instrumentation resources", "pid", pid, "process group details", details.pd)
 
-	for _, inst := range details.insts {
-		if inst == nil {
-			// a factory that failed to init/load is tracked as a nil entry
-			continue
+	if details.distroInst != nil {
+		if err := details.distroInst.Close(ctx); err != nil {
+			m.logger.Error("failed to close instrumentation", "err", err)
 		}
-		if err := inst.Close(ctx); err != nil {
-			m.logger.Error("failed to close instrumentation", "err", err, "pid", pid)
-		}
-	}
-
-	// Decrement the gauge only for what we counted as instrumented: a loaded distro factory.
-	if distribution, loaded := m.distroLoadState(ctx, details); loaded {
+		distribution, _ := details.pd.Distribution(ctx)
 		m.metrics.instrumentedProcesses.Add(ctx, -1, metric.WithAttributeSet(m.metricsAttributeSet(distribution)))
 	}
 
-	// The process has exited, so delete its InstrumentationInstance. This is not gated on which
-	// distro "owns" the instance: it is keyed by (pod, host pid), so it targets at most the instance
-	// the manager itself would create; a native agent's instance is keyed by the pod-internal vpid,
-	// a different name. In the rare hostPID case where those keys coincide, the process is already
-	// gone, so cleaning up the instance is still correct.
+	// Generic instrumentations attach independently of the distro; close them too. They were never
+	// reported and are not accounted in the metrics.
+	for _, inst := range details.genericInsts {
+		if err := inst.Close(ctx); err != nil {
+			m.logger.Error("failed to close generic instrumentation", "err", err, "pid", pid)
+		}
+	}
+
+	// The process has exited, so delete its InstrumentationInstance. This is keyed by (pod, host
+	// pid), so it targets at most the instance the manager itself would create; a native agent's
+	// instance is keyed by the pod-internal vpid, a different name. In the rare hostPID case where
+	// those keys coincide, the process is already gone, so cleaning up the instance is still correct.
 	if err := m.handler.Reporter.OnExit(ctx, pid, details.pd); err != nil {
 		m.logger.Error("failed to report instrumentation exit", "err", err)
 	}
@@ -544,16 +528,23 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) cleanInstrumentatio
 	m.stopTrackInstrumentation(pid)
 }
 
-func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) isInstrumented(ctx context.Context, pid int) bool {
+func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) isInstrumentedByDistro(ctx context.Context, pid int) bool {
 	details, found := m.detailsByPid[pid]
 	if !found {
 		return false
 	}
-	// Instrumented once the distro factory has loaded (a non-nil entry in insts). A process with no
-	// factory of its own (distribution == nil, instrumented only by generic factories) has nothing to
-	// retry via the distro-keyed mechanism, so it is considered instrumented and left alone.
-	distribution, loaded := m.distroLoadState(ctx, details)
-	return distribution == nil || loaded
+	if details.distroInst != nil {
+		return true
+	}
+	// No loaded distro instrumentation. A process whose distro has a factory is a retry candidate
+	// (not yet instrumented); a process with no distro factory of its own is only ever handled by
+	// generic factories (which are not retried), so treat it as instrumented and leave it alone.
+	distribution, err := details.pd.Distribution(ctx)
+	if err != nil || distribution == nil {
+		return true
+	}
+	_, hasFactory := m.distroFactories[distribution.Name]
+	return !hasFactory
 }
 
 func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) tryInstrumentFromProcessEvent(ctx context.Context, e detector.ProcessEvent) error {
@@ -566,7 +557,7 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) tryInstrumentFromPr
 }
 
 func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) tryInstrument(ctx context.Context, pd ProcessDetails, pid int) error {
-	if m.isInstrumented(ctx, pid) {
+	if m.isInstrumentedByDistro(ctx, pid) {
 		// this can happen if we have multiple exec events for the same pid (chain loading)
 		// TODO: better handle this?
 		// this can be done by first closing the existing instrumentation,
@@ -590,23 +581,14 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) tryInstrument(ctx c
 		return errors.Join(err, errFailedToGetProcessGroup)
 	}
 
-	// The factories that apply to this process: the distro's own factory, if it has one, plus the
-	// generic factories (which apply to every process regardless of distro, e.g. OBI network
-	// metrics or eBPF log capture). A process with nothing to run is ignored.
-	toRun := make(map[string]Factory, len(m.genericFactories)+1)
-	if factory, ok := m.factories[otelDistro.Name]; ok {
-		toRun[otelDistro.Name] = factory
-	}
-	for name, f := range m.genericFactories {
-		toRun[name] = f
-	}
-	if len(toRun) == 0 {
+	factory, hasDistroFactory := m.distroFactories[otelDistro.Name]
+	if !hasDistroFactory && len(m.genericFactories) == 0 {
 		// No factory for this distro and no generic factories. Expected for some language/sdk
 		// combinations without eBPF support.
 		return errNoInstrumentationFactory
 	}
 
-	// Fetch initial settings for the instrumentation (SettingsGetter interface requires logr.Logger).
+	// Fetch initial settings for the instrumentation (SettingsGetter interface requires logr.Logger)
 	settings, err := m.handler.SettingsGetter.Settings(ctx, commonlogger.ToLogr().WithName("ebpf-instrumentation-manager"), pd, otelDistro)
 	if err != nil {
 		// for k8s instrumentation config CR will be queried to get the settings
@@ -635,101 +617,133 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) tryInstrument(ctx c
 		ExternalReader: true,
 	}
 
-	// Carry over entries from a previous attempt: loaded instrumentations (non-nil) keep running
-	// untouched, and failures (nil) are preserved so the loop below re-runs only what is not loaded.
-	// A retry thus re-runs the factories that failed before (in practice the distro factory, since
-	// retries are keyed on distros - see failedProcessDetailsByDistro).
-	insts := make(map[string]Instrumentation, len(toRun))
+	// Generic factories attach to every process regardless of its distro, off the main path (no
+	// reporting, no retry). Run them once, when the pid is first seen; a retry only re-attempts the
+	// distro factory, so carry the already-attached generic instrumentations over untouched.
+	var genericInsts []Instrumentation
 	if existing, tracked := m.detailsByPid[pid]; tracked {
-		for name, inst := range existing.insts {
-			insts[name] = inst
-		}
+		genericInsts = existing.genericInsts
+	} else {
+		genericInsts = m.loadGenericInstrumentations(ctx, pid, settings)
 	}
 
-	var instErrs []error
-	for name, f := range toRun {
-		// A non-nil entry means this factory already loaded on a previous attempt; leave it running.
-		// A nil (previously failed) or absent entry is (re)attempted below.
-		if insts[name] != nil {
-			continue
+	if !hasDistroFactory {
+		// The distro has no factory of its own (e.g. a natively-instrumented distro); only generic
+		// factories apply. Track the process so the generics are cleaned up on exit, but only if at
+		// least one attached - otherwise there is nothing to instrument. Pass a nil distribution so
+		// no self metrics are accounted (there is no distro instrumentation).
+		if len(genericInsts) == 0 {
+			return errNoInstrumentationFactory
 		}
-		inst, initErr := f.CreateInstrumentation(ctx, pid, settings)
-		if initErr != nil {
-			// A failed create has no status to consult, so it always reports: only a distro is
-			// expected to fail to create (a generic opts out with a nil instrumentation rather
-			// than an error), so this never touches an InstrumentationInstance a generic doesn't
-			// own. Track the failure as a nil entry so the pid stays a retry candidate and is closed
-			// out on exit. Every factory's error - distro and generic alike - is collected and
-			// returned together.
-			if reporterErr := m.handler.Reporter.OnInit(ctx, pid, initErr, pd); reporterErr != nil {
-				m.logger.Error("failed to report instrumentation init", "err", reporterErr, "pid", pid, "process group details", pd)
+		m.startTrackInstrumentation(ctx, pid, nil, genericInsts, pd, processGroup, configGroup, nil)
+		return nil
+	}
+
+	// Distro factory: the process's own instrumentation and the main instrumentation path - report
+	// init/load, track even on failure (so the reporter is notified on exit and a failed distro can
+	// be retried), and run.
+	inst, initErr := factory.CreateInstrumentation(ctx, pid, settings)
+	reporterErr := m.handler.Reporter.OnInit(ctx, pid, initErr, pd)
+	if reporterErr != nil {
+		m.logger.Error("failed to report instrumentation init", "err", reporterErr, "initialized", initErr == nil, "pid", pid, "process group details", pd)
+	}
+	if initErr != nil {
+		// we need to track the instrumentation even if the initialization failed.
+		// consider a reporter which writes a persistent record for a failed/successful init
+		// we need to notify the reporter once that PID exits to clean up the resources - hence we track it.
+		m.startTrackInstrumentation(ctx, pid, nil, genericInsts, pd, processGroup, configGroup, otelDistro)
+		m.logger.Error("failed to initialize instrumentation", "err", initErr, "language", otelDistro.Language, "distroName", otelDistro.Name)
+		// TODO: should we return here the initialize error? or the handler error? or both?
+		return initErr
+	}
+
+	status, loadErr := inst.Load(ctx)
+	reporterErr = m.handler.Reporter.OnLoad(ctx, pid, loadErr, pd, status)
+	if reporterErr != nil {
+		m.logger.Error("failed to report instrumentation load", "err", reporterErr, "loaded", loadErr == nil, "pid", pid, "process group details", pd)
+	}
+	if loadErr != nil {
+		// we need to track the instrumentation even if the load failed.
+		// consider a reporter which writes a persistent record for a failed/successful load
+		// we need to notify the reporter once that PID exits to clean up the resources - hence we track it.
+		// saving the inst as nil marking the instrumentation failed to load, and is not valid to run/configure/close.
+		m.startTrackInstrumentation(ctx, pid, nil, genericInsts, pd, processGroup, configGroup, otelDistro)
+		m.logger.Error("failed to load instrumentation", "err", loadErr, "language", otelDistro.Language, "distroName", otelDistro.Name)
+		// TODO: should we return here the load error? or the instance write error? or both?
+		return loadErr
+	}
+
+	m.startTrackInstrumentation(ctx, pid, inst, genericInsts, pd, processGroup, configGroup, otelDistro)
+	m.logger.Info("instrumentation loaded", "pid", pid, "process group details", pd)
+
+	go func() {
+		err := inst.Run(ctx)
+		if err != nil && !errors.Is(err, context.Canceled) {
+			reporterErr := m.handler.Reporter.OnRun(ctx, pid, err, pd)
+			if reporterErr != nil {
+				m.logger.Error("failed to report instrumentation run", "err", reporterErr)
 			}
-			insts[name] = nil
-			instErrs = append(instErrs, fmt.Errorf("initialize %q instrumentation for pid %d: %w", name, pid, initErr))
+			m.logger.Error("failed to run instrumentation", "err", err)
+		}
+	}()
+
+	return nil
+}
+
+// loadGenericInstrumentations creates, loads and runs every generic factory for the process and
+// returns the instrumentations that loaded successfully. Generic factories (e.g. OBI network
+// metrics, eBPF log capture) apply to every process regardless of its distro and are intentionally
+// kept off the main instrumentation path: their lifecycle is never reported to the Reporter and a
+// failure is not retried - it is logged and dropped. A factory that does not apply to the process
+// returns ErrFactoryNotApplicable and is skipped silently. The returned instrumentations are tracked
+// only so they can be reconfigured and closed alongside the process.
+func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) loadGenericInstrumentations(ctx context.Context, pid int, settings Settings) []Instrumentation {
+	var insts []Instrumentation
+	for name, factory := range m.genericFactories {
+		inst, err := factory.CreateInstrumentation(ctx, pid, settings)
+		if errors.Is(err, ErrFactoryNotApplicable) {
+			// the generic factory does not apply to this process; skip it silently
 			continue
 		}
-		if inst == nil {
-			// the factory does not apply to this process; leave it with no entry
+		if err != nil {
+			m.logger.Error("failed to create generic instrumentation", "err", err, "generic", name, "pid", pid)
 			continue
 		}
-
-		status, loadErr := inst.Load(ctx)
-		// Report the load unless the instrumentation opts out via Status.SkipReport - a generic
-		// sets this so it never touches an InstrumentationInstance it doesn't own. The flag is honored
-		// on a failed load too, since the status is the instrumentation's own return value.
-		if !status.SkipReport {
-			if reporterErr := m.handler.Reporter.OnLoad(ctx, pid, loadErr, pd, status); reporterErr != nil {
-				m.logger.Error("failed to report instrumentation load", "err", reporterErr, "loaded", loadErr == nil, "pid", pid, "process group details", pd)
-			}
-		}
-		if loadErr != nil {
-			// Track the failure as a nil entry, like a failed create: the pid stays a retry
-			// candidate and is closed out on exit.
-			insts[name] = nil
-			instErrs = append(instErrs, fmt.Errorf("load %q instrumentation for pid %d: %w", name, pid, loadErr))
+		if _, err := inst.Load(ctx); err != nil {
+			m.logger.Error("failed to load generic instrumentation", "err", err, "generic", name, "pid", pid)
 			continue
 		}
+		insts = append(insts, inst)
 
-		insts[name] = inst
-
-		// Run until the process exits (Close) or the manager stops (ctx is canceled). Run errors are
-		// reported only for instrumentations that report their lifecycle.
+		// Run until the process exits (Close) or the manager stops (ctx is canceled).
 		go func() {
 			if err := inst.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-				if !status.SkipReport {
-					if reporterErr := m.handler.Reporter.OnRun(ctx, pid, err, pd); reporterErr != nil {
-						m.logger.Error("failed to report instrumentation run", "err", reporterErr)
-					}
-				}
-				m.logger.Error("failed to run instrumentation", "err", err, "pid", pid)
+				m.logger.Error("failed to run generic instrumentation", "err", err, "generic", name, "pid", pid)
 			}
 		}()
 	}
-
-	m.startTrackInstrumentation(ctx, pid, insts, pd, processGroup, configGroup)
-
-	if len(instErrs) > 0 {
-		return errors.Join(instErrs...)
-	}
-	m.logger.Info("instrumentation loaded", "pid", pid, "process group details", pd)
-	return nil
+	return insts
 }
 
 func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) startTrackInstrumentation(
 	ctx context.Context,
 	pid int,
-	insts map[string]Instrumentation,
+	distroInst Instrumentation,
+	genericInsts []Instrumentation,
 	processDetails ProcessDetails,
 	processGroup ProcessGroup,
 	configGroup ConfigGroup,
+	distribution *distro.OtelDistro,
 ) {
 	prevDetails, hadPrev := m.detailsByPid[pid]
+	prevHadInst := hadPrev && prevDetails.distroInst != nil
 
 	instDetails := &instrumentationDetails[ProcessGroup, ConfigGroup, ProcessDetails]{
-		insts: insts,
-		pd:    processDetails,
-		cg:    configGroup,
-		pg:    processGroup,
+		distroInst:   distroInst,
+		genericInsts: genericInsts,
+		pd:           processDetails,
+		cg:           configGroup,
+		pg:           processGroup,
 	}
 	m.detailsByPid[pid] = instDetails
 
@@ -747,25 +761,21 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) startTrackInstrumen
 		m.detailsByProcessGroup[processGroup][pid] = instDetails
 	}
 
-	// Self metrics are attributed to the process's distribution and only tracked when its distro has
-	// a factory (processes instrumented only by generic factories are not counted). Both the
-	// current and previous loaded state come from the distribution's entry in insts.
-	distribution, loaded := m.distroLoadState(ctx, instDetails)
+	// Self metrics are attributed to the process's distribution. distribution is nil for a process
+	// with no distro factory (only generic factories attached), which is not accounted here.
 	if distribution == nil {
 		return
 	}
-	prevLoaded := false
-	if hadPrev {
-		_, prevLoaded = m.distroLoadState(ctx, prevDetails)
-	}
+	metricAttributeSet := m.metricsAttributeSet(distribution)
 	switch {
-	case !loaded && !hadPrev:
-		// First time the distro factory is attempted for this pid and it failed to init/load; count
-		// once (failedInstrumentations is a monotonic counter).
-		m.metrics.failedInstrumentations.Add(ctx, 1, metric.WithAttributeSet(m.metricsAttributeSet(distribution)))
-	case loaded && !prevLoaded:
-		// Transition from "not instrumented" (never seen or previously failed) to "instrumented".
-		m.metrics.instrumentedProcesses.Add(ctx, 1, metric.WithAttributeSet(m.metricsAttributeSet(distribution)))
+	case distroInst == nil && !hadPrev:
+		// First time we are tracking this pid and the distro attempt failed; count it once.
+		m.metrics.failedInstrumentations.Add(ctx, 1, metric.WithAttributeSet(metricAttributeSet))
+	case distroInst != nil && !prevHadInst:
+		// Transition from "not instrumented" (either never seen or previously failed) to
+		// "instrumented". failedInstrumentations is a monotonic counter so we don't decrement
+		// it; we just record the successful instrumentation.
+		m.metrics.instrumentedProcesses.Add(ctx, 1, metric.WithAttributeSet(metricAttributeSet))
 	}
 }
 
@@ -800,14 +810,10 @@ func (m *manager[ProcessGroup, ConfigGroup, ProcessDetails]) applyInstrumentatio
 
 	for _, instDetails := range configGroupInstrumentations {
 		m.logger.Info("applying configuration to instrumentation", "process group details", instDetails.pd, "configGroup", configGroup)
-		// Fan out to every instrumentation of the process, distro factory and generic alike
-		// (e.g. so OBI network metrics can be toggled on/off via config, including for processes
-		// that have no factory of their own).
-		for _, inst := range instDetails.insts {
-			if inst == nil {
-				// a factory that failed to init/load is tracked as a nil entry
-				continue
-			}
+		if instDetails.distroInst != nil {
+			err = errors.Join(err, instDetails.distroInst.ApplyConfig(ctx, config))
+		}
+		for _, inst := range instDetails.genericInsts {
 			err = errors.Join(err, inst.ApplyConfig(ctx, config))
 		}
 	}

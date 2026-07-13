@@ -33,7 +33,8 @@ const MetricsFactoryName = "opentelemetry-ebpf-instrumentation-network-metrics"
 //     OBI distro's explicit instrumentation it reports status normally, like any other distro.
 //   - MetricsFactory  - registered as a generic factory in the instrumentation manager. It
 //     attaches OBI network + TCP stats metrics to any process, gated per-workload by the
-//     networkMetrics InstrumentationRule, and sets Status.SkipReport so it is not reported.
+//     networkMetrics InstrumentationRule. The manager runs generic factories off the main path and
+//     never reports their status.
 //
 // Both drive the same shared instrumenter through the dynamic PID selector. PID selection updates
 // are not synchronized here; they are invoked from the instrumentation manager event loop
@@ -83,8 +84,8 @@ func (m *Manager) TracesFactory() instrumentation.Factory {
 }
 
 // MetricsFactory returns the generic factory that attaches OBI network + TCP stats metrics to
-// a process, gated per-workload by the networkMetrics InstrumentationRule. It sets Status.SkipReport
-// so its status is not reported.
+// a process, gated per-workload by the networkMetrics InstrumentationRule. The manager runs generic
+// factories off the main path and never reports their status.
 func (m *Manager) MetricsFactory() instrumentation.Factory {
 	return &metricsFactory{manager: m}
 }
@@ -145,7 +146,8 @@ func (t *tracesInstrumentation) ApplyConfig(context.Context, instrumentation.Con
 }
 
 // metricsFactory is a generic factory; it applies to every process (network metrics can be
-// enabled on any workload), gates attachment by config, and does not report (Status.SkipReport).
+// enabled on any workload) and gates attachment by config. The manager never reports the status of
+// generic factories.
 type metricsFactory struct {
 	manager *Manager
 }
@@ -174,9 +176,10 @@ func (mi *metricsInstrumentation) Load(context.Context) (instrumentation.Status,
 		mi.manager.selector.StatsMetrics().AddPIDs(uint32(mi.pid))
 	}
 	// OBI network metrics apply to any process (enabled per-workload via the networkMetrics
-	// InstrumentationRule) and do not own the process's InstrumentationInstance. Skip reporting so we
-	// don't create/delete a status owned by whatever instruments the process.
-	return instrumentation.Status{SkipReport: true}, nil
+	// InstrumentationRule) and do not own the process's InstrumentationInstance. As a generic
+	// instrumentation its status is never reported by the manager, so it does not create/delete a
+	// status owned by whatever instruments the process.
+	return instrumentation.Status{}, nil
 }
 
 // Run blocks until the manager stops (ctx) or the process exits (Close).

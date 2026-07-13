@@ -2,10 +2,19 @@ package instrumentation
 
 import (
 	"context"
+	"errors"
 
 	"github.com/cilium/ebpf"
 	"go.opentelemetry.io/otel/attribute"
 )
+
+// ErrFactoryNotApplicable is returned by a generic Factory's CreateInstrumentation to signal that
+// the factory does not apply to the process at all (a permanent decision, distinct from being
+// disabled by config, which a factory expresses by attaching an instrumentation that gates itself
+// in Load). The manager treats it as a silent skip rather than a failure - the process is simply not
+// attached to that factory. It is only honored for generic factories; distro factories are selected
+// by distribution and are always expected to apply.
+var ErrFactoryNotApplicable = errors.New("instrumentation factory not applicable to process")
 
 type Config any
 
@@ -87,13 +96,4 @@ type Instrumentation interface {
 type Status struct {
 	// Components is a map of component names (such as instrumentation library names) to their status.
 	Components map[string]error
-
-	// SkipReport tells the manager not to report this instrumentation's load/run lifecycle
-	// (OnInit/OnLoad/OnRun) to the Reporter. Generic instrumentations that apply to a process
-	// which is (or may be) instrumented by something else - e.g. OBI network metrics or eBPF log
-	// capture - set this so they never create or update an InstrumentationInstance they don't own;
-	// the status of such a process is owned by its distro-factory instrumentation (if any). Set it
-	// consistently, including in the status returned alongside a load error: the manager honors it on
-	// a failed load too, so a generic instrumentation stays silent rather than clobbering the owner's status.
-	SkipReport bool
 }

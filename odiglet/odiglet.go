@@ -102,8 +102,8 @@ const (
 // being duplicated in each odiglet main:
 //   - the OBI traces factory, registered as an explicit distribution (obisdk.DistroName), and
 //   - the OBI network-metrics generic factory (obisdk.MetricsFactoryName), which applies to
-//     every process, is enabled per-workload via the networkMetrics InstrumentationRule, and sets
-//     Status.SkipReport so it is never reported.
+//     every process, is enabled per-workload via the networkMetrics InstrumentationRule, and is run
+//     off the main path so it is never reported.
 //
 // The returned manager is run as a Runnable by Odiglet (see builtInRunnables).
 func setupOBI(opts *ebpf.InstrumentationManagerOptions) *obisdk.Manager {

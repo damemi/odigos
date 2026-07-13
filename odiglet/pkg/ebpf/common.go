@@ -24,7 +24,7 @@ type InstrumentationManagerOptions struct {
 	Factories map[string]instrumentation.Factory
 	// GenericFactories are factories run for every process regardless of distro, in addition to
 	// the factory selected by the process's distribution (e.g. OBI network metrics, eBPF log
-	// capture). They control whether they report via Status.SkipReport.
+	// capture). They are handled off the main path and never report their status.
 	// See instrumentation.ManagerOptions.GenericFactories.
 	GenericFactories           map[string]instrumentation.Factory
 	DistributionGetter         *distros.Getter
