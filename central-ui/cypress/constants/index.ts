@@ -72,15 +72,10 @@ export const SELECTED_ENTITIES = {
     AUTOFILL_FIELD: 'JAEGER_URL',
     AUTOFILL_VALUE: `jaeger.${NAMESPACES.DESTINATIONS}:4317`,
   },
-  // NOTE: `ExtractAttribute` is intentionally excluded until v1.29.0 is released.
-  // The form fills for it are commented out in 05-actions.cy.ts (see the
-  // matching TODO), so clicking Save would surface an inline validation error
-  // ("each row needs a target attribute name") and never fire the
-  // `CreateAction` GraphQL mutation. `waitForGraphqlOperation('CreateAction')`
-  // would then exhaust its 80 graphql skips against unrelated polling traffic
-  // (~6-7 minutes), pushing the suite past the chainsaw step timeout and
-  // SIGKILLing cypress mid-spec before any failure can be reported.
-  ACTIONS: ['K8sAttributesResolver', 'AddClusterInfo', 'DeleteAttribute', 'RenameAttribute', 'PiiMasking'],
+  // NOTE: ExtractAttribute was previously excluded because the catalog form
+  // could send empty optional enums (`dataFormat: ""`) that GraphQL rejected.
+  // `normalizeActionForWire` in odigos-api-adapter now strips those fields.
+  ACTIONS: ['K8sAttributesResolver', 'AddClusterInfo', 'DeleteAttribute', 'RenameAttribute', 'PiiMasking', 'ExtractAttribute'],
   INSTRUMENTATION_RULES: ['PayloadCollection', 'CodeAttributes'],
 };
 

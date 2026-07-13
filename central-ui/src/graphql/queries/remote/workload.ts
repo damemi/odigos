@@ -190,9 +190,7 @@ export const GET_WORKLOADS_BY_IDS_SLIM: VersionedRemoteFetch = {
   },
 };
 
-export const GET_WORKLOADS_BY_IDS: VersionedRemoteFetch = {
-  [PlatformType.K8s]: {
-    'v1.29': `
+const getWorkloadsByIdsDetailedQuery = (headNoisyOperationFields: string, collectorNoisyHttpServerFields: string) => `
   query GetWorkloadsByIds($ids: [K8sWorkloadIdInput!]!) {
     workloadsByIds(ids: $ids) {
       id {
@@ -314,17 +312,7 @@ export const GET_WORKLOADS_BY_IDS: VersionedRemoteFetch = {
                 name
                 disabled
                 operation {
-                  httpServer {
-                    route
-                    routePrefix
-                    method
-                  }
-                  httpClient {
-                    serverAddress
-                    templatedPath
-                    templatedPathPrefix
-                    method
-                  }
+${headNoisyOperationFields}
                 }
                 percentageAtMost
               }
@@ -339,9 +327,7 @@ export const GET_WORKLOADS_BY_IDS: VersionedRemoteFetch = {
               disabled
               operation {
                 httpServer {
-                  route
-                  routePrefix
-                  method
+${collectorNoisyHttpServerFields}
                 }
                 httpClient {
                   serverAddress
@@ -465,7 +451,67 @@ export const GET_WORKLOADS_BY_IDS: VersionedRemoteFetch = {
         throughputBytes
       }
     }
-  }`,
+  }`;
+
+const HEAD_NOISY_OPERATION_FIELDS_V129 = `
+                  httpServer {
+                    route
+                    routePrefix
+                    method
+                  }
+                  httpClient {
+                    serverAddress
+                    templatedPath
+                    templatedPathPrefix
+                    method
+                  }`;
+
+const HEAD_NOISY_OPERATION_FIELDS_V132 = `
+                  httpServer {
+                    route
+                    routePrefix
+                    method
+                    queryParams {
+                      name
+                      valueExact
+                    }
+                  }
+                  httpClient {
+                    serverAddress
+                    templatedPath
+                    templatedPathPrefix
+                    method
+                  }
+                  grpcServer {
+                    method
+                    service
+                  }
+                  grpcClient {
+                    method
+                    service
+                    serverAddress
+                  }`;
+
+const COLLECTOR_NOISY_HTTP_SERVER_FIELDS_V129 = `
+                  route
+                  routePrefix
+                  method`;
+
+const COLLECTOR_NOISY_HTTP_SERVER_FIELDS_V132 = `
+                  route
+                  routePrefix
+                  method
+                  queryParams {
+                    name
+                    valueExact
+                  }`;
+
+export const GET_WORKLOADS_BY_IDS: VersionedRemoteFetch = {
+  [PlatformType.K8s]: {
+    'v1.29': getWorkloadsByIdsDetailedQuery(HEAD_NOISY_OPERATION_FIELDS_V129, COLLECTOR_NOISY_HTTP_SERVER_FIELDS_V129),
+    // HTTP queryParams + gRPC head-sampling matchers landed in odigos v1.32
+    // (after v1.31.2). Older proxies reject that selection set.
+    'v1.32': getWorkloadsByIdsDetailedQuery(HEAD_NOISY_OPERATION_FIELDS_V132, COLLECTOR_NOISY_HTTP_SERVER_FIELDS_V132),
     // `workloadsByIds` / `K8sWorkloadIdInput` were introduced in v1.21 (v1.20
     // has neither). Pre-v1.21 proxies resolve via the legacy per-id `run` path.
     'v1.21': `

@@ -37,6 +37,7 @@
  *     ctx.version` using the same floor-to-bucket rule as `getVersionedQuery`.
  */
 
+import { normalizeActionForWire, parseRenamesString } from '@/lib/action-form-normalization';
 import React, { type FC, type PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react';
 import { GraphQLError } from 'graphql';
 import { createClient } from 'graphql-ws';
@@ -828,37 +829,14 @@ const legacyNamespacesToNamespaces = (legacyData: unknown): GetNamespacesWithWor
 
 // The backend's `ActionFieldsInput.renames` is a JSON-stringified `String`
 // (it `json.Unmarshal`s the value server-side), while the kit models
-// `renames` as an object map. Serialize on the way out (create/update) and
+// `renames` as an object map. Normalize on the way out (create/update) and
 // parse on the way back (list) so the kit's RenameAttribute form always sees
-// the object shape. This (de)serialization previously lived in the per-app
-// action hook, retired in favor of the kit's `useActionsApi`; without it the
-// raw object is sent to a `String` scalar and the mutation is rejected (no
-// CRD is created). `withActionRenames` composes this around `wrapRemote` so it
-// survives the REMOTE_FETCH round-trip.
-const parseRenamesString = (value: string): Record<string, string> => {
-  const parsed = safeJsonParse<unknown>(value, {});
-  return parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : {};
-};
-
-const serializeActionRenames = (vars: unknown): unknown => {
-  const v = vars as { action?: { fields?: { renames?: Record<string, string> | null } } } | undefined;
-  const action = v?.action;
-  if (!action) return vars;
-  const renames = action.fields?.renames;
-  return {
-    ...v,
-    action: {
-      ...action,
-      fields: {
-        ...action.fields,
-        // Mirror the legacy hook: an empty/missing map is sent as null so the
-        // controller skips the RenameAttribute config entirely.
-        renames: renames && Object.keys(renames).length ? JSON.stringify(renames) : null,
-      },
-    },
-  };
-};
-
+// the object shape. Catalog-driven forms can also emit `renames` as a
+// `[{ key, value }]` row array and ExtractAttribute rows with UI-only /
+// empty optional fields — `normalizeActionForWire` handles both. Without
+// this the raw object/array is sent to a `String` scalar and the mutation
+// is rejected (no CRD is created). `withActionRenames` composes this around
+// `wrapRemote` so it survives the REMOTE_FETCH round-trip.
 const parseActionRenames = (action: Action): Action => {
   const renames = action?.fields?.renames as unknown;
   if (typeof renames !== 'string') return action;
@@ -930,11 +908,19 @@ const withGuardedRuns = (ops: OdigosApiOperations): OdigosApiOperations => {
   return guarded as unknown as OdigosApiOperations;
 };
 
-// Wrap a REMOTE_FETCH-backed action op so `renames` is stringified before the
-// inner variables are embedded, and parsed back out of the inner response.
+// Wrap a REMOTE_FETCH-backed action op so catalog form payloads are normalized
+// before the inner variables are embedded, and `renames` is parsed back out of
+// the inner response. Reads (GET_ACTIONS) pass through variables unchanged and
+// only need the response-side parse.
 const withActionRenames = <TData, TVars>(op: Operation<TData, TVars>): Operation<TData, TVars> => ({
   ...op,
-  transformVariables: op.transformVariables ? (vars, ctx) => op.transformVariables!(serializeActionRenames(vars) as TVars, ctx) : undefined,
+  transformVariables: op.transformVariables
+    ? (vars, ctx) => {
+        const hasAction = !!vars && typeof vars === 'object' && 'action' in (vars as object) && !!(vars as { action?: unknown }).action;
+        const next = hasAction ? (normalizeActionForWire(vars as { action?: { fields?: Record<string, unknown> } }) as TVars) : vars;
+        return op.transformVariables!(next, ctx);
+      }
+    : undefined,
   transformResult: (raw, ctx) => parseActionRenamesInData(op.transformResult ? op.transformResult(raw, ctx) : (raw as TData | undefined)),
 });
 
@@ -1062,8 +1048,9 @@ const operations: OdigosApiOperations = withGuardedRuns({
     },
   },
 
-  // actions. `renames` is a JSON-string on the wire; (de)serialize it so the
-  // kit's object-shaped `renames` survives the proxy round-trip (see helpers above).
+  // actions. Catalog form payloads (row-array `renames`, ExtractAttribute UI-only /
+  // empty optional fields) are normalized for the wire, and stringified `renames`
+  // are parsed back so the kit's object shape survives the proxy round-trip.
   // VM: only URL templatization maps across both surfaces — VM-only action types
   // (processorAddition / spanMetrics) are filtered out of reads and the k8s-only
   // kit types have no VM equivalent (see vm-actions). `renames` is a k8s-only

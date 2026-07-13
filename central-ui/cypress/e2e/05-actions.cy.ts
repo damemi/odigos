@@ -48,18 +48,18 @@ describe('Actions CRUD (via Central UI → Proxy)', () => {
           case 'PiiMasking': {
             break;
           }
-          // NOTE: `ExtractAttribute` is excluded from SELECTED_ENTITIES.ACTIONS
-          // until v1.29.0 — see the comment there. When re-enabling, restore
-          // the case below as well:
-          //
-          // case 'ExtractAttribute': {
-          //   // Default mode is "Preset extract" with the first row's dataFormat=json
-          //   // already selected, so we just fill lookupKey + targetAttributeName to
-          //   // make a valid action.
-          //   cy.get('[data-id=extract-row-0]').find('input[data-id=extract-row-0-lookupKey]').type('task_id');
-          //   cy.get('[data-id=extract-row-0]').find('input[data-id=extract-row-0-targetAttributeName]').type('extracted.json.task_id');
-          //   break;
-          // }
+          case 'ExtractAttribute': {
+            // The catalog form uses InputCardTable (`variant: cards`), which:
+            //   1. Defaults to the "preset" method (lookupKey + dataFormat).
+            //   2. Names each input `${field}-card-${row}-${keyName}` (not bare keyName).
+            // Switch to Custom Regex so we can fill target + regex without the
+            // lookupKey/dataFormat pair — also the path that used to 400 on an
+            // empty dataFormat enum before sanitizeExtractAttributeForWire.
+            cy.get('[data-id=extractAttribute-mode]').contains('Custom Regex').click();
+            cy.get('[data-id=extractAttribute]').find('input[data-id=extractAttribute-card-0-targetAttributeName]').type('extracted.value');
+            cy.get('[data-id=extractAttribute]').find('input[data-id=extractAttribute-card-0-regex]').type('(.*)');
+            break;
+          }
           default: {
             cy.get('unknown action').should('eq', true);
             break;

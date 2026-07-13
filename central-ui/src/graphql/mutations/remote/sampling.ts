@@ -26,6 +26,29 @@ export const CREATE_NOISY_OPERATION_RULE: VersionedRemoteFetch = {
       notes
     }
   }`,
+    // HTTP queryParams + gRPC head-sampling matchers landed in odigos v1.32
+    // (after v1.31.2). Older proxies reject that selection set.
+    'v1.32': `
+  mutation CreateNoisyOperationRule($samplingId: ID!, $rule: NoisyOperationRuleInput!) {
+    createNoisyOperationRule(samplingId: $samplingId, rule: $rule) {
+      ruleId
+      name
+      disabled
+      sourceScopes {
+        sources { namespace kind name }
+        namespaces
+        languages
+      }
+      operation {
+        httpServer { route routePrefix method queryParams { name valueExact } }
+        httpClient { serverAddress templatedPath templatedPathPrefix method }
+        grpcServer { method service }
+        grpcClient { method service serverAddress }
+      }
+      percentageAtMost
+      notes
+    }
+  }`,
   },
 };
 
@@ -46,6 +69,29 @@ export const UPDATE_NOISY_OPERATION_RULE: VersionedRemoteFetch = {
       operation {
         httpServer { route routePrefix method }
         httpClient { serverAddress templatedPath templatedPathPrefix method }
+      }
+      percentageAtMost
+      notes
+    }
+  }`,
+    // HTTP queryParams + gRPC head-sampling matchers landed in odigos v1.32
+    // (after v1.31.2). Older proxies reject that selection set.
+    'v1.32': `
+  mutation UpdateNoisyOperationRule($samplingId: ID!, $ruleId: ID!, $rule: NoisyOperationRuleInput!) {
+    updateNoisyOperationRule(samplingId: $samplingId, ruleId: $ruleId, rule: $rule) {
+      ruleId
+      name
+      disabled
+      sourceScopes {
+        sources { namespace kind name }
+        namespaces
+        languages
+      }
+      operation {
+        httpServer { route routePrefix method queryParams { name valueExact } }
+        httpClient { serverAddress templatedPath templatedPathPrefix method }
+        grpcServer { method service }
+        grpcClient { method service serverAddress }
       }
       percentageAtMost
       notes
