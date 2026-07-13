@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import styled from 'styled-components';
 import { getNavbarIcons } from '@/utils';
 import { OverviewHeader } from '@/components';
-import { Navbar } from '@odigos/ui-kit/components/v2';
+import { Navbar } from '@odigos/ui-kit/components';
 import { ErrorBoundary, FlexColumn, FlexRow } from '@odigos/ui-kit/components';
 
 const ViewportColumn = styled(FlexColumn)`

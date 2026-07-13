@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CopyIcon } from '@odigos/ui-kit/icons';
 import { StatusType } from '@odigos/ui-kit/types';
-import { IconButton, IconButtonSize, Note } from '@odigos/ui-kit/components/v2';
+import { IconButton, IconButtonSize, Note } from '@odigos/ui-kit/components';
 import { DONE, SIGN_UP_PASSWORD_DISCLAIMER, USER_CREATED_SUCCESS, USER_CREATED_SUCCESS_SUBTITLE } from '@/utils';
 import { DoneButton, PasswordBox, PasswordInputWrapper, PasswordText, SuccessContainer, SuccessSubtitle, SuccessTitle } from './create-user-modal.styled';
 

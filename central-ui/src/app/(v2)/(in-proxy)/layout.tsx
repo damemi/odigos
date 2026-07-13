@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import styled from 'styled-components';
 import { getNavbarIcons } from '@/utils';
 import { OverviewHeader } from '@/components';
-import { Navbar } from '@odigos/ui-kit/components/v2';
+import { Navbar } from '@odigos/ui-kit/components';
 import { OdigosProvider } from '@odigos/ui-kit/contexts';
 import { PlatformType, Tier } from '@odigos/ui-kit/types';
 import { useProxy, useSSE, useTokenTracker } from '@/hooks';

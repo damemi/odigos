@@ -4,7 +4,7 @@ import { StatusType } from '@odigos/ui-kit/types';
 import * as STRINGS from '@/utils/constants/strings';
 import { useGenericForm } from '@odigos/ui-kit/hooks';
 import { FlexColumn } from '@odigos/ui-kit/components';
-import { Button, ButtonSize, ButtonVariants, Input, Note } from '@odigos/ui-kit/components/v2';
+import { Button, ButtonSize, ButtonVariants, Input, Note } from '@odigos/ui-kit/components';
 import { ConstrainedWidth, ErrorText, FormContainer, FormSubtitle, FormTitle } from '../styled';
 
 enum FormMode {

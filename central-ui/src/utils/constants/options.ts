@@ -1,5 +1,5 @@
 import { Role } from '@/types';
-import type { DropDataOption } from '@odigos/ui-kit/components/v2';
+import type { DropDataOption } from '@odigos/ui-kit/components';
 
 // Human-friendly Title Case labels for roles. The `Role` enum values stay
 // uppercase (backend contract); this map is the single source of truth for how

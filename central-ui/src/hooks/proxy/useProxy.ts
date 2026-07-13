@@ -4,7 +4,7 @@ import { ROUTES } from '@/utils';
 import { useProxyStore } from '@/store';
 import { useComputePlatformsCRUD } from '../compute-platforms';
 import { PlatformType, StatusType } from '@odigos/ui-kit/types';
-import { useOdigosApi } from '@odigos/ui-kit/contexts/odigos-api';
+import { useOdigosApi } from '@odigos/ui-kit/contexts';
 import { ProgressKeys, useDataStreamStore, useProgressStore, useSetupStore } from '@odigos/ui-kit/store';
 
 interface UseProxy {

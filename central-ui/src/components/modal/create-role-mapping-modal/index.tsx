@@ -7,7 +7,7 @@ import * as STRINGS from '@/utils/constants/strings';
 import { useGenericForm } from '@odigos/ui-kit/hooks';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { Actions, Body, Container, DescriptionTextWrapper, Form, Half, Header, Row } from './create-role-mapping-modal.styled';
-import { Button, ButtonVariants, DropDown, Input, Modal, Note, Typography, TypographySize, TypographyVariants } from '@odigos/ui-kit/components/v2';
+import { Button, ButtonVariants, DropDown, Input, Modal, Note, Typography, TypographySize, TypographyVariants } from '@odigos/ui-kit/components';
 
 interface CreateRoleMappingModalProps {
   isOpen: boolean;

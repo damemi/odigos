@@ -8,7 +8,7 @@ import { ModalContent } from './create-user-modal.styled';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { UserCreatedSuccessfully } from './user-created-successfully';
 import { CreateUserForm, CreateUserFormData, CreateUserFormField } from './create-user-form';
-import { Modal, Typography, TypographySize, TypographyVariants } from '@odigos/ui-kit/components/v2';
+import { Modal, Typography, TypographySize, TypographyVariants } from '@odigos/ui-kit/components';
 
 enum CreateUserModalState {
   Form = 'form',

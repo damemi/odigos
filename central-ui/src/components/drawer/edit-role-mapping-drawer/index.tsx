@@ -8,7 +8,7 @@ import { useGenericForm } from '@odigos/ui-kit/hooks';
 import { Role, type GroupRoleMapping, type GroupRoleMappingInput } from '@/types';
 import { BUTTON_TEXTS } from '@odigos/ui-kit/constants';
 import { FlexColumn, FlexRow } from '@odigos/ui-kit/components';
-import { ButtonVariants, DataCard, DropDown, Drawer, Input, Typography, WarningModal } from '@odigos/ui-kit/components/v2';
+import { ButtonVariants, DataCard, DropDown, Drawer, Input, Typography, WarningModal } from '@odigos/ui-kit/components';
 
 interface EditRoleMappingDrawerProps {
   roleMapping: GroupRoleMapping;

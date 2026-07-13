@@ -7,7 +7,7 @@ import { useGenericForm } from '@odigos/ui-kit/hooks';
 import { FlexColumn, Tooltip } from '@odigos/ui-kit/components';
 import { VisualGreenRings } from '@odigos/ui-kit/visuals';
 import { AUTH_PROVIDERS } from '@/utils/constants/auth-providers';
-import { Button, ButtonTab, CliCommand, Input, Note } from '@odigos/ui-kit/components/v2';
+import { Button, ButtonTab, CliCommand, Input, Note } from '@odigos/ui-kit/components';
 import { ConstrainedWidth, ErrorText, FormContainer, FormSubtitle, FormTitle } from '../styled';
 import { AuthProviderId, LoginType, type SamlIdentityProviderInput, EnsureSamlIdentityProvider } from '@/types';
 

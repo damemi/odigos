@@ -1,6 +1,8 @@
 import type { NextConfig } from 'next';
+import bundleAnalyzer from '@next/bundle-analyzer';
 
-const withBundleAnalyzer = require('@next/bundle-analyzer')({
+// Bundle analyzer configuration
+const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === 'true',
 });
 
@@ -13,14 +15,26 @@ const nextConfig: NextConfig = {
   },
   compiler: {
     styledComponents: true,
+    // Remove console.logs in production
     removeConsole: process.env.NODE_ENV === 'production',
   },
+  // Enable compression
   compress: true,
+  // Enable source maps only in development
   productionBrowserSourceMaps: false,
+  // Enable experimental optimizations
   experimental: {
-    optimizePackageImports: ['@odigos/ui-kit', '@apollo/client', 'graphql', 'zustand', 'styled-components', 'react', 'react-dom'],
+    // Enable tree shaking for better bundle optimization
+    optimizePackageImports: ['@apollo/client', '@odigos/ui-kit', 'graphql', 'react', 'react-dom', 'rxjs', 'styled-components', 'zustand'],
   },
-  turbopack: {},
+  // Turbopack configuration — pin shared deps so yalc'd ui-kit resolves the
+  // host app's copies instead of nested duplicates.
+  turbopack: {
+    resolveAlias: {
+      'styled-components': './node_modules/styled-components',
+      zustand: './node_modules/zustand',
+    },
+  },
   async rewrites() {
     return [
       { source: '/graphql', destination: `${CENTRAL_BACKEND_URL}/graphql` },

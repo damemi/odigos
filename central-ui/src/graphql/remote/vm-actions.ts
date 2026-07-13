@@ -12,7 +12,7 @@ import {
   type UrlTemplatizationConfigInput,
   type UrlTemplatizationRulesGroupInput,
 } from '@odigos/vmagent-api-apollo-client';
-import type { CreateActionResult, CreateActionVars, DeleteActionResult, DeleteActionVars, GetActionsData, UpdateActionResult, UpdateActionVars } from '@odigos/ui-kit/contexts/odigos-api';
+import type { CreateActionResult, CreateActionVars, DeleteActionResult, DeleteActionVars, GetActionsData, UpdateActionResult, UpdateActionVars } from '@odigos/ui-kit/contexts';
 import { stripEmpty } from './utils';
 
 // The agents-api action surface (v0.12.0+) is a discriminated union

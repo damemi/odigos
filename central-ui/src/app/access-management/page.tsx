@@ -5,7 +5,7 @@ import { useUserStore } from '@/store';
 import { FlexRow } from '@odigos/ui-kit/components';
 import styled from 'styled-components';
 import { UsersTable, CreateUserModal, RoleMappingsTable, CreateRoleMappingModal } from '@/components';
-import { Button, ButtonSize, Segment, type SegmentProps, SegmentVariant } from '@odigos/ui-kit/components/v2';
+import { Button, ButtonSize, Segment, type SegmentProps, SegmentVariant } from '@odigos/ui-kit/components';
 
 const Container = styled.div`
   flex: 1;

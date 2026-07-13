@@ -10,7 +10,7 @@ import type { SVG } from '@odigos/ui-kit/types';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { EditIcon, TrashIcon, UserIcon } from '@odigos/ui-kit/icons';
-import { Tag, Table, TableVariant, Typography, TypographySize, WarningModal, type TableProps, type TableRow } from '@odigos/ui-kit/components/v2';
+import { Tag, Table, TableVariant, Typography, TypographySize, WarningModal, type TableProps, type TableRow } from '@odigos/ui-kit/components';
 
 export enum UserTableColumn {
   Icon = 'icon',

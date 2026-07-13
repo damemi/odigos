@@ -4,7 +4,7 @@ import { useUserStore } from '@/store';
 import styled from 'styled-components';
 import { ROLE, ROLE_OPTIONS } from '@/utils';
 import { FlexColumn, FlexRow } from '@odigos/ui-kit/components';
-import { DataCard, DropDown, Typography } from '@odigos/ui-kit/components/v2';
+import { DataCard, DropDown, Typography } from '@odigos/ui-kit/components';
 
 interface FormData {
   role: Role;

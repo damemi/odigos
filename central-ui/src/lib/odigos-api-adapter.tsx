@@ -26,7 +26,7 @@
  *     directly to a vm-agent, bypassing `REMOTE_FETCH`). The kit's runner
  *     will use `op.client ?? defaultClient`.
  *   - `pickByPlatform(ctx, { K8s, Vm })` from
- *     `@odigos/ui-kit/contexts/odigos-api` — drop-in replacement for the
+ *     `@odigos/ui-kit/contexts` — drop-in replacement for the
  *     `if (ctx.platformType === PlatformType.Vm) … else …` switches that
  *     today live inside individual `transformVariables` callbacks.
  *   - `versionedDocument(map)` and `vmDialectMap(dialects, select)` — when
@@ -38,17 +38,19 @@
  */
 
 import React, { type FC, type PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react';
+import { GraphQLError } from 'graphql';
 import { createClient } from 'graphql-ws';
-import { onError } from '@apollo/client/link/error';
 import { useConfig } from '@/hooks/config/useConfig';
+import { ErrorLink } from '@apollo/client/link/error';
 import { useUserStore, useProxyStore } from '@/store';
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
+import { vmQuery, type VmSelect } from '@/graphql/remote/vm-dialect';
 import { safeJsonParse, trimVersion } from '@odigos/ui-kit/functions';
 import { PlatformType, Tier, type Action } from '@odigos/ui-kit/types';
-import { GraphQLError } from 'graphql';
+import { CombinedGraphQLErrors, ServerError } from '@apollo/client/errors';
 import { ApolloLink, type ApolloClient, type DocumentNode } from '@apollo/client';
+import { map } from 'rxjs';
 import type { VersionedRemoteFetch, WorkloadWithOdigosHealthStatus } from '@/types';
-import { vmQuery, type VmSelect } from '@/graphql/remote/vm-dialect';
 import { buildVmPersistSources, mapVmSourceResult, mapVmSourcesToWorkloads, mapVmWorkloadReportsToNamespaces, vmUpdateSourceVariables } from '@/graphql/remote/vm-sources';
 import {
   mapVmDestinationTypesToCategories,
@@ -71,15 +73,7 @@ import {
   vmUpdateInstrumentationRuleResult,
   vmUpdateInstrumentationRuleVariables,
 } from '@/graphql/remote/vm-instrumentation-rules';
-import {
-  mapVmActions,
-  vmCreateActionResult,
-  vmCreateActionVariables,
-  vmDeleteActionResult,
-  vmDeleteActionVariables,
-  vmUpdateActionResult,
-  vmUpdateActionVariables,
-} from '@/graphql/remote/vm-actions';
+import { mapVmActions, vmCreateActionResult, vmCreateActionVariables, vmDeleteActionResult, vmDeleteActionVariables, vmUpdateActionResult, vmUpdateActionVariables } from '@/graphql/remote/vm-actions';
 import { mapVmActionTypesToOptions } from '@/graphql/remote/vm-action-types';
 import { mapVmRuleTypesToOptions } from '@/graphql/remote/vm-rule-types';
 import type {
@@ -185,7 +179,7 @@ import {
   type UpdateSourceVars,
   type UpdateTokenResult,
   type UpdateTokenVars,
-} from '@odigos/ui-kit/contexts/odigos-api';
+} from '@odigos/ui-kit/contexts';
 import type {
   AllClusterSnapshots,
   ClusterSnapshot,
@@ -657,27 +651,29 @@ const parseRemoteFetchData = <T,>(raw: unknown): T | undefined => {
 // error toast. Single REMOTE_FETCH only — REMOTE_MULTI_FETCH keeps per-row
 // error handling in `transformMultiResult` (one bad proxy must not fail the batch).
 const remoteFetchErrorLink = new ApolloLink((operation, forward) =>
-  forward(operation).map((response) => {
-    const remoteFetch = (response.data as RemoteFetchResponse | null | undefined)?.remoteFetch;
-    if (typeof remoteFetch !== 'string') return response;
-    const parsed = safeJsonParse<RemoteParsedPayload<unknown>>(remoteFetch, { data: undefined });
-    const messages = innerRemoteErrors(parsed);
-    if (!messages.length) return response;
-    return { ...response, errors: [...(response.errors ?? []), ...messages.map((message) => new GraphQLError(message))] };
-  }),
+  forward(operation).pipe(
+    map((response) => {
+      const remoteFetch = (response.data as RemoteFetchResponse | null | undefined)?.remoteFetch;
+      if (typeof remoteFetch !== 'string') return response;
+      const parsed = safeJsonParse<RemoteParsedPayload<unknown>>(remoteFetch, { data: undefined });
+      const messages = innerRemoteErrors(parsed);
+      if (!messages.length) return response;
+      return { ...response, errors: [...(response.errors ?? []), ...messages.map((message) => new GraphQLError(message))] };
+    }),
+  ),
 );
 
 // Execute a single REMOTE_FETCH-backed `Operation` imperatively (mirrors the
 // kit runner's `transformVariables -> client.query -> transformResult` single
 // call). Used by legacy `run` executors to perform their round-trips entirely
 // host-side without re-entering the kit runner.
-const runRemoteSingle = async <TData, TVars>(client: ApolloClient<unknown>, op: Operation<TData, TVars>, vars: TVars | undefined, ctx: OperationContext): Promise<{ data?: TData; error?: string }> => {
+const runRemoteSingle = async <TData, TVars>(client: ApolloClient, op: Operation<TData, TVars>, vars: TVars | undefined, ctx: OperationContext): Promise<{ data?: TData; error?: string }> => {
   const document = typeof op.document === 'function' ? op.document(ctx) : op.document;
   if (!document) return { error: 'Operation not supported in this context' };
   const variables = op.transformVariables ? op.transformVariables(vars as TVars, ctx) : (vars as Record<string, unknown> | undefined);
   const result = await client.query({ query: document, variables, fetchPolicy: 'network-only', errorPolicy: 'all' });
   const data = op.transformResult ? op.transformResult(result.data, ctx) : (result.data as TData);
-  const error = result.error ? result.error.message : result.errors?.length ? result.errors.map((e) => e.message).join(', ') : undefined;
+  const error = result.error ? (CombinedGraphQLErrors.is(result.error) ? result.error.errors.map((e) => e.message).join(', ') : result.error.message) : undefined;
   return { data, error };
 };
 
@@ -699,7 +695,7 @@ interface LegacySpec<TData, TVars> {
   query?: VersionedRemoteFetch;
   variables?: (vars: TVars | undefined, ctx: OperationContext) => Record<string, unknown>;
   map?: (legacyData: unknown, ctx: OperationContext) => TData | undefined;
-  run?: (client: ApolloClient<unknown>, vars: TVars | undefined, ctx: OperationContext) => Promise<{ data?: TData; error?: string }>;
+  run?: (client: ApolloClient, vars: TVars | undefined, ctx: OperationContext) => Promise<{ data?: TData; error?: string }>;
 }
 
 /**
@@ -803,7 +799,7 @@ const legacySourcesToWorkloads = (legacyData: unknown): GetWorkloadsData => {
 // then maps the envelope into the v1.20+ `Workload` shape. This keeps the
 // source drawer's data (containers, conditions, agent-injection, instrumentation
 // libraries) intact on legacy proxies, matching `GET_WORKLOADS_BY_IDS`.
-const runLegacySourcesByIds = async (client: ApolloClient<unknown>, vars: GetWorkloadsByIdsVars | undefined, ctx: OperationContext): Promise<{ data?: GetWorkloadsByIdsData; error?: string }> => {
+const runLegacySourcesByIds = async (client: ApolloClient, vars: GetWorkloadsByIdsVars | undefined, ctx: OperationContext): Promise<{ data?: GetWorkloadsByIdsData; error?: string }> => {
   const ids = vars?.ids ?? [];
   if (!ids.length) return { data: { workloadsByIds: [] } };
 
@@ -1397,27 +1393,28 @@ const OdigosApiAdapter: FC<AdapterProps> = ({ children }) => {
     const wsLink: ApolloLink = new GraphQLWsLink(createClient({ url: API.GRAPHQL_WS }));
 
     // Auth-error redirect link mirrors the legacy `apollo-client.ts` behavior.
-    const errorRedirectLink = onError(({ graphQLErrors, networkError }) => {
-      if (graphQLErrors && graphQLErrors.length > 0) {
-        const shouldRedirect = graphQLErrors.some((e) => isAuthErrorMessage(e.message));
-        if (shouldRedirect) {
+    const errorRedirectLink = new ErrorLink(({ error }) => {
+      if (CombinedGraphQLErrors.is(error)) {
+        if (error.errors.some((e) => isAuthErrorMessage(e.message))) {
           try {
             useUserStore.getState().clearAuth();
           } catch {}
           if (typeof window !== 'undefined') window.location.assign(ROUTES.SIGN_IN);
         }
+        return;
       }
-      // Apollo's `networkError` is `Error | ServerError | ServerParseError | null`
-      // — only `ServerError` exposes `statusCode`. Probe both fields
-      // structurally rather than `as any`.
-      if (networkError) {
-        const probe = networkError as { statusCode?: number; message?: string };
-        if (probe.statusCode === 401 || isAuthErrorMessage(probe.message)) {
-          try {
-            useUserStore.getState().clearAuth();
-          } catch {}
-          if (typeof window !== 'undefined') window.location.assign(ROUTES.SIGN_IN);
-        }
+      if (ServerError.is(error) && error.statusCode === 401) {
+        try {
+          useUserStore.getState().clearAuth();
+        } catch {}
+        if (typeof window !== 'undefined') window.location.assign(ROUTES.SIGN_IN);
+        return;
+      }
+      if (isAuthErrorMessage(error.message)) {
+        try {
+          useUserStore.getState().clearAuth();
+        } catch {}
+        if (typeof window !== 'undefined') window.location.assign(ROUTES.SIGN_IN);
       }
     });
 

@@ -6,7 +6,7 @@ import { UserIcon } from '@odigos/ui-kit/icons';
 import { useGenericForm } from '@odigos/ui-kit/hooks';
 import { FlexColumn } from '@odigos/ui-kit/components';
 import { BUTTON_TEXTS } from '@odigos/ui-kit/constants';
-import { ButtonVariants, Drawer, WarningModal } from '@odigos/ui-kit/components/v2';
+import { ButtonVariants, Drawer, WarningModal } from '@odigos/ui-kit/components';
 
 interface EditUserDrawerProps {
   user: User;

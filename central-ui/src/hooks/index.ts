@@ -1,5 +1,5 @@
 // Most CRUD/data hooks have been removed in favor of `useOdigosApi()` from
-// `@odigos/ui-kit/contexts/odigos-api`. The hooks that remain in central-ui
+// `@odigos/ui-kit/contexts`. The hooks that remain in central-ui
 // are host-only concerns:
 //   - auth (`useAuth`, `useAuthProvider`) — sign-in flow + page redirects.
 //   - common — `useSSE` (long-lived EventSource listener), `useHealth`

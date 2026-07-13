@@ -1,6 +1,6 @@
 import { trimVersion } from '@odigos/ui-kit/functions';
 import { type NotifyPayload } from '@odigos/ui-kit/store';
-import { TagVariants } from '@odigos/ui-kit/components/v2';
+import { TagVariants } from '@odigos/ui-kit/components';
 import { Role, type ComputePlatform, type VersionedRemoteFetch } from '@/types';
 import { PlatformType, StatusType } from '@odigos/ui-kit/types';
 

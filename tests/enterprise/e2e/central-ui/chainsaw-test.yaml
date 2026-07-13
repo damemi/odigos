@@ -243,11 +243,15 @@ spec:
               done
 
               cd ../../../central-ui
-              # Direct redirect (not `| tee`) so the command's exit code
-              # propagates and a failing install / cypress run fails the step.
+              # Direct redirect (not `| tee`) so the command's exit code propagates and a failing install / cypress run fails the step.
               # The `catch:` block below tails these files for diagnostics.
-              yarn install --no-cache > yarn-install.log 2>&1
-              yarn cy:run > cy-run.log 2>&1
+              yarn install > yarn-install.log 2>&1
+              # Cypress is installed only in CI (not a package.json dependency).
+              # Use yarn global add (not yarn dlx) — this repo uses Yarn classic
+              # v1, which does not support `dlx`.
+              yarn add -D cypress@latest > yarn-add-cypress.log 2>&1
+              export PATH="$(yarn global bin):$PATH"
+              ./node_modules/.bin/cypress run --e2e -q > cy-run.log 2>&1
       catch:
         - script:
             content: |
@@ -257,6 +261,9 @@ spec:
               echo "==== yarn install (last 50 lines) ===="
               tail -n 50 central-ui/yarn-install.log 2>/dev/null \
                 || tail -n 50 ../../../central-ui/yarn-install.log 2>/dev/null || true
+              echo "==== yarn global add cypress (last 50 lines) ===="
+              tail -n 50 central-ui/yarn-add-cypress.log 2>/dev/null \
+                || tail -n 50 ../../../central-ui/yarn-add-cypress.log 2>/dev/null || true
               echo "==== cypress run (full log) ===="
               cat central-ui/cy-run.log 2>/dev/null \
                 || cat ../../../central-ui/cy-run.log 2>/dev/null || true

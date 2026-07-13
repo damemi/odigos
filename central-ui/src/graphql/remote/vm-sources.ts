@@ -1,5 +1,5 @@
 import type { CreateSourceInput, DeleteSourceInput, GetSourceQuery, GetSourcesQuery, GetWorkloadReportsQuery, UpdateSourceInput } from '@odigos/vmagent-api-apollo-client';
-import type { GetNamespacesWithWorkloadsData, GetWorkloadsData, PersistSourcesVars, UpdateSourceVars } from '@odigos/ui-kit/contexts/odigos-api';
+import type { GetNamespacesWithWorkloadsData, GetWorkloadsData, PersistSourcesVars, UpdateSourceVars } from '@odigos/ui-kit/contexts';
 import { type K8sResourceKind, type Workload } from '@odigos/ui-kit/types';
 
 // The VM (agents-api) schema is flat and not namespaced: a source is just

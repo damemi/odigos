@@ -8,7 +8,7 @@ import type {
   TestDestinationConnectionVars,
   UpdateDestinationData,
   UpdateDestinationVars,
-} from '@odigos/ui-kit/contexts/odigos-api';
+} from '@odigos/ui-kit/contexts';
 import { type Destination, type DestinationTypes, type GetDestinationCategoriesResult, type TestConnectionResponse } from '@odigos/ui-kit/types';
 
 // The agents-api destination surface (v0.12.0+) differs from the odigos k8s

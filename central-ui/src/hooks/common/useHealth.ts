@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { GET_HEALTH } from '@/graphql';
-import { useQuery } from '@apollo/client';
 import { useTheme } from 'styled-components';
+import { useQuery } from '@apollo/client/react';
 import { StatusType } from '@odigos/ui-kit/types';
 import { getStatusIcon } from '@odigos/ui-kit/functions';
 import { StatusKeys, StatusValues, useStatusStore } from '@/store';

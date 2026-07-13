@@ -7,7 +7,7 @@ import { StatusType } from '@odigos/ui-kit/types';
 import * as STRINGS from '@/utils/constants/strings';
 import { VisualOdigosLogo } from '@odigos/ui-kit/visuals';
 import { FlexColumn, FlexRow } from '@odigos/ui-kit/components';
-import { Button, Input, Modal, Note } from '@odigos/ui-kit/components/v2';
+import { Button, Input, Modal, Note } from '@odigos/ui-kit/components';
 import { FormTitle, FormSubtitle, FormContainer, ConstrainedWidth, ErrorText } from '@/components/auth/styled';
 
 export default function UpdatePasswordPage() {

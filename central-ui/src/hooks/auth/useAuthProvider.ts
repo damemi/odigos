@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useLazyQuery, useMutation } from '@apollo/client';
+import { useLazyQuery, useMutation } from '@apollo/client/react';
 import { ENSURE_OIDC_IDENTITY_PROVIDER, ENSURE_SAML_IDENTITY_PROVIDER, SIGN_IN_URL } from '@/graphql';
 import type { IdentityProviderResult, AuthProviderId, OidcIdentityProviderInput, SamlIdentityProviderInput, GetAuthSignInUrl, EnsureOidcIdentityProvider, EnsureSamlIdentityProvider } from '@/types';
 
@@ -25,40 +25,43 @@ interface EnsureSamlIdentityProviderResponse {
 }
 
 export const useAuthProvider = () => {
-  const [signInUrl, { loading: getUrlLoading, error: getUrlError }] = useLazyQuery<SignInUrlResult, GetAuthSignInUrlRequest>(SIGN_IN_URL, {
-    onError: (error) => {
-      console.error(error);
-    },
-  });
-
-  const [ensureOidcIdp, { loading: ensureIdpLoading, error: ensureIdpError }] = useMutation<EnsureOidcIdentityProviderResponse, EnsureOidcIdentityProviderRequest>(ENSURE_OIDC_IDENTITY_PROVIDER, {
-    onError: (error) => {
-      console.error(error);
-    },
-  });
-
+  const [signInUrl, { loading: getUrlLoading, error: getUrlError }] = useLazyQuery<SignInUrlResult, GetAuthSignInUrlRequest>(SIGN_IN_URL);
+  const [ensureOidcIdp, { loading: ensureIdpLoading, error: ensureIdpError }] = useMutation<EnsureOidcIdentityProviderResponse, EnsureOidcIdentityProviderRequest>(ENSURE_OIDC_IDENTITY_PROVIDER);
   const [ensureSamlIdp, { loading: ensureSamlIdpLoading, error: ensureSamlIdpError }] = useMutation<EnsureSamlIdentityProviderResponse, EnsureSamlIdentityProviderRequest>(
     ENSURE_SAML_IDENTITY_PROVIDER,
-    {
-      onError: (error) => {
-        console.error(error);
-      },
-    },
   );
 
-  const getSignInUrl: GetAuthSignInUrl = useCallback(async (providerId) => {
-    const { data } = await signInUrl({ variables: { providerId } });
-    return data?.signInUrl;
-  }, []);
+  const getSignInUrl: GetAuthSignInUrl = useCallback(
+    async (providerId) => {
+      try {
+        const { data } = await signInUrl({ variables: { providerId } });
+        return data?.signInUrl;
+      } catch (error) {
+        console.error(error);
+        return undefined;
+      }
+    },
+    [signInUrl],
+  );
 
   const ensureOidcIdentityProvider: EnsureOidcIdentityProvider = async (input) => {
-    const { data } = await ensureOidcIdp({ variables: { input } });
-    return data?.ensureOidcIdentityProvider;
+    try {
+      const { data } = await ensureOidcIdp({ variables: { input } });
+      return data?.ensureOidcIdentityProvider;
+    } catch (error) {
+      console.error(error);
+      return undefined;
+    }
   };
 
   const ensureSamlIdentityProvider: EnsureSamlIdentityProvider = async (input) => {
-    const { data } = await ensureSamlIdp({ variables: { input } });
-    return data?.ensureSamlIdentityProvider;
+    try {
+      const { data } = await ensureSamlIdp({ variables: { input } });
+      return data?.ensureSamlIdentityProvider;
+    } catch (error) {
+      console.error(error);
+      return undefined;
+    }
   };
 
   return {

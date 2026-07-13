@@ -1,5 +1,5 @@
 import styled from 'styled-components';
-import { Button, Typography } from '@odigos/ui-kit/components/v2';
+import { Button, Typography } from '@odigos/ui-kit/components';
 
 export const ModalContent = styled.div`
   display: flex;

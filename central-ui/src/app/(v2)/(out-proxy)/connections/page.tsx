@@ -4,9 +4,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useProxy } from '@/hooks';
 import type { ComputePlatform } from '@/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
-import { CentralConnections } from '@odigos/ui-kit/containers/v2';
+import { CentralConnections } from '@odigos/ui-kit/containers';
 import { StatusType, type Connection } from '@odigos/ui-kit/types';
-import { useApolloClient, useMutation, useQuery } from '@apollo/client';
+import { useApolloClient, useMutation, useQuery } from '@apollo/client/react';
 import { GET_COMPUTE_PLATFORMS, DELETE_PROXY_CONNECTION } from '@/lib/odigos-api-adapter';
 
 // `<CentralConnections>` is the OUT-OF-PROXY entry point: this page lists

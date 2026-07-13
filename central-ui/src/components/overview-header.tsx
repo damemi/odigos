@@ -6,10 +6,10 @@ import { useOdigos } from '@odigos/ui-kit/contexts';
 import { Tooltip } from '@odigos/ui-kit/components';
 import { StatusKeys, useStatusStore } from '../store';
 import { FORM_ALERTS } from '@odigos/ui-kit/constants';
+import { SystemDrawer } from '@odigos/ui-kit/containers';
 import { useConfig, useHealth, useProxy } from '@/hooks';
-import { SystemDrawer } from '@odigos/ui-kit/containers/v2';
-import { OdigosLogoTextByTier } from '@odigos/ui-kit/snippets/v2';
-import { IconButton, Badge as V2Badge, Header as V2Header } from '@odigos/ui-kit/components/v2';
+import { OdigosLogoTextByTier } from '@odigos/ui-kit/snippets';
+import { IconButton, Badge as V2Badge, Header as V2Header } from '@odigos/ui-kit/components';
 
 export const OverviewHeader = () => {
   useHealth();

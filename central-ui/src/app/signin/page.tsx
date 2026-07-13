@@ -3,14 +3,14 @@
 import React, { useState, useEffect } from 'react';
 import { useUserStore } from '@/store';
 import { AUTH_CODE_QUERY_PARAM } from '@/utils';
+import { Modal } from '@odigos/ui-kit/components';
 import { useAuth, useAuthProvider } from '@/hooks';
 import { AuthProviderId, LoginType } from '@/types';
-import { Modal } from '@odigos/ui-kit/components/v2';
 import { FormContainer } from '@/components/auth/styled';
 import { VisualOdigosLogo } from '@odigos/ui-kit/visuals';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { CenterThis, FlexRow, Loader } from '@odigos/ui-kit/components';
 import { AuthForm, ChooseForm, OidcForm, SamlForm } from '@/components';
-import { CenterThis, FadeLoader, FlexRow } from '@odigos/ui-kit/components';
 
 export default function Page() {
   const router = useRouter();
@@ -59,7 +59,7 @@ export default function Page() {
   if (systemConfigLoading) {
     return (
       <CenterThis $height='100vh'>
-        <FadeLoader scale={2} />
+        <Loader withSpinnerOld scaleSpinnerOld={2} />
       </CenterThis>
     );
   }
@@ -69,7 +69,7 @@ export default function Page() {
   let content = (
     <FormContainer>
       <CenterThis $height='100%'>
-        <FadeLoader scale={2} />
+        <Loader withSpinnerOld scaleSpinnerOld={2} />
       </CenterThis>
     </FormContainer>
   );

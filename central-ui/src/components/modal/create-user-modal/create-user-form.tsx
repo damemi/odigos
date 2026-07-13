@@ -3,7 +3,7 @@ import { Role } from '@/types';
 import { ROLE_OPTIONS } from '@/utils';
 import { StatusType } from '@odigos/ui-kit/types';
 import * as STRINGS from '@/utils/constants/strings';
-import { DropDown, Input, Note, Typography, TypographySize } from '@odigos/ui-kit/components/v2';
+import { DropDown, Input, Note, Typography, TypographySize } from '@odigos/ui-kit/components';
 import { ButtonContainer, CreateButton, DescriptionTextWrapper, Form, Half, Row } from './create-user-modal.styled';
 
 export enum CreateUserFormField {

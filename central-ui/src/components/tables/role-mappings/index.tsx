@@ -11,7 +11,7 @@ import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import type { GroupRoleMapping, GroupRoleMappingInput } from '@/types';
 import { EditIcon, RoleIcon, TrashIcon } from '@odigos/ui-kit/icons';
-import { Tag, Table, TableVariant, Typography, TypographySize, WarningModal, type TableProps, type TableRow } from '@odigos/ui-kit/components/v2';
+import { Tag, Table, TableVariant, Typography, TypographySize, WarningModal, type TableProps, type TableRow } from '@odigos/ui-kit/components';
 
 // Group values are usually opaque IDs (e.g. Azure group object GUIDs); monospace
 // makes them easier to scan and compare.

@@ -1,6 +1,6 @@
 import { print, type DocumentNode } from 'graphql';
 import { resolveDialect } from '@odigos/vmagent-api-apollo-client/registry';
-import type { OperationContext } from '@odigos/ui-kit/contexts/odigos-api';
+import type { OperationContext } from '@odigos/ui-kit/contexts';
 
 // VM dialect resolution for the central-ui REMOTE_FETCH path.
 //

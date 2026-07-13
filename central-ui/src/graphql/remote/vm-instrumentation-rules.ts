@@ -17,7 +17,7 @@ import type {
   GetInstrumentationRulesData,
   UpdateInstrumentationRuleResult,
   UpdateInstrumentationRuleVars,
-} from '@odigos/ui-kit/contexts/odigos-api';
+} from '@odigos/ui-kit/contexts';
 import { stripEmpty } from './utils';
 
 // The agents-api instrumentation-rule surface (v0.12.0+) is a discriminated

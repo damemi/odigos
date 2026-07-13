@@ -3,7 +3,7 @@ import { EmailIcon } from '@odigos/ui-kit/icons';
 import { AuthProviderId, LoginType } from '@/types';
 import * as STRINGS from '@/utils/constants/strings';
 import { FlexColumn } from '@odigos/ui-kit/components';
-import { ButtonTab } from '@odigos/ui-kit/components/v2';
+import { ButtonTab } from '@odigos/ui-kit/components';
 import { AUTH_PROVIDERS } from '@/utils/constants/auth-providers';
 import { ConstrainedWidth, FormContainer, FormSubtitle, FormTitle } from '../styled';
 
