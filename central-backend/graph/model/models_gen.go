@@ -22,6 +22,79 @@ type BackendHealthStatus struct {
 	SseStatus      *ServicesStatus `json:"sseStatus"`
 }
 
+type CloudConnectorAuth struct {
+	Permissions []string                    `json:"permissions"`
+	Methods     []*CloudConnectorAuthMethod `json:"methods"`
+}
+
+type CloudConnectorAuthMethod struct {
+	ID          string                 `json:"id"`
+	DisplayName string                 `json:"displayName"`
+	Description string                 `json:"description"`
+	BaseMethods []string               `json:"baseMethods"`
+	Fields      []*CloudConnectorField `json:"fields"`
+}
+
+type CloudConnectorCapabilityInput struct {
+	Type             string `json:"type"`
+	Discovery        bool   `json:"discovery"`
+	Instrumentation  bool   `json:"instrumentation"`
+	ComputePlatforms bool   `json:"computePlatforms"`
+}
+
+type CloudConnectorFeature struct {
+	Key         string                `json:"key"`
+	Enabled     bool                  `json:"enabled"`
+	DisplayName string                `json:"displayName"`
+	Description string                `json:"description"`
+	Permissions []string              `json:"permissions"`
+	Types       []*CloudConnectorType `json:"types"`
+}
+
+type CloudConnectorField struct {
+	Name           string         `json:"name"`
+	DisplayName    string         `json:"displayName"`
+	ComponentType  string         `json:"componentType"`
+	ComponentProps map[string]any `json:"componentProps,omitempty"`
+	Required       bool           `json:"required"`
+	Secret         bool           `json:"secret"`
+	Tooltip        string         `json:"tooltip"`
+	InitialValue   string         `json:"initialValue"`
+	EnvVar         string         `json:"envVar"`
+}
+
+type CloudConnectorProvider struct {
+	Provider        string                   `json:"provider"`
+	DisplayName     string                   `json:"displayName"`
+	ConnectorFields []*CloudConnectorField   `json:"connectorFields"`
+	Auth            *CloudConnectorAuth      `json:"auth"`
+	Features        []*CloudConnectorFeature `json:"features"`
+}
+
+type CloudConnectorTestCheck struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"displayName"`
+	Passed      bool   `json:"passed"`
+	Message     string `json:"message"`
+	Remediation string `json:"remediation"`
+}
+
+type CloudConnectorTestResult struct {
+	Success   bool                       `json:"success"`
+	AccountID string                     `json:"accountId"`
+	Identity  string                     `json:"identity"`
+	Checks    []*CloudConnectorTestCheck `json:"checks"`
+}
+
+type CloudConnectorType struct {
+	Name        string   `json:"name"`
+	DisplayName string   `json:"displayName"`
+	Description string   `json:"description"`
+	Permissions []string `json:"permissions"`
+	Method      string   `json:"method"`
+	Implemented bool     `json:"implemented"`
+}
+
 type ClusterSnapshot struct {
 	ClusterID   string               `json:"clusterId"`
 	ClusterName string               `json:"clusterName"`
@@ -40,6 +113,20 @@ type ComputePlatform struct {
 	LastSeenAt           *int         `json:"lastSeenAt,omitempty"`
 	Users                []*User      `json:"users"`
 	Teams                []*Team      `json:"teams"`
+}
+
+type CreateCloudConnectorInput struct {
+	Provider          string                           `json:"provider"`
+	DisplayName       string                           `json:"displayName"`
+	Credentials       map[string]any                   `json:"credentials"`
+	ExpectedAccountID string                           `json:"expectedAccountId"`
+	Capabilities      []*CloudConnectorCapabilityInput `json:"capabilities"`
+}
+
+type CreateCloudConnectorResult struct {
+	Created     bool                      `json:"created"`
+	ConnectorID string                    `json:"connectorId"`
+	Test        *CloudConnectorTestResult `json:"test"`
 }
 
 type CreateUserResult struct {
@@ -138,6 +225,13 @@ type Team struct {
 	ComputePlatforms []*ComputePlatform `json:"computePlatforms"`
 	CreatedAt        string             `json:"createdAt"`
 	UpdatedAt        string             `json:"updatedAt"`
+}
+
+type TestCloudConnectorConnectionInput struct {
+	Provider          string                           `json:"provider"`
+	Credentials       map[string]any                   `json:"credentials"`
+	ExpectedAccountID string                           `json:"expectedAccountId"`
+	Capabilities      []*CloudConnectorCapabilityInput `json:"capabilities"`
 }
 
 type User struct {
@@ -308,18 +402,20 @@ func (e HealthStatus) MarshalJSON() ([]byte, error) {
 type PlatformType string
 
 const (
-	PlatformTypeK8s PlatformType = "k8s"
-	PlatformTypeVM  PlatformType = "vm"
+	PlatformTypeK8s       PlatformType = "k8s"
+	PlatformTypeVM        PlatformType = "vm"
+	PlatformTypeConnector PlatformType = "connector"
 )
 
 var AllPlatformType = []PlatformType{
 	PlatformTypeK8s,
 	PlatformTypeVM,
+	PlatformTypeConnector,
 }
 
 func (e PlatformType) IsValid() bool {
 	switch e {
-	case PlatformTypeK8s, PlatformTypeVM:
+	case PlatformTypeK8s, PlatformTypeVM, PlatformTypeConnector:
 		return true
 	}
 	return false

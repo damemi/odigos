@@ -14,7 +14,11 @@ const getPayloadForIcon = (router: AppRouterInstance, currentPath: string, targe
   };
 };
 
-export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, proxyID?: string, isVm?: boolean) => {
+// `minimalNav` restricts the in-proxy nav to Overview only (no service-map /
+// collectors / sampling / settings). It's true for platforms that speak the
+// agents-api and don't expose those k8s features today: VM agents and cloud
+// connectors (the connector overview is a read-only sources + destinations view).
+export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, proxyID?: string, minimalNav?: boolean) => {
   const navIcons: NavbarProps['icons'] = [];
 
   navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.CONNECTIONS, 'Connections', ConnectionsIcon));
@@ -22,7 +26,7 @@ export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, p
   if (proxyID) {
     navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.OVERVIEW, 'Overview', OverviewIcon));
 
-    if (!isVm) {
+    if (!minimalNav) {
       navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SERVICE_MAP, 'Service Map', ServiceMapIcon));
       navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.PIPELINE_COLLECTORS, 'Collectors Pipeline', PipelineCollectorIcon));
       navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SAMPLING, 'Sampling Rules', SamplingIcon));

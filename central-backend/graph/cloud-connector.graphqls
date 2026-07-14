@@ -1,0 +1,131 @@
+# Cloud connector provider catalog. Mirrors connectors/spec.CloudConnectorSpec
+# (the YAML-backed provider specs under connectors/spec/data). This is a static
+# catalog served to the central UI to drive the Create Cloud Connector flow.
+
+type CloudConnectorProvider {
+  provider: String!
+  displayName: String!
+  connectorFields: [CloudConnectorField!]!
+  auth: CloudConnectorAuth!
+  features: [CloudConnectorFeature!]!
+}
+
+type CloudConnectorAuth {
+  permissions: [String!]!
+  methods: [CloudConnectorAuthMethod!]!
+}
+
+type CloudConnectorAuthMethod {
+  id: String!
+  displayName: String!
+  description: String!
+  baseMethods: [String!]!
+  fields: [CloudConnectorField!]!
+}
+
+type CloudConnectorFeature {
+  # discovery | instrumentation | computePlatforms | gateway
+  key: String!
+  enabled: Boolean!
+  displayName: String!
+  description: String!
+  permissions: [String!]!
+  types: [CloudConnectorType!]!
+}
+
+type CloudConnectorType {
+  name: String!
+  displayName: String!
+  description: String!
+  permissions: [String!]!
+  # agent | sidecar | service (empty for discovery types)
+  method: String!
+  implemented: Boolean!
+}
+
+type CloudConnectorField {
+  name: String!
+  displayName: String!
+  componentType: String!
+  componentProps: JSON
+  required: Boolean!
+  secret: Boolean!
+  tooltip: String!
+  initialValue: String!
+  envVar: String!
+}
+
+extend type Query {
+  cloudConnectorProviders: [CloudConnectorProvider!]!
+}
+
+# Test-connection: validate a prospective cloud connector's credentials and
+# permissions in-memory (no Secret or connector pod is created). Mirrors
+# connectors/testconnection.Input / Result and connectors/spec.Capability.
+
+# Per-resource-type allow-list entry (mirrors spec.Capability), used to scope
+# which discovery/instrumentation permissions the tester probes.
+input CloudConnectorCapabilityInput {
+  type: String!
+  discovery: Boolean!
+  instrumentation: Boolean!
+  computePlatforms: Boolean!
+}
+
+input TestCloudConnectorConnectionInput {
+  # Provider key, e.g. "aws".
+  provider: String!
+  # In-memory credentials under test, keyed by the provider spec's auth field
+  # names (e.g. "accessKeyId", "roleArn"). Never persisted or logged.
+  credentials: JSON!
+  # Account boundary id validated against the resolved identity ("" to skip).
+  expectedAccountId: String!
+  capabilities: [CloudConnectorCapabilityInput!]!
+}
+
+type CloudConnectorTestCheck {
+  name: String!
+  displayName: String!
+  passed: Boolean!
+  message: String!
+  remediation: String!
+}
+
+type CloudConnectorTestResult {
+  success: Boolean!
+  accountId: String!
+  identity: String!
+  checks: [CloudConnectorTestCheck!]!
+}
+
+extend type Mutation {
+  # Runs read-only reachability/permission checks for a prospective connector.
+  testCloudConnectorConnection(input: TestCloudConnectorConnectionInput!): CloudConnectorTestResult!
+
+  # Verifies the connection and, only if every check passes, creates the
+  # credentials Secret + OdigosCloudConnector CR in the central cluster. When the
+  # verification fails nothing is created and `created` is false with the checks.
+  createCloudConnector(input: CreateCloudConnectorInput!): CreateCloudConnectorResult!
+}
+
+input CreateCloudConnectorInput {
+  # Provider key, e.g. "aws".
+  provider: String!
+  # Human-friendly connector name (falls back to a derived name when empty).
+  displayName: String!
+  # In-memory credentials keyed by the provider spec's auth field names. Persisted
+  # into the connector's credentials Secret only after verification passes.
+  credentials: JSON!
+  # Account boundary id; "" -> use the identity resolved during verification.
+  expectedAccountId: String!
+  capabilities: [CloudConnectorCapabilityInput!]!
+}
+
+type CreateCloudConnectorResult {
+  # Whether the connector was created (only true when verification passed).
+  created: Boolean!
+  # Name of the created OdigosCloudConnector CR ("" when not created).
+  connectorId: String!
+  # The verification result (checks/identity), same shape as the test mutation.
+  test: CloudConnectorTestResult!
+}

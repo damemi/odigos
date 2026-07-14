@@ -12,6 +12,7 @@ import (
 	"github.com/odigos-io/central-backend/internal/logger"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
 	websocketserver "github.com/odigos-io/central-backend/internal/websocket"
+	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 )
 
 // ComputePlatformService provides helpers around compute platform state derived from proxy connection & metadata stored in Redis.
@@ -28,6 +29,7 @@ func (svc *ComputePlatformService) ComputePlatforms(
 	userService *UserService,
 	teamService *TeamService,
 	wsServer *websocketserver.WebSocketServer,
+	cloudConnectorService *CloudConnectorService,
 ) ([]*model.ComputePlatform, error) {
 	proxyMetadata, err := svc.GetAllProxyMetadata(ctx)
 	if err != nil {
@@ -44,6 +46,11 @@ func (svc *ComputePlatformService) ComputePlatforms(
 		return nil, err
 	}
 
+	// Cloud connectors are folded into the same list via the "connector" platform
+	// type. A listing failure (e.g. missing CRD/RBAC) must not fail the whole
+	// connections query, so it is logged and skipped.
+	appendCloudConnectors(ctx, cpMap, cloudConnectorService)
+
 	for id, cp := range cpMap {
 		meta := proxyMetadata[id]
 		if meta != nil {
@@ -52,6 +59,80 @@ func (svc *ComputePlatformService) ComputePlatforms(
 	}
 
 	return toComputePlatformsSlice(cpMap), nil
+}
+
+// appendCloudConnectors lists OdigosCloudConnector CRs and folds them into the
+// compute platforms map as "connector"-typed entries.
+func appendCloudConnectors(ctx context.Context, cpMap map[string]*model.ComputePlatform, cloudConnectorService *CloudConnectorService) {
+	if cloudConnectorService == nil {
+		return
+	}
+	connectors, err := cloudConnectorService.ListConnectors(ctx)
+	if err != nil {
+		logger.Log.Warn("Failed to list cloud connectors", "error", err)
+		return
+	}
+	for i := range connectors {
+		cc := connectors[i]
+		name := cc.Spec.DisplayName
+		if name == "" {
+			name = cc.Name
+		}
+
+		// The connector runtime registers over the reverse WebSocket using its CR
+		// UID as the routing proxyID (ODIGOS_CONNECTOR_ID = cr.UID). So when a
+		// runtime is connected, buildComputePlatformsFromProxyConnections already
+		// produced a routable, connector-typed row keyed by that UID. Enrich it
+		// with the CR's display name (the WS only reports the CR name) and keep the
+		// routable id + graphqlSchemaVersion + live connection status from the
+		// registration. Without a connected runtime, fall back to a non-routable
+		// CR row that surfaces the connector's lifecycle phase (pending/connecting).
+		routableID := string(cc.UID)
+		if existing, ok := cpMap[routableID]; ok {
+			existing.Type = model.PlatformTypeConnector
+			existing.Name = name
+			continue
+		}
+
+		cpMap[routableID] = &model.ComputePlatform{
+			ID:            routableID,
+			Name:          name,
+			OdigosVersion: cloudConnectorVersion(cc),
+			Type:          model.PlatformTypeConnector,
+			Status:        mapCloudConnectorPhase(cc.Status.Phase),
+			Users:         []*model.User{},
+			Teams:         []*model.Team{},
+		}
+	}
+}
+
+// cloudConnectorVersion reports the connector runtime version from the CR status.
+// A connector has no proxy/agent Odigos version like k8s/vm; its version is the
+// runtime reported at registration. Until a runtime registers there is none, so
+// we return "-" rather than an alarming "unknown".
+func cloudConnectorVersion(cc odigosv1.OdigosCloudConnector) string {
+	if cc.Status.Runtime != nil && cc.Status.Runtime.Version != "" {
+		return cc.Status.Runtime.Version
+	}
+	return "-"
+}
+
+// mapCloudConnectorPhase maps the CRD lifecycle phase to a UI StatusType value.
+func mapCloudConnectorPhase(phase odigosv1.CloudConnectorPhase) string {
+	switch phase {
+	case odigosv1.CloudConnectorPhaseConnected:
+		return string(consts.StatusConnected) // "success"
+	case odigosv1.CloudConnectorPhaseDegraded:
+		return "warning"
+	case odigosv1.CloudConnectorPhaseError:
+		return string(consts.StatusDisconnected) // "error"
+	case odigosv1.CloudConnectorPhaseDisabled:
+		return "disabled"
+	case odigosv1.CloudConnectorPhasePending, odigosv1.CloudConnectorPhaseStarting, odigosv1.CloudConnectorPhaseDeleting:
+		return "info"
+	default:
+		return "info"
+	}
 }
 
 func buildComputePlatformsFromProxyConnections(
@@ -241,6 +322,8 @@ func toModelPlatformType(pType string) (model.PlatformType, bool) {
 		return model.PlatformTypeK8s, true
 	case string(consts.PlatformTypeVM):
 		return model.PlatformTypeVM, true
+	case string(consts.PlatformTypeConnector):
+		return model.PlatformTypeConnector, true
 	default:
 		return model.PlatformTypeK8s, false
 	}

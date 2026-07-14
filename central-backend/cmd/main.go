@@ -113,6 +113,7 @@ func main() {
 	ConfigService := services.NewConfigService(k8sClient)
 	healthService := services.NewHealthService(redisClient, adminService, centralSSEHub)
 	computePlatformService := services.NewComputePlatformService(redisClient)
+	cloudConnectorService := services.NewCloudConnectorService(k8sClient)
 
 	gqlHandler := handler.NewDefaultServer(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{
 		RedisClient:            redisClient,
@@ -125,6 +126,7 @@ func main() {
 		HealthService:          healthService,
 		ComputePlatformService: computePlatformService,
 		ConfigService:          ConfigService,
+		CloudConnectorService:  cloudConnectorService,
 	}}))
 
 	router := newRouter(gqlHandler, wsServer, centralSSEHub)

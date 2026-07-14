@@ -52,7 +52,17 @@ import { CombinedGraphQLErrors, ServerError } from '@apollo/client/errors';
 import { ApolloLink, type ApolloClient, type DocumentNode } from '@apollo/client';
 import { map } from 'rxjs';
 import type { VersionedRemoteFetch, WorkloadWithOdigosHealthStatus } from '@/types';
-import { buildVmPersistSources, mapVmSourceResult, mapVmSourcesToWorkloads, mapVmWorkloadReportsToNamespaces, vmUpdateSourceVariables } from '@/graphql/remote/vm-sources';
+import {
+  buildVmPersistSources,
+  buildVmSourcesWithReportsQuery,
+  mapVmSourceResult,
+  mapVmSourcesToWorkloads,
+  mapVmSourcesWithReportsToWorkloads,
+  mapVmWorkloadReportsToNamespaces,
+  vmUpdateSourceVariables,
+  withWorkloadReportRegion,
+} from '@/graphql/remote/vm-sources';
+import { supportsWorkloadReportRegion } from '@/graphql/remote/utils';
 import {
   mapVmDestinationTypesToCategories,
   mapVmDestinations,
@@ -372,6 +382,14 @@ type ProxyOperationContext = OperationContext & { schemaVersion?: string };
 // (k8s never sets `schemaVersion`, so this equals `ctx.version` there).
 const dialectVersion = (ctx: OperationContext): string => (ctx as ProxyOperationContext).schemaVersion ?? ctx.version;
 
+// A cloud connector runtime serves the exact same agents-api GraphQL schema as
+// the VM agent (it registers over the same reverse WebSocket — see
+// connectors/base/central/client.go), so it resolves documents from the same
+// vmagent dialect registry and reuses every `VmSpec`. Treat VM and connector
+// uniformly wherever the adapter selects the agents-api dialect over the
+// hand-written k8s `VersionedRemoteFetch` buckets.
+const isAgentsApiPlatform = (ctx: OperationContext): boolean => ctx.platformType === PlatformType.Vm || ctx.platformType === PlatformType.Connector;
+
 // ---------------------------------------------------------------------------
 // Version-aware input sanitizing.
 //
@@ -475,6 +493,9 @@ const sanitizeVariablesForVersion = (vars: unknown, ctx: OperationContext): Reco
 interface VmSpec<TData, TVars> {
   select?: VmSelect;
   buildQuery?: (vars: TVars, ctx: OperationContext) => string;
+  // Optional post-process of the printed agents-api document (e.g. inject fields
+  // the frozen dialect snapshot omits but a newer schemaVersion supports).
+  patchQuery?: (query: string, ctx: OperationContext) => string;
   transformVariables?: (vars: TVars, ctx: OperationContext) => Record<string, unknown>;
   transformResult?: (data: unknown, ctx: OperationContext) => TData | undefined;
   unsupported?: boolean;
@@ -488,7 +509,9 @@ interface VmSpec<TData, TVars> {
 // missing-generic call site becomes a TypeScript error rather than
 // silently degrading to `unknown` data flowing through the kit).
 const wrapRemote = <TData, TVars>(versioned: VersionedRemoteFetch, extract?: (envelope: unknown) => TData | undefined, vm?: VmSpec<TData, TVars>): Operation<TData, TVars> => {
-  const isVm = (ctx: OperationContext): boolean => ctx.platformType === PlatformType.Vm && !!vm;
+  // `isVm` is a misnomer kept for brevity: it's true for any agents-api platform
+  // (VM agent OR cloud connector) that has a `VmSpec` to resolve from the dialect.
+  const isVm = (ctx: OperationContext): boolean => isAgentsApiPlatform(ctx) && !!vm;
 
   // Resolve the GraphQL query string for the active context. VM ops resolve
   // from the dialect registry (`select`) or build it dynamically (`buildQuery`,
@@ -496,9 +519,11 @@ const wrapRemote = <TData, TVars>(versioned: VersionedRemoteFetch, extract?: (en
   const resolveQuery = (ctx: OperationContext, vars?: TVars): string | undefined => {
     if (isVm(ctx)) {
       if (vm!.unsupported) return undefined;
-      if (vm!.buildQuery) return vars === undefined ? undefined : vm!.buildQuery(vars, ctx);
-      if (vm!.select) return vmQuery(ctx, vm!.select);
-      return undefined;
+      let query: string | undefined;
+      if (vm!.buildQuery) query = vars === undefined ? undefined : vm!.buildQuery(vars, ctx);
+      else if (vm!.select) query = vmQuery(ctx, vm!.select);
+      if (query && vm!.patchQuery) query = vm!.patchQuery(query, ctx);
+      return query;
     }
     return getVersionedQuery(versioned, ctx.platformType, dialectVersion(ctx));
   };
@@ -951,23 +976,32 @@ const operations: OdigosApiOperations = withGuardedRuns({
     GET_WORKLOADS,
     undefined,
     { query: GET_SOURCES_WITH_STATUS, map: (data) => legacySourcesToWorkloads(data) },
-    // VM: the flat agents-api `sources` list mapped into the kit's `Workload` shape.
-    { select: (d) => d.GetSourcesDocument, transformResult: (data) => mapVmSourcesToWorkloads(data) },
+    // VM/connector: fetch sources + workloadReports in one REMOTE_FETCH and merge
+    // instrumentation status onto each Workload (drawer Overview + list health).
+    {
+      buildQuery: (_vars, ctx) => buildVmSourcesWithReportsQuery(ctx) ?? '',
+      transformResult: (data) => mapVmSourcesWithReportsToWorkloads(data),
+    },
   ),
-  // VM: no by-id endpoint — resolve the flat agents-api `sources` list and map
-  // into `Workload`s under `workloadsByIds`. The kit's `fetchById` `.find()`s the
-  // requested id out of the result (and SSE `fetchByTargets` refreshes the list
-  // via `fetchAll` afterward), so returning the full set is correct and cheap.
+  // VM: no by-id endpoint — resolve the flat agents-api `sources` list (plus
+  // workloadReports for status) and map into `Workload`s under `workloadsByIds`.
+  // The kit's `fetchById` `.find()`s the requested id out of the result (and SSE
+  // `fetchByTargets` refreshes the list via `fetchAll` afterward), so returning
+  // the full set is correct and cheap.
   GET_WORKLOADS_BY_IDS: wrapVersioned<GetWorkloadsByIdsData, GetWorkloadsByIdsVars>(
     GET_WORKLOADS_BY_IDS,
     undefined,
     { run: (client, vars, ctx) => runLegacySourcesByIds(client, vars, ctx) },
-    { select: (d) => d.GetSourcesDocument, transformResult: (data) => ({ workloadsByIds: mapVmSourcesToWorkloads(data).workloads }) },
+    {
+      buildQuery: (_vars, ctx) => buildVmSourcesWithReportsQuery(ctx) ?? '',
+      transformResult: (data) => ({ workloadsByIds: mapVmSourcesWithReportsToWorkloads(data).workloads }),
+    },
   ),
   GET_WORKLOADS_BY_IDS_SLIM: wrapVersioned<GetWorkloadsByIdsData, GetWorkloadsByIdsVars>(
     GET_WORKLOADS_BY_IDS_SLIM,
     undefined,
     { run: (client, vars, ctx) => runLegacySourcesByIds(client, vars, ctx) },
+    // Slim list path stays sources-only — overview table doesn't need full report payload.
     { select: (d) => d.GetSourcesDocument, transformResult: (data) => ({ workloadsByIds: mapVmSourcesToWorkloads(data).workloads }) },
   ),
   // VM: by-name `source(name)`; central-ui's `WorkloadId.name` is the source name.
@@ -1040,7 +1074,7 @@ const operations: OdigosApiOperations = withGuardedRuns({
     // under `testConnectionForDestination`, not the wrapper's default
     // `data` field. Override `transformResult` to dig that one extra level.
     transformResult: (raw, ctx): TestConnectionResponse | undefined => {
-      if (ctx.platformType === PlatformType.Vm) return vmTestConnectionResult(parseRemoteFetchData(raw));
+      if (isAgentsApiPlatform(ctx)) return vmTestConnectionResult(parseRemoteFetchData(raw));
       const remoteFetch = (raw as RemoteFetchResponse | null | undefined)?.remoteFetch;
       if (typeof remoteFetch !== 'string') return undefined;
       const parsed = safeJsonParse<{ data?: { testConnectionForDestination?: TestConnectionResponse } }>(remoteFetch, { data: undefined });
@@ -1146,10 +1180,17 @@ const operations: OdigosApiOperations = withGuardedRuns({
       query: GET_NAMESPACES_WITH_SOURCES,
       map: (data) => legacyNamespacesToNamespaces(data),
     },
-    // VM: the "Add Sources" drawer is a discovery view, so resolve to
+    // VM/connector: the "Add Sources" drawer is a discovery view, so resolve to
     // `workloadReports` (discoverable workloads), grouped by kind into the kit's
     // namespace+workload shape (the left column is relabeled "Kinds").
-    { select: (d) => d.GetWorkloadReportsDocument, transformResult: (data) => mapVmWorkloadReportsToNamespaces(data) },
+    // agents-api >= v0.16.0 adds `region` to WorkloadReport; the published
+    // dialect snapshots through v0.15.0 omit it, so patch it in when the
+    // connected schema supports it (connectors report v0.16.0).
+    {
+      select: (d) => d.GetWorkloadReportsDocument,
+      patchQuery: (query, ctx) => (supportsWorkloadReportRegion(dialectVersion(ctx)) ? withWorkloadReportRegion(query) : query),
+      transformResult: (data) => mapVmWorkloadReportsToNamespaces(data),
+    },
   ),
   // VM has no namespace concept, so the bulk namespace persist is unsupported.
   PERSIST_NAMESPACES: wrapVersioned<PersistNamespacesResult, PersistNamespacesVars>(PERSIST_NAMESPACES, undefined, undefined, { unsupported: true }),
@@ -1282,7 +1323,7 @@ const operations: OdigosApiOperations = withGuardedRuns({
     // Also block for VM: cluster snapshots are a k8s cross-cluster aggregate.
     // The kit already routes VM through `GET_NAMESPACES_WITH_WORKLOADS`, but
     // guard here too so a stale/k8s-defaulted context can never run it for a VM.
-    canRun: (ctx) => ctx.platformType !== PlatformType.Vm && !isLegacySelectedProxy(ctx),
+    canRun: (ctx) => !isAgentsApiPlatform(ctx) && !isLegacySelectedProxy(ctx),
     transformResult: (raw) => (raw as { allClusterSnapshots?: AllClusterSnapshots } | null | undefined)?.allClusterSnapshots,
   },
   GET_CLUSTER_SNAPSHOT: {
@@ -1297,7 +1338,7 @@ const operations: OdigosApiOperations = withGuardedRuns({
     // blocked here too and the kit falls back to the per-proxy
     // `GET_NAMESPACES_WITH_WORKLOADS` path rather than querying a snapshot the
     // backend can't build.
-    canRun: (ctx) => ctx.platformType !== PlatformType.Vm && !isLegacySelectedProxy(ctx),
+    canRun: (ctx) => !isAgentsApiPlatform(ctx) && !isLegacySelectedProxy(ctx),
     transformResult: (raw) => (raw as { clusterSnapshot?: ClusterSnapshot } | null | undefined)?.clusterSnapshot,
   },
 });
@@ -1354,12 +1395,18 @@ const ConfigSync: FC<{ onChange: (ctx: ProxyOperationContext) => void }> = ({ on
     //                       for k8s, which keeps selecting buckets by `version`.
     //                       When a VM proxy reports no schema version (older
     //                       vm-agent), `dialectVersion` falls back to `version`.
+    // VM agents and cloud connectors both report an agents-api schema version
+    // that drives dialect selection; k8s never does (keeps selecting by `version`).
+    const usesAgentsApiDialect = resolvedPlatformType === PlatformType.Vm || resolvedPlatformType === PlatformType.Connector;
     onChange({
       proxyID,
       platformType: resolvedPlatformType,
       tier: config?.tier || INITIAL_CONTEXT.tier,
       version: odigosVersion || config?.odigosVersion || INITIAL_CONTEXT.version,
-      schemaVersion: resolvedPlatformType === PlatformType.Vm ? (graphqlSchemaVersion ?? undefined) : undefined,
+      schemaVersion: usesAgentsApiDialect ? (graphqlSchemaVersion ?? undefined) : undefined,
+      // Connectors serve the agents-api mutations (createSource / createDestination /
+      // etc.) the same way VM agents do, so they inherit the user's normal role-based
+      // readonly flag rather than being force-locked.
       isReadonly,
     });
   }, [proxyID, platformType, odigosVersion, graphqlSchemaVersion, config?.platformType, config?.tier, config?.odigosVersion, isReadonly, onChange]);

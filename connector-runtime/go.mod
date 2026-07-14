@@ -5,10 +5,10 @@ go 1.26.2
 require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/odigos-io/odigos-enterprise/connectors v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/api v1.30.0-pre2.0.20260708133558-cc17fe881b99
-	k8s.io/api v0.35.2
-	k8s.io/apimachinery v0.35.2
-	k8s.io/client-go v0.35.2
+	github.com/odigos-io/odigos/api v1.30.0-pre2.0.20260713122318-e15b3be9f071
+	k8s.io/api v0.35.4
+	k8s.io/apimachinery v0.35.4
+	k8s.io/client-go v0.35.4
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/controller-runtime v0.23.3
 )
@@ -49,7 +49,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/odigos-io/odigos/common v1.30.0-pre2 // indirect
+	github.com/odigos-io/odigos/common v1.30.0-pre2.0.20260713122318-e15b3be9f071 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
@@ -61,7 +61,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
-	go.yaml.in/yaml/v2 v2.4.3 // indirect
+	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
@@ -84,11 +84,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2-0.20260122202528-d9cc6641c482 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
-
-// The OdigosCloudConnector CRD type lives in the OSS odigos api module; consume it (and its sibling
-// common module) locally until a release carrying the type is tagged, then pin versions here.
-replace github.com/odigos-io/odigos/api => ../../odigos/api
-
-replace github.com/odigos-io/odigos/common => ../../odigos/common
 
 replace github.com/odigos-io/odigos-enterprise/connectors => ../connectors

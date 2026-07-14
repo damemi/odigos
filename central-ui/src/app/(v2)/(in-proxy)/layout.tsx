@@ -41,7 +41,7 @@ function Layout({ children }: PropsWithChildren) {
         <ViewportColumn $gap={0}>
           <OverviewHeader />
           <ContentRow $gap={0}>
-            <Navbar height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname, proxyID, platformType === PlatformType.Vm)} />
+            <Navbar height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname, proxyID, platformType === PlatformType.Vm || platformType === PlatformType.Connector)} />
             {children}
           </ContentRow>
         </ViewportColumn>

@@ -17,4 +17,5 @@ type Resolver struct {
 	HealthService          *services.HealthService
 	ComputePlatformService *services.ComputePlatformService
 	ConfigService          *services.ConfigService
+	CloudConnectorService  *services.CloudConnectorService
 }

@@ -95,6 +95,8 @@ export const PLATFORMS_COUNT = (count: number) => `${count} ${PLATFORM}${count =
 export const CONNECTION_ALIVE = 'Connection Live';
 export const CONNECTION_LOST = 'Connection Lost';
 export const CHOOSE_COMPUTE_PLATFORM = 'Choose Compute Platform';
+export const CREATE_NEW = 'Create new';
+export const CREATE_NEW_COMING_SOON = (type: string) => `"${type}" flow is coming soon`;
 
 // User/Member strings
 export const USER = 'User';

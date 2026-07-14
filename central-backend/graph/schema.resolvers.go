@@ -368,7 +368,7 @@ func (r *queryResolver) SignOutURL(ctx context.Context, idToken *string) (*strin
 
 // ComputePlatforms is the resolver for the computePlatforms field.
 func (r *queryResolver) ComputePlatforms(ctx context.Context) ([]*model.ComputePlatform, error) {
-	return r.ComputePlatformService.ComputePlatforms(ctx, r.UserService, r.TeamService, r.WebSocketServer)
+	return r.ComputePlatformService.ComputePlatforms(ctx, r.UserService, r.TeamService, r.WebSocketServer, r.CloudConnectorService)
 }
 
 // Users is the resolver for the users field.

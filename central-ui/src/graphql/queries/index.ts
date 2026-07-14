@@ -1,5 +1,6 @@
 export * from './remote';
 export * from './auth';
+export * from './cloud-connector-providers';
 export * from './compute-platforms';
 export * from './health';
 export * from './role-mappings';

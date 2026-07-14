@@ -3,10 +3,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useProxy } from '@/hooks';
 import type { ComputePlatform } from '@/types';
+import * as STRINGS from '@/utils/constants/strings';
 import { useNotificationStore } from '@odigos/ui-kit/store';
-import { CentralConnections } from '@odigos/ui-kit/containers';
-import { StatusType, type Connection } from '@odigos/ui-kit/types';
+import { CentralConnections, CreateNewType } from '@odigos/ui-kit/containers';
+import { StatusType, type CloudConnectorCreateInput, type CloudConnectorCreateResult, type CloudConnectorProvider, type Connection } from '@odigos/ui-kit/types';
 import { useApolloClient, useMutation, useQuery } from '@apollo/client/react';
+import { GET_CLOUD_CONNECTOR_PROVIDERS, CREATE_CLOUD_CONNECTOR } from '@/graphql';
 import { GET_COMPUTE_PLATFORMS, DELETE_PROXY_CONNECTION } from '@/lib/odigos-api-adapter';
 
 // `<CentralConnections>` is the OUT-OF-PROXY entry point: this page lists
@@ -26,7 +28,9 @@ export default function Page() {
   const [connections, setConnections] = useState<Connection[]>([]);
 
   const { data, refetch } = useQuery<{ computePlatforms?: ComputePlatform[] }>(GET_COMPUTE_PLATFORMS);
+  const { data: providersData } = useQuery<{ cloudConnectorProviders?: CloudConnectorProvider[] }>(GET_CLOUD_CONNECTOR_PROVIDERS);
   const [mutateDelete] = useMutation<{ deleteProxyConnection: boolean }, { id: string }>(DELETE_PROXY_CONNECTION);
+  const [mutateCreateCloudConnector] = useMutation<{ createCloudConnector: CloudConnectorCreateResult }, { input: CloudConnectorCreateInput }>(CREATE_CLOUD_CONNECTOR);
 
   useEffect(() => {
     if (data?.computePlatforms) {
@@ -60,6 +64,30 @@ export default function Page() {
     [mutateDelete, refetch],
   );
 
+  // Verifies and creates the cloud connector in one server call. On success the
+  // backend persists the credentials Secret + OdigosCloudConnector CR; the drawer
+  // then triggers a connections refetch so the new connector appears in the list.
+  const onCreateCloudConnector = useCallback(
+    async (input: CloudConnectorCreateInput): Promise<CloudConnectorCreateResult> => {
+      const { data } = await mutateCreateCloudConnector({ variables: { input } });
+      if (!data?.createCloudConnector) {
+        throw new Error('No result returned from create connector');
+      }
+      return data.createCloudConnector;
+    },
+    [mutateCreateCloudConnector],
+  );
+
+  // Handles non-connector "Create new" selections. Cloud Connector is handled
+  // inside CentralConnections (opens the create drawer). Only Cloud Connector
+  // is exposed in the dropdown for now.
+  const onCreateNew = useCallback(
+    (type: CreateNewType) => {
+      addNotification({ type: StatusType.Info, title: STRINGS.CREATE_NEW, message: STRINGS.CREATE_NEW_COMING_SOON(type), hideFromHistory: true });
+    },
+    [addNotification],
+  );
+
   // Suppress unused — kept for future direct Apollo escape hatches.
   void apollo;
 
@@ -70,6 +98,9 @@ export default function Page() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       onClickConnection={onClickConnection as any}
       deleteConnection={deleteConnection}
+      onCreateNew={onCreateNew}
+      cloudConnectorProviders={providersData?.cloudConnectorProviders ?? []}
+      onCreateCloudConnector={onCreateCloudConnector}
       configMinSupportedVersion={1.16}
       snapshotMinSupportedVersion={1.2}
     />

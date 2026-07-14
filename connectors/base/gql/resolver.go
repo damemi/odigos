@@ -298,10 +298,10 @@ func (r *mutationResolver) DeleteInstrumentationRule(context.Context, model.Dele
 
 func toHealthModel(h centralapi.Health) *model.ConnectorRuntimeHealth {
 	m := &model.ConnectorRuntimeHealth{
-		Registered:      h.Registered,
-		SchemaVersionOk: h.SchemaVersionOK,
-		Authenticated:   h.Authenticated,
-		DiscoveryReady:  h.DiscoveryReady,
+		IsRegistered:          h.Registered,
+		HasSchemaVersionMatch: h.SchemaVersionOK,
+		IsAuthenticated:       h.Authenticated,
+		IsDiscoveryReady:      h.DiscoveryReady,
 	}
 	if h.LastHeartbeatAt != nil {
 		s := h.LastHeartbeatAt.UTC().Format(time.RFC3339)
@@ -322,7 +322,7 @@ func toCollectorModels(cs []centralapi.CollectorStatus) []*model.ConnectorCollec
 			m := c.Message
 			msg = &m
 		}
-		out = append(out, &model.ConnectorCollectorStatus{Name: c.Name, Healthy: c.Healthy, Message: msg})
+		out = append(out, &model.ConnectorCollectorStatus{Name: c.Name, IsHealthy: c.Healthy, Message: msg})
 	}
 	return out
 }

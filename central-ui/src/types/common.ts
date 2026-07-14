@@ -24,6 +24,9 @@ export interface VersionedRemoteFetch {
   };
   // Per agents-api dialect (e.g. v0.6.0, v0.8.0, v0.10.0) or legacy v0.1 hand-written queries.
   [PlatformType.Vm]?: Record<string, string>;
+  // Cloud connectors don't use versioned remote fetch (they have no proxy),
+  // but the key keeps this type total over PlatformType for safe indexing.
+  [PlatformType.Connector]?: Record<string, string>;
 }
 
 export interface PaginatedData<T = unknown> {

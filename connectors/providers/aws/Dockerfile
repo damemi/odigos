@@ -25,14 +25,18 @@ ARG LD_FLAGS
 WORKDIR /workspace
 COPY connectors/ connectors/
 WORKDIR /workspace/connectors/providers/aws
+# The odigos-io dependencies (agents-api, odigos/*) are public, so a token is OPTIONAL: when a non-empty
+# github_token secret is mounted we rewrite github.com fetches to authenticate (private-repo/rate-limit
+# support, matching .devcontainer's :x-oauth-basic form); otherwise we fetch anonymously (module proxy +
+# direct git). Injecting an empty/invalid token would make GitHub reject even public fetches, so guard it.
 RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/go/pkg \
-    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
+    if [ -s /run/secrets/github_token ]; then git config --global url."https://$(cat /run/secrets/github_token):x-oauth-basic@github.com/".insteadOf "https://github.com/"; fi && \
     go mod download && go mod verify
 RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
-    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
+    if [ -s /run/secrets/github_token ]; then git config --global url."https://$(cat /run/secrets/github_token):x-oauth-basic@github.com/".insteadOf "https://github.com/"; fi && \
     CGO_ENABLED=0 GOARCH=$TARGETARCH \
     go build -ldflags="${LD_FLAGS}" -a -o /workspace/connector-aws ./cmd
 

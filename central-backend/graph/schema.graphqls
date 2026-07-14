@@ -8,6 +8,7 @@ scalar Int64
 enum PlatformType {
   k8s
   vm
+  connector
 }
 
 enum Role {

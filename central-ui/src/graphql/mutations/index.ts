@@ -1,4 +1,5 @@
 export * from './remote';
+export * from './cloud-connector';
 export * from './common';
 export * from './compute-platforms';
 export * from './proxy';
