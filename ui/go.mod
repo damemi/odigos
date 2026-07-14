@@ -402,6 +402,8 @@ replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8su
 
 replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.32.0-pre3
 
+replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v1.32.0-pre3
+
 replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v1.32.0-pre3
 
 replace github.com/odigos-io/odigos-enterprise/mcp => ../mcp
