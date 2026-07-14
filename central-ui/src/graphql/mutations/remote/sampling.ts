@@ -26,8 +26,10 @@ export const CREATE_NOISY_OPERATION_RULE: VersionedRemoteFetch = {
       notes
     }
   }`,
-    // HTTP queryParams + gRPC head-sampling matchers landed in odigos v1.32
-    // (after v1.31.2). Older proxies reject that selection set.
+    // HTTP queryParams head-sampling matchers landed in odigos v1.32 (after
+    // v1.31.2). Older proxies reject that selection set. (The gRPC matchers
+    // that briefly shipped alongside were reverted out of the schema in
+    // odigos-io/odigos#5239, so only queryParams remain in this bucket.)
     'v1.32': `
   mutation CreateNoisyOperationRule($samplingId: ID!, $rule: NoisyOperationRuleInput!) {
     createNoisyOperationRule(samplingId: $samplingId, rule: $rule) {
@@ -42,8 +44,6 @@ export const CREATE_NOISY_OPERATION_RULE: VersionedRemoteFetch = {
       operation {
         httpServer { route routePrefix method queryParams { name valueExact } }
         httpClient { serverAddress templatedPath templatedPathPrefix method }
-        grpcServer { method service }
-        grpcClient { method service serverAddress }
       }
       percentageAtMost
       notes
@@ -74,8 +74,10 @@ export const UPDATE_NOISY_OPERATION_RULE: VersionedRemoteFetch = {
       notes
     }
   }`,
-    // HTTP queryParams + gRPC head-sampling matchers landed in odigos v1.32
-    // (after v1.31.2). Older proxies reject that selection set.
+    // HTTP queryParams head-sampling matchers landed in odigos v1.32 (after
+    // v1.31.2). Older proxies reject that selection set. (The gRPC matchers
+    // that briefly shipped alongside were reverted out of the schema in
+    // odigos-io/odigos#5239, so only queryParams remain in this bucket.)
     'v1.32': `
   mutation UpdateNoisyOperationRule($samplingId: ID!, $ruleId: ID!, $rule: NoisyOperationRuleInput!) {
     updateNoisyOperationRule(samplingId: $samplingId, ruleId: $ruleId, rule: $rule) {
@@ -90,8 +92,6 @@ export const UPDATE_NOISY_OPERATION_RULE: VersionedRemoteFetch = {
       operation {
         httpServer { route routePrefix method queryParams { name valueExact } }
         httpClient { serverAddress templatedPath templatedPathPrefix method }
-        grpcServer { method service }
-        grpcClient { method service serverAddress }
       }
       percentageAtMost
       notes

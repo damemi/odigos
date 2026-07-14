@@ -7,8 +7,8 @@ const SOURCES_SCOPE_FIELDS = `
   languages
 `;
 
-// v1.26+: sourceScopes shape. No queryParams/grpc — those fields were not in
-// the GraphQL schema until odigos v1.32 (merged to main after v1.31.2).
+// v1.26+: sourceScopes shape. No queryParams — that matcher was not in the
+// GraphQL schema until odigos v1.32 (merged to main after v1.31.2).
 const NOISY_OPERATION_FIELDS_V126 = `
   ruleId
   name
@@ -22,7 +22,9 @@ const NOISY_OPERATION_FIELDS_V126 = `
   notes
 `;
 
-// v1.32+: HTTP queryParams + gRPC head-sampling matchers on noisy ops.
+// v1.32+: HTTP queryParams head-sampling matchers on noisy ops. (The gRPC
+// matchers that briefly shipped alongside were reverted out of the schema in
+// odigos-io/odigos#5239, so only queryParams remain here.)
 const NOISY_OPERATION_FIELDS_V132 = `
   ruleId
   name
@@ -31,8 +33,6 @@ const NOISY_OPERATION_FIELDS_V132 = `
   operation {
     httpServer { route routePrefix method queryParams { name valueExact } }
     httpClient { serverAddress templatedPath templatedPathPrefix method }
-    grpcServer { method service }
-    grpcClient { method service serverAddress }
   }
   percentageAtMost
   notes
@@ -96,8 +96,10 @@ export const GET_SAMPLING_RULES: VersionedRemoteFetch = {
     // (workloadName/Kind/Namespace/Language), so gate this query at v1.26 to
     // avoid sending an unsupported selection set to those proxies.
     'v1.26': getSamplingRulesQuery(NOISY_OPERATION_FIELDS_V126),
-    // HTTP queryParams + gRPC head-sampling matchers landed in odigos v1.32
-    // (after v1.31.2). Older proxies reject that selection set.
+    // HTTP queryParams head-sampling matchers landed in odigos v1.32 (after
+    // v1.31.2). Older proxies reject that selection set. (The gRPC matchers
+    // that briefly shipped alongside were reverted out of the schema in
+    // odigos-io/odigos#5239, so only queryParams remain in this bucket.)
     'v1.32': getSamplingRulesQuery(NOISY_OPERATION_FIELDS_V132),
   },
 };
