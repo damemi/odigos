@@ -14,11 +14,11 @@ require (
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
 	github.com/odigos-io/odigos/api v0.0.0
-	github.com/odigos-io/odigos/common v1.32.0-pre3
-	github.com/odigos-io/odigos/distros v1.32.0-pre3
-	github.com/odigos-io/odigos/instrumentation v1.32.0-pre3
+	github.com/odigos-io/odigos/common v1.32.0-pre4
+	github.com/odigos-io/odigos/distros v1.32.0-pre4
+	github.com/odigos-io/odigos/instrumentation v1.32.0-pre4
 	github.com/odigos-io/odigos/k8sutils v0.0.0
-	github.com/odigos-io/odigos/odiglet v1.32.0-pre3
+	github.com/odigos-io/odigos/odiglet v1.32.0-pre4
 	github.com/odigos-io/odigos/odiglet/pkg/ebpf/sdks/obi v0.0.0-20260427154914-60b72b57503a
 	github.com/odigos-io/odigos/procdiscovery v0.0.0
 	go.opentelemetry.io/auto v0.22.0
@@ -147,7 +147,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/odigos-io/odigos/opampserver v1.32.0-pre3 // indirect
+	github.com/odigos-io/odigos/opampserver v1.32.0-pre4 // indirect
 	github.com/odigos-io/runtime-detector v0.0.25 // indirect
 	github.com/ohler55/ojg v1.28.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
@@ -291,13 +291,13 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v1.22.0
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.32.0-pre3
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.32.0-pre4
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.32.0-pre3
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.32.0-pre4
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.32.0-pre3
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.32.0-pre4
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.32.0-pre3
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.32.0-pre4
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
@@ -309,6 +309,6 @@ replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 // Added during OBI change
 replace cloud.google.com/go/compute => cloud.google.com/go/compute v1.57.0
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.32.0-pre3
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.32.0-pre4
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.32.0-pre3
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.32.0-pre4
