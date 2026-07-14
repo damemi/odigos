@@ -5,6 +5,7 @@ ARG SERVICE_NAME
 WORKDIR /workspace
 COPY distros/ distros/
 COPY odigosauth/ odigosauth/
+COPY connectors/ connectors/
 
 WORKDIR /workspace/$SERVICE_NAME
 RUN mkdir -p /workspace/build
