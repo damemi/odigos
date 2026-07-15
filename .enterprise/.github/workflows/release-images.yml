@@ -162,6 +162,131 @@ jobs:
           failure-description: "ERROR: failed to publish odigos enterprise component ${{ matrix.service }} Standard image${{ matrix.extended == 'true' && ' (Extended)' || '' }} to registry"
           tag: ${{ env.TAG }}
 
+  # Cloud connector images (connector-runtime, connector-aws, connector-postgres). These build fully in
+  # parallel (fail-fast: false) and independently of the main `release` job. The job is best-effort
+  # (continue-on-error) and is intentionally NOT wired into trigger-cli-release's `needs`, so a connector
+  # build failure never blocks the OSS CLI release.
+  release-connectors:
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: connector-runtime
+            dockerfile: connector-runtime/Dockerfile
+            context: .
+            build-contexts: odigos=odigos-oss
+            ld-flags: "-s -w"
+          - service: connector-aws
+            dockerfile: connectors/providers/aws/Dockerfile
+            context: .
+            ld-flags: "-s -w"
+          - service: connector-postgres
+            dockerfile: connector-postgres/Dockerfile
+            context: connector-postgres
+
+    runs-on: depot-ubuntu-24.04-4
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          fetch-depth: 0
+      - run: git fetch --force --tags
+
+      - name: Set env
+        id: vars
+        run: echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+
+      # connector-runtime consumes the OSS odigos api/common modules via local-path replaces, so wire
+      # the matching odigos checkout in as the `odigos` build context. Pin it to the release tag — the
+      # same ref the other enterprise components resolve OSS at via ODIGOS_OSS_REF.
+      - name: Checkout Odigos OSS (connector-runtime build context)
+        if: matrix.service == 'connector-runtime'
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          repository: odigos-io/odigos
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
+          path: odigos-oss
+          persist-credentials: false
+
+      - name: Notify Slack (Start)
+        if: always()
+        uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
+        env:
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
+        with:
+          webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+          success-description: "Start releasing Odigos enterprise connector: ${{ matrix.service }}."
+          failure-description: "ERROR: starting enterprise connector release: ${{ matrix.service }}"
+          tag: ${{ env.TAG }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 #v3.11.1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 #v3.6.0
+
+      - id: gcp-auth
+        name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@b7593ed2efd1c1617e1b0254da33b86225adb2a5 #v2.1.12
+        with:
+          token_format: access_token
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          access_token_lifetime: 1200s
+
+      # Single registry host; WIF access token authorizes push to public (components)
+      # and private (components-private) repositories.
+      - name: Login to Artifact Registry
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 #v3.5.0
+        with:
+          registry: us-central1-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.gcp-auth.outputs.access_token }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 #v3.5.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Connector Image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 #v6.18.0
+        env:
+          ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
+        with:
+          file: ${{ matrix.dockerfile }}
+          context: ${{ matrix.context }}
+          build-contexts: ${{ matrix.build-contexts }}
+          push: true
+          tags: |
+            us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}:${{ env.ODIGOS_TAG }}
+            us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-enterprise-${{ matrix.service }}:${{ env.ODIGOS_TAG }}
+            keyval/odigos-enterprise-${{ matrix.service }}:${{ env.ODIGOS_TAG }}
+            ghcr.io/odigos-io/odigos-enterprise-${{ matrix.service }}:${{ env.ODIGOS_TAG }}
+          build-args: ${{ matrix.ld-flags && format('LD_FLAGS={0}', matrix.ld-flags) || '' }}
+          platforms: linux/amd64,linux/arm64
+          provenance: false
+          secrets: |
+            "github_token=${{ secrets.RELEASE_BOT_TOKEN }}"
+
+      - name: Notify Slack
+        if: always()
+        uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
+        env:
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
+        with:
+          webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+          success-description: "Odigos enterprise connector ${{ matrix.service }} published to registry"
+          failure-description: "ERROR: failed to publish odigos enterprise connector ${{ matrix.service }} to registry"
+          tag: ${{ env.TAG }}
+
   trigger-cli-release:
     needs: release
     runs-on: ubuntu-latest
@@ -202,7 +327,7 @@ jobs:
           token: ${{ steps.sts-oss-release.outputs.GH_TOKEN }}
           repository: odigos-io/odigos
           event-type: release_cli
-          client-payload: '{"tag": "${{ steps.release-tag.outputs.tag }}"}'          
+          client-payload: '{"tag": "${{ steps.release-tag.outputs.tag }}"}'
 
       - name: Notify Slack
         if: always()

@@ -144,7 +144,12 @@ jobs:
             ${{ matrix.service == 'agents' && 'agents-rhel' || 'rhel' }}
           secrets: |
             "github_token=${{ secrets.RELEASE_BOT_TOKEN }}"
-        
+
+  # TODO: Add a release-connectors job (connector-runtime, connector-aws, connector-postgres) mirroring
+  # .github/workflows/release-images.yml. Requires UBI/`rhel` stages in the connector Dockerfiles first.
+  # connector-postgres needs extra attention — it is based on postgres:16 (Debian), not UBI, so a
+  # RHEL-certified variant is not a straight port of the standard image.
+
   trigger-openshift-certification:
     needs: release
     runs-on: ubuntu-latest
