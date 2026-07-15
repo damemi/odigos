@@ -190,7 +190,44 @@ export const GET_WORKLOADS_BY_IDS_SLIM: VersionedRemoteFetch = {
   },
 };
 
-const getWorkloadsByIdsDetailedQuery = (headNoisyOperationFields: string, collectorNoisyHttpServerFields: string) => `
+const DESIRED_CONDITION_FIELDS = `
+          name
+          status
+          reasonEnum
+          message
+`;
+
+// actionItems shipped with status-action-item on top of podsManifestInjection (PR #5236).
+// Only request them on the v1.33+ selection set so older proxies do not reject the query.
+const DESIRED_CONDITION_FIELDS_WITH_ACTIONS = `
+          name
+          status
+          reasonEnum
+          message
+          actionItems {
+            type
+            userFacingText
+          }
+`;
+
+const PODS_MANIFEST_INJECTION_CONDITION_FIELDS = `
+        podsManifestInjection {
+${DESIRED_CONDITION_FIELDS_WITH_ACTIONS}
+        }
+`;
+
+const ROLLOUT_FIELDS = `
+      rollout {
+        rolloutStatus {
+${DESIRED_CONDITION_FIELDS}
+        }
+        podsManifestInjectionStatus {
+${DESIRED_CONDITION_FIELDS_WITH_ACTIONS}
+        }
+      }
+`;
+
+const getWorkloadsByIdsDetailedQuery = (headNoisyOperationFields: string, collectorNoisyHttpServerFields: string, includePodsManifestInjection = false) => `
   query GetWorkloadsByIds($ids: [K8sWorkloadIdInput!]!) {
     workloadsByIds(ids: $ids) {
       id {
@@ -242,6 +279,7 @@ const getWorkloadsByIdsDetailedQuery = (headNoisyOperationFields: string, collec
           reasonEnum
           message
         }
+${includePodsManifestInjection ? PODS_MANIFEST_INJECTION_CONDITION_FIELDS : ''}
         autoRollback {
           name
           status
@@ -267,6 +305,7 @@ const getWorkloadsByIdsDetailedQuery = (headNoisyOperationFields: string, collec
           message
         }
       }
+${includePodsManifestInjection ? ROLLOUT_FIELDS : ''}
       autoRollback {
         autoRollbackStatus {
           name
@@ -509,6 +548,9 @@ export const GET_WORKLOADS_BY_IDS: VersionedRemoteFetch = {
     // Older proxies reject that selection set.
     // (The gRPC matchers that briefly shipped alongside were reverted out of the schema in odigos-io/odigos#5239, so only queryParams remain in this bucket.)
     'v1.32': getWorkloadsByIdsDetailedQuery(HEAD_NOISY_OPERATION_FIELDS_V132, COLLECTOR_NOISY_HTTP_SERVER_FIELDS_V132),
+    // podsManifestInjection / rollout.podsManifestInjectionStatus (+ actionItems) landed with
+    // odigos PR #5236 and status-action-item. Older proxies reject those fields — keep them off until v1.33+.
+    'v1.33': getWorkloadsByIdsDetailedQuery(HEAD_NOISY_OPERATION_FIELDS_V132, COLLECTOR_NOISY_HTTP_SERVER_FIELDS_V132, true),
     // `workloadsByIds` / `K8sWorkloadIdInput` were introduced in v1.21 (v1.20 has neither).
     // Pre-v1.21 proxies resolve via the legacy per-id `run` path.
     'v1.29': getWorkloadsByIdsDetailedQuery(HEAD_NOISY_OPERATION_FIELDS_V129, COLLECTOR_NOISY_HTTP_SERVER_FIELDS_V129),

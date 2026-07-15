@@ -63,6 +63,7 @@ const emptyWorkloadConditions = (): K8sWorkloadConditions => ({
   runtimeDetection: null,
   agentInjectionEnabled: null,
   rollout: null,
+  podsManifestInjection: null,
   agentInjected: null,
   processesAgentHealth: null,
   expectingTelemetry: null,
@@ -131,7 +132,7 @@ function statusTypeToDesiredStateProgress(status: StatusType): DesiredStateProgr
 // Conditions whose name doesn't match a known field are dropped.
 function mergeConditionsIntoWorkloadConditions(base: K8sWorkloadConditions, conditions: Condition[]): K8sWorkloadConditions {
   const result = { ...base };
-  const knownFields = new Set<keyof K8sWorkloadConditions>(['runtimeDetection', 'agentInjectionEnabled', 'rollout', 'agentInjected', 'processesAgentHealth', 'expectingTelemetry']);
+  const knownFields = new Set<keyof K8sWorkloadConditions>(['runtimeDetection', 'agentInjectionEnabled', 'rollout', 'podsManifestInjection', 'agentInjected', 'processesAgentHealth', 'expectingTelemetry']);
 
   for (const c of conditions) {
     const rawKey = c.name || c.type;
