@@ -380,6 +380,12 @@ ${collectorNoisyHttpServerFields}
             }
           }
         }
+        instrumentations {
+          name
+          healthy
+          message
+          isStandardLibrary
+        }
       }
       pods {
         podName
@@ -499,14 +505,13 @@ const COLLECTOR_NOISY_HTTP_SERVER_FIELDS_V132 = `
 
 export const GET_WORKLOADS_BY_IDS: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
-    'v1.29': getWorkloadsByIdsDetailedQuery(HEAD_NOISY_OPERATION_FIELDS_V129, COLLECTOR_NOISY_HTTP_SERVER_FIELDS_V129),
-    // HTTP queryParams head-sampling matchers landed in odigos v1.32 (after
-    // v1.31.2). Older proxies reject that selection set. (The gRPC matchers
-    // that briefly shipped alongside were reverted out of the schema in
-    // odigos-io/odigos#5239, so only queryParams remain in this bucket.)
+    // HTTP queryParams head-sampling matchers landed in odigos v1.32 (after v1.31.2).
+    // Older proxies reject that selection set.
+    // (The gRPC matchers that briefly shipped alongside were reverted out of the schema in odigos-io/odigos#5239, so only queryParams remain in this bucket.)
     'v1.32': getWorkloadsByIdsDetailedQuery(HEAD_NOISY_OPERATION_FIELDS_V132, COLLECTOR_NOISY_HTTP_SERVER_FIELDS_V132),
-    // `workloadsByIds` / `K8sWorkloadIdInput` were introduced in v1.21 (v1.20
-    // has neither). Pre-v1.21 proxies resolve via the legacy per-id `run` path.
+    // `workloadsByIds` / `K8sWorkloadIdInput` were introduced in v1.21 (v1.20 has neither).
+    // Pre-v1.21 proxies resolve via the legacy per-id `run` path.
+    'v1.29': getWorkloadsByIdsDetailedQuery(HEAD_NOISY_OPERATION_FIELDS_V129, COLLECTOR_NOISY_HTTP_SERVER_FIELDS_V129),
     'v1.21': `
   query GetWorkloadsByIds($ids: [K8sWorkloadIdInput!]!) {
     workloadsByIds(ids: $ids) {
