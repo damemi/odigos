@@ -7,7 +7,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
-	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 )
 
 const (
@@ -42,12 +42,12 @@ func TestSanitize(t *testing.T) {
 	}
 }
 
-func crFor(name, provider string, replicas *int32) *odigosv1.OdigosCloudConnector {
-	return &odigosv1.OdigosCloudConnector{
+func crFor(name, provider string, replicas *int32) *cloudconnectorsv1.OdigosCloudConnector {
+	return &cloudconnectorsv1.OdigosCloudConnector{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "odigos-system"},
-		Spec: odigosv1.OdigosCloudConnectorSpec{
+		Spec: cloudconnectorsv1.OdigosCloudConnectorSpec{
 			Provider: provider,
-			Runtime:  odigosv1.CloudConnectorRuntime{Replicas: replicas},
+			Runtime:  cloudconnectorsv1.CloudConnectorRuntime{Replicas: replicas},
 		},
 	}
 }
@@ -115,16 +115,16 @@ func TestLabelValueBoundsLongName(t *testing.T) {
 // keyRefs derived from the AWS connector spec's auth definition (field name -> Secret key, field envVar
 // -> env var) rather than hardcoded — so adding a provider needs no controller change.
 func TestBuildDeploymentCredentialEnvFromSpec(t *testing.T) {
-	cr := &odigosv1.OdigosCloudConnector{
+	cr := &cloudconnectorsv1.OdigosCloudConnector{
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "odigos-central"},
-		Spec: odigosv1.OdigosCloudConnectorSpec{
+		Spec: cloudconnectorsv1.OdigosCloudConnectorSpec{
 			Provider:             "aws",
-			Account:              odigosv1.CloudConnectorAccount{ID: "123456789012"},
-			CredentialsSecretRef: odigosv1.CloudConnectorCredentialsSecretRef{Name: "prod-creds"},
-			Workloads: []odigosv1.CloudConnectorWorkloadCapability{
+			Account:              cloudconnectorsv1.CloudConnectorAccount{ID: "123456789012"},
+			CredentialsSecretRef: cloudconnectorsv1.CloudConnectorCredentialsSecretRef{Name: "prod-creds"},
+			Workloads: []cloudconnectorsv1.CloudConnectorWorkloadCapability{
 				{Type: awsTypeLambda, Discovery: true},
 			},
-			ComputePlatforms: []odigosv1.CloudConnectorComputePlatformCapability{
+			ComputePlatforms: []cloudconnectorsv1.CloudConnectorComputePlatformCapability{
 				{Type: awsTypeECSCluster, Discovery: true},
 			},
 		},

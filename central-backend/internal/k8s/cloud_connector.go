@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,13 +48,13 @@ func (c *Client) UpsertSecret(ctx context.Context, namespace, name string, data 
 // place if one with the same name already exists. Connectors are keyed by
 // provider+account, so re-submitting the same account updates the existing
 // connector rather than failing on a name conflict.
-func (c *Client) UpsertCloudConnector(ctx context.Context, cc *odigosv1.OdigosCloudConnector) error {
+func (c *Client) UpsertCloudConnector(ctx context.Context, cc *cloudconnectorsv1.OdigosCloudConnector) error {
 	if c.Ctrl == nil {
 		return fmt.Errorf("controller-runtime client is not initialized")
 	}
 	err := c.Ctrl.Create(ctx, cc)
 	if apierrors.IsAlreadyExists(err) {
-		var existing odigosv1.OdigosCloudConnector
+		var existing cloudconnectorsv1.OdigosCloudConnector
 		if getErr := c.Ctrl.Get(ctx, ctrlclient.ObjectKey{Namespace: cc.Namespace, Name: cc.Name}, &existing); getErr != nil {
 			return fmt.Errorf("failed to get existing OdigosCloudConnector %s/%s: %w", cc.Namespace, cc.Name, getErr)
 		}
@@ -71,11 +71,11 @@ func (c *Client) UpsertCloudConnector(ctx context.Context, cc *odigosv1.OdigosCl
 }
 
 // ListCloudConnectors lists all OdigosCloudConnector CRs in the given namespace.
-func (c *Client) ListCloudConnectors(ctx context.Context, namespace string) ([]odigosv1.OdigosCloudConnector, error) {
+func (c *Client) ListCloudConnectors(ctx context.Context, namespace string) ([]cloudconnectorsv1.OdigosCloudConnector, error) {
 	if c.Ctrl == nil {
 		return nil, fmt.Errorf("controller-runtime client is not initialized")
 	}
-	var list odigosv1.OdigosCloudConnectorList
+	var list cloudconnectorsv1.OdigosCloudConnectorList
 	if err := c.Ctrl.List(ctx, &list, ctrlclient.InNamespace(namespace)); err != nil {
 		return nil, fmt.Errorf("failed to list OdigosCloudConnectors in namespace %s: %w", namespace, err)
 	}

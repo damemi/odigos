@@ -6,7 +6,7 @@ import (
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 	"github.com/odigos-io/odigos-enterprise/connectors/testconnection"
-	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 )
 
 const (
@@ -178,7 +178,7 @@ func capabilitiesFromInput(provider string, in []*model.CloudConnectorCapability
 // crdCapabilitiesFromInput maps GraphQL capability inputs to the CRD's split
 // workload / compute-platform allow-lists, using the provider spec to decide
 // which domain each type belongs to.
-func crdCapabilitiesFromInput(provider string, in []*model.CloudConnectorCapabilityInput) (workloads []odigosv1.CloudConnectorWorkloadCapability, computePlatforms []odigosv1.CloudConnectorComputePlatformCapability) {
+func crdCapabilitiesFromInput(provider string, in []*model.CloudConnectorCapabilityInput) (workloads []cloudconnectorsv1.CloudConnectorWorkloadCapability, computePlatforms []cloudconnectorsv1.CloudConnectorComputePlatformCapability) {
 	if len(in) == 0 {
 		return nil, nil
 	}
@@ -191,7 +191,7 @@ func crdCapabilitiesFromInput(provider string, in []*model.CloudConnectorCapabil
 			continue
 		}
 		if specHasType(s.Workloads.Discovery.Types, c.Type) {
-			workloads = append(workloads, odigosv1.CloudConnectorWorkloadCapability{
+			workloads = append(workloads, cloudconnectorsv1.CloudConnectorWorkloadCapability{
 				Type:            c.Type,
 				Discovery:       c.Discovery,
 				Instrumentation: c.Instrumentation,
@@ -199,7 +199,7 @@ func crdCapabilitiesFromInput(provider string, in []*model.CloudConnectorCapabil
 			continue
 		}
 		if specHasType(s.ComputePlatforms.Discovery.Types, c.Type) {
-			computePlatforms = append(computePlatforms, odigosv1.CloudConnectorComputePlatformCapability{
+			computePlatforms = append(computePlatforms, cloudconnectorsv1.CloudConnectorComputePlatformCapability{
 				Type:         c.Type,
 				Discovery:    c.Discovery,
 				Installation: c.ComputePlatforms,

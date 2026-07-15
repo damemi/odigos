@@ -16,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 
-	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
@@ -83,7 +83,7 @@ func sanitize(s string) string {
 
 // Labels returns the labels applied to a connector's workload and pods. LabelCloudConnector carries the
 // (length-bounded) connector name for humans; LabelWorkload is the unique selector identity.
-func Labels(cr *odigosv1.OdigosCloudConnector) map[string]string {
+func Labels(cr *cloudconnectorsv1.OdigosCloudConnector) map[string]string {
 	return map[string]string{
 		LabelComponent:      ComponentValue,
 		LabelPlatformType:   PlatformTypeValue,
@@ -114,7 +114,7 @@ func labelValue(s string) string {
 // ReplicasFor returns the replica count to run for a connector, clamped to MaxReplicas, and whether the
 // requested value was clamped (so the controller can surface a warning condition). A 0 (intentional
 // disable) passes through; values above MaxReplicas are clamped down.
-func ReplicasFor(cr *odigosv1.OdigosCloudConnector) (replicas int32, clamped bool) {
+func ReplicasFor(cr *cloudconnectorsv1.OdigosCloudConnector) (replicas int32, clamped bool) {
 	requested := int32(1)
 	if cr.Spec.Runtime.Replicas != nil {
 		requested = *cr.Spec.Runtime.Replicas
@@ -139,7 +139,7 @@ type DeploymentParams struct {
 }
 
 // BuildDeployment constructs the connector Deployment (strategy: Recreate) for a CR.
-func BuildDeployment(cr *odigosv1.OdigosCloudConnector, p DeploymentParams) *appsv1.Deployment {
+func BuildDeployment(cr *cloudconnectorsv1.OdigosCloudConnector, p DeploymentParams) *appsv1.Deployment {
 	labels := Labels(cr)
 	credSecret := cr.Spec.CredentialsSecretRef.Name
 
@@ -243,7 +243,7 @@ func BuildDeployment(cr *odigosv1.OdigosCloudConnector, p DeploymentParams) *app
 }
 
 // BuildService constructs the ClusterIP Service exposing the connector's GraphQL endpoint.
-func BuildService(cr *odigosv1.OdigosCloudConnector, p DeploymentParams) *corev1.Service {
+func BuildService(cr *cloudconnectorsv1.OdigosCloudConnector, p DeploymentParams) *corev1.Service {
 	return &corev1.Service{
 		// TypeMeta is required for server-side apply.
 		TypeMeta: metav1.TypeMeta{APIVersion: "v1", Kind: "Service"},
@@ -268,10 +268,10 @@ func intStrPort() intstr.IntOrString { return intstr.FromInt32(GraphQLPort) }
 // capabilitiesJSON encodes the CR's per-type capabilities (the customer's per-domain allow-list) for the
 // connector to consume via ODIGOS_CAPABILITIES. The shape matches spec.Capabilities: an object with
 // `workloads` and `computePlatforms` lists.
-func capabilitiesJSON(cr *odigosv1.OdigosCloudConnector) string {
+func capabilitiesJSON(cr *cloudconnectorsv1.OdigosCloudConnector) string {
 	b, err := json.Marshal(struct {
-		Workloads        []odigosv1.CloudConnectorWorkloadCapability        `json:"workloads,omitempty"`
-		ComputePlatforms []odigosv1.CloudConnectorComputePlatformCapability `json:"computePlatforms,omitempty"`
+		Workloads        []cloudconnectorsv1.CloudConnectorWorkloadCapability        `json:"workloads,omitempty"`
+		ComputePlatforms []cloudconnectorsv1.CloudConnectorComputePlatformCapability `json:"computePlatforms,omitempty"`
 	}{
 		Workloads:        cr.Spec.Workloads,
 		ComputePlatforms: cr.Spec.ComputePlatforms,

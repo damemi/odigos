@@ -12,7 +12,7 @@ import (
 	"github.com/odigos-io/central-backend/internal/logger"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
 	websocketserver "github.com/odigos-io/central-backend/internal/websocket"
-	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 )
 
 // ComputePlatformService provides helpers around compute platform state derived from proxy connection & metadata stored in Redis.
@@ -110,7 +110,7 @@ func appendCloudConnectors(ctx context.Context, cpMap map[string]*model.ComputeP
 // A connector has no proxy/agent Odigos version like k8s/vm; its version is the
 // runtime reported at registration. Until a runtime registers there is none, so
 // we return "-" rather than an alarming "unknown".
-func cloudConnectorVersion(cc odigosv1.OdigosCloudConnector) string {
+func cloudConnectorVersion(cc cloudconnectorsv1.OdigosCloudConnector) string {
 	if cc.Status.Runtime != nil && cc.Status.Runtime.Version != "" {
 		return cc.Status.Runtime.Version
 	}
@@ -118,17 +118,17 @@ func cloudConnectorVersion(cc odigosv1.OdigosCloudConnector) string {
 }
 
 // mapCloudConnectorPhase maps the CRD lifecycle phase to a UI StatusType value.
-func mapCloudConnectorPhase(phase odigosv1.CloudConnectorPhase) string {
+func mapCloudConnectorPhase(phase cloudconnectorsv1.CloudConnectorPhase) string {
 	switch phase {
-	case odigosv1.CloudConnectorPhaseConnected:
+	case cloudconnectorsv1.CloudConnectorPhaseConnected:
 		return string(consts.StatusConnected) // "success"
-	case odigosv1.CloudConnectorPhaseDegraded:
+	case cloudconnectorsv1.CloudConnectorPhaseDegraded:
 		return "warning"
-	case odigosv1.CloudConnectorPhaseError:
+	case cloudconnectorsv1.CloudConnectorPhaseError:
 		return string(consts.StatusDisconnected) // "error"
-	case odigosv1.CloudConnectorPhaseDisabled:
+	case cloudconnectorsv1.CloudConnectorPhaseDisabled:
 		return "disabled"
-	case odigosv1.CloudConnectorPhasePending, odigosv1.CloudConnectorPhaseStarting, odigosv1.CloudConnectorPhaseDeleting:
+	case cloudconnectorsv1.CloudConnectorPhasePending, cloudconnectorsv1.CloudConnectorPhaseStarting, cloudconnectorsv1.CloudConnectorPhaseDeleting:
 		return "info"
 	default:
 		return "info"

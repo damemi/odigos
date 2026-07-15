@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/odigos-io/central-backend/internal/k8s"
-	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -25,8 +25,8 @@ type CreateConnectorParams struct {
 	DisplayName        string
 	AccountID            string
 	AccountDisplayName   string
-	Workloads            []odigosv1.CloudConnectorWorkloadCapability
-	ComputePlatforms     []odigosv1.CloudConnectorComputePlatformCapability
+	Workloads            []cloudconnectorsv1.CloudConnectorWorkloadCapability
+	ComputePlatforms     []cloudconnectorsv1.CloudConnectorComputePlatformCapability
 	// SecretData holds the credential values keyed by the provider spec's auth
 	// field names (the keys the connector runtime references via Secret keyRefs).
 	SecretData map[string]string
@@ -56,19 +56,19 @@ func (svc *CloudConnectorService) CreateConnector(ctx context.Context, params Cr
 		}
 	}
 
-	cc := &odigosv1.OdigosCloudConnector{
+	cc := &cloudconnectorsv1.OdigosCloudConnector{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: svc.namespace,
 		},
-		Spec: odigosv1.OdigosCloudConnectorSpec{
+		Spec: cloudconnectorsv1.OdigosCloudConnectorSpec{
 			Provider:    params.Provider,
 			DisplayName: params.DisplayName,
-			Account: odigosv1.CloudConnectorAccount{
+			Account: cloudconnectorsv1.CloudConnectorAccount{
 				ID:          params.AccountID,
 				DisplayName: params.AccountDisplayName,
 			},
-			CredentialsSecretRef: odigosv1.CloudConnectorCredentialsSecretRef{
+			CredentialsSecretRef: cloudconnectorsv1.CloudConnectorCredentialsSecretRef{
 				Name: secretName,
 			},
 			Workloads:        params.Workloads,
@@ -84,7 +84,7 @@ func (svc *CloudConnectorService) CreateConnector(ctx context.Context, params Cr
 }
 
 // ListConnectors returns the OdigosCloudConnector CRs in the connector namespace.
-func (svc *CloudConnectorService) ListConnectors(ctx context.Context) ([]odigosv1.OdigosCloudConnector, error) {
+func (svc *CloudConnectorService) ListConnectors(ctx context.Context) ([]cloudconnectorsv1.OdigosCloudConnector, error) {
 	if svc.k8sClient == nil {
 		return nil, fmt.Errorf("k8s client is not available")
 	}

@@ -5,23 +5,23 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 )
 
 func TestWantsCleanupOnDelete(t *testing.T) {
 	cases := []struct {
 		name string
-		cr   *odigosv1.OdigosCloudConnector
+		cr   *cloudconnectorsv1.OdigosCloudConnector
 		want bool
 	}{
 		{
 			name: "default retain",
-			cr:   &odigosv1.OdigosCloudConnector{},
+			cr:   &cloudconnectorsv1.OdigosCloudConnector{},
 			want: false,
 		},
 		{
 			name: "explicit retain",
-			cr: &odigosv1.OdigosCloudConnector{
+			cr: &cloudconnectorsv1.OdigosCloudConnector{
 				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
 					annotationDeletionPolicy: "retain",
 				}},
@@ -30,7 +30,7 @@ func TestWantsCleanupOnDelete(t *testing.T) {
 		},
 		{
 			name: "cleanup annotation",
-			cr: &odigosv1.OdigosCloudConnector{
+			cr: &cloudconnectorsv1.OdigosCloudConnector{
 				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
 					annotationDeletionPolicy: deletionPolicyCleanup,
 				}},
@@ -48,8 +48,8 @@ func TestWantsCleanupOnDelete(t *testing.T) {
 }
 
 func TestProviderImmutabilityViolated(t *testing.T) {
-	crWith := func(lock, provider string) *odigosv1.OdigosCloudConnector {
-		cr := &odigosv1.OdigosCloudConnector{Spec: odigosv1.OdigosCloudConnectorSpec{Provider: provider}}
+	crWith := func(lock, provider string) *cloudconnectorsv1.OdigosCloudConnector {
+		cr := &cloudconnectorsv1.OdigosCloudConnector{Spec: cloudconnectorsv1.OdigosCloudConnectorSpec{Provider: provider}}
 		if lock != "" {
 			cr.Annotations = map[string]string{annotationProviderLock: lock}
 		}
@@ -57,7 +57,7 @@ func TestProviderImmutabilityViolated(t *testing.T) {
 	}
 	cases := []struct {
 		name    string
-		cr      *odigosv1.OdigosCloudConnector
+		cr      *cloudconnectorsv1.OdigosCloudConnector
 		violate bool
 	}{
 		{"no lock yet", crWith("", "aws"), false},

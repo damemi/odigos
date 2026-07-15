@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -51,7 +51,7 @@ func CreateClient() (*Client, error) {
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("failed to register core scheme: %w", err)
 	}
-	if err := odigosv1.AddToScheme(scheme); err != nil {
+	if err := cloudconnectorsv1.AddToScheme(scheme); err != nil {
 		return nil, fmt.Errorf("failed to register odigos scheme: %w", err)
 	}
 	ctrl, err := ctrlclient.New(config, ctrlclient.Options{Scheme: scheme})

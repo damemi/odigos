@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 
 	"github.com/odigos-io/odigos-enterprise/connector-runtime/internal/controller"
 	"github.com/odigos-io/odigos-enterprise/connector-runtime/internal/heartbeat"
@@ -27,7 +27,7 @@ var scheme = runtime.NewScheme()
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(odigosv1.AddToScheme(scheme))
+	utilruntime.Must(cloudconnectorsv1.AddToScheme(scheme))
 }
 
 func main() {

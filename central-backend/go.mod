@@ -8,8 +8,8 @@ require (
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/google/uuid v1.6.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/api v1.32.0-pre4
-	github.com/odigos-io/odigos/common v1.32.0-pre4
+	github.com/odigos-io/odigos/api v1.32.0-pre4.0.20260715105752-80e7c222d4b7
+	github.com/odigos-io/odigos/common v1.32.0-pre4.0.20260715105752-80e7c222d4b7
 	github.com/vektah/gqlparser/v2 v2.5.35
 	golang.org/x/sync v0.21.0
 	k8s.io/api v0.35.4
@@ -115,7 +115,6 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect

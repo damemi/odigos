@@ -20,7 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 
 	"github.com/odigos-io/odigos-enterprise/connector-runtime/internal/heartbeat"
 	"github.com/odigos-io/odigos-enterprise/connector-runtime/internal/resources"
@@ -105,7 +105,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		r.Config.HeartbeatStaleAfter = 90 * time.Second
 	}
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&odigosv1.OdigosCloudConnector{}).
+		For(&cloudconnectorsv1.OdigosCloudConnector{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
 		Complete(r)
@@ -114,7 +114,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	var cr odigosv1.OdigosCloudConnector
+	var cr cloudconnectorsv1.OdigosCloudConnector
 	if err := r.Get(ctx, req.NamespacedName, &cr); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -159,7 +159,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		msg := fmt.Sprintf("spec.provider is immutable: locked to %q, cannot change to %q", locked, cr.Spec.Provider)
 		meta.SetStatusCondition(&cr.Status.Conditions, cond(condProviderLocked, metav1.ConditionTrue, "ProviderChanged", msg, cr.Generation))
 		meta.SetStatusCondition(&cr.Status.Conditions, cond(condDeploymentReady, metav1.ConditionFalse, "ProviderImmutable", msg, cr.Generation))
-		cr.Status.Phase = odigosv1.CloudConnectorPhaseError
+		cr.Status.Phase = cloudconnectorsv1.CloudConnectorPhaseError
 		logger.Error(nil, msg)
 		return r.finishStatus(ctx, &cr, before)
 	}
@@ -167,7 +167,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	image, err := r.resolveImage(&cr)
 	if err != nil {
 		meta.SetStatusCondition(&cr.Status.Conditions, cond(condDeploymentReady, metav1.ConditionFalse, "ImageUnresolved", err.Error(), cr.Generation))
-		cr.Status.Phase = odigosv1.CloudConnectorPhaseError
+		cr.Status.Phase = cloudconnectorsv1.CloudConnectorPhaseError
 		return r.finishStatus(ctx, &cr, before)
 	}
 
@@ -196,7 +196,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return r.finishStatus(ctx, &cr, before)
 }
 
-func (r *Reconciler) reconcileDelete(ctx context.Context, cr *odigosv1.OdigosCloudConnector) (ctrl.Result, error) {
+func (r *Reconciler) reconcileDelete(ctx context.Context, cr *cloudconnectorsv1.OdigosCloudConnector) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	if !wantsCleanupOnDelete(cr) {
@@ -254,7 +254,7 @@ func (r *Reconciler) reconcileDelete(ctx context.Context, cr *odigosv1.OdigosClo
 	return ctrl.Result{RequeueAfter: r.Config.DrainRequeueInterval}, nil
 }
 
-func wantsCleanupOnDelete(cr *odigosv1.OdigosCloudConnector) bool {
+func wantsCleanupOnDelete(cr *cloudconnectorsv1.OdigosCloudConnector) bool {
 	return cr.Annotations != nil && cr.Annotations[annotationDeletionPolicy] == deletionPolicyCleanup
 }
 
@@ -272,7 +272,7 @@ func validDeletionPolicy(v string) bool {
 }
 
 // event records a Kubernetes Event when a recorder is configured (no-op in unit tests without one).
-func (r *Reconciler) event(cr *odigosv1.OdigosCloudConnector, eventtype, reason, message string) {
+func (r *Reconciler) event(cr *cloudconnectorsv1.OdigosCloudConnector, eventtype, reason, message string) {
 	if r.Recorder != nil {
 		r.Recorder.Event(cr, eventtype, reason, message)
 	}
@@ -281,12 +281,12 @@ func (r *Reconciler) event(cr *odigosv1.OdigosCloudConnector, eventtype, reason,
 // providerImmutabilityViolated reports whether the CR's spec.provider differs from the provider locked
 // (recorded in an annotation) on first reconcile. An empty lock — not yet recorded — is never a
 // violation. Pure so it can be unit-tested without a client.
-func providerImmutabilityViolated(cr *odigosv1.OdigosCloudConnector) (locked string, violated bool) {
+func providerImmutabilityViolated(cr *cloudconnectorsv1.OdigosCloudConnector) (locked string, violated bool) {
 	locked = cr.Annotations[annotationProviderLock]
 	return locked, locked != "" && locked != cr.Spec.Provider
 }
 
-func (r *Reconciler) removeFinalizer(ctx context.Context, cr *odigosv1.OdigosCloudConnector) (ctrl.Result, error) {
+func (r *Reconciler) removeFinalizer(ctx context.Context, cr *cloudconnectorsv1.OdigosCloudConnector) (ctrl.Result, error) {
 	if controllerutil.RemoveFinalizer(cr, finalizer) {
 		if err := r.Update(ctx, cr); err != nil {
 			return ctrl.Result{}, err
@@ -295,7 +295,7 @@ func (r *Reconciler) removeFinalizer(ctx context.Context, cr *odigosv1.OdigosClo
 	return ctrl.Result{}, nil
 }
 
-func (r *Reconciler) resolveImage(cr *odigosv1.OdigosCloudConnector) (string, error) {
+func (r *Reconciler) resolveImage(cr *cloudconnectorsv1.OdigosCloudConnector) (string, error) {
 	if cr.Spec.Runtime.Image != "" {
 		return cr.Spec.Runtime.Image, nil
 	}
@@ -308,7 +308,7 @@ func (r *Reconciler) resolveImage(cr *odigosv1.OdigosCloudConnector) (string, er
 // ensureDeployment server-side-applies the desired Deployment. SSA only manages the fields this
 // controller sets, leaving server-defaulted fields untouched — so it does not churn or conflict on
 // every reconcile the way a get-mutate-update would.
-func (r *Reconciler) ensureDeployment(ctx context.Context, cr *odigosv1.OdigosCloudConnector, params resources.DeploymentParams) (bool, error) {
+func (r *Reconciler) ensureDeployment(ctx context.Context, cr *cloudconnectorsv1.OdigosCloudConnector, params resources.DeploymentParams) (bool, error) {
 	dep := resources.BuildDeployment(cr, params)
 	if err := controllerutil.SetControllerReference(cr, dep, r.Scheme); err != nil {
 		return false, err
@@ -319,7 +319,7 @@ func (r *Reconciler) ensureDeployment(ctx context.Context, cr *odigosv1.OdigosCl
 	return dep.Status.ReadyReplicas >= 1, nil
 }
 
-func (r *Reconciler) ensureService(ctx context.Context, cr *odigosv1.OdigosCloudConnector, params resources.DeploymentParams) error {
+func (r *Reconciler) ensureService(ctx context.Context, cr *cloudconnectorsv1.OdigosCloudConnector, params resources.DeploymentParams) error {
 	svc := resources.BuildService(cr, params)
 	if err := controllerutil.SetControllerReference(cr, svc, r.Scheme); err != nil {
 		return err
@@ -330,7 +330,7 @@ func (r *Reconciler) ensureService(ctx context.Context, cr *odigosv1.OdigosCloud
 
 // computeStatus derives conditions, phase and the status cache from the Deployment readiness and the
 // best-effort heartbeat snapshot.
-func (r *Reconciler) computeStatus(ctx context.Context, cr *odigosv1.OdigosCloudConnector, params resources.DeploymentParams, deploymentReady bool) {
+func (r *Reconciler) computeStatus(ctx context.Context, cr *cloudconnectorsv1.OdigosCloudConnector, params resources.DeploymentParams, deploymentReady bool) {
 	if _, clamped := resources.ReplicasFor(cr); clamped {
 		meta.SetStatusCondition(&cr.Status.Conditions, cond(condReplicasClamped, metav1.ConditionTrue, "ClampedToOne",
 			fmt.Sprintf("spec.runtime.replicas was clamped to %d: the connector runtime is not leader-elected and more than one replica would race provider mutations", resources.MaxReplicas), cr.Generation))
@@ -373,7 +373,7 @@ func (r *Reconciler) computeStatus(ctx context.Context, cr *odigosv1.OdigosCloud
 
 	cr.Status.Phase = computePhase(deploymentReady, hb, stale)
 
-	rt := &odigosv1.CloudConnectorRuntimeStatus{
+	rt := &cloudconnectorsv1.CloudConnectorRuntimeStatus{
 		WorkloadName: params.WorkloadName,
 		Namespace:    params.Namespace,
 		Image:        params.Image,
@@ -388,7 +388,7 @@ func (r *Reconciler) computeStatus(ctx context.Context, cr *odigosv1.OdigosCloud
 		}
 	}
 	cr.Status.Runtime = rt
-	cr.Status.ProviderIdentity = &odigosv1.CloudConnectorProviderIdentity{
+	cr.Status.ProviderIdentity = &cloudconnectorsv1.CloudConnectorProviderIdentity{
 		AccountID:   cr.Spec.Account.ID,
 		DisplayName: cr.Spec.Account.DisplayName,
 	}
@@ -397,7 +397,7 @@ func (r *Reconciler) computeStatus(ctx context.Context, cr *odigosv1.OdigosCloud
 // finishStatus writes the CRD status only when it meaningfully changed (ignoring the LastSyncedAt
 // freshness stamp), then requeues for the next periodic refresh. Skipping no-op writes avoids the
 // self-triggered reconcile storm; conflicts are treated as a quiet requeue rather than an error.
-func (r *Reconciler) finishStatus(ctx context.Context, cr *odigosv1.OdigosCloudConnector, before *odigosv1.OdigosCloudConnectorStatus) (ctrl.Result, error) {
+func (r *Reconciler) finishStatus(ctx context.Context, cr *cloudconnectorsv1.OdigosCloudConnector, before *cloudconnectorsv1.OdigosCloudConnectorStatus) (ctrl.Result, error) {
 	cr.Status.ObservedGeneration = cr.Generation
 	if statusChanged(before, &cr.Status) {
 		now := metav1.Now()
@@ -413,7 +413,7 @@ func (r *Reconciler) finishStatus(ctx context.Context, cr *odigosv1.OdigosCloudC
 }
 
 // statusChanged reports whether two statuses differ, ignoring the LastSyncedAt freshness timestamp.
-func statusChanged(a, b *odigosv1.OdigosCloudConnectorStatus) bool {
+func statusChanged(a, b *cloudconnectorsv1.OdigosCloudConnectorStatus) bool {
 	x := a.DeepCopy()
 	y := b.DeepCopy()
 	x.LastSyncedAt = nil
@@ -421,33 +421,33 @@ func statusChanged(a, b *odigosv1.OdigosCloudConnectorStatus) bool {
 	return !apiequality.Semantic.DeepEqual(x, y)
 }
 
-func computePhase(deploymentReady bool, hb heartbeat.Snapshot, stale bool) odigosv1.CloudConnectorPhase {
+func computePhase(deploymentReady bool, hb heartbeat.Snapshot, stale bool) cloudconnectorsv1.CloudConnectorPhase {
 	if !deploymentReady {
-		return odigosv1.CloudConnectorPhaseStarting
+		return cloudconnectorsv1.CloudConnectorPhaseStarting
 	}
 	if !hb.Found {
-		return odigosv1.CloudConnectorPhaseStarting
+		return cloudconnectorsv1.CloudConnectorPhaseStarting
 	}
 	if stale {
 		// Heartbeat row exists but last_seen_at is stale — the connector is not actively heartbeating.
 		// Report Degraded instead of trusting the last-written (possibly Connected) status.
-		return odigosv1.CloudConnectorPhaseDegraded
+		return cloudconnectorsv1.CloudConnectorPhaseDegraded
 	}
 	switch hb.Status {
 	case cpg.HeartbeatStatusConnected:
-		return odigosv1.CloudConnectorPhaseConnected
+		return cloudconnectorsv1.CloudConnectorPhaseConnected
 	case cpg.HeartbeatStatusDegraded:
-		return odigosv1.CloudConnectorPhaseDegraded
+		return cloudconnectorsv1.CloudConnectorPhaseDegraded
 	case cpg.HeartbeatStatusError:
-		return odigosv1.CloudConnectorPhaseError
+		return cloudconnectorsv1.CloudConnectorPhaseError
 	case cpg.HeartbeatStatusDisabled:
-		return odigosv1.CloudConnectorPhaseDisabled
+		return cloudconnectorsv1.CloudConnectorPhaseDisabled
 	default:
-		return odigosv1.CloudConnectorPhaseStarting
+		return cloudconnectorsv1.CloudConnectorPhaseStarting
 	}
 }
 
-func setUnknown(cr *odigosv1.OdigosCloudConnector, reason, msg string) {
+func setUnknown(cr *cloudconnectorsv1.OdigosCloudConnector, reason, msg string) {
 	for _, t := range []string{condSchemaReady, condRegistered, condAuthenticated, condDiscoveryReady} {
 		meta.SetStatusCondition(&cr.Status.Conditions, cond(t, metav1.ConditionUnknown, reason, msg, cr.Generation))
 	}
