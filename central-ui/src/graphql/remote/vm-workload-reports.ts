@@ -39,8 +39,48 @@ const HEALTH_MESSAGE = {
 
 const reportKey = (serviceName: string, kind: string, region?: string | null) => `${serviceName}\0${kind}\0${region ?? ''}`;
 
+/**
+ * VM agent emits lowercase/snake_case stages (e.g. "instrumented", "waiting_for_rollout").
+ * Connectors may send PascalCase ("Instrumented"). Normalize both to WorkloadReportState
+ * so HealthCard matches the K8s Success / Waiting / Failure banners.
+ */
+const normalizeWorkloadReportState = (raw?: string | null): WorkloadReportState => {
+  if (!raw?.trim()) return WorkloadReportState.Unknown;
+  const key = raw
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+
+  switch (key) {
+    case 'instrumented':
+      return WorkloadReportState.Instrumented;
+    case 'instrumenting':
+    case 'pending':
+    case 'preparing':
+    case 'upgrading':
+    case 'waiting_for_rollout':
+    case 'attaching':
+      return WorkloadReportState.Instrumenting;
+    case 'notinstrumented':
+    case 'not_instrumented':
+    case 'disabled':
+      return WorkloadReportState.NotInstrumented;
+    case 'error':
+      return WorkloadReportState.Error;
+    case 'unsupported':
+      return WorkloadReportState.Unsupported;
+    case 'notimplemented':
+    case 'not_implemented':
+      return WorkloadReportState.NotImplemented;
+    case 'unknown':
+      return WorkloadReportState.Unknown;
+    default:
+      return WorkloadReportState.Unknown;
+  }
+};
+
 const mapReportStateToProgress = (state: string, enabled?: boolean | null): DesiredStateProgress => {
-  switch (state as WorkloadReportState) {
+  switch (normalizeWorkloadReportState(state)) {
     case WorkloadReportState.Instrumented:
       return DesiredStateProgress.Success;
     case WorkloadReportState.Instrumenting:
@@ -85,14 +125,26 @@ const mapLanguage = (language?: string | null): ProgrammingLanguages | null => {
   return aliases[normalized] ?? ProgrammingLanguages.Unknown;
 };
 
+/** Turn snake_case agent stages into PascalCase reason titles (e.g. waiting_for_rollout → WaitingForRollout). */
+const stageToReasonEnum = (stage: string, fallback: string): string => {
+  const trimmed = stage.trim();
+  if (!trimmed) return fallback;
+  return trimmed
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join('');
+};
+
 const mapReportToInstrumentation = (report: VmWorkloadReport): InstrumentationReport => {
   const running = report.current?.runtime?.running;
   const language = running?.language ?? report.current?.runtimeName ?? null;
   const version = running?.version ?? report.current?.runtimeVersion ?? null;
+  const state = normalizeWorkloadReportState(report.current?.state ?? report.progress?.stage);
 
   return {
-    state: report.current?.state ?? WorkloadReportState.Unknown,
-    instrumented: report.current?.instrumented ?? false,
+    state,
+    instrumented: report.current?.instrumented ?? state === WorkloadReportState.Instrumented,
     sdkType: report.desired?.sdkType ?? null,
     progressStage: report.progress?.stage ?? null,
     progressMessage: report.progress?.message ?? null,
@@ -108,7 +160,55 @@ const mapReportToInstrumentation = (report: VmWorkloadReport): InstrumentationRe
         since: issue.since ?? null,
         transient: issue.transient ?? null,
       })) ?? null,
+    processes: mapReportProcesses(report),
   };
+};
+
+/** Join WorkloadReport.instances + processMetadata by pid for the VM process list. */
+const mapReportProcesses = (report: VmWorkloadReport): InstrumentationReport['processes'] => {
+  const instances = report.instances ?? [];
+  const metadata = report.processMetadata ?? [];
+  if (!instances.length && !metadata.length) return null;
+
+  const metaByPid = new Map(metadata.map((m) => [m.pid, m]));
+  const seen = new Set<number>();
+  const processes: NonNullable<InstrumentationReport['processes']> = [];
+
+  for (const inst of instances) {
+    seen.add(inst.pid);
+    const meta = metaByPid.get(inst.pid);
+    processes.push({
+      pid: inst.pid,
+      alive: inst.alive,
+      exe: meta?.exe ?? null,
+      cmdline: meta?.cmdline ?? null,
+      instrumented: inst.instrumented,
+      probesAttached: inst.probesAttached,
+      message: inst.message ?? null,
+      distro: inst.distro ?? null,
+      instrumentationEligible: meta?.instrumentationEligible ?? null,
+      excludedReason: meta?.excludedReason ?? null,
+    });
+  }
+
+  // Metadata-only PIDs (e.g. excluded before an instance row exists).
+  for (const meta of metadata) {
+    if (seen.has(meta.pid)) continue;
+    processes.push({
+      pid: meta.pid,
+      alive: true,
+      exe: meta.exe ?? null,
+      cmdline: meta.cmdline ?? null,
+      instrumented: meta.instrumented,
+      probesAttached: meta.probesAttached ?? null,
+      message: null,
+      distro: null,
+      instrumentationEligible: meta.instrumentationEligible,
+      excludedReason: meta.excludedReason ?? null,
+    });
+  }
+
+  return processes.length ? processes : null;
 };
 
 /**
@@ -120,8 +220,9 @@ const mapReportToHealthPresentation = (report: InstrumentationReport): { reasonE
   const firstIssue = report.issues?.find((i) => i.message)?.message?.trim() || '';
   const detail = progressMessage || firstIssue;
   const stage = report.progressStage?.trim() || '';
+  const state = normalizeWorkloadReportState(report.state);
 
-  switch (report.state as WorkloadReportState) {
+  switch (state) {
     case WorkloadReportState.Instrumented:
       return {
         reasonEnum: HEALTH_REASON.SuccessAndEmittingTelemetry,
@@ -129,12 +230,12 @@ const mapReportToHealthPresentation = (report: InstrumentationReport): { reasonE
       };
     case WorkloadReportState.Instrumenting:
       return {
-        reasonEnum: stage || WorkloadReportState.Instrumenting,
+        reasonEnum: stageToReasonEnum(stage, WorkloadReportState.Instrumenting),
         message: detail || HEALTH_MESSAGE[WorkloadReportState.Instrumenting],
       };
     case WorkloadReportState.Error:
       return {
-        reasonEnum: stage || WorkloadReportState.Error,
+        reasonEnum: stageToReasonEnum(stage, WorkloadReportState.Error),
         message: detail || HEALTH_MESSAGE[WorkloadReportState.Error],
       };
     case WorkloadReportState.Unsupported:
@@ -154,7 +255,7 @@ const mapReportToHealthPresentation = (report: InstrumentationReport): { reasonE
       };
     default:
       return {
-        reasonEnum: stage || report.state || WorkloadReportState.Unknown,
+        reasonEnum: stageToReasonEnum(stage, report.state || WorkloadReportState.Unknown),
         message: detail,
       };
   }
