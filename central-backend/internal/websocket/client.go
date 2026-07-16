@@ -95,7 +95,8 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 	graphqlSchemaVersion := r.URL.Query().Get(GraphQLSchemaVersionQueryParam)
 
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		CompressionMode: websocket.CompressionDisabled,
+		CompressionMode:      websocket.CompressionContextTakeover,
+		CompressionThreshold: 512,
 	})
 	if err != nil {
 		http.Error(w, "WebSocket upgrade failed", http.StatusInternalServerError)

@@ -45,7 +45,9 @@ func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, 
 		TLSClientConfig: tlsConfig,
 	}
 	dialer := websocket.DialOptions{
-		HTTPClient: &http.Client{Transport: transport},
+		HTTPClient:           &http.Client{Transport: transport},
+		CompressionMode:      websocket.CompressionContextTakeover,
+		CompressionThreshold: 512,
 	}
 
 	conn, _, err := websocket.Dial(ctx, u.String(), &dialer)
@@ -361,7 +363,9 @@ func (w *WebSocketClient) handleReconnect(kubeClient *kube.Client) *websocket.Co
 				TLSClientConfig: w.tlsConfig,
 			}
 			dialer := websocket.DialOptions{
-				HTTPClient: &http.Client{Transport: transport},
+				HTTPClient:           &http.Client{Transport: transport},
+				CompressionMode:      websocket.CompressionContextTakeover,
+				CompressionThreshold: 512,
 			}
 			conn, _, err := websocket.Dial(w.ctx, u.String(), &dialer)
 
