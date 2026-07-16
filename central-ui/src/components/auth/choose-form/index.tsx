@@ -5,15 +5,16 @@ import * as STRINGS from '@/utils/constants/strings';
 import { FlexColumn } from '@odigos/ui-kit/components';
 import { ButtonTab } from '@odigos/ui-kit/components';
 import { AUTH_PROVIDERS } from '@/utils/constants/auth-providers';
-import { ConstrainedWidth, FormContainer, FormSubtitle, FormTitle } from '../styled';
+import { ConstrainedWidth, FormContainer, FormSubtitle, FormTitle, ErrorText } from '../styled';
 
 interface ChooseFormProps {
   isFirstTime: boolean;
   loading: boolean;
+  error?: string | null;
   onClick: (providerId: AuthProviderId, loginType?: LoginType) => void;
 }
 
-const ChooseForm: FC<ChooseFormProps> = ({ isFirstTime, loading, onClick }) => {
+const ChooseForm: FC<ChooseFormProps> = ({ isFirstTime, loading, error, onClick }) => {
   const authProvidersBtnsToRender = useMemo(
     () =>
       AUTH_PROVIDERS.map((provider) => (
@@ -25,7 +26,7 @@ const ChooseForm: FC<ChooseFormProps> = ({ isFirstTime, loading, onClick }) => {
           onClick={() => onClick(provider.providerId, provider.loginType)}
         />
       )),
-    [loading],
+    [loading, onClick],
   );
 
   return (
@@ -39,6 +40,7 @@ const ChooseForm: FC<ChooseFormProps> = ({ isFirstTime, loading, onClick }) => {
         <FlexColumn $gap={12}>
           <ButtonTab label={`${STRINGS.CONTINUE_WITH} ${STRINGS.EMAIL}`} icon={EmailIcon} loading={loading} onClick={() => onClick(AuthProviderId.EMAIL)} />
           {authProvidersBtnsToRender}
+          {error && <ErrorText>{error}</ErrorText>}
         </FlexColumn>
       </ConstrainedWidth>
     </FormContainer>

@@ -57,6 +57,9 @@ const ProtectedRoute: FC<ProtectedRouteProps> = ({ children }) => {
         setVerified(true);
         if (status === SignInStatus.PASSWORD_UPDATE_REQUIRED) {
           goToUpdatePassword();
+        } else if (status === SignInStatus.ACCESS_DENIED) {
+          setVerified(false);
+          goToSignIn();
         } else if (isOnSignInPath || isOnUpdatePasswordPath) {
           goToConnections();
         }

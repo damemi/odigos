@@ -146,6 +146,28 @@ func IsUserEditor(ctx context.Context) bool {
 	return isEditor
 }
 
+// HasOdigosRole reports whether the JWT carries at least one Odigos realm role
+// (owner, admin, maintainer, or viewer).
+func HasOdigosRole(ctx context.Context) bool {
+	token := GetTokenFromContext(ctx)
+	if token == "" {
+		return false
+	}
+	roles, err := ExtractRolesFromToken(token)
+	if err != nil {
+		return false
+	}
+	for _, role := range roles {
+		if strings.EqualFold(role, "OWNER") ||
+			strings.EqualFold(role, "ADMIN") ||
+			strings.EqualFold(role, "MAINTAINER") ||
+			strings.EqualFold(role, "VIEWER") {
+			return true
+		}
+	}
+	return false
+}
+
 // RequireAdmin returns ErrForbidden unless the caller carries an ADMIN or OWNER
 // role in their JWT. Use this to guard access-management mutations (user CRUD,
 // password resets, identity providers) so they cannot be reached by lower-privilege
@@ -158,14 +180,17 @@ func RequireAdmin(ctx context.Context) error {
 }
 
 // RequireAuth returns ErrUnauthenticated unless the caller presents a non-expired
-// JWT in context. Use it to guard read endpoints that should be visible to any
-// signed-in user (any role) but not to anonymous callers.
+// JWT that includes at least one Odigos role. Anonymous callers and authenticated
+// users with no mapped role are both rejected.
 func RequireAuth(ctx context.Context) error {
 	token := GetTokenFromContext(ctx)
 	if token == "" {
 		return ErrUnauthenticated
 	}
 	if expired, err := IsTokenExpired(token); err != nil || expired {
+		return ErrUnauthenticated
+	}
+	if !HasOdigosRole(ctx) {
 		return ErrUnauthenticated
 	}
 	return nil

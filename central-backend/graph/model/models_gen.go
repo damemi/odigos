@@ -520,16 +520,18 @@ type SignInStatus string
 const (
 	SignInStatusSuccess                SignInStatus = "SUCCESS"
 	SignInStatusPasswordUpdateRequired SignInStatus = "PASSWORD_UPDATE_REQUIRED"
+	SignInStatusAccessDenied           SignInStatus = "ACCESS_DENIED"
 )
 
 var AllSignInStatus = []SignInStatus{
 	SignInStatusSuccess,
 	SignInStatusPasswordUpdateRequired,
+	SignInStatusAccessDenied,
 }
 
 func (e SignInStatus) IsValid() bool {
 	switch e {
-	case SignInStatusSuccess, SignInStatusPasswordUpdateRequired:
+	case SignInStatusSuccess, SignInStatusPasswordUpdateRequired, SignInStatusAccessDenied:
 		return true
 	}
 	return false

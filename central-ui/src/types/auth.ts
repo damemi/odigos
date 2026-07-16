@@ -10,6 +10,7 @@ export enum Role {
 export enum SignInStatus {
   SUCCESS = 'SUCCESS',
   PASSWORD_UPDATE_REQUIRED = 'PASSWORD_UPDATE_REQUIRED',
+  ACCESS_DENIED = 'ACCESS_DENIED',
 }
 
 export interface SystemConfig {

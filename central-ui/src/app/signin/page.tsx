@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useUserStore } from '@/store';
 import { AUTH_CODE_QUERY_PARAM } from '@/utils';
+import { AUTH_PROVIDERS } from '@/utils/constants/auth-providers';
 import { Modal } from '@odigos/ui-kit/components';
 import { useAuth, useAuthProvider } from '@/hooks';
 import { AuthProviderId, LoginType } from '@/types';
@@ -15,11 +16,22 @@ import { AuthForm, ChooseForm, OidcForm, SamlForm } from '@/components';
 export default function Page() {
   const router = useRouter();
   const { authProviderId, setAuthProviderId } = useUserStore();
-  const { systemConfig, systemConfigLoading, signIn, loading: authLoading, error: authError, getCurrentUser } = useAuth();
+  const {
+    systemConfig,
+    systemConfigLoading,
+    signIn,
+    loading: authLoading,
+    error: authError,
+    getCurrentUser,
+    clearError,
+    ensureIdpLogoutBeforeSso,
+    consumeAutoSsoProvider,
+  } = useAuth();
   const { getSignInUrl, ensureOidcIdentityProvider, ensureSamlIdentityProvider, loading: authProviderLoading, error: authProviderError } = useAuthProvider();
 
   const [needToSetAuthProvider, setNeedToSetAuthProvider] = useState<LoginType | null>(null);
   const [authSetupSuccess, setAuthSetupSuccess] = useState<boolean>(false);
+  const autoSsoStarted = useRef(false);
 
   const searchParams = useSearchParams();
   const authCode = searchParams.get(AUTH_CODE_QUERY_PARAM);
@@ -32,6 +44,7 @@ export default function Page() {
   }, [authCode]);
 
   const handleCleanup = () => {
+    clearError();
     setAuthProviderId(null);
     setNeedToSetAuthProvider(null);
     setAuthSetupSuccess(false);
@@ -39,6 +52,12 @@ export default function Page() {
 
   const handleSignIn = async (providerId: AuthProviderId, loginType: LoginType) => {
     try {
+      // After ACCESS_DENIED, clear Azure/Okta SSO via Keycloak logout before retrying.
+      // Returns true when navigating away; SSO resumes via AUTO_SSO_PROVIDER_KEY on return.
+      if (await ensureIdpLogoutBeforeSso(providerId)) {
+        return;
+      }
+
       const url = await getSignInUrl(providerId);
       if (url) {
         router.replace(url);
@@ -51,10 +70,24 @@ export default function Page() {
   };
 
   const handleProviderClick = async (providerId: AuthProviderId, loginType?: LoginType) => {
+    clearError();
     setAuthProviderId(providerId);
     if (!loginType) return;
     await handleSignIn(providerId, loginType);
   };
+
+  // Resume SSO after deferred IdP logout (ACCESS_DENIED → user clicks Azure again → logout → here).
+  useEffect(() => {
+    if (systemConfigLoading || authCode || autoSsoStarted.current) return;
+    const providerId = consumeAutoSsoProvider();
+    if (!providerId || providerId === AuthProviderId.EMAIL) return;
+
+    const provider = AUTH_PROVIDERS.find((p) => p.providerId === providerId);
+    if (!provider?.loginType) return;
+
+    autoSsoStarted.current = true;
+    void handleProviderClick(providerId, provider.loginType);
+  }, [systemConfigLoading, authCode]);
 
   if (systemConfigLoading) {
     return (
@@ -74,7 +107,7 @@ export default function Page() {
     </FormContainer>
   );
   if (authProviderId === null) {
-    content = <ChooseForm isFirstTime={!!isFirstTime} loading={authLoading || authProviderLoading} onClick={handleProviderClick} />;
+    content = <ChooseForm isFirstTime={!!isFirstTime} loading={authLoading || authProviderLoading} error={authError} onClick={handleProviderClick} />;
   } else if (authProviderId === AuthProviderId.EMAIL) {
     content = <AuthForm isFirstTime={!!isFirstTime} loading={authLoading || authProviderLoading} error={authError} onSubmit={signIn} />;
   } else if (needToSetAuthProvider === LoginType.OIDC) {

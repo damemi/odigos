@@ -74,7 +74,7 @@ func (kc *KeycloakUserService) GetUserRole(token string, userID string) (string,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != StatusOK {
-		return RoleViewer, nil
+		return "", nil
 	}
 
 	var roles RoleList
@@ -83,11 +83,9 @@ func (kc *KeycloakUserService) GetUserRole(token string, userID string) (string,
 	}
 
 	hasRole := map[string]bool{}
-	// var roleNames []string
 	for _, role := range roles {
 		if name, ok := role["name"].(string); ok {
 			hasRole[strings.ToLower(name)] = true
-			// roleNames = append(roleNames, name)
 		}
 	}
 
@@ -104,7 +102,7 @@ func (kc *KeycloakUserService) GetUserRole(token string, userID string) (string,
 		return RoleViewer, nil
 	}
 
-	return RoleViewer, nil
+	return "", nil
 }
 
 func (kc *KeycloakUserService) CheckUserNeedsPasswordChange(token string, email string) (bool, error) {
@@ -856,6 +854,30 @@ func (kc *KeycloakUserService) GetUserByID(token string, userID string) (UserInf
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 	return userData, nil
+}
+
+// LogoutUserSessions invalidates all active Keycloak sessions for the user so a
+// denied SSO login does not leave a broker session that silently re-authenticates
+// the same account on the next IdP sign-in attempt.
+func (kc *KeycloakUserService) LogoutUserSessions(token string, userID string) error {
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s/logout", kc.host, kc.realm, userID)
+	req, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create logout request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to logout user sessions: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != StatusNoContent && resp.StatusCode != StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to logout user sessions: status %d, response: %s", resp.StatusCode, string(responseBody))
+	}
+	return nil
 }
 
 func (kc *KeycloakUserService) DeleteUserByID(token string, userID string) error {

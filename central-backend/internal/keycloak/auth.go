@@ -25,9 +25,10 @@ type KeycloakAuthService struct {
 }
 
 type UserAuthResult struct {
-	AccessToken string            `json:"access_token"`
-	IDToken     string            `json:"id_token,omitempty"`
-	UserData    types.UserSummary `json:"user_data"`
+	AccessToken  string            `json:"access_token"`
+	IDToken      string            `json:"id_token,omitempty"`
+	RefreshToken string            `json:"refresh_token,omitempty"`
+	UserData     types.UserSummary `json:"user_data"`
 }
 
 type TokenResponse struct {
@@ -60,6 +61,9 @@ func (kc *KeycloakAuthService) GetRedirectUrlForSignIn(provider string) string {
 	queryParams.Set("scope", "openid profile email")
 	queryParams.Set("response_type", "code")
 	queryParams.Set("redirect_uri", kc.uiSignInRedirectUrl)
+	// Force the IdP account picker so a previously denied SSO session cannot silently
+	// re-authenticate the same user on the next "Continue with …" click.
+	queryParams.Set("prompt", "select_account")
 
 	return fmt.Sprintf("%s?%s", authURL, queryParams.Encode())
 }
@@ -175,6 +179,7 @@ func (kc *KeycloakAuthService) AuthenticateUser(adminToken string, email string,
 
 		idToken = tokenResponse.IDToken
 		accessToken = tokenResponse.AccessToken
+		refreshToken := tokenResponse.RefreshToken
 
 		// Get user information from Keycloak using the access token
 		// Keycloak already has the user synced from Azure at this point
@@ -200,6 +205,13 @@ func (kc *KeycloakAuthService) AuthenticateUser(adminToken string, email string,
 			ID:    userID,
 			Email: userEmail,
 		}
+
+		return &UserAuthResult{
+			IDToken:      idToken,
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+			UserData:     userData,
+		}, nil
 	} else {
 		// Password-based flow (when email/password are provided)
 		accessToken, err = UserSignIn(kc.host, kc.realm, kc.client, email, password)
@@ -299,6 +311,48 @@ func (kc *KeycloakAuthService) exchangeCodeForTokens(code string) (*TokenRespons
 
 	if tokenResponse.AccessToken == "" {
 		return nil, fmt.Errorf("access token not found in response")
+	}
+
+	return &tokenResponse, nil
+}
+
+// RefreshTokens exchanges a refresh token for a new access/id token pair so that
+// realm role changes made after the original login are reflected in the JWT.
+func (kc *KeycloakAuthService) RefreshTokens(refreshToken string) (*TokenResponse, error) {
+	if refreshToken == "" {
+		return nil, fmt.Errorf("refresh token is empty")
+	}
+
+	tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", kc.host, kc.realm)
+
+	formData := make(url.Values)
+	formData.Set("grant_type", "refresh_token")
+	formData.Set("client_id", kc.client)
+	formData.Set("refresh_token", refreshToken)
+
+	req, err := http.NewRequest("POST", tokenURL, strings.NewReader(formData.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create refresh request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to refresh tokens: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("token refresh failed with status %d: %s", resp.StatusCode, string(responseBody))
+	}
+
+	var tokenResponse TokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResponse); err != nil {
+		return nil, fmt.Errorf("failed to decode refresh response: %w", err)
+	}
+	if tokenResponse.AccessToken == "" {
+		return nil, fmt.Errorf("access token not found in refresh response")
 	}
 
 	return &tokenResponse, nil

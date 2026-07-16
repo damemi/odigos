@@ -35,6 +35,7 @@ export const SIGN_UP_ADMIN_SUBTITLE_2 = 'Create your first user using an email a
 export const SIGN_UP_ADMIN_DISCLAIMER = 'This account will be used as the admin for setting up your environment.';
 export const SIGN_UP_PASSWORD_DISCLAIMER = 'This password is for first-time login only and must be changed after signing in. You won’t be able to view it again, make sure to copy and share it now';
 export const AUTH_ERROR = 'Authentication Error';
+export const ACCESS_DENIED_ERROR = "You don't have access to Odigos Central. Contact your administrator.";
 export const LOGIN_WITH = 'Login with';
 export const CONTINUE_WITH = 'Continue with';
 export const CONTINUE_WITH_EMAIL = 'Continue with Email';
@@ -85,6 +86,10 @@ export const UPDATE_PASSWORD_SUBTITLE = 'Set a new password to continue.';
 
 // Auth code query param
 export const AUTH_CODE_QUERY_PARAM = 'code';
+// Stored after ACCESS_DENIED so the next SSO click can clear the Azure/Okta browser session first.
+export const PENDING_IDP_LOGOUT_TOKEN_KEY = 'odigos_pending_idp_logout_token';
+// Provider to auto-start after returning from that deferred IdP logout.
+export const AUTO_SSO_PROVIDER_KEY = 'odigos_auto_sso_provider';
 
 // CP strings
 export const CONNECTIONS = 'Connections';

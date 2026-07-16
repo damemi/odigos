@@ -6,6 +6,25 @@ import (
 	"github.com/odigos-io/central-backend/graph/model"
 )
 
+func TestConvertStringRoleToModel(t *testing.T) {
+	cases := []struct {
+		in   string
+		want model.Role
+	}{
+		{"owner", model.RoleOwner},
+		{"ADMIN", model.RoleAdmin},
+		{"maintainer", model.RoleMaintainer},
+		{"viewer", model.RoleViewer},
+		{"", model.RoleViewer}, // GraphQL Role is required; empty falls back for display
+		{"unknown", model.RoleViewer},
+	}
+	for _, c := range cases {
+		if got := ConvertStringRoleToModel(c.in); got != c.want {
+			t.Errorf("ConvertStringRoleToModel(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
 func TestConvertModelRoleToString(t *testing.T) {
 	cases := []struct {
 		role model.Role

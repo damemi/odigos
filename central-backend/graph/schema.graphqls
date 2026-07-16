@@ -21,6 +21,7 @@ enum Role {
 enum SignInStatus {
   SUCCESS
   PASSWORD_UPDATE_REQUIRED
+  ACCESS_DENIED
 }
 
 enum AuthProviderId {

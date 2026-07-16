@@ -17,20 +17,22 @@ import (
 )
 
 type AuthService struct {
-	adminService *AdminService
-	userService  *UserService
-	kcUser       *keycloak.KeycloakUserService
-	kcAuth       *keycloak.KeycloakAuthService
-	kcTeam       *keycloak.KeycloakTeamService
+	adminService       *AdminService
+	userService        *UserService
+	roleMappingService *RoleMappingService
+	kcUser             *keycloak.KeycloakUserService
+	kcAuth             *keycloak.KeycloakAuthService
+	kcTeam             *keycloak.KeycloakTeamService
 }
 
-func NewAuthService(adminService *AdminService, userService *UserService) *AuthService {
+func NewAuthService(adminService *AdminService, userService *UserService, roleMappingService *RoleMappingService) *AuthService {
 	return &AuthService{
-		adminService: adminService,
-		userService:  userService,
-		kcAuth:       keycloak.NewKeycloakAuthService(),
-		kcUser:       keycloak.NewKeycloakUserService(),
-		kcTeam:       keycloak.NewKeycloakTeamService(),
+		adminService:       adminService,
+		userService:        userService,
+		roleMappingService: roleMappingService,
+		kcAuth:             keycloak.NewKeycloakAuthService(),
+		kcUser:             keycloak.NewKeycloakUserService(),
+		kcTeam:             keycloak.NewKeycloakTeamService(),
 	}
 }
 
@@ -67,9 +69,31 @@ func (svc *AuthService) VerifyToken(ctx context.Context, token string) (*model.G
 			Error:   &errorMsg,
 		}, nil
 	}
+
+	roles, err := utils.ExtractRolesFromToken(token)
+	if err != nil || !hasOdigosRoleInList(roles) {
+		errorMsg := "token does not include an Odigos role"
+		return &model.GeneralResult{
+			Success: false,
+			Error:   &errorMsg,
+		}, nil
+	}
+
 	return &model.GeneralResult{
 		Success: true,
 	}, nil
+}
+
+func hasOdigosRoleInList(roles []string) bool {
+	for _, role := range roles {
+		if strings.EqualFold(role, keycloak.RoleOwner) ||
+			strings.EqualFold(role, keycloak.RoleAdmin) ||
+			strings.EqualFold(role, keycloak.RoleMaintainer) ||
+			strings.EqualFold(role, keycloak.RoleViewer) {
+			return true
+		}
+	}
+	return false
 }
 
 func extractJWTPayload(token string) (map[string]interface{}, error) {
@@ -133,9 +157,51 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 			return nil, err
 		}
 
+		roleAssigned := false
 		if svc.adminService.NeedToSetAdminUser() {
 			if err := svc.kcUser.AddRealmRoleToUser(adminToken, authResult.UserData.Email, keycloak.RoleAdmin); err != nil {
 				return nil, fmt.Errorf("failed to assign admin role to first SSO user: %w", err)
+			}
+			roleAssigned = true
+		}
+
+		roleStr, err := svc.kcUser.GetUserRole(adminToken, authResult.UserData.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user role after SSO login: %w", err)
+		}
+		if roleStr == "" {
+			hasMappings, err := svc.roleMappingService.HasAnyGroupRoleMappings()
+			if err != nil {
+				return nil, fmt.Errorf("failed to check group role mappings: %w", err)
+			}
+			if hasMappings {
+				logger.Log.Info("SSO login denied: user has no mapped role", "userID", authResult.UserData.ID, "email", authResult.UserData.Email)
+				if err := svc.kcUser.LogoutUserSessions(adminToken, authResult.UserData.ID); err != nil {
+					logger.Log.Warn("Failed to logout denied user sessions", "userID", authResult.UserData.ID, "error", err)
+				}
+				// Return idToken for deferred IdP logout on the next SSO attempt (not used as a session).
+				idToken := authResult.IDToken
+				return &model.SignInResult{
+					Status:  model.SignInStatusAccessDenied,
+					IDToken: &idToken,
+				}, nil
+			}
+			if err := svc.kcUser.AddRealmRoleToUser(adminToken, authResult.UserData.Email, keycloak.RoleViewer); err != nil {
+				return nil, fmt.Errorf("failed to assign default viewer role: %w", err)
+			}
+			roleAssigned = true
+		}
+
+		idToken := authResult.IDToken
+		accessToken := authResult.AccessToken
+		if roleAssigned && authResult.RefreshToken != "" {
+			refreshed, err := svc.kcAuth.RefreshTokens(authResult.RefreshToken)
+			if err != nil {
+				return nil, fmt.Errorf("failed to refresh tokens after role assignment: %w", err)
+			}
+			accessToken = refreshed.AccessToken
+			if refreshed.IDToken != "" {
+				idToken = refreshed.IDToken
 			}
 		}
 
@@ -147,8 +213,8 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 		logger.Log.Info("OAuth login successful", "userID", user.ID, "email", user.Email)
 
 		return &model.SignInResult{
-			IDToken:     &authResult.IDToken,
-			AccessToken: &authResult.AccessToken,
+			IDToken:     &idToken,
+			AccessToken: &accessToken,
 			Status:      model.SignInStatusSuccess,
 			User:        user,
 		}, nil
@@ -338,7 +404,7 @@ func (svc *AuthService) buildUserModel(adminToken string, userData types.UserSum
 	roleStr, err := svc.kcUser.GetUserRole(adminToken, userID)
 	if err != nil {
 		logger.Log.Error("Failed to get user role", "userID", userID, "error", err)
-		roleStr = "user"
+		roleStr = ""
 	}
 	role := utils.ConvertStringRoleToModel(roleStr)
 	logger.Log.Info("buildUserModel: resolved role for user", "userID", userID, "email", email, "roleStr", roleStr, "roleModel", role)

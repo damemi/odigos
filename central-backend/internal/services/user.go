@@ -381,10 +381,11 @@ func (svc *UserService) mapKeycloakUserToModel(userData map[string]any, adminTok
 
 	role, err := svc.kcUser.GetUserRole(adminToken, id)
 	if err != nil {
-		role = keycloak.RoleViewer
+		logger.Log.Error("Failed to get user role", "userID", id, "error", err)
+		role = ""
 	}
 
-	modelRole := utils.ConvertStringRoleToModel(strings.ToUpper(role))
+	modelRole := utils.ConvertStringRoleToModel(role)
 
 	needsPasswordChange, err := svc.kcUser.CheckUserNeedsPasswordChange(adminToken, email)
 	if err != nil {

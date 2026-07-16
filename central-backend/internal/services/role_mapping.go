@@ -181,6 +181,34 @@ func (svc *RoleMappingService) GetGroupRoleMappings(providerID model.AuthProvide
 	return result, nil
 }
 
+// HasAnyGroupRoleMappings reports whether any configured identity provider has at
+// least one group→role mapping. Used at SSO SignIn to decide whether an unmapped
+// user should be denied (mappings exist) or defaulted to Viewer (none exist).
+func (svc *RoleMappingService) HasAnyGroupRoleMappings() (bool, error) {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return false, fmt.Errorf("failed to get admin token: %w", err)
+	}
+
+	for _, providerID := range model.AllAuthProviderID {
+		exists, err := svc.providerExists(providerID)
+		if err != nil {
+			return false, err
+		}
+		if !exists {
+			continue
+		}
+		rows, err := svc.listRows(adminToken, providerAliasFromID(providerID))
+		if err != nil {
+			return false, err
+		}
+		if len(rows) > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // ReconcileExistingMappers folds any legacy per-group mappers into the aggregated
 // format for every configured provider. It is best-effort and idempotent, intended
 // to run once at startup; ongoing writes reconcile on their own.

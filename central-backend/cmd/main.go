@@ -109,7 +109,7 @@ func main() {
 	// Best-effort migration of any legacy per-group IdP mappers into the aggregated
 	// per-(claimName, role) format. Idempotent; safe to run on every startup.
 	go roleMappingService.ReconcileExistingMappers()
-	authService := services.NewAuthService(adminService, userService)
+	authService := services.NewAuthService(adminService, userService, roleMappingService)
 	ConfigService := services.NewConfigService(k8sClient)
 	healthService := services.NewHealthService(redisClient, adminService, centralSSEHub)
 	computePlatformService := services.NewComputePlatformService(redisClient)
