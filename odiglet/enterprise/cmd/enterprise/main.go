@@ -31,7 +31,6 @@ import (
 	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 	"github.com/odigos-io/odigos/odiglet"
 	"github.com/odigos-io/odigos/odiglet/pkg/ebpf"
-	"github.com/odigos-io/odigos/odiglet/pkg/ebpf/sdks/obi"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
 )
 
@@ -201,15 +200,17 @@ func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distro
 	}
 
 	return map[string]commonInstrumentation.Factory{
-		sdks.GoEnterpriseDistroName:          logcapture.WrapFactory(goFactory),
-		"java-ebpf-instrumentations":         logcapture.WrapFactory(javaEbpfFactory),
-		"java-enterprise":                    sdks.NewJavaExtensionInstrumentationFactoryEnterprise(),
-		"python-enterprise":                  pythonEbpfFactory,
-		"python-enterprise3.8":               pythonEbpfFactory,
-		"nodejs-enterprise":                  nodejsEbpfFactory,
-		"nodejs-enterprise-14":               nodejsEbpfFactory,
-		"mysql-enterprise":                   mysqlFactory,
-		"opentelemetry-ebpf-instrumentation": obi.NewOBIInstrumentationFactory(),
+		sdks.GoEnterpriseDistroName:  logcapture.WrapFactory(goFactory),
+		"java-ebpf-instrumentations": logcapture.WrapFactory(javaEbpfFactory),
+		"java-enterprise":            sdks.NewJavaExtensionInstrumentationFactoryEnterprise(),
+		"python-enterprise":          pythonEbpfFactory,
+		"python-enterprise3.8":       pythonEbpfFactory,
+		"nodejs-enterprise":          nodejsEbpfFactory,
+		"nodejs-enterprise-14":       nodejsEbpfFactory,
+		"mysql-enterprise":           mysqlFactory,
+		// OBI (the "opentelemetry-ebpf-instrumentation" traces distro factory and the
+		// network-metrics generic factory) is wired centrally in odiglet.New, identically for
+		// OSS and enterprise, so it is intentionally not registered here.
 		// dotnet, ruby and php are using native instrumentation and does not have ebpf instrumentation.
 	}, nil
 }
