@@ -1,5 +1,5 @@
 import { PROXY, ROUTES } from '../constants';
-import { handleExceptions, signInAsAdmin, visitPage, waitForGraphqlOperation } from '../functions';
+import { handleExceptions, interceptGraphql, signInAsAdmin, visitPage, waitForGraphqlOperation } from '../functions';
 
 // The Central UI lists every Central Proxy as a row in /connections. Until a
 // row is clicked, the user is on an out-of-proxy page and cannot reach the
@@ -10,9 +10,9 @@ import { handleExceptions, signInAsAdmin, visitPage, waitForGraphqlOperation } f
 
 describe('Select Connection', () => {
   beforeEach(() => {
-    cy.intercept('/graphql').as('gql');
     handleExceptions();
     signInAsAdmin();
+    interceptGraphql();
   });
 
   it('Should fetch compute platforms (proxy connections) on /connections', () => {

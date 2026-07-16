@@ -79,7 +79,8 @@ spec:
     - name: Verify Odigos Central Installation
       try:
         - assert:
-            timeout: 1m40s
+            # Keycloak cold-start on kind regularly exceeds ~2m; backend waits on it.
+            timeout: 5m
             file: ../../common/assert/odigos-central-installed.yaml
 
       catch:
@@ -94,7 +95,8 @@ spec:
     - name: Test Central GraphQL Integration By Instrumenting Namespace on the testing odigos installation
       try:
         - script:
-            timeout: 1m10s
+            # Includes wait for central-backend /readyz (Keycloak init can lag kubelet Ready).
+            timeout: 5m
             content: |
               ./test-central-graphql.sh
 

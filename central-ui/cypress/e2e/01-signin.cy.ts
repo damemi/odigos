@@ -1,5 +1,5 @@
 import { AUTH_USER, DATA_IDS, ROUTES } from '../constants';
-import { handleExceptions, visitPage, waitForGraphqlOperation } from '../functions';
+import { handleExceptions, interceptGraphql, visitPage, waitForGraphqlOperation } from '../functions';
 
 // First-spec only: drives the email/password sign-in flow exactly as the
 // user would, including first-time setup (when the central-backend has no
@@ -10,8 +10,8 @@ import { handleExceptions, visitPage, waitForGraphqlOperation } from '../functio
 
 describe('Sign In', () => {
   beforeEach(() => {
-    cy.intercept('/graphql').as('gql');
     handleExceptions();
+    interceptGraphql();
   });
 
   it('Should fetch system config (frontend ↔ central-backend connection)', () => {

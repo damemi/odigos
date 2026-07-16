@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/99designs/gqlgen/graphql/handler"
@@ -39,6 +40,44 @@ func getLogLevel() string {
 	return "info"
 }
 
+// handlerHolder keeps a consistent concrete type in atomic.Value so we can swap
+// from the bootstrap ServeMux to the Gin engine without panicking
+// ("store of inconsistently typed value into Value").
+type handlerHolder struct {
+	h http.Handler
+}
+
+// atomicHandler allows swapping the active HTTP handler after bootstrap completes
+// without closing the listening socket (so probes keep working across the swap).
+type atomicHandler struct {
+	h atomic.Value // *handlerHolder
+}
+
+func (a *atomicHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	a.h.Load().(*handlerHolder).h.ServeHTTP(w, r)
+}
+
+func (a *atomicHandler) store(handler http.Handler) {
+	a.h.Store(&handlerHolder{h: handler})
+}
+
+// newBootstrapHandler serves probe endpoints while Keycloak/Redis init is still in progress.
+// /healthz is always 200 so kubelet liveness does not kill the process during Keycloak cold start.
+// /readyz stays 503 until the full router is installed.
+func newBootstrapHandler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "not ready", http.StatusServiceUnavailable)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "starting", http.StatusServiceUnavailable)
+	})
+	return mux
+}
+
 func main() {
 	logger.InitLogger()
 	logger.Log.Info("Starting Central Backend Service...")
@@ -47,6 +86,21 @@ func main() {
 
 	ctx := context.Background()
 	shutdownCh := bootstrap.GetshutdownChannel()
+
+	port := config.Config.ServerPort
+	rootHandler := &atomicHandler{}
+	rootHandler.store(newBootstrapHandler())
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           rootHandler,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	go func() {
+		logger.Log.Info("Serving bootstrap health endpoints while initializing", "port", port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatal("Failed to start server", err)
+		}
+	}()
 
 	k8sClient, err := k8s.CreateClient()
 	if err != nil {
@@ -64,6 +118,8 @@ func main() {
 	}
 
 	// Block startup until Keycloak is reachable (infinite retries).
+	// The HTTP server above keeps /healthz alive so liveness probes do not restart us
+	// while Keycloak is still cold-starting.
 	_, err = keycloak.GetKeycloakAdminTokenWithRetry(ctx, shutdownCh, adminCredentials.Username, adminCredentials.Password)
 	if err != nil {
 		logger.Log.Info("Shutting down before Keycloak is ready", "error", err)
@@ -134,19 +190,17 @@ func main() {
 	// Initialize Prometheus metrics server (runs in background goroutine)
 	metrics.InitMetrics()
 
-	port := config.Config.ServerPort
+	// Swap in the full application router; /readyz becomes 200 after this point.
+	rootHandler.store(router)
+	logger.Log.Info(fmt.Sprintf("Centralized Backend Service ready on port %s", port))
 
-	logger.Log.Info(fmt.Sprintf("Centralized Backend Service started on port %s", port))
-	err = router.Run(":" + port)
-	if err != nil {
-		logger.Fatal("Failed to start server", err)
-	}
-
+	// ListenAndServe is already running; handleShutdown exits the process on signal/token expiry.
+	select {}
 }
 
 func customLogger() gin.HandlerFunc {
 	return gin.LoggerWithConfig(gin.LoggerConfig{
-		SkipPaths: []string{"/healthz", "/graphql"},
+		SkipPaths: []string{"/healthz", "/readyz", "/graphql"},
 	})
 }
 
@@ -162,6 +216,7 @@ func newRouter(gqlHandler *handler.Server, wsServer *websocketserver.WebSocketSe
 	}))
 
 	router.GET("/healthz", func(c *gin.Context) { c.Status(200) })
+	router.GET("/readyz", func(c *gin.Context) { c.Status(200) })
 	router.GET("/ws/proxy", func(c *gin.Context) { wsServer.HandleConnection(c.Writer, c.Request) })
 	router.GET("/sse/events", func(c *gin.Context) { sseHub.SSEHandler(c.Writer, c.Request) })
 	router.POST("/graphql", authContextMiddleware(), func(c *gin.Context) { gqlHandler.ServeHTTP(c.Writer, c.Request) })

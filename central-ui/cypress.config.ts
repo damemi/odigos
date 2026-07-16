@@ -2,7 +2,9 @@ import Cypress from 'cypress';
 import fs from 'fs';
 
 const PORT = 3000;
-const BASE_URL = `http://localhost:${PORT}`;
+// Chainsaw e2e prefers a kind NodePort URL (CYPRESS_BASE_URL) so Cypress does
+// not depend on a long-lived kubectl port-forward that wedges under load.
+const BASE_URL = process.env.CYPRESS_BASE_URL || `http://localhost:${PORT}`;
 
 const config: Cypress.ConfigOptions = {
   trashAssetsBeforeRuns: true,
@@ -16,17 +18,18 @@ const config: Cypress.ConfigOptions = {
     animationDistanceThreshold: 5,
     viewportWidth: 1920,
     viewportHeight: 1080,
-    // Tight timeouts so a flaky / hung test surfaces fast in CI rather
-    // than running out the whole chainsaw step's clock.
+    // Tight command timeouts so a hung assertion surfaces fast.
     defaultCommandTimeout: 8000,
-    pageLoadTimeout: 20000,
+    pageLoadTimeout: 45000,
     requestTimeout: 10000,
     responseTimeout: 10000,
+    // No runMode retries — flakes should be fixed at the sync point, not
+    // hidden by a second attempt that also burns the chainsaw budget.
     retries: { runMode: 0, openMode: 0 },
     allowCypressEnv: false,
-    // Central UI persists auth + selected proxy in localStorage; keeping
-    // testIsolation enabled clears those between tests, so we re-establish
-    // the session via cy.session() in the shared helpers.
+    // Central UI persists auth in localStorage and selected proxy in
+    // sessionStorage; testIsolation clears both between tests, so we
+    // re-establish via cy.session() (auth + proxy) in the shared helpers.
     testIsolation: true,
     setupNodeEvents(on, config) {
       on('task', {

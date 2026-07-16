@@ -1,6 +1,25 @@
 import { AUTH_USER, DATA_IDS, PROXY, ROUTES } from '../constants';
 
-const SESSION_ID = `central-ui-admin-${AUTH_USER.EMAIL}`;
+// Auth-only session (used by connection specs that exercise /connections
+// themselves). Proxy-aware CRUD specs use SESSION_WITH_PROXY below.
+const SESSION_AUTH = `central-ui-admin-${AUTH_USER.EMAIL}`;
+const SESSION_WITH_PROXY = `central-ui-admin-proxy-${AUTH_USER.EMAIL}-${PROXY.NAME}`;
+
+const assertAuthPersisted = (win: Window) => {
+  const raw = win.localStorage.getItem('odigos-auth-storage');
+  expect(raw, 'odigos-auth-storage in localStorage').to.be.a('string');
+  const parsed = JSON.parse(raw as string);
+  expect(parsed?.state?.accessToken, 'persisted accessToken').to.be.a('string');
+};
+
+const assertProxyPersisted = (win: Window) => {
+  // useProxyStore persists to sessionStorage (not localStorage).
+  const raw = win.sessionStorage.getItem('SELECTED_PROXY');
+  expect(raw, 'SELECTED_PROXY in sessionStorage').to.be.a('string');
+  const parsed = JSON.parse(raw as string);
+  expect(parsed?.state?.proxyName, 'persisted proxyName').to.eq(PROXY.NAME);
+  expect(parsed?.state?.proxyID, 'persisted proxyID').to.be.a('string');
+};
 
 // Performs the email/password sign-in flow against the live central-backend.
 //
@@ -11,7 +30,7 @@ const SESSION_ID = `central-ui-admin-${AUTH_USER.EMAIL}`;
 // Subsequent runs (e.g. cluster reused across spec files in the same chainsaw
 // run) hit the regular login path with no confirm-password field.
 const performSignIn = () => {
-  cy.visit(ROUTES.SIGN_IN);
+  cy.visit(ROUTES.SIGN_IN, { retryOnNetworkFailure: true });
 
   // Wait for the "Choose login method" form to render.
   cy.contains('Continue with Email', { timeout: 30000 }).should('be.visible').click();
@@ -34,25 +53,39 @@ const performSignIn = () => {
   cy.location('pathname', { timeout: 60000 }).should('eq', ROUTES.CONNECTIONS);
 };
 
+// Picks the test proxy from the connections table. Assumes we are already on
+// /connections (post sign-in). Visiting /connections intentionally clears the
+// proxy store (useProxy treats it as an out-of-proxy page), so this must only
+// run when we mean to re-select — never as a per-test warm-up.
+const performSelectTestProxy = () => {
+  cy.contains(PROXY.NAME, { timeout: 30000 }).should('be.visible');
+  // The ui-kit Table renders a hidden MeasurementLayer (visibility: hidden)
+  // that duplicates the text of cells in auto-width columns (e.g. the Status
+  // badge) BEFORE the visible row in the DOM. Plain `cy.contains('Connection
+  // live')` would resolve to that hidden duplicate and fail the visibility
+  // / click assertions, so scope text lookups inside auto-width columns to
+  // `:visible` elements only.
+  cy.contains(':visible', 'Connection live', { timeout: 30000 }).should('be.visible');
+  cy.contains(PROXY.NAME).click();
+
+  // selectProxy() pushes us to /overview and writes SELECTED_PROXY.
+  cy.location('pathname', { timeout: 30000 }).should('eq', ROUTES.OVERVIEW);
+  cy.window().should(assertProxyPersisted);
+};
+
 // Caches the admin login across tests via cy.session(), so individual specs
 // don't have to re-run the sign-in flow on each test. The session is shared
 // across spec files (cacheAcrossSpecs: true) for the duration of the run.
 export const signInAsAdmin = () => {
   cy.session(
-    SESSION_ID,
+    SESSION_AUTH,
     () => {
       performSignIn();
     },
     {
       cacheAcrossSpecs: true,
       validate: () => {
-        // Sanity check: the auth tokens should be persisted in localStorage.
-        cy.window().then((win) => {
-          const raw = win.localStorage.getItem('odigos-auth-storage');
-          expect(raw, 'odigos-auth-storage in localStorage').to.be.a('string');
-          const parsed = JSON.parse(raw as string);
-          expect(parsed?.state?.accessToken, 'persisted accessToken').to.be.a('string');
-        });
+        cy.window().then(assertAuthPersisted);
       },
     },
   );
@@ -61,31 +94,39 @@ export const signInAsAdmin = () => {
 // Picks the test proxy from the connections table by its display name and
 // waits for the in-proxy overview page to render.
 //
-// Use after signInAsAdmin() in any spec that needs to interact with the
-// usual Sources / Destinations / Actions / Rules / Sampling flows.
+// Prefer `signInAndSelectProxy()` for CRUD specs — that folds selection into
+// cy.session so we don't visit /connections (and clear the proxy store) on
+// every test. Keep this helper for specs that intentionally re-select.
 export const selectTestProxy = () => {
-  cy.visit(ROUTES.CONNECTIONS);
-  // Wait for the connections list to populate. The chainsaw setup installs
-  // the proxy with clusterName=PROXY.NAME, which appears as a row in the
-  // table. Status must be "Connection live" before clicking is allowed.
-  //
-  // The ui-kit Table renders a hidden MeasurementLayer (visibility: hidden)
-  // that duplicates the text of cells in auto-width columns (e.g. the Status
-  // badge) BEFORE the visible row in the DOM. Plain `cy.contains('Connection
-  // live')` would resolve to that hidden duplicate and fail the visibility
-  // / click assertions, so scope text lookups inside auto-width columns to
-  // `:visible` elements only.
-  cy.contains(PROXY.NAME, { timeout: 60000 }).should('be.visible');
-  cy.contains(':visible', 'Connection live', { timeout: 60000 }).should('be.visible');
-  cy.contains(PROXY.NAME).click();
-
-  // selectProxy() pushes us to /overview.
-  cy.location('pathname', { timeout: 30000 }).should('eq', ROUTES.OVERVIEW);
+  cy.visit(ROUTES.CONNECTIONS, { retryOnNetworkFailure: true });
+  performSelectTestProxy();
 };
 
-// Convenience helper for specs that just want a signed-in + proxy-selected
-// state before each test.
+// Convenience helper for specs that need signed-in + proxy-selected state.
+//
+// Root cause this addresses: every beforeEach used to call selectTestProxy(),
+// which visits /connections. That path is an out-of-proxy page, so useProxy
+// clears SELECTED_PROXY, then we re-select and reload overview — ~N full
+// round-trips per suite against a single kubectl port-forward. Folding proxy
+// selection into cy.session restores SELECTED_PROXY from sessionStorage;
+// paired with useProxy waiting for persist hydration before clearProxy, each
+// test can visit /overview|/settings directly.
 export const signInAndSelectProxy = () => {
-  signInAsAdmin();
-  selectTestProxy();
+  cy.session(
+    SESSION_WITH_PROXY,
+    () => {
+      performSignIn();
+      // Sign-in lands on /connections; select without an extra visit.
+      performSelectTestProxy();
+    },
+    {
+      cacheAcrossSpecs: true,
+      validate: () => {
+        cy.window().then((win) => {
+          assertAuthPersisted(win);
+          assertProxyPersisted(win);
+        });
+      },
+    },
+  );
 };

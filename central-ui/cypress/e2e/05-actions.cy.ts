@@ -1,5 +1,5 @@
 import { CRD_NAMES, DATA_IDS, NAMESPACES, ROUTES, SELECTED_ENTITIES, TEXTS } from '../constants';
-import { awaitToast, deleteV2Entity, getCrdById, getCrdIds, handleExceptions, signInAndSelectProxy, updateV2Entity, visitPage, waitForGraphqlOperation } from '../functions';
+import { awaitToast, deleteV2Entity, getCrdById, getCrdIds, handleExceptions, interceptGraphql, signInAndSelectProxy, updateV2Entity, visitPage, waitForGraphqlOperation } from '../functions';
 
 const namespace = NAMESPACES.ODIGOS;
 const crdName = CRD_NAMES.ACTION;
@@ -7,9 +7,9 @@ const totalEntities = SELECTED_ENTITIES.ACTIONS.length;
 
 describe('Actions CRUD (via Central UI → Proxy)', () => {
   beforeEach(() => {
-    cy.intercept('/graphql').as('gql');
     handleExceptions();
     signInAndSelectProxy();
+    interceptGraphql();
   });
 
   it(`Should have 0 ${crdName} CRDs in the cluster`, () => {

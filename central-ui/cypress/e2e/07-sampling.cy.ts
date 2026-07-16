@@ -1,5 +1,5 @@
 import { CRD_NAMES, DATA_IDS, NAMESPACES, ROUTES } from '../constants';
-import { awaitToast, dismissSamplingOnboardingModal, handleExceptions, signInAndSelectProxy, visitPage, waitForGraphqlOperation } from '../functions';
+import { awaitToast, dismissSamplingOnboardingModal, handleExceptions, interceptGraphql, signInAndSelectProxy, visitPage, waitForGraphqlOperation } from '../functions';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CrdSpec = Record<string, any>;
@@ -12,11 +12,65 @@ const HIGHLY_RELEVANT_RULE_NAME = 'Cypress Highly Relevant Rule';
 const COST_REDUCTION_RULE_NAME = 'Cypress Cost Reduction Rule';
 const UPDATED_SUFFIX = ' Updated';
 
+// Segment button labels are "1. Noisy Operations", "2. Highly Relevant Operations",
+// "3. Cost Reduction" — substring match is enough for cy.contains.
+const TAB_NOISY = 'Noisy Operations';
+const TAB_HIGHLY_RELEVANT = 'Highly Relevant Operations';
+const TAB_COST_REDUCTION = 'Cost Reduction';
+
+const selectSamplingTab = (tabLabel: string, ruleName?: string) => {
+  cy.contains('button', tabLabel).click();
+  // `sampling-btn-create-rule` lives in the page header chrome — it stays
+  // visible across tab switches and does NOT signal that the Pretty table
+  // for this category has remounted / finished MeasurementLayer. Anchor on
+  // the rule row (or at least the create button as a last resort).
+  if (ruleName) {
+    cy.contains(':visible', ruleName, { timeout: 30000 }).should('be.visible');
+  } else {
+    cy.get(DATA_IDS.SAMPLING_BTN_CREATE_RULE).should('be.visible');
+  }
+};
+
+// Pretty Table rows wire onClick on the cell wrapper, but MeasurementLayer
+// column measurement can swallow the first click (onRuleClick never runs →
+// view drawer never mounts → sampling-view-btn-edit missing). Seen on Noisy
+// first, then on Cost Reduction after the same "wait for create button"
+// false settle. Queue a few conditional re-clicks; Cypress runs each
+// `.then` after the previous click has been applied to the DOM.
+const openSamplingRuleView = (tabLabel: string, ruleName: string) => {
+  selectSamplingTab(tabLabel, ruleName);
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    cy.get('body').then(($body) => {
+      if ($body.find(DATA_IDS.SAMPLING_VIEW_BTN_EDIT).length > 0) {
+        return;
+      }
+      // Re-resolve the row each attempt — do not `.should('be.visible').click()`
+      // which settles the subject and misses Pretty table remounts.
+      cy.contains(':visible', ruleName, { timeout: 30000 }).click();
+    });
+  }
+
+  cy.get(DATA_IDS.SAMPLING_VIEW_BTN_EDIT, { timeout: 15000 }).should('be.visible');
+};
+
+// Open a sampling rule's view drawer, then enter edit mode.
+const openSamplingRuleEditor = (tabLabel: string, ruleName: string) => {
+  openSamplingRuleView(tabLabel, ruleName);
+  cy.get(DATA_IDS.SAMPLING_VIEW_BTN_EDIT, { timeout: 15000 }).should('be.visible').click();
+};
+
+const openSamplingRuleForDelete = (tabLabel: string, ruleName: string) => {
+  openSamplingRuleView(tabLabel, ruleName);
+  cy.get(DATA_IDS.SAMPLING_VIEW_BTN_DELETE, { timeout: 15000 }).should('be.visible').click();
+  cy.contains('button', 'Delete').click();
+};
+
 describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   beforeEach(() => {
-    cy.intercept('/graphql').as('gql');
     handleExceptions();
     signInAndSelectProxy();
+    interceptGraphql();
   });
 
   // ── Cleanup ──────────────────────────────────────────────────────────────
@@ -62,8 +116,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   it('Should create a Highly Relevant Operation rule (Error type)', () => {
     visitPage(ROUTES.SAMPLING, () => {
       waitForGraphqlOperation('GetSamplingRules').then(() => {
-        cy.contains('button', 'Highly Relevant Operations').click();
-        cy.wait(500);
+        selectSamplingTab(TAB_HIGHLY_RELEVANT);
 
         cy.get(DATA_IDS.SAMPLING_BTN_CREATE_RULE).click();
 
@@ -86,8 +139,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   it('Should create a Cost Reduction rule', () => {
     visitPage(ROUTES.SAMPLING, () => {
       waitForGraphqlOperation('GetSamplingRules').then(() => {
-        cy.contains('button', 'Cost Reduction').click();
-        cy.wait(500);
+        selectSamplingTab(TAB_COST_REDUCTION);
 
         cy.get(DATA_IDS.SAMPLING_BTN_CREATE_RULE).click();
 
@@ -135,7 +187,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   it('Should display the Noisy Operation rule in the UI', () => {
     visitPage(ROUTES.SAMPLING, () => {
       waitForGraphqlOperation('GetSamplingRules').then(() => {
-        cy.contains(NOISY_RULE_NAME).should('exist');
+        selectSamplingTab(TAB_NOISY, NOISY_RULE_NAME);
       });
     });
   });
@@ -143,9 +195,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   it('Should display the Highly Relevant Operation rule in the UI', () => {
     visitPage(ROUTES.SAMPLING, () => {
       waitForGraphqlOperation('GetSamplingRules').then(() => {
-        cy.contains('button', 'Highly Relevant Operations').click();
-        cy.wait(500);
-        cy.contains(HIGHLY_RELEVANT_RULE_NAME).should('exist');
+        selectSamplingTab(TAB_HIGHLY_RELEVANT, HIGHLY_RELEVANT_RULE_NAME);
       });
     });
   });
@@ -153,9 +203,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   it('Should display the Cost Reduction rule in the UI', () => {
     visitPage(ROUTES.SAMPLING, () => {
       waitForGraphqlOperation('GetSamplingRules').then(() => {
-        cy.contains('button', 'Cost Reduction').click();
-        cy.wait(500);
-        cy.contains(COST_REDUCTION_RULE_NAME).should('exist');
+        selectSamplingTab(TAB_COST_REDUCTION, COST_REDUCTION_RULE_NAME);
       });
     });
   });
@@ -165,18 +213,9 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   it('Should update the Noisy Operation rule name', () => {
     visitPage(ROUTES.SAMPLING, () => {
       waitForGraphqlOperation('GetSamplingRules').then(() => {
-        // The ui-kit Table renders a hidden MeasurementLayer that duplicates
-        // text from auto-width column cells (rule names live in such a column)
-        // BEFORE the visible row in DOM order. Scope to `:visible` so the
-        // click resolves to the real row and not the hidden duplicate.
-        cy.contains(':visible', NOISY_RULE_NAME).click();
-        cy.get(DATA_IDS.SAMPLING_VIEW_BTN_EDIT).click();
+        openSamplingRuleEditor(TAB_NOISY, NOISY_RULE_NAME);
 
-        cy.get('input[name=sampling-input-rule-name]')
-          .click()
-          .focused()
-          .clear()
-          .type(NOISY_RULE_NAME + UPDATED_SUFFIX);
+        cy.get('input[name=sampling-input-rule-name]').click().focused().clear().type(NOISY_RULE_NAME + UPDATED_SUFFIX);
 
         cy.get(DATA_IDS.SAMPLING_VIEW_EDIT_BTN_SAVE).click();
 
@@ -192,11 +231,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   it('Should update the Highly Relevant Operation rule name', () => {
     visitPage(ROUTES.SAMPLING, () => {
       waitForGraphqlOperation('GetSamplingRules').then(() => {
-        cy.contains('button', 'Highly Relevant Operations').click();
-        cy.wait(500);
-
-        cy.contains(':visible', HIGHLY_RELEVANT_RULE_NAME).click();
-        cy.get(DATA_IDS.SAMPLING_VIEW_BTN_EDIT).click();
+        openSamplingRuleEditor(TAB_HIGHLY_RELEVANT, HIGHLY_RELEVANT_RULE_NAME);
 
         cy.get('input[name=sampling-input-rule-name]')
           .click()
@@ -218,11 +253,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   it('Should update the Cost Reduction rule name', () => {
     visitPage(ROUTES.SAMPLING, () => {
       waitForGraphqlOperation('GetSamplingRules').then(() => {
-        cy.contains('button', 'Cost Reduction').click();
-        cy.wait(500);
-
-        cy.contains(':visible', COST_REDUCTION_RULE_NAME).click();
-        cy.get(DATA_IDS.SAMPLING_VIEW_BTN_EDIT).click();
+        openSamplingRuleEditor(TAB_COST_REDUCTION, COST_REDUCTION_RULE_NAME);
 
         cy.get('input[name=sampling-input-rule-name]')
           .click()
@@ -265,6 +296,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   it('Should display updated Noisy rule name in the UI', () => {
     visitPage(ROUTES.SAMPLING, () => {
       waitForGraphqlOperation('GetSamplingRules').then(() => {
+        selectSamplingTab(TAB_NOISY);
         cy.contains(NOISY_RULE_NAME + UPDATED_SUFFIX).should('exist');
       });
     });
@@ -275,9 +307,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   it('Should delete the Noisy Operation rule via the view drawer', () => {
     visitPage(ROUTES.SAMPLING, () => {
       waitForGraphqlOperation('GetSamplingRules').then(() => {
-        cy.contains(':visible', NOISY_RULE_NAME + UPDATED_SUFFIX).click();
-        cy.get(DATA_IDS.SAMPLING_VIEW_BTN_DELETE).click();
-        cy.contains('button', 'Delete').click();
+        openSamplingRuleForDelete(TAB_NOISY, NOISY_RULE_NAME + UPDATED_SUFFIX);
 
         waitForGraphqlOperation('DeleteNoisyOperationRule').then(() => {
           awaitToast({ message: 'Successfully deleted' });
@@ -291,12 +321,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   it('Should delete the Highly Relevant Operation rule via the view drawer', () => {
     visitPage(ROUTES.SAMPLING, () => {
       waitForGraphqlOperation('GetSamplingRules').then(() => {
-        cy.contains('button', 'Highly Relevant Operations').click();
-        cy.wait(500);
-
-        cy.contains(':visible', HIGHLY_RELEVANT_RULE_NAME + UPDATED_SUFFIX).click();
-        cy.get(DATA_IDS.SAMPLING_VIEW_BTN_DELETE).click();
-        cy.contains('button', 'Delete').click();
+        openSamplingRuleForDelete(TAB_HIGHLY_RELEVANT, HIGHLY_RELEVANT_RULE_NAME + UPDATED_SUFFIX);
 
         waitForGraphqlOperation('DeleteHighlyRelevantOperationRule').then(() => {
           awaitToast({ message: 'Successfully deleted' });
@@ -310,12 +335,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   it('Should delete the Cost Reduction rule via the view drawer', () => {
     visitPage(ROUTES.SAMPLING, () => {
       waitForGraphqlOperation('GetSamplingRules').then(() => {
-        cy.contains('button', 'Cost Reduction').click();
-        cy.wait(500);
-
-        cy.contains(':visible', COST_REDUCTION_RULE_NAME + UPDATED_SUFFIX).click();
-        cy.get(DATA_IDS.SAMPLING_VIEW_BTN_DELETE).click();
-        cy.contains('button', 'Delete').click();
+        openSamplingRuleForDelete(TAB_COST_REDUCTION, COST_REDUCTION_RULE_NAME + UPDATED_SUFFIX);
 
         waitForGraphqlOperation('DeleteCostReductionRule').then(() => {
           awaitToast({ message: 'Successfully deleted' });
@@ -353,16 +373,15 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   it('Should not display any Cypress test rules in the UI after deletion', () => {
     visitPage(ROUTES.SAMPLING, () => {
       waitForGraphqlOperation('GetSamplingRules').then(() => {
+        selectSamplingTab(TAB_NOISY);
         cy.contains(NOISY_RULE_NAME).should('not.exist');
         cy.contains(NOISY_RULE_NAME + UPDATED_SUFFIX).should('not.exist');
 
-        cy.contains('button', 'Highly Relevant Operations').click();
-        cy.wait(500);
+        selectSamplingTab(TAB_HIGHLY_RELEVANT);
         cy.contains(HIGHLY_RELEVANT_RULE_NAME).should('not.exist');
         cy.contains(HIGHLY_RELEVANT_RULE_NAME + UPDATED_SUFFIX).should('not.exist');
 
-        cy.contains('button', 'Cost Reduction').click();
-        cy.wait(500);
+        selectSamplingTab(TAB_COST_REDUCTION);
         cy.contains(COST_REDUCTION_RULE_NAME).should('not.exist');
         cy.contains(COST_REDUCTION_RULE_NAME + UPDATED_SUFFIX).should('not.exist');
       });

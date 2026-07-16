@@ -27,7 +27,8 @@ spec:
     - name: Verify Odigos Central Installation
       try:
         - assert:
-            timeout: 2m50s
+            # Keycloak cold-start on kind regularly exceeds ~2m; backend waits on it.
+            timeout: 5m
             file: ../../common/assert/odigos-central-installed.yaml
 
       catch:
@@ -42,7 +43,9 @@ spec:
     - name: Test Central Backend Infrastructure
       try:
         - script:
-            timeout: 1m20s
+            # Wait up to ~3m for /readyz (Keycloak admin can lag kubelet Ready),
+            # then run GraphQL/SSE/WS checks.
+            timeout: 5m
             content: |
               ./test-infrastructure.sh
 

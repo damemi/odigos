@@ -19,10 +19,37 @@ trap cleanup EXIT
 echo "⏳ Waiting for port forwards to be ready..."
 sleep 5
 
+# central-backend serves /healthz before Keycloak init and /readyz only after
+# full startup. With charts that still use /healthz for readiness, the Deployment
+# can be Ready while GraphQL is still unavailable — wait explicitly for /readyz.
+echo "⏳ Waiting for central-backend /readyz (up to 3 minutes)..."
+READY_OK=0
+for i in $(seq 1 90); do
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 "http://localhost:8083/readyz" || echo "000")
+  if [ "$CODE" = "200" ]; then
+    echo "✅ central-backend /readyz is 200"
+    READY_OK=1
+    break
+  fi
+  echo "⏳ /readyz=$CODE ($i/90)..."
+  sleep 2
+done
+if [ "$READY_OK" != "1" ]; then
+  echo "❌ central-backend /readyz did not become ready"
+  curl -sv --max-time 5 "http://localhost:8083/healthz" || true
+  echo
+  curl -sv --max-time 5 "http://localhost:8083/readyz" || true
+  echo
+  kubectl get pods -n odigos-central -l app=central-backend || true
+  kubectl logs -n odigos-central -l app=central-backend --tail=50 || true
+  exit 1
+fi
+
 echo "🔐 Getting authentication token (with retry for up to 2 minutes while Keycloak starts up)..."
 TOKEN=""
 RETRY_COUNT=0
 MAX_RETRIES=24  # 24 retries * 5 seconds = 2 minutes
+RESPONSE=""
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
   echo "Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES: Trying to authenticate with Keycloak..."
@@ -33,18 +60,18 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     -d "grant_type=password" \
     -d "client_id=odigos-central" \
     -d "username=admin" \
-    -d "password=admin" 2>/dev/null)
+    -d "password=admin" 2>/dev/null || true)
 
   # Check if we got a valid response with an access token
   if [ -n "$RESPONSE" ]; then
-    TOKEN=$(echo "$RESPONSE" | jq -r '.access_token // empty' 2>/dev/null)
+    TOKEN=$(echo "$RESPONSE" | jq -r '.access_token // empty' 2>/dev/null || true)
 
     if [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ] && [ "$TOKEN" != "empty" ]; then
       echo "✅ Authentication successful on attempt $((RETRY_COUNT + 1))"
       break
     else
       # Check for specific error messages to understand what's happening
-      ERROR_MSG=$(echo "$RESPONSE" | jq -r '.error_description // .error // "Unknown error"' 2>/dev/null)
+      ERROR_MSG=$(echo "$RESPONSE" | jq -r '.error_description // .error // "Unknown error"' 2>/dev/null || echo "non-JSON response")
       echo "⚠️  Got response but no valid token: $ERROR_MSG"
     fi
   else
@@ -71,7 +98,13 @@ echo "🏥 Testing central-backend GraphQL..."
 SYSTEM_CONFIG=$(curl -s -X POST "http://localhost:8083/graphql" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"query": "{ systemConfig { version isInitialized } }"}')
+  -d '{"query": "{ systemConfig { version isInitialized } }"}' || true)
+
+if ! echo "$SYSTEM_CONFIG" | jq -e . >/dev/null 2>&1; then
+  echo "❌ Central-backend GraphQL returned non-JSON"
+  echo "Response: $SYSTEM_CONFIG"
+  exit 1
+fi
 
 SUCCESS=$(echo "$SYSTEM_CONFIG" | jq -r '.data.systemConfig.version // ""')
 if [ -z "$SUCCESS" ]; then

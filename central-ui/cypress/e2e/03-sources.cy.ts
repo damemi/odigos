@@ -1,5 +1,5 @@
 import { CRD_NAMES, DATA_IDS, NAMESPACES, ROUTES, SELECTED_ENTITIES, TEXTS } from '../constants';
-import { awaitToast, findCrdId, getCrdById, getCrdIds, handleExceptions, signInAndSelectProxy, updateV2Entity, visitPage, waitForGraphqlOperation } from '../functions';
+import { awaitToast, clickRetryable, findCrdId, getCrdById, getCrdIds, handleExceptions, interceptGraphql, signInAndSelectProxy, updateV2Entity, visitPage, waitForCrdCount, waitForGraphqlOperation } from '../functions';
 
 // All cluster-side assertions target the proxy's namespaces (which live on
 // the same kind cluster as central in the chainsaw test setup).
@@ -17,9 +17,11 @@ const nameForUpdatedSource = SELECTED_ENTITIES.NAMESPACE_SOURCES[indexForUpdated
 
 describe('Sources CRUD (via Central UI → Proxy)', () => {
   beforeEach(() => {
-    cy.intercept('/graphql').as('gql');
     handleExceptions();
     signInAndSelectProxy();
+    // Arm after bootstrap so overview RemoteFetch from session setup is not
+    // queued under `@gql` (stale waits). See interceptGraphql().
+    interceptGraphql();
   });
 
   it(`Should have 0 ${sourceCrdName} CRDs in the cluster`, () => {
@@ -32,21 +34,27 @@ describe('Sources CRUD (via Central UI → Proxy)', () => {
 
   it(`Should instrument ${totalEntities} sources via the Central UI`, () => {
     visitPage(ROUTES.OVERVIEW, () => {
-      cy.get(DATA_IDS.ADD_SOURCE).click();
+      clickRetryable(DATA_IDS.ADD_SOURCE);
 
-      cy.get(DATA_IDS.SELECT_NAMESPACE).should('exist').click();
+      // Re-resolving clicks: overview/SSE refetches detach nodes mid-click when
+      // `.should('exist')` settles the subject before `.click()`.
+      clickRetryable(DATA_IDS.SELECT_NAMESPACE);
 
-      cy.wait(500).then(() => {
-        cy.get('[data-id=workloads-select-all]').click();
+      // Wait for the workloads column to populate before select-all. Clicking
+      // `workloads-select-all` as soon as it mounts (before rows render) left
+      // `source-*` checkboxes missing on slower clusters (K8s 1.23 flake).
+      const firstSource = SELECTED_ENTITIES.NAMESPACE_SOURCES[0].name;
+      cy.get(DATA_IDS.SELECT_SOURCE(firstSource), { timeout: 30000 }).should('exist');
 
-        SELECTED_ENTITIES.NAMESPACE_SOURCES.forEach(({ name }) => {
-          cy.get(DATA_IDS.SELECT_SOURCE(name)).should('exist');
-        });
+      clickRetryable('[data-id=workloads-select-all]');
 
-        cy.get(DATA_IDS.WIDE_DRAWER_SAVE).click();
-
-        cy.get(DATA_IDS.WIDE_DRAWER_SAVE).should('not.exist');
+      SELECTED_ENTITIES.NAMESPACE_SOURCES.forEach(({ name }) => {
+        cy.get(DATA_IDS.SELECT_SOURCE(name)).should('exist');
       });
+
+      clickRetryable(DATA_IDS.WIDE_DRAWER_SAVE);
+
+      cy.get(DATA_IDS.WIDE_DRAWER_SAVE).should('not.exist');
     });
   });
 
@@ -55,10 +63,7 @@ describe('Sources CRUD (via Central UI → Proxy)', () => {
   });
 
   it(`Should have >= ${totalEntities} ${configCrdName} CRDs in the cluster`, () => {
-    cy.exec(`kubectl get ${configCrdName} -n ${namespace} | awk 'NR>1 {print $1}'`).then(({ stdout }) => {
-      const count = stdout.split('\n').filter((s) => !!s).length;
-      expect(count).to.be.gte(totalEntities);
-    });
+    waitForCrdCount({ namespace, crdName: configCrdName, minCount: totalEntities });
   });
 
   it(`Should update the name of 1 source via the v2 edit-source-drawer, and notify locally`, () => {
@@ -89,10 +94,7 @@ describe('Sources CRUD (via Central UI → Proxy)', () => {
   });
 
   it(`Should update "serviceName" of 1 ${configCrdName} CRD in the cluster`, () => {
-    cy.exec(`kubectl get ${configCrdName} -n ${namespace} | awk 'NR>1 {print $1}'`).then(({ stdout }) => {
-      const crdIds = stdout.split('\n').filter((s) => !!s);
-      expect(crdIds.length).to.be.gte(totalEntities);
-
+    waitForCrdCount({ namespace, crdName: configCrdName, minCount: totalEntities }).then((crdIds) => {
       const crdId = crdIds.find((id) => id.indexOf(nameForUpdatedSource) !== -1) || '';
       getCrdById({ namespace, crdName: configCrdName, crdId, expectedError: '', expectedKey: 'serviceName', expectedValue: TEXTS.UPDATED_NAME });
     });
@@ -102,9 +104,7 @@ describe('Sources CRUD (via Central UI → Proxy)', () => {
     cy.exec(`kubectl delete ${sourceCrdName} --all -n ${namespace}`, { failOnNonZeroExit: false });
     cy.exec(`kubectl delete ${configCrdName} --all -n ${namespace}`, { failOnNonZeroExit: false });
 
-    cy.wait(3000).then(() => {
-      getCrdIds({ namespace, crdName: sourceCrdName, expectedError: TEXTS.NO_RESOURCES(namespace), expectedLength: 0 });
-    });
+    getCrdIds({ namespace, crdName: sourceCrdName, expectedError: TEXTS.NO_RESOURCES(namespace), expectedLength: 0 });
   });
 
   it(`Should have 0 ${configCrdName} CRDs in the cluster`, () => {

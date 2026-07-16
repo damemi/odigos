@@ -59,11 +59,36 @@ export const waitForGraphqlOperation = (operationName: string, maxSkips = 80): C
 };
 
 export const visitPage = (path: string, callback?: () => void) => {
-  cy.visit(path);
+  // retryOnNetworkFailure covers brief TCP blips without lengthening
+  // pageLoadTimeout (long visit hangs cascade into skipped suites).
+  //
+  // Do NOT visit /connections here for CRUD warm-up: that path clears
+  // SELECTED_PROXY (see useProxy isOutOfProxyPage). Auth+proxy come from
+  // cy.session via signInAndSelectProxy().
+  cy.visit(path, { retryOnNetworkFailure: true });
 
-  cy.wait(1000).then(() => {
-    if (!!callback) callback();
-  });
+  if (callback) {
+    callback();
+  }
+};
+
+// Arm the shared GraphQL alias AFTER auth/proxy bootstrap.
+//
+// Specs that called `cy.intercept('/graphql').as('gql')` before
+// `signInAndSelectProxy()` queued overview RemoteFetch ops (including
+// GetEffectiveConfig) under the same alias. Later `waitForGraphqlOperation
+// ('GetEffectiveConfig')` could resolve that stale overview response while
+// the settings form was still empty — the classic settings.cy clusterName flake.
+export const interceptGraphql = () => {
+  cy.intercept('/graphql').as('gql');
+};
+
+// Click without inserting `.should('exist')` first: that settles the subject and
+// disables Cypress query re-resolution, so an SSE/overview re-render detaches
+// the node mid-click ("the page updated while this command was executing").
+// `.click()` already asserts existence/visibility and keeps the get() retryable.
+export const clickRetryable = (selector: string, options?: Partial<Cypress.Timeoutable>) => {
+  cy.get(selector, options).click();
 };
 
 interface FindCrdOptions {
@@ -140,6 +165,33 @@ export const getCrdIds = ({ namespace, crdName, expectedError, expectedLength }:
   return attempt(maxAttempts);
 };
 
+interface WaitForCrdCountOptions {
+  namespace: string;
+  crdName: string;
+  minCount: number;
+}
+
+// Like `getCrdIds`, but polls until the CRD count is >= minCount (create
+// paths can lag behind UI toasts on slower clusters). Returns the matching
+// id list so callers can select a specific CRD without a second kubectl.
+export const waitForCrdCount = ({ namespace, crdName, minCount }: WaitForCrdCountOptions, maxAttempts = 15, intervalMs = 2000): Cypress.Chainable<string[]> => {
+  const attempt = (remaining: number): Cypress.Chainable<string[]> => {
+    return cy.exec(`kubectl get ${crdName} -n ${namespace} | awk 'NR>1 {print $1}'`, { failOnNonZeroExit: false }).then(({ stdout }) => {
+      const crdIds = stdout.split('\n').filter((str) => !!str);
+      if (crdIds.length >= minCount) {
+        return cy.wrap(crdIds);
+      }
+      if (remaining <= 0) {
+        expect(crdIds.length).to.be.gte(minCount);
+        return cy.wrap(crdIds);
+      }
+      return cy.wait(intervalMs).then(() => attempt(remaining - 1));
+    });
+  };
+
+  return attempt(maxAttempts);
+};
+
 interface GetCrdByIdOptions {
   namespace: string;
   crdName: string;
@@ -172,6 +224,7 @@ export const getCrdById = ({ namespace, crdName, crdId, expectedError, expectedK
     const { spec } = parsed?.items?.[0] || parsed || {};
 
     expect(spec).to.not.be.empty;
+    expect(spec[expectedKey], `spec.${expectedKey}`).to.not.eq(undefined);
     if (expectedValueContains) {
       expect(spec[expectedKey]).to.include(expectedValue);
     } else {
@@ -191,9 +244,9 @@ interface UpdateEntityOptions {
 
 export const updateEntity = ({ nodeId, nodeContains, fieldKey, fieldValue }: UpdateEntityOptions, callback?: () => void) => {
   if (!!nodeContains) {
-    cy.contains(nodeId, nodeContains).should('exist').click();
+    cy.contains(nodeId, nodeContains).click();
   } else {
-    cy.get(nodeId).should('exist').click();
+    clickRetryable(nodeId);
   }
 
   cy.get(DATA_IDS.DRAWER).should('exist');
@@ -215,7 +268,7 @@ interface DeleteEntityOptions {
 }
 
 export const deleteEntity = ({ nodeId, nodeContains, warnModalTitle, warnModalNote }: DeleteEntityOptions, callback?: () => void) => {
-  cy.contains(nodeId, nodeContains).should('exist').click();
+  cy.contains(nodeId, nodeContains).click();
   cy.get(DATA_IDS.DRAWER).should('exist');
   cy.get(DATA_IDS.DRAWER_DELETE).click();
 
@@ -243,17 +296,34 @@ interface UpdateV2EntityOptions {
   fieldValue: string;
 }
 
+// ui-kit Drawer portals a full-screen Overlay sibling of `[data-id=drawer]`
+// (no data-id on the Overlay itself). When isOpen flips false both unmount
+// together — so "drawer gone" is the correct sync point. Waiting only on
+// save/toast and then force-clicking the next row was papering over cases
+// where close hadn't finished (or a toast still covered the row).
+const waitForDrawerClosed = () => {
+  cy.get(DATA_IDS.DRAWER, { timeout: 20000 }).should('not.exist');
+};
+
+const openOverviewEntity = (nodeId: string, nodeContains?: string) => {
+  // Re-resolving click (no `.should('exist')` settle). Cypress retries
+  // actionability until the row is uncovered — that is the real signal that
+  // the previous drawer's Overlay is gone. Do not force:true.
+  if (nodeContains) {
+    cy.contains(nodeId, nodeContains, { timeout: 30000 }).click();
+  } else {
+    cy.get(nodeId, { timeout: 30000 }).click();
+  }
+};
+
 // v2 edit-drawer flow:
 // 1. open the entity's drawer by clicking its data-flow row
 // 2. open the drawer header's actions dropdown and click "Edit"
 // 3. update the named field and click "Save"
-// 4. close the drawer (it does not auto-close after save)
+// 4. run post-save waits (mutation/toast), then close so the Overlay cannot
+//    cover the next entity row
 export const updateV2Entity = ({ nodeId, nodeContains, prefix, fieldKey, fieldValue }: UpdateV2EntityOptions, callback?: () => void) => {
-  if (!!nodeContains) {
-    cy.contains(nodeId, nodeContains).should('exist').click();
-  } else {
-    cy.get(nodeId).should('exist').click();
-  }
+  openOverviewEntity(nodeId, nodeContains);
 
   cy.get(DATA_IDS.DRAWER).should('exist');
 
@@ -265,9 +335,17 @@ export const updateV2Entity = ({ nodeId, nodeContains, prefix, fieldKey, fieldVa
 
   cy.get(`[data-id=${prefix}-btn-save]`).click();
 
-  if (!!callback) callback();
+  if (callback) callback();
+
+  // Edit* drawers keep isOpen while mounted. Header onClose is gated on
+  // `isEditing && isFormDirty`: while that is true, the X opens a discard
+  // warn modal instead of unmounting. Save flips isEditing off only after
+  // the mutation await resolves and React commits — racing that commit was
+  // leaving `[data-id=drawer]` mounted (seen as Overlay timeout in CI).
+  cy.get(`[data-id=${prefix}-btn-save]`, { timeout: 20000 }).should('not.exist');
 
   cy.get(DATA_IDS.DRAWER_CLOSE).click();
+  waitForDrawerClosed();
 };
 
 interface DeleteV2EntityOptions {
@@ -280,17 +358,7 @@ interface DeleteV2EntityOptions {
 
 // v2 edit-drawer flow: open drawer → actions dropdown → "Delete" → confirm modal.
 export const deleteV2Entity = ({ nodeId, nodeContains, prefix, warnModalTitle, warnModalNote }: DeleteV2EntityOptions, callback?: () => void) => {
-  // Don't insert `.should('exist')` between the query and `.click()`: it
-  // settles the subject and disables Cypress's built-in query re-resolution,
-  // so a re-render of the overview (frequent here via the proxy round-trip +
-  // SSE-driven refetches) detaches the node mid-click ("the page updated
-  // while this command was executing"). Clicking straight off the query keeps
-  // the chain retryable, and `.click()` already asserts existence/visibility.
-  if (!!nodeContains) {
-    cy.contains(nodeId, nodeContains).click();
-  } else {
-    cy.get(nodeId).click();
-  }
+  openOverviewEntity(nodeId, nodeContains);
 
   cy.get(DATA_IDS.DRAWER).should('exist');
 
@@ -302,7 +370,9 @@ export const deleteV2Entity = ({ nodeId, nodeContains, prefix, warnModalTitle, w
 
   cy.get(DATA_IDS.APPROVE).click();
 
-  if (!!callback) callback();
+  if (callback) callback();
+
+  waitForDrawerClosed();
 };
 
 interface AwaitToastOptions {

@@ -1,5 +1,5 @@
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ROUTES } from '@/utils';
 import { useProxyStore } from '@/store';
 import { useComputePlatformsCRUD } from '../compute-platforms';
@@ -28,6 +28,18 @@ export const useProxy = (): UseProxy => {
   const { proxyID: storedProxyID, proxyName, odigosVersion, graphqlSchemaVersion, platformType, setProxyStore, resetProxyStore } = useProxyStore();
 
   const { computePlatforms } = useComputePlatformsCRUD();
+
+  // Zustand persist rehydrates SELECTED_PROXY from sessionStorage asynchronously.
+  // Until that finishes, storedProxyID is briefly undefined on a full page load
+  // of an in-proxy route — clearing here would wipe a valid selection and bounce
+  // the user to /connections (and made Cypress need a /connections re-select
+  // every test).
+  const [proxyStoreHydrated, setProxyStoreHydrated] = useState(() => useProxyStore.persist.hasHydrated());
+  useEffect(() => {
+    const unsub = useProxyStore.persist.onFinishHydration(() => setProxyStoreHydrated(true));
+    setProxyStoreHydrated(useProxyStore.persist.hasHydrated());
+    return unsub;
+  }, []);
 
   // On out-of-proxy pages, treat proxyID as undefined immediately (before effects run)
   // This prevents stale proxyID from triggering fetches before the cleanup effect runs
@@ -78,11 +90,14 @@ export const useProxy = (): UseProxy => {
   }, [proxyID, computePlatforms.length]);
 
   // Clear the store when on out-of-proxy pages (cleanup for next navigation)
-  // Or navigate to the connections page if the proxyID is undefined
+  // Or navigate to the connections page if the proxyID is undefined —
+  // but only after sessionStorage rehydration so a refresh of /overview
+  // with SELECTED_PROXY set is not treated as "no proxy selected".
   useEffect(() => {
+    if (!proxyStoreHydrated) return;
     if (isOutOfProxyPage) clearProxy({ skipRedirect: true });
     else if (!isOutOfProxyPage && !proxyID) clearProxy();
-  }, [isOutOfProxyPage, proxyID]);
+  }, [proxyStoreHydrated, isOutOfProxyPage, proxyID]);
 
   // `platformType` can be briefly unset during store rehydration. VM proxies
   // always report a `graphqlSchemaVersion` (k8s never do), so use it as a

@@ -1,9 +1,39 @@
-import { CONFIG_MAPS, DATA_IDS, NAMESPACES, ROUTES, TEXTS } from '../constants';
-import { awaitToast, handleExceptions, signInAndSelectProxy, visitPage, waitForGraphqlOperation } from '../functions';
+import { CONFIG_MAPS, DATA_IDS, NAMESPACES, PROXY, ROUTES, TEXTS } from '../constants';
+import { awaitToast, handleExceptions, interceptGraphql, signInAndSelectProxy, visitPage, waitForGraphqlOperation } from '../functions';
 
 const namespace = NAMESPACES.ODIGOS;
 const testClusterName = 'cypress-e2e-test';
 let originalClusterName = '';
+
+// Baseline clusterName for assertions / cancel revert. Prefers the value
+// captured from the EffectiveConfig ConfigMap; falls back to the proxy's
+// known clusterName when the CM parse is empty.
+const baselineClusterName = () => originalClusterName || PROXY.NAME || 'cluster';
+
+// Source-of-truth readiness for the settings form: the visible clusterName
+// input must show the effective value. Schema-driven fields can mount empty
+// before EffectiveConfig binds; waiting on a GraphQL alias alone is not
+// enough (and was wrong when `@gql` still held a stale overview
+// GetEffectiveConfig from beforeEach bootstrap).
+const waitForClusterNameField = (expected?: string) => {
+  const want = expected ?? baselineClusterName();
+  cy.get(DATA_IDS.SETTINGS_FIELD('clusterName'), { timeout: 30000 })
+    .filter(':visible')
+    .should('have.length.at.least', 1)
+    .first()
+    .should(($el) => {
+      const val = String($el.val() ?? '').trim();
+      expect(val, `clusterName hydrated to "${want}"`).to.eq(want);
+    });
+};
+
+// After visit(/settings), wait for this page's GetEffectiveConfig (intercept
+// is armed only after auth/proxy bootstrap, so the alias is not polluted),
+// then wait for the form to bind values.
+const waitForSettingsHydrated = (expectedClusterName?: string) => {
+  waitForGraphqlOperation('GetEffectiveConfig');
+  waitForClusterNameField(expectedClusterName);
+};
 
 // ── Schema compatibility ──────────────────────────────────────────────────
 //
@@ -284,9 +314,10 @@ const yamlExpectAbsentIfSet = (fieldKey: string, yaml: string, ...substrings: st
 
 describe('Settings CRUD (via Central UI → Proxy)', () => {
   beforeEach(() => {
-    cy.intercept('/graphql').as('gql');
     handleExceptions();
     signInAndSelectProxy();
+    // After bootstrap — never before. See interceptGraphql().
+    interceptGraphql();
   });
 
   // ── Setup ─────────────────────────────────────────────────────────────────
@@ -297,7 +328,8 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
 
     getConfigMapYaml(CONFIG_MAPS.EFFECTIVE_CONFIG, (yaml) => {
       const match = yaml.match(/clusterName:\s*(.+)/);
-      originalClusterName = match ? match[1].trim() : '';
+      // Strip trailing comments / quotes so we compare apples-to-apples with the input value.
+      originalClusterName = match ? match[1].trim().split(/\s+#/)[0].replace(/^["']|["']$/g, '') : '';
     });
   });
 
@@ -305,36 +337,34 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
 
   it('Should render config sections from the cluster', () => {
     visitPage(ROUTES.SETTINGS, () => {
-      waitForGraphqlOperation('GetEffectiveConfig').then(() => {
-        cy.contains('General').should('exist');
-        cy.contains('Instrumentation').should('exist');
-        cy.contains('Rollout & Rollback').should('exist');
-        cy.contains('Namespaces & Filtering').should('exist');
-        cy.contains('Component Log Levels').should('exist');
-        cy.contains('Sampling').should('exist');
-        cy.contains('Advanced').should('exist');
-        // The effective config YAML moved behind a "Show Config YAML" toolbar action
-        // that opens a drawer titled "Effective Config YAML".
-        cy.contains('Show Config YAML').should('exist').click();
-        cy.contains('Effective Config YAML').should('exist');
-      });
+      waitForSettingsHydrated();
+      cy.contains('General', { timeout: 30000 }).should('be.visible');
+      cy.contains('Instrumentation').should('exist');
+      cy.contains('Rollout & Rollback').should('exist');
+      cy.contains('Namespaces & Filtering').should('exist');
+      cy.contains('Component Log Levels').should('exist');
+      cy.contains('Sampling').should('exist');
+      cy.contains('Advanced').should('exist');
+      // The effective config YAML moved behind a "Show Config YAML" toolbar action
+      // that opens a drawer titled "Effective Config YAML".
+      // Do not `.should('exist').click()` — that settles the subject and breaks
+      // re-resolution when settings re-renders (detached DOM mid-click flake).
+      cy.contains('Show Config YAML', { timeout: 30000 }).click();
+      cy.contains('Effective Config YAML').should('exist');
     });
   });
 
   it('Should render the clusterName field with its current value', () => {
     visitPage(ROUTES.SETTINGS, () => {
-      waitForGraphqlOperation('GetEffectiveConfig').then(() => {
-        cy.get(DATA_IDS.SETTINGS_FIELD('clusterName')).should('exist').and('have.value', originalClusterName);
-      });
+      waitForSettingsHydrated();
     });
   });
 
   it('Should not show the Save/Cancel island when no changes are made', () => {
     visitPage(ROUTES.SETTINGS, () => {
-      waitForGraphqlOperation('GetEffectiveConfig').then(() => {
-        cy.get(DATA_IDS.SETTINGS_SAVE).should('not.exist');
-        cy.get(DATA_IDS.SETTINGS_CANCEL).should('not.exist');
-      });
+      waitForSettingsHydrated();
+      cy.get(DATA_IDS.SETTINGS_SAVE).should('not.exist');
+      cy.get(DATA_IDS.SETTINGS_CANCEL).should('not.exist');
     });
   });
 
@@ -342,19 +372,19 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
 
   it('Should show the Save/Cancel island when a field is modified, and revert on Cancel', () => {
     visitPage(ROUTES.SETTINGS, () => {
-      waitForGraphqlOperation('GetEffectiveConfig').then(() => {
-        const cancelTestValue = (originalClusterName || 'cluster') + '-cancel-test';
+      const baseline = baselineClusterName();
+      const cancelTestValue = baseline + '-cancel-test';
 
-        cy.get(DATA_IDS.SETTINGS_FIELD('clusterName')).click().focused().clear().type(cancelTestValue);
+      waitForSettingsHydrated(baseline);
+      cy.get(DATA_IDS.SETTINGS_FIELD('clusterName')).click().focused().clear().type(cancelTestValue);
 
-        cy.get(DATA_IDS.SETTINGS_SAVE).should('be.visible');
-        cy.get(DATA_IDS.SETTINGS_CANCEL).should('be.visible');
+      cy.get(DATA_IDS.SETTINGS_SAVE).should('be.visible');
+      cy.get(DATA_IDS.SETTINGS_CANCEL).should('be.visible');
 
-        cy.get(DATA_IDS.SETTINGS_CANCEL).click();
+      cy.get(DATA_IDS.SETTINGS_CANCEL).click();
 
-        cy.get(DATA_IDS.SETTINGS_FIELD('clusterName')).should('have.value', originalClusterName);
-        cy.get(DATA_IDS.SETTINGS_SAVE).should('not.exist');
-      });
+      cy.get(DATA_IDS.SETTINGS_FIELD('clusterName')).should('have.value', baseline);
+      cy.get(DATA_IDS.SETTINGS_SAVE).should('not.exist');
     });
   });
 
@@ -362,57 +392,57 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
 
   it('Should update all non-helm-only, non-enterprise-only fields and save successfully', () => {
     visitPage(ROUTES.SETTINGS, () => {
-      waitForGraphqlOperation('GetEffectiveConfig').then(() => {
-        // ─ General ─
-        setInput('clusterName', testClusterName);
-        clickToggle('telemetryEnabled');
+      waitForSettingsHydrated();
 
-        // ─ Instrumentation ─
-        selectDropdownOption('instrumentor.agentEnvVarsInjectionMethod', 'pod-manifest');
-        clickToggle('allowConcurrentAgents.enabled');
-        clickToggle('instrumentor.checkDeviceHealthBeforeInjection');
-        clickToggle('wasp.enabled');
+      // ─ General ─
+      setInput('clusterName', testClusterName);
+      clickToggle('telemetryEnabled');
 
-        // ─ Rollout & Rollback ─
-        clickToggle('rollout.automaticRolloutDisabled');
-        setInput('rollout.maxConcurrentRollouts', '5');
-        clickToggle('autoRollback.disabled');
-        setTimeInput('autoRollback.graceTime', '60s');
-        setTimeInput('autoRollback.stabilityWindowTime', '120s');
+      // ─ Instrumentation ─
+      selectDropdownOption('instrumentor.agentEnvVarsInjectionMethod', 'pod-manifest');
+      clickToggle('allowConcurrentAgents.enabled');
+      clickToggle('instrumentor.checkDeviceHealthBeforeInjection');
+      clickToggle('wasp.enabled');
 
-        // ─ Namespaces & Filtering ─
-        addMultiInputValue('ignoredNamespaces', 'cypress-test-ns');
-        addMultiInputValue('ignoredContainers', 'cypress-test-container');
-        clickToggle('ignoreOdigosNamespace');
+      // ─ Rollout & Rollback ─
+      clickToggle('rollout.automaticRolloutDisabled');
+      setInput('rollout.maxConcurrentRollouts', '5');
+      clickToggle('autoRollback.disabled');
+      setTimeInput('autoRollback.graceTime', '60s');
+      setTimeInput('autoRollback.stabilityWindowTime', '120s');
 
-        // ─ Component Log Levels ─
-        selectDropdownOption('componentLogLevels.default', 'debug');
-        selectDropdownOption('componentLogLevels.autoscaler', 'debug');
-        selectDropdownOption('componentLogLevels.scheduler', 'debug');
-        selectDropdownOption('componentLogLevels.instrumentor', 'debug');
-        selectDropdownOption('componentLogLevels.odiglet', 'debug');
-        selectDropdownOption('componentLogLevels.deviceplugin', 'debug');
-        selectDropdownOption('componentLogLevels.ui', 'debug');
-        selectDropdownOption('componentLogLevels.collector', 'debug');
+      // ─ Namespaces & Filtering ─
+      addMultiInputValue('ignoredNamespaces', 'cypress-test-ns');
+      addMultiInputValue('ignoredContainers', 'cypress-test-container');
+      clickToggle('ignoreOdigosNamespace');
 
-        // ─ Sampling ─
-        clickToggle('sampling.dryRun');
-        clickToggle('sampling.spanSamplingAttributes.disabled');
-        clickToggle('sampling.spanSamplingAttributes.samplingCategoryDisabled');
-        clickToggle('sampling.spanSamplingAttributes.traceDecidingRuleDisabled');
-        clickToggle('sampling.spanSamplingAttributes.spanDecisionAttributesDisabled');
-        clickToggle('sampling.tailSampling.disabled');
-        setTimeInput('sampling.tailSampling.traceAggregationWaitDuration', '45s');
-        clickToggle('sampling.k8sHealthProbesSampling.enabled');
-        setInput('sampling.k8sHealthProbesSampling.keepPercentage', '50');
+      // ─ Component Log Levels ─
+      selectDropdownOption('componentLogLevels.default', 'debug');
+      selectDropdownOption('componentLogLevels.autoscaler', 'debug');
+      selectDropdownOption('componentLogLevels.scheduler', 'debug');
+      selectDropdownOption('componentLogLevels.instrumentor', 'debug');
+      selectDropdownOption('componentLogLevels.odiglet', 'debug');
+      selectDropdownOption('componentLogLevels.deviceplugin', 'debug');
+      selectDropdownOption('componentLogLevels.ui', 'debug');
+      selectDropdownOption('componentLogLevels.collector', 'debug');
 
-        // ─ Save ─
-        cy.get(DATA_IDS.SETTINGS_SAVE).should('be.visible').click();
+      // ─ Sampling ─
+      clickToggle('sampling.dryRun');
+      clickToggle('sampling.spanSamplingAttributes.disabled');
+      clickToggle('sampling.spanSamplingAttributes.samplingCategoryDisabled');
+      clickToggle('sampling.spanSamplingAttributes.traceDecidingRuleDisabled');
+      clickToggle('sampling.spanSamplingAttributes.spanDecisionAttributesDisabled');
+      clickToggle('sampling.tailSampling.disabled');
+      setTimeInput('sampling.tailSampling.traceAggregationWaitDuration', '45s');
+      clickToggle('sampling.k8sHealthProbesSampling.enabled');
+      setInput('sampling.k8sHealthProbesSampling.keepPercentage', '50');
 
-        cy.contains('Save changes').click();
+      // ─ Save ─
+      cy.get(DATA_IDS.SETTINGS_SAVE).should('be.visible').click();
 
-        // awaitToast({ message: TEXTS.NOTIF_CONFIG_UPDATED });
-      });
+      cy.contains('Save changes').click();
+
+      // awaitToast({ message: TEXTS.NOTIF_CONFIG_UPDATED });
     });
   });
 
@@ -488,65 +518,66 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
         // below can skip ones that don't round-trip on the current schema
         // (e.g. `rollout.maxConcurrentRollouts` on legacy v1.24 proxies).
         collectEffectiveConfigKeys(interception);
-
-        cy.get(DATA_IDS.SETTINGS_SAVE).should('not.exist');
-        cy.get(DATA_IDS.SETTINGS_CANCEL).should('not.exist');
-
-        // Each verifier silently skips when the proxy schema didn't expose the
-        // field during the update (see `setFieldKeys` / `withFieldPath` above),
-        // or when the proxy's EffectiveConfig response doesn't carry the field
-        // back (see `effectiveConfigKeys` / `fieldRoundTrips`), so this block
-        // is safe across legacy and current proxy versions.
-
-        // ─ General ─
-        verifyInput('clusterName', testClusterName);
-        // Note: telemetryEnabled is intentionally skipped here. The Go struct uses a
-        // plain bool with json omitempty, so toggling it to false is not serialized
-        // to the local-ui-config YAML, and mergeConfigs only applies the overlay when
-        // the overlay value is true. As a result, flipping the UI toggle to false does
-        // not propagate into the effective config, and after refresh the UI still
-        // renders the helm-default value (true). This is a known limitation tracked
-        // separately; verifying it here would always fail.
-
-        // ─ Instrumentation ─
-        verifyDropdown('instrumentor.agentEnvVarsInjectionMethod', 'pod-manifest');
-        verifyToggle('allowConcurrentAgents.enabled', true);
-        verifyToggle('instrumentor.checkDeviceHealthBeforeInjection', true);
-        verifyToggle('wasp.enabled', true);
-
-        // ─ Rollout & Rollback ─
-        verifyToggle('rollout.automaticRolloutDisabled', true);
-        verifyInput('rollout.maxConcurrentRollouts', '5');
-        verifyToggle('autoRollback.disabled', true);
-        verifyTimeInput('autoRollback.graceTime', '60s');
-        verifyTimeInput('autoRollback.stabilityWindowTime', '120s');
-
-        // ─ Namespaces & Filtering ─
-        verifyMultiInputContains('ignoredNamespaces', 'cypress-test-ns');
-        verifyMultiInputContains('ignoredContainers', 'cypress-test-container');
-        verifyToggle('ignoreOdigosNamespace', false);
-
-        // ─ Component Log Levels ─
-        verifyDropdown('componentLogLevels.default', 'debug');
-        verifyDropdown('componentLogLevels.autoscaler', 'debug');
-        verifyDropdown('componentLogLevels.scheduler', 'debug');
-        verifyDropdown('componentLogLevels.instrumentor', 'debug');
-        verifyDropdown('componentLogLevels.odiglet', 'debug');
-        verifyDropdown('componentLogLevels.deviceplugin', 'debug');
-        verifyDropdown('componentLogLevels.ui', 'debug');
-        verifyDropdown('componentLogLevels.collector', 'debug');
-
-        // ─ Sampling ─
-        verifyToggle('sampling.dryRun', true);
-        verifyToggle('sampling.spanSamplingAttributes.disabled', true);
-        verifyToggle('sampling.spanSamplingAttributes.samplingCategoryDisabled', true);
-        verifyToggle('sampling.spanSamplingAttributes.traceDecidingRuleDisabled', true);
-        verifyToggle('sampling.spanSamplingAttributes.spanDecisionAttributesDisabled', true);
-        verifyToggle('sampling.tailSampling.disabled', true);
-        verifyTimeInput('sampling.tailSampling.traceAggregationWaitDuration', '45s');
-        verifyToggle('sampling.k8sHealthProbesSampling.enabled', true);
-        verifyInput('sampling.k8sHealthProbesSampling.keepPercentage', '50');
       });
+      waitForClusterNameField(testClusterName);
+
+      cy.get(DATA_IDS.SETTINGS_SAVE).should('not.exist');
+      cy.get(DATA_IDS.SETTINGS_CANCEL).should('not.exist');
+
+      // Each verifier silently skips when the proxy schema didn't expose the
+      // field during the update (see `setFieldKeys` / `withFieldPath` above),
+      // or when the proxy's EffectiveConfig response doesn't carry the field
+      // back (see `effectiveConfigKeys` / `fieldRoundTrips`), so this block
+      // is safe across legacy and current proxy versions.
+
+      // ─ General ─
+      verifyInput('clusterName', testClusterName);
+      // Note: telemetryEnabled is intentionally skipped here. The Go struct uses a
+      // plain bool with json omitempty, so toggling it to false is not serialized
+      // to the local-ui-config YAML, and mergeConfigs only applies the overlay when
+      // the overlay value is true. As a result, flipping the UI toggle to false does
+      // not propagate into the effective config, and after refresh the UI still
+      // renders the helm-default value (true). This is a known limitation tracked
+      // separately; verifying it here would always fail.
+
+      // ─ Instrumentation ─
+      verifyDropdown('instrumentor.agentEnvVarsInjectionMethod', 'pod-manifest');
+      verifyToggle('allowConcurrentAgents.enabled', true);
+      verifyToggle('instrumentor.checkDeviceHealthBeforeInjection', true);
+      verifyToggle('wasp.enabled', true);
+
+      // ─ Rollout & Rollback ─
+      verifyToggle('rollout.automaticRolloutDisabled', true);
+      verifyInput('rollout.maxConcurrentRollouts', '5');
+      verifyToggle('autoRollback.disabled', true);
+      verifyTimeInput('autoRollback.graceTime', '60s');
+      verifyTimeInput('autoRollback.stabilityWindowTime', '120s');
+
+      // ─ Namespaces & Filtering ─
+      verifyMultiInputContains('ignoredNamespaces', 'cypress-test-ns');
+      verifyMultiInputContains('ignoredContainers', 'cypress-test-container');
+      verifyToggle('ignoreOdigosNamespace', false);
+
+      // ─ Component Log Levels ─
+      verifyDropdown('componentLogLevels.default', 'debug');
+      verifyDropdown('componentLogLevels.autoscaler', 'debug');
+      verifyDropdown('componentLogLevels.scheduler', 'debug');
+      verifyDropdown('componentLogLevels.instrumentor', 'debug');
+      verifyDropdown('componentLogLevels.odiglet', 'debug');
+      verifyDropdown('componentLogLevels.deviceplugin', 'debug');
+      verifyDropdown('componentLogLevels.ui', 'debug');
+      verifyDropdown('componentLogLevels.collector', 'debug');
+
+      // ─ Sampling ─
+      verifyToggle('sampling.dryRun', true);
+      verifyToggle('sampling.spanSamplingAttributes.disabled', true);
+      verifyToggle('sampling.spanSamplingAttributes.samplingCategoryDisabled', true);
+      verifyToggle('sampling.spanSamplingAttributes.traceDecidingRuleDisabled', true);
+      verifyToggle('sampling.spanSamplingAttributes.spanDecisionAttributesDisabled', true);
+      verifyToggle('sampling.tailSampling.disabled', true);
+      verifyTimeInput('sampling.tailSampling.traceAggregationWaitDuration', '45s');
+      verifyToggle('sampling.k8sHealthProbesSampling.enabled', true);
+      verifyInput('sampling.k8sHealthProbesSampling.keepPercentage', '50');
     });
   });
 
@@ -554,22 +585,21 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
 
   it('Should reset settings via the Reset button and confirm modal', () => {
     visitPage(ROUTES.SETTINGS, () => {
-      waitForGraphqlOperation('GetEffectiveConfig').then(() => {
-        // Reset is now an icon-only toolbar action (tooltip "Reset to defaults") — the last
-        // button in the settings toolbar actions group (anchored via the labeled "Show Config YAML").
-        cy.contains('Show Config YAML')
-          .parents()
-          .filter((_i, el) => el.querySelectorAll('button').length >= 3)
-          .first()
-          .find('button')
-          .last()
-          .click({ force: true });
+      waitForSettingsHydrated(testClusterName);
+      // Reset is now an icon-only toolbar action (tooltip "Reset to defaults") — the last
+      // button in the settings toolbar actions group (anchored via the labeled "Show Config YAML").
+      cy.contains('Show Config YAML')
+        .parents()
+        .filter((_i, el) => el.querySelectorAll('button').length >= 3)
+        .first()
+        .find('button')
+        .last()
+        .click({ force: true });
 
-        // Confirm the reset warning modal
-        cy.contains('button', 'Approve').click();
+      // Confirm the reset warning modal
+      cy.contains('button', 'Approve').click();
 
-        awaitToast({ message: TEXTS.NOTIF_CONFIG_RESET });
-      });
+      awaitToast({ message: TEXTS.NOTIF_CONFIG_RESET });
     });
   });
 

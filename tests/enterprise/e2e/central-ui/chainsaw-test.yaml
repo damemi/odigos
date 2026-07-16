@@ -122,7 +122,8 @@ spec:
     - name: Verify Odigos Central Installation
       try:
         - assert:
-            timeout: 1m50s
+            # Keycloak cold-start on kind regularly exceeds ~2m; backend waits on it.
+            timeout: 5m
             file: ../../common/assert/odigos-central-installed.yaml
       catch:
         - script:
@@ -143,10 +144,37 @@ spec:
             timeout: 1m10s
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-installed.yaml
 
+    - name: Wait for Central Backend Ready
+      try:
+        - script:
+            timeout: 5m
+            content: |
+              # Pod Ready can flip early while /healthz is used for readiness;
+              # GraphQL and WS accept traffic only after /readyz is 200.
+              echo "Waiting for central-backend /readyz..."
+              kubectl port-forward -n odigos-central svc/central-backend 8083:8081 >/dev/null 2>&1 &
+              PF_PID=$!
+              cleanup() { kill $PF_PID 2>/dev/null || true; }
+              trap cleanup EXIT
+              sleep 3
+              for i in $(seq 1 90); do
+                CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 "http://localhost:8083/readyz" || echo "000")
+                if [ "$CODE" = "200" ]; then
+                  echo "✅ central-backend /readyz is 200"
+                  exit 0
+                fi
+                echo "⏳ /readyz=$CODE ($i/90)..."
+                sleep 2
+              done
+              echo "❌ central-backend /readyz did not become ready"
+              kubectl get pods -n odigos-central -l app=central-backend || true
+              kubectl logs -n odigos-central -l app=central-backend --tail=80 || true
+              exit 1
+
     - name: Wait for Central Proxy WebSocket Connection
       try:
         - script:
-            timeout: 1m10s
+            timeout: 5m
             content: |
               # The central-proxy deployment streams a "WebSocket connection
               # established" log line once it has registered itself with
@@ -162,12 +190,13 @@ spec:
               done
               echo "❌ central-proxy did not connect within timeout"
               kubectl logs deploy/central-proxy -n odigos-test --tail=200 || true
+              kubectl logs deploy/central-backend -n odigos-central --tail=80 || true
               exit 1
 
     - name: Wait for Compute Platform Registration in Central
       try:
         - script:
-            timeout: 1m10s
+            timeout: 5m
             content: |
               # Verify central-backend's GraphQL has at least one
               # ComputePlatform whose name matches the proxy's clusterName.
@@ -216,31 +245,50 @@ spec:
     - name: Run Cypress tests
       try:
         - script:
-            timeout: 7m50s
+            # yarn install + cypress + full suite is typically ~4–5m; leave headroom
+            # so a slow cluster does not SIGTERM a green run.
+            timeout: 10m
             content: |
-              # Start the port-forward in the SAME shell as cypress. A
-              # detached `nohup ... &` from a previous chainsaw step is
-              # unreliable: the listener on localhost:3000 stays up but the
-              # cluster-side connection can drop once the parent shell
-              # exits, producing ESOCKETTIMEDOUT inside cy.visit().
-              kubectl port-forward -n odigos-central svc/central-ui 3000:3000 \
-                > central-ui-port-forward.log 2>&1 &
-              PF_PID=$!
-              trap 'kill $PF_PID 2>/dev/null || true' EXIT
+              # Reach Central UI via kind NodePort instead of a long-lived
+              # kubectl port-forward. Under Cypress load, port-forward wedges
+              # without exiting ("Timeout occurred" / broken pipe) while still
+              # accepting some TCP connections — health checks can pass
+              # intermittently while cy.visit hits ESOCKETTIMEDOUT /
+              # pageLoadTimeout and cascades into skipped suites.
+              #
+              # NodePort goes through the kind Docker network to the pod, so
+              # browser + Cypress share a stable origin for the whole run.
+              # GraphQL/SSE still rewrite in-cluster to central-backend.
+              echo "Exposing central-ui via NodePort for Cypress..."
+              kubectl patch svc central-ui -n odigos-central --type merge \
+                -p '{"spec":{"type":"NodePort"}}'
+              NODE_PORT=$(kubectl get svc central-ui -n odigos-central \
+                -o jsonpath='{.spec.ports[0].nodePort}')
+              NODE_IP=$(kubectl get nodes \
+                -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+              if [ -z "$NODE_IP" ] || [ -z "$NODE_PORT" ]; then
+                echo "❌ Failed to resolve kind NodePort endpoint (ip=$NODE_IP port=$NODE_PORT)"
+                kubectl get svc central-ui -n odigos-central -o wide || true
+                kubectl get nodes -o wide || true
+                exit 1
+              fi
+              export CYPRESS_BASE_URL="http://${NODE_IP}:${NODE_PORT}"
+              echo "CYPRESS_BASE_URL=${CYPRESS_BASE_URL}"
 
-              echo "Waiting for Central UI on localhost:3000..."
+              echo "Waiting for Central UI on ${CYPRESS_BASE_URL}..."
               for i in $(seq 1 30); do
-                if curl -fsSL --max-time 2 http://localhost:3000/ >/dev/null 2>&1; then
+                if curl -fsSL --max-time 2 "${CYPRESS_BASE_URL}/" >/dev/null 2>&1; then
                   echo "✅ Central UI is up"
                   break
                 fi
-                if ! kill -0 $PF_PID 2>/dev/null; then
-                  echo "❌ kubectl port-forward died"
-                  cat central-ui-port-forward.log || true
-                  exit 1
-                fi
                 sleep 2
               done
+              if ! curl -fsSL --max-time 2 "${CYPRESS_BASE_URL}/" >/dev/null 2>&1; then
+                echo "❌ Central UI did not become reachable on ${CYPRESS_BASE_URL}"
+                kubectl get svc central-ui -n odigos-central -o yaml || true
+                kubectl get pods -n odigos-central -o wide || true
+                exit 1
+              fi
 
               cd ../../../central-ui
               # Direct redirect (not `| tee`) so the command's exit code propagates and a failing install / cypress run fails the step.
@@ -252,12 +300,12 @@ spec:
               yarn add -D cypress@latest > yarn-add-cypress.log 2>&1
               export PATH="$(yarn global bin):$PATH"
               ./node_modules/.bin/cypress run --e2e -q > cy-run.log 2>&1
+              exit $?
       catch:
         - script:
             content: |
-              echo "==== port-forward log (central-ui) ===="
-              cat tests/e2e/central-ui/central-ui-port-forward.log 2>/dev/null \
-                || cat central-ui-port-forward.log 2>/dev/null || true
+              echo "==== central-ui service (NodePort) ===="
+              kubectl get svc central-ui -n odigos-central -o wide || true
               echo "==== yarn install (last 50 lines) ===="
               tail -n 50 central-ui/yarn-install.log 2>/dev/null \
                 || tail -n 50 ../../../central-ui/yarn-install.log 2>/dev/null || true
