@@ -37,9 +37,10 @@ export const getTagVariantForRole = (role: Role): TagVariants => {
 
 export const getVersionedQuery = (query: VersionedRemoteFetch, platformType?: PlatformType, odigosVersion?: string, notify?: (notification: NotifyPayload) => void): string | undefined => {
   if (!platformType || !odigosVersion) return undefined;
+  const platformQueries = query[platformType as keyof VersionedRemoteFetch] as Record<string, string> | undefined;
 
   // do not reverse this sort, or it will directly affect the targetVersion calculation
-  const supportedVersions = (Object.keys(query[platformType] || {}) as (keyof VersionedRemoteFetch[PlatformType])[]).sort((a, b) => trimVersion(b) - trimVersion(a));
+  const supportedVersions = Object.keys(platformQueries || {}).sort((a, b) => trimVersion(b) - trimVersion(a));
   const minSupportedVersion = supportedVersions[supportedVersions.length - 1];
   const targetVersion = supportedVersions.find((supportedVersion) => trimVersion(odigosVersion) >= trimVersion(supportedVersion));
 
@@ -69,7 +70,7 @@ export const getVersionedQuery = (query: VersionedRemoteFetch, platformType?: Pl
     }
   }
 
-  return targetVersion ? query[platformType]?.[targetVersion] : undefined;
+  return targetVersion ? platformQueries?.[targetVersion] : undefined;
 };
 
 /**

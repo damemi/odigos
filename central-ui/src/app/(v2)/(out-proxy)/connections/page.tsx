@@ -7,7 +7,7 @@ import * as STRINGS from '@/utils/constants/strings';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { CentralConnections, CreateNewType } from '@odigos/ui-kit/containers';
 import { StatusType, type CloudConnectorCreateInput, type CloudConnectorCreateResult, type CloudConnectorProvider, type Connection } from '@odigos/ui-kit/types';
-import { useApolloClient, useMutation, useQuery } from '@apollo/client/react';
+import { useMutation, useQuery } from '@apollo/client/react';
 import { GET_CLOUD_CONNECTOR_PROVIDERS, CREATE_CLOUD_CONNECTOR } from '@/graphql';
 import { GET_COMPUTE_PLATFORMS, DELETE_PROXY_CONNECTION } from '@/lib/odigos-api-adapter';
 
@@ -17,11 +17,13 @@ import { GET_COMPUTE_PLATFORMS, DELETE_PROXY_CONNECTION } from '@/lib/odigos-api
 // they don't go through `useOdigosApi()` because they aren't per-proxy
 // CRUD; they're meta-operations on the connections themselves.
 //
+// Apollo cache for the previous proxy is cleared by `useProxy` when this
+// (out-of-proxy) page mounts — see `clearProxy` / `resetCache` (PLAT-1265).
+//
 // Once the user picks a cluster, `selectProxy(id)` updates the proxy store
 // and the next page load (in-proxy routes) sees the right
 // `proxyID`/`platformType`/`version` in the operation context.
 export default function Page() {
-  const apollo = useApolloClient();
   const { selectProxy } = useProxy();
   const { addNotification } = useNotificationStore();
 
@@ -87,9 +89,6 @@ export default function Page() {
     },
     [addNotification],
   );
-
-  // Suppress unused — kept for future direct Apollo escape hatches.
-  void apollo;
 
   return (
     <CentralConnections

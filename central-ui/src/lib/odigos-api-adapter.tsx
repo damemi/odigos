@@ -37,8 +37,8 @@
  *     ctx.version` using the same floor-to-bucket rule as `getVersionedQuery`.
  */
 
-import { normalizeActionForWire, parseRenamesString } from '@/lib/action-form-normalization';
 import React, { type FC, type PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react';
+import { map } from 'rxjs';
 import { GraphQLError } from 'graphql';
 import { createClient } from 'graphql-ws';
 import { useConfig } from '@/hooks/config/useConfig';
@@ -48,10 +48,12 @@ import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { vmQuery, type VmSelect } from '@/graphql/remote/vm-dialect';
 import { safeJsonParse, trimVersion } from '@odigos/ui-kit/functions';
 import { PlatformType, Tier, type Action } from '@odigos/ui-kit/types';
+import { mapVmRuleTypesToOptions } from '@/graphql/remote/vm-rule-types';
 import { CombinedGraphQLErrors, ServerError } from '@apollo/client/errors';
+import { mapVmActionTypesToOptions } from '@/graphql/remote/vm-action-types';
 import { ApolloLink, type ApolloClient, type DocumentNode } from '@apollo/client';
-import { map } from 'rxjs';
 import type { VersionedRemoteFetch, WorkloadWithOdigosHealthStatus } from '@/types';
+import { normalizeActionForWire, parseRenamesString } from '@/lib/action-form-normalization';
 import {
   buildVmPersistSources,
   buildVmSourcesWithReportsQuery,
@@ -63,6 +65,7 @@ import {
   withWorkloadReportRegion,
 } from '@/graphql/remote/vm-sources';
 import { supportsWorkloadReportRegion } from '@/graphql/remote/utils';
+import { mapVmActions, vmCreateActionResult, vmCreateActionVariables, vmDeleteActionResult, vmDeleteActionVariables, vmUpdateActionResult, vmUpdateActionVariables } from '@/graphql/remote/vm-actions';
 import {
   mapVmDestinationTypesToCategories,
   mapVmDestinations,
@@ -84,9 +87,6 @@ import {
   vmUpdateInstrumentationRuleResult,
   vmUpdateInstrumentationRuleVariables,
 } from '@/graphql/remote/vm-instrumentation-rules';
-import { mapVmActions, vmCreateActionResult, vmCreateActionVariables, vmDeleteActionResult, vmDeleteActionVariables, vmUpdateActionResult, vmUpdateActionVariables } from '@/graphql/remote/vm-actions';
-import { mapVmActionTypesToOptions } from '@/graphql/remote/vm-action-types';
-import { mapVmRuleTypesToOptions } from '@/graphql/remote/vm-rule-types';
 import type {
   CreateActionMutation,
   CreateInstrumentationRuleMutation,

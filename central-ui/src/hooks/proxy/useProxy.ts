@@ -46,12 +46,14 @@ export const useProxy = (): UseProxy => {
   const isOutOfProxyPage = useMemo(() => [ROUTES.ROOT, ROUTES.CONNECTIONS, ROUTES.ACCESS_MANAGEMENT, ROUTES.SIGN_IN, ROUTES.UPDATE_YOUR_PASSWORD].includes(pathname), [pathname]);
   const proxyID = isOutOfProxyPage ? undefined : storedProxyID;
 
-  const resetStores = () => {
+  const resetStores = (opts?: { clearApollo?: boolean }) => {
     resetSetupStore();
-    // Drop all entity data cached against the previous proxy; the
-    // kit's domain hooks will re-fetch on next render under the
-    // new proxyID. (Not awaited — `clearStore` is fire-and-forget.)
-    resetCache();
+    // Soft-clear Apollo's normalized cache when leaving a proxy. Prefer this
+    // over remounting `<OdigosApiProvider>` (key=/clientKey epoch): remounts
+    // tear down ProtectedRoute + the page tree and race Cypress clicks
+    // ("page updated while this command was executing") / navigation.
+    // `cache.reset()` does not abort in-flight requests (avoids Apollo #42).
+    if (opts?.clearApollo) void resetCache();
     resetDataStreamStore();
     resetProgress(ProgressKeys.Instrumenting);
     resetProgress(ProgressKeys.Uninstrumenting);
@@ -60,7 +62,8 @@ export const useProxy = (): UseProxy => {
   const selectProxy = (id: string) => {
     const found = computePlatforms.find((cp) => cp.id === id);
     if (found) {
-      resetStores();
+      // Cache was already cleared when landing on /connections. Do not clear
+      // again here — only reset local UI stores, then navigate.
       setProxyStore({
         proxyID: id,
         proxyName: found?.name,
@@ -68,13 +71,16 @@ export const useProxy = (): UseProxy => {
         graphqlSchemaVersion: found?.graphqlSchemaVersion ?? undefined,
         platformType: found?.type,
       });
-
+      resetStores({ clearApollo: false });
       router.push(ROUTES.OVERVIEW);
     }
   };
 
   const clearProxy = (opts?: { skipRedirect?: boolean }) => {
-    resetStores();
+    // Only wipe Apollo when leaving a selected proxy. Avoid clearing on every
+    // out-of-proxy mount when the store is already empty.
+    const hadSelectedProxy = !!useProxyStore.getState().proxyID;
+    resetStores({ clearApollo: hadSelectedProxy });
     resetProxyStore();
     if (!opts?.skipRedirect) router.push(ROUTES.CONNECTIONS);
   };
@@ -89,15 +95,24 @@ export const useProxy = (): UseProxy => {
     }
   }, [proxyID, computePlatforms.length]);
 
-  // Clear the store when on out-of-proxy pages (cleanup for next navigation)
-  // Or navigate to the connections page if the proxyID is undefined —
-  // but only after sessionStorage rehydration so a refresh of /overview
-  // with SELECTED_PROXY set is not treated as "no proxy selected".
+  // Clear the store when landing on out-of-proxy pages (cleanup after leaving
+  // a proxy). Or redirect to connections when an in-proxy route has no proxy.
+  //
+  // Wait for Zustand persist hydration before acting on a missing proxyID —
+  // otherwise a hard refresh of /overview briefly sees storedProxyID as
+  // undefined and bounces to /connections.
+  //
+  // Do not depend on `proxyID` for the out-of-proxy clear path: `selectProxy`
+  // writes the new proxy into the store while still on /connections, and the
+  // computed `proxyID` stays undefined there anyway (`isOutOfProxyPage`).
   useEffect(() => {
     if (!proxyStoreHydrated) return;
-    if (isOutOfProxyPage) clearProxy({ skipRedirect: true });
-    else if (!isOutOfProxyPage && !proxyID) clearProxy();
-  }, [proxyStoreHydrated, isOutOfProxyPage, proxyID]);
+    if (isOutOfProxyPage) {
+      clearProxy({ skipRedirect: true });
+    } else if (!proxyID) {
+      clearProxy();
+    }
+  }, [isOutOfProxyPage, proxyStoreHydrated]);
 
   // `platformType` can be briefly unset during store rehydration. VM proxies
   // always report a `graphqlSchemaVersion` (k8s never do), so use it as a
