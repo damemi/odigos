@@ -43,7 +43,6 @@ build-image/%:
 	-t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
 	--secret id=github_token,env=GITHUB_TOKEN \
 	--build-arg SERVICE_NAME="$(if $(SERVICE_NAME),$(SERVICE_NAME),$*)" \
-	--build-arg ODIGOS_OSS_REF=$(TAG) \
 	--build-arg SUMMARY="Odiglet for Odigos" \
 	--build-arg DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." \
 	--build-arg VERSION=$(TAG) \
@@ -68,9 +67,20 @@ build-instrumentor:
 # Enterprise UI image: the OSS Odigos web frontend wrapped as an enterprise
 # build. Uses its own Dockerfile (ui/Dockerfile) because it also runs a
 # Node.js yarn build stage for the webapp.
+#
+# By default OSS sources are cloned from GitHub at the ref pinned in ui/go.mod.
+# Override with a local checkout for development:
+#   make build-ui ODIGOS_OSS_SRC=../odigos
+#   make build-ui-local
+ODIGOS_OSS_SRC ?=
+
 .PHONY: build-ui
 build-ui:
-	$(MAKE) build-image/ui DOCKERFILE=ui/Dockerfile SUMMARY="Enterprise UI for Odigos" DESCRIPTION="Enterprise build of the Odigos web frontend." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	$(MAKE) build-image/ui DOCKERFILE=ui/Dockerfile SUMMARY="Enterprise UI for Odigos" DESCRIPTION="Enterprise build of the Odigos web frontend." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) BUILD_CONTEXT="$(if $(ODIGOS_OSS_SRC),--build-context oss-src=$(ODIGOS_OSS_SRC),)"
+
+.PHONY: build-ui-local
+build-ui-local:
+	$(MAKE) build-ui ODIGOS_OSS_SRC=../odigos
 
 .PHONY: build-central-backend
 build-central-backend:
@@ -330,7 +340,7 @@ load-to-kind-%:
 
 .PHONY: load-to-kind
 load-to-kind:
-	make load-to-kind-instrumentor load-to-kind-odiglet ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
+	make load-to-kind-instrumentor load-to-kind-odiglet load-to-kind-ui ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: load-central-to-kind
 load-central-to-kind:
@@ -380,6 +390,10 @@ deploy-odiglet-with-agents:
 deploy-instrumentor:
 	make build-instrumentor TAG=$(TAG) && make load-to-kind-instrumentor TAG=$(TAG) && make restart-instrumentor
 
+.PHONY: deploy-ui
+deploy-ui:
+	make build-ui TAG=$(TAG) && make load-to-kind-ui TAG=$(TAG) && make restart-ui
+
 .PHONY: deploy-agents
 deploy-agents:
 	make build-agents TAG=$(TAG) && make load-to-kind-agents TAG=$(TAG)
@@ -404,7 +418,7 @@ deploy-connector-aws:
 
 .PHONY: deploy
 deploy:
-	make build-images TAG=$(TAG) && make load-to-kind TAG=$(TAG) && make restart-odiglet && make restart-instrumentor
+	make build-images TAG=$(TAG) && make load-to-kind TAG=$(TAG) && make restart-odiglet && make restart-instrumentor && make restart-ui
 
 .PHONY: deploy-central
 deploy-central:
@@ -420,7 +434,6 @@ build-tag-push-ecr-image/%:
 	docker build --platform linux/amd64 -t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
 	--secret id=github_token,env=GITHUB_TOKEN \
 	--build-arg SERVICE_NAME="$(if $(SERVICE_NAME),$(SERVICE_NAME),$*)" \
-	--build-arg ODIGOS_OSS_REF=$(TAG) \
 	--build-arg VERSION=$(TAG) \
 	--build-arg RELEASE=$(TAG) \
 	--build-arg SUMMARY="$(SUMMARY)" \

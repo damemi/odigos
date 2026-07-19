@@ -140,7 +140,6 @@ jobs:
             ghcr.io/odigos-io/odigos-enterprise-${{ matrix.service }}:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
           build-args: |
             SERVICE_NAME=${{ matrix.service }}
-            ODIGOS_OSS_REF=${{ env.ODIGOS_TAG }}
             LD_FLAGS=-s -w
             RHEL=false
             EXTENDED=${{ matrix.extended }}
@@ -198,7 +197,7 @@ jobs:
 
       # connector-runtime consumes the OSS odigos api/common modules via local-path replaces, so wire
       # the matching odigos checkout in as the `odigos` build context. Pin it to the release tag — the
-      # same ref the other enterprise components resolve OSS at via ODIGOS_OSS_REF.
+      # same ref the other enterprise components resolve OSS.
       - name: Checkout Odigos OSS (connector-runtime build context)
         if: matrix.service == 'connector-runtime'
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
