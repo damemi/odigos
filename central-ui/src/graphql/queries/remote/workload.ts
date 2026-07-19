@@ -206,7 +206,7 @@ const DESIRED_CONDITION_FIELDS_WITH_ACTIONS = `
           message
           actionItems {
             type
-            userFacingText
+            buttonText
           }
 `;
 
@@ -221,8 +221,18 @@ const ROLLOUT_FIELDS = `
         rolloutStatus {
 ${DESIRED_CONDITION_FIELDS}
         }
+        agentsMetaHashChangedTime
         podsManifestInjectionStatus {
 ${DESIRED_CONDITION_FIELDS_WITH_ACTIONS}
+        }
+        podsManifestInjectionOverview {
+          totalPods
+          totalAgentNotAppliedPods
+          agentNotAppliedOk
+          totalAgentAppliedPods
+          agentAppliedOk
+          totalAgentOutOfDatePods
+          agentOutOfDateOk
         }
       }
 `;
