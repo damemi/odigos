@@ -133,13 +133,14 @@ func (g *Generator) GenerateSnapshot() (*ClusterSnapshot, error) {
 		}
 
 		workloads := nsWorkloads[nsName]
-		if len(workloads) > 0 {
-			nsSnapshots = append(nsSnapshots, NamespaceSnapshot{
-				Name:      nsName,
-				Selected:  g.cache.IsNamespaceAutoInstrumented(nsName),
-				Workloads: workloads,
-			})
+		if workloads == nil {
+			workloads = []WorkloadSnapshot{}
 		}
+		nsSnapshots = append(nsSnapshots, NamespaceSnapshot{
+			Name:      nsName,
+			Selected:  g.cache.IsNamespaceAutoInstrumented(nsName),
+			Workloads: workloads,
+		})
 	}
 
 	snapshot := &ClusterSnapshot{
