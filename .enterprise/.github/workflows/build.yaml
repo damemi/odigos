@@ -9,6 +9,8 @@ concurrency:
 env:
   IMAGE_TAG: e2e-test # pr-${{ github.event.number }}
   BASE_BRANCH: ${{ github.base_ref }}
+  DEPOT_ORG_ID: p0xd21zf5r
+  DEPOT_ODIGOS_OSS_REGISTRY_ID: 570xmd9kld
 
 jobs:
   detect-changes:
@@ -228,9 +230,6 @@ jobs:
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
           path: |
-            /tmp/odigos-autoscaler.tar
-            /tmp/odigos-scheduler.tar
-            /tmp/odigos-collector.tar
             /tmp/odigos-cli
             /tmp/odigos-cli.tar
           key: ${{ github.run_id }}-odigos-oss-components
@@ -262,7 +261,9 @@ jobs:
             depot-build-autoscaler \
             depot-build-scheduler \
             depot-build-collector \
-            IMAGE_TAG=${{ env.IMAGE_TAG }}
+            IMAGE_TAG=${{ env.IMAGE_TAG }} \
+            GITHUB_RUN_ID=${{ github.run_id }} \
+            GITHUB_REPOSITORY_NAME=${{ github.event.repository.name }}
 
       - uses: ko-build/setup-ko@v0.9
       - name: Build Odigos CLI Image
@@ -271,25 +272,20 @@ jobs:
           cd odigos
           TAG=${{ env.IMAGE_TAG }} make build-cli-image
 
-      - name: Save CLI image and load OSS images for scanning
+      - name: Save CLI image for tests
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
           docker save registry.odigos.io/odigos-cli:${{ env.IMAGE_TAG }} -o /tmp/odigos-cli.tar
-          docker load -i /tmp/odigos-autoscaler.tar
-          docker load -i /tmp/odigos-scheduler.tar
-          docker load -i /tmp/odigos-collector.tar
 
       - name: Scan autoscaler image for vulnerabilities
-        if: steps.cache-oss-components.outputs.cache-hit != 'true'
         id: scan-autoscaler
         uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
-          image: registry.odigos.io/odigos-autoscaler:${{ env.IMAGE_TAG }}
+          image: ${{ env.DEPOT_ORG_ID }}.registry.depot.dev/${{ env.DEPOT_ODIGOS_OSS_REGISTRY_ID }}:odigos-enterprise-autoscaler-${{ github.run_id }}
           severity-cutoff: "CRITICAL"
         continue-on-error: true
 
       - name: Save autoscaler scan JSON
-        if: always() && steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
           mkdir -p /tmp/scan-results
           cat > /tmp/scan-results/odigos-autoscaler.json << 'EOF'
@@ -299,16 +295,14 @@ jobs:
           mv /tmp/scan-results/odigos-autoscaler_enriched.json /tmp/scan-results/odigos-autoscaler.json
 
       - name: Scan scheduler image for vulnerabilities
-        if: steps.cache-oss-components.outputs.cache-hit != 'true'
         id: scan-scheduler
         uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
-          image: registry.odigos.io/odigos-scheduler:${{ env.IMAGE_TAG }}
+          image: ${{ env.DEPOT_ORG_ID }}.registry.depot.dev/${{ env.DEPOT_ODIGOS_OSS_REGISTRY_ID }}:odigos-enterprise-scheduler-${{ github.run_id }}
           severity-cutoff: "CRITICAL"
         continue-on-error: true
 
       - name: Save scheduler scan JSON
-        if: always() && steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
           mkdir -p /tmp/scan-results
           cat > /tmp/scan-results/odigos-scheduler.json << 'EOF'
@@ -318,16 +312,14 @@ jobs:
           mv /tmp/scan-results/odigos-scheduler_enriched.json /tmp/scan-results/odigos-scheduler.json
 
       - name: Scan collector image for vulnerabilities
-        if: steps.cache-oss-components.outputs.cache-hit != 'true'
         id: scan-collector
         uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
-          image: registry.odigos.io/odigos-collector:${{ env.IMAGE_TAG }}
+          image: ${{ env.DEPOT_ORG_ID }}.registry.depot.dev/${{ env.DEPOT_ODIGOS_OSS_REGISTRY_ID }}:odigos-enterprise-collector-${{ github.run_id }}
           severity-cutoff: "CRITICAL"
         continue-on-error: true
 
       - name: Save collector scan JSON
-        if: always() && steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
           mkdir -p /tmp/scan-results
           cat > /tmp/scan-results/odigos-collector.json << 'EOF'
@@ -371,6 +363,9 @@ jobs:
       - build-oss-components-for-tests
     if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
+      id-token: write
     # Belt-and-suspenders cap. Individual chainsaw steps already enforce
     # their own timeouts; this prevents any pathological hang from running
     # out the GH job default of 6 hours.
@@ -610,9 +605,6 @@ jobs:
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
           path: |
-            /tmp/odigos-autoscaler.tar
-            /tmp/odigos-scheduler.tar
-            /tmp/odigos-collector.tar
             /tmp/odigos-cli
             /tmp/odigos-cli.tar
           fail-on-cache-miss: true
@@ -673,6 +665,8 @@ jobs:
           echo "Expected cache key: ${{ github.run_id }}-central-proxy-enterprise-standard"
           exit 1
 
+      - uses: depot/setup-action@v1
+
       - name: Load Odigos Components to Kind Cluster
         if: steps.should-run.outputs.skip != 'true'
         run: |
@@ -681,11 +675,21 @@ jobs:
           kind load image-archive /tmp/instrumentor-enterprise.tar
           kind load image-archive /tmp/agents-enterprise.tar
           kind load image-archive /tmp/agents-enterprise-extended.tar
-          kind load image-archive /tmp/odigos-autoscaler.tar
-          kind load image-archive /tmp/odigos-scheduler.tar
-          kind load image-archive /tmp/odigos-collector.tar
           kind load image-archive /tmp/odigos-cli.tar
           kind load image-archive /tmp/ui-enterprise.tar
+
+          # Pull OSS images saved to the Depot registry during build-oss-components-for-tests,
+          # retag to the names expected by e2e (registry.odigos.io/odigos-<component>:IMAGE_TAG),
+          # then load into kind.
+          for component in autoscaler scheduler collector; do
+            LOCAL_IMAGE="registry.odigos.io/odigos-${component}:${{ env.IMAGE_TAG }}"
+            depot pull \
+              --project ${{ env.DEPOT_ODIGOS_OSS_REGISTRY_ID }} \
+              -t "$LOCAL_IMAGE" \
+              "odigos-enterprise-${component}-${{ github.run_id }}"
+            kind load docker-image "$LOCAL_IMAGE"
+          done
+
 
       - name: Load Central Components to Kind Cluster
         if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui')
