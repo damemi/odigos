@@ -6,14 +6,18 @@ import (
 	"github.com/odigos-io/odigos/frontend/graph/model"
 )
 
-// WorkloadSnapshot represents a minimal K8s workload
+// WorkloadSnapshot represents a minimal K8s workload for central overview lists.
+// Kept compact so large clusters stay well under WebSocket message limits.
 type WorkloadSnapshot struct {
-	Namespace   string                     `json:"namespace"`
-	Name        string                     `json:"name"`
-	Kind        string                     `json:"kind"`
-	Selected    bool                       `json:"selected"`
-	ServiceName string                     `json:"serviceName,omitempty"`
-	Health      model.DesiredStateProgress `json:"health"`
+	Namespace            string                     `json:"namespace"`
+	Name                 string                     `json:"name"`
+	Kind                 string                     `json:"kind"`
+	Selected             bool                       `json:"selected"`
+	ServiceName          string                     `json:"serviceName,omitempty"`
+	Health               model.DesiredStateProgress `json:"health"`
+	DataStreamNames      []string                   `json:"dataStreamNames,omitempty"`
+	DetectedLanguages    []string                   `json:"detectedLanguages,omitempty"`
+	AgentInjectionStatus model.DesiredStateProgress `json:"agentInjectionStatus,omitempty"`
 }
 
 // NamespaceSnapshot represents a namespace with its workloads

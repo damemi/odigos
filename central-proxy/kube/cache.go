@@ -2,15 +2,17 @@ package kube
 
 import (
 	"context"
+	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/odigos-io/central-proxy/internal/logger"
-	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosclientset "github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned"
 	odigosinformers "github.com/odigos-io/odigos/api/generated/odigos/informers/externalversions"
 	odigosv1alpha1informer "github.com/odigos-io/odigos/api/generated/odigos/informers/externalversions/odigos/v1alpha1"
 	odigoslisters "github.com/odigos-io/odigos/api/generated/odigos/listers/odigos/v1alpha1"
+	"github.com/odigos-io/odigos/api/k8sconsts"
+	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/frontend/graph/model"
 	"github.com/odigos-io/odigos/frontend/graph/status"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
@@ -65,6 +67,11 @@ type Cache struct {
 
 	// dirty tracks whether there have been changes since the last snapshot
 	dirty atomic.Bool
+
+	// dirtyNotify is signaled (non-blocking, coalesced) whenever markDirty runs so
+	// the snapshot runner can flush promptly. Only a wake-up bit — never queues
+	// per-object events (avoids unbounded batcher memory under informer churn).
+	dirtyNotify chan struct{}
 }
 
 // NewCache creates a new Cache with informers for all watched resources
@@ -83,6 +90,7 @@ func NewCache(clientset kubernetes.Interface, odigosClient odigosclientset.Inter
 	c := &Cache{
 		factory:       factory,
 		odigosFactory: odigosFactory,
+		dirtyNotify:   make(chan struct{}, 1),
 
 		namespaceInformer:             namespaceInformer,
 		deploymentInformer:            deploymentInformer,
@@ -111,10 +119,24 @@ func NewCache(clientset kubernetes.Interface, odigosClient odigosclientset.Inter
 		},
 	}
 
+	// Slim cached objects before they enter the store. On large clusters the default
+	// full-object cache exceeds the central-proxy memory limit (see PLAT-1302).
+	c.setInformerTransforms()
+
 	// Register event handlers
 	c.registerEventHandlers()
 
 	return c
+}
+
+func (c *Cache) setInformerTransforms() {
+	_ = c.namespaceInformer.Informer().SetTransform(namespacesTransformFunc)
+	_ = c.deploymentInformer.Informer().SetTransform(deploymentsTransformFunc)
+	_ = c.statefulsetInformer.Informer().SetTransform(statefulsetsTransformFunc)
+	_ = c.daemonsetInformer.Informer().SetTransform(daemonsetsTransformFunc)
+	_ = c.cronjobInformer.Informer().SetTransform(cronjobsTransformFunc)
+	_ = c.instrumentationConfigInformer.Informer().SetTransform(instrumentationConfigsTransformFunc)
+	_ = c.sourceInformer.Informer().SetTransform(sourcesTransformFunc)
 }
 
 // registerEventHandlers adds event handlers to all informers to track changes
@@ -153,6 +175,17 @@ func (c *Cache) registerEventHandlers() {
 // markDirty sets the dirty flag indicating changes have occurred
 func (c *Cache) markDirty() {
 	c.dirty.Store(true)
+	// Coalesce bursts of informer events into a single wake-up.
+	select {
+	case c.dirtyNotify <- struct{}{}:
+	default:
+	}
+}
+
+// DirtyNotify returns a channel that receives when the cache is marked dirty.
+// Receives are coalesced (buffer size 1); callers should still check HasChanges.
+func (c *Cache) DirtyNotify() <-chan struct{} {
+	return c.dirtyNotify
 }
 
 // HasChanges returns true if there have been changes since the last call to ResetChanges
@@ -208,9 +241,12 @@ func (c *Cache) IsNamespaceAutoInstrumented(namespace string) bool {
 
 // WorkloadInstrumentationInfo contains instrumentation details for a workload
 type WorkloadInstrumentationInfo struct {
-	Selected    bool
-	ServiceName string
-	Health      model.DesiredStateProgress
+	Selected             bool
+	ServiceName          string
+	Health               model.DesiredStateProgress
+	DataStreamNames      []string
+	DetectedLanguages    []string
+	AgentInjectionStatus model.DesiredStateProgress
 }
 
 // GetWorkloadInstrumentationInfo returns instrumentation info for a workload
@@ -226,25 +262,35 @@ func (c *Cache) GetWorkloadInstrumentationInfo(namespace, name, kind string) Wor
 			logger.Log.Error("Error checking InstrumentationConfig", "error", err, "namespace", namespace, "name", icName)
 		}
 		return WorkloadInstrumentationInfo{
-			Selected: false,
-			Health:   model.DesiredStateProgressDisabled,
+			Selected:             false,
+			Health:               model.DesiredStateProgressDisabled,
+			AgentInjectionStatus: model.DesiredStateProgressDisabled,
 		}
 	}
 
 	// Calculate health using odigos frontend status functions
+	agentInjection := status.CalculateAgentInjectionEnabledStatus(ic)
 	conditions := []*model.DesiredConditionStatus{
 		status.CalculateRuntimeInspectionStatus(ic),
-		status.CalculateAgentInjectionEnabledStatus(ic),
+		agentInjection,
 		status.CalculateRolloutStatus(ic),
 	}
 
 	// Get the most severe condition
 	health := aggregateConditionsBySeverity(conditions)
 
+	agentStatus := model.DesiredStateProgressUnknown
+	if agentInjection != nil {
+		agentStatus = agentInjection.Status
+	}
+
 	return WorkloadInstrumentationInfo{
-		Selected:    true,
-		ServiceName: ic.Spec.ServiceName,
-		Health:      health,
+		Selected:             true,
+		ServiceName:          ic.Spec.ServiceName,
+		Health:               health,
+		DataStreamNames:      dataStreamNamesFromIC(ic),
+		DetectedLanguages:    detectedLanguagesFromIC(ic),
+		AgentInjectionStatus: agentStatus,
 	}
 }
 
@@ -318,4 +364,38 @@ func (c *Cache) ListAllDaemonSets() ([]*appsv1.DaemonSet, error) {
 // ListAllCronJobs returns all cronjobs across all namespaces from cache
 func (c *Cache) ListAllCronJobs() ([]*batchv1.CronJob, error) {
 	return c.cronjobLister.List(labels.Everything())
+}
+
+func dataStreamNamesFromIC(ic *odigosv1.InstrumentationConfig) []string {
+	if ic == nil || len(ic.Labels) == 0 {
+		return nil
+	}
+	names := make([]string, 0, 1)
+	for k, v := range ic.Labels {
+		if !strings.HasPrefix(k, k8sconsts.SourceDataStreamLabelPrefix) || v == "false" {
+			continue
+		}
+		names = append(names, strings.TrimPrefix(k, k8sconsts.SourceDataStreamLabelPrefix))
+	}
+	return names
+}
+
+func detectedLanguagesFromIC(ic *odigosv1.InstrumentationConfig) []string {
+	if ic == nil || len(ic.Status.RuntimeDetailsByContainer) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(ic.Status.RuntimeDetailsByContainer))
+	langs := make([]string, 0, len(ic.Status.RuntimeDetailsByContainer))
+	for _, d := range ic.Status.RuntimeDetailsByContainer {
+		lang := string(d.Language)
+		if lang == "" {
+			continue
+		}
+		if _, ok := seen[lang]; ok {
+			continue
+		}
+		seen[lang] = struct{}{}
+		langs = append(langs, lang)
+	}
+	return langs
 }

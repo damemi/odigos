@@ -268,12 +268,15 @@ type ComplexityRoot struct {
 	}
 
 	WorkloadSnapshot struct {
-		HealthStatus    func(childComplexity int) int
-		Kind            func(childComplexity int) int
-		Name            func(childComplexity int) int
-		Namespace       func(childComplexity int) int
-		OtelServiceName func(childComplexity int) int
-		Selected        func(childComplexity int) int
+		AgentInjectionStatus func(childComplexity int) int
+		DataStreamNames      func(childComplexity int) int
+		DetectedLanguages    func(childComplexity int) int
+		HealthStatus         func(childComplexity int) int
+		Kind                 func(childComplexity int) int
+		Name                 func(childComplexity int) int
+		Namespace            func(childComplexity int) int
+		OtelServiceName      func(childComplexity int) int
+		Selected             func(childComplexity int) int
 	}
 }
 
@@ -1361,6 +1364,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.User.Username(childComplexity), true
 
+	case "WorkloadSnapshot.agentInjectionStatus":
+		if e.ComplexityRoot.WorkloadSnapshot.AgentInjectionStatus == nil {
+			break
+		}
+
+		return e.ComplexityRoot.WorkloadSnapshot.AgentInjectionStatus(childComplexity), true
+	case "WorkloadSnapshot.dataStreamNames":
+		if e.ComplexityRoot.WorkloadSnapshot.DataStreamNames == nil {
+			break
+		}
+
+		return e.ComplexityRoot.WorkloadSnapshot.DataStreamNames(childComplexity), true
+	case "WorkloadSnapshot.detectedLanguages":
+		if e.ComplexityRoot.WorkloadSnapshot.DetectedLanguages == nil {
+			break
+		}
+
+		return e.ComplexityRoot.WorkloadSnapshot.DetectedLanguages(childComplexity), true
 	case "WorkloadSnapshot.healthStatus":
 		if e.ComplexityRoot.WorkloadSnapshot.HealthStatus == nil {
 			break
@@ -1909,6 +1930,12 @@ func (ec *executionContext) childFields_WorkloadSnapshot(ctx context.Context, fi
 		return ec.fieldContext_WorkloadSnapshot_otelServiceName(ctx, field)
 	case "healthStatus":
 		return ec.fieldContext_WorkloadSnapshot_healthStatus(ctx, field)
+	case "dataStreamNames":
+		return ec.fieldContext_WorkloadSnapshot_dataStreamNames(ctx, field)
+	case "detectedLanguages":
+		return ec.fieldContext_WorkloadSnapshot_detectedLanguages(ctx, field)
+	case "agentInjectionStatus":
+		return ec.fieldContext_WorkloadSnapshot_agentInjectionStatus(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type WorkloadSnapshot", field.Name)
 }
@@ -6881,6 +6908,75 @@ func (ec *executionContext) fieldContext_WorkloadSnapshot_healthStatus(_ context
 	return graphql.NewScalarFieldContext("WorkloadSnapshot", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
+func (ec *executionContext) _WorkloadSnapshot_dataStreamNames(ctx context.Context, field graphql.CollectedField, obj *model.WorkloadSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_WorkloadSnapshot_dataStreamNames(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DataStreamNames, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalOString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_WorkloadSnapshot_dataStreamNames(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("WorkloadSnapshot", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _WorkloadSnapshot_detectedLanguages(ctx context.Context, field graphql.CollectedField, obj *model.WorkloadSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_WorkloadSnapshot_detectedLanguages(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DetectedLanguages, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalOString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_WorkloadSnapshot_detectedLanguages(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("WorkloadSnapshot", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _WorkloadSnapshot_agentInjectionStatus(ctx context.Context, field graphql.CollectedField, obj *model.WorkloadSnapshot) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_WorkloadSnapshot_agentInjectionStatus(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AgentInjectionStatus, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_WorkloadSnapshot_agentInjectionStatus(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("WorkloadSnapshot", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) ___Directive_name(ctx context.Context, field graphql.CollectedField, obj *introspection.Directive) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -10463,6 +10559,21 @@ func (ec *executionContext) _WorkloadSnapshot(ctx context.Context, sel ast.Selec
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "dataStreamNames":
+			out.Values[i] = ec._WorkloadSnapshot_dataStreamNames(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "detectedLanguages":
+			out.Values[i] = ec._WorkloadSnapshot_detectedLanguages(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "agentInjectionStatus":
+			out.Values[i] = ec._WorkloadSnapshot_agentInjectionStatus(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -10975,8 +11086,7 @@ func (ec *executionContext) marshalNCloudConnectorAuthMethod2ᚖgithubᚗcomᚋo
 }
 
 func (ec *executionContext) unmarshalNCloudConnectorCapabilityInput2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCapabilityInputᚄ(ctx context.Context, v any) ([]*model.CloudConnectorCapabilityInput, error) {
-	var vSlice []any
-	vSlice = graphql.CoerceList(v)
+	vSlice := graphql.CoerceList(v)
 	var err error
 	res := make([]*model.CloudConnectorCapabilityInput, len(vSlice))
 	for i := range vSlice {
@@ -11502,8 +11612,7 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 }
 
 func (ec *executionContext) unmarshalNString2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
-	var vSlice []any
-	vSlice = graphql.CoerceList(v)
+	vSlice := graphql.CoerceList(v)
 	var err error
 	res := make([]string, len(vSlice))
 	for i := range vSlice {
@@ -11685,8 +11794,7 @@ func (ec *executionContext) marshalN__DirectiveLocation2string(ctx context.Conte
 }
 
 func (ec *executionContext) unmarshalN__DirectiveLocation2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
-	var vSlice []any
-	vSlice = graphql.CoerceList(v)
+	vSlice := graphql.CoerceList(v)
 	var err error
 	res := make([]string, len(vSlice))
 	for i := range vSlice {
@@ -11878,12 +11986,46 @@ func (ec *executionContext) marshalORole2ᚖgithubᚗcomᚋodigosᚑioᚋcentral
 	return v
 }
 
+func (ec *executionContext) unmarshalOString2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
+	if v == nil {
+		return nil, nil
+	}
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNString2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOString2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNString2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) unmarshalOString2ᚕᚖstring(ctx context.Context, v any) ([]*string, error) {
 	if v == nil {
 		return nil, nil
 	}
-	var vSlice []any
-	vSlice = graphql.CoerceList(v)
+	vSlice := graphql.CoerceList(v)
 	var err error
 	res := make([]*string, len(vSlice))
 	for i := range vSlice {

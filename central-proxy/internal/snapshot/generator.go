@@ -53,14 +53,7 @@ func (g *Generator) GenerateSnapshot() (*ClusterSnapshot, error) {
 	for _, dep := range deployments {
 		if !g.isIgnoredNamespace(dep.Namespace) {
 			info := g.cache.GetWorkloadInstrumentationInfo(dep.Namespace, dep.Name, "Deployment")
-			nsWorkloads[dep.Namespace] = append(nsWorkloads[dep.Namespace], WorkloadSnapshot{
-				Namespace:   dep.Namespace,
-				Name:        dep.Name,
-				Kind:        "Deployment",
-				Selected:    info.Selected,
-				ServiceName: info.ServiceName,
-				Health:      info.Health,
-			})
+			nsWorkloads[dep.Namespace] = append(nsWorkloads[dep.Namespace], workloadSnapshotFromInfo(dep.Namespace, dep.Name, "Deployment", info))
 		}
 	}
 
@@ -72,14 +65,7 @@ func (g *Generator) GenerateSnapshot() (*ClusterSnapshot, error) {
 	for _, sts := range statefulsets {
 		if !g.isIgnoredNamespace(sts.Namespace) {
 			info := g.cache.GetWorkloadInstrumentationInfo(sts.Namespace, sts.Name, "StatefulSet")
-			nsWorkloads[sts.Namespace] = append(nsWorkloads[sts.Namespace], WorkloadSnapshot{
-				Namespace:   sts.Namespace,
-				Name:        sts.Name,
-				Kind:        "StatefulSet",
-				Selected:    info.Selected,
-				ServiceName: info.ServiceName,
-				Health:      info.Health,
-			})
+			nsWorkloads[sts.Namespace] = append(nsWorkloads[sts.Namespace], workloadSnapshotFromInfo(sts.Namespace, sts.Name, "StatefulSet", info))
 		}
 	}
 
@@ -91,14 +77,7 @@ func (g *Generator) GenerateSnapshot() (*ClusterSnapshot, error) {
 	for _, ds := range daemonsets {
 		if !g.isIgnoredNamespace(ds.Namespace) {
 			info := g.cache.GetWorkloadInstrumentationInfo(ds.Namespace, ds.Name, "DaemonSet")
-			nsWorkloads[ds.Namespace] = append(nsWorkloads[ds.Namespace], WorkloadSnapshot{
-				Namespace:   ds.Namespace,
-				Name:        ds.Name,
-				Kind:        "DaemonSet",
-				Selected:    info.Selected,
-				ServiceName: info.ServiceName,
-				Health:      info.Health,
-			})
+			nsWorkloads[ds.Namespace] = append(nsWorkloads[ds.Namespace], workloadSnapshotFromInfo(ds.Namespace, ds.Name, "DaemonSet", info))
 		}
 	}
 
@@ -110,14 +89,7 @@ func (g *Generator) GenerateSnapshot() (*ClusterSnapshot, error) {
 	for _, cj := range cronjobs {
 		if !g.isIgnoredNamespace(cj.Namespace) {
 			info := g.cache.GetWorkloadInstrumentationInfo(cj.Namespace, cj.Name, "CronJob")
-			nsWorkloads[cj.Namespace] = append(nsWorkloads[cj.Namespace], WorkloadSnapshot{
-				Namespace:   cj.Namespace,
-				Name:        cj.Name,
-				Kind:        "CronJob",
-				Selected:    info.Selected,
-				ServiceName: info.ServiceName,
-				Health:      info.Health,
-			})
+			nsWorkloads[cj.Namespace] = append(nsWorkloads[cj.Namespace], workloadSnapshotFromInfo(cj.Namespace, cj.Name, "CronJob", info))
 		}
 	}
 
@@ -151,4 +123,18 @@ func (g *Generator) GenerateSnapshot() (*ClusterSnapshot, error) {
 	}
 
 	return snapshot, nil
+}
+
+func workloadSnapshotFromInfo(namespace, name, kind string, info kube.WorkloadInstrumentationInfo) WorkloadSnapshot {
+	return WorkloadSnapshot{
+		Namespace:            namespace,
+		Name:                 name,
+		Kind:                 kind,
+		Selected:             info.Selected,
+		ServiceName:          info.ServiceName,
+		Health:               info.Health,
+		DataStreamNames:      info.DataStreamNames,
+		DetectedLanguages:    info.DetectedLanguages,
+		AgentInjectionStatus: info.AgentInjectionStatus,
+	}
 }

@@ -19,12 +19,15 @@ func parseClusterSnapshot(snapshot *redisclient.ClusterSnapshotData) (*model.Clu
 			Name      string `json:"name"`
 			Selected  bool   `json:"selected"`
 			Workloads []struct {
-				Namespace   string `json:"namespace"`
-				Name        string `json:"name"`
-				Kind        string `json:"kind"`
-				Selected    bool   `json:"selected"`
-				ServiceName string `json:"serviceName,omitempty"`
-				Health      string `json:"health"` // DesiredStateProgress enum as string
+				Namespace            string   `json:"namespace"`
+				Name                 string   `json:"name"`
+				Kind                 string   `json:"kind"`
+				Selected             bool     `json:"selected"`
+				ServiceName          string   `json:"serviceName,omitempty"`
+				Health               string   `json:"health"` // DesiredStateProgress enum as string
+				DataStreamNames      []string `json:"dataStreamNames,omitempty"`
+				DetectedLanguages    []string `json:"detectedLanguages,omitempty"`
+				AgentInjectionStatus string   `json:"agentInjectionStatus,omitempty"`
 			} `json:"workloads"`
 		} `json:"namespaces"`
 	}
@@ -48,14 +51,21 @@ func parseClusterSnapshot(snapshot *redisclient.ClusterSnapshotData) (*model.Clu
 			if wl.ServiceName != "" {
 				otelServiceName = &wl.ServiceName
 			}
+			var agentInjection *string
+			if wl.AgentInjectionStatus != "" {
+				agentInjection = &wl.AgentInjectionStatus
+			}
 
 			workloads = append(workloads, &model.WorkloadSnapshot{
-				Namespace:       wl.Namespace,
-				Name:            wl.Name,
-				Kind:            wl.Kind,
-				Selected:        wl.Selected,
-				OtelServiceName: otelServiceName,
-				HealthStatus:    &wl.Health,
+				Namespace:            wl.Namespace,
+				Name:                 wl.Name,
+				Kind:                 wl.Kind,
+				Selected:             wl.Selected,
+				OtelServiceName:      otelServiceName,
+				HealthStatus:         &wl.Health,
+				DataStreamNames:      wl.DataStreamNames,
+				DetectedLanguages:    wl.DetectedLanguages,
+				AgentInjectionStatus: agentInjection,
 			})
 		}
 

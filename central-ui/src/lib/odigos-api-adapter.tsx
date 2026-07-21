@@ -55,6 +55,14 @@ import { ApolloLink, type ApolloClient, type DocumentNode } from '@apollo/client
 import type { VersionedRemoteFetch, WorkloadWithOdigosHealthStatus } from '@/types';
 import { normalizeActionForWire, parseRenamesString } from '@/lib/action-form-normalization';
 import {
+  mapClusterSnapshotToWorkloads,
+  mergeLiveSelectedIntoSnapshot,
+  resolveClusterSnapshot,
+  setWorkloadSnapshotOverlay,
+  snapshotHasSelectedWorkloads,
+  type SnapshotCluster,
+} from '@/lib/snapshot-workloads';
+import {
   buildVmPersistSources,
   buildVmSourcesWithReportsQuery,
   mapVmSourceResult,
@@ -933,6 +941,45 @@ const withGuardedRuns = (ops: OdigosApiOperations): OdigosApiOperations => {
   return guarded as unknown as OdigosApiOperations;
 };
 
+// After source persist/update, refresh GET_WORKLOADS via its run() path (snapshot
+// + RemoteFetch fallback) so overview useSources (cache-first on GET_CLUSTER_SNAPSHOT)
+// sees selected workloads before Redis catches up.
+const withSourceMutationWorkloadsRefresh = (ops: OdigosApiOperations): OdigosApiOperations => {
+  const refreshWorkloads = async (client: ApolloClient, ctx: OperationContext, attempts: number) => {
+    const getWorkloads = ops.GET_WORKLOADS;
+    if (!getWorkloads?.run) return;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      try {
+        const result = await getWorkloads.run(client, { filter: { markedForInstrumentation: true } }, ctx);
+        if (result?.data?.workloads?.length || attempt === attempts - 1) return;
+      } catch {
+        if (attempt === attempts - 1) return;
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  };
+
+  const wrapMutation = <TData, TVars>(op: Operation<TData, TVars> | undefined, attempts: number): Operation<TData, TVars> | undefined => {
+    if (!op?.run) return op;
+    const prevRun = op.run;
+    return {
+      ...op,
+      run: async (client, vars, ctx) => {
+        const result = await prevRun(client, vars, ctx);
+        if (!result.error) await refreshWorkloads(client, ctx, attempts);
+        return result;
+      },
+    };
+  };
+
+  return {
+    ...ops,
+    // Persist may race IC creation — retry briefly. Update already has ICs.
+    PERSIST_SOURCES: wrapMutation(ops.PERSIST_SOURCES, 5)!,
+    UPDATE_SOURCE: wrapMutation(ops.UPDATE_SOURCE, 2)!,
+  };
+};
+
 // Wrap a REMOTE_FETCH-backed action op so catalog form payloads are normalized
 // before the inner variables are embedded, and `renames` is parsed back out of
 // the inner response. Reads (GET_ACTIONS) pass through variables unchanged and
@@ -965,24 +1012,120 @@ const withRemoteConfigVars = <TData,>(op: Operation<TData, UpdateRemoteConfigVar
   };
 };
 
-const operations: OdigosApiOperations = withGuardedRuns({
+const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
+  withGuardedRuns({
   // sources / workloads
   //
   // Legacy < v1.20: the kit always asks for `GET_WORKLOADS`; here it resolves
   // to a single combined query (`computePlatform.sources` + `workloads`
   // injection rows) mapped into `Workload`s. By-id resolves via a multi-step
   // `run` (one `GET_SOURCE` per id + a single agent-injection enrichment).
-  GET_WORKLOADS: wrapVersioned<GetWorkloadsData, GetWorkloadsVars | undefined>(
-    GET_WORKLOADS,
-    undefined,
-    { query: GET_SOURCES_WITH_STATUS, map: (data) => legacySourcesToWorkloads(data) },
-    // VM/connector: fetch sources + workloadReports in one REMOTE_FETCH and merge
-    // instrumentation status onto each Workload (drawer Overview + list health).
-    {
-      buildQuery: (_vars, ctx) => buildVmSourcesWithReportsQuery(ctx) ?? '',
-      transformResult: (data) => mapVmSourcesWithReportsToWorkloads(data),
-    },
-  ),
+  //
+  // Prefer Redis cluster snapshots for modern k8s list loads (PLAT-1302): avoids
+  // multi-MB GetWorkloads RemoteFetch responses. When Redis lags IC creation,
+  // imperative run() falls back to RemoteFetch, merges into the full snapshot,
+  // writeQuerys GET_CLUSTER_SNAPSHOT (useSources is cache-first on that key),
+  // and keeps an in-memory overlay so declarative transformResult stays fresh.
+  // Legacy (< v1.20) and VM/connector keep RemoteFetch. Detail drawers still use
+  // GET_WORKLOADS_BY_IDS RemoteFetch for full field parity.
+  GET_WORKLOADS: (() => {
+    const remote = wrapVersioned<GetWorkloadsData, GetWorkloadsVars | undefined>(
+      GET_WORKLOADS,
+      undefined,
+      { query: GET_SOURCES_WITH_STATUS, map: (data) => legacySourcesToWorkloads(data) },
+      {
+        buildQuery: (_vars, ctx) => buildVmSourcesWithReportsQuery(ctx) ?? '',
+        transformResult: (data) => mapVmSourcesWithReportsToWorkloads(data),
+      },
+    );
+
+    const prefersSnapshot = (ctx: OperationContext) => !isAgentsApiPlatform(ctx) && !isLegacyProxy(ctx) && !!resolveProxyID(ctx);
+
+    const writeSnapshotCache = (client: ApolloClient, clusterId: string, snapshot: SnapshotCluster) => {
+      setWorkloadSnapshotOverlay(clusterId, snapshot);
+      try {
+        client.writeQuery({
+          query: GET_CLUSTER_SNAPSHOT as DocumentNode,
+          variables: { clusterId },
+          data: { clusterSnapshot: snapshot },
+        });
+      } catch {
+        // Cache write is best-effort; overlay still covers transformResult.
+      }
+    };
+
+    const op: Operation<GetWorkloadsData, GetWorkloadsVars | undefined> = {
+      ...remote,
+      document: (ctx) => (prefersSnapshot(ctx) ? (GET_CLUSTER_SNAPSHOT as DocumentNode) : typeof remote.document === 'function' ? remote.document(ctx) : remote.document),
+      canRun: (ctx) => {
+        if (prefersSnapshot(ctx)) return true;
+        return remote.canRun ? remote.canRun(ctx) : true;
+      },
+      transformVariables: (vars, ctx) => {
+        if (prefersSnapshot(ctx)) return { clusterId: resolveProxyID(ctx) };
+        return remote.transformVariables!(vars, ctx);
+      },
+      transformResult: (raw, ctx) => {
+        if (prefersSnapshot(ctx)) {
+          const clusterId = resolveProxyID(ctx);
+          const redis = (raw as { clusterSnapshot?: SnapshotCluster } | null | undefined)?.clusterSnapshot;
+          const snapshot = resolveClusterSnapshot(clusterId, redis);
+          // Overview always requests markedForInstrumentation=true; transformResult
+          // has no vars, so apply that filter here for the declarative query path.
+          return mapClusterSnapshotToWorkloads(snapshot, { filter: { markedForInstrumentation: true } });
+        }
+        return remote.transformResult!(raw, ctx);
+      },
+      run: async (client, vars, ctx) => {
+        try {
+          if (!prefersSnapshot(ctx)) {
+            if (remote.run) return remote.run(client, vars, ctx);
+            return runRemoteSingle(client, remote, vars, ctx);
+          }
+
+          const clusterId = resolveProxyID(ctx)!;
+          const wantsMarked = vars?.filter?.markedForInstrumentation === true;
+          let redis: SnapshotCluster | null | undefined;
+
+          try {
+            const result = await client.query({
+              query: GET_CLUSTER_SNAPSHOT as DocumentNode,
+              variables: { clusterId },
+              fetchPolicy: 'network-only',
+              errorPolicy: 'all',
+            });
+            redis = (result.data as { clusterSnapshot?: SnapshotCluster } | null | undefined)?.clusterSnapshot;
+          } catch {
+            // Fall through to RemoteFetch when snapshot is unavailable.
+          }
+
+          const snapshot = resolveClusterSnapshot(clusterId, redis);
+          if (snapshot?.namespaces?.length) {
+            const mapped = mapClusterSnapshotToWorkloads(snapshot, vars);
+            // Snapshot can lag IC/Source creates. When the overview asks for
+            // instrumented workloads and Redis/overlay still show none selected,
+            // fall through to live RemoteFetch.
+            if (!(wantsMarked && mapped.workloads.length === 0 && !snapshotHasSelectedWorkloads(snapshot))) {
+              // Refresh Apollo so useSources (cache-first) sees this snapshot.
+              writeSnapshotCache(client, clusterId, snapshot);
+              return { data: mapped };
+            }
+          }
+
+          const live = remote.run ? await remote.run(client, vars, ctx) : await runRemoteSingle(client, remote, vars, ctx);
+          if (live.data?.workloads?.length) {
+            const merged = mergeLiveSelectedIntoSnapshot(redis, clusterId, redis?.clusterName ?? clusterId, live.data.workloads);
+            writeSnapshotCache(client, clusterId, merged);
+          }
+          return live;
+        } catch (err) {
+          return { error: err instanceof Error ? err.message : String(err) };
+        }
+      },
+    };
+
+    return op;
+  })(),
   // VM: no by-id endpoint — resolve the flat agents-api `sources` list (plus
   // workloadReports for status) and map into `Workload`s under `workloadsByIds`.
   // The kit's `fetchById` `.find()`s the requested id out of the result (and SSE
@@ -1341,7 +1484,8 @@ const operations: OdigosApiOperations = withGuardedRuns({
     canRun: (ctx) => !isAgentsApiPlatform(ctx) && !isLegacySelectedProxy(ctx),
     transformResult: (raw) => (raw as { clusterSnapshot?: ClusterSnapshot } | null | undefined)?.clusterSnapshot,
   },
-});
+  }),
+);
 
 type AdapterProps = PropsWithChildren;
 

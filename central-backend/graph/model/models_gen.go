@@ -245,12 +245,15 @@ type User struct {
 }
 
 type WorkloadSnapshot struct {
-	Namespace       string  `json:"namespace"`
-	Name            string  `json:"name"`
-	Kind            string  `json:"kind"`
-	Selected        bool    `json:"selected"`
-	OtelServiceName *string `json:"otelServiceName,omitempty"`
-	HealthStatus    *string `json:"healthStatus,omitempty"`
+	Namespace            string   `json:"namespace"`
+	Name                 string   `json:"name"`
+	Kind                 string   `json:"kind"`
+	Selected             bool     `json:"selected"`
+	OtelServiceName      *string  `json:"otelServiceName,omitempty"`
+	HealthStatus         *string  `json:"healthStatus,omitempty"`
+	DataStreamNames      []string `json:"dataStreamNames,omitempty"`
+	DetectedLanguages    []string `json:"detectedLanguages,omitempty"`
+	AgentInjectionStatus *string  `json:"agentInjectionStatus,omitempty"`
 }
 
 type WriteComputePlatformInput struct {

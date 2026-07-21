@@ -16,6 +16,9 @@ export const GET_ALL_CLUSTER_SNAPSHOTS = gql`
             selected
             otelServiceName
             healthStatus
+            dataStreamNames
+            detectedLanguages
+            agentInjectionStatus
           }
         }
         timestamp
@@ -42,6 +45,9 @@ export const GET_CLUSTER_SNAPSHOT = gql`
           selected
           otelServiceName
           healthStatus
+          dataStreamNames
+          detectedLanguages
+          agentInjectionStatus
         }
       }
       timestamp

@@ -7,6 +7,9 @@ type WorkloadSnapshot {
   selected: Boolean!
   otelServiceName: String
   healthStatus: String
+  dataStreamNames: [String!]
+  detectedLanguages: [String!]
+  agentInjectionStatus: String
 }
 
 type NamespaceSnapshot {

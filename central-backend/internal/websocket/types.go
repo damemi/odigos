@@ -6,11 +6,12 @@ import (
 	"strconv"
 )
 
-// DefaultMaxMessageSize is the maximum size of a WebSocket message (10MB).
+// DefaultMaxMessageSize is the maximum size of a WebSocket message (32MB).
+// Large-cluster GraphQL responses (e.g. GetWorkloads) and snapshots can exceed 10MB.
 // Messages larger than this will be batched if possible.
-const DefaultMaxMessageSize = 10 * 1024 * 1024
+const DefaultMaxMessageSize = 32 * 1024 * 1024
 
-// MaxMessageSize can be configured via MAX_MESSAGE_SIZE environment variable for testing.
+// MaxMessageSize can be configured via MAX_MESSAGE_SIZE environment variable.
 var MaxMessageSize = DefaultMaxMessageSize
 
 func init() {
@@ -31,7 +32,7 @@ type WebSocketMessageToProxy struct {
 
 type WebsocketMessageFromProxy struct {
 	Type      WebSocketMessageType `json:"type"`
-	Data      json.RawMessage      `json:"data"`
+	Data      json.RawMessage      `json:"data,omitempty"`
 	RequestId string               `json:"request_id"`
 }
 

@@ -28,9 +28,9 @@ const OdigosVersionQueryParam = "version"
 const GraphQLSchemaVersionQueryParam = "graphqlSchemaVersion"
 
 type ProxyConnection struct {
-	Conn         *websocket.Conn
-	PlatformName string
-	PlatformType consts.PlatformType
+	Conn          *websocket.Conn
+	PlatformName  string
+	PlatformType  consts.PlatformType
 	OdigosVersion string
 	// GraphQLSchemaVersion is the agents-api GraphQL schema version reported by VM
 	// proxies. It selects which agents-api dialect the UI uses for this proxy.
@@ -104,9 +104,9 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "Closing connection")
 
-	// Increase WebSocket Read Limit (default 32 KB is too low)
-	const maxMessageSize = 10 * 1024 * 1024 // 10 MB
-	conn.SetReadLimit(maxMessageSize)
+	// Increase WebSocket Read Limit (default 32 KB is too low).
+	// Uses package MaxMessageSize so MAX_MESSAGE_SIZE env override applies to Accept too.
+	conn.SetReadLimit(int64(MaxMessageSize))
 
 	// Create a separate cancellable context for the Redis subscription
 	// This allows us to cancel and restart the subscription on Redis reconnect

@@ -43,5 +43,5 @@ type WebSocketMessageFromCentralized struct {
 type WebSocketMessageToCentralized struct {
 	Type      WebSocketMessageType `json:"type"`
 	RequestId string               `json:"request_id"`
-	Data      any                  `json:"data"`
+	Data      any                  `json:"data,omitempty"`
 }
