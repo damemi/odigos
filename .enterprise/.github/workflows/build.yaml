@@ -211,6 +211,9 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout Odigos OSS
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
@@ -219,6 +222,7 @@ jobs:
           ref: ${{ env.BASE_BRANCH }}
           path: odigos
           persist-credentials: false
+
       - name: Cache built OSS components
         id: cache-oss-components
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
@@ -230,6 +234,7 @@ jobs:
             /tmp/odigos-cli
             /tmp/odigos-cli.tar
           key: ${{ github.run_id }}-odigos-oss-components
+
       - name: Set up Go # Needed to build the CLI
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 #v5.5.0
@@ -248,11 +253,16 @@ jobs:
             -ldflags "-X github.com/odigos-io/odigos/cli/pkg/helm.OdigosChartVersion=${TAG#v}" \
             -o /tmp/odigos-cli
 
+      - uses: depot/setup-action@v1
+
       - name: Build OSS Odigos Components Used in e2e Tests
-        if: steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
           cd odigos
-          TAG=${{ env.IMAGE_TAG }} make -j 3 build-autoscaler build-scheduler build-collector
+          make -j -f Makefile.depot \
+            depot-build-autoscaler \
+            depot-build-scheduler \
+            depot-build-collector \
+            IMAGE_TAG=${{ env.IMAGE_TAG }}
 
       - uses: ko-build/setup-ko@v0.9
       - name: Build Odigos CLI Image
@@ -261,13 +271,13 @@ jobs:
           cd odigos
           TAG=${{ env.IMAGE_TAG }} make build-cli-image
 
-      - name: Save Docker images as tar files
+      - name: Save CLI image and load OSS images for scanning
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
-          docker save registry.odigos.io/odigos-autoscaler:${{ env.IMAGE_TAG }} -o /tmp/odigos-autoscaler.tar
-          docker save registry.odigos.io/odigos-scheduler:${{ env.IMAGE_TAG }} -o /tmp/odigos-scheduler.tar
-          docker save registry.odigos.io/odigos-collector:${{ env.IMAGE_TAG }} -o /tmp/odigos-collector.tar
           docker save registry.odigos.io/odigos-cli:${{ env.IMAGE_TAG }} -o /tmp/odigos-cli.tar
+          docker load -i /tmp/odigos-autoscaler.tar
+          docker load -i /tmp/odigos-scheduler.tar
+          docker load -i /tmp/odigos-collector.tar
 
       - name: Scan autoscaler image for vulnerabilities
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
