@@ -23,7 +23,7 @@ require (
 	go.opentelemetry.io/auto v0.22.0
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.44.0
-	google.golang.org/grpc v1.81.1
+	google.golang.org/grpc v1.82.1
 	k8s.io/client-go v0.35.4
 	k8s.io/kubelet v0.35.2
 	sigs.k8s.io/controller-runtime v0.23.3
