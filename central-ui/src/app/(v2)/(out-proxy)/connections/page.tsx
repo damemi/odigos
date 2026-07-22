@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { useProxy } from '@/hooks';
+import { useProxy, useProxyCRUD } from '@/hooks';
 import type { ComputePlatform } from '@/types';
 import * as STRINGS from '@/utils/constants/strings';
 import { useNotificationStore } from '@odigos/ui-kit/store';
@@ -9,7 +9,7 @@ import { CentralConnections, CreateNewType } from '@odigos/ui-kit/containers';
 import { StatusType, type CloudConnectorCreateInput, type CloudConnectorCreateResult, type CloudConnectorProvider, type Connection } from '@odigos/ui-kit/types';
 import { useMutation, useQuery } from '@apollo/client/react';
 import { GET_CLOUD_CONNECTOR_PROVIDERS, CREATE_CLOUD_CONNECTOR } from '@/graphql';
-import { GET_COMPUTE_PLATFORMS, DELETE_PROXY_CONNECTION } from '@/lib/odigos-api-adapter';
+import { GET_COMPUTE_PLATFORMS } from '@/lib/odigos-api-adapter';
 
 // `<CentralConnections>` is the OUT-OF-PROXY entry point: this page lists
 // all connected proxy clusters and lets the user pick one. Cluster CRUD
@@ -25,13 +25,13 @@ import { GET_COMPUTE_PLATFORMS, DELETE_PROXY_CONNECTION } from '@/lib/odigos-api
 // `proxyID`/`platformType`/`version` in the operation context.
 export default function Page() {
   const { selectProxy } = useProxy();
+  const { deleteProxy } = useProxyCRUD();
   const { addNotification } = useNotificationStore();
 
   const [connections, setConnections] = useState<Connection[]>([]);
 
   const { data, refetch } = useQuery<{ computePlatforms?: ComputePlatform[] }>(GET_COMPUTE_PLATFORMS);
   const { data: providersData } = useQuery<{ cloudConnectorProviders?: CloudConnectorProvider[] }>(GET_CLOUD_CONNECTOR_PROVIDERS);
-  const [mutateDelete] = useMutation<{ deleteProxyConnection: boolean }, { id: string }>(DELETE_PROXY_CONNECTION);
   const [mutateCreateCloudConnector] = useMutation<{ createCloudConnector: CloudConnectorCreateResult }, { input: CloudConnectorCreateInput }>(CREATE_CLOUD_CONNECTOR);
 
   useEffect(() => {
@@ -58,12 +58,13 @@ export default function Page() {
 
   const deleteConnection = useCallback(
     async (id: string) => {
-      await mutateDelete({ variables: { id } });
+      const result = await deleteProxy(id);
+      if (!result?.success) return;
       // Refresh the local list immediately; the kit's CentralConnections
       // also calls getConnections() after delete, so this is belt-and-suspenders.
       await refetch();
     },
-    [mutateDelete, refetch],
+    [deleteProxy, refetch],
   );
 
   // Verifies and creates the cloud connector in one server call. On success the

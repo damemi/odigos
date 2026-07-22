@@ -1,5 +1,15 @@
 import { PROXY, ROUTES } from '../constants';
-import { handleExceptions, interceptGraphql, signInAsAdmin, visitPage, waitForGraphqlOperation } from '../functions';
+import {
+  DEAD_PROXY,
+  awaitToast,
+  handleExceptions,
+  interceptGraphql,
+  interceptGraphqlWithDeadConnection,
+  invokeDeleteConnection,
+  signInAsAdmin,
+  visitPage,
+  waitForGraphqlOperation,
+} from '../functions';
 
 // The Central UI lists every Central Proxy as a row in /connections. Until a
 // row is clicked, the user is on an out-of-proxy page and cannot reach the
@@ -56,6 +66,44 @@ describe('Select Connection', () => {
         const parsed = JSON.parse(raw as string);
         expect(parsed?.state?.proxyName, 'persisted proxyName').to.eq(PROXY.NAME);
         expect(parsed?.state?.proxyID, 'persisted proxyID').to.be.a('string');
+      });
+    });
+  });
+});
+
+// Regression for PLAT-1316: DeleteProxyConnection must send variables.proxyID.
+// Sending `{ id }` (or omitting proxyID) yields HTTP 422 / GRAPHQL_VALIDATION_FAILED.
+//
+// We do NOT drive this through HoverActions: those only mount while a table row
+// is hovered, and headless Cypress cannot reliably hover the real row (the
+// table's aria-hidden MeasurementLayer duplicates cell text earlier in the DOM,
+// so row-targeting via .parents().filter fails). Instead we invoke the same
+// `deleteConnection` callback the page passes into `<CentralConnections>` —
+// that is the callback that was buggy in #2940.
+describe('Delete Connection (PLAT-1316)', () => {
+  beforeEach(() => {
+    handleExceptions();
+    signInAsAdmin();
+    interceptGraphqlWithDeadConnection();
+  });
+
+  it('Should send DeleteProxyConnection with variables.proxyID (not id)', () => {
+    visitPage(ROUTES.CONNECTIONS, () => {
+      waitForGraphqlOperation('GetComputePlatforms').then(() => {
+        cy.contains(DEAD_PROXY.NAME, { timeout: 60000 }).should('exist');
+
+        invokeDeleteConnection(DEAD_PROXY.ID);
+
+        waitForGraphqlOperation('DeleteProxyConnection').then((interception) => {
+          const raw = interception.request.body;
+          const body = typeof raw === 'string' ? JSON.parse(raw) : Array.isArray(raw) ? raw[0] : raw;
+
+          expect(body?.operationName, 'operationName').to.eq('DeleteProxyConnection');
+          expect(body?.variables, 'variables').to.deep.equal({ proxyID: DEAD_PROXY.ID });
+          expect(body?.variables, 'must not send legacy `id` key').to.not.have.property('id');
+
+          awaitToast({ message: 'Connection deleted successfully' });
+        });
       });
     });
   });

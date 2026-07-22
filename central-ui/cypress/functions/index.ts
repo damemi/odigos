@@ -83,6 +83,95 @@ export const interceptGraphql = () => {
   cy.intercept('/graphql').as('gql');
 };
 
+// Inject a dead connection + stub delete so PLAT-1316 can assert wire format
+// without deleting the live proxy.
+export const DEAD_PROXY = {
+  ID: 'plat-1316-dead-proxy',
+  NAME: 'dead-connection-plat-1316',
+} as const;
+
+export const interceptGraphqlWithDeadConnection = () => {
+  cy.intercept('POST', '/graphql', (req) => {
+    const body = parseBody(req.body) as { operationName?: string; variables?: Record<string, unknown> } | undefined;
+    const op = body?.operationName;
+
+    if (op === 'DeleteProxyConnection') {
+      req.reply({
+        data: {
+          deleteProxyConnection: { success: true, error: null },
+        },
+      });
+      return;
+    }
+
+    if (op === 'GetComputePlatforms') {
+      req.continue((res) => {
+        const platforms = res.body?.data?.computePlatforms;
+        if (!Array.isArray(platforms)) return;
+        if (platforms.some((p: { id?: string }) => p?.id === DEAD_PROXY.ID)) return;
+        res.body.data.computePlatforms = [
+          ...platforms,
+          {
+            id: DEAD_PROXY.ID,
+            name: DEAD_PROXY.NAME,
+            odigosVersion: 'v1.31.1',
+            graphqlSchemaVersion: null,
+            type: 'k8s',
+            status: 'error',
+            connectedAt: null,
+            lastSeenAt: null,
+            users: [],
+            teams: [],
+          },
+        ];
+      });
+      return;
+    }
+
+    req.continue();
+  }).as('gql');
+};
+
+type FiberNode = {
+  memoizedProps?: { deleteConnection?: (id: string) => Promise<void> };
+  pendingProps?: { deleteConnection?: (id: string) => Promise<void> };
+  return?: FiberNode | null;
+} | null;
+
+// Walk React fibers under `root` to find `<CentralConnections deleteConnection={...} />`.
+// Used instead of HoverActions: those only mount while a row is hovered, and hover is
+// unreliable in headless Cypress. CI failed on `.parents().filter` with 0 matches because
+// `cy.contains` resolves the aria-hidden MeasurementLayer text duplicate first (it sits
+// earlier in the DOM than the real row).
+const findDeleteConnectionProp = (root: ParentNode): ((id: string) => Promise<void>) | null => {
+  const fromFiber = (fiber: FiberNode): ((id: string) => Promise<void>) | null => {
+    while (fiber) {
+      const fn = fiber.memoizedProps?.deleteConnection ?? fiber.pendingProps?.deleteConnection;
+      if (typeof fn === 'function') return fn;
+      fiber = fiber.return ?? null;
+    }
+    return null;
+  };
+
+  for (const el of Array.from(root.querySelectorAll('*'))) {
+    const fiberKey = Object.keys(el).find((k) => k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance'));
+    if (!fiberKey) continue;
+    const found = fromFiber((el as unknown as Record<string, FiberNode>)[fiberKey]);
+    if (found) return found;
+  }
+  return null;
+};
+
+/** Invoke the connections page deleteConnection callback for a proxy id. */
+export const invokeDeleteConnection = (proxyID: string) => {
+  cy.document().then((doc) => {
+    const deleteConnection = findDeleteConnectionProp(doc.body);
+    expect(deleteConnection, 'CentralConnections deleteConnection prop').to.be.a('function');
+    // Fire-and-forget so the following `cy.wait('@gql')` observes the in-flight request.
+    void deleteConnection!(proxyID);
+  });
+};
+
 // Click without inserting `.should('exist')` first: that settles the subject and
 // disables Cypress query re-resolution, so an SSE/overview re-render detaches
 // the node mid-click ("the page updated while this command was executing").

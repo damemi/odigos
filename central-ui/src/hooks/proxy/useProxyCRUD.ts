@@ -16,7 +16,21 @@ export const useProxyCRUD = () => {
       const { data } = await deleteProxyConnectionMutation({
         variables: { proxyID },
       });
-      return data?.deleteProxyConnection;
+      const result = data?.deleteProxyConnection;
+      if (!result?.success) {
+        addNotification({
+          type: StatusType.Error,
+          title: Crud.Delete,
+          message: result?.error || 'Failed to delete connection',
+        });
+        return result;
+      }
+      addNotification({
+        type: StatusType.Success,
+        title: Crud.Delete,
+        message: 'Connection deleted successfully',
+      });
+      return result;
     } catch (error) {
       notifyError(error instanceof Error ? error : { message: String(error) }, Crud.Delete);
     }
