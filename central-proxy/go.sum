@@ -16,6 +16,8 @@ github.com/emicklei/go-restful/v3 v3.12.2 h1:DhwDP0vY3k8ZzE0RunuJy8GhNpPL6zqLkDf
 github.com/emicklei/go-restful/v3 v3.12.2/go.mod h1:6n3XBCmQQb25CM2LCACGz8ukIrRry+4bhvbpWn3mrbc=
 github.com/evanphx/json-patch/v5 v5.9.11 h1:/8HVnzMq13/3x9TPvjG08wUGqBTmZBsCWzjTM0wiaDU=
 github.com/evanphx/json-patch/v5 v5.9.11/go.mod h1:3j+LviiESTElxA4p3EMKAB9HXj3/XEtnUf6OZxqIQTM=
+github.com/fsnotify/fsnotify v1.9.0 h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S9k=
+github.com/fsnotify/fsnotify v1.9.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
 github.com/fxamacker/cbor/v2 v2.9.0 h1:NpKPmjDBgUfBms6tr6JZkTHtfFGcMKsw3eGcmD/sapM=
 github.com/fxamacker/cbor/v2 v2.9.0/go.mod h1:vM4b+DJCtHn+zz7h3FFp/hDAI9WNWCsZj23V5ytsSxQ=
 github.com/go-logr/logr v1.4.3 h1:CjnDlHq8ikf6E492q6eKboGOC0T8CDaOvkHCIg8idEI=
@@ -65,6 +67,8 @@ github.com/google/gnostic-models v0.7.0/go.mod h1:whL5G0m6dmc5cPxKc5bdKdEN3UjI7O
 github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
 github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
 github.com/google/gofuzz v1.0.0/go.mod h1:dBl0BpW6vV/+mYPU4Po3pmUjxk6FQPldtuIdl/M65Eg=
+github.com/google/gofuzz v1.2.0 h1:xRy4A+RhZaiKjJ1bPfwQ8sedCA+YS2YcCHW6ec7JMi0=
+github.com/google/gofuzz v1.2.0/go.mod h1:dBl0BpW6vV/+mYPU4Po3pmUjxk6FQPldtuIdl/M65Eg=
 github.com/google/pprof v0.0.0-20260202012954-cb029daf43ef h1:xpF9fUHpoIrrjX24DURVKiwHcFpw19ndIs+FwTSMbno=
 github.com/google/pprof v0.0.0-20260202012954-cb029daf43ef/go.mod h1:MxpfABSjhmINe3F1It9d+8exIHFvUqtLIRCdOGNXqiI=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
@@ -87,14 +91,14 @@ github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee h1:W5t00kpgFd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
-github.com/odigos-io/odigos/api v1.32.0-pre5 h1:rpxPaCRdfYrwcT/2J/vC//m4+omLZNXhfoYopn+xd+Q=
-github.com/odigos-io/odigos/api v1.32.0-pre5/go.mod h1:EAaxcr4wc4SJeU5m9WQAfFGnGuLkCBCAVgNGEAVAQas=
-github.com/odigos-io/odigos/common v1.32.0-pre5 h1:y20TfbPiyLkezBkmvUju7HV8whhd2LfIT4WEp4/EeZQ=
-github.com/odigos-io/odigos/common v1.32.0-pre5/go.mod h1:JKY9IUXVPaz1kCLrWA7+govYkkeWffC3YOTflrpJbKo=
+github.com/odigos-io/odigos/api v1.32.0-pre5.0.20260722102948-f2986a6dc9da h1:6xmy+dluvkVMcI47ljUypht3+QVssXlMKxopw/1u8Hw=
+github.com/odigos-io/odigos/api v1.32.0-pre5.0.20260722102948-f2986a6dc9da/go.mod h1:EAaxcr4wc4SJeU5m9WQAfFGnGuLkCBCAVgNGEAVAQas=
+github.com/odigos-io/odigos/common v1.32.0-pre5.0.20260722102948-f2986a6dc9da h1:eXfoKQPmjJTdpNTHNpt/T7W5wPLV0XB5vR47cdtgcfo=
+github.com/odigos-io/odigos/common v1.32.0-pre5.0.20260722102948-f2986a6dc9da/go.mod h1:JKY9IUXVPaz1kCLrWA7+govYkkeWffC3YOTflrpJbKo=
 github.com/odigos-io/odigos/frontend v0.0.0-20260311114934-df43ef51103b h1:B8hLWXInW6v2jERr7GJVZWiu+F6TJdW2rBYfJzRJJcQ=
 github.com/odigos-io/odigos/frontend v0.0.0-20260311114934-df43ef51103b/go.mod h1:RjpM05ALa1eAu67XfBMGVEbKpMtoAIvWAYh1gbhSTxY=
-github.com/odigos-io/odigos/k8sutils v1.32.0-pre5 h1:rAX4wfXfR6xTX+hWyxlV5M6BQsDmILA6r5L8AJAUd/k=
-github.com/odigos-io/odigos/k8sutils v1.32.0-pre5/go.mod h1:j4YUO9NJ0skDVVQO4uuFtxMxG6ZmpRYPD84nAHcgg3Q=
+github.com/odigos-io/odigos/k8sutils v1.32.0-pre5.0.20260722102948-f2986a6dc9da h1:pWe+JBfhJtzjwRZsvfhrLuLxOh5+4u/CeA1/AY1mKSw=
+github.com/odigos-io/odigos/k8sutils v1.32.0-pre5.0.20260722102948-f2986a6dc9da/go.mod h1:j4YUO9NJ0skDVVQO4uuFtxMxG6ZmpRYPD84nAHcgg3Q=
 github.com/onsi/ginkgo/v2 v2.27.2 h1:LzwLj0b89qtIy6SSASkzlNvX6WktqurSHwkk2ipF/Ns=
 github.com/onsi/ginkgo/v2 v2.27.2/go.mod h1:ArE1D/XhNXBXCBkKOLkbsb2c81dQHCRcF5zwn/ykDRo=
 github.com/onsi/gomega v1.38.2 h1:eZCjf2xjZAqe+LeWvKb5weQ+NcPwX84kqJ0cZNxok2A=
@@ -185,6 +189,8 @@ golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7/go.mod h1:I/5z698sn9Ka8T
 golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
+gomodules.xyz/jsonpatch/v2 v2.4.0 h1:Ci3iUJyx9UeRx7CeFN8ARgGbkESwJK+KB9lLcWxY/Zw=
+gomodules.xyz/jsonpatch/v2 v2.4.0/go.mod h1:AH3dM2RI6uoBZxn3LVrfvJ3E0/9dG4cSrbuBJT4moAY=
 google.golang.org/protobuf v1.36.11 h1:fV6ZwhNocDyBLK0dj+fg8ektcVegBBuEolpbTQyBNVE=
 google.golang.org/protobuf v1.36.11/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
