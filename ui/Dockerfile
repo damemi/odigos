@@ -21,14 +21,15 @@ RUN apk add --no-cache git
 WORKDIR /src
 # Ref comes from: replace github.com/odigos-io/odigos/frontend => ... <version>
 COPY ui/go.mod /tmp/ui.go.mod
-# Supports both release tags (v1.32.0-pre5) and go-mod pseudo-versions
-# (v0.0.0-20260617121516-bfc5da9bb14b). Pseudo-versions are not valid git
-# refs, so extract the embedded 12-char commit and check that out instead.
+# Supports both release tags (v1.32.0-pre5) and go-mod pseudo-versions.
+# Pseudo-versions are not valid git refs, so extract the embedded 12-char
+# commit. All forms end in <yyyymmddhhmmss>-<sha>:
+#   v0.0.0-20260617121516-bfc5da9bb14b
+#   v1.32.0-pre5.0.20260722102948-f2986a6dc9da  (based on a pre-release tag)
 RUN ODIGOS_OSS_REF=$(grep -E '^replace github.com/odigos-io/odigos/frontend =>' /tmp/ui.go.mod | awk '{print $NF}') && \
     test -n "$ODIGOS_OSS_REF" && \
-    if echo "$ODIGOS_OSS_REF" | grep -qE '-[0-9]{14}-[0-9a-f]{12}$'; then \
-      CHECKOUT_REF=$(echo "$ODIGOS_OSS_REF" | grep -oE '[0-9a-f]{12}$'); \
-    else \
+    CHECKOUT_REF=$(echo "$ODIGOS_OSS_REF" | sed -nE 's/.*[0-9]{14}-([0-9a-f]{12})$/\1/p') && \
+    if [ -z "$CHECKOUT_REF" ]; then \
       CHECKOUT_REF="$ODIGOS_OSS_REF"; \
     fi && \
     git clone --filter=blob:none https://github.com/odigos-io/odigos.git oss && \

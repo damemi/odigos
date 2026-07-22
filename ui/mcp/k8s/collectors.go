@@ -55,7 +55,7 @@ func registerCollectorTools(s *server.MCPServer, deps Deps) {
 
 func getGatewayInfoHandler(deps Deps) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		info, err := collectors.GetGatewayDeploymentInfo(ctx)
+		info, err := collectors.GetGatewayDeploymentInfo(ctx, deps.PromAPI)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("gateway info: %v", err)), nil
 		}
@@ -68,7 +68,7 @@ func getGatewayInfoHandler(deps Deps) server.ToolHandlerFunc {
 
 func getOdigletInfoHandler(deps Deps) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		info, err := collectors.GetOdigletDaemonSetInfo(ctx)
+		info, err := collectors.GetOdigletDaemonSetInfo(ctx, deps.PromAPI)
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("odiglet info: %v", err)), nil
 		}
