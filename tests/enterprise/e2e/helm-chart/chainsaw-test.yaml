@@ -133,10 +133,15 @@ spec:
 
     - name: Generate Traffic
       try:
+        - script:
+            timeout: 2m10s
+            content: |
+              echo "Waiting for 30 seconds..."
+              sleep 90
         - apply:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
         - script:
-            timeout: 1m10s
+            timeout: 2m30s
             content: |
               kubectl wait --for=condition=complete job/$(kubectl get -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
         - delete:
