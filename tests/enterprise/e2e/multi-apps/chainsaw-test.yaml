@@ -103,6 +103,20 @@ spec:
             content: |
               kubectl describe pods -n default
 
+    # The first request through a freshly instrumented java app can't propagate
+    # context (http client instrumentations load lazily on first use). /rate only
+    # reaches currency, so warmup traces don't affect the trace assertions below.
+    - name: Warm Up Java Frontend
+      try:
+        - script:
+            timeout: 3m
+            content: |
+              kubectl delete pod warmup-traffic -n default --ignore-not-found
+              kubectl run warmup-traffic -n default --image=curlimages/curl:8.4.0 --restart=Never --command -- \
+                sh -c 'for i in 1 2 3; do curl -s -o /dev/null "http://frontend:8080/rate/usd-eur"; sleep 2; done'
+              kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/warmup-traffic -n default --timeout=90s
+              kubectl delete pod warmup-traffic -n default --ignore-not-found
+
     - name: Generate Traffic
       try:
         - apply:
