@@ -11,6 +11,7 @@ env:
   BASE_BRANCH: ${{ github.base_ref }}
   DEPOT_ORG_ID: p0xd21zf5r
   DEPOT_ODIGOS_OSS_REGISTRY_ID: 570xmd9kld
+  DEPOT_ODIGOS_ENTERPRISE_REGISTRY_ID: w8zkfqwtt3
 
 jobs:
   detect-changes:
@@ -92,97 +93,126 @@ jobs:
           cd ${{ matrix.module }}
           go test ./... -race
 
-  build-enterprise-components:
-    name: build-enterprise-components (${{ matrix.service }}${{ matrix.rhel == 'true' && ', rhel' || '' }}${{ matrix.extended == 'true' && ', extended' || '' }})
+  # Builds enterprise images used by e2e-tests (and scanned for vulns).
+  # Saved to Depot as odigos-enterprise-<component>-<run_id>.
+  build-enterprise-components-depot:
+    name: build-enterprise-components-depot (${{ matrix.component }})
     needs: detect-changes
     if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: depot-ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     strategy:
+      fail-fast: false
       matrix:
-        service:
+        component:
           [
-            odiglet,
             instrumentor,
-            central-ui,
             ui,
-            central-proxy,
-            central-backend,
+            odiglet,
+            odiglet-extended,
             agents,
+            agents-extended,
+            central-backend,
+            central-ui,
+            central-proxy,
           ]
-        rhel: ["true", "false"]
-        # extended: ['false'] is needed so that standard builds have extended=false explicitly.
-        # Without it, the include entries below (extended: 'true') would match existing
-        # rhel:false combinations and merge into them instead of creating new jobs.
-        extended: ["false"]
-        include:
-          # Extended builds (odiglet + agents with EXTENDED=true) are needed for
-          # important-customers tests that set odiglet.extended=true in their helm config.
-          # These mirror the -extended tag variants published in release-images.yml.
-          # extended: 'true' does not exist in the base matrix values, so these create new jobs.
-          - service: odiglet
-            rhel: "false"
-            extended: "true"
-          - service: agents
-            rhel: "false"
-            extended: "true"
-
     steps:
-      - name: Print tests run info
-        run: |
-          echo "Image tag: $IMAGE_TAG"
-          echo "Base branch: $BASE_BRANCH"
-
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
           persist-credentials: false
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 #v3.11.1
-      - name: Cache Docker Layers
-        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
-        with:
-          path: ${{ matrix.service }}-enterprise-cache
-          key: ${{ github.run_id }}-${{ matrix.service }}-docker-layers-${{ matrix.dockerfile }}
-      - name: Build Image
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 #v6.18.0
-        with:
-          file: >-
-            ${{ matrix.service == 'odiglet' && 'odiglet/Dockerfile'
-            || matrix.service == 'central-ui' && 'central-ui/Dockerfile'
-            || matrix.service == 'ui' && 'ui/Dockerfile'
-            || matrix.service == 'agents' && 'odiglet/Dockerfile'
-            || 'Dockerfile' }}
-          context: ${{ matrix.service == 'central-ui' && 'central-ui' || '.' }}
-          push: false
-          tags: registry.odigos.io/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.IMAGE_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
-          provenance: false
-          secrets: |
-            github_token=${{ secrets.RELEASE_BOT_TOKEN }}
-          cache-to: type=local,mode=max,dest=${{ matrix.service }}-enterprise-cache
-          cache-from: type=local,src=${{ matrix.service }}-enterprise-cache
-          outputs: type=docker,dest=/tmp/${{ matrix.service }}-enterprise${{ matrix.extended == 'true' && '-extended' || '' }}.tar
-          build-args: |
-            SERVICE_NAME=${{ matrix.service }}
-            RHEL=${{ matrix.rhel }}
-            EXTENDED=${{ matrix.extended || 'false' }}
-          target: >-
-            ${{ matrix.service == 'agents' && matrix.rhel == 'true' && 'agents-rhel' ||
-                matrix.service == 'agents' && 'agents' ||
-                matrix.rhel == 'true' && 'rhel' ||
-                '' }}
-      - name: Save enterprise component to cache
-        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
-        with:
-          path: /tmp/${{ matrix.service }}-enterprise${{ matrix.extended == 'true' && '-extended' || '' }}.tar
-          key: ${{ github.run_id }}-${{ matrix.service }}-enterprise-${{ matrix.extended == 'true' && 'extended' || (matrix.rhel == 'true' && 'rhel-certified' || 'standard') }}
 
-      - name: Load Docker image for scanning
-        run: docker load -i /tmp/${{ matrix.service }}-enterprise${{ matrix.extended == 'true' && '-extended' || '' }}.tar
+      - uses: depot/setup-action@v1
+
+      - name: Build Enterprise ${{ matrix.component }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+        run: |
+          make -f Makefile.depot \
+            depot-build-${{ matrix.component }} \
+            IMAGE_TAG=${{ env.IMAGE_TAG }} \
+            GITHUB_RUN_ID=${{ github.run_id }} \
+            GITHUB_REPOSITORY_NAME=${{ github.event.repository.name }}
+
+  # Builds RHEL-certified variants for non-central components. Not loaded into
+  # kind for e2e; only consumed by scan-enterprise-components.
+  build-enterprise-rhel-components-depot:
+    name: build-enterprise-rhel-components-depot
+    needs: detect-changes
+    if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
+    runs-on: depot-ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          persist-credentials: false
+
+      - uses: depot/setup-action@v1
+
+      - name: Build Enterprise RHEL Components
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+        run: |
+          make -j -f Makefile.depot \
+            depot-build-instrumentor-rhel-certified \
+            depot-build-ui-rhel-certified \
+            depot-build-odiglet-rhel-certified \
+            depot-build-agents-rhel-certified \
+            IMAGE_TAG=${{ env.IMAGE_TAG }} \
+            GITHUB_RUN_ID=${{ github.run_id }} \
+            GITHUB_REPOSITORY_NAME=${{ github.event.repository.name }}
+
+  # Scans images saved to the Depot registry (enterprise + OSS components used in e2e).
+  scan-enterprise-components:
+    name: scan-enterprise-components (${{ matrix.component }})
+    needs:
+      - detect-changes
+      - build-enterprise-components-depot
+      - build-enterprise-rhel-components-depot
+      - build-oss-components-for-tests
+    if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
+    runs-on: depot-ubuntu-24.04-2
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [enterprise]
+        component:
+          [
+            instrumentor,
+            instrumentor-rhel-certified,
+            ui,
+            ui-rhel-certified,
+            odiglet,
+            odiglet-extended,
+            odiglet-rhel-certified,
+            agents,
+            agents-extended,
+            agents-rhel-certified,
+            central-backend,
+            central-ui,
+            central-proxy,
+          ]
+        include:
+          - source: oss
+            component: autoscaler
+          - source: oss
+            component: scheduler
+          - source: oss
+            component: collector
+    steps:
+      - uses: depot/setup-action@v1
 
       - name: Scan image for vulnerabilities
         id: scan
         uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
-          image: registry.odigos.io/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.IMAGE_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
+          image: ${{ env.DEPOT_ORG_ID }}.registry.depot.dev/${{ matrix.source == 'oss' && env.DEPOT_ODIGOS_OSS_REGISTRY_ID || env.DEPOT_ODIGOS_ENTERPRISE_REGISTRY_ID }}:odigos-enterprise-${{ matrix.component }}-${{ github.run_id }}
           severity-cutoff: "CRITICAL"
         continue-on-error: true
 
@@ -190,7 +220,11 @@ jobs:
         if: always()
         run: |
           mkdir -p /tmp/scan-results
-          IMAGE_NAME="odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}${{ matrix.extended == 'true' && '-extended' || '' }}"
+          if [ "${{ matrix.source }}" = "oss" ]; then
+            IMAGE_NAME="odigos-${{ matrix.component }}"
+          else
+            IMAGE_NAME="odigos-enterprise-${{ matrix.component }}"
+          fi
 
           # Create a wrapper JSON with image metadata
           cat > /tmp/scan-results/${IMAGE_NAME}.json << 'EOF'
@@ -205,7 +239,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
         with:
-          name: vuln-scan-result-${{ matrix.service }}-${{ matrix.extended == 'true' && 'extended' || (matrix.rhel == 'true' && 'rhel' || 'standard') }}-${{ github.sha }}.json
+          name: vuln-scan-result-${{ matrix.component }}-${{ github.sha }}.json
           path: /tmp/scan-results/*.json
           retention-days: 30
 
@@ -277,57 +311,6 @@ jobs:
         run: |
           docker save registry.odigos.io/odigos-cli:${{ env.IMAGE_TAG }} -o /tmp/odigos-cli.tar
 
-      - name: Scan autoscaler image for vulnerabilities
-        id: scan-autoscaler
-        uses: odigos-io/ci-core/vulnerabilities-scanner@main
-        with:
-          image: ${{ env.DEPOT_ORG_ID }}.registry.depot.dev/${{ env.DEPOT_ODIGOS_OSS_REGISTRY_ID }}:odigos-enterprise-autoscaler-${{ github.run_id }}
-          severity-cutoff: "CRITICAL"
-        continue-on-error: true
-
-      - name: Save autoscaler scan JSON
-        run: |
-          mkdir -p /tmp/scan-results
-          cat > /tmp/scan-results/odigos-autoscaler.json << 'EOF'
-          ${{ steps.scan-autoscaler.outputs.results-json }}
-          EOF
-          jq --arg img "odigos-autoscaler" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' /tmp/scan-results/odigos-autoscaler.json > /tmp/scan-results/odigos-autoscaler_enriched.json
-          mv /tmp/scan-results/odigos-autoscaler_enriched.json /tmp/scan-results/odigos-autoscaler.json
-
-      - name: Scan scheduler image for vulnerabilities
-        id: scan-scheduler
-        uses: odigos-io/ci-core/vulnerabilities-scanner@main
-        with:
-          image: ${{ env.DEPOT_ORG_ID }}.registry.depot.dev/${{ env.DEPOT_ODIGOS_OSS_REGISTRY_ID }}:odigos-enterprise-scheduler-${{ github.run_id }}
-          severity-cutoff: "CRITICAL"
-        continue-on-error: true
-
-      - name: Save scheduler scan JSON
-        run: |
-          mkdir -p /tmp/scan-results
-          cat > /tmp/scan-results/odigos-scheduler.json << 'EOF'
-          ${{ steps.scan-scheduler.outputs.results-json }}
-          EOF
-          jq --arg img "odigos-scheduler" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' /tmp/scan-results/odigos-scheduler.json > /tmp/scan-results/odigos-scheduler_enriched.json
-          mv /tmp/scan-results/odigos-scheduler_enriched.json /tmp/scan-results/odigos-scheduler.json
-
-      - name: Scan collector image for vulnerabilities
-        id: scan-collector
-        uses: odigos-io/ci-core/vulnerabilities-scanner@main
-        with:
-          image: ${{ env.DEPOT_ORG_ID }}.registry.depot.dev/${{ env.DEPOT_ODIGOS_OSS_REGISTRY_ID }}:odigos-enterprise-collector-${{ github.run_id }}
-          severity-cutoff: "CRITICAL"
-        continue-on-error: true
-
-      - name: Save collector scan JSON
-        run: |
-          mkdir -p /tmp/scan-results
-          cat > /tmp/scan-results/odigos-collector.json << 'EOF'
-          ${{ steps.scan-collector.outputs.results-json }}
-          EOF
-          jq --arg img "odigos-collector" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' /tmp/scan-results/odigos-collector.json > /tmp/scan-results/odigos-collector_enriched.json
-          mv /tmp/scan-results/odigos-collector_enriched.json /tmp/scan-results/odigos-collector.json
-
       - name: Scan cli image for vulnerabilities
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
         id: scan-cli
@@ -347,11 +330,11 @@ jobs:
           jq --arg img "odigos-cli" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' /tmp/scan-results/odigos-cli.json > /tmp/scan-results/odigos-cli_enriched.json
           mv /tmp/scan-results/odigos-cli_enriched.json /tmp/scan-results/odigos-cli.json
 
-      - name: Upload OSS scan results JSON
-        if: always()
+      - name: Upload OSS CLI scan results JSON
+        if: always() && steps.cache-oss-components.outputs.cache-hit != 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
         with:
-          name: vuln-scan-result-oss-components.json
+          name: vuln-scan-result-cli-${{ github.sha }}.json
           path: /tmp/scan-results/*.json
           retention-days: 30
 
@@ -359,7 +342,7 @@ jobs:
     name: kubernetes-tests (${{ matrix.kube-version }}, ${{ matrix.test-scenario }}${{ matrix.customer != '' && format(', {0}', matrix.customer) || '' }}${{ matrix.wasp-enabled == true && ', with_wasp' || '' }})
     needs:
       - detect-changes
-      - build-enterprise-components
+      - build-enterprise-components-depot
       - build-oss-components-for-tests
     if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     runs-on: depot-ubuntu-24.04-4
@@ -523,82 +506,6 @@ jobs:
           kubectl wait -n kube-system --for=condition=Ready pod --all --timeout=300s
           kubectl rollout status -n kube-system deployment/coredns --timeout=300s
 
-      - name: Restore Odiglet Enterprise from Cache
-        if: steps.should-run.outputs.skip != 'true'
-        id: restore-odiglet-cache
-        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
-        with:
-          path: /tmp/odiglet-enterprise.tar
-          fail-on-cache-miss: true
-          key: ${{ github.run_id }}-odiglet-enterprise-standard
-
-      - name: Check if Odiglet cache was restored
-        if: steps.should-run.outputs.skip != 'true' && steps.restore-odiglet-cache.outputs.cache-hit != 'true'
-        run: |
-          echo "❌ Cache miss for Odiglet Enterprise - this should not happen!"
-          echo "Expected cache key: ${{ github.run_id }}-odiglet-enterprise-standard"
-          exit 1
-
-      - name: Restore Instrumentor Enterprise from Cache
-        if: steps.should-run.outputs.skip != 'true'
-        id: restore-instrumentor-cache
-        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
-        with:
-          path: /tmp/instrumentor-enterprise.tar
-          fail-on-cache-miss: true
-          key: ${{ github.run_id }}-instrumentor-enterprise-standard
-
-      - name: Check if Instrumentor cache was restored
-        if: steps.should-run.outputs.skip != 'true' && steps.restore-instrumentor-cache.outputs.cache-hit != 'true'
-        run: |
-          echo "❌ Cache miss for Instrumentor Enterprise - this should not happen!"
-          echo "Expected cache key: ${{ github.run_id }}-instrumentor-enterprise-standard"
-          exit 1
-
-      - name: Restore UI Enterprise from Cache
-        if: steps.should-run.outputs.skip != 'true'
-        id: restore-ui-cache
-        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
-        with:
-          path: /tmp/ui-enterprise.tar
-          fail-on-cache-miss: true
-          key: ${{ github.run_id }}-ui-enterprise-standard
-
-      - name: Check if UI cache was restored
-        if: steps.should-run.outputs.skip != 'true' && steps.restore-ui-cache.outputs.cache-hit != 'true'
-        run: |
-          echo "❌ Cache miss for UI Enterprise - this should not happen!"
-          echo "Expected cache key: ${{ github.run_id }}-ui-enterprise-standard"
-          exit 1
-
-      - name: Restore Extended Odiglet from Cache
-        if: steps.should-run.outputs.skip != 'true'
-        id: restore-odiglet-extended-cache
-        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
-        with:
-          path: /tmp/odiglet-enterprise-extended.tar
-          fail-on-cache-miss: true
-          key: ${{ github.run_id }}-odiglet-enterprise-extended
-
-      - name: Restore Extended Agents from Cache
-        if: steps.should-run.outputs.skip != 'true'
-        id: restore-agents-extended-cache
-        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
-        with:
-          path: /tmp/agents-enterprise-extended.tar
-          fail-on-cache-miss: true
-          key: ${{ github.run_id }}-agents-enterprise-extended
-
-      # When testing the init-container mount method we need the non-extended agents image too
-      - name: Restore Agents Enterprise from Cache
-        if: steps.should-run.outputs.skip != 'true'
-        id: restore-agents-cache
-        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
-        with:
-          path: /tmp/agents-enterprise.tar
-          fail-on-cache-miss: true
-          key: ${{ github.run_id }}-agents-enterprise-standard
-
       - name: Restore Odigos OSS Components from Cache
         if: steps.should-run.outputs.skip != 'true'
         id: restore-oss-cache
@@ -617,66 +524,33 @@ jobs:
           echo "Expected cache key: ${{ github.run_id }}-odigos-oss-components"
           exit 1
 
-      - name: Restore Central Backend Enterprise from Cache
-        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui')
-        id: restore-central-backend-cache
-        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
-        with:
-          path: /tmp/central-backend-enterprise.tar
-          fail-on-cache-miss: true
-          key: ${{ github.run_id }}-central-backend-enterprise-standard
-
-      - name: Check if Central Backend cache was restored
-        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui') && steps.restore-central-backend-cache.outputs.cache-hit != 'true'
-        run: |
-          echo "❌ Cache miss for Central Backend Enterprise - this should not happen!"
-          echo "Expected cache key: ${{ github.run_id }}-central-backend-enterprise-standard"
-          exit 1
-
-      - name: Restore Central UI Enterprise from Cache
-        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui')
-        id: restore-central-ui-cache
-        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
-        with:
-          path: /tmp/central-ui-enterprise.tar
-          fail-on-cache-miss: true
-          key: ${{ github.run_id }}-central-ui-enterprise-standard
-
-      - name: Check if Central UI cache was restored
-        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui') && steps.restore-central-ui-cache.outputs.cache-hit != 'true'
-        run: |
-          echo "❌ Cache miss for Central UI Enterprise - this should not happen!"
-          echo "Expected cache key: ${{ github.run_id }}-central-ui-enterprise-standard"
-          exit 1
-
-      - name: Restore Central Proxy Enterprise from Cache
-        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui')
-        id: restore-central-proxy-cache
-        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
-        with:
-          path: /tmp/central-proxy-enterprise.tar
-          fail-on-cache-miss: true
-          key: ${{ github.run_id }}-central-proxy-enterprise-standard
-
-      - name: Check if Central Proxy cache was restored
-        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui') && steps.restore-central-proxy-cache.outputs.cache-hit != 'true'
-        run: |
-          echo "❌ Cache miss for Central Proxy Enterprise - this should not happen!"
-          echo "Expected cache key: ${{ github.run_id }}-central-proxy-enterprise-standard"
-          exit 1
-
       - uses: depot/setup-action@v1
 
       - name: Load Odigos Components to Kind Cluster
         if: steps.should-run.outputs.skip != 'true'
         run: |
-          kind load image-archive /tmp/odiglet-enterprise.tar
-          kind load image-archive /tmp/odiglet-enterprise-extended.tar
-          kind load image-archive /tmp/instrumentor-enterprise.tar
-          kind load image-archive /tmp/agents-enterprise.tar
-          kind load image-archive /tmp/agents-enterprise-extended.tar
           kind load image-archive /tmp/odigos-cli.tar
-          kind load image-archive /tmp/ui-enterprise.tar
+
+          # Pull enterprise images saved to the Depot registry during
+          # build-enterprise-components-depot, retag to the names expected by e2e
+          # (registry.odigos.io/odigos-enterprise-<component>:IMAGE_TAG), then load into kind.
+          for component in instrumentor ui odiglet agents; do
+            LOCAL_IMAGE="registry.odigos.io/odigos-enterprise-${component}:${{ env.IMAGE_TAG }}"
+            depot pull \
+              --project ${{ env.DEPOT_ODIGOS_ENTERPRISE_REGISTRY_ID }} \
+              -t "$LOCAL_IMAGE" \
+              "odigos-enterprise-${component}-${{ github.run_id }}"
+            kind load docker-image "$LOCAL_IMAGE"
+          done
+
+          for component in odiglet agents; do
+            LOCAL_IMAGE="registry.odigos.io/odigos-enterprise-${component}:${{ env.IMAGE_TAG }}-extended"
+            depot pull \
+              --project ${{ env.DEPOT_ODIGOS_ENTERPRISE_REGISTRY_ID }} \
+              -t "$LOCAL_IMAGE" \
+              "odigos-enterprise-${component}-extended-${{ github.run_id }}"
+            kind load docker-image "$LOCAL_IMAGE"
+          done
 
           # Pull OSS images saved to the Depot registry during build-oss-components-for-tests,
           # retag to the names expected by e2e (registry.odigos.io/odigos-<component>:IMAGE_TAG),
@@ -694,9 +568,14 @@ jobs:
       - name: Load Central Components to Kind Cluster
         if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui')
         run: |
-          kind load image-archive /tmp/central-backend-enterprise.tar
-          kind load image-archive /tmp/central-ui-enterprise.tar
-          kind load image-archive /tmp/central-proxy-enterprise.tar
+          for component in central-backend central-ui central-proxy; do
+            LOCAL_IMAGE="registry.odigos.io/odigos-enterprise-${component}:${{ env.IMAGE_TAG }}"
+            depot pull \
+              --project ${{ env.DEPOT_ODIGOS_ENTERPRISE_REGISTRY_ID }} \
+              -t "$LOCAL_IMAGE" \
+              "odigos-enterprise-${component}-${{ github.run_id }}"
+            kind load docker-image "$LOCAL_IMAGE"
+          done
 
       - name: Load Latest UI Image from Container Registry
         if: steps.should-run.outputs.skip != 'true'
@@ -797,7 +676,7 @@ jobs:
 
   vulnerability-report:
     name: Generate Vulnerability Report
-    needs: [detect-changes, build-enterprise-components, build-oss-components-for-tests]
+    needs: [detect-changes, scan-enterprise-components, build-oss-components-for-tests]
     runs-on: ubuntu-latest
     if: always() && needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     steps:
