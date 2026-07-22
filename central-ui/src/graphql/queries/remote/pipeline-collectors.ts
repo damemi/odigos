@@ -3,6 +3,43 @@ import { PlatformType } from '@odigos/ui-kit/types';
 
 export const GET_GATEWAY_INFO: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
+    'v1.33': `
+  query GatewayDeploymentInfo {
+    gatewayDeploymentInfo {
+      status
+      hpa {
+        min
+        max
+        current
+        desired
+        conditions {
+          status
+          type
+          reason
+          message
+
+        }
+      }
+      resources {
+        requests {
+          cpu
+          memory
+        }
+        limits {
+          cpu
+          memory
+        }
+      }
+      imageVersion
+      lastRolloutAt
+      rolloutInProgress
+      manifestYAML
+      configMapYAML
+      throughputTracesBytesPerSec
+      throughputMetricsBytesPerSec
+      throughputLogsBytesPerSec
+    }
+  }`,
     'v1.12': `
   query GatewayDeploymentInfo {
     gatewayDeploymentInfo {
@@ -89,6 +126,34 @@ export const GET_GATEWAY_PODS: VersionedRemoteFetch = {
 
 export const GET_NODE_COLLECTOR_INFO: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
+    'v1.33': `
+  query OdigletDaemonSetInfo {
+    odigletDaemonSetInfo {
+      status
+      nodes {
+        desired
+        ready
+      }
+      resources {
+        requests {
+          cpu
+          memory
+        }
+        limits {
+          cpu
+          memory
+        }
+      }
+      imageVersion
+      lastRolloutAt
+      rolloutInProgress
+      manifestYAML
+      configMapYAML
+      throughputTracesBytesPerSec
+      throughputMetricsBytesPerSec
+      throughputLogsBytesPerSec
+    }
+  }`,
     'v1.12': `
   query OdigletDaemonSetInfo {
     odigletDaemonSetInfo {
