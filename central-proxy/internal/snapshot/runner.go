@@ -5,12 +5,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"k8s.io/client-go/kubernetes"
 
 	"github.com/odigos-io/central-proxy/internal/logger"
 	websocketserver "github.com/odigos-io/central-proxy/internal/websocket"
 	"github.com/odigos-io/central-proxy/kube"
-	odigosclientset "github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned"
 )
 
 const (
@@ -43,8 +41,8 @@ type Runner struct {
 }
 
 // NewRunner creates a new snapshot runner with informer-based caching
-func NewRunner(ctx context.Context, clusterID, clusterName string, clientset kubernetes.Interface, odigosClient odigosclientset.Interface, sender MessageSender, ignoredNamespaces []string) *Runner {
-	cache := kube.NewCache(clientset, odigosClient)
+func NewRunner(ctx context.Context, clusterID, clusterName string, client *kube.Client, sender MessageSender, ignoredNamespaces []string) *Runner {
+	cache := kube.NewCache(ctx, client)
 	generator := NewGenerator(clusterID, clusterName, cache, ignoredNamespaces)
 
 	return &Runner{

@@ -2,12 +2,12 @@ package kube
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/odigos-io/central-proxy/internal/logger"
-	odigosclientset "github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned"
 	odigosinformers "github.com/odigos-io/odigos/api/generated/odigos/informers/externalversions"
 	odigosv1alpha1informer "github.com/odigos-io/odigos/api/generated/odigos/informers/externalversions/odigos/v1alpha1"
 	odigoslisters "github.com/odigos-io/odigos/api/generated/odigos/listers/odigos/v1alpha1"
@@ -22,12 +22,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/informers"
 	appsinformers "k8s.io/client-go/informers/apps/v1"
 	batchinformers "k8s.io/client-go/informers/batch/v1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
-	"k8s.io/client-go/kubernetes"
 	appslisters "k8s.io/client-go/listers/apps/v1"
 	batchlisters "k8s.io/client-go/listers/batch/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
@@ -41,8 +42,9 @@ const (
 
 // Cache provides cached access to Kubernetes resources using informers
 type Cache struct {
-	factory       informers.SharedInformerFactory
-	odigosFactory odigosinformers.SharedInformerFactory
+	factory        informers.SharedInformerFactory
+	odigosFactory  odigosinformers.SharedInformerFactory
+	dynamicFactory dynamicinformer.DynamicSharedInformerFactory
 
 	// Informers
 	namespaceInformer             coreinformers.NamespaceInformer
@@ -50,6 +52,7 @@ type Cache struct {
 	statefulsetInformer           appsinformers.StatefulSetInformer
 	daemonsetInformer             appsinformers.DaemonSetInformer
 	cronjobInformer               batchinformers.CronJobInformer
+	deploymentConfigInformer      cache.SharedIndexInformer
 	instrumentationConfigInformer odigosv1alpha1informer.InstrumentationConfigInformer
 	sourceInformer                odigosv1alpha1informer.SourceInformer
 
@@ -59,6 +62,7 @@ type Cache struct {
 	statefulsetLister           appslisters.StatefulSetLister
 	daemonsetLister             appslisters.DaemonSetLister
 	cronjobLister               batchlisters.CronJobLister
+	deploymentConfigLister      cache.GenericLister
 	instrumentationConfigLister odigoslisters.InstrumentationConfigLister
 	sourceLister                odigoslisters.SourceLister
 
@@ -75,9 +79,9 @@ type Cache struct {
 }
 
 // NewCache creates a new Cache with informers for all watched resources
-func NewCache(clientset kubernetes.Interface, odigosClient odigosclientset.Interface) *Cache {
-	factory := informers.NewSharedInformerFactory(clientset, DefaultResyncPeriod)
-	odigosFactory := odigosinformers.NewSharedInformerFactory(odigosClient, DefaultResyncPeriod)
+func NewCache(ctx context.Context, client *Client) *Cache {
+	factory := informers.NewSharedInformerFactory(client.Interface, DefaultResyncPeriod)
+	odigosFactory := odigosinformers.NewSharedInformerFactory(client.OdigosClient, DefaultResyncPeriod)
 
 	namespaceInformer := factory.Core().V1().Namespaces()
 	deploymentInformer := factory.Apps().V1().Deployments()
@@ -119,6 +123,15 @@ func NewCache(clientset kubernetes.Interface, odigosClient odigosclientset.Inter
 		},
 	}
 
+	if client.IsDeploymentConfigAvailable(ctx) {
+		c.dynamicFactory = dynamicinformer.NewDynamicSharedInformerFactory(client.DynamicClient, DefaultResyncPeriod)
+		deploymentConfigInformer := c.dynamicFactory.ForResource(deploymentConfigGVR)
+		c.deploymentConfigInformer = deploymentConfigInformer.Informer()
+		c.deploymentConfigLister = deploymentConfigInformer.Lister()
+		c.hasSynced = append(c.hasSynced, c.deploymentConfigInformer.HasSynced)
+		logger.Log.Info("DeploymentConfig snapshots enabled")
+	}
+
 	// Slim cached objects before they enter the store. On large clusters the default
 	// full-object cache exceeds the central-proxy memory limit (see PLAT-1302).
 	c.setInformerTransforms()
@@ -135,6 +148,9 @@ func (c *Cache) setInformerTransforms() {
 	_ = c.statefulsetInformer.Informer().SetTransform(statefulsetsTransformFunc)
 	_ = c.daemonsetInformer.Informer().SetTransform(daemonsetsTransformFunc)
 	_ = c.cronjobInformer.Informer().SetTransform(cronjobsTransformFunc)
+	if c.deploymentConfigInformer != nil {
+		_ = c.deploymentConfigInformer.SetTransform(deploymentConfigsTransformFunc)
+	}
 	_ = c.instrumentationConfigInformer.Informer().SetTransform(instrumentationConfigsTransformFunc)
 	_ = c.sourceInformer.Informer().SetTransform(sourcesTransformFunc)
 }
@@ -168,6 +184,9 @@ func (c *Cache) registerEventHandlers() {
 	c.statefulsetInformer.Informer().AddEventHandler(handler)
 	c.daemonsetInformer.Informer().AddEventHandler(handler)
 	c.cronjobInformer.Informer().AddEventHandler(handler)
+	if c.deploymentConfigInformer != nil {
+		c.deploymentConfigInformer.AddEventHandler(handler)
+	}
 	c.instrumentationConfigInformer.Informer().AddEventHandler(handler)
 	c.sourceInformer.Informer().AddEventHandler(handler)
 }
@@ -205,6 +224,9 @@ func (c *Cache) Start(ctx context.Context) error {
 	// Start all informers
 	c.factory.Start(ctx.Done())
 	c.odigosFactory.Start(ctx.Done())
+	if c.dynamicFactory != nil {
+		c.dynamicFactory.Start(ctx.Done())
+	}
 
 	// Wait for all caches to sync
 	logger.Log.Info("Waiting for informer caches to sync")
@@ -364,6 +386,28 @@ func (c *Cache) ListAllDaemonSets() ([]*appsv1.DaemonSet, error) {
 // ListAllCronJobs returns all cronjobs across all namespaces from cache
 func (c *Cache) ListAllCronJobs() ([]*batchv1.CronJob, error) {
 	return c.cronjobLister.List(labels.Everything())
+}
+
+// ListAllDeploymentConfigs returns all DeploymentConfigs when the OpenShift API is available.
+func (c *Cache) ListAllDeploymentConfigs() ([]*unstructured.Unstructured, error) {
+	if c.deploymentConfigLister == nil {
+		return nil, nil
+	}
+
+	objects, err := c.deploymentConfigLister.List(labels.Everything())
+	if err != nil {
+		return nil, err
+	}
+
+	deploymentConfigs := make([]*unstructured.Unstructured, 0, len(objects))
+	for _, object := range objects {
+		deploymentConfig, ok := object.(*unstructured.Unstructured)
+		if !ok {
+			return nil, fmt.Errorf("expected a DeploymentConfig, got %T", object)
+		}
+		deploymentConfigs = append(deploymentConfigs, deploymentConfig)
+	}
+	return deploymentConfigs, nil
 }
 
 func dataStreamNamesFromIC(ic *odigosv1.InstrumentationConfig) []string {

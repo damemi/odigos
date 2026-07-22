@@ -11,6 +11,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 // Transforms keep only fields needed for cluster snapshots and dirty tracking.
@@ -116,6 +117,26 @@ func cronjobsTransformFunc(obj interface{}) (interface{}, error) {
 			ResourceVersion: cronjob.ResourceVersion,
 		},
 	}
+	cacheutils.MarkObjectAsTransformed(minimal)
+	return minimal, nil
+}
+
+func deploymentConfigsTransformFunc(obj interface{}) (interface{}, error) {
+	deploymentConfig, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return nil, fmt.Errorf("expected a DeploymentConfig, got %T", obj)
+	}
+
+	if cacheutils.IsObjectTransformed(deploymentConfig) {
+		return deploymentConfig, nil
+	}
+
+	minimal := &unstructured.Unstructured{}
+	minimal.SetAPIVersion(deploymentConfig.GetAPIVersion())
+	minimal.SetKind(deploymentConfig.GetKind())
+	minimal.SetNamespace(deploymentConfig.GetNamespace())
+	minimal.SetName(deploymentConfig.GetName())
+	minimal.SetResourceVersion(deploymentConfig.GetResourceVersion())
 	cacheutils.MarkObjectAsTransformed(minimal)
 	return minimal, nil
 }

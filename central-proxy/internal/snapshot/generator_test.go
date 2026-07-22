@@ -9,6 +9,9 @@ import (
 	odigosfake "github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned/fake"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 )
 
@@ -19,9 +22,12 @@ func TestGenerateSnapshotIncludesEmptyNamespaces(t *testing.T) {
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "empty"}},
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ignored"}},
 	)
-	cache := kube.NewCache(clientset, odigosfake.NewSimpleClientset())
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
+	cache := kube.NewCache(ctx, &kube.Client{
+		Interface:    clientset,
+		OdigosClient: odigosfake.NewSimpleClientset(),
+	})
 
 	if err := cache.Start(ctx); err != nil {
 		t.Fatalf("failed to start cache: %v", err)
@@ -49,4 +55,54 @@ func TestGenerateSnapshotIncludesEmptyNamespaces(t *testing.T) {
 	if len(namespace.Workloads) != 0 {
 		t.Errorf("empty namespace has %d workloads, want 0", len(namespace.Workloads))
 	}
+}
+
+func TestGenerateSnapshotIncludesDeploymentConfigs(t *testing.T) {
+	logger.InitLogger()
+
+	clientset := kubernetesfake.NewSimpleClientset(
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "app"}},
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "ignored"}},
+	)
+	dynamicClient := dynamicfake.NewSimpleDynamicClient(
+		runtime.NewScheme(),
+		newDeploymentConfig("app", "checkout"),
+		newDeploymentConfig("ignored", "system"),
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	cache := kube.NewCache(ctx, &kube.Client{
+		Interface:     clientset,
+		OdigosClient:  odigosfake.NewSimpleClientset(),
+		DynamicClient: dynamicClient,
+	})
+
+	if err := cache.Start(ctx); err != nil {
+		t.Fatalf("failed to start cache: %v", err)
+	}
+
+	got, err := NewGenerator("cluster-id", "cluster-name", cache, []string{"ignored"}).GenerateSnapshot()
+	if err != nil {
+		t.Fatalf("GenerateSnapshot() error = %v", err)
+	}
+
+	if len(got.Namespaces) != 1 {
+		t.Fatalf("GenerateSnapshot() returned %d namespaces, want 1", len(got.Namespaces))
+	}
+	workloads := got.Namespaces[0].Workloads
+	if len(workloads) != 1 {
+		t.Fatalf("DeploymentConfig namespace has %d workloads, want 1", len(workloads))
+	}
+	if workloads[0].Namespace != "app" || workloads[0].Name != "checkout" || workloads[0].Kind != "DeploymentConfig" {
+		t.Errorf("unexpected DeploymentConfig snapshot: %+v", workloads[0])
+	}
+}
+
+func newDeploymentConfig(namespace, name string) *unstructured.Unstructured {
+	deploymentConfig := &unstructured.Unstructured{}
+	deploymentConfig.SetAPIVersion("apps.openshift.io/v1")
+	deploymentConfig.SetKind("DeploymentConfig")
+	deploymentConfig.SetNamespace(namespace)
+	deploymentConfig.SetName(name)
+	return deploymentConfig
 }

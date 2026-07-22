@@ -103,7 +103,6 @@ func startWebSocketConnection(ctx context.Context, client *kube.Client, ignoredN
 		wsClient.GetProxyID(),
 		wsClient.GetClusterName(),
 		client,
-		client.OdigosClient,
 		wsClient,
 		ignoredNamespaces,
 	)

@@ -93,6 +93,18 @@ func (g *Generator) GenerateSnapshot() (*ClusterSnapshot, error) {
 		}
 	}
 
+	// Collect all OpenShift DeploymentConfigs
+	deploymentConfigs, err := g.cache.ListAllDeploymentConfigs()
+	if err != nil {
+		return nil, err
+	}
+	for _, dc := range deploymentConfigs {
+		if !g.isIgnoredNamespace(dc.GetNamespace()) {
+			info := g.cache.GetWorkloadInstrumentationInfo(dc.GetNamespace(), dc.GetName(), "DeploymentConfig")
+			nsWorkloads[dc.GetNamespace()] = append(nsWorkloads[dc.GetNamespace()], workloadSnapshotFromInfo(dc.GetNamespace(), dc.GetName(), "DeploymentConfig", info))
+		}
+	}
+
 	// Build namespace snapshots
 	var nsSnapshots []NamespaceSnapshot
 

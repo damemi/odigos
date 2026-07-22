@@ -3,12 +3,13 @@ package kube
 import (
 	"testing"
 
-	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/api/k8sconsts"
+	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	cacheutils "github.com/odigos-io/odigos/k8sutils/pkg/cache"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 func TestDeploymentsTransformFunc_KeepsIdentityOnly(t *testing.T) {
@@ -61,6 +62,55 @@ func TestDeploymentsTransformFunc_KeepsIdentityOnly(t *testing.T) {
 	}
 	if again != minimal {
 		t.Fatalf("expected idempotent transform to return same pointer")
+	}
+}
+
+func TestDeploymentConfigsTransformFunc_KeepsIdentityOnly(t *testing.T) {
+	input := &unstructured.Unstructured{Object: map[string]interface{}{
+		"apiVersion": "apps.openshift.io/v1",
+		"kind":       "DeploymentConfig",
+		"metadata": map[string]interface{}{
+			"namespace":       "app-ns",
+			"name":            "app",
+			"resourceVersion": "42",
+			"labels":          map[string]interface{}{"app": "web"},
+		},
+		"spec": map[string]interface{}{
+			"replicas": int64(3),
+		},
+	}}
+
+	out, err := deploymentConfigsTransformFunc(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	minimal, ok := out.(*unstructured.Unstructured)
+	if !ok {
+		t.Fatalf("expected *unstructured.Unstructured, got %T", out)
+	}
+	if minimal.GetAPIVersion() != "apps.openshift.io/v1" || minimal.GetKind() != "DeploymentConfig" {
+		t.Fatalf("group/version/kind not preserved: %s %s", minimal.GetAPIVersion(), minimal.GetKind())
+	}
+	if minimal.GetNamespace() != "app-ns" || minimal.GetName() != "app" || minimal.GetResourceVersion() != "42" {
+		t.Fatalf("identity fields not preserved: %+v", minimal.Object)
+	}
+	if _, ok := minimal.Object["spec"]; ok {
+		t.Fatalf("expected spec stripped, got %+v", minimal.Object["spec"])
+	}
+	if minimal.GetLabels() != nil {
+		t.Fatal("expected labels stripped")
+	}
+	if !cacheutils.IsObjectTransformed(minimal) {
+		t.Fatal("expected object to be marked transformed")
+	}
+
+	again, err := deploymentConfigsTransformFunc(minimal)
+	if err != nil {
+		t.Fatalf("unexpected error on second transform: %v", err)
+	}
+	if again != minimal {
+		t.Fatal("expected idempotent transform to return same pointer")
 	}
 }
 
