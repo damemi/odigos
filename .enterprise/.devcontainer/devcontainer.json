@@ -4,14 +4,16 @@
     "dockerfile": "Dockerfile"
   },
   "features": {
-    "ghcr.io/devcontainers/features/aws-cli:1.1.2": {},
+    "ghcr.io/devcontainers/features/aws-cli:1.1.4": {},
     "ghcr.io/CASL0/devcontainer-features/eksctl:1": {},
-    "ghcr.io/devcontainers/features/node:1": {
-      "version": "v25.0.0"
+    "ghcr.io/devcontainers/features/node:2.1.0": {
+      "version": "v25.0.0",
+      "installYarnUsingApt": "true"
     },
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+    "ghcr.io/devcontainers/features/docker-in-docker:4.0.0": {
       "version": "latest",
-      "enableNonRootDocker": true
+      "enableNonRootDocker": true,
+      "moby": "false"
     }
   },
   "mounts": [

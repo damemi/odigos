@@ -1,5 +1,5 @@
 # Base image: Go devcontainer with Debian bookworm
-FROM mcr.microsoft.com/devcontainers/go:dev-1.26-bookworm
+FROM mcr.microsoft.com/devcontainers/go:1.26-trixie
 
 USER root
 RUN rm -f /etc/apt/sources.list.d/yarn.list
