@@ -147,11 +147,6 @@ spec:
 
     - name: Generate Traffic
       try:
-        - script:
-            timeout: 2m10s
-            content: |
-              echo "Waiting for 30 seconds..."
-              sleep 90
         - apply:
             file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
         - script:
