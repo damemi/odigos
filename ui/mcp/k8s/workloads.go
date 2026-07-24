@@ -73,11 +73,11 @@ func getRuntimeDetectionHandler() server.ToolHandlerFunc {
 		}
 
 		type containerRuntime struct {
-			ContainerName   string `json:"containerName"`
-			Language        string `json:"language"`
-			RuntimeVersion  string `json:"runtimeVersion,omitempty"`
-			CriErrorMessage string `json:"criErrorMessage,omitempty"`
-			OtherAgent      string `json:"otherAgent,omitempty"`
+			ContainerName   string   `json:"containerName"`
+			Language        string   `json:"language"`
+			RuntimeVersion  string   `json:"runtimeVersion,omitempty"`
+			CriErrorMessage string   `json:"criErrorMessage,omitempty"`
+			OtherAgents     []string `json:"otherAgents,omitempty"`
 		}
 		details := make([]containerRuntime, 0, len(ic.Status.RuntimeDetailsByContainer))
 		for _, d := range ic.Status.RuntimeDetailsByContainer {
@@ -89,8 +89,8 @@ func getRuntimeDetectionHandler() server.ToolHandlerFunc {
 			if d.CriErrorMessage != nil {
 				cr.CriErrorMessage = *d.CriErrorMessage
 			}
-			if d.OtherAgent != nil {
-				cr.OtherAgent = d.OtherAgent.Name
+			for _, agent := range d.OtherAgents {
+				cr.OtherAgents = append(cr.OtherAgents, agent.Name)
 			}
 			details = append(details, cr)
 		}
