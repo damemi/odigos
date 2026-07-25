@@ -93,13 +93,14 @@ RUN wget --directory-prefix=loader https://storage.googleapis.com/odigos-loader/
 FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS builder
 
 WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
-# Copyy local modules required by the build
+# Copy local modules required by the build
 COPY odigosauth/ odigosauth/
 COPY distros/ distros/
 WORKDIR ./odiglet/
-# Copy rest of source code for odiglet
-COPY odiglet/ .
 
+# Generate (OBI bpf2go + lib generate) depends on module pins / Makefile, not app source.
+# Keep it in its own layer so source-only changes leave this step CACHED.
+COPY odiglet/go.mod odiglet/go.sum odiglet/Makefile ./
 ARG TARGETARCH
 ARG LD_FLAGS
 ARG RHEL=false
@@ -107,8 +108,24 @@ ENV GOINSECURE=go.opentelemetry.io*
 RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
+    --mount=type=cache,target=/go/src/github.com/odigos-io/odigos-enterprise/odiglet/.obi,sharing=locked \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
-    GOOS=linux GOARCH=$TARGETARCH LD_FLAGS="${LD_FLAGS}" make build-odiglet
+    make generate GO_MOD_TIDY=0 && \
+    mkdir -p /tmp/odiglet-gomod && cp go.mod go.sum /tmp/odiglet-gomod/
+
+# App source — invalidates compile only. Restore go.mod/go.sum from generate
+# (setup-obi adds a local OBI replace that the context COPY would overwrite).
+# Remount .obi so go build can resolve the local OBI replace (cache mounts are
+# not persisted into the image layer). Tidy here with sources present.
+COPY odiglet/ .
+RUN --mount=type=secret,id=github_token \
+    --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg \
+    --mount=type=cache,target=/go/src/github.com/odigos-io/odigos-enterprise/odiglet/.obi,sharing=locked \
+    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
+    cp /tmp/odiglet-gomod/go.mod /tmp/odiglet-gomod/go.sum ./ && \
+    go mod tidy && \
+    GOOS=linux GOARCH=$TARGETARCH go build -ldflags="${LD_FLAGS}" -o odiglet ./cmd/enterprise
 
 # Build CSI driver binary (same binary as community odiglet; required when mountMethod is k8s-csi-driver)
 RUN --mount=type=secret,id=github_token \

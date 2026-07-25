@@ -46,6 +46,11 @@ comma:= ,
 GOPRIVATE := $(subst $(space),$(comma),$(CLEANED_LIBRARIES))
 export GOPRIVATE
 
+# When GO_MOD_TIDY=0, setup-obi only adds the OBI replace and skips `go mod tidy`.
+# Needed for Docker builds that run generate before copying .go sources — tidy would
+# otherwise prune every require ("all matched no packages").
+GO_MOD_TIDY ?= 1
+
 # Dispatch to the selected OBI setup method (OBI_SETUP=pin|release).
 # Phony: prerequisite of `generate` (so `build-odiglet` / `make generate` refresh OBI first).
 setup-obi: setup-obi-$(OBI_SETUP)
@@ -59,6 +64,8 @@ setup-obi-pin:
 		git init -q "$(OBI_CLONE_DIR)"; \
 		git -C "$(OBI_CLONE_DIR)" remote add origin "$(OBI_GIT_URL)"; \
 	fi
+	# Drop stale locks left by crashed/concurrent BuildKit cache mounts (e.g. shallow.lock).
+	@find "$(OBI_CLONE_DIR)/.git" -name '*.lock' -delete 2>/dev/null || true
 	@git -C "$(OBI_CLONE_DIR)" fetch --depth 1 origin "$(OBI_COMMIT)"
 	@git -C "$(OBI_CLONE_DIR)" checkout -q --detach FETCH_HEAD
 	@if [ -f /.dockerenv ] || ! command -v docker >/dev/null 2>&1; then \
@@ -69,7 +76,7 @@ setup-obi-pin:
 		$(MAKE) -C "$(OBI_CLONE_DIR)" docker-generate; \
 	fi
 	@go mod edit -replace "$(OBI_MODULE)=$(OBI_PIN_REPLACE_PATH)"
-	@go mod tidy
+	@if [ "$(GO_MOD_TIDY)" = "1" ]; then go mod tidy; fi
 
 # Release method: download and verify OBI's source-generated release tarball, extract under .obi/,
 # then add a local-path go.mod replace.
@@ -88,7 +95,7 @@ setup-obi-release:
 		rm -rf "$(OBI_EXTRACTED)"; \
 		tar -xzf "$$tarball_name" -C $(OBI_LOCAL_DIR)
 	@go mod edit -replace "$(OBI_MODULE)=$(OBI_EXTRACTED)"
-	@go mod tidy
+	@if [ "$(GO_MOD_TIDY)" = "1" ]; then go mod tidy; fi
 
 build-odiglet: generate
 	go build -ldflags="$(LD_FLAGS)" -o odiglet ./cmd/enterprise
