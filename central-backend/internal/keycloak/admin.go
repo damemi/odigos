@@ -20,7 +20,8 @@ type KeycloakAdminService struct {
 	realm string
 }
 
-type IdentityProviderConfig struct {
+// OidcIdentityProviderConfig holds the configuration needed to create/update an OIDC IdP in Keycloak.
+type OidcIdentityProviderConfig struct {
 	ProviderAlias string
 	ClientID      string
 	ClientSecret  string
@@ -102,46 +103,25 @@ type oidcDiscoveryEndpoints struct {
 	LogoutURL        string
 }
 
-func (e oidcDiscoveryEndpoints) ToConfigMap() map[string]string {
-	out := map[string]string{}
-	if e.AuthorizationURL != "" {
-		out["authorizationUrl"] = e.AuthorizationURL
-	}
-	if e.TokenURL != "" {
-		out["tokenUrl"] = e.TokenURL
-	}
-	if e.UserInfoURL != "" {
-		out["userInfoUrl"] = e.UserInfoURL
-	}
-	if e.JWKSURL != "" {
-		out["jwksUrl"] = e.JWKSURL
-	}
-	if e.Issuer != "" {
-		out["issuer"] = e.Issuer
-	}
-	if e.LogoutURL != "" {
-		out["logoutUrl"] = e.LogoutURL
-	}
-	return out
-}
-
+// oidcIdentityProviderConfig is the typed Keycloak OIDC identity-provider config.
+// Keycloak's Admin API expects config as map[string]string; ToConfigMap converts this struct.
 type oidcIdentityProviderConfig struct {
-	ClientAuthMethod      string
-	ClientID              string
-	ClientSecret          string
-	UseDiscovery          string
-	MetadataDescriptorURL string
-	SyncMode              string
-	ValidateSignature     string
-	UseJwksURL            string
-	DefaultScope          string
+	ClientAuthMethod      string `json:"clientAuthMethod"`
+	ClientID              string `json:"clientId"`
+	ClientSecret          string `json:"clientSecret"`
+	UseDiscovery          string `json:"useDiscovery"`
+	MetadataDescriptorURL string `json:"metadataDescriptorUrl"`
+	SyncMode              string `json:"syncMode"`
+	ValidateSignature     string `json:"validateSignature"`
+	UseJwksURL            string `json:"useJwksUrl"`
+	DefaultScope          string `json:"defaultScope,omitempty"`
 
-	AuthorizationURL string
-	TokenURL         string
-	UserInfoURL      string
-	JWKSURL          string
-	Issuer           string
-	LogoutURL        string
+	AuthorizationURL string `json:"authorizationUrl,omitempty"`
+	TokenURL         string `json:"tokenUrl,omitempty"`
+	UserInfoURL      string `json:"userInfoUrl,omitempty"`
+	JWKSURL          string `json:"jwksUrl,omitempty"`
+	Issuer           string `json:"issuer,omitempty"`
+	LogoutURL        string `json:"logoutUrl,omitempty"`
 }
 
 func (c *oidcIdentityProviderConfig) ApplyDiscoveryEndpoints(e oidcDiscoveryEndpoints) {
@@ -166,63 +146,37 @@ func (c *oidcIdentityProviderConfig) ApplyDiscoveryEndpoints(e oidcDiscoveryEndp
 	}
 }
 
-func (c oidcIdentityProviderConfig) ToConfigMap() map[string]string {
-	out := map[string]string{
-		"clientAuthMethod":      c.ClientAuthMethod,
-		"clientId":              c.ClientID,
-		"clientSecret":          c.ClientSecret,
-		"useDiscovery":          c.UseDiscovery,
-		"metadataDescriptorUrl": c.MetadataDescriptorURL,
-		"syncMode":              c.SyncMode,
-		"validateSignature":     c.ValidateSignature,
-		"useJwksUrl":            c.UseJwksURL,
+func (c oidcIdentityProviderConfig) ToConfigMap() (map[string]string, error) {
+	body, err := json.Marshal(c)
+	if err != nil {
+		return nil, fmt.Errorf("marshal OIDC identity provider config: %w", err)
 	}
-	if c.DefaultScope != "" {
-		out["defaultScope"] = c.DefaultScope
+	out := map[string]string{}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, fmt.Errorf("unmarshal OIDC identity provider config: %w", err)
 	}
-
-	// Keep exact same key names as before.
-	if c.AuthorizationURL != "" {
-		out["authorizationUrl"] = c.AuthorizationURL
-	}
-	if c.TokenURL != "" {
-		out["tokenUrl"] = c.TokenURL
-	}
-	if c.UserInfoURL != "" {
-		out["userInfoUrl"] = c.UserInfoURL
-	}
-	if c.JWKSURL != "" {
-		out["jwksUrl"] = c.JWKSURL
-	}
-	if c.Issuer != "" {
-		out["issuer"] = c.Issuer
-	}
-	if c.LogoutURL != "" {
-		out["logoutUrl"] = c.LogoutURL
-	}
-
-	return out
+	return out, nil
 }
 
 type samlIdentityProviderConfig struct {
-	// NOTE: keep key names identical to previous map usage.
-	EntityID                string
-	SingleSignOnServiceURL  string
-	SigningCertificate      string
-	ValidateSignature       string
-	PostBindingAuthnRequest string
-	PostBindingResponse     string
+	EntityID                string `json:"entityId"`
+	SingleSignOnServiceURL  string `json:"singleSignOnServiceUrl"`
+	SigningCertificate      string `json:"signingCertificate"`
+	ValidateSignature       string `json:"validateSignature"`
+	PostBindingAuthnRequest string `json:"postBindingAuthnRequest"`
+	PostBindingResponse     string `json:"postBindingResponse"`
 }
 
-func (c samlIdentityProviderConfig) ToConfigMap() map[string]string {
-	return map[string]string{
-		"entityId":                c.EntityID,
-		"singleSignOnServiceUrl":  c.SingleSignOnServiceURL,
-		"signingCertificate":      c.SigningCertificate,
-		"validateSignature":       c.ValidateSignature,
-		"postBindingAuthnRequest": c.PostBindingAuthnRequest,
-		"postBindingResponse":     c.PostBindingResponse,
+func (c samlIdentityProviderConfig) ToConfigMap() (map[string]string, error) {
+	body, err := json.Marshal(c)
+	if err != nil {
+		return nil, fmt.Errorf("marshal SAML identity provider config: %w", err)
 	}
+	out := map[string]string{}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, fmt.Errorf("unmarshal SAML identity provider config: %w", err)
+	}
+	return out, nil
 }
 
 func NewKeycloakAdminService() *KeycloakAdminService {
@@ -312,7 +266,7 @@ func (kc *KeycloakAdminService) GetIdentityProvider(adminUsername string, adminP
 	return nil, nil
 }
 
-func (kc *KeycloakAdminService) ConfigureIdentityProvider(adminUsername string, adminPassword string, config *IdentityProviderConfig) error {
+func (kc *KeycloakAdminService) ConfigureOidcIdentityProvider(adminUsername string, adminPassword string, config *OidcIdentityProviderConfig) error {
 	url := kc.identityProviderInstancesURL()
 
 	adminToken, err := kc.GetAdminToken(adminUsername, adminPassword)
@@ -320,7 +274,12 @@ func (kc *KeycloakAdminService) ConfigureIdentityProvider(adminUsername string, 
 		return err
 	}
 
-	body, err := json.Marshal(getIDPConfig(config))
+	payload, err := getIDPConfig(config)
+	if err != nil {
+		return err
+	}
+
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal identity provider config: %w", err)
 	}
@@ -359,7 +318,12 @@ func (kc *KeycloakAdminService) ConfigureSamlIdentityProvider(adminUsername stri
 		return err
 	}
 
-	body, err := json.Marshal(getSamlIDPConfig(config))
+	payload, err := getSamlIDPConfig(config)
+	if err != nil {
+		return err
+	}
+
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("failed to marshal SAML identity provider config: %w", err)
 	}
@@ -424,9 +388,13 @@ func (kc *KeycloakAdminService) updateIdentityProvider(adminUsername string, adm
 	return nil
 }
 
-// UpdateIdentityProvider updates an existing IdP by alias using PUT.
-func (kc *KeycloakAdminService) UpdateIdentityProvider(adminUsername string, adminPassword string, config *IdentityProviderConfig) error {
-	if err := kc.updateIdentityProvider(adminUsername, adminPassword, config.ProviderAlias, getIDPConfig(config), AuthProtocolOIDC); err != nil {
+// UpdateOidcIdentityProvider updates an existing OIDC IdP by alias using PUT.
+func (kc *KeycloakAdminService) UpdateOidcIdentityProvider(adminUsername string, adminPassword string, config *OidcIdentityProviderConfig) error {
+	payload, err := getIDPConfig(config)
+	if err != nil {
+		return err
+	}
+	if err := kc.updateIdentityProvider(adminUsername, adminPassword, config.ProviderAlias, payload, AuthProtocolOIDC); err != nil {
 		return err
 	}
 
@@ -444,7 +412,11 @@ func (kc *KeycloakAdminService) UpdateIdentityProvider(adminUsername string, adm
 
 // UpdateSamlIdentityProvider updates an existing SAML IdP by alias using PUT.
 func (kc *KeycloakAdminService) UpdateSamlIdentityProvider(adminUsername string, adminPassword string, config *SamlIdentityProviderConfig) error {
-	if err := kc.updateIdentityProvider(adminUsername, adminPassword, config.ProviderAlias, getSamlIDPConfig(config), AuthProtocolSAML); err != nil {
+	payload, err := getSamlIDPConfig(config)
+	if err != nil {
+		return err
+	}
+	if err := kc.updateIdentityProvider(adminUsername, adminPassword, config.ProviderAlias, payload, AuthProtocolSAML); err != nil {
 		return err
 	}
 
@@ -710,17 +682,24 @@ func GetKeycloakAdminTokenWithRetry(ctx context.Context, shutdownCh <-chan struc
 	}
 }
 
+// resolveDiscoveryURL replaces {tenantid} placeholders in the discovery URL.
+func resolveDiscoveryURL(discoveryURL, tenantID string) string {
+	return strings.ReplaceAll(discoveryURL, "{tenantid}", tenantID)
+}
+
 // getIDPConfig builds the IDP config map for the given configuration.
-func getIDPConfig(config *IdentityProviderConfig) IdentityProviderUpsertPayload {
+func getIDPConfig(config *OidcIdentityProviderConfig) (IdentityProviderUpsertPayload, error) {
 	// Build the configuration map for the identity provider
 	// https://www.keycloak.org/docs-api/latest/rest-api/index.html#IdentityProviderRepresentation
+
+	discoveryURL := resolveDiscoveryURL(config.DiscoveryURL, config.TenantID)
 
 	oidcConfig := oidcIdentityProviderConfig{
 		ClientAuthMethod:      "client_secret_post",
 		ClientID:              config.ClientID,
 		ClientSecret:          config.ClientSecret,
 		UseDiscovery:          "true",
-		MetadataDescriptorURL: config.DiscoveryURL,
+		MetadataDescriptorURL: discoveryURL,
 		SyncMode:              "FORCE",
 		ValidateSignature:     "true",
 		UseJwksURL:            "true",
@@ -728,8 +707,13 @@ func getIDPConfig(config *IdentityProviderConfig) IdentityProviderUpsertPayload 
 	}
 
 	// Proactively populate endpoints from discovery so they are present even if KC doesn't import automatically
-	if config.DiscoveryURL != "" {
-		oidcConfig.ApplyDiscoveryEndpoints(getOIDCDiscoveryEndpoints(config))
+	if discoveryURL != "" {
+		oidcConfig.ApplyDiscoveryEndpoints(getOIDCDiscoveryEndpoints(config, discoveryURL))
+	}
+
+	configMap, err := oidcConfig.ToConfigMap()
+	if err != nil {
+		return IdentityProviderUpsertPayload{}, err
 	}
 
 	return IdentityProviderUpsertPayload{
@@ -740,11 +724,11 @@ func getIDPConfig(config *IdentityProviderConfig) IdentityProviderUpsertPayload 
 		TrustEmail:                  true,  // trusts the email from the IDP without verification, avoiding additional prompts
 		UpdateProfileFirstLoginMode: "off", // prevents the account update prompt after first login
 		FirstBrokerLoginFlowAlias:   "first broker login",
-		Config:                      oidcConfig.ToConfigMap(),
-	}
+		Config:                      configMap,
+	}, nil
 }
 
-func getSamlIDPConfig(config *SamlIdentityProviderConfig) IdentityProviderUpsertPayload {
+func getSamlIDPConfig(config *SamlIdentityProviderConfig) (IdentityProviderUpsertPayload, error) {
 	samlConfig := samlIdentityProviderConfig{
 		EntityID:                config.IdpEntityID,
 		SingleSignOnServiceURL:  config.SingleSignOnServiceURL,
@@ -752,6 +736,11 @@ func getSamlIDPConfig(config *SamlIdentityProviderConfig) IdentityProviderUpsert
 		ValidateSignature:       fmt.Sprintf("%t", config.ValidateSignature),
 		PostBindingAuthnRequest: fmt.Sprintf("%t", config.PostBindingAuthnRequest),
 		PostBindingResponse:     fmt.Sprintf("%t", config.PostBindingResponse),
+	}
+
+	configMap, err := samlConfig.ToConfigMap()
+	if err != nil {
+		return IdentityProviderUpsertPayload{}, err
 	}
 
 	return IdentityProviderUpsertPayload{
@@ -762,18 +751,18 @@ func getSamlIDPConfig(config *SamlIdentityProviderConfig) IdentityProviderUpsert
 		TrustEmail:                  true,
 		UpdateProfileFirstLoginMode: "off",
 		FirstBrokerLoginFlowAlias:   "first broker login",
-		Config:                      samlConfig.ToConfigMap(),
-	}
+		Config:                      configMap,
+	}, nil
 }
 
 // getOIDCDiscoveryEndpoints fetches the OIDC discovery document and maps fields
 // we care about into Keycloak IdP config keys.
-func getOIDCDiscoveryEndpoints(config *IdentityProviderConfig) oidcDiscoveryEndpoints {
-	if config.DiscoveryURL == "" {
+func getOIDCDiscoveryEndpoints(config *OidcIdentityProviderConfig, discoveryURL string) oidcDiscoveryEndpoints {
+	if discoveryURL == "" {
 		return oidcDiscoveryEndpoints{}
 	}
 
-	resp, err := http.Get(config.DiscoveryURL)
+	resp, err := http.Get(discoveryURL)
 	if err != nil {
 		return oidcDiscoveryEndpoints{}
 	}
@@ -782,33 +771,23 @@ func getOIDCDiscoveryEndpoints(config *IdentityProviderConfig) oidcDiscoveryEndp
 		return oidcDiscoveryEndpoints{}
 	}
 
-	var data map[string]interface{}
-	dec := json.NewDecoder(resp.Body)
-	if err := dec.Decode(&data); err != nil {
+	var data oidcDiscoveryDocument
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		return oidcDiscoveryEndpoints{}
 	}
 
-	endpoints := oidcDiscoveryEndpoints{}
-
-	copyIfString := func(getKey string, set func(string)) {
-		if val, ok := data[getKey]; ok {
-			if s, ok := val.(string); ok && s != "" {
-				set(s)
-			}
-		}
+	endpoints := oidcDiscoveryEndpoints{
+		AuthorizationURL: data.AuthorizationEndpoint,
+		TokenURL:         data.TokenEndpoint,
+		UserInfoURL:      data.UserinfoEndpoint,
+		JWKSURL:          data.JwksURI,
+		Issuer:           data.Issuer,
+		LogoutURL:        data.EndSessionEndpoint,
 	}
 
-	copyIfString("authorization_endpoint", func(s string) { endpoints.AuthorizationURL = s })
-	copyIfString("token_endpoint", func(s string) { endpoints.TokenURL = s })
-	copyIfString("userinfo_endpoint", func(s string) { endpoints.UserInfoURL = s })
-	copyIfString("jwks_uri", func(s string) { endpoints.JWKSURL = s })
-	copyIfString("issuer", func(s string) { endpoints.Issuer = s })
-	// Not all providers expose end_session_endpoint; copy if present
-	copyIfString("end_session_endpoint", func(s string) { endpoints.LogoutURL = s })
-
 	if endpoints.Issuer != "" {
-		// replace "{tenantid}" with the tenant id
-		endpoints.Issuer = strings.Replace(endpoints.Issuer, "{tenantid}", config.TenantID, 1)
+		// Azure multi-tenant discovery returns issuer with a {tenantid} placeholder.
+		endpoints.Issuer = strings.ReplaceAll(endpoints.Issuer, "{tenantid}", config.TenantID)
 	}
 
 	return endpoints

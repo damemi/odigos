@@ -293,18 +293,20 @@ type WriteUserInput struct {
 type AuthProviderID string
 
 const (
-	AuthProviderIDAzure AuthProviderID = "AZURE"
-	AuthProviderIDOkta  AuthProviderID = "OKTA"
+	AuthProviderIDGoogle AuthProviderID = "GOOGLE"
+	AuthProviderIDAzure  AuthProviderID = "AZURE"
+	AuthProviderIDOkta   AuthProviderID = "OKTA"
 )
 
 var AllAuthProviderID = []AuthProviderID{
+	AuthProviderIDGoogle,
 	AuthProviderIDAzure,
 	AuthProviderIDOkta,
 }
 
 func (e AuthProviderID) IsValid() bool {
 	switch e {
-	case AuthProviderIDAzure, AuthProviderIDOkta:
+	case AuthProviderIDGoogle, AuthProviderIDAzure, AuthProviderIDOkta:
 		return true
 	}
 	return false

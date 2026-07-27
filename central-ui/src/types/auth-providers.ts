@@ -8,6 +8,7 @@ export enum LoginType {
 
 export enum AuthProviderId {
   EMAIL = 'email', // for client-side only
+  GOOGLE = 'GOOGLE',
   AZURE = 'AZURE',
   OKTA = 'OKTA',
 }
@@ -36,6 +37,5 @@ export interface AuthProviderOption {
   displayName: string;
   icon: SVG;
   discoveryUrl?: string;
-  requireTenantId?: boolean;
-  loginType?: LoginType;
+  defaultLoginType?: LoginType;
 }

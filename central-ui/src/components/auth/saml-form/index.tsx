@@ -7,6 +7,7 @@ import { useGenericForm } from '@odigos/ui-kit/hooks';
 import { FlexColumn, Tooltip } from '@odigos/ui-kit/components';
 import { VisualGreenRings } from '@odigos/ui-kit/visuals';
 import { AUTH_PROVIDERS } from '@/utils/constants/auth-providers';
+import { LoginTypeSegment } from '@/components/auth/login-type-segment';
 import { Button, ButtonTab, CliCommand, Input, Note } from '@odigos/ui-kit/components';
 import { ConstrainedWidth, ErrorText, FormContainer, FormSubtitle, FormTitle } from '../styled';
 import { AuthProviderId, LoginType, type SamlIdentityProviderInput, EnsureSamlIdentityProvider } from '@/types';
@@ -19,6 +20,7 @@ interface SamlFormProps {
   isCreateSuccess: boolean;
   setIsCreateSuccess: Dispatch<SetStateAction<boolean>>;
   onLogin: (providerId: AuthProviderId, loginType: LoginType) => void;
+  onLoginTypeChange: (loginType: LoginType) => void;
 }
 
 const VisualWrapper = styled.div`
@@ -32,7 +34,31 @@ const FullWidthTooltip = styled.div`
   }
 `;
 
-const SamlForm: React.FC<SamlFormProps> = ({ providerId, loading, error, onCreate, isCreateSuccess, setIsCreateSuccess, onLogin }) => {
+type SamlFormField = {
+  name: keyof SamlIdentityProviderInput;
+  label: string;
+  required: boolean;
+};
+
+const SAML_FORM_FIELDS: SamlFormField[] = [
+  {
+    name: 'idpEntityId',
+    label: STRINGS.IDP_ENTITY_ID,
+    required: true,
+  },
+  {
+    name: 'singleSignOnServiceUrl',
+    label: STRINGS.SINGLE_SIGN_ON_SERVICE_URL,
+    required: true,
+  },
+  {
+    name: 'signingCertificate',
+    label: STRINGS.SIGNING_CERTIFICATE,
+    required: true,
+  },
+];
+
+const SamlForm: React.FC<SamlFormProps> = ({ providerId, loading, error, onCreate, isCreateSuccess, setIsCreateSuccess, onLogin, onLoginTypeChange }) => {
   const [callbackUrl, setCallbackUrl] = useState<string | undefined>();
   const [hasCopiedCallbackUrl, setHasCopiedCallbackUrl] = useState(false);
   const { formData, handleFormChange, formErrors, handleErrorChange } = useGenericForm<SamlIdentityProviderInput>({
@@ -41,7 +67,7 @@ const SamlForm: React.FC<SamlFormProps> = ({ providerId, loading, error, onCreat
     singleSignOnServiceUrl: '',
     signingCertificate: '',
   });
-  const provider = useMemo(() => AUTH_PROVIDERS.filter((p) => p.loginType === LoginType.SAML).find((p) => p.providerId === providerId), [providerId]);
+  const provider = useMemo(() => AUTH_PROVIDERS.find((p) => p.providerId === providerId), [providerId]);
 
   const validateForm = (values: typeof formData): boolean => {
     const errors: typeof formErrors = {};
@@ -101,7 +127,13 @@ const SamlForm: React.FC<SamlFormProps> = ({ providerId, loading, error, onCreat
             <FlexColumn $gap={8}>
               <FullWidthTooltip>
                 <Tooltip text={!!callbackUrl && !hasCopiedCallbackUrl ? STRINGS.COPY_CALLBACK_URL_TOOLTIP : undefined}>
-                  <ButtonTab label={`${STRINGS.LOGIN_WITH} SAML`} loading={loading} disabled={!!callbackUrl && !hasCopiedCallbackUrl} onClick={() => onLogin(providerId, LoginType.SAML)} />
+                  <ButtonTab
+                    label={`${STRINGS.LOGIN_WITH} ${provider.displayName}`}
+                    loading={loading}
+                    disabled={!!callbackUrl && !hasCopiedCallbackUrl}
+                    onClick={() => onLogin(providerId, LoginType.SAML)}
+                    icon={provider.icon}
+                  />
                 </Tooltip>
               </FullWidthTooltip>
             </FlexColumn>
@@ -120,31 +152,19 @@ const SamlForm: React.FC<SamlFormProps> = ({ providerId, loading, error, onCreat
 
       <ConstrainedWidth>
         <FlexColumn $gap={12}>
+          <LoginTypeSegment selected={LoginType.SAML} setSelected={onLoginTypeChange} />
           <Note status={StatusType.Default} message={STRINGS.SIGN_UP_ADMIN_DISCLAIMER} />
-          <Input
-            name='idpEntityId'
-            value={formData.idpEntityId}
-            onChange={(e) => handleFormChange(e.target.name, e.target.value)}
-            errorMessage={formErrors.idpEntityId}
-            label={STRINGS.IDP_ENTITY_ID}
-            required
-          />
-          <Input
-            name='singleSignOnServiceUrl'
-            value={formData.singleSignOnServiceUrl}
-            onChange={(e) => handleFormChange(e.target.name, e.target.value)}
-            errorMessage={formErrors.singleSignOnServiceUrl}
-            label={STRINGS.SINGLE_SIGN_ON_SERVICE_URL}
-            required
-          />
-          <Input
-            name='signingCertificate'
-            value={formData.signingCertificate}
-            onChange={(e) => handleFormChange(e.target.name, e.target.value)}
-            errorMessage={formErrors.signingCertificate}
-            label={STRINGS.SIGNING_CERTIFICATE}
-            required
-          />
+          {SAML_FORM_FIELDS.map((field) => (
+            <Input
+              key={field.name}
+              name={field.name}
+              value={formData[field.name]}
+              onChange={(e) => handleFormChange(e.target.name, e.target.value)}
+              errorMessage={formErrors[field.name]}
+              label={field.label}
+              required={field.required}
+            />
+          ))}
         </FlexColumn>
       </ConstrainedWidth>
 

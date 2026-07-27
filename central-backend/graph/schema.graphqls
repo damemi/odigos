@@ -25,6 +25,7 @@ enum SignInStatus {
 }
 
 enum AuthProviderId {
+  GOOGLE
   AZURE
   OKTA
 }

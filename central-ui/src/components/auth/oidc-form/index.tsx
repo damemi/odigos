@@ -4,12 +4,13 @@ import { StatusType } from '@odigos/ui-kit/types';
 import { VSquareIcon } from '@odigos/ui-kit/icons';
 import * as STRINGS from '@/utils/constants/strings';
 import { useGenericForm } from '@odigos/ui-kit/hooks';
-import { FlexColumn, Tooltip } from '@odigos/ui-kit/components';
 import { VisualGreenRings } from '@odigos/ui-kit/visuals';
-import { AUTH_PROVIDERS } from '@/utils/constants/auth-providers';
+import { FlexColumn, Tooltip } from '@odigos/ui-kit/components';
+import { AUTH_PROVIDERS, isOidcTenantIdRequired } from '@/utils/constants/auth-providers';
+import { LoginTypeSegment } from '@/components/auth/login-type-segment';
 import { Button, ButtonTab, CliCommand, Input, Note } from '@odigos/ui-kit/components';
 import { ConstrainedWidth, ErrorText, FormContainer, FormSubtitle, FormTitle } from '../styled';
-import { AuthProviderId, LoginType, OidcIdentityProviderInput, AuthProviderOption, EnsureOidcIdentityProvider } from '@/types';
+import { AuthProviderId, LoginType, OidcIdentityProviderInput, EnsureOidcIdentityProvider } from '@/types';
 
 interface OidcFormProps {
   providerId: AuthProviderId;
@@ -19,6 +20,7 @@ interface OidcFormProps {
   isCreateSuccess: boolean;
   setIsCreateSuccess: Dispatch<SetStateAction<boolean>>;
   onLogin: (providerId: AuthProviderId, loginType: LoginType) => void;
+  onLoginTypeChange: (loginType: LoginType) => void;
 }
 
 const VisualWrapper = styled.div`
@@ -32,39 +34,46 @@ const FullWidthTooltip = styled.div`
   }
 `;
 
-const getFields = (provider: AuthProviderOption) => [
+type OidcFormField = {
+  name: keyof OidcIdentityProviderInput;
+  type?: string;
+  label: string;
+  tooltip: string;
+  required: boolean;
+};
+
+const OIDC_FORM_FIELDS: OidcFormField[] = [
   {
-    name: 'clientId' as keyof OidcIdentityProviderInput,
-    label: STRINGS.CLIENT_ID,
-    tooltip: STRINGS.CLIENT_ID_TOOLTIP,
-    required: true,
-  },
-  {
-    name: 'clientSecret' as keyof OidcIdentityProviderInput,
-    type: 'password',
-    label: STRINGS.CLIENT_SECRET,
-    tooltip: STRINGS.CLIENT_SECRET_TOOLTIP,
-    required: true,
-  },
-  {
-    name: 'discoveryUrl' as keyof OidcIdentityProviderInput,
+    name: 'discoveryUrl',
     label: STRINGS.DISCOVERY_URL,
     tooltip: STRINGS.DISCOVERY_URL_TOOLTIP,
     required: true,
   },
   {
-    name: 'tenantId' as keyof OidcIdentityProviderInput,
+    name: 'tenantId',
     label: STRINGS.TENANT_ID,
     tooltip: STRINGS.TENANT_ID_TOOLTIP,
-    required: provider.requireTenantId || false,
+    required: false, // computed dynamically from discovery URL / provider
+  },
+  {
+    name: 'clientId',
+    label: STRINGS.CLIENT_ID,
+    tooltip: STRINGS.CLIENT_ID_TOOLTIP,
+    required: true,
+  },
+  {
+    name: 'clientSecret',
+    type: 'password',
+    label: STRINGS.CLIENT_SECRET,
+    tooltip: STRINGS.CLIENT_SECRET_TOOLTIP,
+    required: true,
   },
 ];
 
-const OidcForm: React.FC<OidcFormProps> = ({ providerId, loading, error, onCreate, isCreateSuccess, setIsCreateSuccess, onLogin }) => {
+const OidcForm: React.FC<OidcFormProps> = ({ providerId, loading, error, onCreate, isCreateSuccess, setIsCreateSuccess, onLogin, onLoginTypeChange }) => {
   const [callbackUrl, setCallbackUrl] = useState<string | undefined>();
   const [hasCopiedCallbackUrl, setHasCopiedCallbackUrl] = useState(false);
-  const provider = useMemo(() => AUTH_PROVIDERS.filter((p) => p.loginType === LoginType.OIDC).find((p) => p.providerId === providerId), [providerId]);
-  const fields = useMemo(() => (provider ? getFields(provider) : []), [provider]);
+  const provider = useMemo(() => AUTH_PROVIDERS.find((p) => p.providerId === providerId), [providerId]);
 
   const { formData, handleFormChange, formErrors, handleErrorChange } = useGenericForm<OidcIdentityProviderInput>({
     providerId,
@@ -73,6 +82,8 @@ const OidcForm: React.FC<OidcFormProps> = ({ providerId, loading, error, onCreat
     discoveryUrl: provider?.discoveryUrl || '',
     tenantId: '',
   });
+
+  const tenantIdRequired = isOidcTenantIdRequired(formData.discoveryUrl, providerId);
 
   const validateForm = (values: typeof formData): boolean => {
     const errors: typeof formErrors = {};
@@ -86,7 +97,7 @@ const OidcForm: React.FC<OidcFormProps> = ({ providerId, loading, error, onCreat
     if (!values.discoveryUrl) {
       errors.discoveryUrl = STRINGS.DISCOVERY_URL_REQUIRED;
     }
-    if (provider?.requireTenantId && !values.tenantId) {
+    if (isOidcTenantIdRequired(values.discoveryUrl, providerId) && !values.tenantId) {
       errors.tenantId = STRINGS.TENANT_ID_REQUIRED;
     }
 
@@ -162,20 +173,26 @@ const OidcForm: React.FC<OidcFormProps> = ({ providerId, loading, error, onCreat
 
       <ConstrainedWidth>
         <FlexColumn $gap={12}>
+          <LoginTypeSegment selected={LoginType.OIDC} setSelected={onLoginTypeChange} />
           <Note status={StatusType.Default} message={STRINGS.SIGN_UP_ADMIN_DISCLAIMER} />
-          {fields.map((field) => (
-            <Input
-              key={field.name}
-              type={field.type}
-              name={field.name}
-              value={formData[field.name]}
-              onChange={(e) => handleFormChange(e.target.name, e.target.value)}
-              errorMessage={formErrors[field.name]}
-              label={field.label}
-              tooltip={field.tooltip}
-              required={field.required}
-            />
-          ))}
+          {OIDC_FORM_FIELDS.map((field) => {
+            const required = field.name === 'tenantId' ? tenantIdRequired : field.required;
+            const tooltip =
+              field.name === 'tenantId' ? (tenantIdRequired ? STRINGS.TENANT_ID_TOOLTIP : STRINGS.TENANT_ID_OPTIONAL_TOOLTIP) : field.tooltip;
+            return (
+              <Input
+                key={field.name}
+                type={field.type}
+                name={field.name}
+                value={formData[field.name]}
+                onChange={(e) => handleFormChange(e.target.name, e.target.value)}
+                errorMessage={formErrors[field.name]}
+                label={field.label}
+                tooltip={tooltip}
+                required={required}
+              />
+            );
+          })}
         </FlexColumn>
       </ConstrainedWidth>
 

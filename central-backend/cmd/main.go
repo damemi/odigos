@@ -280,16 +280,52 @@ func ensureKeycloakState(username, password string) error {
 	if err := keycloak.EnsureAccessTokenLifespan(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm, consts.GetAccessTokenLifespanSeconds()); err != nil {
 		return fmt.Errorf("failed to ensure token lifespan: %w", err)
 	}
+	// Skip IdP first-login interstitials so the auth-code flow returns immediately
+	// after the external IdP completes (no Review Profile / VERIFY_PROFILE pages).
+	if err := keycloak.EnsureFirstBrokerLoginSkipsReviewProfile(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm); err != nil {
+		return fmt.Errorf("failed to configure first broker login flow: %w", err)
+	}
+	if err := keycloak.EnsureVerifyProfileDisabled(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm); err != nil {
+		return fmt.Errorf("failed to disable VERIFY_PROFILE required action: %w", err)
+	}
 	return nil
 }
 
-// watchKeycloakHealth monitors Keycloak and re-runs setup when it recovers after being down.
-// This handles the case where Keycloak restarts and loses its ephemeral H2 state.
+// watchKeycloakHealth monitors Keycloak and re-runs setup when it recovers after being down,
+// or when the odigos-central client is missing (ephemeral H2 wipe between health ticks).
+//
+// Reachability is checked every healthCheckInterval. The heavier admin-token + client
+// existence probe runs on recovery, and otherwise at most once per clientCheckInterval
+// with a short-lived cached admin token to avoid password-grant spam in steady state.
 func watchKeycloakHealth(ctx context.Context, shutdownCh <-chan struct{}, username, password string) {
-	ticker := time.NewTicker(30 * time.Second)
+	const (
+		healthCheckInterval = 30 * time.Second
+		clientCheckInterval = 60 * time.Second
+		adminTokenTTL       = 45 * time.Second
+	)
+
+	ticker := time.NewTicker(healthCheckInterval)
 	defer ticker.Stop()
 	kc := keycloak.NewKeycloakAdminService()
 	wasDown := false
+	var lastClientCheck time.Time
+	var cachedAdminToken string
+	var cachedAdminTokenAt time.Time
+
+	getAdminToken := func() (string, error) {
+		if cachedAdminToken != "" && time.Since(cachedAdminTokenAt) < adminTokenTTL {
+			return cachedAdminToken, nil
+		}
+		token, err := kc.GetAdminToken(username, password)
+		if err != nil {
+			cachedAdminToken = ""
+			return "", err
+		}
+		cachedAdminToken = token
+		cachedAdminTokenAt = time.Now()
+		return token, nil
+	}
+
 	for {
 		select {
 		case <-ticker.C:
@@ -299,16 +335,44 @@ func watchKeycloakHealth(ctx context.Context, shutdownCh <-chan struct{}, userna
 					logger.Log.Warn("Keycloak became unreachable")
 				}
 				wasDown = true
+				cachedAdminToken = ""
 				continue
 			}
-			if wasDown {
-				logger.Log.Info("Keycloak recovered, re-running setup")
+
+			needsSetup := wasDown
+			shouldProbeClient := wasDown || lastClientCheck.IsZero() || time.Since(lastClientCheck) >= clientCheckInterval
+			if !needsSetup && shouldProbeClient {
+				adminToken, err := getAdminToken()
+				if err != nil {
+					logger.Log.Warn("Keycloak healthy but admin token unavailable", "error", err)
+					continue
+				}
+				exists, err := keycloak.OdigosUIClientExists(adminToken, consts.GetKeycloakHost(), consts.KeycloakRealm)
+				lastClientCheck = time.Now()
+				if err != nil {
+					// Token may have been revoked; force refresh on the next probe.
+					cachedAdminToken = ""
+					logger.Log.Warn("Failed to check odigos-central client", "error", err)
+					continue
+				}
+				needsSetup = !exists
+				if needsSetup {
+					logger.Log.Warn("odigos-central client missing after Keycloak restart; re-running setup")
+				}
+			}
+
+			if needsSetup {
+				if wasDown {
+					logger.Log.Info("Keycloak recovered, re-running setup")
+				}
 				if err := ensureKeycloakState(username, password); err != nil {
 					logger.Log.Error("Failed to re-initialize Keycloak state after recovery", "error", err)
 				} else {
 					logger.Log.Info("Keycloak state re-initialized successfully")
+					wasDown = false
+					lastClientCheck = time.Now()
+					cachedAdminToken = ""
 				}
-				wasDown = false
 			}
 		case <-shutdownCh:
 			return

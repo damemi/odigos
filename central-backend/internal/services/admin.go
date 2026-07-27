@@ -100,9 +100,23 @@ func (svc *AdminService) GetIdentityProvider(providerID string) (*keycloak.Ident
 	return svc.kcAdmin.GetIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, providerID)
 }
 
+// oidcTenantIDRequired reports whether Tenant ID is needed for OIDC setup.
+// Required when the discovery URL templates {tenantid} (e.g. Okta), or for Azure
+// whose multi-tenant discovery document returns an issuer containing {tenantid}.
+// Google and other static discovery URLs do not need a tenant value.
+func oidcTenantIDRequired(providerID model.AuthProviderID, discoveryURL string) bool {
+	if strings.Contains(discoveryURL, "{tenantid}") {
+		return true
+	}
+	return providerID == model.AuthProviderIDAzure
+}
+
 func (svc *AdminService) EnsureOidcIdentityProvider(config *model.OidcIdentityProviderInput) error {
-	if config.ProviderID == "" || config.ClientID == "" || config.ClientSecret == "" || config.DiscoveryURL == "" || config.TenantID == "" {
+	if config.ProviderID == "" || config.ClientID == "" || config.ClientSecret == "" || config.DiscoveryURL == "" {
 		return fmt.Errorf("invalid OIDC identity provider configuration, missing required fields")
+	}
+	if oidcTenantIDRequired(config.ProviderID, config.DiscoveryURL) && config.TenantID == "" {
+		return fmt.Errorf("invalid OIDC identity provider configuration, tenant ID is required for this discovery URL")
 	}
 
 	identityProvider, err := svc.kcAdmin.GetIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, strings.ToLower(string(config.ProviderID)))
@@ -112,15 +126,15 @@ func (svc *AdminService) EnsureOidcIdentityProvider(config *model.OidcIdentityPr
 
 	// If provider does not exist, create it
 	if identityProvider == nil {
-		return svc.kcAdmin.ConfigureIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, convertOidcIdentityProviderInputToKeycloakConfig(config))
+		return svc.kcAdmin.ConfigureOidcIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, convertOidcIdentityProviderInputToKeycloakConfig(config))
 	}
 
 	// If provider exists, update it
-	return svc.kcAdmin.UpdateIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, convertOidcIdentityProviderInputToKeycloakConfig(config))
+	return svc.kcAdmin.UpdateOidcIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, convertOidcIdentityProviderInputToKeycloakConfig(config))
 }
 
-func convertOidcIdentityProviderInputToKeycloakConfig(input *model.OidcIdentityProviderInput) *keycloak.IdentityProviderConfig {
-	return &keycloak.IdentityProviderConfig{
+func convertOidcIdentityProviderInputToKeycloakConfig(input *model.OidcIdentityProviderInput) *keycloak.OidcIdentityProviderConfig {
+	return &keycloak.OidcIdentityProviderConfig{
 		ProviderAlias: strings.ToLower(string(input.ProviderID)),
 		ClientID:      input.ClientID,
 		ClientSecret:  input.ClientSecret,

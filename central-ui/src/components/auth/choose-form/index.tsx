@@ -11,7 +11,7 @@ interface ChooseFormProps {
   isFirstTime: boolean;
   loading: boolean;
   error?: string | null;
-  onClick: (providerId: AuthProviderId, loginType?: LoginType) => void;
+  onClick: (providerId: AuthProviderId, defaultLoginType?: LoginType) => void;
 }
 
 const ChooseForm: FC<ChooseFormProps> = ({ isFirstTime, loading, error, onClick }) => {
@@ -23,7 +23,7 @@ const ChooseForm: FC<ChooseFormProps> = ({ isFirstTime, loading, error, onClick 
           label={`${STRINGS.CONTINUE_WITH} ${provider.displayName}`}
           icon={provider.icon}
           loading={loading}
-          onClick={() => onClick(provider.providerId, provider.loginType)}
+          onClick={() => onClick(provider.providerId, provider.defaultLoginType)}
         />
       )),
     [loading, onClick],

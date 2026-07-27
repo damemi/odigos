@@ -3,31 +3,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useUserStore } from '@/store';
 import { AUTH_CODE_QUERY_PARAM } from '@/utils';
-import { AUTH_PROVIDERS } from '@/utils/constants/auth-providers';
 import { Modal } from '@odigos/ui-kit/components';
 import { useAuth, useAuthProvider } from '@/hooks';
 import { AuthProviderId, LoginType } from '@/types';
 import { FormContainer } from '@/components/auth/styled';
 import { VisualOdigosLogo } from '@odigos/ui-kit/visuals';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { AUTH_PROVIDERS } from '@/utils/constants/auth-providers';
 import { CenterThis, FlexRow, Loader } from '@odigos/ui-kit/components';
 import { AuthForm, ChooseForm, OidcForm, SamlForm } from '@/components';
 
 export default function Page() {
   const router = useRouter();
   const { authProviderId, setAuthProviderId } = useUserStore();
-  const {
-    systemConfig,
-    systemConfigLoading,
-    signIn,
-    loading: authLoading,
-    error: authError,
-    getCurrentUser,
-    clearError,
-    ensureIdpLogoutBeforeSso,
-    consumeAutoSsoProvider,
-  } = useAuth();
   const { getSignInUrl, ensureOidcIdentityProvider, ensureSamlIdentityProvider, loading: authProviderLoading, error: authProviderError } = useAuthProvider();
+  const { systemConfig, systemConfigLoading, signIn, loading: authLoading, error: authError, getCurrentUser, clearError, ensureIdpLogoutBeforeSso, consumeAutoSsoProvider } = useAuth();
 
   const [needToSetAuthProvider, setNeedToSetAuthProvider] = useState<LoginType | null>(null);
   const [authSetupSuccess, setAuthSetupSuccess] = useState<boolean>(false);
@@ -48,6 +38,12 @@ export default function Page() {
     setAuthProviderId(null);
     setNeedToSetAuthProvider(null);
     setAuthSetupSuccess(false);
+  };
+
+  const handleLoginTypeChange = (loginType: LoginType) => {
+    clearError();
+    setAuthSetupSuccess(false);
+    setNeedToSetAuthProvider(loginType);
   };
 
   const handleSignIn = async (providerId: AuthProviderId, loginType: LoginType) => {
@@ -83,10 +79,10 @@ export default function Page() {
     if (!providerId || providerId === AuthProviderId.EMAIL) return;
 
     const provider = AUTH_PROVIDERS.find((p) => p.providerId === providerId);
-    if (!provider?.loginType) return;
+    if (!provider?.defaultLoginType) return;
 
     autoSsoStarted.current = true;
-    void handleProviderClick(providerId, provider.loginType);
+    void handleProviderClick(providerId, provider.defaultLoginType);
   }, [systemConfigLoading, authCode]);
 
   if (systemConfigLoading) {
@@ -120,6 +116,7 @@ export default function Page() {
         isCreateSuccess={authSetupSuccess}
         setIsCreateSuccess={setAuthSetupSuccess}
         onLogin={handleProviderClick}
+        onLoginTypeChange={handleLoginTypeChange}
       />
     );
   } else if (needToSetAuthProvider === LoginType.SAML) {
@@ -132,6 +129,7 @@ export default function Page() {
         isCreateSuccess={authSetupSuccess}
         setIsCreateSuccess={setAuthSetupSuccess}
         onLogin={handleProviderClick}
+        onLoginTypeChange={handleLoginTypeChange}
       />
     );
   }
