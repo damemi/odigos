@@ -42,3 +42,5 @@ spec:
       supported: true
     payloadCollection:
       supported: true
+    headSampling:
+      supported: true
