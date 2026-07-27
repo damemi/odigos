@@ -33,6 +33,84 @@ export const GET_ACTION_TYPES: VersionedRemoteFetch = {
 
 export const GET_ACTIONS: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
+    // customFormatMaskings / customRegexMaskings on PiiMasking landed in odigos
+    // v1.33 (CORE-1372). Older proxies reject that selection set.
+    'v1.33': `
+    query GetActions {
+      computePlatform {
+        actions {
+          id
+          type
+          name
+          notes
+          disabled
+          signals
+          fields {
+            collectContainerAttributes
+            collectReplicaSetAttributes
+            collectWorkloadId
+            collectClusterId
+            labelsAttributes {
+              labelKey
+              attributeKey
+              from
+              fromSources
+            }
+            annotationsAttributes {
+              annotationKey
+              attributeKey
+              from
+              fromSources
+            }
+            clusterAttributes {
+              attributeName
+              attributeStringValue
+            }
+            overwriteExistingValues
+            attributeNamesToDelete
+            renames
+            piiCategories
+            customFormatMaskings {
+              lookupKey
+              dataFormat
+            }
+            customRegexMaskings {
+              regex
+            }
+            extractAttribute {
+              extractions {
+                targetAttributeName
+                lookupKey
+                dataFormat
+                regex
+              }
+            }
+            urlTemplatizationRulesGroups {
+              filterK8sNamespace
+              filterK8sWorkloadKind
+              filterK8sWorkloadName
+              filterProgrammingLanguage
+              notes
+              workloadFilters {
+                kind
+                name
+              }
+              templatizationRules {
+                template
+                notes
+                examples
+              }
+            }
+          }
+          conditions {
+            status
+            type
+            reason
+            message
+          }
+        }
+      }
+    }`,
     'v1.29': `
     query GetActions {
       computePlatform {

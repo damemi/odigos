@@ -429,6 +429,8 @@ const STRIP_INPUT_FIELDS: { name: string; minVersion: number }[] = [
   { name: 'urlTemplatizationRulesGroups', minVersion: trimVersion('v1.20') }, // ActionFieldsInput.urlTemplatizationRulesGroups
   { name: 'otelDistroName', minVersion: trimVersion('v1.27') }, // PatchSourceRequestInput.otelDistroName
   { name: 'extractAttribute', minVersion: trimVersion('v1.29') }, // ActionFieldsInput.extractAttribute
+  { name: 'customFormatMaskings', minVersion: trimVersion('v1.33') }, // ActionFieldsInput.customFormatMaskings
+  { name: 'customRegexMaskings', minVersion: trimVersion('v1.33') }, // ActionFieldsInput.customRegexMaskings
 ];
 
 // `instrumentationRule.sourcesScopes` (v1.26+) -> legacy `workloads` (<=v1.25).
