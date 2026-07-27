@@ -37,6 +37,14 @@ const ProtectedRoute: FC<ProtectedRouteProps> = ({ children }) => {
     let cancelled = false;
 
     const run = async () => {
+      // First-login OTP users get PASSWORD_UPDATE_REQUIRED without a user token.
+      // Allow /update-password without verifyToken, and do not clearAuth (it drops lastAuthEmail).
+      if (status === SignInStatus.PASSWORD_UPDATE_REQUIRED) {
+        setVerified(true);
+        goToUpdatePassword();
+        return;
+      }
+
       if (!accessToken) {
         setVerified(false);
         goToSignIn();
@@ -55,9 +63,7 @@ const ProtectedRoute: FC<ProtectedRouteProps> = ({ children }) => {
         }
 
         setVerified(true);
-        if (status === SignInStatus.PASSWORD_UPDATE_REQUIRED) {
-          goToUpdatePassword();
-        } else if (status === SignInStatus.ACCESS_DENIED) {
+        if (status === SignInStatus.ACCESS_DENIED) {
           setVerified(false);
           goToSignIn();
         } else if (isOnSignInPath || isOnUpdatePasswordPath) {
@@ -75,7 +81,7 @@ const ProtectedRoute: FC<ProtectedRouteProps> = ({ children }) => {
     return () => {
       cancelled = true;
     };
-  }, [accessToken]);
+  }, [accessToken, status]);
 
   if (!verified && !isOnSignInPath) {
     return (

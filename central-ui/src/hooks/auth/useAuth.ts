@@ -59,9 +59,11 @@ export const useAuth = () => {
       sessionStorage.removeItem(STRINGS.PENDING_IDP_LOGOUT_TOKEN_KEY);
       sessionStorage.removeItem(STRINGS.AUTO_SSO_PROVIDER_KEY);
 
+      // PASSWORD_UPDATE_REQUIRED intentionally has no user accessToken (null).
+      // Keep lastAuthEmail so /update-password can call setInitialPassword.
       setAuth({
-        idToken: idToken || '',
-        accessToken: accessToken || '',
+        idToken: idToken || null,
+        accessToken: accessToken || null,
         user: user || null,
         status,
       });

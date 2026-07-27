@@ -96,6 +96,22 @@ func hasOdigosRoleInList(roles []string) bool {
 	return false
 }
 
+// passwordUpdateRequiredResult is returned when a user authenticates with a
+// temporary/one-time password and must set a permanent password before a real
+// session can be issued. AccessToken is intentionally nil — never an admin token.
+func passwordUpdateRequiredResult(email string) *model.SignInResult {
+	return &model.SignInResult{
+		AccessToken: nil,
+		Status:      model.SignInStatusPasswordUpdateRequired,
+		User: &model.User{
+			Email:               email,
+			NeedsPasswordChange: true,
+			Teams:               []*model.Team{},
+			ComputePlatforms:    []*model.ComputePlatform{},
+		},
+	}
+}
+
 func extractJWTPayload(token string) (map[string]interface{}, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
@@ -257,19 +273,10 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 	authResult, err := svc.kcAuth.AuthenticateUser(adminToken, email, password, "")
 	if err != nil {
 		if strings.Contains(err.Error(), "password update required") {
-			adminToken, err := svc.adminService.GetAdminToken()
-			if err != nil {
-				return nil, fmt.Errorf("failed to get admin token for initial password setup: %w", err)
-			}
-			return &model.SignInResult{
-				// IDToken:     ,
-				AccessToken: &adminToken,
-				Status:      model.SignInStatusPasswordUpdateRequired,
-				User: &model.User{
-					Email:               email,
-					NeedsPasswordChange: true,
-				},
-			}, nil
+			// Do not return a Keycloak admin/master token here. setInitialPassword uses
+			// admin credentials server-side, and the UI must reach /update-password
+			// without a verifiable user session token.
+			return passwordUpdateRequiredResult(email), nil
 		}
 		return nil, err
 	}
