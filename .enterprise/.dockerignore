@@ -1,0 +1,5 @@
+.git
+.github/
+.devcontainer/
+tests/
+onprem-token-generator/

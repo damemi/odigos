@@ -1,6 +1,9 @@
 name: Build and Test
 
-on: pull_request
+on:
+  pull_request:
+    # labeled/unlabeled so build: arm / build: no-cache label changes re-run CI
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -17,13 +20,22 @@ jobs:
   detect-changes:
     name: Detect Changed Files
     runs-on: depot-ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       central: ${{ steps.filter.outputs.central }}
       skip-enterprise-k8s: ${{ steps.connector-only.outputs.skip }}
+      platforms: ${{ steps.build-opts.outputs.platforms }}
+      no-cache: ${{ steps.build-opts.outputs.no-cache }}
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
           persist-credentials: false
+
+      - name: Resolve build options from PR labels
+        id: build-opts
+        uses: odigos-io/ci-core/resolve-build-labels@main
 
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 #v3.0.2
         id: filter
@@ -132,6 +144,8 @@ jobs:
           make -f depot.mk \
             depot-build-${{ matrix.component }} \
             IMAGE_TAG=${{ env.IMAGE_TAG }} \
+            PLATFORM=${{ needs.detect-changes.outputs.platforms }} \
+            NO_CACHE=${{ needs.detect-changes.outputs.no-cache }} \
             GITHUB_RUN_ID=${{ github.run_id }} \
             GITHUB_REPOSITORY_NAME=${{ github.event.repository.name }}
 
@@ -162,6 +176,8 @@ jobs:
             depot-build-odiglet-rhel-certified \
             depot-build-agents-rhel-certified \
             IMAGE_TAG=${{ env.IMAGE_TAG }} \
+            PLATFORM=${{ needs.detect-changes.outputs.platforms }} \
+            NO_CACHE=${{ needs.detect-changes.outputs.no-cache }} \
             GITHUB_RUN_ID=${{ github.run_id }} \
             GITHUB_REPOSITORY_NAME=${{ github.event.repository.name }}
 
@@ -272,6 +288,7 @@ jobs:
             depot-build-collector \
             depot-build-cli \
             IMAGE_TAG=${{ env.IMAGE_TAG }} \
+            PLATFORM=${{ needs.detect-changes.outputs.platforms }} \
             GITHUB_RUN_ID=${{ github.run_id }} \
             GITHUB_REPOSITORY_NAME=${{ github.event.repository.name }} \
             CHART_VERSION=0.0.0-e2e-test \
