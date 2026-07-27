@@ -21,13 +21,13 @@ func registerCustomInstrumentationTools(s *server.MCPServer, deps Deps) {
 	s.AddTool(
 		mcp.NewTool("add_custom_instrumentation",
 			writeAnno(),
-			mcp.WithDescription("Add a custom eBPF probe to instrument a specific function/method without changing application code. Typically called after get_source_hot_functions identifies where time is spent, or when telemetry from a specific symbol is missing. Languages: 'java' (class + method), 'go' (package + function, or package + receiver + receiver method), 'cpp' (signature). Optionally scope to a single workload."),
-			mcp.WithString("language", mcp.Required(), mcp.Description("One of: java, go, cpp.")),
+			mcp.WithDescription("Add a custom probe to instrument a specific function/method without changing application code. Typically called after get_source_hot_functions identifies where time is spent, or when telemetry from a specific symbol is missing. Languages: 'java' (class + method), 'go' (package + function, or package + receiver + receiver method), 'cpp' (signature), 'php' (optional class + function). Optionally scope to a single workload."),
+			mcp.WithString("language", mcp.Required(), mcp.Description("One of: java, go, cpp, php.")),
 			mcp.WithString("rule_name", mcp.Description("Optional human-readable name for the rule.")),
-			mcp.WithString("class_name", mcp.Description("java: fully-qualified class name.")),
+			mcp.WithString("class_name", mcp.Description("java/php: fully-qualified class name. For php, omit for a global function.")),
 			mcp.WithString("method_name", mcp.Description("java: method name to instrument.")),
 			mcp.WithString("package_name", mcp.Description("go: package import path, e.g. net/http (required for go).")),
-			mcp.WithString("function_name", mcp.Description("go: function name. Use this OR receiver_name + receiver_method_name.")),
+			mcp.WithString("function_name", mcp.Description("go/php: function name. For go, use this OR receiver_name + receiver_method_name. For php, required.")),
 			mcp.WithString("receiver_name", mcp.Description("go: receiver struct name. Requires receiver_method_name.")),
 			mcp.WithString("receiver_method_name", mcp.Description("go: method name on the receiver.")),
 			mcp.WithString("signature", mcp.Description("cpp: function signature, e.g. std::vector::push_back or SSL_write.")),
@@ -85,8 +85,18 @@ func addCustomInstrumentationHandler(deps Deps) server.ToolHandlerFunc {
 			}
 			ci.Cpp = []instrumentationrules.CppCustomProbe{probe}
 			probeSummary = probe.Signature
+		case "php":
+			probe := instrumentationrules.PhpCustomProbe{
+				ClassName:    stringArg(req, "class_name", ""),
+				FunctionName: stringArg(req, "function_name", ""),
+			}
+			if err := probe.Verify(); err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("invalid php probe: %v", err)), nil
+			}
+			ci.Php = []instrumentationrules.PhpCustomProbe{probe}
+			probeSummary = probe.String()
 		default:
-			return errorWithOptions(fmt.Sprintf("unknown language %q", language), []string{"java", "go", "cpp"})
+			return errorWithOptions(fmt.Sprintf("unknown language %q", language), []string{"java", "go", "cpp", "php"})
 		}
 
 		scope, err := parseOptionalWorkloadScope(req)
@@ -136,6 +146,6 @@ func addCustomInstrumentationHandler(deps Deps) server.ToolHandlerFunc {
 			"namespace": created.Namespace,
 			"language":  language,
 			"probe":     probeSummary,
-		}, fmt.Sprintf("Created custom %s probe on %s. The agent will pick it up on next reconcile (often without restart on enterprise eBPF distros).", language, probeSummary), steps)
+		}, fmt.Sprintf("Created custom %s probe on %s. Go/Java/C++ enterprise eBPF agents often pick it up without restart; PHP requires a pod restart to load ODIGOS_AGENT_CUSTOM_INSTRUMENTATIONS.", language, probeSummary), steps)
 	}
 }
