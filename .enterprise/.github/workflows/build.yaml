@@ -48,6 +48,7 @@ jobs:
               - 'tests/e2e/central-infrastructure/**'
               - 'tests/e2e/central-install/**'
               - 'tests/e2e/central-ui/**'
+              - 'tests/e2e/central-auth-idp/**'
               - 'tests/common/assert/odigos-central-installed.yaml'
             outside-connectors:
               - '**'
@@ -323,6 +324,7 @@ jobs:
           - "central-install"
           - "central-infrastructure"
           - "central-ui"
+          - "central-auth-idp"
           - "mount-method"
         wasp-enabled: [false]
         include:
@@ -371,7 +373,7 @@ jobs:
         id: should-run
         run: |
           # Central tests only run if central-related files changed
-          if [[ "${{ matrix.test-scenario }}" == "central-install" || "${{ matrix.test-scenario }}" == "central-infrastructure" || "${{ matrix.test-scenario }}" == "central-ui" ]]; then
+          if [[ "${{ matrix.test-scenario }}" == "central-install" || "${{ matrix.test-scenario }}" == "central-infrastructure" || "${{ matrix.test-scenario }}" == "central-ui" || "${{ matrix.test-scenario }}" == "central-auth-idp" ]]; then
             if [[ "${{ needs.detect-changes.outputs.central }}" != "true" ]]; then
               echo "Skipping ${{ matrix.test-scenario }} - no central files changed"
               echo "skip=true" >> $GITHUB_OUTPUT
@@ -503,7 +505,7 @@ jobs:
 
 
       - name: Load Central Components to Kind Cluster
-        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui')
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui' || matrix.test-scenario == 'central-auth-idp')
         run: |
           for component in central-backend central-ui central-proxy; do
             LOCAL_IMAGE="registry.odigos.io/odigos-enterprise-${component}:${{ env.IMAGE_TAG }}"
