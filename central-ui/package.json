@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@apollo/client": "^4.2.6",
-    "@odigos/ui-kit": "0.0.270",
+    "@odigos/ui-kit": "0.0.271",
     "@odigos/vmagent-api-apollo-client": "0.16.0",
     "graphql": "^16.14.2",
     "graphql-ws": "^6.1.0",
@@ -22,14 +22,14 @@
     "picomatch": "4.0.5",
     "react": "19.2.7",
     "react-dom": "19.2.7",
-    "rxjs": "^7.8.1",
+    "rxjs": "^7.8.2",
     "styled-components": "6.3.12",
-    "ws": "8.21.0",
+    "ws": "8.21.1",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@next/bundle-analyzer": "^16.2.10",
+    "@next/bundle-analyzer": "^16.2.12",
     "@types/node": "26.1.1",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
@@ -37,7 +37,7 @@
     "babel-plugin-styled-components": "^2.3.0",
     "check-peer-dependencies": "^4.3.4",
     "eslint": "9.39.2",
-    "eslint-config-next": "16.2.10",
+    "eslint-config-next": "16.2.12",
     "typescript": "5.9.3"
   },
   "resolutions": {
