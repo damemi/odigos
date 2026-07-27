@@ -12,12 +12,14 @@ import (
 
 	"github.com/odigos-io/ebpf-core/pkg/collection"
 	"github.com/odigos-io/ebpf-core/pkg/wasp"
+	javaconfig "github.com/odigos-io/ebpf-java-instrumentation/v2/pkg/config"
 	"github.com/odigos-io/ebpf-java-instrumentation/v2/jvmmetrics"
 	"github.com/odigos-io/ebpf-java-instrumentation/v2/pkg/dynamic"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/logcapture"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common"
+	commonapisampling "github.com/odigos-io/odigos/common/api/sampling"
 	"github.com/odigos-io/odigos/distros/distro"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
 	"google.golang.org/grpc"
@@ -307,7 +309,57 @@ func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instru
 		return err
 	}
 
+	var headSampling *javaconfig.HeadSamplingConfig
+	if containerConfig.Traces != nil && containerConfig.Traces.HeadSampling != nil {
+		headSampling = convertJavaHeadSampling(containerConfig.Traces.HeadSampling)
+	}
+	// A nil config clears any previously applied head-sampling policy.
+	if err := g.inst.ApplyDynamicConfig(dynamic.HeadSampling(headSampling)); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// convertJavaHeadSampling maps the Odigos head-sampling config to the Java eBPF
+// SDK's config type.
+func convertJavaHeadSampling(hs *commonapisampling.HeadSamplingConfig) *javaconfig.HeadSamplingConfig {
+	if hs == nil {
+		return nil
+	}
+	cfg := &javaconfig.HeadSamplingConfig{
+		DryRun:          hs.DryRun,
+		SpanMetricsMode: javaconfig.SpanMetricsMode(hs.SpanMetricsMode),
+	}
+	for _, no := range hs.NoisyOperations {
+		rule := javaconfig.NoisyOperationRule{
+			ID:               no.Id,
+			Name:             no.Name,
+			Disabled:         no.Disabled,
+			PercentageAtMost: no.PercentageAtMost,
+		}
+		if no.Operation != nil {
+			matcher := &javaconfig.HeadSamplingOperationMatcher{}
+			if no.Operation.HttpServer != nil {
+				matcher.HTTPServer = &javaconfig.HeadSamplingHTTPServerMatcher{
+					Route:       no.Operation.HttpServer.Route,
+					RoutePrefix: no.Operation.HttpServer.RoutePrefix,
+					Method:      no.Operation.HttpServer.Method,
+				}
+			}
+			if no.Operation.HttpClient != nil {
+				matcher.HTTPClient = &javaconfig.HeadSamplingHTTPClientMatcher{
+					ServerAddress:       no.Operation.HttpClient.ServerAddress,
+					TemplatedPath:       no.Operation.HttpClient.TemplatedPath,
+					TemplatedPathPrefix: no.Operation.HttpClient.TemplatedPathPrefix,
+					Method:              no.Operation.HttpClient.Method,
+				}
+			}
+			rule.Operation = matcher
+		}
+		cfg.NoisyOperations = append(cfg.NoisyOperations, rule)
+	}
+	return cfg
 }
 
 func createJVMMetricsConfig(config *common.MetricsSourceAgentJavaRuntimeMetricsConfiguration) *jvmmetrics.JVMMetricsConfig {
