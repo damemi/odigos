@@ -197,6 +197,9 @@ type Query {
   ): [RemoteFetchResult!]!
   systemConfig: SystemConfig!
   apiTokens: [ApiToken!]!
+  # Public (unauthenticated): aliases of configured external IdPs for the login chooser.
+  # Returns only AuthProviderId values — never IdP secrets or full Keycloak config.
+  configuredIdentityProviders: [AuthProviderId!]!
   signInUrl(providerId: AuthProviderId!): String
   signOutUrl(idToken: String): String
   computePlatforms: [ComputePlatform!]!

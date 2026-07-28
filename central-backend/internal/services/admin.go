@@ -100,6 +100,10 @@ func (svc *AdminService) GetIdentityProvider(providerID string) (*keycloak.Ident
 	return svc.kcAdmin.GetIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, providerID)
 }
 
+func (svc *AdminService) ListIdentityProviders() ([]keycloak.IdentityProviderRepresentation, error) {
+	return svc.kcAdmin.ListIdentityProviders(svc.adminCredentials.Username, svc.adminCredentials.Password)
+}
+
 // oidcTenantIDRequired reports whether Tenant ID is needed for OIDC setup.
 // Required when the discovery URL templates {tenantid} (e.g. Okta), or for Azure
 // whose multi-tenant discovery document returns an issuer containing {tenantid}.

@@ -7,6 +7,56 @@ import (
 	"github.com/odigos-io/central-backend/internal/keycloak"
 )
 
+func TestAuthProviderIDsFromIdentityProviders(t *testing.T) {
+	cases := []struct {
+		name string
+		idps []keycloak.IdentityProviderRepresentation
+		want []model.AuthProviderID
+	}{
+		{
+			name: "empty",
+			idps: nil,
+			want: []model.AuthProviderID{},
+		},
+		{
+			name: "azure only",
+			idps: []keycloak.IdentityProviderRepresentation{{Alias: "azure"}},
+			want: []model.AuthProviderID{model.AuthProviderIDAzure},
+		},
+		{
+			name: "ignores unknown aliases",
+			idps: []keycloak.IdentityProviderRepresentation{
+				{Alias: "azure"},
+				{Alias: "custom-saml"},
+				{Alias: "google"},
+			},
+			want: []model.AuthProviderID{model.AuthProviderIDAzure, model.AuthProviderIDGoogle},
+		},
+		{
+			name: "dedupes aliases",
+			idps: []keycloak.IdentityProviderRepresentation{
+				{Alias: "okta"},
+				{Alias: "okta"},
+			},
+			want: []model.AuthProviderID{model.AuthProviderIDOkta},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := authProviderIDsFromIdentityProviders(tc.idps)
+			if len(got) != len(tc.want) {
+				t.Fatalf("len = %d, want %d (%v vs %v)", len(got), len(tc.want), got, tc.want)
+			}
+			for i := range tc.want {
+				if got[i] != tc.want[i] {
+					t.Fatalf("got[%d] = %v, want %v", i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+}
+
 func TestHasOdigosRoleInList(t *testing.T) {
 	cases := []struct {
 		name  string

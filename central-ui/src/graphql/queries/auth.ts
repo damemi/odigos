@@ -1,5 +1,11 @@
 import { gql } from '@apollo/client';
 
+export const GET_CONFIGURED_IDENTITY_PROVIDERS = gql`
+  query ConfiguredIdentityProviders {
+    configuredIdentityProviders
+  }
+`;
+
 export const SIGN_IN_URL = gql`
   query signInUrl($providerId: AuthProviderId!) {
     signInUrl(providerId: $providerId)

@@ -51,6 +51,34 @@ func (svc *AuthService) GetRedirectUrlForSignInByProviderID(providerID model.Aut
 	return &url, nil
 }
 
+// ConfiguredIdentityProviders returns AuthProviderIDs for Keycloak IdPs whose
+// aliases match known providers (google/azure/okta). Unknown aliases are ignored.
+// Only provider IDs are returned — never IdP secrets or full Keycloak config.
+func (svc *AuthService) ConfiguredIdentityProviders() ([]model.AuthProviderID, error) {
+	idps, err := svc.adminService.ListIdentityProviders()
+	if err != nil {
+		return nil, err
+	}
+	return authProviderIDsFromIdentityProviders(idps), nil
+}
+
+func authProviderIDsFromIdentityProviders(idps []keycloak.IdentityProviderRepresentation) []model.AuthProviderID {
+	result := make([]model.AuthProviderID, 0, len(idps))
+	seen := make(map[model.AuthProviderID]struct{}, len(idps))
+	for _, idp := range idps {
+		providerID := model.AuthProviderID(strings.ToUpper(idp.Alias))
+		if !providerID.IsValid() {
+			continue
+		}
+		if _, ok := seen[providerID]; ok {
+			continue
+		}
+		seen[providerID] = struct{}{}
+		result = append(result, providerID)
+	}
+	return result
+}
+
 func (svc *AuthService) GetRedirectUrlForSignOut(ctx context.Context, idToken string) string {
 	return svc.kcAuth.GetRedirectUrlForSignOut(idToken)
 }

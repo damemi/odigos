@@ -16,7 +16,15 @@ import { AuthForm, ChooseForm, OidcForm, SamlForm } from '@/components';
 export default function Page() {
   const router = useRouter();
   const { authProviderId, setAuthProviderId } = useUserStore();
-  const { getSignInUrl, ensureOidcIdentityProvider, ensureSamlIdentityProvider, loading: authProviderLoading, error: authProviderError } = useAuthProvider();
+  const {
+    getSignInUrl,
+    ensureOidcIdentityProvider,
+    ensureSamlIdentityProvider,
+    configuredIdentityProviders,
+    configuredIdentityProvidersLoading,
+    loading: authProviderLoading,
+    error: authProviderError,
+  } = useAuthProvider();
   const { systemConfig, systemConfigLoading, signIn, loading: authLoading, error: authError, getCurrentUser, clearError, ensureIdpLogoutBeforeSso, consumeAutoSsoProvider } = useAuth();
 
   const [needToSetAuthProvider, setNeedToSetAuthProvider] = useState<LoginType | null>(null);
@@ -103,7 +111,15 @@ export default function Page() {
     </FormContainer>
   );
   if (authProviderId === null) {
-    content = <ChooseForm isFirstTime={!!isFirstTime} loading={authLoading || authProviderLoading} error={authError} onClick={handleProviderClick} />;
+    content = (
+      <ChooseForm
+        isFirstTime={!!isFirstTime}
+        loading={authLoading || authProviderLoading || configuredIdentityProvidersLoading}
+        configuredProviders={configuredIdentityProviders}
+        error={authError}
+        onClick={handleProviderClick}
+      />
+    );
   } else if (authProviderId === AuthProviderId.EMAIL) {
     content = <AuthForm isFirstTime={!!isFirstTime} loading={authLoading || authProviderLoading} error={authError} onSubmit={signIn} />;
   } else if (needToSetAuthProvider === LoginType.OIDC) {

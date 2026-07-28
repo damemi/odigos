@@ -207,20 +207,21 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		APITokens               func(childComplexity int) int
-		AllClusterSnapshots     func(childComplexity int) int
-		CloudConnectorProviders func(childComplexity int) int
-		ClusterSnapshot         func(childComplexity int, clusterID string) int
-		ComputePlatforms        func(childComplexity int) int
-		GroupRoleMappings       func(childComplexity int, providerID model.AuthProviderID) int
-		Health                  func(childComplexity int) int
-		RemoteFetch             func(childComplexity int, proxyID string, query string, variables map[string]any) int
-		RemoteMultiFetch        func(childComplexity int, proxyIDs []string, query string, variables map[string]any) int
-		SignInURL               func(childComplexity int, providerID model.AuthProviderID) int
-		SignOutURL              func(childComplexity int, idToken *string) int
-		SystemConfig            func(childComplexity int) int
-		Teams                   func(childComplexity int) int
-		Users                   func(childComplexity int) int
+		APITokens                   func(childComplexity int) int
+		AllClusterSnapshots         func(childComplexity int) int
+		CloudConnectorProviders     func(childComplexity int) int
+		ClusterSnapshot             func(childComplexity int, clusterID string) int
+		ComputePlatforms            func(childComplexity int) int
+		ConfiguredIdentityProviders func(childComplexity int) int
+		GroupRoleMappings           func(childComplexity int, providerID model.AuthProviderID) int
+		Health                      func(childComplexity int) int
+		RemoteFetch                 func(childComplexity int, proxyID string, query string, variables map[string]any) int
+		RemoteMultiFetch            func(childComplexity int, proxyIDs []string, query string, variables map[string]any) int
+		SignInURL                   func(childComplexity int, providerID model.AuthProviderID) int
+		SignOutURL                  func(childComplexity int, idToken *string) int
+		SystemConfig                func(childComplexity int) int
+		Teams                       func(childComplexity int) int
+		Users                       func(childComplexity int) int
 	}
 
 	RemoteFetchResult struct {
@@ -309,6 +310,7 @@ type QueryResolver interface {
 	RemoteMultiFetch(ctx context.Context, proxyIDs []string, query string, variables map[string]any) ([]*model.RemoteFetchResult, error)
 	SystemConfig(ctx context.Context) (*model.SystemConfig, error)
 	APITokens(ctx context.Context) ([]*model.APIToken, error)
+	ConfiguredIdentityProviders(ctx context.Context) ([]model.AuthProviderID, error)
 	SignInURL(ctx context.Context, providerID model.AuthProviderID) (*string, error)
 	SignOutURL(ctx context.Context, idToken *string) (*string, error)
 	ComputePlatforms(ctx context.Context) ([]*model.ComputePlatform, error)
@@ -1121,6 +1123,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.ComputePlatforms(childComplexity), true
+	case "Query.configuredIdentityProviders":
+		if e.ComplexityRoot.Query.ConfiguredIdentityProviders == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.ConfiguredIdentityProviders(childComplexity), true
 	case "Query.groupRoleMappings":
 		if e.ComplexityRoot.Query.GroupRoleMappings == nil {
 			break
@@ -5683,6 +5691,29 @@ func (ec *executionContext) fieldContext_Query_apiTokens(_ context.Context, fiel
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_configuredIdentityProviders(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_configuredIdentityProviders(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().ConfiguredIdentityProviders(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []model.AuthProviderID) graphql.Marshaler {
+			return ec.marshalNAuthProviderId2ᚕgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐAuthProviderIDᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_configuredIdentityProviders(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Query", field, true, true, errors.New("field of type AuthProviderId does not have child fields"))
+}
+
 func (ec *executionContext) _Query_signInUrl(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -9934,6 +9965,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "configuredIdentityProviders":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_configuredIdentityProviders(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "signInUrl":
 			field := field
 
@@ -11021,6 +11074,36 @@ func (ec *executionContext) unmarshalNAuthProviderId2githubᚗcomᚋodigosᚑio�
 
 func (ec *executionContext) marshalNAuthProviderId2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐAuthProviderID(ctx context.Context, sel ast.SelectionSet, v model.AuthProviderID) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) unmarshalNAuthProviderId2ᚕgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐAuthProviderIDᚄ(ctx context.Context, v any) ([]model.AuthProviderID, error) {
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]model.AuthProviderID, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNAuthProviderId2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐAuthProviderID(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNAuthProviderId2ᚕgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐAuthProviderIDᚄ(ctx context.Context, sel ast.SelectionSet, v []model.AuthProviderID) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNAuthProviderId2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐAuthProviderID(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) marshalNBackendHealthStatus2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐBackendHealthStatus(ctx context.Context, sel ast.SelectionSet, v *model.BackendHealthStatus) graphql.Marshaler {

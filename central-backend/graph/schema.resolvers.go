@@ -352,6 +352,12 @@ func (r *queryResolver) APITokens(ctx context.Context) ([]*model.APIToken, error
 	return r.AuthService.APITokens(ctx)
 }
 
+// ConfiguredIdentityProviders is the resolver for the configuredIdentityProviders field.
+// Public (unauthenticated), same trust model as signInUrl - returns only provider IDs.
+func (r *queryResolver) ConfiguredIdentityProviders(ctx context.Context) ([]model.AuthProviderID, error) {
+	return r.AuthService.ConfiguredIdentityProviders()
+}
+
 // SignInURL is the resolver for the signInUrl field.
 func (r *queryResolver) SignInURL(ctx context.Context, providerID model.AuthProviderID) (*string, error) {
 	return r.AuthService.GetRedirectUrlForSignInByProviderID(providerID)

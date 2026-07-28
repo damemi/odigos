@@ -8,7 +8,7 @@ Standalone auth coverage for Central IdP setup. **Not part of the Cypress suite.
    Exercises `getOIDCDiscoveryEndpoints` in `central-backend/internal/keycloak/admin.go` via Go tests (live HTTP).  
    Okta live discovery requires `E2E_OKTA_TENANT_ID` (org subdomain).
 
-2. **Create IdP** for `GOOGLE` / `AZURE` / `OKTA` × `OIDC` / `SAML`  
+2. **Create IdP** for `AZURE` / `OKTA` × `OIDC` / `SAML`  
    One case at a time. Between cases the script deletes every IdP instance and every
    brokered user through the Keycloak admin API, so each case starts from an empty
    IdP store and exercises the create (not update) path.
@@ -37,13 +37,13 @@ go test ./internal/keycloak/ -count=1 -run 'TestResolveDiscoveryURL|TestGetOIDCD
 
 ## Env vars
 
-| Variable | Purpose |
-|---|---|
-| `ODIGOS_API_KEY` / `ODIGOS_ONPREM_TOKEN` | Central helm install |
-| `IMAGE_TAG` | Central image tag (CI sets `e2e-test`) |
-| `E2E_OKTA_TENANT_ID` | Okta org subdomain for live discovery |
-| `E2E_AZURE_TENANT_ID` | Optional Azure tenant GUID for issuer rewrite |
-| `DISCOVERY_MODE=mock` | Skip live vendor discovery during create (mock only) |
+| Variable                                 | Purpose                                              |
+| ---------------------------------------- | ---------------------------------------------------- |
+| `ODIGOS_API_KEY` / `ODIGOS_ONPREM_TOKEN` | Central helm install                                 |
+| `IMAGE_TAG`                              | Central image tag (CI sets `e2e-test`)               |
+| `E2E_OKTA_TENANT_ID`                     | Okta org subdomain for live discovery                |
+| `E2E_AZURE_TENANT_ID`                    | Optional Azure tenant GUID for issuer rewrite        |
+| `DISCOVERY_MODE=mock`                    | Skip live vendor discovery during create (mock only) |
 
 ## CI
 

@@ -1,18 +1,18 @@
 import { LoginType } from '@/types/auth-providers';
-import { AzureIcon, GoogleCloudPlatformLogo, OktaIcon } from '@odigos/ui-kit/icons';
+import { AzureIcon, OktaIcon } from '@odigos/ui-kit/icons';
 import { AuthProviderId, type AuthProviderOption } from '@/types';
 
 // defaultLoginType is the default protocol shown during first-time IdP setup.
 // Users can toggle between OIDC and SAML via Segment on the setup form.
 // discoveryUrl may include a {tenantid} placeholder resolved from Tenant ID.
 export const AUTH_PROVIDERS: AuthProviderOption[] = [
-  {
-    providerId: AuthProviderId.GOOGLE,
-    displayName: 'Google',
-    icon: GoogleCloudPlatformLogo,
-    discoveryUrl: 'https://accounts.google.com/.well-known/openid-configuration',
-    defaultLoginType: LoginType.OIDC,
-  },
+  // {
+  //   providerId: AuthProviderId.GOOGLE,
+  //   displayName: 'Google',
+  //   icon: GoogleCloudPlatformLogo,
+  //   discoveryUrl: 'https://accounts.google.com/.well-known/openid-configuration',
+  //   defaultLoginType: LoginType.OIDC,
+  // },
   {
     providerId: AuthProviderId.AZURE,
     displayName: 'Azure',

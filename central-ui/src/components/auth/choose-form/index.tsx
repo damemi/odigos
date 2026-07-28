@@ -10,14 +10,23 @@ import { ConstrainedWidth, FormContainer, FormSubtitle, FormTitle, ErrorText } f
 interface ChooseFormProps {
   isFirstTime: boolean;
   loading: boolean;
+  /** When empty/undefined, show all IdP options (first-time setup). When non-empty, email + matching providers only. */
+  configuredProviders?: AuthProviderId[];
   error?: string | null;
   onClick: (providerId: AuthProviderId, defaultLoginType?: LoginType) => void;
 }
 
-const ChooseForm: FC<ChooseFormProps> = ({ isFirstTime, loading, error, onClick }) => {
+const ChooseForm: FC<ChooseFormProps> = ({ isFirstTime, loading, configuredProviders, error, onClick }) => {
+  const providersToShow = useMemo(() => {
+    if (configuredProviders && configuredProviders.length > 0) {
+      return AUTH_PROVIDERS.filter((provider) => configuredProviders.includes(provider.providerId));
+    }
+    return AUTH_PROVIDERS;
+  }, [configuredProviders]);
+
   const authProvidersBtnsToRender = useMemo(
     () =>
-      AUTH_PROVIDERS.map((provider) => (
+      providersToShow.map((provider) => (
         <ButtonTab
           key={provider.providerId}
           label={`${STRINGS.CONTINUE_WITH} ${provider.displayName}`}
@@ -26,7 +35,7 @@ const ChooseForm: FC<ChooseFormProps> = ({ isFirstTime, loading, error, onClick 
           onClick={() => onClick(provider.providerId, provider.defaultLoginType)}
         />
       )),
-    [loading, onClick],
+    [loading, onClick, providersToShow],
   );
 
   return (

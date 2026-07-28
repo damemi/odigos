@@ -2,9 +2,9 @@
 # Standalone Central Auth IdP e2e (not part of the Cypress suite).
 #
 # Covers:
-# 1) Live OIDC discovery for Google/Azure/(Okta when E2E_OKTA_TENANT_ID is set)
+# 1) Live OIDC discovery for Azure/(Okta when E2E_OKTA_TENANT_ID is set)
 #    via go test in central-backend/internal/keycloak (getOIDCDiscoveryEndpoints path)
-# 2) Create IdP for GOOGLE/AZURE/OKTA × OIDC/SAML (one at a time), resetting the
+# 2) Create IdP for AZURE/OKTA × OIDC/SAML (one at a time), resetting the
 #    brokered Keycloak state between cases
 # 3) Login using the created IdP:
 #    - OIDC: full authorization-code login against in-cluster mock-oauth2-server
@@ -617,7 +617,7 @@ wait_for_odigos_central_client
 ensure_mock_oidc
 start_saml_sso_stub
 
-PROVIDERS=(GOOGLE AZURE OKTA)
+PROVIDERS=(AZURE OKTA)
 SAML_CERT_B64="$(gen_saml_cert)"
 SAML_ENTITY_ID="http://127.0.0.1:${SAML_SSO_PORT}/metadata"
 SAML_SSO_URL="http://127.0.0.1:${SAML_SSO_PORT}/sso"

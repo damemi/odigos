@@ -8,7 +8,7 @@ export enum LoginType {
 
 export enum AuthProviderId {
   EMAIL = 'email', // for client-side only
-  GOOGLE = 'GOOGLE',
+  // GOOGLE = 'GOOGLE',
   AZURE = 'AZURE',
   OKTA = 'OKTA',
 }

@@ -224,7 +224,7 @@ func (kc *KeycloakAdminService) GetAdminToken(adminUsername string, adminPasswor
 	return token.AccessToken, nil
 }
 
-func (kc *KeycloakAdminService) GetIdentityProvider(adminUsername string, adminPassword string, providerAlias string) (*IdentityProviderRepresentation, error) {
+func (kc *KeycloakAdminService) ListIdentityProviders(adminUsername string, adminPassword string) ([]IdentityProviderRepresentation, error) {
 	url := kc.identityProviderInstancesURL()
 
 	adminToken, err := kc.GetAdminToken(adminUsername, adminPassword)
@@ -248,13 +248,22 @@ func (kc *KeycloakAdminService) GetIdentityProvider(adminUsername string, adminP
 
 	responseBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get identity provider: status %d, response: %s", resp.StatusCode, string(responseBody))
+		return nil, fmt.Errorf("failed to list identity providers: status %d, response: %s", resp.StatusCode, string(responseBody))
 	}
 
 	var idpList []IdentityProviderRepresentation
 	err = json.Unmarshal(responseBody, &idpList)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal identity provider during get: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal identity providers during list: %w", err)
+	}
+
+	return idpList, nil
+}
+
+func (kc *KeycloakAdminService) GetIdentityProvider(adminUsername string, adminPassword string, providerAlias string) (*IdentityProviderRepresentation, error) {
+	idpList, err := kc.ListIdentityProviders(adminUsername, adminPassword)
+	if err != nil {
+		return nil, err
 	}
 
 	for _, idp := range idpList {
