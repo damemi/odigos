@@ -25,6 +25,7 @@ jobs:
       pull-requests: read
     outputs:
       central: ${{ steps.filter.outputs.central }}
+      central-backend: ${{ steps.filter.outputs.central-backend }}
       skip-enterprise-k8s: ${{ steps.connector-only.outputs.skip }}
       platforms: ${{ steps.build-opts.outputs.platforms }}
       no-cache: ${{ steps.build-opts.outputs.no-cache }}
@@ -48,6 +49,13 @@ jobs:
               - 'tests/e2e/central-infrastructure/**'
               - 'tests/e2e/central-install/**'
               - 'tests/e2e/central-ui/**'
+              - 'tests/e2e/central-auth-idp/**'
+              - 'tests/common/assert/odigos-central-installed.yaml'
+            # central-auth-idp exercises the backend's Keycloak integration only,
+            # so it is gated on central-backend instead of the broader central
+            # filter above.
+            central-backend:
+              - 'central-backend/**'
               - 'tests/e2e/central-auth-idp/**'
               - 'tests/common/assert/odigos-central-installed.yaml'
             outside-connectors:
@@ -372,8 +380,17 @@ jobs:
       - name: Check if test should run
         id: should-run
         run: |
-          # Central tests only run if central-related files changed
-          if [[ "${{ matrix.test-scenario }}" == "central-install" || "${{ matrix.test-scenario }}" == "central-infrastructure" || "${{ matrix.test-scenario }}" == "central-ui" || "${{ matrix.test-scenario }}" == "central-auth-idp" ]]; then
+          # central-auth-idp only covers the backend's Keycloak integration
+          if [[ "${{ matrix.test-scenario }}" == "central-auth-idp" ]]; then
+            if [[ "${{ needs.detect-changes.outputs.central-backend }}" != "true" ]]; then
+              echo "Skipping central-auth-idp - no central-backend files changed"
+              echo "skip=true" >> $GITHUB_OUTPUT
+            else
+              echo "Running central-auth-idp - central-backend files changed"
+              echo "skip=false" >> $GITHUB_OUTPUT
+            fi
+          # Other central tests run if any central-related files changed
+          elif [[ "${{ matrix.test-scenario }}" == "central-install" || "${{ matrix.test-scenario }}" == "central-infrastructure" || "${{ matrix.test-scenario }}" == "central-ui" ]]; then
             if [[ "${{ needs.detect-changes.outputs.central }}" != "true" ]]; then
               echo "Skipping ${{ matrix.test-scenario }} - no central files changed"
               echo "skip=true" >> $GITHUB_OUTPUT
