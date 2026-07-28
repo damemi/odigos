@@ -1,0 +1,92 @@
+# OdigosCloudConnector installs one GCP connector runtime (one project boundary).
+#
+# Everything provider-specific is declared in the connector spec (connectors/spec/data/gcp.yaml),
+# not in this CR — the CR only references it:
+#   spec.account.id              -> the connector.field "projectId" (stamped as ODIGOS_GCP_PROJECT_ID)
+#   spec.workloads / spec.computePlatforms -> per-type discovery/instrumentation allow-lists (see below)
+#   the credentials Secret keys  -> auth.methods[].fields[].name (see below)
+# The connector scans every location/zone in the project (locations wildcard); there is no location
+# selection.
+#
+# How credentials flow (no GCP-specific wiring in the controller):
+#   1. The keys in the Secret below match the spec's auth field NAMES (credentialsJson).
+#   2. connector-runtime reads the spec and, for each auth field, injects its Secret value into the
+#      env var the field declares (envVar), e.g. credentialsJson -> ODIGOS_GCP_CREDENTIALS_JSON.
+#   3. central-backend's testConnectionForCloudConnector runs the same checks in-memory (credentials
+#      keyed by these same field names) BEFORE this CR/Secret is applied; on success you apply this.
+#
+# Apply the credentials Secret in the same namespace before (or with) this CR.
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: odigos-connector-gcp-prod-credentials
+  namespace: odigos-central
+type: Opaque
+stringData:
+  # Provide the keys for exactly ONE auth path (keys = connectors/spec/data/gcp.yaml auth.methods[].fields[].name).
+  # Leave the Secret empty to use workload-identity (GKE Workload Identity / ADC) — no keys required.
+  #
+  # --- service-account-key ---
+  # credentialsJson: |
+  #   {
+  #     "type": "service_account",
+  #     "project_id": "my-project",
+  #     ...
+  #   }
+---
+apiVersion: odigos.io/v1alpha1
+kind: OdigosCloudConnector
+metadata:
+  name: gcp-prod
+  namespace: odigos-central
+  labels:
+    odigos.io/platform-type: connector
+    odigos.io/provider: gcp
+  annotations:
+    odigos.io/deletion-policy: cleanup
+spec:
+  provider: gcp
+  displayName: GCP Production
+
+  # Provider boundary -> connectors/spec/data/gcp.yaml connector.field "projectId". The connector scans
+  # every location/zone in the project, so there is no location selection here.
+  account:
+    id: "my-gcp-project"
+    displayName: Odigos dev project
+
+  # Credentials live in a Secret — never in the CR. Supported auth paths (connectors/spec/data/gcp.yaml
+  # auth.methods); the keys provided in the Secret select which one applies:
+  #   workload-identity    — GKE Workload Identity / ADC; no keys required
+  #   service-account-key  — credentialsJson (the service account JSON key)
+  credentialsSecretRef:
+    name: odigos-connector-gcp-prod-credentials
+
+  # Connector runtime image. For local/dev this is the image you built + loaded into kind (README step 4:
+  # `make build-connector-gcp load-to-kind-connector-gcp TAG=dev`). In a managed install the controller
+  # supplies a default via CONNECTOR_GCP_IMAGE and you can omit this block.
+  runtime:
+    image: registry.odigos.io/odigos-enterprise-connector-gcp:dev
+
+# Per-type allow-lists, split into the two domains (mirrors connectors/spec/data/gcp.yaml). The connector
+# intersects these with the types its spec supports; a type it does not support is ignored.
+#
+# Workloads — directly-instrumentable resources:
+#   discovery       — enumerate workloads of this type (gcp.cloud-run)
+#   instrumentation — instrument them in place (not built yet; leave unset)
+  workloads:
+    - type: gcp.cloud-run
+      discovery: true
+      instrumentation: true
+
+# ComputePlatforms — managed environments (gcp.gke, gcp.gce):
+#   discovery    — detect compute platforms of this type
+#   installation — install a separate Odigos agent onto one (not supported yet; leave unset)
+  computePlatforms:
+    - type: gcp.gke
+      discovery: true
+    - type: gcp.gce
+      discovery: true
+
+  discovery:
+    refreshInterval: 10m

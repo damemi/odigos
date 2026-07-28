@@ -1,0 +1,136 @@
+provider: gcp
+displayName: Google Cloud Platform
+
+# Provider boundary and non-secret connector configuration (not authentication).
+# The connector scans every location/zone in the project via location wildcards (parent
+# ".../locations/-"), so there is no location selection field.
+connector:
+  fields:
+    - name: projectId
+      displayName: GCP Project ID
+      componentType: input
+      required: true
+      tooltip: The Google Cloud project this connector manages.
+
+# Authentication: either the connector pod's ambient credentials (Application Default Credentials /
+# GKE Workload Identity) or a service account JSON key stored in the credentials Secret. Unlike AWS,
+# GCP credentials are not bound to a single project — the connector always scopes its calls to the
+# configured project id, so there is no cross-account boundary to assume.
+auth:
+  permissions:
+    - resourcemanager.projects.get
+  methods:
+    - id: workload-identity
+      displayName: Workload identity
+      description: >-
+        Uses the connector pod's ambient credentials (GKE Workload Identity / Application Default
+        Credentials). No credentials Secret keys are required.
+      fields: []
+
+    - id: service-account-key
+      displayName: Service account key
+      description: A Google Cloud service account JSON key stored in the credentials Secret.
+      fields:
+        - name: credentialsJson
+          displayName: Service Account Key (JSON)
+          componentType: textarea
+          secret: true
+          required: true
+          tooltip: The full JSON key for a service account with the required roles.
+          envVar: ODIGOS_GCP_CREDENTIALS_JSON
+
+# Two parallel hierarchies (domains), completely separate, sharing only the codebase and running pod.
+#   workloads        -> discovery + instrumentation (instrument a discovered workload directly).
+#   computePlatforms -> discovery + installation    (install a separate Odigos agent onto the platform).
+# Every type name is unique across both domains.
+
+# workloads: directly-instrumentable resources — discovered, then instrumented in place.
+workloads:
+  discovery:
+    enabled: true
+    displayName: Workload discovery
+    description: >-
+      Enumerate Cloud Run services across every location in the project, so they can be surfaced as
+      Odigos Source candidates.
+    types:
+      - name: gcp.cloud-run
+        displayName: Cloud Run
+        description: List Cloud Run services in every location in the project.
+        permissions:
+          - run.services.list
+          - run.services.get
+
+  # instrumentation: instrument a discovered workload DIRECTLY. Each type references a workload-discovery
+  # type and declares how instrumentation is injected. Gated on an OTLP destination.
+  #   gcp.cloud-run -> service (OpenTelemetry agent injected into the service revision)
+  instrumentation:
+    enabled: true
+    displayName: Workload instrumentation
+    description: >-
+      Attach OpenTelemetry instrumentation directly to discovered Cloud Run services. Requires an
+      OTLP destination.
+    types:
+      - name: gcp.cloud-run
+        displayName: Cloud Run
+        description: >-
+          Inject the OpenTelemetry agent into the Cloud Run service revision. An init-ordered sidecar
+          stages the language agent into a shared in-memory volume and the ingress container is
+          configured (activation + OTLP export env vars) to load it — the same non-eBPF mechanism
+          Odigos uses on Kubernetes. Supported languages: Java, Python, Node.js, .NET.
+        method: service
+        permissions:
+          - run.services.get
+          - run.services.update
+          - run.operations.get
+          # Optional: read the service image's Cloud Native Buildpack metadata for language detection
+          # (roles/artifactregistry.reader). Only needed for the buildpack-label detection layer; the
+          # static heuristics and the source runtime override work without it.
+          - artifactregistry.repositories.downloadArtifacts
+
+# computePlatforms: managed environments — discovered, then a separate Odigos agent is installed onto
+# them. Installation is NOT supported yet, so discovered compute platforms are reported but never
+# instrumented (surfaced as NotImplemented).
+computePlatforms:
+  discovery:
+    enabled: true
+    displayName: Compute-platform discovery
+    description: >-
+      Detect managed environments — GKE clusters and Compute Engine instances — across the project,
+      so they can be surfaced as compute-platform candidates.
+    types:
+      - name: gcp.gke
+        displayName: Google Kubernetes Engine
+        description: >-
+          Detect GKE clusters in the project. Instrumented by installing Odigos for Kubernetes
+          (odiglet) in the cluster.
+        permissions:
+          - container.clusters.list
+          - container.clusters.get
+      - name: gcp.gce
+        displayName: Compute Engine (VM)
+        description: >-
+          Detect Compute Engine instances across every zone in the project. Instrumented by installing
+          the Odigos VM agent on the instance.
+        permissions:
+          - compute.instances.list
+
+  # installation: install a separate Odigos agent onto a discovered compute platform (Odigos for
+  # Kubernetes on GKE, or the Odigos VM agent on Compute Engine). This is NOT supported yet, so it
+  # declares no types: discovered compute platforms are reported but never instrumented (surfaced as
+  # NotImplemented). When support lands, each installable compute-platform type is referenced here with
+  # its install method (method: agent) and the GCP permissions the install requires.
+  installation:
+    enabled: false
+    displayName: Compute-platform installation
+    description: >-
+      Install a separate Odigos agent onto a discovered compute platform (Odigos for Kubernetes on
+      GKE, the Odigos VM agent on Compute Engine). Not supported yet.
+    types: []
+
+# gateway: connector-wide collector wiring; not part of either domain. Implemented in a later phase.
+gateway:
+  enabled: false
+  displayName: Gateway / collector wiring
+  description: >-
+    Wire instrumented workloads to managed-otelcol regional collectors. Implemented in a later phase.
+  types: []

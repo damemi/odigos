@@ -155,7 +155,11 @@ func BuildDeployment(cr *cloudconnectorsv1.OdigosCloudConnector, p DeploymentPar
 		{Name: "ODIGOS_DB_SCHEMA", Value: p.SchemaName},
 		{Name: "ODIGOS_EXPECTED_SCHEMA_VERSION", Value: p.SchemaVersion},
 		{Name: "ODIGOS_CAPABILITIES", Value: capabilitiesJSON(cr)},
+		// The provider boundary id (spec.account.id) is stamped into every provider's boundary env var.
+		// A connector reads only the var for its own provider; the others are harmless no-ops. Add a new
+		// line here when onboarding a provider whose boundary env var differs.
 		{Name: "ODIGOS_AWS_ACCOUNT_ID", Value: cr.Spec.Account.ID},
+		{Name: "ODIGOS_GCP_PROJECT_ID", Value: cr.Spec.Account.ID},
 		{Name: "ODIGOS_CENTRAL_BACKEND_URL", Value: p.CentralBackendURL},
 		{Name: "ODIGOS_GQL_ADDR", Value: fmt.Sprintf(":%d", GraphQLPort)},
 		{Name: "ODIGOS_CLI_ADDR", Value: fmt.Sprintf(":%d", CLIPort)},
