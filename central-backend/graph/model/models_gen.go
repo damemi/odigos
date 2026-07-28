@@ -103,16 +103,16 @@ type ClusterSnapshot struct {
 }
 
 type ComputePlatform struct {
-	ID                   string       `json:"id"`
-	Name                 string       `json:"name"`
-	OdigosVersion        string       `json:"odigosVersion"`
-	GraphqlSchemaVersion *string      `json:"graphqlSchemaVersion,omitempty"`
-	Type                 PlatformType `json:"type"`
-	Status               string       `json:"status"`
-	ConnectedAt          *int         `json:"connectedAt,omitempty"`
-	LastSeenAt           *int         `json:"lastSeenAt,omitempty"`
-	Users                []*User      `json:"users"`
-	Teams                []*Team      `json:"teams"`
+	ID                   string  `json:"id"`
+	Name                 string  `json:"name"`
+	OdigosVersion        string  `json:"odigosVersion"`
+	GraphqlSchemaVersion *string `json:"graphqlSchemaVersion,omitempty"`
+	Type                 string  `json:"type"`
+	Status               string  `json:"status"`
+	ConnectedAt          *int    `json:"connectedAt,omitempty"`
+	LastSeenAt           *int    `json:"lastSeenAt,omitempty"`
+	Users                []*User `json:"users"`
+	Teams                []*Team `json:"teams"`
 }
 
 type CreateCloudConnectorInput struct {
@@ -399,63 +399,6 @@ func (e *HealthStatus) UnmarshalJSON(b []byte) error {
 }
 
 func (e HealthStatus) MarshalJSON() ([]byte, error) {
-	var buf bytes.Buffer
-	e.MarshalGQL(&buf)
-	return buf.Bytes(), nil
-}
-
-type PlatformType string
-
-const (
-	PlatformTypeK8s       PlatformType = "k8s"
-	PlatformTypeVM        PlatformType = "vm"
-	PlatformTypeConnector PlatformType = "connector"
-)
-
-var AllPlatformType = []PlatformType{
-	PlatformTypeK8s,
-	PlatformTypeVM,
-	PlatformTypeConnector,
-}
-
-func (e PlatformType) IsValid() bool {
-	switch e {
-	case PlatformTypeK8s, PlatformTypeVM, PlatformTypeConnector:
-		return true
-	}
-	return false
-}
-
-func (e PlatformType) String() string {
-	return string(e)
-}
-
-func (e *PlatformType) UnmarshalGQL(v any) error {
-	str, ok := v.(string)
-	if !ok {
-		return fmt.Errorf("enums must be strings")
-	}
-
-	*e = PlatformType(str)
-	if !e.IsValid() {
-		return fmt.Errorf("%s is not a valid PlatformType", str)
-	}
-	return nil
-}
-
-func (e PlatformType) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
-}
-
-func (e *PlatformType) UnmarshalJSON(b []byte) error {
-	s, err := strconv.Unquote(string(b))
-	if err != nil {
-		return err
-	}
-	return e.UnmarshalGQL(s)
-}
-
-func (e PlatformType) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

@@ -79,14 +79,16 @@ func (ws *WebSocketServer) HandleConnection(w http.ResponseWriter, r *http.Reque
 	platformTypeStr := r.URL.Query().Get(PlatformTypeQueryParam)
 	var platformType consts.PlatformType
 	switch platformTypeStr {
-	case "vm":
+	case string(consts.PlatformTypeVM):
 		platformType = consts.PlatformTypeVM
-	case "k8s":
+	case string(consts.PlatformTypeK8s):
 		platformType = consts.PlatformTypeK8s
-	case "connector":
+	case string(consts.PlatformTypeConnector):
 		platformType = consts.PlatformTypeConnector
+	case string(consts.PlatformTypeAwsEcs):
+		platformType = consts.PlatformTypeAwsEcs
 	default:
-		http.Error(w, fmt.Sprintf("Unsupported platform type: %s. Supported types: %s, %s, %s", platformTypeStr, consts.PlatformTypeK8s, consts.PlatformTypeVM, consts.PlatformTypeConnector), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("Unsupported platform type: %s. Supported types: %s, %s, %s, %s", platformTypeStr, consts.PlatformTypeK8s, consts.PlatformTypeVM, consts.PlatformTypeConnector, consts.PlatformTypeAwsEcs), http.StatusBadRequest)
 		return
 	}
 

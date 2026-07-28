@@ -114,19 +114,12 @@ export const useProxy = (): UseProxy => {
     }
   }, [isOutOfProxyPage, proxyStoreHydrated]);
 
-  // `platformType` can be briefly unset during store rehydration. VM proxies
-  // always report a `graphqlSchemaVersion` (k8s never do), so use it as a
-  // deterministic fallback — keeps `useOdigos().isVm` (and VM-gated UI like the
-  // namespace "Auto / future apps" toggle) reliable. Mirrors the adapter's
-  // resolvedContext fallback.
-  const resolvedPlatformType = platformType ?? (graphqlSchemaVersion ? PlatformType.Vm : undefined);
-
   return {
     proxyID,
     proxyName,
     odigosVersion,
     graphqlSchemaVersion,
-    platformType: resolvedPlatformType,
+    platformType,
     selectProxy,
     clearProxy,
   };

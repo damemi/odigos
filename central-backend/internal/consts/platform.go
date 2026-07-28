@@ -9,4 +9,5 @@ const (
 	// same reverse WebSocket as a VM agent (platformType=connector) and serves
 	// the agents-api GraphQL schema, so Central routes to it like any other proxy.
 	PlatformTypeConnector PlatformType = "connector"
+	PlatformTypeAwsEcs    PlatformType = "aws.ecs"
 )

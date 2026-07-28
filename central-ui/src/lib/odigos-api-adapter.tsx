@@ -396,7 +396,7 @@ const dialectVersion = (ctx: OperationContext): string => (ctx as ProxyOperation
 // vmagent dialect registry and reuses every `VmSpec`. Treat VM and connector
 // uniformly wherever the adapter selects the agents-api dialect over the
 // hand-written k8s `VersionedRemoteFetch` buckets.
-const isAgentsApiPlatform = (ctx: OperationContext): boolean => ctx.platformType === PlatformType.Vm || ctx.platformType === PlatformType.Connector;
+const isAgentsApiPlatform = (ctx: Pick<OperationContext, 'platformType'>): boolean => ctx.platformType !== PlatformType.K8s;
 
 // ---------------------------------------------------------------------------
 // Version-aware input sanitizing.
@@ -1016,476 +1016,476 @@ const withRemoteConfigVars = <TData,>(op: Operation<TData, UpdateRemoteConfigVar
 
 const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
   withGuardedRuns({
-  // sources / workloads
-  //
-  // Legacy < v1.20: the kit always asks for `GET_WORKLOADS`; here it resolves
-  // to a single combined query (`computePlatform.sources` + `workloads`
-  // injection rows) mapped into `Workload`s. By-id resolves via a multi-step
-  // `run` (one `GET_SOURCE` per id + a single agent-injection enrichment).
-  //
-  // Prefer Redis cluster snapshots for modern k8s list loads (PLAT-1302): avoids
-  // multi-MB GetWorkloads RemoteFetch responses. When Redis lags IC creation,
-  // imperative run() falls back to RemoteFetch, merges into the full snapshot,
-  // writeQuerys GET_CLUSTER_SNAPSHOT (useSources is cache-first on that key),
-  // and keeps an in-memory overlay so declarative transformResult stays fresh.
-  // Legacy (< v1.20) and VM/connector keep RemoteFetch. Detail drawers still use
-  // GET_WORKLOADS_BY_IDS RemoteFetch for full field parity.
-  GET_WORKLOADS: (() => {
-    const remote = wrapVersioned<GetWorkloadsData, GetWorkloadsVars | undefined>(
-      GET_WORKLOADS,
+    // sources / workloads
+    //
+    // Legacy < v1.20: the kit always asks for `GET_WORKLOADS`; here it resolves
+    // to a single combined query (`computePlatform.sources` + `workloads`
+    // injection rows) mapped into `Workload`s. By-id resolves via a multi-step
+    // `run` (one `GET_SOURCE` per id + a single agent-injection enrichment).
+    //
+    // Prefer Redis cluster snapshots for modern k8s list loads (PLAT-1302): avoids
+    // multi-MB GetWorkloads RemoteFetch responses. When Redis lags IC creation,
+    // imperative run() falls back to RemoteFetch, merges into the full snapshot,
+    // writeQuerys GET_CLUSTER_SNAPSHOT (useSources is cache-first on that key),
+    // and keeps an in-memory overlay so declarative transformResult stays fresh.
+    // Legacy (< v1.20) and VM/connector keep RemoteFetch. Detail drawers still use
+    // GET_WORKLOADS_BY_IDS RemoteFetch for full field parity.
+    GET_WORKLOADS: (() => {
+      const remote = wrapVersioned<GetWorkloadsData, GetWorkloadsVars | undefined>(
+        GET_WORKLOADS,
+        undefined,
+        { query: GET_SOURCES_WITH_STATUS, map: (data) => legacySourcesToWorkloads(data) },
+        {
+          buildQuery: (_vars, ctx) => buildVmSourcesWithReportsQuery(ctx) ?? '',
+          transformResult: (data) => mapVmSourcesWithReportsToWorkloads(data),
+        },
+      );
+
+      const prefersSnapshot = (ctx: OperationContext) => !isAgentsApiPlatform(ctx) && !isLegacyProxy(ctx) && !!resolveProxyID(ctx);
+
+      const writeSnapshotCache = (client: ApolloClient, clusterId: string, snapshot: SnapshotCluster) => {
+        setWorkloadSnapshotOverlay(clusterId, snapshot);
+        try {
+          client.writeQuery({
+            query: GET_CLUSTER_SNAPSHOT as DocumentNode,
+            variables: { clusterId },
+            data: { clusterSnapshot: snapshot },
+          });
+        } catch {
+          // Cache write is best-effort; overlay still covers transformResult.
+        }
+      };
+
+      const op: Operation<GetWorkloadsData, GetWorkloadsVars | undefined> = {
+        ...remote,
+        document: (ctx) => (prefersSnapshot(ctx) ? (GET_CLUSTER_SNAPSHOT as DocumentNode) : typeof remote.document === 'function' ? remote.document(ctx) : remote.document),
+        canRun: (ctx) => {
+          if (prefersSnapshot(ctx)) return true;
+          return remote.canRun ? remote.canRun(ctx) : true;
+        },
+        transformVariables: (vars, ctx) => {
+          if (prefersSnapshot(ctx)) return { clusterId: resolveProxyID(ctx) };
+          return remote.transformVariables!(vars, ctx);
+        },
+        transformResult: (raw, ctx) => {
+          if (prefersSnapshot(ctx)) {
+            const clusterId = resolveProxyID(ctx);
+            const redis = (raw as { clusterSnapshot?: SnapshotCluster } | null | undefined)?.clusterSnapshot;
+            const snapshot = resolveClusterSnapshot(clusterId, redis);
+            // Overview always requests markedForInstrumentation=true; transformResult
+            // has no vars, so apply that filter here for the declarative query path.
+            return mapClusterSnapshotToWorkloads(snapshot, { filter: { markedForInstrumentation: true } });
+          }
+          return remote.transformResult!(raw, ctx);
+        },
+        run: async (client, vars, ctx) => {
+          try {
+            if (!prefersSnapshot(ctx)) {
+              if (remote.run) return remote.run(client, vars, ctx);
+              return runRemoteSingle(client, remote, vars, ctx);
+            }
+
+            const clusterId = resolveProxyID(ctx)!;
+            const wantsMarked = vars?.filter?.markedForInstrumentation === true;
+            let redis: SnapshotCluster | null | undefined;
+
+            try {
+              const result = await client.query({
+                query: GET_CLUSTER_SNAPSHOT as DocumentNode,
+                variables: { clusterId },
+                fetchPolicy: 'network-only',
+                errorPolicy: 'all',
+              });
+              redis = (result.data as { clusterSnapshot?: SnapshotCluster } | null | undefined)?.clusterSnapshot;
+            } catch {
+              // Fall through to RemoteFetch when snapshot is unavailable.
+            }
+
+            const snapshot = resolveClusterSnapshot(clusterId, redis);
+            if (snapshot?.namespaces?.length) {
+              const mapped = mapClusterSnapshotToWorkloads(snapshot, vars);
+              // Snapshot can lag IC/Source creates. When the overview asks for
+              // instrumented workloads and Redis/overlay still show none selected,
+              // fall through to live RemoteFetch.
+              if (!(wantsMarked && mapped.workloads.length === 0 && !snapshotHasSelectedWorkloads(snapshot))) {
+                // Refresh Apollo so useSources (cache-first) sees this snapshot.
+                writeSnapshotCache(client, clusterId, snapshot);
+                return { data: mapped };
+              }
+            }
+
+            const live = remote.run ? await remote.run(client, vars, ctx) : await runRemoteSingle(client, remote, vars, ctx);
+            if (live.data?.workloads?.length) {
+              const merged = mergeLiveSelectedIntoSnapshot(redis, clusterId, redis?.clusterName ?? clusterId, live.data.workloads);
+              writeSnapshotCache(client, clusterId, merged);
+            }
+            return live;
+          } catch (err) {
+            return { error: err instanceof Error ? err.message : String(err) };
+          }
+        },
+      };
+
+      return op;
+    })(),
+    // VM: no by-id endpoint — resolve the flat agents-api `sources` list (plus
+    // workloadReports for status) and map into `Workload`s under `workloadsByIds`.
+    // The kit's `fetchById` `.find()`s the requested id out of the result (and SSE
+    // `fetchByTargets` refreshes the list via `fetchAll` afterward), so returning
+    // the full set is correct and cheap.
+    GET_WORKLOADS_BY_IDS: wrapVersioned<GetWorkloadsByIdsData, GetWorkloadsByIdsVars>(
+      GET_WORKLOADS_BY_IDS,
       undefined,
-      { query: GET_SOURCES_WITH_STATUS, map: (data) => legacySourcesToWorkloads(data) },
+      { run: (client, vars, ctx) => runLegacySourcesByIds(client, vars, ctx) },
       {
         buildQuery: (_vars, ctx) => buildVmSourcesWithReportsQuery(ctx) ?? '',
-        transformResult: (data) => mapVmSourcesWithReportsToWorkloads(data),
+        transformResult: (data) => ({ workloadsByIds: mapVmSourcesWithReportsToWorkloads(data).workloads }),
       },
-    );
-
-    const prefersSnapshot = (ctx: OperationContext) => !isAgentsApiPlatform(ctx) && !isLegacyProxy(ctx) && !!resolveProxyID(ctx);
-
-    const writeSnapshotCache = (client: ApolloClient, clusterId: string, snapshot: SnapshotCluster) => {
-      setWorkloadSnapshotOverlay(clusterId, snapshot);
-      try {
-        client.writeQuery({
-          query: GET_CLUSTER_SNAPSHOT as DocumentNode,
-          variables: { clusterId },
-          data: { clusterSnapshot: snapshot },
-        });
-      } catch {
-        // Cache write is best-effort; overlay still covers transformResult.
-      }
-    };
-
-    const op: Operation<GetWorkloadsData, GetWorkloadsVars | undefined> = {
-      ...remote,
-      document: (ctx) => (prefersSnapshot(ctx) ? (GET_CLUSTER_SNAPSHOT as DocumentNode) : typeof remote.document === 'function' ? remote.document(ctx) : remote.document),
-      canRun: (ctx) => {
-        if (prefersSnapshot(ctx)) return true;
-        return remote.canRun ? remote.canRun(ctx) : true;
-      },
-      transformVariables: (vars, ctx) => {
-        if (prefersSnapshot(ctx)) return { clusterId: resolveProxyID(ctx) };
-        return remote.transformVariables!(vars, ctx);
-      },
-      transformResult: (raw, ctx) => {
-        if (prefersSnapshot(ctx)) {
-          const clusterId = resolveProxyID(ctx);
-          const redis = (raw as { clusterSnapshot?: SnapshotCluster } | null | undefined)?.clusterSnapshot;
-          const snapshot = resolveClusterSnapshot(clusterId, redis);
-          // Overview always requests markedForInstrumentation=true; transformResult
-          // has no vars, so apply that filter here for the declarative query path.
-          return mapClusterSnapshotToWorkloads(snapshot, { filter: { markedForInstrumentation: true } });
-        }
-        return remote.transformResult!(raw, ctx);
-      },
-      run: async (client, vars, ctx) => {
-        try {
-          if (!prefersSnapshot(ctx)) {
-            if (remote.run) return remote.run(client, vars, ctx);
-            return runRemoteSingle(client, remote, vars, ctx);
-          }
-
-          const clusterId = resolveProxyID(ctx)!;
-          const wantsMarked = vars?.filter?.markedForInstrumentation === true;
-          let redis: SnapshotCluster | null | undefined;
-
-          try {
-            const result = await client.query({
-              query: GET_CLUSTER_SNAPSHOT as DocumentNode,
-              variables: { clusterId },
-              fetchPolicy: 'network-only',
-              errorPolicy: 'all',
-            });
-            redis = (result.data as { clusterSnapshot?: SnapshotCluster } | null | undefined)?.clusterSnapshot;
-          } catch {
-            // Fall through to RemoteFetch when snapshot is unavailable.
-          }
-
-          const snapshot = resolveClusterSnapshot(clusterId, redis);
-          if (snapshot?.namespaces?.length) {
-            const mapped = mapClusterSnapshotToWorkloads(snapshot, vars);
-            // Snapshot can lag IC/Source creates. When the overview asks for
-            // instrumented workloads and Redis/overlay still show none selected,
-            // fall through to live RemoteFetch.
-            if (!(wantsMarked && mapped.workloads.length === 0 && !snapshotHasSelectedWorkloads(snapshot))) {
-              // Refresh Apollo so useSources (cache-first) sees this snapshot.
-              writeSnapshotCache(client, clusterId, snapshot);
-              return { data: mapped };
-            }
-          }
-
-          const live = remote.run ? await remote.run(client, vars, ctx) : await runRemoteSingle(client, remote, vars, ctx);
-          if (live.data?.workloads?.length) {
-            const merged = mergeLiveSelectedIntoSnapshot(redis, clusterId, redis?.clusterName ?? clusterId, live.data.workloads);
-            writeSnapshotCache(client, clusterId, merged);
-          }
-          return live;
-        } catch (err) {
-          return { error: err instanceof Error ? err.message : String(err) };
-        }
-      },
-    };
-
-    return op;
-  })(),
-  // VM: no by-id endpoint — resolve the flat agents-api `sources` list (plus
-  // workloadReports for status) and map into `Workload`s under `workloadsByIds`.
-  // The kit's `fetchById` `.find()`s the requested id out of the result (and SSE
-  // `fetchByTargets` refreshes the list via `fetchAll` afterward), so returning
-  // the full set is correct and cheap.
-  GET_WORKLOADS_BY_IDS: wrapVersioned<GetWorkloadsByIdsData, GetWorkloadsByIdsVars>(
-    GET_WORKLOADS_BY_IDS,
-    undefined,
-    { run: (client, vars, ctx) => runLegacySourcesByIds(client, vars, ctx) },
-    {
-      buildQuery: (_vars, ctx) => buildVmSourcesWithReportsQuery(ctx) ?? '',
-      transformResult: (data) => ({ workloadsByIds: mapVmSourcesWithReportsToWorkloads(data).workloads }),
-    },
-  ),
-  GET_WORKLOADS_BY_IDS_SLIM: wrapVersioned<GetWorkloadsByIdsData, GetWorkloadsByIdsVars>(
-    GET_WORKLOADS_BY_IDS_SLIM,
-    undefined,
-    { run: (client, vars, ctx) => runLegacySourcesByIds(client, vars, ctx) },
-    // Slim list path stays sources-only — overview table doesn't need full report payload.
-    { select: (d) => d.GetSourcesDocument, transformResult: (data) => ({ workloadsByIds: mapVmSourcesToWorkloads(data).workloads }) },
-  ),
-  // VM: by-name `source(name)`; central-ui's `WorkloadId.name` is the source name.
-  GET_SOURCE: wrapVersioned<{ source?: Workload }, WorkloadId>(GET_SOURCE, undefined, undefined, {
-    select: (d) => d.GetSourceDocument,
-    transformVariables: (vars) => ({ name: vars.name }),
-    transformResult: (data) => mapVmSourceResult(data),
-  }),
-  GET_SOURCE_LIBRARIES: wrapVersioned<GetSourceLibrariesData, GetSourceLibrariesVars>(GET_SOURCE_LIBRARIES),
-  GET_PEER_SOURCES: wrapVersioned<{ peerSources?: PeerSources }, GetPeerSourcesVars>(GET_PEER_SOURCES),
-  // VM: no bulk persist op — fan out into one combined, aliased
-  // createSource/deleteSource mutation (enable -> create, disable -> delete).
-  PERSIST_SOURCES: wrapVersioned<PersistSourcesResult, PersistSourcesVars>(PERSIST_SOURCES, undefined, undefined, {
-    buildQuery: (vars) => buildVmPersistSources(vars).query,
-    transformVariables: (vars) => buildVmPersistSources(vars).variables,
-    transformResult: () => ({ persistK8sSources: true }),
-  }),
-  // VM: `updateSource(input: UpdateSourceInput!)`.
-  UPDATE_SOURCE: wrapVersioned<{ updateK8sActualSource: boolean }, UpdateSourceVars>(UPDATE_SOURCE, undefined, undefined, {
-    select: (d) => d.UpdateSourceDocument,
-    transformVariables: (vars) => vmUpdateSourceVariables(vars),
-    transformResult: () => ({ updateK8sActualSource: true }),
-  }),
-  RESTART_WORKLOADS: wrapVersioned<{ restartWorkloads: boolean }, RestartWorkloadsVars>(RESTART_WORKLOADS),
-  RESTART_POD: wrapVersioned<{ restartPod: boolean }, RestartPodVars>(RESTART_POD),
-  RECOVER_FROM_ROLLBACK: wrapVersioned<{ recoverFromRollbackForWorkload: boolean }, RecoverFromRollbackVars>(RECOVER_FROM_ROLLBACK),
-
-  // destinations
-  // VM: the agents-api destination surface — `destinations`/`destinationTypes`
-  // reads + per-destination create/update/delete/testConnection — resolved from
-  // the versioned vmagent dialect registry and shape-mapped (see vm-destinations).
-  GET_DESTINATIONS: wrapVersioned<GetDestinationsData, undefined>(GET_DESTINATIONS, undefined, undefined, {
-    select: (d) => d.GetDestinationsDocument,
-    transformResult: (data) => mapVmDestinations(data),
-  }),
-  // Kit slot types are `Operation<GetDestinationCategoriesResult, undefined>`
-  // and `Operation<GetPotentialDestinationsResult, undefined>` — bind
-  // them explicitly here so the kit consumer never sees `unknown`.
-  // VM: `destinationTypes` (flat catalog) -> the kit's category catalog.
-  GET_DESTINATION_CATEGORIES: wrapVersioned<GetDestinationCategoriesResult, undefined>(GET_DESTINATION_CATEGORIES, undefined, undefined, {
-    select: (d) => d.GetDestinationTypesDocument,
-    transformResult: (data) => mapVmDestinationTypesToCategories(data),
-  }),
-  // No VM equivalent for `potentialDestinations` (k8s auto-detect); VM `canRun`
-  // is false (no VM bucket), so the op is simply unavailable there.
-  GET_POTENTIAL_DESTINATIONS: wrapVersioned<GetPotentialDestinationsResult, undefined>(GET_POTENTIAL_DESTINATIONS),
-  CREATE_DESTINATION: wrapVersioned<CreateDestinationResult, CreateDestinationVars>(CREATE_DESTINATION, undefined, undefined, {
-    select: (d) => d.CreateDestinationDocument,
-    transformVariables: (vars) => vmCreateDestinationVariables(vars),
-    transformResult: (data) => vmCreateDestinationResult(data),
-  }),
-  UPDATE_DESTINATION: wrapVersioned<UpdateDestinationData, UpdateDestinationVars>(UPDATE_DESTINATION, undefined, undefined, {
-    select: (d) => d.UpdateDestinationDocument,
-    transformVariables: (vars) => vmUpdateDestinationVariables(vars),
-    transformResult: (data) => vmUpdateDestinationResult(data),
-  }),
-  DELETE_DESTINATION: wrapVersioned<DeleteDestinationResult, DeleteDestinationVars>(DELETE_DESTINATION, undefined, undefined, {
-    select: (d) => d.DeleteDestinationDocument,
-    transformVariables: (vars) => vmDeleteDestinationVariables(vars),
-    transformResult: (data) => vmDeleteDestinationResult(data),
-  }),
-  TEST_DESTINATION_CONNECTION: {
-    // VM uses the agents-api `TestConnection` document + input; both k8s and VM
-    // return the result under `testConnectionForDestination`, dug out below.
-    ...wrapVersioned<TestConnectionResponse, TestDestinationConnectionVars>(TEST_DESTINATION_CONNECTION, undefined, undefined, {
-      select: (d) => d.TestConnectionDocument,
-      transformVariables: (vars) => vmTestConnectionVariables(vars),
+    ),
+    GET_WORKLOADS_BY_IDS_SLIM: wrapVersioned<GetWorkloadsByIdsData, GetWorkloadsByIdsVars>(
+      GET_WORKLOADS_BY_IDS_SLIM,
+      undefined,
+      { run: (client, vars, ctx) => runLegacySourcesByIds(client, vars, ctx) },
+      // Slim list path stays sources-only — overview table doesn't need full report payload.
+      { select: (d) => d.GetSourcesDocument, transformResult: (data) => ({ workloadsByIds: mapVmSourcesToWorkloads(data).workloads }) },
+    ),
+    // VM: by-name `source(name)`; central-ui's `WorkloadId.name` is the source name.
+    GET_SOURCE: wrapVersioned<{ source?: Workload }, WorkloadId>(GET_SOURCE, undefined, undefined, {
+      select: (d) => d.GetSourceDocument,
+      transformVariables: (vars) => ({ name: vars.name }),
+      transformResult: (data) => mapVmSourceResult(data),
     }),
-    // The test-connection mutation's GraphQL shape returns the result
-    // under `testConnectionForDestination`, not the wrapper's default
-    // `data` field. Override `transformResult` to dig that one extra level.
-    transformResult: (raw, ctx): TestConnectionResponse | undefined => {
-      if (isAgentsApiPlatform(ctx)) return vmTestConnectionResult(parseRemoteFetchData(raw));
-      const remoteFetch = (raw as RemoteFetchResponse | null | undefined)?.remoteFetch;
-      if (typeof remoteFetch !== 'string') return undefined;
-      const parsed = safeJsonParse<{ data?: { testConnectionForDestination?: TestConnectionResponse } }>(remoteFetch, { data: undefined });
-      return parsed?.data?.testConnectionForDestination;
-    },
-  },
-
-  // actions. Catalog form payloads (row-array `renames`, ExtractAttribute UI-only /
-  // empty optional fields) are normalized for the wire, and stringified `renames`
-  // are parsed back so the kit's object shape survives the proxy round-trip.
-  // VM: only URL templatization maps across both surfaces — VM-only action types
-  // (processorAddition / spanMetrics) are filtered out of reads and the k8s-only
-  // kit types have no VM equivalent (see vm-actions). `renames` is a k8s-only
-  // RenameAttribute concern, so `withActionRenames` is a no-op on VM.
-  GET_ACTIONS: withActionRenames(
-    wrapVersioned<GetActionsData, undefined>(GET_ACTIONS, undefined, undefined, {
-      select: (d) => d.GetActionsDocument,
-      transformResult: (data) => mapVmActions(data as GetActionsQuery),
+    GET_SOURCE_LIBRARIES: wrapVersioned<GetSourceLibrariesData, GetSourceLibrariesVars>(GET_SOURCE_LIBRARIES),
+    GET_PEER_SOURCES: wrapVersioned<{ peerSources?: PeerSources }, GetPeerSourcesVars>(GET_PEER_SOURCES),
+    // VM: no bulk persist op — fan out into one combined, aliased
+    // createSource/deleteSource mutation (enable -> create, disable -> delete).
+    PERSIST_SOURCES: wrapVersioned<PersistSourcesResult, PersistSourcesVars>(PERSIST_SOURCES, undefined, undefined, {
+      buildQuery: (vars) => buildVmPersistSources(vars).query,
+      transformVariables: (vars) => buildVmPersistSources(vars).variables,
+      transformResult: () => ({ persistK8sSources: true }),
     }),
-  ),
-  // Dynamic action-type catalog (YAML-driven). K8s: introduced in odigos v1.31 —
-  // older proxies have no bucket, so `canRun` is false and the kit falls back to
-  // its hard-coded ACTION_OPTIONS. VM: resolved from the vmagent `actionTypes`
-  // dialect document (graceful no-op on dialects that predate it) and mapped to
-  // the kit's catalog shape (VM-only types dropped, see vm-action-types).
-  GET_ACTION_TYPES: wrapVersioned<GetActionTypesResult, undefined>(GET_ACTION_TYPES, undefined, undefined, {
-    select: (d) => d.GetActionTypesDocument,
-    transformResult: (data) => mapVmActionTypesToOptions(data),
-  }),
-  CREATE_ACTION: withActionRenames(
-    wrapVersioned<CreateActionResult, CreateActionVars>(CREATE_ACTION, undefined, undefined, {
-      select: (d) => d.CreateActionDocument,
-      transformVariables: (vars) => vmCreateActionVariables(vars),
-      transformResult: (data) => vmCreateActionResult(data as CreateActionMutation),
+    // VM: `updateSource(input: UpdateSourceInput!)`.
+    UPDATE_SOURCE: wrapVersioned<{ updateK8sActualSource: boolean }, UpdateSourceVars>(UPDATE_SOURCE, undefined, undefined, {
+      select: (d) => d.UpdateSourceDocument,
+      transformVariables: (vars) => vmUpdateSourceVariables(vars),
+      transformResult: () => ({ updateK8sActualSource: true }),
     }),
-  ),
-  UPDATE_ACTION: withActionRenames(
-    wrapVersioned<UpdateActionResult, UpdateActionVars>(UPDATE_ACTION, undefined, undefined, {
-      select: (d) => d.UpdateActionDocument,
-      transformVariables: (vars) => vmUpdateActionVariables(vars),
-      transformResult: (data) => vmUpdateActionResult(data as UpdateActionMutation),
+    RESTART_WORKLOADS: wrapVersioned<{ restartWorkloads: boolean }, RestartWorkloadsVars>(RESTART_WORKLOADS),
+    RESTART_POD: wrapVersioned<{ restartPod: boolean }, RestartPodVars>(RESTART_POD),
+    RECOVER_FROM_ROLLBACK: wrapVersioned<{ recoverFromRollbackForWorkload: boolean }, RecoverFromRollbackVars>(RECOVER_FROM_ROLLBACK),
+
+    // destinations
+    // VM: the agents-api destination surface — `destinations`/`destinationTypes`
+    // reads + per-destination create/update/delete/testConnection — resolved from
+    // the versioned vmagent dialect registry and shape-mapped (see vm-destinations).
+    GET_DESTINATIONS: wrapVersioned<GetDestinationsData, undefined>(GET_DESTINATIONS, undefined, undefined, {
+      select: (d) => d.GetDestinationsDocument,
+      transformResult: (data) => mapVmDestinations(data),
     }),
-  ),
-  DELETE_ACTION: wrapVersioned<DeleteActionResult, DeleteActionVars>(DELETE_ACTION, undefined, undefined, {
-    select: (d) => d.DeleteActionDocument,
-    transformVariables: (vars) => vmDeleteActionVariables(vars),
-    transformResult: (data) => vmDeleteActionResult(data as DeleteActionMutation),
-  }),
-
-  // instrumentation rules
-  // VM: the agents-api rule surface — `instrumentationRules` read + per-rule
-  // create/update/delete — resolved from the versioned vmagent dialect registry
-  // and shape-mapped (see vm-instrumentation-rules). The VM rule model is
-  // narrower than k8s (global rules, no scopes/notes/disabled, boolean
-  // payload-collection), so those fields map to neutral defaults.
-  GET_INSTRUMENTATION_RULES: wrapVersioned<GetInstrumentationRulesData, undefined>(GET_INSTRUMENTATION_RULES, undefined, undefined, {
-    select: (d) => d.GetInstrumentationRulesDocument,
-    transformResult: (data) => mapVmInstrumentationRules(data as GetInstrumentationRulesQuery),
-  }),
-  // Dynamic rule-type catalog (YAML-driven), mirroring GET_ACTION_TYPES. K8s:
-  // introduced in odigos v1.31 — older proxies have no bucket, so `canRun` is
-  // false and the kit falls back to its hard-coded INSTRUMENTATION_RULE_OPTIONS.
-  // VM: resolved from the vmagent `instrumentationRuleTypes` dialect document
-  // (graceful no-op on dialects that predate it) and mapped to the kit's catalog
-  // shape (VM-only types dropped, see vm-rule-types).
-  GET_INSTRUMENTATION_RULE_TYPES: wrapVersioned<GetInstrumentationRuleTypesResult, undefined>(GET_INSTRUMENTATION_RULE_TYPES, undefined, undefined, {
-    select: (d) => d.GetInstrumentationRuleTypesDocument,
-    transformResult: (data) => mapVmRuleTypesToOptions(data),
-  }),
-  CREATE_INSTRUMENTATION_RULE: wrapVersioned<CreateInstrumentationRuleResult, CreateInstrumentationRuleVars>(CREATE_INSTRUMENTATION_RULE, undefined, undefined, {
-    select: (d) => d.CreateInstrumentationRuleDocument,
-    transformVariables: (vars) => vmCreateInstrumentationRuleVariables(vars),
-    transformResult: (data) => vmCreateInstrumentationRuleResult(data as CreateInstrumentationRuleMutation),
-  }),
-  UPDATE_INSTRUMENTATION_RULE: wrapVersioned<UpdateInstrumentationRuleResult, UpdateInstrumentationRuleVars>(UPDATE_INSTURMENTATION_RULE, undefined, undefined, {
-    select: (d) => d.UpdateInstrumentationRuleDocument,
-    transformVariables: (vars) => vmUpdateInstrumentationRuleVariables(vars),
-    transformResult: (data) => vmUpdateInstrumentationRuleResult(data as UpdateInstrumentationRuleMutation),
-  }),
-  DELETE_INSTRUMENTATION_RULE: wrapVersioned<DeleteInstrumentationRuleResult, DeleteInstrumentationRuleVars>(DELETE_INSTURMENTATION_RULE, undefined, undefined, {
-    select: (d) => d.DeleteInstrumentationRuleDocument,
-    transformVariables: (vars) => vmDeleteInstrumentationRuleVariables(vars),
-    transformResult: (data) => vmDeleteInstrumentationRuleResult(data as DeleteInstrumentationRuleMutation),
-  }),
-
-  // data streams
-  GET_DATA_STREAMS: wrapVersioned<GetDataStreamsData, undefined>(GET_DATA_STREAMS),
-  UPDATE_DATA_STREAM: wrapVersioned<UpdateDataStreamResult, UpdateDataStreamVars>(UPDATE_DATA_STREAM),
-  DELETE_DATA_STREAM: wrapVersioned<DeleteDataStreamResult, DeleteDataStreamVars>(DELETE_DATA_STREAM),
-
-  // namespaces
-  //
-  // Modern (>= v1.20): wire returns `{ namespaces: [...] }` flat at the root;
-  // the kit's slot expects the same flat shape, so the pass-through `extract`
-  // makes the bare typing explicit. Legacy (< v1.20): the v1.20+ `namespaces`
-  // field doesn't exist, so resolve to a single combined query over
-  // `k8sActualNamespaces { ... sources }` mapped into the modern `Namespace`
-  // shape (replaces the old all-namespaces + per-namespace N+1 fetch).
-  GET_NAMESPACES_WITH_WORKLOADS: wrapVersioned<GetNamespacesWithWorkloadsData, undefined>(
-    GET_NAMESPACES_WITH_WORKLOADS,
-    (d) => ({ namespaces: (d as { namespaces?: GetNamespacesWithWorkloadsData['namespaces'] })?.namespaces ?? [] }),
-    {
-      query: GET_NAMESPACES_WITH_SOURCES,
-      map: (data) => legacyNamespacesToNamespaces(data),
+    // Kit slot types are `Operation<GetDestinationCategoriesResult, undefined>`
+    // and `Operation<GetPotentialDestinationsResult, undefined>` — bind
+    // them explicitly here so the kit consumer never sees `unknown`.
+    // VM: `destinationTypes` (flat catalog) -> the kit's category catalog.
+    GET_DESTINATION_CATEGORIES: wrapVersioned<GetDestinationCategoriesResult, undefined>(GET_DESTINATION_CATEGORIES, undefined, undefined, {
+      select: (d) => d.GetDestinationTypesDocument,
+      transformResult: (data) => mapVmDestinationTypesToCategories(data),
+    }),
+    // No VM equivalent for `potentialDestinations` (k8s auto-detect); VM `canRun`
+    // is false (no VM bucket), so the op is simply unavailable there.
+    GET_POTENTIAL_DESTINATIONS: wrapVersioned<GetPotentialDestinationsResult, undefined>(GET_POTENTIAL_DESTINATIONS),
+    CREATE_DESTINATION: wrapVersioned<CreateDestinationResult, CreateDestinationVars>(CREATE_DESTINATION, undefined, undefined, {
+      select: (d) => d.CreateDestinationDocument,
+      transformVariables: (vars) => vmCreateDestinationVariables(vars),
+      transformResult: (data) => vmCreateDestinationResult(data),
+    }),
+    UPDATE_DESTINATION: wrapVersioned<UpdateDestinationData, UpdateDestinationVars>(UPDATE_DESTINATION, undefined, undefined, {
+      select: (d) => d.UpdateDestinationDocument,
+      transformVariables: (vars) => vmUpdateDestinationVariables(vars),
+      transformResult: (data) => vmUpdateDestinationResult(data),
+    }),
+    DELETE_DESTINATION: wrapVersioned<DeleteDestinationResult, DeleteDestinationVars>(DELETE_DESTINATION, undefined, undefined, {
+      select: (d) => d.DeleteDestinationDocument,
+      transformVariables: (vars) => vmDeleteDestinationVariables(vars),
+      transformResult: (data) => vmDeleteDestinationResult(data),
+    }),
+    TEST_DESTINATION_CONNECTION: {
+      // VM uses the agents-api `TestConnection` document + input; both k8s and VM
+      // return the result under `testConnectionForDestination`, dug out below.
+      ...wrapVersioned<TestConnectionResponse, TestDestinationConnectionVars>(TEST_DESTINATION_CONNECTION, undefined, undefined, {
+        select: (d) => d.TestConnectionDocument,
+        transformVariables: (vars) => vmTestConnectionVariables(vars),
+      }),
+      // The test-connection mutation's GraphQL shape returns the result
+      // under `testConnectionForDestination`, not the wrapper's default
+      // `data` field. Override `transformResult` to dig that one extra level.
+      transformResult: (raw, ctx): TestConnectionResponse | undefined => {
+        if (isAgentsApiPlatform(ctx)) return vmTestConnectionResult(parseRemoteFetchData(raw));
+        const remoteFetch = (raw as RemoteFetchResponse | null | undefined)?.remoteFetch;
+        if (typeof remoteFetch !== 'string') return undefined;
+        const parsed = safeJsonParse<{ data?: { testConnectionForDestination?: TestConnectionResponse } }>(remoteFetch, { data: undefined });
+        return parsed?.data?.testConnectionForDestination;
+      },
     },
-    // VM/connector: the "Add Sources" drawer is a discovery view, so resolve to
-    // `workloadReports` (discoverable workloads), grouped by kind into the kit's
-    // namespace+workload shape (the left column is relabeled "Kinds").
-    // agents-api >= v0.16.0 adds `region` to WorkloadReport; the published
-    // dialect snapshots through v0.15.0 omit it, so patch it in when the
-    // connected schema supports it (connectors report v0.16.0).
-    {
-      select: (d) => d.GetWorkloadReportsDocument,
-      patchQuery: (query, ctx) => (supportsWorkloadReportRegion(dialectVersion(ctx)) ? withWorkloadReportRegion(query) : query),
-      transformResult: (data) => mapVmWorkloadReportsToNamespaces(data),
+
+    // actions. Catalog form payloads (row-array `renames`, ExtractAttribute UI-only /
+    // empty optional fields) are normalized for the wire, and stringified `renames`
+    // are parsed back so the kit's object shape survives the proxy round-trip.
+    // VM: only URL templatization maps across both surfaces — VM-only action types
+    // (processorAddition / spanMetrics) are filtered out of reads and the k8s-only
+    // kit types have no VM equivalent (see vm-actions). `renames` is a k8s-only
+    // RenameAttribute concern, so `withActionRenames` is a no-op on VM.
+    GET_ACTIONS: withActionRenames(
+      wrapVersioned<GetActionsData, undefined>(GET_ACTIONS, undefined, undefined, {
+        select: (d) => d.GetActionsDocument,
+        transformResult: (data) => mapVmActions(data as GetActionsQuery),
+      }),
+    ),
+    // Dynamic action-type catalog (YAML-driven). K8s: introduced in odigos v1.31 —
+    // older proxies have no bucket, so `canRun` is false and the kit falls back to
+    // its hard-coded ACTION_OPTIONS. VM: resolved from the vmagent `actionTypes`
+    // dialect document (graceful no-op on dialects that predate it) and mapped to
+    // the kit's catalog shape (VM-only types dropped, see vm-action-types).
+    GET_ACTION_TYPES: wrapVersioned<GetActionTypesResult, undefined>(GET_ACTION_TYPES, undefined, undefined, {
+      select: (d) => d.GetActionTypesDocument,
+      transformResult: (data) => mapVmActionTypesToOptions(data),
+    }),
+    CREATE_ACTION: withActionRenames(
+      wrapVersioned<CreateActionResult, CreateActionVars>(CREATE_ACTION, undefined, undefined, {
+        select: (d) => d.CreateActionDocument,
+        transformVariables: (vars) => vmCreateActionVariables(vars),
+        transformResult: (data) => vmCreateActionResult(data as CreateActionMutation),
+      }),
+    ),
+    UPDATE_ACTION: withActionRenames(
+      wrapVersioned<UpdateActionResult, UpdateActionVars>(UPDATE_ACTION, undefined, undefined, {
+        select: (d) => d.UpdateActionDocument,
+        transformVariables: (vars) => vmUpdateActionVariables(vars),
+        transformResult: (data) => vmUpdateActionResult(data as UpdateActionMutation),
+      }),
+    ),
+    DELETE_ACTION: wrapVersioned<DeleteActionResult, DeleteActionVars>(DELETE_ACTION, undefined, undefined, {
+      select: (d) => d.DeleteActionDocument,
+      transformVariables: (vars) => vmDeleteActionVariables(vars),
+      transformResult: (data) => vmDeleteActionResult(data as DeleteActionMutation),
+    }),
+
+    // instrumentation rules
+    // VM: the agents-api rule surface — `instrumentationRules` read + per-rule
+    // create/update/delete — resolved from the versioned vmagent dialect registry
+    // and shape-mapped (see vm-instrumentation-rules). The VM rule model is
+    // narrower than k8s (global rules, no scopes/notes/disabled, boolean
+    // payload-collection), so those fields map to neutral defaults.
+    GET_INSTRUMENTATION_RULES: wrapVersioned<GetInstrumentationRulesData, undefined>(GET_INSTRUMENTATION_RULES, undefined, undefined, {
+      select: (d) => d.GetInstrumentationRulesDocument,
+      transformResult: (data) => mapVmInstrumentationRules(data as GetInstrumentationRulesQuery),
+    }),
+    // Dynamic rule-type catalog (YAML-driven), mirroring GET_ACTION_TYPES. K8s:
+    // introduced in odigos v1.31 — older proxies have no bucket, so `canRun` is
+    // false and the kit falls back to its hard-coded INSTRUMENTATION_RULE_OPTIONS.
+    // VM: resolved from the vmagent `instrumentationRuleTypes` dialect document
+    // (graceful no-op on dialects that predate it) and mapped to the kit's catalog
+    // shape (VM-only types dropped, see vm-rule-types).
+    GET_INSTRUMENTATION_RULE_TYPES: wrapVersioned<GetInstrumentationRuleTypesResult, undefined>(GET_INSTRUMENTATION_RULE_TYPES, undefined, undefined, {
+      select: (d) => d.GetInstrumentationRuleTypesDocument,
+      transformResult: (data) => mapVmRuleTypesToOptions(data),
+    }),
+    CREATE_INSTRUMENTATION_RULE: wrapVersioned<CreateInstrumentationRuleResult, CreateInstrumentationRuleVars>(CREATE_INSTRUMENTATION_RULE, undefined, undefined, {
+      select: (d) => d.CreateInstrumentationRuleDocument,
+      transformVariables: (vars) => vmCreateInstrumentationRuleVariables(vars),
+      transformResult: (data) => vmCreateInstrumentationRuleResult(data as CreateInstrumentationRuleMutation),
+    }),
+    UPDATE_INSTRUMENTATION_RULE: wrapVersioned<UpdateInstrumentationRuleResult, UpdateInstrumentationRuleVars>(UPDATE_INSTURMENTATION_RULE, undefined, undefined, {
+      select: (d) => d.UpdateInstrumentationRuleDocument,
+      transformVariables: (vars) => vmUpdateInstrumentationRuleVariables(vars),
+      transformResult: (data) => vmUpdateInstrumentationRuleResult(data as UpdateInstrumentationRuleMutation),
+    }),
+    DELETE_INSTRUMENTATION_RULE: wrapVersioned<DeleteInstrumentationRuleResult, DeleteInstrumentationRuleVars>(DELETE_INSTURMENTATION_RULE, undefined, undefined, {
+      select: (d) => d.DeleteInstrumentationRuleDocument,
+      transformVariables: (vars) => vmDeleteInstrumentationRuleVariables(vars),
+      transformResult: (data) => vmDeleteInstrumentationRuleResult(data as DeleteInstrumentationRuleMutation),
+    }),
+
+    // data streams
+    GET_DATA_STREAMS: wrapVersioned<GetDataStreamsData, undefined>(GET_DATA_STREAMS),
+    UPDATE_DATA_STREAM: wrapVersioned<UpdateDataStreamResult, UpdateDataStreamVars>(UPDATE_DATA_STREAM),
+    DELETE_DATA_STREAM: wrapVersioned<DeleteDataStreamResult, DeleteDataStreamVars>(DELETE_DATA_STREAM),
+
+    // namespaces
+    //
+    // Modern (>= v1.20): wire returns `{ namespaces: [...] }` flat at the root;
+    // the kit's slot expects the same flat shape, so the pass-through `extract`
+    // makes the bare typing explicit. Legacy (< v1.20): the v1.20+ `namespaces`
+    // field doesn't exist, so resolve to a single combined query over
+    // `k8sActualNamespaces { ... sources }` mapped into the modern `Namespace`
+    // shape (replaces the old all-namespaces + per-namespace N+1 fetch).
+    GET_NAMESPACES_WITH_WORKLOADS: wrapVersioned<GetNamespacesWithWorkloadsData, undefined>(
+      GET_NAMESPACES_WITH_WORKLOADS,
+      (d) => ({ namespaces: (d as { namespaces?: GetNamespacesWithWorkloadsData['namespaces'] })?.namespaces ?? [] }),
+      {
+        query: GET_NAMESPACES_WITH_SOURCES,
+        map: (data) => legacyNamespacesToNamespaces(data),
+      },
+      // VM/connector: the "Add Sources" drawer is a discovery view, so resolve to
+      // `workloadReports` (discoverable workloads), grouped by kind into the kit's
+      // namespace+workload shape (the left column is relabeled "Kinds").
+      // agents-api >= v0.16.0 adds `region` to WorkloadReport; the published
+      // dialect snapshots through v0.15.0 omit it, so patch it in when the
+      // connected schema supports it (connectors report v0.16.0).
+      {
+        select: (d) => d.GetWorkloadReportsDocument,
+        patchQuery: (query, ctx) => (supportsWorkloadReportRegion(dialectVersion(ctx)) ? withWorkloadReportRegion(query) : query),
+        transformResult: (data) => mapVmWorkloadReportsToNamespaces(data),
+      },
+    ),
+    // VM has no namespace concept, so the bulk namespace persist is unsupported.
+    PERSIST_NAMESPACES: wrapVersioned<PersistNamespacesResult, PersistNamespacesVars>(PERSIST_NAMESPACES, undefined, undefined, { unsupported: true }),
+
+    // k8s manifest — wire field is `k8sManifest` (a top-level string); we
+    // also accept the legacy `k8sActualManifest`/`manifest` names as
+    // fallbacks for any older backend version still in flight.
+    GET_K8S_MANIFEST: wrapVersioned<string, GetK8sManifestVars>(GET_K8S_MANIFEST, (d) => {
+      const obj = d as { k8sManifest?: string; k8sActualManifest?: string; manifest?: string } | string | null | undefined;
+      if (!obj) return undefined;
+      if (typeof obj === 'string') return obj;
+      return obj.k8sManifest ?? obj.k8sActualManifest ?? obj.manifest;
+    }),
+
+    // config
+    GET_CONFIG: wrapVersioned<FetchedConfig, undefined>(GET_CONFIG, (d) => (d as { config?: FetchedConfig })?.config),
+    // Wire returns `{ effectiveConfig: { … } }`; the kit's slot is the
+    // bare `EffectiveConfig`. Walk the envelope here.
+    GET_EFFECTIVE_CONFIG: wrapVersioned<EffectiveConfig, { id?: string }>(
+      GET_EFFECTIVE_CONFIG,
+      (d) =>
+        (d as { effectiveConfig?: EffectiveConfig; computePlatform?: { effectiveConfig?: EffectiveConfig } })?.effectiveConfig ??
+        (d as { computePlatform?: { effectiveConfig?: EffectiveConfig } })?.computePlatform?.effectiveConfig,
+    ),
+    GET_CONFIG_YAMLS: wrapVersioned<GetConfigYamlsData, undefined>(GET_CONFIG_YAMLS),
+    UPDATE_REMOTE_CONFIG: withRemoteConfigVars(wrapVersioned<UpdateRemoteConfigResult, UpdateRemoteConfigVars>(UPDATE_REMOTE_CONFIG)),
+    UPDATE_LOCAL_UI_CONFIG: wrapVersioned<UpdateLocalUiConfigResult, UpdateLocalUiConfigVars>(UPDATE_LOCAL_UI_CONFIG),
+    RESET_LOCAL_UI_CONFIG_TO_FACTORY_DEFAULTS: wrapVersioned<ResetLocalUiConfigResult, undefined>(RESET_LOCAL_UI_CONFIG_TO_FACTORY_DEFAULTS),
+
+    // describe
+    GET_DESCRIBE_ODIGOS: wrapVersioned<DescribeOdigosData, undefined>(GET_DESCRIBE_ODIGOS),
+    GET_DESCRIBE_SOURCE: wrapVersioned<DescribeSourceData, WorkloadId>(GET_DESCRIBE_SOURCE),
+
+    // tokens — wire returns `{ computePlatform: { apiTokens: [...] } }`;
+    // accept the legacy `tokens` name too for older backends.
+    GET_TOKENS: wrapVersioned<TokenPayload[], undefined>(GET_TOKENS, (d) => {
+      const env = d as
+        | {
+            apiTokens?: TokenPayload[];
+            tokens?: TokenPayload[];
+            computePlatform?: { apiTokens?: TokenPayload[]; tokens?: TokenPayload[] };
+          }
+        | null
+        | undefined;
+      return env?.computePlatform?.apiTokens ?? env?.computePlatform?.tokens ?? env?.apiTokens ?? env?.tokens ?? [];
+    }),
+    UPDATE_TOKEN: wrapVersioned<UpdateTokenResult, UpdateTokenVars>(UPDATE_TOKEN),
+
+    // metrics / service map
+    GET_METRICS: wrapVersioned<GetMetricsData, undefined>(GET_METRICS),
+    // Wire returns `{ getServiceMap: { services: [...] } }`. Surface the
+    // bare `services` array on `serviceMap` so the kit's container can
+    // pluck `data.serviceMap` without walking the wire envelope.
+    GET_SERVICE_MAP: wrapVersioned<GetServiceMapData, undefined>(GET_SERVICE_MAP, (d): GetServiceMapData => {
+      const env = d as { getServiceMap?: { services?: ServiceMapSources }; serviceMap?: ServiceMapSources } | null | undefined;
+      return { serviceMap: env?.getServiceMap?.services ?? env?.serviceMap ?? [] };
+    }),
+
+    // profiling — bare-shape slots, extract from `{ <field>: <bare> }` envelopes.
+    GET_PROFILING_SLOTS: wrapVersioned<ProfilingSlots, undefined>(GET_PROFILING_SLOTS, (d) => (d as { profilingSlots?: ProfilingSlots })?.profilingSlots),
+    // Wire returns `{ computePlatform: { source: { profiling: { profileJson } } } }`.
+    // Walk the path and surface the bare `{ profileJson }` shape so the
+    // consumer never has to narrow.
+    GET_SOURCE_PROFILING: wrapVersioned<SourceProfilingResult, WorkloadId>(GET_SOURCE_PROFILING, (d) => {
+      const env = d as { computePlatform?: { source?: { profiling?: SourceProfilingResult } }; sourceProfiling?: SourceProfilingResult } | null | undefined;
+      return env?.computePlatform?.source?.profiling ?? env?.sourceProfiling;
+    }),
+    ENABLE_SOURCE_PROFILING: wrapVersioned<EnableProfilingResult, WorkloadId>(ENABLE_SOURCE_PROFILING, (d) => (d as { enableSourceProfiling?: EnableProfilingResult })?.enableSourceProfiling),
+
+    // pipeline collectors — bare-shape slots. The backend's GraphQL
+    // field names predate the kit's normalization: the gateway is
+    // exposed as `gatewayDeploymentInfo`, the node-collector as
+    // `odigletDaemonSetInfo` / `odigletPods`. Extract from the wire
+    // field names here so consumers see the canonical kit slot shape.
+    GET_GATEWAY_INFO: wrapVersioned<GatewayInfo, undefined>(GET_GATEWAY_INFO, (d) => (d as { gatewayDeploymentInfo?: GatewayInfo })?.gatewayDeploymentInfo),
+    GET_GATEWAY_PODS: wrapVersioned<PodInfo[], undefined>(GET_GATEWAY_PODS, (d) => (d as { gatewayPods?: PodInfo[] })?.gatewayPods ?? []),
+    GET_NODE_COLLECTOR_INFO: wrapVersioned<NodeCollectoInfo, undefined>(GET_NODE_COLLECTOR_INFO, (d) => (d as { odigletDaemonSetInfo?: NodeCollectoInfo })?.odigletDaemonSetInfo),
+    GET_NODE_COLLECTOR_PODS: wrapVersioned<PodInfo[], undefined>(GET_NODE_COLLECTOR_PODS, (d) => (d as { odigletPods?: PodInfo[] })?.odigletPods ?? []),
+    // Wire field is `collectorPod`. Legacy `extendedPodInfo` retained as
+    // a fallback for older backend versions that might still ship it.
+    GET_COLLECTOR_POD_INFO: wrapVersioned<ExtendedPodInfo, GetCollectorPodInfoVars>(GET_COLLECTOR_POD_INFO, (d) => {
+      const env = d as { collectorPod?: ExtendedPodInfo; extendedPodInfo?: ExtendedPodInfo } | null | undefined;
+      return env?.collectorPod ?? env?.extendedPodInfo;
+    }),
+
+    // sampling
+    // Wire returns `{ sampling: { rules: [...], configs: { effective: {
+    // k8sHealthProbesSampling: { enabled, keepPercentage } } } } }`.
+    // Flatten to the kit's bare `{ samplingRules, k8sHealthProbesConfig }`
+    // shape so consumers don't have to walk the nested envelope.
+    GET_SAMPLING_RULES: wrapVersioned<GetSamplingRulesData, undefined>(GET_SAMPLING_RULES, (d): GetSamplingRulesData => {
+      const env = d as
+        | {
+            sampling?: {
+              rules?: SamplingRules[];
+              configs?: { effective?: { k8sHealthProbesSampling?: SamplingRulesK8sHealthConfig } };
+            };
+          }
+        | null
+        | undefined;
+      return {
+        samplingRules: env?.sampling?.rules ?? [],
+        k8sHealthProbesConfig: env?.sampling?.configs?.effective?.k8sHealthProbesSampling ?? undefined,
+      };
+    }),
+    CREATE_NOISY_OPERATION_RULE: wrapVersioned<CreateNoisyOperationRuleResult, SamplingRuleCreateVars<NoisyOperationRuleInput>>(CREATE_NOISY_OPERATION_RULE),
+    UPDATE_NOISY_OPERATION_RULE: wrapVersioned<UpdateNoisyOperationRuleResult, SamplingRuleUpdateVars<NoisyOperationRuleInput>>(UPDATE_NOISY_OPERATION_RULE),
+    DELETE_NOISY_OPERATION_RULE: wrapVersioned<DeleteNoisyOperationRuleResult, SamplingRuleDeleteVars>(DELETE_NOISY_OPERATION_RULE),
+    CREATE_HIGHLY_RELEVANT_OPERATION_RULE: wrapVersioned<CreateHighlyRelevantOperationRuleResult, SamplingRuleCreateVars<HighlyRelevantOperationRuleInput>>(CREATE_HIGHLY_RELEVANT_OPERATION_RULE),
+    UPDATE_HIGHLY_RELEVANT_OPERATION_RULE: wrapVersioned<UpdateHighlyRelevantOperationRuleResult, SamplingRuleUpdateVars<HighlyRelevantOperationRuleInput>>(UPDATE_HIGHLY_RELEVANT_OPERATION_RULE),
+    DELETE_HIGHLY_RELEVANT_OPERATION_RULE: wrapVersioned<DeleteHighlyRelevantOperationRuleResult, SamplingRuleDeleteVars>(DELETE_HIGHLY_RELEVANT_OPERATION_RULE),
+    CREATE_COST_REDUCTION_RULE: wrapVersioned<CreateCostReductionRuleResult, SamplingRuleCreateVars<CostReductionRuleInput>>(CREATE_COST_REDUCTION_RULE),
+    UPDATE_COST_REDUCTION_RULE: wrapVersioned<UpdateCostReductionRuleResult, SamplingRuleUpdateVars<CostReductionRuleInput>>(UPDATE_COST_REDUCTION_RULE),
+    DELETE_COST_REDUCTION_RULE: wrapVersioned<DeleteCostReductionRuleResult, SamplingRuleDeleteVars>(DELETE_COST_REDUCTION_RULE),
+    UPDATE_LOCAL_UI_SAMPLING_CONFIG: wrapVersioned<UpdateLocalUiSamplingConfigResult, UpdateLocalUiSamplingConfigVars>(UPDATE_LOCAL_UI_SAMPLING_CONFIG),
+
+    // snapshots — central-only, direct (NOT versioned-remote-fetch). The
+    // wire returns `{ allClusterSnapshots: … }` / `{ clusterSnapshot: … }`;
+    // unwrap via `transformResult` so consumers receive the bare slot shape
+    // and don't have to runtime-narrow.
+    GET_ALL_CLUSTER_SNAPSHOTS: {
+      document: GET_ALL_CLUSTER_SNAPSHOTS as DocumentNode,
+      // @deprecated-legacy-api(v1.20) — the central backend can't build a
+      // snapshot for a < v1.20 proxy (returns 0 results). Block the op for a
+      // selected legacy proxy so the kit's AddSourceDrawer falls back to the
+      // per-proxy `GET_NAMESPACES_WITH_WORKLOADS` path — which this adapter maps
+      // to the legacy `k8sActualNamespaces { … sources }` combined query. This
+      // mirrors the pre-v1.20 behavior (the drawer always used per-proxy
+      // namespaces, never cluster snapshots).
+      // Also block for VM: cluster snapshots are a k8s cross-cluster aggregate.
+      // The kit already routes VM through `GET_NAMESPACES_WITH_WORKLOADS`, but
+      // guard here too so a stale/k8s-defaulted context can never run it for a VM.
+      canRun: (ctx) => !isAgentsApiPlatform(ctx) && !isLegacySelectedProxy(ctx),
+      transformResult: (raw) => (raw as { allClusterSnapshots?: AllClusterSnapshots } | null | undefined)?.allClusterSnapshots,
     },
-  ),
-  // VM has no namespace concept, so the bulk namespace persist is unsupported.
-  PERSIST_NAMESPACES: wrapVersioned<PersistNamespacesResult, PersistNamespacesVars>(PERSIST_NAMESPACES, undefined, undefined, { unsupported: true }),
-
-  // k8s manifest — wire field is `k8sManifest` (a top-level string); we
-  // also accept the legacy `k8sActualManifest`/`manifest` names as
-  // fallbacks for any older backend version still in flight.
-  GET_K8S_MANIFEST: wrapVersioned<string, GetK8sManifestVars>(GET_K8S_MANIFEST, (d) => {
-    const obj = d as { k8sManifest?: string; k8sActualManifest?: string; manifest?: string } | string | null | undefined;
-    if (!obj) return undefined;
-    if (typeof obj === 'string') return obj;
-    return obj.k8sManifest ?? obj.k8sActualManifest ?? obj.manifest;
-  }),
-
-  // config
-  GET_CONFIG: wrapVersioned<FetchedConfig, undefined>(GET_CONFIG, (d) => (d as { config?: FetchedConfig })?.config),
-  // Wire returns `{ effectiveConfig: { … } }`; the kit's slot is the
-  // bare `EffectiveConfig`. Walk the envelope here.
-  GET_EFFECTIVE_CONFIG: wrapVersioned<EffectiveConfig, { id?: string }>(
-    GET_EFFECTIVE_CONFIG,
-    (d) =>
-      (d as { effectiveConfig?: EffectiveConfig; computePlatform?: { effectiveConfig?: EffectiveConfig } })?.effectiveConfig ??
-      (d as { computePlatform?: { effectiveConfig?: EffectiveConfig } })?.computePlatform?.effectiveConfig,
-  ),
-  GET_CONFIG_YAMLS: wrapVersioned<GetConfigYamlsData, undefined>(GET_CONFIG_YAMLS),
-  UPDATE_REMOTE_CONFIG: withRemoteConfigVars(wrapVersioned<UpdateRemoteConfigResult, UpdateRemoteConfigVars>(UPDATE_REMOTE_CONFIG)),
-  UPDATE_LOCAL_UI_CONFIG: wrapVersioned<UpdateLocalUiConfigResult, UpdateLocalUiConfigVars>(UPDATE_LOCAL_UI_CONFIG),
-  RESET_LOCAL_UI_CONFIG_TO_FACTORY_DEFAULTS: wrapVersioned<ResetLocalUiConfigResult, undefined>(RESET_LOCAL_UI_CONFIG_TO_FACTORY_DEFAULTS),
-
-  // describe
-  GET_DESCRIBE_ODIGOS: wrapVersioned<DescribeOdigosData, undefined>(GET_DESCRIBE_ODIGOS),
-  GET_DESCRIBE_SOURCE: wrapVersioned<DescribeSourceData, WorkloadId>(GET_DESCRIBE_SOURCE),
-
-  // tokens — wire returns `{ computePlatform: { apiTokens: [...] } }`;
-  // accept the legacy `tokens` name too for older backends.
-  GET_TOKENS: wrapVersioned<TokenPayload[], undefined>(GET_TOKENS, (d) => {
-    const env = d as
-      | {
-          apiTokens?: TokenPayload[];
-          tokens?: TokenPayload[];
-          computePlatform?: { apiTokens?: TokenPayload[]; tokens?: TokenPayload[] };
-        }
-      | null
-      | undefined;
-    return env?.computePlatform?.apiTokens ?? env?.computePlatform?.tokens ?? env?.apiTokens ?? env?.tokens ?? [];
-  }),
-  UPDATE_TOKEN: wrapVersioned<UpdateTokenResult, UpdateTokenVars>(UPDATE_TOKEN),
-
-  // metrics / service map
-  GET_METRICS: wrapVersioned<GetMetricsData, undefined>(GET_METRICS),
-  // Wire returns `{ getServiceMap: { services: [...] } }`. Surface the
-  // bare `services` array on `serviceMap` so the kit's container can
-  // pluck `data.serviceMap` without walking the wire envelope.
-  GET_SERVICE_MAP: wrapVersioned<GetServiceMapData, undefined>(GET_SERVICE_MAP, (d): GetServiceMapData => {
-    const env = d as { getServiceMap?: { services?: ServiceMapSources }; serviceMap?: ServiceMapSources } | null | undefined;
-    return { serviceMap: env?.getServiceMap?.services ?? env?.serviceMap ?? [] };
-  }),
-
-  // profiling — bare-shape slots, extract from `{ <field>: <bare> }` envelopes.
-  GET_PROFILING_SLOTS: wrapVersioned<ProfilingSlots, undefined>(GET_PROFILING_SLOTS, (d) => (d as { profilingSlots?: ProfilingSlots })?.profilingSlots),
-  // Wire returns `{ computePlatform: { source: { profiling: { profileJson } } } }`.
-  // Walk the path and surface the bare `{ profileJson }` shape so the
-  // consumer never has to narrow.
-  GET_SOURCE_PROFILING: wrapVersioned<SourceProfilingResult, WorkloadId>(GET_SOURCE_PROFILING, (d) => {
-    const env = d as { computePlatform?: { source?: { profiling?: SourceProfilingResult } }; sourceProfiling?: SourceProfilingResult } | null | undefined;
-    return env?.computePlatform?.source?.profiling ?? env?.sourceProfiling;
-  }),
-  ENABLE_SOURCE_PROFILING: wrapVersioned<EnableProfilingResult, WorkloadId>(ENABLE_SOURCE_PROFILING, (d) => (d as { enableSourceProfiling?: EnableProfilingResult })?.enableSourceProfiling),
-
-  // pipeline collectors — bare-shape slots. The backend's GraphQL
-  // field names predate the kit's normalization: the gateway is
-  // exposed as `gatewayDeploymentInfo`, the node-collector as
-  // `odigletDaemonSetInfo` / `odigletPods`. Extract from the wire
-  // field names here so consumers see the canonical kit slot shape.
-  GET_GATEWAY_INFO: wrapVersioned<GatewayInfo, undefined>(GET_GATEWAY_INFO, (d) => (d as { gatewayDeploymentInfo?: GatewayInfo })?.gatewayDeploymentInfo),
-  GET_GATEWAY_PODS: wrapVersioned<PodInfo[], undefined>(GET_GATEWAY_PODS, (d) => (d as { gatewayPods?: PodInfo[] })?.gatewayPods ?? []),
-  GET_NODE_COLLECTOR_INFO: wrapVersioned<NodeCollectoInfo, undefined>(GET_NODE_COLLECTOR_INFO, (d) => (d as { odigletDaemonSetInfo?: NodeCollectoInfo })?.odigletDaemonSetInfo),
-  GET_NODE_COLLECTOR_PODS: wrapVersioned<PodInfo[], undefined>(GET_NODE_COLLECTOR_PODS, (d) => (d as { odigletPods?: PodInfo[] })?.odigletPods ?? []),
-  // Wire field is `collectorPod`. Legacy `extendedPodInfo` retained as
-  // a fallback for older backend versions that might still ship it.
-  GET_COLLECTOR_POD_INFO: wrapVersioned<ExtendedPodInfo, GetCollectorPodInfoVars>(GET_COLLECTOR_POD_INFO, (d) => {
-    const env = d as { collectorPod?: ExtendedPodInfo; extendedPodInfo?: ExtendedPodInfo } | null | undefined;
-    return env?.collectorPod ?? env?.extendedPodInfo;
-  }),
-
-  // sampling
-  // Wire returns `{ sampling: { rules: [...], configs: { effective: {
-  // k8sHealthProbesSampling: { enabled, keepPercentage } } } } }`.
-  // Flatten to the kit's bare `{ samplingRules, k8sHealthProbesConfig }`
-  // shape so consumers don't have to walk the nested envelope.
-  GET_SAMPLING_RULES: wrapVersioned<GetSamplingRulesData, undefined>(GET_SAMPLING_RULES, (d): GetSamplingRulesData => {
-    const env = d as
-      | {
-          sampling?: {
-            rules?: SamplingRules[];
-            configs?: { effective?: { k8sHealthProbesSampling?: SamplingRulesK8sHealthConfig } };
-          };
-        }
-      | null
-      | undefined;
-    return {
-      samplingRules: env?.sampling?.rules ?? [],
-      k8sHealthProbesConfig: env?.sampling?.configs?.effective?.k8sHealthProbesSampling ?? undefined,
-    };
-  }),
-  CREATE_NOISY_OPERATION_RULE: wrapVersioned<CreateNoisyOperationRuleResult, SamplingRuleCreateVars<NoisyOperationRuleInput>>(CREATE_NOISY_OPERATION_RULE),
-  UPDATE_NOISY_OPERATION_RULE: wrapVersioned<UpdateNoisyOperationRuleResult, SamplingRuleUpdateVars<NoisyOperationRuleInput>>(UPDATE_NOISY_OPERATION_RULE),
-  DELETE_NOISY_OPERATION_RULE: wrapVersioned<DeleteNoisyOperationRuleResult, SamplingRuleDeleteVars>(DELETE_NOISY_OPERATION_RULE),
-  CREATE_HIGHLY_RELEVANT_OPERATION_RULE: wrapVersioned<CreateHighlyRelevantOperationRuleResult, SamplingRuleCreateVars<HighlyRelevantOperationRuleInput>>(CREATE_HIGHLY_RELEVANT_OPERATION_RULE),
-  UPDATE_HIGHLY_RELEVANT_OPERATION_RULE: wrapVersioned<UpdateHighlyRelevantOperationRuleResult, SamplingRuleUpdateVars<HighlyRelevantOperationRuleInput>>(UPDATE_HIGHLY_RELEVANT_OPERATION_RULE),
-  DELETE_HIGHLY_RELEVANT_OPERATION_RULE: wrapVersioned<DeleteHighlyRelevantOperationRuleResult, SamplingRuleDeleteVars>(DELETE_HIGHLY_RELEVANT_OPERATION_RULE),
-  CREATE_COST_REDUCTION_RULE: wrapVersioned<CreateCostReductionRuleResult, SamplingRuleCreateVars<CostReductionRuleInput>>(CREATE_COST_REDUCTION_RULE),
-  UPDATE_COST_REDUCTION_RULE: wrapVersioned<UpdateCostReductionRuleResult, SamplingRuleUpdateVars<CostReductionRuleInput>>(UPDATE_COST_REDUCTION_RULE),
-  DELETE_COST_REDUCTION_RULE: wrapVersioned<DeleteCostReductionRuleResult, SamplingRuleDeleteVars>(DELETE_COST_REDUCTION_RULE),
-  UPDATE_LOCAL_UI_SAMPLING_CONFIG: wrapVersioned<UpdateLocalUiSamplingConfigResult, UpdateLocalUiSamplingConfigVars>(UPDATE_LOCAL_UI_SAMPLING_CONFIG),
-
-  // snapshots — central-only, direct (NOT versioned-remote-fetch). The
-  // wire returns `{ allClusterSnapshots: … }` / `{ clusterSnapshot: … }`;
-  // unwrap via `transformResult` so consumers receive the bare slot shape
-  // and don't have to runtime-narrow.
-  GET_ALL_CLUSTER_SNAPSHOTS: {
-    document: GET_ALL_CLUSTER_SNAPSHOTS as DocumentNode,
-    // @deprecated-legacy-api(v1.20) — the central backend can't build a
-    // snapshot for a < v1.20 proxy (returns 0 results). Block the op for a
-    // selected legacy proxy so the kit's AddSourceDrawer falls back to the
-    // per-proxy `GET_NAMESPACES_WITH_WORKLOADS` path — which this adapter maps
-    // to the legacy `k8sActualNamespaces { … sources }` combined query. This
-    // mirrors the pre-v1.20 behavior (the drawer always used per-proxy
-    // namespaces, never cluster snapshots).
-    // Also block for VM: cluster snapshots are a k8s cross-cluster aggregate.
-    // The kit already routes VM through `GET_NAMESPACES_WITH_WORKLOADS`, but
-    // guard here too so a stale/k8s-defaulted context can never run it for a VM.
-    canRun: (ctx) => !isAgentsApiPlatform(ctx) && !isLegacySelectedProxy(ctx),
-    transformResult: (raw) => (raw as { allClusterSnapshots?: AllClusterSnapshots } | null | undefined)?.allClusterSnapshots,
-  },
-  GET_CLUSTER_SNAPSHOT: {
-    document: GET_CLUSTER_SNAPSHOT as DocumentNode,
-    // The kit's `useSnapshots()` resolves to THIS single-cluster slot whenever a
-    // specific proxy is selected (in-proxy pages — e.g. the overview's
-    // AddSourceDrawer), scoping the drawer to the selected cluster instead of
-    // listing every connected cluster (PLAT-1255). Snapshots are keyed by
-    // proxyID server-side (`clusterId === proxyID`, see central-backend's
-    // websocket client), so the kit passes `{ clusterId: ctx.proxyID }`. Mirror
-    // GET_ALL_CLUSTER_SNAPSHOTS' guard so a legacy (< v1.20) or VM proxy is
-    // blocked here too and the kit falls back to the per-proxy
-    // `GET_NAMESPACES_WITH_WORKLOADS` path rather than querying a snapshot the
-    // backend can't build.
-    canRun: (ctx) => !isAgentsApiPlatform(ctx) && !isLegacySelectedProxy(ctx),
-    transformResult: (raw) => (raw as { clusterSnapshot?: ClusterSnapshot } | null | undefined)?.clusterSnapshot,
-  },
+    GET_CLUSTER_SNAPSHOT: {
+      document: GET_CLUSTER_SNAPSHOT as DocumentNode,
+      // The kit's `useSnapshots()` resolves to THIS single-cluster slot whenever a
+      // specific proxy is selected (in-proxy pages — e.g. the overview's
+      // AddSourceDrawer), scoping the drawer to the selected cluster instead of
+      // listing every connected cluster (PLAT-1255). Snapshots are keyed by
+      // proxyID server-side (`clusterId === proxyID`, see central-backend's
+      // websocket client), so the kit passes `{ clusterId: ctx.proxyID }`. Mirror
+      // GET_ALL_CLUSTER_SNAPSHOTS' guard so a legacy (< v1.20) or VM proxy is
+      // blocked here too and the kit falls back to the per-proxy
+      // `GET_NAMESPACES_WITH_WORKLOADS` path rather than querying a snapshot the
+      // backend can't build.
+      canRun: (ctx) => !isAgentsApiPlatform(ctx) && !isLegacySelectedProxy(ctx),
+      transformResult: (raw) => (raw as { clusterSnapshot?: ClusterSnapshot } | null | undefined)?.clusterSnapshot,
+    },
   }),
 );
 
@@ -1526,28 +1526,24 @@ const ConfigSync: FC<{ onChange: (ctx: ProxyOperationContext) => void }> = ({ on
   const { proxyID, platformType, odigosVersion, graphqlSchemaVersion } = useProxyStore();
 
   useEffect(() => {
-    // `platformType` can be briefly unset (store rehydration / navigation
-    // timing). VM proxies always report a non-null `graphqlSchemaVersion` while
-    // k8s proxies never do, so use it as a deterministic fallback — otherwise the
-    // kit's capabilities (`canFetchSnapshots = !isVm`) flip to k8s and the Add
-    // Sources drawer wrongly fetches the cluster-wide snapshot for a VM.
-    const resolvedPlatformType = platformType || config?.platformType || (graphqlSchemaVersion ? PlatformType.Vm : INITIAL_CONTEXT.platformType);
-    // Two versions travel in the context, and they differ for VM proxies:
-    //   - `version`       = the agent binary version (what the user sees as the
-    //                       installed agent); always `odigosVersion`.
-    //   - `schemaVersion` = the GraphQL dialect VM proxies report separately
-    //                       (`graphqlSchemaVersion`); drives dialect/bucket
-    //                       selection via `dialectVersion(ctx)`. Left undefined
-    //                       for k8s, which keeps selecting buckets by `version`.
-    //                       When a VM proxy reports no schema version (older
-    //                       vm-agent), `dialectVersion` falls back to `version`.
-    // VM agents and cloud connectors both report an agents-api schema version
-    // that drives dialect selection; k8s never does (keeps selecting by `version`).
-    const usesAgentsApiDialect = resolvedPlatformType === PlatformType.Vm || resolvedPlatformType === PlatformType.Connector;
+    const resolvedPlatformType = platformType || config?.platformType || INITIAL_CONTEXT.platformType;
+    const usesAgentsApiDialect = isAgentsApiPlatform({ platformType });
+
     onChange({
       proxyID,
       platformType: resolvedPlatformType,
       tier: config?.tier || INITIAL_CONTEXT.tier,
+      // Two versions travel in the context, and they differ for VM proxies:
+      //   - `version`       = the agent binary version (what the user sees as the
+      //                       installed agent); always `odigosVersion`.
+      //   - `schemaVersion` = the GraphQL dialect VM proxies report separately
+      //                       (`graphqlSchemaVersion`); drives dialect/bucket
+      //                       selection via `dialectVersion(ctx)`. Left undefined
+      //                       for k8s, which keeps selecting buckets by `version`.
+      //                       When a VM proxy reports no schema version (older
+      //                       vm-agent), `dialectVersion` falls back to `version`.
+      // VM agents and cloud connectors both report an agents-api schema version
+      // that drives dialect selection; k8s never does (keeps selecting by `version`).
       version: odigosVersion || config?.odigosVersion || INITIAL_CONTEXT.version,
       schemaVersion: usesAgentsApiDialect ? (graphqlSchemaVersion ?? undefined) : undefined,
       // Connectors serve the agents-api mutations (createSource / createDestination /

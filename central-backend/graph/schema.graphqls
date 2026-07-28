@@ -5,12 +5,6 @@
 scalar JSON
 scalar Int64
 
-enum PlatformType {
-  k8s
-  vm
-  connector
-}
-
 enum Role {
   OWNER
   ADMIN
@@ -49,7 +43,7 @@ type ComputePlatform {
   # agents-api GraphQL schema version reported by VM proxies; used by the UI to
   # select the right agents-api dialect. Null for k8s proxies (they don't report it).
   graphqlSchemaVersion: String
-  type: PlatformType!
+  type: String!
   status: String!
   connectedAt: Int64
   lastSeenAt: Int64

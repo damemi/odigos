@@ -3984,15 +3984,15 @@ func (ec *executionContext) _ComputePlatform_type(ctx context.Context, field gra
 			return obj.Type, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v model.PlatformType) graphql.Marshaler {
-			return ec.marshalNPlatformType2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐPlatformType(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
 		},
 		true,
 		true,
 	)
 }
 func (ec *executionContext) fieldContext_ComputePlatform_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("ComputePlatform", field, false, false, errors.New("field of type PlatformType does not have child fields"))
+	return graphql.NewScalarFieldContext("ComputePlatform", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _ComputePlatform_status(ctx context.Context, field graphql.CollectedField, obj *model.ComputePlatform) (ret graphql.Marshaler) {
@@ -11508,16 +11508,6 @@ func (ec *executionContext) marshalNNamespaceSnapshot2ᚖgithubᚗcomᚋodigos�
 func (ec *executionContext) unmarshalNOidcIdentityProviderInput2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐOidcIdentityProviderInput(ctx context.Context, v any) (model.OidcIdentityProviderInput, error) {
 	res, err := ec.unmarshalInputOidcIdentityProviderInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) unmarshalNPlatformType2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐPlatformType(ctx context.Context, v any) (model.PlatformType, error) {
-	var res model.PlatformType
-	err := res.UnmarshalGQL(v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalNPlatformType2githubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐPlatformType(ctx context.Context, sel ast.SelectionSet, v model.PlatformType) graphql.Marshaler {
-	return v
 }
 
 func (ec *executionContext) marshalNRemoteFetchResult2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐRemoteFetchResultᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.RemoteFetchResult) graphql.Marshaler {

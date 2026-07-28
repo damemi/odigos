@@ -89,7 +89,7 @@ func appendCloudConnectors(ctx context.Context, cpMap map[string]*model.ComputeP
 		// CR row that surfaces the connector's lifecycle phase (pending/connecting).
 		routableID := string(cc.UID)
 		if existing, ok := cpMap[routableID]; ok {
-			existing.Type = model.PlatformTypeConnector
+			existing.Type = string(consts.PlatformTypeConnector)
 			existing.Name = name
 			continue
 		}
@@ -98,7 +98,7 @@ func appendCloudConnectors(ctx context.Context, cpMap map[string]*model.ComputeP
 			ID:            routableID,
 			Name:          name,
 			OdigosVersion: cloudConnectorVersion(cc),
-			Type:          model.PlatformTypeConnector,
+			Type:          string(consts.PlatformTypeConnector),
 			Status:        mapCloudConnectorPhase(cc.Status.Phase),
 			Users:         []*model.User{},
 			Teams:         []*model.Team{},
@@ -150,14 +150,9 @@ func buildComputePlatformsFromProxyConnections(
 			platformName = name
 		}
 
-		platformType := model.PlatformTypeK8s
+		platformType := consts.PlatformTypeK8s
 		if pType, ok := wsServer.GetPlatformType(proxyID); ok {
-			if mapped, ok := toModelPlatformType(string(pType)); ok {
-				platformType = mapped
-			} else {
-				logger.Log.Warn("Unknown platform type, defaulting to k8s", "proxyID", proxyID, "platformType", pType)
-				platformType = model.PlatformTypeK8s
-			}
+			platformType = pType
 		}
 
 		odigosVersion := consts.UnknownValue
@@ -176,7 +171,7 @@ func buildComputePlatformsFromProxyConnections(
 			Name:                 platformName,
 			OdigosVersion:        odigosVersion,
 			GraphqlSchemaVersion: graphqlSchemaVersion,
-			Type:                 platformType,
+			Type:                 string(platformType),
 			Status:               string(meta.Status),
 			Users:                []*model.User{},
 			Teams:                []*model.Team{},
@@ -225,7 +220,7 @@ func ensureComputePlatformExists(cpMap map[string]*model.ComputePlatform, id str
 		ID:            id,
 		Name:          consts.UnknownValue,
 		OdigosVersion: consts.UnknownValue,
-		Type:          model.PlatformTypeK8s,
+		Type:          string(consts.PlatformTypeK8s),
 		Status:        string(consts.StatusDisconnected),
 		Users:         []*model.User{},
 		Teams:         []*model.Team{},
@@ -266,7 +261,7 @@ func (svc *ComputePlatformService) GetAllProxyMetadata(ctx context.Context) (map
 
 		builtMetadata := &redisclient.ProxyMetadata{
 			PlatformName:         value[consts.ProxyMetaFieldPlatformName],
-			PlatformType:         value[consts.ProxyMetaFieldPlatformType],
+			PlatformType:         consts.PlatformType(value[consts.ProxyMetaFieldPlatformType]),
 			OdigosVersion:        value[consts.ProxyMetaFieldOdigosVersion],
 			GraphQLSchemaVersion: value[consts.ProxyMetaFieldGraphQLSchemaVersion],
 			Status:               consts.ProxyConnectionStatus(value[consts.ProxyMetaFieldStatus]),
@@ -303,9 +298,7 @@ func applyProxyMetaToComputePlatform(cp *model.ComputePlatform, meta *redisclien
 		schemaVersion := meta.GraphQLSchemaVersion
 		cp.GraphqlSchemaVersion = &schemaVersion
 	}
-	if mapped, ok := toModelPlatformType(string(meta.PlatformType)); ok {
-		cp.Type = mapped
-	}
+	cp.Type = string(meta.PlatformType)
 	if meta.ConnectedAt > 0 {
 		connectedAt := int(meta.ConnectedAt * 1000)
 		cp.ConnectedAt = &connectedAt
@@ -313,19 +306,6 @@ func applyProxyMetaToComputePlatform(cp *model.ComputePlatform, meta *redisclien
 	if meta.LastSeenAt > 0 {
 		lastSeenAt := int(meta.LastSeenAt * 1000)
 		cp.LastSeenAt = &lastSeenAt
-	}
-}
-
-func toModelPlatformType(pType string) (model.PlatformType, bool) {
-	switch pType {
-	case string(consts.PlatformTypeK8s):
-		return model.PlatformTypeK8s, true
-	case string(consts.PlatformTypeVM):
-		return model.PlatformTypeVM, true
-	case string(consts.PlatformTypeConnector):
-		return model.PlatformTypeConnector, true
-	default:
-		return model.PlatformTypeK8s, false
 	}
 }
 

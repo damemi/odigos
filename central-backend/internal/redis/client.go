@@ -328,7 +328,7 @@ func (r *RedisClient) HasSubscribers(ctx context.Context, channel string) (bool,
 // ProxyMetadata holds durable proxy details and timestamps.
 type ProxyMetadata struct {
 	PlatformName         string
-	PlatformType         string
+	PlatformType         consts.PlatformType
 	OdigosVersion        string
 	GraphQLSchemaVersion string
 	ConnectedAt          int64

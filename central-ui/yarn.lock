@@ -670,10 +670,10 @@
     virtua "^0.50.0"
     zustand "^5.0.14"
 
-"@odigos/vmagent-api-apollo-client@0.16.0":
-  version "0.16.0"
-  resolved "https://registry.yarnpkg.com/@odigos/vmagent-api-apollo-client/-/vmagent-api-apollo-client-0.16.0.tgz#1e713ff1888e978a651d5989105e9f52701ae600"
-  integrity sha512-qw0/OuuUXKdBMEgKarrZcp2s+vk8n0qYREDcbFXHL4vxNwBBfRIRIDHqmBDr6hVtSdWQQq38LGk6UDP3XzJIxg==
+"@odigos/vmagent-api-apollo-client@0.17.0":
+  version "0.17.0"
+  resolved "https://registry.yarnpkg.com/@odigos/vmagent-api-apollo-client/-/vmagent-api-apollo-client-0.17.0.tgz#5465cda7581e48c8cc7e6fb1d5e802fd133b50c3"
+  integrity sha512-CW8OurM2ksMOT08H7Opu3227xdBTNueKwN97VdmBV1PWL0Y1ReBTdy2U3MDXBePfRVEp0qPoUjPsP6dyXUk6NQ==
   dependencies:
     "@apollo/client" "^3.13.8"
     graphql "^16.11.0"

@@ -32,9 +32,9 @@ export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, p
       navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SAMPLING, 'Sampling Rules', SamplingIcon));
       navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SETTINGS, 'Settings', SettingsIcon));
     }
+  } else {
+    navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.ACCESS_MANAGEMENT, 'Access Management', UserSettingsIcon));
   }
-
-  navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.ACCESS_MANAGEMENT, 'Access Management', UserSettingsIcon));
 
   return navIcons;
 };
