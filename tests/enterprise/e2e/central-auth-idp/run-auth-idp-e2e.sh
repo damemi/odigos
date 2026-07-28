@@ -4,8 +4,8 @@
 # Covers:
 # 1) Live OIDC discovery for Google/Azure/(Okta when E2E_OKTA_TENANT_ID is set)
 #    via go test in central-backend/internal/keycloak (getOIDCDiscoveryEndpoints path)
-# 2) Create IdP for GOOGLE/AZURE/OKTA × OIDC/SAML (one at a time), restarting
-#    Keycloak between cases for a fresh H2 store
+# 2) Create IdP for GOOGLE/AZURE/OKTA × OIDC/SAML (one at a time), resetting the
+#    brokered Keycloak state between cases
 # 3) Login using the created IdP:
 #    - OIDC: full authorization-code login against in-cluster mock-oauth2-server
 #    - SAML: broker login redirect reaches the configured SSO endpoint
@@ -65,6 +65,12 @@ wait_backend_ready() {
   fail "central-backend /readyz did not become ready"
 }
 
+ensure_port_forwards() {
+  if ! kill -0 "${BACKEND_PID}" 2>/dev/null || ! kill -0 "${KEYCLOAK_PID}" 2>/dev/null; then
+    start_port_forwards
+  fi
+}
+
 keycloak_admin_token() {
   curl -sS -X POST "http://localhost:${KEYCLOAK_PORT}/realms/master/protocol/openid-connect/token" \
     -H "Content-Type: application/x-www-form-urlencoded" \
@@ -72,8 +78,27 @@ keycloak_admin_token() {
     | jq -r '.access_token // empty'
 }
 
-# After Keycloak restarts with ephemeral H2, odigos-central is wiped until
-# central-backend re-runs ensureKeycloakState. /readyz alone is not enough.
+keycloak_admin_get() {
+  local path="$1" token="$2"
+  curl -sS --max-time 30 "http://localhost:${KEYCLOAK_PORT}${path}" \
+    -H "Authorization: Bearer ${token}" \
+    -H "Content-Type: application/json"
+}
+
+keycloak_admin_delete() {
+  local path="$1" token="$2" code
+  code=$(curl -sS --max-time 30 -o /dev/null -w "%{http_code}" -X DELETE \
+    "http://localhost:${KEYCLOAK_PORT}${path}" \
+    -H "Authorization: Bearer ${token}")
+  # 404 means someone else already removed it, which is the state we want.
+  case "$code" in
+    2*|404) return 0 ;;
+    *) fail "DELETE ${path} returned HTTP ${code}" ;;
+  esac
+}
+
+# central-backend creates the odigos-central client through ensureKeycloakState,
+# which lands after /readyz starts answering, so /readyz alone is not enough.
 wait_for_odigos_central_client() {
   log "Waiting for Keycloak client odigos-central"
   local token body
@@ -90,21 +115,55 @@ wait_for_odigos_central_client() {
     fi
     sleep 2
   done
-  fail "odigos-central client was not recreated after Keycloak restart"
+  fail "odigos-central client is missing from Keycloak"
 }
 
-restart_keycloak() {
-  log "Restarting Keycloak for a fresh IdP store"
-  kubectl rollout restart deployment/keycloak -n "$NAMESPACE"
-  kubectl rollout status deployment/keycloak -n "$NAMESPACE" --timeout=5m
-  # Force central-backend startup ensureKeycloakState so we do not race the
-  # background health watcher (which can miss brief Keycloak outages).
-  log "Restarting central-backend to re-initialize Keycloak state"
-  kubectl rollout restart deployment/central-backend -n "$NAMESPACE"
-  kubectl rollout status deployment/central-backend -n "$NAMESPACE" --timeout=5m
-  start_port_forwards
-  wait_backend_ready
-  wait_for_odigos_central_client
+# Delete every IdP instance plus the users the broker created for them. This is
+# the only Keycloak state the matrix carries between cases, so wiping it through
+# the admin API leaves the realm equivalent to a fresh H2 store without paying
+# for two rollouts per case.
+reset_keycloak_idp_state() {
+  log "Resetting Keycloak IdP state via the admin API"
+  ensure_port_forwards
+
+  local token idps users alias user_id username
+  token="$(keycloak_admin_token)"
+  if [ -z "$token" ] || [ "$token" = "null" ]; then
+    start_port_forwards
+    token="$(keycloak_admin_token)"
+  fi
+  [ -n "$token" ] && [ "$token" != "null" ] || fail "failed to get Keycloak admin token for IdP reset"
+
+  # Brokered users first: deleting an IdP also drops its federated-identity
+  # links, which would leave the users below indistinguishable from local ones.
+  # A leftover brokered user makes the next login hit Keycloak's "account
+  # already exists" interstitial instead of the first-broker-login path this
+  # test covers. Everything in this realm is either the bootstrap admin, a
+  # client service account, or a user some IdP brokered in.
+  users="$(keycloak_admin_get "/admin/realms/master/users?briefRepresentation=true&max=1000" "$token")"
+  echo "$users" | jq -e 'type=="array"' >/dev/null 2>&1 \
+    || fail "unexpected users list response: ${users}"
+
+  while read -r user_id username; do
+    [ -n "$user_id" ] || continue
+    keycloak_admin_delete "/admin/realms/master/users/${user_id}" "$token"
+    log "Deleted brokered user ${username}"
+  done < <(echo "$users" | jq -r '
+    .[]
+    | select(.username != "admin" and (.username | startswith("service-account-") | not))
+    | "\(.id) \(.username)"')
+
+  idps="$(keycloak_admin_get "/admin/realms/master/identity-provider/instances" "$token")"
+  echo "$idps" | jq -e 'type=="array"' >/dev/null 2>&1 \
+    || fail "unexpected identity-provider list response: ${idps}"
+
+  while read -r alias; do
+    [ -n "$alias" ] || continue
+    keycloak_admin_delete "/admin/realms/master/identity-provider/instances/${alias}" "$token"
+    log "Deleted IdP ${alias}"
+  done < <(echo "$idps" | jq -r '.[].alias // empty')
+
+  pass "Keycloak IdP state reset"
 }
 
 graphql() {
@@ -554,6 +613,7 @@ pass "Discovery tests passed"
 # ---------------------------
 start_port_forwards
 wait_backend_ready
+wait_for_odigos_central_client
 ensure_mock_oidc
 start_saml_sso_stub
 
@@ -571,7 +631,7 @@ for provider in "${PROVIDERS[@]}"; do
   for protocol in OIDC SAML; do
     echo
     log "======== ${provider} / ${protocol} ========"
-    restart_keycloak
+    reset_keycloak_idp_state
 
     alias="$(echo "$provider" | tr '[:upper:]' '[:lower:]')"
 

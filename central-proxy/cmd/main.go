@@ -2,18 +2,24 @@ package main
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/odigos-io/central-proxy/internal/config"
+	"github.com/odigos-io/central-proxy/internal/health"
 	"github.com/odigos-io/central-proxy/internal/logger"
 	"github.com/odigos-io/central-proxy/internal/snapshot"
 	"github.com/odigos-io/central-proxy/internal/sseforwarder"
 	websocketserver "github.com/odigos-io/central-proxy/internal/websocket"
 	"github.com/odigos-io/central-proxy/kube"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
+
+const healthListenAddr = ":8080"
 
 func main() {
 	logger.InitLogger()
@@ -22,15 +28,27 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Bind probe endpoints before any dependency wait so startup/liveness stay
+	// green while effective-config is still being created during install.
+	healthServer := health.NewServer()
+	go func() {
+		logger.Log.Info("Serving health endpoints", "addr", healthListenAddr)
+		if err := healthServer.ListenAndServe(healthListenAddr); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Fatal("Failed to start health server", err)
+		}
+	}()
+
 	client, err := kube.CreateClient()
 	if err != nil {
 		logger.Fatal("Failed to create Kubernetes client", err)
 	}
 
-	// Get ignored namespaces from Odigos config
-	ignoredNamespaces, err := config.GetIgnoredNamespaces(ctx, client)
+	// Retry until effective-config exists. Exiting on NotFound caused CrashLoop
+	// while odigos-system components were still creating the ConfigMap.
+	ignoredNamespaces, err := waitForIgnoredNamespaces(ctx, client)
 	if err != nil {
-		logger.Fatal("Failed to get ignored namespaces from ConfigMap", err)
+		logger.Log.Info("Shutting down before ignored namespaces are available", "error", err)
+		return
 	}
 	logger.Log.Info("Configured ignored namespaces for snapshots", "namespaces", ignoredNamespaces)
 
@@ -39,11 +57,41 @@ func main() {
 	// e.g if the backend is down, the supervisor will restart the WebSocket connection
 	go superviseWebSocketConnection(ctx, client, ignoredNamespaces)
 
+	// Config is loaded and the supervisor is running — report Ready to kubelet.
+	healthServer.MarkReady()
+
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	<-sigCh
 
 	logger.Log.Info("Shutting down Centralized Proxy...")
+}
+
+// waitForIgnoredNamespaces retries GetIgnoredNamespaces until the effective-config
+// ConfigMap exists or ctx is cancelled. NotFound (and wrapped NotFound) is the
+// expected install race; other errors are also retried so a brief API blip does
+// not CrashLoop the pod while /healthz is already serving.
+func waitForIgnoredNamespaces(ctx context.Context, client *kube.Client) ([]string, error) {
+	const retryDelay = 2 * time.Second
+
+	for {
+		ignoredNamespaces, err := config.GetIgnoredNamespaces(ctx, client)
+		if err == nil {
+			return ignoredNamespaces, nil
+		}
+
+		if apierrors.IsNotFound(err) {
+			logger.Log.Info("Waiting for effective-config ConfigMap", "error", err)
+		} else {
+			logger.Log.Warn("Failed to get ignored namespaces, retrying", "error", err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(retryDelay):
+		}
+	}
 }
 
 func superviseWebSocketConnection(ctx context.Context, client *kube.Client, ignoredNamespaces []string) {

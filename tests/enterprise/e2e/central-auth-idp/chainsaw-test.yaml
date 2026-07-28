@@ -9,7 +9,7 @@ spec:
     Validates:
     - Live OIDC discovery URL fetching for Google / Azure / Okta (getOIDCDiscoveryEndpoints)
     - Creating GOOGLE / AZURE / OKTA IdPs with OIDC and SAML (one at a time)
-    - Keycloak restart between cases for a fresh IdP store
+    - Keycloak IdP + brokered user reset between cases for a fresh IdP store
     - Login using the created IdP (OIDC code flow via mock server; SAML broker redirect)
   skipDelete: true
   steps:
@@ -46,7 +46,7 @@ spec:
     - name: Run standalone auth IdP e2e
       try:
         - script:
-            timeout: 45m
+            timeout: 15m
             content: |
               chmod +x ./run-auth-idp-e2e.sh
               ./run-auth-idp-e2e.sh
