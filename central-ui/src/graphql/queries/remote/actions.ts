@@ -5,13 +5,16 @@ import { PlatformType } from '@odigos/ui-kit/types';
 // `actionTypes` resolver is unreleased as of v1.30.x). Proxies older than that
 // have no bucket here -> `getVersionedQuery` returns undefined -> `canRun` is
 // false and the kit falls back to its hard-coded ACTION_OPTIONS.
-export const GET_ACTION_TYPES: VersionedRemoteFetch = {
-  [PlatformType.K8s]: {
-    'v1.31': `
+// `ActionTypeOption.category` + `subtitle` (picker grouping and one-line menu
+// copy) landed with the action-menu redesign. Older proxies reject the selection
+// set, so keep them off until v1.33+; the kit falls back to
+// `ACTION_TYPE_TO_CATEGORY` and uses `description` for the menu without them.
+const ACTION_TYPES_QUERY = (withCategoryAndSubtitle = false) => `
   query GetActionTypes {
     actionTypes {
       type
       displayName
+      ${withCategoryAndSubtitle ? 'category\n      subtitle' : ''}
       description
       allowedSignals
       docsUrl
@@ -24,7 +27,12 @@ export const GET_ACTION_TYPES: VersionedRemoteFetch = {
         renderCondition
       }
     }
-  }`,
+  }`;
+
+export const GET_ACTION_TYPES: VersionedRemoteFetch = {
+  [PlatformType.K8s]: {
+    'v1.33': ACTION_TYPES_QUERY(true),
+    'v1.31': ACTION_TYPES_QUERY(),
   },
   // VM proxies resolve the action catalog from the versioned vmagent
   // `actionTypes` dialect document (see the VmSpec on GET_ACTION_TYPES in
