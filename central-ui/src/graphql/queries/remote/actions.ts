@@ -39,87 +39,29 @@ export const GET_ACTION_TYPES: VersionedRemoteFetch = {
   // odigos-api-adapter).
 };
 
-export const GET_ACTIONS: VersionedRemoteFetch = {
-  [PlatformType.K8s]: {
-    // customFormatMaskings / customRegexMaskings on PiiMasking landed in odigos
-    // v1.33 (CORE-1372). Older proxies reject that selection set.
-    'v1.33': `
-    query GetActions {
-      computePlatform {
-        actions {
-          id
-          type
-          name
-          notes
-          disabled
-          signals
-          fields {
-            collectContainerAttributes
-            collectReplicaSetAttributes
-            collectWorkloadId
-            collectClusterId
-            labelsAttributes {
-              labelKey
-              attributeKey
-              from
-              fromSources
-            }
-            annotationsAttributes {
-              annotationKey
-              attributeKey
-              from
-              fromSources
-            }
-            clusterAttributes {
-              attributeName
-              attributeStringValue
-            }
-            overwriteExistingValues
-            attributeNamesToDelete
-            renames
-            piiCategories
+// `Action.statuses` (desired-state conditions that carry their own severity, so a
+// disabled action reads as disabled rather than as a failed `conditions` entry)
+// landed with odigos PR #5387. Older proxies reject the selection set.
+const ACTION_STATUSES_FIELDS = `
+          statuses {
+            name
+            status
+            reasonEnum
+            message
+          }`;
+
+// customFormatMaskings / customRegexMaskings on PiiMasking landed in odigos
+// v1.33 (CORE-1372 / PLAT-1340). Older proxies reject that selection set.
+const ACTION_PII_MASKING_FIELDS = `
             customFormatMaskings {
               lookupKey
               dataFormat
             }
             customRegexMaskings {
               regex
-            }
-            extractAttribute {
-              extractions {
-                targetAttributeName
-                lookupKey
-                dataFormat
-                regex
-              }
-            }
-            urlTemplatizationRulesGroups {
-              filterK8sNamespace
-              filterK8sWorkloadKind
-              filterK8sWorkloadName
-              filterProgrammingLanguage
-              notes
-              workloadFilters {
-                kind
-                name
-              }
-              templatizationRules {
-                template
-                notes
-                examples
-              }
-            }
-          }
-          conditions {
-            status
-            type
-            reason
-            message
-          }
-        }
-      }
-    }`,
-    'v1.29': `
+            }`;
+
+const getActionsQuery = (extraFields = '', statusesFields = '') => `
     query GetActions {
       computePlatform {
         actions {
@@ -153,7 +95,7 @@ export const GET_ACTIONS: VersionedRemoteFetch = {
             overwriteExistingValues
             attributeNamesToDelete
             renames
-            piiCategories
+            piiCategories${extraFields}
             extractAttribute {
               extractions {
                 targetAttributeName
@@ -184,10 +126,18 @@ export const GET_ACTIONS: VersionedRemoteFetch = {
             type
             reason
             message
-          }
+          }${statusesFields}
         }
       }
-    }`,
+    }`;
+
+export const GET_ACTIONS: VersionedRemoteFetch = {
+  [PlatformType.K8s]: {
+    // v1.33+ selects both PII custom maskings (PLAT-1340) and desired-state
+    // `statuses` (PLAT-1336). Older proxies keep the v1.29 bucket; the drawer
+    // falls back to `conditions` without `statuses`.
+    'v1.33': getActionsQuery(ACTION_PII_MASKING_FIELDS, ACTION_STATUSES_FIELDS),
+    'v1.29': getActionsQuery(),
     'v1.28': `
     query GetActions {
       computePlatform {
