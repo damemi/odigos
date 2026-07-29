@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -17,6 +16,21 @@ import (
 	"github.com/odigos-io/central-proxy/internal/graphql"
 	"github.com/odigos-io/central-proxy/internal/logger"
 	"github.com/odigos-io/central-proxy/kube"
+)
+
+const (
+	healthCheckInterval = 30 * time.Second
+
+	// pingTimeout bounds the wait for a pong. Without it the ping waits on the
+	// root context, so a silently broken path (packets dropped with no RST) parks
+	// the health check forever and the only remaining detection is the kernel
+	// retransmission timeout, which takes ~15 minutes.
+	pingTimeout = 10 * time.Second
+
+	// writeTimeout bounds a single message write. A write to a black-holed socket
+	// otherwise blocks indefinitely while holding the connection's write lock,
+	// which starves the health check ping.
+	writeTimeout = 30 * time.Second
 )
 
 // NewWebSocketClient creates a WebSocket client
@@ -38,12 +52,8 @@ func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, 
 		Path:     "/ws/proxy",
 		RawQuery: fmt.Sprintf("proxyID=%s&platformName=%s&version=%s&platformType=%s", proxyID, clusterName, odigosVersion, consts.PlatformTypeK8sString),
 	}
-	transport := &http.Transport{
-		TLSNextProto:    map[string]func(string, *tls.Conn) http.RoundTripper{},
-		TLSClientConfig: tlsConfig,
-	}
 	dialer := websocket.DialOptions{
-		HTTPClient:           &http.Client{Transport: transport},
+		HTTPClient:           newHTTPClient(tlsConfig),
 		CompressionMode:      websocket.CompressionContextTakeover,
 		CompressionThreshold: 512,
 	}
@@ -80,8 +90,23 @@ func NewWebSocketClient(ctx context.Context, client *kube.Client, wsURL string, 
 	return wsClient, nil
 }
 
+// currentConn returns the active connection. The pointer is swapped on reconnect,
+// so readers must go through here rather than touching w.conn directly.
+func (w *WebSocketClient) currentConn() *websocket.Conn {
+	w.connMu.Lock()
+	defer w.connMu.Unlock()
+	return w.conn
+}
+
+func (w *WebSocketClient) setConn(conn *websocket.Conn) {
+	w.connMu.Lock()
+	defer w.connMu.Unlock()
+	w.conn = conn
+}
+
 func (w *WebSocketClient) Send(data WebSocketMessageToCentralized) error {
-	if w.conn == nil {
+	conn := w.currentConn()
+	if conn == nil {
 		logger.Log.Warn("Attempted to send WebSocket message but connection is nil",
 			"proxyID", w.proxyID,
 			"messageType", data.Type)
@@ -93,12 +118,13 @@ func (w *WebSocketClient) Send(data WebSocketMessageToCentralized) error {
 		return err
 	}
 
-	// Lock to ensure only one goroutine writes at a time.
-	// While coder/websocket is thread-safe, explicit locking makes concurrency obvious.
-	w.connMu.Lock()
-	err = w.conn.Write(w.ctx, websocket.MessageText, jsonData)
-	w.connMu.Unlock()
+	// coder/websocket serializes concurrent writes internally and honors the
+	// context while waiting for its write lock, so the deadline covers both
+	// waiting for the lock and the write itself.
+	writeCtx, cancel := context.WithTimeout(w.ctx, writeTimeout)
+	defer cancel()
 
+	err = conn.Write(writeCtx, websocket.MessageText, jsonData)
 	if err != nil {
 		logger.Log.Error("Failed to send WebSocket message",
 			"error", err,
@@ -135,7 +161,7 @@ func (w *WebSocketClient) Run(kubeClient *kube.Client) {
 	// Start health monitoring to detect dead connections early.
 	// Pings every 30s - if ping fails, forces connection close to trigger reconnection.
 	// This prevents "zombie" connections that appear connected but can't send/receive data.
-	w.startHealthCheck()
+	w.startHealthCheck(w.currentConn())
 
 	for {
 		select {
@@ -145,14 +171,15 @@ func (w *WebSocketClient) Run(kubeClient *kube.Client) {
 				"proxyID", w.proxyID,
 				"clusterName", w.clusterName,
 				"duration", duration)
-			if w.conn != nil {
-				w.conn.Close(websocket.StatusNormalClosure, "context canceled")
+			if conn := w.currentConn(); conn != nil {
+				conn.Close(websocket.StatusNormalClosure, "context canceled")
 			}
 			return
 
 		default:
+			conn := w.currentConn()
 
-			_, message, err := w.conn.Read(w.ctx)
+			_, message, err := conn.Read(w.ctx)
 			if err != nil {
 				duration := time.Since(w.connectedAt)
 				logger.Log.Error("WebSocket read failed, connection lost",
@@ -160,9 +187,7 @@ func (w *WebSocketClient) Run(kubeClient *kube.Client) {
 					"proxyID", w.proxyID,
 					"clusterName", w.clusterName,
 					"duration", duration)
-				if w.conn != nil {
-					w.conn.Close(websocket.StatusInternalError, "read error")
-				}
+				conn.Close(websocket.StatusInternalError, "read error")
 				logger.Log.Info("Starting WebSocket reconnection process",
 					"proxyID", w.proxyID,
 					"clusterName", w.clusterName)
@@ -173,15 +198,14 @@ func (w *WebSocketClient) Run(kubeClient *kube.Client) {
 						"clusterName", w.clusterName)
 					return
 				}
-				w.conn = newConn
+				w.setConn(newConn)
 				w.connectedAt = time.Now()
 				logger.Log.Info("WebSocket reconnected, resuming read loop",
 					"proxyID", w.proxyID,
 					"clusterName", w.clusterName)
-				// Start new health check goroutine for the new connection.
-				// This is safe because the old health check goroutine already exited when the connection failed.
-				// Each connection needs its own health monitor - this follows WebSocket best practices.
-				w.startHealthCheck()
+				// Each connection gets its own health monitor. The previous one exits
+				// on its next tick once it sees the connection has been replaced.
+				w.startHealthCheck(newConn)
 				continue
 			}
 
@@ -192,13 +216,17 @@ func (w *WebSocketClient) Run(kubeClient *kube.Client) {
 	}
 }
 
-// startHealthCheck runs a background goroutine that pings the WebSocket connection every 30 seconds.
+// startHealthCheck runs a background goroutine that pings conn every healthCheckInterval.
 // This detects "zombie" connections that appear connected but can't actually send/receive data.
 // If a ping fails, it forces the connection to close, which triggers the main read loop to reconnect.
-// The health check goroutine exits after forcing a close and will be restarted after reconnection.
-func (w *WebSocketClient) startHealthCheck() {
+// The goroutine is bound to a single connection and exits once that connection fails or is replaced.
+func (w *WebSocketClient) startHealthCheck(conn *websocket.Conn) {
+	if conn == nil {
+		return
+	}
+
 	go func() {
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(healthCheckInterval)
 		defer ticker.Stop()
 
 		for {
@@ -206,21 +234,32 @@ func (w *WebSocketClient) startHealthCheck() {
 			case <-w.ctx.Done():
 				return
 			case <-ticker.C:
-				if w.conn != nil {
-					if err := w.conn.Ping(w.ctx); err != nil {
-						logger.Log.Warn("WebSocket health check failed - connection may be dead",
-							"error", err,
-							"proxyID", w.proxyID,
-							"clusterName", w.clusterName)
-						// Force close connection to trigger reconnection in main read loop
-						w.conn.Close(websocket.StatusInternalError, "health check failed")
-						return // Exit health check goroutine, will be restarted after reconnect
-					} else {
-						logger.Log.Debug("WebSocket health check passed",
-							"proxyID", w.proxyID,
-							"clusterName", w.clusterName)
-					}
+				// A reconnect may have swapped in a new connection, which has its own
+				// monitor. Without this the goroutine would outlive its connection and
+				// one would accumulate per reconnect.
+				if w.currentConn() != conn {
+					return
 				}
+
+				// Ping waits for the pong until the context is done, so this deadline is
+				// what makes a silently broken path detectable at all.
+				pingCtx, cancel := context.WithTimeout(w.ctx, pingTimeout)
+				err := conn.Ping(pingCtx)
+				cancel()
+
+				if err != nil {
+					logger.Log.Warn("WebSocket health check failed - connection may be dead",
+						"error", err,
+						"proxyID", w.proxyID,
+						"clusterName", w.clusterName)
+					// Force close connection to trigger reconnection in main read loop
+					conn.Close(websocket.StatusInternalError, "health check failed")
+					return // Exit health check goroutine, will be restarted after reconnect
+				}
+
+				logger.Log.Debug("WebSocket health check passed",
+					"proxyID", w.proxyID,
+					"clusterName", w.clusterName)
 			}
 		}
 	}()
@@ -340,12 +379,8 @@ func (w *WebSocketClient) handleReconnect(kubeClient *kube.Client) *websocket.Co
 				"version", odigosVersion,
 				"url", u.String())
 			time.Sleep(delay)
-			transport := &http.Transport{
-				TLSNextProto:    map[string]func(string, *tls.Conn) http.RoundTripper{},
-				TLSClientConfig: w.tlsConfig,
-			}
 			dialer := websocket.DialOptions{
-				HTTPClient:           &http.Client{Transport: transport},
+				HTTPClient:           newHTTPClient(w.tlsConfig),
 				CompressionMode:      websocket.CompressionContextTakeover,
 				CompressionThreshold: 512,
 			}
