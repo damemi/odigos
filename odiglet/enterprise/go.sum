@@ -279,8 +279,8 @@ github.com/odigos-io/ebpf-java-instrumentation/v2 v2.37.0 h1:jf0I/8Jw0Q01Pw9hgmV
 github.com/odigos-io/ebpf-java-instrumentation/v2 v2.37.0/go.mod h1:mELWE90jGNBTB4O+P8gHZHdl6Z8Mmb+S+sB5mCHbNM8=
 github.com/odigos-io/ebpf-nodejs-instrumentation v0.12.1 h1:RkttNRX3x4+VejWeraO41gAR0VLh9pYdA1Rtq5Ov+Sc=
 github.com/odigos-io/ebpf-nodejs-instrumentation v0.12.1/go.mod h1:pXCGQ5GpWuu6Rhvyye1qLpXS+loKe5aO4djbr3h7VM0=
-github.com/odigos-io/enterprise-go-instrumentation v1.22.0 h1:lUq0++eKPiN12EentuNMUGfMCyUna4S23fu76gssIl4=
-github.com/odigos-io/enterprise-go-instrumentation v1.22.0/go.mod h1:qLvIBfy7gzaj3A9qKLLXxedS0qWcDhh5D0pPyNlEAiY=
+github.com/odigos-io/enterprise-go-instrumentation v1.23.0 h1:YR7JBFhiJt1vxIhsXza7PQcX5jp2dr8MIU9/1HJ0w74=
+github.com/odigos-io/enterprise-go-instrumentation v1.23.0/go.mod h1:oOonm8+lyE6HN1ZiGl87vG099OOMhzkztswYb2UyeMQ=
 github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752 h1:Fv18bWsleIZzGy+SWOuwva3IYlcoEOclDxRy/WnypB8=
 github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752/go.mod h1:J5jQgrjFpdwSS2N924u5suppg1rSDkm536Fb3ZHDFwU=
 github.com/odigos-io/odigos/api v1.33.0-pre4 h1:Riy/Yo7ETaJKGoZEe47lhGQvzwwUhHU/2RDUMVdCtps=
