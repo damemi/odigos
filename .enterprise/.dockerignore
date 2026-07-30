@@ -3,3 +3,4 @@
 .devcontainer/
 tests/
 onprem-token-generator/
+odiglet/.obi/

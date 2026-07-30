@@ -118,8 +118,6 @@ jobs:
   # Saved to Depot as odigos-enterprise-<component>-<run_id>.
   build-enterprise-components-depot:
     name: build-enterprise-components-depot (${{ matrix.component }})
-    needs: detect-changes
-    if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     runs-on: depot-ubuntu-latest
     permissions:
       contents: read
@@ -140,6 +138,11 @@ jobs:
             central-proxy,
           ]
     steps:
+
+      - name: Resolve build options from PR labels
+        id: build-opts
+        uses: odigos-io/ci-core/resolve-build-labels@main
+
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
           persist-credentials: false
@@ -153,8 +156,8 @@ jobs:
           make -f depot.mk \
             depot-build-${{ matrix.component }} \
             IMAGE_TAG=${{ env.IMAGE_TAG }} \
-            PLATFORM=${{ needs.detect-changes.outputs.platforms }} \
-            NO_CACHE=${{ needs.detect-changes.outputs.no-cache }} \
+            PLATFORM=${{ steps.build-opts.outputs.platforms }} \
+            NO_CACHE=${{ steps.build-opts.outputs.no-cache }} \
             GITHUB_RUN_ID=${{ github.run_id }} \
             GITHUB_REPOSITORY_NAME=${{ github.event.repository.name }}
 
@@ -271,13 +274,15 @@ jobs:
           retention-days: 30
 
   build-oss-components-for-tests:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     runs-on: depot-ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
+      - name: Resolve build options from PR labels
+        id: build-opts
+        uses: odigos-io/ci-core/resolve-build-labels@main
+
       - name: Checkout Odigos OSS
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
@@ -297,7 +302,7 @@ jobs:
             depot-build-collector \
             depot-build-cli \
             IMAGE_TAG=${{ env.IMAGE_TAG }} \
-            PLATFORM=${{ needs.detect-changes.outputs.platforms }} \
+            PLATFORM=${{ steps.build-opts.outputs.platforms }} \
             GITHUB_RUN_ID=${{ github.run_id }} \
             GITHUB_REPOSITORY_NAME=${{ github.event.repository.name }} \
             CHART_VERSION=0.0.0-e2e-test \
@@ -623,7 +628,7 @@ jobs:
 
   vulnerability-report:
     name: Generate Vulnerability Report
-    needs: [detect-changes, scan-components, build-oss-components-for-tests]
+    needs: [detect-changes, scan-components]
     runs-on: depot-ubuntu-latest
     if: always() && needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     steps:
