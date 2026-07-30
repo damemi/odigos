@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@apollo/client": "^4.2.6",
-    "@odigos/ui-kit": "0.0.277",
+    "@odigos/ui-kit": "0.0.278",
     "@odigos/vmagent-api-apollo-client": "0.17.0",
     "graphql": "^16.14.2",
     "graphql-ws": "^6.1.0",
