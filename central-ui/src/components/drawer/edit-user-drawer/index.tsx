@@ -1,11 +1,11 @@
 import React, { useState, type FC } from 'react';
 import { UserCard } from './user-card';
 import { useUserStore } from '@/store';
-import type { User, UserInput } from '@/types';
 import { UserIcon } from '@odigos/ui-kit/icons';
 import { useGenericForm } from '@odigos/ui-kit/hooks';
 import { FlexColumn } from '@odigos/ui-kit/components';
 import { BUTTON_TEXTS } from '@odigos/ui-kit/constants';
+import { Role, type User, type UserInput } from '@/types';
 import { ButtonVariants, Drawer, WarningModal } from '@odigos/ui-kit/components';
 
 interface EditUserDrawerProps {
@@ -20,6 +20,7 @@ const EditUserDrawer: FC<EditUserDrawerProps> = ({ user, onClose, onSave, onDele
   // User management (edit role / delete / reset password) is restricted to ADMIN/OWNER.
   // MAINTAINER and VIEWER can open the drawer to view details, but cannot modify anything.
   const { isAdmin } = useUserStore();
+  const isProtectedAdmin = user.role === Role.ADMIN || user.role === Role.OWNER;
   const { formData, handleFormChange, resetFormData, isFormDirty } = useGenericForm({
     email: user.email || '',
     role: user.role,
@@ -47,20 +48,29 @@ const EditUserDrawer: FC<EditUserDrawerProps> = ({ user, onClose, onSave, onDele
           onClose: () => handleWithCancelWarning(onClose),
           icon: UserIcon,
           title: user.email,
-          actions: isAdmin
-            ? [
-                {
-                  id: 'reset-password',
-                  label: 'Reset Password',
-                  onClick: onResetPassword,
-                },
-                {
-                  id: 'delete-user',
-                  label: 'Delete User',
-                  onClick: onDelete,
-                },
-              ]
-            : [],
+          actions:
+            isAdmin && !isProtectedAdmin
+              ? [
+                  {
+                    id: 'reset-password',
+                    label: 'Reset Password',
+                    onClick: onResetPassword,
+                  },
+                  {
+                    id: 'delete-user',
+                    label: 'Delete User',
+                    onClick: onDelete,
+                  },
+                ]
+              : isAdmin
+                ? [
+                    {
+                      id: 'reset-password',
+                      label: 'Reset Password',
+                      onClick: onResetPassword,
+                    },
+                  ]
+                : [],
         }}
         footer={{
           actions:

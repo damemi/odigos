@@ -67,6 +67,7 @@ func TestHasOdigosRoleInList(t *testing.T) {
 		{name: "owner case-insensitive", roles: []string{"OWNER"}, want: true},
 		{name: "maintainer", roles: []string{keycloak.RoleMaintainer}, want: true},
 		{name: "viewer", roles: []string{keycloak.RoleViewer}, want: true},
+		{name: "no access", roles: []string{keycloak.RoleNoAccess}, want: false},
 		{name: "admin-cli only", roles: []string{"admin-cli", "create-realm"}, want: false},
 		{name: "empty", roles: nil, want: false},
 	}

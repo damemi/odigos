@@ -18,6 +18,7 @@ const (
 	RoleOwner      = "owner"
 	RoleMaintainer = "maintainer"
 	RoleViewer     = "viewer"
+	RoleNoAccess   = "no-access"
 )
 
 const (
@@ -135,7 +136,7 @@ func CreateOdigosUIClient(token, keycloakHost, realm string) error {
 }
 
 func EnsureRequiredRoles(adminToken, keycloakHost, realm string) error {
-	requiredRoles := []string{RoleAdmin, RoleOwner, RoleMaintainer, RoleViewer}
+	requiredRoles := []string{RoleAdmin, RoleOwner, RoleMaintainer, RoleViewer, RoleNoAccess}
 
 	for _, roleName := range requiredRoles {
 		err := createRoleIfNotExists(adminToken, keycloakHost, realm, roleName)

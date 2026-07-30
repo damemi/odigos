@@ -47,6 +47,24 @@ func TestGetUserRolePrecedence(t *testing.T) {
 	}
 }
 
+func TestGetUserRoleReturnsNoAccessRole(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"name": "no-access"},
+		})
+	}))
+	defer server.Close()
+
+	kc := &KeycloakUserService{host: server.URL, realm: "odigos"}
+	role, err := kc.GetUserRole("token", "user-1")
+	if err != nil {
+		t.Fatalf("GetUserRole returned error: %v", err)
+	}
+	if role != RoleNoAccess {
+		t.Fatalf("GetUserRole() = %q, want %q", role, RoleNoAccess)
+	}
+}
+
 func TestGetUserRoleNonOKStatusReturnsEmpty(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)

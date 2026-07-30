@@ -15,7 +15,8 @@ func TestConvertStringRoleToModel(t *testing.T) {
 		{"ADMIN", model.RoleAdmin},
 		{"maintainer", model.RoleMaintainer},
 		{"viewer", model.RoleViewer},
-		{"", model.RoleViewer}, // GraphQL Role is required; empty falls back for display
+		{"no-access", model.RoleNoAccess},
+		{"", model.RoleNoAccess},
 		{"unknown", model.RoleViewer},
 	}
 	for _, c := range cases {
@@ -34,6 +35,7 @@ func TestConvertModelRoleToString(t *testing.T) {
 		{model.RoleAdmin, "admin"},
 		{model.RoleMaintainer, "maintainer"},
 		{model.RoleViewer, "viewer"},
+		{model.RoleNoAccess, "no-access"},
 	}
 
 	for _, c := range cases {

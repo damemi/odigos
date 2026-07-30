@@ -9,6 +9,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   [Role.ADMIN]: 'Admin',
   [Role.MAINTAINER]: 'Maintainer',
   [Role.VIEWER]: 'Viewer',
+  [Role.NO_ACCESS]: 'No Access',
 };
 
 export const ROLE_OPTIONS: DropDataOption[] = [
@@ -16,3 +17,5 @@ export const ROLE_OPTIONS: DropDataOption[] = [
   { id: Role.MAINTAINER, label: ROLE_LABELS[Role.MAINTAINER] },
   { id: Role.VIEWER, label: ROLE_LABELS[Role.VIEWER] },
 ];
+
+export const EDIT_USER_ROLE_OPTIONS: DropDataOption[] = [...ROLE_OPTIONS, { id: Role.NO_ACCESS, label: ROLE_LABELS[Role.NO_ACCESS] }];

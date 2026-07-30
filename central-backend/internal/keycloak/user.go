@@ -101,6 +101,9 @@ func (kc *KeycloakUserService) GetUserRole(token string, userID string) (string,
 	if hasRole[strings.ToLower(RoleViewer)] {
 		return RoleViewer, nil
 	}
+	if hasRole[strings.ToLower(RoleNoAccess)] {
+		return RoleNoAccess, nil
+	}
 
 	return "", nil
 }

@@ -30,7 +30,7 @@ export const RoleMappingsTable: React.FC = () => {
   const theme = useTheme();
   const { isAdmin } = useUserStore();
   const { addNotification } = useNotificationStore();
-  const { roleMappings, updateRoleMapping, updating, deleteRoleMapping, deleting } = useRoleMappingsCRUD();
+  const { roleMappings, updateRoleMapping, updating, deleteRoleMapping, deleting, loading } = useRoleMappingsCRUD();
 
   const [editOpenFor, setEditOpenFor] = useState<GroupRoleMapping | null>(null);
   const [deleteOpenFor, setDeleteOpenFor] = useState<GroupRoleMapping | null>(null);
@@ -141,7 +141,7 @@ export const RoleMappingsTable: React.FC = () => {
 
   return (
     <>
-      <Table variant={TableVariant.Pretty} columns={columns} rows={rows} noDataProps={{ title: 'No data found' }} getRowActions={isAdmin ? getRowActions : undefined} />
+      <Table variant={TableVariant.Pretty} columns={columns} rows={rows} isLoading={loading} noDataProps={{ title: 'No data found' }} getRowActions={isAdmin ? getRowActions : undefined} />
 
       {editOpenFor && (
         <EditRoleMappingDrawer

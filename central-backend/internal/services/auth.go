@@ -213,6 +213,17 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 		if err != nil {
 			return nil, fmt.Errorf("failed to get user role after SSO login: %w", err)
 		}
+		if roleStr == keycloak.RoleNoAccess {
+			logger.Log.Info("SSO login denied: user has no-access role", "userID", authResult.UserData.ID, "email", authResult.UserData.Email)
+			if err := svc.kcUser.LogoutUserSessions(adminToken, authResult.UserData.ID); err != nil {
+				logger.Log.Warn("Failed to logout denied user sessions", "userID", authResult.UserData.ID, "error", err)
+			}
+			idToken := authResult.IDToken
+			return &model.SignInResult{
+				Status:  model.SignInStatusAccessDenied,
+				IDToken: &idToken,
+			}, nil
+		}
 		if roleStr == "" {
 			hasMappings, err := svc.roleMappingService.HasAnyGroupRoleMappings()
 			if err != nil {
@@ -222,6 +233,9 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 				logger.Log.Info("SSO login denied: user has no mapped role", "userID", authResult.UserData.ID, "email", authResult.UserData.Email)
 				if err := svc.kcUser.LogoutUserSessions(adminToken, authResult.UserData.ID); err != nil {
 					logger.Log.Warn("Failed to logout denied user sessions", "userID", authResult.UserData.ID, "error", err)
+				}
+				if err := svc.kcUser.AddRealmRoleToUser(adminToken, authResult.UserData.Email, keycloak.RoleNoAccess); err != nil {
+					logger.Log.Warn("Failed to assign no-access role to denied SSO user", "userID", authResult.UserData.ID, "error", err)
 				}
 				// Return idToken for deferred IdP logout on the next SSO attempt (not used as a session).
 				idToken := authResult.IDToken

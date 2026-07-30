@@ -31,7 +31,12 @@ func ConvertStringRoleToModel(roleStr string) model.Role {
 		return model.RoleMaintainer
 	case "VIEWER":
 		return model.RoleViewer
+	case "NO_ACCESS", "NO-ACCESS":
+		return model.RoleNoAccess
 	default:
+		if roleStr == "" {
+			return model.RoleNoAccess
+		}
 		return model.RoleViewer
 	}
 }
@@ -48,6 +53,8 @@ func ConvertModelRoleToString(role model.Role) string {
 		return "maintainer"
 	case model.RoleViewer:
 		return "viewer"
+	case model.RoleNoAccess:
+		return "no-access"
 	default:
 		return "viewer"
 	}

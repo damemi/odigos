@@ -7,7 +7,7 @@ export const useConfig = (): { config: FetchedConfig; isReadonly: boolean } => {
   const { user, canEdit } = useUserStore();
   const { data: config } = useApiQuery('GET_CONFIG');
 
-  const isReadonly = user?.role === Role.VIEWER || (!!config?.readonly && !canEdit);
+  const isReadonly = user?.role === Role.VIEWER || user?.role === Role.NO_ACCESS || (!!config?.readonly && !canEdit);
 
   return { config, isReadonly };
 };

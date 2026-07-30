@@ -32,6 +32,8 @@ export const getTagVariantForRole = (role: Role): TagVariants => {
       return TagVariants.Yellow;
     case Role.OWNER:
       return TagVariants.Purple;
+    case Role.NO_ACCESS:
+      return TagVariants.Pink;
   }
 };
 

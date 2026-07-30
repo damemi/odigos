@@ -258,6 +258,9 @@ func (svc *RoleMappingService) CreateGroupRoleMapping(input *model.WriteGroupRol
 	if err := validateClaimValue(input.ClaimValue); err != nil {
 		return nil, err
 	}
+	if input.Role == model.RoleNoAccess {
+		return nil, fmt.Errorf("no-access cannot be used for group role mappings")
+	}
 
 	if result, err := svc.requireProvider(input.ProviderID); result != nil || err != nil {
 		return result, err
@@ -314,6 +317,9 @@ func (svc *RoleMappingService) UpdateGroupRoleMapping(id string, input *model.Wr
 	}
 	if err := validateClaimValue(input.ClaimValue); err != nil {
 		return nil, err
+	}
+	if input.Role == model.RoleNoAccess {
+		return nil, fmt.Errorf("no-access cannot be used for group role mappings")
 	}
 
 	if result, err := svc.requireProvider(input.ProviderID); result != nil || err != nil {

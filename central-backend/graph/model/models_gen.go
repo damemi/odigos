@@ -427,6 +427,7 @@ const (
 	RoleAdmin      Role = "ADMIN"
 	RoleMaintainer Role = "MAINTAINER"
 	RoleViewer     Role = "VIEWER"
+	RoleNoAccess   Role = "NO_ACCESS"
 )
 
 var AllRole = []Role{
@@ -434,11 +435,12 @@ var AllRole = []Role{
 	RoleAdmin,
 	RoleMaintainer,
 	RoleViewer,
+	RoleNoAccess,
 }
 
 func (e Role) IsValid() bool {
 	switch e {
-	case RoleOwner, RoleAdmin, RoleMaintainer, RoleViewer:
+	case RoleOwner, RoleAdmin, RoleMaintainer, RoleViewer, RoleNoAccess:
 		return true
 	}
 	return false

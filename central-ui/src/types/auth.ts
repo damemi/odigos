@@ -5,6 +5,7 @@ export enum Role {
   ADMIN = 'ADMIN',
   VIEWER = 'VIEWER',
   MAINTAINER = 'MAINTAINER',
+  NO_ACCESS = 'NO_ACCESS',
 }
 
 export enum SignInStatus {

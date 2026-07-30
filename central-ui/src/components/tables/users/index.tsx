@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
+import { Role } from '@/types';
 import * as UTILS from '@/utils';
 import { IconCircle } from '../styled';
 import { useUsersCRUD } from '@/hooks';
@@ -23,7 +24,7 @@ export const UsersTable: React.FC = () => {
   const theme = useTheme();
   const { isAdmin } = useUserStore();
   const { addNotification } = useNotificationStore();
-  const { users, updateUser, updating, deleteUser, deleting } = useUsersCRUD();
+  const { users, updateUser, updating, deleteUser, deleting, loading } = useUsersCRUD();
 
   const [editOpenForUser, setEditOpenForUser] = useState<User | null>(null);
   const [deleteOpenForUser, setDeleteOpenForUser] = useState<User | null>(null);
@@ -111,27 +112,33 @@ export const UsersTable: React.FC = () => {
 
       const TrashFilled: SVG = (props) => <TrashIcon fill={theme.text.error} {...props} />;
 
-      return [
+      const actions = [
         {
           id: `edit-${user.id}`,
           tooltip: UTILS.EDIT_USER,
           rightIcon: EditIcon,
           onClick: () => setEditOpenForUser(user),
         },
-        {
+      ];
+
+      const isProtectedAdmin = user.role === Role.ADMIN || user.role === Role.OWNER;
+      if (!isProtectedAdmin) {
+        actions.push({
           id: `delete-${user.id}`,
           tooltip: UTILS.DELETE_USER,
           rightIcon: TrashFilled,
           onClick: () => setDeleteOpenForUser(user),
-        },
-      ];
+        });
+      }
+
+      return actions;
     },
     [isAdmin, users, theme.text.error],
   );
 
   return (
     <>
-      <Table variant={TableVariant.Pretty} columns={columns} rows={rows} noDataProps={{ title: 'No data found' }} getRowActions={isAdmin ? getRowActions : undefined} />
+      <Table variant={TableVariant.Pretty} columns={columns} rows={rows} isLoading={loading} noDataProps={{ title: 'No data found' }} getRowActions={isAdmin ? getRowActions : undefined} />
 
       {editOpenForUser && (
         <EditUserDrawer

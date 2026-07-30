@@ -181,6 +181,15 @@ func (svc *UserService) UpdateUser(ctx context.Context, userID string, input *mo
 }
 
 func (svc *UserService) DeleteUser(ctx context.Context, userID string) (*model.GeneralResult, error) {
+	user, err := svc.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user.Role == model.RoleAdmin || user.Role == model.RoleOwner {
+		errorMsg := "admin users cannot be deleted"
+		return &model.GeneralResult{Success: false, Error: &errorMsg}, nil
+	}
+
 	adminToken, err := svc.adminService.GetAdminToken()
 	if err != nil {
 		return nil, err

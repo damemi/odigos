@@ -1,8 +1,8 @@
 import React, { type FC } from 'react';
 import { Role, User } from '@/types';
-import { useUserStore } from '@/store';
 import styled from 'styled-components';
-import { ROLE, ROLE_OPTIONS } from '@/utils';
+import { useUserStore } from '@/store';
+import { ROLE, EDIT_USER_ROLE_OPTIONS } from '@/utils';
 import { FlexColumn, FlexRow } from '@odigos/ui-kit/components';
 import { DataCard, DropDown, Typography } from '@odigos/ui-kit/components';
 
@@ -46,7 +46,7 @@ const UserCard: FC<UserCardProps> = ({ user: _, formData, handleFormChange }) =>
           <DataCardCellStretch>
             <DropDown
               placeholder={ROLE}
-              options={ROLE_OPTIONS}
+              options={EDIT_USER_ROLE_OPTIONS}
               disabled={!isAdmin}
               values={[formData.role]}
               setValues={([value]) => handleFormChange('role', (value as Role) ?? Role.VIEWER)}
