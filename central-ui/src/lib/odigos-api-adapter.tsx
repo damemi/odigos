@@ -1502,6 +1502,22 @@ const OdigosApiAdapter: FC<AdapterProps> = ({ children }) => {
       httpUrl: API.GRAPHQL_HTTP,
       wsLink,
       credentials: 'same-origin' as const,
+      // The cloud connector provider catalog is a static, read-only tree served
+      // whole under `cloudConnectorProviders`. Its nested objects carry an `id`
+      // that is only unique WITHIN a provider, not globally: every provider's
+      // policy preview is `CloudConnectorSetupArtifact:policy-preview`, and both
+      // AWS and GCP expose a `CloudConnectorAuthMethod:workload-identity`. Under
+      // Apollo's default `__typename`+`id` normalization those collapse into one
+      // shared cache entity, so one provider's artifact/auth-method silently
+      // overwrites another's (symptom: GCP rendering AWS's IAM-policy preview).
+      // They're embedded value objects, not shared entities, so disable
+      // normalization to keep each inline under its parent provider. Only these
+      // two types expose an `id` — the rest of the tree keys off provider/name/
+      // key, which Apollo never normalizes.
+      cacheTypePolicies: {
+        CloudConnectorSetupArtifact: { keyFields: false as const },
+        CloudConnectorAuthMethod: { keyFields: false as const },
+      },
       authHeader: (): Record<string, string> => {
         const accessToken = useUserStore.getState().accessToken;
         return accessToken ? { authorization: `Bearer ${accessToken}` } : {};

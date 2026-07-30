@@ -90,6 +90,22 @@ type ComplexityRoot struct {
 		DisplayName     func(childComplexity int) int
 		Features        func(childComplexity int) int
 		Provider        func(childComplexity int) int
+		Setup           func(childComplexity int) int
+	}
+
+	CloudConnectorSetup struct {
+		Artifacts func(childComplexity int) int
+	}
+
+	CloudConnectorSetupArtifact struct {
+		Description   func(childComplexity int) int
+		Format        func(childComplexity int) int
+		ID            func(childComplexity int) int
+		ItemSeparator func(childComplexity int) int
+		ItemTemplate  func(childComplexity int) int
+		Section       func(childComplexity int) int
+		Template      func(childComplexity int) int
+		Title         func(childComplexity int) int
 	}
 
 	CloudConnectorTestCheck struct {
@@ -551,6 +567,68 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CloudConnectorProvider.Provider(childComplexity), true
+	case "CloudConnectorProvider.setup":
+		if e.ComplexityRoot.CloudConnectorProvider.Setup == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorProvider.Setup(childComplexity), true
+
+	case "CloudConnectorSetup.artifacts":
+		if e.ComplexityRoot.CloudConnectorSetup.Artifacts == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorSetup.Artifacts(childComplexity), true
+
+	case "CloudConnectorSetupArtifact.description":
+		if e.ComplexityRoot.CloudConnectorSetupArtifact.Description == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorSetupArtifact.Description(childComplexity), true
+	case "CloudConnectorSetupArtifact.format":
+		if e.ComplexityRoot.CloudConnectorSetupArtifact.Format == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorSetupArtifact.Format(childComplexity), true
+	case "CloudConnectorSetupArtifact.id":
+		if e.ComplexityRoot.CloudConnectorSetupArtifact.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorSetupArtifact.ID(childComplexity), true
+	case "CloudConnectorSetupArtifact.itemSeparator":
+		if e.ComplexityRoot.CloudConnectorSetupArtifact.ItemSeparator == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorSetupArtifact.ItemSeparator(childComplexity), true
+	case "CloudConnectorSetupArtifact.itemTemplate":
+		if e.ComplexityRoot.CloudConnectorSetupArtifact.ItemTemplate == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorSetupArtifact.ItemTemplate(childComplexity), true
+	case "CloudConnectorSetupArtifact.section":
+		if e.ComplexityRoot.CloudConnectorSetupArtifact.Section == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorSetupArtifact.Section(childComplexity), true
+	case "CloudConnectorSetupArtifact.template":
+		if e.ComplexityRoot.CloudConnectorSetupArtifact.Template == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorSetupArtifact.Template(childComplexity), true
+	case "CloudConnectorSetupArtifact.title":
+		if e.ComplexityRoot.CloudConnectorSetupArtifact.Title == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorSetupArtifact.Title(childComplexity), true
 
 	case "CloudConnectorTestCheck.displayName":
 		if e.ComplexityRoot.CloudConnectorTestCheck.DisplayName == nil {
@@ -1646,8 +1724,40 @@ func (ec *executionContext) childFields_CloudConnectorProvider(ctx context.Conte
 		return ec.fieldContext_CloudConnectorProvider_auth(ctx, field)
 	case "features":
 		return ec.fieldContext_CloudConnectorProvider_features(ctx, field)
+	case "setup":
+		return ec.fieldContext_CloudConnectorProvider_setup(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type CloudConnectorProvider", field.Name)
+}
+
+func (ec *executionContext) childFields_CloudConnectorSetup(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "artifacts":
+		return ec.fieldContext_CloudConnectorSetup_artifacts(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CloudConnectorSetup", field.Name)
+}
+
+func (ec *executionContext) childFields_CloudConnectorSetupArtifact(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_CloudConnectorSetupArtifact_id(ctx, field)
+	case "section":
+		return ec.fieldContext_CloudConnectorSetupArtifact_section(ctx, field)
+	case "title":
+		return ec.fieldContext_CloudConnectorSetupArtifact_title(ctx, field)
+	case "description":
+		return ec.fieldContext_CloudConnectorSetupArtifact_description(ctx, field)
+	case "format":
+		return ec.fieldContext_CloudConnectorSetupArtifact_format(ctx, field)
+	case "template":
+		return ec.fieldContext_CloudConnectorSetupArtifact_template(ctx, field)
+	case "itemTemplate":
+		return ec.fieldContext_CloudConnectorSetupArtifact_itemTemplate(ctx, field)
+	case "itemSeparator":
+		return ec.fieldContext_CloudConnectorSetupArtifact_itemSeparator(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CloudConnectorSetupArtifact", field.Name)
 }
 
 func (ec *executionContext) childFields_CloudConnectorTestCheck(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -3431,6 +3541,254 @@ func (ec *executionContext) fieldContext_CloudConnectorProvider_features(_ conte
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _CloudConnectorProvider_setup(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorProvider) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorProvider_setup(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Setup, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.CloudConnectorSetup) graphql.Marshaler {
+			return ec.marshalNCloudConnectorSetup2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorSetup(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorProvider_setup(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CloudConnectorProvider",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CloudConnectorSetup(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CloudConnectorSetup_artifacts(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorSetup) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorSetup_artifacts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Artifacts, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.CloudConnectorSetupArtifact) graphql.Marshaler {
+			return ec.marshalNCloudConnectorSetupArtifact2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorSetupArtifactᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorSetup_artifacts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CloudConnectorSetup",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CloudConnectorSetupArtifact(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CloudConnectorSetupArtifact_id(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorSetupArtifact) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorSetupArtifact_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorSetupArtifact_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CloudConnectorSetupArtifact", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CloudConnectorSetupArtifact_section(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorSetupArtifact) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorSetupArtifact_section(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Section, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorSetupArtifact_section(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CloudConnectorSetupArtifact", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CloudConnectorSetupArtifact_title(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorSetupArtifact) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorSetupArtifact_title(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Title, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorSetupArtifact_title(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CloudConnectorSetupArtifact", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CloudConnectorSetupArtifact_description(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorSetupArtifact) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorSetupArtifact_description(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Description, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorSetupArtifact_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CloudConnectorSetupArtifact", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CloudConnectorSetupArtifact_format(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorSetupArtifact) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorSetupArtifact_format(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Format, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorSetupArtifact_format(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CloudConnectorSetupArtifact", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CloudConnectorSetupArtifact_template(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorSetupArtifact) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorSetupArtifact_template(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Template, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorSetupArtifact_template(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CloudConnectorSetupArtifact", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CloudConnectorSetupArtifact_itemTemplate(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorSetupArtifact) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorSetupArtifact_itemTemplate(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ItemTemplate, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorSetupArtifact_itemTemplate(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CloudConnectorSetupArtifact", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CloudConnectorSetupArtifact_itemSeparator(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorSetupArtifact) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorSetupArtifact_itemSeparator(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ItemSeparator, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorSetupArtifact_itemSeparator(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CloudConnectorSetupArtifact", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _CloudConnectorTestCheck_name(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorTestCheck) (ret graphql.Marshaler) {
@@ -8970,6 +9328,122 @@ func (ec *executionContext) _CloudConnectorProvider(ctx context.Context, sel ast
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "setup":
+			out.Values[i] = ec._CloudConnectorProvider_setup(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var cloudConnectorSetupImplementors = []string{"CloudConnectorSetup"}
+
+func (ec *executionContext) _CloudConnectorSetup(ctx context.Context, sel ast.SelectionSet, obj *model.CloudConnectorSetup) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, cloudConnectorSetupImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CloudConnectorSetup")
+		case "artifacts":
+			out.Values[i] = ec._CloudConnectorSetup_artifacts(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var cloudConnectorSetupArtifactImplementors = []string{"CloudConnectorSetupArtifact"}
+
+func (ec *executionContext) _CloudConnectorSetupArtifact(ctx context.Context, sel ast.SelectionSet, obj *model.CloudConnectorSetupArtifact) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, cloudConnectorSetupArtifactImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CloudConnectorSetupArtifact")
+		case "id":
+			out.Values[i] = ec._CloudConnectorSetupArtifact_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "section":
+			out.Values[i] = ec._CloudConnectorSetupArtifact_section(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "title":
+			out.Values[i] = ec._CloudConnectorSetupArtifact_title(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._CloudConnectorSetupArtifact_description(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "format":
+			out.Values[i] = ec._CloudConnectorSetupArtifact_format(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "template":
+			out.Values[i] = ec._CloudConnectorSetupArtifact_template(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "itemTemplate":
+			out.Values[i] = ec._CloudConnectorSetupArtifact_itemTemplate(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "itemSeparator":
+			out.Values[i] = ec._CloudConnectorSetupArtifact_itemSeparator(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -11263,6 +11737,42 @@ func (ec *executionContext) marshalNCloudConnectorProvider2ᚖgithubᚗcomᚋodi
 		return graphql.Null
 	}
 	return ec._CloudConnectorProvider(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCloudConnectorSetup2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorSetup(ctx context.Context, sel ast.SelectionSet, v *model.CloudConnectorSetup) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CloudConnectorSetup(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCloudConnectorSetupArtifact2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorSetupArtifactᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.CloudConnectorSetupArtifact) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCloudConnectorSetupArtifact2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorSetupArtifact(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCloudConnectorSetupArtifact2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorSetupArtifact(ctx context.Context, sel ast.SelectionSet, v *model.CloudConnectorSetupArtifact) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CloudConnectorSetupArtifact(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNCloudConnectorTestCheck2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorTestCheckᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.CloudConnectorTestCheck) graphql.Marshaler {

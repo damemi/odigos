@@ -36,7 +36,29 @@ func cloudConnectorProviderFromSpec(s spec.CloudConnectorSpec) *model.CloudConne
 			Methods:     cloudConnectorAuthMethods(s.Auth.Methods),
 		},
 		Features: cloudConnectorFeatures(s),
+		Setup:    cloudConnectorSetup(s.Setup),
 	}
+}
+
+// cloudConnectorSetup maps the spec's declarative onboarding artifacts to their
+// GraphQL model. The UI renders these client-side (filling the {{permissions}}
+// placeholder from the selected access level), so the connector owns the artifact
+// definition and the UI stays provider-agnostic.
+func cloudConnectorSetup(s spec.Setup) *model.CloudConnectorSetup {
+	artifacts := make([]*model.CloudConnectorSetupArtifact, 0, len(s.Artifacts))
+	for _, a := range s.Artifacts {
+		artifacts = append(artifacts, &model.CloudConnectorSetupArtifact{
+			ID:            a.ID,
+			Section:       a.Section,
+			Title:         a.Title,
+			Description:   a.Description,
+			Format:        a.Format,
+			Template:      a.Template,
+			ItemTemplate:  a.ItemTemplate,
+			ItemSeparator: a.ItemSeparator,
+		})
+	}
+	return &model.CloudConnectorSetup{Artifacts: artifacts}
 }
 
 func cloudConnectorAuthMethods(methods []spec.AuthMethod) []*model.CloudConnectorAuthMethod {

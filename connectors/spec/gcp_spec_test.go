@@ -1,6 +1,9 @@
 package spec
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestGCPSpecLoads(t *testing.T) {
 	s, ok := Get("gcp")
@@ -71,6 +74,32 @@ func TestGCPSpecLoads(t *testing.T) {
 	}
 	if len(s.ComputePlatforms.Installation.Types) != 0 {
 		t.Errorf("installation feature should declare no types, got %v", s.ComputePlatforms.Installation.Types)
+	}
+}
+
+func TestGCPPolicyPreviewArtifact(t *testing.T) {
+	s := MustGet("gcp")
+
+	arts := s.SetupArtifactsForSection("permissions")
+	if len(arts) != 1 {
+		t.Fatalf("permissions setup artifacts = %d, want 1 (policy-preview)", len(arts))
+	}
+	a := arts[0]
+	if a.ID != "policy-preview" {
+		t.Errorf("artifact id = %q, want policy-preview", a.ID)
+	}
+	// GCP renders a custom IAM role YAML (not an AWS-style JSON policy).
+	if a.Format != "yaml" {
+		t.Errorf("artifact format = %q, want yaml", a.Format)
+	}
+	if !strings.Contains(a.Template, "includedPermissions:") {
+		t.Errorf("template should declare a custom-role includedPermissions block, got:\n%s", a.Template)
+	}
+	if !strings.Contains(a.Template, "{{permissions}}") {
+		t.Errorf("template should carry the {{permissions}} placeholder, got:\n%s", a.Template)
+	}
+	if a.ItemTemplate != "- {{permission}}" {
+		t.Errorf("itemTemplate = %q, want %q", a.ItemTemplate, "- {{permission}}")
 	}
 }
 

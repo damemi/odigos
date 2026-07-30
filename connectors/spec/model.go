@@ -49,6 +49,56 @@ type CloudConnectorSpec struct {
 	ComputePlatforms ComputePlatformDomain `yaml:"computePlatforms"`
 	// Gateway is connector-wide collector wiring; not part of either domain.
 	Gateway Feature `yaml:"gateway"`
+	// Setup declares provider-defined onboarding UI artifacts (e.g. the IAM policy preview, CLI setup
+	// snippets) shown in the create-connector flow. It is intentionally declarative: each provider
+	// authors artifact templates in its YAML, and the UI fills them from the aggregated spec permissions
+	// (and, later, live form values), so the UI stays provider-agnostic and no per-provider Go rendering
+	// code is needed. Extend this with new artifacts/sections as more onboarding steps become spec-driven.
+	Setup Setup `yaml:"setup"`
+}
+
+// Setup groups a provider's declarative onboarding artifacts. Kept as a struct (rather than a bare
+// slice) so it can grow additional setup metadata without breaking the schema.
+type Setup struct {
+	Artifacts []SetupArtifact `yaml:"artifacts"`
+}
+
+// SetupArtifact is one renderable onboarding artifact. The UI renders Template, replacing the literal
+// "{{permissions}}" placeholder line with the aggregated permission strings — each wrapped by
+// ItemTemplate (whose "{{permission}}" token is substituted per permission), joined by ItemSeparator,
+// and indented to match the placeholder's column. Format is a syntax hint only. This is a plain
+// placeholder convention, NOT Go text/template — nothing here is executed server-side.
+type SetupArtifact struct {
+	// ID is a stable key for the artifact (e.g. "policy-preview"). Unique within a provider.
+	ID string `yaml:"id"`
+	// Section is the UI section the artifact belongs to (e.g. "permissions"). Lets one provider declare
+	// artifacts for multiple onboarding steps; the UI selects by section.
+	Section string `yaml:"section"`
+	// Title / Description are for the UI header.
+	Title       string `yaml:"title"`
+	Description string `yaml:"description"`
+	// Format is a syntax hint for the UI code block: "json" | "yaml" | "shell" | "text".
+	Format string `yaml:"format"`
+	// Template is the artifact body containing the literal "{{permissions}}" placeholder line.
+	Template string `yaml:"template"`
+	// ItemTemplate renders a single permission; its literal "{{permission}}" token is replaced per item.
+	ItemTemplate string `yaml:"itemTemplate"`
+	// ItemSeparator joins the rendered permission items (e.g. ",\n" for a JSON array, "\n" for YAML).
+	ItemSeparator string `yaml:"itemSeparator"`
+}
+
+// SetupArtifacts returns every declared onboarding artifact.
+func (s CloudConnectorSpec) SetupArtifacts() []SetupArtifact { return s.Setup.Artifacts }
+
+// SetupArtifactsForSection returns the declared artifacts for a UI section, in spec order.
+func (s CloudConnectorSpec) SetupArtifactsForSection(section string) []SetupArtifact {
+	var out []SetupArtifact
+	for _, a := range s.Setup.Artifacts {
+		if a.Section == section {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // WorkloadDomain groups the two features that operate on directly-instrumentable resources: Discovery

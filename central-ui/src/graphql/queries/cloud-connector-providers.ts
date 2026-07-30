@@ -55,6 +55,18 @@ export const GET_CLOUD_CONNECTOR_PROVIDERS = gql`
           implemented
         }
       }
+      setup {
+        artifacts {
+          id
+          section
+          title
+          description
+          format
+          template
+          itemTemplate
+          itemSeparator
+        }
+      }
     }
   }
 `;

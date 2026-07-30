@@ -8,6 +8,31 @@ type CloudConnectorProvider {
   connectorFields: [CloudConnectorField!]!
   auth: CloudConnectorAuth!
   features: [CloudConnectorFeature!]!
+  # Declarative onboarding artifacts (e.g. the IAM policy preview). Provider-owned
+  # templates the UI fills from the aggregated spec permissions; keeps the UI agnostic.
+  setup: CloudConnectorSetup!
+}
+
+# Provider-defined onboarding artifacts, grouped so the schema can grow more setup
+# metadata without a breaking change. Mirrors connectors/spec.Setup.
+type CloudConnectorSetup {
+  artifacts: [CloudConnectorSetupArtifact!]!
+}
+
+# One renderable onboarding artifact. The UI renders `template`, replacing the
+# literal "{{permissions}}" placeholder with the aggregated permissions (each
+# wrapped by `itemTemplate` and joined by `itemSeparator`). `format` is a syntax
+# hint. Mirrors connectors/spec.SetupArtifact.
+type CloudConnectorSetupArtifact {
+  id: String!
+  section: String!
+  title: String!
+  description: String!
+  # json | yaml | shell | text
+  format: String!
+  template: String!
+  itemTemplate: String!
+  itemSeparator: String!
 }
 
 type CloudConnectorAuth {

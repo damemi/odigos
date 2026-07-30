@@ -194,6 +194,8 @@ GOWORK=off go test -run TestGCPManual -v .
 
 ### 4. Build + load the connector image into kind
 
+(This step is included in `make connector-dev-up` but it is useful if you make changes and want to redeploy.)
+
 `ORG` defaults to `registry.odigos.io`; use `TAG=dev` to match the running `connector-runtime`
 (`CONNECTOR_GCP_IMAGE=registry.odigos.io/odigos-enterprise-connector-gcp:dev`):
 

@@ -127,6 +127,26 @@ computePlatforms:
       GKE, the Odigos VM agent on Compute Engine). Not supported yet.
     types: []
 
+# setup: declarative onboarding artifacts rendered in the create-connector UI. The UI fills the literal
+# {{permissions}} placeholder from the aggregated spec permissions for the selected access level, so the
+# preview always matches what test-connection validates. Provider-owned: GCP renders a custom IAM role
+# definition (the YAML `gcloud iam roles create --file=` consumes); the shared UI renderer stays agnostic.
+setup:
+  artifacts:
+    - id: policy-preview
+      section: permissions
+      title: Policy preview
+      description: The custom IAM role Odigos needs for the selected access level.
+      format: yaml
+      itemTemplate: '- {{permission}}'
+      itemSeparator: "\n"
+      template: |-
+        title: OdigosCloudConnector
+        description: Role for the Odigos cloud connector.
+        stage: GA
+        includedPermissions:
+          {{permissions}}
+
 # gateway: connector-wide collector wiring; not part of either domain. Implemented in a later phase.
 gateway:
   enabled: false

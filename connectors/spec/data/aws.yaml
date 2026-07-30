@@ -209,6 +209,34 @@ computePlatforms:
       for Kubernetes on EKS, the Odigos VM agent on EC2). Not supported yet.
     types: []
 
+# setup: declarative onboarding artifacts rendered in the create-connector UI. The UI fills the literal
+# {{permissions}} placeholder from the aggregated spec permissions for the selected access level, so the
+# preview always matches what test-connection validates. Provider-owned: AWS renders an IAM policy JSON;
+# other providers declare their own artifact (e.g. a GCP custom-role YAML) without any UI changes.
+setup:
+  artifacts:
+    - id: policy-preview
+      section: permissions
+      title: Policy preview
+      description: The IAM policy Odigos needs for the selected access level.
+      format: json
+      itemTemplate: '"{{permission}}"'
+      itemSeparator: ",\n"
+      template: |-
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "OdigosCloudConnector",
+              "Effect": "Allow",
+              "Action": [
+                {{permissions}}
+              ],
+              "Resource": "*"
+            }
+          ]
+        }
+
 # gateway: connector-wide collector wiring; not part of either domain. Implemented in a later phase.
 gateway:
   enabled: false
