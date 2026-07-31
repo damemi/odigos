@@ -129,21 +129,45 @@ RUN --mount=type=secret,id=github_token \
     make go-mod-replace && \
     GOOS=linux GOARCH=$TARGETARCH LD_FLAGS="${LD_FLAGS}" make compile-odiglet
 
-# Build CSI driver binary (same binary as community odiglet; required when mountMethod is k8s-csi-driver)
+######### sidecar builder (csi, deviceplugin) #########
+# Parallel to the odiglet builder. Only go.mod/sum (+ local replace stubs) — not OBI,
+# generate, or odiglet sources — so enterprise source changes do not rebuild these.
+FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS sidecar-builder
+
+ARG TARGETARCH
+
+WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
+COPY odigosauth/go.mod odigosauth/go.sum odigosauth/
+COPY distros/go.mod distros/go.sum distros/
+WORKDIR odiglet
+COPY odiglet/go.mod odiglet/go.sum ./
 RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
-    GOOS=linux GOARCH=$TARGETARCH go build -ldflags="${LD_FLAGS}" -o odigos-csi-driver github.com/odigos-io/odigos/odiglet/cmd/csi-driver
+    go mod download
 
-# Build OSS deviceplugin binary (same binary as community odiglet)
+# OSS deviceplugin (no LD_FLAGS — keep before ARG so version embeds don't bust this layer)
 RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
     GOOS=linux GOARCH=$TARGETARCH go build -o deviceplugin github.com/odigos-io/odigos/deviceplugin/cmd
 
-# Used by the deviceplugin container to check if the deviceplugin is healthy
+ARG LD_FLAGS
+# OSS CSI driver (required when mountMethod is k8s-csi-driver)
+RUN --mount=type=secret,id=github_token \
+    --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg \
+    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
+    GOOS=linux GOARCH=$TARGETARCH go build -ldflags="${LD_FLAGS}" -o odigos-csi-driver github.com/odigos-io/odigos/odiglet/cmd/csi-driver
+
+# Note that we do not pass --platform=$BUILDPLATFORM here because we want to build for the target platform
+FROM ${ODIGLET_BASE_IMAGE} AS rsync-base
+
+######### grpc health probe #########
+FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS grpc-health-probe
+ARG TARGETARCH
 ARG GRPC_HEALTH_PROBE_VERSION=v0.4.52
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
         GRPC_ARCH="arm64"; \
@@ -153,9 +177,6 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     wget -O /tmp/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${GRPC_HEALTH_PROBE_VERSION}/grpc_health_probe-linux-${GRPC_ARCH} && \
     chmod +x /tmp/grpc_health_probe
 
-# Note that we do not pass --platform=$BUILDPLATFORM here because we want to build for the target platform
-FROM ${ODIGLET_BASE_IMAGE} AS rsync-base
-
 ######### agents final image #########
 # Use BusyBox for the final image instead of distroless.
 # Rationale:
@@ -163,10 +184,9 @@ FROM ${ODIGLET_BASE_IMAGE} AS rsync-base
 # - Allows `sh -c` command chaining (`cp dir1 dst1 && cp dir2 dst2`) in init containers.
 # - Very small (~1MB), making it good for init containers.
 FROM busybox:1.36.1 AS agents
-WORKDIR /instrumentations/
 
 # Copy all instrumentation assets from the build stage
-COPY --from=agents-builder /instrumentations/ .
+COPY --from=agents-builder /instrumentations/ /instrumentations/
 
 # make sure we run as non root user
 # this is required when this container is added to a pod that has runAsNonRoot: true
@@ -185,8 +205,7 @@ LABEL "version"=$VERSION
 LABEL "release"=$RELEASE
 LABEL "summary"=$SUMMARY
 LABEL "description"=$DESCRIPTION
-WORKDIR /instrumentations/
-COPY --from=agents-builder /instrumentations/ .
+COPY --from=agents-builder /instrumentations/ /instrumentations/
 
 # make sure we run as non root user
 # this is required when this container is added to a pod that has runAsNonRoot: true
@@ -205,26 +224,24 @@ LABEL "version"=$VERSION
 LABEL "release"=$RELEASE
 LABEL "summary"=$SUMMARY
 LABEL "description"=$DESCRIPTION
-COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
-COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odigos-csi-driver /root/odigos-csi-driver
-COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/licenses /licenses
-COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/deviceplugin /root/deviceplugin
-COPY --from=builder /tmp/grpc_health_probe /root/grpc_health_probe
-# Copy statically compiled rsync (no shared libraries needed)
+# Least-changing / heaviest layers first for better cache reuse
 COPY --from=rsync-base /usr/bin/rsync /usr/bin/rsync
-WORKDIR /instrumentations/
-COPY --from=agents-builder /instrumentations/ .
+COPY --from=grpc-health-probe /tmp/grpc_health_probe /root/grpc_health_probe
+COPY --from=agents-builder /instrumentations/ /instrumentations/
+COPY --from=sidecar-builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/deviceplugin /root/deviceplugin
+COPY --from=sidecar-builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odigos-csi-driver /root/odigos-csi-driver
+COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/licenses /licenses
+COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
 CMD ["/root/odiglet"]
 
 ######### Default Odiglet #########
 # pinning the distroless base image to a specific commit since the hash after it broke rsync somehow.
-FROM gcr.io/distroless/base-debian12@sha256:e7e678c88c59e70e105a46549bb3fbfb3d732ee3b4afd3a19fdab2e15afaa6b3
-COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
-COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odigos-csi-driver /root/odigos-csi-driver
-COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/deviceplugin /root/deviceplugin
-COPY --from=builder /tmp/grpc_health_probe /root/grpc_health_probe
-# Copy statically compiled rsync (no shared libraries needed)
+FROM gcr.io/distroless/base-debian12@sha256:e7e678c88c59e70e105a46549bb3fbfb3d732ee3b4afd3a19fdab2e15afaa6b3 AS odiglet
+# Least-changing / heaviest layers first for better cache reuse
 COPY --from=rsync-base /usr/bin/rsync /usr/bin/rsync
-WORKDIR /instrumentations/
-COPY --from=agents-builder /instrumentations/ .
+COPY --from=grpc-health-probe /tmp/grpc_health_probe /root/grpc_health_probe
+COPY --from=agents-builder /instrumentations/ /instrumentations/
+COPY --from=sidecar-builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/deviceplugin /root/deviceplugin
+COPY --from=sidecar-builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odigos-csi-driver /root/odigos-csi-driver
+COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
 CMD ["/root/odiglet"]

@@ -15,6 +15,7 @@ env:
   DEPOT_ORG_ID: p0xd21zf5r
   DEPOT_ODIGOS_OSS_REGISTRY_ID: 570xmd9kld
   DEPOT_ODIGOS_ENTERPRISE_REGISTRY_ID: w8zkfqwtt3
+  DEPOT_ODIGLET_ENTERPRISE_REGISTRY_ID: 1wj57h6qh9
 
 jobs:
   detect-changes:
@@ -116,8 +117,8 @@ jobs:
 
   # Builds enterprise images used by e2e-tests (and scanned for vulns).
   # Saved to Depot as odigos-enterprise-<component>-<run_id>.
-  build-enterprise-components-depot:
-    name: build-enterprise-components-depot (${{ matrix.component }})
+  build-enterprise-components:
+    name: build-enterprise-components (${{ matrix.component }})
     runs-on: depot-ubuntu-latest
     permissions:
       contents: read
@@ -129,10 +130,6 @@ jobs:
           [
             instrumentor,
             ui,
-            odiglet,
-            odiglet-extended,
-            agents,
-            agents-extended,
             central-backend,
             central-ui,
             central-proxy,
@@ -161,10 +158,51 @@ jobs:
             GITHUB_RUN_ID=${{ github.run_id }} \
             GITHUB_REPOSITORY_NAME=${{ github.event.repository.name }}
 
+  # Odiglet/agents images — separate job for CI visibility; heavy Depot project.
+  build-enterprise-odiglet:
+    name: build-enterprise-odiglet (${{ matrix.component }})
+    runs-on: depot-ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        component:
+          [
+            odiglet,
+            odiglet-extended,
+            agents,
+            agents-extended,
+          ]
+    steps:
+
+      - name: Resolve build options from PR labels
+        id: build-opts
+        uses: odigos-io/ci-core/resolve-build-labels@main
+
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          persist-credentials: false
+
+      - uses: depot/setup-action@v1
+
+      - name: Build Enterprise ${{ matrix.component }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+        run: |
+          make -f depot.mk \
+            depot-build-${{ matrix.component }} \
+            IMAGE_TAG=${{ env.IMAGE_TAG }} \
+            PLATFORM=${{ steps.build-opts.outputs.platforms }} \
+            NO_CACHE=${{ steps.build-opts.outputs.no-cache }} \
+            GITHUB_RUN_ID=${{ github.run_id }} \
+            GITHUB_REPOSITORY_NAME=${{ github.event.repository.name }}
+
   # Builds RHEL-certified variants for non-central components. Not loaded into
   # kind for e2e; only consumed by scan-components.
-  build-enterprise-rhel-components-depot:
-    name: build-enterprise-rhel-components-depot
+  build-enterprise-rhel-components:
+    name: build-enterprise-rhel-components
     needs: detect-changes
     if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     runs-on: depot-ubuntu-latest
@@ -198,8 +236,9 @@ jobs:
     name: scan-components (${{ matrix.component }})
     needs:
       - detect-changes
-      - build-enterprise-components-depot
-      - build-enterprise-rhel-components-depot
+      - build-enterprise-components
+      - build-enterprise-odiglet
+      - build-enterprise-rhel-components
       - build-oss-components-for-tests
     if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     runs-on: depot-ubuntu-24.04-2
@@ -209,32 +248,60 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        source: [enterprise]
-        component:
-          [
-            instrumentor,
-            instrumentor-rhel-certified,
-            ui,
-            ui-rhel-certified,
-            odiglet,
-            odiglet-extended,
-            odiglet-rhel-certified,
-            agents,
-            agents-extended,
-            agents-rhel-certified,
-            central-backend,
-            central-ui,
-            central-proxy,
-          ]
+        # project must be a literal here — env context is not available in strategy.matrix.
+        # Keep these in sync with DEPOT_*_REGISTRY_ID above.
         include:
+          - source: enterprise
+            component: instrumentor
+            project: w8zkfqwtt3
+          - source: enterprise
+            component: instrumentor-rhel-certified
+            project: w8zkfqwtt3
+          - source: enterprise
+            component: ui
+            project: w8zkfqwtt3
+          - source: enterprise
+            component: ui-rhel-certified
+            project: w8zkfqwtt3
+          - source: enterprise
+            component: odiglet
+            project: 1wj57h6qh9
+          - source: enterprise
+            component: odiglet-extended
+            project: 1wj57h6qh9
+          - source: enterprise
+            component: odiglet-rhel-certified
+            project: 1wj57h6qh9
+          - source: enterprise
+            component: agents
+            project: 1wj57h6qh9
+          - source: enterprise
+            component: agents-extended
+            project: 1wj57h6qh9
+          - source: enterprise
+            component: agents-rhel-certified
+            project: 1wj57h6qh9
+          - source: enterprise
+            component: central-backend
+            project: w8zkfqwtt3
+          - source: enterprise
+            component: central-ui
+            project: w8zkfqwtt3
+          - source: enterprise
+            component: central-proxy
+            project: w8zkfqwtt3
           - source: oss
             component: autoscaler
+            project: 570xmd9kld
           - source: oss
             component: scheduler
+            project: 570xmd9kld
           - source: oss
             component: collector
+            project: 570xmd9kld
           - source: oss
             component: cli
+            project: 570xmd9kld
     steps:
       - uses: depot/setup-action@v1
 
@@ -242,7 +309,7 @@ jobs:
         id: scan
         uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
-          image: ${{ env.DEPOT_ORG_ID }}.registry.depot.dev/${{ matrix.source == 'oss' && env.DEPOT_ODIGOS_OSS_REGISTRY_ID || env.DEPOT_ODIGOS_ENTERPRISE_REGISTRY_ID }}:odigos-enterprise-${{ matrix.component }}-${{ github.run_id }}
+          image: ${{ env.DEPOT_ORG_ID }}.registry.depot.dev/${{ matrix.project }}:odigos-enterprise-${{ matrix.component }}-${{ github.run_id }}
           severity-cutoff: "CRITICAL"
         continue-on-error: true
 
@@ -312,7 +379,8 @@ jobs:
     name: kubernetes-tests (${{ matrix.kube-version }}, ${{ matrix.test-scenario }}${{ matrix.customer != '' && format(', {0}', matrix.customer) || '' }}${{ matrix.wasp-enabled == true && ', with_wasp' || '' }})
     needs:
       - detect-changes
-      - build-enterprise-components-depot
+      - build-enterprise-components
+      - build-enterprise-odiglet
       - build-oss-components-for-tests
     if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     runs-on: depot-ubuntu-24.04-4
@@ -493,12 +561,17 @@ jobs:
         run: |
 
           # Pull enterprise images saved to the Depot registry during
-          # build-enterprise-components-depot, retag to the names expected by e2e
+          # build-enterprise-components / build-enterprise-odiglet, retag to the names expected by e2e
           # (registry.odigos.io/odigos-enterprise-<component>:IMAGE_TAG), then load into kind.
+          # odiglet/agents are built in a separate Depot project (heavy builds).
           for component in instrumentor ui odiglet agents; do
+            case "$component" in
+              odiglet|agents) PROJECT="${{ env.DEPOT_ODIGLET_ENTERPRISE_REGISTRY_ID }}" ;;
+              *) PROJECT="${{ env.DEPOT_ODIGOS_ENTERPRISE_REGISTRY_ID }}" ;;
+            esac
             LOCAL_IMAGE="registry.odigos.io/odigos-enterprise-${component}:${{ env.IMAGE_TAG }}"
             depot pull \
-              --project ${{ env.DEPOT_ODIGOS_ENTERPRISE_REGISTRY_ID }} \
+              --project "$PROJECT" \
               -t "$LOCAL_IMAGE" \
               "odigos-enterprise-${component}-${{ github.run_id }}"
             kind load docker-image "$LOCAL_IMAGE"
@@ -507,7 +580,7 @@ jobs:
           for component in odiglet agents; do
             LOCAL_IMAGE="registry.odigos.io/odigos-enterprise-${component}:${{ env.IMAGE_TAG }}-extended"
             depot pull \
-              --project ${{ env.DEPOT_ODIGOS_ENTERPRISE_REGISTRY_ID }} \
+              --project ${{ env.DEPOT_ODIGLET_ENTERPRISE_REGISTRY_ID }} \
               -t "$LOCAL_IMAGE" \
               "odigos-enterprise-${component}-extended-${{ github.run_id }}"
             kind load docker-image "$LOCAL_IMAGE"
