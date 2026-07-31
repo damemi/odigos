@@ -14,11 +14,12 @@ require (
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
 	github.com/odigos-io/odigos/api v0.0.0
-	github.com/odigos-io/odigos/common v1.33.0-pre4.0.20260730071242-9ce3dcc3cc37
-	github.com/odigos-io/odigos/distros v1.33.0-pre4.0.20260730071242-9ce3dcc3cc37
-	github.com/odigos-io/odigos/instrumentation v1.33.0-pre4.0.20260730071242-9ce3dcc3cc37
+	github.com/odigos-io/odigos/common v1.33.0-pre4.0.20260731135555-5ab8ec59a749
+	github.com/odigos-io/odigos/deviceplugin v0.0.0
+	github.com/odigos-io/odigos/distros v1.33.0-pre4.0.20260731135555-5ab8ec59a749
+	github.com/odigos-io/odigos/instrumentation v1.33.0-pre4.0.20260731135555-5ab8ec59a749
 	github.com/odigos-io/odigos/k8sutils v0.0.0
-	github.com/odigos-io/odigos/odiglet v1.33.0-pre4.0.20260730071242-9ce3dcc3cc37
+	github.com/odigos-io/odigos/odiglet v1.33.0-pre4.0.20260731135555-5ab8ec59a749
 	github.com/odigos-io/odigos/procdiscovery v0.0.0
 	go.opentelemetry.io/auto v0.22.0
 	go.opentelemetry.io/otel v1.44.0
@@ -30,7 +31,7 @@ require (
 )
 
 require (
-	github.com/argoproj/argo-rollouts v1.8.3 // indirect
+	github.com/argoproj/argo-rollouts v1.9.1 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.24 // indirect
 	github.com/caarlos0/env/v11 v11.4.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.6.0 // indirect
@@ -116,6 +117,7 @@ require (
 	github.com/gocql/gocql v1.7.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.0 // indirect
+	github.com/golang/glog v1.2.5 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
@@ -148,8 +150,9 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/odigos-io/odigos-device-plugin v1.19.8 // indirect
 	github.com/odigos-io/odigos/odiglet/pkg/ebpf/sdks/obi v0.0.0-20260716120814-416780ced5cd // indirect
-	github.com/odigos-io/odigos/opampserver v1.33.0-pre4.0.20260730071242-9ce3dcc3cc37 // indirect
+	github.com/odigos-io/odigos/opampserver v1.33.0-pre4.0.20260731135555-5ab8ec59a749 // indirect
 	github.com/odigos-io/runtime-detector v0.0.25 // indirect
 	github.com/ohler55/ojg v1.28.2 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
@@ -264,7 +267,7 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260630182238-925bb5da69e7 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
@@ -290,13 +293,13 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v1.23.0
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.33.0-pre4.0.20260730071242-9ce3dcc3cc37
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.33.0-pre4.0.20260731135555-5ab8ec59a749
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.33.0-pre4.0.20260730071242-9ce3dcc3cc37
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.33.0-pre4.0.20260731135555-5ab8ec59a749
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.33.0-pre4.0.20260730071242-9ce3dcc3cc37
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.33.0-pre4.0.20260731135555-5ab8ec59a749
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.33.0-pre4.0.20260730071242-9ce3dcc3cc37
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.33.0-pre4.0.20260731135555-5ab8ec59a749
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
@@ -308,6 +311,8 @@ replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 // Added during OBI change
 replace cloud.google.com/go/compute => cloud.google.com/go/compute v1.57.0
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.33.0-pre4.0.20260730071242-9ce3dcc3cc37
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.33.0-pre4.0.20260731135555-5ab8ec59a749
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.33.0-pre4.0.20260730071242-9ce3dcc3cc37
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.33.0-pre4.0.20260731135555-5ab8ec59a749
+
+replace github.com/odigos-io/odigos/deviceplugin => github.com/odigos-io/odigos/deviceplugin v0.0.0-20260731135555-5ab8ec59a749

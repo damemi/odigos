@@ -136,18 +136,12 @@ RUN --mount=type=secret,id=github_token \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
     GOOS=linux GOARCH=$TARGETARCH go build -ldflags="${LD_FLAGS}" -o odigos-csi-driver github.com/odigos-io/odigos/odiglet/cmd/csi-driver
 
-######### deviceplugin builder #########
-FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS deviceplugin-builder
-
-ARG TARGETARCH
-
-WORKDIR /go/src/github.com/odigos-io/odigos-enterprise/deviceplugin
-COPY deviceplugin/ .
+# Build OSS deviceplugin binary (same binary as community odiglet)
 RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
-    GOOS=linux GOARCH=$TARGETARCH go build -o deviceplugin ./cmd
+    GOOS=linux GOARCH=$TARGETARCH go build -o deviceplugin github.com/odigos-io/odigos/deviceplugin/cmd
 
 # Used by the deviceplugin container to check if the deviceplugin is healthy
 ARG GRPC_HEALTH_PROBE_VERSION=v0.4.52
@@ -214,8 +208,8 @@ LABEL "description"=$DESCRIPTION
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odigos-csi-driver /root/odigos-csi-driver
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/licenses /licenses
-COPY --from=deviceplugin-builder /go/src/github.com/odigos-io/odigos-enterprise/deviceplugin/deviceplugin /root/deviceplugin
-COPY --from=deviceplugin-builder /tmp/grpc_health_probe /root/grpc_health_probe
+COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/deviceplugin /root/deviceplugin
+COPY --from=builder /tmp/grpc_health_probe /root/grpc_health_probe
 # Copy statically compiled rsync (no shared libraries needed)
 COPY --from=rsync-base /usr/bin/rsync /usr/bin/rsync
 WORKDIR /instrumentations/
@@ -227,8 +221,8 @@ CMD ["/root/odiglet"]
 FROM gcr.io/distroless/base-debian12@sha256:e7e678c88c59e70e105a46549bb3fbfb3d732ee3b4afd3a19fdab2e15afaa6b3
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odigos-csi-driver /root/odigos-csi-driver
-COPY --from=deviceplugin-builder /go/src/github.com/odigos-io/odigos-enterprise/deviceplugin/deviceplugin /root/deviceplugin
-COPY --from=deviceplugin-builder /tmp/grpc_health_probe /root/grpc_health_probe
+COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/deviceplugin /root/deviceplugin
+COPY --from=builder /tmp/grpc_health_probe /root/grpc_health_probe
 # Copy statically compiled rsync (no shared libraries needed)
 COPY --from=rsync-base /usr/bin/rsync /usr/bin/rsync
 WORKDIR /instrumentations/
