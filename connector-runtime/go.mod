@@ -82,3 +82,7 @@ require (
 )
 
 replace github.com/odigos-io/odigos-enterprise/connectors => ../connectors
+
+// Pulled in transitively (not a direct require here); an odigos-io/odigos module in the graph requires this
+// via its own local-only replace, which doesn't propagate across repos.
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.33.0-pre4.0.20260731135555-5ab8ec59a749

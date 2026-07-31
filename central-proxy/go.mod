@@ -74,3 +74,15 @@ require (
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/yaml v1.6.0
 )
+
+replace (
+	// k8sutils (required above) requires these via local-only replaces in the odigos-io/odigos repo, which
+	// don't propagate across repos. Pinned to the same commit already used for api/k8sutils/common here.
+	github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v1.33.0-pre4.0.20260731135555-5ab8ec59a749
+	// frontend (required above) requires this the same way, via k8sutils.
+	github.com/odigos-io/odigos/destinations => github.com/odigos-io/odigos/destinations v1.33.0-pre4.0.20260731135555-5ab8ec59a749
+	// Same as actions above, required transitively via k8sutils.
+	github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.33.0-pre4.0.20260731135555-5ab8ec59a749
+	// argo-rollouts@v1.9.1 requires this via its own internal-only replace, which doesn't propagate to us.
+	k8s.io/kubelet => k8s.io/kubelet v0.34.1
+)
