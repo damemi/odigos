@@ -316,3 +316,9 @@ replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.33
 replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.33.0-pre4.0.20260731135555-5ab8ec59a749
 
 replace github.com/odigos-io/odigos/deviceplugin => github.com/odigos-io/odigos/deviceplugin v0.0.0-20260731135555-5ab8ec59a749
+
+// k8sutils requires this via its own local-only replace, which doesn't propagate across repos.
+replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v1.33.0-pre4.0.20260731135555-5ab8ec59a749
+
+// Same as actions above, required transitively via k8sutils.
+replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.33.0-pre4.0.20260731135555-5ab8ec59a749

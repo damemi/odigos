@@ -119,3 +119,9 @@ replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common
 replace github.com/odigos-io/odigos/instrumentor => github.com/odigos-io/odigos/instrumentor v1.33.0-pre4.0.20260731135555-5ab8ec59a749
 
 replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v1.33.0-pre4.0.20260731135555-5ab8ec59a749
+
+// k8sutils requires this via its own local-only replace, which doesn't propagate across repos.
+replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.33.0-pre4.0.20260731135555-5ab8ec59a749
+
+// argo-rollouts@v1.9.1 requires this via its own internal-only replace, which doesn't propagate to us.
+replace k8s.io/kubelet => k8s.io/kubelet v0.34.1
