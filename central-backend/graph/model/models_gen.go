@@ -73,18 +73,22 @@ type CloudConnectorProvider struct {
 }
 
 type CloudConnectorSetup struct {
+	Subtitle  string                         `json:"subtitle"`
 	Artifacts []*CloudConnectorSetupArtifact `json:"artifacts"`
 }
 
 type CloudConnectorSetupArtifact struct {
-	ID            string `json:"id"`
-	Section       string `json:"section"`
-	Title         string `json:"title"`
-	Description   string `json:"description"`
-	Format        string `json:"format"`
-	Template      string `json:"template"`
-	ItemTemplate  string `json:"itemTemplate"`
-	ItemSeparator string `json:"itemSeparator"`
+	ID            string   `json:"id"`
+	Section       string   `json:"section"`
+	Variant       string   `json:"variant"`
+	VariantLabel  string   `json:"variantLabel"`
+	Title         string   `json:"title"`
+	Description   string   `json:"description"`
+	Steps         []string `json:"steps"`
+	Format        string   `json:"format"`
+	Template      string   `json:"template"`
+	ItemTemplate  string   `json:"itemTemplate"`
+	ItemSeparator string   `json:"itemSeparator"`
 }
 
 type CloudConnectorTestCheck struct {

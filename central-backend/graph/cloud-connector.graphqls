@@ -16,18 +16,26 @@ type CloudConnectorProvider {
 # Provider-defined onboarding artifacts, grouped so the schema can grow more setup
 # metadata without a breaking change. Mirrors connectors/spec.Setup.
 type CloudConnectorSetup {
+  # Optional step-2 subtitle (provider-owned copy under "Setup credentials").
+  subtitle: String!
   artifacts: [CloudConnectorSetupArtifact!]!
 }
 
 # One renderable onboarding artifact. The UI renders `template`, replacing the
 # literal "{{permissions}}" placeholder with the aggregated permissions (each
-# wrapped by `itemTemplate` and joined by `itemSeparator`). `format` is a syntax
-# hint. Mirrors connectors/spec.SetupArtifact.
+# wrapped by `itemTemplate` and joined by `itemSeparator`) and scalar "{{name}}"
+# tokens from live form values. `variant`/`variantLabel` drive the setup-method
+# chooser for multi-artifact sections (e.g. create-role). `steps` is the ordered
+# instruction list above the snippet. `format` is a syntax hint.
+# Mirrors connectors/spec.SetupArtifact.
 type CloudConnectorSetupArtifact {
   id: String!
   section: String!
+  variant: String!
+  variantLabel: String!
   title: String!
   description: String!
+  steps: [String!]!
   # json | yaml | shell | text
   format: String!
   template: String!

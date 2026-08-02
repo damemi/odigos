@@ -209,11 +209,13 @@ computePlatforms:
       for Kubernetes on EKS, the Odigos VM agent on EC2). Not supported yet.
     types: []
 
-# setup: declarative onboarding artifacts rendered in the create-connector UI. The UI fills the literal
-# {{permissions}} placeholder from the aggregated spec permissions for the selected access level, so the
-# preview always matches what test-connection validates. Provider-owned: AWS renders an IAM policy JSON;
-# other providers declare their own artifact (e.g. a GCP custom-role YAML) without any UI changes.
+# setup: declarative onboarding artifacts rendered in the create-connector UI. The UI fills
+# {{permissions}} from the selected access level and scalar {{vars}} from form values, so the
+# preview always matches what test-connection validates. Provider-owned: AWS renders an IAM policy
+# JSON and create-role variants (CloudFormation / Terraform / CLI / Manual); other providers declare
+# their own artifacts without any UI changes.
 setup:
+  subtitle: Apply the selected IAM policy in your AWS account.
   artifacts:
     - id: policy-preview
       section: permissions
@@ -236,6 +238,108 @@ setup:
             }
           ]
         }
+
+    # create-role variants drive step-2 "Choose setup method" + "Create IAM role". The selected
+    # variant's steps + template are rendered; scalar tokens like {{externalId}} come from the form.
+    - id: create-role-cloudformation
+      section: create-role
+      variant: cloudformation
+      variantLabel: CloudFormation
+      title: Create IAM role
+      description: >-
+        Launch the stack in your AWS account. It creates the IAM role with the policy above and
+        returns the Role ARN.
+      format: shell
+      steps:
+        - Open the AWS CloudFormation console.
+        - Choose Create stack → With new resources.
+        - Upload the template below as the stack template.
+        - Review the permissions, then deploy the stack.
+        - Open the stack's Outputs tab.
+        - Copy the RoleArn value and paste it below.
+      template: |-
+        aws cloudformation deploy \
+          --stack-name odigos-connector \
+          --template-file odigos-connector.yaml \
+          --capabilities CAPABILITY_NAMED_IAM
+
+    - id: create-role-terraform
+      section: create-role
+      variant: terraform
+      variantLabel: Terraform
+      title: Create IAM role
+      description: >-
+        Run the Odigos connector module to provision the IAM role as code and expose the Role ARN
+        as an output.
+      format: shell
+      steps:
+        - Add the odigos-connector module to your configuration.
+        - Run terraform init to download the module.
+        - Run terraform apply and confirm the plan.
+        - Read the role_arn value from the apply output.
+        - Copy the Role ARN and paste it below.
+      template: |-
+        terraform init
+        terraform apply
+        terraform output -raw role_arn
+
+    - id: create-role-aws-cli
+      section: create-role
+      variant: aws-cli
+      variantLabel: AWS CLI
+      title: Create IAM role
+      description: Create the IAM role from your terminal using the AWS CLI, then return the Role ARN.
+      format: shell
+      steps:
+        - Make sure the AWS CLI is configured (aws configure).
+        - Create the role with the trust policy.
+        - Attach the permissions policy to the role.
+        - Copy the ARN from the create-role output and paste it below.
+      template: |-
+        aws iam get-role \
+          --role-name OdigosConnectorRole \
+          --query 'Role.Arn' \
+          --output text
+
+    - id: create-role-manual
+      section: create-role
+      variant: manual
+      variantLabel: Manual
+      title: Create IAM role
+      description: >-
+        Create the IAM role by hand in the AWS Console using the trust policy below, then return the
+        Role ARN.
+      format: json
+      steps:
+        - Open the AWS Console → IAM → Roles → Create role.
+        - Select Custom trust policy.
+        - Paste the trust policy below.
+        - Attach the permissions policy from the previous step.
+        - Name the role and create it.
+        - Open the role summary and copy the Role ARN below.
+      template: |-
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": { "AWS": "arn:aws:iam::657451249928:root" },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": { "sts:ExternalId": "{{externalId}}" }
+              }
+            }
+          ]
+        }
+
+    # credentials section metadata: title/description for the final "enter credentials" panel.
+    # Template is unused; fields come from auth.methods[].fields + connector.fields.
+    - id: enter-credentials
+      section: credentials
+      title: Enter Role ARN
+      description: Paste the generated Role ARN into Odigos.
+      format: text
+      template: ""
 
 # gateway: connector-wide collector wiring; not part of either domain. Implemented in a later phase.
 gateway:

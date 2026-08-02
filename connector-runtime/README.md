@@ -37,6 +37,7 @@ internal/heartbeat/reader.go                  # best-effort pgx read of runtime_
 | `CONNECTOR_DB_SECRET_NAME` | `odigos-connector-postgres` | Secret holding the DSN handed to connector pods |
 | `CONNECTOR_DB_SECRET_KEY` | `dsn` | Key within that Secret |
 | `CONNECTOR_AWS_IMAGE` | — | Image stamped onto AWS connector Deployments (overridable per-CR via `spec.runtime.image`) |
+| `CONNECTOR_GCP_IMAGE` | — | Image stamped onto GCP connector Deployments (overridable per-CR via `spec.runtime.image`) |
 
 Flags: `--leader-elect`, `--metrics-bind-address` (`:8080`), `--health-probe-bind-address` (`:8081`).
 

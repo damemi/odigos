@@ -103,6 +103,52 @@ func TestGCPPolicyPreviewArtifact(t *testing.T) {
 	}
 }
 
+func TestGCPCreateRoleArtifacts(t *testing.T) {
+	s := MustGet("gcp")
+
+	if s.Setup.Subtitle == "" {
+		t.Error("setup.subtitle should be set for the step-2 header")
+	}
+
+	arts := s.SetupArtifactsForSection("create-role")
+	if len(arts) != 3 {
+		t.Fatalf("create-role setup artifacts = %d, want 3 (gcloud/terraform/console)", len(arts))
+	}
+
+	wantVariants := []string{"gcloud", "terraform", "console"}
+	for i, want := range wantVariants {
+		a := arts[i]
+		if a.Variant != want {
+			t.Errorf("artifact[%d].variant = %q, want %q", i, a.Variant, want)
+		}
+		if a.VariantLabel == "" {
+			t.Errorf("artifact[%d] (%s) missing variantLabel", i, want)
+		}
+		if len(a.Steps) == 0 {
+			t.Errorf("artifact[%d] (%s) should declare steps", i, want)
+		}
+		if a.Template == "" {
+			t.Errorf("artifact[%d] (%s) should declare a template", i, want)
+		}
+		if !strings.Contains(a.Template, "{{projectId}}") {
+			t.Errorf("artifact[%d] (%s) template should carry {{projectId}}, got:\n%s", i, want, a.Template)
+		}
+	}
+
+	consoleArt := arts[2]
+	if !strings.Contains(consoleArt.Template, "{{permissions}}") {
+		t.Errorf("console create-role template should carry {{permissions}}, got:\n%s", consoleArt.Template)
+	}
+	if consoleArt.ItemTemplate != "- {{permission}}" {
+		t.Errorf("console itemTemplate = %q, want %q", consoleArt.ItemTemplate, "- {{permission}}")
+	}
+
+	creds := s.SetupArtifactsForSection("credentials")
+	if len(creds) != 1 || creds[0].Title == "" {
+		t.Errorf("credentials section artifact should declare a title, got %+v", creds)
+	}
+}
+
 func TestGCPCapabilityResolution(t *testing.T) {
 	s := MustGet("gcp")
 
@@ -131,7 +177,14 @@ func TestGCPCapabilityResolution(t *testing.T) {
 	}
 
 	perms := s.RequiredPermissions(caps)
-	for _, want := range []string{"resourcemanager.projects.get", "run.services.list", "run.services.update", "container.clusters.list", "compute.instances.list"} {
+	for _, want := range []string{
+		"resourcemanager.projects.get",
+		"run.services.list",
+		"run.services.update",
+		"iam.serviceAccounts.actAs",
+		"container.clusters.list",
+		"compute.instances.list",
+	} {
 		if !containsStr(perms, want) {
 			t.Errorf("required permissions %v missing %q", perms, want)
 		}

@@ -1,6 +1,9 @@
 package spec
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestAWSSpecLoads(t *testing.T) {
 	s, ok := Get("aws")
@@ -226,6 +229,46 @@ func TestAWSAuthResolveAllModes(t *testing.T) {
 		if _, err := auth.Resolve(tc.creds); err == nil {
 			t.Errorf("%s: expected an error, got none", tc.name)
 		}
+	}
+}
+
+func TestAWSCreateRoleArtifacts(t *testing.T) {
+	s := MustGet("aws")
+
+	if s.Setup.Subtitle == "" {
+		t.Error("setup.subtitle should be set for the step-2 header")
+	}
+
+	arts := s.SetupArtifactsForSection("create-role")
+	if len(arts) != 4 {
+		t.Fatalf("create-role setup artifacts = %d, want 4 (cloudformation/terraform/aws-cli/manual)", len(arts))
+	}
+
+	wantVariants := []string{"cloudformation", "terraform", "aws-cli", "manual"}
+	for i, want := range wantVariants {
+		a := arts[i]
+		if a.Variant != want {
+			t.Errorf("artifact[%d].variant = %q, want %q", i, a.Variant, want)
+		}
+		if a.VariantLabel == "" {
+			t.Errorf("artifact[%d] (%s) missing variantLabel", i, want)
+		}
+		if len(a.Steps) == 0 {
+			t.Errorf("artifact[%d] (%s) should declare steps", i, want)
+		}
+		if a.Template == "" {
+			t.Errorf("artifact[%d] (%s) should declare a template", i, want)
+		}
+	}
+
+	// Manual trust policy interpolates the form's externalId.
+	if !strings.Contains(arts[3].Template, "{{externalId}}") {
+		t.Errorf("manual create-role template should carry {{externalId}}, got:\n%s", arts[3].Template)
+	}
+
+	creds := s.SetupArtifactsForSection("credentials")
+	if len(creds) != 1 || creds[0].Title == "" {
+		t.Errorf("credentials section artifact should declare a title, got %+v", creds)
 	}
 }
 

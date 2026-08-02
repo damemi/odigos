@@ -82,6 +82,9 @@ workloads:
           - run.services.get
           - run.services.update
           - run.operations.get
+          # Required to update a Cloud Run service that runs as a runtime service account
+          # (PermissionDenied on iam.serviceAccounts.actAs without this).
+          - iam.serviceAccounts.actAs
           # Optional: read the service image's Cloud Native Buildpack metadata for language detection
           # (roles/artifactregistry.reader). Only needed for the buildpack-label detection layer; the
           # static heuristics and the source runtime override work without it.
@@ -131,7 +134,10 @@ computePlatforms:
 # {{permissions}} placeholder from the aggregated spec permissions for the selected access level, so the
 # preview always matches what test-connection validates. Provider-owned: GCP renders a custom IAM role
 # definition (the YAML `gcloud iam roles create --file=` consumes); the shared UI renderer stays agnostic.
+# create-role variants drive step-2 "Choose setup method" + create instructions. Save the policy-preview
+# YAML from step 1 as odigos-connector-role.yaml — gcloud/terraform consume that file for the custom role.
 setup:
+  subtitle: Configure the Google Cloud project and the identity Odigos uses to access it.
   artifacts:
     - id: policy-preview
       section: permissions
@@ -146,6 +152,146 @@ setup:
         stage: GA
         includedPermissions:
           {{permissions}}
+
+    # create-role variants: create the service account, custom role, project IAM binding, and (for the
+    # service-account-key auth method) a JSON key. {{projectId}} is filled from the account field.
+    - id: create-role-gcloud
+      section: create-role
+      variant: gcloud
+      variantLabel: gcloud
+      title: Create service account & role
+      description: >-
+        Create a service account, a project-level custom role from the policy preview, bind the role,
+        and download a JSON key to paste below.
+      format: shell
+      steps:
+        - Save the policy preview from the previous step as odigos-connector-role.yaml in your working directory.
+        - Set PROJECT_ID (pre-filled below from the project id you entered) and authenticate the gcloud CLI.
+        - Run the script to enable APIs, create the service account, create the custom role, and bind it.
+        - For the service-account-key auth method, create a JSON key and paste its contents below.
+        - For workload identity, skip the key step and bind the Kubernetes service account instead (see GCP docs).
+      template: |-
+        export PROJECT_ID="{{projectId}}"
+        gcloud config set project "$PROJECT_ID"
+
+        gcloud services enable \
+          cloudresourcemanager.googleapis.com \
+          run.googleapis.com \
+          container.googleapis.com \
+          compute.googleapis.com \
+          iam.googleapis.com
+
+        gcloud iam service-accounts create odigos-connector \
+          --display-name="Odigos Cloud Connector"
+        export SA_EMAIL="odigos-connector@${PROJECT_ID}.iam.gserviceaccount.com"
+
+        gcloud iam roles create odigosCloudConnector --project="$PROJECT_ID" \
+          --file=odigos-connector-role.yaml
+        gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+          --member="serviceAccount:${SA_EMAIL}" \
+          --role="projects/${PROJECT_ID}/roles/odigosCloudConnector"
+
+        gcloud iam service-accounts keys create ./odigos-connector-key.json \
+          --iam-account="$SA_EMAIL"
+        cat ./odigos-connector-key.json
+
+    - id: create-role-terraform
+      section: create-role
+      variant: terraform
+      variantLabel: Terraform
+      title: Create service account & role
+      description: >-
+        Provision the service account, custom role, IAM binding, and key as code. The custom role
+        permissions are loaded from the policy-preview YAML file.
+      format: shell
+      steps:
+        - Save the policy preview from the previous step as odigos-connector-role.yaml next to your Terraform files.
+        - Add the configuration below (or an equivalent module) and set project_id if needed.
+        - Run terraform init, then terraform apply.
+        - Read the credentials_json output and paste it below (service-account-key auth).
+      template: |-
+        # Save as main.tf (policy preview must be odigos-connector-role.yaml alongside it).
+        terraform {
+          required_providers {
+            google = { source = "hashicorp/google" }
+          }
+        }
+
+        variable "project_id" {
+          type    = string
+          default = "{{projectId}}"
+        }
+
+        locals {
+          role = yamldecode(file("odigos-connector-role.yaml"))
+        }
+
+        resource "google_service_account" "odigos" {
+          project      = var.project_id
+          account_id   = "odigos-connector"
+          display_name = "Odigos Cloud Connector"
+        }
+
+        resource "google_project_iam_custom_role" "odigos" {
+          project     = var.project_id
+          role_id     = "odigosCloudConnector"
+          title       = local.role.title
+          description = local.role.description
+          permissions = local.role.includedPermissions
+        }
+
+        resource "google_project_iam_member" "odigos" {
+          project = var.project_id
+          role    = google_project_iam_custom_role.odigos.id
+          member  = "serviceAccount:${google_service_account.odigos.email}"
+        }
+
+        resource "google_service_account_key" "odigos" {
+          service_account_id = google_service_account.odigos.name
+        }
+
+        output "credentials_json" {
+          value     = base64decode(google_service_account_key.odigos.private_key)
+          sensitive = true
+        }
+
+        # terraform init && terraform apply
+        # terraform output -raw credentials_json
+
+    - id: create-role-console
+      section: create-role
+      variant: console
+      variantLabel: Console
+      title: Create service account & role
+      description: >-
+        Create the service account, custom role, and project IAM binding in the Google Cloud Console,
+        then download a JSON key to paste below.
+      format: yaml
+      itemTemplate: '- {{permission}}'
+      itemSeparator: "\n"
+      steps:
+        - Open Google Cloud Console → IAM & Admin → Roles → Create role.
+        - Title it OdigosCloudConnector and paste or add every permission from the YAML below.
+        - Open IAM & Admin → Service Accounts → Create service account (e.g. odigos-connector).
+        - Grant that service account the custom role on the project (IAM → Grant access).
+        - Open the service account → Keys → Add key → Create new key → JSON.
+        - Paste the downloaded JSON key below.
+      template: |-
+        # Bind this role to serviceAccount:odigos-connector@{{projectId}}.iam.gserviceaccount.com
+        title: OdigosCloudConnector
+        description: Role for the Odigos cloud connector.
+        stage: GA
+        includedPermissions:
+          {{permissions}}
+
+    - id: enter-credentials
+      section: credentials
+      title: Enter service account credentials
+      description: >-
+        Paste the complete JSON key for the service account created above. Skip this when using
+        workload identity (no key is required).
+      format: text
+      template: ""
 
 # gateway: connector-wide collector wiring; not part of either domain. Implemented in a later phase.
 gateway:

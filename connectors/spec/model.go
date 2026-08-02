@@ -60,26 +60,41 @@ type CloudConnectorSpec struct {
 // Setup groups a provider's declarative onboarding artifacts. Kept as a struct (rather than a bare
 // slice) so it can grow additional setup metadata without breaking the schema.
 type Setup struct {
+	// Subtitle is optional copy shown under the step-2 ("Setup credentials") header. Provider-owned so
+	// the UI stays free of per-provider branching (e.g. AWS: "Apply the selected IAM policy...").
+	Subtitle string `yaml:"subtitle"`
+	// Artifacts are the renderable onboarding pieces (policy preview, create-role variants, etc.).
 	Artifacts []SetupArtifact `yaml:"artifacts"`
 }
 
 // SetupArtifact is one renderable onboarding artifact. The UI renders Template, replacing the literal
 // "{{permissions}}" placeholder line with the aggregated permission strings — each wrapped by
 // ItemTemplate (whose "{{permission}}" token is substituted per permission), joined by ItemSeparator,
-// and indented to match the placeholder's column. Format is a syntax hint only. This is a plain
-// placeholder convention, NOT Go text/template — nothing here is executed server-side.
+// and indented to match the placeholder's column. Scalar placeholders ({{accountId}}, {{projectId}},
+// {{externalId}}, ...) are filled from a vars map assembled client-side from form values. Format is a
+// syntax hint only. This is a plain placeholder convention, NOT Go text/template — nothing here is
+// executed server-side.
 type SetupArtifact struct {
-	// ID is a stable key for the artifact (e.g. "policy-preview"). Unique within a provider.
+	// ID is a stable key for the artifact (e.g. "policy-preview", "create-role-cloudformation").
+	// Unique within a provider.
 	ID string `yaml:"id"`
-	// Section is the UI section the artifact belongs to (e.g. "permissions"). Lets one provider declare
-	// artifacts for multiple onboarding steps; the UI selects by section.
+	// Section is the UI section the artifact belongs to (e.g. "permissions", "create-role",
+	// "credentials"). Lets one provider declare artifacts for multiple onboarding steps; the UI
+	// selects by section.
 	Section string `yaml:"section"`
+	// Variant / VariantLabel let a section declare a chooser. Distinct variants in the "create-role"
+	// section are the "Setup method" segment options; the selected variant's artifact drives the
+	// create-role instructions + snippet. Empty for single-artifact sections (e.g. policy-preview).
+	Variant      string `yaml:"variant"`
+	VariantLabel string `yaml:"variantLabel"`
 	// Title / Description are for the UI header.
 	Title       string `yaml:"title"`
 	Description string `yaml:"description"`
+	// Steps are an ordered instruction list shown above the code snippet (create-role section).
+	Steps []string `yaml:"steps"`
 	// Format is a syntax hint for the UI code block: "json" | "yaml" | "shell" | "text".
 	Format string `yaml:"format"`
-	// Template is the artifact body containing the literal "{{permissions}}" placeholder line.
+	// Template is the artifact body. May contain "{{permissions}}" and/or scalar "{{name}}" tokens.
 	Template string `yaml:"template"`
 	// ItemTemplate renders a single permission; its literal "{{permission}}" token is replaced per item.
 	ItemTemplate string `yaml:"itemTemplate"`

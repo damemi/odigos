@@ -56,11 +56,15 @@ export const GET_CLOUD_CONNECTOR_PROVIDERS = gql`
         }
       }
       setup {
+        subtitle
         artifacts {
           id
           section
+          variant
+          variantLabel
           title
           description
+          steps
           format
           template
           itemTemplate
