@@ -5,11 +5,11 @@ import { useProxy, useProxyCRUD } from '@/hooks';
 import type { ComputePlatform } from '@/types';
 import * as STRINGS from '@/utils/constants/strings';
 import { useNotificationStore } from '@odigos/ui-kit/store';
-import { CentralConnections, CreateNewType } from '@odigos/ui-kit/containers';
-import { StatusType, type CloudConnectorCreateInput, type CloudConnectorCreateResult, type CloudConnectorProvider, type Connection } from '@odigos/ui-kit/types';
 import { useMutation, useQuery } from '@apollo/client/react';
-import { GET_CLOUD_CONNECTOR_PROVIDERS, CREATE_CLOUD_CONNECTOR } from '@/graphql';
 import { GET_COMPUTE_PLATFORMS } from '@/lib/odigos-api-adapter';
+import { CentralConnections, CreateNewType } from '@odigos/ui-kit/containers';
+import { GET_CLOUD_CONNECTOR_PROVIDERS, CREATE_CLOUD_CONNECTOR } from '@/graphql';
+import { StatusType, type CloudConnectorCreateInput, type CloudConnectorCreateResult, type CloudConnectorProvider, type Connection } from '@odigos/ui-kit/types';
 
 // `<CentralConnections>` is the OUT-OF-PROXY entry point: this page lists
 // all connected proxy clusters and lets the user pick one. Cluster CRUD
@@ -102,7 +102,6 @@ export default function Page() {
       cloudConnectorProviders={providersData?.cloudConnectorProviders ?? []}
       onCreateCloudConnector={onCreateCloudConnector}
       configMinSupportedVersion={1.16}
-      snapshotMinSupportedVersion={1.2}
     />
   );
 }

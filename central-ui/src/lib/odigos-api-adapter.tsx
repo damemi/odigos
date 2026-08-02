@@ -565,10 +565,9 @@ const wrapRemote = <TData, TVars>(versioned: VersionedRemoteFetch, extract?: (en
     },
     transformVariables: (vars, ctx) => ({
       // In connections scope there's no single "selected" proxy — the bulk
-      // drawers pass `connectionIds`. We use the first as the coordinator
-      // proxy the REMOTE_FETCH is addressed to; ops that genuinely fan out
-      // server-side (e.g. `updateRemoteConfig`) also receive the full
-      // `connectionIds` list inside their own `variables`.
+      // drawers pass `connectionIds`. Single-target REMOTE_FETCH uses the first
+      // as coordinator; multi-target writes (e.g. `updateRemoteConfig`) fan out
+      // via REMOTE_MULTI_FETCH in the kit runner (`runMulti`).
       proxyID: resolveProxyID(ctx),
       query: resolveQuery(ctx, vars),
       variables: resolveVariables(vars, ctx),
@@ -993,11 +992,11 @@ const withActionRenames = <TData, TVars>(op: Operation<TData, TVars>): Operation
 
 // Wrap the remote-config mutation so the kit's `{ formData, connectionIds }`
 // slot input is translated into the proxy's `$config: RemoteConfigInput!`
-// shape before the inner variables are embedded in the RemoteFetch. The proxy
-// applies the config to its own cluster; `connectionIds` only selects which
-// proxies the RemoteFetch is addressed to (resolved from `ctx`), so it is
-// intentionally dropped from the inner variables. `RemoteConfigInput` is
-// `Pick<EffectiveConfigInput, 'rollout'>`, so only `rollout` is forwarded.
+// shape before the inner variables are embedded in RemoteFetch /
+// RemoteMultiFetch. Each targeted proxy runs the mutation on its own cluster;
+// `connectionIds` selects the fan-out targets in the kit runner, not in the
+// inner GraphQL variables. `RemoteConfigInput` is `Pick<EffectiveConfigInput,
+// 'rollout'>`, so only `rollout` is forwarded.
 const withRemoteConfigVars = <TData,>(op: Operation<TData, UpdateRemoteConfigVars>): Operation<TData, UpdateRemoteConfigVars> => {
   const toWire = (vars: UpdateRemoteConfigVars | undefined) => ({ config: { rollout: vars?.formData?.rollout } }) as unknown as UpdateRemoteConfigVars;
   return {
