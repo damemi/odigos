@@ -77,7 +77,11 @@ export const mapLegacySourceToWorkload = (s: LegacySource): Workload => {
   return {
     id: { namespace: s.namespace, kind: s.kind, name: s.name },
     serviceName: s.otelServiceName ?? null,
-    workloadOdigosHealthStatus: s.workloadOdigosHealthStatus ?? legacyPlaceholderStatus,
+    // @deprecated-legacy-api(v1.20) - null, not a placeholder. `HealthCard` renders
+    // whenever this is truthy, so an `Unknown`-with-no-reason placeholder produced a
+    // blank banner. `addAgentInjectionStatusToSources` fills in the real value when
+    // the workloads row carries one. Remove when min supported proxy >= v1.20.
+    workloadOdigosHealthStatus: s.workloadOdigosHealthStatus ?? null,
     conditions: s.conditions?.length ? mergeConditionsIntoWorkloadConditions(emptyWorkloadConditions(), s.conditions) : emptyWorkloadConditions(),
     markedForInstrumentation: { markedForInstrumentation: null },
     runtimeInfo: s.detectedLanguages ? { detectedLanguages: s.detectedLanguages } : null,
@@ -100,7 +104,12 @@ export const mapLegacySourceToWorkload = (s: LegacySource): Workload => {
     numberOfInstances: s.numberOfInstances,
     autoRollback: {
       rollbackOccurred: s.rollbackOccurred ?? false,
-      autoRollbackStatus: { ...legacyPlaceholderStatus },
+      // @deprecated-legacy-api(v1.20) - null, not a placeholder. Legacy agents don't
+      // report auto-rollback state at all, and an `Unknown` placeholder made
+      // StatusesCard render a "Rollback" card for every source plus a Rollback button
+      // (its legacy branch fires whenever status !== Success) — an action button on
+      // invented data. Remove when min supported proxy >= v1.20.
+      autoRollbackStatus: null,
     },
   };
 };
@@ -130,19 +139,46 @@ function statusTypeToDesiredStateProgress(status: StatusType): DesiredStateProgr
 // (from the legacy `GET_SOURCE_CONDITIONS` query) into the nested
 // `K8sWorkloadConditions` shape that `Workload.conditions` now uses.
 // Conditions whose name doesn't match a known field are dropped.
+// @deprecated-legacy-api(v1.20) - legacy condition type -> modern
+// `K8sWorkloadConditions` field. This used to be a lower-first heuristic
+// (`AgentEnabled` -> `agentEnabled`), which silently dropped every condition whose
+// modern field was RENAMED rather than just recased. On a v1.17 agent that meant 4
+// of the 5 reported conditions vanished — only `RuntimeDetection` happened to match
+// — so the drawer had almost no lifecycle detail to show. Explicit table instead:
+// an unmapped name is dropped deliberately, not by accident.
+// Remove when min supported proxy >= v1.20.
+const LEGACY_CONDITION_TYPE_TO_FIELD: Record<string, keyof K8sWorkloadConditions> = {
+  RuntimeDetection: 'runtimeDetection',
+  AgentEnabled: 'agentInjectionEnabled',
+  WorkloadRollout: 'rollout',
+  InstrumentationInstancesHealth: 'processesAgentHealth',
+  // Already recase-compatible, listed so the mapping is readable in one place.
+  AgentInjected: 'agentInjected',
+  PodsManifestInjection: 'podsManifestInjection',
+  ExpectingTelemetry: 'expectingTelemetry',
+  AgentInjectionEnabled: 'agentInjectionEnabled',
+  ProcessesAgentHealth: 'processesAgentHealth',
+  Rollout: 'rollout',
+  // NOTE: `MarkedForInstrumentation` has no slot in K8sWorkloadConditions — it is a
+  // top-level `Workload.markedForInstrumentation` field and is already surfaced as
+  // the "Enabled" chip on the drawer's main card, so it is intentionally not mapped.
+};
+
 function mergeConditionsIntoWorkloadConditions(base: K8sWorkloadConditions, conditions: Condition[]): K8sWorkloadConditions {
   const result = { ...base };
-  const knownFields = new Set<keyof K8sWorkloadConditions>(['runtimeDetection', 'agentInjectionEnabled', 'rollout', 'podsManifestInjection', 'agentInjected', 'processesAgentHealth', 'expectingTelemetry']);
 
   for (const c of conditions) {
     const rawKey = c.name || c.type;
     if (!rawKey) continue;
 
-    const fieldName = (rawKey.charAt(0).toLowerCase() + rawKey.slice(1)) as keyof K8sWorkloadConditions;
-    if (!knownFields.has(fieldName)) continue;
+    const fieldName = LEGACY_CONDITION_TYPE_TO_FIELD[rawKey];
+    if (!fieldName) continue;
 
     result[fieldName] = {
-      name: c.name,
+      // The legacy wire has no `name` (the PascalCase identity lives on `type`), and
+      // the kit keys React elements off `name` — without this the rows render blank
+      // and collide. See buildBadgeForDesiredStatus / mapDesiredStatusesToConditions.
+      name: c.name || c.type,
       status: statusTypeToDesiredStateProgress(c.status),
       reasonEnum: c.reason,
       message: c.message ?? '',
@@ -177,7 +213,10 @@ export const addAgentInjectionStatusToSources = (
     podsAgentInjectionStatus,
     autoRollback: {
       rollbackOccurred: autoRollback?.rollbackOccurred ?? sources[foundIdx].autoRollback?.rollbackOccurred ?? false,
-      autoRollbackStatus: { ...legacyPlaceholderStatus },
+      // @deprecated-legacy-api(v1.20) - pass through the real status when the
+      // workloads row reports one; otherwise null rather than a fabricated
+      // placeholder (see mapLegacySourceToWorkload).
+      autoRollbackStatus: autoRollback?.autoRollbackStatus ?? null,
     },
   };
 
@@ -217,38 +256,119 @@ const boolFromProp = (prop?: EntityProperty | null): boolean => prop?.value?.toL
 // data, no fabrication). The flat `instrumentationInstanceComponents` (detected
 // libraries, which describe doesn't break down per-process) are attached to each
 // mapped process so the drawer's "Instrumentation Libraries" tab stays populated.
+// @deprecated-legacy-api(v1.20) - `instrumentationInstanceComponents` -> the
+// modern `instrumentations` shape. Shared by the two consumers below (processes
+// on the Pods tab, containers on the Libraries tab) so they can never drift.
+// Remove when min supported proxy >= v1.20.
+const mapLibrariesToInstrumentations = (libraries: InstrumentationInstanceComponent[]) =>
+  libraries.map((lib) => ({ name: lib.name, healthy: lib.healthy ?? null, message: lib.message ?? null }));
+
+// @deprecated-legacy-api(v1.20) - `describeSource` reports health as a free-form
+// `EntityProperty.status` string ('success' | 'error' | ...) rather than the modern
+// `DesiredConditionStatus`. Translate rather than invent: the value is the proxy's
+// OWN assessment, so we pass its verdict through instead of re-deriving one.
+//
+// This is deliberately not inferred from `started`/`ready`: on a v1.17 proxy those
+// report "false" for containers whose pod `phase` is Running with status 'success'
+// (verified live on default/Deployment/coupon), so trusting them would paint a
+// healthy pod red — which is exactly the bug this replaces.
+// Remove when min supported proxy >= v1.20.
+// `name` is REQUIRED, not cosmetic: the kit derives a React key from it
+// (`desired-status-${name}` in buildBadgeForDesiredStatus), so two statuses on the
+// same row without one collide into duplicate keys. Values mirror the names the
+// v1.28+ API actually sends for the same fields — see LEGACY_STATUS_NAMES.
+const statusFromEntityProperty = (name: string, prop?: EntityProperty | null): DesiredConditionStatus | null => {
+  if (!prop) return null;
+  const isSuccess = prop.status?.toLowerCase() === 'success';
+  return {
+    name,
+    status: isSuccess ? DesiredStateProgress.Success : DesiredStateProgress.Error,
+    // `explain` is the proxy's human-readable rationale; fall back to the raw value
+    // (e.g. "Running") so a tooltip is never blank.
+    message: prop.explain || prop.value || '',
+  };
+};
+
+// @deprecated-legacy-api(v1.20) - condition names the v1.28+ API returns for these
+// exact fields, captured from a live agent so the legacy path is key-compatible and
+// visually identical. Remove when min supported proxy >= v1.20.
+const LEGACY_STATUS_NAMES = {
+  podAgentInjection: 'PodAgentInjection',
+  podHealthK8s: 'PodHealthK8s',
+  podHealthOdigos: 'PodHealthOdigos',
+  podContainerHealthOdigos: 'PodContainerHealthOdigos',
+} as const;
+
 const mapDescribePodsToWorkloadPods = (describe: Pick<DescribeSource, 'pods'> | null | undefined, libraries: InstrumentationInstanceComponent[]): K8sWorkloadPod[] => {
   const pods = describe?.pods;
   if (!pods?.length) return [];
 
-  const instrumentations = libraries.map((lib) => ({ name: lib.name, healthy: lib.healthy ?? null, message: lib.message ?? null }));
+  const instrumentations = mapLibrariesToInstrumentations(libraries);
 
-  return pods.map((pod) => ({
-    podName: pod.podName?.value ?? '',
-    nodeName: pod.nodeName?.value ?? '',
-    startTime: '',
-    agentInjected: boolFromProp(pod.agentInjected),
-    containers: (pod.containers ?? []).map((container) => ({
-      containerName: container.containerName?.value ?? '',
-      otelDistroName: (container.actualDevices?.value || null) as OtelDistroName | null,
-      started: boolFromProp(container.started),
-      ready: boolFromProp(container.ready),
-      processes: (container.instrumentationInstances ?? []).map((instance) => {
-        const healthy = boolFromProp(instance.healthy);
-        return {
-          healthy,
-          healthStatus: {
-            status: healthy ? DesiredStateProgress.Success : DesiredStateProgress.Error,
-            message: instance.message?.value ?? '',
-          },
-          identifyingAttributes: (instance.identifyingAttributes ?? []).map((attr) => ({ name: attr.name, value: attr.value })),
-          // describe gives no per-process library breakdown on legacy proxies, so
-          // surface the source's detected libraries on every process (best effort).
-          instrumentations: instrumentations.length ? instrumentations : null,
-        };
-      }),
-    })),
-  }));
+  return pods.map((pod) => {
+    // @deprecated-legacy-api(v1.20) - odigos health for the pod. Reported
+    // instrumentation instances are DIRECT evidence and outrank `agentInjected`,
+    // which is a proxy-side heuristic that reads false for eBPF-based agents:
+    // on v1.17 a healthy Go pod reports phase Running/success and an instance
+    // "Successfully loaded eBPF probes" while `agentInjected` is false/error
+    // (verified live on default/Deployment/membership). Trusting `agentInjected`
+    // there marks a demonstrably-working pod unhealthy.
+    // Only when no instance is reported at all do we fall back to `agentInjected`.
+    // Remove when min supported proxy >= v1.20.
+    const podInstances = (pod.containers ?? []).flatMap((c) => c.instrumentationInstances ?? []);
+    const unhealthyInstance = podInstances.find((i) => !boolFromProp(i.healthy));
+    const agentInjectedStatus = statusFromEntityProperty(LEGACY_STATUS_NAMES.podAgentInjection, pod.agentInjected);
+    const odigosHealthStatus: DesiredConditionStatus | null = podInstances.length
+      ? unhealthyInstance
+        ? { name: LEGACY_STATUS_NAMES.podHealthOdigos, status: DesiredStateProgress.Error, message: unhealthyInstance.message?.value ?? '' }
+        : { name: LEGACY_STATUS_NAMES.podHealthOdigos, status: DesiredStateProgress.Success, message: podInstances[0]?.message?.value ?? '' }
+      : agentInjectedStatus && { ...agentInjectedStatus, name: LEGACY_STATUS_NAMES.podHealthOdigos };
+
+    return {
+      podName: pod.podName?.value ?? '',
+      nodeName: pod.nodeName?.value ?? '',
+      // `PodAnalyze` carries no pod start time on legacy proxies, so Age has nothing
+      // real to show. Left empty rather than fabricated.
+      startTime: '',
+      agentInjected: boolFromProp(pod.agentInjected),
+      agentInjectedStatus,
+      // Kubernetes health = the proxy's verdict on `phase` ('Running'/'success').
+      k8sHealthStatus: statusFromEntityProperty(LEGACY_STATUS_NAMES.podHealthK8s, pod.phase),
+      odigosHealthStatus,
+      containers: (pod.containers ?? []).map((container) => ({
+        containerName: container.containerName?.value ?? '',
+        otelDistroName: (container.actualDevices?.value || null) as OtelDistroName | null,
+        started: boolFromProp(container.started),
+        ready: boolFromProp(container.ready),
+        // Deliberately no container-level `k8sHealthStatus`: the only inputs legacy
+        // describe offers are `started`/`ready`, which are unreliable here (see
+        // `statusFromEntityProperty`). The kit renders no badge when it's absent,
+        // which beats a wrong one.
+        odigosHealthStatus: (() => {
+          const instances = container.instrumentationInstances ?? [];
+          if (!instances.length) return null;
+          const bad = instances.find((i) => !boolFromProp(i.healthy));
+          return bad
+            ? { name: LEGACY_STATUS_NAMES.podContainerHealthOdigos, status: DesiredStateProgress.Error, message: bad.message?.value ?? '' }
+            : { name: LEGACY_STATUS_NAMES.podContainerHealthOdigos, status: DesiredStateProgress.Success, message: '' };
+        })(),
+        processes: (container.instrumentationInstances ?? []).map((instance) => {
+          const healthy = boolFromProp(instance.healthy);
+          return {
+            healthy,
+            healthStatus: {
+              status: healthy ? DesiredStateProgress.Success : DesiredStateProgress.Error,
+              message: instance.message?.value ?? '',
+            },
+            identifyingAttributes: (instance.identifyingAttributes ?? []).map((attr) => ({ name: attr.name, value: attr.value })),
+            // describe gives no per-process library breakdown on legacy proxies, so
+            // surface the source's detected libraries on every process (best effort).
+            instrumentations: instrumentations.length ? instrumentations : null,
+          };
+        }),
+      })),
+    };
+  });
 };
 
 // @deprecated-legacy-api(v1.20) - map the combined `GET_SOURCE_WITH_DETAILS`
@@ -282,8 +402,46 @@ export const mapCombinedLegacySourceToWorkload = (env: CombinedLegacySourceEnvel
 
   // Surface real pods (K8s only; VM has no `describeSource`) from the describe
   // query, attaching the detected instrumentation libraries to each process.
-  const pods = mapDescribePodsToWorkloadPods(env?.describeSource, env?.instrumentationInstanceComponents ?? []);
-  if (pods.length) workload = { ...workload, pods };
+  const libraries = env?.instrumentationInstanceComponents ?? [];
+  const pods = mapDescribePodsToWorkloadPods(env?.describeSource, libraries);
+  if (pods.length) {
+    // @deprecated-legacy-api(v1.20) - `podsOdigosHealthStatus` gates the whole pods
+    // header (`if (!pods?.length || !podsOdigosHealthStatus || !status) return null`)
+    // AND supplies its status icon/message. Legacy proxies don't report it, and the
+    // `Unknown`-with-empty-message placeholder rendered a blank info card above the
+    // counters. Aggregate the per-pod verdicts we just derived instead.
+    // Remove when min supported proxy >= v1.20.
+    const unhealthyPods = pods.filter((p) => p.odigosHealthStatus?.status === DesiredStateProgress.Error);
+    const withStatus = pods.filter((p) => !!p.odigosHealthStatus);
+    const podsOdigosHealthStatus: DesiredConditionStatus = unhealthyPods.length
+      ? {
+          name: LEGACY_STATUS_NAMES.podHealthOdigos,
+          status: DesiredStateProgress.Error,
+          message: `${unhealthyPods.length} of ${pods.length} pod${pods.length === 1 ? '' : 's'} unhealthy`,
+        }
+      : withStatus.length
+        ? { name: LEGACY_STATUS_NAMES.podHealthOdigos, status: DesiredStateProgress.Success, message: `${withStatus.length} of ${pods.length} pod${pods.length === 1 ? '' : 's'} healthy` }
+        : legacyPlaceholderStatus;
+    workload = { ...workload, pods, podsOdigosHealthStatus };
+  }
+
+  // @deprecated-legacy-api(v1.20) - the same libraries also have to land on
+  // `containers[].instrumentations`, because the drawer reads them from two
+  // different places: the Pods tab renders
+  // `pods[].containers[].processes[].instrumentations` (attached above), while the
+  // Libraries tab renders `containers[].instrumentations`. On v1.28+ one query
+  // populates both; on legacy proxies only the pod tree was filled, so libraries
+  // showed under Pods but the Libraries tab read "No libraries found" for a source
+  // the proxy had reported libraries for.
+  //
+  // `describeSource` exposes libraries as one flat per-source list with no
+  // container breakdown, so — exactly as for processes above — broadcast the list
+  // onto every container rather than inventing an attribution.
+  // Remove when min supported proxy >= v1.20.
+  if (libraries.length && workload.containers?.length) {
+    const instrumentations = mapLibrariesToInstrumentations(libraries);
+    workload = { ...workload, containers: workload.containers.map((c) => ({ ...c, instrumentations })) };
+  }
 
   return workload;
 };

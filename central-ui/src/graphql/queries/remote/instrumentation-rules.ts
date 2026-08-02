@@ -114,7 +114,11 @@ export const GET_INSTRUMENTATION_RULES: VersionedRemoteFetch = {
       }
     }
   }`,
-    'v1.28': `
+    // `sourcesScopes` replaced the legacy `workloads` field in odigos v1.26 — the two
+    // never coexist on the output type, so this bucket must start exactly at v1.26.
+    // (It was previously keyed 'v1.28', which sent v1.26/v1.27 proxies down the v1.11
+    // bucket and left them with no scope field selected at all.)
+    'v1.26': `
   query GetInstrumentationRules {
     computePlatform {
       instrumentationRules {
@@ -190,6 +194,16 @@ export const GET_INSTRUMENTATION_RULES: VersionedRemoteFetch = {
         disabled
         mutable
         profileName
+        # Pre-v1.26 scope. sourcesScopes doesn't exist yet on these proxies, and
+        # workloads is removed at v1.26, so this selection is valid for exactly the
+        # v1.11..v1.25 range this bucket serves. The kit needs it to echo the scope
+        # back on update: updateInstrumentationRule is a full replace, so a rule
+        # whose scope was never loaded gets it cleared on any edit.
+        workloads {
+          namespace
+          kind
+          name
+        }
         conditions {
           status
           type

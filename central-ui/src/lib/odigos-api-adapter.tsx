@@ -406,54 +406,66 @@ const isAgentsApiPlatform = (ctx: Pick<OperationContext, 'platformType'>): boole
 //   1. STRIP — drop a field the proxy predates. Safe because below the
 //      introduced version the field doesn't exist anywhere in the proxy's
 //      schema, so a by-name deep strip can never remove a supported field.
-//   2. MAP — `sourcesScopes` (rule input, v1.26+) is rewritten to the legacy
-//      `workloads: [PodWorkloadInput!]` field for pre-v1.26 proxies so rules
-//      stay scoped instead of silently matching everything. Only fully
-//      specified workloads (namespace+kind+name) have a legacy equivalent;
-//      namespace-only / language-only criteria are dropped (the rule matches
-//      more broadly for those — the legacy schema has no way to express them).
+//      Note nulling is never a substitute for stripping: gqlparser rejects an
+//      unknown KEY regardless of its value.
+//   2. FILTER ENUM — drop `"PROFILES"` from `signals: [SignalType!]` arrays
+//      below v1.26. Field-name strip can't help here: the key is still valid
+//      (`signals`), but the enum value isn't, and GraphQL rejects the whole
+//      mutation with "PROFILES is not a valid SignalType".
+//
+// Rule source scope below v1.26 is deliberately NOT mapped. `sourcesScopes` was
+// previously rewritten into the legacy `workloads: [PodWorkloadInput!]` field,
+// but PodWorkloadInput requires namespace+kind+name, so namespace-only and
+// language-only criteria silently vanished and the rule widened to the whole
+// cluster behind a success toast. The kit now hides the scope editor below
+// v1.26 instead, and `sourcesScopes` is simply stripped. The legacy `workloads`
+// value is round-tripped by the kit (read in the v1.11 bucket, echoed back on
+// update) so pre-existing scopes set outside Central survive an edit —
+// updateInstrumentationRule is a full replace, so an omitted `workloads` clears
+// it just as `null` does.
 //
 // All branching only applies to a real (`> v0.0.0`) selected proxy.
 // ---------------------------------------------------------------------------
 const STRIP_INPUT_FIELDS: { name: string; minVersion: number }[] = [
   { name: 'profiles', minVersion: trimVersion('v1.26') }, // ExportedSignalsInput.profiles
+  { name: 'sourcesScopes', minVersion: trimVersion('v1.26') }, // InstrumentationRuleInput.sourcesScopes
   { name: 'fromSources', minVersion: trimVersion('v1.14') }, // K8s(Label|Annotation)AttributeInput.fromSources
   { name: 'urlTemplatizationRulesGroups', minVersion: trimVersion('v1.20') }, // ActionFieldsInput.urlTemplatizationRulesGroups
-  { name: 'otelDistroName', minVersion: trimVersion('v1.27') }, // PatchSourceRequestInput.otelDistroName
+  // PatchSourceRequestInput.otelDistroName — absent in every v1.15.x, present from
+  // v1.16.0 on. Stripping it above that floor is not a no-op: the proxy reads an
+  // absent `otelDistroName` as "clear the override", so ContainersCard's deliberate
+  // re-send of the effective distro (to preserve it while editing a runtime override)
+  // turned into a wipe.
+  { name: 'otelDistroName', minVersion: trimVersion('v1.16') },
   { name: 'extractAttribute', minVersion: trimVersion('v1.29') }, // ActionFieldsInput.extractAttribute
   { name: 'customFormatMaskings', minVersion: trimVersion('v1.33') }, // ActionFieldsInput.customFormatMaskings
   { name: 'customRegexMaskings', minVersion: trimVersion('v1.33') }, // ActionFieldsInput.customRegexMaskings
+  // InstrumentationRuleInput.networkMetrics — absent at v1.30.2 and every v1.31.x,
+  // PRESENT from v1.32.0 (verified per-tag across all GA releases). This entry
+  // previously read v1.33 with a comment claiming the field was unreleased, which
+  // stripped a SUPPORTED field on v1.32.x: the Network Metrics rule was accepted and
+  // then silently did nothing, behind a success toast.
+  { name: 'networkMetrics', minVersion: trimVersion('v1.32') },
+  // CustomInstrumentationsInput.php — genuinely unreleased: still absent at v1.32.1,
+  // the newest GA release. Bump when it ships.
+  { name: 'php', minVersion: trimVersion('v1.33') },
 ];
 
-// `instrumentationRule.sourcesScopes` (v1.26+) -> legacy `workloads` (<=v1.25).
-const SOURCES_SCOPES_MIN_VERSION = trimVersion('v1.26');
+// `SignalType.PROFILES` joined the GraphQL enum in odigos ~v1.26.
+const PROFILES_SIGNAL_MIN_VERSION = trimVersion('v1.26');
+const PROFILES_SIGNAL = 'PROFILES';
 
-const sourcesScopesToWorkloads = (rows: unknown): { namespace: string; kind: string; name: string }[] => {
-  if (!Array.isArray(rows)) return [];
-  const out: { namespace: string; kind: string; name: string }[] = [];
-  for (const r of rows) {
-    const row = r as { workloadName?: string | null; workloadKind?: string | null; workloadNamespace?: string | null } | null;
-    // PodWorkloadInput requires all three fields; rows missing any (namespace-
-    // or language-only criteria) have no legacy representation and are dropped.
-    if (row?.workloadName && row.workloadKind && row.workloadNamespace) {
-      out.push({ namespace: row.workloadNamespace, kind: row.workloadKind, name: row.workloadName });
-    }
-  }
-  return out;
-};
-
-const transformDrift = (value: unknown, strip: Set<string>, mapScopes: boolean): unknown => {
-  if (Array.isArray(value)) return value.map((v) => transformDrift(v, strip, mapScopes));
+const transformDrift = (value: unknown, strip: Set<string>, stripProfilesSignal: boolean): unknown => {
+  if (Array.isArray(value)) return value.map((v) => transformDrift(v, strip, stripProfilesSignal));
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
       if (strip.has(k)) continue;
-      if (mapScopes && k === 'sourcesScopes') {
-        const workloads = sourcesScopesToWorkloads(v);
-        if (workloads.length) out.workloads = workloads;
+      if (stripProfilesSignal && k === 'signals' && Array.isArray(v)) {
+        out[k] = v.filter((item) => item !== PROFILES_SIGNAL);
         continue;
       }
-      out[k] = transformDrift(v, strip, mapScopes);
+      out[k] = transformDrift(v, strip, stripProfilesSignal);
     }
     return out;
   }
@@ -461,8 +473,8 @@ const transformDrift = (value: unknown, strip: Set<string>, mapScopes: boolean):
 };
 
 // Reconcile mutation inputs with the selected proxy's schema so legacy proxies
-// don't reject the operation with "unknown field". No-op for modern proxies and
-// for the out-of-proxy (`v0.0.0`) context.
+// don't reject the operation with "unknown field" / invalid enum values.
+// No-op for modern proxies and for the out-of-proxy (`v0.0.0`) context.
 const sanitizeVariablesForVersion = (vars: unknown, ctx: OperationContext): Record<string, unknown> => {
   const base = (vars ?? {}) as Record<string, unknown>;
   // These are k8s odigos-version drift shims (field stripping / scope mapping).
@@ -473,9 +485,9 @@ const sanitizeVariablesForVersion = (vars: unknown, ctx: OperationContext): Reco
   const v = trimVersion(ctx.version);
   if (!(v > 0)) return base;
   const strip = new Set(STRIP_INPUT_FIELDS.filter((f) => v < f.minVersion).map((f) => f.name));
-  const mapScopes = v < SOURCES_SCOPES_MIN_VERSION;
-  if (!strip.size && !mapScopes) return base;
-  return transformDrift(base, strip, mapScopes) as Record<string, unknown>;
+  const stripProfilesSignal = v < PROFILES_SIGNAL_MIN_VERSION;
+  if (!strip.size && !stripProfilesSignal) return base;
+  return transformDrift(base, strip, stripProfilesSignal) as Record<string, unknown>;
 };
 
 // VM proxies resolve their GraphQL document straight from the published vmagent

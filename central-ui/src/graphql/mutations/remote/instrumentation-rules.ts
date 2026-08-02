@@ -73,7 +73,8 @@ export const CREATE_INSTRUMENTATION_RULE: VersionedRemoteFetch = {
       }
     }
   }`,
-    'v1.28': `
+    // Starts at v1.26, where `sourcesScopes` replaced `workloads` (was keyed 'v1.28').
+    'v1.26': `
   mutation CreateInstrumentationRule($instrumentationRule: InstrumentationRuleInput!) {
     createInstrumentationRule(instrumentationRule: $instrumentationRule) {
       type
@@ -139,6 +140,12 @@ export const CREATE_INSTRUMENTATION_RULE: VersionedRemoteFetch = {
       disabled
       mutable
       profileName
+      # Echoed back so a later edit doesn't clear scope (update is a full replace).
+      workloads {
+        namespace
+        kind
+        name
+      }
       payloadCollection {
         httpRequest {
           mimeTypes
@@ -249,7 +256,8 @@ export const UPDATE_INSTURMENTATION_RULE: VersionedRemoteFetch = {
       }
     }
   }`,
-    'v1.28': `
+    // Starts at v1.26, where `sourcesScopes` replaced `workloads` (was keyed 'v1.28').
+    'v1.26': `
   mutation UpdateInstrumentationRule($ruleId: ID!, $instrumentationRule: InstrumentationRuleInput!) {
     updateInstrumentationRule(ruleId: $ruleId, instrumentationRule: $instrumentationRule) {
       type
@@ -315,6 +323,12 @@ export const UPDATE_INSTURMENTATION_RULE: VersionedRemoteFetch = {
       disabled
       mutable
       profileName
+      # Echoed back so a later edit doesn't clear scope (update is a full replace).
+      workloads {
+        namespace
+        kind
+        name
+      }
       payloadCollection {
         httpRequest {
           mimeTypes

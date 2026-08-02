@@ -284,7 +284,12 @@ export const GET_SOURCE_WITH_DETAILS: VersionedRemoteFetch = {
       pods {
         podName { name value }
         nodeName { name value }
-        agentInjected { name value }
+        # @deprecated-legacy-api(v1.20) - phase is the only k8s pod-health signal legacy
+        # describe offers; status/explain carry the proxy's own verdict per property.
+        # Dropping them regressed the drawer to every healthy pod as 0/N red.
+        # Both exist since v1.11, so they're safe at this bucket's floor.
+        phase { name value status explain }
+        agentInjected { name value status explain }
         containers {
           containerName { name value }
           actualDevices { name value }
@@ -369,7 +374,12 @@ export const GET_SOURCE_WITH_DETAILS: VersionedRemoteFetch = {
       pods {
         podName { name value }
         nodeName { name value }
-        agentInjected { name value }
+        # @deprecated-legacy-api(v1.20) - phase is the only k8s pod-health signal legacy
+        # describe offers; status/explain carry the proxy's own verdict per property.
+        # Dropping them regressed the drawer to every healthy pod as 0/N red.
+        # Both exist since v1.11, so they're safe at this bucket's floor.
+        phase { name value status explain }
+        agentInjected { name value status explain }
         containers {
           containerName { name value }
           actualDevices { name value }

@@ -566,7 +566,19 @@ export const GET_WORKLOADS_BY_IDS: VersionedRemoteFetch = {
     'v1.33': getWorkloadsByIdsDetailedQuery(HEAD_NOISY_OPERATION_FIELDS_V132, COLLECTOR_NOISY_HTTP_SERVER_FIELDS_V132, true),
     // `workloadsByIds` / `K8sWorkloadIdInput` were introduced in v1.21 (v1.20 has neither).
     // Pre-v1.21 proxies resolve via the legacy per-id `run` path.
-    'v1.29': getWorkloadsByIdsDetailedQuery(HEAD_NOISY_OPERATION_FIELDS_V129, COLLECTOR_NOISY_HTTP_SERVER_FIELDS_V129),
+    //
+    // [T-MOBILE-ALIGNMENT] Keyed 'v1.28', not 'v1.29'. This selection set is accepted from
+    // exactly v1.28.0 onward — verified by validating this document against all 109 GA
+    // schemas v1.11.0..v1.32.1 (scratchpad/find-bucket-floor.js): last failing release
+    // v1.27.3, first passing v1.28.0, contiguous above, and every v1.28.x patch passes
+    // (`trimVersion` ignores the patch, so a partial minor would be unsafe to key here).
+    // Keying it at v1.29 meant v1.28 agents floored to the 'v1.21' bucket, which selects
+    // neither `containers.instrumentations` nor `pods` — so the Instrumented Libraries tab
+    // and the entire Pods surface rendered permanently empty against a v1.28 agent that
+    // returns both. NOTE: unlike the rest of the T-Mobile alignment work this is a
+    // permanent correctness fix, not scaffolding — reverting it re-breaks every v1.28/v1.29
+    // customer.
+    'v1.28': getWorkloadsByIdsDetailedQuery(HEAD_NOISY_OPERATION_FIELDS_V129, COLLECTOR_NOISY_HTTP_SERVER_FIELDS_V129),
     'v1.21': `
   query GetWorkloadsByIds($ids: [K8sWorkloadIdInput!]!) {
     workloadsByIds(ids: $ids) {
