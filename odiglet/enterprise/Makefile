@@ -28,13 +28,22 @@ export GOPRIVATE
 go-mod: go-mod-replace
 	@go mod download
 
-# go-mod + each $(LIBRARIES) upstream `make generate`. Does not clone/materialize OBI.
+# go-mod + each $(LIBRARIES) upstream `make generate` in parallel. Does not clone/materialize OBI.
 generate: go-mod
-	@for lib in $(LIBRARIES); do \
-		LIB_PATH=$$(go list -m -f '{{.Dir}}' $${lib%@*}) && \
-		chmod -R +w $$LIB_PATH && \
-		$(MAKE) -C "$$LIB_PATH" generate; \
-	done
+	@pids=""; \
+	for lib in $(LIBRARIES); do \
+		( \
+			LIB_PATH=$$(go list -m -f '{{.Dir}}' $${lib%@*}) && \
+			chmod -R +w $$LIB_PATH && \
+			$(MAKE) -C "$$LIB_PATH" generate \
+		) & \
+		pids="$$pids $$!"; \
+	done; \
+	fail=0; \
+	for pid in $$pids; do \
+		wait $$pid || fail=1; \
+	done; \
+	exit $$fail
 
 # Compile only — no materialize / generate / go-mod. For Docker after those layers have run.
 compile-odiglet:
