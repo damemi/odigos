@@ -39,13 +39,35 @@ RUN if [ "$EXTENDED" = "true" ]; then \
 
 ######### agents builder #########
 # combine all agents into a single image
+# ordered least → most frequently changing for better layer caching
 FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS agents-builder
 WORKDIR /instrumentations
+
+# loader
+ARG TARGETARCH
+ARG ODIGOS_LOADER_VERSION=v0.0.8
+RUN wget --directory-prefix=loader https://storage.googleapis.com/odigos-loader/$ODIGOS_LOADER_VERSION/$TARGETARCH/loader.so
 
 # java-community
 ARG JAVA_OTEL_VERSION=v2.6.0
 ADD https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/$JAVA_OTEL_VERSION/opentelemetry-javaagent.jar /instrumentations/java/javaagent.jar
 RUN chmod 644 /instrumentations/java/javaagent.jar
+
+# dotnet-community
+COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
+
+# dotnet-legacy - Legacy .NET (only included in extended builds)
+ARG EXTENDED=false
+RUN --mount=type=bind,from=dotnet-builder,source=/legacy-dotnet-instrumentation,target=/legacy-dotnet-instrumentation \
+    if [ "$EXTENDED" = "true" ]; then \
+        cp -r /legacy-dotnet-instrumentation /instrumentations/legacy-dotnet; \
+    fi
+
+# php-community
+COPY --from=public.ecr.aws/odigos/agents/php-community:v0.4.1 /instrumentations/php /instrumentations/php
+
+# ruby-community
+COPY --from=public.ecr.aws/odigos/agents/ruby-community:v0.0.8 /instrumentations/ruby /instrumentations/ruby
 
 # python-community/python-community3.8
 COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.73-py3.8 /instrumentations/python3.8 /instrumentations/python3.8
@@ -62,32 +84,11 @@ COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.12.1 /instrumentat
 COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.20 /instrumentations/opentelemetry-node-14 /instrumentations/opentelemetry-node-14
 COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.20 /instrumentations/nodejs-ebpf-14 /instrumentations/nodejs-ebpf-14
 
-# dotnet-community
-COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
-
-# dotnet-legacy - Legacy .NET (only included in extended builds)
-ARG EXTENDED=false
-RUN --mount=type=bind,from=dotnet-builder,source=/legacy-dotnet-instrumentation,target=/legacy-dotnet-instrumentation \
-    if [ "$EXTENDED" = "true" ]; then \
-        cp -r /legacy-dotnet-instrumentation /instrumentations/legacy-dotnet; \
-    fi
-
 # java-ebpf-instrumentations
 COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.38.0 /instrumentations/java-ebpf /instrumentations/java-ebpf
 
 # java-enterprise
 COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.38.0 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
-
-# php-community
-COPY --from=public.ecr.aws/odigos/agents/php-community:v0.4.1 /instrumentations/php /instrumentations/php
-
-# ruby-community
-COPY --from=public.ecr.aws/odigos/agents/ruby-community:v0.0.8 /instrumentations/ruby /instrumentations/ruby
-
-# loader
-ARG TARGETARCH
-ARG ODIGOS_LOADER_VERSION=v0.0.8
-RUN wget --directory-prefix=loader https://storage.googleapis.com/odigos-loader/$ODIGOS_LOADER_VERSION/$TARGETARCH/loader.so
 
 ######### Odiglet builder #########
 FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS builder
