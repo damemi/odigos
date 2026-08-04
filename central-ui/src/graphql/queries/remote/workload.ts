@@ -240,7 +240,7 @@ ${DESIRED_CONDITION_FIELDS_WITH_ACTIONS}
       }
 `;
 
-const getWorkloadsByIdsDetailedQuery = (headNoisyOperationFields: string, collectorNoisyHttpServerFields: string, includePodsManifestInjection = false) => `
+const getWorkloadsByIdsDetailedQuery = (headNoisyOperationFields: string, collectorNoisyHttpServerFields: string, includePodsManifestInjection = false, includeConcurrentAgentActions = false) => `
   query GetWorkloadsByIds($ids: [K8sWorkloadIdInput!]!) {
     workloadsByIds(ids: $ids) {
       id {
@@ -343,12 +343,21 @@ ${includePodsManifestInjection ? ROLLOUT_FIELDS : ''}
             status
             reasonEnum
             message
+${
+  includeConcurrentAgentActions
+    ? `            actionItems {
+              type
+              buttonText
+            }`
+    : ''
+}
           }
           otelDistroName
         }
         overrides {
           containerName
           otelDistroName
+${includeConcurrentAgentActions ? '          allowConcurrentAgents' : ''}
           runtimeInfo {
             language
             runtimeVersion
@@ -557,6 +566,10 @@ const COLLECTOR_NOISY_HTTP_SERVER_FIELDS_V132 = `
 
 export const GET_WORKLOADS_BY_IDS: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
+    // Per-container concurrent-agent actions and overrides landed after v1.34.0-pre1.
+    // Version selection is minor-only, so v1.34 is the first safe bucket that cannot
+    // match an older v1.34 prerelease whose schema rejects these fields.
+    'v1.34': getWorkloadsByIdsDetailedQuery(HEAD_NOISY_OPERATION_FIELDS_V132, COLLECTOR_NOISY_HTTP_SERVER_FIELDS_V132, true, true),
     // HTTP queryParams head-sampling matchers landed in odigos v1.32 (after v1.31.2).
     // Older proxies reject that selection set.
     // (The gRPC matchers that briefly shipped alongside were reverted out of the schema in odigos-io/odigos#5239, so only queryParams remain in this bucket.)
