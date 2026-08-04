@@ -4,3 +4,6 @@
 tests/
 onprem-token-generator/
 odiglet/.obi/
+# host build artifacts; .tools would shadow the linux ocb download_builder fetches in the image
+collector/.tools/
+collector/odigosotelcol/odigosotelcol

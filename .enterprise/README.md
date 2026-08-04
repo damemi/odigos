@@ -148,6 +148,26 @@ make update-odigos-oss-mod-deps-all OSS_TAG=v1.5.0
 make update-odigos-oss-mod-deps-all
 ```
 
+#### Update the Collector Components
+
+The collector is built by `ocb` from `collector/builder-config.yaml`, not by a `go.mod`, so it
+is re-pinned by its own target (which `update-odigos-oss-mod-deps-all` already calls):
+
+```bash
+make update-collector-oss-deps OSS_TAG=v1.5.0
+```
+
+This rewrites the pinned version of every `github.com/odigos-io/odigos/collector/...` component
+in the manifest and regenerates `collector/odigosotelcol/`. Commit the manifest and the
+generated distribution together — CI regenerates and fails on a diff. The target refuses to
+write anything if a component moved, if a module declares a path other than the one it is
+replaced under, or if OSS builds a component this manifest is missing; the error says which.
+
+Note these are Odigos' own collector components. Upstream OpenTelemetry versions arrive
+transitively through them and are bumped in
+[odigos-io/odigos](https://github.com/odigos-io/odigos/blob/main/DEVELOPMENT.md#updating-opentelemetry-dependencies),
+not here.
+
 ### Using CI Workflows
 
 #### Automatic Dependency Sync (Enterprise Dependencies Update)

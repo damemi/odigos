@@ -22,6 +22,7 @@ jobs:
           - odiglet
           - instrumentor
           - ui
+          - collector
           - central-proxy
           - central-backend
           - central-ui
@@ -47,6 +48,9 @@ jobs:
           - service: ui
             summary: "Enterprise UI for Odigos"
             description: "Enterprise build of the Odigos web frontend."
+          - service: collector
+            summary: "Collector for Odigos"
+            description: "Enterprise build of the Odigos OpenTelemetry Collector."
           - service: agents
             summary: "Odigos Enterprise Agents"
             description: "The Odigos Agents used to copy Odigos agent relevant files into the user workloads."
@@ -120,6 +124,7 @@ jobs:
             || matrix.service == 'central-ui' && 'central-ui/Dockerfile'
             || matrix.service == 'ui' && 'ui/Dockerfile'
             || matrix.service == 'agents' && 'odiglet/Dockerfile'
+            || matrix.service == 'collector' && 'collector/Dockerfile'
             || 'Dockerfile' }}
           context: ${{ matrix.service == 'central-ui' && 'central-ui' || '.' }}
           push: true

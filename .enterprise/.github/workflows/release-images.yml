@@ -19,14 +19,12 @@ jobs:
     strategy:
       matrix:
         # Base matrix builds all services with extended=false (standard builds without legacy .NET)
-        # Base matrix: 6 builds (6 services × extended=false)
-        # Extended=true odiglet and agents builds are added via 'include' below: 2 additional builds
-        # Total: 8 builds
         service:
           [
             "odiglet",
             "instrumentor",
             "ui",
+            "collector",
             "central-proxy",
             "central-backend",
             "central-ui",
@@ -60,6 +58,9 @@ jobs:
           - service: ui
             summary: "Enterprise UI for Odigos"
             description: "Enterprise build of the Odigos web frontend."
+          - service: collector
+            summary: "Collector for Odigos"
+            description: "Enterprise build of the Odigos OpenTelemetry Collector."
 
     runs-on: depot-ubuntu-24.04-4
     steps:
@@ -130,6 +131,7 @@ jobs:
             || matrix.service == 'central-ui' && 'central-ui/Dockerfile'
             || matrix.service == 'ui' && 'ui/Dockerfile'
             || matrix.service == 'agents' && 'odiglet/Dockerfile'
+            || matrix.service == 'collector' && 'collector/Dockerfile'
             || 'Dockerfile' }}
           context: ${{ matrix.service == 'central-ui' && 'central-ui' || '.' }}
           push: true

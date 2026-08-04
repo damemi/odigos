@@ -82,6 +82,10 @@ build-ui:
 build-ui-local:
 	$(MAKE) build-ui ODIGOS_OSS_SRC=../odigos
 
+.PHONY: build-collector
+build-collector:
+	$(MAKE) build-image/collector DOCKERFILE=collector/Dockerfile SUMMARY="Collector for Odigos" DESCRIPTION="Enterprise build of the Odigos OpenTelemetry Collector." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
 .PHONY: build-central-backend
 build-central-backend:
 	$(MAKE) build-image/central-backend SUMMARY="Central Backend for Odigos" DESCRIPTION="Central Backend is the core component of Odigos Central, responsible for managing the data flow from the cluster to the ui." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
@@ -324,7 +328,7 @@ connector-dev-down:
 
 .PHONY: build-images
 build-images:
-	make build-odiglet build-instrumentor build-ui TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
+	make build-odiglet build-instrumentor build-ui build-collector TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
 
 .PHONY: build-central-images
 build-central-images:
@@ -348,7 +352,7 @@ push-images-with-agents-rhel:
 
 .PHONY: push-images
 push-images:
-	make push-odiglet push-instrumentor push-ui push-central-backend push-central-ui push-central-proxy TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)\
+	make push-odiglet push-instrumentor push-ui push-collector push-central-backend push-central-ui push-central-proxy TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)\
 
 .PHONY: push-images-with-agents
 push-images-with-agents:
@@ -380,6 +384,10 @@ push-instrumentor:
 push-ui:
 	$(MAKE) push-image/ui DOCKERFILE=ui/Dockerfile SUMMARY="Enterprise UI for Odigos" DESCRIPTION="Enterprise build of the Odigos web frontend." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
+.PHONY: push-collector
+push-collector:
+	$(MAKE) push-image/collector DOCKERFILE=collector/Dockerfile SUMMARY="Collector for Odigos" DESCRIPTION="Enterprise build of the Odigos OpenTelemetry Collector." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
 .PHONY: push-agents
 push-agents:
 	$(MAKE) push-image/agents DOCKERFILE=odiglet/$(DOCKERFILE) TARGET=agents SUMMARY="Odigos Enterprise Agents" DESCRIPTION="The Odigos Agents used to copy Odigos agent relevant files into the user workloads." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
@@ -406,6 +414,12 @@ restart-instrumentor:
 .PHONY: restart-ui
 restart-ui:
 	kubectl rollout restart deployment odigos-ui -n odigos-system || true
+
+# the node collector runs inside the odiglet daemonset, so it restarts alongside the gateway
+.PHONY: restart-collector
+restart-collector:
+	kubectl rollout restart deployment odigos-gateway -n odigos-system || true
+	kubectl rollout restart daemonset odiglet -n odigos-system || true
 
 .PHONY: restart-central-backend
 restart-central-backend:
@@ -442,6 +456,10 @@ deploy-instrumentor:
 .PHONY: deploy-ui
 deploy-ui:
 	make build-ui TAG=$(TAG) && make load-to-kind-ui TAG=$(TAG) && make restart-ui
+
+.PHONY: deploy-collector
+deploy-collector:
+	make build-collector TAG=$(TAG) && make load-to-kind-collector TAG=$(TAG) && make restart-collector
 
 .PHONY: deploy-agents
 deploy-agents:

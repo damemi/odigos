@@ -130,6 +130,7 @@ jobs:
           [
             instrumentor,
             ui,
+            collector,
             central-backend,
             central-ui,
             central-proxy,
@@ -225,6 +226,7 @@ jobs:
             depot-build-ui-rhel-certified \
             depot-build-odiglet-rhel-certified \
             depot-build-agents-rhel-certified \
+            depot-build-collector-rhel-certified \
             IMAGE_TAG=${{ env.IMAGE_TAG }} \
             PLATFORM=${{ needs.detect-changes.outputs.platforms }} \
             NO_CACHE=${{ needs.detect-changes.outputs.no-cache }} \
@@ -262,6 +264,12 @@ jobs:
             project: w8zkfqwtt3
           - source: enterprise
             component: ui-rhel-certified
+            project: w8zkfqwtt3
+          - source: enterprise
+            component: collector
+            project: w8zkfqwtt3
+          - source: enterprise
+            component: collector-rhel-certified
             project: w8zkfqwtt3
           - source: enterprise
             component: odiglet

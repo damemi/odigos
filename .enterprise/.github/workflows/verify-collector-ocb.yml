@@ -1,0 +1,42 @@
+name: verify collector ocb
+
+on:
+  pull_request:
+    paths:
+      - "collector/**"
+      - ".github/workflows/verify-collector-ocb.yml"
+
+jobs:
+  verify-collector-ocb:
+    runs-on: depot-ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 #v5.5.0
+        with:
+          go-version-file: collector/odigosotelcol/go.mod
+
+      - name: Generate collector with ocb
+        working-directory: ./collector
+        run: make genodigoscol
+
+      - name: Verify Generate
+        working-directory: ./collector
+        run: |
+          if [ -n "$(git status --porcelain .)" ]; then
+            git status --porcelain .
+            git diff .
+            echo "::error::collector/odigosotelcol is out of sync with builder-config.yaml. Run 'make genodigoscol' in collector/ and commit the result."
+            exit 1
+          fi
+
+  test-collector:
+    runs-on: depot-ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 #v5.5.0
+        with:
+          go-version-file: collector/odigosotelcol/go.mod
+
+      - name: Test collector distribution
+        working-directory: ./collector
+        run: make test
