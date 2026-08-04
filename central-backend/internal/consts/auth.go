@@ -27,11 +27,28 @@ func GetCentralBackendHost() string {
 }
 
 func GetCentralUIHost() string {
-	// TODO: make this env in install command
 	if host := os.Getenv("CENTRAL_UI_HOST"); host != "" {
+		if backendHost := os.Getenv("CENTRAL_BACKEND_HOST"); host == backendHost {
+			if uiHost := uiHostForSharedExternalURL(host); uiHost != "" {
+				return uiHost
+			}
+		}
 		return host
 	}
 	return "http://localhost:3000"
+}
+
+// uiHostForSharedExternalURL returns the Central UI URL when CENTRAL_UI_HOST was
+// set to the same value as CENTRAL_BACKEND_HOST (the Keycloak proxy URL).
+// Production uses one browser origin for both services; local port-forward uses
+// backend on :8081 and UI on :3000.
+func uiHostForSharedExternalURL(shared string) string {
+	switch shared {
+	case "http://localhost:8081", "http://127.0.0.1:8081":
+		return "http://localhost:3000"
+	default:
+		return ""
+	}
 }
 
 const (
