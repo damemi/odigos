@@ -26,10 +26,11 @@ import { stripEmpty } from './utils';
 // a per-type `config`. central-ui's domain model (the ui-kit `InstrumentationRule`)
 // is a single flat shape carrying one optional config object per rule type. The
 // VM surface is also narrower than k8s: rules are global (no `sourceScopes` /
-// `workloads`), carry no `notes`/`disabled`/`profileName`, and `payloadCollection`
-// is a set of booleans rather than per-signal config objects. These helpers
-// translate between the two surfaces (resolved from the version-pinned dialect
-// documents), filling the VM-absent fields with neutral defaults.
+// `workloads` — kit scopes are stripped on create/update), and
+// `payloadCollection` is a set of booleans rather than per-signal config
+// objects. These helpers translate between the two surfaces (resolved from the
+// version-pinned dialect documents), filling the VM-absent fields with neutral
+// defaults.
 
 type VmRule = GetInstrumentationRulesQuery['instrumentationRules'][number];
 // `ruleType` is a plain `RuleType` enum shared by every union member, so it's
@@ -156,26 +157,27 @@ const payloadKindHasAdvancedOptions = (kind: { mimeTypes?: string[] | null; maxP
 // `CreateInstrumentationRuleInput`/`UpdateInstrumentationRuleInput` carry
 // `name`, `ruleType`, `enabled`, `notes`, and the per-type config branch — but
 // NOT the k8s-only targeting fields (source scopes, workloads, conditions,
-// instrumentation libraries), a mutable display name, or the payload-collection
-// advanced options. Those would be silently dropped here and never reflected on
-// read, so reject the mutation up front with a clear, itemized error instead of
-// dropping data. The root `withGuardedRuns` wrapper turns this throw into a
-// normal error toast.
+// instrumentation libraries). Those are stripped below: VM rules are always
+// global, and kit callers (e.g. profiling's "Profiling Symbols" rule) still
+// attach source scopes for k8s. Dropping them is the correct VM mapping —
+// `buildVmRuleConfig` / the mutation input never forward them.
+//
+// Fields that would lose user-authored config with no VM equivalent (rename,
+// payload advanced options) are still rejected up front. The root
+// `withGuardedRuns` wrapper turns this throw into a normal error toast.
 const assertVmSupportedRuleFields = (rule: VmRuleInput, opts?: { ruleId?: string }): void => {
   const unsupported: string[] = [];
 
   if (opts?.ruleId && stripEmpty(rule.ruleName) && rule.ruleName !== opts.ruleId) unsupported.push('renaming a rule');
-  if ((rule.sourcesScopes?.length ?? 0) > 0) unsupported.push('source scopes');
-  if ((rule.workloads?.length ?? 0) > 0) unsupported.push('workloads');
-  if ((rule.instrumentationLibraries?.length ?? 0) > 0) unsupported.push('instrumentation libraries');
-  if ((rule.conditions?.length ?? 0) > 0) unsupported.push('conditions');
   const pc = rule.payloadCollection;
   if (pc && [pc.httpRequest, pc.httpResponse, pc.dbQuery, pc.messaging].some(payloadKindHasAdvancedOptions)) {
     unsupported.push('payload collection advanced options (mime types / max length / drop partial payloads)');
   }
 
   if (unsupported.length > 0) {
-    throw new Error(`The VM agent does not support the following on instrumentation rules: ${unsupported.join(', ')}. These would be silently ignored — remove them, or manage this rule on a Kubernetes platform.`);
+    throw new Error(
+      `The VM agent does not support the following on instrumentation rules: ${unsupported.join(', ')}. These would be silently ignored — remove them, or manage this rule on a Kubernetes platform.`,
+    );
   }
 };
 

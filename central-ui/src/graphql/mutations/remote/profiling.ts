@@ -14,3 +14,7 @@ export const ENABLE_SOURCE_PROFILING: VersionedRemoteFetch = {
   }`,
   },
 };
+
+// VM-only: resolved from the vmagent `clearProfileCache` dialect document
+// (see VmSpec on CLEAR_PROFILE_CACHE in odigos-api-adapter). No k8s bucket.
+export const CLEAR_PROFILE_CACHE: VersionedRemoteFetch = {};

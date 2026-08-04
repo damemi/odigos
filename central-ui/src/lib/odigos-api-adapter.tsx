@@ -47,6 +47,7 @@ import { useUserStore, useProxyStore } from '@/store';
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { vmQuery, type VmSelect } from '@/graphql/remote/vm-dialect';
 import { safeJsonParse, trimVersion } from '@odigos/ui-kit/functions';
+import { supportsWorkloadReportRegion } from '@/graphql/remote/utils';
 import { PlatformType, Tier, type Action } from '@odigos/ui-kit/types';
 import { mapVmRuleTypesToOptions } from '@/graphql/remote/vm-rule-types';
 import { CombinedGraphQLErrors, ServerError } from '@apollo/client/errors';
@@ -54,6 +55,8 @@ import { mapVmActionTypesToOptions } from '@/graphql/remote/vm-action-types';
 import { ApolloLink, type ApolloClient, type DocumentNode } from '@apollo/client';
 import type { VersionedRemoteFetch, WorkloadWithOdigosHealthStatus } from '@/types';
 import { normalizeActionForWire, parseRenamesString } from '@/lib/action-form-normalization';
+import { mapVmClearProfileCache, mapVmEnableSourceProfiling, mapVmHotFunctions, mapVmProfilingSlots, mapVmSourceProfile, vmProfilingService } from '@/graphql/remote/vm-profiling';
+import { mapVmActions, vmCreateActionResult, vmCreateActionVariables, vmDeleteActionResult, vmDeleteActionVariables, vmUpdateActionResult, vmUpdateActionVariables } from '@/graphql/remote/vm-actions';
 import {
   buildVmPersistSources,
   buildVmSourcesWithReportsQuery,
@@ -64,8 +67,6 @@ import {
   vmUpdateSourceVariables,
   withWorkloadReportRegion,
 } from '@/graphql/remote/vm-sources';
-import { supportsWorkloadReportRegion } from '@/graphql/remote/utils';
-import { mapVmActions, vmCreateActionResult, vmCreateActionVariables, vmDeleteActionResult, vmDeleteActionVariables, vmUpdateActionResult, vmUpdateActionVariables } from '@/graphql/remote/vm-actions';
 import {
   mapVmDestinationTypesToCategories,
   mapVmDestinations,
@@ -200,7 +201,9 @@ import type {
   ExtendedPodInfo,
   FetchedConfig,
   GatewayInfo,
+  GetProfileHotFunctionsVars,
   HighlyRelevantOperationRuleInput,
+  HotFunctionsResult,
   NodeCollectoInfo,
   NoisyOperationRuleInput,
   PeerSources,
@@ -214,6 +217,7 @@ import type {
   SamplingRulesK8sHealthConfig,
   ServiceMapSources,
   SourceProfilingResult,
+  SourceProfilingVars,
   TestConnectionResponse,
   TokenPayload,
   Workload,
@@ -254,6 +258,7 @@ import {
   GET_COLLECTOR_POD_INFO,
   GET_PROFILING_SLOTS,
   GET_SOURCE_PROFILING,
+  GET_PROFILE_HOT_FUNCTIONS,
   GET_SAMPLING_RULES,
   GET_SERVICE_MAP,
   GET_SOURCES_WITH_STATUS,
@@ -283,6 +288,7 @@ import {
   RESET_LOCAL_UI_CONFIG_TO_FACTORY_DEFAULTS,
   PERSIST_NAMESPACES,
   ENABLE_SOURCE_PROFILING,
+  CLEAR_PROFILE_CACHE,
   UPDATE_REMOTE_CONFIG,
   CREATE_NOISY_OPERATION_RULE,
   UPDATE_NOISY_OPERATION_RULE,
@@ -1310,15 +1316,47 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
     }),
 
     // profiling — bare-shape slots, extract from `{ <field>: <bare> }` envelopes.
-    GET_PROFILING_SLOTS: wrapVersioned<ProfilingSlots, undefined>(GET_PROFILING_SLOTS, (d) => (d as { profilingSlots?: ProfilingSlots })?.profilingSlots),
-    // Wire returns `{ computePlatform: { source: { profiling: { profileJson } } } }`.
-    // Walk the path and surface the bare `{ profileJson }` shape so the
-    // consumer never has to narrow.
-    GET_SOURCE_PROFILING: wrapVersioned<SourceProfilingResult, WorkloadId>(GET_SOURCE_PROFILING, (d) => {
-      const env = d as { computePlatform?: { source?: { profiling?: SourceProfilingResult } }; sourceProfiling?: SourceProfilingResult } | null | undefined;
-      return env?.computePlatform?.source?.profiling ?? env?.sourceProfiling;
+    // VM (CORE-1246): agents-api `profilingSlots` nests limits under `cache`; flatten to kit shape.
+    // Docs from `@odigos/vmagent-api-apollo-client` ≥0.17.0 (`ProfilingSlotsDocument` / etc.).
+    GET_PROFILING_SLOTS: wrapVersioned<ProfilingSlots, undefined>(GET_PROFILING_SLOTS, (d) => (d as { profilingSlots?: ProfilingSlots })?.profilingSlots, undefined, {
+      select: (d) => d.ProfilingSlotsDocument,
+      transformResult: (data) => mapVmProfilingSlots(data),
     }),
-    ENABLE_SOURCE_PROFILING: wrapVersioned<EnableProfilingResult, WorkloadId>(ENABLE_SOURCE_PROFILING, (d) => (d as { enableSourceProfiling?: EnableProfilingResult })?.enableSourceProfiling),
+    // K8s wire: `{ computePlatform: { source: { profiling: { profileJson } } } }`.
+    // VM wire: `{ sourceProfile: { profileJson } }` keyed by service name.
+    GET_SOURCE_PROFILING: wrapVersioned<SourceProfilingResult, SourceProfilingVars>(
+      GET_SOURCE_PROFILING,
+      (d) => {
+        const env = d as { computePlatform?: { source?: { profiling?: SourceProfilingResult } }; sourceProfiling?: SourceProfilingResult } | null | undefined;
+        return env?.computePlatform?.source?.profiling ?? env?.sourceProfiling;
+      },
+      undefined,
+      {
+        select: (d) => d.SourceProfileDocument,
+        transformVariables: (vars) => ({ service: vmProfilingService(vars) }),
+        transformResult: (data) => mapVmSourceProfile(data),
+      },
+    ),
+    ENABLE_SOURCE_PROFILING: wrapVersioned<EnableProfilingResult, SourceProfilingVars>(
+      ENABLE_SOURCE_PROFILING,
+      (d) => (d as { enableSourceProfiling?: EnableProfilingResult })?.enableSourceProfiling,
+      undefined,
+      {
+        select: (d) => d.EnableSourceProfilingDocument,
+        transformVariables: (vars) => ({ service: vmProfilingService(vars) }),
+        transformResult: (data) => mapVmEnableSourceProfiling(data),
+      },
+    ),
+    // VM agents-api hot functions (secondary; flame path above is the primary Central UI).
+    GET_PROFILE_HOT_FUNCTIONS: wrapVersioned<HotFunctionsResult, GetProfileHotFunctionsVars | undefined>(GET_PROFILE_HOT_FUNCTIONS, undefined, undefined, {
+      select: (d) => d.ProfileHotFunctionsDocument ?? d.ProfileHotFunctionsV2Document,
+      transformVariables: (vars) => ({ topN: vars?.topN ?? null }),
+      transformResult: (data) => mapVmHotFunctions(data),
+    }),
+    CLEAR_PROFILE_CACHE: wrapVersioned<boolean, undefined>(CLEAR_PROFILE_CACHE, undefined, undefined, {
+      select: (d) => d.ClearProfileCacheDocument ?? d.ClearProfileCacheV2Document,
+      transformResult: (data) => mapVmClearProfileCache(data),
+    }),
 
     // pipeline collectors — bare-shape slots. The backend's GraphQL
     // field names predate the kit's normalization: the gateway is

@@ -33,3 +33,7 @@ export const GET_SOURCE_PROFILING: VersionedRemoteFetch = {
 `,
   },
 };
+
+// VM-only: resolved from the vmagent `profileHotFunctions` dialect document
+// (see VmSpec on GET_PROFILE_HOT_FUNCTIONS in odigos-api-adapter). No k8s bucket.
+export const GET_PROFILE_HOT_FUNCTIONS: VersionedRemoteFetch = {};
