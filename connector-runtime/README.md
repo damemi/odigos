@@ -39,6 +39,7 @@ internal/heartbeat/reader.go                  # best-effort pgx read of runtime_
 | `CONNECTOR_AWS_IMAGE` | — | Image stamped onto AWS connector Deployments (overridable per-CR via `spec.runtime.image`) |
 | `CONNECTOR_GCP_IMAGE` | — | Image stamped onto GCP connector Deployments (overridable per-CR via `spec.runtime.image`) |
 | `CONNECTOR_AZURE_IMAGE` | — | Image stamped onto Azure connector Deployments (overridable per-CR via `spec.runtime.image`) |
+| `CONNECTOR_AWS_FARGATE_AGENTS_IMAGE` | — | Optional override of the odigos-fargate-agents bundle, stamped as `ODIGOS_FARGATE_AGENTS_IMAGE` onto AWS connector Deployments (empty keeps the connector's compiled-in default) |
 
 Flags: `--leader-elect`, `--metrics-bind-address` (`:8080`), `--health-probe-bind-address` (`:8081`).
 

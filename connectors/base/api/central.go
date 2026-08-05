@@ -18,15 +18,91 @@ import (
 // SourceOverrides carries matched-source configuration overrides surfaced on WorkloadReports.
 // ServiceName overrides OTel service.name when set; it does not change workload identity.
 type SourceOverrides struct {
-	ServiceName       string
-	RuntimeLanguage   string
-	RuntimeVersion    string
-	OtelDistroName    string
+	ServiceName     string
+	RuntimeLanguage string
+	RuntimeVersion  string
+	OtelDistroName  string
+	// Containers narrows the overrides above to individual containers of a container-shaped
+	// workload. Empty for single-container platforms (Lambda) and for workloads the customer has
+	// not narrowed; see domainsrc.ContainerOverride for why containers are keyed by name.
+	Containers []domainsrc.ContainerOverride
 }
 
 // HasRuntimeOverride reports whether a runtime language or version override is configured.
 func (o SourceOverrides) HasRuntimeOverride() bool {
 	return o.RuntimeLanguage != "" || o.RuntimeVersion != ""
+}
+
+// ContainerOverrideFor returns the override for a named container, or nil when none is configured.
+func (o SourceOverrides) ContainerOverrideFor(name string) *domainsrc.ContainerOverride {
+	for i := range o.Containers {
+		if o.Containers[i].ContainerName == name {
+			return &o.Containers[i]
+		}
+	}
+	return nil
+}
+
+// WorkloadContainer is one container of a container-shaped workload, as the connector sees it from
+// the provider's control plane.
+//
+// A connector rewrites a task definition or a service spec, so it knows every container, its image
+// and its detected runtime — but it never observes a process inside one. That is why there are no
+// PIDs here: the wire field exists for agents that can see processes, and a connector leaving it
+// empty says "no process visibility", not "no processes".
+type WorkloadContainer struct {
+	Name  string
+	Image string
+	// RuntimeLanguage/RuntimeVersion are this container's own detection, not the workload's.
+	RuntimeLanguage string
+	RuntimeVersion  string
+	// OverrideLanguage/OverrideVersion mirror a per-container source override when one applies.
+	OverrideLanguage string
+	OverrideVersion  string
+	Instrumented bool
+	// Eligible plus ExcludedReason are the pair that travels: whether Odigos can instrument this
+	// container, and — when it cannot — why. ExcludedReason is never left empty on an ineligible
+	// container, because it is the only explanation a client ever receives.
+	Eligible       bool
+	ExcludedReason string
+	Distro         string
+	// Essential and OdigosManaged are CONNECTOR-INTERNAL and deliberately absent from the report:
+	// they are provider-specific (an ECS container-definition flag, an Odigos ownership marker) and a
+	// client would need each platform's rules to make sense of them. The provider applies those rules
+	// and reports the outcome instead — see ExcludedReason above, which is where both end up
+	// ("non-essential container", "Odigos agents sidecar").
+	Essential     bool
+	OdigosManaged bool
+}
+
+// WorkloadDetails carries the kind-specific facts a connector knows about a workload beyond the
+// common report. Kind selects which fields are meaningful, and the GraphQL boundary narrows it to
+// the matching wire type; nil means the workload has nothing beyond the common report.
+//
+// It is a flat superset rather than a Go interface because a connector stores and passes it as
+// plain data. Every field is named — that is the whole point, since these facts used to have
+// nowhere to live except an untyped metadata map.
+type WorkloadDetails struct {
+	Kind string
+
+	// Container-shaped kinds (ECS, Cloud Run).
+	Containers []WorkloadContainer
+
+	// ECS only.
+	ClusterArn           string
+	TaskDefinition       string
+	LaunchType           string
+	DeploymentController string
+
+	// Lambda only.
+	FunctionArn  string
+	Runtime      string
+	Architecture string
+	LayerArn     string
+
+	// Cloud Run only.
+	Service  string
+	Revision string
 }
 
 // DiscoveredWorkload is a discovered cloud resource, reported to Central as a WorkloadReport.
@@ -71,8 +147,30 @@ type DiscoveredWorkload struct {
 	// source-matched workload of such a type is reported as NotImplemented rather than as instrumented,
 	// so an unsupported capability is never shown as working.
 	InstrumentationImplemented bool
-	LastSeenAt                 time.Time
+	// WaitingFor names the prerequisite blocking a workload the customer HAS marked for
+	// instrumentation, when the connector is deliberately not attempting it yet. It is not a failure:
+	// nothing has gone wrong and nothing needs fixing on the workload — a precondition simply is not
+	// met, so the reconcile skips it and will proceed on its own once the precondition is satisfied.
+	//
+	// Without this the skip is invisible: the workload reports as enabled-but-not-instrumented with no
+	// explanation, and the only trace is a connector log line the customer cannot see.
+	// Empty when nothing is blocking. Set by the coordinator, which knows the connector-wide state.
+	WaitingFor string
+	// Details carries kind-specific facts (an ECS task's containers, a Lambda's ARN and layer).
+	// Nil when the provider has nothing to add beyond the common report.
+	Details    *WorkloadDetails
+	LastSeenAt time.Time
 }
+
+// Prerequisites a workload's instrumentation can be waiting on. These are values of
+// DiscoveredWorkload.WaitingFor and travel to the UI as WorkloadReport.progress.waitingFor.
+const (
+	// WaitingForDestination: the customer marked the workload for instrumentation but the connector
+	// has no OTLP destination. Every connector instrumentation exports directly to that destination
+	// (a Fargate task or Lambda has no node-local collector), so there is nowhere to point an agent
+	// and instrumentation is deferred rather than applied half-configured.
+	WaitingForDestination = "destination"
+)
 
 // ReportedServiceName returns the OTel service.name instrumentation should report: the source-level
 // override when set, otherwise the discovered workload identity.

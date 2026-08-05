@@ -176,10 +176,19 @@ func (awsTester) Test(ctx context.Context, in Input) (*Result, error) {
 			"grant "+permissionsFor(awsSpec, in.Capabilities, "lambda:")))
 	}
 	if ecsActive {
+		// The remediation lists every capability-required ecs:* permission; when Fargate instrumentation
+		// is enabled that set includes the write path (RegisterTaskDefinition/UpdateService), which also
+		// needs pass-role on the task definitions' roles — called out here since it is never probed
+		// (these checks stay read-only).
+		ecsGrant := "grant " + permissionsFor(awsSpec, in.Capabilities, "ecs:")
+		if iamPerms := permissionsFor(awsSpec, in.Capabilities, "iam:"); !strings.HasPrefix(iamPerms, "the required ") {
+			ecsGrant += "; for Fargate instrumentation also grant " + iamPerms +
+				" on the task/execution roles (scope with iam:PassedToService=ecs-tasks.amazonaws.com)"
+		}
 		res.add(boolCheck(CheckDiscoveryECS, "ECS discovery permissions", len(ecsDenied) == 0,
 			"ecs:ListClusters allowed",
 			"access denied in region(s): "+strings.Join(ecsDenied, ", "),
-			"grant "+permissionsFor(awsSpec, in.Capabilities, "ecs:")))
+			ecsGrant))
 	}
 
 	res.finalize()

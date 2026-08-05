@@ -21,10 +21,44 @@ type DistroOverride struct {
 	OtelDistroName string `json:"otel_distro_name,omitempty" validate:"omitempty"`
 }
 
+// ContainerOverride narrows the source's overrides to one container of a container-shaped workload.
+// Containers are identified by name — the only sub-workload key that survives a redeploy, unlike a
+// task ARN or a PID. Containers not listed keep the workload-level behavior.
+//
+// This is what makes a multi-application task definition expressible: one ECS task can pack six
+// apps in six languages, and a single workload-wide RuntimeOverride cannot describe any of them
+// without misdescribing the other five.
+type ContainerOverride struct {
+	ContainerName   string          `json:"container_name" validate:"required"`
+	RuntimeOverride RuntimeOverride `json:"runtime_override,omitempty" validate:"omitempty"`
+	DistroOverride  DistroOverride  `json:"distro_override,omitempty" validate:"omitempty"`
+	// Disabled excludes a container from instrumentation even when its runtime is supported.
+	// False (the zero value) means the workload-level decision applies — see the wire type's doc
+	// for why this is an opt-out rather than an `enabled` opt-in.
+	Disabled bool `json:"disabled,omitempty"`
+}
+
+// InstrumentationEnabled reports whether this container should be instrumented.
+func (c ContainerOverride) InstrumentationEnabled() bool { return !c.Disabled }
+
 // SourceConfig is optional instrumentation configuration for a source.
 type SourceConfig struct {
 	RuntimeOverride RuntimeOverride `json:"runtime_override,omitempty" validate:"omitempty"`
 	DistroOverride  DistroOverride  `json:"distro_override,omitempty" validate:"omitempty"`
+	// ContainerOverrides applies only to container-shaped kinds. The wire carries it under a
+	// per-kind branch (config.ecs) so a Lambda source cannot express it at all; it is flattened
+	// here because one connector handles every kind and the kind is already on the Source.
+	ContainerOverrides []ContainerOverride `json:"container_overrides,omitempty" validate:"omitempty,dive"`
+}
+
+// ContainerOverrideFor returns the override for a named container, or nil when none is configured.
+func (c SourceConfig) ContainerOverrideFor(name string) *ContainerOverride {
+	for i := range c.ContainerOverrides {
+		if c.ContainerOverrides[i].ContainerName == name {
+			return &c.ContainerOverrides[i]
+		}
+	}
+	return nil
 }
 
 // Source is connector-local instrumentation intent for a discovered cloud workload.

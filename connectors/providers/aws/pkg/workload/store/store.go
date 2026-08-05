@@ -9,8 +9,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
 	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
 )
 
 var inventoryLog = connlog.Subsystem("aws-workload-store")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
@@ -96,27 +97,31 @@ type LambdaFunction struct {
 	Metadata     map[string]any
 }
 
-// ECSTask is a discovered ECS task inventory record. Only tasks on fargate-clusters are stored (the
-// whole cluster is handled as fargate), so every stored task is a per-task sidecar fargate-task.
+// ECSTask is a discovered ECS task inventory record. Only FARGATE-launch-type tasks are stored:
+// EC2-launch-type tasks belong to the cluster agent (compute-platform domain) and are never per-task
+// sidecar candidates. Service-managed tasks are coverage detail under their ecs_services row; standalone
+// tasks (no service) are workloads of their own, keyed by task ARN.
 type ECSTask struct {
 	Region         string
 	ClusterARN     string
 	TaskARN        string
 	ServiceName    string
 	TaskDefinition string
-	LaunchType     string // EC2 | FARGATE (a hybrid cluster stores both; both are fargate-task)
+	LaunchType     string // FARGATE (possibly via a FARGATE/FARGATE_SPOT capacity provider)
 	LastStatus     string
 	DesiredStatus  string
 	Metadata       map[string]any
 }
 
-// ecsWorkloadName is the SQL expression composing a Fargate workload's display name as
-// "{cluster name}-{task name}": the cluster's short name (last cluster-ARN segment) joined to the task's
-// name as shown in the cluster — its ECS service when it has one, else the task id (last task-ARN segment)
-// for a standalone task. Used identically in ListWorkloads (to produce the name) and
-// LookupDiscoveredWorkload (to match it) so a created source's name resolves back to its workload.
-const ecsWorkloadName = `regexp_replace(cluster_arn, '^.*/', '') || '-' || ` +
-	`CASE WHEN COALESCE(service_name, '') <> '' THEN service_name ELSE regexp_replace(task_arn, '^.*/', '') END`
+// ecsServiceWorkloadName composes a Fargate SERVICE workload's display name over ecs_services rows:
+// "{cluster short name}-{service name}". ecsStandaloneTaskWorkloadName is the analog over standalone
+// ecs_tasks rows (no service): "{cluster short name}-{task id}". Each is used identically in
+// ListWorkloads (to produce the name) and LookupDiscoveredWorkload (to match it) so a created source's
+// name resolves back to its workload.
+const (
+	ecsServiceWorkloadName        = `regexp_replace(cluster_arn, '^.*/', '') || '-' || service_name`
+	ecsStandaloneTaskWorkloadName = `regexp_replace(cluster_arn, '^.*/', '') || '-' || regexp_replace(task_arn, '^.*/', '')`
+)
 
 func metaJSON(m map[string]any) (string, error) {
 	if m == nil {
@@ -304,7 +309,9 @@ func (s *Store) ClearLambdaInstrumentationError(ctx context.Context, functionARN
 	return err
 }
 
-// UpsertECSTask inserts or refreshes a Fargate-cluster task inventory row.
+// UpsertECSTask inserts or refreshes a Fargate task inventory row. The instrumentation_error metadata key
+// is preserved across the refresh (same jsonb merge as UpsertLambda): the reconciler writes a terminal
+// unsupported error onto standalone-task rows, and a wholesale metadata replace would erase it every scan.
 func (s *Store) UpsertECSTask(ctx context.Context, t ECSTask) error {
 	inventoryLog.Debug("upsert ecs task", "region", t.Region, "arn", t.TaskARN)
 	meta, err := metaJSON(t.Metadata)
@@ -319,7 +326,12 @@ func (s *Store) UpsertECSTask(ctx context.Context, t ECSTask) error {
 			region = EXCLUDED.region, cluster_arn = EXCLUDED.cluster_arn, service_name = EXCLUDED.service_name,
 			task_definition = EXCLUDED.task_definition, launch_type = EXCLUDED.launch_type,
 			last_status = EXCLUDED.last_status, desired_status = EXCLUDED.desired_status,
-			metadata = EXCLUDED.metadata, last_seen_at = now(), deleted_at = NULL
+			metadata = EXCLUDED.metadata
+				|| CASE
+					WHEN connector_aws.ecs_tasks.metadata ? 'instrumentation_error'
+					THEN jsonb_build_object('instrumentation_error', connector_aws.ecs_tasks.metadata->'instrumentation_error')
+					ELSE '{}'::jsonb END,
+			last_seen_at = now(), deleted_at = NULL
 	`, s.ConnectorName(), t.Region, t.ClusterARN, t.TaskARN, t.ServiceName, t.TaskDefinition, t.LaunchType, t.LastStatus, t.DesiredStatus, meta)
 	return err
 }
@@ -403,7 +415,7 @@ func (s *Store) SetOwnerAccount(ctx context.Context, accountID string) error {
 // used when the connector name is rebound to a different AWS account (the old account's inventory is
 // meaningless for the new one). Sources/destinations are purged separately via the base PurgeIntent.
 func (s *Store) PurgeConnectorInventory(ctx context.Context) error {
-	for _, table := range []string{"lambda_functions", "ecs_tasks", "discovery_state"} {
+	for _, table := range []string{"lambda_functions", "ecs_tasks", "ecs_services", "discovery_state"} {
 		if _, err := s.Pool().Exec(ctx, "DELETE FROM connector_aws."+table+" WHERE connector_name = $1", s.ConnectorName()); err != nil {
 			return fmt.Errorf("purge %s: %w", table, err)
 		}
@@ -421,29 +433,48 @@ func (s *Store) UpdateDiscoveryState(ctx context.Context, region, kind string, s
 	return err
 }
 
-// ListWorkloads returns the discovered WORKLOAD inventory (Lambda functions + Fargate-cluster tasks) as
-// raw DiscoveredWorkload objects; the base coordinator enriches them with source intent.
+// ListWorkloads returns the discovered WORKLOAD inventory (Lambda functions + Fargate services and
+// standalone Fargate tasks) as raw DiscoveredWorkload objects; the base coordinator enriches them with
+// source intent. Every query returns the same column shape:
+//
+//	name, region, external_id, language, version, last_seen_at, instrumented, error, phase
+//
+// Lambda encodes language+version in its runtime identifier, split in Go (splitRuntime); the ECS rows
+// carry them as separate metadata keys.
 func (s *Store) ListWorkloads(ctx context.Context) ([]api.DiscoveredWorkload, error) {
 	inventoryLog.Debug("list workloads", "connector", s.ConnectorName())
 	queries := []struct {
-		kind string
-		sql  string
+		kind        string
+		lambdaSplit bool // language column is a Lambda runtime id — split into (language, version)
+		sql         string
 	}{
-		{KindLambda, fmt.Sprintf(`SELECT function_name, region, function_arn, COALESCE(runtime, ''), last_seen_at,
-			COALESCE(metadata->>'instrumented','false')='true', '%s',
+		{KindLambda, true, `SELECT function_name, region, function_arn, COALESCE(runtime, ''), '', last_seen_at,
+			COALESCE(metadata->>'instrumented','false')='true',
 			COALESCE(metadata->>'instrumentation_error', ''),
-			COALESCE(metadata->>'instrumentation_phase', '')
-			FROM connector_aws.lambda_functions WHERE connector_name = $1 AND deleted_at IS NULL`, KindLambda)},
-		// ECS tasks roll up to their (cluster, service): the external id — a source's stable identity — is
-		// the cluster+service, NOT the task ARN, which recycles on every deploy/scale and would churn the
-		// intent row. Tasks of one service in a cluster collapse to a single workload (MAX(last_seen_at) is
-		// the representative freshness). A standalone task (no service) is inherently ephemeral, so it keeps
-		// its task ARN as identity.
-		{KindECSTask, fmt.Sprintf(`SELECT `+ecsWorkloadName+`, region,
-			CASE WHEN COALESCE(service_name, '') <> '' THEN cluster_arn || '/' || service_name ELSE task_arn END,
-			'', MAX(last_seen_at), false, '%s', '', ''
-			FROM connector_aws.ecs_tasks WHERE connector_name = $1 AND deleted_at IS NULL
-			GROUP BY 1, region, 3`, KindECSTask)},
+			COALESCE(metadata->>'instrumentation_phase', ''),
+			COALESCE(architecture, ''), '', '', NULL
+			FROM connector_aws.lambda_functions WHERE connector_name = $1 AND deleted_at IS NULL`},
+		// Fargate SERVICES: one workload per (cluster, service) from the ecs_services inventory. The
+		// external id — a source's stable identity — is cluster_arn || '/' || service_name (NOT a task ARN,
+		// which recycles on every deploy/scale and would churn the intent row). Instrumentation state comes
+		// from the metadata the instrumentor writes through.
+		{KindECSTask, false, `SELECT ` + ecsServiceWorkloadName + `, region, cluster_arn || '/' || service_name,
+			COALESCE(metadata->>'runtime_language',''), COALESCE(metadata->>'runtime_version',''), last_seen_at,
+			COALESCE(metadata->>'instrumented','false')='true',
+			COALESCE(metadata->>'instrumentation_error', ''),
+			COALESCE(metadata->>'instrumentation_phase', ''),
+			COALESCE(launch_type, ''), COALESCE(task_definition, ''), COALESCE(deployment_controller, ''),
+			metadata->'containers'
+			FROM connector_aws.ecs_services WHERE connector_name = $1 AND deleted_at IS NULL`},
+		// STANDALONE Fargate tasks (no ECS service — RunTask/EventBridge): inherently ephemeral, so the task
+		// ARN is the identity. They stay discoverable/selectable, but instrumentation reports a terminal
+		// unsupported error (there is no UpdateService rollout path), carried on the task row's metadata.
+		{KindECSTask, false, `SELECT ` + ecsStandaloneTaskWorkloadName + `, region, task_arn,
+			'', '', last_seen_at, false,
+			COALESCE(metadata->>'instrumentation_error', ''), '',
+			'', '', '', NULL
+			FROM connector_aws.ecs_tasks
+			WHERE connector_name = $1 AND deleted_at IS NULL AND COALESCE(service_name, '') = ''`},
 	}
 
 	var out []api.DiscoveredWorkload
@@ -453,15 +484,25 @@ func (s *Store) ListWorkloads(ctx context.Context) ([]api.DiscoveredWorkload, er
 			return nil, err
 		}
 		for rows.Next() {
-			var name, region, externalID, runtime, instrType, instrErr, instrPhase string
+			var name, region, externalID, language, version, instrErr, instrPhase string
+			// The last four columns carry the kind-specific facts each query supplies and the others
+			// pad out: architecture/launch type, task definition, deployment controller, and the ECS
+			// container inventory. They feed DiscoveredWorkload.Details, which the report narrows to
+			// the wire type matching the kind.
+			var archOrLaunchType, taskDefinition, deploymentController string
+			var containersJSON []byte
 			var lastSeen time.Time
 			var instrumented bool
-			if err := rows.Scan(&name, &region, &externalID, &runtime, &lastSeen, &instrumented, &instrType, &instrErr, &instrPhase); err != nil {
+			if err := rows.Scan(&name, &region, &externalID, &language, &version, &lastSeen, &instrumented, &instrErr, &instrPhase,
+				&archOrLaunchType, &taskDefinition, &deploymentController, &containersJSON); err != nil {
 				rows.Close()
 				return nil, err
 			}
-			language, version := splitRuntime(runtime)
-			w := api.DiscoveredWorkload{
+			runtime := language
+			if q.lambdaSplit {
+				language, version = splitRuntime(language)
+			}
+			out = append(out, api.DiscoveredWorkload{
 				ServiceName:          name,
 				Kind:                 q.kind,
 				Region:               region,
@@ -469,14 +510,13 @@ func (s *Store) ListWorkloads(ctx context.Context) ([]api.DiscoveredWorkload, er
 				RuntimeLanguage:      language,
 				RuntimeVersion:       version,
 				Instrumented:         instrumented,
-				InstrumentationType:  instrType,
+				InstrumentationType:  q.kind,
+				InstrumentationError: instrErr,
 				InstrumentationPhase: instrPhase,
-				LastSeenAt:           lastSeen,
-			}
-			if q.kind == KindLambda {
-				w.InstrumentationError = instrErr
-			}
-			out = append(out, w)
+				Details: workloadDetails(q.kind, externalID, runtime,
+					archOrLaunchType, taskDefinition, deploymentController, containersJSON),
+				LastSeenAt: lastSeen,
+			})
 		}
 		err = rows.Err()
 		rows.Close()
@@ -486,6 +526,80 @@ func (s *Store) ListWorkloads(ctx context.Context) ([]api.DiscoveredWorkload, er
 	}
 	inventoryLog.Debug("list workloads complete", "connector", s.ConnectorName(), "count", len(out))
 	return out, nil
+}
+
+// workloadDetails assembles the kind-specific detail block for one inventory row. It reports only
+// what the store actually holds: a Fargate service's containers come from the inventory the
+// instrumentor wrote, and a standalone task — which has no service, no revision and no
+// instrumentation path — gets nothing rather than a block of empty fields.
+func workloadDetails(kind, externalID, lambdaRuntime, archOrLaunchType, taskDefinition, deploymentController string, containersJSON []byte) *api.WorkloadDetails {
+	switch kind {
+	case KindLambda:
+		return &api.WorkloadDetails{
+			Kind:         kind,
+			FunctionArn:  externalID,
+			Runtime:      lambdaRuntime,
+			Architecture: archOrLaunchType,
+		}
+	case KindECSTask:
+		// Standalone tasks share this kind but are keyed by task ARN, so they carry none of the
+		// service columns; without them there is nothing worth reporting.
+		if taskDefinition == "" && archOrLaunchType == "" && len(containersJSON) == 0 {
+			return nil
+		}
+		return &api.WorkloadDetails{
+			Kind:                 kind,
+			ClusterArn:           clusterARNFromExternalID(externalID),
+			TaskDefinition:       taskDefinition,
+			LaunchType:           archOrLaunchType,
+			DeploymentController: deploymentController,
+			Containers:           decodeECSContainers(containersJSON),
+		}
+	default:
+		return nil
+	}
+}
+
+// clusterARNFromExternalID recovers the cluster ARN from an ECS service external id
+// (cluster_arn || '/' || service_name). It splits on the LAST separator, not the first: a cluster
+// ARN is itself "arn:...:cluster/<name>", so cutting at the first slash would return a truncated ARN.
+func clusterARNFromExternalID(externalID string) string {
+	if i := strings.LastIndex(externalID, "/"); i >= 0 {
+		return externalID[:i]
+	}
+	return externalID
+}
+
+// decodeECSContainers reads the container inventory the instrumentor persisted. A row written by an
+// older connector has no inventory, and a malformed one is not worth failing a whole listing over —
+// both degrade to no container layer, which the report renders as a workload without containers.
+func decodeECSContainers(raw []byte) []api.WorkloadContainer {
+	if len(raw) == 0 {
+		return nil
+	}
+	var stored []ECSContainer
+	if err := json.Unmarshal(raw, &stored); err != nil {
+		inventoryLog.Warn("ignoring unreadable ECS container inventory", "error", err)
+		return nil
+	}
+	out := make([]api.WorkloadContainer, 0, len(stored))
+	for _, c := range stored {
+		out = append(out, api.WorkloadContainer{
+			Name:             c.Name,
+			Image:            c.Image,
+			RuntimeLanguage:  c.RuntimeLanguage,
+			RuntimeVersion:   c.RuntimeVersion,
+			OverrideLanguage: c.OverrideLanguage,
+			OverrideVersion:  c.OverrideVersion,
+			Instrumented:     c.Instrumented,
+			Eligible:         c.Eligible,
+			ExcludedReason:   c.ExcludedReason,
+			Distro:           c.Distro,
+			Essential:        c.Essential,
+			OdigosManaged:    c.OdigosManaged,
+		})
+	}
+	return out
 }
 
 // splitRuntime splits an AWS Lambda runtime identifier into (language, version) at the first digit:
@@ -513,16 +627,27 @@ func (s *Store) LookupDiscoveredWorkload(ctx context.Context, serviceName, kind,
 			ORDER BY region LIMIT 1
 		`, s.ConnectorName(), serviceName, region).Scan(&externalID, &foundRegion)
 	case KindECSTask:
-		// Match by the SAME "{cluster name}-{task name}" display name ListWorkloads reports (serviceName is
-		// that composed handle), and return the SAME stable external id (cluster+service, or the task ARN for
-		// a standalone task) so a created source's external_resource_id matches the discovered workload.
+		// Match by the SAME composed display name ListWorkloads reports (serviceName is that handle) and
+		// return the SAME stable external id so a created source's external_resource_id matches the
+		// discovered workload. Services (from ecs_services) are tried first; a standalone task (from
+		// ecs_tasks, task ARN identity) is the fallback.
 		err = s.Pool().QueryRow(ctx, `
-			SELECT CASE WHEN COALESCE(service_name, '') <> '' THEN cluster_arn || '/' || service_name ELSE task_arn END, region
-			FROM connector_aws.ecs_tasks
-			WHERE connector_name = $1 AND (`+ecsWorkloadName+`) = $2 AND deleted_at IS NULL
+			SELECT cluster_arn || '/' || service_name, region
+			FROM connector_aws.ecs_services
+			WHERE connector_name = $1 AND (`+ecsServiceWorkloadName+`) = $2 AND deleted_at IS NULL
 			  AND ($3 = '' OR region = $3)
 			ORDER BY region LIMIT 1
 		`, s.ConnectorName(), serviceName, region).Scan(&externalID, &foundRegion)
+		if isNoRows(err) {
+			err = s.Pool().QueryRow(ctx, `
+				SELECT task_arn, region
+				FROM connector_aws.ecs_tasks
+				WHERE connector_name = $1 AND (`+ecsStandaloneTaskWorkloadName+`) = $2 AND deleted_at IS NULL
+				  AND COALESCE(service_name, '') = ''
+				  AND ($3 = '' OR region = $3)
+				ORDER BY region LIMIT 1
+			`, s.ConnectorName(), serviceName, region).Scan(&externalID, &foundRegion)
+		}
 	default:
 		return "", "", false, fmt.Errorf("unsupported workload kind %q", kind)
 	}

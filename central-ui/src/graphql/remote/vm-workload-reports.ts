@@ -1,11 +1,45 @@
 import { Kind, OperationTypeNode, parse, print, type DocumentNode, type OperationDefinitionNode } from 'graphql';
 import type { GetWorkloadReportsQuery } from '@odigos/vmagent-api-apollo-client';
 import type { OperationContext } from '@odigos/ui-kit/contexts';
-import { DesiredStateProgress, ProgrammingLanguages, type InstrumentationReport, type Workload } from '@odigos/ui-kit/types';
+import { DesiredStateProgress, ProgrammingLanguages, type InstrumentationReport, type OtelDistroName, type Workload } from '@odigos/ui-kit/types';
 import { dialectVersion, vmQuery } from '@/graphql/remote/vm-dialect';
-import { supportsWorkloadReportRegion } from '@/graphql/remote/utils';
+import { rememberWorkloadRegion, supportsTypedContainerDetails, supportsWorkloadReportRegion, withFragmentSelections, type VmContainerOverride, type VmSourceConfig } from '@/graphql/remote/utils';
 
-export type VmWorkloadReport = GetWorkloadReportsQuery['workloadReports'][number] & { region?: string | null };
+/** One `WorkloadReport.details.containers` row (agents-api v0.18.0+). */
+interface VmWorkloadDetailsContainer {
+  name: string;
+  runtime?: {
+    detected?: { language?: string | null; version?: string | null } | null;
+    override?: { language?: string | null; version?: string | null } | null;
+  } | null;
+  instrumented?: boolean | null;
+  distro?: string | null;
+  /**
+   * Whether Odigos can instrument this container, and why not when it cannot.
+   *
+   * This pair is the container's whole status: the reporter resolves every
+   * platform-specific rule (ECS essentiality, whether Odigos injected the
+   * container itself) and reports the outcome, so there is nothing for the UI to
+   * re-derive and no per-platform flag for it to interpret.
+   */
+  instrumentationEligible?: boolean | null;
+  excludedReason?: string | null;
+}
+
+/**
+ * `WorkloadReport.details`, narrowed to the container layer central-ui consumes.
+ *
+ * The wire type is an interface with one branch per kind; the container-shaped
+ * branches (ECS, docker, Cloud Run) all carry `containers`, and that is the only
+ * part with a slot in the kit's `Workload` today. The process-shaped branches
+ * leave `details` null, and Lambda's branch has no containers at all, so both
+ * simply read as absent here.
+ */
+interface VmWorkloadDetails {
+  containers?: VmWorkloadDetailsContainer[] | null;
+}
+
+export type VmWorkloadReport = GetWorkloadReportsQuery['workloadReports'][number] & { region?: string | null; details?: VmWorkloadDetails | null };
 
 /** WorkloadReport.current.state values from agents-api / connectors. */
 const WorkloadReportState = {
@@ -212,6 +246,87 @@ const mapReportProcesses = (report: VmWorkloadReport): InstrumentationReport['pr
 };
 
 /**
+ * `WorkloadReport.details.containers` -> the kit's `Workload.containers`.
+ *
+ * A container-shaped workload (an ECS task definition packing several apps) has a
+ * layer the flat report cannot express, and `Workload.containers` is the slot the
+ * kit already models it in — same shape as k8s, so a container row renders the
+ * same way whatever platform it came from. K8s is untouched: this only runs on
+ * the agents-api mapping path, off `details`, which no k8s proxy serves.
+ *
+ * `runtimeInfo` is the DETECTED runtime and `overrides.runtimeInfo` the override,
+ * because the kit derives the effective runtime as `overrides ?? detected`
+ * (`getEffectiveLanguage`) — writing the effective value into both would make
+ * every container look overridden. The distro override comes from the source's
+ * `containerOverrides` (customer intent) while `agentEnabled.otelDistroName` is
+ * the distro actually applied (reported status).
+ *
+ * `instrumentationEligible` + `excludedReason` become the container's
+ * `agentEnabledStatus`, which is the kit's per-container status slot (ContainersCard
+ * already renders its `message` as the badge tooltip). The report has no
+ * platform-specific container flags to interpret — an ECS container the platform
+ * does not treat as part of the application, or the agents sidecar Odigos injected
+ * itself, both arrive as an ineligible container whose reason says which.
+ */
+const CONTAINER_AGENT_ENABLED_NAME = 'AgentEnabled';
+
+/**
+ * A container's eligibility + reason as the kit's per-container Condition.
+ *
+ * `reasonEnum` is derived from `instrumented` / `instrumentationEligible` only —
+ * never from the reason text. The reason is prose written by the reporter for a
+ * human ("Odigos agents sidecar", "eBPF is not available on Fargate"), and pattern
+ * matching it here would put central-ui straight back to reading facts out of
+ * strings, which is what dropping the platform-specific container flags avoided.
+ */
+const mapContainerStatus = (container: VmWorkloadDetailsContainer) => {
+  const eligible = container.instrumentationEligible;
+  const message = container.excludedReason?.trim() || '';
+
+  if (container.instrumented) {
+    return { name: CONTAINER_AGENT_ENABLED_NAME, status: DesiredStateProgress.Success, reasonEnum: 'Instrumented', message };
+  }
+  if (eligible === false) {
+    // Not an error: the reporter decided this container is out of scope and said why.
+    return { name: CONTAINER_AGENT_ENABLED_NAME, status: DesiredStateProgress.Unsupported, reasonEnum: 'NotEligible', message };
+  }
+  return { name: CONTAINER_AGENT_ENABLED_NAME, status: DesiredStateProgress.Pending, reasonEnum: 'NotInstrumented', message };
+};
+
+const mapReportContainers = (report: VmWorkloadReport, containerOverrides: VmContainerOverride[]): Workload['containers'] => {
+  const containers = report.details?.containers ?? [];
+  if (!containers.length) return null;
+
+  const overrideByName = new Map(containerOverrides.map((o) => [o.containerName, o]));
+
+  return containers.map((container) => {
+    const override = overrideByName.get(container.name);
+    const detected = container.runtime?.detected;
+    const runtimeOverride = container.runtime?.override ?? override?.runtimeOverride;
+    const distroOverride = override?.distroOverride?.otelDistroName || undefined;
+    const hasRuntimeOverride = !!(runtimeOverride?.language || runtimeOverride?.version);
+
+    return {
+      containerName: container.name,
+      runtimeInfo: detected?.language || detected?.version ? { language: mapLanguage(detected?.language) ?? ProgrammingLanguages.Unknown, runtimeVersion: detected?.version ?? null } : null,
+      agentEnabled: {
+        agentEnabled: !!container.instrumented,
+        otelDistroName: (container.distro as OtelDistroName | undefined) ?? null,
+        agentEnabledStatus: mapContainerStatus(container),
+      },
+      overrides:
+        hasRuntimeOverride || distroOverride
+          ? {
+              containerName: container.name,
+              otelDistroName: (distroOverride as OtelDistroName | undefined) ?? null,
+              runtimeInfo: hasRuntimeOverride ? { language: mapLanguage(runtimeOverride?.language) ?? ProgrammingLanguages.Unknown, runtimeVersion: runtimeOverride?.version ?? null } : null,
+            }
+          : null,
+    };
+  });
+};
+
+/**
  * Map WorkloadReport state into the same Condition shape HealthCard expects
  * (reasonEnum + message), so connector/VM Overview matches the K8s banner.
  */
@@ -267,6 +382,9 @@ const applyReportToWorkload = (workload: Workload, report: VmWorkloadReport): Wo
   const progress = mapReportStateToProgress(instrumentationReport.state, enabled);
   const { reasonEnum, message } = mapReportToHealthPresentation(instrumentationReport);
   const language = mapLanguage(instrumentationReport.runtimeLanguage);
+  // The Source carries the customer's per-container intent, the report carries what
+  // was applied; the container rows need both, and the Source mapping already ran.
+  const containers = mapReportContainers(report, (workload.sourceConfig as VmSourceConfig | null | undefined)?.containerOverrides ?? []);
 
   return {
     ...workload,
@@ -277,6 +395,7 @@ const applyReportToWorkload = (workload: Workload, report: VmWorkloadReport): Wo
       reasonEnum,
       message,
     },
+    ...(containers ? { containers } : {}),
     ...(language
       ? {
           runtimeInfo: {
@@ -293,6 +412,10 @@ export const mergeVmWorkloadReports = (workloads: Workload[], reports: VmWorkloa
 
   const byKey = new Map<string, VmWorkloadReport>();
   for (const report of reports) {
+    // The kit's bulk-persist payload drops region, so remember it here too — a
+    // source disabled from the sources list needs it just as much as one created
+    // from the discovery drawer. See the region side-channel in vm-sources.ts.
+    rememberWorkloadRegion(report.kind, report.serviceName, report.region);
     byKey.set(reportKey(report.serviceName, report.kind, report.region), report);
   }
 
@@ -356,4 +479,49 @@ export const buildVmSourcesWithReportsQuery = (ctx: OperationContext): string | 
 export const withWorkloadReportRegion = (printedQuery: string): string => {
   if (/\bregion\b/.test(printedQuery)) return printedQuery;
   return printedQuery.replace(/(fragment WorkloadReportFields on WorkloadReport \{\s*serviceName\s*\n\s*kind)/, '$1\n  region');
+};
+
+// `WorkloadReport.details` (agents-api v0.18.0+), narrowed to what
+// `mapReportContainers` consumes.
+//
+// Only the container-shaped branches are selected: Lambda's branch has no
+// containers, and the ECS/Cloud Run workload scalars (clusterArn, taskDefinition,
+// launchType, revision) have nowhere to go in the kit's `Workload` yet — asking
+// for them would just grow every report payload. `runtime.running` is skipped for
+// the same reason: the kit computes the effective runtime from detected+override
+// itself. Add a field here when, and only when, something renders it.
+//
+// `instrumentationEligible` + `excludedReason` are the container's status, and the
+// report carries no platform-specific container flags at all — an ECS container the
+// platform does not treat as part of the application and the agents sidecar Odigos
+// injected itself both arrive here as an ineligible container whose reason says
+// which, so this pair is the whole story and there is nothing else to ask for.
+const WORKLOAD_DETAILS_CONTAINER_FIELDS = `
+  name
+  runtime {
+    detected { language version }
+    override { language version }
+  }
+  instrumented
+  instrumentationEligible
+  excludedReason
+  distro
+`;
+
+const WORKLOAD_DETAILS_SELECTIONS = `
+  details {
+    ... on EcsWorkloadDetails { containers { ${WORKLOAD_DETAILS_CONTAINER_FIELDS} } }
+    ... on DockerWorkloadDetails { containers { ${WORKLOAD_DETAILS_CONTAINER_FIELDS} } }
+    ... on CloudRunWorkloadDetails { containers { ${WORKLOAD_DETAILS_CONTAINER_FIELDS} } }
+  }
+`;
+
+/**
+ * Patch `details` into a printed document's WorkloadReport fragment when the
+ * connected platform's schema has it. No-op below v0.18.0 — and no-op for k8s,
+ * which never resolves an agents-api document at all.
+ */
+export const withWorkloadReportDetails = (printedQuery: string, ctx: OperationContext): string => {
+  if (!supportsTypedContainerDetails(dialectVersion(ctx))) return printedQuery;
+  return withFragmentSelections(printedQuery, 'WorkloadReport', WORKLOAD_DETAILS_SELECTIONS);
 };

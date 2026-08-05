@@ -13,14 +13,14 @@ import (
 	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
 	cpg "github.com/odigos-io/odigos-enterprise/connectors/postgres"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/awsclient"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/config"
 	computeplatformdetector "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/computeplatform/detector"
 	computeplatformreconciler "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/computeplatform/reconciler"
 	computeplatformstore "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/computeplatform/store"
+	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/config"
+	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/types"
 	workloaddetector "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/detector"
 	workloadinstrumentor "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/instrumentor"
 	workloadstore "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/types"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
@@ -36,12 +36,15 @@ var awslog = connlog.Subsystem("aws-provider")
 // Provider is the AWS implementation of base.Provider. It holds a workload store and a compute-platform store
 // (two store types over one shared base pool) and the shared AWS config cache.
 type Provider struct {
-	cfg          config.Config
-	cfgMgr       *baseconfig.Manager
-	workloadStdb *workloadstore.Store
-	computePlatformStdb  *computeplatformstore.Store
-	cache        *awsclient.Cache
-	layers       workloadinstrumentor.LayerResolver
+	cfg                 config.Config
+	cfgMgr              *baseconfig.Manager
+	workloadStdb        *workloadstore.Store
+	computePlatformStdb *computeplatformstore.Store
+	cache               *awsclient.Cache
+	layers              workloadinstrumentor.LayerResolver
+	// ecrImages reads container image configs (via ECR auth or anonymously) for Fargate language
+	// detection. Optional layer: the task-definition heuristics and source overrides work without it.
+	ecrImages workloadinstrumentor.ImageInspector
 }
 
 // New builds the AWS provider over the two domain stores and the live config Manager. By default Lambda
@@ -53,7 +56,11 @@ func New(cfg config.Config, cfgMgr *baseconfig.Manager, workloadStore *workloads
 	if len(cfg.LambdaLayerARNs) > 0 {
 		layers = workloadinstrumentor.NewPublicLayerResolver(cfg.LambdaLayerARNs)
 	}
-	return &Provider{cfg: cfg, cfgMgr: cfgMgr, workloadStdb: workloadStore, computePlatformStdb: computePlatformStore, cache: cache, layers: layers}
+	return &Provider{
+		cfg: cfg, cfgMgr: cfgMgr, workloadStdb: workloadStore, computePlatformStdb: computePlatformStore,
+		cache: cache, layers: layers,
+		ecrImages: workloadinstrumentor.NewECRImageInspector(cache),
+	}
 }
 
 // discoveryTags returns the current discovery tag selectors from the live config (re-read each call so a
@@ -62,6 +69,16 @@ func (p *Provider) discoveryTags() map[string]string { return p.cfgMgr.Settings(
 
 // debugTelemetry returns the current Lambda debug-telemetry toggle from the live config.
 func (p *Provider) debugTelemetry() bool { return p.cfgMgr.Bool(config.KeyDebugLambdaTelemetry, false) }
+
+// debugEcsTelemetry returns the current ECS/Fargate debug-telemetry toggle from the live config.
+func (p *Provider) debugEcsTelemetry() bool { return p.cfgMgr.Bool(config.KeyDebugEcsTelemetry, false) }
+
+// SupportedDestinationTypes implements base.DestinationTypesProvider: alongside the default OTLP gRPC
+// destination, the AWS connector accepts otlphttp — required by the http/protobuf-only Fargate agents
+// (php/ruby) and usable as a fallback by the rest.
+func (p *Provider) SupportedDestinationTypes() []string {
+	return []string{baseapi.DefaultDestinationType, "otlphttp"}
+}
 
 func (p *Provider) Spec() spec.CloudConnectorSpec { return spec.MustGet("aws") }
 
@@ -133,11 +150,13 @@ func (p *Provider) ComputePlatformDetectors() map[string]baseapi.Detector {
 }
 
 // Reconcilers maps instrumentation type names to AWS instrumentors (workloads the connector instruments
-// directly; destination-gated). Lambda is implemented; aws.fargate-task is an inert no-op seam.
+// directly; destination-gated). Lambda attaches an OTel layer to the function; Fargate registers an
+// instrumented task-definition revision (agent sidecar + shared volume + activation/OTLP env) and rolls
+// the service to it.
 func (p *Provider) Reconcilers() map[string]baseapi.Reconciler {
 	return map[string]baseapi.Reconciler{
 		types.Lambda:      workloadinstrumentor.NewLambda(p.workloadStdb, p.cache, p.layers, p.debugTelemetry),
-		types.FargateTask: workloadinstrumentor.NewECSFargate(),
+		types.FargateTask: workloadinstrumentor.NewECSFargate(p.workloadStdb, p.cache, p.cfg.FargateAgentsImage, p.debugEcsTelemetry, p.ecrImages),
 	}
 }
 

@@ -49,6 +49,10 @@ func (a *SourceAPI) Source(ctx context.Context, name string) (*model.Source, err
 
 func (a *SourceAPI) CreateSource(ctx context.Context, input model.CreateSourceInput) (*model.Source, error) {
 	sourceAPILog.Info("create source", "name", input.Name, "kind", input.Kind)
+	if err := domainsrc.ValidateConfigInput(input.Kind, input.Config); err != nil {
+		sourceAPILog.Error("create source rejected", "name", input.Name, "kind", input.Kind, "error", err)
+		return nil, fmt.Errorf("createSource: %w", err)
+	}
 	src := domainsrc.SourceFromCreateInput(input)
 	if err := a.Central.CreateSource(ctx, *src); err != nil {
 		sourceAPILog.Error("create source failed", "name", input.Name, "error", err)
@@ -75,6 +79,12 @@ func (a *SourceAPI) UpdateSource(ctx context.Context, input model.UpdateSourceIn
 	}
 	updated := *current
 	updated.ApplyUpdateInput(input)
+	// Validate the branch against the POST-update kind: one call may change both the kind and the
+	// config, and the branch has to agree with what the source ends up being.
+	if err := domainsrc.ValidateConfigInput(updated.Kind, input.Config); err != nil {
+		sourceAPILog.Error("update source rejected", "name", input.Name, "kind", updated.Kind, "error", err)
+		return nil, fmt.Errorf("updateSource: %w", err)
+	}
 	if err := a.Central.UpdateSource(ctx, updated); err != nil {
 		sourceAPILog.Error("update source failed", "name", input.Name, "error", err)
 		return nil, fmt.Errorf("updateSource: %w", err)

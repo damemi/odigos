@@ -81,7 +81,10 @@ func main() {
 		DBSecretKey:       getenvDefault("CONNECTOR_DB_SECRET_KEY", "dsn"),
 		ProviderImages:    providerImagesFromEnv(),
 		CentralBackendURL: getenvDefault("CONNECTOR_CENTRAL_BACKEND_URL", "http://central-backend:8081"),
-		RequeueInterval:   30 * time.Second,
+		// Optional override for the Fargate agents bundle staged by the AWS connector's ECS instrumentor;
+		// empty keeps the connector's compiled-in default (registry.odigos.io/odigos-fargate-agents).
+		FargateAgentsImage: os.Getenv("CONNECTOR_AWS_FARGATE_AGENTS_IMAGE"),
+		RequeueInterval:    30 * time.Second,
 	}
 
 	if err := (&controller.Reconciler{

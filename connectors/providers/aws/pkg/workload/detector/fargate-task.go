@@ -15,29 +15,45 @@ import (
 	store "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
 
-const describeTasksBatch = 100
+const (
+	describeTasksBatch = 100
+	// describeServicesBatch is the DescribeServices API maximum (10 services per call).
+	describeServicesBatch = 10
+)
 
-// ecsFailureReasonMissing is the DescribeTasks/DescribeClusters failure reason AWS returns for a resource
+// ecsFailureReasonMissing is the DescribeTasks/DescribeServices failure reason AWS returns for a resource
 // that no longer exists (e.g. a task reaped between ListTasks and DescribeTasks). A MISSING resource is
 // genuinely gone, so omitting it from the scan (and letting the prune soft-delete it) is correct; any
 // other failure reason means the scan is incomplete and the prune must be skipped.
 const ecsFailureReasonMissing = "MISSING"
 
-// ECSTaskDetector discovers Fargate-cluster tasks: for any cluster running at least one Fargate task it
-// stores EVERY task (regardless of launch type), since such a cluster is handled fully as fargate (the
-// per-task sidecar). Pure-EC2 clusters store no tasks here — they're covered by the cluster agent in the
-// compute-platform domain. This is the workload-domain counterpart to the compute-platform ECS cluster detector.
+// Fargate capacity provider names (AWS-reserved; customer capacity providers back EC2 Auto Scaling
+// groups and always have different names).
+const (
+	capacityProviderFargate     = "FARGATE"
+	capacityProviderFargateSpot = "FARGATE_SPOT"
+)
+
+// ECSTaskDetector discovers Fargate workloads in ONE region scan per cycle:
+//
+//   - ECS SERVICES running on Fargate (launch type or FARGATE/FARGATE_SPOT capacity providers) — the
+//     per-service instrumentation unit, stored in ecs_services (stable across task churn).
+//   - Fargate-launch-type TASKS — coverage detail for service tasks, and the workload identity for
+//     standalone tasks (RunTask/EventBridge, no service).
+//
+// EC2-launch-type services and tasks are NOT stored: EC2-backed ECS is covered by the cluster agent
+// (compute-platform domain), Fargate by the per-task sidecar this inventory backs.
 type ECSTaskDetector struct {
 	store *store.Store
 	cache *awsclient.Cache
-	// tags returns the current discovery tag selectors (DB-backed live config): when non-empty, only tasks
-	// carrying ALL of these tag key/values are discovered. A getter so a config change applies without a
-	// restart.
+	// tags returns the current discovery tag selectors (DB-backed live config): when non-empty, only
+	// services/tasks carrying ALL of these tag key/values are discovered. A getter so a config change
+	// applies without a restart.
 	tags func() map[string]string
 }
 
-// NewECSTaskDetector builds the Fargate-task detector over the workload store and shared config cache.
-// tags is a getter for the live discovery tag filter (nil/empty discovers all tasks).
+// NewECSTaskDetector builds the Fargate detector over the workload store and shared config cache.
+// tags is a getter for the live discovery tag filter (nil/empty discovers all services/tasks).
 func NewECSTaskDetector(st *store.Store, cache *awsclient.Cache, tags func() map[string]string) *ECSTaskDetector {
 	return &ECSTaskDetector{store: st, cache: cache, tags: tags}
 }
@@ -48,7 +64,7 @@ func (d *ECSTaskDetector) Detect(ctx context.Context) (baseapi.DetectResult, err
 		return baseapi.DetectResult{}, fmt.Errorf("enumerate enabled regions: %w", err)
 	}
 	tags := d.tags()
-	log.Info("ecs task detector starting", "regions", len(regions), "tag_filter", len(tags) > 0)
+	log.Info("ecs fargate detector starting", "regions", len(regions), "tag_filter", len(tags) > 0)
 	var anyErr error
 	authed := false
 	for _, region := range regions {
@@ -58,14 +74,20 @@ func (d *ECSTaskDetector) Detect(ctx context.Context) (baseapi.DetectResult, err
 			anyErr = err
 			continue
 		}
-		tasks, err := discoverFargateClusterTasks(ctx, cfg, region, tags)
+		services, tasks, err := discoverFargateWorkloads(ctx, cfg, region, tags)
 		if err != nil {
 			anyErr = err
-			log.Error("ecs task region scan failed", "region", region, "error", err)
+			log.Error("ecs fargate region scan failed", "region", region, "error", err)
 			continue
 		}
 		authed = true
 		upsertFailed := false
+		for _, svc := range services {
+			if err := d.store.UpsertECSService(ctx, svc); err != nil {
+				log.Error("upsert ecs service failed", "region", region, "cluster", svc.ClusterARN, "service", svc.ServiceName, "error", err)
+				upsertFailed = true
+			}
+		}
 		for _, t := range tasks {
 			if err := d.store.UpsertECSTask(ctx, t); err != nil {
 				log.Error("upsert ecs task failed", "region", region, "arn", t.TaskARN, "error", err)
@@ -73,56 +95,130 @@ func (d *ECSTaskDetector) Detect(ctx context.Context) (baseapi.DetectResult, err
 			}
 		}
 		_ = d.store.UpdateDiscoveryState(ctx, region, store.KindECSTask, scanStart)
-		// Prune only when every discovered task persisted this cycle; pruning after a failed upsert would
-		// soft-delete a still-live task whose last_seen_at wasn't refreshed this scan.
+		// Prune only when every discovered row persisted this cycle; pruning after a failed upsert would
+		// soft-delete a still-live workload whose last_seen_at wasn't refreshed this scan.
 		if upsertFailed {
-			anyErr = fmt.Errorf("region %s: one or more ecs task upserts failed; skipping prune", region)
-			log.Error("skipping ecs task prune after upsert failure", "region", region)
-		} else if err := d.store.PruneECSTasks(ctx, region, scanStart); err != nil {
-			log.Error("prune ecs task inventory failed", "region", region, "error", err)
+			anyErr = fmt.Errorf("region %s: one or more ecs upserts failed; skipping prune", region)
+			log.Error("skipping ecs prune after upsert failure", "region", region)
+		} else {
+			if err := d.store.PruneECSServices(ctx, region, scanStart); err != nil {
+				log.Error("prune ecs service inventory failed", "region", region, "error", err)
+			}
+			if err := d.store.PruneECSTasks(ctx, region, scanStart); err != nil {
+				log.Error("prune ecs task inventory failed", "region", region, "error", err)
+			}
 		}
-		log.Info("ecs task region scan complete", "region", region, "tasks", len(tasks))
+		log.Info("ecs fargate region scan complete", "region", region, "services", len(services), "tasks", len(tasks))
 	}
 	// Reclaim rows soft-deleted long ago (once per cycle, account-wide); ECS tasks churn fast, so this
 	// bounds table growth. Best-effort — a purge failure never fails discovery.
 	if err := d.store.PurgeDeletedECSTasks(ctx, time.Now().Add(-store.SoftDeleteRetention)); err != nil {
 		log.Error("purge deleted ecs task inventory failed", "error", err)
 	}
+	if err := d.store.PurgeDeletedECSServices(ctx, time.Now().Add(-store.SoftDeleteRetention)); err != nil {
+		log.Error("purge deleted ecs service inventory failed", "error", err)
+	}
 	return baseapi.DetectResult{Authenticated: authed}, anyErr
 }
 
-// discoverFargateClusterTasks enumerates clusters and returns the tasks of every cluster that runs at
-// least one Fargate task (all of that cluster's tasks, regardless of launch type).
-func discoverFargateClusterTasks(ctx context.Context, cfg aws.Config, region string, tags map[string]string) ([]store.ECSTask, error) {
-	log.Info("ecs task discovery starting", "region", region)
+// discoverFargateWorkloads enumerates the region's clusters and returns their Fargate services and
+// Fargate tasks (one combined scan so services and tasks stay consistent within a cycle).
+func discoverFargateWorkloads(ctx context.Context, cfg aws.Config, region string, tags map[string]string) ([]store.ECSService, []store.ECSTask, error) {
+	log.Info("ecs fargate discovery starting", "region", region)
 	client := ecs.NewFromConfig(cfg)
-	var out []store.ECSTask
+	var services []store.ECSService
+	var tasks []store.ECSTask
 	clusterPaginator := ecs.NewListClustersPaginator(client, &ecs.ListClustersInput{})
 	for pageNum := 1; clusterPaginator.HasMorePages(); pageNum++ {
 		page, err := clusterPaginator.NextPage(ctx)
 		if err != nil {
 			log.Error("ecs list clusters failed", "region", region, "page", pageNum, "error", err)
-			return nil, err
+			return nil, nil, err
 		}
 		for i := range page.ClusterArns {
-			tasks, err := clusterTasksIfFargate(ctx, client, region, page.ClusterArns[i], tags)
+			clusterARN := page.ClusterArns[i]
+			svcs, err := clusterFargateServices(ctx, client, region, clusterARN, tags)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-			out = append(out, tasks...)
+			services = append(services, svcs...)
+			ts, err := clusterFargateTasks(ctx, client, region, clusterARN, tags)
+			if err != nil {
+				return nil, nil, err
+			}
+			tasks = append(tasks, ts...)
 		}
 	}
-	log.Info("ecs task discovery complete", "region", region, "tasks", len(out))
+	log.Info("ecs fargate discovery complete", "region", region, "services", len(services), "tasks", len(tasks))
+	return services, tasks, nil
+}
+
+// clusterFargateServices returns a cluster's Fargate ECS services (ListServices + DescribeServices in
+// batches of 10). When tags is non-empty, only services carrying all of the given tag key/values are
+// kept — DescribeServices returns tags inline (Include TAGS), so no extra API call is needed.
+func clusterFargateServices(ctx context.Context, client *ecs.Client, region, clusterARN string, tags map[string]string) ([]store.ECSService, error) {
+	var out []store.ECSService
+	cluster := clusterName(clusterARN)
+	paginator := ecs.NewListServicesPaginator(client, &ecs.ListServicesInput{Cluster: aws.String(clusterARN)})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			log.Error("ecs list services failed", "region", region, "cluster", cluster, "error", err)
+			return nil, err
+		}
+		for _, batch := range chunk(page.ServiceArns, describeServicesBatch) {
+			in := &ecs.DescribeServicesInput{Cluster: aws.String(clusterARN), Services: batch}
+			if len(tags) > 0 {
+				in.Include = []ecstypes.ServiceField{ecstypes.ServiceFieldTags}
+			}
+			desc, err := client.DescribeServices(ctx, in)
+			if err != nil {
+				log.Error("ecs describe services failed", "region", region, "cluster", cluster, "error", err)
+				return nil, err
+			}
+			// A non-MISSING failure means this batch is incomplete (throttling, server error): return an error
+			// so the region's prune is skipped rather than soft-deleting live services we just failed to describe.
+			for _, f := range desc.Failures {
+				if !strings.EqualFold(aws.ToString(f.Reason), ecsFailureReasonMissing) {
+					return nil, fmt.Errorf("describe services incomplete in cluster %s: arn=%s reason=%s detail=%s",
+						cluster, aws.ToString(f.Arn), aws.ToString(f.Reason), aws.ToString(f.Detail))
+				}
+			}
+			for _, svc := range desc.Services {
+				if !isFargateService(svc) {
+					continue // EC2/EXTERNAL service — the cluster agent's job, not the sidecar's
+				}
+				if len(tags) > 0 && !ecsTagsMatchAll(svc.Tags, tags) {
+					continue // doesn't carry the required discovery tags
+				}
+				out = append(out, store.ECSService{
+					Region:               region,
+					ClusterARN:           clusterARN,
+					ServiceName:          aws.ToString(svc.ServiceName),
+					ServiceARN:           aws.ToString(svc.ServiceArn),
+					TaskDefinition:       aws.ToString(svc.TaskDefinition),
+					LaunchType:           string(svc.LaunchType),
+					DeploymentController: deploymentControllerType(svc.DeploymentController),
+					Status:               aws.ToString(svc.Status),
+					DesiredCount:         svc.DesiredCount,
+					RunningCount:         svc.RunningCount,
+					Metadata: map[string]any{
+						"platformVersion":    aws.ToString(svc.PlatformVersion),
+						"platformFamily":     aws.ToString(svc.PlatformFamily),
+						"schedulingStrategy": string(svc.SchedulingStrategy),
+					},
+				})
+			}
+		}
+	}
 	return out, nil
 }
 
-// clusterTasksIfFargate returns a cluster's tasks IFF it runs at least one Fargate task (then ALL its
-// tasks); otherwise nil (pure-EC2 cluster — the cluster agent covers it). When tags is non-empty, only
-// tasks carrying all of the given tag key/values are kept — DescribeTasks returns tags inline (Include
-// TAGS), so no extra API call is needed.
-func clusterTasksIfFargate(ctx context.Context, client *ecs.Client, region, clusterARN string, tags map[string]string) ([]store.ECSTask, error) {
-	var all []store.ECSTask
-	hasFargate := false
+// clusterFargateTasks returns a cluster's FARGATE-launch-type tasks (per-task filter; EC2 tasks are never
+// stored). When tags is non-empty, only tasks carrying all of the given tag key/values are kept —
+// DescribeTasks returns tags inline (Include TAGS), so no extra API call is needed.
+func clusterFargateTasks(ctx context.Context, client *ecs.Client, region, clusterARN string, tags map[string]string) ([]store.ECSTask, error) {
+	var out []store.ECSTask
 	cluster := clusterName(clusterARN)
 	describeInput := func(batch []string) *ecs.DescribeTasksInput {
 		in := &ecs.DescribeTasksInput{Cluster: aws.String(clusterARN), Tasks: batch}
@@ -153,19 +249,19 @@ func clusterTasksIfFargate(ctx context.Context, client *ecs.Client, region, clus
 				}
 			}
 			for _, t := range desc.Tasks {
-				if strings.EqualFold(string(t.LaunchType), store.LaunchTypeFargate) {
-					hasFargate = true
+				if !isFargateTask(t) {
+					continue // EC2-launch-type task — the cluster agent's job, not the sidecar's
 				}
 				if len(tags) > 0 && !ecsTagsMatchAll(t.Tags, tags) {
 					continue // doesn't carry the required discovery tags
 				}
-				all = append(all, store.ECSTask{
+				out = append(out, store.ECSTask{
 					Region:         region,
 					ClusterARN:     clusterARN,
 					TaskARN:        aws.ToString(t.TaskArn),
 					ServiceName:    serviceNameFromGroup(aws.ToString(t.Group)),
 					TaskDefinition: aws.ToString(t.TaskDefinitionArn),
-					LaunchType:     string(t.LaunchType),
+					LaunchType:     launchTypeLabel(string(t.LaunchType), aws.ToString(t.CapacityProviderName)),
 					LastStatus:     aws.ToString(t.LastStatus),
 					DesiredStatus:  aws.ToString(t.DesiredStatus),
 					Metadata: map[string]any{
@@ -178,10 +274,66 @@ func clusterTasksIfFargate(ctx context.Context, client *ecs.Client, region, clus
 			}
 		}
 	}
-	if !hasFargate {
-		return nil, nil
+	return out, nil
+}
+
+// isFargateService reports whether an ECS service runs its tasks on Fargate. Capacity-provider services
+// report an EMPTY launch type, so the FARGATE/FARGATE_SPOT providers in the strategy are checked too; the
+// Fargate-only platform family covers a service inheriting the cluster's default strategy (which
+// DescribeServices may not echo back).
+func isFargateService(svc ecstypes.Service) bool {
+	switch svc.LaunchType {
+	case ecstypes.LaunchTypeFargate:
+		return true
+	case ecstypes.LaunchTypeEc2, ecstypes.LaunchTypeExternal:
+		return false
 	}
-	return all, nil
+	for _, cp := range svc.CapacityProviderStrategy {
+		if isFargateCapacityProvider(aws.ToString(cp.CapacityProvider)) {
+			return true
+		}
+	}
+	return aws.ToString(svc.PlatformFamily) != ""
+}
+
+// isFargateTask reports whether a task runs on Fargate. Capacity-provider tasks report an EMPTY launch
+// type and carry the provider name instead; the Fargate-only platform family is the final fallback.
+func isFargateTask(t ecstypes.Task) bool {
+	switch t.LaunchType {
+	case ecstypes.LaunchTypeFargate:
+		return true
+	case ecstypes.LaunchTypeEc2, ecstypes.LaunchTypeExternal:
+		return false
+	}
+	if isFargateCapacityProvider(aws.ToString(t.CapacityProviderName)) {
+		return true
+	}
+	return aws.ToString(t.PlatformFamily) != ""
+}
+
+func isFargateCapacityProvider(name string) bool {
+	return strings.EqualFold(name, capacityProviderFargate) || strings.EqualFold(name, capacityProviderFargateSpot)
+}
+
+// launchTypeLabel normalizes the stored launch type: capacity-provider Fargate tasks have an empty
+// LaunchType, so label them FARGATE for a consistent inventory value.
+func launchTypeLabel(launchType, capacityProvider string) string {
+	if launchType != "" {
+		return launchType
+	}
+	if isFargateCapacityProvider(capacityProvider) {
+		return store.LaunchTypeFargate
+	}
+	return launchType
+}
+
+// deploymentControllerType returns the service's deployment controller type; a nil controller means the
+// default ECS rolling-update controller.
+func deploymentControllerType(dc *ecstypes.DeploymentController) string {
+	if dc == nil {
+		return string(ecstypes.DeploymentControllerTypeEcs)
+	}
+	return string(dc.Type)
 }
 
 func clusterName(clusterARN string) string {
@@ -199,11 +351,11 @@ func serviceNameFromGroup(group string) string {
 	return ""
 }
 
-// ecsTagsMatchAll reports whether the task's tags contain every key/value in required (reuses the shared
-// tagsMatchAll from the Lambda detector).
-func ecsTagsMatchAll(taskTags []ecstypes.Tag, required map[string]string) bool {
-	have := make(map[string]string, len(taskTags))
-	for _, t := range taskTags {
+// ecsTagsMatchAll reports whether the resource's tags contain every key/value in required (reuses the
+// shared tagsMatchAll from the Lambda detector).
+func ecsTagsMatchAll(resourceTags []ecstypes.Tag, required map[string]string) bool {
+	have := make(map[string]string, len(resourceTags))
+	for _, t := range resourceTags {
 		have[aws.ToString(t.Key)] = aws.ToString(t.Value)
 	}
 	return tagsMatchAll(have, required)

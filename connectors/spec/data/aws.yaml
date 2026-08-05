@@ -101,13 +101,15 @@ workloads:
         description: List Lambda functions in each configured region.
         permissions:
           - lambda:ListFunctions
-      # Fargate task discovery runs ONE region scan (clusters + Fargate tasks). EC2-backed tasks are NOT
-      # discovered — ecs-cluster instrumentation is delivered by the cluster agent, a different solution.
+      # Fargate discovery runs ONE region scan (clusters + Fargate services + Fargate tasks). EC2-backed
+      # services/tasks are NOT discovered — ecs-cluster instrumentation is delivered by the cluster agent
+      # (the eBPF odigos-ecs-agent daemon), a different solution.
       - name: aws.fargate-task
         displayName: Amazon ECS (Fargate task)
         description: >-
-          Discover Fargate tasks per region. The per-workload instrumentation unit (sidecar). A single
-          ECS scan enumerates clusters and Fargate tasks.
+          Discover Fargate ECS services and tasks per region. The service is the per-workload
+          instrumentation unit (sidecar injected into its task definition); standalone tasks are
+          discovered for coverage. A single ECS scan enumerates clusters, Fargate services and tasks.
         permissions:
           - ecs:ListClusters
           - ecs:DescribeClusters
@@ -119,7 +121,7 @@ workloads:
   # instrumentation: instrument a discovered workload DIRECTLY. Each type references a workload-discovery
   # type and declares how instrumentation is injected. Gated on an OTLP destination.
   #   aws.lambda        -> service (Lambda layer/extension on the function itself)
-  #   aws.fargate-task  -> sidecar (each Fargate task receives an instrumentation sidecar) — not yet built
+  #   aws.fargate-task  -> sidecar (an agent-staging sidecar injected into the service's task definition)
   instrumentation:
     enabled: true
     displayName: Workload instrumentation
@@ -141,15 +143,26 @@ workloads:
           - lambda:DeleteLayerVersion
       - name: aws.fargate-task
         displayName: Amazon ECS (Fargate task)
-        description: Inject an instrumentation sidecar container into each Fargate task definition.
+        description: >-
+          Register an instrumented task-definition revision (agent-staging sidecar + shared volume +
+          OpenTelemetry activation/export env) and roll the Fargate service to it. Only ECS
+          rolling-update services are instrumentable; standalone tasks report Unsupported.
         method: sidecar
-        # The Fargate sidecar injection is not built yet. Declared (discoverable, permissions documented)
-        # but inert: the connector does not run it and reports such workloads as NotImplemented.
-        implemented: false
         permissions:
+          - ecs:DescribeServices
           - ecs:DescribeTaskDefinition
           - ecs:RegisterTaskDefinition
           - ecs:UpdateService
+          # Registering a task definition that carries a task/execution role — Fargate task definitions
+          # virtually always carry an execution role for the image pull — requires passing those roles.
+          # Scope the grant with the condition iam:PassedToService=ecs-tasks.amazonaws.com.
+          - iam:PassRole
+          # Optional: best-effort language detection from the container image config in ECR (CNB
+          # buildpack labels + entrypoint/cmd/env). Absent permissions only degrade detection — the
+          # task-definition heuristics still run, and a source runtime override always works.
+          - ecr:GetAuthorizationToken
+          - ecr:BatchGetImage
+          - ecr:GetDownloadUrlForLayer
 
 # computePlatforms: managed environments — discovered, then a separate Odigos agent is installed onto
 # them. Installation is NOT supported yet, so discovered compute platforms are reported but never

@@ -171,6 +171,18 @@ func (r *queryResolver) ProfileBundleStatus(context.Context, string) (*model.Pro
 	logUnsupported("profileBundleStatus")
 	return nil, nil
 }
+
+// Per-source profiling reads the agent's in-process eBPF profile cache. A cloud connector has no
+// such cache — it rewrites provider configuration and never runs alongside the workload — so these
+// join the rest of the profiling surface as no-ops.
+func (r *queryResolver) ProfilingSlots(context.Context) (*model.ProfilingSlots, error) {
+	logUnsupported("profilingSlots")
+	return nil, nil
+}
+func (r *queryResolver) SourceProfile(context.Context, string) (*model.SourceProfilingResult, error) {
+	logUnsupported("sourceProfile")
+	return nil, nil
+}
 func (r *queryResolver) InstrumentationRule(context.Context, string) (model.InstrumentationRule, error) {
 	logUnsupported("instrumentationRule")
 	return nil, nil
@@ -280,6 +292,22 @@ func (r *mutationResolver) CancelProfileBundle(context.Context, string) (bool, e
 func (r *mutationResolver) ClearProfileCache(context.Context) (bool, error) {
 	logUnsupported("clearProfileCache")
 	return false, nil
+}
+func (r *mutationResolver) EnableSourceProfiling(context.Context, string) (*model.SlotResult, error) {
+	logUnsupported("enableSourceProfiling")
+	return nil, nil
+}
+func (r *mutationResolver) DisableSourceProfiling(context.Context, string) (*model.SlotResult, error) {
+	logUnsupported("disableSourceProfiling")
+	return nil, nil
+}
+func (r *mutationResolver) ClearSourceProfilingBuffer(context.Context, string) (*model.SlotResult, error) {
+	logUnsupported("clearSourceProfilingBuffer")
+	return nil, nil
+}
+func (r *mutationResolver) ConfigureProfilingCache(context.Context, *int, *int, *int) (*model.ProfilingSlots, error) {
+	logUnsupported("configureProfilingCache")
+	return nil, nil
 }
 func (r *mutationResolver) CreateInstrumentationRule(context.Context, model.CreateInstrumentationRuleInput) (model.InstrumentationRule, error) {
 	logUnsupported("createInstrumentationRule")

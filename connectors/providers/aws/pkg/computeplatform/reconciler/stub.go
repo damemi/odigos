@@ -10,7 +10,9 @@ import "context"
 type StubComputePlatformReconciler struct{ typeName string }
 
 // NewStubComputePlatform builds a no-op compute-platform reconciler labelled with its spec compute-platform type name.
-func NewStubComputePlatform(typeName string) *StubComputePlatformReconciler { return &StubComputePlatformReconciler{typeName: typeName} }
+func NewStubComputePlatform(typeName string) *StubComputePlatformReconciler {
+	return &StubComputePlatformReconciler{typeName: typeName}
+}
 
 func (r *StubComputePlatformReconciler) Reconcile(context.Context) error {
 	log.Debug("compute-platform reconcile not implemented; skipping", "type", r.typeName)

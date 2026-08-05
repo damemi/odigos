@@ -135,16 +135,23 @@ func TestAWSCapabilityResolution(t *testing.T) {
 	}
 
 	instr := s.ActiveInstrumentationTypes(caps)
-	if len(instr) != 1 || instr[0].Name != "aws.lambda" {
-		t.Errorf("active instrumentation types = %v, want only aws.lambda (fargate-task is not implemented)", instr)
+	wantInstr := map[string]bool{"aws.lambda": true, "aws.fargate-task": true}
+	if len(instr) != len(wantInstr) {
+		t.Errorf("active instrumentation types = %v, want aws.lambda and aws.fargate-task", instr)
+	}
+	for _, ty := range instr {
+		if !wantInstr[ty.Name] {
+			t.Errorf("unexpected active instrumentation type %q", ty.Name)
+		}
 	}
 	// Installation is not supported yet (empty feature), so no compute platform is actively managed.
 	if cp := s.ActiveComputePlatformTypes(caps); len(cp) != 0 {
 		t.Errorf("active compute-platform types = %v, want none (installation not supported)", cp)
 	}
 
-	if !s.UnimplementedInstrumentationKinds()["aws.fargate-task"] {
-		t.Error("expected aws.fargate-task to be reported as an unimplemented instrumentation kind")
+	// Both workload instrumentation kinds are implemented; nothing should be reported unimplemented.
+	if unimpl := s.UnimplementedInstrumentationKinds(); len(unimpl) != 0 {
+		t.Errorf("unimplemented instrumentation kinds = %v, want none", unimpl)
 	}
 	// Every compute-platform discovery kind is unimplemented while installation is unsupported.
 	unimplCP := s.UnimplementedComputePlatformKinds()
@@ -155,7 +162,11 @@ func TestAWSCapabilityResolution(t *testing.T) {
 	}
 
 	perms := s.RequiredPermissions(caps)
-	for _, want := range []string{"sts:GetCallerIdentity", "ec2:DescribeRegions", "lambda:ListFunctions", "ecs:ListClusters"} {
+	for _, want := range []string{
+		"sts:GetCallerIdentity", "ec2:DescribeRegions", "lambda:ListFunctions", "ecs:ListClusters",
+		// Fargate instrumentation write path + the pass-role it implies.
+		"ecs:RegisterTaskDefinition", "ecs:UpdateService", "iam:PassRole",
+	} {
 		if !containsStr(perms, want) {
 			t.Errorf("required permissions %v missing %q", perms, want)
 		}

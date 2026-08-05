@@ -64,6 +64,8 @@ import {
   mapVmSourcesToWorkloads,
   mapVmSourcesWithReportsToWorkloads,
   mapVmWorkloadReportsToNamespaces,
+  patchVmSourceQuery,
+  patchVmSourcesWithReportsQuery,
   vmUpdateSourceVariables,
   withWorkloadReportRegion,
 } from '@/graphql/remote/vm-sources';
@@ -1046,6 +1048,7 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
       { query: GET_SOURCES_WITH_STATUS, map: (data) => legacySourcesToWorkloads(data) },
       {
         buildQuery: (_vars, ctx) => buildVmSourcesWithReportsQuery(ctx) ?? '',
+        patchQuery: patchVmSourcesWithReportsQuery,
         transformResult: (data) => mapVmSourcesWithReportsToWorkloads(data),
       },
     ),
@@ -1060,6 +1063,7 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
       { run: (client, vars, ctx) => runLegacySourcesByIds(client, vars, ctx) },
       {
         buildQuery: (_vars, ctx) => buildVmSourcesWithReportsQuery(ctx) ?? '',
+        patchQuery: patchVmSourcesWithReportsQuery,
         transformResult: (data) => ({ workloadsByIds: mapVmSourcesWithReportsToWorkloads(data).workloads }),
       },
     ),
@@ -1067,12 +1071,16 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
       GET_WORKLOADS_BY_IDS_SLIM,
       undefined,
       { run: (client, vars, ctx) => runLegacySourcesByIds(client, vars, ctx) },
-      // Slim list path stays sources-only — overview table doesn't need full report payload.
-      { select: (d) => d.GetSourcesDocument, transformResult: (data) => ({ workloadsByIds: mapVmSourcesToWorkloads(data).workloads }) },
+      // Slim list path stays sources-only — overview table doesn't need full report
+      // payload. It still asks for the kind-specific config branches: the update
+      // path replays the container overrides from the last read, so a read that
+      // omitted them would make the next update wipe them.
+      { select: (d) => d.GetSourcesDocument, patchQuery: patchVmSourceQuery, transformResult: (data) => ({ workloadsByIds: mapVmSourcesToWorkloads(data).workloads }) },
     ),
     // VM: by-name `source(name)`; central-ui's `WorkloadId.name` is the source name.
     GET_SOURCE: wrapVersioned<{ source?: Workload }, WorkloadId>(GET_SOURCE, undefined, undefined, {
       select: (d) => d.GetSourceDocument,
+      patchQuery: patchVmSourceQuery,
       transformVariables: (vars) => ({ name: vars.name }),
       transformResult: (data) => mapVmSourceResult(data),
     }),
@@ -1088,7 +1096,8 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
     // VM: `updateSource(input: UpdateSourceInput!)`.
     UPDATE_SOURCE: wrapVersioned<{ updateK8sActualSource: boolean }, UpdateSourceVars>(UPDATE_SOURCE, undefined, undefined, {
       select: (d) => d.UpdateSourceDocument,
-      transformVariables: (vars) => vmUpdateSourceVariables(vars),
+      // `ctx` gates the kind-specific config branch on the connected schema version.
+      transformVariables: (vars, ctx) => vmUpdateSourceVariables(vars, ctx),
       transformResult: () => ({ updateK8sActualSource: true }),
     }),
     RESTART_WORKLOADS: wrapVersioned<{ restartWorkloads: boolean }, RestartWorkloadsVars>(RESTART_WORKLOADS),

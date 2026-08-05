@@ -436,11 +436,11 @@ func LanguageFromRuntime(runtime string) string {
 // else upload ours" path. Published/discovered ARNs are cached per region/language/arch for the process
 // lifetime so publishing happens at most once.
 type ManagedLayerResolver struct {
-	cache    *awsclient.Cache
-	layerDir string
-	discover *AccountLayerResolver
-	mu       sync.Mutex
-	arns     map[string]string // region/lang/arch -> arn (discovered or published)
+	cache     *awsclient.Cache
+	layerDir  string
+	discover  *AccountLayerResolver
+	mu        sync.Mutex
+	arns      map[string]string // region/lang/arch -> arn (discovered or published)
 	published map[string]string // region/lang/arch -> arn, only layers WE published (GC candidates)
 }
 

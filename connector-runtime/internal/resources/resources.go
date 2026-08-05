@@ -136,6 +136,9 @@ type DeploymentParams struct {
 	SchemaVersion string // expected schema version stamped into the runtime
 	// CentralBackendURL is dialed by the connector for the reverse-WebSocket agents-api connection.
 	CentralBackendURL string
+	// FargateAgentsImage optionally overrides the odigos-fargate-agents bundle for AWS connectors
+	// (stamped as ODIGOS_FARGATE_AGENTS_IMAGE); empty keeps the connector's compiled-in default.
+	FargateAgentsImage string
 }
 
 // BuildDeployment constructs the connector Deployment (strategy: Recreate) for a CR.
@@ -167,6 +170,12 @@ func BuildDeployment(cr *cloudconnectorsv1.OdigosCloudConnector, p DeploymentPar
 		// Shutdown timeout is DB-backed operational config (config.Manager), not env.
 		{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 		dsnEnv("DATABASE_URL", p.DBSecretName, p.DBSecretKey),
+	}
+
+	// Optional operator-level override of the Fargate agents bundle (AWS-only concern; the connector
+	// falls back to its compiled-in default when unset, so this env is stamped only when configured).
+	if cr.Spec.Provider == "aws" && p.FargateAgentsImage != "" {
+		env = append(env, corev1.EnvVar{Name: "ODIGOS_FARGATE_AGENTS_IMAGE", Value: p.FargateAgentsImage})
 	}
 
 	// Discovery interval + tag selectors are NOT stamped as env: they are operational config, held in the

@@ -477,8 +477,64 @@ func (c *Coordinator) WorkloadReports(ctx context.Context) ([]api.DiscoveredWork
 		return nil, err
 	}
 	c.markInstrumentationAvailability(out)
+	c.markBlockedOnPrerequisites(ctx, out)
 	coordLog.Debug("list workload reports complete", "count", len(out))
 	return out, nil
+}
+
+// markBlockedOnPrerequisites flags workloads the customer marked for instrumentation that the
+// reconcile is deliberately skipping because a connector-wide precondition is unmet.
+//
+// Today that is the OTLP destination: every connector instrumentation exports directly to it, so
+// without one the instrumentors log a warning and skip. That skip was invisible to the customer —
+// the workload showed as enabled and not instrumented, with nothing saying why or that it will
+// resolve itself once a destination exists.
+//
+// It is marked here rather than in each instrumentor because the condition is a property of the
+// connector, not of a workload: one check covers Lambda, Fargate and Cloud Run alike, needs no
+// per-workload persistence, and cannot go stale the way a written flag would.
+func (c *Coordinator) markBlockedOnPrerequisites(ctx context.Context, workloads []api.DiscoveredWorkload) {
+	if len(workloads) == 0 {
+		return
+	}
+	// Only workloads that would otherwise be instrumented can be blocked, so skip the lookup entirely
+	// when none is waiting on anything.
+	wanted := false
+	for i := range workloads {
+		if blockableForInstrumentation(workloads[i]) {
+			wanted = true
+			break
+		}
+	}
+	if !wanted {
+		return
+	}
+
+	_, haveDest, err := c.store.OTLPExportTarget(ctx)
+	if err != nil {
+		// The destination state is unknown, not absent. Reporting "waiting for a destination" on a
+		// transient store error would be a guess, and a wrong one blames the customer's configuration
+		// for our failure.
+		coordLog.Warn("resolve otlp export target for workload reports failed; not reporting a blocked state", "error", err)
+		return
+	}
+	if haveDest {
+		return
+	}
+	for i := range workloads {
+		if blockableForInstrumentation(workloads[i]) {
+			workloads[i].WaitingFor = api.WaitingForDestination
+		}
+	}
+}
+
+// blockableForInstrumentation reports whether a workload is one the reconcile would try to
+// instrument: marked and enabled by the customer, not already instrumented, and of a type this
+// connector actually implements. A workload failing any of those has a more specific story to tell
+// (Unknown, NotImplemented, already working) and must not be relabelled as merely waiting.
+func blockableForInstrumentation(w api.DiscoveredWorkload) bool {
+	return w.SourceMatched && w.SourceEnabled && !w.Instrumented &&
+		w.InstrumentationAvailable && w.InstrumentationImplemented
 }
 
 // markInstrumentationAvailability flags each workload whose instrumentation type is currently active
@@ -732,5 +788,6 @@ func sourceOverridesFromRecord(src store.SourceRecord) api.SourceOverrides {
 		RuntimeLanguage: dom.Config.RuntimeOverride.Language,
 		RuntimeVersion:  dom.Config.RuntimeOverride.Version,
 		OtelDistroName:  dom.Config.DistroOverride.OtelDistroName,
+		Containers:      dom.Config.ContainerOverrides,
 	}
 }

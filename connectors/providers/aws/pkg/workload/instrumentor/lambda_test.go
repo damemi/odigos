@@ -299,13 +299,13 @@ func TestInstrumentedAsDesiredUsesReportedServiceName(t *testing.T) {
 	layerARN := "arn:aws:lambda:us-east-1:0:layer:odigos-otel-python-x86_64:1"
 	env := map[string]string{
 		store.EnvOdigosManaged: `{"v":1}`,
-		EnvServiceName:       "custom-service",
-		EnvTracesExporter:    exporterOTLP,
-		EnvMetricsExporter:   exporterNone,
-		EnvLogsExporter:      exporterNone,
-		EnvCollectorEndpoint: "collector:4317",
-		EnvCollectorInsecure: "true",
-		store.EnvExecWrapper: execWrapperInstrument,
+		EnvServiceName:         "custom-service",
+		EnvTracesExporter:      exporterOTLP,
+		EnvMetricsExporter:     exporterNone,
+		EnvLogsExporter:        exporterNone,
+		EnvCollectorEndpoint:   "collector:4317",
+		EnvCollectorInsecure:   "true",
+		store.EnvExecWrapper:   execWrapperInstrument,
 	}
 	layers := []string{layerARN}
 

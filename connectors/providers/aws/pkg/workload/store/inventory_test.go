@@ -45,3 +45,72 @@ func TestSplitRuntime(t *testing.T) {
 		}
 	}
 }
+
+// An ECS service's external id is cluster_arn || '/' || service_name, and a cluster ARN itself ends
+// in "cluster/<name>" — so the split must be on the LAST separator. Cutting at the first one yields
+// a truncated ARN ("arn:aws:ecs:...:cluster") that matches no cluster.
+func TestClusterARNFromExternalID(t *testing.T) {
+	cases := map[string]string{
+		"arn:aws:ecs:il-central-1:025950698545:cluster/dev/simple-demo": "arn:aws:ecs:il-central-1:025950698545:cluster/dev",
+		"arn:aws:ecs:us-east-1:1:cluster/prod/api":                      "arn:aws:ecs:us-east-1:1:cluster/prod",
+		// A task ARN (standalone tasks are keyed by it) has no service suffix to strip; the function
+		// is only called for service rows, but it must not mangle anything it is handed.
+		"no-separator": "no-separator",
+	}
+	for in, want := range cases {
+		if got := clusterARNFromExternalID(in); got != want {
+			t.Errorf("clusterARNFromExternalID(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The container inventory is what lets a report show the container layer. A row written before the
+// inventory existed, or one that is unreadable, must degrade to no containers rather than failing a
+// whole workload listing.
+func TestDecodeECSContainers(t *testing.T) {
+	raw := []byte(`[{"name":"app","image":"app:1","runtime_language":"java","eligible":true,"instrumented":true,"essential":true},
+	                {"name":"odigos-agent","odigos_managed":true,"excluded_reason":"Odigos agents sidecar"}]`)
+	got := decodeECSContainers(raw)
+	if len(got) != 2 {
+		t.Fatalf("got %d containers, want 2", len(got))
+	}
+	if got[0].Name != "app" || got[0].RuntimeLanguage != "java" || !got[0].Eligible || !got[0].Instrumented || !got[0].Essential {
+		t.Errorf("app container not decoded: %+v", got[0])
+	}
+	if !got[1].OdigosManaged || got[1].ExcludedReason == "" {
+		t.Errorf("sidecar not decoded: %+v", got[1])
+	}
+	if decodeECSContainers(nil) != nil {
+		t.Error("an absent inventory must decode to no containers")
+	}
+	if decodeECSContainers([]byte(`{"not":"an array"}`)) != nil {
+		t.Error("an unreadable inventory must degrade to no containers, not panic or half-decode")
+	}
+}
+
+// Details must report only what the store actually holds. A standalone task shares the ECS kind but
+// is keyed by task ARN and carries none of the service columns, so it gets no details at all rather
+// than a block of empty fields a client cannot tell apart from a real one.
+func TestWorkloadDetailsByKind(t *testing.T) {
+	svc := workloadDetails(KindECSTask, "arn:aws:ecs:us-east-1:1:cluster/prod/api", "",
+		"FARGATE", "api:42", "ECS", []byte(`[{"name":"app"}]`))
+	if svc == nil {
+		t.Fatal("an ECS service row must produce details")
+	}
+	if svc.ClusterArn != "arn:aws:ecs:us-east-1:1:cluster/prod" || svc.TaskDefinition != "api:42" ||
+		svc.LaunchType != "FARGATE" || svc.DeploymentController != "ECS" || len(svc.Containers) != 1 {
+		t.Errorf("service details = %+v", svc)
+	}
+
+	if got := workloadDetails(KindECSTask, "arn:aws:ecs:us-east-1:1:task/abc", "", "", "", "", nil); got != nil {
+		t.Errorf("standalone task details = %+v, want nil", got)
+	}
+
+	lam := workloadDetails(KindLambda, "arn:aws:lambda:us-east-1:1:function:fn", "python3.12", "arm64", "", "", nil)
+	if lam == nil || lam.Runtime != "python3.12" || lam.Architecture != "arm64" || lam.FunctionArn == "" {
+		t.Errorf("lambda details = %+v", lam)
+	}
+	if len(lam.Containers) != 0 {
+		t.Errorf("lambda has no container layer, got %+v", lam.Containers)
+	}
+}

@@ -39,11 +39,21 @@ type Config struct {
 	// LambdaLayerDir overrides where the connector image stages bundled OTel Lambda layer artifacts
 	// (<dir>/<language>/<arch>/layer.zip). Empty uses the instrumentor default (/var/odigos/lambda).
 	LambdaLayerDir string
-	// ECSAgentImage is the container image for the Odigos ecs-agent the connector deploys onto an
-	// EC2-backed ECS cluster (the ecs-cluster service). Sourced from ODIGOS_ECS_AGENT_IMAGE; the actual
-	// deploy is a stub in this release, so it is informational until the agent task spec is finalized.
+	// ECSAgentImage is the container image for the Odigos ecs-agent (the vm-agent's eBPF daemon) the
+	// connector deploys onto an EC2-backed ECS cluster (the ecs-cluster service). Sourced from
+	// ODIGOS_ECS_AGENT_IMAGE; the actual deploy is a stub in this release, so it is informational until
+	// the agent task spec is finalized. NOT the Fargate agents bundle — that is FargateAgentsImage.
 	ECSAgentImage string
+	// FargateAgentsImage is the agents-bundle image the ECS Fargate instrumentor's odigos-agent sidecar
+	// stages the language agent files from (busybox + env-driven OpenTelemetry agents under
+	// /instrumentations, built from connectors/providers/aws/agents). Sourced from
+	// ODIGOS_FARGATE_AGENTS_IMAGE; empty uses DefaultFargateAgentsImage.
+	FargateAgentsImage string
 }
+
+// DefaultFargateAgentsImage is the published multi-arch (amd64+arm64) Fargate agents bundle used when
+// ODIGOS_FARGATE_AGENTS_IMAGE is not set. Fargate tasks must have image-pull egress to this registry.
+const DefaultFargateAgentsImage = "registry.odigos.io/odigos-fargate-agents:v0.1.0"
 
 // FromEnv builds the Config from environment variables (base requires connector name + database URL).
 func FromEnv() (Config, error) {
@@ -69,10 +79,18 @@ func FromEnv() (Config, error) {
 			RoleARN:         os.Getenv("ODIGOS_AWS_ROLE_ARN"),
 			ExternalID:      os.Getenv("ODIGOS_AWS_EXTERNAL_ID"),
 		},
-		LambdaLayerARNs: parseLayerARNs(os.Getenv("ODIGOS_AWS_LAMBDA_LAYER_ARNS")),
-		LambdaLayerDir:  os.Getenv("ODIGOS_AWS_LAMBDA_LAYER_DIR"),
-		ECSAgentImage:   os.Getenv("ODIGOS_ECS_AGENT_IMAGE"),
+		LambdaLayerARNs:    parseLayerARNs(os.Getenv("ODIGOS_AWS_LAMBDA_LAYER_ARNS")),
+		LambdaLayerDir:     os.Getenv("ODIGOS_AWS_LAMBDA_LAYER_DIR"),
+		ECSAgentImage:      os.Getenv("ODIGOS_ECS_AGENT_IMAGE"),
+		FargateAgentsImage: envOrDefault("ODIGOS_FARGATE_AGENTS_IMAGE", DefaultFargateAgentsImage),
 	}, nil
+}
+
+func envOrDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }
 
 // KeyDebugLambdaTelemetry is the DB-backed config key toggling verbose in-function OpenTelemetry logging
@@ -80,12 +98,18 @@ func FromEnv() (Config, error) {
 // updateConfig operation (no pod restart).
 const KeyDebugLambdaTelemetry = "debugLambdaTelemetry"
 
+// KeyDebugEcsTelemetry is the DB-backed config key toggling verbose in-task OpenTelemetry logging
+// (OTEL_LOG_LEVEL=debug) on instrumented Fargate services. A separate key from the Lambda toggle so
+// debugging one workload kind never floods the other's logs.
+const KeyDebugEcsTelemetry = "debugEcsTelemetry"
+
 // Defaults returns the AWS-specific operational config defaults. They are merged onto the base defaults
 // (config.MergeDefaults) when the connector builds its config.Manager, so every key resolves even when the
 // connector has never been configured.
 func Defaults() map[string]any {
 	return map[string]any{
 		KeyDebugLambdaTelemetry: false,
+		KeyDebugEcsTelemetry:    false,
 	}
 }
 

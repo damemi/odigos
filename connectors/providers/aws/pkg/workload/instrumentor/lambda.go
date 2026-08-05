@@ -292,7 +292,6 @@ func exporterFor(supported bool) string {
 	return exporterNone
 }
 
-
 func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunction, dest domaindest.OTLPTarget, reportedServiceName string) error {
 	if reportedServiceName == "" {
 		reportedServiceName = fn.FunctionName
