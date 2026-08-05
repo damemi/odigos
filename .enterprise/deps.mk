@@ -99,7 +99,7 @@ update-collector-oss-deps:
 	fi; \
 	: > "$$tmp/rewrite.sed"; \
 	while read -r mod ver; do \
-		echo "s|(=> $$mod) v[^ ]+|\1 $$ver|g" >> "$$tmp/rewrite.sed"; \
+		printf '%s\n' "s|(=> $$mod) v[^ ]+|\1 $$ver|g" >> "$$tmp/rewrite.sed"; \
 	done < "$$tmp/pins"; \
 	SED_SCRIPT="$$(cat "$$tmp/rewrite.sed")" \
 		$(DOCKER_SED_SCRIPT) < collector/builder-config.yaml > "$$tmp/manifest"; \
