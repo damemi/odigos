@@ -5,6 +5,10 @@ module odigos.io/opentelemetry-collector/cmd/odigosotelcol
 go 1.26.2
 
 require (
+	github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor v0.0.0
+	github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor v0.0.0
+	github.com/odigos-io/odigos-enterprise/collector/processors/odigosvmprofileattrsprocessor v0.0.0
+	github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver v0.0.0
 	github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v0.151.0
 	github.com/odigos-io/odigos/collector/connectors/serviceioconnector v0.151.0
 	github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v0.151.0
@@ -13,13 +17,9 @@ require (
 	github.com/odigos-io/odigos/collector/processor/odigospiimaskingprocessor v0.151.0
 	github.com/odigos-io/odigos/collector/processor/odigossqlqueryprocessor v0.151.0
 	github.com/odigos-io/odigos/collector/processor/odigosurltemplateprocessor v0.151.0
-	github.com/odigos-io/odigos/collector/processors/odigosprofilesprocessor v0.151.0
-	github.com/odigos-io/odigos/collector/processors/odigossymbolizeprocessor v0.151.0
 	github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor v0.151.0
 	github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor v0.151.0
 	github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor v0.151.0
-	github.com/odigos-io/odigos/collector/processors/odigosvmprofileattrsprocessor v0.151.0
-	github.com/odigos-io/odigos/collector/receivers/odigosebpfreceiver v0.151.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.151.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/datadogconnector v0.151.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/exceptionsconnector v0.151.0
@@ -506,7 +506,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
 	github.com/odigos-io/go-rtml v0.0.1 // indirect
-	github.com/odigos-io/odigos/common v0.0.0 // indirect
+	github.com/odigos-io/odigos/common v1.34.0-pre1.0.20260803114326-2a76b712ad1d // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding v0.151.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/internal/credentialsfile v0.151.0 // indirect
@@ -795,11 +795,13 @@ replace github.com/odigos-io/odigos/collector/processor/odigosextractattributepr
 
 replace github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor => github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor v0.0.0-20260803114326-2a76b712ad1d
 
-replace github.com/odigos-io/odigos/collector/processors/odigosprofilesprocessor => github.com/odigos-io/odigos/collector/processors/odigosprofilesprocessor v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor => ../processors/odigosprofilesprocessor
 
-replace github.com/odigos-io/odigos/collector/processors/odigosvmprofileattrsprocessor => github.com/odigos-io/odigos/collector/processors/odigosvmprofileattrsprocessor v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/odigos-io/odigos-enterprise/collector/processors/odigosvmprofileattrsprocessor => ../processors/odigosvmprofileattrsprocessor
 
-replace github.com/odigos-io/odigos/collector/processors/odigossymbolizeprocessor => github.com/odigos-io/odigos/collector/processors/odigossymbolizeprocessor v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor => ../processors/odigossymbolizeprocessor
+
+replace github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver => ../receivers/odigosebpfreceiver
 
 replace odigosk8scmprovider => github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v0.0.0-20260803114326-2a76b712ad1d
 
@@ -808,8 +810,6 @@ replace github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector =
 replace github.com/odigos-io/odigos/collector/connectors/serviceioconnector => github.com/odigos-io/odigos/collector/connectors/serviceioconnector v0.0.0-20260803114326-2a76b712ad1d
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector => github.com/odigos-io/odigos/collector/connectors/servicegraphconnector v0.0.0-20260803114326-2a76b712ad1d
-
-replace github.com/odigos-io/odigos/collector/receivers/odigosebpfreceiver => github.com/odigos-io/odigos/collector/receivers/odigosebpfreceiver v0.0.0-20260803114326-2a76b712ad1d
 
 replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.34.0-pre1.0.20260803114326-2a76b712ad1d
 

@@ -102,9 +102,9 @@ import (
 	odigoslogsresourceattrsprocessor "github.com/odigos-io/odigos/collector/processor/odigoslogsresourceattrsprocessor"
 	odigosextractattributeprocessor "github.com/odigos-io/odigos/collector/processor/odigosextractattributeprocessor"
 	odigostracefilterprocessor "github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor"
-	odigosprofilesprocessor "github.com/odigos-io/odigos/collector/processors/odigosprofilesprocessor"
-	odigosvmprofileattrsprocessor "github.com/odigos-io/odigos/collector/processors/odigosvmprofileattrsprocessor"
-	odigossymbolizeprocessor "github.com/odigos-io/odigos/collector/processors/odigossymbolizeprocessor"
+	odigosprofilesprocessor "github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor"
+	odigosvmprofileattrsprocessor "github.com/odigos-io/odigos-enterprise/collector/processors/odigosvmprofileattrsprocessor"
+	odigossymbolizeprocessor "github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor"
 	otlpreceiver "go.opentelemetry.io/collector/receiver/otlpreceiver"
 	zipkinreceiver "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver"
 	filelogreceiver "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
@@ -112,7 +112,7 @@ import (
 	k8sclusterreceiver "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sclusterreceiver"
 	hostmetricsreceiver "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver"
 	prometheusreceiver "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver"
-	odigosebpfreceiver "github.com/odigos-io/odigos/collector/receivers/odigosebpfreceiver"
+	odigosebpfreceiver "github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver"
 	collector "go.opentelemetry.io/ebpf-profiler/collector"
 	journaldreceiver "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver"
 )
@@ -188,7 +188,7 @@ func components() (otelcol.Factories, error) {
 		k8sclusterreceiver.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sclusterreceiver v0.151.0",
 		hostmetricsreceiver.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.151.0",
 		prometheusreceiver.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.151.0",
-		odigosebpfreceiver.NewFactory().Type(): "github.com/odigos-io/odigos/collector/receivers/odigosebpfreceiver v0.151.0",
+		odigosebpfreceiver.NewFactory().Type(): "github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver v0.0.0",
 		collector.NewFactory().Type(): "go.opentelemetry.io/ebpf-profiler v0.0.202614",
 		journaldreceiver.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.151.0",
 	})
@@ -354,9 +354,9 @@ func components() (otelcol.Factories, error) {
 		odigoslogsresourceattrsprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processor/odigoslogsresourceattrsprocessor v0.151.0",
 		odigosextractattributeprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processor/odigosextractattributeprocessor v0.151.0",
 		odigostracefilterprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor v0.151.0",
-		odigosprofilesprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processors/odigosprofilesprocessor v0.151.0",
-		odigosvmprofileattrsprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processors/odigosvmprofileattrsprocessor v0.151.0",
-		odigossymbolizeprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processors/odigossymbolizeprocessor v0.151.0",
+		odigosprofilesprocessor.NewFactory().Type(): "github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor v0.0.0",
+		odigosvmprofileattrsprocessor.NewFactory().Type(): "github.com/odigos-io/odigos-enterprise/collector/processors/odigosvmprofileattrsprocessor v0.0.0",
+		odigossymbolizeprocessor.NewFactory().Type(): "github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor v0.0.0",
 	})
 
 	factories.Connectors, err = otelcol.MakeFactoryMap[connector.Factory](

@@ -15,9 +15,9 @@ jobs:
         with:
           go-version-file: collector/odigosotelcol/go.mod
 
-      - name: Generate collector with ocb
+      - name: Generate collector with ocb and component metadata
         working-directory: ./collector
-        run: make genodigoscol
+        run: make genodigoscol generate
 
       - name: Verify Generate
         working-directory: ./collector
@@ -25,7 +25,7 @@ jobs:
           if [ -n "$(git status --porcelain .)" ]; then
             git status --porcelain .
             git diff .
-            echo "::error::collector/odigosotelcol is out of sync with builder-config.yaml. Run 'make genodigoscol' in collector/ and commit the result."
+            echo "::error::collector/ is out of sync with its sources. Run 'make genodigoscol generate' in collector/ and commit the result."
             exit 1
           fi
 
@@ -37,6 +37,6 @@ jobs:
         with:
           go-version-file: collector/odigosotelcol/go.mod
 
-      - name: Test collector distribution
+      - name: Test collector components and distribution
         working-directory: ./collector
         run: make test

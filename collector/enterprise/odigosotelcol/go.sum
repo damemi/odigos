@@ -1060,14 +1060,10 @@ github.com/odigos-io/odigos/collector/processors/odigoslogsresourceattrsprocesso
 github.com/odigos-io/odigos/collector/processors/odigoslogsresourceattrsprocessor v0.0.0-20260803114326-2a76b712ad1d/go.mod h1:IYWPt+fIGlEM9I7jat+j5t6zFanaUKP0leNH278iUhM=
 github.com/odigos-io/odigos/collector/processors/odigospiimaskingprocessor v0.0.0-20260803114326-2a76b712ad1d h1:hqyJyh4Ko1aW7/XUKQ4ZKp5l8+I4x5darKOzpbA9dV0=
 github.com/odigos-io/odigos/collector/processors/odigospiimaskingprocessor v0.0.0-20260803114326-2a76b712ad1d/go.mod h1:JD7ddBhKSAU0F4tSOH6huAPbtELU752DvLeYnYskoD8=
-github.com/odigos-io/odigos/collector/processors/odigosprofilesprocessor v0.0.0-20260803114326-2a76b712ad1d h1:soZrejORX4hV0uTdSEeLFRhtS5dDSn7a3y3siSpZZVo=
-github.com/odigos-io/odigos/collector/processors/odigosprofilesprocessor v0.0.0-20260803114326-2a76b712ad1d/go.mod h1:Km3CdopcaxnYXj8zX4ZKA6FvIox8EPGwyFjkxdTwkDw=
 github.com/odigos-io/odigos/collector/processors/odigossqldboperationprocessor v0.0.0-20260803114326-2a76b712ad1d h1:1TqP6EPJiy2woiR9s6UelgtaVbSNku2gwxMeZL2V39E=
 github.com/odigos-io/odigos/collector/processors/odigossqldboperationprocessor v0.0.0-20260803114326-2a76b712ad1d/go.mod h1:rpcodvaX7y0PhJMMOc76f1rB0E6BELwxL9pXxHa4Nac=
 github.com/odigos-io/odigos/collector/processors/odigossqlqueryprocessor v0.0.0-20260803114326-2a76b712ad1d h1:caCMCqCCo2hG7HlJqCB2xSmX8AQQ0YbPVLHvlGD3aeQ=
 github.com/odigos-io/odigos/collector/processors/odigossqlqueryprocessor v0.0.0-20260803114326-2a76b712ad1d/go.mod h1:7Ux7+YFe0mYd5d4C9Qj4yq6TvrV2cjG5p4JCdL62MFw=
-github.com/odigos-io/odigos/collector/processors/odigossymbolizeprocessor v0.0.0-20260803114326-2a76b712ad1d h1:gSZ1LYQkUQFenCMQXBvml+KOinxso77aUUw9dhQIqhk=
-github.com/odigos-io/odigos/collector/processors/odigossymbolizeprocessor v0.0.0-20260803114326-2a76b712ad1d/go.mod h1:eVSGswc7fTFGwJQwh+acaGkDEDMudGGe2K3XpM7jLoE=
 github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor v0.0.0-20260803114326-2a76b712ad1d h1:WxLslPj6jZKaWrdWkqWmP+M+oPlkd9VZREz7jDjTUGw=
 github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor v0.0.0-20260803114326-2a76b712ad1d/go.mod h1:4A/Z0slkSJfK0vAJ71UVhlU4y1lPAZd6ryLTfqfdOvE=
 github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor v0.0.0-20260803114326-2a76b712ad1d h1:RyvSLMEKRgh/LKCfmwZeQmnP7lVzftzt8K/e9wpF6Xk=
@@ -1078,12 +1074,8 @@ github.com/odigos-io/odigos/collector/processors/odigostrafficmetrics v0.0.0-202
 github.com/odigos-io/odigos/collector/processors/odigostrafficmetrics v0.0.0-20260803114326-2a76b712ad1d/go.mod h1:+2jzOx1JM7XxmNgv1wGmJ6VADQCvbXtMa8VLwF10FcM=
 github.com/odigos-io/odigos/collector/processors/odigosurltemplateprocessor v0.0.0-20260803114326-2a76b712ad1d h1:fNjGkH9K1Obxi+PMXN3tBDeSqy7FYBL+NS+QDBbiVr0=
 github.com/odigos-io/odigos/collector/processors/odigosurltemplateprocessor v0.0.0-20260803114326-2a76b712ad1d/go.mod h1:UykFzYcbjCIdN0j1MsuLPrZjSZl0UH8wEKv/l6POpog=
-github.com/odigos-io/odigos/collector/processors/odigosvmprofileattrsprocessor v0.0.0-20260803114326-2a76b712ad1d h1:pxvGKZrvrR3Qdb8j4Zf81BAuMHZ+MYobncfeI83Qe4k=
-github.com/odigos-io/odigos/collector/processors/odigosvmprofileattrsprocessor v0.0.0-20260803114326-2a76b712ad1d/go.mod h1:KMRjEWnou2i7Ozzd3atsl2RaY2dZBsPpPhwHKSdeRrM=
 github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v0.0.0-20260803114326-2a76b712ad1d h1:lgj/U8khk1fXg4VFFU0rwem5aRlqHsK5YHUcKVwX2BU=
 github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v0.0.0-20260803114326-2a76b712ad1d/go.mod h1:T5sGmebAuuyRPqFg4OWYx6nUshjp/p9U6HAdpzXlGuU=
-github.com/odigos-io/odigos/collector/receivers/odigosebpfreceiver v0.0.0-20260803114326-2a76b712ad1d h1:eG5R/76DqnkLTvBgmDBf3PtVTvzDu7dNoVMmceqsxXk=
-github.com/odigos-io/odigos/collector/receivers/odigosebpfreceiver v0.0.0-20260803114326-2a76b712ad1d/go.mod h1:emIXWGlAZasAaruUFIjdSmHXQhO1O2160BGG7jMX6Vg=
 github.com/odigos-io/odigos/common v1.34.0-pre1.0.20260803114326-2a76b712ad1d h1:RQGQwFhiiYueKdrCYclN27LMeKqT3f3FkcJquiqmiE0=
 github.com/odigos-io/odigos/common v1.34.0-pre1.0.20260803114326-2a76b712ad1d/go.mod h1:JKY9IUXVPaz1kCLrWA7+govYkkeWffC3YOTflrpJbKo=
 github.com/oklog/ulid/v2 v2.1.1 h1:suPZ4ARWLOJLegGFiZZ1dFAkqzhMjL3J1TzI+5wHz8s=
