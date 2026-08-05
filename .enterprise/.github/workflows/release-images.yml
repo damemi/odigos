@@ -163,7 +163,7 @@ jobs:
           failure-description: "ERROR: failed to publish odigos enterprise component ${{ matrix.service }} Standard image${{ matrix.extended == 'true' && ' (Extended)' || '' }} to registry"
           tag: ${{ env.TAG }}
 
-  # Cloud connector images (connector-runtime, connector-aws, connector-gcp, connector-postgres).
+  # Cloud connector images (connector-runtime, connector-aws, connector-azure, connector-gcp, connector-postgres).
   # These build fully in parallel (fail-fast: false) and independently of the main `release` job.
   # The job is best-effort (continue-on-error) and is intentionally NOT wired into
   # trigger-cli-release's `needs`, so a connector build failure never blocks the OSS CLI release.
@@ -180,6 +180,10 @@ jobs:
             ld-flags: "-s -w"
           - service: connector-aws
             dockerfile: connectors/providers/aws/Dockerfile
+            context: .
+            ld-flags: "-s -w"
+          - service: connector-azure
+            dockerfile: connectors/providers/azure/Dockerfile
             context: .
             ld-flags: "-s -w"
           - service: connector-gcp

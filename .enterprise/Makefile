@@ -155,6 +155,20 @@ build-connector-gcp:
 		--build-arg LD_FLAGS="$(LD_FLAGS)" \
 		. $(NO_CACHE)
 
+
+.PHONY: build-connector-azure
+build-connector-azure:
+	@if [ -z "$(GITHUB_TOKEN)" ]; then \
+		echo "❌ GITHUB_TOKEN is not set. Export a GitHub PAT with access to odigos-io private repos."; \
+		exit 1; \
+	fi
+	docker build $(TARGET_FLAG) \
+		-t $(ORG)/odigos-enterprise-connector-azure$(IMG_SUFFIX):$(TAG) \
+		-f connectors/providers/azure/Dockerfile \
+		--secret id=github_token,env=GITHUB_TOKEN \
+		--build-arg LD_FLAGS="$(LD_FLAGS)" \
+		. $(NO_CACHE)
+
 # connector-postgres is a plain Docker image (PostgreSQL + goose + migrations); it needs no Go build
 # or GITHUB_TOKEN, so it does not go through build-image/%.
 .PHONY: build-connector-postgres
@@ -177,20 +191,23 @@ build-connector-aws-dev: build-connector-aws
 .PHONY: build-connector-gcp-dev
 build-connector-gcp-dev: build-connector-gcp
 
+.PHONY: build-connector-azure-dev
+build-connector-azure-dev: build-connector-azure
+
 .PHONY: build-connector-images
 build-connector-images:
-	make build-connector-postgres build-connector-runtime build-connector-aws build-connector-gcp TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	make build-connector-postgres build-connector-runtime build-connector-aws build-connector-gcp build-connector-azure TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 # Build every image the cloud-connectors dev stack needs: the central images plus postgres and the
 # connector services (all built inside Docker).
 .PHONY: build-connector-stack
 build-connector-stack:
 	make build-central-backend build-central-ui TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
-	make build-connector-postgres build-connector-runtime build-connector-aws build-connector-gcp TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	make build-connector-postgres build-connector-runtime build-connector-aws build-connector-gcp build-connector-azure TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: load-connector-stack-to-kind
 load-connector-stack-to-kind:
-	make load-to-kind-central-backend load-to-kind-central-ui load-to-kind-connector-postgres load-to-kind-connector-runtime load-to-kind-connector-aws load-to-kind-connector-gcp ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
+	make load-to-kind-central-backend load-to-kind-central-ui load-to-kind-connector-postgres load-to-kind-connector-runtime load-to-kind-connector-aws load-to-kind-connector-gcp load-to-kind-connector-azure ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: push-connector-runtime
 push-connector-runtime:
@@ -238,13 +255,29 @@ push-connector-gcp:
 		--push \
 		. $(NO_CACHE)
 
+
+.PHONY: push-connector-azure
+push-connector-azure:
+	@if [ -z "$(GITHUB_TOKEN)" ]; then \
+		echo "❌ GITHUB_TOKEN is not set. Export a GitHub PAT with access to odigos-io private repos."; \
+		exit 1; \
+	fi
+	docker buildx build $(TARGET_FLAG) \
+		--platform linux/amd64,linux/arm64/v8 \
+		-t $(ORG)/odigos-enterprise-connector-azure$(IMG_SUFFIX):$(TAG) \
+		-f connectors/providers/azure/Dockerfile \
+		--secret id=github_token,env=GITHUB_TOKEN \
+		--build-arg LD_FLAGS="$(LD_FLAGS)" \
+		--push \
+		. $(NO_CACHE)
+
 .PHONY: push-connector-postgres
 push-connector-postgres:
 	docker buildx build --push --platform linux/amd64,linux/arm64/v8 -t $(ORG)/odigos-enterprise-connector-postgres$(IMG_SUFFIX):$(TAG) connector-postgres -f connector-postgres/Dockerfile
 
 .PHONY: load-connectors-to-kind
 load-connectors-to-kind:
-	make load-to-kind-connector-postgres load-to-kind-connector-runtime load-to-kind-connector-aws load-to-kind-connector-gcp ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
+	make load-to-kind-connector-postgres load-to-kind-connector-runtime load-to-kind-connector-aws load-to-kind-connector-gcp load-to-kind-connector-azure ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: restart-connector-runtime
 restart-connector-runtime:
@@ -290,6 +323,25 @@ port-forward-connector-gcp:
 	@target="$(CONNECTOR)"; \
 	if [ -z "$$target" ]; then \
 		target=$$(kubectl -n $(ODIGOS_CENTRAL_NS) get pods -l odigos.io/provider=gcp -o jsonpath='{.items[0].metadata.name}'); \
+	fi; \
+	echo "port-forwarding $$target 23678:23678 (run odictl with no flags to connect)"; \
+	kubectl -n $(ODIGOS_CENTRAL_NS) port-forward "$$target" 23678:23678
+
+
+# Restart connector-azure workload pods (created by connector-runtime from OdigosCloudConnector CRs).
+# Set CONNECTOR=<cr-name> to restart one connector; defaults to all Azure connectors in the namespace.
+.PHONY: restart-connector-azure
+restart-connector-azure:
+	@selector="odigos.io/provider=azure"; \
+	if [ -n "$(CONNECTOR)" ]; then selector="odigos.io/cloud-connector=$(CONNECTOR)"; fi; \
+	echo "restarting connector deployments in $(ODIGOS_CENTRAL_NS) ($$selector)"; \
+	kubectl rollout restart deployment -n $(ODIGOS_CENTRAL_NS) -l "$$selector"
+
+.PHONY: port-forward-connector-azure
+port-forward-connector-azure:
+	@target="$(CONNECTOR)"; \
+	if [ -z "$$target" ]; then \
+		target=$$(kubectl -n $(ODIGOS_CENTRAL_NS) get pods -l odigos.io/provider=azure -o jsonpath='{.items[0].metadata.name}'); \
 	fi; \
 	echo "port-forwarding $$target 23678:23678 (run odictl with no flags to connect)"; \
 	kubectl -n $(ODIGOS_CENTRAL_NS) port-forward "$$target" 23678:23678
@@ -488,6 +540,14 @@ deploy-connector-gcp:
 	make build-connector-gcp TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) && \
 	make load-to-kind-connector-gcp TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) && \
 	make restart-connector-gcp
+
+
+.PHONY: deploy-connector-azure
+deploy-connector-azure:
+	make build-connector-azure TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) && \
+	make load-to-kind-connector-azure TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) && \
+	make restart-connector-azure
+
 
 .PHONY: deploy
 deploy:
