@@ -130,7 +130,7 @@ build-connector-runtime:
 		. $(NO_CACHE)
 
 .PHONY: build-connector-aws
-build-connector-aws:
+build-connector-aws: build-fargate-agents
 	@if [ -z "$(GITHUB_TOKEN)" ]; then \
 		echo "❌ GITHUB_TOKEN is not set. Export a GitHub PAT with access to odigos-io private repos."; \
 		exit 1; \
@@ -141,6 +141,24 @@ build-connector-aws:
 		--secret id=github_token,env=GITHUB_TOKEN \
 		--build-arg LD_FLAGS="$(LD_FLAGS)" \
 		. $(NO_CACHE)
+
+# odigos-fargate-agents: the busybox agents bundle the AWS connector's ECS Fargate instrumentor stages
+# language agents from (staged by the injected odigos-agent sidecar). Built alongside the AWS connector
+# (build-connector-aws depends on it), delegating to connectors/providers/aws/agents/Makefile so the
+# image definition has one home. Public sources only — no GITHUB_TOKEN. NOTE: this image is pulled by
+# FARGATE TASKS from a registry, never by the kind cluster — there is no load-to-kind target for it; for
+# a real environment push it (push-fargate-agents) and point the connector at it via
+# CONNECTOR_AWS_FARGATE_AGENTS_IMAGE (or rely on the compiled-in default bundle).
+.PHONY: build-fargate-agents
+build-fargate-agents:
+	$(MAKE) -C connectors/providers/aws/agents build \
+		REGISTRY=$(ORG) IMAGE=odigos-fargate-agents$(IMG_SUFFIX) TAG=$(TAG)
+
+.PHONY: push-fargate-agents
+push-fargate-agents:
+	$(MAKE) -C connectors/providers/aws/agents buildx-push \
+		REGISTRY=$(ORG) IMAGE=odigos-fargate-agents$(IMG_SUFFIX) TAG=$(TAG) \
+		PLATFORMS=linux/amd64,linux/arm64/v8
 
 .PHONY: build-connector-gcp
 build-connector-gcp:
@@ -194,16 +212,19 @@ build-connector-gcp-dev: build-connector-gcp
 .PHONY: build-connector-azure-dev
 build-connector-azure-dev: build-connector-azure
 
+# Aggregate builds are plain prerequisite fan-outs (no sub-make), so parallel make builds the
+# independent images concurrently — e.g. `make -j$(nproc) build-connector-images`. The images share no
+# build ordering (build-connector-aws pulls in build-fargate-agents via its own prerequisite); ORG/TAG/
+# IMG_SUFFIX are in scope for every prerequisite, so no explicit pass-through is needed. Tip: add -O
+# (output-sync) to keep concurrent docker build logs grouped per target.
 .PHONY: build-connector-images
-build-connector-images:
-	make build-connector-postgres build-connector-runtime build-connector-aws build-connector-gcp build-connector-azure TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+build-connector-images: build-connector-postgres build-connector-runtime build-connector-aws build-connector-gcp build-connector-azure
 
 # Build every image the cloud-connectors dev stack needs: the central images plus postgres and the
-# connector services (all built inside Docker).
+# connector services (all built inside Docker). Parallel-safe like build-connector-images.
 .PHONY: build-connector-stack
-build-connector-stack:
-	make build-central-backend build-central-ui TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
-	make build-connector-postgres build-connector-runtime build-connector-aws build-connector-gcp build-connector-azure TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+build-connector-stack: build-central-backend build-central-ui build-connector-images
+
 
 .PHONY: load-connector-stack-to-kind
 load-connector-stack-to-kind:
@@ -226,7 +247,7 @@ push-connector-runtime:
 		. $(NO_CACHE)
 
 .PHONY: push-connector-aws
-push-connector-aws:
+push-connector-aws: push-fargate-agents
 	@if [ -z "$(GITHUB_TOKEN)" ]; then \
 		echo "❌ GITHUB_TOKEN is not set. Export a GitHub PAT with access to odigos-io private repos."; \
 		exit 1; \

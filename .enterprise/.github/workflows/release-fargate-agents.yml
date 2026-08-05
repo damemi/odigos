@@ -1,0 +1,434 @@
+name: Release Fargate Agents
+run-name: 'Release Fargate Agents · ${{ inputs.bump }} on ${{ github.ref_name }}'
+
+# Independent release train for the odigos-fargate-agents image — the env-driven OpenTelemetry agents
+# bundle the AWS connector's ECS Fargate instrumentor stages into each task (see
+# connectors/providers/aws/agents/Dockerfile). It versions separately from the enterprise release
+# (release-images.yml) because the bundle only changes when an upstream agent version changes.
+#
+# Manual trigger only. Pick a bump (patch/minor/major); the workflow calculates the next version from
+# the existing `fargate-agents/v*` tag history, creates the annotated tag + GitHub release, then builds
+# and pushes the multi-arch image.
+#
+# Tag:   fargate-agents/vX.Y.Z
+# Image: registry.odigos.io/odigos-fargate-agents:vX.Y.Z
+#        (registry.odigos.io is a custom domain in front of the GCP Artifact Registry repo
+#         us-central1-docker.pkg.dev/odigos-cloud/components-private; the public `components`
+#         mirror is pushed too, matching every other enterprise image)
+#
+# Runs from main only — the `github-release-updater` STS identity
+# (.github/chainguard/github-release-updater.sts.yaml) is scoped to refs/heads/main.
+
+concurrency:
+  group: fargate-agents-release
+  cancel-in-progress: false
+
+permissions: read-all
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options: [patch, minor, major]
+
+jobs:
+  calculate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      current_version: ${{ steps.calc.outputs.current_version }}
+      new_version: ${{ steps.calc.outputs.new_version }}
+      tag: ${{ steps.calc.outputs.tag }}
+    steps:
+      - name: Guard - main only
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::Release Fargate Agents must be dispatched from main (got ${REF})"
+            exit 1
+          fi
+
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - run: git fetch --force --tags
+
+      - name: Calculate new version
+        id: calc
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+
+          # Most recent fargate-agents/vX.Y.Z tag. No tags yet => v0.0.0, so the first `minor`
+          # release lands on v0.1.0 (the version the AWS connector currently defaults to, see
+          # connectors/providers/aws/pkg/config/config.go DefaultFargateAgentsImage).
+          CURRENT=$(git tag -l 'fargate-agents/v*' \
+            | sed 's|^fargate-agents/||' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V | tail -1 || true)
+          CURRENT=${CURRENT:-v0.0.0}
+
+          IFS=. read -r MAJOR MINOR PATCH <<< "${CURRENT#v}"
+          case "$BUMP" in
+            major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH + 1)) ;;
+            *) echo "::error::unknown bump type '${BUMP}'"; exit 1 ;;
+          esac
+          NEW="v${MAJOR}.${MINOR}.${PATCH}"
+          TAG="fargate-agents/${NEW}"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag ${TAG} already exists"
+            exit 1
+          fi
+
+          {
+            echo "current_version=${CURRENT}"
+            echo "new_version=${NEW}"
+            echo "tag=${TAG}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Write release preview summary
+        env:
+          BUMP: ${{ inputs.bump }}
+          CURRENT_VERSION: ${{ steps.calc.outputs.current_version }}
+          NEW_VERSION: ${{ steps.calc.outputs.new_version }}
+          TAG: ${{ steps.calc.outputs.tag }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Fargate Agents Release Preview"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Base branch | \`${GITHUB_REF_NAME}\` |"
+            echo "| Bump type | \`${BUMP}\` |"
+            echo "| Current version | \`${CURRENT_VERSION}\` |"
+            echo "| **New version** | \`${NEW_VERSION}\` |"
+            echo "| Tag | \`${TAG}\` |"
+            echo "| Image | \`registry.odigos.io/odigos-fargate-agents:${NEW_VERSION}\` |"
+            echo ""
+            echo "#### Changes under connectors/providers/aws/agents"
+            echo ""
+            RANGE=HEAD
+            if git rev-parse "fargate-agents/${CURRENT_VERSION}" >/dev/null 2>&1; then
+              RANGE="fargate-agents/${CURRENT_VERSION}..HEAD"
+            fi
+            COMMITS=$(git log "$RANGE" --format="%H %s" --no-decorate -- connectors/providers/aws/agents)
+            if [ -z "$COMMITS" ]; then
+              echo "_No commits touching the agents bundle since \`${CURRENT_VERSION}\`._"
+            else
+              echo "$COMMITS" | while IFS= read -r line; do
+                sha="${line%% *}"
+                msg="${line#* }"
+                echo "- [\`${sha:0:7}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${sha}) ${msg}"
+              done
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Approval gate, same shape as the agents-api release. This only pauses the run once the
+  # `release-gate` environment has required reviewers configured in repo settings.
+  confirm:
+    needs: calculate
+    runs-on: ubuntu-latest
+    environment: release-gate
+    steps:
+      - name: Release approved
+        run: |
+          echo "Releasing ${{ needs.calculate.outputs.tag }} from ${GITHUB_REF_NAME}"
+
+  tag:
+    needs: [calculate, confirm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for STS (github-release-updater)
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      # Writes a global gitconfig with the STS credential, so `git push` and `gh` both authenticate.
+      - name: Get STS token
+        id: sts
+        uses: odigos-io/ci-core/sts@main
+        with:
+          scope: ${{ github.repository }}
+          identity: github-release-updater
+
+      - name: Configure Git
+        run: |
+          git config user.name "Odigos Release Bot"
+          git config user.email "bot@keyval.dev"
+
+      - name: Verify HEAD matches main
+        run: |
+          set -euo pipefail
+          LOCAL_SHA=$(git rev-parse HEAD)
+          REMOTE_SHA=$(git rev-parse origin/main)
+          if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
+            echo "::error::HEAD (${LOCAL_SHA}) does not match origin/main (${REMOTE_SHA}); aborting to avoid tagging the wrong commit"
+            exit 1
+          fi
+
+      - name: Create & push tag
+        env:
+          TAG: ${{ needs.calculate.outputs.tag }}
+          NEW_VERSION: ${{ needs.calculate.outputs.new_version }}
+          BUMP: ${{ inputs.bump }}
+          ACTOR: ${{ github.actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag ${TAG} already exists"
+            exit 1
+          fi
+          git tag -a "$TAG" -m "$(printf 'Release fargate-agents %s\n\nbump:    %s\nbranch:  main\nactor:   %s\nrun:     %s' \
+            "$NEW_VERSION" "$BUMP" "$ACTOR" "$RUN_URL")"
+          git push origin "$TAG"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ steps.sts.outputs.GH_TOKEN }}
+          TAG: ${{ needs.calculate.outputs.tag }}
+          NEW_VERSION: ${{ needs.calculate.outputs.new_version }}
+          PREVIOUS_TAG: fargate-agents/${{ needs.calculate.outputs.current_version }}
+        run: |
+          set -euo pipefail
+          GENERATE_NOTES_ARGS=(-f tag_name="${TAG}")
+          if git rev-parse "${PREVIOUS_TAG}" >/dev/null 2>&1; then
+            GENERATE_NOTES_ARGS+=(-f previous_tag_name="${PREVIOUS_TAG}")
+          fi
+          NOTES=$(gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+            "${GENERATE_NOTES_ARGS[@]}" --jq '.body')
+
+          MAX=124000
+          if [ "${#NOTES}" -gt "$MAX" ]; then
+            NOTES="${NOTES:0:$MAX}"$'\n\n_Release notes truncated — see full git history for details._'
+          fi
+
+          gh release create "$TAG" \
+            --title "Fargate Agents ${NEW_VERSION}" \
+            --notes "$NOTES"
+
+  publish:
+    needs: [calculate, tag]
+    runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
+      id-token: write # required for GCP workload identity federation
+    steps:
+      - name: Notify Slack (Start)
+        uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
+        with:
+          webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+          success-description: "Starting release of odigos-fargate-agents image"
+          failure-description: "Failed to start release of odigos-fargate-agents image"
+          tag: ${{ needs.calculate.outputs.new_version }}
+
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          ref: ${{ needs.calculate.outputs.tag }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 #v3.11.1
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 #v3.6.0
+
+      - id: gcp-auth
+        name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@b7593ed2efd1c1617e1b0254da33b86225adb2a5 #v2.1.12
+        with:
+          token_format: access_token
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          access_token_lifetime: 1200s
+
+      # Single registry host; WIF access token authorizes push to public (components)
+      # and private (components-private, fronted by registry.odigos.io) repositories.
+      - name: Login to Artifact Registry
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 #v3.5.0
+        with:
+          registry: us-central1-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.gcp-auth.outputs.access_token }}
+
+      # Multi-arch manifest list: Fargate runs amd64 and arm64 (Graviton) tasks and pulls the entry
+      # matching RuntimePlatform.CpuArchitecture. Same platforms as the Makefile buildx-push target.
+      - name: Build and push Fargate agents image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 #v6.18.0
+        env:
+          IMAGE_TAG: ${{ needs.calculate.outputs.new_version }}
+        with:
+          context: connectors/providers/aws/agents
+          file: connectors/providers/aws/agents/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          provenance: false
+          tags: |
+            us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-fargate-agents:${{ env.IMAGE_TAG }}
+            us-central1-docker.pkg.dev/odigos-cloud/components/odigos-fargate-agents:${{ env.IMAGE_TAG }}
+
+      - name: Write publish summary
+        env:
+          IMAGE_TAG: ${{ needs.calculate.outputs.new_version }}
+        run: |
+          {
+            echo "### Fargate Agents Published"
+            echo ""
+            echo "- \`registry.odigos.io/odigos-fargate-agents:${IMAGE_TAG}\`"
+            echo "- \`us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-fargate-agents:${IMAGE_TAG}\`"
+            echo "- \`us-central1-docker.pkg.dev/odigos-cloud/components/odigos-fargate-agents:${IMAGE_TAG}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Notify Slack
+        if: always()
+        uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
+        with:
+          webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+          success-description: "odigos-fargate-agents image released successfully. new version is ready"
+          failure-description: "Failed to release odigos-fargate-agents image"
+          tag: ${{ needs.calculate.outputs.new_version }}
+
+  # The published image is not the default until the connector points at it. This opens that bump as a
+  # PR rather than committing to main: the change alters what every new Fargate instrumentation stages
+  # its agents from, so it goes through review and CI like any other change to the connector.
+  #
+  # Deliberately NOT auto-merged. The sibling instrumentation-agent bump
+  # (ci-core/apply-agent-version-update) enables auto-merge because those bumps are routine and
+  # additive; this one switches the default bundle for every customer's next task-definition revision,
+  # which is a decision a human should make after seeing the release.
+  #
+  # Runs after publish so the PR can never reference an image tag that does not exist yet.
+  bump-default-image:
+    needs: [calculate, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for STS (agent-version-updater)
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Bump DefaultFargateAgentsImage
+        id: bump
+        env:
+          NEW_VERSION: ${{ needs.calculate.outputs.new_version }}
+          CONFIG: connectors/providers/aws/pkg/config/config.go
+        run: |
+          set -euo pipefail
+          CONST='DefaultFargateAgentsImage'
+          IMAGE_REPO='registry.odigos.io/odigos-fargate-agents'
+
+          CURRENT=$(sed -n "s|^const ${CONST} = \"${IMAGE_REPO}:\(.*\)\"$|\1|p" "$CONFIG")
+          if [ -z "$CURRENT" ]; then
+            echo "::error file=${CONFIG}::could not find 'const ${CONST} = \"${IMAGE_REPO}:<version>\"' — the constant moved or was reformatted, so the bump cannot be applied safely"
+            exit 1
+          fi
+
+          {
+            echo "current=${CURRENT}"
+            echo "config=${CONFIG}"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$CURRENT" = "$NEW_VERSION" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Default is already ${NEW_VERSION}; nothing to bump."
+            exit 0
+          fi
+
+          sed -i "s|^const ${CONST} = \"${IMAGE_REPO}:.*\"$|const ${CONST} = \"${IMAGE_REPO}:${NEW_VERSION}\"|" "$CONFIG"
+
+          # Guard against a silent no-op: a sed that matched nothing must not produce an empty PR.
+          if [ -z "$(git status --porcelain -- "$CONFIG")" ]; then
+            echo "::error file=${CONFIG}::bump produced no change despite ${CURRENT} != ${NEW_VERSION}"
+            exit 1
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      # Same identity and PR mechanics as ci-core/apply-agent-version-update, minus the auto-merge step.
+      - name: Get agent version updater token
+        if: ${{ steps.bump.outputs.changed == 'true' }}
+        id: sts
+        uses: odigos-io/ci-core/sts@main
+        with:
+          scope: ${{ github.repository }}
+          identity: agent-version-updater
+          output-git-config: "false"
+
+      - name: Create pull request
+        if: ${{ steps.bump.outputs.changed == 'true' }}
+        id: cpr
+        uses: peter-evans/create-pull-request@v8
+        with:
+          token: ${{ steps.sts.outputs.GH_TOKEN }}
+          branch: bump-fargate-agents-${{ needs.calculate.outputs.new_version }}
+          title: "chore: default Fargate agents bundle to ${{ needs.calculate.outputs.new_version }}"
+          body: |
+            Points `DefaultFargateAgentsImage` at the newly released Fargate agents bundle.
+
+            | | |
+            |---|---|
+            | Previous | `registry.odigos.io/odigos-fargate-agents:${{ steps.bump.outputs.current }}` |
+            | **New** | `registry.odigos.io/odigos-fargate-agents:${{ needs.calculate.outputs.new_version }}` |
+            | Release | ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.calculate.outputs.tag }} |
+            | Run | ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} |
+
+            Once merged, every Fargate task instrumented from then on stages its language agents from
+            this bundle unless the deployment overrides `ODIGOS_FARGATE_AGENTS_IMAGE`. Already-instrumented
+            task definitions are unaffected until their next reconcile registers a new revision.
+
+            **Not auto-merged** — merge once you are satisfied with the released bundle.
+          commit-message: "chore: default Fargate agents bundle to ${{ needs.calculate.outputs.new_version }}"
+          delete-branch: true
+          sign-commits: true
+          labels: |
+            new-agent-version
+            release-bot
+
+      - name: Write bump summary
+        if: ${{ always() }}
+        env:
+          CHANGED: ${{ steps.bump.outputs.changed }}
+          CURRENT: ${{ steps.bump.outputs.current }}
+          NEW_VERSION: ${{ needs.calculate.outputs.new_version }}
+          PR_URL: ${{ steps.cpr.outputs.pull-request-url }}
+          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
+          CONFIG: ${{ steps.bump.outputs.config }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Default Bundle Bump"
+            echo ""
+            if [ "${CHANGED}" != "true" ]; then
+              echo "\`DefaultFargateAgentsImage\` is already \`${NEW_VERSION}\` — no PR needed."
+            elif [ -n "${PR_URL}" ]; then
+              echo "**[PR #${PR_NUMBER} — default Fargate agents bundle to ${NEW_VERSION}](${PR_URL})**"
+              echo ""
+              echo "| Field | Value |"
+              echo "|---|---|"
+              echo "| File | \`${CONFIG}\` |"
+              echo "| From | \`${CURRENT}\` |"
+              echo "| To | \`${NEW_VERSION}\` |"
+              echo "| Status | Awaiting manual review — **not** auto-merged |"
+              echo ""
+              echo "Merging makes this the bundle every new Fargate instrumentation stages from."
+            else
+              echo ":warning: The bump was applied but no pull request was created — check the job log."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
