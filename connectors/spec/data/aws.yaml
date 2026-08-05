@@ -17,6 +17,7 @@ connector:
 auth:
   permissions:
     - sts:GetCallerIdentity
+  defaultMethod: assume-role
   methods:
     - id: workload-identity
       displayName: Pod / workload identity
@@ -340,6 +341,7 @@ setup:
       description: Paste the generated Role ARN into Odigos.
       format: text
       template: ""
+
 
 # gateway: connector-wide collector wiring; not part of either domain. Implemented in a later phase.
 gateway:

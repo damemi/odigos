@@ -51,8 +51,9 @@ type ComplexityRoot struct {
 	}
 
 	CloudConnectorAuth struct {
-		Methods     func(childComplexity int) int
-		Permissions func(childComplexity int) int
+		DefaultMethod func(childComplexity int) int
+		Methods       func(childComplexity int) int
+		Permissions   func(childComplexity int) int
 	}
 
 	CloudConnectorAuthMethod struct {
@@ -405,6 +406,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.BackendHealthStatus.SseStatus(childComplexity), true
 
+	case "CloudConnectorAuth.defaultMethod":
+		if e.ComplexityRoot.CloudConnectorAuth.DefaultMethod == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorAuth.DefaultMethod(childComplexity), true
 	case "CloudConnectorAuth.methods":
 		if e.ComplexityRoot.CloudConnectorAuth.Methods == nil {
 			break
@@ -1676,6 +1683,8 @@ func (ec *executionContext) childFields_CloudConnectorAuth(ctx context.Context, 
 	switch field.Name {
 	case "permissions":
 		return ec.fieldContext_CloudConnectorAuth_permissions(ctx, field)
+	case "defaultMethod":
+		return ec.fieldContext_CloudConnectorAuth_defaultMethod(ctx, field)
 	case "methods":
 		return ec.fieldContext_CloudConnectorAuth_methods(ctx, field)
 	}
@@ -2924,6 +2933,29 @@ func (ec *executionContext) _CloudConnectorAuth_permissions(ctx context.Context,
 	)
 }
 func (ec *executionContext) fieldContext_CloudConnectorAuth_permissions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CloudConnectorAuth", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CloudConnectorAuth_defaultMethod(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorAuth) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorAuth_defaultMethod(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DefaultMethod, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorAuth_defaultMethod(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CloudConnectorAuth", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
@@ -9191,6 +9223,11 @@ func (ec *executionContext) _CloudConnectorAuth(ctx context.Context, sel ast.Sel
 			out.Values[i] = graphql.MarshalString("CloudConnectorAuth")
 		case "permissions":
 			out.Values[i] = ec._CloudConnectorAuth_permissions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "defaultMethod":
+			out.Values[i] = ec._CloudConnectorAuth_defaultMethod(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

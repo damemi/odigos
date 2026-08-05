@@ -235,6 +235,10 @@ func TestAWSAuthResolveAllModes(t *testing.T) {
 func TestAWSCreateRoleArtifacts(t *testing.T) {
 	s := MustGet("aws")
 
+	if s.Auth.DefaultMethod != "assume-role" {
+		t.Errorf("auth defaultMethod = %q, want assume-role", s.Auth.DefaultMethod)
+	}
+
 	if s.Setup.Subtitle == "" {
 		t.Error("setup.subtitle should be set for the step-2 header")
 	}

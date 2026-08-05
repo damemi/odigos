@@ -208,6 +208,9 @@ type AuthConfig struct {
 	// Permissions are baseline provider permissions needed to validate authentication (e.g. an identity
 	// probe). Format is provider-specific.
 	Permissions []string `yaml:"permissions"`
+	// DefaultMethod is the auth method id pre-selected in the create-connector UI when set (e.g.
+	// "assume-role" for AWS). When empty, the UI picks the first method that declares required fields.
+	DefaultMethod string `yaml:"defaultMethod"`
 	// Methods are the supported authentication paths declared by the provider.
 	Methods []AuthMethod `yaml:"methods"`
 }

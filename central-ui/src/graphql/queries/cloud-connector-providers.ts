@@ -22,6 +22,7 @@ export const GET_CLOUD_CONNECTOR_PROVIDERS = gql`
       }
       auth {
         permissions
+        defaultMethod
         methods {
           id
           displayName

@@ -160,6 +160,7 @@ func BuildDeployment(cr *cloudconnectorsv1.OdigosCloudConnector, p DeploymentPar
 		// line here when onboarding a provider whose boundary env var differs.
 		{Name: "ODIGOS_AWS_ACCOUNT_ID", Value: cr.Spec.Account.ID},
 		{Name: "ODIGOS_GCP_PROJECT_ID", Value: cr.Spec.Account.ID},
+		{Name: "ODIGOS_AZURE_SUBSCRIPTION_ID", Value: cr.Spec.Account.ID},
 		{Name: "ODIGOS_CENTRAL_BACKEND_URL", Value: p.CentralBackendURL},
 		{Name: "ODIGOS_GQL_ADDR", Value: fmt.Sprintf(":%d", GraphQLPort)},
 		{Name: "ODIGOS_CLI_ADDR", Value: fmt.Sprintf(":%d", CLIPort)},
@@ -233,8 +234,8 @@ func BuildDeployment(cr *cloudconnectorsv1.OdigosCloudConnector, p DeploymentPar
 				ObjectMeta: metav1.ObjectMeta{Labels: labels},
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: ptr.To(DefaultShutdownGraceSeconds),
-					// The connector talks to Postgres, AWS and Central — never the Kubernetes API — so don't
-					// mount a service-account token into a pod that holds cloud credentials.
+					// The connector talks to Postgres, the cloud provider, and Central — never the Kubernetes
+					// API — so don't mount a service-account token into a pod that holds cloud credentials.
 					AutomountServiceAccountToken: ptr.To(false),
 					SecurityContext: &corev1.PodSecurityContext{
 						SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},

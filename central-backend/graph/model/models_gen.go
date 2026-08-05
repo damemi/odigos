@@ -23,8 +23,9 @@ type BackendHealthStatus struct {
 }
 
 type CloudConnectorAuth struct {
-	Permissions []string                    `json:"permissions"`
-	Methods     []*CloudConnectorAuthMethod `json:"methods"`
+	Permissions   []string                    `json:"permissions"`
+	DefaultMethod string                      `json:"defaultMethod"`
+	Methods       []*CloudConnectorAuthMethod `json:"methods"`
 }
 
 type CloudConnectorAuthMethod struct {

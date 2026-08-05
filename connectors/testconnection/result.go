@@ -1,6 +1,6 @@
 // Package testconnection runs read-only reachability and permission checks for a prospective cloud
 // connector, using credentials held in memory only. It is provider-agnostic: each provider registers a
-// Tester (see aws.go) and callers dispatch through Run. It is imported by central-backend so the
+// Tester (see aws.go / azure.go) and callers dispatch through Run. It is imported by central-backend so the
 // onboarding / create-connector flow can validate a connector before any Secret or connector pod is
 // created — therefore it must never persist credentials, log them, or echo them back. Each provider's
 // probe calls mirror what that connector's discovery loop performs.

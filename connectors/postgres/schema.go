@@ -9,6 +9,7 @@ const (
 	SchemaPlatform = "connector_platform"
 	SchemaAWS      = "connector_aws"
 	SchemaGCP      = "connector_gcp"
+	SchemaAzure    = "connector_azure"
 )
 
 // ExpectedSchemaVersions maps a schema name to the version a runtime built from this module requires
@@ -19,6 +20,7 @@ var ExpectedSchemaVersions = map[string]string{
 	SchemaPlatform: "2",
 	SchemaAWS:      "1",
 	SchemaGCP:      "1",
+	SchemaAzure:    "1",
 }
 
 // AWSExpectedVersion is the connector_aws schema version the AWS runtime is built against. It is the
@@ -28,6 +30,10 @@ func AWSExpectedVersion() string { return ExpectedSchemaVersions[SchemaAWS] }
 // GCPExpectedVersion is the connector_gcp schema version the GCP runtime is built against. It is the
 // value the connector-runtime controller stamps into ODIGOS_EXPECTED_SCHEMA_VERSION for GCP pods.
 func GCPExpectedVersion() string { return ExpectedSchemaVersions[SchemaGCP] }
+
+// AzureExpectedVersion is the connector_azure schema version the Azure runtime is built against. It is
+// the value the connector-runtime controller stamps into ODIGOS_EXPECTED_SCHEMA_VERSION for Azure pods.
+func AzureExpectedVersion() string { return ExpectedSchemaVersions[SchemaAzure] }
 
 // Platform tables.
 const (

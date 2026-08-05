@@ -32,8 +32,9 @@ func cloudConnectorProviderFromSpec(s spec.CloudConnectorSpec) *model.CloudConne
 		DisplayName:     s.DisplayName,
 		ConnectorFields: cloudConnectorFields(s.Connector.Fields),
 		Auth: &model.CloudConnectorAuth{
-			Permissions: nonNilStrings(s.Auth.Permissions),
-			Methods:     cloudConnectorAuthMethods(s.Auth.Methods),
+			Permissions:   nonNilStrings(s.Auth.Permissions),
+			DefaultMethod: s.Auth.DefaultMethod,
+			Methods:       cloudConnectorAuthMethods(s.Auth.Methods),
 		},
 		Features: cloudConnectorFeatures(s),
 		Setup:    cloudConnectorSetup(s.Setup),

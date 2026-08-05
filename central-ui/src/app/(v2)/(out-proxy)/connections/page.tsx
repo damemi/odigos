@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { useProxy, useProxyCRUD } from '@/hooks';
 import type { ComputePlatform } from '@/types';
+import { useProxy, useProxyCRUD } from '@/hooks';
 import * as STRINGS from '@/utils/constants/strings';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { useMutation, useQuery } from '@apollo/client/react';

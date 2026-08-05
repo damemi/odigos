@@ -1,0 +1,174 @@
+provider: azure
+displayName: Microsoft Azure
+
+# Provider boundary and non-secret connector configuration (not authentication).
+# One connector instance owns one Azure subscription. Detectors enumerate resources across the
+# subscription (no resource-group selection field).
+connector:
+  fields:
+    - name: subscriptionId
+      displayName: Azure Subscription ID
+      componentType: input
+      required: true
+      tooltip: The Azure subscription this connector manages.
+
+# Authentication: either the connector pod's ambient credentials (Azure Workload Identity / Managed
+# Identity via DefaultAzureCredential) or a service principal client secret stored in the credentials
+# Secret. Azure credentials are not themselves bound to a single subscription — the connector always
+# scopes its calls to the configured subscription id.
+auth:
+  permissions:
+    - Microsoft.Resources/subscriptions/read
+  methods:
+    - id: workload-identity
+      displayName: Workload identity
+      description: >-
+        Uses the connector pod's ambient credentials (Azure Workload Identity / Managed Identity via
+        DefaultAzureCredential). No credentials Secret keys are required.
+      fields: []
+
+    - id: service-principal
+      displayName: Service principal
+      description: >-
+        An Azure AD application (service principal) with a client secret, stored in the credentials
+        Secret. Maps to the standard AZURE_* environment variables the Azure SDK reads.
+      fields:
+        - name: tenantId
+          displayName: Tenant ID
+          componentType: input
+          required: true
+          showInUi: true
+          tooltip: Azure AD (Entra ID) tenant that owns the service principal.
+          envVar: AZURE_TENANT_ID
+        - name: clientId
+          displayName: Client ID
+          componentType: input
+          required: true
+          showInUi: true
+          tooltip: Application (client) ID of the service principal.
+          envVar: AZURE_CLIENT_ID
+        - name: clientSecret
+          displayName: Client Secret
+          componentType: input
+          secret: true
+          required: true
+          showInUi: true
+          tooltip: Client secret for the service principal.
+          envVar: AZURE_CLIENT_SECRET
+
+# Two parallel hierarchies (domains), completely separate, sharing only the codebase and running pod.
+#   workloads        -> discovery + instrumentation (instrument a discovered workload directly).
+#   computePlatforms -> discovery + installation    (install a separate Odigos agent onto the platform).
+# Every type name is unique across both domains.
+
+# workloads: directly-instrumentable resources — discovered, then instrumented in place.
+workloads:
+  discovery:
+    enabled: true
+    displayName: Workload discovery
+    description: >-
+      Enumerate Azure Container Apps across the subscription, so they can be surfaced as Odigos Source
+      candidates.
+    types:
+      - name: azure.container-apps
+        displayName: Azure Container Apps
+        description: List Container Apps in every resource group in the subscription.
+        permissions:
+          - Microsoft.App/containerApps/read
+
+  # instrumentation: instrument a discovered workload DIRECTLY. Each type references a workload-discovery
+  # type and declares how instrumentation is injected. Gated on an OTLP destination.
+  #   azure.container-apps -> service (OpenTelemetry agent injected into the app revision)
+  instrumentation:
+    enabled: true
+    displayName: Workload instrumentation
+    description: >-
+      Attach OpenTelemetry instrumentation directly to discovered Container Apps. Requires an OTLP
+      destination.
+    types:
+      - name: azure.container-apps
+        displayName: Azure Container Apps
+        description: >-
+          Inject the OpenTelemetry agent into the Container Apps revision (init container + EmptyDir
+          volume + activation/OTLP env, the OSS k8s-init-container pattern).
+        method: service
+        permissions:
+          - Microsoft.App/containerApps/read
+          - Microsoft.App/containerApps/write
+          - Microsoft.App/managedEnvironments/join/action
+
+# computePlatforms: managed environments — discovered, then a separate Odigos agent is installed onto
+# them. Installation is NOT supported yet, so discovered compute platforms are reported but never
+# instrumented (surfaced as NotImplemented).
+computePlatforms:
+  discovery:
+    enabled: true
+    displayName: Compute-platform discovery
+    description: >-
+      Detect managed environments — AKS clusters and Azure Virtual Machines — across the subscription,
+      so they can be surfaced as compute-platform candidates.
+    types:
+      - name: azure.aks
+        displayName: Azure Kubernetes Service
+        description: >-
+          Detect AKS clusters in the subscription. Instrumented by installing Odigos for Kubernetes
+          (odiglet) in the cluster.
+        permissions:
+          - Microsoft.ContainerService/managedClusters/read
+      - name: azure.vm
+        displayName: Azure Virtual Machine
+        description: >-
+          Detect Virtual Machines across the subscription. Instrumented by installing the Odigos VM
+          agent on the instance.
+        permissions:
+          - Microsoft.Compute/virtualMachines/read
+
+  # installation: install a separate Odigos agent onto a discovered compute platform (Odigos for
+  # Kubernetes on AKS, or the Odigos VM agent on Azure VMs). This is NOT supported yet, so it
+  # declares no types: discovered compute platforms are reported but never instrumented (surfaced as
+  # NotImplemented). When support lands, each installable compute-platform type is referenced here with
+  # its install method (method: agent) and the Azure RBAC permissions the install requires.
+  installation:
+    enabled: false
+    displayName: Compute-platform installation
+    description: >-
+      Install a separate Odigos agent onto a discovered compute platform (Odigos for Kubernetes on
+      AKS, the Odigos VM agent on Azure VMs). Not supported yet.
+    types: []
+
+# setup: declarative onboarding artifacts rendered in the create-connector UI. The UI fills the literal
+# {{permissions}} placeholder from the aggregated spec permissions for the selected access level, so the
+# preview always matches what test-connection validates. Provider-owned: Azure renders a custom RBAC role
+# definition (Actions list); the shared UI renderer stays agnostic.
+setup:
+  artifacts:
+    - id: policy-preview
+      section: permissions
+      title: Policy preview
+      description: The custom Azure RBAC role Odigos needs for the selected access level.
+      format: json
+      itemTemplate: '"{{permission}}"'
+      itemSeparator: ",\n"
+      template: |-
+        {
+          "Name": "Odigos Cloud Connector",
+          "IsCustom": true,
+          "Description": "Role for the Odigos cloud connector.",
+          "Actions": [
+            {{permissions}}
+          ],
+          "NotActions": [],
+          "DataActions": [],
+          "NotDataActions": [],
+          "AssignableScopes": [
+            "/subscriptions/"
+          ]
+        }
+
+# gateway: connector-wide collector wiring; not part of either domain. Implemented in a later phase.
+gateway:
+  enabled: false
+  displayName: Gateway / collector wiring
+  description: >-
+    Wire instrumented workloads to managed-otelcol regional collectors. Implemented in a later phase.
+  types: []

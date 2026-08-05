@@ -45,6 +45,8 @@ type CloudConnectorSetupArtifact {
 
 type CloudConnectorAuth {
   permissions: [String!]!
+  # Auth method id pre-selected in the create-connector UI (empty = UI default).
+  defaultMethod: String!
   methods: [CloudConnectorAuthMethod!]!
 }
 
@@ -133,12 +135,16 @@ type CloudConnectorTestResult {
 
 extend type Mutation {
   # Runs read-only reachability/permission checks for a prospective connector.
-  testCloudConnectorConnection(input: TestCloudConnectorConnectionInput!): CloudConnectorTestResult!
+  testCloudConnectorConnection(
+    input: TestCloudConnectorConnectionInput!
+  ): CloudConnectorTestResult!
 
   # Verifies the connection and, only if every check passes, creates the
   # credentials Secret + OdigosCloudConnector CR in the central cluster. When the
   # verification fails nothing is created and `created` is false with the checks.
-  createCloudConnector(input: CreateCloudConnectorInput!): CreateCloudConnectorResult!
+  createCloudConnector(
+    input: CreateCloudConnectorInput!
+  ): CreateCloudConnectorResult!
 }
 
 input CreateCloudConnectorInput {

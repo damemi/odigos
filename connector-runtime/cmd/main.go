@@ -119,6 +119,9 @@ func providerImagesFromEnv() map[string]string {
 	if v := os.Getenv("CONNECTOR_GCP_IMAGE"); v != "" {
 		images["gcp"] = v
 	}
+	if v := os.Getenv("CONNECTOR_AZURE_IMAGE"); v != "" {
+		images["azure"] = v
+	}
 	return images
 }
 
