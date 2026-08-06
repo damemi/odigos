@@ -123,6 +123,17 @@ spec:
             timeout: 1m30s
             file: /tmp/simple-demo-instrumented-assert.yaml
 
+    - name: Warm Up Dynamic Instrumentation
+      try:
+        - apply:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
+        - script:
+            timeout: 1m10s
+            content: |
+              kubectl wait --for=condition=complete job/$(kubectl get -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
+        - delete:
+            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml            
+
     - name: Generate Traffic
       try:
         - apply:
