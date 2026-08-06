@@ -123,16 +123,27 @@ spec:
             timeout: 1m30s
             file: /tmp/simple-demo-instrumented-assert.yaml
 
-    - name: Warm Up Dynamic Instrumentation
+    # Opt-in via <slug>_warmup_java_lazy_client_probes=true in customers.sh (java-ebpf only).
+    - name: Warm Up Java Lazy Client Probes
       try:
-        - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
         - script:
-            timeout: 1m10s
+            timeout: 2m10s
+            env:
+              - name: CUSTOMER
+                value: ($values.customer)
             content: |
+              bash -s << 'BASH_EOF'
+              set -e
+              source ./customers.sh
+              flag_var="${CUSTOMER}_warmup_java_lazy_client_probes"
+              if [ "${!flag_var}" != "true" ]; then
+                echo "Skipping java lazy-client-probes warmup for customer=${CUSTOMER}"
+                exit 0
+              fi
+              kubectl apply -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
               kubectl wait --for=condition=complete job/$(kubectl get -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
-        - delete:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml            
+              kubectl delete -f https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
+              BASH_EOF
 
     - name: Generate Traffic
       try:

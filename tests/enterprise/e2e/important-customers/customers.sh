@@ -15,6 +15,10 @@
 #   <slug>_odigos_installed_assert_file=<filename>  →  filename under tests/common/assert in the OSS repo
 #                                                       for the "Verify Odigos Installation" step.
 #                                                       (e.g. odigos-installed.yaml, odigos-installed-no-device-plugin.yaml)
+#   <slug>_warmup_java_lazy_client_probes=true  →  run buybot once before measured traffic.
+#                                                   Needed for java-ebpf (probes load lazily on first
+#                                                   class transform). Skip for customers that already
+#                                                   produce a complete first-request trace (e.g. kratos).
 #
 # Array format: each --set and its key=value MUST be separate elements:
 #   "--set" "key=value"   ✓
@@ -37,6 +41,7 @@ CUSTOMERS=(
 # ---------------------------------------------------------------------------
 greatwall_odigos_installed_assert_file="odigos-installed-no-device-plugin.yaml"
 greatwall_instrumented_assert_file="../../common/assert/demo-instrumented-java-ebpf-no-restart-dotnet-legacy.yaml"
+greatwall_warmup_java_lazy_client_probes=true
 declare -a greatwall_helm_sets=(
   "--set" "instrumentor.mountMethod=k8s-init-container"
   # This includes the greatwall profile, which includes the java-ebpf-instrumentations and legacy-dotnet-instrumentation
