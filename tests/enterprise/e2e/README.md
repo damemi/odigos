@@ -32,11 +32,18 @@ brew install jq
 
 ### Preparation
 
-- Fresh Kubernetes cluster in kubectl context. For local development, you can use KinD but also managed clusters like EKS should work.
-- Odigos CLI compiled at the `cli` directory in odigos OSS repo (which is expected to be cloned as sibling of the current repo). To compile the cli executable, go to the OSS repository and run: `cd cli && go build -tags=embed_manifests -o odigos .`
-- Odigos OSS images (instrumentor, autoscaler etc) tagged with `e2e-test` preloaded to the cluster. If you are using KinD you can cd to the OSS repo and run: `TAG=e2e-test make build-images load-to-kind`
-- Enterprise Odiglet and instrumentor images tagged with `e2e-test` preloaded to the cluster. If you are using KinD you can run `TAG=e2e-test make build-images load-to-kind`
-- valid Odigos Enterprise API Key to be set in the `ODIGOS_API_KEY` environment variable.
+1. From the sibling **odigos** OSS repo, create the kind cluster and load OSS images/CLI (`TAG=e2e-test`):
+   ```bash
+   cd ../odigos && make dev-tests-setup
+   ```
+2. From **odigos-enterprise**, build and load enterprise images with the same tag (requires the kind cluster from step 1):
+   ```bash
+   make dev-tests-setup
+   ```
+3. Set a valid Odigos Enterprise API key:
+   ```bash
+   export ODIGOS_API_KEY=...
+   ```
 
 ### Running the Tests
 

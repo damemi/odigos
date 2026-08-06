@@ -476,6 +476,32 @@ load-to-kind:
 load-central-to-kind:
 	make load-to-kind-central-backend load-to-kind-central-ui load-to-kind-central-proxy ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
 
+# Local e2e prep (mirrors odigos `make dev-tests-setup`). Does NOT create the kind cluster —
+# OSS images/CLI must already be loaded. Builds enterprise images with TAG=e2e-test and loads them.
+.PHONY: ensure-kind-running
+ensure-kind-running:
+	@if ! kind get clusters 2>/dev/null | grep -qx "$(KIND_CLUSTER)"; then \
+		echo "❌ Kind cluster '$(KIND_CLUSTER)' is not running."; \
+		echo "   Run OSS setup first from the sibling odigos repo:"; \
+		echo "     cd ../odigos && make dev-tests-setup"; \
+		exit 1; \
+	fi
+	@if ! kubectl cluster-info >/dev/null 2>&1; then \
+		echo "❌ Kind cluster '$(KIND_CLUSTER)' exists but kubectl cannot reach it."; \
+		echo "   Fix your kube context, or re-run OSS setup:"; \
+		echo "     cd ../odigos && make dev-tests-setup"; \
+		exit 1; \
+	fi
+	@echo "✅ Kind cluster '$(KIND_CLUSTER)' is up"
+
+.PHONY: dev-tests-setup
+dev-tests-setup: TAG := e2e-test
+dev-tests-setup: ensure-kind-running
+	@echo "Building and loading enterprise images with TAG=$(TAG)..."
+	$(MAKE) build-images TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	$(MAKE) load-to-kind TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	@echo "✅ Enterprise images loaded into kind (TAG=$(TAG)). Ready for chainsaw tests."
+
 .PHONY: restart-odiglet
 restart-odiglet:
 	kubectl rollout restart daemonset odiglet -n odigos-system || true
