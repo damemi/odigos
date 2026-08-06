@@ -49,13 +49,14 @@ jobs:
             summary: "Enterprise UI for Odigos"
             description: "Enterprise build of the Odigos web frontend."
           - service: collector
+            runner: depot-ubuntu-24.04-16
             summary: "Collector for Odigos"
             description: "Enterprise build of the Odigos OpenTelemetry Collector."
           - service: agents
             summary: "Odigos Enterprise Agents"
             description: "The Odigos Agents used to copy Odigos agent relevant files into the user workloads."
 
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ${{ matrix.runner || 'depot-ubuntu-24.04-4' }}
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
@@ -75,7 +76,8 @@ jobs:
           token_format: access_token
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          access_token_lifetime: 1200s
+          # Collector multi-arch compile can exceed 20m on smaller runners; keep headroom for push.
+          access_token_lifetime: 3600s
 
       - name: Login to Artifact Registry
         uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 #v3.5.0
