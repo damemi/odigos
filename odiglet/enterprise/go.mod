@@ -7,8 +7,8 @@ require (
 	github.com/container-storage-interface/spec v1.10.0
 	github.com/odigos-io/ebpf-core v0.19.0
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.12
-	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.38.0
-	github.com/odigos-io/ebpf-java-instrumentation/v2 v2.38.0
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.39.0
+	github.com/odigos-io/ebpf-java-instrumentation/v2 v2.39.0
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.12.1
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0
@@ -127,7 +127,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/grafana/go-offsets-tracker v0.1.7 // indirect
-	github.com/grafana/jvmtools v0.0.5 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
