@@ -1,4 +1,9 @@
-FROM --platform=$BUILDPLATFORM golang:1.26.2-trixie AS builder
+# 1.26.4 rather than OSS's 1.26.2: odigosauth declares `go 1.26.4` (#3038) and the builder runs
+# with GOTOOLCHAIN=local.
+FROM --platform=$BUILDPLATFORM golang:1.26.4-trixie AS builder
+# The auth extension replaces odigosauth, which lives at the repo root rather than under collector/.
+# Copied first because it changes far less often than collector/, so the layer stays cached.
+COPY ./odigosauth/ /go/src/odigosauth
 COPY ./collector/ /go/src/collector
 WORKDIR /go/src/collector
 

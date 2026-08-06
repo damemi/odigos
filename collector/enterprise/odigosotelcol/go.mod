@@ -2,9 +2,10 @@
 
 module odigos.io/opentelemetry-collector/cmd/odigosotelcol
 
-go 1.26.2
+go 1.26.4
 
 require (
+	github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension v0.0.0
 	github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor v0.0.0
 	github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor v0.0.0
 	github.com/odigos-io/odigos-enterprise/collector/processors/odigosvmprofileattrsprocessor v0.0.0
@@ -506,6 +507,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
 	github.com/odigos-io/go-rtml v0.0.1 // indirect
+	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos/common v1.34.0-pre1.0.20260803114326-2a76b712ad1d // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding v0.151.0 // indirect
@@ -802,6 +804,10 @@ replace github.com/odigos-io/odigos-enterprise/collector/processors/odigosvmprof
 replace github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor => ../processors/odigossymbolizeprocessor
 
 replace github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver => ../receivers/odigosebpfreceiver
+
+replace github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension => ../extension/odigosenterpriseauthextension
+
+replace github.com/odigos-io/odigos-enterprise/odigosauth => ../../odigosauth
 
 replace odigosk8scmprovider => github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v0.0.0-20260803114326-2a76b712ad1d
 

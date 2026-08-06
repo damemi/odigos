@@ -65,3 +65,16 @@ func TestFullSignalConfigStartsSuccessfully(t *testing.T) {
 		t.Fatal("timed out waiting for collector shutdown")
 	}
 }
+
+// TestEnterpriseOnlyComponentsAreRegistered pins the wire names the OSS autoscaler emits into
+// the enterprise collector config (odigos-io/odigos#5447, #5399). The collector rejects unknown
+// component types at config load, so a rename on either side — or a builder-config.yaml entry
+// whose generated components.go was never regenerated — crash-loops the collector in production
+// rather than failing here.
+func TestEnterpriseOnlyComponentsAreRegistered(t *testing.T) {
+	factories, err := components()
+	require.NoError(t, err)
+
+	assert.Contains(t, factories.Extensions, component.MustNewType("odigos_enterprise_auth"))
+	assert.Contains(t, factories.Receivers, component.MustNewType("odigosebpf"))
+}

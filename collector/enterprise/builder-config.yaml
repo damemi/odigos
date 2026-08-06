@@ -16,6 +16,8 @@ extensions:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension v0.151.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector v0.151.0
   - gomod: github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v0.151.0
+  # Enterprise-only: verifies the Odigos on-prem token at startup and on expiry.
+  - gomod: github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension v0.0.0
 
 exporters:
   - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.151.0
@@ -154,6 +156,9 @@ replaces:
   - github.com/odigos-io/odigos-enterprise/collector/processors/odigosvmprofileattrsprocessor => ../processors/odigosvmprofileattrsprocessor
   - github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor => ../processors/odigossymbolizeprocessor
   - github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver => ../receivers/odigosebpfreceiver
+  - github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension => ../extension/odigosenterpriseauthextension
+  # odigosauth lives at the enterprise repo root, copied into the build context by the Dockerfile.
+  - github.com/odigos-io/odigos-enterprise/odigosauth => ../../odigosauth
   - odigosk8scmprovider => github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v0.0.0-20260803114326-2a76b712ad1d
   - github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector => github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v0.0.0-20260803114326-2a76b712ad1d
   - github.com/odigos-io/odigos/collector/connectors/serviceioconnector => github.com/odigos-io/odigos/collector/connectors/serviceioconnector v0.0.0-20260803114326-2a76b712ad1d
