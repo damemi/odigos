@@ -508,7 +508,7 @@ require (
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
 	github.com/odigos-io/go-rtml v0.0.1 // indirect
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000 // indirect
-	github.com/odigos-io/odigos/common v1.34.0-pre1.0.20260803114326-2a76b712ad1d // indirect
+	github.com/odigos-io/odigos/common v1.34.0-pre3 // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding v0.151.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/internal/credentialsfile v0.151.0 // indirect
@@ -769,33 +769,33 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-replace odigosconditionalattributes => github.com/odigos-io/odigos/collector/processors/odigosconditionalattributes v0.0.0-20260803114326-2a76b712ad1d
+replace odigosconditionalattributes => github.com/odigos-io/odigos/collector/processors/odigosconditionalattributes v1.34.0-pre3
 
-replace odigossqldboperationprocessor => github.com/odigos-io/odigos/collector/processors/odigossqldboperationprocessor v0.0.0-20260803114326-2a76b712ad1d
+replace odigossqldboperationprocessor => github.com/odigos-io/odigos/collector/processors/odigossqldboperationprocessor v1.34.0-pre3
 
-replace github.com/odigos-io/odigos/collector/processor/odigossqlqueryprocessor => github.com/odigos-io/odigos/collector/processors/odigossqlqueryprocessor v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/odigos-io/odigos/collector/processor/odigossqlqueryprocessor => github.com/odigos-io/odigos/collector/processors/odigossqlqueryprocessor v1.34.0-pre3
 
-replace github.com/odigos-io/odigos/collector/processor/odigospiimaskingprocessor => github.com/odigos-io/odigos/collector/processors/odigospiimaskingprocessor v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/odigos-io/odigos/collector/processor/odigospiimaskingprocessor => github.com/odigos-io/odigos/collector/processors/odigospiimaskingprocessor v1.34.0-pre3
 
-replace github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor => github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor => github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor v1.34.0-pre3
 
-replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/azureblobstorageexporter => github.com/odigos-io/odigos/collector/exporters/azureblobstorageexporter v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/azureblobstorageexporter => github.com/odigos-io/odigos/collector/exporters/azureblobstorageexporter v1.34.0-pre3
 
-replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/googlecloudstorageexporter => github.com/odigos-io/odigos/collector/exporters/googlecloudstorageexporter v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/googlecloudstorageexporter => github.com/odigos-io/odigos/collector/exporters/googlecloudstorageexporter v1.34.0-pre3
 
-replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/mockdestinationexporter => github.com/odigos-io/odigos/collector/exporters/mockdestinationexporter v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/mockdestinationexporter => github.com/odigos-io/odigos/collector/exporters/mockdestinationexporter v1.34.0-pre3
 
-replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigostrafficmetrics => github.com/odigos-io/odigos/collector/processors/odigostrafficmetrics v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigostrafficmetrics => github.com/odigos-io/odigos/collector/processors/odigostrafficmetrics v1.34.0-pre3
 
-replace github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor => github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor => github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor v1.34.0-pre3
 
-replace github.com/odigos-io/odigos/collector/processor/odigosurltemplateprocessor => github.com/odigos-io/odigos/collector/processors/odigosurltemplateprocessor v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/odigos-io/odigos/collector/processor/odigosurltemplateprocessor => github.com/odigos-io/odigos/collector/processors/odigosurltemplateprocessor v1.34.0-pre3
 
-replace github.com/odigos-io/odigos/collector/processor/odigoslogsresourceattrsprocessor => github.com/odigos-io/odigos/collector/processors/odigoslogsresourceattrsprocessor v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/odigos-io/odigos/collector/processor/odigoslogsresourceattrsprocessor => github.com/odigos-io/odigos/collector/processors/odigoslogsresourceattrsprocessor v1.34.0-pre3
 
-replace github.com/odigos-io/odigos/collector/processor/odigosextractattributeprocessor => github.com/odigos-io/odigos/collector/processors/odigosextractattributeprocessor v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/odigos-io/odigos/collector/processor/odigosextractattributeprocessor => github.com/odigos-io/odigos/collector/processors/odigosextractattributeprocessor v1.34.0-pre3
 
-replace github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor => github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor => github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor v1.34.0-pre3
 
 replace github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor => ../processors/odigosprofilesprocessor
 
@@ -809,19 +809,19 @@ replace github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpr
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../../odigosauth
 
-replace odigosk8scmprovider => github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v0.0.0-20260803114326-2a76b712ad1d
+replace odigosk8scmprovider => github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v1.34.0-pre3
 
-replace github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector => github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector => github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v1.34.0-pre3
 
-replace github.com/odigos-io/odigos/collector/connectors/serviceioconnector => github.com/odigos-io/odigos/collector/connectors/serviceioconnector v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/odigos-io/odigos/collector/connectors/serviceioconnector => github.com/odigos-io/odigos/collector/connectors/serviceioconnector v1.34.0-pre3
 
-replace github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector => github.com/odigos-io/odigos/collector/connectors/servicegraphconnector v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector => github.com/odigos-io/odigos/collector/connectors/servicegraphconnector v1.34.0-pre3
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.34.0-pre1.0.20260803114326-2a76b712ad1d
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.34.0-pre3
 
-replace go.opentelemetry.io/collector/config/configgrpc => github.com/odigos-io/odigos/collector/config/configgrpc v0.0.0-20260803114326-2a76b712ad1d
+replace go.opentelemetry.io/collector/config/configgrpc => github.com/odigos-io/odigos/collector/config/configgrpc v1.34.0-pre3
 
-replace github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension => github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v0.0.0-20260803114326-2a76b712ad1d
+replace github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension => github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v1.34.0-pre3
 
 replace github.com/apache/thrift => github.com/apache/thrift v0.23.0
 
