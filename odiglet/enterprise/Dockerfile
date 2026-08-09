@@ -85,10 +85,10 @@ COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.20 /instrumen
 COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.20 /instrumentations/nodejs-ebpf-14 /instrumentations/nodejs-ebpf-14
 
 # java-ebpf-instrumentations
-COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.39.0 /instrumentations/java-ebpf /instrumentations/java-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.40.0 /instrumentations/java-ebpf /instrumentations/java-ebpf
 
 # java-enterprise
-COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.39.0 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.40.0 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
 
 ######### Odiglet builder #########
 FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS builder
