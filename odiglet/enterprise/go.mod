@@ -6,7 +6,7 @@ require (
 	github.com/cilium/ebpf v0.22.0
 	github.com/container-storage-interface/spec v1.10.0
 	github.com/odigos-io/ebpf-core v0.19.0
-	github.com/odigos-io/ebpf-generic-instrumentation v0.0.12
+	github.com/odigos-io/ebpf-generic-instrumentation v0.0.14
 	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.39.0
 	github.com/odigos-io/ebpf-java-instrumentation/v2 v2.39.0
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.12.1

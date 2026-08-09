@@ -74,7 +74,7 @@ COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.73-py3.8 /instrum
 COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.90 /instrumentations/python /instrumentations/python
 
 # python-enterprise
-COPY --from=public.ecr.aws/odigos/agents/python-ebpf:v0.0.12 /instrumentations/python-ebpf /instrumentations/python-ebpf
+COPY --from=public.ecr.aws/odigos/agents/python-ebpf:v0.0.14 /instrumentations/python-ebpf /instrumentations/python-ebpf
 
 # nodejs-enterprise
 COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.12.1 /instrumentations/opentelemetry-node /instrumentations/opentelemetry-node
