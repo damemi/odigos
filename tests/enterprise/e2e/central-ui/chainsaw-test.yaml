@@ -102,7 +102,7 @@ spec:
       try:
         - assert:
             timeout: 2m50s
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/odigos-installed.yaml
+            file: ../../common/assert/odigos-installed.yaml
       catch:
         - script:
             content: |
