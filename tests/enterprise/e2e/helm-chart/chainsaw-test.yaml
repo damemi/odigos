@@ -70,7 +70,7 @@ spec:
 
         - assert:
             timeout: 3m10s
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/odigos-installed.yaml
+            file: ../../common/assert/odigos-installed.yaml
 
         - assert:
             timeout: 3m10s
@@ -123,7 +123,7 @@ spec:
       try:
         - assert:
             timeout: 1m10s
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/pipeline-ready.yaml
+            file: ../../common/assert/pipeline-ready.yaml
 
     - name: Simple-demo instrumented after destination added
       try:

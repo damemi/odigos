@@ -37,7 +37,7 @@ spec:
 
         - assert:
             timeout: 2m20s
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/odigos-installed.yaml
+            file: ../../common/assert/odigos-installed.yaml
 
       catch:
         - script:
@@ -80,7 +80,7 @@ spec:
       try:
         - assert:
             timeout: 1m10s
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/pipeline-ready.yaml
+            file: ../../common/assert/pipeline-ready.yaml
 
     - name: Assert Control Plane Instrumentation Instances
       try:

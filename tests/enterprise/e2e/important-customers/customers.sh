@@ -12,7 +12,7 @@
 # Optional per-customer variables:
 #   <slug>_instrumented_assert_file=<path>  →  assert file for the "simple-demo instrumented" step.
 #                                              Path is relative to the test directory.
-#   <slug>_odigos_installed_assert_file=<filename>  →  filename under tests/common/assert in the OSS repo
+#   <slug>_odigos_installed_assert_file=<filename>  →  filename under tests/common/assert in this repo
 #                                                       for the "Verify Odigos Installation" step.
 #                                                       (e.g. odigos-installed.yaml, odigos-installed-no-device-plugin.yaml)
 #   <slug>_warmup_java_lazy_client_probes=true  →  run buybot once before measured traffic.

@@ -22,26 +22,11 @@ spec:
         odigos.io/collector-role: "CLUSTER_GATEWAY"
     spec:
       containers:
-        - env:
-            - name: ODIGOS_VERSION
-              valueFrom:
-                configMapKeyRef:
-                  key: ODIGOS_VERSION
-                  name: odigos-deployment
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  apiVersion: v1
-                  fieldPath: metadata.name
-            - name: GOMEMLIMIT
-              (value != null): true
-            - name: GOMAXPROCS
-              valueFrom:
-                resourceFieldRef:
-                  containerName: gateway
-                  divisor: "0"
-                  resource: limits.cpu
-          name: gateway
+        # Do not assert the full gateway env list here: this file is used both
+        # pre-upgrade (released build, no collector ODIGOS_ONPREM_TOKEN) and on
+        # HEAD (token present). Token injection is covered by odigos-installed /
+        # pipeline-ready / post-upgrade asserts.
+        - name: gateway
           resources:
             requests:
               (memory != null): true

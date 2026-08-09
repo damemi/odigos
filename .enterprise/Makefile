@@ -470,7 +470,7 @@ load-to-kind-%:
 
 .PHONY: load-to-kind
 load-to-kind:
-	make load-to-kind-instrumentor load-to-kind-odiglet load-to-kind-ui ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
+	make load-to-kind-instrumentor load-to-kind-odiglet load-to-kind-ui load-to-kind-collector ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: load-central-to-kind
 load-central-to-kind:

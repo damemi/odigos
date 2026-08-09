@@ -104,6 +104,11 @@ spec:
               containerName: data-collection
               divisor: "0"
               resource: limits.cpu
+        - name: ODIGOS_ONPREM_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: odigos-onprem-token
+              name: odigos-pro
       resources:
         requests:
           (memory != null): true
@@ -141,7 +146,7 @@ metadata:
 spec:
   containers:
     - name: gateway
-      image: registry.odigos.io/odigos-collector:e2e-test
+      image: registry.odigos.io/odigos-enterprise-collector:e2e-test
 status:
   containerStatuses:
     - name: gateway

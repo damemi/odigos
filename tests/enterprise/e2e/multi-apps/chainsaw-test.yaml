@@ -27,7 +27,7 @@ spec:
               ../../common/verify_odigos_installation.sh odigos-test
         - assert:
             timeout: 1m10s
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/odigos-installed.yaml
+            file: ../../common/assert/odigos-installed.yaml
       catch:
         - script:
             content: |

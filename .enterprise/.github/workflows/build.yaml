@@ -305,9 +305,6 @@ jobs:
             component: scheduler
             project: 570xmd9kld
           - source: oss
-            component: collector
-            project: 570xmd9kld
-          - source: oss
             component: cli
             project: 570xmd9kld
     steps:
@@ -374,7 +371,6 @@ jobs:
           make -j -f depot.mk \
             depot-build-autoscaler \
             depot-build-scheduler \
-            depot-build-collector \
             depot-build-cli \
             IMAGE_TAG=${{ env.IMAGE_TAG }} \
             PLATFORM=${{ steps.build-opts.outputs.platforms }} \
@@ -572,7 +568,9 @@ jobs:
           # build-enterprise-components / build-enterprise-odiglet, retag to the names expected by e2e
           # (registry.odigos.io/odigos-enterprise-<component>:IMAGE_TAG), then load into kind.
           # odiglet/agents are built in a separate Depot project (heavy builds).
-          for component in instrumentor ui odiglet agents; do
+          # Every scenario here installs with an onprem token, so helm always resolves the
+          # enterprise collector (odigos-io/odigos#5446) and the OSS one is never pulled.
+          for component in instrumentor ui odiglet agents collector; do
             case "$component" in
               odiglet|agents) PROJECT="${{ env.DEPOT_ODIGLET_ENTERPRISE_REGISTRY_ID }}" ;;
               *) PROJECT="${{ env.DEPOT_ODIGOS_ENTERPRISE_REGISTRY_ID }}" ;;
@@ -597,7 +595,7 @@ jobs:
           # Pull OSS images saved to the Depot registry during build-oss-components-for-tests,
           # retag to the names expected by e2e (registry.odigos.io/odigos-<component>:IMAGE_TAG),
           # then load into kind.
-          for component in autoscaler scheduler collector cli; do
+          for component in autoscaler scheduler cli; do
             LOCAL_IMAGE="registry.odigos.io/odigos-${component}:${{ env.IMAGE_TAG }}"
             depot pull \
               --project ${{ env.DEPOT_ODIGOS_OSS_REGISTRY_ID }} \

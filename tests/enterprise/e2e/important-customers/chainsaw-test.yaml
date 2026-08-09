@@ -55,9 +55,7 @@ spec:
               source ./customers.sh
               assert_file_var="${CUSTOMER}_odigos_installed_assert_file"
               assert_file="${!assert_file_var}"
-              curl -sSL --retry 5 --retry-delay 5 \
-                -o /tmp/odigos-installed-assert.yaml \
-                "https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/${assert_file}"
+              cp "../../common/assert/${assert_file}" /tmp/odigos-installed-assert.yaml
               BASH_EOF
 
         - assert:
@@ -103,7 +101,7 @@ spec:
       try:
         - assert:
             timeout: 1m10s
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/pipeline-ready.yaml
+            file: ../../common/assert/pipeline-ready.yaml
 
     - name: Simple-demo instrumented after destination added
       try:
