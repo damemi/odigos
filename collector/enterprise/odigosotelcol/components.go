@@ -71,6 +71,7 @@ import (
 	googleclientauthextension "github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension"
 	k8sleaderelector "github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector"
 	odigosconfigk8sextension "github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension"
+	odigoscapabilitiesextension "github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension"
 	odigosenterpriseauthextension "github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension"
 	odigostailsamplingprocessor "github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor"
 	odigostracestateprocessor "github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor"
@@ -149,6 +150,7 @@ func components() (otelcol.Factories, error) {
 		googleclientauthextension.NewFactory(),
 		k8sleaderelector.NewFactory(),
 		odigosconfigk8sextension.NewFactory(),
+		odigoscapabilitiesextension.NewFactory(),
 		odigosenterpriseauthextension.NewFactory(),
 	)
 	if err != nil {
@@ -165,6 +167,7 @@ func components() (otelcol.Factories, error) {
 		googleclientauthextension.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension v0.151.0",
 		k8sleaderelector.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector v0.151.0",
 		odigosconfigk8sextension.NewFactory().Type(): "github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v0.151.0",
+		odigoscapabilitiesextension.NewFactory().Type(): "github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v0.151.0",
 		odigosenterpriseauthextension.NewFactory().Type(): "github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension v0.0.0",
 	})
 

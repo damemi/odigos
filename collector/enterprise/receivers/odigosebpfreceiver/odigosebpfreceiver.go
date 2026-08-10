@@ -16,7 +16,7 @@ import (
 
 	"github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver/internal/metadata"
 	"github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver/internal/metrics/jvm"
-	"github.com/odigos-io/odigos/common/unixfd"
+	"github.com/odigos-io/odigos-enterprise/ebpfshare/unixfd"
 )
 
 type ebpfReceiver struct {

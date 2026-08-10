@@ -18,7 +18,6 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
-	cilumebpf "github.com/cilium/ebpf"
 	"github.com/odigos-io/ebpf-core/pkg/wasp"
 	waspserver "github.com/odigos-io/ebpf-core/pkg/wasp/server"
 	enterprisedistros "github.com/odigos-io/odigos-enterprise/distros"
@@ -121,17 +120,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	// The enterprise eBPF SDKs write into shared maps, served over the unix socket to the
+	// enterprise collector's odigosebpfreceiver. Neither end exists in OSS.
+	mapExchange, err := newEbpfMapExchange()
+	if err != nil {
+		logger.Error("failed to set up the ebpf map exchange", "error", err)
+		os.Exit(1)
+	}
+	defer mapExchange.close()
+
 	instrumentationManagerOptions := ebpf.InstrumentationManagerOptions{
 		Factories:                  factories,
 		DistributionGetter:         enterpriseDistrosProvider.Getter,
 		OdigletHealthProbeBindPort: healthProbeBindPort,
-		OnLogsMapCreated: func(m *cilumebpf.Map) {
-			logcapture.GetInstance().SetExternalLogsMap(m)
-		},
-		LogsAttrSubscribe: func() (<-chan string, []string) {
-			return logcapture.GetInstance().SubscribeAttrs()
-		},
 	}
+	mapExchange.applyTo(&instrumentationManagerOptions)
 
 	o, err := odiglet.New(clientset, instrumentationManagerOptions)
 	if err != nil {
@@ -140,6 +143,11 @@ func main() {
 	}
 
 	ctx := signals.SetupSignalHandler()
+
+	o.AddRunnable(odiglet.Runnable{
+		Name: "ebpf map fd server",
+		Run:  mapExchange.serve,
+	})
 
 	o.AddRunnable(odiglet.Runnable{
 		Name:         "go offsets watcher",

@@ -107,6 +107,7 @@ RUN make -f obi.mk materialize-obi
 WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
 COPY odigosauth/go.mod odigosauth/go.sum odigosauth/
 COPY distros/go.mod distros/go.sum distros/
+COPY ebpfshare/go.mod ebpfshare/go.sum ebpfshare/
 WORKDIR odiglet
 COPY odiglet/Makefile .
 COPY odiglet/go.mod odiglet/go.sum ./
@@ -121,6 +122,7 @@ RUN --mount=type=secret,id=github_token \
 WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
 COPY odigosauth/ odigosauth/
 COPY distros/ distros/
+COPY ebpfshare/ ebpfshare/
 COPY odiglet/ odiglet/
 WORKDIR odiglet
 RUN --mount=type=secret,id=github_token \
@@ -140,6 +142,7 @@ ARG TARGETARCH
 WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
 COPY odigosauth/go.mod odigosauth/go.sum odigosauth/
 COPY distros/go.mod distros/go.sum distros/
+COPY ebpfshare/go.mod ebpfshare/go.sum ebpfshare/
 WORKDIR odiglet
 COPY odiglet/go.mod odiglet/go.sum ./
 RUN --mount=type=secret,id=github_token \

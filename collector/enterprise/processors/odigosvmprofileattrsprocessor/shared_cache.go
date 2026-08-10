@@ -6,7 +6,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/odigos-io/odigos/common/unixfd"
+	"github.com/odigos-io/odigos-enterprise/ebpfshare/unixfd"
 )
 
 // The PID→service.name cache and its single unixfd client are process-global, not

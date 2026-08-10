@@ -12,6 +12,7 @@ require (
 	github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver v0.0.0
 	github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v0.151.0
 	github.com/odigos-io/odigos/collector/connectors/serviceioconnector v0.151.0
+	github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v0.151.0
 	github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v0.151.0
 	github.com/odigos-io/odigos/collector/processor/odigosextractattributeprocessor v0.151.0
 	github.com/odigos-io/odigos/collector/processor/odigoslogsresourceattrsprocessor v0.151.0
@@ -507,6 +508,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
 	github.com/odigos-io/go-rtml v0.0.1 // indirect
+	github.com/odigos-io/odigos-enterprise/ebpfshare v0.0.0 // indirect
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos/common v1.34.0-pre3 // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
@@ -729,7 +731,7 @@ require (
 	go.uber.org/zap v1.28.0 // indirect
 	go.uber.org/zap/exp v0.3.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.4 // indirect
 	golang.org/x/arch v0.25.0 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
@@ -809,6 +811,8 @@ replace github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpr
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../../odigosauth
 
+replace github.com/odigos-io/odigos-enterprise/ebpfshare => ../../ebpfshare
+
 replace odigosk8scmprovider => github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v1.34.0-pre3
 
 replace github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector => github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v1.34.0-pre3
@@ -817,11 +821,13 @@ replace github.com/odigos-io/odigos/collector/connectors/serviceioconnector => g
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector => github.com/odigos-io/odigos/collector/connectors/servicegraphconnector v1.34.0-pre3
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.34.0-pre3
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.34.0-pre3.0.20260810082733-1ab5fad874cf
 
 replace go.opentelemetry.io/collector/config/configgrpc => github.com/odigos-io/odigos/collector/config/configgrpc v1.34.0-pre3
 
 replace github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension => github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v1.34.0-pre3
+
+replace github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension => github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v0.0.0-20260810082733-1ab5fad874cf
 
 replace github.com/apache/thrift => github.com/apache/thrift v0.23.0
 

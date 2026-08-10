@@ -1050,6 +1050,8 @@ github.com/odigos-io/odigos/collector/exporters/googlecloudstorageexporter v1.34
 github.com/odigos-io/odigos/collector/exporters/googlecloudstorageexporter v1.34.0-pre3/go.mod h1:m9ESe2KopwD/b+p2MOI3atw4oiXUsXDslHanehYct34=
 github.com/odigos-io/odigos/collector/exporters/mockdestinationexporter v1.34.0-pre3 h1:/KJBMw0mEt+xJTxqDFLm+Lc85INRzLFhuV0y2F/xiaQ=
 github.com/odigos-io/odigos/collector/exporters/mockdestinationexporter v1.34.0-pre3/go.mod h1:pAThBV2zU80ARmxLvas8BLEEvYwHjg8LNx3R3NYpPVk=
+github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v0.0.0-20260810082733-1ab5fad874cf h1:i6Q4npiW4PmdcsCNwWFDMCQz3RpBPi34wFHChUY+Fh4=
+github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v0.0.0-20260810082733-1ab5fad874cf/go.mod h1:dojyw7fvaI4JR6h3STakPe3opkLvYItKTOIfA4w6ctE=
 github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v1.34.0-pre3 h1:5K+VfOwXdCwgUcC3Q6BWgnMEKeaVpgRKEbNnmefY5q8=
 github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v1.34.0-pre3/go.mod h1:on8ul1KE76MVIpZoTAWZNB0cPUZGmXHpXZEeAG2jptw=
 github.com/odigos-io/odigos/collector/processors/odigosconditionalattributes v1.34.0-pre3 h1:gvd7BrLmAZ0/kts0imK4idUiqrM2bFCYhzUAb2oTMf8=
@@ -1076,8 +1078,8 @@ github.com/odigos-io/odigos/collector/processors/odigosurltemplateprocessor v1.3
 github.com/odigos-io/odigos/collector/processors/odigosurltemplateprocessor v1.34.0-pre3/go.mod h1:UykFzYcbjCIdN0j1MsuLPrZjSZl0UH8wEKv/l6POpog=
 github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v1.34.0-pre3 h1:M2KjsXMWbrJwMp1daXdr+DQFE+lZYX+Fdi0KUnXeLNE=
 github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v1.34.0-pre3/go.mod h1:T5sGmebAuuyRPqFg4OWYx6nUshjp/p9U6HAdpzXlGuU=
-github.com/odigos-io/odigos/common v1.34.0-pre3 h1:ICc+eOgmkpCsstFs9AaXiIRQysRH1bQP58JlZcKnZWg=
-github.com/odigos-io/odigos/common v1.34.0-pre3/go.mod h1:JKY9IUXVPaz1kCLrWA7+govYkkeWffC3YOTflrpJbKo=
+github.com/odigos-io/odigos/common v1.34.0-pre3.0.20260810082733-1ab5fad874cf h1:YswAZ4qtycEHp/wkTX1TTIZ5Kv+CTfXZHCStR4qMXuo=
+github.com/odigos-io/odigos/common v1.34.0-pre3.0.20260810082733-1ab5fad874cf/go.mod h1:HqlLCTINki6lOtaZFZL3ShFJP7bEkzxdTQprBvWcxe8=
 github.com/oklog/ulid/v2 v2.1.1 h1:suPZ4ARWLOJLegGFiZZ1dFAkqzhMjL3J1TzI+5wHz8s=
 github.com/oklog/ulid/v2 v2.1.1/go.mod h1:rcEKHmBBKfef9DhnvX7y1HZBYxjXb0cP5ExxNsTT1QQ=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
@@ -1869,8 +1871,9 @@ go.uber.org/zap/exp v0.3.0/go.mod h1:5I384qq7XGxYyByIhHm6jg5CHkGY0nsTfbDLgDDlgJQ
 go.yaml.in/yaml/v2 v2.4.3/go.mod h1:zSxWcmIDjOzPXpjlTTbAsKokqkDNAVtZO0WOMiT90s8=
 go.yaml.in/yaml/v2 v2.4.4 h1:tuyd0P+2Ont/d6e2rl3be67goVK4R6deVxCUX5vyPaQ=
 go.yaml.in/yaml/v2 v2.4.4/go.mod h1:gMZqIpDtDqOfM0uNfy0SkpRhvUryYH0Z6wdMYcacYXQ=
-go.yaml.in/yaml/v3 v3.0.4 h1:tfq32ie2Jv2UxXFdLJdh3jXuOzWiL1fo0bu/FbuKpbc=
 go.yaml.in/yaml/v3 v3.0.4/go.mod h1:DhzuOOF2ATzADvBadXxruRBLzYTpT36CKvDb3+aBEFg=
+go.yaml.in/yaml/v3 v3.0.5 h1:N6y/pJk8buWs9NY5ERU2HSMfm+IuD/OtfdAnq6kESPw=
+go.yaml.in/yaml/v3 v3.0.5/go.mod h1:HVTZu1O7/Vkt2N+BFy8Zza+lnLsABggaTM2ZpNIGuKg=
 go.yaml.in/yaml/v4 v4.0.0-rc.4 h1:UP4+v6fFrBIb1l934bDl//mmnoIZEDK0idg1+AIvX5U=
 go.yaml.in/yaml/v4 v4.0.0-rc.4/go.mod h1:aZqd9kCMsGL7AuUv/m/PvWLdg5sjJsZ4oHDEnfPPfY0=
 golang.org/x/arch v0.25.0 h1:qnk6Ksugpi5Bz32947rkUgDt9/s5qvqDPl/gBKdMJLE=
