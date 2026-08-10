@@ -1,4 +1,4 @@
-import { Kind, OperationTypeNode, parse, print, type DocumentNode, type OperationDefinitionNode } from 'graphql';
+import { Kind, OperationTypeNode, parse, print, type DocumentNode, type FragmentDefinitionNode, type OperationDefinitionNode } from 'graphql';
 import type { GetWorkloadReportsQuery } from '@odigos/vmagent-api-apollo-client';
 import type { OperationContext } from '@odigos/ui-kit/contexts';
 import { DesiredStateProgress, ProgrammingLanguages, type InstrumentationReport, type OtelDistroName, type Workload } from '@odigos/ui-kit/types';
@@ -435,7 +435,18 @@ const combinePrintedQueries = (sourcesQuery: string, reportsQuery: string): stri
   const reportsOp = reportsAst.definitions.find((d): d is OperationDefinitionNode => d.kind === Kind.OPERATION_DEFINITION);
   if (!sourcesOp || !reportsOp) return sourcesQuery;
 
-  const fragments = reportsAst.definitions.filter((d) => d.kind === Kind.FRAGMENT_DEFINITION);
+  // Both sides can define fragments — agents-api v0.18.0 gave GetSources
+  // `ContainerOverrideFields`, where earlier snapshots had none — so carrying
+  // over only one side leaves the combined operation spreading a fragment it
+  // never defines ("Unknown fragment ..."). Dedupe by name: both documents come
+  // from the same dialect snapshot, so a shared name is the same fragment, and
+  // printing it twice is itself a validation error.
+  const fragmentsByName = new Map<string, FragmentDefinitionNode>();
+  for (const definition of [...sourcesAst.definitions, ...reportsAst.definitions]) {
+    if (definition.kind === Kind.FRAGMENT_DEFINITION) fragmentsByName.set(definition.name.value, definition);
+  }
+  const fragments = Array.from(fragmentsByName.values());
+
   const combined: DocumentNode = {
     kind: Kind.DOCUMENT,
     definitions: [

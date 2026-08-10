@@ -78,6 +78,19 @@ func TestAWSSpecLoads(t *testing.T) {
 			t.Errorf("compute-platform discovery type %q should declare permissions", name)
 		}
 	}
+	// Both ECS cluster types are served by one detector whose Fargate classification issues a
+	// launch-type-filtered ecs:ListTasks per cluster; a denial fails the whole region scan, so neither
+	// type may omit it.
+	for _, name := range []string{"aws.ecs-cluster", "aws.fargate-cluster"} {
+		if p := s.ComputePlatforms.Discovery.PermissionsForType(name); !containsStr(p, "ecs:ListTasks") {
+			t.Errorf("compute-platform discovery type %q permissions %v missing ecs:ListTasks", name, p)
+		}
+	}
+	// Workload discovery reads cluster ARNs from ListClusters only — describing the cluster belongs to
+	// the compute-platform domain, so declaring it here would over-grant.
+	if p := s.Workloads.Discovery.PermissionsForType("aws.fargate-task"); containsStr(p, "ecs:DescribeClusters") {
+		t.Errorf("aws.fargate-task workload discovery should not require ecs:DescribeClusters, got %v", p)
+	}
 
 	wantInstrMethod := map[string]string{
 		"aws.lambda":       MethodService,
@@ -164,8 +177,11 @@ func TestAWSCapabilityResolution(t *testing.T) {
 	perms := s.RequiredPermissions(caps)
 	for _, want := range []string{
 		"sts:GetCallerIdentity", "ec2:DescribeRegions", "lambda:ListFunctions", "ecs:ListClusters",
-		// Fargate instrumentation write path + the pass-role it implies.
-		"ecs:RegisterTaskDefinition", "ecs:UpdateService", "iam:PassRole",
+		// Tag-filtered Lambda discovery issues one ListTags per function; a denial aborts the scan.
+		"lambda:ListTags",
+		// Fargate instrumentation write path, the pass-role it implies, and the tag-on-create
+		// authorization RegisterTaskDefinition needs when it carries the task definition's tags.
+		"ecs:RegisterTaskDefinition", "ecs:UpdateService", "iam:PassRole", "ecs:TagResource",
 	} {
 		if !containsStr(perms, want) {
 			t.Errorf("required permissions %v missing %q", perms, want)
@@ -255,11 +271,12 @@ func TestAWSCreateRoleArtifacts(t *testing.T) {
 	}
 
 	arts := s.SetupArtifactsForSection("create-role")
-	if len(arts) != 4 {
-		t.Fatalf("create-role setup artifacts = %d, want 4 (cloudformation/terraform/aws-cli/manual)", len(arts))
+	wantVariants := []string{"cloudformation", "terraform", "aws-cli", "manual", "iam-user"}
+	if len(arts) != len(wantVariants) {
+		t.Fatalf("create-role setup artifacts = %d, want %d (%v)", len(arts), len(wantVariants), wantVariants)
 	}
 
-	wantVariants := []string{"cloudformation", "terraform", "aws-cli", "manual"}
+	byVariant := map[string]SetupArtifact{}
 	for i, want := range wantVariants {
 		a := arts[i]
 		if a.Variant != want {
@@ -274,11 +291,40 @@ func TestAWSCreateRoleArtifacts(t *testing.T) {
 		if a.Template == "" {
 			t.Errorf("artifact[%d] (%s) should declare a template", i, want)
 		}
+		byVariant[a.Variant] = a
 	}
 
-	// Manual trust policy interpolates the form's externalId.
-	if !strings.Contains(arts[3].Template, "{{externalId}}") {
-		t.Errorf("manual create-role template should carry {{externalId}}, got:\n%s", arts[3].Template)
+	// Each create-role variant must actually CREATE the role it promises — a read-only snippet (the
+	// original aws-cli artifact only ran `aws iam get-role`) leaves the user with nothing to paste.
+	// The iam-user variant is the access-keys path: it creates a user, not a role.
+	wantCreates := map[string]string{
+		"cloudformation": "AWS::IAM::Role",
+		"terraform":      `resource "aws_iam_role"`,
+		"aws-cli":        "aws iam create-role",
+		"manual":         "sts:AssumeRole",
+		"iam-user":       "aws iam create-user",
+	}
+	for variant, want := range wantCreates {
+		if !strings.Contains(byVariant[variant].Template, want) {
+			t.Errorf("%s create-role template should contain %q, got:\n%s", variant, want, byVariant[variant].Template)
+		}
+	}
+
+	// Every trust-policy-bearing variant interpolates the form's externalId, so the role Odigos is told
+	// to assume and the external id Odigos actually sends cannot drift apart.
+	for _, variant := range []string{"cloudformation", "terraform", "aws-cli", "manual"} {
+		if !strings.Contains(byVariant[variant].Template, "{{externalId}}") {
+			t.Errorf("%s create-role template should carry {{externalId}}, got:\n%s", variant, byVariant[variant].Template)
+		}
+	}
+
+	// A template that embeds the permission list must declare how to render one item; without an
+	// itemTemplate the renderer falls back to a bare permission string, which is invalid in both the
+	// CloudFormation YAML list and the Terraform string list.
+	for _, a := range append(arts, s.SetupArtifactsForSection("permissions")...) {
+		if strings.Contains(a.Template, "{{permissions}}") && a.ItemTemplate == "" {
+			t.Errorf("artifact %q embeds {{permissions}} but declares no itemTemplate", a.ID)
+		}
 	}
 
 	creds := s.SetupArtifactsForSection("credentials")

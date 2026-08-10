@@ -68,12 +68,20 @@ auth:
           showInUi: true
           tooltip: ARN of the cross-account role Odigos assumes.
           envVar: ODIGOS_AWS_ROLE_ARN
+        # Optional at the protocol level (a trust policy without an ExternalId condition is assumable
+        # without one), but every create-role artifact below builds a trust policy that REQUIRES it.
+        # Set this before copying a setup snippet: a trust policy generated with an empty external id
+        # can never be satisfied, because the connector omits ExternalId entirely when the value is
+        # blank — the role would be permanently unassumable.
         - name: externalId
           displayName: External ID
           componentType: input
           required: false
           showInUi: true
-          tooltip: External ID enforced in the role's trust policy (recommended with role ARN).
+          tooltip: >-
+            A secret string Odigos presents when assuming the role; the trust policy in the setup
+            snippets enforces it. Strongly recommended — set it before copying the snippet, since a
+            role created with a blank external ID cannot be assumed.
           envVar: ODIGOS_AWS_EXTERNAL_ID
 
 # Two parallel hierarchies (domains), completely separate, sharing only the codebase and running pod.
@@ -101,6 +109,10 @@ workloads:
         description: List Lambda functions in each configured region.
         permissions:
           - lambda:ListFunctions
+          # ListFunctions does not return tags, so a discovery tag selector costs one ListTags per
+          # function. Only exercised when the connector is configured with discovery tags, but it is a
+          # hard requirement there: a denial aborts the whole region scan, not just the tag filter.
+          - lambda:ListTags
       # Fargate discovery runs ONE region scan (clusters + Fargate services + Fargate tasks). EC2-backed
       # services/tasks are NOT discovered — ecs-cluster instrumentation is delivered by the cluster agent
       # (the eBPF odigos-ecs-agent daemon), a different solution.
@@ -110,10 +122,14 @@ workloads:
           Discover Fargate ECS services and tasks per region. The service is the per-workload
           instrumentation unit (sidecar injected into its task definition); standalone tasks are
           discovered for coverage. A single ECS scan enumerates clusters, Fargate services and tasks.
+        # No ecs:DescribeClusters here: workload discovery only needs the cluster ARNs from
+        # ListClusters before descending into services/tasks. Describing the cluster itself is
+        # compute-platform discovery's job (EC2 capacity + Fargate classification).
         permissions:
           - ecs:ListClusters
-          - ecs:DescribeClusters
           - ecs:ListServices
+          # DescribeServices/DescribeTasks return tags inline (Include: TAGS), so tag-filtered
+          # discovery needs no extra tag API.
           - ecs:DescribeServices
           - ecs:ListTasks
           - ecs:DescribeTasks
@@ -153,6 +169,11 @@ workloads:
           - ecs:DescribeTaskDefinition
           - ecs:RegisterTaskDefinition
           - ecs:UpdateService
+          # A new revision carries over the customer's task-definition tags, and ECS treats that as
+          # tag-on-create: with tagging authorization enabled on the account, RegisterTaskDefinition
+          # with a `tags` payload is denied unless ecs:TagResource is also granted. Task definitions
+          # are tagged often enough that this is required, not optional.
+          - ecs:TagResource
           # Registering a task definition that carries a task/execution role — Fargate task definitions
           # virtually always carry an execution role for the image pull — requires passing those roles.
           # Scope the grant with the condition iam:PassedToService=ecs-tasks.amazonaws.com.
@@ -183,30 +204,44 @@ computePlatforms:
         description: >-
           Detect EC2-backed ECS clusters per region (clusters with registered EC2 container instances).
           The cluster is the unit; a global Odigos ecs-agent would be installed on it.
+        # One scan serves both cluster types: ListClusters + DescribeClusters for EC2 capacity, plus a
+        # Fargate-filtered ListTasks per cluster to tell an ecs-cluster from a fargate-cluster. The
+        # ListTasks denial is fatal to the scan, so it belongs on both types.
         permissions:
           - ecs:ListClusters
           - ecs:DescribeClusters
+          - ecs:ListTasks
       - name: aws.fargate-cluster
         displayName: Amazon ECS (Fargate cluster)
         description: >-
           Detect ECS clusters that run Fargate tasks per region. A cluster grouping over Fargate tasks
           used to report Odigos coverage; no agent is installed — the per-task sidecar (aws.fargate-task)
           does the instrumentation.
+        # Same scan as aws.ecs-cluster (one detector serves both); see the note there.
         permissions:
           - ecs:ListClusters
           - ecs:DescribeClusters
+          - ecs:ListTasks
+      # aws.eks and aws.ec2 are declared SEAMS: the types, permissions and UI copy are pinned so the
+      # capability exists and its IAM cost is documented, but no detector is wired for them yet
+      # (awsprovider.ComputePlatformDetectors registers the ECS detector only). Enabling either
+      # capability today adds its permissions to the generated policy and discovers nothing — say so in
+      # customer docs until the detectors land.
       - name: aws.eks
         displayName: Amazon EKS (Kubernetes)
         description: >-
-          Detect EKS clusters per region. Instrumented by installing Odigos for Kubernetes (odiglet) in
-          the cluster.
+          Detect EKS clusters per region. NOT DETECTED YET — the type is declared for the upcoming
+          detector; once discovered, it is instrumented by installing Odigos for Kubernetes (odiglet)
+          in the cluster.
         permissions:
           - eks:ListClusters
           - eks:DescribeCluster
       - name: aws.ec2
         displayName: Amazon EC2 (VM)
         description: >-
-          Detect EC2 instances per region. Instrumented by installing the Odigos VM agent on the instance.
+          Detect EC2 instances per region. NOT DETECTED YET — the type is declared for the upcoming
+          detector; once discovered, it is instrumented by installing the Odigos VM agent on the
+          instance.
         permissions:
           - ec2:DescribeInstances
 
@@ -231,10 +266,20 @@ computePlatforms:
 setup:
   subtitle: Apply the selected IAM policy in your AWS account.
   artifacts:
+    # KNOWN GAP — unscoped iam:PassRole. Fargate instrumentation needs iam:PassRole, and the comment on
+    # that permission (and test-connection's remediation text) both say to scope it with
+    # iam:PassedToService=ecs-tasks.amazonaws.com. This template cannot express that: the renderer
+    # expands {{permissions}} into one Action list, with no way to split a permission into its own
+    # statement or attach a per-permission Condition. Fixing it properly needs a renderer/model change
+    # (e.g. permission groups, each with its own Resource/Condition) in ui-kit + spec. Until then the
+    # generated policy grants iam:PassRole on "*", which is broader than what Odigos actually needs —
+    # call this out for customers who review the policy before applying it.
     - id: policy-preview
       section: permissions
       title: Policy preview
-      description: The IAM policy Odigos needs for the selected access level.
+      description: >-
+        The IAM policy Odigos needs for the selected access level. The AWS CLI and IAM-user setup
+        methods expect this saved as odigos-policy.json.
       format: json
       itemTemplate: '"{{permission}}"'
       itemSeparator: ",\n"
@@ -255,27 +300,77 @@ setup:
 
     # create-role variants drive step-2 "Choose setup method" + "Create IAM role". The selected
     # variant's steps + template are rendered; scalar tokens like {{externalId}} come from the form.
+    #
+    # Every variant must be self-contained and runnable as shown: the snippet either IS the artifact
+    # the steps tell the user to apply, or it references a file the steps told them to save. The one
+    # cross-artifact reference allowed is the policy preview above, saved as odigos-policy.json — the
+    # steps always say so explicitly (mirrors the gcp.yaml convention).
+    #
+    # ODIGOS_TRUST_ACCOUNT: 657451249928 is the AWS account allowed to assume the connector role. It is
+    # the Odigos Central platform account and is duplicated in each trust policy below — change all of
+    # them together, and keep them in sync with whatever Central actually runs as.
     - id: create-role-cloudformation
       section: create-role
       variant: cloudformation
       variantLabel: CloudFormation
       title: Create IAM role
       description: >-
-        Launch the stack in your AWS account. It creates the IAM role with the policy above and
-        returns the Role ARN.
-      format: shell
+        Deploy the CloudFormation template below. It creates the IAM role with the permissions policy
+        inline and returns the Role ARN as a stack output.
+      format: yaml
+      itemTemplate: '- {{permission}}'
+      itemSeparator: "\n"
       steps:
-        - Open the AWS CloudFormation console.
-        - Choose Create stack → With new resources.
-        - Upload the template below as the stack template.
-        - Review the permissions, then deploy the stack.
-        - Open the stack's Outputs tab.
-        - Copy the RoleArn value and paste it below.
+        - Enter an External ID in the field below first — it is baked into the template's trust policy.
+        - Save the template below as odigos-connector.yaml.
+        - "Console: open CloudFormation → Create stack → With new resources → Upload a template file."
+        - "CLI: aws cloudformation deploy --stack-name odigos-connector --template-file odigos-connector.yaml --capabilities CAPABILITY_NAMED_IAM"
+        - Acknowledge that the stack creates a named IAM resource, then deploy it.
+        - Open the stack's Outputs tab and copy the RoleArn value into the field below.
       template: |-
-        aws cloudformation deploy \
-          --stack-name odigos-connector \
-          --template-file odigos-connector.yaml \
-          --capabilities CAPABILITY_NAMED_IAM
+        AWSTemplateFormatVersion: "2010-09-09"
+        Description: IAM role assumed by the Odigos cloud connector.
+
+        Parameters:
+          OdigosExternalId:
+            Type: String
+            MinLength: 1
+            Description: >-
+              External ID Odigos presents when assuming this role. Pre-filled from the Odigos setup
+              form; the stack will not deploy while it is empty.
+            Default: "{{externalId}}"
+
+        Resources:
+          OdigosConnectorRole:
+            Type: AWS::IAM::Role
+            Properties:
+              RoleName: OdigosConnectorRole
+              Description: Lets Odigos Central discover and instrument workloads in this account.
+              AssumeRolePolicyDocument:
+                Version: "2012-10-17"
+                Statement:
+                  - Effect: Allow
+                    Principal:
+                      AWS: arn:aws:iam::657451249928:root
+                    Action: sts:AssumeRole
+                    Condition:
+                      StringEquals:
+                        sts:ExternalId: !Ref OdigosExternalId
+              Policies:
+                - PolicyName: OdigosCloudConnector
+                  PolicyDocument:
+                    Version: "2012-10-17"
+                    Statement:
+                      - Sid: OdigosCloudConnector
+                        Effect: Allow
+                        Resource: "*"
+                        Action:
+                          {{permissions}}
+
+        Outputs:
+          RoleArn:
+            Description: Paste this value into the Odigos setup form.
+            Value: !GetAtt OdigosConnectorRole.Arn
 
     - id: create-role-terraform
       section: create-role
@@ -283,33 +378,121 @@ setup:
       variantLabel: Terraform
       title: Create IAM role
       description: >-
-        Run the Odigos connector module to provision the IAM role as code and expose the Role ARN
-        as an output.
+        Provision the IAM role as code. The configuration below is complete — drop it into your
+        Terraform workspace and apply it; role_arn is exposed as an output.
       format: shell
+      itemTemplate: '"{{permission}}"'
+      itemSeparator: ",\n"
       steps:
-        - Add the odigos-connector module to your configuration.
-        - Run terraform init to download the module.
-        - Run terraform apply and confirm the plan.
-        - Read the role_arn value from the apply output.
-        - Copy the Role ARN and paste it below.
+        - Enter an External ID in the field below first — it becomes the variable default.
+        - Save the configuration below as odigos-connector.tf in your Terraform workspace.
+        - Run terraform init, then terraform apply and confirm the plan.
+        - Run terraform output -raw role_arn and paste the value into the field below.
       template: |-
-        terraform init
-        terraform apply
-        terraform output -raw role_arn
+        # odigos-connector.tf — requires the hashicorp/aws provider.
+
+        variable "odigos_external_id" {
+          type        = string
+          description = "External ID Odigos presents when assuming the role."
+          default     = "{{externalId}}"
+
+          validation {
+            condition     = length(var.odigos_external_id) > 0
+            error_message = "Set an external ID: the connector role's trust policy requires one."
+          }
+        }
+
+        data "aws_iam_policy_document" "odigos_trust" {
+          statement {
+            effect  = "Allow"
+            actions = ["sts:AssumeRole"]
+
+            principals {
+              type        = "AWS"
+              identifiers = ["arn:aws:iam::657451249928:root"]
+            }
+
+            condition {
+              test     = "StringEquals"
+              variable = "sts:ExternalId"
+              values   = [var.odigos_external_id]
+            }
+          }
+        }
+
+        data "aws_iam_policy_document" "odigos_permissions" {
+          statement {
+            sid       = "OdigosCloudConnector"
+            effect    = "Allow"
+            resources = ["*"]
+
+            actions = [
+              {{permissions}}
+            ]
+          }
+        }
+
+        resource "aws_iam_role" "odigos_connector" {
+          name               = "OdigosConnectorRole"
+          description        = "Lets Odigos Central discover and instrument workloads in this account."
+          assume_role_policy = data.aws_iam_policy_document.odigos_trust.json
+        }
+
+        resource "aws_iam_role_policy" "odigos_connector" {
+          name   = "OdigosCloudConnector"
+          role   = aws_iam_role.odigos_connector.id
+          policy = data.aws_iam_policy_document.odigos_permissions.json
+        }
+
+        output "role_arn" {
+          value = aws_iam_role.odigos_connector.arn
+        }
 
     - id: create-role-aws-cli
       section: create-role
       variant: aws-cli
       variantLabel: AWS CLI
       title: Create IAM role
-      description: Create the IAM role from your terminal using the AWS CLI, then return the Role ARN.
+      description: >-
+        Create the role from your terminal. The script writes the trust policy, creates the role,
+        attaches the permissions policy, and prints the Role ARN.
       format: shell
       steps:
-        - Make sure the AWS CLI is configured (aws configure).
-        - Create the role with the trust policy.
-        - Attach the permissions policy to the role.
-        - Copy the ARN from the create-role output and paste it below.
+        - Enter an External ID in the field below first — the script embeds it in the trust policy.
+        - Save the policy preview from the previous step as odigos-policy.json in your working directory.
+        - Make sure the AWS CLI is configured for the target account (aws configure).
+        - Run the script below.
+        - Copy the Role ARN it prints into the field below.
       template: |-
+        export ODIGOS_EXTERNAL_ID="{{externalId}}"
+        [ -n "$ODIGOS_EXTERNAL_ID" ] || echo "WARNING: no external ID set — the role will not be assumable."
+
+        cat > odigos-trust-policy.json <<EOF
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": { "AWS": "arn:aws:iam::657451249928:root" },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": { "sts:ExternalId": "${ODIGOS_EXTERNAL_ID}" }
+              }
+            }
+          ]
+        }
+        EOF
+
+        aws iam create-role \
+          --role-name OdigosConnectorRole \
+          --description "Lets Odigos Central discover and instrument workloads in this account." \
+          --assume-role-policy-document file://odigos-trust-policy.json
+
+        aws iam put-role-policy \
+          --role-name OdigosConnectorRole \
+          --policy-name OdigosCloudConnector \
+          --policy-document file://odigos-policy.json
+
         aws iam get-role \
           --role-name OdigosConnectorRole \
           --query 'Role.Arn' \
@@ -325,12 +508,12 @@ setup:
         Role ARN.
       format: json
       steps:
+        - Enter an External ID in the field below first — it is interpolated into the trust policy.
         - Open the AWS Console → IAM → Roles → Create role.
-        - Select Custom trust policy.
-        - Paste the trust policy below.
-        - Attach the permissions policy from the previous step.
-        - Name the role and create it.
-        - Open the role summary and copy the Role ARN below.
+        - Select Custom trust policy and paste the policy below.
+        - On the next screen, attach the permissions policy from the previous step.
+        - Name the role OdigosConnectorRole and create it.
+        - Open the role summary and copy the Role ARN into the field below.
       template: |-
         {
           "Version": "2012-10-17",
@@ -346,12 +529,48 @@ setup:
           ]
         }
 
+    # The access-keys path (auth method "static-keys"): no role, no trust policy — an IAM user in the
+    # target account carrying the same permissions policy. Declared as a create-role-section variant so
+    # it appears in the same "Setup method" chooser; the artifact title reflects what it actually makes.
+    - id: create-user-aws-cli
+      section: create-role
+      variant: iam-user
+      variantLabel: IAM user (access keys)
+      title: Create IAM user
+      description: >-
+        For the access-keys authentication method. Creates a programmatic-only IAM user with the
+        permissions policy attached, and prints an access key pair to paste below.
+      format: shell
+      steps:
+        - Save the policy preview from the previous step as odigos-policy.json in your working directory.
+        - Make sure the AWS CLI is configured for the target account (aws configure).
+        - Run the script below.
+        - Copy AccessKeyId and SecretAccessKey from the output into the fields below.
+        - Store the secret key somewhere safe — AWS will not show it again.
+      template: |-
+        aws iam create-user --user-name odigos-connector
+
+        aws iam put-user-policy \
+          --user-name odigos-connector \
+          --policy-name OdigosCloudConnector \
+          --policy-document file://odigos-policy.json
+
+        aws iam create-access-key \
+          --user-name odigos-connector \
+          --query 'AccessKey.{AccessKeyId:AccessKeyId,SecretAccessKey:SecretAccessKey}' \
+          --output table
+
     # credentials section metadata: title/description for the final "enter credentials" panel.
-    # Template is unused; fields come from auth.methods[].fields + connector.fields.
+    # Template is unused; fields come from auth.methods[].fields + connector.fields. Method-neutral
+    # copy: the same panel serves assume-role (Role ARN), static-keys (access keys) and
+    # workload-identity (nothing to paste).
     - id: enter-credentials
       section: credentials
-      title: Enter Role ARN
-      description: Paste the generated Role ARN into Odigos.
+      title: Enter connector credentials
+      description: >-
+        Paste the Role ARN generated above, plus the External ID you used in its trust policy. For the
+        access-keys method, paste the access key pair instead. Using pod / workload identity (IRSA)?
+        Leave these fields empty.
       format: text
       template: ""
 

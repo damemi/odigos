@@ -42,7 +42,7 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
-	github.com/odigos-io/agents-api/go/server v0.16.0 // indirect
+	github.com/odigos-io/agents-api/go/server v0.18.0 // indirect
 	github.com/odigos-io/odigos/common v1.29.0 // indirect
 	github.com/odigos-io/odigos/destinations v1.29.0 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
