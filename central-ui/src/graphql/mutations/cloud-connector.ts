@@ -44,3 +44,14 @@ export const CREATE_CLOUD_CONNECTOR = gql`
     }
   }
 `;
+
+// Deletes an OdigosCloudConnector CR (and credentials Secret) by the connection
+// id used in computePlatforms (the CR UID). Also clears Redis proxy metadata.
+export const DELETE_CLOUD_CONNECTOR = gql`
+  mutation DeleteCloudConnector($connectorId: String!) {
+    deleteCloudConnector(connectorId: $connectorId) {
+      success
+      error
+    }
+  }
+`;

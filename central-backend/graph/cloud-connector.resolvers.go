@@ -99,6 +99,47 @@ func (r *mutationResolver) CreateCloudConnector(ctx context.Context, input model
 	}, nil
 }
 
+// DeleteCloudConnector deletes the OdigosCloudConnector CR (and credentials
+// Secret) for the given connection id (CR UID), then clears Redis proxy
+// metadata so the row disappears from the connections list. Restricted to
+// ADMIN/OWNER, matching deleteProxyConnection.
+//
+// Redis is always cleared: connectors can appear in the list from a WebSocket
+// registration even when no CR exists (or the CRD is not installed yet).
+func (r *mutationResolver) DeleteCloudConnector(ctx context.Context, connectorID string) (*model.GeneralResult, error) {
+	if err := utils.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
+
+	if r.CloudConnectorService == nil {
+		return nil, fmt.Errorf("cloud connector service is not available")
+	}
+
+	if _, err := r.CloudConnectorService.DeleteConnector(ctx, connectorID); err != nil {
+		errorMsg := "Failed to delete cloud connector: " + err.Error()
+		return &model.GeneralResult{
+			Success: false,
+			Error:   &errorMsg,
+		}, err
+	}
+
+	// Always clear Redis proxy-meta so orphaned WS registrations (no CR) also
+	// drop out of the connections list.
+	if r.RedisClient != nil {
+		if err := r.RedisClient.DeleteProxyConnection(ctx, connectorID); err != nil {
+			errorMsg := "Failed to clear connector connection metadata: " + err.Error()
+			return &model.GeneralResult{
+				Success: false,
+				Error:   &errorMsg,
+			}, err
+		}
+	}
+
+	return &model.GeneralResult{
+		Success: true,
+	}, nil
+}
+
 // CloudConnectorProviders is the resolver for the cloudConnectorProviders field.
 // It returns the static cloud connector provider catalog (backed by the embedded
 // connectors/spec YAML), used by the UI to drive the Create Cloud Connector flow.

@@ -25,7 +25,7 @@ import { StatusType, type CloudConnectorCreateInput, type CloudConnectorCreateRe
 // `proxyID`/`platformType`/`version` in the operation context.
 export default function Page() {
   const { selectProxy } = useProxy();
-  const { deleteProxy } = useProxyCRUD();
+  const { deleteConnection: deleteConnectionByType } = useProxyCRUD();
   const { addNotification } = useNotificationStore();
 
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -58,13 +58,14 @@ export default function Page() {
 
   const deleteConnection = useCallback(
     async (id: string) => {
-      const result = await deleteProxy(id);
+      const type = connections.find((c) => c.id === id)?.type;
+      const result = await deleteConnectionByType(id, type);
       if (!result?.success) return;
       // Refresh the local list immediately; the kit's CentralConnections
       // also calls getConnections() after delete, so this is belt-and-suspenders.
       await refetch();
     },
-    [deleteProxy, refetch],
+    [connections, deleteConnectionByType, refetch],
   );
 
   // Verifies and creates the cloud connector in one server call. On success the

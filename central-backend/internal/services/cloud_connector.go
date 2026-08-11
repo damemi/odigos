@@ -8,6 +8,8 @@ import (
 
 	"github.com/odigos-io/central-backend/internal/k8s"
 	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -89,6 +91,66 @@ func (svc *CloudConnectorService) ListConnectors(ctx context.Context) ([]cloudco
 		return nil, fmt.Errorf("k8s client is not available")
 	}
 	return svc.k8sClient.ListCloudConnectors(ctx, svc.namespace)
+}
+
+// DeleteConnector removes the OdigosCloudConnector CR (and its credentials
+// Secret) identified by the connection id used in computePlatforms — the CR
+// UID. The connector-runtime finalizer tears down the Deployment after the CR
+// is marked for deletion.
+//
+// Returns (deletedCR=false, err=nil) when no matching CR exists (e.g. the row
+// is only a stale Redis/WebSocket registration, or the CRD is not installed).
+// Callers should still clear Redis proxy metadata so the connection disappears
+// from the UI.
+func (svc *CloudConnectorService) DeleteConnector(ctx context.Context, connectorUID string) (deletedCR bool, err error) {
+	if svc.k8sClient == nil {
+		return false, fmt.Errorf("k8s client is not available")
+	}
+	if connectorUID == "" {
+		return false, fmt.Errorf("connector id is required")
+	}
+
+	connectors, err := svc.ListConnectors(ctx)
+	if err != nil {
+		// CRD missing / API discovery failure: nothing to delete in Kubernetes.
+		// The connection may still exist as Redis proxy-meta from a WS registration.
+		if isCloudConnectorAPIUnavailable(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	var target *cloudconnectorsv1.OdigosCloudConnector
+	for i := range connectors {
+		if string(connectors[i].UID) == connectorUID {
+			target = &connectors[i]
+			break
+		}
+	}
+	if target == nil {
+		return false, nil
+	}
+
+	secretName := target.Spec.CredentialsSecretRef.Name
+	if err := svc.k8sClient.DeleteCloudConnector(ctx, svc.namespace, target.Name); err != nil {
+		return false, err
+	}
+	if secretName != "" {
+		if err := svc.k8sClient.DeleteSecret(ctx, svc.namespace, secretName); err != nil {
+			return false, err
+		}
+	}
+	return true, nil
+}
+
+// isCloudConnectorAPIUnavailable reports whether listing/mutating
+// OdigosCloudConnector failed because the CRD (or matching GVK) is not
+// available on the API server — common on older central installs that predate
+// cloud connectors.
+func isCloudConnectorAPIUnavailable(err error) bool {
+	// meta.IsNoMatchError uses errors.Is and unwraps fmt.Errorf("%w") wrappers
+	// from the k8s helpers (NoKindMatchError / NoResourceMatchError).
+	return meta.IsNoMatchError(err) || apierrors.IsNotFound(err)
 }
 
 var invalidNameChars = regexp.MustCompile(`[^a-z0-9-]+`)

@@ -205,6 +205,7 @@ type ComplexityRoot struct {
 		CreateGroupRoleMapping       func(childComplexity int, input model.WriteGroupRoleMappingInput) int
 		CreateTeam                   func(childComplexity int, input model.WriteTeamInput) int
 		CreateUser                   func(childComplexity int, input model.WriteUserInput) int
+		DeleteCloudConnector         func(childComplexity int, connectorID string) int
 		DeleteGroupRoleMapping       func(childComplexity int, providerID model.AuthProviderID, id string) int
 		DeleteProxyConnection        func(childComplexity int, proxyID string) int
 		DeleteTeam                   func(childComplexity int, teamID string) int
@@ -325,6 +326,7 @@ type MutationResolver interface {
 	DeleteProxyConnection(ctx context.Context, proxyID string) (*model.GeneralResult, error)
 	TestCloudConnectorConnection(ctx context.Context, input model.TestCloudConnectorConnectionInput) (*model.CloudConnectorTestResult, error)
 	CreateCloudConnector(ctx context.Context, input model.CreateCloudConnectorInput) (*model.CreateCloudConnectorResult, error)
+	DeleteCloudConnector(ctx context.Context, connectorID string) (*model.GeneralResult, error)
 }
 type QueryResolver interface {
 	RemoteFetch(ctx context.Context, proxyID string, query string, variables map[string]any) (string, error)
@@ -1027,6 +1029,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateUser(childComplexity, args["input"].(model.WriteUserInput)), true
+	case "Mutation.deleteCloudConnector":
+		if e.ComplexityRoot.Mutation.DeleteCloudConnector == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteCloudConnector_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteCloudConnector(childComplexity, args["connectorId"].(string)), true
 	case "Mutation.deleteGroupRoleMapping":
 		if e.ComplexityRoot.Mutation.DeleteGroupRoleMapping == nil {
 			break
@@ -2272,6 +2285,20 @@ func (ec *executionContext) field_Mutation_createUser_args(ctx context.Context, 
 		return nil, err
 	}
 	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteCloudConnector_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "connectorId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["connectorId"] = arg0
 	return args, nil
 }
 
@@ -5973,6 +6000,50 @@ func (ec *executionContext) fieldContext_Mutation_createCloudConnector(ctx conte
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_createCloudConnector_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteCloudConnector(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteCloudConnector(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteCloudConnector(ctx, fc.Args["connectorId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.GeneralResult) graphql.Marshaler {
+			return ec.marshalNGeneralResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐGeneralResult(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteCloudConnector(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_GeneralResult(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteCloudConnector_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -10443,6 +10514,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "createCloudConnector":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createCloudConnector(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteCloudConnector":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteCloudConnector(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++

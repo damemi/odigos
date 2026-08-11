@@ -145,6 +145,11 @@ extend type Mutation {
   createCloudConnector(
     input: CreateCloudConnectorInput!
   ): CreateCloudConnectorResult!
+
+  # Deletes an OdigosCloudConnector CR (and its credentials Secret) identified by
+  # the connection id used in computePlatforms (the CR UID). Also clears any
+  # Redis proxy metadata for that id so the connection disappears from the list.
+  deleteCloudConnector(connectorId: String!): GeneralResult!
 }
 
 input CreateCloudConnectorInput {

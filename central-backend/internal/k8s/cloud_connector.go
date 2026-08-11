@@ -81,3 +81,34 @@ func (c *Client) ListCloudConnectors(ctx context.Context, namespace string) ([]c
 	}
 	return list.Items, nil
 }
+
+// DeleteCloudConnector deletes an OdigosCloudConnector CR by name.
+func (c *Client) DeleteCloudConnector(ctx context.Context, namespace, name string) error {
+	if c.Ctrl == nil {
+		return fmt.Errorf("controller-runtime client is not initialized")
+	}
+	cc := &cloudconnectorsv1.OdigosCloudConnector{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+	if err := c.Ctrl.Delete(ctx, cc); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to delete OdigosCloudConnector %s/%s: %w", namespace, name, err)
+	}
+	return nil
+}
+
+// DeleteSecret deletes a Secret by name. Missing secrets are treated as success
+// so callers can clean up credentials after the CR without failing if the
+// Secret was already removed.
+func (c *Client) DeleteSecret(ctx context.Context, namespace, name string) error {
+	err := c.CoreV1().Secrets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete secret %s in namespace %s: %w", name, namespace, err)
+	}
+	return nil
+}
