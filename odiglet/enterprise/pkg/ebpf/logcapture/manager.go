@@ -149,6 +149,11 @@ func (m *Manager) RegisterProcess(ctx context.Context, pid int, packedAttrs stri
 	return nil
 }
 
+// UnregisterProcess removes a PID from active log capture, e.g. when a workload dynamically
+// disables ebpfLogCapture. It intentionally retains the process's correlation maps in processOpts:
+// the SDKs provision those maps once (when the process is instrumented), so keeping them lets
+// capture be re-enabled later - RegisterProcess re-applies them via AddProcess - without the SDK
+// re-provisioning. The maps are dropped only when the process exits, via ClearProcessOpts.
 func (m *Manager) UnregisterProcess(pid int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -160,10 +165,19 @@ func (m *Manager) UnregisterProcess(pid int) {
 	if err := m.logCapture.RemoveProcess(uint32(pid)); err != nil {
 		commonlogger.LoggerCompat().With("subsystem", "ebpflogcapture").Info("failed to unregister process from log capture", "pid", pid, "error", err)
 	}
-	delete(m.processOpts, uint32(pid))
 
 	delete(m.currentAttrs, uint32(pid))
 	m.notifyAttr(unixfd.EncodeAttrUnregister(uint32(pid)))
+}
+
+// ClearProcessOpts drops a process's correlation maps from processOpts without touching the running
+// BPF program. The maps are provisioned once by the eBPF SDKs and retained across ebpfLogCapture
+// enable/disable toggles (see UnregisterProcess); this releases them when the process exits (or was
+// never registered because log capture is disabled) so they don't leak.
+func (m *Manager) ClearProcessOpts(pid int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.processOpts, uint32(pid))
 }
 
 // pidNSInode reads our PID namespace inode so the BPF CO-RE walk can translate

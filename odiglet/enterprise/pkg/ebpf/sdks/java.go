@@ -41,6 +41,7 @@ type JavaOtelEbpfSdkEnterprise struct {
 	waspMaps         *wasp.Maps
 	waspMapsProvider wasp.MapsProvider
 	podName          string
+	pid              int
 }
 
 type JavaInstrumentationFactoryEnterprise struct {
@@ -171,6 +172,7 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 		waspMaps:         waspMaps,
 		waspMapsProvider: g.waspMapsProvider,
 		podName:          podName,
+		pid:              pid,
 	}
 
 	return javaInstWrapper, nil
@@ -225,6 +227,8 @@ func (g *JavaOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.S
 		return instrumentation.Status{}, err
 	}
 
+	g.prepareLogCapture()
+
 	return status, nil
 }
 
@@ -243,19 +247,21 @@ func (g *JavaOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 	return err
 }
 
-// PrepareLogCapture attaches the global Linux TID span map so logs emitted
-// from this Java process can be correlated with their originating span.
-// Invoked by logCaptureDecorator immediately before RegisterProcess.
-func (g *JavaOtelEbpfSdkEnterprise) PrepareLogCapture(ctx context.Context, pid int) {
+// prepareLogCapture attaches the global Linux TID span map so logs emitted from this Java process
+// can be correlated with their originating span. It is invoked at the end of Load, once the probes
+// (and their shared maps) are loaded. This is done regardless of whether log capture is currently
+// enabled for the workload: the log capture generic factory registers/unregisters the process
+// based on config, and the Manager supports attaching this map before or after registration.
+func (g *JavaOtelEbpfSdkEnterprise) prepareLogCapture() {
 	spanMap, err := collection.LookupSharedMap(auto.ActiveSpanByLinuxTidMapName, collection.WithGlobalScope())
 	if err != nil {
 		// Not loaded yet (no Java probe attached) is expected; only surface real errors.
 		if !errors.Is(err, collection.ErrSharedMapNotFound) {
-			g.logger.Info("failed to look up span map for log correlation", "pid", pid, "error", err)
+			g.logger.Info("failed to look up span map for log correlation", "pid", g.pid, "error", err)
 		}
 		return
 	}
-	logcapture.GetInstance().AddSpanMap(uint32(pid), spanMap)
+	logcapture.GetInstance().AddSpanMap(uint32(g.pid), spanMap)
 }
 
 func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instrumentation.Config) error {

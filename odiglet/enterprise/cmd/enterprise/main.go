@@ -130,7 +130,15 @@ func main() {
 	defer mapExchange.close()
 
 	instrumentationManagerOptions := ebpf.InstrumentationManagerOptions{
-		Factories:                  factories,
+		Factories: factories,
+		// eBPF log capture is a generic factory: it is offered every process regardless of distro,
+		// opts out of every distro except the Go and Java enterprise distros (the ones whose SDKs
+		// provision the log correlation maps), and is gated per-workload by the ebpfLogCapture
+		// config. It is run off the main path and never reports its status. (OBI's generic factories
+		// are wired centrally in odiglet.New.)
+		GenericFactories: map[string]commonInstrumentation.Factory{
+			logcapture.FactoryName: logcapture.NewFactory(),
+		},
 		DistributionGetter:         enterpriseDistrosProvider.Getter,
 		OdigletHealthProbeBindPort: healthProbeBindPort,
 	}
@@ -208,8 +216,8 @@ func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distro
 	}
 
 	return map[string]commonInstrumentation.Factory{
-		sdks.GoEnterpriseDistroName:  logcapture.WrapFactory(goFactory),
-		"java-ebpf-instrumentations": logcapture.WrapFactory(javaEbpfFactory),
+		sdks.GoEnterpriseDistroName:  goFactory,
+		"java-ebpf-instrumentations": javaEbpfFactory,
 		"java-enterprise":            sdks.NewJavaExtensionInstrumentationFactoryEnterprise(),
 		"python-enterprise":          pythonEbpfFactory,
 		"python-enterprise3.8":       pythonEbpfFactory,
