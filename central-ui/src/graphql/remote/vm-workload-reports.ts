@@ -26,20 +26,19 @@ interface VmWorkloadDetailsContainer {
   excludedReason?: string | null;
 }
 
-/**
- * `WorkloadReport.details`, narrowed to the container layer central-ui consumes.
- *
- * The wire type is an interface with one branch per kind; the container-shaped
- * branches (ECS, docker, Cloud Run) all carry `containers`, and that is the only
- * part with a slot in the kit's `Workload` today. The process-shaped branches
- * leave `details` null, and Lambda's branch has no containers at all, so both
- * simply read as absent here.
- */
-interface VmWorkloadDetails {
-  containers?: VmWorkloadDetailsContainer[] | null;
-}
+export type VmWorkloadReport = GetWorkloadReportsQuery['workloadReports'][number];
 
-export type VmWorkloadReport = GetWorkloadReportsQuery['workloadReports'][number] & { region?: string | null; details?: VmWorkloadDetails | null };
+/**
+ * Pull the container layer out of the kind-union `details` block.
+ *
+ * Only the container-shaped branches (ECS / docker / Cloud Run) carry
+ * `containers`; Lambda's branch and a null details do not. Narrowing via `in`
+ * keeps the read typed without casting the whole report.
+ */
+const readDetailsContainers = (details: VmWorkloadReport['details']): VmWorkloadDetailsContainer[] => {
+  if (!details || !('containers' in details) || !details.containers?.length) return [];
+  return details.containers.filter((c): c is NonNullable<typeof c> => !!c?.name);
+};
 
 /** WorkloadReport.current.state values from agents-api / connectors. */
 const WorkloadReportState = {
@@ -294,7 +293,7 @@ const mapContainerStatus = (container: VmWorkloadDetailsContainer) => {
 };
 
 const mapReportContainers = (report: VmWorkloadReport, containerOverrides: VmContainerOverride[]): Workload['containers'] => {
-  const containers = report.details?.containers ?? [];
+  const containers = readDetailsContainers(report.details);
   if (!containers.length) return null;
 
   const overrideByName = new Map(containerOverrides.map((o) => [o.containerName, o]));

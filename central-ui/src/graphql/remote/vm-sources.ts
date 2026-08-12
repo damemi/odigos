@@ -30,21 +30,12 @@ export const VM_DATA_STREAM = 'default';
 
 export type VmSource = GetSourcesQuery['sources'][number];
 
-// `Source.config` on the wire, widened with the v0.18.0 kind-specific branches the
-// pinned dialect package (v0.17.0) does not know about yet. Exactly one branch is
-// ever populated, and it must agree with the source's kind.
-type VmSourceConfigBranches = {
-  ecs?: { containerOverrides?: (VmContainerOverride | null)[] | null } | null;
-  docker?: { containerOverrides?: (VmContainerOverride | null)[] | null } | null;
-};
-
 /**
  * Flatten whichever kind-specific branch carries content. Reading both in order is
  * unambiguous because the server rejects a config that sets more than one.
  */
 const readContainerOverrides = (config: VmSource['config']): VmContainerOverride[] => {
-  const branches = config as (VmSource['config'] & VmSourceConfigBranches) | null | undefined;
-  const rows = branches?.ecs?.containerOverrides ?? branches?.docker?.containerOverrides ?? [];
+  const rows = config?.ecs?.containerOverrides ?? config?.docker?.containerOverrides ?? [];
   return rows.filter((row): row is VmContainerOverride => !!row?.containerName);
 };
 

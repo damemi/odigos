@@ -26,10 +26,12 @@ export const supportsWorkloadReportRegion = (schemaVersion: string): boolean => 
 // agents-api v0.18.0 typed the kind-specific blocks that used to have nowhere to
 // live: `WorkloadReport.details` (an ECS task's container layer, replacing the
 // deprecated untyped `metadata: JSON`) and `Source.config.ecs` / `.docker`
-// (per-container runtime/distro overrides). Both are additive, and the published
-// dialect snapshots stop at v0.17.0, so central-ui patches the selections into
-// the printed documents — but only when the connected platform actually has them,
-// since an older agent rejects the whole query on one unknown field.
+// (per-container runtime/distro overrides). Both are additive. The published
+// dialect registry floors to v0.18.0 when the platform reports >= that version
+// (so those selections arrive natively); for a platform stuck between a newer
+// schema and an older frozen snapshot the adapter still patches them in — but
+// only when the connected platform actually has them, since an older agent
+// rejects the whole query on one unknown field.
 export const supportsTypedContainerDetails = (schemaVersion: string): boolean => atLeastMinor(schemaVersion, 18);
 
 // Region side-channel.
@@ -81,11 +83,13 @@ export const clearWorkloadRegions = (): void => workloadRegions.clear();
 // Patching selections into a frozen dialect snapshot.
 //
 // A VM/connector document comes from the published dialect registry, floored to
-// the highest FROZEN snapshot (v0.17.0 today). A platform reporting a newer
-// schema therefore serves fields the printed document never asks for. The
-// adapter's `patchQuery` hook exists for exactly that, and these helpers do the
-// patching on the parsed AST rather than by string surgery, so they survive any
-// `print` formatting change and any reordering inside the snapshot.
+// the highest FROZEN snapshot that is <= the reported schema (v0.18.0 today).
+// A platform reporting a schema newer than every frozen snapshot therefore
+// serves fields the printed document never asks for. The adapter's `patchQuery`
+// hook exists for exactly that, and these helpers do the patching on the parsed
+// AST rather than by string surgery, so they survive any `print` formatting
+// change and any reordering inside the snapshot. When the floored dialect
+// already selects the field, merge is a no-op (marker match).
 // ---------------------------------------------------------------------------
 
 /** Parse a printed selection-set body (`"a b { c }"`) into selection nodes. */
@@ -162,9 +166,9 @@ export const withFragmentSelections = (printedQuery: string, typeCondition: stri
 /**
  * One entry of `Source.config.{ecs,docker}.containerOverrides`.
  *
- * Mirrors the wire shape rather than a ui-kit type on purpose: the kit's
- * `SourceConfig` models only the workload-level override slots, so central-ui
- * carries the container layer itself until the kit grows a slot for it.
+ * Mirrors the wire / ui-kit `SourceContainerOverride` shape. Kept as a local
+ * interface so central-ui typechecks against ui-kit releases that predate the
+ * `SourceConfig.containerOverrides` slot; once that ships, this is identical.
  */
 export interface VmContainerOverride {
   containerName: string;
@@ -175,9 +179,8 @@ export interface VmContainerOverride {
 }
 
 /**
- * The kit's `SourceConfig` widened with the container layer. Kept as a central-ui
- * type so `Workload.sourceConfig` can carry the overrides through to the update
- * path without waiting on a ui-kit release.
+ * Workload.sourceConfig with the container layer. Intersection stays until every
+ * deployed ui-kit includes `SourceConfig.containerOverrides` natively.
  */
 export type VmSourceConfig = SourceConfig & { containerOverrides?: VmContainerOverride[] | null };
 
