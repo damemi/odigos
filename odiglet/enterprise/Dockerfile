@@ -48,19 +48,19 @@ ADD https://github.com/open-telemetry/opentelemetry-java-instrumentation/release
 RUN chmod 644 /instrumentations/java/javaagent.jar
 
 # python-community/python-community3.8
-COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.73-py3.8 /instrumentations/python3.8 /instrumentations/python3.8
-COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.90 /instrumentations/python /instrumentations/python
+COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.73-py3.8@sha256:661308cb08d293f4ff3e1823cc7ebc0537ba53dd1fff72f61b411637d62ec3d4 /instrumentations/python3.8 /instrumentations/python3.8
+COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.90@sha256:26be5a681e6cde7585f0bff6714fd74dbc90515a239d4759f5b6225591a78185 /instrumentations/python /instrumentations/python
 
 # python-enterprise
-COPY --from=public.ecr.aws/odigos/agents/python-ebpf:v0.0.14 /instrumentations/python-ebpf /instrumentations/python-ebpf
+COPY --from=public.ecr.aws/odigos/agents/python-ebpf:v0.0.14@sha256:168a709d9e586f209d2a92581bacc9786099b5ce3613bdf9e3ec8b1d6a0a317b /instrumentations/python-ebpf /instrumentations/python-ebpf
 
 # nodejs-enterprise
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.13.0 /instrumentations/opentelemetry-node /instrumentations/opentelemetry-node
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.13.0 /instrumentations/nodejs-ebpf /instrumentations/nodejs-ebpf
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.13.0 /instrumentations/nodejs-community /instrumentations/nodejs-community
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.13.0@sha256:420770b2f7e8863e79a0f03c339083806e1ef79ae316955240686f547ec9d781 /instrumentations/opentelemetry-node /instrumentations/opentelemetry-node
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.13.0@sha256:420770b2f7e8863e79a0f03c339083806e1ef79ae316955240686f547ec9d781 /instrumentations/nodejs-ebpf /instrumentations/nodejs-ebpf
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.13.0@sha256:420770b2f7e8863e79a0f03c339083806e1ef79ae316955240686f547ec9d781 /instrumentations/nodejs-community /instrumentations/nodejs-community
 # nodejs-enterprise-14
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.20 /instrumentations/opentelemetry-node-14 /instrumentations/opentelemetry-node-14
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.20 /instrumentations/nodejs-ebpf-14 /instrumentations/nodejs-ebpf-14
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.20@sha256:39e18324ddfac277b557114be36c062bc95bfd5daba38fde91fce1a2b6543418 /instrumentations/opentelemetry-node-14 /instrumentations/opentelemetry-node-14
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.20@sha256:39e18324ddfac277b557114be36c062bc95bfd5daba38fde91fce1a2b6543418 /instrumentations/nodejs-ebpf-14 /instrumentations/nodejs-ebpf-14
 
 # dotnet-community
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
@@ -73,16 +73,16 @@ RUN --mount=type=bind,from=dotnet-builder,source=/legacy-dotnet-instrumentation,
     fi
 
 # java-ebpf-instrumentations
-COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.41.1 /instrumentations/java-ebpf /instrumentations/java-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.41.1@sha256:deb25264d273c0a41a967d4edd1d32bc48cd5656aa486757aa4f129b0689b739 /instrumentations/java-ebpf /instrumentations/java-ebpf
 
 # java-enterprise
-COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.41.1 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.41.1@sha256:0dd655736137035e40c595df08b3479bc4e3ac8bb8e37eee3245da7d676d63d9 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
 
 # php-community
-COPY --from=public.ecr.aws/odigos/agents/php-community:v0.4.1 /instrumentations/php /instrumentations/php
+COPY --from=public.ecr.aws/odigos/agents/php-community:v0.4.1@sha256:feab1097b5adbfbb2cf89dadc7d16e3debbae2c8b6138d41fedb214d6b9b04d8 /instrumentations/php /instrumentations/php
 
 # ruby-community
-COPY --from=public.ecr.aws/odigos/agents/ruby-community:v0.0.8 /instrumentations/ruby /instrumentations/ruby
+COPY --from=public.ecr.aws/odigos/agents/ruby-community:v0.0.8@sha256:a9df41f7684f550a3b7e1693456f7c4eb4ce432aba82d4b9e22d2a73687473b1 /instrumentations/ruby /instrumentations/ruby
 
 # loader
 ARG TARGETARCH

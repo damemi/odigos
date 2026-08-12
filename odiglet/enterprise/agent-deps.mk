@@ -47,16 +47,18 @@ upgrade-java-ebpf-version:
 	fi
 	@echo "Updating java ebpf agents version to $(AGENT_VERSION) in Dockerfile, debug.Dockerfile, and go.mod"
 	@if [ "$(shell uname)" = "Darwin" ]; then \
-		sed -i '' -E 's|java-ebpf-instrumentations:[0-9A-Za-z._-]+|java-ebpf-instrumentations:$(AGENT_VERSION)|g' Dockerfile; \
-		sed -i '' -E 's|java-enterprise:[0-9A-Za-z._-]+|java-enterprise:$(AGENT_VERSION)|g' Dockerfile; \
-		sed -i '' -E 's|java-ebpf-instrumentations:[0-9A-Za-z._-]+|java-ebpf-instrumentations:$(AGENT_VERSION)|g' debug.Dockerfile; \
-		sed -i '' -E 's|java-enterprise:[0-9A-Za-z._-]+|java-enterprise:$(AGENT_VERSION)|g' debug.Dockerfile; \
+		sed -i '' -E 's|java-ebpf-instrumentations:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|java-ebpf-instrumentations:$(AGENT_VERSION)|g' Dockerfile; \
+		sed -i '' -E 's|java-enterprise:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|java-enterprise:$(AGENT_VERSION)|g' Dockerfile; \
+		sed -i '' -E 's|java-ebpf-instrumentations:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|java-ebpf-instrumentations:$(AGENT_VERSION)|g' debug.Dockerfile; \
+		sed -i '' -E 's|java-enterprise:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|java-enterprise:$(AGENT_VERSION)|g' debug.Dockerfile; \
 	else \
-		sed -i -E 's|java-ebpf-instrumentations:[0-9A-Za-z._-]+|java-ebpf-instrumentations:$(AGENT_VERSION)|g' Dockerfile; \
-		sed -i -E 's|java-enterprise:[0-9A-Za-z._-]+|java-enterprise:$(AGENT_VERSION)|g' Dockerfile; \
-		sed -i -E 's|java-ebpf-instrumentations:[0-9A-Za-z._-]+|java-ebpf-instrumentations:$(AGENT_VERSION)|g' debug.Dockerfile; \
-		sed -i -E 's|java-enterprise:[0-9A-Za-z._-]+|java-enterprise:$(AGENT_VERSION)|g' debug.Dockerfile; \
+		sed -i -E 's|java-ebpf-instrumentations:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|java-ebpf-instrumentations:$(AGENT_VERSION)|g' Dockerfile; \
+		sed -i -E 's|java-enterprise:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|java-enterprise:$(AGENT_VERSION)|g' Dockerfile; \
+		sed -i -E 's|java-ebpf-instrumentations:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|java-ebpf-instrumentations:$(AGENT_VERSION)|g' debug.Dockerfile; \
+		sed -i -E 's|java-enterprise:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|java-enterprise:$(AGENT_VERSION)|g' debug.Dockerfile; \
 	fi
+	@$(MAKE) -f $(MK) pin-image-agent-digest AGENT_DISTRO=java-ebpf-instrumentations AGENT_VERSION=$(AGENT_VERSION) FILES="Dockerfile debug.Dockerfile"
+	@$(MAKE) -f $(MK) pin-image-agent-digest AGENT_DISTRO=java-enterprise AGENT_VERSION=$(AGENT_VERSION) FILES="Dockerfile debug.Dockerfile"
 	@echo "Updating Go module versions using go get"
 	@go get github.com/odigos-io/ebpf-java-instrumentation/v2@$(AGENT_VERSION)
 	@go get github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2@$(AGENT_VERSION)
@@ -72,12 +74,13 @@ upgrade-nodejs-ebpf-version:
 	fi
 	@echo "Updating nodejs ebpf agents version to $(AGENT_VERSION) in Dockerfile, debug.Dockerfile, and go.mod"
 	@if [ "$(shell uname)" = "Darwin" ]; then \
-		sed -i '' -E 's|nodejs-enterprise:[0-9A-Za-z._-]+|nodejs-enterprise:$(AGENT_VERSION)|g' Dockerfile; \
-		sed -i '' -E 's|nodejs-enterprise:[0-9A-Za-z._-]+|nodejs-enterprise:$(AGENT_VERSION)|g' debug.Dockerfile; \
+		sed -i '' -E 's|nodejs-enterprise:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|nodejs-enterprise:$(AGENT_VERSION)|g' Dockerfile; \
+		sed -i '' -E 's|nodejs-enterprise:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|nodejs-enterprise:$(AGENT_VERSION)|g' debug.Dockerfile; \
 	else \
-		sed -i -E 's|nodejs-enterprise:[0-9A-Za-z._-]+|nodejs-enterprise:$(AGENT_VERSION)|g' Dockerfile; \
-		sed -i -E 's|nodejs-enterprise:[0-9A-Za-z._-]+|nodejs-enterprise:$(AGENT_VERSION)|g' debug.Dockerfile; \
+		sed -i -E 's|nodejs-enterprise:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|nodejs-enterprise:$(AGENT_VERSION)|g' Dockerfile; \
+		sed -i -E 's|nodejs-enterprise:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|nodejs-enterprise:$(AGENT_VERSION)|g' debug.Dockerfile; \
 	fi
+	@$(MAKE) -f $(MK) pin-image-agent-digest AGENT_DISTRO=nodejs-enterprise AGENT_VERSION=$(AGENT_VERSION) FILES="Dockerfile debug.Dockerfile"
 	@echo "Updating Go module versions using go get"
 	@go get github.com/odigos-io/ebpf-nodejs-instrumentation@$(AGENT_VERSION)
 	@echo "Running go mod tidy to clean up go.sum"
@@ -94,12 +97,13 @@ upgrade-python-ebpf-version:
 	fi
 	@echo "Updating python ebpf agents version to $(AGENT_VERSION) in Dockerfile, debug.Dockerfile, and go.mod"
 	@if [ "$(shell uname)" = "Darwin" ]; then \
-		sed -i '' -E 's|python-ebpf:[0-9A-Za-z._-]+|python-ebpf:$(AGENT_VERSION)|g' Dockerfile; \
-		sed -i '' -E 's|python-ebpf:[0-9A-Za-z._-]+|python-ebpf:$(AGENT_VERSION)|g' debug.Dockerfile; \
+		sed -i '' -E 's|python-ebpf:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|python-ebpf:$(AGENT_VERSION)|g' Dockerfile; \
+		sed -i '' -E 's|python-ebpf:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|python-ebpf:$(AGENT_VERSION)|g' debug.Dockerfile; \
 	else \
-		sed -i -E 's|python-ebpf:[0-9A-Za-z._-]+|python-ebpf:$(AGENT_VERSION)|g' Dockerfile; \
-		sed -i -E 's|python-ebpf:[0-9A-Za-z._-]+|python-ebpf:$(AGENT_VERSION)|g' debug.Dockerfile; \
+		sed -i -E 's|python-ebpf:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|python-ebpf:$(AGENT_VERSION)|g' Dockerfile; \
+		sed -i -E 's|python-ebpf:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|python-ebpf:$(AGENT_VERSION)|g' debug.Dockerfile; \
 	fi
+	@$(MAKE) -f $(MK) pin-image-agent-digest AGENT_DISTRO=python-ebpf AGENT_VERSION=$(AGENT_VERSION) FILES="Dockerfile debug.Dockerfile"
 	@echo "Updating Go module versions using go get"
 	@go get github.com/odigos-io/ebpf-generic-instrumentation@$(AGENT_VERSION)
 	@echo "Running go mod tidy to clean up go.sum"
@@ -115,12 +119,13 @@ upgrade-python-community-version:
 	fi
 	@echo "Updating python-community agent image tag to $(AGENT_VERSION) in Dockerfile and debug.Dockerfile (preserving -py3.8 pin)"
 	@if [ "$(shell uname)" = "Darwin" ]; then \
-		sed -i '' -E 's|python-community:[0-9A-Za-z._-]+( +/instrumentations/python )|python-community:$(AGENT_VERSION)\1|g' Dockerfile; \
-		sed -i '' -E 's|python-community:[0-9A-Za-z._-]+( +/instrumentations/python )|python-community:$(AGENT_VERSION)\1|g' debug.Dockerfile; \
+		sed -i '' -E 's|python-community:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?( +/instrumentations/python )|python-community:$(AGENT_VERSION)\2|g' Dockerfile; \
+		sed -i '' -E 's|python-community:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?( +/instrumentations/python )|python-community:$(AGENT_VERSION)\2|g' debug.Dockerfile; \
 	else \
-		sed -i -E 's|python-community:[0-9A-Za-z._-]+( +/instrumentations/python )|python-community:$(AGENT_VERSION)\1|g' Dockerfile; \
-		sed -i -E 's|python-community:[0-9A-Za-z._-]+( +/instrumentations/python )|python-community:$(AGENT_VERSION)\1|g' debug.Dockerfile; \
+		sed -i -E 's|python-community:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?( +/instrumentations/python )|python-community:$(AGENT_VERSION)\2|g' Dockerfile; \
+		sed -i -E 's|python-community:[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?( +/instrumentations/python )|python-community:$(AGENT_VERSION)\2|g' debug.Dockerfile; \
 	fi
+	@$(MAKE) -f $(MK) pin-image-agent-digest AGENT_DISTRO=python-community AGENT_VERSION=$(AGENT_VERSION) FILES="Dockerfile debug.Dockerfile"
 
 # Generic image-tag bump for image-only agents (php, ruby, and any future image-only distro).
 # Pass AGENT_DISTRO matching the image name in the dockerfiles (e.g. php-community).
@@ -132,12 +137,32 @@ upgrade-image-agent-version:
 	fi
 	@echo "Updating $(AGENT_DISTRO) agent image tag to $(AGENT_VERSION) in Dockerfile and debug.Dockerfile"
 	@if [ "$(shell uname)" = "Darwin" ]; then \
-		sed -i '' -E 's|$(AGENT_DISTRO):[0-9A-Za-z._-]+|$(AGENT_DISTRO):$(AGENT_VERSION)|g' Dockerfile; \
-		sed -i '' -E 's|$(AGENT_DISTRO):[0-9A-Za-z._-]+|$(AGENT_DISTRO):$(AGENT_VERSION)|g' debug.Dockerfile; \
+		sed -i '' -E 's|$(AGENT_DISTRO):[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|$(AGENT_DISTRO):$(AGENT_VERSION)|g' Dockerfile; \
+		sed -i '' -E 's|$(AGENT_DISTRO):[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|$(AGENT_DISTRO):$(AGENT_VERSION)|g' debug.Dockerfile; \
 	else \
-		sed -i -E 's|$(AGENT_DISTRO):[0-9A-Za-z._-]+|$(AGENT_DISTRO):$(AGENT_VERSION)|g' Dockerfile; \
-		sed -i -E 's|$(AGENT_DISTRO):[0-9A-Za-z._-]+|$(AGENT_DISTRO):$(AGENT_VERSION)|g' debug.Dockerfile; \
+		sed -i -E 's|$(AGENT_DISTRO):[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|$(AGENT_DISTRO):$(AGENT_VERSION)|g' Dockerfile; \
+		sed -i -E 's|$(AGENT_DISTRO):[0-9A-Za-z._-]+(@sha256:[0-9a-f]+)?|$(AGENT_DISTRO):$(AGENT_VERSION)|g' debug.Dockerfile; \
 	fi
+	@$(MAKE) -f $(MK) pin-image-agent-digest AGENT_DISTRO=$(AGENT_DISTRO) AGENT_VERSION=$(AGENT_VERSION) FILES="Dockerfile debug.Dockerfile"
+
+# Internal: rewrite `<AGENT_DISTRO>:<AGENT_VERSION>` refs in FILES to `<tag>@<manifest digest>`.
+# The dockerfiles pin agent images by digest (the digest is what the build resolves; the tag stays
+# for readability), so every tag bump must re-resolve and rewrite the digest — a tag-only bump
+# would silently keep the OLD image, because the digest wins over the tag.
+.PHONY: pin-image-agent-digest
+pin-image-agent-digest:
+	@set -e; \
+	ref="public.ecr.aws/odigos/agents/$(AGENT_DISTRO):$(AGENT_VERSION)"; \
+	digest=$$(docker buildx imagetools inspect "$$ref" --format '{{.Manifest.Digest}}'); \
+	if [ -z "$$digest" ]; then echo "ERROR: could not resolve digest for $$ref (does the tag exist?)"; exit 1; fi; \
+	echo "Pinning $$ref@$$digest"; \
+	for f in $(FILES); do \
+		if [ "$$(uname)" = "Darwin" ]; then \
+			sed -i '' -E "s|$(AGENT_DISTRO):$(AGENT_VERSION)([[:space:]])|$(AGENT_DISTRO):$(AGENT_VERSION)@$$digest\1|g" $$f; \
+		else \
+			sed -i -E "s|$(AGENT_DISTRO):$(AGENT_VERSION)([[:space:]])|$(AGENT_DISTRO):$(AGENT_VERSION)@$$digest\1|g" $$f; \
+		fi; \
+	done
 
 # golang (enterprise-go-instrumentation) is consumed only as a go.mod replace of go.opentelemetry.io/auto.
 .PHONY: upgrade-golang-version
