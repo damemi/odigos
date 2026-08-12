@@ -200,18 +200,20 @@ jobs:
 
       - name: Save scan JSON results
         if: always()
+        env:
+          RESULTS_FILE: ${{ steps.scan.outputs.results-file }}
         run: |
           mkdir -p /tmp/scan-results
           IMAGE_NAME="odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}${{ matrix.extended == 'true' && '-extended' || '' }}"
 
           # Create a wrapper JSON with image metadata
-          cat > /tmp/scan-results/${IMAGE_NAME}.json << 'EOF'
-          ${{ steps.scan.outputs.results-json }}
-          EOF
+          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
+            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
+            exit 1
+          fi
 
           # Add image name to the JSON
-          jq --arg img "$IMAGE_NAME" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' /tmp/scan-results/${IMAGE_NAME}.json > /tmp/scan-results/${IMAGE_NAME}_enriched.json
-          mv /tmp/scan-results/${IMAGE_NAME}_enriched.json /tmp/scan-results/${IMAGE_NAME}.json
+          jq --arg img "$IMAGE_NAME" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/${IMAGE_NAME}.json
 
       - name: Upload scan results JSON
         if: always()
@@ -296,13 +298,15 @@ jobs:
 
       - name: Save autoscaler scan JSON
         if: always() && steps.cache-oss-components.outputs.cache-hit != 'true'
+        env:
+          RESULTS_FILE: ${{ steps.scan-autoscaler.outputs.results-file }}
         run: |
           mkdir -p /tmp/scan-results
-          cat > /tmp/scan-results/odigos-autoscaler.json << 'EOF'
-          ${{ steps.scan-autoscaler.outputs.results-json }}
-          EOF
-          jq --arg img "odigos-autoscaler" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' /tmp/scan-results/odigos-autoscaler.json > /tmp/scan-results/odigos-autoscaler_enriched.json
-          mv /tmp/scan-results/odigos-autoscaler_enriched.json /tmp/scan-results/odigos-autoscaler.json
+          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
+            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
+            exit 1
+          fi
+          jq --arg img "odigos-autoscaler" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-autoscaler.json
 
       - name: Scan scheduler image for vulnerabilities
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
@@ -315,13 +319,15 @@ jobs:
 
       - name: Save scheduler scan JSON
         if: always() && steps.cache-oss-components.outputs.cache-hit != 'true'
+        env:
+          RESULTS_FILE: ${{ steps.scan-scheduler.outputs.results-file }}
         run: |
           mkdir -p /tmp/scan-results
-          cat > /tmp/scan-results/odigos-scheduler.json << 'EOF'
-          ${{ steps.scan-scheduler.outputs.results-json }}
-          EOF
-          jq --arg img "odigos-scheduler" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' /tmp/scan-results/odigos-scheduler.json > /tmp/scan-results/odigos-scheduler_enriched.json
-          mv /tmp/scan-results/odigos-scheduler_enriched.json /tmp/scan-results/odigos-scheduler.json
+          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
+            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
+            exit 1
+          fi
+          jq --arg img "odigos-scheduler" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-scheduler.json
 
       - name: Scan cli image for vulnerabilities
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
@@ -334,13 +340,15 @@ jobs:
 
       - name: Save cli scan JSON
         if: always() && steps.cache-oss-components.outputs.cache-hit != 'true'
+        env:
+          RESULTS_FILE: ${{ steps.scan-cli.outputs.results-file }}
         run: |
           mkdir -p /tmp/scan-results
-          cat > /tmp/scan-results/odigos-cli.json << 'EOF'
-          ${{ steps.scan-cli.outputs.results-json }}
-          EOF
-          jq --arg img "odigos-cli" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' /tmp/scan-results/odigos-cli.json > /tmp/scan-results/odigos-cli_enriched.json
-          mv /tmp/scan-results/odigos-cli_enriched.json /tmp/scan-results/odigos-cli.json
+          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
+            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
+            exit 1
+          fi
+          jq --arg img "odigos-cli" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-cli.json
 
       - name: Upload OSS scan results JSON
         if: always()
