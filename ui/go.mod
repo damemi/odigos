@@ -401,6 +401,8 @@ replace github.com/odigos-io/odigos/destinations => github.com/odigos-io/odigos/
 
 replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.34.0-pre3
 
+replace github.com/odigos-io/odigos/recommendations => github.com/odigos-io/odigos/recommendations v1.34.0-pre3
+
 replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.34.0-pre3
 
 replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v1.34.0-pre3
