@@ -379,6 +379,7 @@ jobs:
           - "1.32"
         test-scenario:
           - "multi-apps"
+          - "jvm-metrics"
           - "helm-chart"
           - "cli-upgrade"
           - "central-install"

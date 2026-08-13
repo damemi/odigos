@@ -37,6 +37,10 @@ type ebpfReceiver struct {
 	// Metrics handlers - only used for metrics receivers
 	jvmHandler        *jvm.JVMMetricsHandler
 	processStartTimes map[[64]byte]pcommon.Timestamp
+	// processAttrIssues holds the last reported resource attribute problem per
+	// process, so a persistent problem is logged on transition rather than once per
+	// collection interval. See shouldReportAttrIssue.
+	processAttrIssues map[[64]byte]attrIssue
 
 	wg sync.WaitGroup
 }
@@ -53,6 +57,7 @@ func (r *ebpfReceiver) Start(ctx context.Context, host component.Host) error {
 	if r.receiverType == ReceiverTypeMetrics {
 		r.jvmHandler = jvm.NewJVMMetricsHandler(r.logger)
 		r.processStartTimes = make(map[[64]byte]pcommon.Timestamp)
+		r.processAttrIssues = make(map[[64]byte]attrIssue)
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
