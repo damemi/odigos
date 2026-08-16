@@ -1,0 +1,124 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: odigos-test
+  labels:
+    odigos.io/system-object: "true"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app.kubernetes.io/name: odigos-autoscaler
+  namespace: odigos-test
+status:
+  containerStatuses:
+    - name: manager
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app.kubernetes.io/name: odigos-scheduler
+  namespace: odigos-test
+status:
+  containerStatuses:
+    - name: manager
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app.kubernetes.io/name: odigos-instrumentor
+  namespace: odigos-test
+status:
+  containerStatuses:
+    - name: manager
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: odigos-ui
+  namespace: odigos-test
+status:
+  containerStatuses:
+    - name: ui
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app.kubernetes.io/name: odiglet
+  namespace: odigos-test
+  ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: DaemonSet
+      name: odiglet
+spec:
+  # runAsNonRoot=true forces the pod to run as the non-root USER baked into the images.
+  securityContext:
+    runAsNonRoot: true
+  # k8s-init-container mount method: agents image is pre-pulled via an init container.
+  initContainers:
+    - name: odigos-agents-image-pull
+  containers:
+    # unPrivileged=true: odiglet drops ALL and adds only the eBPF capabilities it needs.
+    - name: odiglet
+      securityContext:
+        privileged: false
+        capabilities:
+          drop:
+            - ALL
+    # signals={traces} only (no logs/metrics), so data-collection is unprivileged too
+    # and drops ALL caps, adding back only what the eBPF node collector needs.
+    - name: data-collection
+      securityContext:
+        privileged: false
+        capabilities:
+          drop:
+            - ALL
+  hostPID: true
+  nodeSelector:
+    kubernetes.io/os: linux
+  serviceAccount: odiglet
+  serviceAccountName: odiglet
+status:
+  containerStatuses:
+    - name: data-collection
+      ready: true
+      restartCount: 0
+      started: true
+    - name: odiglet
+      ready: true
+      restartCount: 0
+      started: true
+---
+# Gate on the odiglet DaemonSet so every node's odiglet is Ready before the test proceeds.
+# Comparing against desiredNumberScheduled is topology-agnostic (works for any node count).
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: odiglet
+  namespace: odigos-test
+status:
+  (desiredNumberScheduled > `0`): true
+  (numberReady == desiredNumberScheduled): true

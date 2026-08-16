@@ -1,0 +1,11 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+# Two workers: mountMethod=k8s-init-container injects a 300m-CPU odigos-agents init
+# container into every instrumented pod. Since the simple-demo app containers request
+# little/no CPU, each pod's effective scheduling request becomes ~300m for its whole
+# lifetime, saturating a single worker (~95% CPU) and leaving no room for the rolling-
+# update surge pod (FailedScheduling: Insufficient cpu). A second worker spreads the load.
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker

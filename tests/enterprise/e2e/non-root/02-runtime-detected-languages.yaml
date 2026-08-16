@@ -1,0 +1,56 @@
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationConfig
+metadata:
+  name: deployment-coupon
+  namespace: default
+status:
+  (runtimeDetailsByContainer[?containerName == 'coupon'].language): ["javascript"]
+---
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationConfig
+metadata:
+  name: deployment-frontend
+  namespace: default
+status:
+  (runtimeDetailsByContainer[?containerName == 'frontend'].language): ["java"]
+---
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationConfig
+metadata:
+  name: deployment-inventory
+  namespace: default
+status:
+  (runtimeDetailsByContainer[?containerName == 'inventory'].language): ["python"]
+---
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationConfig
+metadata:
+  name: deployment-membership
+  namespace: default
+status:
+  (runtimeDetailsByContainer[?containerName == 'membership'].language): ["go"]
+---
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationConfig
+metadata:
+  name: deployment-pricing
+  namespace: default
+status:
+  (runtimeDetailsByContainer[?containerName == 'pricing'].language): ["dotnet"]
+---
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationConfig
+metadata:
+  name: deployment-currency
+  namespace: default
+status:
+  (runtimeDetailsByContainer[?containerName == 'currency'].language): ["php"]
+  (runtimeDetailsByContainer[?containerName == 'nginx'].language): ["nginx"]
+---
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationConfig
+metadata:
+  name: deployment-geolocation
+  namespace: default
+status:
+  (runtimeDetailsByContainer[?containerName == 'geolocation'].language): ["ruby"]

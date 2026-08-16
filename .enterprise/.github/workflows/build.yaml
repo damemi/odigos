@@ -271,14 +271,14 @@ jobs:
           cd odigos
           # Autoscaler + scheduler only. Collector is built enterprise-side
           # (odigos-io/odigos#5446 — helm with onprem token always resolves enterprise collector).
-          TAG=${{ env.IMAGE_TAG }} make -j 2 build-autoscaler build-scheduler
+          TAG=${{ env.IMAGE_TAG }} TAG=e2e-test ORG=registry.odigos.io make -j 2 build-autoscaler build-scheduler
 
       - uses: ko-build/setup-ko@v0.9
       - name: Build Odigos CLI Image
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
           cd odigos
-          TAG=${{ env.IMAGE_TAG }} make build-cli-image
+          TAG=${{ env.IMAGE_TAG }} TAG=e2e-test ORG=registry.odigos.io make build-cli-image
 
       - name: Save Docker images as tar files
         if: steps.cache-oss-components.outputs.cache-hit != 'true'
@@ -387,6 +387,7 @@ jobs:
           - "central-ui"
           - "central-auth-idp"
           - "mount-method"
+          - "non-root"
         wasp-enabled: [false]
         include:
           - kube-version: "1.21.12"

@@ -91,7 +91,7 @@ setup-obi-release:
 	@go mod tidy
 
 build-odiglet: generate
-	go build -ldflags="$(LD_FLAGS)" -o odiglet ./cmd/enterprise
+	CGO_ENABLED=0 go build -ldflags="$(LD_FLAGS)" -o odiglet ./cmd/enterprise
 
 debug-build-odiglet: generate
 	go build -gcflags "all=-N -l" -o odiglet ./cmd/enterprise

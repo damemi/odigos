@@ -1,4 +1,4 @@
-ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.17
+ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.19
 
 ######### dotnet builder #########
 FROM --platform=$BUILDPLATFORM busybox:1.36.1 AS dotnet-builder
@@ -128,7 +128,11 @@ RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
-    GOOS=linux GOARCH=$TARGETARCH LD_FLAGS="${LD_FLAGS}" make build-odiglet
+    CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH LD_FLAGS="${LD_FLAGS}" make build-odiglet
+# File capabilities so the binary can use eBPF privileges when run as non-root.
+# Setting this caps as the permitted set (=p) so that the binary can be executed with a sub set of these capabilities
+# if the environment does not require all of them. A sub-set can be configured with helm values.
+RUN setcap cap_bpf,cap_perfmon,cap_sys_admin,cap_sys_ptrace,cap_dac_read_search,cap_ipc_lock,cap_sys_resource,cap_setuid,cap_setgid=p ./odiglet
 
 # Build CSI driver binary (same binary as community odiglet; required when mountMethod is k8s-csi-driver)
 RUN --mount=type=secret,id=github_token \
@@ -215,6 +219,9 @@ COPY --from=builder /tmp/grpc_health_probe /root/grpc_health_probe
 COPY --from=rsync-base /usr/bin/rsync /usr/bin/rsync
 WORKDIR /instrumentations/
 COPY --from=agents-builder /instrumentations/ .
+
+USER 65532:65532
+
 CMD ["/root/odiglet"]
 
 ######### Default Odiglet #########
@@ -228,4 +235,7 @@ COPY --from=builder /tmp/grpc_health_probe /root/grpc_health_probe
 COPY --from=rsync-base /usr/bin/rsync /usr/bin/rsync
 WORKDIR /instrumentations/
 COPY --from=agents-builder /instrumentations/ .
+
+USER 65532:65532
+
 CMD ["/root/odiglet"]

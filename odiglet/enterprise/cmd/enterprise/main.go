@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/odigos-io/odigos/common/capabilities"
 	"github.com/odigos-io/odigos/common/consts"
 	"github.com/odigos-io/odigos/distros"
 	"google.golang.org/grpc"
@@ -41,6 +42,9 @@ func getLogLevel() string {
 }
 
 func main() {
+	commonlogger.Init(getLogLevel(), "odiglet")
+	logger := commonlogger.LoggerCompat().With("subsystem", "startup")
+
 	var healthProbeBindPort int
 	var traceIdSuffix string
 	var waspEnabled bool
@@ -48,6 +52,10 @@ func main() {
 	flag.StringVar(&traceIdSuffix, "trace-id-suffix", "", "Hex value for the unique identifier for timestamp-based trace IDs. Must be 1 byte. Example: 5E.")
 	flag.BoolVar(&waspEnabled, "wasp-enabled", false, "Enable Wasp integration")
 	flag.Parse()
+
+	if err := capabilities.AlignEffectiveCapToPermitted(); err != nil {
+		logger.Warn("failed to align effective capabilities to permitted set", "err", err)
+	}
 
 	// Init Kubernetes clientset
 	cfg, err := rest.InClusterConfig()
@@ -59,15 +67,11 @@ func main() {
 		panic(err)
 	}
 
-	// Must run before OdigletInitPhase: LoggerCompat() is a no-op until Init (init container only runs that path).
-	commonlogger.Init(getLogLevel(), "odiglet")
-
 	// If started in init mode
 	if len(os.Args) == 2 && os.Args[1] == "init" {
 		odiglet.OdigletInitPhase(clientset)
 	}
 
-	logger := commonlogger.LoggerCompat().With("subsystem", "startup")
 	logger.Info("Starting odiglet enterprise")
 
 	odigosauth.AssertEnterpriseOdigosToken(commonlogger.LoggerCompat())
