@@ -519,22 +519,21 @@ func collectorExportAsDesired(env map[string]string, dest domaindest.OTLPTarget)
 		env[EnvLogsExporter] == exporterFor(dest.Logs)
 }
 
-// Component names for instrumentationDiff. They are the provider-neutral vocabulary the BASE renders into
-// customer-facing prose (base/domain/workloadreport.componentLabels), which is why they are not AWS terms: the
-// same missing marker or stale collector endpoint has to read identically whether it came from Lambda, Cloud
-// Run or Container Apps. A name added here needs a label there, or the report falls back to printing the raw
-// name — degraded, but never silent.
+// Local names for the components the diffs below report. They are ALIASES of the base's vocabulary
+// (baseapi.Component*), never their own strings: the base is what renders a component into the prose a customer
+// reads, so a component defined here would be one the report could only print as a raw identifier. Aliasing
+// keeps the call sites short while making an unlabelled component impossible — see api.InstrumentationComponents.
 const (
-	componentOwnershipMarker      = "ownershipMarker"
-	componentInstrumentationLayer = "instrumentationLayer"
-	componentLayerVersionConflict = "layerVersionConflict"
-	componentServiceName          = "serviceName"
-	componentCollectorExport      = "collectorExport"
-	componentLegacyExportVars     = "legacyExportVars"
-	componentAgentLoader          = "agentLoader"
-	componentAgentLoaderConfig    = "agentLoaderConfig"
-	componentExecWrapper          = "execWrapper"
-	componentLogLevel             = "logLevel"
+	componentOwnershipMarker      = baseapi.ComponentOwnershipMarker
+	componentInstrumentationLayer = baseapi.ComponentInstrumentationLayer
+	componentLayerVersionConflict = baseapi.ComponentLayerVersionConflict
+	componentServiceName          = baseapi.ComponentServiceName
+	componentCollectorExport      = baseapi.ComponentCollectorExport
+	componentLegacyExportVars     = baseapi.ComponentLegacyExportVars
+	componentAgentLoader          = baseapi.ComponentAgentLoader
+	componentAgentLoaderConfig    = baseapi.ComponentAgentLoaderConfig
+	componentExecWrapper          = baseapi.ComponentExecWrapper
+	componentLogLevel             = baseapi.ComponentLogLevel
 )
 
 // instrumentationDiff returns the components of the desired instrumentation that are absent or stale on the

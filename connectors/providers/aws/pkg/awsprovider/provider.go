@@ -166,12 +166,14 @@ func (p *Provider) Reconcilers() map[string]baseapi.Reconciler {
 // counterpart to Reconcilers above and share its comparator, so both modes judge "correctly instrumented"
 // by one definition.
 //
-// Lambda only, for now. Fargate, Cloud Run and Container Apps each report marker presence but not conformance
-// until their own observers land (plan waves 4.2-4.4); the base warns for a manual-mode type with no observer
-// rather than letting an unobserved type look observed.
+// Both AWS workload types are covered. Cloud Run and Container Apps still report marker presence but not
+// conformance until their own observers land (plan waves 4.2-4.3); the base warns for a manual-mode type with
+// no observer rather than letting an unobserved type look observed.
 func (p *Provider) WorkloadObservers() map[string]baseapi.InstrumentationObserver {
 	return map[string]baseapi.InstrumentationObserver{
 		types.Lambda: workloadinstrumentor.NewLambdaObserver(p.workloadStdb, p.cache, p.layers, p.debugTelemetry),
+		types.FargateTask: workloadinstrumentor.NewECSFargateObserver(
+			p.workloadStdb, p.cache, p.cfg.FargateAgentsImage, p.debugEcsTelemetry, p.ecrImages),
 	}
 }
 

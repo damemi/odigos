@@ -312,6 +312,10 @@ const lambdaObservationCols = `COALESCE(env_hash, ''), COALESCE(config_hash, '')
 // noObservationCols pads ListWorkloads' fixed column shape for a kind with no observer: an Unknown verdict,
 // no components, no timestamp, no error, not settling, no layers. It is not "conformant by default" — Unknown
 // is the honest verdict for state nothing has looked at, and the base reports it as such.
+//
+// Standalone ECS tasks are the remaining user: they are discovered for coverage but cannot be instrumented at
+// all (no UpdateService rollout path), so there is no conformance question to answer about them. The layers
+// column stays NULL for every non-Lambda kind.
 const noObservationCols = `'', NULL, NULL, '', false, NULL`
 
 const lambdaSelectCols = `region, function_arn, function_name, COALESCE(runtime, ''), COALESCE(architecture, ''), COALESCE(role_arn, ''), COALESCE(tracing_mode, ''), COALESCE(metadata->>'instrumented', 'false') = 'true', layers, COALESCE(metadata->>'state', ''), COALESCE(metadata->>'last_update_status', ''), ` + lambdaObservationCols
@@ -706,7 +710,7 @@ func workloadQueries() []workloadQuery {
 			COALESCE(metadata->>'instrumentation_phase', ''),
 			COALESCE(launch_type, ''), COALESCE(task_definition, ''), COALESCE(deployment_controller, ''),
 			metadata->'containers',
-			` + noObservationCols + `
+			` + ecsObservationCols + `, NULL
 			FROM connector_aws.ecs_services WHERE connector_name = $1 AND deleted_at IS NULL`},
 		// STANDALONE Fargate tasks (no ECS service — RunTask/EventBridge): inherently ephemeral, so the task
 		// ARN is the identity. They stay discoverable/selectable, but instrumentation reports a terminal

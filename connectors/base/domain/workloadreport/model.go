@@ -413,20 +413,33 @@ func driftMessage(missing []string) string {
 		"). Odigos does not change manually-instrumented workloads, so re-apply the instrumentation to your deployment definition."
 }
 
-// componentLabels maps the provider-neutral component names an observer reports to customer-facing prose.
-// The names are shared vocabulary across providers on purpose: the same missing ownership marker or stale
-// collector endpoint reads identically whether it came from Lambda, Cloud Run or Container Apps.
+// componentLabels renders each component an observer can report (api.InstrumentationComponents) into the
+// customer-facing prose that goes in a drift message. Keyed by the base's own constants, so a component cannot
+// be declared without this map being the place it has to be labelled —
+// TestEveryComponentHasALabel fails until it is.
 var componentLabels = map[string]string{
-	"ownershipMarker":      "the Odigos ownership marker is missing",
-	"instrumentationLayer": "the instrumentation layer is not attached",
-	"layerVersionConflict": "more than one version of the instrumentation layer is attached",
-	"serviceName":          "the reported service name does not match this source",
-	"collectorExport":      "the telemetry export settings do not match the configured destination",
-	"legacyExportVars":     "obsolete export variables from an earlier Odigos version are still set",
-	"agentLoader":          "the language agent is not being loaded",
-	"agentLoaderConfig":    "the language agent's configuration is incomplete",
-	"execWrapper":          "the instrumentation wrapper is not set",
-	"logLevel":             "the telemetry log level does not match the connector's setting",
+	api.ComponentOwnershipMarker:  "the Odigos ownership marker is missing",
+	api.ComponentServiceName:      "the reported service name does not match this source",
+	api.ComponentCollectorExport:  "the telemetry export settings do not match the configured destination",
+	api.ComponentLogLevel:         "the telemetry log level does not match the connector's setting",
+	api.ComponentAgentLoader:      "the language agent is not being loaded",
+	api.ComponentLegacyExportVars: "obsolete export variables from an earlier Odigos version are still set",
+
+	api.ComponentInstrumentationLayer: "the instrumentation layer is not attached",
+	api.ComponentLayerVersionConflict: "more than one version of the instrumentation layer is attached",
+	api.ComponentExecWrapper:          "the instrumentation wrapper is not set",
+	api.ComponentAgentLoaderConfig:    "the language agent's configuration is incomplete",
+
+	// On the staged-agent platforms the agent is copied by a helper container into a volume the application
+	// container reads, so three things decay independently of the activation env: the staging container, the
+	// volume, and the ordering between them. A missing sidecar or mount is the exact analog of Lambda's
+	// detached layer — every env var is correct, and there is no agent for them to activate.
+	api.ComponentAgentSidecar:           "the container that stages the Odigos agent files is missing or does not match",
+	api.ComponentAgentVolume:            "the shared volume the agent files are staged into is missing",
+	api.ComponentAgentVolumeMount:       "the application container does not mount the shared agent volume",
+	api.ComponentAgentStartupDependency: "the application container does not wait for the agent files to be staged",
+	api.ComponentAgentLanguage:          "the staged agent is for a different language than this container now runs",
+	api.ComponentResourceAttributes:     "the telemetry resource attributes do not match this workload",
 }
 
 // sinceOrNil renders an issue's first-observed time, or nil when unknown (no source matched, so there is no

@@ -243,3 +243,40 @@ func TestDriftMessageNamesComponents(t *testing.T) {
 		t.Errorf("a component-less Partial verdict must still read as a sentence, got %q", msg)
 	}
 }
+
+// TestEveryComponentHasALabel is the check that makes centralizing the component vocabulary worth it. Both
+// sides live in the base now, so this compares the real declaration against the real label map — unlike the
+// provider-side version it replaces, which asserted a duplicated copy of the map against itself and passed
+// happily with a label deleted.
+//
+// A component with no label still reaches the customer, as its raw identifier ("agentStartupDependency"), which
+// reads as a bug in Odigos rather than a fact about their deployment.
+func TestEveryComponentHasALabel(t *testing.T) {
+	if len(api.InstrumentationComponents) == 0 {
+		t.Fatal("no components declared; this test has stopped checking anything")
+	}
+	for _, c := range api.InstrumentationComponents {
+		label, ok := componentLabels[c]
+		if !ok {
+			t.Errorf("component %q has no customer-facing label", c)
+			continue
+		}
+		// The label is prose spliced into a sentence, so it must not be the identifier echoed back.
+		if label == c || label == "" {
+			t.Errorf("component %q has a placeholder label %q", c, label)
+		}
+	}
+	// The other direction. Keying the map on the constants makes a stale label impossible — rename a constant
+	// and its key renames with it — but a label added as a raw STRING would sit here labelling nothing while
+	// the component it was meant for stays unlabelled. That is the only way the two can drift now, so it is
+	// the one worth asserting.
+	declared := make(map[string]bool, len(api.InstrumentationComponents))
+	for _, c := range api.InstrumentationComponents {
+		declared[c] = true
+	}
+	for c := range componentLabels {
+		if !declared[c] {
+			t.Errorf("label for %q, which no api.Component* constant declares; label the constant, not a literal", c)
+		}
+	}
+}

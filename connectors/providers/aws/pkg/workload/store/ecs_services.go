@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"time"
+
+	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
 )
 
 // ECSService is a discovered ECS service inventory record. Only Fargate services are stored (EC2-backed
@@ -29,8 +31,10 @@ type ECSService struct {
 	Status               string
 	DesiredCount         int32
 	RunningCount         int32
-	// Instrumented is the live instrumentation state, written through by the instrumentor (authoritative;
-	// the detector never derives it).
+	// Instrumented is whether Odigos instrumentation is currently applied. Written through by the instrumentor
+	// in automatic mode and by the observer in manual mode — see SetECSServiceInstrumented for why both, and
+	// why they cannot disagree. Discovery never derives it: that would cost a DescribeTaskDefinition per
+	// service across the whole account every cycle.
 	Instrumented bool
 	// RuntimeLanguage / RuntimeVersion are the resolved workload runtime, written by the instrumentor once
 	// resolved (version is the major.minor used by version-templated agents, e.g. php/ruby).
@@ -40,7 +44,36 @@ type ECSService struct {
 	InstrumentationError string
 	// InstrumentationPhase is the last in-flight instrumentation progress phase; empty when converged.
 	InstrumentationPhase string
-	Metadata             map[string]any
+	// Observation is the read-only conformance verdict, written by the observer rather than by discovery or
+	// the instrumentor. Zero until a pass has run.
+	Observation ECSObservation
+	Metadata    map[string]any
+}
+
+// ECSObservation is the persisted result of one read-only conformance observation of a Fargate service: does
+// the instrumentation actually on its task definition match what Odigos wants for it. Stored per service so a
+// WorkloadReport (served on the GraphQL read path, which must make no AWS calls) can report the verdict
+// without a live read.
+//
+// Unlike the Lambda record this carries no fingerprints. Lambda has PK-indexed env_hash/config_hash columns
+// sitting unused, and its observer needed a cheap "did anything move" test over a large per-function env map.
+// Here the verdict tuple below IS that test — any desired input that matters shows up as a changed conformance
+// or a changed component list — so hashing would add a second thing to keep in step for nothing.
+type ECSObservation struct {
+	// Conformance is the verdict. ConformanceUnknown means never observed, or the last read failed.
+	Conformance api.Conformance
+	// Missing names the components that are absent or stale, in the provider-neutral vocabulary the base
+	// renders. Empty unless Conformance is Partial.
+	Missing []string
+	// Since is when this verdict was first observed, carried forward by api.ConformanceSince while it holds.
+	Since time.Time
+	// Settling is true when the service had a deployment still rolling out at the last observation. A rollout
+	// mid-flight is indistinguishable from a half-applied instrumentation, so the verdict above is NOT
+	// refreshed while this holds — it is the last settled one.
+	Settling bool
+	// Error records why the last observation could not be completed. Not drift: the base keeps reporting the
+	// last confirmed verdict and raises a transient issue.
+	Error string
 }
 
 // Metadata keys the instrumentor persists into ecs_services.metadata (snake_case, matching the
@@ -54,6 +87,14 @@ const (
 	metaInstrumentationPhase = "instrumentation_phase"
 	metaOdigosTaskDefinition = "odigos_task_definition"
 	metaContainers           = "containers"
+	// The read-only observation record. Written only by the observer; UpsertECSService already MERGES
+	// metadata rather than replacing it, so these survive a discovery refresh without a preserve-list —
+	// the trap the lambda_functions upsert fell into.
+	metaConformance        = "conformance"
+	metaConformanceMissing = "conformance_missing"
+	metaConformanceSince   = "conformance_since"
+	metaObservationError   = "observation_error"
+	metaSettling           = "settling"
 )
 
 // ECSContainer is one container of a service's task definition as the instrumentor resolved it.
@@ -114,8 +155,12 @@ func (s *Store) UpsertECSService(ctx context.Context, svc ECSService) error {
 	return err
 }
 
-// ListECSServices returns the full live ECS service inventory for the instrumentor, with the
-// instrumentation state parsed out of the metadata JSONB.
+// ecsObservationCols selects the observation record in a fixed order, shared by every read of it so the scan
+// stays in one place. Mirrors lambdaObservationCols.
+const ecsObservationCols = `COALESCE(metadata->>'conformance', ''), metadata->'conformance_missing', metadata->>'conformance_since', COALESCE(metadata->>'observation_error', ''), COALESCE(metadata->>'settling','false')='true'`
+
+// ListECSServices returns the full live ECS service inventory for the instrumentor and the observer, with the
+// instrumentation state and the observation record parsed out of the metadata JSONB.
 func (s *Store) ListECSServices(ctx context.Context) ([]ECSService, error) {
 	inventoryLog.Debug("list ecs services", "connector", s.ConnectorName())
 	rows, err := s.Pool().Query(ctx, `
@@ -126,7 +171,8 @@ func (s *Store) ListECSServices(ctx context.Context) ([]ECSService, error) {
 			COALESCE(metadata->>'runtime_language',''),
 			COALESCE(metadata->>'runtime_version',''),
 			COALESCE(metadata->>'instrumentation_error',''),
-			COALESCE(metadata->>'instrumentation_phase','')
+			COALESCE(metadata->>'instrumentation_phase',''),
+			`+ecsObservationCols+`
 		FROM connector_aws.ecs_services WHERE connector_name = $1 AND deleted_at IS NULL
 	`, s.ConnectorName())
 	if err != nil {
@@ -136,12 +182,18 @@ func (s *Store) ListECSServices(ctx context.Context) ([]ECSService, error) {
 	var out []ECSService
 	for rows.Next() {
 		var svc ECSService
+		var missingJSON []byte
+		var since *string
 		if err := rows.Scan(&svc.Region, &svc.ClusterARN, &svc.ServiceName, &svc.ServiceARN, &svc.TaskDefinition,
 			&svc.LaunchType, &svc.DeploymentController, &svc.Status, &svc.DesiredCount, &svc.RunningCount,
 			&svc.Instrumented, &svc.RuntimeLanguage, &svc.RuntimeVersion,
-			&svc.InstrumentationError, &svc.InstrumentationPhase); err != nil {
+			&svc.InstrumentationError, &svc.InstrumentationPhase,
+			&conformanceTarget{&svc.Observation.Conformance}, &missingJSON, &since,
+			&svc.Observation.Error, &svc.Observation.Settling); err != nil {
 			return nil, err
 		}
+		svc.Observation.Missing = decodeStringSlice(missingJSON, metaConformanceMissing)
+		svc.Observation.Since = parseObservedAt(since)
 		out = append(out, svc)
 	}
 	if err := rows.Err(); err != nil {
@@ -174,9 +226,45 @@ func (s *Store) deleteECSServiceMetadataKey(ctx context.Context, clusterARN, ser
 	return err
 }
 
-// SetECSServiceInstrumented records whether Odigos instrumentation is currently applied to a service
-// (write-through after instrument/rollback, so a reconcile before the next discovery cycle sees the
-// current state).
+// SetECSServiceObservation records one read-only conformance observation for a service.
+//
+// It writes the observation keys and NOTHING else — in particular not instrumentation_phase or
+// instrumentation_error, which belong to the instrumentor, and not last_seen_at, which is discovery's liveness
+// signal and the prune cutoff. `instrumented` is the one deliberate exception, and it goes through
+// SetECSServiceInstrumented below so that exception stays explicit rather than buried in this patch.
+func (s *Store) SetECSServiceObservation(ctx context.Context, clusterARN, serviceName string, obs ECSObservation) error {
+	inventoryLog.Debug("set ecs service observation", "cluster", clusterARN, "service", serviceName, "conformance", obs.Conformance)
+	patch := map[string]any{
+		metaConformance:        string(obs.Conformance),
+		metaConformanceMissing: nonNilStrings(obs.Missing),
+		metaObservationError:   obs.Error,
+		metaSettling:           obs.Settling,
+	}
+	// A nil (rather than empty-string) timestamp keeps the key readable as SQL NULL, which parseObservedAt
+	// renders as "unknown since" instead of a zero time that would read as 1970.
+	if obs.Since.IsZero() {
+		patch[metaConformanceSince] = nil
+	} else {
+		patch[metaConformanceSince] = obs.Since.UTC().Format(time.RFC3339)
+	}
+	if err := s.mergeECSServiceMetadata(ctx, clusterARN, serviceName, patch); err != nil {
+		inventoryLog.Error("set ecs service observation failed", "cluster", clusterARN, "service", serviceName, "error", err)
+		return err
+	}
+	return nil
+}
+
+// SetECSServiceInstrumented records whether Odigos instrumentation is currently applied to a service.
+//
+// Two writers, and they never run together. The instrumentor writes it through after instrument/rollback so a
+// reconcile before the next discovery cycle sees the current state. The OBSERVER writes it from the ownership
+// markers it reads on the live task definition, which is what makes the flag correct in manual (IaC) mode at
+// all: nothing else derives it there, so before the observer existed a service the customer instrumented
+// themselves stayed flagged false forever, and one they later un-instrumented stayed flagged true forever.
+//
+// The two cannot disagree because the modes partition — a type is either reconciled or observed, never both
+// (coordinator.activeObservers) — and they compute the same fact from the same source: the ownership marker on
+// the task definition the service points at.
 func (s *Store) SetECSServiceInstrumented(ctx context.Context, clusterARN, serviceName string, instrumented bool) error {
 	return s.mergeECSServiceMetadata(ctx, clusterARN, serviceName, map[string]any{metaInstrumented: instrumented})
 }

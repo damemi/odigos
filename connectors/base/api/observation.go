@@ -1,6 +1,9 @@
 package api
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Conformance is how completely a workload's LIVE instrumentation matches the instrumentation Odigos
 // wants for it. It exists because "is the ownership marker present" is not the same question as "is the
@@ -30,6 +33,73 @@ const (
 	// ConformanceConformant means every component of the desired instrumentation is present and current.
 	ConformanceConformant Conformance = "Conformant"
 )
+
+// Instrumentation components — the provider-neutral names an observer reports in
+// DiscoveredWorkload.MissingComponents when a workload's instrumentation is incomplete or stale.
+//
+// They live in the BASE, not in each provider, because the base is what renders them into the prose a customer
+// reads (workloadreport.componentLabels) and §7.1 puts the report vocabulary here. Keeping them provider-side
+// made the pairing unenforceable in the direction that matters: a provider could emit a name the base had no
+// label for, and the report would print the raw identifier at a customer. Now a new component cannot exist
+// without a label, because adding one means editing the base — and TestEveryComponentHasALabel fails until it
+// is labelled.
+//
+// The names are deliberately shared across providers wherever the concept is: a stale reported service name or
+// export setting reads identically whether it came from a Lambda function, an ECS task definition or a Cloud Run
+// revision, so it must not arrive under three different names.
+const (
+	// Common to every platform.
+	ComponentOwnershipMarker  = "ownershipMarker"  // the marker proving Odigos ownership is absent
+	ComponentServiceName      = "serviceName"      // the reported OTel service.name does not match the source
+	ComponentCollectorExport  = "collectorExport"  // endpoint / protocol / per-signal exporters are stale
+	ComponentLogLevel         = "logLevel"         // telemetry verbosity does not match the connector setting
+	ComponentAgentLoader      = "agentLoader"      // the language agent is not being loaded
+	ComponentLegacyExportVars = "legacyExportVars" // obsolete export vars from an earlier Odigos version remain
+
+	// Lambda: the agent ships as a layer, activated by an exec wrapper.
+	ComponentInstrumentationLayer = "instrumentationLayer"
+	ComponentLayerVersionConflict = "layerVersionConflict"
+	ComponentExecWrapper          = "execWrapper"
+	ComponentAgentLoaderConfig    = "agentLoaderConfig"
+
+	// Staged-agent platforms (ECS Fargate today; Cloud Run and Container Apps use the same mechanism). A helper
+	// container copies the agent into a shared volume the application container reads, so the staging, the
+	// volume and the ordering between them can each decay independently of the activation env.
+	ComponentAgentSidecar           = "agentSidecar"
+	ComponentAgentVolume            = "agentVolume"
+	ComponentAgentVolumeMount       = "agentVolumeMount"
+	ComponentAgentStartupDependency = "agentStartupDependency"
+	ComponentAgentLanguage          = "agentLanguage"
+	ComponentResourceAttributes     = "resourceAttributes"
+)
+
+// InstrumentationComponents is every declared component name. Its only consumer is the base's own test that
+// each has a customer-facing label, which is the check that makes the constants above worth centralizing.
+var InstrumentationComponents = []string{
+	ComponentOwnershipMarker, ComponentServiceName, ComponentCollectorExport, ComponentLogLevel,
+	ComponentAgentLoader, ComponentLegacyExportVars,
+	ComponentInstrumentationLayer, ComponentLayerVersionConflict, ComponentExecWrapper, ComponentAgentLoaderConfig,
+	ComponentAgentSidecar, ComponentAgentVolume, ComponentAgentVolumeMount, ComponentAgentStartupDependency,
+	ComponentAgentLanguage, ComponentResourceAttributes,
+}
+
+// ConformanceSince returns the timestamp a freshly observed verdict should be stored with: the timestamp the
+// previous verdict already carried while the verdict still holds, and `now` when it changes.
+//
+// This one rule is why the base owns it rather than each observer. Re-stamping on every pass is the obvious
+// implementation, it looks right, and it silently destroys the only thing that makes a drift report
+// actionable: "this has been drifted for three days" collapses into "this is drifted right now", which every
+// pass reports identically and nobody can triage. Providers observe on their own schedules and with their own
+// change tests, but they must not each re-derive this.
+//
+// A previous verdict with no timestamp (written before observation could date it, or by an older connector) is
+// stamped now, so it becomes dateable instead of staying permanently unknown.
+func ConformanceSince(prev Conformance, prevSince time.Time, next Conformance, now time.Time) time.Time {
+	if prev == next && !prevSince.IsZero() {
+		return prevSince
+	}
+	return now.UTC()
+}
 
 // InstrumentationObserver observes ONE instrumentation type read-only in a single pass, and persists what
 // it found through the provider's own inventory so ListWorkloads can report it. It is the manual-mode

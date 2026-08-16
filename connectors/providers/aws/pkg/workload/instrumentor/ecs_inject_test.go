@@ -416,7 +416,7 @@ func TestSelectTargetsInstrumentsEveryDetectedContainer(t *testing.T) {
 		imageContainer("currency", "php:8.3-fpm"),
 		imageContainer("geolocation", "ruby:3.3"),
 	)
-	i := &ECSFargateInstrumentor{}
+	i := &ecsInspector{}
 	targets, excluded, err := i.selectTargets(context.Background(), td, enabledFargateSource{}, store.ECSService{}, bothTransports())
 	if err != nil {
 		t.Fatalf("a multi-application task definition must instrument, not error: %v", err)
@@ -447,7 +447,7 @@ func TestSelectTargetsSkipsWeakDetections(t *testing.T) {
 	nginx.Command = []string{"sh", "-c", "printf 'fastcgi_pass 127.0.0.1:9000; fastcgi_param SCRIPT_FILENAME /app/index.php;' > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"}
 
 	td := taskDef("currency-nginx", php, nginx)
-	i := &ECSFargateInstrumentor{images: perImageInspector{
+	i := &ecsInspector{images: perImageInspector{
 		"registry/odigos-demo-currency:v1": {Env: []string{"PHP_VERSION=8.3.2"}},
 		"nginx:alpine":                     {Env: []string{"NGINX_VERSION=1.27.0"}},
 	}}
@@ -486,7 +486,7 @@ func TestSelectTargetsIsolatesPerContainerFailures(t *testing.T) {
 		imageContainer("api", "openjdk:21"),
 		imageContainer("legacy", "golang:1.23"),
 	)
-	i := &ECSFargateInstrumentor{}
+	i := &ecsInspector{}
 	targets, excluded, err := i.selectTargets(context.Background(), td, enabledFargateSource{}, store.ECSService{}, bothTransports())
 	if err != nil {
 		t.Fatalf("one uninstrumentable container must not fail the task: %v", err)
@@ -517,7 +517,7 @@ func TestSelectTargetsIsolatesPerContainerFailures(t *testing.T) {
 // container detected as so the operator can act.
 func TestSelectTargetsErrorsWhenNothingInstrumentable(t *testing.T) {
 	td := taskDef("f", imageContainer("a", "registry/a:1"), imageContainer("b", "registry/b:1"))
-	i := &ECSFargateInstrumentor{}
+	i := &ecsInspector{}
 	_, _, err := i.selectTargets(context.Background(), td, enabledFargateSource{}, store.ECSService{}, bothTransports())
 	if err == nil || !strings.HasPrefix(err.Error(), "unsupported") {
 		t.Fatalf("want unsupported error, got %v", err)
@@ -532,7 +532,7 @@ func TestSelectTargetsErrorsWhenNothingInstrumentable(t *testing.T) {
 // A workload-level override describes "the application", so it applies when exactly one container is
 // instrumented — and must NOT be broadcast to every container, which would turn a proxy into a target.
 func TestSelectTargetsWorkloadOverrideAppliesOnlyWhenUnambiguous(t *testing.T) {
-	i := &ECSFargateInstrumentor{images: perImageInspector{
+	i := &ecsInspector{images: perImageInspector{
 		"registry/odigos-demo-currency:v1": {Env: []string{"PHP_VERSION=8.1.0"}},
 		"nginx:alpine":                     {Env: []string{"NGINX_VERSION=1.27.0"}},
 	}}
@@ -568,7 +568,7 @@ func TestSelectTargetsWorkloadOverrideAppliesOnlyWhenUnambiguous(t *testing.T) {
 // Disabling containers narrows the set; disabling all of them is a terminal, self-explanatory state.
 func TestSelectTargetsRespectsDisabledContainers(t *testing.T) {
 	td := taskDef("f", imageContainer("api", "openjdk:21"), imageContainer("worker", "ruby:3.3"))
-	i := &ECSFargateInstrumentor{}
+	i := &ecsInspector{}
 	ctx := context.Background()
 
 	src := enabledFargateSource{containers: []domainsrc.ContainerOverride{{ContainerName: "worker", Disabled: true}}}

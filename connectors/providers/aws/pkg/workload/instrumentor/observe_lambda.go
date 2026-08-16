@@ -231,12 +231,8 @@ func (o *LambdaObserver) persist(ctx context.Context, fn store.LambdaFunction, o
 }
 
 // nextObservation decides what to store for a freshly computed observation, given the previously stored one:
-// the record to write and whether writing is worth it at all.
-//
-// The since-stamp is the point. It is carried forward unchanged while the verdict holds and re-stamped only
-// when the verdict actually flips, because "this has been drifted for three days" and "this is drifted right
-// now" are different reports and only the first is actionable. Re-stamping every pass — the obvious
-// implementation — would silently produce the second.
+// the record to write and whether writing is worth it at all. The since-stamp rule itself is the base's
+// (api.ConformanceSince) — it is the part that must not be re-derived per provider.
 //
 // The fingerprints are what make skipping safe, and are the reason they are stored at all: identical observed
 // and desired prints mean neither the function nor the desired instrumentation moved since the last pass, so
@@ -251,10 +247,7 @@ func nextObservation(prev, obs store.LambdaObservation, now time.Time) (store.La
 	if unchanged && !prev.Since.IsZero() {
 		return prev, false
 	}
-	obs.Since = prev.Since
-	if obs.Conformance != prev.Conformance || obs.Since.IsZero() {
-		obs.Since = now.UTC()
-	}
+	obs.Since = baseapi.ConformanceSince(prev.Conformance, prev.Since, obs.Conformance, now)
 	return obs, true
 }
 

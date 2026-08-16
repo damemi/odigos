@@ -40,12 +40,16 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
 
-// ECSFargateInstrumentor reconciles Fargate service instrumentation against source intent. Each cycle it
-// instruments enabled fargate-task sources (register an instrumented task-definition revision + roll the
-// service to it) and rolls back services that are instrumented but no longer have an enabled source. It
-// is idempotent: the live service + task definition are the source of truth, so a converged service is
-// left untouched.
-type ECSFargateInstrumentor struct {
+// ecsInspector is the READ-ONLY half of Fargate instrumentation: resolving WHICH containers of a task
+// definition Odigos instruments, with which agent, exporting where — plus recording that resolution as the
+// service's container inventory. It performs no AWS writes.
+//
+// Both ECSFargateInstrumentor and ECSFargateObserver embed it, and that is what makes §7.2 structural rather
+// than aspirational. Fargate's notion of "correctly instrumented" is the most elaborate of the four platforms
+// (per-container language detection with relative confidence ranking, per-language agent recipes, per-language
+// export transports), so two independent implementations of it would not merely risk drifting — they would
+// start out disagreeing. The mode that mutates and the mode that only reports ask exactly one question.
+type ecsInspector struct {
 	store *store.Store
 	cache *awsclient.Cache
 	// image is the odigos-fargate-agents image the sidecar stages the language agents from.
@@ -60,14 +64,27 @@ type ECSFargateInstrumentor struct {
 	recipes recipes
 }
 
+func newECSInspector(st *store.Store, cache *awsclient.Cache, image string, debug func() bool, images ImageInspector) *ecsInspector {
+	if debug == nil {
+		debug = func() bool { return false }
+	}
+	return &ecsInspector{store: st, cache: cache, image: image, debug: debug, images: images}
+}
+
+// ECSFargateInstrumentor reconciles Fargate service instrumentation against source intent. Each cycle it
+// instruments enabled fargate-task sources (register an instrumented task-definition revision + roll the
+// service to it) and rolls back services that are instrumented but no longer have an enabled source. It
+// is idempotent: the live service + task definition are the source of truth, so a converged service is
+// left untouched.
+type ECSFargateInstrumentor struct {
+	*ecsInspector
+}
+
 // NewECSFargate builds the Fargate instrumentor over the workload store, shared config cache, the
 // odigos-fargate-agents image, a getter for the live debug-telemetry toggle, and an optional image
 // inspector used to read language metadata from the app container's image.
 func NewECSFargate(st *store.Store, cache *awsclient.Cache, image string, debug func() bool, images ImageInspector) *ECSFargateInstrumentor {
-	if debug == nil {
-		debug = func() bool { return false }
-	}
-	return &ECSFargateInstrumentor{store: st, cache: cache, image: image, debug: debug, images: images}
+	return &ECSFargateInstrumentor{ecsInspector: newECSInspector(st, cache, image, debug, images)}
 }
 
 // EnsurePrerequisite implements base.Prerequisite: Fargate instrumentation exports OTLP directly to the
@@ -121,7 +138,7 @@ func (s enabledFargateSource) runtimeFor(name string) (language, version string)
 	return s.language, s.version
 }
 
-func (i *ECSFargateInstrumentor) enabledSources(ctx context.Context) (map[string]enabledFargateSource, error) {
+func (i *ecsInspector) enabledSources(ctx context.Context) (map[string]enabledFargateSource, error) {
 	sources, err := i.store.ListSources(ctx)
 	if err != nil {
 		return nil, err
@@ -427,7 +444,7 @@ func (i *ECSFargateInstrumentor) rollback(ctx context.Context, svc store.ECSServ
 // explain every container rather than only the instrumented ones. An error means NOTHING could be
 // instrumented — a single container failing (an unresolvable php version, an unsupported runtime)
 // only excludes that container.
-func (i *ECSFargateInstrumentor) selectTargets(ctx context.Context, td *ecstypes.TaskDefinition, src enabledFargateSource, svc store.ECSService, dest domaindest.OTLPTarget) ([]containerTarget, map[string]string, error) {
+func (i *ecsInspector) selectTargets(ctx context.Context, td *ecstypes.TaskDefinition, src enabledFargateSource, svc store.ECSService, dest domaindest.OTLPTarget) ([]containerTarget, map[string]string, error) {
 	candidates, err := candidateContainerIndexes(td)
 	if err != nil {
 		return nil, nil, err
@@ -541,7 +558,7 @@ func (i *ECSFargateInstrumentor) selectTargets(ctx context.Context, td *ecstypes
 
 // retarget re-resolves one target with an explicit language/version override applied, rebuilding its
 // recipe and export wiring to match.
-func (i *ECSFargateInstrumentor) retarget(ctx context.Context, td *ecstypes.TaskDefinition, t containerTarget, language, version string, dest domaindest.OTLPTarget) (containerTarget, error) {
+func (i *ecsInspector) retarget(ctx context.Context, td *ecstypes.TaskDefinition, t containerTarget, language, version string, dest domaindest.OTLPTarget) (containerTarget, error) {
 	c := &td.ContainerDefinitions[t.idx]
 	rt := resolveECSRuntime(ctx, i.images, language, version, containerManifestLanguage(c), "", c)
 	if !CoverableLanguage(rt.language) {
@@ -596,13 +613,23 @@ func ovDisabled(src enabledFargateSource, name string) bool {
 //
 // Best-effort: a report that cannot show containers is worse than one that can, but neither is worth
 // failing instrumentation over.
-func (i *ECSFargateInstrumentor) recordContainers(ctx context.Context, td *ecstypes.TaskDefinition, src enabledFargateSource, svc store.ECSService, targets []containerTarget, excluded map[string]string) {
+func (i *ecsInspector) recordContainers(ctx context.Context, td *ecstypes.TaskDefinition, src enabledFargateSource, svc store.ECSService, targets []containerTarget, excluded map[string]string) {
 	if td == nil {
 		return
 	}
 	byIdx := make(map[int]containerTarget, len(targets))
 	for _, t := range targets {
 		byIdx[t.idx] = t
+	}
+	// Per-container ownership read from the live task definition, which is the only precise answer. It used
+	// to be the SERVICE-level instrumented flag applied to every target, which is wrong in both directions in
+	// exactly the situations that matter: in a task where one container is owned and another was just added
+	// as a target, the new one reported instrumented; and in manual (IaC) mode, where nothing writes the
+	// service flag until the observer does, every container reported uninstrumented no matter what the
+	// customer had applied.
+	owned := make(map[int]bool, len(td.ContainerDefinitions))
+	for _, idx := range ownedContainerIndexes(td) {
+		owned[idx] = true
 	}
 	out := make([]store.ECSContainer, 0, len(td.ContainerDefinitions))
 	for idx := range td.ContainerDefinitions {
@@ -629,9 +656,7 @@ func (i *ECSFargateInstrumentor) recordContainers(ctx context.Context, td *ecsty
 		case targeted:
 			row.RuntimeLanguage, row.RuntimeVersion = t.runtime.language, t.runtime.version
 			row.Eligible = true
-			// The flag reflects the state the service was in at the start of this cycle; a freshly
-			// targeted container flips to true on the next converged pass.
-			row.Instrumented = svc.Instrumented
+			row.Instrumented = owned[idx]
 			row.Distro = t.recipe.lang
 		case excluded[name] != "":
 			row.ExcludedReason = excluded[name]
@@ -798,20 +823,20 @@ func withPassRoleHint(err error) error {
 }
 
 // setECSPhase records an in-flight instrumentation phase for live WorkloadReport progress. Best-effort.
-func (i *ECSFargateInstrumentor) setECSPhase(ctx context.Context, svc store.ECSService, phase string) {
+func (i *ecsInspector) setECSPhase(ctx context.Context, svc store.ECSService, phase string) {
 	if err := i.store.SetECSServiceInstrumentationPhase(ctx, svc.ClusterARN, svc.ServiceName, phase); err != nil {
 		log.Warn("set fargate instrumentation phase failed", "service", svc.ServiceName, "phase", phase, "error", err)
 	}
 }
 
 // clearECSPhase drops the in-flight phase once a service has converged. Best-effort like setECSPhase.
-func (i *ECSFargateInstrumentor) clearECSPhase(ctx context.Context, svc store.ECSService) {
+func (i *ecsInspector) clearECSPhase(ctx context.Context, svc store.ECSService) {
 	if err := i.store.ClearECSServiceInstrumentationPhase(ctx, svc.ClusterARN, svc.ServiceName); err != nil {
 		log.Warn("clear fargate instrumentation phase failed", "service", svc.ServiceName, "error", err)
 	}
 }
 
-func (i *ECSFargateInstrumentor) ecsClient(ctx context.Context, region string) (*ecs.Client, error) {
+func (i *ecsInspector) ecsClient(ctx context.Context, region string) (*ecs.Client, error) {
 	cfg, err := i.cache.Config(ctx, region)
 	if err != nil {
 		return nil, err

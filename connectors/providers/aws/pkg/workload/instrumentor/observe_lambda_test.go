@@ -228,30 +228,6 @@ func TestInstrumentationDiffWebServerMode(t *testing.T) {
 	}
 }
 
-// TestDiffComponentsAllHaveLabels keeps the provider-neutral vocabulary and the base's rendering of it in step.
-// A component name with no label still renders (it falls through as the raw name) but reads as a code leak to
-// the customer, so the pairing is asserted rather than trusted.
-func TestDiffComponentsAllHaveLabels(t *testing.T) {
-	// Mirrors base/domain/workloadreport.componentLabels. Duplicated rather than imported because the base
-	// deliberately keeps it unexported — the point of the assertion is that a provider adding a component here
-	// notices the base has to learn about it.
-	labeled := map[string]bool{
-		componentOwnershipMarker: true, componentInstrumentationLayer: true, componentLayerVersionConflict: true,
-		componentServiceName: true, componentCollectorExport: true, componentLegacyExportVars: true,
-		componentAgentLoader: true, componentAgentLoaderConfig: true, componentExecWrapper: true,
-		componentLogLevel: true,
-	}
-	for _, c := range []string{
-		componentOwnershipMarker, componentInstrumentationLayer, componentLayerVersionConflict,
-		componentServiceName, componentCollectorExport, componentLegacyExportVars,
-		componentAgentLoader, componentAgentLoaderConfig, componentExecWrapper, componentLogLevel,
-	} {
-		if !labeled[c] {
-			t.Errorf("component %q has no label in base/domain/workloadreport.componentLabels", c)
-		}
-	}
-}
-
 // stubResolver stands in for a LayerResolver. It records whether it was consulted at all, which is what proves
 // the marker takes precedence rather than merely producing the same answer.
 type stubResolver struct {

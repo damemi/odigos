@@ -1,0 +1,90 @@
+package store
+
+import (
+	"os"
+	"strings"
+	"testing"
+)
+
+func readECSSource(t *testing.T) string {
+	t.Helper()
+	b, err := os.ReadFile("ecs_services.go")
+	if err != nil {
+		t.Fatalf("read ecs_services.go: %v", err)
+	}
+	return string(b)
+}
+
+// TestECSObservationKeysSurviveDiscovery is the ecs_services counterpart of the lambda_functions allowlist
+// guard, and the reason this one is cheap: UpsertECSService MERGES metadata (`metadata || EXCLUDED.metadata`)
+// rather than replacing it, so a key written by any other writer survives a discovery refresh by construction.
+//
+// That is the property being pinned. The lambda upsert took the other approach — enumerate what to preserve —
+// and every key added after it was written would have been silently wiped on the next scan. If this ever
+// becomes a replace or grows a preserve-list, the whole observation record starts disappearing minutes after
+// each pass writes it, with no error anywhere.
+func TestECSObservationKeysSurviveDiscovery(t *testing.T) {
+	upsert := statementIn(t, readECSSource(t), "func (s *Store) UpsertECSService")
+	if !strings.Contains(upsert, "metadata = connector_aws.ecs_services.metadata || EXCLUDED.metadata") {
+		t.Error("UpsertECSService no longer merges metadata. A replace (or a preserve-list) wipes the observation " +
+			"record and the instrumentor's phase/error on every discovery cycle.")
+	}
+	if strings.Contains(upsert, "metadata = EXCLUDED.metadata") {
+		t.Error("UpsertECSService replaces metadata wholesale; every other writer's keys are lost on the next scan")
+	}
+}
+
+// TestSetECSServiceObservationTouchesOnlyObservationState pins the observer's write boundary. It is the
+// read-only path, and the one thing it does write must not reach into another writer's state.
+//
+// The instrumented flag is the deliberate exception and it is written through a DIFFERENT method
+// (SetECSServiceInstrumented), which is what keeps the exception explicit rather than buried in this patch.
+func TestSetECSServiceObservationTouchesOnlyObservationState(t *testing.T) {
+	src := readECSSource(t)
+	i := strings.Index(src, "func (s *Store) SetECSServiceObservation")
+	if i < 0 {
+		t.Fatal("SetECSServiceObservation not found; this test has stopped checking anything")
+	}
+	body := src[i:]
+	if j := strings.Index(body, "\nfunc "); j >= 0 {
+		body = body[:j]
+	}
+	// The patch map is built from the metadata-key CONSTANTS, so the identifiers are what appear in the
+	// source. metaConformance carries a colon to keep it from matching metaConformanceMissing/Since.
+	for _, forbidden := range []string{
+		"metaInstrumented", "metaInstrumentationPhase", "metaInstrumentationError",
+		"metaRuntimeLanguage", "metaRuntimeVersion", "metaContainers", "metaOdigosTaskDefinition",
+	} {
+		if strings.Contains(body, forbidden) {
+			t.Errorf("SetECSServiceObservation writes %s, which belongs to discovery or the instrumentor", forbidden)
+		}
+	}
+	for _, want := range []string{
+		"metaConformance:", "metaConformanceMissing", "metaConformanceSince", "metaObservationError", "metaSettling",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("SetECSServiceObservation does not write %s; the report reads it", want)
+		}
+	}
+	// last_seen_at is discovery's liveness signal and the prune cutoff: refreshing it here would let an
+	// observation keep a deleted service alive in the inventory forever.
+	if strings.Contains(body, "last_seen_at") {
+		t.Error("SetECSServiceObservation touches last_seen_at, which belongs to discovery")
+	}
+}
+
+// TestECSObservationColsAndScanAgree: ecsObservationCols is selected by two different queries (ListECSServices
+// and ListWorkloads) and read by two different scans. A column added to the constant without updating both
+// scans is a runtime failure of the report path with no compile-time signal.
+func TestECSObservationColsAndScanAgree(t *testing.T) {
+	const wantCols = 5 // conformance, missing, since, error, settling
+	if got := topLevelCommas(ecsObservationCols); got != wantCols {
+		t.Errorf("ecsObservationCols selects %d columns, the scans read %d", got, wantCols)
+	}
+	// ListWorkloads pads it to the shared shape with one trailing NULL for the Lambda-only layers column; the
+	// full-shape assertion lives in TestListWorkloadsQueriesShareColumnShape.
+	src := readInventorySource(t)
+	if !strings.Contains(src, "ecsObservationCols+`, NULL") && !strings.Contains(src, "ecsObservationCols + `, NULL") {
+		t.Error("the ecs_services report query no longer pads ecsObservationCols with the layers column")
+	}
+}

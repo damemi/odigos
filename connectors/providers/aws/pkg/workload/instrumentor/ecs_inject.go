@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 
+	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
 
@@ -173,6 +174,22 @@ func unionAgentDirs(targets []containerTarget) []string {
 	return dirs
 }
 
+// Component names for the conformance diffs below. They are the provider-neutral vocabulary the BASE renders
+// into customer-facing prose (base/domain/workloadreport.componentLabels), shared with Lambda wherever the
+// concept is the same: a stale service name or export setting reads identically on either platform, so it must
+// carry the same name. The sidecar/volume/dependency triple is specific to the staged-agent platforms.
+//
+// A name added here needs a label there, or the report falls through to printing the raw name — degraded, but
+// never silent.
+const (
+	componentAgentSidecar           = baseapi.ComponentAgentSidecar
+	componentAgentVolume            = baseapi.ComponentAgentVolume
+	componentAgentVolumeMount       = baseapi.ComponentAgentVolumeMount
+	componentAgentStartupDependency = baseapi.ComponentAgentStartupDependency
+	componentAgentLanguage          = baseapi.ComponentAgentLanguage
+	componentResourceAttributes     = baseapi.ComponentResourceAttributes
+)
+
 // alreadyInstrumented reports whether td already carries the exact desired instrumentation for the
 // recipe, so the reconcile can skip RegisterTaskDefinition+UpdateService entirely (steady state = zero
 // AWS writes). It checks the managed state — never task-definition-ARN equality, since a customer deploy
@@ -184,6 +201,12 @@ func alreadyInstrumented(td *ecstypes.TaskDefinition, targets []containerTarget,
 	// The instrumented set must match the target set EXACTLY. A container we own but no longer target
 	// has to be rolled back, and a target we do not yet own has to be instrumented — either way the
 	// task definition is not converged, so this cannot be a per-target check alone.
+	//
+	// This set check is deliberately NOT part of the diff functions below. For the mutating path a mismatch
+	// means "converge it", which is free; for the read-only observer it would mean telling a customer their
+	// deployment has drifted because Odigos detected a container they did not instrument — a coverage
+	// opinion, not decay, and one that rests on language detection the manual-mode policy does not fully
+	// grant. See ecsObservedDiff.
 	owned := ownedContainerIndexes(td)
 	if len(owned) != len(targets) {
 		return false
@@ -196,60 +219,109 @@ func alreadyInstrumented(td *ecstypes.TaskDefinition, targets []containerTarget,
 		if !ownedIdx[t.idx] {
 			return false
 		}
-		if !containerConverged(&td.ContainerDefinitions[t.idx], t, serviceName, region, debug) {
+		if len(containerDiff(&td.ContainerDefinitions[t.idx], t, serviceName, region, debug)) > 0 {
 			return false
 		}
 	}
-	if !hasAgentVolume(td) {
-		return false
-	}
-	sc := findECSContainer(td, sidecarContainerName)
-	return sc != nil &&
-		aws.ToString(sc.Image) == image &&
-		sc.Essential != nil && !*sc.Essential &&
-		strings.Join(sc.Command, "\x00") == strings.Join(sidecarCommand(unionAgentDirs(targets)), "\x00")
+	return len(taskLevelDiff(td, targets, image)) == 0
 }
 
-// containerConverged reports whether one container already carries exactly its target's wiring.
-func containerConverged(app *ecstypes.ContainerDefinition, t containerTarget, serviceName, region string, debug bool) bool {
+// taskLevelDiff reports what is missing from the task-level agent staging: the sidecar that copies the agent
+// files into the shared volume, and the volume itself.
+//
+// These are the ECS analog of Lambda's detached layer, and the reason marker-presence checking is a false
+// green here too: a container can carry a complete, correct set of activation env vars while the sidecar that
+// puts the agent on disk is gone, in which case the application starts, finds nothing at /var/odigos, and
+// exports no telemetry at all — while reporting as instrumented.
+func taskLevelDiff(td *ecstypes.TaskDefinition, targets []containerTarget, image string) []string {
+	var diff []string
+	if !hasAgentVolume(td) {
+		diff = append(diff, componentAgentVolume)
+	}
+	sc := findECSContainer(td, sidecarContainerName)
+	// Image, non-essentiality and the exact copy command all matter: a stale image stages the wrong agent
+	// build, an essential copier fails the whole task when it exits, and a command missing a language's
+	// directory stages nothing for that container.
+	if sc == nil ||
+		aws.ToString(sc.Image) != image ||
+		sc.Essential == nil || *sc.Essential ||
+		strings.Join(sc.Command, "\x00") != strings.Join(sidecarCommand(unionAgentDirs(targets)), "\x00") {
+		diff = append(diff, componentAgentSidecar)
+	}
+	return diff
+}
+
+// containerDiff reports the components of one container's desired wiring that are absent or stale — empty
+// when it already carries exactly its target's instrumentation.
+//
+// It replaces what used to be a bare bool (containerConverged), for the reason §7.2 gives: as a bool its only
+// consumer was "may I skip this RegisterTaskDefinition", and the detail was worthless because the instrumentor
+// was about to converge whatever was wrong. In manual mode nothing converges it — the customer edits their own
+// task definition — so the component list is the only thing that tells them where to look. Same predicate,
+// same call site for the mutating path (alreadyInstrumented above), one new consumer that needs the facts.
+func containerDiff(app *ecstypes.ContainerDefinition, t containerTarget, serviceName, region string, debug bool) []string {
 	env := containerEnvMap(app)
 	manifest, ok := parseECSManifest(env[store.EnvOdigosManaged])
 	if !ok {
-		return false
+		// No marker: nothing on this container is attributable to Odigos, so there is nothing to compare
+		// against. Reporting the individual components would describe an uninstrumented container — or a
+		// customer's own OpenTelemetry setup — as broken Odigos instrumentation.
+		return []string{componentOwnershipMarker}
 	}
+	var diff []string
 	// The recorded language is what we injected last time. A container whose resolved language has
-	// changed (a customer swapped its image) carries the wrong agent and must be re-instrumented,
-	// which the env comparison below would not always catch on its own.
+	// changed (a customer swapped its image) carries the wrong agent, which the env comparison below would
+	// not always catch on its own.
 	if manifest.Language != t.recipe.lang {
-		return false
+		diff = append(diff, componentAgentLanguage)
 	}
-	if env[EnvServiceName] != serviceName ||
-		env[envResourceAttributes] != ecsResourceAttributes(region) ||
-		env[envOTLPEndpoint] != t.export.endpoint ||
+	if env[EnvServiceName] != serviceName {
+		diff = append(diff, componentServiceName)
+	}
+	if env[envResourceAttributes] != ecsResourceAttributes(region) {
+		diff = append(diff, componentResourceAttributes)
+	}
+	if env[envOTLPEndpoint] != t.export.endpoint ||
 		env[EnvOtlpProtocol] != t.export.protocol ||
 		env[EnvTracesExporter] != exporterFor(t.export.traces) ||
 		env[EnvMetricsExporter] != exporterFor(t.export.metrics) ||
 		env[EnvLogsExporter] != exporterFor(t.export.logs) {
-		return false
+		diff = append(diff, componentCollectorExport)
 	}
 	wantLogLevel := ""
 	if debug {
 		wantLogLevel = otelLogLevelDebug
 	}
 	if env[EnvOtelLogLevel] != wantLogLevel {
-		return false
+		diff = append(diff, componentLogLevel)
 	}
+	// The recipe's static and append-style env is what actually activates the agent; without it the files are
+	// staged and never loaded.
+	activated := true
 	for k, v := range t.recipe.staticEnv {
 		if env[k] != v {
-			return false
+			activated = false
+			break
 		}
 	}
-	for _, a := range t.recipe.appendEnv {
-		if env[a.name] != a.evaluate(ecsPriorEnv(manifest, a.name)) {
-			return false
+	if activated {
+		for _, a := range t.recipe.appendEnv {
+			if env[a.name] != a.evaluate(ecsPriorEnv(manifest, a.name)) {
+				activated = false
+				break
+			}
 		}
 	}
-	return containerHasMount(app) && containerDependsOnSidecar(app)
+	if !activated {
+		diff = append(diff, componentAgentLoader)
+	}
+	if !containerHasMount(app) {
+		diff = append(diff, componentAgentVolumeMount)
+	}
+	if !containerDependsOnSidecar(app) {
+		diff = append(diff, componentAgentStartupDependency)
+	}
+	return diff
 }
 
 // rollbackInstrumentation restores td to its pre-Odigos state from the ownership marker and returns the
