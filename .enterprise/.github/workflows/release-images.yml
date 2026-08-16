@@ -123,6 +123,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and Push Enterprise Image
+        id: build
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 #v6.18.0
         env:
           ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
@@ -152,6 +153,19 @@ jobs:
             ${{ matrix.service == 'agents' && 'agents' || '' }}
           secrets: |
             "github_token=${{ secrets.RELEASE_BOT_TOKEN }}"
+
+      # Runs in this job so it inherits the registry logins above. One build
+      # writes the same digest to four registries; each ref gets its own
+      # signature. Fail-closed: a signing failure fails this publish job.
+      - name: Sign image and attach SBOM
+        uses: odigos-io/ci-core/sign-oci@main
+        with:
+          refs: |
+            us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}
+            us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-enterprise-${{ matrix.service }}
+            keyval/odigos-enterprise-${{ matrix.service }}
+            ghcr.io/odigos-io/odigos-enterprise-${{ matrix.service }}
+          digest: ${{ steps.build.outputs.digest }}
 
       - name: Notify Slack
         if: always()
@@ -267,6 +281,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and Push Connector Image
+        id: build
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 #v6.18.0
         env:
           ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
@@ -285,6 +300,19 @@ jobs:
           provenance: false
           secrets: |
             "github_token=${{ secrets.RELEASE_BOT_TOKEN }}"
+
+      # Runs in this job so it inherits the registry logins above. One build
+      # writes the same digest to four registries; each ref gets its own
+      # signature. Fail-closed: a signing failure fails this publish job.
+      - name: Sign image and attach SBOM
+        uses: odigos-io/ci-core/sign-oci@main
+        with:
+          refs: |
+            us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}
+            us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-enterprise-${{ matrix.service }}
+            keyval/odigos-enterprise-${{ matrix.service }}
+            ghcr.io/odigos-io/odigos-enterprise-${{ matrix.service }}
+          digest: ${{ steps.build.outputs.digest }}
 
       - name: Notify Slack
         if: always()
