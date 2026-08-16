@@ -32,7 +32,5 @@ RUN ARCH=$(uname -m) && \
       aarch64) ARCH="arm64" ;; \
       *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
     esac && \
-    KO_VERSION=$(curl -s https://api.github.com/repos/ko-build/ko/releases/latest \
-      | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/') && \
-    curl -L https://github.com/ko-build/ko/releases/download/v${KO_VERSION}/ko_Linux_${ARCH}.tar.gz \
+    curl -fL https://github.com/ko-build/ko/releases/latest/download/ko_Linux_${ARCH}.tar.gz \
       | tar xz -C /usr/local/bin
