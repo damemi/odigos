@@ -143,6 +143,19 @@ func (p *Provider) Reconcilers() map[string]baseapi.Reconciler {
 	}
 }
 
+// WorkloadPlanners implements the optional base.WorkloadPlannerRegistry: what a customer has to apply to
+// instrument a Cloud Run service themselves, served on the read path.
+//
+// It is built from the same languageSpecs and agent image the reconciler above uses. That agreement is the
+// property the feature rests on: nothing converges a manual-mode service, so a plan that differs from what
+// conformance is judged against produces a customer who applied the instructions correctly and is told their
+// deployment has drifted.
+func (p *Provider) WorkloadPlanners() map[string]baseapi.InstrumentationPlanner {
+	return map[string]baseapi.InstrumentationPlanner{
+		types.CloudRun: workloadinstrumentor.NewCloudRunPlanner(p.cfg.AgentImage),
+	}
+}
+
 // ComputePlatformReconcilers maps compute-platform type names to GCP compute-platform reconcilers. Both
 // are inert no-op seams (installation not supported yet; the base never runs them).
 func (p *Provider) ComputePlatformReconcilers() map[string]baseapi.ComputePlatformReconciler {

@@ -177,6 +177,20 @@ func (p *Provider) WorkloadObservers() map[string]baseapi.InstrumentationObserve
 	}
 }
 
+// WorkloadPlanners implements the optional base.WorkloadPlannerRegistry: what a customer has to apply to
+// instrument a workload themselves, served on the read path.
+//
+// Both AWS types are covered, and both planners are built from the same recipes and images the reconcilers and
+// observers above use — which is the property the whole feature rests on. Nothing converges a manual-mode
+// workload, so a plan that differs from what the observer judges against produces a customer who applied the
+// instructions correctly and is told their deployment has drifted.
+func (p *Provider) WorkloadPlanners() map[string]baseapi.InstrumentationPlanner {
+	return map[string]baseapi.InstrumentationPlanner{
+		types.Lambda:      workloadinstrumentor.NewLambdaPlanner(p.workloadStdb, p.layers),
+		types.FargateTask: workloadinstrumentor.NewECSFargatePlanner(p.cfg.FargateAgentsImage),
+	}
+}
+
 // ComputePlatformReconcilers maps compute-platform type names to AWS compute-platform reconcilers (NOT destination-gated).
 func (p *Provider) ComputePlatformReconcilers() map[string]baseapi.ComputePlatformReconciler {
 	central := computeplatformreconciler.CentralParams{

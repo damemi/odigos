@@ -80,8 +80,8 @@ func TestConformanceStateMatrix(t *testing.T) {
 				w.WaitingFor = api.WaitingForCustomer
 			},
 			state:      api.WorkloadStateNotInstrumented,
-			stage:      "WaitingForCustomer",
-			issueCodes: []string{"WaitingForCustomer"},
+			stage:      "Waiting For Customer",
+			issueCodes: []string{"Waiting For Customer"},
 			wantSince:  true,
 		},
 		{

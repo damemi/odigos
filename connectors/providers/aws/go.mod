@@ -56,7 +56,7 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
-	github.com/odigos-io/agents-api/go/server v0.18.0 // indirect
+	github.com/odigos-io/agents-api/go/server v0.19.0-rc1.0.20260813111849-6472d5482514 // indirect
 	github.com/odigos-io/odigos/common v1.29.0 // indirect
 	github.com/odigos-io/odigos/destinations v1.29.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect

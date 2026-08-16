@@ -360,6 +360,71 @@ func TestToModelLambdaDetails(t *testing.T) {
 	}
 }
 
+// TestToModelRevisionedServiceDetails covers the branch Cloud Run and Container Apps SHARE. They used to have a
+// wire type each, which had drifted into calling the same field `revision` while documenting it as opposite
+// facts (serving-traffic vs latest-ready) — so this asserts both kinds land on one type and that the value goes
+// into the field named for what it holds.
+//
+// It is the mapping most exposed to a silent error: every field is a *string, so putting Service where the
+// revision belongs, or dropping either, compiles and type-asserts perfectly and only shows up as a blank column
+// in a UI.
+func TestToModelRevisionedServiceDetails(t *testing.T) {
+	cases := []struct {
+		name       string
+		kind       string
+		containers []api.WorkloadContainer
+		wantConts  int
+	}{
+		{
+			// Cloud Run: the half that was declared, mapped, and never populated until now.
+			name: "cloud run",
+			kind: "gcp.cloud-run",
+		},
+		{
+			// Container Apps resolves to the SAME type — that is the merge.
+			name: "container apps",
+			kind: "azure.container-apps",
+		},
+		{
+			// Containers travel when the reporter has them, on either platform.
+			name:       "with a container inventory",
+			kind:       "gcp.cloud-run",
+			containers: []api.WorkloadContainer{{Name: "app", Instrumented: true, Eligible: true}},
+			wantConts:  1,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			w := api.DiscoveredWorkload{
+				ServiceName: "checkout",
+				Kind:        c.kind,
+				Details: &api.WorkloadDetails{
+					Kind:                c.kind,
+					Service:             "projects/p/locations/us-central1/services/checkout",
+					LatestReadyRevision: "checkout-00007-abc",
+					Containers:          c.containers,
+				},
+			}
+			got, ok := ToModel(w).Details.(model.RevisionedServiceWorkloadDetails)
+			if !ok {
+				t.Fatalf("details = %T, want model.RevisionedServiceWorkloadDetails", ToModel(w).Details)
+			}
+			if got.Kind != c.kind {
+				t.Errorf("kind = %q, want %q; it is the discriminator a client branches on now that one type serves both", got.Kind, c.kind)
+			}
+			if ptr(got.Service) != w.Details.Service {
+				t.Errorf("service = %q, want %q", ptr(got.Service), w.Details.Service)
+			}
+			if ptr(got.LatestReadyRevision) != w.Details.LatestReadyRevision {
+				t.Errorf("latestReadyRevision = %q, want %q", ptr(got.LatestReadyRevision), w.Details.LatestReadyRevision)
+			}
+			if len(got.Containers) != c.wantConts {
+				t.Errorf("containers = %d, want %d", len(got.Containers), c.wantConts)
+			}
+		})
+	}
+}
+
 // A workload the provider has nothing extra to say about must report no details at all, rather than an
 // empty block every client then has to distinguish from a real one.
 func TestToModelNoDetailsWhenProviderHasNone(t *testing.T) {

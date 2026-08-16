@@ -287,6 +287,34 @@ func (s *Store) PurgeConnectorInventory(ctx context.Context) error {
 	return nil
 }
 
+// cloudRunDetails is the kind-specific detail block for a Cloud Run service: the fully-qualified service name
+// and the revision the platform last reported ready.
+//
+// Cloud Run shares its wire type with Container Apps, and until now was the half that never filled it — the
+// detail block was declared, mapped at the GraphQL boundary, and never populated, so a Cloud Run workload
+// reported no details at all while the value sat unread in the inventory.
+//
+// The revision is the load-bearing half, for the same reason it is on Container Apps: Cloud Run revisions are
+// immutable, so instrumentation always produces a NEW one, and a traffic split can keep serving an older,
+// uninstrumented revision indefinitely. A customer who applies instrumentation correctly and never migrates
+// traffic sees no telemetry. This is what the service last reported READY, not necessarily what serves
+// requests; distinguishing those needs the traffic statuses, which is the Cloud Run observer's job.
+//
+// Containers stay nil: this connector keeps no per-container inventory for Cloud Run, and an empty list would
+// read as "no containers" rather than "not observed".
+func cloudRunDetails(resourceName, revision string) *api.WorkloadDetails {
+	if resourceName == "" && revision == "" {
+		return nil
+	}
+	return &api.WorkloadDetails{
+		Kind:    KindCloudRun,
+		Service: resourceName,
+		// The inventory key is `latestRevision` here and `latestReadyRevision` on Container Apps, for the same
+		// fact; both are provider-internal metadata keys, and the shared wire field is where they converge.
+		LatestReadyRevision: revision,
+	}
+}
+
 // ListWorkloads returns the discovered WORKLOAD inventory (Cloud Run services) as raw DiscoveredWorkload
 // objects; the base coordinator enriches them with source intent.
 func (s *Store) ListWorkloads(ctx context.Context) ([]api.DiscoveredWorkload, error) {
@@ -297,7 +325,8 @@ func (s *Store) ListWorkloads(ctx context.Context) ([]api.DiscoveredWorkload, er
 			COALESCE(metadata->>'runtimeLanguage',''),
 			COALESCE(metadata->>'runtimeVersion',''),
 			COALESCE(metadata->>'instrumentationError',''),
-			COALESCE(metadata->>'instrumentationPhase','')
+			COALESCE(metadata->>'instrumentationPhase',''),
+			COALESCE(metadata->>'latestRevision','')
 		FROM connector_gcp.cloud_run_services WHERE connector_name = $1 AND deleted_at IS NULL
 	`, KindCloudRun), s.ConnectorName())
 	if err != nil {
@@ -307,11 +336,11 @@ func (s *Store) ListWorkloads(ctx context.Context) ([]api.DiscoveredWorkload, er
 
 	var out []api.DiscoveredWorkload
 	for rows.Next() {
-		var name, location, externalID, instrType, runtimeLang, runtimeVer, instrErr, instrPhase string
+		var name, location, externalID, instrType, runtimeLang, runtimeVer, instrErr, instrPhase, revision string
 		var lastSeen time.Time
 		var instrumented bool
 		if err := rows.Scan(&name, &location, &externalID, &lastSeen, &instrumented, &instrType,
-			&runtimeLang, &runtimeVer, &instrErr, &instrPhase); err != nil {
+			&runtimeLang, &runtimeVer, &instrErr, &instrPhase, &revision); err != nil {
 			return nil, err
 		}
 		out = append(out, api.DiscoveredWorkload{
@@ -325,6 +354,7 @@ func (s *Store) ListWorkloads(ctx context.Context) ([]api.DiscoveredWorkload, er
 			InstrumentationError: instrErr,
 			InstrumentationPhase: instrPhase,
 			InstrumentationType:  instrType,
+			Details:              cloudRunDetails(externalID, revision),
 			LastSeenAt:           lastSeen,
 		})
 	}

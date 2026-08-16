@@ -300,6 +300,284 @@ setup:
       format: text
       template: ""
 
+    # ---------------------------------------------------------------------------------------------------
+    # MANUAL (IaC) INSTRUMENTATION INSTRUCTIONS — section "instrumentation:gcp.cloud-run".
+    #
+    # A workload type whose capability is {discovery: true, instrumentation: false} is instrumented BY THE
+    # CUSTOMER: Odigos discovers it, publishes what to apply, observes the result and reports conformance,
+    # and never mutates it. <ANGLE_BRACKETED> tokens are values the customer substitutes — deliberately not
+    # the {{token}} syntax, which is filled from create-connector form values and left verbatim when there
+    # is none.
+    #
+    # Checked against the connector's own injection recipes by TestInstrumentationArtifactsMatchPlans
+    # (providers/gcp): every variable, path, container name and staging command below is asserted to be what
+    # the instrumentor would apply. Nothing converges a manual-mode service, so instructions that have
+    # drifted leave a customer applying a previous release's configuration and reading a drift verdict they
+    # cannot attribute. Do not hand-edit a value here to silence a failure.
+    # ---------------------------------------------------------------------------------------------------
+
+    - id: instrument-cloud-run-manual
+      section: instrumentation:gcp.cloud-run
+      variant: manual
+      variantLabel: Reference
+      title: Instrument a Cloud Run service yourself
+      description: >-
+        The complete change, per language. Read this first: it is the reference the Terraform and gcloud
+        variants show one worked example of.
+      format: text
+      steps:
+        - Add the shared in-memory volume and the agent-staging sidecar to the service template.
+        - Mount the volume into your ingress container and make it depend on the sidecar.
+        - Set the environment variables for your language.
+        - Deploy. Cloud Run revisions are immutable, so this creates a new revision — make sure traffic moves to it.
+      template: |-
+        The agent is staged by a container, not baked into your image: "odigos-agent" copies the language
+        agent into a shared in-memory volume your ingress container reads at /var/odigos.
+
+        Cloud Run has NO run-to-completion containers, so the stager cannot exit. It holds TCP port 2400
+        once staging is done, and your container's dependency on it waits for that startup probe. That
+        dependency is what keeps the application from starting before the agent files exist.
+
+        SERVICE TEMPLATE (template.*)
+          volumes: add
+            name     = odigos-agent
+            emptyDir = { medium = MEMORY, sizeLimit = 500Mi }
+          containers: add
+            name    = odigos-agent
+            image   = us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0
+            command = ["sh", "-c", "<the staging command for your language, below>"]
+            volumeMounts = [{ name = odigos-agent, mountPath = /var/odigos }]
+            startupProbe = { tcpSocket = { port = 2400 }, periodSeconds = 3, timeoutSeconds = 1, failureThreshold = 30 }
+
+        YOUR INGRESS CONTAINER
+          volumeMounts += { name = odigos-agent, mountPath = /var/odigos }
+          dependsOn    += odigos-agent
+          env          += the variables below
+          (A multi-container service requires every container to be named. If yours was created
+           single-container with no name, give it one before adding the sidecar.)
+
+        ALWAYS, every language:
+          ODIGOS_MANAGED              = {"v":1,"lang":"<your language>"}
+          OTEL_SERVICE_NAME           = <ODIGOS_SOURCE_NAME>
+          OTEL_RESOURCE_ATTRIBUTES    = cloud.provider=gcp,cloud.platform=gcp_cloud_run,cloud.region=<REGION>
+          ODIGOS_OTLP_ENDPOINT        = <OTLP_ENDPOINT>
+          OTEL_EXPORTER_OTLP_ENDPOINT = <OTLP_ENDPOINT_URL>
+          OTEL_EXPORTER_OTLP_PROTOCOL = grpc
+          OTEL_TRACES_EXPORTER        = otlp
+          OTEL_METRICS_EXPORTER       = otlp
+          OTEL_LOGS_EXPORTER          = otlp
+        OTEL_LOG_LEVEL must NOT be set (compared against unset; a value is reported as drift) unless this
+        connector has debug telemetry enabled, in which case set it to "debug".
+
+        The two endpoint variables are not interchangeable: ODIGOS_OTLP_ENDPOINT is the raw host:port, and
+        OTEL_EXPORTER_OTLP_ENDPOINT is the scheme-qualified URL. The SDK accepts a bare host:port and then
+        exports nowhere.
+
+        PER LANGUAGE — staging command, and the activation environment.
+        APPEND means: keep the value your container already has, then add ours joined by the separator
+        shown. Assigning it instead discards your value.
+
+        java   {"v":1,"lang":"java"}
+               command: mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java && while true; do nc -l -p 2400 >/dev/null 2>&1; done
+               JAVA_TOOL_OPTIONS  APPEND " "  -javaagent:/var/odigos/java/javaagent.jar
+
+        python {"v":1,"lang":"python"}
+               command: mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python && while true; do nc -l -p 2400 >/dev/null 2>&1; done
+               PYTHONPATH  APPEND ":"  /var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation
+               OTEL_PYTHON_CONFIGURATOR = odigos-python-configurator
+
+        nodejs {"v":1,"lang":"nodejs"}
+               command: mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs && while true; do nc -l -p 2400 >/dev/null 2>&1; done
+               NODE_OPTIONS  APPEND " "  --require /var/odigos/nodejs/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js
+
+        dotnet {"v":1,"lang":"dotnet"}
+               command: mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet && while true; do nc -l -p 2400 >/dev/null 2>&1; done
+               CORECLR_ENABLE_PROFILING = 1
+               CORECLR_PROFILER         = {918728DD-259F-4A6A-AC2B-B85E1B658318}
+               CORECLR_PROFILER_PATH    = /var/odigos/dotnet/linux-glibc/OpenTelemetry.AutoInstrumentation.Native.so
+               OTEL_DOTNET_AUTO_HOME    = /var/odigos/dotnet
+               DOTNET_STARTUP_HOOKS     = /var/odigos/dotnet/net/OpenTelemetry.AutoInstrumentation.StartupHook.dll
+               DOTNET_ADDITIONAL_DEPS   = /var/odigos/dotnet/AdditionalDeps
+               DOTNET_SHARED_STORE      = /var/odigos/dotnet/store
+               glibc only — a musl (Alpine) based image is not supported.
+
+        NOTES
+        - ODIGOS_MANAGED is the ONLY thing that tells Odigos this service is instrumented. Without it the
+          service is reported as awaiting your deployment however completely the rest is applied, and the
+          recorded language is what Odigos compares the activation environment against.
+        - OTEL_SERVICE_NAME must match the workload's name in Odigos, or it is reported as drift.
+        - Set any exporter to "none" for a signal your destination does not accept.
+        - The in-memory volume counts against the instance memory, which is why it is capped at 500Mi.
+        - The agent image is pulled by YOUR service. Cloud Run only accepts images from *.gcr.io,
+          *-docker.pkg.dev or docker.io, so mirror it into your own Artifact Registry if this one is
+          unreachable — and use that reference here.
+        - If this connector is configured with an agent-image override (ODIGOS_CLOUDRUN_AGENT_IMAGE), use
+          that image instead.
+        - If you later hand instrumentation over to Odigos, add a "prevEnv" object to ODIGOS_MANAGED
+          recording your pre-Odigos value for each variable above, so it can restore them on rollback.
+
+    - id: instrument-cloud-run-terraform
+      section: instrumentation:gcp.cloud-run
+      variant: terraform
+      variantLabel: Terraform
+      title: Instrument a Cloud Run service (Terraform)
+      description: >-
+        Anchored fragments for google_cloud_run_v2_service. Shown for Java; see the Reference variant for
+        the other languages.
+      format: shell
+      steps:
+        - Add the volume and the odigos-agent container blocks inside template.
+        - Add the volume mount, depends_on and env to your ingress container.
+        - Apply, then make sure traffic is serving the new revision.
+      template: |-
+        resource "google_cloud_run_v2_service" "app" {
+          # ... your existing configuration ...
+
+          template {
+            volumes {
+              name = "odigos-agent"
+              empty_dir {
+                medium = "MEMORY"
+                # Counts against the instance memory, so it is deliberately modest.
+                size_limit = "500Mi"
+              }
+            }
+
+            # --- the agent-staging sidecar ---
+            containers {
+              name  = "odigos-agent"
+              image = "us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0"
+              # Cloud Run has no run-to-completion containers, so the stager holds a port instead of
+              # exiting, and the startup probe below is what tells Cloud Run staging has finished.
+              command = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java && while true; do nc -l -p 2400 >/dev/null 2>&1; done"]
+              volume_mounts {
+                name       = "odigos-agent"
+                mount_path = "/var/odigos"
+              }
+              startup_probe {
+                tcp_socket { port = 2400 }
+                period_seconds    = 3
+                timeout_seconds   = 1
+                failure_threshold = 30
+              }
+            }
+
+            # --- your ingress container ---
+            containers {
+              name  = "<YOUR_CONTAINER>" # a multi-container service requires every container to be named
+              image = var.app_image
+              # ... your existing configuration ...
+
+              volume_mounts {
+                name       = "odigos-agent"
+                mount_path = "/var/odigos"
+              }
+              # Gates the application's start on the agent files existing.
+              depends_on = ["odigos-agent"]
+
+              env {
+                name  = "ODIGOS_MANAGED"
+                value = "{\"v\":1,\"lang\":\"java\"}"
+              }
+              env {
+                name  = "OTEL_SERVICE_NAME"
+                value = "<ODIGOS_SOURCE_NAME>"
+              }
+              env {
+                name  = "OTEL_RESOURCE_ATTRIBUTES"
+                value = "cloud.provider=gcp,cloud.platform=gcp_cloud_run,cloud.region=<REGION>"
+              }
+              env {
+                name  = "ODIGOS_OTLP_ENDPOINT"
+                value = "<OTLP_ENDPOINT>"
+              }
+              env {
+                # The scheme-qualified form. A bare host:port is accepted here and then exports nowhere.
+                name  = "OTEL_EXPORTER_OTLP_ENDPOINT"
+                value = "<OTLP_ENDPOINT_URL>"
+              }
+              env {
+                name  = "OTEL_EXPORTER_OTLP_PROTOCOL"
+                value = "grpc"
+              }
+              env {
+                name  = "OTEL_TRACES_EXPORTER"
+                value = "otlp"
+              }
+              env {
+                name  = "OTEL_METRICS_EXPORTER"
+                value = "otlp"
+              }
+              env {
+                name  = "OTEL_LOGS_EXPORTER"
+                value = "otlp"
+              }
+              env {
+                # APPEND, never assign: keep whatever the container already carries and add ours after it.
+                name  = "JAVA_TOOL_OPTIONS"
+                value = trimspace("${var.java_tool_options} -javaagent:/var/odigos/java/javaagent.jar")
+              }
+              # Do NOT set OTEL_LOG_LEVEL — compared against unset, so a value is reported as drift.
+            }
+          }
+        }
+
+        # Other languages differ in the staging command, the marker's "lang" and the activation variables —
+        # see the Reference variant. PYTHONPATH is appended with ":", not a space.
+
+    - id: instrument-cloud-run-gcloud
+      section: instrumentation:gcp.cloud-run
+      variant: gcloud
+      variantLabel: gcloud
+      title: Instrument a Cloud Run service (gcloud)
+      description: >-
+        The service YAML `gcloud run services replace` consumes. Note that this is a WHOLE-OBJECT replace —
+        export the live service first and edit that, rather than applying this file as-is.
+      format: shell
+      steps:
+        - Export the live service - gcloud run services describe SERVICE --region REGION --format export > service.yaml
+        - Merge the volume, the odigos-agent container and your container's mount/dependency/env into it, as shown.
+        - Apply it - gcloud run services replace service.yaml --region REGION
+        - Check that traffic is serving the new revision.
+      template: |-
+        # gcloud run services replace takes the WHOLE object, so start from the live service:
+        #   gcloud run services describe SERVICE --region REGION --format export > service.yaml
+        # then merge the pieces below into spec.template.spec. Applying this file as-is would drop
+        # everything your service already declares.
+
+        # spec.template.spec.volumes: add
+        #   - name: odigos-agent
+        #     emptyDir: { medium: Memory, sizeLimit: 500Mi }
+        #
+        # spec.template.spec.containers: add the staging sidecar
+        #   - name: odigos-agent
+        #     image: us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0
+        #     command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java && while true; do nc -l -p 2400 >/dev/null 2>&1; done"]
+        #     volumeMounts: [{ name: odigos-agent, mountPath: /var/odigos }]
+        #     startupProbe: { tcpSocket: { port: 2400 }, periodSeconds: 3, timeoutSeconds: 1, failureThreshold: 30 }
+        #
+        # and on your own container <YOUR_CONTAINER>:
+        #   volumeMounts: += { name: odigos-agent, mountPath: /var/odigos }
+        #   the container-dependency annotation naming odigos-agent
+        #   env: += the variables below
+        #
+        #   ODIGOS_MANAGED              {"v":1,"lang":"java"}
+        #   OTEL_SERVICE_NAME           <ODIGOS_SOURCE_NAME>
+        #   OTEL_RESOURCE_ATTRIBUTES    cloud.provider=gcp,cloud.platform=gcp_cloud_run,cloud.region=<REGION>
+        #   ODIGOS_OTLP_ENDPOINT        <OTLP_ENDPOINT>
+        #   OTEL_EXPORTER_OTLP_ENDPOINT <OTLP_ENDPOINT_URL>
+        #   OTEL_EXPORTER_OTLP_PROTOCOL grpc
+        #   OTEL_TRACES_EXPORTER        otlp
+        #   OTEL_METRICS_EXPORTER       otlp
+        #   OTEL_LOGS_EXPORTER          otlp
+        #   JAVA_TOOL_OPTIONS           APPEND " " -javaagent:/var/odigos/java/javaagent.jar
+        #   (do NOT set OTEL_LOG_LEVEL — compared against unset, so a value is reported as drift)
+        #
+        # Other languages differ in the staging command, the marker's "lang" and the activation variables —
+        # see the Reference variant. PYTHONPATH is appended with ":", not a space.
+
+        gcloud run services replace service.yaml --region "<REGION>"
+
 # gateway: connector-wide collector wiring; not part of either domain. Implemented in a later phase.
 gateway:
   enabled: false

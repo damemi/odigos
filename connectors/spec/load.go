@@ -71,7 +71,42 @@ func Parse(data []byte) (CloudConnectorSpec, error) {
 	if err := validateFeatureTypes(s); err != nil {
 		return CloudConnectorSpec{}, err
 	}
+	if err := validateSetupArtifacts(s); err != nil {
+		return CloudConnectorSpec{}, err
+	}
 	return s, nil
+}
+
+// validateSetupArtifacts enforces the two invariants the artifact list's consumers assume.
+//
+// The id must be unique: it is the only key an artifact has, and it is what a UI keys a rendered list by and
+// what a test names when an artifact is incomplete. A duplicate does not fail anywhere — one entry simply
+// shadows the other, in whichever place happens to index by id — so it has to be rejected here.
+//
+// Within a section, the variant must be unique too, because distinct variants in a section ARE the "choose a
+// method" chooser: two artifacts declaring the same variant give the chooser two identical options and only
+// one of them can ever be selected. A section with a single artifact legitimately declares no variant.
+func validateSetupArtifacts(s CloudConnectorSpec) error {
+	ids := map[string]bool{}
+	variants := map[string]bool{}
+	for _, a := range s.Setup.Artifacts {
+		if a.ID == "" {
+			return fmt.Errorf("connector spec: setup artifact id is required")
+		}
+		if ids[a.ID] {
+			return fmt.Errorf("connector spec: duplicate setup artifact id %q", a.ID)
+		}
+		ids[a.ID] = true
+		if a.Variant == "" {
+			continue
+		}
+		k := a.Section + "/" + a.Variant
+		if variants[k] {
+			return fmt.Errorf("connector spec: setup section %q declares variant %q twice", a.Section, a.Variant)
+		}
+		variants[k] = true
+	}
+	return nil
 }
 
 // validateFeatureTypes enforces the two-domain taxonomy. In each domain, discovery is the superset: every

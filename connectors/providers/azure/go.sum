@@ -95,8 +95,8 @@ github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0
 github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw=
 github.com/leodido/go-urn v1.4.0 h1:WT9HwE9SGECu3lg4d/dIA+jxlljEa1/ffXKmRjqdmIQ=
 github.com/leodido/go-urn v1.4.0/go.mod h1:bvxc+MVxLKB4z00jd1z+Dvzr47oO32F/QSNjSBOlFxI=
-github.com/odigos-io/agents-api/go/server v0.18.0 h1:42iuauXAYBEBRLhVovm0XCt+9I2aDE/jgkShaew1mGc=
-github.com/odigos-io/agents-api/go/server v0.18.0/go.mod h1:0PNMYOY1wJ8Rw74mlVlCHtII5VahQxcL+bGH3DJ1UBw=
+github.com/odigos-io/agents-api/go/server v0.19.0-rc1.0.20260813111849-6472d5482514 h1:yi5yBhykCYaOub355AQtPrWFsPfqvm0tL+Y/srUzEo8=
+github.com/odigos-io/agents-api/go/server v0.19.0-rc1.0.20260813111849-6472d5482514/go.mod h1:0PNMYOY1wJ8Rw74mlVlCHtII5VahQxcL+bGH3DJ1UBw=
 github.com/odigos-io/odigos/common v1.29.0 h1:4dh8dEJcBs9HnDZYDP0FUFg3Dd23rXv0Jc1fY+8vTl8=
 github.com/odigos-io/odigos/common v1.29.0/go.mod h1:vFHVrElkdAJ6hX1arI4K2WwuYC7Qsg7CzsTdRaB220w=
 github.com/odigos-io/odigos/destinations v1.29.0 h1:u33+m2QnbPdhZ/n4DnLS5Uom7GaBgkb+UrON7bm1+M0=

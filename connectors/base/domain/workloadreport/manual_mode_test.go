@@ -50,8 +50,8 @@ func TestManualModeStateMatrix(t *testing.T) {
 			name:      "marked and awaiting the customer's deployment",
 			mutate:    func(w *api.DiscoveredWorkload) { w.WaitingFor = api.WaitingForCustomer },
 			state:     api.WorkloadStateNotInstrumented,
-			stage:     "WaitingForCustomer",
-			issueCode: "WaitingForCustomer",
+			stage:     "Waiting For Customer",
+			issueCode: "Waiting For Customer",
 			severity:  "unknown",
 			transient: true,
 			wantSince: true,
@@ -252,7 +252,7 @@ func TestStalePhaseIgnoredInManualMode(t *testing.T) {
 		if m.Current.State != api.WorkloadStateNotInstrumented {
 			t.Errorf("phase %q: state = %q, want %q", phase, m.Current.State, api.WorkloadStateNotInstrumented)
 		}
-		if m.Progress.Stage != "WaitingForCustomer" {
+		if m.Progress.Stage != "Waiting For Customer" {
 			t.Errorf("phase %q: stage = %q, want WaitingForCustomer", phase, m.Progress.Stage)
 		}
 	}

@@ -85,7 +85,7 @@ type WorkloadContainer struct {
 type WorkloadDetails struct {
 	Kind string
 
-	// Container-shaped kinds (ECS, Cloud Run).
+	// Container-shaped kinds (ECS, Cloud Run, Container Apps).
 	Containers []WorkloadContainer
 
 	// ECS only.
@@ -100,9 +100,17 @@ type WorkloadDetails struct {
 	Architecture string
 	LayerArn     string
 
-	// Cloud Run only.
-	Service  string
-	Revision string
+	// Revisioned-service kinds — Cloud Run and Container Apps, which share one wire type because these two
+	// facts mean the same thing on both: Service is the platform resource identity (a Cloud Run service name,
+	// a Container App resource id).
+	Service string
+	// LatestReadyRevision is the revision the platform last reported READY — deliberately not "the revision
+	// serving traffic", which is a different fact. Revisions are immutable on both platforms, so
+	// instrumentation always produces a new one and a traffic split can keep weighting an older,
+	// uninstrumented one indefinitely: a customer can apply instrumentation correctly and see no telemetry.
+	// Naming the field for what it holds is what keeps the two providers from filling it with different facts,
+	// which is exactly what the two wire types it feeds used to do.
+	LatestReadyRevision string
 }
 
 // DiscoveredWorkload is a discovered cloud resource, reported to Central as a WorkloadReport.
@@ -315,6 +323,10 @@ type CentralInterface interface {
 	// ComputePlatformReport returns a single discovered compute platform by composite key (name + kind + region), or nil
 	// if absent. region may be empty to match by name + kind alone.
 	ComputePlatformReport(ctx context.Context, name, kind, region string) (*DiscoveredComputePlatform, error)
+	// InstrumentationPlan returns what a customer has to apply to instrument one workload, keyed the same way
+	// as WorkloadReport. nil (with no error) when there is nothing to publish for it — a type with no
+	// instrumentation defined, a provider with no planner, a language it cannot instrument.
+	InstrumentationPlan(ctx context.Context, serviceName, kind, region string) (*InstrumentationPlanResult, error)
 	RefreshDiscovery(ctx context.Context) error
 	// Config returns the effective operational config (code defaults + DB-stored overrides); ConfigDefaults
 	// returns just the defaults; UpdateConfig merges a patch of overrides, applies it live (no restart), and

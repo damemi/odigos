@@ -52,6 +52,29 @@ func (a appendEnvVar) evaluate(original string) string {
 	return distro.EvaluateReplacePattern(a.pattern, original, agentsDir)
 }
 
+// separator is the delimiter the pattern joins the customer's original value with ours: the character
+// immediately after the {{ORIGINAL_ENV_VALUE}} placeholder.
+//
+// It is DERIVED from the pattern rather than declared, because the pattern is the authority — it comes from
+// the upstream distro, differs by language (a space for JAVA_TOOL_OPTIONS/NODE_OPTIONS, a colon for
+// PYTHONPATH), and can change on somebody else's release. Assuming one would be silently destructive in a way
+// nothing here would catch: a space-joined PYTHONPATH is one unusable path rather than two, and the process
+// still starts.
+//
+// Its consumer is the published instrumentation plan, which has to tell a customer HOW to join their value to
+// ours rather than handing them a finished literal. Returns "" when the pattern does not append at all.
+func (a appendEnvVar) separator() string {
+	i := strings.Index(a.pattern, distro.OriginalEnvValuePlaceholder)
+	if i < 0 {
+		return ""
+	}
+	rest := a.pattern[i+len(distro.OriginalEnvValuePlaceholder):]
+	if rest == "" {
+		return ""
+	}
+	return rest[:1]
+}
+
 // agentRecipe describes how to inject a language's OpenTelemetry agent into a Fargate task container:
 // which agent directories the sidecar stages from the agents image, the static activation env vars
 // (params already rendered), the loader (append-style) activation env vars, and which OTLP protocol the

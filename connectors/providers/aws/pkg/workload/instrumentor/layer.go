@@ -283,7 +283,15 @@ func layerKey(region, language, arch string) string {
 // runtime, or "" for an unsupported runtime (the caller then declines to instrument rather than set a
 // wrapper the layer does not provide).
 func execWrapperForRuntime(runtime string) string {
-	switch LanguageFromRuntime(runtime) {
+	return execWrapperForLanguage(LanguageFromRuntime(runtime))
+}
+
+// execWrapperForLanguage is the same mapping keyed by the OTel layer language rather than by an AWS runtime
+// identifier, for callers that already hold a language — the published instrumentation plan, which is per
+// language and has no single runtime to speak of. Split out rather than duplicated so the two cannot disagree
+// about which wrapper a language gets, which is the mistake that breaks a function at cold start.
+func execWrapperForLanguage(lang string) string {
+	switch lang {
 	case "python":
 		return execWrapperInstrument
 	case "nodejs", "java", "ruby":

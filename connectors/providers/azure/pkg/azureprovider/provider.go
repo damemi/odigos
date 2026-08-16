@@ -135,6 +135,17 @@ func (p *Provider) Reconcilers() map[string]baseapi.Reconciler {
 	}
 }
 
+// WorkloadPlanners implements the optional base.WorkloadPlannerRegistry: what a customer has to apply to
+// instrument a Container App themselves, served on the read path.
+//
+// It is built from the same languageSpecs and agent image the reconciler above uses, so the published
+// instructions and the desired state Odigos would apply cannot diverge.
+func (p *Provider) WorkloadPlanners() map[string]baseapi.InstrumentationPlanner {
+	return map[string]baseapi.InstrumentationPlanner{
+		types.ContainerApps: workloadinstrumentor.NewContainerAppsPlanner(p.cfg.AgentImage),
+	}
+}
+
 // ComputePlatformReconcilers maps compute-platform type names to Azure compute-platform reconcilers.
 // Both are inert no-op seams (installation not supported yet; the base never runs them).
 func (p *Provider) ComputePlatformReconcilers() map[string]baseapi.ComputePlatformReconciler {

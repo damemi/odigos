@@ -279,7 +279,8 @@ func (s *Store) ListWorkloads(ctx context.Context) ([]api.DiscoveredWorkload, er
 			COALESCE(metadata->>'runtimeLanguage',''),
 			COALESCE(metadata->>'runtimeVersion',''),
 			COALESCE(metadata->>'instrumentationError',''),
-			COALESCE(metadata->>'instrumentationPhase','')
+			COALESCE(metadata->>'instrumentationPhase',''),
+			COALESCE(metadata->>'latestReadyRevision','')
 		FROM connector_azure.container_apps WHERE connector_name = $1 AND deleted_at IS NULL
 	`, KindContainerApps), s.ConnectorName())
 	if err != nil {
@@ -289,11 +290,11 @@ func (s *Store) ListWorkloads(ctx context.Context) ([]api.DiscoveredWorkload, er
 
 	var out []api.DiscoveredWorkload
 	for rows.Next() {
-		var name, location, externalID, instrType, runtimeLang, runtimeVer, instrErr, instrPhase string
+		var name, location, externalID, instrType, runtimeLang, runtimeVer, instrErr, instrPhase, revision string
 		var lastSeen time.Time
 		var instrumented bool
 		if err := rows.Scan(&name, &location, &externalID, &lastSeen, &instrumented, &instrType,
-			&runtimeLang, &runtimeVer, &instrErr, &instrPhase); err != nil {
+			&runtimeLang, &runtimeVer, &instrErr, &instrPhase, &revision); err != nil {
 			return nil, err
 		}
 		out = append(out, api.DiscoveredWorkload{
@@ -307,6 +308,7 @@ func (s *Store) ListWorkloads(ctx context.Context) ([]api.DiscoveredWorkload, er
 			InstrumentationError: instrErr,
 			InstrumentationPhase: instrPhase,
 			InstrumentationType:  instrType,
+			Details:              containerAppDetails(externalID, revision),
 			LastSeenAt:           lastSeen,
 		})
 	}
@@ -315,6 +317,30 @@ func (s *Store) ListWorkloads(ctx context.Context) ([]api.DiscoveredWorkload, er
 	}
 	inventoryLog.Debug("list workloads complete", "connector", s.ConnectorName(), "count", len(out))
 	return out, nil
+}
+
+// containerAppDetails is the kind-specific detail block for a Container App: the app's resource id and the
+// revision the platform last reported ready.
+//
+// The revision is the load-bearing half. Container Apps revisions are immutable, so instrumentation always
+// produces a NEW one — and in Multiple-revision mode an ingress traffic split can keep weighting an older,
+// uninstrumented revision indefinitely. A customer who applies instrumentation correctly and never moves
+// traffic sees no telemetry, and until this field travelled there was nothing on the wire that could explain
+// it. It is what the app last reported READY, not necessarily what serves requests; distinguishing those needs
+// the revisions sub-resource, which is the Container Apps observer's job.
+//
+// No containers: this connector keeps no per-container inventory for Container Apps yet, so the shared wire
+// type's containers field stays null here. That is per-reporter nullability, not an unfillable slot — Cloud Run
+// fills it from the same type once its own inventory lands.
+func containerAppDetails(resourceID, revision string) *api.WorkloadDetails {
+	if resourceID == "" && revision == "" {
+		return nil
+	}
+	return &api.WorkloadDetails{
+		Kind:                KindContainerApps,
+		Service:             resourceID,
+		LatestReadyRevision: revision,
+	}
 }
 
 // LookupDiscoveredWorkload finds a workload inventory row matching a prospective source name/kind/region.

@@ -142,6 +142,13 @@ func ToModel(w api.DiscoveredWorkload) *model.WorkloadReport {
 			// How long it has stood this way, which is what separates a deployment that half-landed minutes
 			// ago from one that has been broken for weeks.
 			Since: sinceOrNil(w.ConformanceSince),
+			// The components as DATA, alongside the prose that already names them. The message is written to be
+			// read; a client that wants to list the missing pieces, or offer a targeted fix for one, would
+			// otherwise have to parse that sentence back apart — and would break the moment it was reworded.
+			Details: model.InstrumentationDriftDetails{
+				Code:              "InstrumentationPartiallyApplied",
+				MissingComponents: nonNilComponents(w.MissingComponents),
+			},
 		})
 	} else if w.ManagementMode == spec.ModeManual && w.Instrumented && !(w.SourceMatched && w.SourceEnabled) {
 		// Manual-mode instrumentation is live but the intent that asked for it is gone: the source was
@@ -253,12 +260,28 @@ func detailsToModel(w api.DiscoveredWorkload) model.WorkloadDetails {
 			Architecture: strPtrOrNil(d.Architecture),
 			LayerArn:     strPtrOrNil(d.LayerArn),
 		}
-	case strings.HasPrefix(kind, "gcp.cloud-run"):
-		return model.CloudRunWorkloadDetails{
-			Kind:       kind,
-			Service:    strPtrOrNil(d.Service),
-			Revision:   strPtrOrNil(d.Revision),
-			Containers: containersToModel(d.Containers),
+	case strings.HasPrefix(kind, "gcp.cloud-run"), strings.HasPrefix(kind, "azure.container-apps"):
+		// Cloud Run and Container Apps share ONE wire type, because every fact here means the same thing on
+		// both: the platform resource identity, the revision the platform last reported ready, and the
+		// containers in that revision's template. `kind` still tells a client which platform it is, so two
+		// types for one shape bought nothing — and the two they replaced had already drifted apart in the one
+		// way that mattered, each calling its revision field `revision` while documenting it as the opposite
+		// fact (serving-traffic vs latest-ready). Both connectors populate latest-ready, which is what the
+		// field is now named for.
+		//
+		// The revision is the point of this block. Revisions are immutable on both platforms, so
+		// instrumentation always creates a new one, and a traffic split can keep weighting an older,
+		// uninstrumented revision — a customer who applies instrumentation correctly and never moves traffic
+		// sees no telemetry, and nothing on the wire could explain that before.
+		//
+		// Containers travel when the reporter has them. Container Apps keeps no per-container inventory today,
+		// so the field is null there; that is the same per-reporter nullability EcsWorkloadDetails is built on
+		// ("each fills the subset it can see"), not a slot nobody ever fills.
+		return model.RevisionedServiceWorkloadDetails{
+			Kind:                kind,
+			Service:             strPtrOrNil(d.Service),
+			LatestReadyRevision: strPtrOrNil(d.LatestReadyRevision),
+			Containers:          containersToModel(d.Containers),
 		}
 	default:
 		return nil
@@ -498,4 +521,14 @@ func buildRuntimeSnapshot(w api.DiscoveredWorkload) *model.WorkloadRuntimeSnapsh
 		}
 	}
 	return snap
+}
+
+// nonNilComponents normalizes a nil slice to an empty one so the non-null missingComponents list never
+// resolves to null. An empty list is meaningful here — the verdict is Partial but the observer recorded no
+// component names — and is different from the field being absent.
+func nonNilComponents(in []string) []string {
+	if in == nil {
+		return []string{}
+	}
+	return in
 }

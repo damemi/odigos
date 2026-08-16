@@ -12,6 +12,7 @@ import (
 
 	centralapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/computeplatformreport"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/instrumentationplan"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/workloadreport"
 	gqlapi "github.com/odigos-io/odigos-enterprise/connectors/base/gql/api"
 	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
@@ -85,6 +86,35 @@ func (r *queryResolver) WorkloadReport(ctx context.Context, serviceName string, 
 		return nil, err
 	}
 	return workloadreport.ToModel(*w), nil
+}
+
+// --- InstrumentationInstructions ---
+
+// InstrumentationInstructions serves what a customer has to apply to instrument one workload.
+//
+// The coordinator computes a PLAN — the same desired state the connector's own injector would produce — and
+// instrumentationplan renders it into documents. The two names differ on purpose: the plan is the internal
+// model the observer also judges a workload against, and only its rendering crosses the wire, so nothing a
+// client sees can drift from what the connector reports drift against.
+//
+// A null result is a normal answer, not an error: the workload is unknown, or its type has no instrumentation
+// defined on this connector, or the provider registers no planner for it. Each of those is already explained
+// by the workload report, so this returns null rather than an error a client would have to special-case.
+func (r *queryResolver) InstrumentationInstructions(ctx context.Context, serviceName string, kind string, region *string) (*model.InstrumentationInstructions, error) {
+	reg := ""
+	if region != nil {
+		reg = *region
+	}
+	resolverLog.Debug("instrumentationInstructions query", "service", serviceName, "kind", kind, "region", reg)
+	res, err := r.Central.InstrumentationPlan(ctx, serviceName, kind, reg)
+	if err != nil {
+		resolverLog.Error("instrumentationInstructions failed", "service", serviceName, "kind", kind, "error", err)
+		return nil, err
+	}
+	if res == nil {
+		return nil, nil
+	}
+	return instrumentationplan.ToModel(*res, time.Now()), nil
 }
 
 // --- ComputePlatformReports (managed install targets; distinct from WorkloadReports) ---

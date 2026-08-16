@@ -70,6 +70,82 @@ will not strip instrumentation the customer applied, so removing it is theirs to
 > "the customer instruments this" — but it is customer-visible. It is safe on the wire: `current.state` stays
 > within the set central-ui decodes, and only the free-form `progress.stage` and issue codes change.
 
+#### What the connector publishes for manual mode
+
+Reporting a workload as "awaiting your deployment" is only useful if the connector can also say **what** to
+deploy — and it is the only thing that can, because the desired state is computed from the same recipes its own
+injector would apply. Nothing converges a manual-mode workload, so instructions written anywhere else would
+drift from what the connector then judges the workload against, and the customer would apply them correctly and
+be told their deployment is broken.
+
+The desired state is modelled in `base/domain/plan` as an ordered set of **anchored fragments** — "add THIS at
+THAT path" — rather than as a generated task definition or service object. A generated document would make
+Odigos a second owner of something the customer's pipeline owns, and for the whole-object declarative platforms
+it is not even expressible: Cloud Run and ARM/Bicep have no per-container or per-env-var child resource to
+append to.
+
+The part of that model worth knowing before touching it is **merge direction**. Loader variables
+(`JAVA_TOOL_OPTIONS`, `PYTHONPATH`, `NODE_OPTIONS`) usually already carry a customer value, so a fragment
+records how ours combines with theirs (`set` / `append` / `prepend` / `remove`) instead of a finished literal:
+
+- a literal is correct only for the customer who has nothing set, and silently discards everyone else's value;
+- the SIDE differs per platform for real reasons — Lambda **prepends** `PYTHONPATH` so the layer's
+  OpenTelemetry packages resolve before the application's own, while the staged-agent platforms **append** so
+  the customer's settings keep precedence — and getting it backwards fails nothing visibly;
+- `remove` is a first-class instruction because conformance treats it as one: a variable the connector deletes
+  (`OTEL_LOG_LEVEL`, Lambda's legacy `OTEL_EXPORTER_OTLP_*`) is compared against unset, so a workload still
+  carrying it is reported as drifted.
+
+Two delivery paths, and they are for different consumers:
+
+| Path | What | Where |
+| --- | --- | --- |
+| Spec-declared artifacts | Per-type, per-tool copy-paste snippets (Terraform, CloudFormation, Bicep, gcloud, az-cli, aws-cli, plus a tool-agnostic reference) with `<UPPER_SNAKE_CASE>` placeholders | `spec/data/<provider>.yaml`, section `instrumentation:<type>`; surfaced by the existing `cloudConnectorProviders` catalog with no backend change |
+| `instrumentationInstructions` query | The same change per WORKLOAD, **already rendered**: the artifacts with this workload's values substituted, plus the blanks that are still the customer's to fill | agents-api; served by `base/gql` from a provider `WorkloadPlanners()` registration |
+
+`<...>` is deliberately **not** the `{{token}}` syntax the onboarding artifacts use: that one is substituted
+client-side from create-connector form values and left verbatim when there is none, so a per-workload token
+spelled that way reaches a customer as a literal `{{containerName}}` and reads as a rendering bug.
+
+**The plan model does not cross the wire, and that is the design.** `base/domain/plan` is how the connector
+decides what to write and what to judge a workload against; `base/domain/instrumentationplan` renders it to
+text and that text is all a client gets. Fragments, merge directions, volumes, helper containers and layer
+attachments stay internal — a client that acted on them would be a second implementation of this rendering,
+free to disagree with the one that then reports the customer's deployment as drifted, and every new injection
+mechanic would cost an agents-api version for internals nothing acts on. A provider that grows one now ships
+it in the text it already owns.
+
+Substitution therefore happens **connector-side**. The base resolves the reported service name, the region and
+the OTLP endpoint in **both** the `host:port` and scheme-qualified forms — the SDK accepts a bare authority
+and then exports nowhere, which is exactly the mistake a second substituting party would make. Values only a
+provider can resolve — a container's name, a Lambda layer version ARN — come from its planner. Whatever is
+left stays verbatim in the document and is reported in `unresolved` **with what belongs there**, derived from
+the rendered text rather than from what the plan declares: that is the truth for a task definition packing
+several applications, or for a Lambda layer Odigos does not publish yet, and reading it back off the text is
+what keeps a client from being asked for a value its snippet does not contain.
+
+`documents` is never empty. A type with no hand-authored per-tool snippet still gets one `manual` document
+built from `plan.Prose` — the desired state is fully known either way, and a customer on an unsupported
+toolchain needs the change described more than they need it in their own syntax.
+
+**Two things a customer must get exactly right, and both were easy to miss:**
+
+- **`ODIGOS_MANAGED` is mandatory.** Ownership is derived from that variable alone, so a workload with every
+  other fragment applied and no marker reports as awaiting the deployment forever — indistinguishable from an
+  untouched one. Its recorded language (or, on Lambda, layer ARN) is also what conformance compares against.
+- **On ECS, a pre-existing loader value must be recorded in the marker's `prevEnv`.** `containerDiff`
+  reconstructs the expected value as `<recorded original> + separator + <Odigos value>`, so a customer who
+  correctly appends to a value they did not record is reported as drifted for following the instructions.
+  Cloud Run and Container Apps use a substring check and are unaffected.
+
+The artifacts are hand-authored per tool — HCL, CloudFormation YAML and ARM share no syntax — so
+`plan.CoverageProblems` is the guard that keeps them honest: a provider test asserts every literal a plan
+requires appears in them, that every artifact carries the language-independent core, and that each artifact
+states the merge DIRECTION next to the loader variable it names. That last check is the one a substring sweep
+cannot make, because a template that hardcodes the loader value satisfies every literal check and is still the
+bug. **When one of those tests fails, fix the recipe or update both sides — never edit a value in the YAML to
+silence it.**
+
 1. **Compute platforms** — managed environments where Odigos would be _installed_ (EKS, GKE, AKS, EC2, VM).
 
 - **Discovery** — detect platforms

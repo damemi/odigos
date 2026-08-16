@@ -51,11 +51,12 @@ type CloudConnectorSpec struct {
 	ComputePlatforms ComputePlatformDomain `yaml:"computePlatforms"`
 	// Gateway is connector-wide collector wiring; not part of either domain.
 	Gateway Feature `yaml:"gateway"`
-	// Setup declares provider-defined onboarding UI artifacts (e.g. the IAM policy preview, CLI setup
-	// snippets) shown in the create-connector flow. It is intentionally declarative: each provider
-	// authors artifact templates in its YAML, and the UI fills them from the aggregated spec permissions
-	// (and, later, live form values), so the UI stays provider-agnostic and no per-provider Go rendering
-	// code is needed. Extend this with new artifacts/sections as more onboarding steps become spec-driven.
+	// Setup declares provider-defined renderable artifacts: the onboarding pieces shown in the
+	// create-connector flow (IAM policy preview, CLI setup snippets) and — sectioned by instrumentation type,
+	// see InstrumentationSection — the manual-mode instrumentation instructions a customer applies in their
+	// own deployment definition. It is intentionally declarative: each provider authors artifact templates in
+	// its YAML, and the UI fills them from the aggregated spec permissions (and, later, live form values), so
+	// the UI stays provider-agnostic and no per-provider Go rendering code is needed.
 	Setup Setup `yaml:"setup"`
 }
 
@@ -116,6 +117,31 @@ func (s CloudConnectorSpec) SetupArtifactsForSection(section string) []SetupArti
 		}
 	}
 	return out
+}
+
+// instrumentationSectionPrefix namespaces the manual-mode instrumentation instructions inside
+// Setup.Artifacts, one section per instrumentation type.
+//
+// They ride in Setup rather than getting a hierarchy of their own for one concrete reason: central-backend's
+// cloudConnectorSetup maps the artifact list through UNINTERPRETED — id, section, variant, steps, format,
+// template — so a new section reaches the create-connector catalog with no change there and no agents-api
+// version bump. A new top-level field would need both, and until both shipped the instructions would simply
+// not exist for a customer who has already been told their workload is awaiting them.
+//
+// Sectioning by TYPE rather than lumping them under one "instrumentation" section is what makes them
+// selectable: a client showing instructions for a Fargate service must not have to filter Lambda's out of the
+// same list, and the two share no anchors, no variants and no vocabulary.
+const instrumentationSectionPrefix = "instrumentation:"
+
+// InstrumentationSection is the Setup.Artifacts section carrying the manual-mode instrumentation instructions
+// for one workload instrumentation type (e.g. "instrumentation:aws.lambda").
+func InstrumentationSection(typeName string) string { return instrumentationSectionPrefix + typeName }
+
+// InstrumentationArtifacts returns the manual-mode instrumentation instructions declared for one
+// instrumentation type, in spec order. Each is a delivery variant (terraform, cloudformation, manual, …) of
+// the same underlying change.
+func (s CloudConnectorSpec) InstrumentationArtifacts(typeName string) []SetupArtifact {
+	return s.SetupArtifactsForSection(InstrumentationSection(typeName))
 }
 
 // WorkloadDomain groups the two features that operate on directly-instrumentable resources: Discovery
