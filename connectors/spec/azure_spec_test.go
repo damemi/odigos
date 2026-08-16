@@ -138,6 +138,9 @@ func TestAzureCapabilityResolution(t *testing.T) {
 	for _, want := range []string{
 		"Microsoft.Resources/subscriptions/read",
 		"Microsoft.App/containerApps/read",
+		// Observation read, declared on the discovery type so manual (IaC) mode can see which revision is
+		// actually serving traffic; automatic mode gets it too.
+		"Microsoft.App/containerApps/revisions/read",
 		"Microsoft.App/containerApps/write",
 		"Microsoft.App/managedEnvironments/join/action",
 		"Microsoft.ContainerService/managedClusters/read",

@@ -59,6 +59,13 @@ workloads:
         permissions:
           - run.services.list
           - run.services.get
+          # Cloud Run revisions are immutable: Service.template describes the NEXT revision, while traffic
+          # can keep serving an older one indefinitely. Confirming what is ACTUALLY running — and therefore
+          # whether instrumentation is effective rather than merely declared — requires the Revision
+          # resource, which carries its own containers, volumes and conditions. Read-only, and needed by
+          # manual (IaC) mode, which observes through discovery alone.
+          - run.revisions.list
+          - run.revisions.get
 
   # instrumentation: instrument a discovered workload DIRECTLY. Each type references a workload-discovery
   # type and declares how instrumentation is injected. Gated on an OTLP destination.

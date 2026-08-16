@@ -235,6 +235,70 @@ func (c Capabilities) Validate() error {
 	return nil
 }
 
+// UnsupportedCapabilities returns human-readable warnings for capability entries this provider spec cannot
+// honor as written. Callers should log them at startup.
+//
+// It deliberately returns warnings rather than an error, and must never fail the runtime. Every case below
+// degrades to a correct-but-surprising per-workload report, whereas refusing to start would turn a recoverable
+// misconfiguration into a connector that never registers, heartbeats or reports at all — strictly less
+// observable than the state being warned about.
+//
+// This is deliberately NOT a permission check. Whether the connector's credentials actually carry the mutation
+// permissions automatic mode needs cannot be established without a provider policy-simulation call (nothing in
+// connectors/ makes one), and inferring it would risk exactly that false negative. The authorization error from
+// the first real mutation attempt is the honest signal there, and it is already reported per workload.
+func (s CloudConnectorSpec) UnsupportedCapabilities(caps Capabilities) []string {
+	discovers := make(map[string]bool, len(s.Workloads.Discovery.Types))
+	for _, t := range s.Workloads.Discovery.Types {
+		discovers[t.Name] = true
+	}
+
+	// Fold duplicate entries with the same OR the mode resolver and the reconciler gate use, so a warning is
+	// reported once per type and describes the flags that actually take effect.
+	type flags struct{ discovery, instrumentation bool }
+	folded := make(map[string]flags, len(caps.Workloads))
+	order := make([]string, 0, len(caps.Workloads))
+	for _, w := range caps.Workloads {
+		f, seen := folded[w.Type]
+		if !seen {
+			order = append(order, w.Type)
+		}
+		folded[w.Type] = flags{f.discovery || w.Discovery, f.instrumentation || w.Instrumentation}
+	}
+
+	var out []string
+	for _, name := range order {
+		f := folded[name]
+		if !f.discovery && !f.instrumentation {
+			continue // the type is simply switched off; nothing to warn about
+		}
+		if !discovers[name] {
+			out = append(out, fmt.Sprintf(
+				"workload capability %q is not a workload type this provider discovers; it will be ignored", name))
+			continue
+		}
+		if !f.instrumentation {
+			continue // manual mode: needs nothing from the instrumentation feature
+		}
+		it, declared := s.Workloads.Instrumentation.findType(name)
+		switch {
+		case !s.Workloads.Instrumentation.Enabled || !declared:
+			out = append(out, fmt.Sprintf(
+				"workload capability %q requests automatic instrumentation, but this provider declares none for it; "+
+					"discovered workloads of this type will report no instrumentation defined", name))
+		case !it.IsImplemented():
+			out = append(out, fmt.Sprintf(
+				"workload capability %q requests automatic instrumentation, but it is declared unimplemented in this "+
+					"release; discovered workloads of this type will report NotImplemented", name))
+		case !f.discovery:
+			out = append(out, fmt.Sprintf(
+				"workload capability %q enables instrumentation without discovery; no workload of this type will be "+
+					"discovered, so none will be instrumented", name))
+		}
+	}
+	return out
+}
+
 // WorkloadCapability is the allow-list entry for one directly-instrumentable resource type: whether the
 // connector may discover and/or instrument that workload type.
 type WorkloadCapability struct {
@@ -625,9 +689,21 @@ func (s CloudConnectorSpec) RequiredPermissions(caps Capabilities) []string {
 	// Deliberately ActiveInstrumentationTypes (automatic only), NOT InstrumentationTypes: Type.Permissions is
 	// the set needed to MUTATE the workload, so aggregating it for a manual-mode type would demand exactly the
 	// mutation permissions manual mode exists to avoid. A manual-mode type therefore contributes nothing here
-	// beyond its discovery permissions, which is correct — until manual mode's extra READ permissions are
-	// declared separately (an additive observe-permissions list), at which point those get added here for
-	// manual-mode types only.
+	// beyond its DISCOVERY permissions — and that is the whole mechanism, not a gap: the extra reads manual mode
+	// needs to judge conformance (ecs:DescribeTaskDefinition, run.revisions.*, containerApps/revisions/read) are
+	// declared on the discovery type, because discovery is the only thing manual mode runs.
+	//
+	// A separate observe-permissions list was considered and rejected. Nothing consumes this function to build
+	// the policy the customer actually applies — that is aggregated client-side in ui-kit from each type's
+	// declared permissions, gated on the same two capability booleans — so a new field would have to be threaded
+	// through CloudConnectorType in central-backend and then through ui-kit before it rendered anywhere. Until
+	// both shipped, the rendered policy would OMIT the reads and manual-mode observation would fail with 403s in
+	// the field. Declaring them on discovery makes them render today, in every access level, with no change
+	// outside connectors/.
+	//
+	// The cost is that automatic mode is also granted those reads. They are read-only, and automatic mode wants
+	// them anyway: judging whether instrumentation is effective (serving traffic) rather than merely declared is
+	// the same question in both modes.
 	for _, t := range s.ActiveInstrumentationTypes(caps) {
 		add(t.Permissions)
 	}

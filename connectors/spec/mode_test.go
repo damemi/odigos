@@ -1,6 +1,9 @@
 package spec
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // modeSampleYAML declares two instrumentation types so a capability set can put one in each mode.
 const modeSampleYAML = `
@@ -281,4 +284,182 @@ func typeNames(types []Type) []string {
 		out = append(out, t.Name)
 	}
 	return out
+}
+
+// manualObservationReads names, per provider workload type, the permissions MANUAL mode needs in order to judge
+// whether the customer actually applied instrumentation — beyond what merely listing the inventory requires.
+//
+// These live on each provider's DISCOVERY type, because discovery is the only thing manual mode runs; see the
+// comment in RequiredPermissions for why a separate observe-permissions list was rejected. An empty list is a
+// deliberate assertion rather than an omission: Lambda's ListFunctions already returns the function's
+// environment and layers, so conformance there costs no extra permission.
+var manualObservationReads = map[string]map[string][]string{
+	"aws": {
+		"aws.lambda":       {},
+		"aws.fargate-task": {"ecs:DescribeTaskDefinition"},
+	},
+	"gcp": {
+		"gcp.cloud-run": {"run.revisions.list", "run.revisions.get"},
+	},
+	"azure": {
+		"azure.container-apps": {"Microsoft.App/containerApps/revisions/read"},
+	},
+}
+
+// TestManualModeGrantsObservationReads is the positive counterpart to TestManualModeGrantsNoMutationPermissions:
+// that one proves mutation permissions stay out of manual mode, this one proves the reads observation needs are
+// actually in. Without it, dropping a read from a discovery type would silently produce a connector whose
+// rendered policy cannot support the conformance checks manual mode is built on (a 403 in the field, not a test
+// failure).
+func TestManualModeGrantsObservationReads(t *testing.T) {
+	for provider, byType := range manualObservationReads {
+		s, ok := Get(provider)
+		if !ok {
+			t.Fatalf("provider %q not retrievable", provider)
+		}
+		for typeName, reads := range byType {
+			caps := Capabilities{Workloads: []WorkloadCapability{{Type: typeName, Discovery: true}}}
+			if got := caps.WorkloadInstrumentationMode(typeName); got != ModeManual {
+				t.Fatalf("%s/%s: test set up the wrong mode: got %q, want %q", provider, typeName, got, ModeManual)
+			}
+			perms := s.RequiredPermissions(caps)
+			for _, want := range reads {
+				if !containsStr(perms, want) {
+					t.Errorf("%s/%s manual mode: required permissions %v missing observation read %q",
+						provider, typeName, perms, want)
+				}
+			}
+		}
+	}
+}
+
+// TestEveryInstrumentationTypeDeclaresObservationReads makes the decision above mandatory. A newly declared
+// instrumentation type must state what manual mode needs to read — even if the answer is "nothing" — rather than
+// inheriting silence and shipping a mode that cannot observe.
+func TestEveryInstrumentationTypeDeclaresObservationReads(t *testing.T) {
+	for _, provider := range Providers() {
+		s := MustGet(provider)
+		byType, ok := manualObservationReads[provider]
+		if !ok {
+			t.Errorf("provider %q declares no manual observation-read expectations", provider)
+			continue
+		}
+		for _, it := range s.Workloads.Instrumentation.Types {
+			if _, ok := byType[it.Name]; !ok {
+				t.Errorf("%s: instrumentation type %q has no manual observation-read expectation; decide what manual "+
+					"mode must read to verify it and record it in manualObservationReads", provider, it.Name)
+			}
+		}
+	}
+}
+
+// writeVerbs mark a provider permission as write-capable. Matching is case-sensitive and anchored on separators
+// where a bare verb would be ambiguous — "put" alone would match "compute.instances.list".
+var writeVerbs = []string{
+	"Update", "Create", "Delete", "Register", "Publish", "TagResource", "PassRole",
+	".update", ".create", ".delete", ".setIamPolicy", "actAs",
+	"/write", "join/action",
+}
+
+// TestManualModeUnionHasNoWriteVerb generalizes TestManualModeGrantsNoMutationPermissions, which can only catch
+// permissions some instrumentation type happens to declare. This catches a write-capable permission added
+// anywhere the manual-mode aggregation reaches — including a discovery type, which is where this wave put the
+// observation reads and therefore the most likely place for one to slip in.
+func TestManualModeUnionHasNoWriteVerb(t *testing.T) {
+	for _, provider := range Providers() {
+		s := MustGet(provider)
+		for _, it := range s.Workloads.Instrumentation.Types {
+			caps := Capabilities{Workloads: []WorkloadCapability{{Type: it.Name, Discovery: true}}}
+			for _, p := range s.RequiredPermissions(caps) {
+				for _, verb := range writeVerbs {
+					if strings.Contains(p, verb) {
+						t.Errorf("%s/%s manual mode aggregates write-capable permission %q (matched %q)",
+							provider, it.Name, p, verb)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestUnsupportedCapabilities(t *testing.T) {
+	s, err := Parse([]byte(modeSampleYAML))
+	if err != nil {
+		t.Fatalf("parse sample spec: %v", err)
+	}
+	cases := []struct {
+		name      string
+		caps      Capabilities
+		wantCount int
+		wantMatch string
+	}{
+		{
+			name: "manual mode on a discovery-only type is fine",
+			caps: Capabilities{Workloads: []WorkloadCapability{{Type: "bucket", Discovery: true}}},
+		},
+		{
+			name: "automatic mode is fine where instrumentation is declared",
+			caps: Capabilities{Workloads: []WorkloadCapability{{Type: "vm", Discovery: true, Instrumentation: true}}},
+		},
+		{
+			name:      "automatic mode on a type with no instrumentation",
+			caps:      Capabilities{Workloads: []WorkloadCapability{{Type: "bucket", Discovery: true, Instrumentation: true}}},
+			wantCount: 1,
+			wantMatch: "declares none for it",
+		},
+		{
+			name:      "unknown workload type",
+			caps:      Capabilities{Workloads: []WorkloadCapability{{Type: "nope", Discovery: true}}},
+			wantCount: 1,
+			wantMatch: "not a workload type this provider discovers",
+		},
+		{
+			name:      "instrumentation without discovery finds nothing to instrument",
+			caps:      Capabilities{Workloads: []WorkloadCapability{{Type: "vm", Instrumentation: true}}},
+			wantCount: 1,
+			wantMatch: "without discovery",
+		},
+		{
+			name: "a switched-off type is not a warning",
+			caps: Capabilities{Workloads: []WorkloadCapability{{Type: "vm"}}},
+		},
+		{
+			name: "duplicate entries warn once, on the OR-ed flags",
+			caps: Capabilities{Workloads: []WorkloadCapability{
+				{Type: "bucket", Discovery: true},
+				{Type: "bucket", Discovery: true, Instrumentation: true},
+			}},
+			wantCount: 1,
+			wantMatch: "declares none for it",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := s.UnsupportedCapabilities(c.caps)
+			if len(got) != c.wantCount {
+				t.Fatalf("UnsupportedCapabilities = %v (%d warnings), want %d", got, len(got), c.wantCount)
+			}
+			if c.wantMatch != "" && !strings.Contains(got[0], c.wantMatch) {
+				t.Errorf("warning %q does not mention %q", got[0], c.wantMatch)
+			}
+		})
+	}
+}
+
+// TestRealProviderCapabilitiesAreHonorable guards against a spec that cannot serve its own advertised types: for
+// every provider, enabling everything it declares must produce no warnings.
+func TestRealProviderCapabilitiesAreHonorable(t *testing.T) {
+	for _, provider := range Providers() {
+		s := MustGet(provider)
+		var caps Capabilities
+		for _, t := range s.Workloads.Discovery.Types {
+			_, instrumentable := s.Workloads.Instrumentation.findType(t.Name)
+			caps.Workloads = append(caps.Workloads, WorkloadCapability{
+				Type: t.Name, Discovery: true, Instrumentation: instrumentable,
+			})
+		}
+		if got := s.UnsupportedCapabilities(caps); len(got) != 0 {
+			t.Errorf("%s: enabling every declared type produced warnings: %v", provider, got)
+		}
+	}
 }

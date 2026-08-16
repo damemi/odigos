@@ -133,6 +133,12 @@ workloads:
           - ecs:DescribeServices
           - ecs:ListTasks
           - ecs:DescribeTasks
+          # Observation, not mutation. DescribeServices yields only the task-definition ARN, never the
+          # definition itself, so deriving whether a service actually carries Odigos instrumentation needs
+          # this read. Declared on DISCOVERY (not only on the instrumentation type) because manual mode runs
+          # on discovery alone: a connector the customer instruments themselves must still be able to see
+          # what they applied. Automatic mode also declares it, for the mutation path.
+          - ecs:DescribeTaskDefinition
 
   # instrumentation: instrument a discovered workload DIRECTLY. Each type references a workload-discovery
   # type and declares how instrumentation is injected. Gated on an OTLP destination.

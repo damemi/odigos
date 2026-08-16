@@ -75,6 +75,12 @@ workloads:
         description: List Container Apps in every resource group in the subscription.
         permissions:
           - Microsoft.App/containerApps/read
+          # Container Apps revisions are immutable, and Properties.Template is the latest DESIRED template,
+          # not what serves traffic — in Multiple-revision mode an ingress traffic split can weight an older,
+          # uninstrumented revision. Per-revision runningState/healthState lives on the revisions
+          # sub-resource, behind this distinct read action. Needed by manual (IaC) mode, which observes
+          # through discovery alone. NOTE: listSecrets is deliberately never requested.
+          - Microsoft.App/containerApps/revisions/read
 
   # instrumentation: instrument a discovered workload DIRECTLY. Each type references a workload-discovery
   # type and declares how instrumentation is injected. Gated on an OTLP destination.

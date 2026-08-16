@@ -181,6 +181,10 @@ func TestGCPCapabilityResolution(t *testing.T) {
 		"resourcemanager.projects.get",
 		"run.services.list",
 		"run.services.update",
+		// Observation reads, declared on the discovery type so manual (IaC) mode can see what the customer
+		// applied; automatic mode gets them too.
+		"run.revisions.list",
+		"run.revisions.get",
 		"iam.serviceAccounts.actAs",
 		"container.clusters.list",
 		"compute.instances.list",

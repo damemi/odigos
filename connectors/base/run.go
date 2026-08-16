@@ -32,6 +32,15 @@ func Run(ctx context.Context, cfg config.Config, cfgMgr *config.Manager, st *sto
 	}
 	runLog.Info("schema version verified")
 
+	// Surface capability entries the provider spec cannot honor (e.g. automatic instrumentation requested for a
+	// type this provider cannot instrument). Warnings only, deliberately: each case degrades to a correct
+	// per-workload report, and aborting here would produce a connector that never registers or heartbeats —
+	// less observable than the misconfiguration itself. See spec.UnsupportedCapabilities for why this is not a
+	// permission check.
+	for _, w := range p.Spec().UnsupportedCapabilities(cfg.Capabilities) {
+		runLog.Warn("capability cannot be honored as declared", "detail", w)
+	}
+
 	// Load the operational config (DB overrides over code defaults) before starting the loops so they use
 	// the configured intervals from the first cycle rather than pure defaults.
 	if err := cfgMgr.Refresh(ctx); err != nil {
