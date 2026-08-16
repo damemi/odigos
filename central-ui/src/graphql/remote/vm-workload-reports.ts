@@ -31,7 +31,7 @@ export type VmWorkloadReport = GetWorkloadReportsQuery['workloadReports'][number
 /**
  * Pull the container layer out of the kind-union `details` block.
  *
- * Only the container-shaped branches (ECS / docker / Cloud Run) carry
+ * Only the container-shaped branches (ECS / docker / RevisionedService) carry
  * `containers`; Lambda's branch and a null details do not. Narrowing via `in`
  * keeps the read typed without casting the whole report.
  */
@@ -495,11 +495,16 @@ export const withWorkloadReportRegion = (printedQuery: string): string => {
 // `mapReportContainers` consumes.
 //
 // Only the container-shaped branches are selected: Lambda's branch has no
-// containers, and the ECS/Cloud Run workload scalars (clusterArn, taskDefinition,
-// launchType, revision) have nowhere to go in the kit's `Workload` yet — asking
-// for them would just grow every report payload. `runtime.running` is skipped for
-// the same reason: the kit computes the effective runtime from detected+override
-// itself. Add a field here when, and only when, something renders it.
+// containers, and the ECS/RevisionedService workload scalars (clusterArn,
+// taskDefinition, launchType, latestReadyRevision) have nowhere to go in the
+// kit's `Workload` yet — asking for them would just grow every report payload.
+// `runtime.running` is skipped for the same reason: the kit computes the
+// effective runtime from detected+override itself. Add a field here when, and
+// only when, something renders it.
+//
+// agents-api v0.19.0 replaced CloudRunWorkloadDetails (and Container Apps) with
+// the shared RevisionedServiceWorkloadDetails branch; the patch below matches
+// that wire type so a platform ahead of the frozen dialect still gets containers.
 //
 // `instrumentationEligible` + `excludedReason` are the container's status, and the
 // report carries no platform-specific container flags at all — an ECS container the
@@ -522,7 +527,7 @@ const WORKLOAD_DETAILS_SELECTIONS = `
   details {
     ... on EcsWorkloadDetails { containers { ${WORKLOAD_DETAILS_CONTAINER_FIELDS} } }
     ... on DockerWorkloadDetails { containers { ${WORKLOAD_DETAILS_CONTAINER_FIELDS} } }
-    ... on CloudRunWorkloadDetails { containers { ${WORKLOAD_DETAILS_CONTAINER_FIELDS} } }
+    ... on RevisionedServiceWorkloadDetails { containers { ${WORKLOAD_DETAILS_CONTAINER_FIELDS} } }
   }
 `;
 

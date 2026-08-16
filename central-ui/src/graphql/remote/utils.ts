@@ -27,7 +27,7 @@ export const supportsWorkloadReportRegion = (schemaVersion: string): boolean => 
 // live: `WorkloadReport.details` (an ECS task's container layer, replacing the
 // deprecated untyped `metadata: JSON`) and `Source.config.ecs` / `.docker`
 // (per-container runtime/distro overrides). Both are additive. The published
-// dialect registry floors to v0.18.0 when the platform reports >= that version
+// dialect registry floors to v0.19.0 when the platform reports >= that version
 // (so those selections arrive natively); for a platform stuck between a newer
 // schema and an older frozen snapshot the adapter still patches them in — but
 // only when the connected platform actually has them, since an older agent
@@ -83,7 +83,7 @@ export const clearWorkloadRegions = (): void => workloadRegions.clear();
 // Patching selections into a frozen dialect snapshot.
 //
 // A VM/connector document comes from the published dialect registry, floored to
-// the highest FROZEN snapshot that is <= the reported schema (v0.18.0 today).
+// the highest FROZEN snapshot that is <= the reported schema (v0.19.0 today).
 // A platform reporting a schema newer than every frozen snapshot therefore
 // serves fields the printed document never asks for. The adapter's `patchQuery`
 // hook exists for exactly that, and these helpers do the patching on the parsed

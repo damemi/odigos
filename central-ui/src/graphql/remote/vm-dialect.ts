@@ -8,7 +8,7 @@ import type { OperationContext } from '@odigos/ui-kit/contexts';
 // `getVersionedQuery`/`trimVersion`), VM proxies select their GraphQL document
 // straight from the published `@odigos/vmagent-api-apollo-client` dialect
 // registry. The package ships one frozen dialect per agents-api snapshot
-// (v0.6.0 … v0.18.0); `resolveDialect(reported)` floors the proxy's reported
+// (v0.6.0 … v0.19.0); `resolveDialect(reported)` floors the proxy's reported
 // schema version to the matching dialect (patch-aware, full semver) so the
 // agent never receives fields its schema lacks. This keeps a single source of
 // truth for VM operations and makes patch-level resolution automatic.
