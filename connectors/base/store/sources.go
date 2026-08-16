@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 
@@ -22,12 +23,17 @@ type SourceRecord struct {
 	ExternalResourceID string
 	Region             string
 	Config             domainsrc.SourceConfig
+	// UpdatedAt is when the intent last changed (created, edited, enabled or disabled). It is the base's
+	// only clock over intent: reports use it to say how long a workload has been in its current state — how
+	// long instrumentation has been awaited, or how long a disabled source has had live instrumentation on it
+	// — which is the difference between "pending" and "stuck" for anyone reading a report.
+	UpdatedAt time.Time
 }
 
 func (s *Store) ListSources(ctx context.Context) ([]SourceRecord, error) {
 	sourcesLog.Debug("list sources", "connector", s.connectorName, "schema", s.schema)
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
-		SELECT source_name, kind, COALESCE(service_name, ''), enabled, external_resource_id, COALESCE(region, ''), config
+		SELECT source_name, kind, COALESCE(service_name, ''), enabled, external_resource_id, COALESCE(region, ''), config, updated_at
 		FROM %s.sources
 		WHERE connector_name = $1
 		ORDER BY source_name
@@ -65,7 +71,7 @@ func (s *Store) ListSources(ctx context.Context) ([]SourceRecord, error) {
 func (s *Store) FindSource(ctx context.Context, name, kind, region string) (*SourceRecord, error) {
 	sourcesLog.Debug("find source", "connector", s.connectorName, "name", name, "kind", kind, "region", region)
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
-		SELECT source_name, kind, COALESCE(service_name, ''), enabled, external_resource_id, COALESCE(region, ''), config
+		SELECT source_name, kind, COALESCE(service_name, ''), enabled, external_resource_id, COALESCE(region, ''), config, updated_at
 		FROM %s.sources
 		WHERE connector_name = $1 AND source_name = $2
 		  AND ($3 = '' OR kind = $3)
@@ -104,7 +110,7 @@ func (s *Store) FindSource(ctx context.Context, name, kind, region string) (*Sou
 func scanSourceRow(row interface{ Scan(...any) error }) (SourceRecord, error) {
 	var rec SourceRecord
 	var configJSON []byte
-	if err := row.Scan(&rec.Name, &rec.Kind, &rec.ServiceName, &rec.Enabled, &rec.ExternalResourceID, &rec.Region, &configJSON); err != nil {
+	if err := row.Scan(&rec.Name, &rec.Kind, &rec.ServiceName, &rec.Enabled, &rec.ExternalResourceID, &rec.Region, &configJSON, &rec.UpdatedAt); err != nil {
 		return SourceRecord{}, err
 	}
 	if len(configJSON) > 0 {

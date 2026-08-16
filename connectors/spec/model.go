@@ -132,12 +132,60 @@ type ComputePlatformDomain struct {
 	Installation Feature `yaml:"installation"`
 }
 
+// Instrumentation modes: WHO applies instrumentation for a workload type on a given connector. The mode is
+// DERIVED from the capability booleans rather than stored as its own field (see WorkloadInstrumentationMode),
+// so it needs no new field on the CRD, the GraphQL capability input, or this struct.
+//
+// The derivation is also fail-safe across connector image versions: manual mode is expressed as
+// `instrumentation: false`, so a connector image that predates these modes wires no reconciler for the type
+// and therefore cannot mutate a workload its customer chose to own. Encoding manual mode as a new field
+// alongside `instrumentation: true` would have had the opposite property — ODIGOS_CAPABILITIES is parsed with
+// encoding/json, which ignores unknown fields, so an older image would have read it as plain automatic
+// instrumentation and instrumented workloads behind the customer's back.
+const (
+	// ModeAutomatic: Odigos applies, repairs and removes instrumentation itself. Requires provider mutation
+	// permissions. This is the pre-existing behavior.
+	ModeAutomatic = "automatic"
+	// ModeManual: the customer applies instrumentation themselves (IaC or by hand). Odigos publishes what to
+	// apply, observes the result and reports conformance; it never mutates the workload.
+	ModeManual = "manual"
+)
+
 // Capabilities is the customer's allow-list, split into the two domains to mirror the CRD
 // (OdigosCloudConnectorSpec.Workloads / .ComputePlatforms) and the spec's own two hierarchies. The
 // connector resolves active detectors/reconcilers by intersecting these with the spec's supported types.
 type Capabilities struct {
 	Workloads        []WorkloadCapability        `json:"workloads,omitempty" yaml:"workloads,omitempty"`
 	ComputePlatforms []ComputePlatformCapability `json:"computePlatforms,omitempty" yaml:"computePlatforms,omitempty"`
+}
+
+// WorkloadInstrumentationMode returns who instruments the named workload type on this connector:
+// ModeAutomatic, ModeManual, or "" when the type is not in the allow-list at all.
+//
+// A discovered workload type is instrumented BY THE CUSTOMER by default; only granting the connector
+// instrumentation capability for that type makes Odigos do the installation itself. So:
+//
+//	discovery: true,  instrumentation: true   -> automatic
+//	discovery: true,  instrumentation: false  -> manual   (the default for a discovered type)
+//	discovery: false, instrumentation: false  -> ""       (type not enabled at all)
+//
+// `instrumentation: true` maps to automatic regardless of the discovery flag, so this never contradicts
+// ActiveInstrumentationTypes — which gates the mutating reconcilers on that boolean alone.
+func (c Capabilities) WorkloadInstrumentationMode(typeName string) string {
+	for _, w := range c.Workloads {
+		if w.Type != typeName {
+			continue
+		}
+		switch {
+		case w.Instrumentation:
+			return ModeAutomatic
+		case w.Discovery:
+			return ModeManual
+		default:
+			return ""
+		}
+	}
+	return ""
 }
 
 // WorkloadCapability is the allow-list entry for one directly-instrumentable resource type: whether the
@@ -172,6 +220,18 @@ func (c Capabilities) workloadInstrumentation() map[string]bool {
 	out := map[string]bool{}
 	for _, w := range c.Workloads {
 		if w.Instrumentation {
+			out[w.Type] = true
+		}
+	}
+	return out
+}
+
+// workloadInstrumentationAnyMode is workloadInstrumentation widened to the manual-mode types as well — every
+// type WorkloadInstrumentationMode resolves to a mode. Backs InstrumentationTypes.
+func (c Capabilities) workloadInstrumentationAnyMode() map[string]bool {
+	out := map[string]bool{}
+	for _, w := range c.Workloads {
+		if w.Instrumentation || w.Discovery {
 			out[w.Type] = true
 		}
 	}
@@ -423,9 +483,26 @@ func (s CloudConnectorSpec) UnimplementedInstrumentationKinds() map[string]bool 
 	return s.Workloads.Instrumentation.unimplementedKinds()
 }
 
-// ActiveInstrumentationTypes returns the workload instrumentation types to reconcile, given the capabilities.
+// ActiveInstrumentationTypes returns the workload instrumentation types to RECONCILE — that is, the types
+// this connector may mutate — given the capabilities. It resolves AUTOMATIC-mode types only.
+//
+// This is the mutation gate, and it is structurally airtight: the coordinator wires a reconciler only for a
+// type returned here, so a manual-mode type has no reconciler in the runtime at all and cannot be mutated by
+// any code path, including the shutdown drain. Callers that mean "which types does this connector handle in
+// SOME mode" (reporting, availability, observation) must use InstrumentationTypes instead — keeping this
+// function's existing narrow meaning is what makes every pre-existing caller correct by default.
 func (s CloudConnectorSpec) ActiveInstrumentationTypes(caps Capabilities) []Type {
 	return s.Workloads.Instrumentation.activeTypes(caps.workloadInstrumentation())
+}
+
+// InstrumentationTypes returns every instrumentation type this connector handles in EITHER mode: the
+// automatic-mode types plus the manual-mode ones the customer instruments themselves.
+//
+// Used for reporting and availability, never to authorize a mutation — see ActiveInstrumentationTypes. A
+// manual-mode type must appear here so a workload marked for instrumentation reports as awaiting the
+// customer's deployment rather than as "no instrumentation defined for this workload".
+func (s CloudConnectorSpec) InstrumentationTypes(caps Capabilities) []Type {
+	return s.Workloads.Instrumentation.activeTypes(caps.workloadInstrumentationAnyMode())
 }
 
 // ActiveComputePlatformTypes returns the compute-platform types to reconcile by installing an Odigos
@@ -498,6 +575,12 @@ func (s CloudConnectorSpec) RequiredPermissions(caps Capabilities) []string {
 	for _, t := range cp {
 		add(t.Permissions)
 	}
+	// Deliberately ActiveInstrumentationTypes (automatic only), NOT InstrumentationTypes: Type.Permissions is
+	// the set needed to MUTATE the workload, so aggregating it for a manual-mode type would demand exactly the
+	// mutation permissions manual mode exists to avoid. A manual-mode type therefore contributes nothing here
+	// beyond its discovery permissions, which is correct — until manual mode's extra READ permissions are
+	// declared separately (an additive observe-permissions list), at which point those get added here for
+	// manual-mode types only.
 	for _, t := range s.ActiveInstrumentationTypes(caps) {
 		add(t.Permissions)
 	}

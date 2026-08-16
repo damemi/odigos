@@ -18,6 +18,7 @@ import (
 	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
 	cpg "github.com/odigos-io/odigos-enterprise/connectors/postgres"
+	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
 var coordLog = connlog.Subsystem("coordinator")
@@ -478,6 +479,8 @@ func (c *Coordinator) WorkloadReports(ctx context.Context) ([]api.DiscoveredWork
 	}
 	c.markInstrumentationAvailability(out)
 	c.markBlockedOnPrerequisites(ctx, out)
+	// Ordered after the prerequisite check so a missing destination wins over "waiting for the customer".
+	c.markAwaitingCustomer(out)
 	coordLog.Debug("list workload reports complete", "count", len(out))
 	return out, nil
 }
@@ -537,22 +540,66 @@ func blockableForInstrumentation(w api.DiscoveredWorkload) bool {
 		w.InstrumentationAvailable && w.InstrumentationImplemented
 }
 
-// markInstrumentationAvailability flags each workload whose instrumentation type is currently active
-// for this connector (spec feature enabled + capability allowed). A workload marked for instrumentation
-// whose type is not available is reported as Unknown (not an error) — see workloadreport.ToModel. It also
-// flags whether the type's instrumentation is implemented in this release: a declared-but-unimplemented
-// type (implemented:false) is reported as NotImplemented rather than as working.
+// markInstrumentationAvailability flags each workload whose instrumentation type this connector handles,
+// and in which mode.
+//
+// Availability spans BOTH modes deliberately. "Available" answers "does this connector have instrumentation
+// for this workload at all", which is true of a manual-mode type — the customer applies it, but there is a
+// defined instrumentation and a plan to publish. Resolving it from the automatic-only set instead would
+// report every manual-mode workload as Unknown / "no instrumentation defined", which is the opposite of the
+// truth and hides the state the customer is actually in. The genuinely-unavailable case survives: a kind
+// with no instrumentation type declared at all (InstrumentationType == "") has nothing to offer in any mode.
+//
+// This is also why availability must not be used to authorize a mutation — ManagementMode is what says
+// whether Odigos may act, and the mutating reconcilers are separately gated by ActiveInstrumentationTypes.
+//
+// It also flags whether the type's instrumentation is implemented in this release: a declared-but-
+// unimplemented type (implemented:false) is reported as NotImplemented rather than as working.
 func (c *Coordinator) markInstrumentationAvailability(workloads []api.DiscoveredWorkload) {
-	active := make(map[string]bool)
-	for _, t := range c.provider.Spec().ActiveInstrumentationTypes(c.cfg.Capabilities) {
-		active[t.Name] = true
+	handled := make(map[string]bool)
+	for _, t := range c.provider.Spec().InstrumentationTypes(c.cfg.Capabilities) {
+		handled[t.Name] = true
 	}
 	unimplemented := c.provider.Spec().UnimplementedInstrumentationKinds()
 	for i := range workloads {
 		t := workloads[i].InstrumentationType
-		workloads[i].InstrumentationAvailable = t != "" && active[t]
+		workloads[i].InstrumentationAvailable = t != "" && handled[t]
 		workloads[i].InstrumentationImplemented = !unimplemented[t]
+		if t != "" {
+			workloads[i].ManagementMode = c.cfg.Capabilities.WorkloadInstrumentationMode(t)
+		}
 	}
+}
+
+// markAwaitingCustomer flags manual-mode workloads the customer has marked but not yet instrumented, so the
+// report says "waiting for your deployment" instead of leaving an enabled-but-uninstrumented workload
+// unexplained.
+//
+// It runs after markBlockedOnPrerequisites and only fills an empty WaitingFor, so a missing destination keeps
+// precedence: the instructions the customer needs must carry an OTLP endpoint, so until a destination exists
+// there is nothing for them to apply and telling them to act would be wrong.
+//
+// Like the destination check this belongs in the base rather than in a provider: the mode is a property of
+// the connector's capabilities, so one check covers Lambda, Fargate, Cloud Run and Container Apps alike.
+func (c *Coordinator) markAwaitingCustomer(workloads []api.DiscoveredWorkload) {
+	for i := range workloads {
+		w := &workloads[i]
+		if w.WaitingFor != "" || w.ManagementMode != spec.ModeManual {
+			continue
+		}
+		if awaitingCustomerAction(*w) {
+			w.WaitingFor = api.WaitingForCustomer
+		}
+	}
+}
+
+// awaitingCustomerAction reports whether a manual-mode workload is marked for instrumentation and the
+// customer's deployment has not landed yet. A workload already carrying Odigos instrumentation, one whose
+// source is disabled or absent, and one whose type this connector cannot instrument each have a more
+// specific story to tell and must not be relabelled as merely waiting.
+func awaitingCustomerAction(w api.DiscoveredWorkload) bool {
+	return w.SourceMatched && w.SourceEnabled && !w.Instrumented &&
+		w.InstrumentationAvailable && w.InstrumentationImplemented
 }
 
 // markComputePlatformSupport overrides the reported status of discovered compute platforms whose compute-platform type is declared
@@ -778,6 +825,7 @@ func sourceMatchKey(kind, serviceName, region string) string {
 func applySource(w *api.DiscoveredWorkload, src store.SourceRecord) {
 	w.SourceMatched = true
 	w.SourceEnabled = src.Enabled
+	w.SourceIntentAt = src.UpdatedAt
 	w.Overrides = sourceOverridesFromRecord(src)
 }
 

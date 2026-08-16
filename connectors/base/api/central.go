@@ -133,6 +133,16 @@ type DiscoveredWorkload struct {
 	// InstrumentationType is the connector-spec instrumentation type for this workload; empty when the
 	// workload's kind has no instrumentation type. Set by the provider.
 	InstrumentationType string
+	// ManagementMode is WHO instruments this workload: spec.ModeAutomatic (Odigos applies and repairs it) or
+	// spec.ModeManual (the customer applies it themselves; Odigos observes and reports). Empty when this
+	// workload's type is not enabled for instrumentation in any mode. Set by the coordinator, which resolves
+	// it from the connector's capabilities — it is a property of the connector, not of the workload.
+	ManagementMode string
+	// SourceIntentAt is when the matched source's intent last changed; zero when no source is matched. It is
+	// what lets a report say how long this state has held — how long a manual-mode workload has been awaiting
+	// the customer's deployment, or how long a disabled source has had live instrumentation on it — rather
+	// than only that it currently holds.
+	SourceIntentAt time.Time
 	// InstrumentationPhase is the live progress phase the instrumentor last recorded for this workload
 	// (e.g. "Verifying", "LayerReady", "Instrumenting", "Instrumented"); empty when no phase has been
 	// recorded yet. Set by the provider so a WorkloadReport reflects instrumentation progress on the fly.
@@ -170,6 +180,15 @@ const (
 	// (a Fargate task or Lambda has no node-local collector), so there is nowhere to point an agent
 	// and instrumentation is deferred rather than applied half-configured.
 	WaitingForDestination = "destination"
+	// WaitingForCustomer: the workload's type is in manual (IaC) mode, so the customer applies the
+	// instrumentation themselves — through Terraform, CloudFormation, Bicep, a CLI or by hand — and the
+	// connector is waiting for that deployment to land. It resolves on its own the moment the customer
+	// applies it: discovery observes the Odigos ownership marker and the workload reports Instrumented.
+	//
+	// This is the normal, healthy resting state of a marked manual-mode workload, not a failure. It takes
+	// lower precedence than WaitingForDestination: without a destination there is no endpoint to put in the
+	// instructions, so there is nothing for the customer to apply yet.
+	WaitingForCustomer = "customer"
 )
 
 // ReportedServiceName returns the OTel service.name instrumentation should report: the source-level

@@ -31,6 +31,45 @@ Every provider spec declares capabilities in two **separate** hierarchies:
 - **Discovery** — enumerate candidates as Odigos Sources
 - **Instrumentation** — attach agents / env in place (requires an OTLP destination)
 
+#### Who instruments a workload: automatic vs manual (IaC)
+
+The two capability booleans above also decide **who applies** the instrumentation. A discovered workload
+type is instrumented **by the customer by default**; the connector only does it itself when granted
+instrumentation capability for that type:
+
+| `discovery` | `instrumentation` | Mode | Behavior |
+| --- | --- | --- | --- |
+| `true` | `true` | `automatic` | Odigos applies, repairs and removes instrumentation. Needs provider mutation permissions. |
+| `true` | `false` | `manual` (default) | The customer applies it via Terraform / CloudFormation / Bicep / CLI / by hand. Odigos observes and reports; it never mutates the workload. |
+| `false` | — | — | Type not discovered at all. |
+
+There is **no separate mode field** — on the CRD, in the GraphQL capability input, or in
+`spec.Capabilities`. The mode is derived (`spec.Capabilities.WorkloadInstrumentationMode`), which also makes
+it fail-safe across connector image versions: manual mode is `instrumentation: false`, so an older connector
+image wires no reconciler for the type and cannot mutate a workload the customer chose to own.
+
+Two resolvers follow from this, and picking the wrong one is the easiest mistake to make here:
+
+- `ActiveInstrumentationTypes` — **automatic only.** The mutation gate. A reconciler is wired only for a
+  type it returns, so a manual-mode type has no reconciler in the runtime at all (including during the
+  shutdown drain).
+- `InstrumentationTypes` — **either mode.** Reporting and availability. A manual-mode type must appear here
+  so a marked workload reports as awaiting the customer's deployment rather than "no instrumentation
+  defined".
+
+A marked manual-mode workload reports `current.state: NotInstrumented` with
+`progress.stage: WaitingForCustomer` and a transient, non-error issue, and flips to `Instrumented` on its own
+once discovery observes the Odigos ownership marker (`ODIGOS_MANAGED`) on the applied workload. If the source
+is later disabled or deleted while that instrumentation is still live, the workload reports `Error` with
+`SourceDisabledButInstrumented` / `SourceMissingButInstrumented` and `current.instrumented: true` — Odigos
+will not strip instrumentation the customer applied, so removing it is theirs to do.
+
+> **Behavior change.** Connectors already running with `discovery: true, instrumentation: false` previously
+> reported a marked source as `Unknown` / `NoInstrumentationDefined` ("no instrumentation defined for this
+> workload"). They now report the manual-mode states above. This is intended — that combination always meant
+> "the customer instruments this" — but it is customer-visible. It is safe on the wire: `current.state` stays
+> within the set central-ui decodes, and only the free-form `progress.stage` and issue codes change.
+
 1. **Compute platforms** — managed environments where Odigos would be _installed_ (EKS, GKE, AKS, EC2, VM).
 
 - **Discovery** — detect platforms

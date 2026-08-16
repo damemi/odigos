@@ -7,6 +7,7 @@ import (
 	"github.com/odigos-io/agents-api/go/server/graph/model"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
 // ToModel converts a discovered workload (optionally linked to a source intent) to agents-api WorkloadReport.
@@ -34,6 +35,10 @@ func ToModel(w api.DiscoveredWorkload) *model.WorkloadReport {
 		Reason:        &reason,
 		SourceMatched: boolPtr(w.SourceMatched),
 		SourceEnabled: boolPtr(w.SourceEnabled),
+		// Who instruments this workload: "automatic" (Odigos applies and repairs it) or "manual" (the
+		// customer applies it and Odigos observes). Nil when this workload's type is not enabled for
+		// instrumentation in any mode, so a client can tell "not applicable" from either mode.
+		Mode: strPtrOrNil(w.ManagementMode),
 	}
 	// The connector only instruments with OpenTelemetry; advertise the SDK type when this workload's
 	// instrumentation is actually available (spec-enabled + implemented).
@@ -76,6 +81,11 @@ func ToModel(w api.DiscoveredWorkload) *model.WorkloadReport {
 		// deliberately skipping it. The STATE stays NotInstrumented — nothing has failed and nothing
 		// about this workload needs fixing — which a UI renders as pending for an enabled source. The
 		// stage/message/waitingFor carry the explanation and the fact that it resolves on its own.
+		//
+		// Manual (IaC) mode shares this branch rather than getting its own: awaiting the customer's own
+		// deployment is exactly the same shape of state — a precondition outside this workload, no failure,
+		// self-resolving — and the only difference is who satisfies it. `since` says how long the wait has
+		// run, which is what separates "just marked" from "marked weeks ago and never applied".
 		msg := waitingForMessage(w.WaitingFor)
 		progress.Stage = "WaitingFor" + capitalizeFirst(w.WaitingFor)
 		progress.Message = &msg
@@ -84,9 +94,28 @@ func ToModel(w api.DiscoveredWorkload) *model.WorkloadReport {
 			Code:     "WaitingFor" + capitalizeFirst(w.WaitingFor),
 			Severity: "unknown",
 			Message:  msg,
+			Since:    sinceOrNil(w.SourceIntentAt),
 			// Transient: it clears itself the moment the precondition is met, with no action on the
-			// workload — the customer configures a destination, not this source.
+			// workload — the customer configures a destination, or applies the plan, not this source.
 			Transient: boolPtr(true),
+		})
+	} else if w.ManagementMode == spec.ModeManual && w.Instrumented && !(w.SourceMatched && w.SourceEnabled) {
+		// Manual-mode instrumentation is live but the intent that asked for it is gone: the source was
+		// disabled, or deleted outright. Odigos cannot resolve this itself — it has no permission to change
+		// the workload in manual mode, and stripping instrumentation the customer applied is not its call —
+		// so this is a real error that stays until the customer acts, not a transient state.
+		//
+		// current.instrumented stays true: instrumentation IS running and exporting telemetry. Reporting it as
+		// not-instrumented would hide live agents from the person who has to go remove them.
+		state = "Error"
+		code, msg := sourceGoneIssue(w.SourceMatched)
+		progress.Stage = code
+		progress.Message = &msg
+		issues = append(issues, &model.WorkloadIssue{
+			Code:     code,
+			Severity: "error",
+			Message:  msg,
+			Since:    sinceOrNil(w.SourceIntentAt),
 		})
 	}
 
@@ -268,9 +297,34 @@ func waitingForMessage(waitingFor string) string {
 	switch waitingFor {
 	case api.WaitingForDestination:
 		return "waiting for a destination: this workload is marked for instrumentation, but the connector has no OTLP destination to export telemetry to. Instrumentation starts automatically once a destination is configured."
+	case api.WaitingForCustomer:
+		return "waiting for you to apply the instrumentation: this workload type is configured for manual (infrastructure-as-code) instrumentation, so Odigos does not change the workload itself. Apply the instrumentation to your own deployment definition — this workload reports as instrumented automatically once the change is live."
 	default:
 		return "waiting for " + waitingFor
 	}
+}
+
+// sourceGoneIssue names the manual-mode condition where instrumentation outlived the intent that asked for
+// it, split by whether the source is disabled or absent entirely. The two are separate codes because the
+// remedies differ: a disabled source can be re-enabled to adopt the instrumentation again, whereas a deleted
+// one leaves removal as the only way back to a consistent state.
+func sourceGoneIssue(sourceMatched bool) (code, message string) {
+	if sourceMatched {
+		return "SourceDisabledButInstrumented",
+			"instrumentation is still applied to this workload, but its source is disabled. Odigos does not remove manually-applied instrumentation, so either re-enable the source or remove the instrumentation from your deployment definition."
+	}
+	return "SourceMissingButInstrumented",
+		"instrumentation is still applied to this workload, but it has no source. Odigos does not remove manually-applied instrumentation, so either create a source for this workload or remove the instrumentation from your deployment definition."
+}
+
+// sinceOrNil renders an issue's first-observed time, or nil when unknown (no source matched, so there is no
+// intent timestamp to report). An absent `since` is honest; a zero-time one would read as 1970.
+func sinceOrNil(t time.Time) *string {
+	if t.IsZero() {
+		return nil
+	}
+	s := t.UTC().Format(time.RFC3339)
+	return &s
 }
 
 func capitalizeFirst(s string) string {
