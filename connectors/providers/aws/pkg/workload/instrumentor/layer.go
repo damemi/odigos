@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -19,6 +18,7 @@ import (
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/awsclient"
+	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
 
 // DefaultLayerDir is where the connector image stages the bundled OTel Lambda layer artifacts,
@@ -106,6 +106,35 @@ type LayerResolver interface {
 	Resolve(ctx context.Context, region, runtime, arch string) (string, error)
 }
 
+// existingLayerDiscoverer is implemented by resolvers that can look up an already-published layer without
+// publishing one (ManagedLayerResolver). Resolvers that never publish (the public-ARN table) don't need it.
+type existingLayerDiscoverer interface {
+	DiscoverExisting(ctx context.Context, region, runtime, arch string) (string, error)
+}
+
+// NonPublishingLayerARN resolves the layer ARN for a function WITHOUT publishing one into the account. It is
+// the read-only counterpart to LayerResolver.Resolve, whose managed implementation publishes the bundled layer
+// as a side effect of being asked.
+//
+// Two callers need that guarantee, for the same reason expressed differently:
+//
+//   - rollback, which is uninstrumenting a function and must not mutate the account on the way out;
+//   - the read-only observer, which runs for MANUAL-mode types. There, publishing would be a write to a
+//     customer's account performed by the one code path whose entire contract is that it performs none —
+//     and it would happen on a schedule, for every function, in the mode where Odigos has explicitly been
+//     told not to touch anything.
+//
+// A miss is returned as an error rather than an empty ARN, so a caller decides what an unresolvable layer
+// means instead of silently treating "unknown" as "absent".
+func NonPublishingLayerARN(ctx context.Context, layers LayerResolver, region, runtime, arch string) (string, error) {
+	if d, ok := layers.(existingLayerDiscoverer); ok {
+		return d.DiscoverExisting(ctx, region, runtime, arch)
+	}
+	// Resolvers without a discover-only mode don't publish on Resolve either (PublicLayerResolver reads a
+	// configured ARN table), so calling Resolve is already non-mutating for them.
+	return layers.Resolve(ctx, region, runtime, arch)
+}
+
 // AccountLayerResolver discovers a layer the connector ITSELF published on a previous run: it lists the
 // layers in the function's region compatible with the function's runtime and architecture
 // (lambda:ListLayers) and returns the one whose name is our published-layer signature
@@ -169,29 +198,22 @@ func (r *AccountLayerResolver) Resolve(ctx context.Context, region, runtime, arc
 	return "", fmt.Errorf("%w: region=%s runtime=%s arch=%s (no odigos-published layer %q found in account)", ErrLayerUnavailable, region, runtime, arch, wantName)
 }
 
-// isOdigosLayerName reports whether a Lambda layer name is one this connector published (the
-// publishedLayerName signature). Only layers matching this are ever reused, deleted, or attributed to
-// Odigos — a customer's or a public OpenTelemetry/ADOT layer never matches.
-func isOdigosLayerName(name string) bool {
-	return strings.HasPrefix(name, ownedLayerNamePrefix)
-}
-
 // MatchesInstrumentationLayerARN reports whether arn refers to a layer THIS connector published. It is
 // name-signature based (isOdigosLayerName): a customer or public OTel/ADOT layer is not considered ours.
 func MatchesInstrumentationLayerARN(arn string) bool {
-	name, _, ok := parseLayerVersionARN(arn)
-	return ok && isOdigosLayerName(name)
+	name, _, ok := store.ParseLayerVersionARN(arn)
+	return ok && store.IsOdigosLayerName(name)
 }
 
 // normalizeInstrumentationLayers keeps at most one version of each Lambda layer name. When desiredARN
 // is set, every other version of that layer name is removed and desiredARN is appended if missing.
 // This repairs functions left with multiple versions of the same layer after a failed partial update.
 func normalizeInstrumentationLayers(layers []string, desiredARN string) []string {
-	desiredName, _, hasDesired := parseLayerVersionARN(desiredARN)
+	desiredName, _, hasDesired := store.ParseLayerVersionARN(desiredARN)
 	seen := map[string]bool{}
 	out := make([]string, 0, len(layers)+1)
 	for _, arn := range layers {
-		name, _, ok := parseLayerVersionARN(arn)
+		name, _, ok := store.ParseLayerVersionARN(arn)
 		if !ok {
 			out = append(out, arn)
 			continue
@@ -306,7 +328,7 @@ func isJavaHandler(handler string) bool {
 // OpenTelemetry instrumentation does not apply and would break the function.
 func usesLambdaWebAdapter(layers []string) bool {
 	for _, arn := range layers {
-		name, _, ok := parseLayerVersionARN(arn)
+		name, _, ok := store.ParseLayerVersionARN(arn)
 		if !ok {
 			name = arn
 		}
@@ -513,7 +535,7 @@ func (r *ManagedLayerResolver) GarbageCollect(ctx context.Context, eligibleKeys 
 			continue
 		}
 		region := regionFromLayerKey(key)
-		name, version, ok := parseLayerVersionARN(arn)
+		name, version, ok := store.ParseLayerVersionARN(arn)
 		if !ok {
 			continue
 		}
@@ -542,7 +564,7 @@ func (r *ManagedLayerResolver) RefreshOrphan(ctx context.Context, region, runtim
 	if err != nil {
 		return nil // nothing in the account to refresh
 	}
-	name, version, ok := parseLayerVersionARN(arn)
+	name, version, ok := store.ParseLayerVersionARN(arn)
 	if !ok || name != publishedLayerName(lang, arch) {
 		return nil // not our layer — never delete a customer/public layer
 	}
@@ -578,29 +600,10 @@ func regionFromLayerKey(key string) string {
 	return key
 }
 
-// parseLayerVersionARN extracts the layer name and version from a layer-version ARN of the form
-// arn:aws:lambda:<region>:<account>:layer:<name>:<version>.
-func parseLayerVersionARN(arn string) (name string, version int64, ok bool) {
-	parts := strings.Split(arn, ":")
-	if len(parts) < 2 {
-		return "", 0, false
-	}
-	v, err := strconv.ParseInt(parts[len(parts)-1], 10, 64)
-	if err != nil {
-		return "", 0, false
-	}
-	return parts[len(parts)-2], v, true
-}
-
-// ownedLayerNamePrefix is the name prefix of every Lambda layer this connector publishes (see
-// publishedLayerName). It is the signature used to recognize OUR layers in the account (vs a customer's
-// or a public OTel/ADOT layer), so the connector only ever reuses, attaches, or deletes a layer it owns.
-const ownedLayerNamePrefix = "odigos-otel-"
-
 // publishedLayerName is the layer name this connector publishes for a language/arch. It carries
-// ownedLayerNamePrefix so isOdigosLayerName recognizes it, and we only ever delete layers we own.
+// store.OdigosLayerNamePrefix so store.IsOdigosLayerName recognizes it, and we only ever delete layers we own.
 func publishedLayerName(lang, arch string) string {
-	return ownedLayerNamePrefix + lang + "-" + arch
+	return store.OdigosLayerNamePrefix + lang + "-" + arch
 }
 
 func (r *ManagedLayerResolver) publish(ctx context.Context, region, lang, arch string) (string, error) {

@@ -112,6 +112,13 @@ func discoverLambda(ctx context.Context, cfg aws.Config, region string, tags map
 				RoleARN:      aws.ToString(fn.Role),
 				TracingMode:  tracingMode(fn.TracingConfig),
 				Instrumented: store.OdigosInstrumented(envVariables(fn.Environment)),
+				// ListFunctions already returns the attached layers and the function's lifecycle state, and
+				// all three were being discarded. They are what separate the three situations a marker alone
+				// cannot tell apart: instrumented, half-instrumented (marker kept, layer detached), and
+				// mid-deploy (a change still settling, which looks half-instrumented but is not).
+				Layers:           layerARNs(fn.Layers),
+				State:            string(fn.State),
+				LastUpdateStatus: string(fn.LastUpdateStatus),
 				Metadata: map[string]any{
 					"handler":    aws.ToString(fn.Handler),
 					"memorySize": aws.ToInt32(fn.MemorySize),
@@ -182,4 +189,15 @@ func envVariables(env *lambdatypes.EnvironmentResponse) map[string]string {
 		return nil
 	}
 	return env.Variables
+}
+
+// layerARNs flattens a function's attached layers to their version ARNs, dropping any entry without one.
+func layerARNs(layers []lambdatypes.Layer) []string {
+	out := make([]string, 0, len(layers))
+	for _, l := range layers {
+		if a := aws.ToString(l.Arn); a != "" {
+			out = append(out, a)
+		}
+	}
+	return out
 }

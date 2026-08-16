@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/types"
@@ -72,6 +75,44 @@ func OdigosInstrumented(env map[string]string) bool {
 	return env[envCollectorEndpoint] != "" || env[envCollectorInsecure] != ""
 }
 
+// OdigosLayerNamePrefix is the name prefix of every Lambda layer this connector publishes. It is the
+// signature that recognizes OUR layers in an account (as opposed to a customer's, or a public
+// OpenTelemetry/ADOT layer), so the connector only ever reuses, attaches, deletes or attributes a layer it
+// owns. It lives here, next to EnvOdigosManaged, as the neutral ground the detector, the observer and the
+// instrumentor all need — the instrumentor builds names from it, and the read-only paths recognize them.
+const OdigosLayerNamePrefix = "odigos-otel-"
+
+// IsOdigosLayerName reports whether a Lambda layer name is one this connector published.
+func IsOdigosLayerName(name string) bool {
+	return strings.HasPrefix(name, OdigosLayerNamePrefix)
+}
+
+// ParseLayerVersionARN extracts the layer name and version from a layer-version ARN of the form
+// arn:aws:lambda:<region>:<account>:layer:<name>:<version>.
+func ParseLayerVersionARN(arn string) (name string, version int64, ok bool) {
+	parts := strings.Split(arn, ":")
+	if len(parts) < 2 {
+		return "", 0, false
+	}
+	v, err := strconv.ParseInt(parts[len(parts)-1], 10, 64)
+	if err != nil {
+		return "", 0, false
+	}
+	return parts[len(parts)-2], v, true
+}
+
+// OdigosLayerARN returns the first Odigos-published layer ARN in an observed layer set, or "" when the
+// function carries none. Name-signature based, so a customer's or a public OTel/ADOT layer is never
+// reported as Odigos instrumentation.
+func OdigosLayerARN(layers []string) string {
+	for _, arn := range layers {
+		if name, _, ok := ParseLayerVersionARN(arn); ok && IsOdigosLayerName(name) {
+			return arn
+		}
+	}
+	return ""
+}
+
 // InstrumentationType returns the connector-spec instrumentation type for a discovered task.
 func (t ECSTask) InstrumentationType() string {
 	return KindECSTask
@@ -92,10 +133,62 @@ type LambdaFunction struct {
 	RoleARN      string
 	TracingMode  string
 	// Instrumented is the live instrumentation state derived from the function's env at discovery time;
-	// persisted in metadata so WorkloadReports and the instrumentor's reconcile see the same truth.
+	// persisted in metadata so WorkloadReports and the instrumentor's reconcile see the same truth. It
+	// answers only "is an Odigos ownership marker present" — see Observation for whether the instrumentation
+	// behind that marker is actually complete.
 	Instrumented bool
-	Metadata     map[string]any
+	// Layers is the function's attached layer-version ARN set, as ListFunctions returns it. Persisted in the
+	// (until now unused) layers column: it is what makes "the marker is there but the layer was detached"
+	// observable, and it fills the LayerArn a Lambda workload report has always declared and never carried.
+	Layers []string
+	// State / LastUpdateStatus are the function's lifecycle fields. Lambda applies configuration changes
+	// asynchronously, so a change a customer just applied reports State=Pending or
+	// LastUpdateStatus=InProgress while it settles — which looks identical to a half-applied
+	// instrumentation. Captured so a settling change is reported as such instead of as drift.
+	State            string
+	LastUpdateStatus string
+	// Observation is the read-only conformance verdict for this function, written by the observer rather than
+	// by discovery. Zero until a pass has run.
+	Observation LambdaObservation
+	Metadata    map[string]any
 }
+
+// LambdaObservation is the persisted result of one read-only conformance observation of a function: does
+// what is actually on the function match the instrumentation Odigos wants for it. It is stored per function
+// so a WorkloadReport (served on the GraphQL read path, which must make no AWS calls) can report the verdict
+// without a live read.
+type LambdaObservation struct {
+	// Conformance is the verdict. ConformanceUnknown means never observed, or the last read failed.
+	Conformance api.Conformance
+	// Missing names the components that are absent or stale, in the provider-neutral vocabulary the base
+	// renders (see workloadreport.componentLabels). Empty unless Conformance is Partial.
+	Missing []string
+	// Since is when this verdict was first observed, so a report can say how long a drift has stood. The
+	// observer carries it forward unchanged while the verdict holds, and stamps a new one when it flips.
+	Since time.Time
+	// ObservedPrint / DesiredPrint are the fingerprints of the live and wanted instrumentation, stored in the
+	// env_hash / config_hash columns. They are the cheap equality test between passes: unchanged prints mean
+	// nothing about this function moved, so the observer neither rewrites the row nor disturbs Since — which
+	// is what keeps the since-clock meaningful across passes rather than resetting on every cycle.
+	ObservedPrint string
+	DesiredPrint  string
+	// Error records why the last observation could not be completed. It is not drift: the base keeps
+	// reporting the last confirmed verdict and raises a transient issue.
+	Error string
+}
+
+// The two AWS lifecycle values that mean "a configuration change to a function is still being applied".
+// ListWorkloads derives the report's Settling flag from them in SQL; they are declared as plain strings rather
+// than pulling the Lambda SDK into the store, which persists plain data.
+//
+// There is deliberately no Go predicate over them here. The observer needs the same question answered about its
+// own LIVE read, where the SDK enums are available and the answer is seconds fresh — see
+// instrumentor.lifecycleSettling. A second string-based copy in the store would be a duplicate definition of
+// "settling" with no production caller.
+const (
+	lambdaStatePending     = "Pending"
+	lambdaUpdateInProgress = "InProgress"
+)
 
 // ECSTask is a discovered ECS task inventory record. Only FARGATE-launch-type tasks are stored:
 // EC2-launch-type tasks belong to the cluster agent (compute-platform domain) and are never per-task
@@ -134,6 +227,19 @@ func metaJSON(m map[string]any) (string, error) {
 	return string(b), nil
 }
 
+// lambdaDiscoveryMetadataKeys are the metadata keys DISCOVERY owns and refreshes on every scan. Every other
+// key on the row belongs to a different writer — the instrumentor's phase/error, the observer's conformance
+// verdict — and must survive a discovery cycle.
+//
+// UpsertLambda expresses that as "drop the keys I own, then merge mine in", which is the inverse of the
+// preserve-list it used to carry: that list named the two keys that existed when it was written, so every key
+// added since (the whole observation record) would have been silently wiped on the next scan. Excluding what
+// discovery owns keeps a new key by any other writer preserved by default, which is the safe direction to be
+// wrong in.
+var lambdaDiscoveryMetadataKeys = []string{
+	"instrumented", "handler", "memorySize", "timeout", "version", "state", "last_update_status",
+}
+
 // UpsertLambda inserts or refreshes a Lambda inventory row, clearing any soft-delete marker.
 func (s *Store) UpsertLambda(ctx context.Context, fn LambdaFunction) error {
 	inventoryLog.Debug("upsert lambda", "region", fn.Region, "name", fn.FunctionName)
@@ -141,37 +247,145 @@ func (s *Store) UpsertLambda(ctx context.Context, fn LambdaFunction) error {
 		fn.Metadata = map[string]any{}
 	}
 	fn.Metadata["instrumented"] = fn.Instrumented
+	fn.Metadata["state"] = fn.State
+	fn.Metadata["last_update_status"] = fn.LastUpdateStatus
 	meta, err := metaJSON(fn.Metadata)
+	if err != nil {
+		return err
+	}
+	layers, err := json.Marshal(nonNilStrings(fn.Layers))
 	if err != nil {
 		return err
 	}
 	_, err = s.Pool().Exec(ctx, `
 		INSERT INTO connector_aws.lambda_functions
-			(connector_name, region, function_arn, function_name, runtime, architecture, role_arn, tracing_mode, metadata, first_seen_at, last_seen_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb, now(), now())
+			(connector_name, region, function_arn, function_name, runtime, architecture, role_arn, tracing_mode, layers, metadata, first_seen_at, last_seen_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb, now(), now())
 		ON CONFLICT (connector_name, function_arn) DO UPDATE SET
 			region = EXCLUDED.region, function_name = EXCLUDED.function_name, runtime = EXCLUDED.runtime,
 			architecture = EXCLUDED.architecture, role_arn = EXCLUDED.role_arn, tracing_mode = EXCLUDED.tracing_mode,
-			metadata = EXCLUDED.metadata
-				|| CASE
-					WHEN connector_aws.lambda_functions.metadata ? 'instrumentation_error'
-					THEN jsonb_build_object('instrumentation_error', connector_aws.lambda_functions.metadata->'instrumentation_error')
-					ELSE '{}'::jsonb END
-				|| CASE
-					WHEN connector_aws.lambda_functions.metadata ? 'instrumentation_phase'
-					THEN jsonb_build_object('instrumentation_phase', connector_aws.lambda_functions.metadata->'instrumentation_phase')
-					ELSE '{}'::jsonb END,
+			layers = EXCLUDED.layers,
+			metadata = (COALESCE(connector_aws.lambda_functions.metadata, '{}'::jsonb) - $11::text[]) || EXCLUDED.metadata,
 			last_seen_at = now(), deleted_at = NULL
-	`, s.ConnectorName(), fn.Region, fn.FunctionARN, fn.FunctionName, fn.Runtime, fn.Architecture, fn.RoleARN, fn.TracingMode, meta)
+	`, s.ConnectorName(), fn.Region, fn.FunctionARN, fn.FunctionName, fn.Runtime, fn.Architecture, fn.RoleARN, fn.TracingMode,
+		string(layers), meta, lambdaDiscoveryMetadataKeys)
 	return err
 }
 
-const lambdaSelectCols = `region, function_arn, function_name, COALESCE(runtime, ''), COALESCE(architecture, ''), COALESCE(role_arn, ''), COALESCE(tracing_mode, ''), COALESCE(metadata->>'instrumented', 'false') = 'true'`
+// SetLambdaObservation records one read-only conformance observation. It writes the two fingerprints to the
+// env_hash / config_hash columns and the verdict to metadata, and touches nothing else — in particular not
+// the `instrumented` flag, which discovery and the instrumentor own: the observer's job is to say whether the
+// instrumentation is CORRECT, never to decide whether it exists.
+//
+// last_seen_at is deliberately left alone too. It is discovery's liveness signal and the prune cutoff, so
+// refreshing it here would let an observation keep a function that no longer exists alive in the inventory.
+func (s *Store) SetLambdaObservation(ctx context.Context, functionARN string, obs LambdaObservation) error {
+	inventoryLog.Debug("set lambda observation", "arn", functionARN, "conformance", obs.Conformance)
+	missing, err := json.Marshal(nonNilStrings(obs.Missing))
+	if err != nil {
+		return err
+	}
+	var since any
+	if !obs.Since.IsZero() {
+		since = obs.Since.UTC().Format(time.RFC3339)
+	}
+	_, err = s.Pool().Exec(ctx, `
+		UPDATE connector_aws.lambda_functions
+		SET env_hash = $3, config_hash = $4,
+		    metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
+		        'conformance', $5::text,
+		        'conformance_missing', $6::jsonb,
+		        'conformance_since', $7::text,
+		        'observation_error', $8::text)
+		WHERE connector_name = $1 AND function_arn = $2 AND deleted_at IS NULL
+	`, s.ConnectorName(), functionARN, obs.ObservedPrint, obs.DesiredPrint, string(obs.Conformance), string(missing), since, obs.Error)
+	if err != nil {
+		inventoryLog.Error("set lambda observation failed", "arn", functionARN, "error", err)
+	}
+	return err
+}
+
+// lambdaObservationCols selects the observation record in a fixed order, shared by every read so the scan
+// stays in one place.
+const lambdaObservationCols = `COALESCE(env_hash, ''), COALESCE(config_hash, ''), COALESCE(metadata->>'conformance', ''), metadata->'conformance_missing', metadata->>'conformance_since', COALESCE(metadata->>'observation_error', '')`
+
+// noObservationCols pads ListWorkloads' fixed column shape for a kind with no observer: an Unknown verdict,
+// no components, no timestamp, no error, not settling, no layers. It is not "conformant by default" — Unknown
+// is the honest verdict for state nothing has looked at, and the base reports it as such.
+const noObservationCols = `'', NULL, NULL, '', false, NULL`
+
+const lambdaSelectCols = `region, function_arn, function_name, COALESCE(runtime, ''), COALESCE(architecture, ''), COALESCE(role_arn, ''), COALESCE(tracing_mode, ''), COALESCE(metadata->>'instrumented', 'false') = 'true', layers, COALESCE(metadata->>'state', ''), COALESCE(metadata->>'last_update_status', ''), ` + lambdaObservationCols
 
 func scanLambda(row interface{ Scan(...any) error }) (LambdaFunction, error) {
 	var fn LambdaFunction
-	err := row.Scan(&fn.Region, &fn.FunctionARN, &fn.FunctionName, &fn.Runtime, &fn.Architecture, &fn.RoleARN, &fn.TracingMode, &fn.Instrumented)
-	return fn, err
+	var layersJSON, missingJSON []byte
+	var since *string
+	err := row.Scan(&fn.Region, &fn.FunctionARN, &fn.FunctionName, &fn.Runtime, &fn.Architecture, &fn.RoleARN, &fn.TracingMode,
+		&fn.Instrumented, &layersJSON, &fn.State, &fn.LastUpdateStatus,
+		&fn.Observation.ObservedPrint, &fn.Observation.DesiredPrint, &conformanceTarget{&fn.Observation.Conformance}, &missingJSON, &since, &fn.Observation.Error)
+	if err != nil {
+		return fn, err
+	}
+	fn.Layers = decodeStringSlice(layersJSON, "layers")
+	fn.Observation.Missing = decodeStringSlice(missingJSON, "conformance_missing")
+	fn.Observation.Since = parseObservedAt(since)
+	return fn, nil
+}
+
+// conformanceTarget lets a TEXT column scan straight into the typed api.Conformance without a separate
+// string variable at every call site.
+type conformanceTarget struct{ dst *api.Conformance }
+
+func (t *conformanceTarget) Scan(src any) error {
+	switch v := src.(type) {
+	case nil:
+		*t.dst = api.ConformanceUnknown
+	case string:
+		*t.dst = api.Conformance(v)
+	case []byte:
+		*t.dst = api.Conformance(v)
+	default:
+		return fmt.Errorf("unsupported conformance value %T", src)
+	}
+	return nil
+}
+
+// decodeStringSlice reads a JSONB string array. An unreadable value degrades to none rather than failing a
+// whole listing: a garbled layer set or component list is worth a log line, not a connector that cannot
+// report any workload.
+func decodeStringSlice(raw []byte, field string) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var out []string
+	if err := json.Unmarshal(raw, &out); err != nil {
+		inventoryLog.Warn("ignoring unreadable inventory field", "field", field, "error", err)
+		return nil
+	}
+	return out
+}
+
+// parseObservedAt reads a stored RFC3339 timestamp. An absent or unparsable value yields the zero time,
+// which the report renders as "unknown since" rather than as 1970.
+func parseObservedAt(s *string) time.Time {
+	if s == nil || *s == "" {
+		return time.Time{}
+	}
+	t, err := time.Parse(time.RFC3339, *s)
+	if err != nil {
+		inventoryLog.Warn("ignoring unparsable observation timestamp", "value", *s, "error", err)
+		return time.Time{}
+	}
+	return t
+}
+
+// nonNilStrings normalizes a nil slice to an empty one so it marshals as [] rather than null, keeping the
+// JSONB columns' declared "not null, default []" shape.
+func nonNilStrings(xs []string) []string {
+	if xs == nil {
+		return []string{}
+	}
+	return xs
 }
 
 // ListLambdaFunctions returns all live (non-deleted) Lambda inventory rows, used by the instrumentor.
@@ -443,16 +657,43 @@ func (s *Store) UpdateDiscoveryState(ctx context.Context, region, kind string, s
 // carry them as separate metadata keys.
 func (s *Store) ListWorkloads(ctx context.Context) ([]api.DiscoveredWorkload, error) {
 	inventoryLog.Debug("list workloads", "connector", s.ConnectorName())
-	queries := []struct {
-		kind        string
-		lambdaSplit bool // language column is a Lambda runtime id — split into (language, version)
-		sql         string
-	}{
+	var out []api.DiscoveredWorkload
+	for _, q := range workloadQueries() {
+		rows, err := s.Pool().Query(ctx, q.sql, s.ConnectorName())
+		if err != nil {
+			return nil, err
+		}
+		if err := scanWorkloadRows(rows, q, &out); err != nil {
+			return nil, err
+		}
+	}
+	inventoryLog.Debug("list workloads complete", "connector", s.ConnectorName(), "count", len(out))
+	return out, nil
+}
+
+// workloadQuery is one kind's inventory listing. Every query must select the SAME column shape, because one
+// Scan reads all of them (see scanWorkloadRows) — TestListWorkloadsQueriesShareColumnShape asserts it against
+// the assembled SQL, since a mismatch is a runtime failure of the whole report path with no compile-time signal.
+type workloadQuery struct {
+	kind        string
+	lambdaSplit bool // language column is a Lambda runtime id — split into (language, version)
+	sql         string
+}
+
+// workloadQueries returns the per-kind listings. It is a function rather than an inline slice so a test can read
+// the fully-assembled SQL — the column list is built from shared constants, so reading the source text instead
+// would not see through the concatenation.
+func workloadQueries() []workloadQuery {
+	return []workloadQuery{
 		{KindLambda, true, `SELECT function_name, region, function_arn, COALESCE(runtime, ''), '', last_seen_at,
 			COALESCE(metadata->>'instrumented','false')='true',
 			COALESCE(metadata->>'instrumentation_error', ''),
 			COALESCE(metadata->>'instrumentation_phase', ''),
-			COALESCE(architecture, ''), '', '', NULL
+			COALESCE(architecture, ''), '', '', NULL,
+			COALESCE(metadata->>'conformance', ''), metadata->'conformance_missing', metadata->>'conformance_since',
+			COALESCE(metadata->>'observation_error', ''),
+			COALESCE(metadata->>'state','') = '` + lambdaStatePending + `' OR COALESCE(metadata->>'last_update_status','') = '` + lambdaUpdateInProgress + `',
+			layers
 			FROM connector_aws.lambda_functions WHERE connector_name = $1 AND deleted_at IS NULL`},
 		// Fargate SERVICES: one workload per (cluster, service) from the ecs_services inventory. The
 		// external id — a source's stable identity — is cluster_arn || '/' || service_name (NOT a task ARN,
@@ -464,7 +705,8 @@ func (s *Store) ListWorkloads(ctx context.Context) ([]api.DiscoveredWorkload, er
 			COALESCE(metadata->>'instrumentation_error', ''),
 			COALESCE(metadata->>'instrumentation_phase', ''),
 			COALESCE(launch_type, ''), COALESCE(task_definition, ''), COALESCE(deployment_controller, ''),
-			metadata->'containers'
+			metadata->'containers',
+			` + noObservationCols + `
 			FROM connector_aws.ecs_services WHERE connector_name = $1 AND deleted_at IS NULL`},
 		// STANDALONE Fargate tasks (no ECS service — RunTask/EventBridge): inherently ephemeral, so the task
 		// ARN is the identity. They stay discoverable/selectable, but instrumentation reports a terminal
@@ -472,37 +714,46 @@ func (s *Store) ListWorkloads(ctx context.Context) ([]api.DiscoveredWorkload, er
 		{KindECSTask, false, `SELECT ` + ecsStandaloneTaskWorkloadName + `, region, task_arn,
 			'', '', last_seen_at, false,
 			COALESCE(metadata->>'instrumentation_error', ''), '',
-			'', '', '', NULL
+			'', '', '', NULL,
+			` + noObservationCols + `
 			FROM connector_aws.ecs_tasks
 			WHERE connector_name = $1 AND deleted_at IS NULL AND COALESCE(service_name, '') = ''`},
 	}
+}
 
-	var out []api.DiscoveredWorkload
-	for _, q := range queries {
-		rows, err := s.Pool().Query(ctx, q.sql, s.ConnectorName())
-		if err != nil {
-			return nil, err
-		}
+// scanWorkloadRows reads one query's rows into out. Split out of ListWorkloads so all three queries provably
+// share a single scan — the reason their column shapes must match.
+func scanWorkloadRows(rows pgx.Rows, q workloadQuery, out *[]api.DiscoveredWorkload) error {
+	defer rows.Close()
+	{
 		for rows.Next() {
 			var name, region, externalID, language, version, instrErr, instrPhase string
-			// The last four columns carry the kind-specific facts each query supplies and the others
+			// The next four columns carry the kind-specific facts each query supplies and the others
 			// pad out: architecture/launch type, task definition, deployment controller, and the ECS
 			// container inventory. They feed DiscoveredWorkload.Details, which the report narrows to
 			// the wire type matching the kind.
 			var archOrLaunchType, taskDefinition, deploymentController string
 			var containersJSON []byte
+			// The trailing columns are the read-only observation record. Only Lambda has an observer today,
+			// so the other queries select noObservationCols and report an Unknown verdict — which is the
+			// truth for a type nothing has observed, and is distinct from "observed and found conformant".
+			var conformance api.Conformance
+			var missingJSON, layersJSON []byte
+			var conformanceSince *string
+			var observationErr string
+			var settling bool
 			var lastSeen time.Time
 			var instrumented bool
 			if err := rows.Scan(&name, &region, &externalID, &language, &version, &lastSeen, &instrumented, &instrErr, &instrPhase,
-				&archOrLaunchType, &taskDefinition, &deploymentController, &containersJSON); err != nil {
-				rows.Close()
-				return nil, err
+				&archOrLaunchType, &taskDefinition, &deploymentController, &containersJSON,
+				&conformanceTarget{&conformance}, &missingJSON, &conformanceSince, &observationErr, &settling, &layersJSON); err != nil {
+				return err
 			}
 			runtime := language
 			if q.lambdaSplit {
 				language, version = splitRuntime(language)
 			}
-			out = append(out, api.DiscoveredWorkload{
+			*out = append(*out, api.DiscoveredWorkload{
 				ServiceName:          name,
 				Kind:                 q.kind,
 				Region:               region,
@@ -513,26 +764,26 @@ func (s *Store) ListWorkloads(ctx context.Context) ([]api.DiscoveredWorkload, er
 				InstrumentationType:  q.kind,
 				InstrumentationError: instrErr,
 				InstrumentationPhase: instrPhase,
+				Conformance:          conformance,
+				MissingComponents:    decodeStringSlice(missingJSON, "conformance_missing"),
+				ConformanceSince:     parseObservedAt(conformanceSince),
+				Settling:             settling,
+				ObservationError:     observationErr,
 				Details: workloadDetails(q.kind, externalID, runtime,
-					archOrLaunchType, taskDefinition, deploymentController, containersJSON),
+					archOrLaunchType, taskDefinition, deploymentController, containersJSON,
+					decodeStringSlice(layersJSON, "layers")),
 				LastSeenAt: lastSeen,
 			})
 		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return nil, err
-		}
 	}
-	inventoryLog.Debug("list workloads complete", "connector", s.ConnectorName(), "count", len(out))
-	return out, nil
+	return rows.Err()
 }
 
 // workloadDetails assembles the kind-specific detail block for one inventory row. It reports only
 // what the store actually holds: a Fargate service's containers come from the inventory the
 // instrumentor wrote, and a standalone task — which has no service, no revision and no
 // instrumentation path — gets nothing rather than a block of empty fields.
-func workloadDetails(kind, externalID, lambdaRuntime, archOrLaunchType, taskDefinition, deploymentController string, containersJSON []byte) *api.WorkloadDetails {
+func workloadDetails(kind, externalID, lambdaRuntime, archOrLaunchType, taskDefinition, deploymentController string, containersJSON []byte, layers []string) *api.WorkloadDetails {
 	switch kind {
 	case KindLambda:
 		return &api.WorkloadDetails{
@@ -540,6 +791,11 @@ func workloadDetails(kind, externalID, lambdaRuntime, archOrLaunchType, taskDefi
 			FunctionArn:  externalID,
 			Runtime:      lambdaRuntime,
 			Architecture: archOrLaunchType,
+			// The Odigos layer actually attached to the function, from the observed layer set. This field has
+			// been on the Lambda workload report since it was written and never carried a value, because
+			// nothing captured the function's layers; a customer asking "which layer version am I on" — the
+			// first question in manual mode, where they pinned it themselves — had no answer.
+			LayerArn: OdigosLayerARN(layers),
 		}
 	case KindECSTask:
 		// Standalone tasks share this kind but are keyed by task ARN, so they carry none of the

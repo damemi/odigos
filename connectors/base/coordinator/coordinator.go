@@ -67,6 +67,7 @@ type Coordinator struct {
 	computePlatformDiscoveryTrigger  chan struct{}
 	reconcileTrigger         chan struct{}
 	computePlatformTrigger           chan struct{}
+	observeTrigger           chan struct{}
 }
 
 func New(cfg config.Config, cfgMgr *config.Manager, st *store.Store, p api.Provider) *Coordinator {
@@ -83,6 +84,7 @@ func New(cfg config.Config, cfgMgr *config.Manager, st *store.Store, p api.Provi
 		computePlatformDiscoveryTrigger:  make(chan struct{}, 1),
 		reconcileTrigger:         make(chan struct{}, 1),
 		computePlatformTrigger:           make(chan struct{}, 1),
+		observeTrigger:           make(chan struct{}, 1),
 	}
 }
 
@@ -141,6 +143,7 @@ func (c *Coordinator) Start(ctx context.Context) {
 	defer cancelLoops()
 	go c.heartbeatLoop(loopCtx, cancelLoops)
 	go c.reconcileLoop(loopCtx)
+	go c.observeLoop(loopCtx)
 	go c.computePlatformReconcileLoop(loopCtx)
 	// Workloads and compute platforms discover on independent loops over their own detector sets + stores.
 	go c.discoveryLoop(loopCtx, "computePlatform", c.activeComputePlatformDetectors, c.computePlatformDiscoveryTrigger)
@@ -324,6 +327,9 @@ func (c *Coordinator) runDiscovery(ctx context.Context, domain string, dets []na
 	// enabled source, a workload that drifted (lost instrumentation), or one that disappeared — rather than
 	// waiting for the next reconcile ticker. Coalesced, so back-to-back cycles don't pile up.
 	c.triggerReconcile()
+	// Manual-mode types have no reconciler to converge, so their equivalent of that is an observation pass:
+	// a workload discovered just now should have its conformance read in this cycle, not in the next one.
+	c.triggerObserve()
 }
 
 // namedReconciler pairs a spec instrumentation type name with its reconciler.

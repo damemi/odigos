@@ -27,8 +27,9 @@ import (
 // Compile-time checks: the AWS provider satisfies base.Provider and the optional startup-verification
 // seam (so base.Run enforces the account boundary before starting the loops).
 var (
-	_ baseapi.Provider        = (*Provider)(nil)
-	_ baseapi.StartupVerifier = (*Provider)(nil)
+	_ baseapi.Provider                 = (*Provider)(nil)
+	_ baseapi.StartupVerifier          = (*Provider)(nil)
+	_ baseapi.WorkloadObserverRegistry = (*Provider)(nil)
 )
 
 var awslog = connlog.Subsystem("aws-provider")
@@ -157,6 +158,20 @@ func (p *Provider) Reconcilers() map[string]baseapi.Reconciler {
 	return map[string]baseapi.Reconciler{
 		types.Lambda:      workloadinstrumentor.NewLambda(p.workloadStdb, p.cache, p.layers, p.debugTelemetry),
 		types.FargateTask: workloadinstrumentor.NewECSFargate(p.workloadStdb, p.cache, p.cfg.FargateAgentsImage, p.debugEcsTelemetry, p.ecrImages),
+	}
+}
+
+// WorkloadObservers implements the optional base.WorkloadObserverRegistry: read-only conformance observers,
+// which the base runs ONLY for instrumentation types whose mode is manual (IaC). They are the manual-mode
+// counterpart to Reconcilers above and share its comparator, so both modes judge "correctly instrumented"
+// by one definition.
+//
+// Lambda only, for now. Fargate, Cloud Run and Container Apps each report marker presence but not conformance
+// until their own observers land (plan waves 4.2-4.4); the base warns for a manual-mode type with no observer
+// rather than letting an unobserved type look observed.
+func (p *Provider) WorkloadObservers() map[string]baseapi.InstrumentationObserver {
+	return map[string]baseapi.InstrumentationObserver{
+		types.Lambda: workloadinstrumentor.NewLambdaObserver(p.workloadStdb, p.cache, p.layers, p.debugTelemetry),
 	}
 }
 

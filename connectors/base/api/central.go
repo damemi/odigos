@@ -147,6 +147,33 @@ type DiscoveredWorkload struct {
 	// (e.g. "Verifying", "LayerReady", "Instrumenting", "Instrumented"); empty when no phase has been
 	// recorded yet. Set by the provider so a WorkloadReport reflects instrumentation progress on the fly.
 	InstrumentationPhase string
+	// Conformance is the verdict of the last successful read-only observation: does the instrumentation
+	// actually on this workload match what Odigos wants for it (see api.Conformance). Written by the
+	// provider's InstrumentationObserver, ConformanceUnknown when the type has no observer or none has run.
+	//
+	// Instrumented answers a strictly weaker question — is an Odigos ownership marker present — which is
+	// enough in automatic mode (the reconciler converges any gap it finds) but a false green in manual
+	// mode, where nothing converges anything. The two are deliberately separate fields: a Partial workload
+	// is BOTH instrumented and wrong, and hiding either half would mislead whoever has to fix it.
+	Conformance Conformance
+	// MissingComponents names the parts of the desired instrumentation that are absent or stale, in
+	// provider-neutral terms (e.g. "instrumentationLayer", "serviceName", "collectorExport"). Non-empty
+	// only for ConformancePartial — it is the entire explanation a customer gets for what to fix, so a
+	// Partial verdict must never travel without it.
+	MissingComponents []string
+	// ConformanceSince is when the current Conformance verdict was first observed, so a report can say how
+	// long a drift has stood rather than only that it stands now. Zero when never observed.
+	ConformanceSince time.Time
+	// Settling is true when the provider observed a change to this workload still being applied — a Lambda
+	// configuration update mid-flight, a revision rolling out. It is why an observation that looks
+	// non-conformant must not be reported as drift yet: the customer's deployment may be seconds from
+	// completing, and a "drifted" report in that window is simply wrong.
+	Settling bool
+	// ObservationError is set when the last observation could not be completed (an API error, or a desired
+	// value that could not be resolved without mutating the account). It is NOT drift: the base keeps the
+	// last confirmed Conformance and raises a transient issue, because "we could not look" and "your
+	// instrumentation is broken" are different things to tell a customer.
+	ObservationError string
 	// InstrumentationAvailable is true when InstrumentationType is an active instrumentation type for
 	// this connector (spec feature enabled + capability allowed). Set by the coordinator. When a
 	// workload is marked for instrumentation but this is false, it is reported as Unknown (not an

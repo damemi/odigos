@@ -519,43 +519,100 @@ func collectorExportAsDesired(env map[string]string, dest domaindest.OTLPTarget)
 		env[EnvLogsExporter] == exporterFor(dest.Logs)
 }
 
-// instrumentedAsDesired reports whether the function already carries the exact instrumentation for its
-// mode, so the update can be skipped (avoiding a new function version every reconcile). A missing marker,
-// stale collector/service vars, a missing/duplicate layer, leftover legacy vars, or (per mode) a missing
-// loader / wrong-or-stale handler wrapper all force a re-instrument to converge.
-func (i *LambdaInstrumentor) instrumentedAsDesired(webServer bool, fn store.LambdaFunction, env map[string]string, layers []string, layerARN string, dest domaindest.OTLPTarget, debug bool, reportedServiceName string) bool {
+// Component names for instrumentationDiff. They are the provider-neutral vocabulary the BASE renders into
+// customer-facing prose (base/domain/workloadreport.componentLabels), which is why they are not AWS terms: the
+// same missing marker or stale collector endpoint has to read identically whether it came from Lambda, Cloud
+// Run or Container Apps. A name added here needs a label there, or the report falls back to printing the raw
+// name — degraded, but never silent.
+const (
+	componentOwnershipMarker      = "ownershipMarker"
+	componentInstrumentationLayer = "instrumentationLayer"
+	componentLayerVersionConflict = "layerVersionConflict"
+	componentServiceName          = "serviceName"
+	componentCollectorExport      = "collectorExport"
+	componentLegacyExportVars     = "legacyExportVars"
+	componentAgentLoader          = "agentLoader"
+	componentAgentLoaderConfig    = "agentLoaderConfig"
+	componentExecWrapper          = "execWrapper"
+	componentLogLevel             = "logLevel"
+)
+
+// instrumentationDiff returns the components of the desired instrumentation that are absent or stale on the
+// function — empty when it is instrumented exactly as desired.
+//
+// It replaces what used to be a bare bool, and the reason is the difference between the two modes. As a bool
+// its only consumer was "may I skip this UpdateFunctionConfiguration"; the answer's DETAIL was worthless
+// because the instrumentor was about to converge whatever was wrong anyway. In manual (IaC) mode nothing
+// converges it: the customer has to go edit their own deployment definition, and the component list is the
+// only thing that tells them where to look. Same predicate, same call site for the mutating path
+// (instrumentedAsDesired below is now len(diff) == 0), one new consumer that needs the facts rather than the
+// verdict.
+//
+// It is a pure function of (observed env, observed layers, desired inputs) so the observer can call it on a
+// live read without touching the instrumentor's state or making a single mutating call.
+func instrumentationDiff(webServer bool, fn store.LambdaFunction, env map[string]string, layers []string, layerARN string, dest domaindest.OTLPTarget, debug bool, reportedServiceName string) []string {
+	// No marker: nothing here is attributable to this connector, so there is nothing to compare against.
+	// Reporting the individual components as missing would describe an uninstrumented function as a broken
+	// one — including a customer's own unrelated OpenTelemetry setup.
 	if _, ok := env[store.EnvOdigosManaged]; !ok {
-		return false
+		return []string{componentOwnershipMarker}
 	}
+	var diff []string
 	if reportedServiceName == "" {
 		reportedServiceName = fn.FunctionName
 	}
-	if env[EnvServiceName] != reportedServiceName || !collectorExportAsDesired(env, dest) {
-		return false
+	if env[EnvServiceName] != reportedServiceName {
+		diff = append(diff, componentServiceName)
 	}
-	if !contains(layers, layerARN) || hasDuplicateLayerVersions(layers) {
-		return false
+	if !collectorExportAsDesired(env, dest) {
+		diff = append(diff, componentCollectorExport)
+	}
+	// An empty desired ARN means the layer could not be resolved read-only. The caller decides what that
+	// means (the observer records it as an observation limitation); claiming the layer is missing on the
+	// strength of not having looked it up would be manufactured drift.
+	if layerARN != "" && !contains(layers, layerARN) {
+		diff = append(diff, componentInstrumentationLayer)
+	}
+	if hasDuplicateLayerVersions(layers) {
+		diff = append(diff, componentLayerVersionConflict)
 	}
 	if _, ok := env[envLegacyOTLPEndpoint]; ok {
-		return false
-	}
-	if _, ok := env[envLegacyOTLPHeaders]; ok {
-		return false
+		diff = append(diff, componentLegacyExportVars)
+	} else if _, ok := env[envLegacyOTLPHeaders]; ok {
+		diff = append(diff, componentLegacyExportVars)
 	}
 	if webServer {
 		lang := LanguageFromRuntime(fn.Runtime)
 		for k, v := range webServerExtraEnv(lang) {
 			if env[k] != v {
-				return false
+				diff = append(diff, componentAgentLoaderConfig)
+				break
 			}
 		}
-		return webServerLoaderApplied(lang, env)
+		if !webServerLoaderApplied(lang, env) {
+			diff = append(diff, componentAgentLoader)
+		}
+		return diff
+	}
+	if env[store.EnvExecWrapper] != execWrapperForRuntime(fn.Runtime) {
+		diff = append(diff, componentExecWrapper)
 	}
 	desiredLogLevel := ""
 	if debug {
 		desiredLogLevel = otelLogLevelDebug
 	}
-	return env[store.EnvExecWrapper] == execWrapperForRuntime(fn.Runtime) && env[EnvOtelLogLevel] == desiredLogLevel
+	if env[EnvOtelLogLevel] != desiredLogLevel {
+		diff = append(diff, componentLogLevel)
+	}
+	return diff
+}
+
+// instrumentedAsDesired reports whether the function already carries the exact instrumentation for its
+// mode, so the update can be skipped (avoiding a new function version every reconcile). A missing marker,
+// stale collector/service vars, a missing/duplicate layer, leftover legacy vars, or (per mode) a missing
+// loader / wrong-or-stale handler wrapper all force a re-instrument to converge.
+func (i *LambdaInstrumentor) instrumentedAsDesired(webServer bool, fn store.LambdaFunction, env map[string]string, layers []string, layerARN string, dest domaindest.OTLPTarget, debug bool, reportedServiceName string) bool {
+	return len(instrumentationDiff(webServer, fn, env, layers, layerARN, dest, debug, reportedServiceName)) == 0
 }
 
 func (i *LambdaInstrumentor) rollback(ctx context.Context, fn store.LambdaFunction) error {
@@ -633,7 +690,18 @@ func (i *LambdaInstrumentor) rollback(ctx context.Context, fn store.LambdaFuncti
 // applies updates asynchronously (State=Pending / LastUpdateStatus=InProgress); mutating again before it
 // finishes returns ResourceConflictException (409), so the connector waits for the next reconcile cycle.
 func updateInProgress(cur *lambda.GetFunctionConfigurationOutput) bool {
-	return cur.State == lambdatypes.StatePending || cur.LastUpdateStatus == lambdatypes.LastUpdateStatusInProgress
+	return lifecycleSettling(cur.State, cur.LastUpdateStatus)
+}
+
+// lifecycleSettling is the same question for either shape AWS returns the lifecycle in — the instrumentor reads
+// it from GetFunctionConfiguration, the observer from ListFunctions, and they are distinct SDK types over
+// identical fields.
+//
+// The two callers act on it for different reasons that happen to coincide: the instrumentor must not mutate a
+// function mid-settle (AWS rejects it with a 409), and the observer must not JUDGE one mid-settle, because a
+// change still landing is indistinguishable from a change that landed half-way.
+func lifecycleSettling(state lambdatypes.State, lastUpdate lambdatypes.LastUpdateStatus) bool {
+	return state == lambdatypes.StatePending || lastUpdate == lambdatypes.LastUpdateStatusInProgress
 }
 
 // revisionConflict reports whether AWS rejected an UpdateFunctionConfiguration because the function's
@@ -898,26 +966,16 @@ func (i *LambdaInstrumentor) ownership(ctx context.Context, fn store.LambdaFunct
 	return m, true
 }
 
-// existingLayerDiscoverer is implemented by resolvers that can look up an already-published layer without
-// publishing one (ManagedLayerResolver). Used on the rollback path to avoid publishing during uninstrument.
-type existingLayerDiscoverer interface {
-	DiscoverExisting(ctx context.Context, region, runtime, arch string) (string, error)
-}
-
-// resolveExistingLayer finds the layer ARN to strip on rollback without publishing. For the managed
-// resolver it discovers an existing layer; other resolvers (e.g. config-driven public ARNs) don't publish
-// on Resolve, so their Resolve is safe to use directly.
+// resolveExistingLayer finds the layer ARN to strip on rollback without publishing one as a side effect —
+// this is an uninstrument path, so it must not mutate the account.
 func (i *LambdaInstrumentor) resolveExistingLayer(ctx context.Context, fn store.LambdaFunction) (string, error) {
-	if d, ok := i.layers.(existingLayerDiscoverer); ok {
-		return d.DiscoverExisting(ctx, fn.Region, fn.Runtime, firstArch(fn.Architecture))
-	}
-	return i.layers.Resolve(ctx, fn.Region, fn.Runtime, firstArch(fn.Architecture))
+	return NonPublishingLayerARN(ctx, i.layers, fn.Region, fn.Runtime, firstArch(fn.Architecture))
 }
 
 func hasDuplicateLayerVersions(layers []string) bool {
 	seen := map[string]bool{}
 	for _, arn := range layers {
-		name, _, ok := parseLayerVersionARN(arn)
+		name, _, ok := store.ParseLayerVersionARN(arn)
 		if !ok {
 			continue
 		}

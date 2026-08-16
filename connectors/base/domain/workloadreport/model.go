@@ -105,6 +105,44 @@ func ToModel(w api.DiscoveredWorkload) *model.WorkloadReport {
 			// workload — the customer configures a destination, or applies the plan, not this source.
 			Transient: boolPtr(true),
 		})
+	} else if w.ManagementMode == spec.ModeManual && w.SourceMatched && w.SourceEnabled && w.Settling {
+		// The customer's own change is still being applied — a Lambda configuration update in flight, a
+		// revision rolling out. Mid-apply state looks exactly like a partial application, so this MUST be
+		// checked before the drift branch below: telling a customer their deployment has drifted while it is
+		// seconds from completing is worse than saying nothing.
+		//
+		// It sits after the WaitingFor branch, so a missing destination still wins and a workload with no
+		// marker yet still reads as awaiting the customer. That costs nothing in practice: the platforms
+		// report a settling change together with its new configuration, so a workload whose apply is in
+		// flight already carries the ownership marker and reaches this branch.
+		msg := "verifying your changes: a configuration change to this workload is still being applied. Odigos re-checks it automatically once it settles."
+		state = api.WorkloadStateInstrumenting
+		progress.Stage = "VerifyingCustomerChanges"
+		progress.Message = &msg
+	} else if w.ManagementMode == spec.ModeManual && w.SourceMatched && w.SourceEnabled && w.Instrumented &&
+		w.Conformance == api.ConformancePartial {
+		// Instrumentation is attributable to Odigos but does not match what it should be — a component was
+		// never applied, or carries a stale value after the destination or service name changed. In automatic
+		// mode this is a non-event (the next reconcile converges it), which is exactly why it needs reporting
+		// here: nothing converges a manual-mode workload, so a half-applied instrumentation stays half-applied
+		// and would otherwise report as healthy on the strength of its marker alone.
+		//
+		// Instrumented is asserted rather than assumed: the marker flag is refreshed by discovery and the
+		// verdict by the observation pass, so between the two a workload the customer just stripped can still
+		// carry a stale Partial. Requiring the marker keeps this branch from reporting drift on a workload
+		// that now has nothing applied at all (which the WaitingFor branch above already describes correctly).
+		msg := driftMessage(w.MissingComponents)
+		state = "Error"
+		progress.Stage = "InstrumentationDrift"
+		progress.Message = &msg
+		issues = append(issues, &model.WorkloadIssue{
+			Code:     "InstrumentationPartiallyApplied",
+			Severity: "error",
+			Message:  msg,
+			// How long it has stood this way, which is what separates a deployment that half-landed minutes
+			// ago from one that has been broken for weeks.
+			Since: sinceOrNil(w.ConformanceSince),
+		})
 	} else if w.ManagementMode == spec.ModeManual && w.Instrumented && !(w.SourceMatched && w.SourceEnabled) {
 		// Manual-mode instrumentation is live but the intent that asked for it is gone: the source was
 		// disabled, or deleted outright. Odigos cannot resolve this itself — it has no permission to change
@@ -122,6 +160,20 @@ func ToModel(w api.DiscoveredWorkload) *model.WorkloadReport {
 			Severity: "error",
 			Message:  msg,
 			Since:    sinceOrNil(w.SourceIntentAt),
+		})
+	}
+
+	// An observation that could not be completed is reported ALONGSIDE whatever state was decided above,
+	// leaving that state untouched: the last confirmed verdict is still the best information available, and
+	// downgrading a workload because Odigos failed to read it would blame the customer for our failure. It is
+	// transient — the next pass either succeeds or repeats this.
+	if w.ObservationError != "" {
+		msg := "could not verify this workload's instrumentation: " + w.ObservationError + ". The last confirmed state is shown; Odigos retries automatically."
+		issues = append(issues, &model.WorkloadIssue{
+			Code:      "InstrumentationObservationFailed",
+			Severity:  "unknown",
+			Message:   msg,
+			Transient: boolPtr(true),
 		})
 	}
 
@@ -336,6 +388,45 @@ func sourceGoneIssue(sourceMatched bool) (code, message string) {
 	}
 	return "SourceMissingButInstrumented",
 		"instrumentation is still applied to this workload, but it has no source. Odigos does not remove manually-applied instrumentation, so either create a source for this workload or remove the instrumentation from your deployment definition."
+}
+
+// driftMessage explains a partially-applied manual-mode instrumentation. It names the components rather than
+// saying "drift detected", because the customer has to go edit their own deployment definition and the
+// component list is the only thing that tells them where to look. componentLabels turns the provider-neutral
+// component names into that prose; an unrecognized one is passed through rather than dropped, so a provider
+// adding a component still produces an actionable message before this map learns about it.
+func driftMessage(missing []string) string {
+	if len(missing) == 0 {
+		// A Partial verdict is supposed to travel with its component list. Without one there is nothing
+		// specific to say, so say the general thing rather than an empty sentence.
+		return "this workload's instrumentation does not match what Odigos expects. Re-apply the instrumentation to your deployment definition."
+	}
+	labels := make([]string, 0, len(missing))
+	for _, m := range missing {
+		if label, ok := componentLabels[m]; ok {
+			labels = append(labels, label)
+		} else {
+			labels = append(labels, m)
+		}
+	}
+	return "this workload's instrumentation is incomplete or out of date (" + strings.Join(labels, "; ") +
+		"). Odigos does not change manually-instrumented workloads, so re-apply the instrumentation to your deployment definition."
+}
+
+// componentLabels maps the provider-neutral component names an observer reports to customer-facing prose.
+// The names are shared vocabulary across providers on purpose: the same missing ownership marker or stale
+// collector endpoint reads identically whether it came from Lambda, Cloud Run or Container Apps.
+var componentLabels = map[string]string{
+	"ownershipMarker":      "the Odigos ownership marker is missing",
+	"instrumentationLayer": "the instrumentation layer is not attached",
+	"layerVersionConflict": "more than one version of the instrumentation layer is attached",
+	"serviceName":          "the reported service name does not match this source",
+	"collectorExport":      "the telemetry export settings do not match the configured destination",
+	"legacyExportVars":     "obsolete export variables from an earlier Odigos version are still set",
+	"agentLoader":          "the language agent is not being loaded",
+	"agentLoaderConfig":    "the language agent's configuration is incomplete",
+	"execWrapper":          "the instrumentation wrapper is not set",
+	"logLevel":             "the telemetry log level does not match the connector's setting",
 }
 
 // sinceOrNil renders an issue's first-observed time, or nil when unknown (no source matched, so there is no

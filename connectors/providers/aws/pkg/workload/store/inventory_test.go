@@ -93,7 +93,7 @@ func TestDecodeECSContainers(t *testing.T) {
 // than a block of empty fields a client cannot tell apart from a real one.
 func TestWorkloadDetailsByKind(t *testing.T) {
 	svc := workloadDetails(KindECSTask, "arn:aws:ecs:us-east-1:1:cluster/prod/api", "",
-		"FARGATE", "api:42", "ECS", []byte(`[{"name":"app"}]`))
+		"FARGATE", "api:42", "ECS", []byte(`[{"name":"app"}]`), nil)
 	if svc == nil {
 		t.Fatal("an ECS service row must produce details")
 	}
@@ -102,15 +102,31 @@ func TestWorkloadDetailsByKind(t *testing.T) {
 		t.Errorf("service details = %+v", svc)
 	}
 
-	if got := workloadDetails(KindECSTask, "arn:aws:ecs:us-east-1:1:task/abc", "", "", "", "", nil); got != nil {
+	if got := workloadDetails(KindECSTask, "arn:aws:ecs:us-east-1:1:task/abc", "", "", "", "", nil, nil); got != nil {
 		t.Errorf("standalone task details = %+v, want nil", got)
 	}
 
-	lam := workloadDetails(KindLambda, "arn:aws:lambda:us-east-1:1:function:fn", "python3.12", "arm64", "", "", nil)
+	// The observed layer set resolves to the ODIGOS layer only. A Lambda report's layerArn has to answer
+	// "which Odigos layer version is this function on", so a customer's own layer must never fill it in.
+	layers := []string{
+		"arn:aws:lambda:us-east-1:1:layer:LambdaAdapterLayerX86:25",
+		"arn:aws:lambda:us-east-1:1:layer:odigos-otel-python-arm64:7",
+	}
+	lam := workloadDetails(KindLambda, "arn:aws:lambda:us-east-1:1:function:fn", "python3.12", "arm64", "", "", nil, layers)
 	if lam == nil || lam.Runtime != "python3.12" || lam.Architecture != "arm64" || lam.FunctionArn == "" {
 		t.Errorf("lambda details = %+v", lam)
 	}
+	if lam.LayerArn != layers[1] {
+		t.Errorf("layerArn = %q, want the odigos layer %q", lam.LayerArn, layers[1])
+	}
 	if len(lam.Containers) != 0 {
 		t.Errorf("lambda has no container layer, got %+v", lam.Containers)
+	}
+
+	// A function carrying only foreign layers reports no Odigos layer rather than the first one it finds.
+	foreign := workloadDetails(KindLambda, "arn:aws:lambda:us-east-1:1:function:fn", "python3.12", "arm64", "", "", nil,
+		[]string{"arn:aws:lambda:us-east-1:1:layer:AWSOtelPython:5"})
+	if foreign.LayerArn != "" {
+		t.Errorf("layerArn = %q, want empty for a function with no odigos layer", foreign.LayerArn)
 	}
 }
