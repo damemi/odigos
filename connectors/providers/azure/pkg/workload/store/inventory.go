@@ -20,6 +20,32 @@ const (
 // it. It gives operators/UI a window to see recently-removed resources while bounding table growth.
 const SoftDeleteRetention = 7 * 24 * time.Hour
 
+// Odigos-owned env vars the instrumentor sets on the instrumented container. They live here — neutral
+// ground both the detector and the instrumentor already import — so writer and reader can never drift.
+const (
+	// EnvOdigosManaged marks a Container App as instrumented by THIS connector and carries, in its JSON
+	// value, the pre-Odigos value of every env key we changed so rollback restores the app exactly.
+	//
+	// It is the SINGLE authority on Odigos ownership. Every decision keys off it and nothing else:
+	// discovery deriving the instrumented flag, the gate that authorizes a mutation, and rollback. A
+	// second, weaker signal would let those disagree — a workload one of them calls ours and another does
+	// not oscillates between states, and worse, the mutation gate is the safety boundary that keeps Odigos
+	// out of a workload a customer instrumented themselves.
+	EnvOdigosManaged = "ODIGOS_MANAGED"
+	// EnvCollectorEndpoint carries the user-configured OTLP destination as raw host:port (no scheme — the
+	// same convention the AWS connector uses for this variable name).
+	//
+	// It is NOT an ownership signal — see EnvOdigosManaged. Nothing reads it today: the injected agents are
+	// upstream OpenTelemetry builds, which read the standard OTEL_EXPORTER_OTLP_ENDPOINT that the
+	// instrumentor sets alongside this. It is written so the Odigos-owned value exists on the container as a
+	// mark of what destination we configured.
+	//
+	// EnvCollectorEndpoint is ODIGOS_OTLP_ENDPOINT: the configured destination as host:port
+	// (same name/shape as AWS). Not an ownership signal — see EnvOdigosManaged. Unused by
+	// the injected upstream OTel agents, which read OTEL_EXPORTER_OTLP_ENDPOINT instead.
+	EnvCollectorEndpoint = "ODIGOS_OTLP_ENDPOINT"
+)
+
 const (
 	metaInstrumented         = "instrumented"
 	metaRuntimeLanguage      = "runtimeLanguage"

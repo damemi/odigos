@@ -257,6 +257,89 @@ func TestRollbackNotOwned(t *testing.T) {
 	}
 }
 
+// TestCollectorEndpointEchoesDestination pins the odigos-namespaced ownership var to the user-configured
+// destination. It carries the RAW host:port (matching the AWS connector's convention for the same variable
+// name), which is deliberately not the scheme-qualified URL the SDK var gets — the detector derives Odigos
+// ownership from this var, so a customer who happens to set OTEL_EXPORTER_OTLP_ENDPOINT themselves is never
+// mistaken for us.
+func TestCollectorEndpointEchoesDestination(t *testing.T) {
+	svc := serviceWith(&runpb.Container{Image: "openjdk:21", Ports: []*runpb.ContainerPort{{ContainerPort: 8080}}})
+	if err := applyInstrumentation(svc, LangJava, testAgentImage, "my-svc", "us-central1", testDest(), false); err != nil {
+		t.Fatalf("applyInstrumentation: %v", err)
+	}
+	env := containerEnvMap(ingressContainer(svc))
+	if got := env[EnvCollectorEndpoint]; got != "collector.example:4317" {
+		t.Errorf("ODIGOS_OTLP_ENDPOINT = %q, want the destination host:port", got)
+	}
+	if env[EnvCollectorEndpoint] == env[EnvOTLPEndpoint] {
+		t.Errorf("ODIGOS_OTLP_ENDPOINT should carry host:port, not the SDK's URL form (both are %q)", env[EnvCollectorEndpoint])
+	}
+	// Converged immediately: if the new var were not part of the comparison, every reconcile would register
+	// a fresh revision forever.
+	if !alreadyInstrumented(svc, LangJava, testAgentImage, "my-svc", "us-central1", testDest(), false) {
+		t.Error("service should be converged right after apply")
+	}
+}
+
+// TestDestinationChangeForcesReinstrument proves the echoed endpoint participates in convergence: pointing
+// the connector at a new destination must make the service non-converged so it is re-instrumented.
+func TestDestinationChangeForcesReinstrument(t *testing.T) {
+	svc := serviceWith(&runpb.Container{Image: "openjdk:21", Ports: []*runpb.ContainerPort{{ContainerPort: 8080}}})
+	if err := applyInstrumentation(svc, LangJava, testAgentImage, "my-svc", "us-central1", testDest(), false); err != nil {
+		t.Fatalf("applyInstrumentation: %v", err)
+	}
+	moved := testDest()
+	moved.Endpoint = "other-collector.example:4317"
+	if alreadyInstrumented(svc, LangJava, testAgentImage, "my-svc", "us-central1", moved, false) {
+		t.Error("a destination change should leave the service non-converged")
+	}
+	if err := applyInstrumentation(svc, LangJava, testAgentImage, "my-svc", "us-central1", moved, false); err != nil {
+		t.Fatalf("re-apply after destination change: %v", err)
+	}
+	if got := containerEnvMap(ingressContainer(svc))[EnvCollectorEndpoint]; got != moved.Endpoint {
+		t.Errorf("ODIGOS_OTLP_ENDPOINT = %q, want %q after re-instrument", got, moved.Endpoint)
+	}
+	if !alreadyInstrumented(svc, LangJava, testAgentImage, "my-svc", "us-central1", moved, false) {
+		t.Error("service should converge on the new destination")
+	}
+}
+
+// TestRollbackRemovesCollectorEndpointForLegacyMarker covers a service instrumented by a connector build
+// that predates ODIGOS_OTLP_ENDPOINT: its marker snapshot never mentions the key, so a rollback driven only
+// by the snapshot would leave the var behind — and the detector treats a non-empty ODIGOS_OTLP_ENDPOINT as
+// proof of Odigos ownership, so the workload would report as instrumented forever after being rolled back.
+func TestRollbackRemovesCollectorEndpointForLegacyMarker(t *testing.T) {
+	svc := serviceWith(&runpb.Container{Name: "app", Image: "openjdk:21", Ports: []*runpb.ContainerPort{{ContainerPort: 8080}}})
+	if err := applyInstrumentation(svc, LangJava, testAgentImage, "my-svc", "us-central1", testDest(), false); err != nil {
+		t.Fatalf("applyInstrumentation: %v", err)
+	}
+
+	// Rewrite the marker to a pre-upgrade snapshot: same manifest, minus any knowledge of the new key.
+	app := ingressContainer(svc)
+	marker, _ := containerEnvValue(app, EnvOdigosManaged)
+	m, ok := parseManifest(marker)
+	if !ok {
+		t.Fatal("expected a parseable marker after apply")
+	}
+	delete(m.PrevEnv, EnvCollectorEndpoint)
+	legacy, err := marshalManifest(m)
+	if err != nil {
+		t.Fatalf("marshalManifest: %v", err)
+	}
+	setContainerEnv(app, EnvOdigosManaged, legacy)
+
+	if !rollbackInstrumentation(svc) {
+		t.Fatal("rollback should report the service was owned")
+	}
+	env := containerEnvMap(ingressContainer(svc))
+	if v, ok := env[EnvCollectorEndpoint]; ok {
+		t.Errorf("ODIGOS_OTLP_ENDPOINT survived rollback as %q; the detector would still report this service instrumented", v)
+	}
+	if _, ok := env[EnvOdigosManaged]; ok {
+		t.Error("ownership marker should be removed on rollback")
+	}
+}
+
 func TestOTLPEndpointURL(t *testing.T) {
 	cases := []struct {
 		dest domaindest.OTLPTarget

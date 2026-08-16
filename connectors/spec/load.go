@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"bytes"
 	"embed"
 	"fmt"
 	"io/fs"
@@ -52,7 +53,13 @@ func loadEmbedded(root embed.FS) error {
 // at package init (see loadEmbedded).
 func Parse(data []byte) (CloudConnectorSpec, error) {
 	var s CloudConnectorSpec
-	if err := yaml.Unmarshal(data, &s); err != nil {
+	// KnownFields(true) rather than yaml.Unmarshal: an undeclared key is a typo, and silently discarding it
+	// means the connector runs with a default the spec author believed they had overridden. A misspelled
+	// permission list or feature flag would otherwise surface only as wrong runtime behavior in a customer
+	// account. Every key a provider YAML uses must therefore have a field on these structs.
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&s); err != nil {
 		return CloudConnectorSpec{}, fmt.Errorf("parse connector spec: %w", err)
 	}
 	if s.Provider == "" {

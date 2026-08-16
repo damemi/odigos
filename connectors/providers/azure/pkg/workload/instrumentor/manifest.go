@@ -3,10 +3,13 @@ package instrumentor
 import (
 	"encoding/json"
 	"fmt"
+
+	store "github.com/odigos-io/odigos-enterprise/connectors/providers/azure/pkg/workload/store"
 )
 
-// EnvOdigosManaged is the ownership marker + change snapshot stamped on the app container.
-const EnvOdigosManaged = "ODIGOS_MANAGED"
+// EnvOdigosManaged is the ownership marker + change snapshot stamped on the app container. Defined in the
+// workload store, which the detector also imports, so the writer here and the reader there cannot drift.
+const EnvOdigosManaged = store.EnvOdigosManaged
 
 const managedManifestVersion = 1
 
@@ -39,7 +42,7 @@ func parseManifest(s string) (managedManifest, bool) {
 
 func managedEnvKeys(lang string) []string {
 	keys := []string{
-		EnvOdigosManaged,
+		EnvOdigosManaged, EnvCollectorEndpoint,
 		EnvServiceName, EnvResourceAttributes,
 		EnvOTLPEndpoint, EnvOTLPProtocol,
 		EnvTracesExporter, EnvMetricsExporter, EnvLogsExporter,
@@ -68,7 +71,9 @@ func buildManifest(env map[string]string, existingMarker, lang string) managedMa
 }
 
 func priorValue(key string, env map[string]string) *string {
-	if key == EnvOdigosManaged {
+	switch key {
+	case EnvOdigosManaged, EnvCollectorEndpoint:
+		// odigos-namespaced — always ours, never a customer value, so rollback deletes rather than restores.
 		return nil
 	}
 	if v, ok := env[key]; ok {

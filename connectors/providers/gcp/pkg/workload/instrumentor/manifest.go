@@ -3,13 +3,18 @@ package instrumentor
 import (
 	"encoding/json"
 	"fmt"
+
+	store "github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/workload/store"
 )
 
 // EnvOdigosManaged is the ownership marker + change snapshot the instrumentor stamps on the ingress
 // container. Its presence is the authoritative proof this connector instrumented the service (a
 // customer's own OpenTelemetry setup never carries it), and its JSON payload records the pre-Odigos value
 // of every env key we changed so rollback restores the service exactly.
-const EnvOdigosManaged = "ODIGOS_MANAGED"
+//
+// Defined in the workload store, which the detector also imports, so the writer here and the reader there
+// cannot drift.
+const EnvOdigosManaged = store.EnvOdigosManaged
 
 const managedManifestVersion = 1
 
@@ -49,7 +54,7 @@ func parseManifest(s string) (managedManifest, bool) {
 // Their pre-Odigos values are snapshotted on first instrument so rollback restores the container exactly.
 func managedEnvKeys(lang string) []string {
 	keys := []string{
-		EnvOdigosManaged,
+		EnvOdigosManaged, EnvCollectorEndpoint,
 		EnvServiceName, EnvResourceAttributes,
 		EnvOTLPEndpoint, EnvOTLPProtocol,
 		EnvTracesExporter, EnvMetricsExporter, EnvLogsExporter,
@@ -80,11 +85,13 @@ func buildManifest(env map[string]string, existingMarker, lang string) managedMa
 	return managedManifest{Version: managedManifestVersion, Language: lang, PrevEnv: prev}
 }
 
-// priorValue is the value rollback should restore for an env key: the customer's current value, except
-// for keys that are unmistakably ours (the ownership marker), which are recorded as absent (deleted on
-// rollback).
+// priorValue is the value rollback should restore for an env key: the customer's current value, except for
+// the odigos-namespaced keys that are unmistakably ours (the ownership marker and the destination echo),
+// which are recorded as absent (deleted on rollback).
 func priorValue(key string, env map[string]string) *string {
-	if key == EnvOdigosManaged {
+	switch key {
+	case EnvOdigosManaged, EnvCollectorEndpoint:
+		// odigos-namespaced — always ours, never a customer value, so rollback deletes rather than restores.
 		return nil
 	}
 	if v, ok := env[key]; ok {

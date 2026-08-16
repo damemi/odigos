@@ -21,13 +21,9 @@ import (
 
 var log = connlog.Subsystem("gcp-workload-detector")
 
-// envOdigosManaged marks a Cloud Run service as instrumented by THIS connector (set on the revision
-// template by the instrumentor once that lands). Its presence is the authoritative proof of ownership.
-const envOdigosManaged = "ODIGOS_MANAGED"
-
-// envCollectorEndpoint is the odigos-namespaced collector var the instrumentor sets; its presence also
-// proves the connector instrumented the service.
-const envCollectorEndpoint = "ODIGOS_OTLP_ENDPOINT"
+// envOdigosManaged is the sole ownership signal, defined in the workload store — shared with the
+// instrumentor that writes it, so reader and writer cannot drift (see store.EnvOdigosManaged).
+const envOdigosManaged = store.EnvOdigosManaged
 
 // CloudRunDetector discovers Cloud Run services across every location in the project.
 type CloudRunDetector struct {
@@ -122,9 +118,14 @@ func parseServiceName(name string) (location, serviceID string) {
 	return location, serviceID
 }
 
-// odigosInstrumented reports whether a Cloud Run service's revision template shows instrumentation owned
-// by THIS connector (the ownership marker or the odigos-namespaced collector endpoint). A customer's own
-// OpenTelemetry setup is deliberately not treated as ours.
+// odigosInstrumented reports whether a Cloud Run service's revision template shows instrumentation owned by
+// THIS connector. A customer's own OpenTelemetry setup is deliberately not treated as ours.
+//
+// The ownership marker is the ONLY signal, deliberately. It is also what gates every mutation
+// (instrumentor.serviceOwned) and what rollback restores from, so deriving the flag from anything else would
+// let discovery and the instrumentor disagree: a service discovery called ours but the mutation gate did not
+// would flip between instrumented and not on every cycle, one write each, and never settle. Other
+// odigos-namespaced vars we set (store.EnvCollectorEndpoint) are values we own, not proof of ownership.
 func odigosInstrumented(svc *runpb.Service) bool {
 	tmpl := svc.GetTemplate()
 	if tmpl == nil {
@@ -132,13 +133,8 @@ func odigosInstrumented(svc *runpb.Service) bool {
 	}
 	for _, c := range tmpl.GetContainers() {
 		for _, e := range c.GetEnv() {
-			switch e.GetName() {
-			case envOdigosManaged:
+			if e.GetName() == envOdigosManaged {
 				return true
-			case envCollectorEndpoint:
-				if e.GetValue() != "" {
-					return true
-				}
 			}
 		}
 	}

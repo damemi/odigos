@@ -10,6 +10,7 @@ import (
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	store "github.com/odigos-io/odigos-enterprise/connectors/providers/azure/pkg/workload/store"
 )
 
 const (
@@ -21,9 +22,14 @@ const (
 	EnvMetricsExporter    = "OTEL_METRICS_EXPORTER"
 	EnvLogsExporter       = "OTEL_LOGS_EXPORTER"
 	EnvOtelLogLevel       = "OTEL_LOG_LEVEL"
+	// EnvCollectorEndpoint is ODIGOS_OTLP_ENDPOINT: the destination as host:port.
+	// Today the agent ignores it and uses EnvOTLPEndpoint (standard OTel). We still
+	// set it to record the configured destination; future Odigos agents will read it
+	// and EnvOTLPEndpoint will be dropped.
+	EnvCollectorEndpoint = store.EnvCollectorEndpoint
 
-	exporterOTLP     = "otlp"
-	exporterNone     = "none"
+	exporterOTLP      = "otlp"
+	exporterNone      = "none"
 	otlpProtocolGRPC  = "grpc"
 	otelLogLevelDebug = "debug"
 
@@ -59,6 +65,7 @@ func applyInstrumentation(app *armappcontainers.ContainerApp, lang, image, servi
 
 	setContainerEnv(c, EnvServiceName, serviceName)
 	setContainerEnv(c, EnvResourceAttributes, resourceAttributes(region))
+	setContainerEnv(c, EnvCollectorEndpoint, dest.Endpoint)
 	setContainerEnv(c, EnvOTLPEndpoint, otlpEndpointURL(dest))
 	setContainerEnv(c, EnvOTLPProtocol, otlpProtocolGRPC)
 	setContainerEnv(c, EnvTracesExporter, exporterFor(dest.Traces))
@@ -97,6 +104,7 @@ func alreadyInstrumented(app *armappcontainers.ContainerApp, lang, image, servic
 	}
 	if env[EnvServiceName] != serviceName ||
 		env[EnvResourceAttributes] != resourceAttributes(region) ||
+		env[EnvCollectorEndpoint] != dest.Endpoint ||
 		env[EnvOTLPEndpoint] != otlpEndpointURL(dest) ||
 		env[EnvOTLPProtocol] != otlpProtocolGRPC ||
 		env[EnvTracesExporter] != exporterFor(dest.Traces) ||
@@ -146,6 +154,10 @@ func rollbackInstrumentation(app *armappcontainers.ContainerApp) bool {
 		}
 	}
 	deleteContainerEnv(c, EnvOdigosManaged)
+	// Delete unconditionally rather than relying on the snapshot: an app instrumented before this var
+	// existed has a marker whose PrevEnv does not mention it, and leaving it behind would keep the detector
+	// reporting the app as Odigos-instrumented forever after a rollback.
+	deleteContainerEnv(c, EnvCollectorEndpoint)
 	removeVolumeMount(c, agentVolumeName)
 	removeInitContainer(app, initContainerName)
 	removeVolume(app, agentVolumeName)

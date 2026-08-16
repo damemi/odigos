@@ -9,6 +9,7 @@ import (
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	store "github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/workload/store"
 )
 
 // OpenTelemetry configuration + identity env vars the instrumentor sets on the ingress container. Unlike
@@ -23,6 +24,13 @@ const (
 	EnvMetricsExporter    = "OTEL_METRICS_EXPORTER"
 	EnvLogsExporter       = "OTEL_LOGS_EXPORTER"
 	EnvOtelLogLevel       = "OTEL_LOG_LEVEL"
+	// EnvCollectorEndpoint carries the user-configured destination as raw host:port. Currently UNUSED by
+	// anything on the container — the injected agent is an upstream OpenTelemetry build and reads
+	// EnvOTLPEndpoint above — and it is NOT an ownership signal (EnvOdigosManaged alone is). It is set as a
+	// mark of the destination we configured, and becomes the agent's actual input once the agents move to an
+	// Odigos implementation, at which point EnvOTLPEndpoint drops out of the injected set. See
+	// store.EnvCollectorEndpoint.
+	EnvCollectorEndpoint = store.EnvCollectorEndpoint
 
 	exporterOTLP      = "otlp"
 	exporterNone      = "none"
@@ -84,6 +92,7 @@ func applyInstrumentation(svc *runpb.Service, lang, image, serviceName, region s
 
 	setContainerEnv(app, EnvServiceName, serviceName)
 	setContainerEnv(app, EnvResourceAttributes, resourceAttributes(region))
+	setContainerEnv(app, EnvCollectorEndpoint, dest.Endpoint)
 	setContainerEnv(app, EnvOTLPEndpoint, otlpEndpointURL(dest))
 	setContainerEnv(app, EnvOTLPProtocol, otlpProtocolGRPC)
 	setContainerEnv(app, EnvTracesExporter, exporterFor(dest.Traces))
@@ -126,6 +135,7 @@ func alreadyInstrumented(svc *runpb.Service, lang, image, serviceName, region st
 	}
 	if env[EnvServiceName] != serviceName ||
 		env[EnvResourceAttributes] != resourceAttributes(region) ||
+		env[EnvCollectorEndpoint] != dest.Endpoint ||
 		env[EnvOTLPEndpoint] != otlpEndpointURL(dest) ||
 		env[EnvOTLPProtocol] != otlpProtocolGRPC ||
 		env[EnvTracesExporter] != exporterFor(dest.Traces) ||
@@ -180,6 +190,10 @@ func rollbackInstrumentation(svc *runpb.Service) bool {
 		}
 	}
 	deleteContainerEnv(app, EnvOdigosManaged)
+	// Delete unconditionally rather than relying on the snapshot: a service instrumented before this var
+	// existed has a marker whose PrevEnv does not mention it, and leaving it behind would keep the detector
+	// reporting the service as Odigos-instrumented forever after a rollback.
+	deleteContainerEnv(app, EnvCollectorEndpoint)
 	removeVolumeMount(app, agentVolumeName)
 	removeDependsOn(app, sidecarContainerName)
 	removeContainer(svc, sidecarContainerName)

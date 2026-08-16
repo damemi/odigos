@@ -86,6 +86,47 @@ func TestParseRequiresProvider(t *testing.T) {
 	}
 }
 
+// TestParseRejectsUnknownFields locks in strict decoding. Without it a mistyped key is silently dropped and
+// the connector runs with the default the author thought they had overridden — e.g. `permission:` instead of
+// `permissions:` yields a type that requests no permissions at all, which only shows up as a denied API call
+// in a customer account.
+func TestParseRejectsUnknownFields(t *testing.T) {
+	cases := map[string]string{
+		"top level": "provider: sample\nprovidr: typo\n",
+		"nested type": `
+provider: sample
+workloads:
+  discovery:
+    types:
+      - name: vm
+        permission:
+          - sample:ListVMs
+`,
+		"auth field": `
+provider: sample
+auth:
+  methods:
+    - id: default
+      fields:
+        - name: token
+          showInUI: true
+`,
+	}
+	for name, y := range cases {
+		if _, err := Parse([]byte(y)); err == nil {
+			t.Errorf("%s: Parse should reject an undeclared key", name)
+		}
+	}
+
+	// The real provider YAMLs must keep parsing under strict decoding — this is what makes the rule
+	// enforceable rather than aspirational (showInUi, for one, is declared precisely because they use it).
+	for _, p := range Providers() {
+		if _, ok := Get(p); !ok {
+			t.Errorf("provider %q registered but not retrievable", p)
+		}
+	}
+}
+
 // TestValidateFeatureTypes covers the two-domain taxonomy rules enforced at parse time.
 func TestValidateFeatureTypes(t *testing.T) {
 	// Discovery-only is allowed: a discovery type with no instrumentation counterpart parses fine, and a

@@ -340,6 +340,15 @@ type Field struct {
 	Secret         bool                   `yaml:"secret"`
 	Tooltip        string                 `yaml:"tooltip"`
 	InitialValue   string                 `yaml:"initialValue"`
+	// ShowInUi is a UI hint: whether the create-connector form renders this field up-front. It exists so a
+	// rarely-needed optional credential can stay hidden behind a disclosure (e.g. the AWS sessionToken,
+	// which only temporary access keys use) instead of cluttering the common path.
+	//
+	// NOTE: it is declared here so the provider YAML is honest — spec.Parse now rejects undeclared keys —
+	// but nothing consumes it yet: central-backend's CloudConnectorField does not carry it, so every field
+	// currently renders regardless. Either plumb it through to the UI or drop it from the YAML; do not
+	// assume a `showInUi: false` field is hidden today.
+	ShowInUi bool `yaml:"showInUi"`
 	// EnvVar is the environment variable the connector runtime stamps this field's value into (for
 	// auth fields, via a Secret keyRef whose key is Name). It is the bridge from the provider-agnostic
 	// field name to the env var the connector binary reads (e.g. accessKeyId -> AWS_ACCESS_KEY_ID).

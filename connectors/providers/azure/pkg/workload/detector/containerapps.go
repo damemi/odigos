@@ -19,13 +19,9 @@ import (
 
 var log = connlog.Subsystem("azure-workload-detector")
 
-// envOdigosManaged marks a Container App as instrumented by THIS connector (set on the revision
-// template by the instrumentor once that lands). Its presence is the authoritative proof of ownership.
-const envOdigosManaged = "ODIGOS_MANAGED"
-
-// envCollectorEndpoint is the odigos-namespaced collector var the instrumentor sets; its presence also
-// proves the connector instrumented the app.
-const envCollectorEndpoint = "ODIGOS_OTLP_ENDPOINT"
+// envOdigosManaged is the sole ownership signal, defined in the workload store — shared with the
+// instrumentor that writes it, so reader and writer cannot drift (see store.EnvOdigosManaged).
+const envOdigosManaged = store.EnvOdigosManaged
 
 // ContainerAppsDetector discovers Azure Container Apps across the subscription.
 type ContainerAppsDetector struct {
@@ -125,7 +121,13 @@ func toContainerApp(app *armappcontainers.ContainerApp) store.ContainerApp {
 }
 
 // odigosInstrumented reports whether a Container App's template shows instrumentation owned by THIS
-// connector (the ownership marker or the odigos-namespaced collector endpoint).
+// connector. A customer's own OpenTelemetry setup is deliberately not treated as ours.
+//
+// The ownership marker is the ONLY signal, deliberately. It is also what gates every mutation
+// (instrumentor.appOwned) and what rollback restores from, so deriving the flag from anything else would let
+// discovery and the instrumentor disagree: an app discovery called ours but the mutation gate did not would
+// flip between instrumented and not on every cycle, one write each, and never settle. Other
+// odigos-namespaced vars we set (store.EnvCollectorEndpoint) are values we own, not proof of ownership.
 func odigosInstrumented(app *armappcontainers.ContainerApp) bool {
 	if app.Properties == nil || app.Properties.Template == nil {
 		return false
@@ -138,13 +140,8 @@ func odigosInstrumented(app *armappcontainers.ContainerApp) bool {
 			if e == nil || e.Name == nil {
 				continue
 			}
-			switch *e.Name {
-			case envOdigosManaged:
+			if *e.Name == envOdigosManaged {
 				return true
-			case envCollectorEndpoint:
-				if e.Value != nil && *e.Value != "" {
-					return true
-				}
 			}
 		}
 	}
