@@ -5,6 +5,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -205,6 +206,8 @@ func (r *Reconciler) reconcileDelete(ctx context.Context, cr *cloudconnectorsv1.
 	logger := log.FromContext(ctx)
 
 	if !wantsCleanupOnDelete(cr) {
+		// retain (default): drop the finalizer immediately and leave provider instrumentation as-is —
+		// both automatic-mode agents the connector applied and manual-mode (IaC) agents the customer applied.
 		return r.removeFinalizer(ctx, cr)
 	}
 
@@ -222,20 +225,29 @@ func (r *Reconciler) reconcileDelete(ctx context.Context, cr *cloudconnectorsv1.
 		return r.removeFinalizer(ctx, cr)
 	}
 	if hb.ShutdownComplete {
+		// Drain finished: automatic rollback succeeded and no manual-mode workloads remain instrumented
+		// (or the connector had none). Safe to tear the pod down via owner-ref GC.
 		return r.removeFinalizer(ctx, cr)
 	}
 
 	// Cleanup is performed by the RUNNING connector pod: it observes this drain request in its loop and
-	// rolls back instrumentation with per-tick retry, then records shutdownComplete (handled above). We do
-	// NOT scale the pod to zero to trigger cleanup — draining happens while the pod runs, so a transient
-	// provider (AWS) error simply retries on the next loop tick instead of being force-killed mid-rollback
-	// by pod termination (which cannot be halted once started). The pod is torn down by owner-reference GC
-	// once the finalizer is removed here.
+	// rolls back automatic-mode instrumentation with per-tick retry, then — for manual-mode leftovers —
+	// keeps discovering until those workloads report uninstrumented, and only then records
+	// shutdownComplete. We do NOT scale the pod to zero to trigger cleanup — draining happens while the
+	// pod runs, so a transient provider (AWS) error simply retries on the next loop tick instead of being
+	// force-killed mid-rollback by pod termination (which cannot be halted once started). The pod is torn
+	// down by owner-reference GC once the finalizer is removed here.
 	if !hb.DrainRequested {
 		if err := r.Heartbeat.RequestDrain(ctx, cr.Name, "connector_deleted"); err != nil {
 			return ctrl.Result{}, err
 		}
 		logger.Info("drain requested; waiting for the connector to roll back instrumentation")
+	}
+
+	// Manual + cleanup: automatic rollback may already be done while the connector waits for the customer
+	// to remove IaC instrumentation. Surface that so the deleting CR explains the hold.
+	if hb.AwaitingManualCleanup || hb.ManualInstrumentationRetained > 0 {
+		r.reportManualCleanupRequired(ctx, cr, hb)
 	}
 
 	// Bound the wait by the CR's deletion timestamp — a stable, monotonic clock that survives connector pod
@@ -245,14 +257,19 @@ func (r *Reconciler) reconcileDelete(ctx context.Context, cr *cloudconnectorsv1.
 	// condition (the pod keeps retrying until GC removes it after the finalizer is dropped).
 	if time.Since(cr.DeletionTimestamp.Time) > r.Config.CleanupTimeout {
 		logger.Info("instrumentation cleanup timed out; removing finalizer")
-		meta.SetStatusCondition(&cr.Status.Conditions, cond("CleanupFailed", metav1.ConditionTrue, "CleanupTimedOut", "Instrumentation rollback did not complete before the cleanup timeout", cr.Generation))
+		timeoutMsg := "Instrumentation rollback did not complete before the cleanup timeout; provider resources may still be instrumented"
+		if hb.ManualInstrumentationRetained > 0 || hb.AwaitingManualCleanup {
+			timeoutMsg = manualCleanupTimedOutMessage(hb)
+			meta.SetStatusCondition(&cr.Status.Conditions,
+				cond("ManualCleanupRequired", metav1.ConditionTrue, "InstrumentationRetained", timeoutMsg, cr.Generation))
+		}
+		meta.SetStatusCondition(&cr.Status.Conditions, cond("CleanupFailed", metav1.ConditionTrue, "CleanupTimedOut", timeoutMsg, cr.Generation))
 		if err := r.Status().Update(ctx, cr); err != nil && !apierrors.IsConflict(err) {
 			return ctrl.Result{}, err
 		}
-		// Emit a durable Event: the CR (and its CleanupFailed condition) is about to be deleted, so a log
-		// line would be the only trace that instrumentation was left live in the customer's account.
-		r.event(cr, corev1.EventTypeWarning, "CleanupFailed",
-			"Instrumentation rollback did not complete before the cleanup timeout; provider resources may still be instrumented")
+		// Emit a durable Event: the CR (and its conditions) is about to be deleted, so a log line would be
+		// the only other trace that instrumentation was left live in the customer's account.
+		r.event(cr, corev1.EventTypeWarning, "CleanupFailed", timeoutMsg)
 		return r.removeFinalizer(ctx, cr)
 	}
 
@@ -289,6 +306,54 @@ func (r *Reconciler) event(cr *cloudconnectorsv1.OdigosCloudConnector, eventtype
 func providerImmutabilityViolated(cr *cloudconnectorsv1.OdigosCloudConnector) (locked string, violated bool) {
 	locked = cr.Annotations[annotationProviderLock]
 	return locked, locked != "" && locked != cr.Spec.Provider
+}
+
+// reportManualCleanupRequired records that deletion is held (or timed out) because manual-mode (IaC)
+// instrumentation is still applied — the customer must remove it from their deployment definitions.
+//
+// Both a condition and an Event are written: while waiting, the condition explains the hold on the still-
+// present CR; on timeout force-delete the Event is the durable trace after the CR disappears. A status
+// write that loses a conflict race must not wedge the CR — we still requeue / eventually time out.
+func (r *Reconciler) reportManualCleanupRequired(ctx context.Context, cr *cloudconnectorsv1.OdigosCloudConnector, hb heartbeat.Snapshot) {
+	logger := log.FromContext(ctx)
+	msg := manualCleanupWaitingMessage(hb)
+	logger.Info("waiting for manual-mode instrumentation to be removed before finishing delete",
+		"retained", hb.ManualInstrumentationRetained, "workloads", hb.ManualInstrumentationWorkloads)
+
+	prev := meta.FindStatusCondition(cr.Status.Conditions, "ManualCleanupRequired")
+	changed := prev == nil || prev.Message != msg
+	if !changed {
+		return
+	}
+	meta.SetStatusCondition(&cr.Status.Conditions,
+		cond("ManualCleanupRequired", metav1.ConditionTrue, "InstrumentationRetained", msg, cr.Generation))
+	if err := r.Status().Update(ctx, cr); err != nil && !apierrors.IsConflict(err) {
+		logger.Error(err, "could not record the ManualCleanupRequired condition; the Event still carries it")
+	}
+	r.event(cr, corev1.EventTypeWarning, "ManualCleanupRequired", msg)
+}
+
+// manualCleanupWaitingMessage is what the customer sees while deletion is held for manual-mode leftovers.
+func manualCleanupWaitingMessage(hb heartbeat.Snapshot) string {
+	msg := fmt.Sprintf(
+		"Waiting to finish deleting: %d workload(s) still have Odigos instrumentation applied. Their workload type is configured for manual (infrastructure-as-code) instrumentation, so the connector cannot remove it — remove it from your own deployment definitions",
+		hb.ManualInstrumentationRetained)
+	if len(hb.ManualInstrumentationWorkloads) > 0 {
+		msg += ": " + strings.Join(hb.ManualInstrumentationWorkloads, ", ")
+	}
+	return msg + ". Deletion will complete once discovery reports them uninstrumented."
+}
+
+// manualCleanupTimedOutMessage is the durable trace when the cleanup timeout fires while manual-mode
+// instrumentation is still live — the CR is about to disappear.
+func manualCleanupTimedOutMessage(hb heartbeat.Snapshot) string {
+	msg := fmt.Sprintf(
+		"Cleanup timed out with %d workload(s) still carrying Odigos instrumentation. Their workload type is configured for manual (infrastructure-as-code) instrumentation, so the connector could not remove it — remove it from your own deployment definitions",
+		hb.ManualInstrumentationRetained)
+	if len(hb.ManualInstrumentationWorkloads) > 0 {
+		msg += ": " + strings.Join(hb.ManualInstrumentationWorkloads, ", ")
+	}
+	return msg + "."
 }
 
 func (r *Reconciler) removeFinalizer(ctx context.Context, cr *cloudconnectorsv1.OdigosCloudConnector) (ctrl.Result, error) {

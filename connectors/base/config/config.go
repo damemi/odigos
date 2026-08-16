@@ -69,6 +69,13 @@ func FromEnv() (Config, error) {
 		if err := json.Unmarshal([]byte(v), &c.Capabilities); err != nil {
 			return c, fmt.Errorf("parse ODIGOS_CAPABILITIES: %w", err)
 		}
+		// A contradictory allow-list is as unusable as malformed JSON, and failing here is the only place it can
+		// be caught: nothing upstream (the CRD list, the GraphQL input, connector-runtime's marshal) enforces one
+		// entry per type. Refusing to start is deliberate — the alternative is guessing, and the guess the
+		// reconciler gate would make is that Odigos may mutate a workload the customer may have meant to own.
+		if err := c.Capabilities.Validate(); err != nil {
+			return c, fmt.Errorf("invalid ODIGOS_CAPABILITIES: %w", err)
+		}
 	}
 
 	c.RuntimeID = c.PodName

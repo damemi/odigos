@@ -46,6 +46,17 @@ type Coordinator struct {
 	// normal reconcile loops stop instrumenting while the drain rolls everything back — they must not race
 	// the rollback by re-instrumenting a source the drain just disabled.
 	draining atomic.Bool
+	// automaticDrainDone is set after a successful drainInstrumentation during CR-delete cleanup. Later
+	// heartbeat ticks skip re-running that mutate pass and only re-count manual-mode leftovers — discovery
+	// must keep running so the customer removing IaC instrumentation can be observed.
+	automaticDrainDone atomic.Bool
+
+	// awaitingManual holds the live count/sample of manual-mode workloads still instrumented after the
+	// automatic drain. Heartbeat merges these into health so connector-runtime can surface
+	// ManualCleanupRequired while withholding the finalizer. Guarded by awaitingMu.
+	awaitingMu              sync.Mutex
+	awaitingManualRetained  int
+	awaitingManualWorkloads []string
 
 	// reconcileMu serializes every reconcile pass (workload loop, compute-platform loop, shutdown drain and manual
 	// cleanup) so at most one runs at a time. The runtime is not leader-elected; serializing passes keeps
@@ -185,6 +196,7 @@ func (c *Coordinator) tickHeartbeat(ctx context.Context, cancelLoops context.Can
 		"authenticated":       c.authenticated.Load(),
 		"workloadReportKinds": c.workloadKinds,
 	}
+	c.mergeAwaitingManual(health)
 	if err := c.store.Heartbeat(ctx, status, health); err != nil {
 		coordLog.Error("heartbeat write failed", "status", status, "error", err)
 	} else {
@@ -329,6 +341,11 @@ func (c *Coordinator) activeReconcilers() []namedReconciler {
 	}
 	var out []namedReconciler
 	for _, t := range c.provider.Spec().ActiveInstrumentationTypes(c.cfg.Capabilities) {
+		// ActiveInstrumentationTypes resolves AUTOMATIC-mode types only, which is what keeps Odigos out of a
+		// workload the customer owns: a manual-mode type gets no reconciler here, so no mutation path exists for
+		// it anywhere in the runtime — including the shutdown drain, which re-runs these same reconcilers.
+		// TestReconcilersNeverIncludeManualModeTypes pins that agreement between this resolver and
+		// Capabilities.WorkloadInstrumentationMode across every capability combination.
 		if r, ok := recs[t.Name]; ok {
 			out = append(out, namedReconciler{name: t.Name, rec: r})
 		}

@@ -23,7 +23,8 @@ func ToModel(w api.DiscoveredWorkload) *model.WorkloadReport {
 	// applied, before it finishes settling), so central-ui and odictl show it progressing rather than
 	// disabled or prematurely done. The fine phase rides on progress.stage below; a terminal
 	// error/unsupported/not-implemented condition still overrides this further down.
-	if inFlightPhase(w.InstrumentationPhase) {
+	phase := livePhase(w)
+	if inFlightPhase(phase) {
 		state = api.WorkloadStateInstrumenting
 	}
 	reason := "Discovered"
@@ -87,6 +88,11 @@ func ToModel(w api.DiscoveredWorkload) *model.WorkloadReport {
 		// self-resolving — and the only difference is who satisfies it. `since` says how long the wait has
 		// run, which is what separates "just marked" from "marked weeks ago and never applied".
 		msg := waitingForMessage(w.WaitingFor)
+		// Asserted, not assumed: a workload can arrive here with a stale in-flight phase from an earlier
+		// automatic-mode life (or from a destination that was removed mid-instrumentation), which set the state
+		// to Instrumenting above. Nothing is in flight — the reconcile is deliberately skipping this workload —
+		// so leaving that state would report it as permanently busy.
+		state = api.WorkloadStateNotInstrumented
 		progress.Stage = "WaitingFor" + capitalizeFirst(w.WaitingFor)
 		progress.Message = &msg
 		progress.WaitingFor = strPtrOrNil(w.WaitingFor)
@@ -277,9 +283,24 @@ func inFlightPhase(phase string) bool {
 	return phase != "" && phase != api.PhaseInstrumented
 }
 
+// livePhase is the recorded instrumentation phase, but only where it can still be live. A phase is written by
+// an Odigos instrumentor as it works, and in manual mode no instrumentor runs for the type at all — so any
+// phase on a manual-mode workload is a leftover from a previous life under automatic mode, and nothing will
+// ever advance or clear it.
+//
+// Without this, a workload whose capability flipped from automatic to manual mid-instrumentation reports
+// state=Instrumenting forever, next to stage=WaitingForCustomer and instrumented=false: it looks permanently
+// busy while in truth it is waiting on the customer and nothing is happening.
+func livePhase(w api.DiscoveredWorkload) string {
+	if w.ManagementMode == spec.ModeManual {
+		return ""
+	}
+	return w.InstrumentationPhase
+}
+
 func stageFor(w api.DiscoveredWorkload) string {
-	if w.InstrumentationPhase != "" {
-		return w.InstrumentationPhase
+	if phase := livePhase(w); phase != "" {
+		return phase
 	}
 	if w.Instrumented {
 		return api.PhaseInstrumented

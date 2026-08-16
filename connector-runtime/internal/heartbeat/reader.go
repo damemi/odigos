@@ -25,6 +25,18 @@ type Snapshot struct {
 	DrainRequestedAt time.Time
 	DrainReason      string
 	ShutdownComplete bool
+	// AwaitingManualCleanup is true while automatic-mode rollback finished but manual-mode (IaC)
+	// workloads are still observed as instrumented. The connector withholds shutdownComplete until
+	// discovery reports them uninstrumented (or the controller's cleanup timeout force-removes the
+	// finalizer).
+	AwaitingManualCleanup bool
+	// ManualInstrumentationRetained is how many manual-mode workloads are still carrying Odigos
+	// instrumentation the connector will not remove. Non-zero while AwaitingManualCleanup, and may
+	// also appear on a timed-out delete so the Event can name what was left behind.
+	ManualInstrumentationRetained int
+	// ManualInstrumentationWorkloads samples the retained workloads (kind/serviceName), capped by the
+	// connector. The count above is authoritative; this is somewhere to start looking.
+	ManualInstrumentationWorkloads []string
 }
 
 type Reader struct {
@@ -85,9 +97,12 @@ func (r *Reader) Get(ctx context.Context, connectorName string) (Snapshot, error
 		s.DrainReason = *drainReason
 	}
 	var health struct {
-		DiscoveryReady   bool `json:"discoveryReady"`
-		Authenticated    bool `json:"authenticated"`
-		ShutdownComplete bool `json:"shutdownComplete"`
+		DiscoveryReady                 bool     `json:"discoveryReady"`
+		Authenticated                  bool     `json:"authenticated"`
+		ShutdownComplete               bool     `json:"shutdownComplete"`
+		AwaitingManualCleanup          bool     `json:"awaitingManualCleanup"`
+		ManualInstrumentationRetained  int      `json:"manualInstrumentationRetained"`
+		ManualInstrumentationWorkloads []string `json:"manualInstrumentationWorkloads"`
 	}
 	if len(healthBytes) > 0 {
 		_ = json.Unmarshal(healthBytes, &health)
@@ -95,6 +110,9 @@ func (r *Reader) Get(ctx context.Context, connectorName string) (Snapshot, error
 	s.DiscoveryReady = health.DiscoveryReady
 	s.Authenticated = health.Authenticated
 	s.ShutdownComplete = health.ShutdownComplete
+	s.AwaitingManualCleanup = health.AwaitingManualCleanup
+	s.ManualInstrumentationRetained = health.ManualInstrumentationRetained
+	s.ManualInstrumentationWorkloads = health.ManualInstrumentationWorkloads
 	return s, nil
 }
 

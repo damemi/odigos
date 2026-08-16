@@ -176,6 +176,105 @@ func discoveryDeclares(s CloudConnectorSpec, typeName, perm string) bool {
 	return false
 }
 
+// TestDuplicateCapabilityEntriesCannotSplitModeFromGate is a regression guard for a real hole: nothing along
+// the carrier enforces one capability entry per workload type — the CRD list has no listMapKey, the GraphQL
+// input appends verbatim, connector-runtime marshals verbatim, and the connector json.Unmarshals it.
+//
+// The mode resolver used to return on the FIRST matching entry while the reconciler gate OR-ed over ALL of
+// them, so [{lambda, manual}, {lambda, automatic}] reported the type as manual — "waiting for your
+// deployment" — while the reconciler was wired and rewriting the function. Both now read the same OR, so the
+// report can never claim Odigos is hands-off while it is mutating.
+func TestDuplicateCapabilityEntriesCannotSplitModeFromGate(t *testing.T) {
+	s, err := Parse([]byte(modeSampleYAML))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	orders := map[string][]WorkloadCapability{
+		"manual first": {
+			{Type: "vm", Discovery: true},
+			{Type: "vm", Discovery: true, Instrumentation: true},
+		},
+		"automatic first": {
+			{Type: "vm", Discovery: true, Instrumentation: true},
+			{Type: "vm", Discovery: true},
+		},
+	}
+	for name, workloads := range orders {
+		t.Run(name, func(t *testing.T) {
+			caps := Capabilities{Workloads: workloads}
+			mode := caps.WorkloadInstrumentationMode("vm")
+			wired := len(typeNames(s.ActiveInstrumentationTypes(caps))) > 0
+
+			if wired && mode != ModeAutomatic {
+				t.Errorf("reconciler is wired but the reported mode is %q: the connector would mutate a workload while reporting it as the customer's", mode)
+			}
+			if !wired && mode == ModeAutomatic {
+				t.Errorf("reported mode is automatic but no reconciler is wired: the workload would report as Odigos-managed while nothing manages it")
+			}
+		})
+	}
+}
+
+// TestValidateRejectsConflictingDuplicates covers the first line of defense: a contradictory allow-list is
+// refused at startup rather than resolved into one of the two things the customer asked for. Redundant but
+// identical entries are merely sloppy and must keep working.
+func TestValidateRejectsConflictingDuplicates(t *testing.T) {
+	cases := []struct {
+		name    string
+		caps    Capabilities
+		wantErr bool
+	}{
+		{
+			name: "conflicting workload duplicates",
+			caps: Capabilities{Workloads: []WorkloadCapability{
+				{Type: "vm", Discovery: true},
+				{Type: "vm", Discovery: true, Instrumentation: true},
+			}},
+			wantErr: true,
+		},
+		{
+			name: "identical workload duplicates are redundant, not contradictory",
+			caps: Capabilities{Workloads: []WorkloadCapability{
+				{Type: "vm", Discovery: true, Instrumentation: true},
+				{Type: "vm", Discovery: true, Instrumentation: true},
+			}},
+			wantErr: false,
+		},
+		{
+			name: "distinct types are the normal case",
+			caps: Capabilities{Workloads: []WorkloadCapability{
+				{Type: "vm", Discovery: true, Instrumentation: true},
+				{Type: "fn", Discovery: true},
+			}},
+			wantErr: false,
+		},
+		{
+			name: "conflicting compute-platform duplicates",
+			caps: Capabilities{ComputePlatforms: []ComputePlatformCapability{
+				{Type: "eks", Discovery: true},
+				{Type: "eks", Discovery: true, Installation: true},
+			}},
+			wantErr: true,
+		},
+		{
+			name:    "empty is valid",
+			caps:    Capabilities{},
+			wantErr: false,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := c.caps.Validate()
+			if c.wantErr && err == nil {
+				t.Error("Validate accepted a contradictory allow-list")
+			}
+			if !c.wantErr && err != nil {
+				t.Errorf("Validate rejected a usable allow-list: %v", err)
+			}
+		})
+	}
+}
+
 func typeNames(types []Type) []string {
 	out := make([]string, 0, len(types))
 	for _, t := range types {

@@ -9,6 +9,8 @@
 // test-connection and UI.
 package spec
 
+import "fmt"
+
 // The spec has two parallel domains, completely separate (separate detectors, capabilities, reports),
 // sharing only the codebase and running connector pod:
 //   - workloads: directly-instrumentable resources. A `discovery` feature enumerates them and an
@@ -172,20 +174,65 @@ type Capabilities struct {
 // `instrumentation: true` maps to automatic regardless of the discovery flag, so this never contradicts
 // ActiveInstrumentationTypes — which gates the mutating reconcilers on that boolean alone.
 func (c Capabilities) WorkloadInstrumentationMode(typeName string) string {
+	// Both flags are OR-ed over EVERY entry for the type, matching workloadInstrumentation and
+	// workloadInstrumentationAnyMode below. Nothing along the carrier — the CRD list (no +listMapKey), the
+	// GraphQL capability input, connector-runtime's marshal, or the ODIGOS_CAPABILITIES unmarshal — enforces
+	// one entry per type, so duplicates do reach here. Returning on the FIRST match instead would let this
+	// disagree with the reconciler gate: a list of [{lambda, manual}, {lambda, automatic}] would report the
+	// type as manual ("waiting for your deployment") while the reconciler was wired and rewriting the
+	// function. Resolving both from the same OR keeps the report honest about what the connector actually does.
+	//
+	// Validate() rejects that contradictory list outright, so this agreement is the second line of defense
+	// rather than the only one.
+	var discovery, instrumentation bool
 	for _, w := range c.Workloads {
 		if w.Type != typeName {
 			continue
 		}
-		switch {
-		case w.Instrumentation:
-			return ModeAutomatic
-		case w.Discovery:
-			return ModeManual
-		default:
-			return ""
-		}
+		discovery = discovery || w.Discovery
+		instrumentation = instrumentation || w.Instrumentation
 	}
-	return ""
+	switch {
+	case instrumentation:
+		return ModeAutomatic
+	case discovery:
+		return ModeManual
+	default:
+		return ""
+	}
+}
+
+// Validate rejects a capability allow-list that cannot be honored as written. It is called where the
+// capabilities enter the runtime, so a contradictory set stops the connector at startup with a clear message
+// instead of being silently resolved into one of the two things the customer asked for.
+//
+// The only such contradiction today is two entries for the same workload type that disagree about
+// instrumentation: one says the customer instruments it, the other says Odigos does. That is a question only a
+// human can answer — and the unsafe reading (Odigos mutates a workload the customer may have meant to own) is
+// the one the reconciler gate would take — so it is refused rather than guessed. Byte-identical duplicates are
+// merely redundant and pass.
+func (c Capabilities) Validate() error {
+	seen := make(map[string]WorkloadCapability, len(c.Workloads))
+	for _, w := range c.Workloads {
+		prev, dup := seen[w.Type]
+		if dup && prev != w {
+			return fmt.Errorf(
+				"workload capability %q is declared more than once with conflicting flags (discovery %v/%v, instrumentation %v/%v); declare it once",
+				w.Type, prev.Discovery, w.Discovery, prev.Instrumentation, w.Instrumentation)
+		}
+		seen[w.Type] = w
+	}
+	cps := make(map[string]ComputePlatformCapability, len(c.ComputePlatforms))
+	for _, p := range c.ComputePlatforms {
+		prev, dup := cps[p.Type]
+		if dup && prev != p {
+			return fmt.Errorf(
+				"compute-platform capability %q is declared more than once with conflicting flags (discovery %v/%v, installation %v/%v); declare it once",
+				p.Type, prev.Discovery, p.Discovery, prev.Installation, p.Installation)
+		}
+		cps[p.Type] = p
+	}
+	return nil
 }
 
 // WorkloadCapability is the allow-list entry for one directly-instrumentable resource type: whether the

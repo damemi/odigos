@@ -121,6 +121,56 @@ func TestMarkAwaitingCustomer(t *testing.T) {
 	}
 }
 
+// TestReconcilersNeverIncludeManualModeTypes is the invariant the whole safety model rests on, asserted
+// exhaustively rather than defended by a runtime check: a reconciler exists ONLY for a type whose derived mode
+// is automatic.
+//
+// Two independent functions have to agree for that to hold — ActiveInstrumentationTypes (which the coordinator
+// intersects with provider.Reconcilers) and Capabilities.WorkloadInstrumentationMode (which reporting and this
+// PR's drain accounting use). They read the same capability booleans today, so they cannot diverge; this pins
+// that so a later edit to either one fails in CI instead of quietly handing a manual-mode workload a
+// reconciler, which would be a mutation path with nothing else in its way.
+func TestReconcilersNeverIncludeManualModeTypes(t *testing.T) {
+	p := fakeProvider{recs: map[string]api.Reconciler{"workload-a": nil, "workload-b": nil}}
+
+	for _, aDiscovery := range []bool{false, true} {
+		for _, aInstrumentation := range []bool{false, true} {
+			for _, bDiscovery := range []bool{false, true} {
+				for _, bInstrumentation := range []bool{false, true} {
+					caps := spec.Capabilities{Workloads: []spec.WorkloadCapability{
+						{Type: "workload-a", Discovery: aDiscovery, Instrumentation: aInstrumentation},
+						{Type: "workload-b", Discovery: bDiscovery, Instrumentation: bInstrumentation},
+					}}
+					c := newCoord(p, caps)
+					for _, nr := range c.activeReconcilers() {
+						mode := caps.WorkloadInstrumentationMode(nr.name)
+						if mode != spec.ModeAutomatic {
+							t.Errorf("caps a=(%v,%v) b=(%v,%v): reconciler wired for %q whose mode is %q, want %q",
+								aDiscovery, aInstrumentation, bDiscovery, bInstrumentation, nr.name, mode, spec.ModeAutomatic)
+						}
+					}
+
+					// Same assertion with BOTH entries naming the same type. Nothing along the carrier enforces
+					// one entry per type, and the two resolvers read that slice independently — this is where they
+					// used to diverge and hand a manual-mode type a reconciler. spec.Capabilities.Validate rejects
+					// the conflicting shape at startup; this pins that even if one slipped through, the gate and
+					// the reported mode still agree.
+					dupCaps := spec.Capabilities{Workloads: []spec.WorkloadCapability{
+						{Type: "workload-a", Discovery: aDiscovery, Instrumentation: aInstrumentation},
+						{Type: "workload-a", Discovery: bDiscovery, Instrumentation: bInstrumentation},
+					}}
+					for _, nr := range newCoord(p, dupCaps).activeReconcilers() {
+						if mode := dupCaps.WorkloadInstrumentationMode(nr.name); mode != spec.ModeAutomatic {
+							t.Errorf("duplicate entries (%v,%v)+(%v,%v): reconciler wired for %q whose mode is %q, want %q",
+								aDiscovery, aInstrumentation, bDiscovery, bInstrumentation, nr.name, mode, spec.ModeAutomatic)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 func reconcilerNames(nrs []namedReconciler) []string {
 	out := make([]string, 0, len(nrs))
 	for _, nr := range nrs {

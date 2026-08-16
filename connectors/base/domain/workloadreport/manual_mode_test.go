@@ -237,4 +237,51 @@ func TestManualModeErrorStillOverrides(t *testing.T) {
 	}
 }
 
+// TestStalePhaseIgnoredInManualMode is a regression guard. An instrumentor writes a progress phase as it
+// works; in manual mode no instrumentor runs for the type, so a phase found there is a leftover from a
+// previous automatic-mode life and nothing will ever advance or clear it. Reporting it made the workload look
+// permanently busy — state=Instrumenting alongside stage=WaitingForCustomer and instrumented=false — which is
+// three mutually contradictory facts in one report.
+func TestStalePhaseIgnoredInManualMode(t *testing.T) {
+	for _, phase := range []string{api.PhaseVerifying, api.PhaseLayerReady, api.PhaseInstrumenting} {
+		w := manualWorkload()
+		w.InstrumentationPhase = phase
+		w.WaitingFor = api.WaitingForCustomer
+
+		m := ToModel(w)
+		if m.Current.State != api.WorkloadStateNotInstrumented {
+			t.Errorf("phase %q: state = %q, want %q", phase, m.Current.State, api.WorkloadStateNotInstrumented)
+		}
+		if m.Progress.Stage != "WaitingForCustomer" {
+			t.Errorf("phase %q: stage = %q, want WaitingForCustomer", phase, m.Progress.Stage)
+		}
+	}
+
+	// Automatic mode must be untouched: there, an in-flight phase is real progress by a running instrumentor.
+	w := manualWorkload()
+	w.ManagementMode = spec.ModeAutomatic
+	w.InstrumentationPhase = api.PhaseInstrumenting
+	if m := ToModel(w); m.Current.State != api.WorkloadStateInstrumenting {
+		t.Errorf("automatic mode: state = %q, want %q", m.Current.State, api.WorkloadStateInstrumenting)
+	}
+}
+
+// TestWaitingStateNeverReportsBusy generalizes the fix: whatever a workload is waiting on, "waiting" and
+// "actively instrumenting" cannot both be true, so the waiting branch asserts the state rather than inheriting
+// whatever an earlier branch left behind.
+func TestWaitingStateNeverReportsBusy(t *testing.T) {
+	for _, waitingFor := range []string{api.WaitingForCustomer, api.WaitingForDestination} {
+		w := manualWorkload()
+		// A destination removed mid-instrumentation leaves exactly this: automatic mode, a live phase, and a
+		// prerequisite now unmet.
+		w.ManagementMode = spec.ModeAutomatic
+		w.InstrumentationPhase = api.PhaseInstrumenting
+		w.WaitingFor = waitingFor
+
+		if m := ToModel(w); m.Current.State != api.WorkloadStateNotInstrumented {
+			t.Errorf("waitingFor %q: state = %q, want %q", waitingFor, m.Current.State, api.WorkloadStateNotInstrumented)
+		}
+	}
+}
+
 func strPtr(s string) *string { return &s }
