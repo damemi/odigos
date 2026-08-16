@@ -194,11 +194,19 @@ build-connector-postgres:
 	docker build -t $(ORG)/odigos-enterprise-connector-postgres$(IMG_SUFFIX):$(TAG) connector-postgres -f connector-postgres/Dockerfile $(NO_CACHE)
 
 # Validate the connector-postgres goose migrations parse (up/down annotations well-formed, versions
-# unique/ordered). CI runs the same target. Requires Docker only — no local goose/Postgres install.
+# unique/ordered). Requires Docker only — no local goose/Postgres install.
+#
+# The Go image and GOOSE_VERSION mirror .github/workflows/connector-postgres-migrations.yml, which runs
+# this validate step plus a full up -> down -> up round trip against a real Postgres (the round trip needs
+# a database, so it lives only in CI). Keep both pins in sync with that workflow.
+#
+# goose is pinned rather than @latest on purpose: @latest tracks a release whose minimum Go version moves
+# independently of this image, which silently breaks the target (v3.27.3 requires Go >= 1.25.7).
+GOOSE_VERSION ?= v3.27.2
 .PHONY: validate-db-migrations
 validate-db-migrations:
-	docker run --rm -v "$(CURDIR)/connector-postgres/migrations:/migrations" golang:1.23 \
-		sh -c 'CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@latest && goose -dir /migrations validate'
+	docker run --rm -v "$(CURDIR)/connector-postgres/migrations:/migrations" golang:1.25 \
+		sh -c 'CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION) && goose -dir /migrations validate'
 
 .PHONY: build-connector-runtime-dev
 build-connector-runtime-dev: build-connector-runtime
