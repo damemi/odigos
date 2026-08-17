@@ -78,15 +78,15 @@ require (
 
 // k8sutils (required above) requires these via local-only replaces in the odigos-io/odigos repo, which
 // don't propagate across repos. Pinned to the same commit already used for api/k8sutils/common here.
-replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v0.0.0-feat.amir-testing.3
+replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v1.36.0-pre3
 
 // frontend (required above) requires this the same way, via k8sutils.
-replace github.com/odigos-io/odigos/destinations => github.com/odigos-io/odigos/destinations v0.0.0-feat.amir-testing.3
+replace github.com/odigos-io/odigos/destinations => github.com/odigos-io/odigos/destinations v1.36.0-pre3
 
 // Same as actions above, required transitively via k8sutils.
-replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v0.0.0-feat.amir-testing.3
+replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.36.0-pre3
 
-replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v0.0.0-feat.amir-testing.3
+replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v1.36.0-pre3
 
 // argo-rollouts@v1.9.1 requires this via its own internal-only replace, which doesn't propagate to us.
 replace k8s.io/kubelet => k8s.io/kubelet v0.34.1
