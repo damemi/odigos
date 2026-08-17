@@ -11,6 +11,33 @@ env:
   BASE_BRANCH: ${{ github.base_ref }}
 
 jobs:
+  resolve-base-branch:
+    name: Resolve OSS base branch
+    runs-on: depot-ubuntu-latest
+    outputs:
+      base_branch: ${{ steps.resolve.outputs.base_branch }}
+    steps:
+      - name: Resolve BASE_BRANCH
+        id: resolve
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          DEFAULT_BASE: ${{ github.base_ref }}
+          IS_FEATURE: ${{ contains(github.event.pull_request.labels.*.name, 'feature-branch-release') }}
+        run: |
+          BRANCH="$DEFAULT_BASE"
+          if [ "$IS_FEATURE" = "true" ]; then
+            PARSED=$(printf '%s\n' "$PR_BODY" | grep -oP '(?m)^Base OSS branch:\s*\K\S+' | head -1)
+            if [ -z "$PARSED" ]; then
+              echo "ERROR: feature PR is missing 'Base OSS branch:' in the body"
+              exit 1
+            fi
+            BRANCH="$PARSED"
+            echo "Feature PR: using base OSS branch from PR body: $BRANCH"
+          else
+            echo "Using PR base ref: $BRANCH"
+          fi
+          echo "base_branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
   detect-changes:
     name: Detect Changed Files
     runs-on: ubuntu-latest
@@ -101,9 +128,11 @@ jobs:
 
   build-enterprise-components:
     name: build-enterprise-components (${{ matrix.service }}${{ matrix.rhel == 'true' && ', rhel' || '' }}${{ matrix.extended == 'true' && ', extended' || '' }})
-    needs: detect-changes
+    needs: [detect-changes, resolve-base-branch]
     if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     runs-on: depot-ubuntu-24.04-4
+    env:
+      BASE_BRANCH: ${{ needs.resolve-base-branch.outputs.base_branch }}
     strategy:
       matrix:
         service:
@@ -138,7 +167,7 @@ jobs:
       - name: Print tests run info
         run: |
           echo "Image tag: $IMAGE_TAG"
-          echo "Base branch: $BASE_BRANCH"
+          echo "Base OSS branch: $BASE_BRANCH"
 
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
@@ -224,9 +253,11 @@ jobs:
           retention-days: 30
 
   build-oss-components-for-tests:
-    needs: detect-changes
+    needs: [detect-changes, resolve-base-branch]
     if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     runs-on: depot-ubuntu-24.04-4
+    env:
+      BASE_BRANCH: ${{ needs.resolve-base-branch.outputs.base_branch }}
     steps:
       - name: Checkout Odigos OSS
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
@@ -362,10 +393,13 @@ jobs:
     name: kubernetes-tests (${{ matrix.kube-version }}, ${{ matrix.test-scenario }}${{ matrix.customer != '' && format(', {0}', matrix.customer) || '' }}${{ matrix.wasp-enabled == true && ', with_wasp' || '' }})
     needs:
       - detect-changes
+      - resolve-base-branch
       - build-enterprise-components
       - build-oss-components-for-tests
     if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     runs-on: depot-ubuntu-24.04-4
+    env:
+      BASE_BRANCH: ${{ needs.resolve-base-branch.outputs.base_branch }}
     # Belt-and-suspenders cap. Individual chainsaw steps already enforce
     # their own timeouts; this prevents any pathological hang from running
     # out the GH job default of 6 hours.

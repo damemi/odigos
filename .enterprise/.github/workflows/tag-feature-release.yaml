@@ -1,0 +1,58 @@
+name: Tag Feature Release
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  id-token: write
+
+jobs:
+  tag-feature-release:
+    runs-on: depot-ubuntu-latest
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'feature-branch-release')
+    steps:
+    - name: Get STS token
+      id: sts
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: ${{ github.repository }}
+        identity: github-release-updater
+
+    - name: Extract Version from PR body
+      env:
+        GITHUB_EVENT_PULL_REQUEST_BODY: ${{ github.event.pull_request.body }}
+      id: extract-version
+      run: |
+        PR_COMMENT="$GITHUB_EVENT_PULL_REQUEST_BODY"
+        VERSION=$(echo "$PR_COMMENT" | grep -oP 'Version:\s*\Kv[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?' | xargs)
+        if [ -z "$VERSION" ]; then
+          echo "ERROR: could not extract Version from PR body"
+          exit 1
+        fi
+        echo "Extracted version: $VERSION"
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+    - name: Tag merge commit
+      env:
+        GH_TOKEN: ${{ steps.sts.outputs.GH_TOKEN }}
+        VERSION: ${{ steps.extract-version.outputs.version }}
+        SHA: ${{ github.event.pull_request.merge_commit_sha }}
+      run: |
+        if [ -z "$SHA" ]; then
+          echo "ERROR: pull request has no merge_commit_sha"
+          exit 1
+        fi
+        gh api --method POST "repos/${{ github.repository }}/git/refs" \
+          -f ref="refs/tags/${VERSION}" \
+          -f sha="${SHA}"
+        echo "Created tag $VERSION at $SHA"
+
+    - name: Notify Slack
+      if: always()
+      uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
+      with:
+        webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+        success-description: "Tagged odigos enterprise feature release"
+        failure-description: "ERROR: failed to tag odigos enterprise feature release"
+        tag: ${{ steps.extract-version.outputs.version }}
