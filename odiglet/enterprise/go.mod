@@ -15,9 +15,9 @@ require (
 	github.com/odigos-io/odigos-enterprise/ebpfshare v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/api v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/common v1.36.0-pre2.0.20260817105752-f61e45920ac9
+	github.com/odigos-io/odigos/common v0.0.0-feat.amir-testing.3
 	github.com/odigos-io/odigos/deviceplugin v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/distros v1.36.0-pre2.0.20260817105752-f61e45920ac9
+	github.com/odigos-io/odigos/distros v0.0.0-feat.amir-testing.3
 	github.com/odigos-io/odigos/instrumentation v0.0.0-feat.amir-testing.2
 	github.com/odigos-io/odigos/k8sutils v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/odiglet v0.0.0-feat.amir-testing.2
@@ -293,13 +293,13 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v1.24.0
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v0.0.0-feat.amir-testing.2
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v0.0.0-feat.amir-testing.3
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v0.0.0-feat.amir-testing.2
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v0.0.0-feat.amir-testing.3
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v0.0.0-feat.amir-testing.2
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v0.0.0-feat.amir-testing.3
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v0.0.0-feat.amir-testing.2
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v0.0.0-feat.amir-testing.3
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
@@ -311,16 +311,16 @@ replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 // Added during OBI change
 replace cloud.google.com/go/compute => cloud.google.com/go/compute v1.57.0
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v0.0.0-feat.amir-testing.2
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v0.0.0-feat.amir-testing.3
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v0.0.0-feat.amir-testing.2
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v0.0.0-feat.amir-testing.3
 
-replace github.com/odigos-io/odigos/deviceplugin => github.com/odigos-io/odigos/deviceplugin v0.0.0-feat.amir-testing.2
+replace github.com/odigos-io/odigos/deviceplugin => github.com/odigos-io/odigos/deviceplugin v0.0.0-feat.amir-testing.3
 
 // k8sutils requires this via its own local-only replace, which doesn't propagate across repos.
-replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v0.0.0-feat.amir-testing.2
+replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v0.0.0-feat.amir-testing.3
 
 // Same as actions above, required transitively via k8sutils.
-replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v0.0.0-feat.amir-testing.2
+replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v0.0.0-feat.amir-testing.3
 
 replace github.com/odigos-io/odigos-enterprise/ebpfshare => ../ebpfshare
