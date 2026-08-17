@@ -9,7 +9,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/api v0.0.0-feat.amir-testing.2
-	github.com/odigos-io/odigos/common v1.36.0-pre2.0.20260817105752-f61e45920ac9
+	github.com/odigos-io/odigos/common v0.0.0-feat.amir-testing.3
 	github.com/vektah/gqlparser/v2 v2.5.36
 	golang.org/x/sync v0.22.0
 	k8s.io/api v0.35.4

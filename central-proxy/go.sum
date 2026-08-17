@@ -99,8 +99,8 @@ github.com/odigos-io/odigos/frontend v0.0.0-feat.amir-testing.2 h1:GaP7M2hUT6N4t
 github.com/odigos-io/odigos/frontend v0.0.0-feat.amir-testing.2/go.mod h1:zdFKV1GREfzwOgNdW5AQ+RJjNBVDkIUWhCbSpsC+HWM=
 github.com/odigos-io/odigos/k8sutils v0.0.0-feat.amir-testing.2 h1:af/x51sCWER8Dz0Cdj4FTKnJxHXacGRLjwzL8oDDCZc=
 github.com/odigos-io/odigos/k8sutils v0.0.0-feat.amir-testing.2/go.mod h1:E1JDO9CZlgtQjlReZr658AGMtpUmbL7lvS7/UrSQXZs=
-github.com/odigos-io/odigos/status v0.0.0-feat.amir-testing.2 h1:xtWE5DMp9m5AwXzymwDdMWrAD8O10UsWzf+YQ/Z8Ry8=
-github.com/odigos-io/odigos/status v0.0.0-feat.amir-testing.2/go.mod h1:hiyJHyQw5xF1aOUiUbt1sY71Ori/avbNNquo5/79bIY=
+github.com/odigos-io/odigos/status v0.0.0-feat.amir-testing.3 h1:BXMVGDrE0RjWDqzsczfRTyLO33DwRPByb+YTiaSVfRs=
+github.com/odigos-io/odigos/status v0.0.0-feat.amir-testing.3/go.mod h1:hiyJHyQw5xF1aOUiUbt1sY71Ori/avbNNquo5/79bIY=
 github.com/onsi/ginkgo/v2 v2.27.2 h1:LzwLj0b89qtIy6SSASkzlNvX6WktqurSHwkk2ipF/Ns=
 github.com/onsi/ginkgo/v2 v2.27.2/go.mod h1:ArE1D/XhNXBXCBkKOLkbsb2c81dQHCRcF5zwn/ykDRo=
 github.com/onsi/gomega v1.38.2 h1:eZCjf2xjZAqe+LeWvKb5weQ+NcPwX84kqJ0cZNxok2A=
