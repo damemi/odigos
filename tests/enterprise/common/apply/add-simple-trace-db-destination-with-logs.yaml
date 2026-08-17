@@ -1,0 +1,17 @@
+# The LOGS signal here is what causes the node collector to build a logs pipeline at all. Without
+# it the pipeline is never generated, no logs reach any destination, and the log assertions fail in
+# a way that looks like broken instrumentation rather than a missing destination signal.
+# Kept separate from the shared traces-only destination, which is applied by every other scenario.
+apiVersion: odigos.io/v1alpha1
+kind: Destination
+metadata:
+  name: odigos.io.dest.simple-trace-db
+  namespace: odigos-test
+spec:
+  data:
+    OTLP_HTTP_ENDPOINT: http://simple-trace-db.traces:4318
+  destinationName: e2e-tests
+  signals:
+    - TRACES
+    - LOGS
+  type: otlphttp

@@ -1,0 +1,16 @@
+# Switches the node collector's logs pipeline from the filelog receiver to the odigos eBPF
+# receiver, and enables log capture in odiglet for the processes it instruments. The two receivers
+# are mutually exclusive, so with this rule applied the only logs reaching a destination are the
+# eBPF captured ones, which are the ones carrying trace context.
+#
+# Only the Go and Java eBPF distros provision the correlation maps this depends on, so this rule
+# has no effect on the other demo services.
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationRule
+metadata:
+  name: ebpf-log-capture-rule
+  namespace: odigos-test
+spec:
+  ruleName: ebpf-log-capture
+  ebpfLogCapture:
+    enabled: true
