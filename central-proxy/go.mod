@@ -27,7 +27,7 @@ require (
 	github.com/go-openapi/swag/typeutils v0.25.5 // indirect
 	github.com/go-openapi/swag/yamlutils v0.25.5 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/odigos-io/odigos/status v0.0.0 // indirect
+	github.com/odigos-io/odigos/status v0.0.0-00010101000000-000000000000 // indirect
 	github.com/openshift/api v3.9.0+incompatible // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
