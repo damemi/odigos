@@ -9,7 +9,10 @@ OSS_TAG ?= main
 # Usage: make update-odigos-oss-mod-deps/odiglet [OSS_TAG=v1.5.0]
 # This target:
 # 1. Updates 'replace' directives in go.mod to use the specified OSS_TAG
-# 2. Updates direct version specifications (excluding v0.0.0 versions) to use OSS_TAG
+# 2. Updates direct version specifications (excluding unpublished local-replace
+#    placeholders like v0.0.0-00010101000000-000000000000) to use OSS_TAG.
+#    Do not use a bare v0.0.0 require: that is a real semver release, so without
+#    a replace Go fetches github.com/odigos-io/odigos/<mod>@v0.0.0 from the proxy.
 # 3. Runs 'go mod tidy' to resolve dependencies
 .PHONY: update-odigos-oss-mod-deps
 update-odigos-oss-mod-deps/%:

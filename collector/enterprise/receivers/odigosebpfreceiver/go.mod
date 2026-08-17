@@ -23,7 +23,7 @@ require (
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
-	github.com/odigos-io/odigos/common v1.36.0-pre2 // indirect
+	github.com/odigos-io/odigos/common v1.36.0-pre2.0.20260817105752-f61e45920ac9 // indirect
 	go.opentelemetry.io/collector/internal/componentalias v0.151.0 // indirect
 	go.uber.org/zap/exp v0.3.0 // indirect
 	golang.org/x/mod v0.35.0 // indirect
@@ -47,7 +47,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
-	github.com/odigos-io/odigos-enterprise/ebpfshare v0.0.0
+	github.com/odigos-io/odigos-enterprise/ebpfshare v0.0.0-00010101000000-000000000000
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/consumer/consumererror v0.151.0 // indirect

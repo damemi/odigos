@@ -18,7 +18,7 @@ extensions:
   - gomod: github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v0.151.0
   - gomod: github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v0.151.0
   # Enterprise-only: verifies the Odigos on-prem token at startup and on expiry.
-  - gomod: github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension v0.0.0
+  - gomod: github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension v0.0.0-00010101000000-000000000000
 
 exporters:
   - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.151.0
@@ -95,9 +95,9 @@ processors:
   - gomod: github.com/odigos-io/odigos/collector/processor/odigoslogsresourceattrsprocessor v0.151.0
   - gomod: github.com/odigos-io/odigos/collector/processor/odigosextractattributeprocessor v0.151.0
   - gomod: github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor v0.151.0
-  - gomod: github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor v0.0.0
-  - gomod: github.com/odigos-io/odigos-enterprise/collector/processors/odigosvmprofileattrsprocessor v0.0.0
-  - gomod: github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor v0.0.0
+  - gomod: github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor v0.0.0-00010101000000-000000000000
+  - gomod: github.com/odigos-io/odigos-enterprise/collector/processors/odigosvmprofileattrsprocessor v0.0.0-00010101000000-000000000000
+  - gomod: github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor v0.0.0-00010101000000-000000000000
 
 receivers:
   - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.151.0
@@ -107,7 +107,7 @@ receivers:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sclusterreceiver v0.151.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.151.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.151.0
-  - gomod: github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver v0.0.0
+  - gomod: github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver v0.0.0-00010101000000-000000000000
   - gomod: go.opentelemetry.io/ebpf-profiler v0.0.202614
     import: go.opentelemetry.io/ebpf-profiler/collector
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.151.0

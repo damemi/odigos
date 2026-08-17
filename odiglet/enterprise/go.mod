@@ -11,17 +11,17 @@ require (
 	github.com/odigos-io/ebpf-java-instrumentation/v2 v2.42.0
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.13.0
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
-	github.com/odigos-io/odigos-enterprise/distros v0.0.0
-	github.com/odigos-io/odigos-enterprise/ebpfshare v0.0.0
-	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0
-	github.com/odigos-io/odigos/api v0.0.0
+	github.com/odigos-io/odigos-enterprise/distros v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos-enterprise/ebpfshare v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/api v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/common v1.36.0-pre2.0.20260817105752-f61e45920ac9
-	github.com/odigos-io/odigos/deviceplugin v0.0.0
+	github.com/odigos-io/odigos/deviceplugin v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/distros v1.36.0-pre2.0.20260817105752-f61e45920ac9
 	github.com/odigos-io/odigos/instrumentation v1.36.0-pre2.0.20260817105752-f61e45920ac9
-	github.com/odigos-io/odigos/k8sutils v0.0.0
+	github.com/odigos-io/odigos/k8sutils v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/odiglet v1.36.0-pre2.0.20260817105752-f61e45920ac9
-	github.com/odigos-io/odigos/procdiscovery v0.0.0
+	github.com/odigos-io/odigos/procdiscovery v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/auto v0.22.0
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.44.0

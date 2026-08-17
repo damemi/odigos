@@ -5,11 +5,11 @@ module odigos.io/opentelemetry-collector/cmd/odigosotelcol
 go 1.26.4
 
 require (
-	github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension v0.0.0
-	github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor v0.0.0
-	github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor v0.0.0
-	github.com/odigos-io/odigos-enterprise/collector/processors/odigosvmprofileattrsprocessor v0.0.0
-	github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver v0.0.0
+	github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos-enterprise/collector/processors/odigosvmprofileattrsprocessor v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v0.151.0
 	github.com/odigos-io/odigos/collector/connectors/serviceioconnector v0.151.0
 	github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v0.151.0
@@ -508,7 +508,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
 	github.com/odigos-io/go-rtml v0.0.1 // indirect
-	github.com/odigos-io/odigos-enterprise/ebpfshare v0.0.0 // indirect
+	github.com/odigos-io/odigos-enterprise/ebpfshare v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos/common v1.36.0-pre2.0.20260817105752-f61e45920ac9 // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect

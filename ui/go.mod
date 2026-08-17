@@ -16,10 +16,10 @@ require (
 require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
-	github.com/odigos-io/odigos/actions v0.0.0 // indirect
-	github.com/odigos-io/odigos/instrumentationrules v0.0.0 // indirect
-	github.com/odigos-io/odigos/recommendations v0.0.0 // indirect
-	github.com/odigos-io/odigos/status v0.0.0 // indirect
+	github.com/odigos-io/odigos/actions v0.0.0-00010101000000-000000000000 // indirect
+	github.com/odigos-io/odigos/instrumentationrules v0.0.0-00010101000000-000000000000 // indirect
+	github.com/odigos-io/odigos/recommendations v0.0.0-00010101000000-000000000000 // indirect
+	github.com/odigos-io/odigos/status v0.0.0-00010101000000-000000000000 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.uber.org/zap/exp v0.3.0 // indirect
@@ -196,12 +196,12 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
-	github.com/odigos-io/odigos-enterprise/mcp v0.0.0
-	github.com/odigos-io/odigos/config v0.0.0 // indirect
-	github.com/odigos-io/odigos/destinations v0.0.0
+	github.com/odigos-io/odigos-enterprise/mcp v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/config v0.0.0-00010101000000-000000000000 // indirect
+	github.com/odigos-io/odigos/destinations v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/distros v1.36.0-pre2.0.20260817105752-f61e45920ac9
-	github.com/odigos-io/odigos/k8sutils v0.0.0
-	github.com/odigos-io/odigos/odigosauth v0.0.0 // indirect
+	github.com/odigos-io/odigos/k8sutils v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/odigosauth v0.0.0-00010101000000-000000000000 // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/exp/metrics v0.148.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.151.0 // indirect
