@@ -249,8 +249,8 @@ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=
-github.com/odigos-io/odigos/api v1.36.0-pre2.0.20260817105752-f61e45920ac9 h1:H6hMyfLfQ3x/TNzEv5RA9T1cEADkCQC73W7qus4dFDs=
-github.com/odigos-io/odigos/api v1.36.0-pre2.0.20260817105752-f61e45920ac9/go.mod h1:EAaxcr4wc4SJeU5m9WQAfFGnGuLkCBCAVgNGEAVAQas=
+github.com/odigos-io/odigos/api v0.0.0-feat.amir-testing.2 h1:g36GLWIl+lp2Y7NpxIsXP9zHaepIT64PjNb07B7GoqM=
+github.com/odigos-io/odigos/api v0.0.0-feat.amir-testing.2/go.mod h1:EAaxcr4wc4SJeU5m9WQAfFGnGuLkCBCAVgNGEAVAQas=
 github.com/odigos-io/odigos/common v1.36.0-pre2.0.20260817105752-f61e45920ac9 h1:inOiaTy+oTKxKuJLpan02q+FLYoaeQIeR7fqnSSo5rc=
 github.com/odigos-io/odigos/common v1.36.0-pre2.0.20260817105752-f61e45920ac9/go.mod h1:HqlLCTINki6lOtaZFZL3ShFJP7bEkzxdTQprBvWcxe8=
 github.com/onsi/ginkgo v1.16.5 h1:8xi0RTUf59SOSfEtZMvwTvXYMzG4gV23XVHOZiXNtnE=
