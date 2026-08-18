@@ -27,6 +27,7 @@ import (
 	auto "github.com/odigos-io/ebpf-java-instrumentation/v2"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/instrumentation"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 )
 
@@ -93,11 +94,21 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 		return nil, err
 	}
 
+	metricExporter, err := otlpmetricgrpc.New(
+		ctx,
+		otlpmetricgrpc.WithGRPCConn(g.otlpConn),
+	)
+	if err != nil {
+		g.logger.Error("failed to create metric exporter", "error", err)
+		return nil, err
+	}
+
 	opts := []auto.InstrumentationOption{
 		auto.WithPID(pid),
 		auto.WithResourceAttributes(settings.ResourceAttributes...),
 		auto.WithServiceName(settings.ServiceName),
 		auto.WithTraceExporter(defaultExporter),
+		auto.WithMetricExporter(metricExporter),
 		auto.WithProcFS(process.HostProcDir()),
 		auto.WithLogger(g.logger),
 	}
