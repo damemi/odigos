@@ -12,8 +12,8 @@ import (
 
 	"github.com/odigos-io/ebpf-core/pkg/collection"
 	"github.com/odigos-io/ebpf-core/pkg/wasp"
-	javaconfig "github.com/odigos-io/ebpf-java-instrumentation/v2/pkg/config"
 	"github.com/odigos-io/ebpf-java-instrumentation/v2/jvmmetrics"
+	javaconfig "github.com/odigos-io/ebpf-java-instrumentation/v2/pkg/config"
 	"github.com/odigos-io/ebpf-java-instrumentation/v2/pkg/dynamic"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/logcapture"
 	"github.com/odigos-io/odigos/api/k8sconsts"
@@ -189,42 +189,25 @@ func isEnvValPresent(pid int, envVarName string) (bool, error) {
 }
 
 func (g *JavaOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.Status, error) {
-	javaStatus, err := g.inst.Load(ctx)
+	libraryStatus, err := g.inst.Load(ctx)
+	status := instrumentation.Status{
+		Components: make(map[string]error, len(libraryStatus)),
+	}
+	for name, libErr := range libraryStatus {
+		status.Components[name] = libErr
+	}
+
 	if err != nil {
 		if g.waspMaps != nil {
 			// if we failed to load, and the instrumentation took ownership over the wasp maps
 			// we return ownership back to the provider
 			err = errors.Join(err, g.waspMapsProvider.Take(g.podName, g.waspMaps))
 		}
-		return instrumentation.Status{}, err
-	}
-
-	status := instrumentation.Status{
-		Components: make(map[string]error),
-	}
-
-	if javaStatus != nil {
-		for _, lib := range javaStatus.Libraries {
-			isLoaded := lib.ClassCount > 0
-			isTransformed := len(lib.AdviceClasses) > 0
-
-			if isTransformed {
-				status.Components[lib.Name] = nil
-			} else if isLoaded {
-				status.Components[lib.Name] = fmt.Errorf("library loaded but not transformed")
-			}
-		}
-
-		g.logger.Info("Java instrumentation loaded",
-			"nativeLibLoaded", javaStatus.NativeLibLoaded,
-			"byteBuddyClassCount", javaStatus.ByteBuddyClassCount,
-			"byteBuddyAuxiliaryCount", javaStatus.ByteBuddyAuxiliaryCount,
-			"agentInitialized", javaStatus.AgentInitialized,
-			"librariesCount", len(javaStatus.Libraries))
+		return status, err
 	}
 
 	if err := g.ApplyConfig(ctx, g.config); err != nil {
-		return instrumentation.Status{}, err
+		return status, err
 	}
 
 	g.prepareLogCapture()

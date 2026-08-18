@@ -56,7 +56,6 @@ spec:
     - name: data-collection
       securityContext:
         privileged: true
-      # Pre-upgrade: released collectors may not inject ODIGOS_ONPREM_TOKEN yet.
       env:
         - name: NODE_NAME
           valueFrom:
@@ -81,6 +80,11 @@ spec:
               containerName: data-collection
               divisor: "0"
               resource: limits.cpu
+        - name: ODIGOS_ONPREM_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: odigos-onprem-token
+              name: odigos-pro
       resources:
         requests:
           (memory != null): true

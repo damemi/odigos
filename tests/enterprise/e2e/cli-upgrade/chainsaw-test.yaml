@@ -79,12 +79,10 @@ spec:
               kubectl label namespace odigos-test odigos.io/system-object="true"
 
               ../../common/verify_odigos_installation.sh odigos-test
-        # Pre-upgrade install is the latest *released* build, which may not yet
-        # inject ODIGOS_ONPREM_TOKEN into collectors. Use the OSS assert (no token).
-        # Post-upgrade asserts (assert-odigos-upgraded*) cover the enterprise collector env.
+        # Use the local enterprise assert (not OSS, which omits the token).
         - assert:
             timeout: 1m10s
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/odigos-installed.yaml
+            file: ../../common/assert/odigos-installed.yaml
       catch:
         - script:
             content: |
