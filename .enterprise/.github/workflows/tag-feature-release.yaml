@@ -25,7 +25,7 @@ jobs:
       id: extract-version
       run: |
         PR_COMMENT="$GITHUB_EVENT_PULL_REQUEST_BODY"
-        VERSION=$(echo "$PR_COMMENT" | grep -oP 'Version:\s*\Kv[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?' | xargs)
+        VERSION=$(echo "$PR_COMMENT" | grep -oP 'Version:\s*\Kv[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?' | xargs)
         if [ -z "$VERSION" ]; then
           echo "ERROR: could not extract Version from PR body"
           exit 1
