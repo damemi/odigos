@@ -830,7 +830,7 @@ setup:
               an ephemeral-storage bind mount scoped to the task (Fargate has no tmpfs).
           containerDefinitions: add
             name       = odigos-agent
-            image      = registry.odigos.io/odigos-fargate-agents:v0.1.0
+            image      = registry.odigos.io/odigos-fargate-agents:v0.0.9
             essential  = false          # it stages the agent and exits 0
             command    = ["sh", "-c", "<the staging command for your language, below>"]
             mountPoints = [{ sourceVolume = odigos-agent, containerPath = /var/odigos }]
@@ -951,7 +951,7 @@ setup:
             {
               # --- the agent-staging container ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.1.0"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.9"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
               mountPoints = [{
@@ -1017,7 +1017,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.1.0"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.9"
             # Non-essential: it stages the agent and exits 0. SUCCESS below is only valid against a
             # non-essential container, so the two settings are one decision.
             Essential: false

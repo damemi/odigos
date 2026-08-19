@@ -8,6 +8,7 @@ import (
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
 
@@ -435,4 +436,182 @@ func TestSameComponentsDetectsChange(t *testing.T) {
 func mustEnv(c *ecstypes.ContainerDefinition, name string) string {
 	v, _ := containerEnvValue(c, name)
 	return v
+}
+
+// exportWithSignals is testExport() with an explicit signal set, so a case can state which signals are in play
+// without restating the transport — which every case below holds constant on purpose.
+func exportWithSignals(traces, metrics, logs bool) ecsExportTarget {
+	e := testExport()
+	e.traces, e.metrics, e.logs = traces, metrics, logs
+	return e
+}
+
+// signalSet is one case's (traces, metrics, logs) triple. Comparable, so a case can ask "are these the same set"
+// without a helper — which is exactly the question the mutating path's assertion turns on.
+type signalSet struct{ traces, metrics, logs bool }
+
+// judgeSignals instruments a task definition for the signals a container actually exports — with the real
+// injector, so the env under test is the env a customer following the plan writes rather than a hand-built map
+// that could drift from it — and returns the observer's verdict against a destination accepting dest.
+func judgeSignals(t *testing.T, instr, dest signalSet) (td *ecstypes.TaskDefinition, targets []containerTarget, diff []string) {
+	t.Helper()
+	rec := testRecipe(t, LangJava, "")
+	in, err := applyInstrumentation(sampleTaskDef(), oneTarget(0, rec, exportWithSignals(instr.traces, instr.metrics, instr.logs)),
+		nil, testAgentsImage, "svc-checkout", "us-east-1", false)
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	td = tdFromRegisterInput(in)
+	targets = oneTarget(0, rec, exportWithSignals(dest.traces, dest.metrics, dest.logs))
+	svc := store.ECSService{ClusterARN: "arn:cluster", ServiceName: "checkout", Region: "us-east-1"}
+	diff, incomplete := ecsOwnedDiff(td, ownedContainerIndexes(td), targets, "svc-checkout", svc, testAgentsImage, false)
+	if incomplete != "" {
+		t.Fatalf("check reported incomplete (%s); every case here has a resolvable target", incomplete)
+	}
+	return td, targets, diff
+}
+
+// TestFargateExportedSignalsAreJudgedAsymmetrically pins the DIRECTION of the export-signal check on Fargate,
+// which is now the same rule Lambda applies: a manually-instrumented task may export FEWER signals than its
+// destination accepts, but never one the destination does not accept.
+//
+// Both halves matter and they are not symmetric. Sending less than the destination could take is a legitimate
+// choice a customer's task definition is entitled to make, and reporting it as drift told them to re-apply
+// instrumentation over a decision they made deliberately. Sending MORE is the harmful direction: the signal has
+// no pipeline at the far end, so every batch is refused and retried on a backoff.
+//
+// Each case also asserts the MUTATING path is unaffected — see the comment on that assertion, which is the
+// constraint that makes this relaxation safe rather than a hole.
+func TestFargateExportedSignalsAreJudgedAsymmetrically(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		instr signalSet
+		dest  signalSet
+		want  []string
+	}{
+		{"exact match on traces only", signalSet{true, false, false}, signalSet{true, false, false}, nil},
+		{"exact match on all three", signalSet{true, true, true}, signalSet{true, true, true}, nil},
+		// The false alarm this change removes: the exact shape Lambda already reports as conformant.
+		{"traces-only against an all-signal destination", signalSet{true, false, false}, signalSet{true, true, true}, nil},
+		{"traces+metrics against an all-signal destination", signalSet{true, true, false}, signalSet{true, true, true}, nil},
+		{"logs-only against an all-signal destination", signalSet{false, false, true}, signalSet{true, true, true}, nil},
+		{"traces-only against a traces+logs destination", signalSet{true, false, false}, signalSet{true, false, true}, nil},
+		// The harmful direction — a signal with no pipeline at the far end.
+		{"exports metrics and logs the destination refuses", signalSet{true, true, true}, signalSet{true, false, false}, []string{componentCollectorExport}},
+		{"exports logs the destination refuses", signalSet{true, false, true}, signalSet{true, true, false}, []string{componentCollectorExport}},
+		{"exports a signal the destination refuses while narrowing another", signalSet{false, true, false}, signalSet{true, false, true}, []string{componentCollectorExport}},
+		// Not a narrower choice but an agent asked to produce nothing: the task runs instrumented and silent.
+		{"exports nothing at all", signalSet{false, false, false}, signalSet{true, true, true}, []string{componentCollectorExport}},
+		{"exports nothing at all against a traces-only destination", signalSet{false, false, false}, signalSet{true, false, false}, []string{componentCollectorExport}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			td, targets, got := judgeSignals(t, c.instr, c.dest)
+			if !sameSet(got, c.want) {
+				t.Errorf("observer diff = %v, want %v", got, c.want)
+			}
+
+			// The relaxation is the OBSERVER's alone. When Odigos owns and mutates a task definition it writes
+			// the export env itself and must converge it to the destination's FULL signal set — anything less
+			// and a task would keep exporting less than Odigos asked for forever, with nothing left to report
+			// it, since the observer now (correctly) calls that shape conformant. So here, and only here, a
+			// subset is still "not converged".
+			converged := alreadyInstrumented(td, targets, testAgentsImage, "svc-checkout", "us-east-1", false)
+			if want := c.instr == c.dest; converged != want {
+				t.Errorf("alreadyInstrumented = %v, want %v: the mutating path must converge to the destination's full signal set, not tolerate a subset",
+					converged, want)
+			}
+		})
+	}
+}
+
+// TestNarrowingKeepsTheTransportExact guards the half of the export check that did NOT become tolerant. The
+// signals and the transport shared one condition before this change, so relaxing the whole thing was the easy
+// mistake — and an endpoint or protocol Odigos never pointed the task at fails at runtime as a connection reset
+// that points nowhere near its cause, which is precisely what a conformance verdict has to catch.
+//
+// Each case starts from a container whose signals are a legitimate strict subset, so the only thing that can
+// produce a verdict is the transport.
+func TestNarrowingKeepsTheTransportExact(t *testing.T) {
+	subset, allSignals := signalSet{true, false, false}, signalSet{true, true, true}
+	if _, _, diff := judgeSignals(t, subset, allSignals); len(diff) != 0 {
+		t.Fatalf("test setup: the subset baseline must be conformant, got %v — every case below would be vacuous", diff)
+	}
+
+	for _, c := range []struct {
+		name   string
+		mutate func(app *ecstypes.ContainerDefinition)
+	}{
+		{"endpoint points at another collector", func(app *ecstypes.ContainerDefinition) {
+			setContainerEnv(app, envOTLPEndpoint, "http://old-collector:4317")
+		}},
+		{"protocol no longer matches the agent's transport", func(app *ecstypes.ContainerDefinition) {
+			setContainerEnv(app, EnvOtlpProtocol, otlpProtocolHTTP)
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			rec := testRecipe(t, LangJava, "")
+			in, err := applyInstrumentation(sampleTaskDef(), oneTarget(0, rec, exportWithSignals(subset.traces, subset.metrics, subset.logs)),
+				nil, testAgentsImage, "svc-checkout", "us-east-1", false)
+			if err != nil {
+				t.Fatalf("apply: %v", err)
+			}
+			td := tdFromRegisterInput(in)
+			c.mutate(&td.ContainerDefinitions[0])
+
+			targets := oneTarget(0, rec, exportWithSignals(allSignals.traces, allSignals.metrics, allSignals.logs))
+			svc := store.ECSService{ClusterARN: "arn:cluster", ServiceName: "checkout", Region: "us-east-1"}
+			got, incomplete := ecsOwnedDiff(td, ownedContainerIndexes(td), targets, "svc-checkout", svc, testAgentsImage, false)
+			if incomplete != "" {
+				t.Fatalf("check reported incomplete: %s", incomplete)
+			}
+			if !sameSet(got, []string{componentCollectorExport}) {
+				t.Errorf("diff = %v, want %v: narrowing the signals must not relax the transport", got, []string{componentCollectorExport})
+			}
+		})
+	}
+}
+
+// TestNarrowingTheContainerExportNeverWidensIt guards the one way the narrowing could do damage — it must only
+// ever REMOVE signals. If it could add one, a container would be judged against, and reported conformant for,
+// exporting a signal its destination cannot receive: the exact failure the asymmetry exists to catch.
+//
+// It also asserts the two platforms reach the SAME verdict for the same inputs, which is the point of sharing
+// narrowedSignals. Two platforms disagreeing about what drift means is what this change set out to fix, and
+// nothing but a test keeps them from diverging again.
+func TestNarrowingTheContainerExportNeverWidensIt(t *testing.T) {
+	for _, export := range []ecsExportTarget{
+		exportWithSignals(true, false, false),
+		exportWithSignals(true, true, false),
+		exportWithSignals(true, true, true),
+		exportWithSignals(false, true, false),
+		exportWithSignals(false, false, true),
+	} {
+		for _, env := range []map[string]string{
+			{},
+			{EnvTracesExporter: exporterOTLP, EnvMetricsExporter: exporterOTLP, EnvLogsExporter: exporterOTLP},
+			{EnvTracesExporter: exporterNone},
+			{EnvMetricsExporter: exporterNone},
+			{EnvLogsExporter: exporterNone},
+			{EnvTracesExporter: exporterNone, EnvMetricsExporter: exporterNone},
+			{EnvTracesExporter: exporterNone, EnvMetricsExporter: exporterNone, EnvLogsExporter: exporterNone},
+		} {
+			got := narrowExportToContainerSignals(export, env)
+			if got.traces && !export.traces || got.metrics && !export.metrics || got.logs && !export.logs {
+				t.Errorf("narrowing widened the export: export=%+v env=%v -> %+v", export, env, got)
+			}
+			// Everything that is not a signal must survive untouched, or containerDiff — which still compares
+			// these exactly — would be judging the container against a transport it was never pointed at.
+			if got.endpoint != export.endpoint || got.protocol != export.protocol {
+				t.Errorf("narrowing altered the transport: %+v -> %+v", export, got)
+			}
+
+			lambda := narrowToExportedSignals(domaindest.OTLPTarget{
+				Traces: export.traces, Metrics: export.metrics, Logs: export.logs,
+			}, env)
+			if lambda.Traces != got.traces || lambda.Metrics != got.metrics || lambda.Logs != got.logs {
+				t.Errorf("Fargate and Lambda disagree for export=%+v env=%v: fargate=(%v,%v,%v) lambda=(%v,%v,%v)",
+					export, env, got.traces, got.metrics, got.logs, lambda.Traces, lambda.Metrics, lambda.Logs)
+			}
+		}
+	}
 }

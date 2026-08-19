@@ -93,11 +93,11 @@ func ToModel(w api.DiscoveredWorkload) *model.WorkloadReport {
 		// to Instrumenting above. Nothing is in flight — the reconcile is deliberately skipping this workload —
 		// so leaving that state would report it as permanently busy.
 		state = api.WorkloadStateNotInstrumented
-		progress.Stage = "WaitingFor" + capitalizeFirst(w.WaitingFor)
+		progress.Stage = waitingForLabel(w.WaitingFor)
 		progress.Message = &msg
 		progress.WaitingFor = strPtrOrNil(w.WaitingFor)
 		issues = append(issues, &model.WorkloadIssue{
-			Code:     "WaitingFor" + capitalizeFirst(w.WaitingFor),
+			Code:     waitingForLabel(w.WaitingFor),
 			Severity: "unknown",
 			Message:  msg,
 			Since:    sinceOrNil(w.SourceIntentAt),
@@ -473,6 +473,20 @@ func sinceOrNil(t time.Time) *string {
 	}
 	s := t.UTC().Format(time.RFC3339)
 	return &s
+}
+
+// waitingForLabel renders a blocked prerequisite as the stage and issue code a client displays.
+//
+// WaitingForCustomer is spelled out with spaces because it is the one wait a PERSON has to act on: it names the
+// manual (IaC) flow, where nothing converges the workload until the customer applies the instrumentation to
+// their own deployment definition, so the label is read as an instruction rather than as a machine state. The
+// others are preconditions that clear themselves — a destination gets configured and the wait ends with nobody
+// touching the workload — and they keep the compact form.
+func waitingForLabel(waitingFor string) string {
+	if waitingFor == api.WaitingForCustomer {
+		return "Waiting For Customer"
+	}
+	return "WaitingFor" + capitalizeFirst(waitingFor)
 }
 
 func capitalizeFirst(s string) string {

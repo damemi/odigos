@@ -46,14 +46,21 @@ type Config struct {
 	ECSAgentImage string
 	// FargateAgentsImage is the agents-bundle image the ECS Fargate instrumentor's odigos-agent sidecar
 	// stages the language agent files from (busybox + env-driven OpenTelemetry agents under
-	// /instrumentations, built from connectors/providers/aws/agents). Sourced from
+	// /instrumentations, built and released by odigos-io/aws-connector-artifacts). Sourced from
 	// ODIGOS_FARGATE_AGENTS_IMAGE; empty uses DefaultFargateAgentsImage.
 	FargateAgentsImage string
 }
 
 // DefaultFargateAgentsImage is the published multi-arch (amd64+arm64) Fargate agents bundle used when
 // ODIGOS_FARGATE_AGENTS_IMAGE is not set. Fargate tasks must have image-pull egress to this registry.
-const DefaultFargateAgentsImage = "registry.odigos.io/odigos-fargate-agents:v0.1.0"
+//
+// The tag MUST equal the version in connectors/providers/aws/ARTIFACTS_VERSION. This bundle and the
+// Lambda layers come from ONE release of odigos-io/aws-connector-artifacts, and TestArtifactVersions
+// enforces the match. Without it this is a Go constant and the Dockerfile's LAMBDA_AGENTS_IMAGE is a
+// build arg, with nothing forcing them to agree — a connector could ship v0.3.0 Lambda layers while
+// staging v0.1.0 Fargate agents, and nobody would notice until a customer's ECS task behaved unlike
+// their Lambdas.
+const DefaultFargateAgentsImage = "registry.odigos.io/odigos-fargate-agents:v0.0.9"
 
 // FromEnv builds the Config from environment variables (base requires connector name + database URL).
 func FromEnv() (Config, error) {
