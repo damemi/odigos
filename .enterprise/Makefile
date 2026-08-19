@@ -129,8 +129,35 @@ build-connector-runtime:
 		--build-arg LD_FLAGS="$(LD_FLAGS)" \
 		. $(NO_CACHE)
 
+# The Lambda layer bundle and the Fargate agents bundle are no longer built here. Both are released by
+# odigos-io/aws-connector-artifacts, which also publishes the SAME layer zips as public Lambda layer
+# versions and as Serverless Application Repository applications — a customer deploying the layer
+# themselves and a customer whose functions the connector instruments have to get identical bytes, and
+# that only holds if there is one build.
+#
+# This connector consumes them by tag:
+#   - LAMBDA_AGENTS_IMAGE (build arg, defaulted in connectors/providers/aws/Dockerfile) supplies the layer
+#     zips the connector publishes into customer accounts.
+#   - config.DefaultFargateAgentsImage names the bundle instrumented Fargate tasks pull at runtime. It was
+#     never pulled by this build or by the kind cluster, which is why there was no load-to-kind target for
+#     it and why nothing here replaces build-fargate-agents.
+#
+# ARTIFACTS_VERSION is the single place the artifacts release this connector is built against is written
+# down. Both pins derive from it, and pkg/config's TestArtifactVersions fails if they drift — the two
+# would otherwise be a Dockerfile ARG and a Go constant that nothing forces to agree, and a connector
+# shipping v0.3.0 layers while staging v0.1.0 Fargate agents is not a state anyone would notice.
+#
+# Bumping the artifacts version is: edit that file, run the test, open a PR.
+ARTIFACTS_VERSION := $(shell cat connectors/providers/aws/ARTIFACTS_VERSION)
+LAMBDA_AGENTS_REGISTRY ?= us-central1-docker.pkg.dev/odigos-cloud/components-private
+
+# Override to build against an unreleased layer bundle (the version check does not apply to an override,
+# which is the point of having one):
+#   make build-connector-aws LAMBDA_AGENTS_IMAGE=my-registry/odigos-lambda-agents:dev
+LAMBDA_AGENTS_IMAGE ?= $(LAMBDA_AGENTS_REGISTRY)/odigos-lambda-agents:$(ARTIFACTS_VERSION)
+
 .PHONY: build-connector-aws
-build-connector-aws: build-fargate-agents
+build-connector-aws:
 	@if [ -z "$(GITHUB_TOKEN)" ]; then \
 		echo "❌ GITHUB_TOKEN is not set. Export a GitHub PAT with access to odigos-io private repos."; \
 		exit 1; \
@@ -140,25 +167,8 @@ build-connector-aws: build-fargate-agents
 		-f connectors/providers/aws/Dockerfile \
 		--secret id=github_token,env=GITHUB_TOKEN \
 		--build-arg LD_FLAGS="$(LD_FLAGS)" \
+		--build-arg LAMBDA_AGENTS_IMAGE=$(LAMBDA_AGENTS_IMAGE) \
 		. $(NO_CACHE)
-
-# odigos-fargate-agents: the busybox agents bundle the AWS connector's ECS Fargate instrumentor stages
-# language agents from (staged by the injected odigos-agent sidecar). Built alongside the AWS connector
-# (build-connector-aws depends on it), delegating to connectors/providers/aws/agents/Makefile so the
-# image definition has one home. Public sources only — no GITHUB_TOKEN. NOTE: this image is pulled by
-# FARGATE TASKS from a registry, never by the kind cluster — there is no load-to-kind target for it; for
-# a real environment push it (push-fargate-agents) and point the connector at it via
-# CONNECTOR_AWS_FARGATE_AGENTS_IMAGE (or rely on the compiled-in default bundle).
-.PHONY: build-fargate-agents
-build-fargate-agents:
-	$(MAKE) -C connectors/providers/aws/agents build \
-		REGISTRY=$(ORG) IMAGE=odigos-fargate-agents$(IMG_SUFFIX) TAG=$(TAG)
-
-.PHONY: push-fargate-agents
-push-fargate-agents:
-	$(MAKE) -C connectors/providers/aws/agents buildx-push \
-		REGISTRY=$(ORG) IMAGE=odigos-fargate-agents$(IMG_SUFFIX) TAG=$(TAG) \
-		PLATFORMS=linux/amd64,linux/arm64/v8
 
 .PHONY: build-connector-gcp
 build-connector-gcp:
@@ -222,9 +232,8 @@ build-connector-azure-dev: build-connector-azure
 
 # Aggregate builds are plain prerequisite fan-outs (no sub-make), so parallel make builds the
 # independent images concurrently — e.g. `make -j$(nproc) build-connector-images`. The images share no
-# build ordering (build-connector-aws pulls in build-fargate-agents via its own prerequisite); ORG/TAG/
-# IMG_SUFFIX are in scope for every prerequisite, so no explicit pass-through is needed. Tip: add -O
-# (output-sync) to keep concurrent docker build logs grouped per target.
+# build ordering; ORG/TAG/IMG_SUFFIX are in scope for every prerequisite, so no explicit pass-through is
+# needed. Tip: add -O (output-sync) to keep concurrent docker build logs grouped per target.
 .PHONY: build-connector-images
 build-connector-images: build-connector-postgres build-connector-runtime build-connector-aws build-connector-gcp build-connector-azure
 
@@ -255,7 +264,7 @@ push-connector-runtime:
 		. $(NO_CACHE)
 
 .PHONY: push-connector-aws
-push-connector-aws: push-fargate-agents
+push-connector-aws:
 	@if [ -z "$(GITHUB_TOKEN)" ]; then \
 		echo "❌ GITHUB_TOKEN is not set. Export a GitHub PAT with access to odigos-io private repos."; \
 		exit 1; \
@@ -266,6 +275,7 @@ push-connector-aws: push-fargate-agents
 		-f connectors/providers/aws/Dockerfile \
 		--secret id=github_token,env=GITHUB_TOKEN \
 		--build-arg LD_FLAGS="$(LD_FLAGS)" \
+		--build-arg LAMBDA_AGENTS_IMAGE=$(LAMBDA_AGENTS_IMAGE) \
 		--push \
 		. $(NO_CACHE)
 
