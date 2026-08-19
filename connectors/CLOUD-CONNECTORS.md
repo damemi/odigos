@@ -59,7 +59,8 @@ Two resolvers follow from this, and picking the wrong one is the easiest mistake
 
 A marked manual-mode workload reports `current.state: NotInstrumented` with
 `progress.stage: WaitingForCustomer` and a transient, non-error issue, and flips to `Instrumented` on its own
-once discovery observes the Odigos ownership marker (`ODIGOS_MANAGED`) on the applied workload. If the source
+once discovery observes an Odigos marker on the applied workload — `ODIGOS_IAC`, written by the Odigos IaC
+artifact the customer applied, or `ODIGOS_MANAGED` where the connector itself instrumented it. If the source
 is later disabled or deleted while that instrumentation is still live, the workload reports `Error` with
 `SourceDisabledButInstrumented` / `SourceMissingButInstrumented` and `current.instrumented: true` — Odigos
 will not strip instrumentation the customer applied, so removing it is theirs to do.
@@ -130,9 +131,17 @@ toolchain needs the change described more than they need it in their own syntax.
 
 **Two things a customer must get exactly right, and both were easy to miss:**
 
-- **`ODIGOS_MANAGED` is mandatory.** Ownership is derived from that variable alone, so a workload with every
+- **The marker is mandatory.** Attribution is derived from that variable alone, so a workload with every
   other fragment applied and no marker reports as awaiting the deployment forever — indistinguishable from an
   untouched one. Its recorded language (or, on Lambda, layer ARN) is also what conformance compares against.
+
+  Which marker depends on who applies it, and the two are not interchangeable. A manual-mode customer sets
+  `ODIGOS_IAC` (api.EnvOdigosIaC) — attribution, no snapshot, never mutated by the connector. `ODIGOS_MANAGED`
+  is the connector's own record of a mutation it performed, including the rollback snapshot, and is written
+  only in automatic mode; a customer must not hand-author it, because it claims a rollback nothing recorded.
+  Readers accept either for "is this instrumented"; only `ODIGOS_MANAGED` grants the right to roll a workload
+  back. Lambda publishes `ODIGOS_IAC` in its manual instructions today; the staged-agent platforms still
+  publish `ODIGOS_MANAGED` and move over when their own IaC artifacts land.
 - **On ECS, a pre-existing loader value must be recorded in the marker's `prevEnv`.** `containerDiff`
   reconstructs the expected value as `<recorded original> + separator + <Odigos value>`, so a customer who
   correctly appends to a value they did not record is reported as drifted for following the instructions.

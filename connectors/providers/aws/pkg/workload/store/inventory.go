@@ -37,6 +37,14 @@ const EnvExecWrapper = "AWS_LAMBDA_EXEC_WRAPPER"
 // overwrote. Its presence is the authoritative proof of Odigos ownership.
 const EnvOdigosManaged = "ODIGOS_MANAGED"
 
+// EnvOdigosIaC is the base-owned attribution marker an Odigos IaC artifact writes (see api.EnvOdigosIaC for
+// why it is a second variable rather than a value of the first). Aliased here so the detector, observer and
+// instrumentor reach both markers through one package, as they already do for EnvOdigosManaged.
+//
+// It proves the instrumentation came from Odigos tooling; it does NOT prove ownership, because it carries no
+// rollback snapshot. Nothing in the mutating path may key off it — see ownership().
+const EnvOdigosIaC = api.EnvOdigosIaC
+
 // envCollectorEndpoint / envCollectorInsecure are the odigos-namespaced collector vars the instrumentor
 // sets (mirrored as instrumentor.EnvCollectorEndpoint/EnvCollectorInsecure). Their presence proves we
 // instrumented a function even before EnvOdigosManaged existed — no customer OTel/ADOT setup sets them.
@@ -60,16 +68,26 @@ const (
 	PhaseInstrumented  = api.PhaseInstrumented  // instrumentation applied and confirmed
 )
 
-// OdigosInstrumented reports whether a Lambda function's environment shows instrumentation owned by THIS
-// connector: the ownership marker, or — for functions instrumented before the marker existed — the
-// odigos-namespaced collector vars. It deliberately does NOT treat a generic OpenTelemetry/ADOT layer or
-// exec wrapper as ours: a customer's pre-existing OTel setup is not Odigos-owned and must never be flagged
-// as instrumented by us nor rolled back.
+// OdigosInstrumented reports whether a Lambda function's environment shows instrumentation applied by
+// Odigos: the ownership marker this connector writes when it instruments the function itself, the IaC marker
+// an Odigos artifact writes when the customer applies it from their own deployment definition, or — for
+// functions instrumented before either marker existed — the odigos-namespaced collector vars. It
+// deliberately does NOT treat a generic OpenTelemetry/ADOT layer or exec wrapper as ours: a customer's
+// pre-existing OTel setup is not Odigos instrumentation and must never be flagged as ours.
+//
+// This is ATTRIBUTION, not ownership, and the two markers are not equivalent past this line. Discovery runs
+// with no management mode in hand, so a predicate that accepted only one of them would report every
+// manual-mode function as untouched — which is the bug this widening fixes. What must not widen with it is
+// the mutating path: rollback resolves ownership separately (see the instrumentor's ownership()), where the
+// IaC marker does not qualify because it carries no snapshot of what to restore.
 func OdigosInstrumented(env map[string]string) bool {
 	if env == nil {
 		return false
 	}
 	if _, ok := env[EnvOdigosManaged]; ok {
+		return true
+	}
+	if _, ok := env[EnvOdigosIaC]; ok {
 		return true
 	}
 	return env[envCollectorEndpoint] != "" || env[envCollectorInsecure] != ""

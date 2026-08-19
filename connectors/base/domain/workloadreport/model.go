@@ -386,6 +386,23 @@ func stageFor(w api.DiscoveredWorkload) string {
 	return "Discovered"
 }
 
+// waitingForLabel is the stage and issue-code name for a blocked prerequisite.
+//
+// WaitingForCustomer is spelled out with spaces and the others are not, which is deliberate rather than an
+// oversight. The other waits are internal states a customer never has to act on — a destination gets
+// configured and the wait clears itself. WaitingForCustomer is the manual (IaC) flow: it is the one wait
+// whose resolution IS the customer going and changing their own deployment definition, so it is read by a
+// person deciding whether to go do that, and it is rendered as prose for the same reason the message beside
+// it is prose.
+//
+// Anything consuming these as identifiers must match the value, not reconstruct it from the WaitingFor key.
+func waitingForLabel(waitingFor string) string {
+	if waitingFor == api.WaitingForCustomer {
+		return "Waiting For Customer"
+	}
+	return "WaitingFor" + capitalizeFirst(waitingFor)
+}
+
 // waitingForMessage is the customer-facing explanation for a blocked prerequisite: what is missing,
 // why it blocks instrumentation, and what resolves it — the last part matters most, since the state
 // otherwise reads as something wrong with the workload.
@@ -441,7 +458,11 @@ func driftMessage(missing []string) string {
 // be declared without this map being the place it has to be labelled —
 // TestEveryComponentHasALabel fails until it is.
 var componentLabels = map[string]string{
-	api.ComponentOwnershipMarker:  "the Odigos ownership marker is missing",
+	// Deliberately names neither variable. The component is reported when NO marker attributes the workload to
+	// Odigos, and which marker was expected depends on how it was instrumented: the connector's own ownership
+	// marker in automatic mode, an IaC marker (api.EnvOdigosIaC) where the customer's own deployment applied it.
+	// Naming one would send half of manual-mode customers to set the wrong variable.
+	api.ComponentOwnershipMarker:  "no marker identifying this as Odigos-instrumented is present",
 	api.ComponentServiceName:      "the reported service name does not match this source",
 	api.ComponentCollectorExport:  "the telemetry export settings do not match the configured destination",
 	api.ComponentLogLevel:         "the telemetry log level does not match the connector's setting",
@@ -473,20 +494,6 @@ func sinceOrNil(t time.Time) *string {
 	}
 	s := t.UTC().Format(time.RFC3339)
 	return &s
-}
-
-// waitingForLabel renders a blocked prerequisite as the stage and issue code a client displays.
-//
-// WaitingForCustomer is spelled out with spaces because it is the one wait a PERSON has to act on: it names the
-// manual (IaC) flow, where nothing converges the workload until the customer applies the instrumentation to
-// their own deployment definition, so the label is read as an instruction rather than as a machine state. The
-// others are preconditions that clear themselves — a destination gets configured and the wait ends with nobody
-// touching the workload — and they keep the compact form.
-func waitingForLabel(waitingFor string) string {
-	if waitingFor == api.WaitingForCustomer {
-		return "Waiting For Customer"
-	}
-	return "WaitingFor" + capitalizeFirst(waitingFor)
 }
 
 func capitalizeFirst(s string) string {

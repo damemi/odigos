@@ -149,7 +149,6 @@ cmd/main.go                    # startup: schema check -> register -> loops -> s
 pkg/awsprovider                # wires workload + compute-platform domains into base.Provider
 pkg/config                     # env config
 pkg/awsclient                  # shared AWS config cache
-agents/                        # odigos-fargate-agents image (busybox + env-driven language agents)
 pkg/workload/
   store/                       # lambda_functions + ecs_services + ecs_tasks inventory
   detector/                    # Lambda + Fargate (services + tasks) discovery
@@ -180,14 +179,36 @@ The connector scans every region enabled in the account (via `ec2:DescribeRegion
 setting. Discovery interval and tag selectors are DB-backed operational config (agents-api
 `updateConfig`), not env.
 
+## Artifacts this connector consumes
+
+The OpenTelemetry Lambda layers and the Fargate agents bundle are **not built in this repository**. Both
+are released by [`odigos-io/aws-connector-artifacts`](https://github.com/odigos-io/aws-connector-artifacts),
+which publishes the same layer zips three ways from one build — into the image this connector reads them
+from, as public Lambda layer versions in every region, and as Serverless Application Repository
+applications customers deploy into their own accounts. A customer who deploys the layer themselves and a
+customer whose functions this connector instruments have to get identical bytes, and that only holds if
+there is one build.
+
+| Artifact | Pinned by | Used |
+| --- | --- | --- |
+| `odigos-lambda-agents:vX.Y.Z` | `LAMBDA_AGENTS_IMAGE` build arg in [`Dockerfile`](Dockerfile) | build time — supplies `/var/odigos/lambda/<lang>/<arch>/layer.zip`, which the connector publishes into customer accounts |
+| `odigos-fargate-agents:vX.Y.Z` | `config.DefaultFargateAgentsImage` | runtime — pulled by every instrumented Fargate task |
+
+Picking up new upstream OpenTelemetry versions means bumping those two pins, each as its own reviewed PR.
+
 ## Build & run locally
 
-`make build-connector-aws` from the repo root — this also builds the Fargate agents image
-(`build-fargate-agents`, from [`agents/`](agents/), tagged `$(ORG)/odigos-fargate-agents:$(TAG)`), and
-`make push-connector-aws` likewise pushes the multi-arch agents bundle first (`push-fargate-agents`).
-The agents image is pulled by **Fargate tasks from a registry** — it is never loaded into kind; point
-the connector at a pushed tag via `CONNECTOR_AWS_FARGATE_AGENTS_IMAGE` (or rely on the compiled-in
-default bundle). `go build ./...` and `go test ./...` work locally.
+`make build-connector-aws` from the repo root. `go build ./...` and `go test ./...` work locally.
+
+To build against an unreleased layer bundle:
+
+```bash
+make build-connector-aws LAMBDA_AGENTS_IMAGE=my-registry/odigos-lambda-agents:dev
+```
+
+The Fargate agents image is pulled by **Fargate tasks from a registry** — it is never loaded into kind;
+point the connector at a pushed tag via `ODIGOS_FARGATE_AGENTS_IMAGE` (or rely on the compiled-in default
+bundle).
 
 Smoke test against the bundled Postgres image:
 

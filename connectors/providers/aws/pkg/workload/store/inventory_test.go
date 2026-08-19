@@ -2,9 +2,11 @@ package store
 
 import "testing"
 
-// TestOdigosInstrumented guards the ownership predicate that gates rollback (issue 1): only our marker or
-// our odigos-namespaced collector vars count as Odigos-owned. A customer's own OpenTelemetry/ADOT exec
-// wrapper must NOT be treated as ours, or rollback would strip a customer's instrumentation.
+// TestOdigosInstrumented guards the ATTRIBUTION predicate: only a marker we or our IaC artifacts wrote, or our
+// odigos-namespaced collector vars, count as Odigos instrumentation. A customer's own OpenTelemetry/ADOT exec
+// wrapper must NOT be treated as ours, or the connector would claim — and report drift on — instrumentation
+// nobody asked it to look at. Ownership, which is what actually gates rollback, is a strictly narrower
+// question decided in the instrumentor (see TestIaCMarkerIsAttributionNotOwnership).
 func TestOdigosInstrumented(t *testing.T) {
 	cases := []struct {
 		name string
@@ -14,6 +16,13 @@ func TestOdigosInstrumented(t *testing.T) {
 		{"nil env", nil, false},
 		{"empty env", map[string]string{}, false},
 		{"marker present", map[string]string{EnvOdigosManaged: `{"v":1}`}, true},
+		// Applied by an Odigos IaC artifact rather than by the connector. Attribution only — it is what stops a
+		// correctly instrumented manual-mode function reading as untouched; ownership() still refuses it, so
+		// widening this predicate never widens what rollback may touch.
+		{"iac marker present", map[string]string{EnvOdigosIaC: `{"v":1,"source":"cdk"}`}, true},
+		// Presence decides, not parseability: a typo inside a value a customer hand-authored must not demote a
+		// function Odigos genuinely instrumented back to "awaiting your deployment".
+		{"iac marker unparseable", map[string]string{EnvOdigosIaC: "not-json"}, true},
 		{"odigos collector endpoint", map[string]string{envCollectorEndpoint: "collector:4317"}, true},
 		{"odigos collector insecure", map[string]string{envCollectorInsecure: "true"}, true},
 		// Customer's own OTel/ADOT setup — not ours, must be left alone.
