@@ -2,7 +2,10 @@ package instrumentor
 
 import (
 	"fmt"
+	"strings"
 
+	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
@@ -83,7 +86,7 @@ func DesiredLambdaPlan(lang, activation string) (plan.Plan, error) {
 			{
 				Token: PlaceholderLayerARN,
 				Description: "The OpenTelemetry Lambda layer version ARN for your function's region, runtime and architecture. " +
-					"Attach it alongside your existing layers, and record the exact version you attached in ODIGOS_MANAGED.",
+					"Attach it alongside your existing layers, and record the exact version you attached in " + store.EnvOdigosIaC + ".",
 			},
 			plan.ServiceNamePlaceholder,
 			plan.OTLPEndpointPlaceholder,
@@ -124,7 +127,7 @@ func desiredHandlerEnv(lang string) []plan.EnvVar {
 		// First because it is the one a customer skips and the one whose absence makes everything else
 		// invisible: with no marker the function is not attributable to Odigos at all, and the report says
 		// "awaiting your deployment" however completely the rest is applied.
-		{Name: store.EnvOdigosManaged, Value: lambdaMarkerValue(), Merge: plan.MergeSet},
+		{Name: store.EnvOdigosIaC, Value: lambdaIaCMarkerValue(), Merge: plan.MergeSet},
 		// The layer's own wrapper script, and it is LANGUAGE-SPECIFIC: /opt/otel-instrument for Python,
 		// /opt/otel-handler for the rest. The wrong one makes the function fail at cold start with
 		// "does not exist", so it is never a single hardcoded value.
@@ -153,7 +156,7 @@ func desiredWebServerEnv(lang string) ([]plan.EnvVar, error) {
 	}
 
 	env := []plan.EnvVar{
-		{Name: store.EnvOdigosManaged, Value: lambdaMarkerValue(), Merge: plan.MergeSet},
+		{Name: store.EnvOdigosIaC, Value: lambdaIaCMarkerValue(), Merge: plan.MergeSet},
 		{Name: key, Value: value, Merge: merge, Separator: sep},
 		// The adapter owns the exec wrapper. Setting the OTel handler wrapper on a web-server function is what
 		// broke these functions before web-server mode existed, so the plan says to remove ours rather than
@@ -174,15 +177,25 @@ func desiredWebServerEnv(lang string) ([]plan.EnvVar, error) {
 // blocked on a remote endpoint. Pointing the SDK straight at the destination is what older connector versions
 // did, and it is why those two variables are removals here rather than omissions: instrumentationDiff reports
 // their presence as legacyExportVars.
+//
+// Note also what became removals: the three OTEL_*_EXPORTER variables, and the ODIGOS_OTLP_* pair. "otlp" is
+// already every SDK's default, so setting it restated the default three times per function; and the collector
+// is now configured by one inline document rather than by two odigos-namespaced variables it had to indirect
+// through. A customer who applied a previous version of this plan has both, so both are stated as removals
+// rather than dropped — an unmentioned variable is one nobody is told to clean up.
 func sharedLambdaEnv() []plan.EnvVar {
 	return []plan.EnvVar{
 		{Name: EnvServiceName, Value: plan.PlaceholderServiceName, Merge: plan.MergeSet},
-		{Name: EnvCollectorEndpoint, Value: plan.PlaceholderOTLPEndpoint, Merge: plan.MergeSet},
-		{Name: EnvCollectorInsecure, Value: plan.PlaceholderOTLPInsecure, Merge: plan.MergeSet},
-		{Name: EnvTracesExporter, Value: exporterOTLP, Merge: plan.MergeSet},
-		{Name: EnvMetricsExporter, Value: exporterOTLP, Merge: plan.MergeSet},
-		{Name: EnvLogsExporter, Value: exporterOTLP, Merge: plan.MergeSet},
+		{Name: EnvCollectorConfigURI, Value: lambdaCollectorConfigTemplate(), Merge: plan.MergeSet},
 
+		// Absent means "the SDK default", which is what an accepted signal wants. The note explains the one
+		// case that needs a value: "none", for a signal the destination does not accept.
+		{Name: EnvTracesExporter, Merge: plan.MergeRemove},
+		{Name: EnvMetricsExporter, Merge: plan.MergeRemove},
+		{Name: EnvLogsExporter, Merge: plan.MergeRemove},
+
+		{Name: EnvCollectorEndpoint, Merge: plan.MergeRemove},
+		{Name: EnvCollectorInsecure, Merge: plan.MergeRemove},
 		{Name: envLegacyOTLPEndpoint, Merge: plan.MergeRemove},
 		{Name: envLegacyOTLPHeaders, Merge: plan.MergeRemove},
 		// Compared against unset unless the connector's debug-telemetry toggle is on, so a function carrying
@@ -191,27 +204,77 @@ func sharedLambdaEnv() []plan.EnvVar {
 	}
 }
 
-// lambdaMarkerValue is the ownership marker a customer applies. Unlike the staged-agent platforms it records
-// the LAYER rather than a language: the layer ARN is what desiredLayerARN reads to decide which version the
-// function is supposed to carry.
+// lambdaCollectorConfigTemplate is the collector configuration a manual-mode customer applies, produced by
+// the INJECTOR'S OWN renderer with placeholders standing in for the destination.
 //
-// That read is the reason the marker must name the exact ARN the customer attached, and it is deliberate: with
-// no recorded layer the observer falls back to resolving one for the function's region/runtime/architecture,
-// so a customer who pinned a different version would be reported as drifted for a version they chose. The
-// marker records what they actually applied, which makes drift mean "the function no longer carries what was
-// applied" instead of "Odigos ships a newer layer".
-func lambdaMarkerValue() string {
-	return fmt.Sprintf(`{"v":%d,"layer":%q}`, managedManifestVersion, PlaceholderLayerARN)
+// Building it from renderCollectorConfig rather than writing the document out by hand is the whole point: the
+// observer compares the live variable against a rendered config byte for byte, so a hand-maintained copy that
+// drifted by one space would report every correctly-configured function as drifted, with a diff no customer
+// could see. Rendering both sides through one function makes that impossible.
+//
+// Insecure is substituted after the fact because it is a bool on the target and cannot carry a placeholder
+// through the renderer. The literal below is exactly what the renderer emits for Insecure=false.
+//
+// Headers are passed as nil, and that is a security property rather than an omission: this string is rendered
+// into copy-paste artifacts — Terraform, CloudFormation, a shell script — that customers paste into shared
+// repositories and support tickets. The destination's credential must never be baked into one. The plan's
+// notes tell the reader to add their own `headers:` block instead, which is the only form in which a token
+// should reach a document like this.
+func lambdaCollectorConfigTemplate() string {
+	cfg, err := renderCollectorConfig(domaindest.OTLPTarget{
+		Endpoint: plan.PlaceholderOTLPEndpoint,
+		Insecure: false,
+		// All three pipelines are rendered because the plan is static and cannot know which signals a
+		// particular destination accepts. The note tells the customer to drop the ones theirs does not.
+		Traces: true, Metrics: true, Logs: true,
+	}, nil)
+	if err != nil {
+		// Unreachable: the target above always has an endpoint and at least one signal. A panic here is a
+		// programming error in the renderer, surfaced at package init rather than as a silent empty plan.
+		panic(fmt.Sprintf("rendering the lambda collector config template: %v", err))
+	}
+	return strings.Replace(cfg, "tls: {insecure: false}", "tls: {insecure: "+plan.PlaceholderOTLPInsecure+"}", 1)
+}
+
+// lambdaIaCMarkerValue is the attribution marker a manual-mode customer applies — the IaC marker, NOT the
+// ownership marker the connector writes when it instruments a function itself.
+//
+// Which of the two the plan names is the whole difference between the modes. The ownership marker's payload is
+// a rollback snapshot of what the connector changed, and in manual mode there is no such thing: nothing
+// converges the function, so nothing will ever roll it back, and asking a customer to hand-author a snapshot
+// of a mutation that never happened produced a value the connector would then have had to honour. What a
+// customer's deployment definition can honestly state is that Odigos instrumentation was applied here, from
+// which artifact, carrying which layer — which is exactly this marker, and is all manual mode reads.
+//
+// Unlike the staged-agent platforms it records the LAYER rather than a language, because the layer ARN is what
+// desiredLayerARN reads to decide which version the function is supposed to carry. That read is the reason the
+// marker must name the exact ARN the customer attached: with no recorded layer the observer falls back to
+// resolving one for the function's region/runtime/architecture, so a customer who pinned a different version
+// would be reported as drifted for a version they chose. Recording what they actually applied makes drift mean
+// "the function no longer carries what was applied" instead of "Odigos ships a newer layer".
+// The payload is the MINIMUM a reader needs: the schema version and the layer. "source"/"version" are
+// deliberately absent, because they are attribution an Odigos IaC module fills in about itself and a customer
+// pasting a fragment by hand has nothing true to write there — and requiring them would put a literal in these
+// instructions that every module then has to contradict.
+func lambdaIaCMarkerValue() string {
+	return fmt.Sprintf(`{"v":%d,"layer":%q}`, baseapi.IaCMarkerVersion, PlaceholderLayerARN)
 }
 
 func lambdaPlanNotes(lang, activation string) []string {
 	notes := []string{
-		fmt.Sprintf("Set %s exactly as shown, with the layer version ARN you actually attached. Odigos derives ownership from this variable alone — without it the function is reported as awaiting your deployment however completely the rest is applied — and the recorded ARN is the version it checks the function against, so pinning your own version is respected rather than reported as drift.",
+		fmt.Sprintf("Set %s exactly as shown, with the layer version ARN you actually attached. Odigos attributes the function to this variable — without it the function is reported as awaiting your deployment however completely the rest is applied — and the recorded ARN is the version it checks the function against, so pinning your own version is respected rather than reported as drift.",
+			store.EnvOdigosIaC),
+		fmt.Sprintf("Do NOT set %s. That variable is the connector's own record of a mutation it performed, including the snapshot it restores from on rollback, and it is written only when you hand instrumentation over to Odigos by enabling the instrumentation capability for this type. Setting it by hand claims a rollback that was never recorded.",
 			store.EnvOdigosManaged),
 		fmt.Sprintf("%s must match the workload's name in Odigos. A different value is reported as instrumentation drift, not as a naming preference.", EnvServiceName),
-		fmt.Sprintf("%s is \"true\" only if the destination is plaintext; it has to match how the destination is configured on this connector.", EnvCollectorInsecure),
-		fmt.Sprintf("Set %s / %s / %s to \"%s\" for any signal your destination does not accept, so the agent never produces it.",
-			EnvTracesExporter, EnvMetricsExporter, EnvLogsExporter, exporterNone),
+		fmt.Sprintf("%s carries the in-Lambda collector's ENTIRE configuration inline, so no other variable describes your destination. Substitute %s and %s inside it, and leave the rest byte-for-byte as shown — Odigos compares the whole value, so an extra space is reported as drift.",
+			EnvCollectorConfigURI, plan.PlaceholderOTLPEndpoint, plan.PlaceholderOTLPInsecure),
+		fmt.Sprintf("%s is \"true\" only if the destination is plaintext; it has to match how the destination is configured on this connector.", plan.PlaceholderOTLPInsecure),
+		fmt.Sprintf("If your destination speaks OTLP/HTTP rather than gRPC, replace the whole `otlp:` exporter with `otlphttp: {endpoint: \"<your https URL>\"}` and name `otlphttp` in each pipeline's exporters. The gRPC exporter takes host:port and a TLS flag; the HTTP one takes a scheme-qualified URL and no TLS flag."),
+		fmt.Sprintf("Delete the pipeline for any signal your destination does not accept, and set that signal's %s / %s / %s to \"%s\" so the agent never produces it. Leave the variable UNSET for a signal your destination does accept — \"%s\" is already the SDK default, and Odigos compares those variables against unset.",
+			EnvTracesExporter, EnvMetricsExporter, EnvLogsExporter, exporterNone, exporterOTLP),
+		fmt.Sprintf("%s and %s must NOT be set. Earlier versions of this instrumentation used them to point the collector at the destination; the configuration above replaces them, and a function still carrying them is reported as drifted.",
+			EnvCollectorEndpoint, EnvCollectorInsecure),
 		// This is the one value in the plan a customer genuinely cannot derive, and there is no published
 		// Odigos layer to point at yet (see the artifact-distribution track), so say where it comes from.
 		fmt.Sprintf("%s is per region, runtime and architecture. Use the OpenTelemetry Lambda layer ARN for your function's region and runtime, matching its architecture (x86_64 or arm64). Attach it alongside your existing layers — do not replace them.",
@@ -233,6 +296,8 @@ func lambdaPlanNotes(lang, activation string) []string {
 		)
 		if lang == "java" {
 			notes = append(notes, "Java: the OpenTelemetry layer can only wrap a standard class[::method] handler. A function whose handler is a script (run.sh, bootstrap) is a web-server function — use that plan instead.")
+			notes = append(notes, fmt.Sprintf("Java: the layer ships four wrapper scripts, one per handler interface, and %s above is the default for a plain RequestHandler. A function implementing RequestStreamHandler needs %s — %s BREAKS it, because the two interfaces have different signatures — and API Gateway proxy and SQS functions get richer spans from %s and %s. Odigos cannot tell which yours implements (the handler is a class name either way), so set the source's distro override to the script name you need and apply that value here instead.",
+				execWrapperHandler, execWrapperStreamHandler, execWrapperHandler, execWrapperProxyHandler, execWrapperSqsHandler))
 		}
 	case ActivationWebServer:
 		notes = append(notes,

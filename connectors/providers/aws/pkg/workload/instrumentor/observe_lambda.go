@@ -36,23 +36,23 @@ var observeLog = connlog.Subsystem("aws-observer")
 // exported, widening the mutating package's surface to everyone for no gain.
 //
 // What keeps it honest is not its location but its dependencies: it holds no lambda client factory of its own
-// beyond a read, resolves layers exclusively through NonPublishingLayerARN, and every store method it calls
-// writes observation keys only. The reviewable invariant is that this file contains no AWS call other than
-// ListFunctions.
+// beyond a read, it resolves no layer at all (see the layer check in observation), and every store method it
+// calls writes observation keys only. The reviewable invariant is that this file contains no AWS call other
+// than ListFunctions — which is also what makes manual mode's permission set sufficient, since a layer lookup
+// is an instrumentation permission manual mode deliberately does not grant.
 type LambdaObserver struct {
-	store  *store.Store
-	cache  *awsclient.Cache
-	layers LayerResolver
-	debug  func() bool
+	store *store.Store
+	cache *awsclient.Cache
+	debug func() bool
 	// now is the clock for the drift since-stamp, injectable so a test can assert the stamp is CARRIED
 	// FORWARD across passes rather than refreshed — the property that makes "drifted for 3 days" true.
 	now func() time.Time
 }
 
-// NewLambdaObserver builds the read-only Lambda observer over the same store, config cache, layer resolver and
-// live debug toggle the instrumentor uses, so both judge conformance against identical desired inputs.
-func NewLambdaObserver(st *store.Store, cache *awsclient.Cache, layers LayerResolver, debug func() bool) *LambdaObserver {
-	return &LambdaObserver{store: st, cache: cache, layers: layers, debug: debug, now: time.Now}
+// NewLambdaObserver builds the read-only Lambda observer over the same store, config cache and live debug
+// toggle the instrumentor uses, so both judge conformance against identical desired inputs.
+func NewLambdaObserver(st *store.Store, cache *awsclient.Cache, debug func() bool) *LambdaObserver {
+	return &LambdaObserver{store: st, cache: cache, debug: debug, now: time.Now}
 }
 
 // Observe implements baseapi.InstrumentationObserver. One pass:
@@ -67,7 +67,7 @@ func NewLambdaObserver(st *store.Store, cache *awsclient.Cache, layers LayerReso
 // included because that is what lets a verdict be cleared when a customer removes instrumentation, rather than
 // leaving the last drift verdict standing forever.
 func (o *LambdaObserver) Observe(ctx context.Context) error {
-	enabled, reportedNames, err := o.enabledLambdaSources(ctx)
+	enabled, err := o.enabledLambdaSources(ctx)
 	if err != nil {
 		return err
 	}
@@ -77,6 +77,12 @@ func (o *LambdaObserver) Observe(ctx context.Context) error {
 	dest, haveDest, err := o.store.OTLPExportTarget(ctx)
 	if err != nil {
 		return fmt.Errorf("resolve otlp export target: %w", err)
+	}
+	// Read alongside the target so the observer judges a function against the same configuration the
+	// instrumentor would write — including the credential, which is part of the rendered config.
+	destHeaders, err := o.store.OTLPExportHeaders(ctx)
+	if err != nil {
+		return fmt.Errorf("resolve otlp export headers: %w", err)
 	}
 	if !haveDest {
 		// Without a destination there is no desired instrumentation to compare against — the endpoint is part
@@ -127,7 +133,7 @@ func (o *LambdaObserver) Observe(ctx context.Context) error {
 				// disappearance into a drift verdict.
 				continue
 			}
-			if obs, ok := o.observation(ctx, fn, cur, dest, reportedNames[fn.FunctionARN]); ok {
+			if obs, ok := o.observation(ctx, fn, cur, dest, destHeaders, enabled[fn.FunctionARN]); ok {
 				o.persist(ctx, fn, obs)
 			}
 		}
@@ -138,7 +144,8 @@ func (o *LambdaObserver) Observe(ctx context.Context) error {
 // observation computes one function's verdict from its live configuration, or reports that no verdict should be
 // recorded this pass. Pure apart from the layer lookup, which is read-only by construction
 // (NonPublishingLayerARN).
-func (o *LambdaObserver) observation(ctx context.Context, fn store.LambdaFunction, cur lambdatypes.FunctionConfiguration, dest domaindest.OTLPTarget, reportedServiceName string) (store.LambdaObservation, bool) {
+func (o *LambdaObserver) observation(ctx context.Context, fn store.LambdaFunction, cur lambdatypes.FunctionConfiguration, dest domaindest.OTLPTarget, destHeaders map[string]string, src enabledLambdaSource) (store.LambdaObservation, bool) {
+	reportedServiceName := src.serviceName
 	// A configuration change still being applied must not be judged at all. Mid-flight state is
 	// indistinguishable from a half-applied instrumentation, so recording a verdict here would both report a
 	// drift that is about to resolve itself and — worse — reset the drift clock of a workload that really is
@@ -165,16 +172,41 @@ func (o *LambdaObserver) observation(ctx context.Context, fn store.LambdaFunctio
 	}
 
 	webServer := usesLambdaWebAdapter(layers)
-	layerARN, layerErr := o.desiredLayerARN(ctx, fn, env)
+	// The layer the APPLIED instrumentation recorded, and the only version this function is held to. Empty when
+	// neither marker recorded one, which is the unpinned case the layer check below handles by name instead.
+	pinnedLayerARN := recordedLayer(env)
 	debug := o.debug()
-	obs.DesiredPrint = desiredPrint(webServer, fn, layerARN, dest, debug, reportedServiceName)
 
-	diff := instrumentationDiff(webServer, fn, env, layers, layerARN, dest, debug, reportedServiceName)
-	if layerErr != nil {
-		// The layer is the one component that could not be checked (see desiredLayerARN). Report the verdict
-		// over everything that COULD be checked and say the check was incomplete, rather than either inventing
-		// a missing layer or quietly calling a partially-verified function conformant.
-		obs.Error = fmt.Sprintf("could not determine the expected instrumentation layer: %v", layerErr)
+	// Judge the export configuration against the signals this function actually exports, not against the full
+	// set the destination accepts — see narrowToExportedSignals. Illegal narrowing leaves dest untouched, so the
+	// comparison below reports it.
+	judgedDest := narrowToExportedSignals(dest, env)
+
+	// A destination the collector cannot be configured for is a configuration problem, not function drift:
+	// there is no desired state to judge this function against, so say that rather than reporting every
+	// marked function as Partial because the connector cannot describe what it wants.
+	collectorCfg, cfgErr := renderCollectorConfig(judgedDest, destHeaders)
+	if cfgErr != nil {
+		obs.Conformance = fn.Observation.Conformance
+		obs.Missing = fn.Observation.Missing
+		obs.Since = fn.Observation.Since
+		obs.Error = fmt.Sprintf("the configured destination cannot be exported to from Lambda: %v", cfgErr)
+		return obs, true
+	}
+	obs.DesiredPrint = desiredPrint(webServer, fn, pinnedLayerARN, debug, reportedServiceName, collectorCfg, src.distro)
+
+	diff := instrumentationDiff(webServer, fn, env, layers, pinnedLayerARN, judgedDest, debug, reportedServiceName, collectorCfg, src.distro)
+	// An unpinned marker (a customer's own IaC, or an Odigos artifact predating the recorded layer) leaves NO
+	// version to hold the function to, so the check falls back from identity to signature: an Odigos layer is
+	// attached, or none is.
+	//
+	// Resolving one to compare against instead is the false alarm this exists to avoid. The resolver answers
+	// "which layer does Odigos ship TODAY", so every layer release would report every conformant function in the
+	// account as drifted — an available upgrade announced as an error, on every function, until the customer
+	// re-applied. Manual mode also grants no permission to ask (a layer lookup is an instrumentation
+	// permission), so the lookup that produced that wrong verdict was not even one this path is entitled to make.
+	if pinnedLayerARN == "" && store.OdigosLayerARN(layers) == "" {
+		diff = append(diff, componentInstrumentationLayer)
 	}
 	if len(diff) == 0 {
 		obs.Conformance = baseapi.ConformanceConformant
@@ -183,39 +215,6 @@ func (o *LambdaObserver) observation(ctx context.Context, fn store.LambdaFunctio
 	obs.Conformance = baseapi.ConformancePartial
 	obs.Missing = diff
 	return obs, true
-}
-
-// desiredLayerARN resolves the layer version this function is supposed to carry, without publishing one.
-//
-// The ownership marker comes FIRST, and that ordering is the whole semantics of manual-mode drift. The marker
-// records the layer that was applied, which in manual mode is the layer the CUSTOMER pinned from the
-// instrumentation Odigos gave them. Drift means "what is on the function no longer matches what was applied" —
-// so the marker is the correct reference, and the case this pass exists to catch is exactly the one it
-// catches: the layer was detached (or replaced) while the marker survived.
-//
-// Asking the resolver first would instead compare against whatever layer version Odigos currently has, and
-// then every layer release would report every conformant function as drifted — an available upgrade announced
-// as an error, on every function, until the customer re-applied. That is a false alarm, not drift.
-//
-// The resolver is the fallback for a marker that records no layer, which a customer's own IaC can produce.
-// Under a manual-mode policy that call is not necessarily granted (lambda:ListLayers is declared on the
-// instrumentation type, and manual mode deliberately grants no instrumentation permissions — see
-// spec.manualObservationReads, which asserts Lambda observation needs nothing beyond ListFunctions). A denial
-// there surfaces as an incomplete check, which is the honest outcome: Odigos genuinely cannot tell which layer
-// was meant.
-func (o *LambdaObserver) desiredLayerARN(ctx context.Context, fn store.LambdaFunction, env map[string]string) (string, error) {
-	if m, ok := parseManifest(env[store.EnvOdigosManaged]); ok && m.Layer != "" {
-		return m.Layer, nil
-	}
-	arn, err := NonPublishingLayerARN(ctx, o.layers, fn.Region, fn.Runtime, firstArch(fn.Architecture))
-	switch {
-	case err != nil:
-		return "", err
-	case arn == "":
-		return "", ErrLayerUnavailable
-	default:
-		return arn, nil
-	}
 }
 
 // persist writes a verdict only when something actually moved. The decision itself is nextObservation's, kept
@@ -278,20 +277,21 @@ func (o *LambdaObserver) liveFunctions(ctx context.Context, region string) (map[
 // enabledLambdaSources mirrors the instrumentor's intent read: enabled Lambda source ARNs and the OTel
 // service.name each should report. Both must resolve the reported name identically or the observer would call
 // a correctly-instrumented function drifted over a name only it disagrees with.
-func (o *LambdaObserver) enabledLambdaSources(ctx context.Context) (map[string]struct{}, map[string]string, error) {
+func (o *LambdaObserver) enabledLambdaSources(ctx context.Context) (map[string]enabledLambdaSource, error) {
 	sources, err := o.store.ListSources(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	enabled := make(map[string]struct{})
-	reported := make(map[string]string)
+	enabled := make(map[string]enabledLambdaSource)
 	for _, s := range sources {
 		if s.Kind == store.KindLambda && s.Enabled && s.ExternalResourceID != "" {
-			enabled[s.ExternalResourceID] = struct{}{}
-			reported[s.ExternalResourceID] = s.ReportedServiceName()
+			enabled[s.ExternalResourceID] = enabledLambdaSource{
+				serviceName: s.ReportedServiceName(),
+				distro:      s.Config.DistroOverride.OtelDistroName,
+			}
 		}
 	}
-	return enabled, reported, nil
+	return enabled, nil
 }
 
 // observedPrint / desiredPrint fingerprint the live and wanted instrumentation.
@@ -303,10 +303,10 @@ func (o *LambdaObserver) enabledLambdaSources(ctx context.Context) (map[string]s
 // env_hash = config_hash.
 func observedPrint(env map[string]string, layers []string) string {
 	parts := make([]string, 0, len(odigosEnvKeys)+len(layers)+1)
-	// The marker's own value carries a snapshot of the customer's pre-Odigos env, which changes for reasons
-	// that are not instrumentation changes. Only the layer it records participates.
-	marker, _ := parseManifest(env[store.EnvOdigosManaged])
-	parts = append(parts, "marker="+marker.Layer)
+	// A marker's own value carries things that change for reasons that are not instrumentation changes — the
+	// ownership marker's snapshot of the customer's pre-Odigos env, the IaC marker's artifact release. Only
+	// the layer they record participates, from whichever marker recorded it.
+	parts = append(parts, "marker="+recordedLayer(env))
 	for _, k := range sortedCopy(odigosEnvKeys) {
 		parts = append(parts, k+"="+env[k])
 	}
@@ -314,7 +314,14 @@ func observedPrint(env map[string]string, layers []string) string {
 	return fingerprint(parts)
 }
 
-func desiredPrint(webServer bool, fn store.LambdaFunction, layerARN string, dest domaindest.OTLPTarget, debug bool, reportedServiceName string) string {
+// desiredPrint fingerprints the instrumentation the connector wants on this function, so a change in intent
+// is visible as a changed print even when the function itself did not move.
+//
+// The collector config stands in for what used to be four separate parts (endpoint, insecure, and the three
+// exporter selectors): it is rendered from exactly those inputs plus the ones they could not express — the
+// transport, the destination's credential, and which pipelines exist — so hashing it tracks strictly more of
+// the desired state than enumerating fields did, and cannot drift from what is actually applied.
+func desiredPrint(webServer bool, fn store.LambdaFunction, layerARN string, debug bool, reportedServiceName, collectorCfg, distro string) string {
 	if reportedServiceName == "" {
 		reportedServiceName = fn.FunctionName
 	}
@@ -323,11 +330,11 @@ func desiredPrint(webServer bool, fn store.LambdaFunction, layerARN string, dest
 		"runtime=" + fn.Runtime,
 		"layer=" + layerARN,
 		"service=" + reportedServiceName,
-		"endpoint=" + dest.Endpoint,
-		"insecure=" + strconv.FormatBool(dest.Insecure),
-		"traces=" + exporterFor(dest.Traces),
-		"metrics=" + exporterFor(dest.Metrics),
-		"logs=" + exporterFor(dest.Logs),
+		"collector=" + collectorCfg,
+		// The Java wrapper the source selected is desired state too: a source switched from otel-handler to
+		// otel-stream-handler changes what the function must carry, and a print that ignored it would report
+		// "nothing has moved" on exactly the change the customer just made.
+		"wrapper=" + execWrapperForRuntime(fn.Runtime, distro),
 		"debug=" + strconv.FormatBool(debug),
 	})
 }

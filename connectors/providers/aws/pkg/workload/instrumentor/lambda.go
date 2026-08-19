@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -74,7 +73,7 @@ func NewLambda(st *store.Store, cache *awsclient.Cache, layers LayerResolver, de
 // Reconcile's per-function Resolve is a cache hit. It gates the step only when nothing can be ensured
 // (no enabled function got a layer); partial gaps are left to per-function handling in Reconcile.
 func (i *LambdaInstrumentor) EnsurePrerequisite(ctx context.Context) error {
-	enabled, _, err := i.enabledLambdaSources(ctx)
+	enabled, err := i.enabledLambdaSources(ctx)
 	if err != nil {
 		return err
 	}
@@ -129,7 +128,7 @@ func (i *LambdaInstrumentor) EnsurePrerequisite(ctx context.Context) error {
 }
 
 func (i *LambdaInstrumentor) Reconcile(ctx context.Context) error {
-	enabled, reportedNames, err := i.enabledLambdaSources(ctx)
+	enabled, err := i.enabledLambdaSources(ctx)
 	if err != nil {
 		return err
 	}
@@ -146,6 +145,14 @@ func (i *LambdaInstrumentor) Reconcile(ctx context.Context) error {
 		log.Error("resolve otlp export target failed", "error", derr)
 		haveDest = false
 	}
+	// The destination's credential, read off the raw generated config rather than off OTLPTarget (which
+	// mirrors the upstream odigos definitions and must not grow a field here). A failure is treated as
+	// "no headers" and logged: instrumenting with the endpoint but without the credential fails visibly at
+	// the destination, which is a better outcome than skipping the whole reconcile including rollbacks.
+	destHeaders, herr := i.store.OTLPExportHeaders(ctx)
+	if herr != nil {
+		log.Error("resolve otlp export headers failed", "error", herr)
+	}
 
 	// Accumulate per-function failures and return them joined. The steady-state reconcile loop only logs
 	// the returned error and carries on, but the shutdown drain propagates it so a function that failed to
@@ -158,7 +165,7 @@ func (i *LambdaInstrumentor) Reconcile(ctx context.Context) error {
 				log.Warn("skip lambda instrumentation: no OTLP destination configured", "function", fn.FunctionName)
 				continue
 			}
-			if err := i.instrument(ctx, fn, dest, reportedNames[fn.FunctionARN]); err != nil {
+			if err := i.instrument(ctx, fn, dest, destHeaders, enabled[fn.FunctionARN]); err != nil {
 				log.Error("instrument lambda failed", "function", fn.FunctionName, "region", fn.Region, "error", err)
 				_ = i.store.SetLambdaInstrumentationError(ctx, fn.FunctionARN, err.Error())
 				errs = append(errs, fmt.Errorf("instrument %s: %w", fn.FunctionName, err))
@@ -224,7 +231,7 @@ func fnLayerKey(fn store.LambdaFunction) string {
 // no enabled source and no instrumented function — the shared per-language layer is unused there and can
 // be reclaimed. Granularity is per language+arch so one language's layer is freed even while another
 // language is still instrumented in the same region.
-func eligibleLayerKeys(enabled map[string]struct{}, functions []store.LambdaFunction) map[string]bool {
+func eligibleLayerKeys(enabled map[string]enabledLambdaSource, functions []store.LambdaFunction) map[string]bool {
 	all := map[string]bool{}
 	used := map[string]bool{}
 	for _, fn := range functions {
@@ -265,20 +272,33 @@ func instrumentedLayerKeys(functions []store.LambdaFunction) map[string]bool {
 
 // enabledLambdaSources returns enabled Lambda function ARNs and their OTel service.name values
 // (source override when set, otherwise the source name / discovered workload identity).
-func (i *LambdaInstrumentor) enabledLambdaSources(ctx context.Context) (map[string]struct{}, map[string]string, error) {
+func (i *LambdaInstrumentor) enabledLambdaSources(ctx context.Context) (map[string]enabledLambdaSource, error) {
 	sources, err := i.store.ListSources(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	enabled := make(map[string]struct{})
-	reported := make(map[string]string)
+	enabled := make(map[string]enabledLambdaSource)
 	for _, s := range sources {
 		if s.Kind == store.KindLambda && s.Enabled && s.ExternalResourceID != "" {
-			enabled[s.ExternalResourceID] = struct{}{}
-			reported[s.ExternalResourceID] = s.ReportedServiceName()
+			enabled[s.ExternalResourceID] = enabledLambdaSource{
+				serviceName: s.ReportedServiceName(),
+				distro:      s.Config.DistroOverride.OtelDistroName,
+			}
 		}
 	}
-	return enabled, reported, nil
+	return enabled, nil
+}
+
+// enabledLambdaSource is the per-source intent the instrumentor and the observer both read. It mirrors
+// enabledFargateSource: one struct rather than parallel maps, so a new piece of intent cannot be threaded
+// into one caller and forgotten in the other.
+type enabledLambdaSource struct {
+	serviceName string // reported OTel service.name
+	// distro is the source's distro override, reused here to select WHICH Java wrapper the layer should
+	// install (see javaHandlerWrapperFor). It rides on the existing override rather than a new field
+	// because the source model is generated upstream; ignored for every other language, whose layer ships
+	// exactly one wrapper.
+	distro string
 }
 
 // exporterFor returns the OTel SDK exporter env value for a signal: "otlp" to export it to the in-Lambda
@@ -292,7 +312,8 @@ func exporterFor(supported bool) string {
 	return exporterNone
 }
 
-func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunction, dest domaindest.OTLPTarget, reportedServiceName string) error {
+func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunction, dest domaindest.OTLPTarget, destHeaders map[string]string, src enabledLambdaSource) error {
+	reportedServiceName := src.serviceName
 	if reportedServiceName == "" {
 		reportedServiceName = fn.FunctionName
 	}
@@ -302,7 +323,24 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 	if lang == "" {
 		return fmt.Errorf("%w %q: Odigos has no OpenTelemetry instrumentation for this Lambda language", ErrUnsupportedRuntime, fn.Runtime)
 	}
+	// A distro override naming a wrapper the Java layer does not ship is refused rather than ignored.
+	// Falling back to otel-handler is exactly the behavior this override exists to correct, and doing it
+	// silently would leave a customer who asked for the stream wrapper with a broken function and a report
+	// that says everything is fine.
+	if lang == "java" && javaHandlerWrapperFor(src.distro) == "" {
+		return fmt.Errorf("%w: distro override %q names no OpenTelemetry Java Lambda wrapper (valid values: %s)",
+			ErrUnsupportedInstrumentation, src.distro, strings.Join(sortedMapKeys(JavaHandlerDistros), ", "))
+	}
 	debug := i.debug()
+	// Render the collector's configuration before touching AWS. A destination the collector cannot be
+	// configured for — no usable endpoint, or no accepted signal — is an instrumentation error reported
+	// against the workload, NOT something to discover after the function has been mutated: the previous
+	// behavior wrote an empty endpoint into the env and produced a collector that exited on startup while
+	// the function was still reported as conformant.
+	collectorCfg, err := renderCollectorConfig(dest, destHeaders)
+	if err != nil {
+		return err
+	}
 	// Live progress phases: only written while the function is not yet instrumented, so a steady-state
 	// instrumented function does not flip phases every reconcile (the as-desired path below records the
 	// terminal Instrumented phase via SetLambdaInstrumented).
@@ -362,7 +400,7 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 		// Already instrumented as desired for this mode AND settled (updateInProgress was checked above) —
 		// the function has fully converged. Mark instrumented and clear the in-flight phase so the report
 		// shows the terminal Instrumented state. Skipping the update also avoids churning a new version.
-		if i.instrumentedAsDesired(webServer, fn, env, layers, layerARN, dest, debug, reportedServiceName) {
+		if i.instrumentedAsDesired(webServer, fn, env, layers, layerARN, dest, debug, reportedServiceName, collectorCfg, src.distro) {
 			if err := i.store.SetLambdaInstrumented(ctx, fn.FunctionARN, true); err != nil {
 				log.Warn("set lambda instrumented flag failed", "function", fn.FunctionName, "region", fn.Region, "error", err)
 			}
@@ -385,12 +423,12 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 		manifest := buildManifest(env, layerARN)
 		// Capture any customer edit to a shared, instrumentor-owned env key made AFTER the snapshot was first
 		// taken, so a value the customer set post-instrument is restored (not deleted) on rollback.
-		reconcileCustomerEdits(&manifest, env, i.desiredSharedEnv(webServer, fn.Runtime, reportedServiceName, dest, debug))
+		reconcileCustomerEdits(&manifest, env, i.desiredSharedEnv(webServer, fn.Runtime, reportedServiceName, dest, debug, collectorCfg))
 
 		if webServer {
-			applyWebServerEnv(env, manifest, lang, reportedServiceName, dest)
+			applyWebServerEnv(env, manifest, lang, reportedServiceName, dest, collectorCfg)
 		} else {
-			applyHandlerEnv(env, fn.Runtime, reportedServiceName, dest, debug)
+			applyHandlerEnv(env, fn.Runtime, src.distro, reportedServiceName, dest, debug, collectorCfg)
 		}
 		layers = normalized
 
@@ -457,10 +495,10 @@ func instrumentMode(webServer bool) string {
 // applyHandlerEnv sets the env for a standard RequestHandler function: the OTel handler exec wrapper +
 // collector export vars. The auto-instrumentation exports to the in-Lambda collector on localhost (never
 // blocking the invocation on the remote destination), which forwards to the destination.
-func applyHandlerEnv(env map[string]string, runtime, serviceName string, dest domaindest.OTLPTarget, debug bool) {
-	env[store.EnvExecWrapper] = execWrapperForRuntime(runtime)
+func applyHandlerEnv(env map[string]string, runtime, distro, serviceName string, dest domaindest.OTLPTarget, debug bool, collectorCfg string) {
+	env[store.EnvExecWrapper] = execWrapperForRuntime(runtime, distro)
 	env[EnvServiceName] = serviceName
-	applyCollectorExport(env, dest)
+	applyCollectorExport(env, dest, collectorCfg)
 	if debug {
 		env[EnvOtelLogLevel] = otelLogLevelDebug
 	} else {
@@ -475,7 +513,7 @@ func applyHandlerEnv(env map[string]string, runtime, serviceName string, dest do
 // function's pre-Odigos value from the snapshot, undoing an OTel handler wrapper a prior mis-instrumentation
 // may have set (which is what broke these functions). The agent/SDK exports to the in-Lambda collector on
 // localhost by default; the collector forwards to the destination via the ODIGOS_OTLP_* vars.
-func applyWebServerEnv(env map[string]string, manifest managedManifest, lang, serviceName string, dest domaindest.OTLPTarget) {
+func applyWebServerEnv(env map[string]string, manifest managedManifest, lang, serviceName string, dest domaindest.OTLPTarget, collectorCfg string) {
 	if prev, ok := manifest.PrevEnv[store.EnvExecWrapper]; ok {
 		if prev == nil {
 			delete(env, store.EnvExecWrapper)
@@ -492,31 +530,74 @@ func applyWebServerEnv(env map[string]string, manifest managedManifest, lang, se
 		env[k] = v
 	}
 	env[EnvServiceName] = serviceName
-	applyCollectorExport(env, dest)
+	applyCollectorExport(env, dest, collectorCfg)
 	delete(env, envLegacyOTLPEndpoint)
 	delete(env, envLegacyOTLPHeaders)
 	delete(env, EnvOtelLogLevel)
 }
 
-// applyCollectorExport points the SDK/agent at the in-Lambda collector and enables only the signals the
-// destination accepts (via OTEL_{TRACES,METRICS,LOGS}_EXPORTER=otlp|none), so a signal the backend does
-// not implement — e.g. metrics/logs against a traces-only Jaeger — is never produced or exported.
-func applyCollectorExport(env map[string]string, dest domaindest.OTLPTarget) {
-	env[EnvCollectorEndpoint] = dest.Endpoint
-	env[EnvCollectorInsecure] = strconv.FormatBool(dest.Insecure)
-	env[EnvTracesExporter] = exporterFor(dest.Traces)
-	env[EnvMetricsExporter] = exporterFor(dest.Metrics)
-	env[EnvLogsExporter] = exporterFor(dest.Logs)
+// applyCollectorExport configures the in-Lambda collector and tells the SDK which signals to produce.
+//
+// The collector's entire configuration is rendered per function and passed inline through the layer's own
+// OPENTELEMETRY_COLLECTOR_CONFIG_URI (see collector_config.go), which is what replaced the pair of
+// odigos-namespaced ODIGOS_OTLP_* variables. Those are deleted here so a function instrumented by an earlier
+// version converges instead of carrying two competing descriptions of the same destination.
+func applyCollectorExport(env map[string]string, dest domaindest.OTLPTarget, collectorCfg string) {
+	env[EnvCollectorConfigURI] = collectorCfg
+	applySignalExporters(env, dest)
+	delete(env, EnvCollectorEndpoint)
+	delete(env, EnvCollectorInsecure)
 }
 
-// collectorExportAsDesired reports whether the collector endpoint + per-signal exporters already match the
-// destination, so a change (e.g. the destination gaining/losing a signal) forces a converging re-instrument.
-func collectorExportAsDesired(env map[string]string, dest domaindest.OTLPTarget) bool {
-	return env[EnvCollectorEndpoint] == dest.Endpoint &&
-		env[EnvCollectorInsecure] == strconv.FormatBool(dest.Insecure) &&
-		env[EnvTracesExporter] == exporterFor(dest.Traces) &&
-		env[EnvMetricsExporter] == exporterFor(dest.Metrics) &&
-		env[EnvLogsExporter] == exporterFor(dest.Logs)
+// applySignalExporters disables the signals the destination does not accept and says nothing about the ones
+// it does.
+//
+// Only the "none" side is written, because "otlp" is already every OpenTelemetry SDK's default for all three
+// signals — setting it restated the default in three variables on every function. The "none" side genuinely
+// earns its place: the rendered collector config builds no pipeline for an unaccepted signal, so a signal the
+// SDK still produced would be refused at the receiver on every batch.
+func applySignalExporters(env map[string]string, dest domaindest.OTLPTarget) {
+	setOrDelete(env, EnvTracesExporter, exporterOverrideFor(dest.Traces))
+	setOrDelete(env, EnvMetricsExporter, exporterOverrideFor(dest.Metrics))
+	setOrDelete(env, EnvLogsExporter, exporterOverrideFor(dest.Logs))
+}
+
+// exporterOverrideFor returns the value a signal's OTEL_*_EXPORTER must hold: "none" to suppress a signal the
+// destination does not accept, or "" meaning the variable must be ABSENT because the SDK's own default is
+// already what we want.
+func exporterOverrideFor(supported bool) string {
+	if supported {
+		return ""
+	}
+	return exporterNone
+}
+
+func setOrDelete(env map[string]string, key, value string) {
+	if value == "" {
+		delete(env, key)
+		return
+	}
+	env[key] = value
+}
+
+// collectorExportAsDesired reports whether the rendered collector config and the per-signal exporter
+// overrides already match the destination, so a change — the destination moving, gaining or losing a signal,
+// or gaining a credential — forces a converging re-instrument.
+//
+// A leftover ODIGOS_OTLP_* pair counts as not-as-desired on purpose: it is how a function instrumented before
+// the inline config existed gets migrated exactly once, rather than being left carrying stale variables that
+// nothing reads.
+func collectorExportAsDesired(env map[string]string, dest domaindest.OTLPTarget, collectorCfg string) bool {
+	if _, ok := env[EnvCollectorEndpoint]; ok {
+		return false
+	}
+	if _, ok := env[EnvCollectorInsecure]; ok {
+		return false
+	}
+	return env[EnvCollectorConfigURI] == collectorCfg &&
+		env[EnvTracesExporter] == exporterOverrideFor(dest.Traces) &&
+		env[EnvMetricsExporter] == exporterOverrideFor(dest.Metrics) &&
+		env[EnvLogsExporter] == exporterOverrideFor(dest.Logs)
 }
 
 // Local names for the components the diffs below report. They are ALIASES of the base's vocabulary
@@ -549,11 +630,16 @@ const (
 //
 // It is a pure function of (observed env, observed layers, desired inputs) so the observer can call it on a
 // live read without touching the instrumentor's state or making a single mutating call.
-func instrumentationDiff(webServer bool, fn store.LambdaFunction, env map[string]string, layers []string, layerARN string, dest domaindest.OTLPTarget, debug bool, reportedServiceName string) []string {
-	// No marker: nothing here is attributable to this connector, so there is nothing to compare against.
-	// Reporting the individual components as missing would describe an uninstrumented function as a broken
-	// one — including a customer's own unrelated OpenTelemetry setup.
-	if _, ok := env[store.EnvOdigosManaged]; !ok {
+func instrumentationDiff(webServer bool, fn store.LambdaFunction, env map[string]string, layers []string, layerARN string, dest domaindest.OTLPTarget, debug bool, reportedServiceName, collectorCfg, distro string) []string {
+	// No marker of either kind: nothing here is attributable to Odigos, so there is nothing to compare
+	// against. Reporting the individual components as missing would describe an uninstrumented function as a
+	// broken one — including a customer's own unrelated OpenTelemetry setup.
+	//
+	// Both markers qualify because both mean "Odigos instrumentation was applied here", which is the only
+	// question this gate asks. The mutating path reaches this function through instrumentedAsDesired, where a
+	// diff of zero means "skip the update" — never "this function is mine to roll back", which ownership()
+	// decides on the ownership marker alone.
+	if !store.OdigosInstrumented(env) {
 		return []string{componentOwnershipMarker}
 	}
 	var diff []string
@@ -563,7 +649,7 @@ func instrumentationDiff(webServer bool, fn store.LambdaFunction, env map[string
 	if env[EnvServiceName] != reportedServiceName {
 		diff = append(diff, componentServiceName)
 	}
-	if !collectorExportAsDesired(env, dest) {
+	if !collectorExportAsDesired(env, dest, collectorCfg) {
 		diff = append(diff, componentCollectorExport)
 	}
 	// An empty desired ARN means the layer could not be resolved read-only. The caller decides what that
@@ -593,7 +679,7 @@ func instrumentationDiff(webServer bool, fn store.LambdaFunction, env map[string
 		}
 		return diff
 	}
-	if env[store.EnvExecWrapper] != execWrapperForRuntime(fn.Runtime) {
+	if env[store.EnvExecWrapper] != execWrapperForRuntime(fn.Runtime, distro) {
 		diff = append(diff, componentExecWrapper)
 	}
 	desiredLogLevel := ""
@@ -610,8 +696,8 @@ func instrumentationDiff(webServer bool, fn store.LambdaFunction, env map[string
 // mode, so the update can be skipped (avoiding a new function version every reconcile). A missing marker,
 // stale collector/service vars, a missing/duplicate layer, leftover legacy vars, or (per mode) a missing
 // loader / wrong-or-stale handler wrapper all force a re-instrument to converge.
-func (i *LambdaInstrumentor) instrumentedAsDesired(webServer bool, fn store.LambdaFunction, env map[string]string, layers []string, layerARN string, dest domaindest.OTLPTarget, debug bool, reportedServiceName string) bool {
-	return len(instrumentationDiff(webServer, fn, env, layers, layerARN, dest, debug, reportedServiceName)) == 0
+func (i *LambdaInstrumentor) instrumentedAsDesired(webServer bool, fn store.LambdaFunction, env map[string]string, layers []string, layerARN string, dest domaindest.OTLPTarget, debug bool, reportedServiceName, collectorCfg, distro string) bool {
+	return len(instrumentationDiff(webServer, fn, env, layers, layerARN, dest, debug, reportedServiceName, collectorCfg, distro)) == 0
 }
 
 func (i *LambdaInstrumentor) rollback(ctx context.Context, fn store.LambdaFunction) error {
@@ -637,7 +723,11 @@ func (i *LambdaInstrumentor) rollback(ctx context.Context, fn store.LambdaFuncti
 		// strip a layer or env var by name-matching. Still correct a possibly-stale inventory flag.
 		manifest, owned := i.ownership(ctx, fn, env)
 		if !owned {
-			if err := i.store.SetLambdaInstrumented(ctx, fn.FunctionARN, false); err != nil {
+			// Sync the flag to what is actually on the function rather than to false. A function carrying only
+			// the IaC marker IS instrumented — by the customer's own deployment — and is simply not ours to
+			// roll back; writing false there would contradict discovery and be flipped straight back on its
+			// next pass.
+			if err := i.store.SetLambdaInstrumented(ctx, fn.FunctionARN, store.OdigosInstrumented(env)); err != nil {
 				log.Warn("set lambda instrumented flag failed", "function", fn.FunctionName, "region", fn.Region, "error", err)
 			}
 			return nil
@@ -787,7 +877,10 @@ const managedManifestVersion = 1
 // function exactly — including append-style vars (JAVA_TOOL_OPTIONS/NODE_OPTIONS/PYTHONPATH), where the
 // snapshot is the customer's original value that rollback puts back verbatim.
 var odigosEnvKeys = []string{
-	store.EnvExecWrapper, EnvServiceName, EnvCollectorEndpoint, EnvCollectorInsecure, EnvOtelLogLevel,
+	store.EnvExecWrapper, EnvServiceName, EnvCollectorConfigURI, EnvOtelLogLevel,
+	// No longer set (the inline collector config replaced them) but still snapshotted and stripped, so a
+	// function instrumented by an earlier version is restored cleanly rather than left carrying them.
+	EnvCollectorEndpoint, EnvCollectorInsecure,
 	envLegacyOTLPEndpoint, envLegacyOTLPHeaders,
 	EnvJavaToolOptions, EnvNodeOptions, EnvPythonPath, EnvOtlpProtocol,
 	EnvTracesExporter, EnvMetricsExporter, EnvLogsExporter,
@@ -844,14 +937,28 @@ func priorEnv(m managedManifest, key string) string {
 // vars / exec-wrapper sentinel, which are unambiguously ours, and the append-style loader vars, which are
 // rebuilt from the original snapshot each cycle). Used by reconcileCustomerEdits to tell our own live value
 // apart from a customer edit.
-func (i *LambdaInstrumentor) desiredSharedEnv(webServer bool, runtime, serviceName string, dest domaindest.OTLPTarget, debug bool) map[string]string {
+func (i *LambdaInstrumentor) desiredSharedEnv(webServer bool, runtime, serviceName string, dest domaindest.OTLPTarget, debug bool, collectorCfg string) map[string]string {
 	d := map[string]string{
-		EnvServiceName:     serviceName,
-		EnvTracesExporter:  exporterFor(dest.Traces),
-		EnvMetricsExporter: exporterFor(dest.Metrics),
-		EnvLogsExporter:    exporterFor(dest.Logs),
+		EnvServiceName: serviceName,
+		// The collector's config URI is upstream's variable name, not an odigos-namespaced one, so a customer
+		// running their own collector layer could legitimately have set it. Listing it here is what lets
+		// reconcileCustomerEdits tell their value apart from ours and restore it on rollback.
+		EnvCollectorConfigURI: collectorCfg,
 	}
-	if debug {
+	// Only the signals we actually override are listed. A supported signal has no variable of ours to
+	// confuse with a customer's, so including it would make reconcileCustomerEdits capture the customer's
+	// value as if we had overwritten something.
+	for key, v := range map[string]string{
+		EnvTracesExporter:  exporterOverrideFor(dest.Traces),
+		EnvMetricsExporter: exporterOverrideFor(dest.Metrics),
+		EnvLogsExporter:    exporterOverrideFor(dest.Logs),
+	} {
+		if v != "" {
+			d[key] = v
+		}
+	}
+	// Handler mode is the only mode that sets a log level; applyWebServerEnv always deletes it.
+	if debug && !webServer {
 		d[EnvOtelLogLevel] = otelLogLevelDebug
 	}
 	if webServer && LanguageFromRuntime(runtime) == "python" {
@@ -922,6 +1029,27 @@ func parseManifest(s string) (managedManifest, bool) {
 		return managedManifest{}, false
 	}
 	return m, true
+}
+
+// recordedLayer is the layer-version ARN the applied instrumentation says this function carries, from
+// whichever marker recorded it — empty when neither did.
+//
+// The ownership marker wins when both are present, and that ordering is not arbitrary: both markers coexist
+// only on a function an IaC artifact instrumented and the customer then handed to the connector, and there
+// the connector's own record is the one describing what is actually applied now.
+//
+// One definition rather than two because its two callers must not disagree. desiredLayerARN answers "which
+// layer is this function supposed to carry" and observedPrint answers "has that changed since the last
+// pass"; a print built from a narrower notion of "recorded" than the verdict uses would go on reporting
+// nothing-moved across exactly the change the verdict cares about.
+func recordedLayer(env map[string]string) string {
+	if m, ok := parseManifest(env[store.EnvOdigosManaged]); ok && m.Layer != "" {
+		return m.Layer
+	}
+	if m, ok := baseapi.ParseIaCMarker(env[store.EnvOdigosIaC]); ok {
+		return m.Layer
+	}
+	return ""
 }
 
 // ownership decides whether a function's live state is Odigos-owned and returns the manifest describing

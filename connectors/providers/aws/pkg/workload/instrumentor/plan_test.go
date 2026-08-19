@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 
+	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/config"
@@ -325,7 +326,11 @@ func TestLambdaHandlerPlanEnvMatchesInjector(t *testing.T) {
 		t.Run(lang, func(t *testing.T) {
 			runtime := planRuntimeFor(lang)
 			live := map[string]string{}
-			applyHandlerEnv(live, runtime, "my-fn", dest, false)
+			planCfg, err := renderCollectorConfig(dest, nil)
+			if err != nil {
+				t.Fatalf("renderCollectorConfig: %v", err)
+			}
+			applyHandlerEnv(live, runtime, "", "my-fn", dest, false, planCfg)
 
 			p, err := DesiredLambdaPlan(lang, ActivationHandler)
 			if err != nil {
@@ -335,8 +340,8 @@ func TestLambdaHandlerPlanEnvMatchesInjector(t *testing.T) {
 
 			// The wrapper is language-specific and the wrong value fails at cold start, so it is compared
 			// against the injector's own resolution rather than against a literal.
-			if got := lambdaPlanValue(p, store.EnvExecWrapper); got != execWrapperForRuntime(runtime) {
-				t.Errorf("%s: plan says %q, injector uses %q for runtime %s", store.EnvExecWrapper, got, execWrapperForRuntime(runtime), runtime)
+			if got := lambdaPlanValue(p, store.EnvExecWrapper); got != execWrapperForRuntime(runtime, "") {
+				t.Errorf("%s: plan says %q, injector uses %q for runtime %s", store.EnvExecWrapper, got, execWrapperForRuntime(runtime, ""), runtime)
 			}
 		})
 	}
@@ -351,7 +356,11 @@ func TestLambdaWebServerPlanEnvMatchesInjector(t *testing.T) {
 	for _, lang := range []string{"java", "nodejs", "python"} {
 		t.Run(lang, func(t *testing.T) {
 			live := map[string]string{}
-			applyWebServerEnv(live, managedManifest{Version: managedManifestVersion}, lang, "my-fn", dest)
+			planCfg, err := renderCollectorConfig(dest, nil)
+			if err != nil {
+				t.Fatalf("renderCollectorConfig: %v", err)
+			}
+			applyWebServerEnv(live, managedManifest{Version: managedManifestVersion}, lang, "my-fn", dest, planCfg)
 
 			p, err := DesiredLambdaPlan(lang, ActivationWebServer)
 			if err != nil {
@@ -388,24 +397,38 @@ func TestLambdaWebServerPlanEnvMatchesInjector(t *testing.T) {
 // TestLambdaPlanMarkerRecordsTheLayer: the marker is what desiredLayerARN reads to decide which version the
 // function should carry, so it must name the layer the customer attached — not be left to a resolver that
 // would report a deliberately pinned version as drift.
+//
+// It also pins WHICH marker manual mode publishes. The plan must name the IaC marker and not the ownership
+// marker: the latter's payload is a rollback snapshot of a mutation, and in manual mode no mutation happens,
+// so instructing a customer to hand-author one would have the connector honouring a rollback record nothing
+// produced. Reading it back through the base decoder is what proves the published instructions and the
+// observer agree on the same variable.
 func TestLambdaPlanMarkerRecordsTheLayer(t *testing.T) {
 	p, err := DesiredLambdaPlan("java", ActivationHandler)
 	if err != nil {
 		t.Fatalf("DesiredLambdaPlan: %v", err)
 	}
-	marker := lambdaPlanValue(p, store.EnvOdigosManaged)
-	if marker == "" {
-		t.Fatalf("the plan does not tell a customer to set %s, without which the function reads as untouched", store.EnvOdigosManaged)
+	if got := lambdaPlanValue(p, store.EnvOdigosManaged); got != "" {
+		t.Errorf("the plan tells a manual-mode customer to hand-author %s (%q), which claims a rollback snapshot no mutation produced", store.EnvOdigosManaged, got)
 	}
-	m, ok := parseManifest(marker)
+	marker := lambdaPlanValue(p, store.EnvOdigosIaC)
+	if marker == "" {
+		t.Fatalf("the plan does not tell a customer to set %s, without which the function reads as untouched", store.EnvOdigosIaC)
+	}
+	m, ok := baseapi.ParseIaCMarker(marker)
 	if !ok {
 		t.Fatalf("the connector cannot parse the marker the plan publishes: %s", marker)
 	}
-	if m.Version != managedManifestVersion {
-		t.Errorf("marker version = %d, want %d", m.Version, managedManifestVersion)
+	if m.Version != baseapi.IaCMarkerVersion {
+		t.Errorf("marker version = %d, want %d", m.Version, baseapi.IaCMarkerVersion)
 	}
 	if m.Layer != PlaceholderLayerARN {
 		t.Errorf("marker layer = %q, want the placeholder the customer replaces with the ARN they attached", m.Layer)
+	}
+	// The plan's marker must be the one recordedLayer reads, or manual mode publishes instructions the
+	// observer then measures drift against a different variable from.
+	if got := recordedLayer(map[string]string{store.EnvOdigosIaC: marker}); got != PlaceholderLayerARN {
+		t.Errorf("recordedLayer read %q from the marker the plan publishes, want %q", got, PlaceholderLayerARN)
 	}
 	if got := lambdaPlanValue(p, ""); got != "" {
 		t.Errorf("unexpected value for an unnamed variable: %q", got)
@@ -432,8 +455,8 @@ func TestLambdaArtifactCoverageIsNotVacuous(t *testing.T) {
 
 func TestInstrumentationArtifactsDeclareTheExpectedVariants(t *testing.T) {
 	for typeName, want := range map[string]string{
-		"aws.lambda":       "aws-cli,cloudformation,manual,terraform",
-		"aws.fargate-task": "cloudformation,manual,terraform",
+		"aws.lambda":       "aws-cli,cdk,cloudformation,terraform",
+		"aws.fargate-task": "cloudformation,terraform",
 	} {
 		arts := spec.MustGet("aws").InstrumentationArtifacts(typeName)
 		var variants []string
@@ -530,10 +553,15 @@ func assertLambdaEnvAgrees(t *testing.T, p plan.Plan, live map[string]string) {
 		}
 	}
 	for name, merge := range planned {
-		// The marker is stamped by instrument() after applyHandlerEnv / applyWebServerEnv return, so it is
-		// legitimately absent from the env either of those builds. TestLambdaPlanMarkerRecordsTheLayer checks
-		// it against what the connector reads back, which is the part that has to agree.
-		if name == store.EnvOdigosManaged {
+		// The marker is the ONE variable the plan and the injector are supposed to disagree about, and the
+		// disagreement is the manual/automatic split itself: the plan is what a customer applies in manual
+		// mode, where nothing will ever mutate the function, so it names the IaC marker; the injector mutates
+		// the function itself and stamps the ownership marker, whose payload is the rollback snapshot only a
+		// mutation can produce. (The ownership marker is also stamped by instrument() after applyHandlerEnv /
+		// applyWebServerEnv return, so it is absent from the env either of those builds regardless.)
+		// TestLambdaPlanMarkerRecordsTheLayer checks the plan's marker against what the connector reads back,
+		// which is the part that does have to agree.
+		if name == store.EnvOdigosIaC {
 			continue
 		}
 		_, set := live[name]

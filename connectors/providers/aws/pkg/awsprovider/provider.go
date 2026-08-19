@@ -171,7 +171,7 @@ func (p *Provider) Reconcilers() map[string]baseapi.Reconciler {
 // no observer rather than letting an unobserved type look observed.
 func (p *Provider) WorkloadObservers() map[string]baseapi.InstrumentationObserver {
 	return map[string]baseapi.InstrumentationObserver{
-		types.Lambda: workloadinstrumentor.NewLambdaObserver(p.workloadStdb, p.cache, p.layers, p.debugTelemetry),
+		types.Lambda: workloadinstrumentor.NewLambdaObserver(p.workloadStdb, p.cache, p.debugTelemetry),
 		types.FargateTask: workloadinstrumentor.NewECSFargateObserver(
 			p.workloadStdb, p.cache, p.cfg.FargateAgentsImage, p.debugEcsTelemetry, p.ecrImages),
 	}

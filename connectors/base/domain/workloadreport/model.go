@@ -496,6 +496,20 @@ func sinceOrNil(t time.Time) *string {
 	return &s
 }
 
+// waitingForLabel renders a blocked prerequisite as the stage and issue code a client displays.
+//
+// WaitingForCustomer is spelled out with spaces because it is the one wait a PERSON has to act on: it names the
+// manual (IaC) flow, where nothing converges the workload until the customer applies the instrumentation to
+// their own deployment definition, so the label is read as an instruction rather than as a machine state. The
+// others are preconditions that clear themselves — a destination gets configured and the wait ends with nobody
+// touching the workload — and they keep the compact form.
+func waitingForLabel(waitingFor string) string {
+	if waitingFor == api.WaitingForCustomer {
+		return "Waiting For Customer"
+	}
+	return "WaitingFor" + capitalizeFirst(waitingFor)
+}
+
 func capitalizeFirst(s string) string {
 	if s == "" {
 		return s

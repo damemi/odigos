@@ -53,6 +53,20 @@ const (
 	execWrapperInstrument = "/opt/otel-instrument" // python
 	execWrapperHandler    = "/opt/otel-handler"    // nodejs, java, ruby
 
+	// The Java layer ships FOUR wrapper scripts, one per handler interface, and picking the wrong one is not
+	// a matter of richer or poorer spans. otel-handler installs TracingRequestWrapper, which implements
+	// RequestHandler; a function implementing RequestStreamHandler has a different signature entirely, so
+	// wrapping it that way breaks the invocation. otel-proxy-handler and otel-sqs-handler are the enriched
+	// wrappers for API Gateway proxy and SQS events — a function that should use one of those still runs
+	// under otel-handler, just with generic POJO spans.
+	//
+	// Nothing in GetFunctionConfiguration says which interface a handler implements: the handler string is a
+	// class name either way. So the connector cannot detect this, and the customer selects it on the source
+	// (see javaHandlerWrapperFor).
+	execWrapperProxyHandler  = "/opt/otel-proxy-handler"  // java, API Gateway proxy events
+	execWrapperSqsHandler    = "/opt/otel-sqs-handler"    // java, SQS events
+	execWrapperStreamHandler = "/opt/otel-stream-handler" // java, RequestStreamHandler
+
 	// Web-server mode (AWS Lambda Web Adapter) loader env vars + the value Odigos appends. These functions
 	// run a normal web server, not a Lambda RequestHandler, so they cannot use the OTel handler exec
 	// wrapper (the adapter already owns AWS_LAMBDA_EXEC_WRAPPER=/opt/bootstrap). Instead the language agent
@@ -279,11 +293,40 @@ func layerKey(region, language, arch string) string {
 	return region + "/" + language + "/" + arch
 }
 
+// JavaHandlerDistros are the values a source's distro override may carry to select a Java wrapper. They are
+// the layer's own script names so the value a customer sets is the thing they can see in the layer, rather
+// than an Odigos synonym for it.
+var JavaHandlerDistros = map[string]string{
+	"otel-handler":        execWrapperHandler,
+	"otel-proxy-handler":  execWrapperProxyHandler,
+	"otel-sqs-handler":    execWrapperSqsHandler,
+	"otel-stream-handler": execWrapperStreamHandler,
+}
+
+// javaHandlerWrapperFor resolves a source's distro override to a Java wrapper script. An empty override
+// keeps otel-handler, which is what an unconfigured source has always got; an unrecognized one returns ""
+// so the caller refuses rather than silently falling back — silently falling back is the behavior that
+// leaves a stream-handler function broken, which is what this override exists to fix.
+func javaHandlerWrapperFor(distro string) string {
+	if distro == "" {
+		return execWrapperHandler
+	}
+	return JavaHandlerDistros[distro]
+}
+
 // execWrapperForRuntime returns the AWS_LAMBDA_EXEC_WRAPPER value the OTel layer expects for a function's
-// runtime, or "" for an unsupported runtime (the caller then declines to instrument rather than set a
-// wrapper the layer does not provide).
-func execWrapperForRuntime(runtime string) string {
-	return execWrapperForLanguage(LanguageFromRuntime(runtime))
+// runtime, or "" when there is none — an unsupported runtime, or a Java distro override naming a wrapper
+// the layer does not ship. The caller declines to instrument in both cases rather than setting a wrapper
+// that fails at cold start.
+//
+// distro is the source's distro override and is only consulted for Java: every other language's layer ships
+// exactly one wrapper, so an override there would be a choice between one option.
+func execWrapperForRuntime(runtime, distro string) string {
+	lang := LanguageFromRuntime(runtime)
+	if lang == "java" {
+		return javaHandlerWrapperFor(distro)
+	}
+	return execWrapperForLanguage(lang)
 }
 
 // execWrapperForLanguage is the same mapping keyed by the OTel layer language rather than by an AWS runtime
@@ -305,8 +348,14 @@ func execWrapperForLanguage(lang string) string {
 // language wrapper). Used when attributing ownership / capturing prior config so a function carrying our
 // wrapper — including one a pre-fix connector set to the wrong language value — is recognized as ours and
 // its wrapper is removed (not "restored") on rollback.
+// Every Java variant counts: a function instrumented with otel-stream-handler must still be recognized as
+// ours, or rollback would leave the wrapper behind and ownership detection would read it as a customer's.
 func isOdigosExecWrapper(v string) bool {
-	return v == execWrapperInstrument || v == execWrapperHandler
+	switch v {
+	case execWrapperInstrument, execWrapperHandler, execWrapperProxyHandler, execWrapperSqsHandler, execWrapperStreamHandler:
+		return true
+	}
+	return false
 }
 
 // isJavaHandler reports whether a Lambda handler string is a standard Java RequestHandler reference the
@@ -638,20 +687,30 @@ func (r *ManagedLayerResolver) publish(ctx context.Context, region, lang, arch s
 	return aws.ToString(out.LayerVersionArn), nil
 }
 
-// compatibleRuntimes is the runtime set the published layer advertises (so account discovery and AWS
-// accept it across minor runtime versions). Built from strings to avoid coupling to specific SDK enum
-// constants.
+// compatibleRuntimes is the runtime set the published layer advertises. Built from strings to avoid coupling
+// to specific SDK enum constants, but kept in step with them — every value below exists in
+// lambdatypes.Runtime, and the list is every non-retired version of each language AWS currently offers.
+//
+// A missing entry is not cosmetic. AWS does not enforce CompatibleRuntimes when a layer is attached, so
+// instrumentation still works; what breaks is DISCOVERY. AccountLayerResolver finds a previously-published
+// layer with lambda:ListLayers filtered by the function's runtime, so a layer that does not advertise
+// python3.14 is invisible to a python3.14 function — and the resolver then publishes a second, identical
+// layer version on every fresh region/language, quietly accumulating them.
+//
+// The lists run wider than LanguageFromRuntime needs on purpose: that function prefix-matches, so it already
+// routes java8.al2 and ruby4.0 to a language, and the layer has to be discoverable for the runtimes the
+// connector will in fact try to instrument.
 func compatibleRuntimes(lang string) []lambdatypes.Runtime {
 	var names []string
 	switch lang {
 	case "python":
-		names = []string{"python3.10", "python3.11", "python3.12", "python3.13"}
+		names = []string{"python3.9", "python3.10", "python3.11", "python3.12", "python3.13", "python3.14"}
 	case "nodejs":
-		names = []string{"nodejs18.x", "nodejs20.x", "nodejs22.x"}
+		names = []string{"nodejs18.x", "nodejs20.x", "nodejs22.x", "nodejs24.x"}
 	case "java":
-		names = []string{"java11", "java17", "java21"}
+		names = []string{"java8.al2", "java11", "java17", "java21", "java25"}
 	case "ruby":
-		names = []string{"ruby3.2", "ruby3.3", "ruby3.4"}
+		names = []string{"ruby3.2", "ruby3.3", "ruby3.4", "ruby4.0"}
 	}
 	out := make([]lambdatypes.Runtime, len(names))
 	for i, n := range names {

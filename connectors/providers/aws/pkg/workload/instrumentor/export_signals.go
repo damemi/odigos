@@ -4,55 +4,72 @@ import (
 	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 )
 
-// The asymmetric export-signal rule, shared by the Lambda and Fargate observers.
+// The asymmetric export-signal rule, shared by every platform's observer.
 //
-// It lives in a file of its own because it is the one piece of conformance logic BOTH platforms must apply
-// identically. Two platforms disagreeing about what drift means is the bug this exists to prevent, and a rule
-// duplicated per platform is a rule that drifts — so each observer narrows through narrowedSignals rather than
-// re-deriving the comparison itself.
+// It lives in a file of its own because it is the one piece of conformance logic all platforms must apply
+// identically, and neither Lambda nor Fargate is the right owner of a rule the other depends on.
 
-// narrowedSignals restricts a destination's (traces, metrics, logs) to the signals a workload actually exports.
+// narrowedSignals is the asymmetric rule itself: given the signals a destination accepts, it returns the set a
+// manually-instrumented workload should be HELD TO, read from the workload's own OTEL_*_EXPORTER variables.
 //
-// The DIRECTION is the whole rule. Exporting FEWER signals than the destination accepts is a legitimate choice a
-// manually-instrumented workload's own definition is entitled to make: it costs nothing and loses nothing Odigos
-// was promised, so reporting it as drift told a customer to re-apply instrumentation over a decision they made
-// deliberately. Exporting one the destination does NOT accept is the harmful direction — the signal has no
-// pipeline at the far end, so every batch is refused and the collector retries it on an exponential backoff,
-// inside billed duration for a Lambda and against the task's own CPU for Fargate.
+// It is shared by every platform's observer on purpose. "Drift" meaning one thing on Lambda and another on
+// Fargate is not a cosmetic inconsistency — it is the same workload shape reported as healthy or broken
+// depending on which service it happens to run on, and a customer being told to re-apply instrumentation they
+// deliberately narrowed. One predicate makes that divergence impossible rather than merely unlikely, and the
+// per-platform wrappers (narrowToExportedSignals, narrowExportToContainerSignals) hold nothing but the shape
+// conversion.
 //
-// Two cases deliberately do NOT narrow, so the caller's exact comparison reports them:
+// Two inputs deliberately return the destination UNCHANGED, so that the caller's comparison — which is an
+// equality check against the destination's set — reports them as drift:
 //
-//   - a signal exported that the destination does not accept (the harmful direction above);
-//   - a workload exporting NO signal at all, which is not a narrower choice but a collector with no pipeline —
-//     it fails to start, leaving the workload instrumented and silent.
+//   - a signal exported that the destination does not accept. This is the harmful direction: the signal has no
+//     pipeline at the far end, so every batch is refused and retried on a backoff, paying for telemetry that
+//     is discarded.
+//   - NO signal exported at all. That is not a narrower choice but an agent asked to produce nothing, which
+//     leaves the workload instrumented and silent — the failure a conformance verdict exists to catch.
 //
-// This is the OBSERVER's rule and never the mutating path's. When the connector owns a workload it writes the
-// export configuration itself and must converge it to the destination's full signal set; tolerating a subset
-// there would let it keep exporting less than Odigos asked for, forever, with nothing left to report it.
+// Absence of a variable means the signal IS exported (see signalExported), so a workload only narrows by saying
+// "none" explicitly — which is exactly what the manual-mode plan tells customers to do per signal.
 func narrowedSignals(env map[string]string, traces, metrics, logs bool) (bool, bool, bool) {
-	exportsTraces := signalExported(env, EnvTracesExporter)
-	exportsMetrics := signalExported(env, EnvMetricsExporter)
-	exportsLogs := signalExported(env, EnvLogsExporter)
+	t := signalExported(env, EnvTracesExporter)
+	m := signalExported(env, EnvMetricsExporter)
+	l := signalExported(env, EnvLogsExporter)
 
-	if (exportsTraces && !traces) || (exportsMetrics && !metrics) || (exportsLogs && !logs) {
+	if (t && !traces) || (m && !metrics) || (l && !logs) {
 		return traces, metrics, logs
 	}
-	if !exportsTraces && !exportsMetrics && !exportsLogs {
+	if !t && !m && !l {
 		return traces, metrics, logs
 	}
-	return exportsTraces, exportsMetrics, exportsLogs
+	return t, m, l
 }
 
-// signalExported reports whether a workload's SDK is configured to produce a signal, read back off its
-// OTEL_*_EXPORTER variable. Absent means the SDK default ("otlp") applies, so ABSENCE IS ENABLED — the same
-// convention exporterFor writes.
+// signalExported reports whether the SDK is configured to produce a signal, from its OTEL_*_EXPORTER variable.
+// Absent means the SDK default ("otlp") applies, so absence is ENABLED — the same convention
+// exporterOverrideFor writes, read back.
 func signalExported(env map[string]string, key string) bool {
 	return env[key] != exporterNone
 }
 
-// narrowToExportedSignals is narrowedSignals over an OTLPTarget — the Lambda observer's shape. Only the three
-// signal flags move; the transport (endpoint, HTTP endpoint, TLS) is carried through untouched, because those
-// stay an exact comparison in instrumentationDiff.
+// narrowToExportedSignals returns dest restricted to the signals a Lambda function actually exports, which is
+// what makes the export check ASYMMETRIC: exporting FEWER signals than the destination accepts is a legitimate
+// choice, exporting one it does not accept is drift.
+//
+// The direction is the whole point. A signal the destination accepts but the function does not send costs
+// nothing and loses nothing Odigos was promised — a customer instrumenting for traces against a destination
+// that also takes metrics and logs has configured exactly what they meant. A signal the function sends that the
+// destination does NOT accept is the harmful case: it has no pipeline to be received on, so every batch is
+// refused and the in-Lambda collector retries it on an exponential backoff inside billed duration.
+//
+// Narrowing rather than comparing signal sets directly is what keeps ONE comparator. The rest of the export
+// configuration — transport, endpoint, credential, processors, receivers — must still match byte for byte, and
+// re-rendering the desired document for the narrowed signal set means the existing string comparison enforces
+// all of that unchanged, while the pipelines it contains are the ones this function is entitled to have.
+//
+// This is the OBSERVER's rule and not the instrumentor's. When the connector owns a function it writes the
+// export configuration itself and must converge it to the destination's full signal set; tolerating a subset
+// there would let a function keep exporting less than Odigos asked for, forever. Manual mode is the opposite:
+// the customer's deployment definition is the author, and a narrower choice in it is a decision to respect.
 func narrowToExportedSignals(dest domaindest.OTLPTarget, env map[string]string) domaindest.OTLPTarget {
 	dest.Traces, dest.Metrics, dest.Logs = narrowedSignals(env, dest.Traces, dest.Metrics, dest.Logs)
 	return dest

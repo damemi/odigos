@@ -594,80 +594,22 @@ setup:
     # form value is left verbatim — so a per-workload token spelled that way renders as a bug rather than as
     # a field to fill in.
     #
+    # Each artifact is a DELIVERY VARIANT of the same change (Terraform, CloudFormation, AWS CLI, AWS CDK for
+    # Lambda; Terraform and CloudFormation for Fargate) and has to stand on its own: a customer opens one and
+    # applies it, so per-language detail lives in every variant rather than in a shared prose artifact that
+    # only one of them points at.
+    #
     # These templates are checked against the connector's own injection recipes by
-    # TestInstrumentationArtifactsMatchPlans (providers/aws). Every environment variable name, value, agent
-    # path, container name and staging command below is asserted to be what the instrumentor would actually
-    # apply — because nothing converges a manual-mode workload, so instructions that have drifted from the
+    # TestLambdaInstrumentationArtifactsMatchPlans and TestFargateInstrumentationArtifactsMatchPlans
+    # (providers/aws, pkg/workload/instrumentor). Every environment variable name, value, agent path,
+    # container name and staging command below is asserted to be what the instrumentor would actually apply
+    # — because nothing converges a manual-mode workload, so instructions that have drifted from the
     # injector leave a customer applying a previous release's configuration and reading a drift verdict they
     # cannot attribute. Do not hand-edit a value here to "fix" a failure; fix the recipe or update both.
+    #
+    # The coverage guard also enforces that every value EVERY plan needs appears in EVERY variant, so a new
+    # variant that omits the marker or the collector configuration fails rather than shipping half a recipe.
     # ---------------------------------------------------------------------------------------------------
-
-    - id: instrument-lambda-manual
-      section: instrumentation:aws.lambda
-      variant: manual
-      variantLabel: Reference
-      title: Instrument a Lambda function yourself
-      description: >-
-        The complete change, per language. Read this first: it is the reference the Terraform,
-        CloudFormation and CLI variants show one worked example of.
-      format: text
-      steps:
-        - Decide which activation your function uses — see "Two activations" below. Applying the wrong one breaks the function.
-        - Attach the OpenTelemetry Lambda layer for your function's region, runtime and architecture, alongside your existing layers.
-        - Set the environment variables for your language and activation.
-        - Set ODIGOS_MANAGED, recording the exact layer version ARN you attached.
-      template: |-
-        TWO ACTIVATIONS. A normal RequestHandler function is instrumented by the layer's exec wrapper
-        (AWS_LAMBDA_EXEC_WRAPPER). A function running a web server behind the AWS Lambda Web Adapter is
-        NOT: the adapter already owns that variable, so the language agent is loaded through its own
-        variable instead. Odigos detects which from the function's layers; apply the matching column.
-
-        ALWAYS, both activations:
-          ODIGOS_MANAGED         = {"v":1,"layer":"<OTEL_LAYER_ARN>"}
-          OTEL_SERVICE_NAME      = <ODIGOS_SOURCE_NAME>
-          ODIGOS_OTLP_ENDPOINT   = <OTLP_ENDPOINT>
-          ODIGOS_OTLP_INSECURE   = <OTLP_INSECURE>
-          OTEL_TRACES_EXPORTER   = otlp
-          OTEL_METRICS_EXPORTER  = otlp
-          OTEL_LOGS_EXPORTER     = otlp
-
-        MUST NOT be set (Odigos compares each against unset, so a leftover value is reported as drift):
-          OTEL_EXPORTER_OTLP_ENDPOINT
-          OTEL_EXPORTER_OTLP_HEADERS
-          OTEL_LOG_LEVEL               (unless this connector has debug telemetry enabled: then "debug")
-
-        HANDLER activation — set the layer's wrapper script. It is language-specific; the wrong value makes
-        the function fail at cold start with "does not exist":
-          python                  AWS_LAMBDA_EXEC_WRAPPER = /opt/otel-instrument
-          nodejs / java / ruby    AWS_LAMBDA_EXEC_WRAPPER = /opt/otel-handler
-
-        WEB-SERVER activation (AWS Lambda Web Adapter) — REMOVE AWS_LAMBDA_EXEC_WRAPPER and load the agent
-        through the language's own variable. APPEND or PREPEND as stated: these variables normally already
-        carry your own value, and assigning ours would discard it.
-          java     JAVA_TOOL_OPTIONS  append " " + "-javaagent:/opt/opentelemetry-javaagent.jar"
-          nodejs   NODE_OPTIONS       append " " + "--import /opt/init.mjs"
-          python   PYTHONPATH         prepend ":" + "/opt/python:/opt/python/opentelemetry/instrumentation/auto_instrumentation:/var/task:/var/task/site-packages"
-                   plus OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
-                   (PREPEND, not append: the layer's OpenTelemetry packages and its sitecustomize must
-                    resolve before your application's own, or auto-instrumentation loads nothing. The extra
-                    /var/task entries are there because a web-server process gets no automatic /var/task on
-                    sys.path.)
-          ruby     not supported yet — no verified web-server loader.
-
-        NOTES
-        - ODIGOS_MANAGED is the ONLY thing that tells Odigos this function is instrumented. Without it the
-          function is reported as awaiting your deployment however completely the rest is applied.
-        - Record the layer ARN you actually attached. Odigos checks the function against the recorded
-          version, so pinning your own is respected instead of being reported as drift.
-        - <OTEL_LAYER_ARN> is per region, runtime and architecture. Attach at most 5 layers in total (the AWS
-          limit) and never two versions of the same layer — a duplicate is reported as a version conflict.
-        - OTEL_SERVICE_NAME must match the workload's name in Odigos, or it is reported as drift.
-        - Set any exporter to "none" for a signal your destination does not accept.
-        - If your function already sets AWS_LAMBDA_EXEC_WRAPPER to something of its own, Odigos reports it as
-          unsupported rather than taking the wrapper: a function has only one, and taking it would disable
-          your tooling.
-        - Java handler activation needs a standard class[::method] handler. A script handler (run.sh,
-          bootstrap) is a web-server function.
 
     - id: instrument-lambda-terraform
       section: instrumentation:aws.lambda
@@ -675,8 +617,8 @@ setup:
       variantLabel: Terraform
       title: Instrument a Lambda function (Terraform)
       description: >-
-        Anchored fragments for aws_lambda_function. Shown for handler activation on Java; see the Reference
-        variant for the other languages and for web-server activation.
+        Anchored fragments for aws_lambda_function. Worked example is handler activation on Java; the
+        comments at the end of the template carry the other languages and web-server activation.
       format: shell
       steps:
         - Add the layer to your function's layers list — keep the ones already there.
@@ -692,17 +634,20 @@ setup:
           environment {
             variables = {
               # The value, unescaped, is exactly: {"v":1,"layer":"<OTEL_LAYER_ARN>"}
-              ODIGOS_MANAGED          = "{\"v\":1,\"layer\":\"<OTEL_LAYER_ARN>\"}"
+              ODIGOS_IAC              = "{\"v\":1,\"layer\":\"<OTEL_LAYER_ARN>\"}"
               AWS_LAMBDA_EXEC_WRAPPER = "/opt/otel-handler" # python: /opt/otel-instrument
               OTEL_SERVICE_NAME       = "<ODIGOS_SOURCE_NAME>"
-              ODIGOS_OTLP_ENDPOINT    = "<OTLP_ENDPOINT>"
-              ODIGOS_OTLP_INSECURE    = "<OTLP_INSECURE>"
-              OTEL_TRACES_EXPORTER    = "otlp"
-              OTEL_METRICS_EXPORTER   = "otlp"
-              OTEL_LOGS_EXPORTER      = "otlp"
+              # The in-Lambda collector's entire configuration. Substitute the two placeholders and change
+              # nothing else — Odigos compares the whole value. The space after every colon is required.
+              # The value, unescaped, is exactly:
+              #   yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: "<OTLP_ENDPOINT>", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}
+              OPENTELEMETRY_COLLECTOR_CONFIG_URI = "yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: \"localhost:4317\"}, http: {endpoint: \"localhost:4318\"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: \"<OTLP_ENDPOINT>\", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}"
 
-              # Do NOT add OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_HEADERS or OTEL_LOG_LEVEL.
+              # Do NOT add OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_HEADERS, OTEL_LOG_LEVEL,
+              # ODIGOS_OTLP_ENDPOINT or ODIGOS_OTLP_INSECURE.
               # Odigos compares each against unset; a value here is reported as instrumentation drift.
+              # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be UNSET for a signal
+              # your destination accepts, and "none" for one it does not (also delete that pipeline).
             }
           }
         }
@@ -725,8 +670,8 @@ setup:
       variantLabel: CloudFormation
       title: Instrument a Lambda function (CloudFormation)
       description: >-
-        The AWS::Lambda::Function properties to merge. Shown for handler activation; see the Reference
-        variant for the other languages and for web-server activation.
+        The AWS::Lambda::Function properties to merge. Worked example is handler activation; the comments in
+        the template carry the other languages and web-server activation.
       format: yaml
       steps:
         - Merge these properties into your function resource.
@@ -739,17 +684,18 @@ setup:
           - "<OTEL_LAYER_ARN>"
         Environment:
           Variables:
-            ODIGOS_MANAGED: '{"v":1,"layer":"<OTEL_LAYER_ARN>"}'
+            ODIGOS_IAC: '{"v":1,"layer":"<OTEL_LAYER_ARN>"}'
             # Language-specific: /opt/otel-instrument for python, /opt/otel-handler for nodejs/java/ruby.
             AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-handler"
             OTEL_SERVICE_NAME: "<ODIGOS_SOURCE_NAME>"
-            ODIGOS_OTLP_ENDPOINT: "<OTLP_ENDPOINT>"
-            ODIGOS_OTLP_INSECURE: "<OTLP_INSECURE>"
-            OTEL_TRACES_EXPORTER: "otlp"
-            OTEL_METRICS_EXPORTER: "otlp"
-            OTEL_LOGS_EXPORTER: "otlp"
-            # Do NOT set OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_HEADERS or OTEL_LOG_LEVEL —
-            # each is compared against unset, so a value is reported as instrumentation drift.
+            # The in-Lambda collector's entire configuration. Substitute the two placeholders and change
+            # nothing else — Odigos compares the whole value. The space after every colon is required.
+            OPENTELEMETRY_COLLECTOR_CONFIG_URI: 'yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: "<OTLP_ENDPOINT>", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}'
+            # Do NOT set OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_HEADERS, OTEL_LOG_LEVEL,
+            # ODIGOS_OTLP_ENDPOINT or ODIGOS_OTLP_INSECURE — each is compared against unset, so a value
+            # is reported as instrumentation drift. OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and
+            # OTEL_LOGS_EXPORTER must be UNSET for a signal your destination accepts, and "none" for one
+            # it does not (also delete that signal's pipeline from the configuration above).
             #
             # Web-server activation (AWS Lambda Web Adapter): remove AWS_LAMBDA_EXEC_WRAPPER and append the
             # language loader to your existing value — java JAVA_TOOL_OPTIONS " -javaagent:/opt/opentelemetry-javaagent.jar",
@@ -768,6 +714,7 @@ setup:
       format: shell
       steps:
         - Set the variables at the top, including the layer ARN for your function's region, runtime and architecture.
+        - Replace <OTLP_ENDPOINT> and <OTLP_INSECURE> inside odigos-env.json, and re-list any variables your function already needs.
         - Run the script. It merges the OpenTelemetry layer into the function's existing layers.
         - Re-run it after any deploy that resets the function configuration.
       template: |-
@@ -775,29 +722,45 @@ setup:
         LAYER="<OTEL_LAYER_ARN>"
         WRAPPER="/opt/otel-handler"   # python: /opt/otel-instrument
 
-        # ODIGOS_MANAGED must end up holding exactly: {"v":1,"layer":"<OTEL_LAYER_ARN>"}
-        # (the shell escaping below produces that; $LAYER is substituted for the placeholder).
+        # The environment goes through a JSON file rather than the Variables={...} shorthand: the collector
+        # configuration contains commas and braces, which that shorthand cannot represent.
         #
+        # The two JSON-escaped values below are, unescaped, exactly:
+        #   ODIGOS_IAC                         {"v":1,"layer":"<OTEL_LAYER_ARN>"}
+        #   OPENTELEMETRY_COLLECTOR_CONFIG_URI yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: "<OTLP_ENDPOINT>", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}
+        #
+        # --environment REPLACES the whole map, so add any variables your function already needs here too.
+        # Substitute <OTLP_ENDPOINT> and <OTLP_INSECURE>; change nothing else in the collector configuration,
+        # including the space after every colon.
+        cat > odigos-env.json <<'JSON'
+        {
+          "Variables": {
+            "ODIGOS_IAC": "{\"v\":1,\"layer\":\"<OTEL_LAYER_ARN>\"}",
+            "AWS_LAMBDA_EXEC_WRAPPER": "<WRAPPER>",
+            "OTEL_SERVICE_NAME": "<ODIGOS_SOURCE_NAME>",
+            "OPENTELEMETRY_COLLECTOR_CONFIG_URI": "yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: \"localhost:4317\"}, http: {endpoint: \"localhost:4318\"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: \"<OTLP_ENDPOINT>\", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}"
+          }
+        }
+        JSON
+        sed -i.bak -e "s|<OTEL_LAYER_ARN>|$LAYER|g" -e "s|<WRAPPER>|$WRAPPER|g" odigos-env.json && rm -f odigos-env.json.bak
+
         # Keep the layers already attached — this appends ours rather than replacing them.
         EXISTING=$(aws lambda get-function-configuration --function-name "$FUNCTION" \
           --query 'Layers[].Arn' --output text | tr '\t' ' ')
+        # A function with no layers has no Layers key at all, and the query then renders as the literal
+        # "None" — which would be passed on as a layer ARN and fail the update. Blank it.
+        [ "$EXISTING" = "None" ] && EXISTING=""
 
         aws lambda update-function-configuration \
           --function-name "$FUNCTION" \
           --layers $EXISTING "$LAYER" \
-          --environment "Variables={\
-        ODIGOS_MANAGED='{\"v\":1,\"layer\":\"$LAYER\"}',\
-        AWS_LAMBDA_EXEC_WRAPPER=$WRAPPER,\
-        OTEL_SERVICE_NAME=<ODIGOS_SOURCE_NAME>,\
-        ODIGOS_OTLP_ENDPOINT=<OTLP_ENDPOINT>,\
-        ODIGOS_OTLP_INSECURE=<OTLP_INSECURE>,\
-        OTEL_TRACES_EXPORTER=otlp,\
-        OTEL_METRICS_EXPORTER=otlp,\
-        OTEL_LOGS_EXPORTER=otlp}"
+          --environment file://odigos-env.json
 
-        # --environment REPLACES the whole map, so re-list any variables your function already needs.
-        # Do not add OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_HEADERS or OTEL_LOG_LEVEL: each is
-        # compared against unset and a value is reported as instrumentation drift.
+        # Do not add OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_HEADERS, OTEL_LOG_LEVEL,
+        # ODIGOS_OTLP_ENDPOINT or ODIGOS_OTLP_INSECURE: each is compared against unset and a value is
+        # reported as instrumentation drift. OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and
+        # OTEL_LOGS_EXPORTER must be UNSET for a signal your destination accepts, and "none" for one it
+        # does not (also delete that signal's pipeline from the configuration above).
         #
         # Web-server activation (AWS Lambda Web Adapter): drop AWS_LAMBDA_EXEC_WRAPPER and append the
         # language loader to the value the function already has —
@@ -806,124 +769,124 @@ setup:
         #   python  PYTHONPATH         prepend "/opt/python:/opt/python/opentelemetry/instrumentation/auto_instrumentation:/var/task:/var/task/site-packages"
         #           plus OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 
-    - id: instrument-fargate-manual
-      section: instrumentation:aws.fargate-task
-      variant: manual
-      variantLabel: Reference
-      title: Instrument an ECS Fargate service yourself
+    - id: instrument-lambda-cdk
+      section: instrumentation:aws.lambda
+      variant: cdk
+      variantLabel: AWS CDK
+      title: Instrument a Lambda function (AWS CDK)
       description: >-
-        The complete change, per language. Read this first: it is the reference the Terraform and
-        CloudFormation variants show one worked example of.
+        For a function defined in a TypeScript/JavaScript CDK app, using the Odigos CDK constructs, which
+        resolve the layer ARN, render the collector configuration and write the IaC marker for you.
       format: text
       steps:
-        - Add the shared volume and the agent-staging container to the task definition.
-        - Mount the volume read-only into each application container and make it depend on the staging container.
-        - Set the environment variables for each application container's language.
-        - Register the revision, then update the service to it.
+        - Install @odigos/aws-cdk in the app that defines the function, pinned to an exact version — the package version IS the layer version.
+        - Add one OdigosLambdaInstrumentation per function, passing serviceName explicitly.
+        - Run cdk diff to check the layer and the variables, then cdk deploy. Your function code is untouched, so this is a configuration-only update.
       template: |-
-        The agent is staged by a container, not baked into your image: "odigos-agent" copies the language
-        agent into a shared volume that your application container reads at /var/odigos.
+        npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
 
-        TASK DEFINITION (once per task definition)
-          volumes:
-            - a bare-name volume "odigos-agent" — no host, docker or EFS configuration. On Fargate that is
-              an ephemeral-storage bind mount scoped to the task (Fargate has no tmpfs).
-          containerDefinitions: add
-            name       = odigos-agent
-            image      = registry.odigos.io/odigos-fargate-agents:v0.0.9
-            essential  = false          # it stages the agent and exits 0
-            command    = ["sh", "-c", "<the staging command for your language, below>"]
-            mountPoints = [{ sourceVolume = odigos-agent, containerPath = /var/odigos }]
+        WHAT THE CONSTRUCT DOES. It attaches the layer for each function's language and architecture, sets
+        AWS_LAMBDA_EXEC_WRAPPER for that language, sets OTEL_SERVICE_NAME, renders
+        OPENTELEMETRY_COLLECTOR_CONFIG_URI — the same renderer this connector uses, so the value matches byte
+        for byte — and writes ODIGOS_IAC recording the layer it attached, which is what makes Odigos report
+        the function as instrumented rather than as awaiting your deployment. Nothing below has to be added
+        by hand.
 
-        EACH APPLICATION CONTAINER
-          mountPoints  += { sourceVolume = odigos-agent, containerPath = /var/odigos, readOnly = true }
-          dependsOn    += { containerName = odigos-agent, condition = SUCCESS }
-          environment  += the variables below
+        What it does NOT set is ODIGOS_MANAGED. That is the connector's record of a mutation IT performed,
+        including the snapshot it rolls back from, and the package will not claim ownership of a function on
+        your behalf. Do not add it yourself.
 
-        ALWAYS, every language:
-          ODIGOS_MANAGED              = {"v":1,"lang":"<your language>"}
-          OTEL_SERVICE_NAME           = <ODIGOS_SOURCE_NAME>
-          OTEL_RESOURCE_ATTRIBUTES    = cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>
-          OTEL_EXPORTER_OTLP_ENDPOINT = <OTLP_ENDPOINT_URL>
-          OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
-          OTEL_TRACES_EXPORTER        = otlp
-          OTEL_METRICS_EXPORTER       = otlp
-          OTEL_LOGS_EXPORTER          = otlp
-        OTEL_LOG_LEVEL must NOT be set (compared against unset; a value is reported as drift) unless this
-        connector has debug telemetry enabled, in which case set it to "debug".
+        import { Stack } from 'aws-cdk-lib';
+        import { LAYER_ARNS, OdigosLambdaInstrumentation } from '@odigos/aws-cdk';
 
-        PER LANGUAGE — staging command, and the activation environment.
-        APPEND means: keep the value your container already has, then add ours joined by the separator
-        shown. Assigning it instead discards your value.
+        // ONE CONSTRUCT PER FUNCTION. serviceName applies to every function a construct instruments, and
+        // left unset it falls back to the CDK CONSTRUCT ID rather than the deployed function name —
+        // lambda.Function.functionName resolves to a CloudFormation Ref even when you set it explicitly, so
+        // the package cannot read it. OTEL_SERVICE_NAME must match the workload's name in Odigos, so pass it.
+        new OdigosLambdaInstrumentation(this, 'OdigosApi', {
+          destination: {
+            endpoint: '<OTLP_ENDPOINT>',      // OTLP/gRPC as host:port, no scheme
+            insecure: <OTLP_INSECURE>,        // plaintext destination only; must match this connector
+            // httpEndpoint: 'https://...'    // instead of endpoint, for an OTLP/HTTP destination
+            // headers: { authorization: 'Bearer ...' },  // see the credential warning below
+          },
+          serviceName: '<ODIGOS_SOURCE_NAME>',
+          functions: [fn],
+        });
 
-        java   {"v":1,"lang":"java"}
-               command: mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java
-               JAVA_TOOL_OPTIONS  APPEND " "  -javaagent:/var/odigos/java/javaagent.jar
-               OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+        // THE MARKER IS WRITTEN FOR YOU — shown here so you recognise it in a cdk diff, not to be added by
+        // hand. It records the ARN the construct actually attached, and Odigos checks the function against
+        // the version recorded in it, so a version you pinned is respected instead of being reported as
+        // drift. Its value is exactly {"v":1,"layer":"<OTEL_LAYER_ARN>"} with the package that wrote it
+        // named alongside:
+        //   ODIGOS_IAC = {"v":1,"source":"cdk","version":"<PACKAGE_VERSION>","layer":"<OTEL_LAYER_ARN>"}
+        //
+        // LAYER_ARNS is that same table, exported for a stack that needs the ARN for its own reasons:
+        //   const layerArn = LAYER_ARNS[`${Stack.of(this).region}/nodejs/${fn.architecture.name}`];
 
-        python {"v":1,"lang":"python"}
-               command: mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python
-               PYTHONPATH  APPEND ":"  /var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation
-               OTEL_PYTHON_CONFIGURATOR = odigos-python-configurator
-               OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+        WHERE THE LAYER COMES FROM
+          layerSource: OdigosLayerSource.ODIGOS_PUBLIC   (default) the public Odigos layer version in the
+            stack's region, resolved at SYNTH time from a table in the package. No extra resources, no
+            deploy-time lookup — but it needs a concrete region, so an environment-agnostic stack throws.
+          layerSource: OdigosLayerSource.IN_ACCOUNT      deploys the Odigos Serverless Application
+            Repository application into your account as a nested stack (one per language/architecture) and
+            wires its LayerVersionArn output into the function. Identical bytes, owned by your own stack —
+            for organisations whose policy forbids attaching a layer owned by another AWS account. Needs
+            serverlessrepo:CreateCloudFormationTemplate and serverlessrepo:GetApplication at deploy time.
+          layerVersion: <your ILayerVersion>             a layer you mirrored yourself; neither path is used.
 
-        nodejs {"v":1,"lang":"nodejs"}
-               command: mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs
-               NODE_OPTIONS  APPEND " "  --require /var/odigos/nodejs/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js
-               OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+        The marker needs the ARN, and only the ODIGOS_PUBLIC path exposes it — LAYER_ARNS is a plain table
+        you can index. IN_ACCOUNT resolves the ARN from a nested stack output that the construct does not
+        hand back, so to record the marker there, either pass the layer in yourself through layerVersion and
+        read its layerVersionArn, or read the nested application's LayerVersionArn output directly.
 
-        dotnet {"v":1,"lang":"dotnet"}
-               command: mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet
-               CORECLR_ENABLE_PROFILING = 1
-               CORECLR_PROFILER         = {918728DD-259F-4A6A-AC2B-B85E1B658318}
-               CORECLR_PROFILER_PATH    = /var/odigos/dotnet/linux-glibc/OpenTelemetry.AutoInstrumentation.Native.so
-               OTEL_DOTNET_AUTO_HOME    = /var/odigos/dotnet
-               DOTNET_STARTUP_HOOKS     = /var/odigos/dotnet/net/OpenTelemetry.AutoInstrumentation.StartupHook.dll
-               DOTNET_ADDITIONAL_DEPS   = /var/odigos/dotnet/AdditionalDeps
-               DOTNET_SHARED_STORE      = /var/odigos/dotnet/store
-               OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
-               glibc only — a musl (Alpine) based image is not supported.
+        HANDLER vs WEB-SERVER, same rule as every other variant. The default mode is HANDLER, which sets
+        AWS_LAMBDA_EXEC_WRAPPER (/opt/otel-instrument for python, /opt/otel-handler for nodejs, java and
+        ruby). A function behind the AWS Lambda Web Adapter needs mode: OdigosInstrumentationMode.WEB_SERVER,
+        which leaves the wrapper to the adapter and loads the agent through the language's own variable
+        instead — and there, pass existingLoaderValue with whatever your function already needs in
+        NODE_OPTIONS / JAVA_TOOL_OPTIONS / PYTHONPATH, because CDK cannot read an environment variable back
+        and ours would otherwise replace yours. Applying HANDLER to a web-adapter function stops it serving.
 
-        php    {"v":1,"lang":"php"}
-               command: mkdir -p /var/odigos && cp -r /instrumentations/php /var/odigos/php
-               PHP_INI_SCAN_DIR          = :/var/odigos/php/<RUNTIME_VERSION>
-               OTEL_PHP_AUTOLOAD_ENABLED = true
-               OTEL_PROPAGATORS          = tracecontext,baggage
-               OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf   (pinned by the SDK — cannot be switched)
+        Java: javaHandlerDistro selects the wrapper script for your handler interface. The default suits a
+        RequestHandler; a RequestStreamHandler needs OdigosJavaHandlerDistro.OTEL_STREAM_HANDLER, and the
+        default BREAKS it rather than producing thinner spans.
 
-        ruby   {"v":1,"lang":"ruby"}
-               command: mkdir -p /var/odigos && cp -r /instrumentations/ruby /var/odigos/ruby
-               RUBYOPT         = -r/var/odigos/ruby/<RUNTIME_VERSION>/index.rb
-               ODIGOS_GEM_PATH = /var/odigos/ruby/<RUNTIME_VERSION>/bundle
-               OTEL_PROPAGATORS = tracecontext,baggage
-               OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf   (pinned by the SDK — cannot be switched)
+        Signals: destination.traces / metrics / logs default to true. Setting one false drops that pipeline
+        from the configuration AND sets that signal's OTEL_TRACES_EXPORTER / OTEL_METRICS_EXPORTER /
+        OTEL_LOGS_EXPORTER to "none" — which is exactly what this connector expects for a signal your
+        destination does not accept. Leave a signal enabled and its variable stays unset, because "otlp" is
+        already the SDK default. Turning all three off throws at synth.
+
+        MUST NOT be set (Odigos compares each against unset, so a leftover value is reported as drift). The
+        construct sets none of them; this list matters if an earlier attempt did:
+          OTEL_EXPORTER_OTLP_ENDPOINT   OTEL_EXPORTER_OTLP_HEADERS
+          ODIGOS_OTLP_ENDPOINT          ODIGOS_OTLP_INSECURE      (replaced by the configuration below)
+          OTEL_LOG_LEVEL                (unless this connector has debug telemetry enabled: then "debug",
+                                         which the construct writes for you when you pass debug: true)
+
+        For reference, the OPENTELEMETRY_COLLECTOR_CONFIG_URI value the construct renders for a gRPC
+        destination with all three signals on — this is what Odigos compares the live variable against:
+          yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: "<OTLP_ENDPOINT>", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}
 
         NOTES
-        - ODIGOS_MANAGED is per container and is the ONLY thing that tells Odigos a container is
-          instrumented. Without it the container is reported as awaiting your deployment however completely
-          the rest is applied, and the recorded language is what Odigos compares the activation env against.
-        - If your container ALREADY sets JAVA_TOOL_OPTIONS / PYTHONPATH / NODE_OPTIONS, record its original
-          value in the marker — {"v":1,"lang":"java","prevEnv":{"JAVA_TOOL_OPTIONS":"-Xmx512m"}}. Odigos
-          rebuilds the expected value from what you recorded, so appending to an unrecorded value is
-          reported as drift even though you applied this correctly.
-        - PHP_INI_SCAN_DIR and RUBYOPT are set to the value shown, replacing anything already there, and are
-          compared exactly. Fold your own value into it before applying.
-        - php and ruby agent paths are per runtime version: replace <RUNTIME_VERSION> with your
-          application's major.minor (for example 8.3). Set a runtime override on the source so Odigos
-          resolves the same version.
-        - Every Odigos community agent exports over http/protobuf, so <OTLP_ENDPOINT_URL> must be your
-          destination's OTLP/HTTP endpoint — the standard port is 4318, not the gRPC 4317. Endpoint and
-          protocol are one decision: a mismatch fails at runtime as a connection reset that points nowhere
-          near the cause.
-        - Declare odigos-agent NON-essential. ECS only accepts a SUCCESS dependency against a non-essential
-          container, so the two settings are one decision.
-        - AWS caps a task definition at 10 containers; one already at the limit has no room for the stager.
-        - Registering the revision is not enough — update the service to it, or it keeps running the old one.
-        - The image is pulled by your task's execution role. Mirror it into a registry the task can reach if
-          it cannot pull this one.
-        - The agents bundle is Linux-only; a Windows task definition cannot be instrumented at all.
-        - OTEL_SERVICE_NAME must match the workload's name in Odigos, or it is reported as drift. Set any
-          exporter to "none" for a signal your destination does not accept.
+        - ODIGOS_IAC is what Odigos reads to attribute the function to itself and to learn which layer version
+          the function is supposed to carry — so the version you pinned is respected rather than reported as
+          an available upgrade. Its "source"/"version" fields are attribution only.
+        - The package version is the layer version: @odigos/aws-cdk 0.0.10 resolves the layer built by Odigos
+          release v0.0.10 and pins the SAR application to 0.0.10, which is immutable. Upgrading a layer is
+          therefore npm update plus a cdk diff that shows the change.
+        - destination.headers is rendered into OPENTELEMETRY_COLLECTOR_CONFIG_URI, a plain Lambda environment
+          variable readable by anyone with lambda:GetFunctionConfiguration. Prefer a destination that
+          authenticates by network position, or terminate at a collector you control.
+        - A container-image function (DockerImageFunction) cannot carry layers at all, and the construct
+          takes a mutable lambda.Function — a function imported with Function.fromFunctionArn cannot be
+          instrumented this way, because CDK cannot modify a resource it does not own.
+        - Do not also enable these functions as automatic-mode connector sources. Both sides would then own
+          the function: every cdk deploy reasserts your stack's environment, every reconcile reasserts the
+          connector's, and each round trip publishes a new function version.
+        - Attach at most 5 layers in total (the AWS limit) and never two versions of the same layer — Odigos
+          reports a duplicate as a layer-version conflict.
 
     - id: instrument-fargate-terraform
       section: instrumentation:aws.fargate-task
@@ -931,8 +894,8 @@ setup:
       variantLabel: Terraform
       title: Instrument an ECS Fargate service (Terraform)
       description: >-
-        Anchored fragments for aws_ecs_task_definition. Shown for Java; see the Reference variant for the
-        other languages.
+        Anchored fragments for aws_ecs_task_definition. Worked example in Java; the per-language appendix
+        at the end of the template carries every other language.
       format: shell
       steps:
         - Add the volume block and the odigos-agent container to your task definition.
@@ -993,9 +956,84 @@ setup:
           ])
         }
 
-        # Other languages differ in the staging command, the marker's "lang", the activation variables and
-        # the OTLP protocol — see the Reference variant. In particular PYTHONPATH is appended with ":", and
-        # php/ruby activate through static variables whose paths carry <RUNTIME_VERSION>.
+        # ---------------------------------------------------------------------------------------------
+        # PER-LANGUAGE APPENDIX. The example above is Java. Every other language differs only in the
+        # staging command, the marker's "lang", and the activation variables. APPEND means: keep the value
+        # the container already carries and add ours after it, joined by the separator shown — assigning it
+        # instead discards the customer's value.
+        #
+        # java    marker {"v":1,"lang":"java"}
+        #         command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
+        #         JAVA_TOOL_OPTIONS  APPEND with " ":  -javaagent:/var/odigos/java/javaagent.jar
+        #         OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+        #
+        # python  marker {"v":1,"lang":"python"}
+        #         command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python"]
+        #         PYTHONPATH  APPEND with ":":  /var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation
+        #         OTEL_PYTHON_CONFIGURATOR = odigos-python-configurator
+        #         OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+        #
+        # nodejs  marker {"v":1,"lang":"nodejs"}
+        #         command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs"]
+        #         NODE_OPTIONS  APPEND with " ":  --require /var/odigos/nodejs/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js
+        #         OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+        #
+        # dotnet  marker {"v":1,"lang":"dotnet"}
+        #         command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet"]
+        #         CORECLR_ENABLE_PROFILING = 1
+        #         CORECLR_PROFILER         = {918728DD-259F-4A6A-AC2B-B85E1B658318}
+        #         CORECLR_PROFILER_PATH    = /var/odigos/dotnet/linux-glibc/OpenTelemetry.AutoInstrumentation.Native.so
+        #         OTEL_DOTNET_AUTO_HOME    = /var/odigos/dotnet
+        #         DOTNET_STARTUP_HOOKS     = /var/odigos/dotnet/net/OpenTelemetry.AutoInstrumentation.StartupHook.dll
+        #         DOTNET_ADDITIONAL_DEPS   = /var/odigos/dotnet/AdditionalDeps
+        #         DOTNET_SHARED_STORE      = /var/odigos/dotnet/store
+        #         OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+        #         glibc only — a musl (Alpine) based image is not supported.
+        #
+        # php     marker {"v":1,"lang":"php"}
+        #         command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/php /var/odigos/php"]
+        #         PHP_INI_SCAN_DIR          = :/var/odigos/php/<RUNTIME_VERSION>
+        #         OTEL_PHP_AUTOLOAD_ENABLED = true
+        #         OTEL_PROPAGATORS          = tracecontext,baggage
+        #         OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf   (pinned by the SDK — cannot be switched)
+        #
+        # ruby    marker {"v":1,"lang":"ruby"}
+        #         command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/ruby /var/odigos/ruby"]
+        #         RUBYOPT          = -r/var/odigos/ruby/<RUNTIME_VERSION>/index.rb
+        #         ODIGOS_GEM_PATH  = /var/odigos/ruby/<RUNTIME_VERSION>/bundle
+        #         OTEL_PROPAGATORS = tracecontext,baggage
+        #         OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf   (pinned by the SDK — cannot be switched)
+        #
+        # PHP_INI_SCAN_DIR and RUBYOPT are SET to the value shown, replacing anything already there, and are
+        # compared exactly — fold your own value into it before applying. php and ruby agent paths are per
+        # runtime version: replace <RUNTIME_VERSION> with your application's major.minor (for example 8.3),
+        # and set a runtime override on the source so Odigos resolves the same version.
+        #
+        # NOTES
+        # - ODIGOS_MANAGED is per container and is the ONLY thing that tells Odigos a container is
+        #   instrumented. Without it the container is reported as awaiting your deployment however completely
+        #   the rest is applied, and the recorded language is what the activation env is compared against.
+        # - If the container ALREADY sets JAVA_TOOL_OPTIONS / PYTHONPATH / NODE_OPTIONS, record its original
+        #   value in the marker: {"v":1,"lang":"java","prevEnv":{"JAVA_TOOL_OPTIONS":"-Xmx512m"}}. Odigos
+        #   rebuilds the expected value from what you recorded, so appending to an unrecorded value is
+        #   reported as drift even when you applied this correctly.
+        # - Every Odigos community agent exports over http/protobuf, so <OTLP_ENDPOINT_URL> must be the
+        #   destination's OTLP/HTTP endpoint — standard port 4318, not the gRPC 4317. Endpoint and protocol
+        #   are one decision; a mismatch fails at runtime as a connection reset that points nowhere near it.
+        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or it is reported as drift. Set a
+        #   signal's exporter to "none" for a signal your destination does not accept.
+        # - Declare odigos-agent NON-essential: ECS only accepts a SUCCESS dependency against a
+        #   non-essential container, so the two settings are one decision.
+        # - AWS caps a task definition at 10 containers; one already at the limit has no room for the stager.
+        # - Registering the revision is not enough — update the service to it, or it keeps running the old
+        #   one. The image is pulled by the task's execution role; mirror it into a registry the task can
+        #   reach if it cannot pull this one. The agents bundle is Linux-only, so a Windows task definition
+        #   cannot be instrumented at all.
+        # - AWS CDK: the same four moves through aws-cdk-lib/aws-ecs — taskDefinition.addVolume({ name:
+        #   'odigos-agent' }), addContainer for the stager with essential: false, addMountPoints on each
+        #   application container, and addContainerDependencies with
+        #   ecs.ContainerDependencyCondition.SUCCESS. There is no addEnvironment on an ECS container, so the
+        #   variables above go in the `environment` prop where the container is created.
 
     - id: instrument-fargate-cloudformation
       section: instrumentation:aws.fargate-task
@@ -1003,8 +1041,8 @@ setup:
       variantLabel: CloudFormation
       title: Instrument an ECS Fargate service (CloudFormation)
       description: >-
-        The AWS::ECS::TaskDefinition properties to merge. Shown for Java; see the Reference variant for the
-        other languages.
+        The AWS::ECS::TaskDefinition properties to merge. Worked example in Java; the per-language appendix
+        at the end of the template carries every other language.
       format: yaml
       steps:
         - Merge Volumes and the odigos-agent entry into your task definition.
@@ -1057,10 +1095,85 @@ setup:
               - Name: JAVA_TOOL_OPTIONS
                 Value: "<YOUR_EXISTING_VALUE> -javaagent:/var/odigos/java/javaagent.jar"
               # Do NOT set OTEL_LOG_LEVEL: compared against unset, so a value is reported as drift.
-              #
-              # Other languages differ in the staging command, the marker's "lang", the activation
-              # variables and the OTLP protocol — see the Reference variant. PYTHONPATH is appended with
-              # ":"; php/ruby activate through static variables carrying <RUNTIME_VERSION>.
+
+        # ---------------------------------------------------------------------------------------------
+        # PER-LANGUAGE APPENDIX. The example above is Java. Every other language differs only in the
+        # staging command, the marker's "lang", and the activation variables. APPEND means: keep the value
+        # the container already carries and add ours after it, joined by the separator shown — assigning it
+        # instead discards the customer's value.
+        #
+        # java    marker {"v":1,"lang":"java"}
+        #         command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
+        #         JAVA_TOOL_OPTIONS  APPEND with " ":  -javaagent:/var/odigos/java/javaagent.jar
+        #         OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+        #
+        # python  marker {"v":1,"lang":"python"}
+        #         command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python"]
+        #         PYTHONPATH  APPEND with ":":  /var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation
+        #         OTEL_PYTHON_CONFIGURATOR = odigos-python-configurator
+        #         OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+        #
+        # nodejs  marker {"v":1,"lang":"nodejs"}
+        #         command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs"]
+        #         NODE_OPTIONS  APPEND with " ":  --require /var/odigos/nodejs/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js
+        #         OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+        #
+        # dotnet  marker {"v":1,"lang":"dotnet"}
+        #         command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet"]
+        #         CORECLR_ENABLE_PROFILING = 1
+        #         CORECLR_PROFILER         = {918728DD-259F-4A6A-AC2B-B85E1B658318}
+        #         CORECLR_PROFILER_PATH    = /var/odigos/dotnet/linux-glibc/OpenTelemetry.AutoInstrumentation.Native.so
+        #         OTEL_DOTNET_AUTO_HOME    = /var/odigos/dotnet
+        #         DOTNET_STARTUP_HOOKS     = /var/odigos/dotnet/net/OpenTelemetry.AutoInstrumentation.StartupHook.dll
+        #         DOTNET_ADDITIONAL_DEPS   = /var/odigos/dotnet/AdditionalDeps
+        #         DOTNET_SHARED_STORE      = /var/odigos/dotnet/store
+        #         OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+        #         glibc only — a musl (Alpine) based image is not supported.
+        #
+        # php     marker {"v":1,"lang":"php"}
+        #         command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/php /var/odigos/php"]
+        #         PHP_INI_SCAN_DIR          = :/var/odigos/php/<RUNTIME_VERSION>
+        #         OTEL_PHP_AUTOLOAD_ENABLED = true
+        #         OTEL_PROPAGATORS          = tracecontext,baggage
+        #         OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf   (pinned by the SDK — cannot be switched)
+        #
+        # ruby    marker {"v":1,"lang":"ruby"}
+        #         command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/ruby /var/odigos/ruby"]
+        #         RUBYOPT          = -r/var/odigos/ruby/<RUNTIME_VERSION>/index.rb
+        #         ODIGOS_GEM_PATH  = /var/odigos/ruby/<RUNTIME_VERSION>/bundle
+        #         OTEL_PROPAGATORS = tracecontext,baggage
+        #         OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf   (pinned by the SDK — cannot be switched)
+        #
+        # PHP_INI_SCAN_DIR and RUBYOPT are SET to the value shown, replacing anything already there, and are
+        # compared exactly — fold your own value into it before applying. php and ruby agent paths are per
+        # runtime version: replace <RUNTIME_VERSION> with your application's major.minor (for example 8.3),
+        # and set a runtime override on the source so Odigos resolves the same version.
+        #
+        # NOTES
+        # - ODIGOS_MANAGED is per container and is the ONLY thing that tells Odigos a container is
+        #   instrumented. Without it the container is reported as awaiting your deployment however completely
+        #   the rest is applied, and the recorded language is what the activation env is compared against.
+        # - If the container ALREADY sets JAVA_TOOL_OPTIONS / PYTHONPATH / NODE_OPTIONS, record its original
+        #   value in the marker: {"v":1,"lang":"java","prevEnv":{"JAVA_TOOL_OPTIONS":"-Xmx512m"}}. Odigos
+        #   rebuilds the expected value from what you recorded, so appending to an unrecorded value is
+        #   reported as drift even when you applied this correctly.
+        # - Every Odigos community agent exports over http/protobuf, so <OTLP_ENDPOINT_URL> must be the
+        #   destination's OTLP/HTTP endpoint — standard port 4318, not the gRPC 4317. Endpoint and protocol
+        #   are one decision; a mismatch fails at runtime as a connection reset that points nowhere near it.
+        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or it is reported as drift. Set a
+        #   signal's exporter to "none" for a signal your destination does not accept.
+        # - Declare odigos-agent NON-essential: ECS only accepts a SUCCESS dependency against a
+        #   non-essential container, so the two settings are one decision.
+        # - AWS caps a task definition at 10 containers; one already at the limit has no room for the stager.
+        # - Registering the revision is not enough — update the service to it, or it keeps running the old
+        #   one. The image is pulled by the task's execution role; mirror it into a registry the task can
+        #   reach if it cannot pull this one. The agents bundle is Linux-only, so a Windows task definition
+        #   cannot be instrumented at all.
+        # - AWS CDK: the same four moves through aws-cdk-lib/aws-ecs — taskDefinition.addVolume({ name:
+        #   'odigos-agent' }), addContainer for the stager with essential: false, addMountPoints on each
+        #   application container, and addContainerDependencies with
+        #   ecs.ContainerDependencyCondition.SUCCESS. There is no addEnvironment on an ECS container, so the
+        #   variables above go in the `environment` prop where the container is created.
 
 
 # gateway: connector-wide collector wiring; not part of either domain. Implemented in a later phase.

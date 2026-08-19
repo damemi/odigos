@@ -1,6 +1,7 @@
 package instrumentor
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -154,7 +155,7 @@ func TestEligibleLayerKeysPerLanguage(t *testing.T) {
 		// unsupported runtime -> no layer key, never eligible.
 		{FunctionARN: "go1", Region: "us-east-1", Runtime: "go1.x", Architecture: "x86_64"},
 	}
-	enabled := map[string]struct{}{"nd1": {}}
+	enabled := map[string]enabledLambdaSource{"nd1": {}}
 
 	got := eligibleLayerKeys(enabled, functions)
 
@@ -192,33 +193,75 @@ func TestInstrumentedLayerKeys(t *testing.T) {
 }
 
 // A traces-only destination (e.g. Jaeger) must disable metric/log export, or the collector hard-fails with
-// "Unimplemented ... MetricsService" on every batch. Signal support drives OTEL_{TRACES,METRICS,LOGS}_EXPORTER.
+// "Unimplemented ... MetricsService" on every batch. A SUPPORTED signal is left unset instead of being
+// pinned to "otlp", which is already the SDK default for all three.
 func TestApplyCollectorExportSignals(t *testing.T) {
 	tracesOnly := domaindest.OTLPTarget{Endpoint: "collector:4317", Insecure: true, Traces: true}
+	tracesCfg := mustRenderCollectorConfig(t, tracesOnly)
 	env := map[string]string{}
-	applyCollectorExport(env, tracesOnly)
-	if env[EnvTracesExporter] != exporterOTLP {
-		t.Errorf("traces exporter = %q, want otlp", env[EnvTracesExporter])
+	applyCollectorExport(env, tracesOnly, tracesCfg)
+	if _, ok := env[EnvTracesExporter]; ok {
+		t.Errorf("a supported signal must not restate the SDK default, got %q", env[EnvTracesExporter])
 	}
 	if env[EnvMetricsExporter] != exporterNone || env[EnvLogsExporter] != exporterNone {
 		t.Errorf("metrics/logs must be none for a traces-only destination: metrics=%q logs=%q", env[EnvMetricsExporter], env[EnvLogsExporter])
 	}
-	if env[EnvCollectorEndpoint] != "collector:4317" || env[EnvCollectorInsecure] != "true" {
-		t.Errorf("collector endpoint/insecure not set: %v", env)
+	if env[EnvCollectorConfigURI] != tracesCfg {
+		t.Errorf("collector config URI not set: %v", env)
 	}
-	if !collectorExportAsDesired(env, tracesOnly) {
+	if !collectorExportAsDesired(env, tracesOnly, tracesCfg) {
 		t.Error("collectorExportAsDesired should be true right after applyCollectorExport")
 	}
 
 	// A full backend enables all three; changing supported signals must fail the skip-check (forces converge).
 	full := domaindest.OTLPTarget{Endpoint: "collector:4317", Insecure: true, Traces: true, Metrics: true, Logs: true}
-	if collectorExportAsDesired(env, full) {
+	fullCfg := mustRenderCollectorConfig(t, full)
+	if collectorExportAsDesired(env, full, fullCfg) {
 		t.Error("skip-check must detect that the destination now supports metrics/logs and re-instrument")
 	}
-	applyCollectorExport(env, full)
-	if env[EnvMetricsExporter] != exporterOTLP || env[EnvLogsExporter] != exporterOTLP {
-		t.Errorf("full backend should enable metrics+logs: %v", env)
+	applyCollectorExport(env, full, fullCfg)
+	if _, ok := env[EnvMetricsExporter]; ok {
+		t.Errorf("metrics override must be removed once the destination accepts metrics: %v", env)
 	}
+	if _, ok := env[EnvLogsExporter]; ok {
+		t.Errorf("logs override must be removed once the destination accepts logs: %v", env)
+	}
+}
+
+// The odigos-namespaced collector vars are no longer set. A function still carrying them was instrumented by
+// an earlier version and must be reported as not-as-desired exactly once, so the next reconcile strips them
+// rather than leaving variables behind that nothing reads.
+func TestLegacyOdigosCollectorVarsForceReinstrument(t *testing.T) {
+	dest := domaindest.OTLPTarget{Endpoint: "collector:4317", Insecure: true, Traces: true}
+	cfg := mustRenderCollectorConfig(t, dest)
+	env := map[string]string{}
+	applyCollectorExport(env, dest, cfg)
+	if !collectorExportAsDesired(env, dest, cfg) {
+		t.Fatal("freshly applied env should be as desired")
+	}
+	for _, legacy := range []string{EnvCollectorEndpoint, EnvCollectorInsecure} {
+		withLegacy := map[string]string{}
+		for k, v := range env {
+			withLegacy[k] = v
+		}
+		withLegacy[legacy] = "collector:4317"
+		if collectorExportAsDesired(withLegacy, dest, cfg) {
+			t.Errorf("leftover %s must force a re-instrument", legacy)
+		}
+		applyCollectorExport(withLegacy, dest, cfg)
+		if _, ok := withLegacy[legacy]; ok {
+			t.Errorf("%s must be deleted on re-instrument", legacy)
+		}
+	}
+}
+
+func mustRenderCollectorConfig(t *testing.T, dest domaindest.OTLPTarget) string {
+	t.Helper()
+	cfg, err := renderCollectorConfig(dest, nil)
+	if err != nil {
+		t.Fatalf("renderCollectorConfig: %v", err)
+	}
+	return cfg
 }
 
 // reconcileCustomerEdits must capture a value the customer set on a shared, instrumentor-owned key AFTER
@@ -297,26 +340,66 @@ func TestInstrumentedAsDesiredUsesReportedServiceName(t *testing.T) {
 	fn := store.LambdaFunction{FunctionName: "aws-fn", Runtime: "python3.12"}
 	dest := domaindest.OTLPTarget{Endpoint: "collector:4317", Insecure: true, Traces: true}
 	layerARN := "arn:aws:lambda:us-east-1:0:layer:odigos-otel-python-x86_64:1"
+	cfg := mustRenderCollectorConfig(t, dest)
 	env := map[string]string{
 		store.EnvOdigosManaged: `{"v":1}`,
 		EnvServiceName:         "custom-service",
-		EnvTracesExporter:      exporterOTLP,
 		EnvMetricsExporter:     exporterNone,
 		EnvLogsExporter:        exporterNone,
-		EnvCollectorEndpoint:   "collector:4317",
-		EnvCollectorInsecure:   "true",
+		EnvCollectorConfigURI:  cfg,
 		store.EnvExecWrapper:   execWrapperInstrument,
 	}
 	layers := []string{layerARN}
 
-	if !inst.instrumentedAsDesired(false, fn, env, layers, layerARN, dest, false, "custom-service") {
+	if !inst.instrumentedAsDesired(false, fn, env, layers, layerARN, dest, false, "custom-service", cfg, "") {
 		t.Error("expected converged with custom reported service name")
 	}
-	if inst.instrumentedAsDesired(false, fn, env, layers, layerARN, dest, false, "other-service") {
+	if inst.instrumentedAsDesired(false, fn, env, layers, layerARN, dest, false, "other-service", cfg, "") {
 		t.Error("expected not converged when reported service name override changed")
 	}
 	env[EnvServiceName] = "aws-fn"
-	if inst.instrumentedAsDesired(false, fn, env, layers, layerARN, dest, false, "custom-service") {
+	if inst.instrumentedAsDesired(false, fn, env, layers, layerARN, dest, false, "custom-service", cfg, "") {
 		t.Error("expected not converged when live env still has stale service name")
+	}
+}
+
+// TestIaCMarkerIsAttributionNotOwnership pins the split the two markers exist to express, from the side that
+// is dangerous to get wrong.
+//
+// A function an Odigos IaC artifact instrumented must READ as instrumented — that is the whole point of the
+// marker, and reporting such a function as "awaiting your deployment" is the bug this pair of variables was
+// introduced to fix. But it must never become MUTABLE by that fact: the IaC marker carries no snapshot of a
+// pre-Odigos state, so a rollback keyed off it would strip a layer and env vars with nothing to restore,
+// leaving the customer's own deployment definition and the live function permanently disagreeing.
+func TestIaCMarkerIsAttributionNotOwnership(t *testing.T) {
+	const iacLayer = "arn:aws:lambda:us-east-1:1:layer:odigos-otel-python-x86_64:6"
+	env := map[string]string{
+		store.EnvOdigosIaC:    `{"v":1,"source":"cdk","version":"v0.0.11","layer":"` + iacLayer + `"}`,
+		EnvServiceName:        "checkout",
+		store.EnvExecWrapper:  execWrapperInstrument,
+		EnvCollectorConfigURI: "yaml:{}",
+	}
+
+	if !store.OdigosInstrumented(env) {
+		t.Error("a function instrumented by an Odigos IaC artifact reads as untouched, so it is reported as awaiting a deployment that already happened")
+	}
+	if got := recordedLayer(env); got != iacLayer {
+		t.Errorf("recordedLayer = %q, want %q — without it the observer falls back to a resolver manual mode has no permission to call, and reports a pinned version as drift", got, iacLayer)
+	}
+
+	i := &LambdaInstrumentor{}
+	if _, owned := i.ownership(context.Background(), store.LambdaFunction{FunctionName: "checkout", Region: "us-east-1"}, env); owned {
+		t.Error("the IaC marker granted ownership, so rollback would strip instrumentation it has no snapshot to restore")
+	}
+
+	// Both markers on one function: the connector took over a function IaC had instrumented. Its own record
+	// describes what is applied now, so it wins the layer question.
+	const ownedLayer = "arn:aws:lambda:us-east-1:1:layer:odigos-otel-python-x86_64:9"
+	env[store.EnvOdigosManaged] = `{"v":1,"layer":"` + ownedLayer + `"}`
+	if got := recordedLayer(env); got != ownedLayer {
+		t.Errorf("recordedLayer = %q, want the ownership marker's %q when both are present", got, ownedLayer)
+	}
+	if _, owned := i.ownership(context.Background(), store.LambdaFunction{FunctionName: "checkout", Region: "us-east-1"}, env); !owned {
+		t.Error("a function carrying the connector's own marker is not owned, so it can never be rolled back")
 	}
 }

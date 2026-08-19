@@ -69,7 +69,7 @@ func TestExecWrapperForRuntime(t *testing.T) {
 		"go1.x":      "", // unsupported -> no wrapper
 	}
 	for runtime, want := range cases {
-		if got := execWrapperForRuntime(runtime); got != want {
+		if got := execWrapperForRuntime(runtime, ""); got != want {
 			t.Errorf("execWrapperForRuntime(%q) = %q, want %q", runtime, got, want)
 		}
 	}
@@ -242,6 +242,43 @@ func TestRemoveLoaderValue(t *testing.T) {
 	} {
 		if got := removeLoaderValue(addLoaderValue(tc.cust, tc.val, tc.sep), tc.val, tc.sep); got != tc.cust {
 			t.Errorf("round-trip(%q) = %q, want original", tc.cust, got)
+		}
+	}
+}
+
+// The Java layer ships four wrapper scripts and the connector cannot tell which one a function needs — the
+// handler string is a class name whichever interface it implements. The source's distro override is how a
+// customer says, and getting it wrong is not cosmetic: otel-handler on a RequestStreamHandler function
+// breaks the invocation outright.
+func TestJavaHandlerWrapperFollowsTheSourceOverride(t *testing.T) {
+	cases := map[string]string{
+		"":                    execWrapperHandler, // unconfigured source keeps the long-standing default
+		"otel-handler":        execWrapperHandler,
+		"otel-proxy-handler":  execWrapperProxyHandler,
+		"otel-sqs-handler":    execWrapperSqsHandler,
+		"otel-stream-handler": execWrapperStreamHandler,
+	}
+	for distro, want := range cases {
+		if got := execWrapperForRuntime("java21", distro); got != want {
+			t.Errorf("distro %q: wrapper = %q, want %q", distro, got, want)
+		}
+	}
+	// Unknown must resolve to "" so instrument() refuses. Silently falling back to otel-handler is the bug
+	// this override exists to fix.
+	if got := execWrapperForRuntime("java21", "otel-nonsense"); got != "" {
+		t.Errorf("an unknown distro resolved to %q; it must be refused, not defaulted", got)
+	}
+	// Every other language ships exactly one wrapper, so the override is ignored rather than able to break it.
+	for _, runtime := range []string{"python3.12", "nodejs22.x", "ruby3.3"} {
+		if got, want := execWrapperForRuntime(runtime, "otel-stream-handler"), execWrapperForLanguage(LanguageFromRuntime(runtime)); got != want {
+			t.Errorf("%s: distro override changed the wrapper to %q, want %q", runtime, got, want)
+		}
+	}
+	// All four must be recognized as ours, or rollback leaves one behind and ownership reads it as a
+	// customer's wrapper.
+	for _, w := range []string{execWrapperHandler, execWrapperProxyHandler, execWrapperSqsHandler, execWrapperStreamHandler, execWrapperInstrument} {
+		if !isOdigosExecWrapper(w) {
+			t.Errorf("%s is not recognized as an Odigos wrapper", w)
 		}
 	}
 }

@@ -2,7 +2,6 @@ package instrumentor
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -17,6 +16,16 @@ const observedLayerARN = "arn:aws:lambda:us-east-1:1:layer:odigos-otel-python-x8
 
 var observeDest = domaindest.OTLPTarget{Endpoint: "collector:4317", Insecure: true, Traces: true}
 
+// observeCollectorCfg is the inline collector configuration observeDest renders to — the value an
+// as-desired function carries in OPENTELEMETRY_COLLECTOR_CONFIG_URI.
+func observeCollectorCfg() string {
+	cfg, err := renderCollectorConfig(observeDest, nil)
+	if err != nil {
+		panic(err)
+	}
+	return cfg
+}
+
 func observedFn() store.LambdaFunction {
 	return store.LambdaFunction{FunctionName: "checkout", Runtime: "python3.12", Region: "us-east-1"}
 }
@@ -28,9 +37,7 @@ func conformantEnv() map[string]string {
 	return map[string]string{
 		store.EnvOdigosManaged: `{"v":1,"layer":"` + observedLayerARN + `"}`,
 		EnvServiceName:         "checkout",
-		EnvCollectorEndpoint:   "collector:4317",
-		EnvCollectorInsecure:   "true",
-		EnvTracesExporter:      exporterOTLP,
+		EnvCollectorConfigURI:  observeCollectorCfg(),
 		EnvMetricsExporter:     exporterNone,
 		EnvLogsExporter:        exporterNone,
 		store.EnvExecWrapper:   execWrapperInstrument,
@@ -50,6 +57,17 @@ func TestInstrumentationDiffNamesWhatIsWrong(t *testing.T) {
 			name:   "instrumented exactly as desired",
 			mutate: func(map[string]string, *[]string, *string) {},
 			want:   nil,
+		},
+		{
+			// The manual-mode shape: the customer's own IaC applied everything and stamped the IaC marker
+			// instead of the connector's ownership marker. It is fully conformant, and the verdict must say so
+			// — this reporting as Absent is what made a correctly instrumented CDK stack look untouched.
+			name: "instrumented by IaC, attributed by the IaC marker",
+			mutate: func(env map[string]string, _ *[]string, _ *string) {
+				delete(env, store.EnvOdigosManaged)
+				env[store.EnvOdigosIaC] = `{"v":1,"source":"cdk","version":"v0.0.11","layer":"` + observedLayerARN + `"}`
+			},
+			want: nil,
 		},
 		{
 			// The plan's own headline drift case, and the one marker-presence checking cannot see: the layer was
@@ -167,14 +185,14 @@ func TestInstrumentationDiffNamesWhatIsWrong(t *testing.T) {
 			layerARN := observedLayerARN
 			c.mutate(env, &layers, &layerARN)
 
-			got := instrumentationDiff(false, observedFn(), env, layers, layerARN, observeDest, false, "checkout")
+			got := instrumentationDiff(false, observedFn(), env, layers, layerARN, observeDest, false, "checkout", observeCollectorCfg(), "")
 			if !sameSet(got, c.want) {
 				t.Errorf("diff = %v, want %v", got, c.want)
 			}
 			// The mutating path's predicate must stay exactly "the diff is empty", so observation and
 			// instrumentation can never disagree about what "correctly instrumented" means.
 			inst := &LambdaInstrumentor{}
-			asDesired := inst.instrumentedAsDesired(false, observedFn(), env, layers, layerARN, observeDest, false, "checkout")
+			asDesired := inst.instrumentedAsDesired(false, observedFn(), env, layers, layerARN, observeDest, false, "checkout", observeCollectorCfg(), "")
 			if asDesired != (len(got) == 0) {
 				t.Errorf("instrumentedAsDesired = %v but diff = %v; the two must agree", asDesired, got)
 			}
@@ -192,9 +210,7 @@ func TestInstrumentationDiffWebServerMode(t *testing.T) {
 		return map[string]string{
 			store.EnvOdigosManaged: `{"v":1,"layer":"` + observedLayerARN + `"}`,
 			EnvServiceName:         "web",
-			EnvCollectorEndpoint:   "collector:4317",
-			EnvCollectorInsecure:   "true",
-			EnvTracesExporter:      exporterOTLP,
+			EnvCollectorConfigURI:  observeCollectorCfg(),
 			EnvMetricsExporter:     exporterNone,
 			EnvLogsExporter:        exporterNone,
 			EnvPythonPath:          pythonInstrPath,
@@ -204,85 +220,240 @@ func TestInstrumentationDiffWebServerMode(t *testing.T) {
 	if !usesLambdaWebAdapter(layers) {
 		t.Fatal("test setup: the adapter layer must be recognized, or this exercises handler mode")
 	}
-	if got := instrumentationDiff(true, fn, base(), layers, observedLayerARN, observeDest, false, "web"); len(got) != 0 {
+	if got := instrumentationDiff(true, fn, base(), layers, observedLayerARN, observeDest, false, "web", observeCollectorCfg(), ""); len(got) != 0 {
 		t.Errorf("conformant web-server function: diff = %v, want none", got)
 	}
 
 	// The loader dropped from PYTHONPATH: the agent is no longer loaded even though everything else survived.
 	env := base()
 	delete(env, EnvPythonPath)
-	if got := instrumentationDiff(true, fn, env, layers, observedLayerARN, observeDest, false, "web"); !sameSet(got, []string{componentAgentLoader}) {
+	if got := instrumentationDiff(true, fn, env, layers, observedLayerARN, observeDest, false, "web", observeCollectorCfg(), ""); !sameSet(got, []string{componentAgentLoader}) {
 		t.Errorf("missing loader: diff = %v, want [%s]", got, componentAgentLoader)
 	}
 
 	// Python's HTTP protocol pin removed: the loader is there but the SDK cannot export.
 	env = base()
 	delete(env, EnvOtlpProtocol)
-	if got := instrumentationDiff(true, fn, env, layers, observedLayerARN, observeDest, false, "web"); !sameSet(got, []string{componentAgentLoaderConfig}) {
+	if got := instrumentationDiff(true, fn, env, layers, observedLayerARN, observeDest, false, "web", observeCollectorCfg(), ""); !sameSet(got, []string{componentAgentLoaderConfig}) {
 		t.Errorf("missing protocol pin: diff = %v, want [%s]", got, componentAgentLoaderConfig)
 	}
 
 	// A handler-mode function must NOT be judged by web-server rules either: the exec wrapper is what it needs.
-	if got := instrumentationDiff(false, fn, base(), layers, observedLayerARN, observeDest, false, "web"); !sameSet(got, []string{componentExecWrapper}) {
+	if got := instrumentationDiff(false, fn, base(), layers, observedLayerARN, observeDest, false, "web", observeCollectorCfg(), ""); !sameSet(got, []string{componentExecWrapper}) {
 		t.Errorf("handler-mode rules over web-server env: diff = %v, want [%s]", got, componentExecWrapper)
 	}
 }
 
-// stubResolver stands in for a LayerResolver. It records whether it was consulted at all, which is what proves
-// the marker takes precedence rather than merely producing the same answer.
-type stubResolver struct {
-	arn    string
-	err    error
-	called bool
-}
-
-func (s *stubResolver) Resolve(context.Context, string, string, string) (string, error) {
-	s.called = true
-	return s.arn, s.err
-}
-
-// TestDesiredLayerARNPrefersTheMarker pins the precedence that decides what manual-mode drift MEANS.
+// TestLayerVerdictHonoursThePinnedVersion pins what manual-mode layer drift MEANS, across both the pinned and
+// the unpinned case — the two halves of one rule: a function is only ever held to the layer its own applied
+// instrumentation recorded, never to the layer Odigos happens to ship today.
 //
-// The marker records the layer the customer actually pinned from the instructions Odigos gave them, so drift is
-// "the function no longer carries what was applied". Asking the resolver first would compare against whatever
-// version Odigos currently ships, and then a layer release would report every correctly-instrumented function
-// in the account as drifted — announcing an available upgrade as an error.
-func TestDesiredLayerARNPrefersTheMarker(t *testing.T) {
-	pinned := "arn:aws:lambda:us-east-1:1:layer:odigos-otel-python-x86_64:3"
-	newer := "arn:aws:lambda:us-east-1:1:layer:odigos-otel-python-x86_64:9"
+// The unpinned half is the regression this guards. A marker that records no layer used to fall back to
+// resolving one, which answers "the newest published version" — so a customer who pinned an older version, or
+// whose IaC artifact predated the recorded layer, was reported as drifted for a version they deliberately
+// chose. Every layer release re-broke every such function until it was re-applied.
+func TestLayerVerdictHonoursThePinnedVersion(t *testing.T) {
+	const (
+		pinned  = "arn:aws:lambda:us-east-1:1:layer:odigos-otel-python-x86_64:3"
+		foreign = "arn:aws:lambda:us-east-1:1:layer:aws-otel-python-x86_64:5"
+	)
+	// An IaC marker carrying no layer at all — exactly what an older Odigos CDK release wrote.
+	unpinnedMarker := map[string]string{store.EnvOdigosIaC: `{"v":1,"source":"cdk","version":"v0.0.12"}`}
 
-	res := &stubResolver{arn: newer}
-	o := &LambdaObserver{layers: res, debug: func() bool { return false }, now: time.Now}
-	env := map[string]string{store.EnvOdigosManaged: `{"v":1,"layer":"` + pinned + `"}`}
+	for _, c := range []struct {
+		name   string
+		marker map[string]string
+		layers []string
+		want   []string
+	}{
+		{
+			// The whole point: an Odigos layer IS attached, at a version nothing recorded. There is no version to
+			// hold it to, so signature is the honest test and this is conformant.
+			name:   "unpinned marker with an odigos layer attached is not drift",
+			marker: unpinnedMarker,
+			layers: []string{pinned},
+			want:   nil,
+		},
+		{
+			name:   "unpinned marker with no odigos layer attached is drift",
+			marker: unpinnedMarker,
+			layers: []string{foreign},
+			want:   []string{componentInstrumentationLayer},
+		},
+		{
+			name:   "unpinned marker with no layers at all is drift",
+			marker: unpinnedMarker,
+			layers: nil,
+			want:   []string{componentInstrumentationLayer},
+		},
+		{
+			// A recorded layer is an identity check, and it stays one: this is how a detached or replaced layer is
+			// caught while the marker survives.
+			name:   "pinned marker holds the function to that exact version",
+			marker: map[string]string{store.EnvOdigosIaC: `{"v":1,"layer":"` + pinned + `"}`},
+			layers: []string{observedLayerARN},
+			want:   []string{componentInstrumentationLayer},
+		},
+		{
+			name:   "pinned marker satisfied by the version it names",
+			marker: map[string]string{store.EnvOdigosIaC: `{"v":1,"layer":"` + pinned + `"}`},
+			layers: []string{pinned},
+			want:   nil,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			o := &LambdaObserver{debug: func() bool { return false }, now: time.Now}
+			env := conformantEnv()
+			delete(env, store.EnvOdigosManaged) // the marker under test is the only attribution
+			for k, v := range c.marker {
+				env[k] = v
+			}
+			cur := lambdatypes.FunctionConfiguration{
+				State:            lambdatypes.StateActive,
+				LastUpdateStatus: lambdatypes.LastUpdateStatusSuccessful,
+				Environment:      &lambdatypes.EnvironmentResponse{Variables: env},
+				Layers:           layerList(c.layers),
+			}
+			obs, ok := o.observation(context.Background(), observedFn(), cur, observeDest, nil,
+				enabledLambdaSource{serviceName: "checkout"})
+			if !ok {
+				t.Fatal("no verdict recorded for a settled function")
+			}
+			if !sameSet(obs.Missing, c.want) {
+				t.Errorf("missing = %v, want %v", obs.Missing, c.want)
+			}
+			// An unresolvable layer must never surface as an observation ERROR either: the observer no longer looks
+			// one up, so there is nothing that can fail.
+			if obs.Error != "" {
+				t.Errorf("unexpected observation error: %s", obs.Error)
+			}
+			wantConformance := baseapi.ConformanceConformant
+			if len(c.want) > 0 {
+				wantConformance = baseapi.ConformancePartial
+			}
+			if obs.Conformance != wantConformance {
+				t.Errorf("conformance = %q, want %q", obs.Conformance, wantConformance)
+			}
+		})
+	}
+}
 
-	got, err := o.desiredLayerARN(context.Background(), observedFn(), env)
-	if err != nil {
-		t.Fatalf("desiredLayerARN: %v", err)
-	}
-	if got != pinned {
-		t.Errorf("desired layer = %q, want the pinned %q (a newer published version is an upgrade, not drift)", got, pinned)
-	}
-	if res.called {
-		t.Error("the resolver must not be consulted when the marker records a layer; that is what makes an upgrade not-drift")
-	}
+// TestExportedSignalsAreJudgedAsymmetrically pins the DIRECTION of the export-signal check, which is the whole
+// rule: a manually-instrumented function may export FEWER signals than its destination accepts, but never one
+// the destination does not accept.
+//
+// Both halves matter and they are not symmetric. Sending less than the destination could take is a legitimate
+// choice a customer's deployment definition is entitled to make, and reporting it as drift told them to "re-apply
+// the instrumentation" over a decision they made deliberately. Sending MORE is the harmful direction: the signal
+// has no pipeline to be received on, so every batch is refused and the in-Lambda collector retries it on an
+// exponential backoff inside billed duration.
+func TestExportedSignalsAreJudgedAsymmetrically(t *testing.T) {
+	type sig struct{ traces, metrics, logs bool }
 
-	// A marker with no layer — which a customer's own IaC can produce — falls back to the resolver.
-	res = &stubResolver{arn: newer}
-	o.layers = res
-	got, err = o.desiredLayerARN(context.Background(), observedFn(), map[string]string{store.EnvOdigosManaged: `{"v":1}`})
-	if err != nil || got != newer {
-		t.Errorf("marker without a layer: got (%q, %v), want (%q, nil)", got, err, newer)
-	}
-	if !res.called {
-		t.Error("the resolver is the fallback for a marker with no layer and must be consulted")
-	}
+	for _, c := range []struct {
+		name  string
+		instr sig
+		dest  sig
+		want  []string
+	}{
+		{"exact match", sig{true, false, false}, sig{true, false, false}, nil},
+		{"traces-only against an all-signal destination", sig{true, false, false}, sig{true, true, true}, nil},
+		{"traces+metrics against an all-signal destination", sig{true, true, false}, sig{true, true, true}, nil},
+		{"all three against an all-signal destination", sig{true, true, true}, sig{true, true, true}, nil},
+		// The harmful direction — a signal with no pipeline at the far end.
+		{"exports metrics and logs the destination refuses", sig{true, true, true}, sig{true, false, false}, []string{componentCollectorExport}},
+		{"exports logs the destination refuses", sig{true, false, true}, sig{true, true, false}, []string{componentCollectorExport}},
+		// Not a narrower choice but a collector with no pipeline: it fails to start and the function is silent.
+		{"exports nothing at all", sig{false, false, false}, sig{true, true, true}, []string{componentCollectorExport}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			liveDest := domaindest.OTLPTarget{
+				Endpoint: observeDest.Endpoint, Insecure: observeDest.Insecure,
+				Traces: c.instr.traces, Metrics: c.instr.metrics, Logs: c.instr.logs,
+			}
+			// The live config URI is rendered by the real renderer for what the function exports, so this asserts
+			// the rule rather than a hand-written string that could drift from it.
+			liveCfg, err := renderCollectorConfig(liveDest, nil)
+			if err != nil {
+				liveCfg = "yaml:{}" // the no-signal case, which has no renderable document
+			}
+			env := map[string]string{
+				store.EnvOdigosManaged: `{"v":1,"layer":"` + observedLayerARN + `"}`,
+				EnvServiceName:         "checkout",
+				EnvCollectorConfigURI:  liveCfg,
+				store.EnvExecWrapper:   execWrapperInstrument,
+			}
+			if !c.instr.traces {
+				env[EnvTracesExporter] = exporterNone
+			}
+			if !c.instr.metrics {
+				env[EnvMetricsExporter] = exporterNone
+			}
+			if !c.instr.logs {
+				env[EnvLogsExporter] = exporterNone
+			}
 
-	// Neither source answers: an error, so the caller reports an INCOMPLETE CHECK rather than treating
-	// "we could not look up the layer" as "the layer is missing".
-	o.layers = &stubResolver{err: errors.New("AccessDenied")}
-	if _, err := o.desiredLayerARN(context.Background(), observedFn(), map[string]string{store.EnvOdigosManaged: `{"v":1}`}); err == nil {
-		t.Error("an unresolvable layer must return an error, not an empty ARN that reads as absent")
+			o := &LambdaObserver{debug: func() bool { return false }, now: time.Now}
+			cur := lambdatypes.FunctionConfiguration{
+				State:            lambdatypes.StateActive,
+				LastUpdateStatus: lambdatypes.LastUpdateStatusSuccessful,
+				Environment:      &lambdatypes.EnvironmentResponse{Variables: env},
+				Layers:           layerList([]string{observedLayerARN}),
+			}
+			dest := domaindest.OTLPTarget{
+				Endpoint: observeDest.Endpoint, Insecure: observeDest.Insecure,
+				Traces: c.dest.traces, Metrics: c.dest.metrics, Logs: c.dest.logs,
+			}
+			obs, ok := o.observation(context.Background(), observedFn(), cur, dest, nil,
+				enabledLambdaSource{serviceName: "checkout"})
+			if !ok {
+				t.Fatal("no verdict recorded for a settled function")
+			}
+			if !sameSet(obs.Missing, c.want) {
+				t.Errorf("missing = %v, want %v", obs.Missing, c.want)
+			}
+		})
 	}
+}
+
+// TestNarrowingNeverWidensTheDestination guards the one way narrowToExportedSignals could do damage: it must
+// only ever REMOVE signals. If it could add one, a function would be judged against — and reported conformant
+// for — exporting a signal its destination cannot receive, which is the exact failure the asymmetry exists to
+// catch.
+func TestNarrowingNeverWidensTheDestination(t *testing.T) {
+	for _, dest := range []domaindest.OTLPTarget{
+		{Traces: true}, {Traces: true, Metrics: true}, {Traces: true, Metrics: true, Logs: true},
+		{Metrics: true}, {Logs: true},
+	} {
+		for _, env := range []map[string]string{
+			{},
+			{EnvTracesExporter: exporterNone},
+			{EnvMetricsExporter: exporterNone},
+			{EnvLogsExporter: exporterNone},
+			{EnvTracesExporter: exporterNone, EnvMetricsExporter: exporterNone},
+			{EnvTracesExporter: exporterNone, EnvMetricsExporter: exporterNone, EnvLogsExporter: exporterNone},
+		} {
+			got := narrowToExportedSignals(dest, env)
+			if got.Traces && !dest.Traces || got.Metrics && !dest.Metrics || got.Logs && !dest.Logs {
+				t.Errorf("narrowing widened the destination: dest=%+v env=%v -> %+v", dest, env, got)
+			}
+			// Everything that is not a signal must survive untouched, or the byte comparison downstream would be
+			// judging the function against a destination it was never pointed at.
+			if got.Endpoint != dest.Endpoint || got.HTTPEndpoint != dest.HTTPEndpoint || got.Insecure != dest.Insecure {
+				t.Errorf("narrowing altered the transport: %+v -> %+v", dest, got)
+			}
+		}
+	}
+}
+
+// layerList turns observed layer ARNs into the SDK shape ListFunctions returns them in.
+func layerList(arns []string) []lambdatypes.Layer {
+	out := make([]lambdatypes.Layer, 0, len(arns))
+	for _, a := range arns {
+		arn := a
+		out = append(out, lambdatypes.Layer{Arn: &arn})
+	}
+	return out
 }
 
 // TestObservationSkipsASettlingFunction is §7.3's rule at its source: drift is only ever declared after a
@@ -290,7 +461,7 @@ func TestDesiredLayerARNPrefersTheMarker(t *testing.T) {
 // recording a verdict mid-flight would both report a drift about to resolve itself and reset the drift clock of a
 // genuinely broken workload every time the customer touched it.
 func TestObservationSkipsASettlingFunction(t *testing.T) {
-	o := &LambdaObserver{layers: &stubResolver{arn: observedLayerARN}, debug: func() bool { return false }, now: time.Now}
+	o := &LambdaObserver{debug: func() bool { return false }, now: time.Now}
 	// Deliberately a function whose instrumentation IS broken — the layer is gone — so a skip cannot be confused
 	// with "nothing was wrong anyway".
 	env := conformantEnv()
@@ -311,7 +482,7 @@ func TestObservationSkipsASettlingFunction(t *testing.T) {
 		{lambdatypes.StateActive, lambdatypes.LastUpdateStatusFailed, true},
 	} {
 		cur.State, cur.LastUpdateStatus = c.state, c.lastUpdate
-		obs, ok := o.observation(context.Background(), observedFn(), cur, observeDest, "checkout")
+		obs, ok := o.observation(context.Background(), observedFn(), cur, observeDest, nil, enabledLambdaSource{serviceName: "checkout"})
 		if ok != c.wantVerdict {
 			t.Errorf("state=%q lastUpdateStatus=%q: recorded a verdict = %v, want %v", c.state, c.lastUpdate, ok, c.wantVerdict)
 		}
@@ -440,18 +611,37 @@ func TestObservedPrintTracksInstrumentationOnly(t *testing.T) {
 // customer is supposed to apply changes, since that is the other half of "has anything moved since last pass".
 func TestDesiredPrintTracksDesiredInputs(t *testing.T) {
 	fn := observedFn()
-	base := desiredPrint(false, fn, observedLayerARN, observeDest, false, "checkout")
+	cfgFor := func(d domaindest.OTLPTarget) string {
+		cfg, err := renderCollectorConfig(d, nil)
+		if err != nil {
+			t.Fatalf("renderCollectorConfig: %v", err)
+		}
+		return cfg
+	}
+	base := desiredPrint(false, fn, observedLayerARN, false, "checkout", observeCollectorCfg(), "")
 
 	cases := map[string]string{
-		"service name":  desiredPrint(false, fn, observedLayerARN, observeDest, false, "renamed"),
-		"layer version": desiredPrint(false, fn, "arn:aws:lambda:us-east-1:1:layer:odigos-otel-python-x86_64:9", observeDest, false, "checkout"),
-		"debug toggle":  desiredPrint(false, fn, observedLayerARN, observeDest, true, "checkout"),
-		"mode":          desiredPrint(true, fn, observedLayerARN, observeDest, false, "checkout"),
-		"destination": desiredPrint(false, fn, observedLayerARN,
-			domaindest.OTLPTarget{Endpoint: "other:4317", Insecure: true, Traces: true}, false, "checkout"),
-		"signals": desiredPrint(false, fn, observedLayerARN,
-			domaindest.OTLPTarget{Endpoint: "collector:4317", Insecure: true, Traces: true, Metrics: true}, false, "checkout"),
+		"service name":  desiredPrint(false, fn, observedLayerARN, false, "renamed", observeCollectorCfg(), ""),
+		"layer version": desiredPrint(false, fn, "arn:aws:lambda:us-east-1:1:layer:odigos-otel-python-x86_64:9", false, "checkout", observeCollectorCfg(), ""),
+		"debug toggle":  desiredPrint(false, fn, observedLayerARN, true, "checkout", observeCollectorCfg(), ""),
+		"mode":          desiredPrint(true, fn, observedLayerARN, false, "checkout", observeCollectorCfg(), ""),
+		"destination": desiredPrint(false, fn, observedLayerARN, false, "checkout",
+			cfgFor(domaindest.OTLPTarget{Endpoint: "other:4317", Insecure: true, Traces: true}), ""),
+		"signals": desiredPrint(false, fn, observedLayerARN, false, "checkout",
+			cfgFor(domaindest.OTLPTarget{Endpoint: "collector:4317", Insecure: true, Traces: true, Metrics: true}), ""),
+		// The transport and the credential are new inputs the previous print could not see at all.
+		"transport": desiredPrint(false, fn, observedLayerARN, false, "checkout",
+			cfgFor(domaindest.OTLPTarget{HTTPEndpoint: "https://collector:4318", Traces: true}), ""),
 	}
+	// A java function whose source selects a different wrapper: the print must move, or the observer reports
+	// "nothing changed" on exactly the change the customer just made.
+	javaFn := store.LambdaFunction{FunctionName: "checkout", Runtime: "java21", Region: "us-east-1"}
+	javaBase := desiredPrint(false, javaFn, observedLayerARN, false, "checkout", observeCollectorCfg(), "")
+	cases["java wrapper selection"] = desiredPrint(false, javaFn, observedLayerARN, false, "checkout", observeCollectorCfg(), "otel-stream-handler")
+	if cases["java wrapper selection"] == javaBase {
+		t.Error("selecting a different java wrapper must move the desired print")
+	}
+	delete(cases, "java wrapper selection")
 	for what, got := range cases {
 		if got == base {
 			t.Errorf("a change to the %s must move the desired print", what)
@@ -459,7 +649,7 @@ func TestDesiredPrintTracksDesiredInputs(t *testing.T) {
 	}
 	// An empty reported name falls back to the function name, exactly as the diff does — otherwise the print
 	// would move between two inputs the comparator treats as identical.
-	if desiredPrint(false, fn, observedLayerARN, observeDest, false, "") != base {
+	if desiredPrint(false, fn, observedLayerARN, false, "", observeCollectorCfg(), "") != base {
 		t.Error("an empty reported service name must resolve to the function name, as instrumentationDiff does")
 	}
 }
