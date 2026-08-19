@@ -148,6 +148,25 @@ func (s *Store) OTLPExportTarget(ctx context.Context) (domaindest.OTLPTarget, bo
 	return target, found, nil
 }
 
+// OTLPExportHeaders returns the per-request headers the connector's OTLP destination requires — its
+// credential, in practice — or nil when it needs none.
+//
+// Separate from OTLPExportTarget rather than folded into it because OTLPTarget mirrors the destination
+// definitions generated upstream in odigos, and this connector must not fork that shape. The headers come
+// off the raw Destination.Config the generated model already carries through, converted in code by
+// domaindest.ResolveOTLPHeaders, which selects the same destination OTLPExportTarget resolves.
+func (s *Store) OTLPExportHeaders(ctx context.Context) (map[string]string, error) {
+	recs, err := s.ListDestinations(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dests := make([]domaindest.Destination, 0, len(recs))
+	for _, rec := range recs {
+		dests = append(dests, DestinationRecordToDomain(rec))
+	}
+	return domaindest.ResolveOTLPHeaders(dests), nil
+}
+
 func DestinationRecordToDomain(rec DestinationRecord) domaindest.Destination {
 	cfg := rec.Config
 	if cfg == nil {
