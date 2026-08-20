@@ -771,33 +771,33 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-replace odigosconditionalattributes => github.com/odigos-io/odigos/collector/processors/odigosconditionalattributes v0.0.0-feat.amir-testing.4
+replace odigosconditionalattributes => github.com/odigos-io/odigos/collector/processors/odigosconditionalattributes v1.36.0-pre4
 
-replace odigossqldboperationprocessor => github.com/odigos-io/odigos/collector/processors/odigossqldboperationprocessor v0.0.0-feat.amir-testing.4
+replace odigossqldboperationprocessor => github.com/odigos-io/odigos/collector/processors/odigossqldboperationprocessor v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/collector/processor/odigossqlqueryprocessor => github.com/odigos-io/odigos/collector/processors/odigossqlqueryprocessor v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/collector/processor/odigossqlqueryprocessor => github.com/odigos-io/odigos/collector/processors/odigossqlqueryprocessor v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/collector/processor/odigospiimaskingprocessor => github.com/odigos-io/odigos/collector/processors/odigospiimaskingprocessor v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/collector/processor/odigospiimaskingprocessor => github.com/odigos-io/odigos/collector/processors/odigospiimaskingprocessor v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor => github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor => github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor v1.36.0-pre4
 
-replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/azureblobstorageexporter => github.com/odigos-io/odigos/collector/exporters/azureblobstorageexporter v0.0.0-feat.amir-testing.4
+replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/azureblobstorageexporter => github.com/odigos-io/odigos/collector/exporters/azureblobstorageexporter v1.36.0-pre4
 
-replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/googlecloudstorageexporter => github.com/odigos-io/odigos/collector/exporters/googlecloudstorageexporter v0.0.0-feat.amir-testing.4
+replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/googlecloudstorageexporter => github.com/odigos-io/odigos/collector/exporters/googlecloudstorageexporter v1.36.0-pre4
 
-replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/mockdestinationexporter => github.com/odigos-io/odigos/collector/exporters/mockdestinationexporter v0.0.0-feat.amir-testing.4
+replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/mockdestinationexporter => github.com/odigos-io/odigos/collector/exporters/mockdestinationexporter v1.36.0-pre4
 
-replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigostrafficmetrics => github.com/odigos-io/odigos/collector/processors/odigostrafficmetrics v0.0.0-feat.amir-testing.4
+replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigostrafficmetrics => github.com/odigos-io/odigos/collector/processors/odigostrafficmetrics v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor => github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor => github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/collector/processor/odigosurltemplateprocessor => github.com/odigos-io/odigos/collector/processors/odigosurltemplateprocessor v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/collector/processor/odigosurltemplateprocessor => github.com/odigos-io/odigos/collector/processors/odigosurltemplateprocessor v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/collector/processor/odigoslogsresourceattrsprocessor => github.com/odigos-io/odigos/collector/processors/odigoslogsresourceattrsprocessor v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/collector/processor/odigoslogsresourceattrsprocessor => github.com/odigos-io/odigos/collector/processors/odigoslogsresourceattrsprocessor v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/collector/processor/odigosextractattributeprocessor => github.com/odigos-io/odigos/collector/processors/odigosextractattributeprocessor v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/collector/processor/odigosextractattributeprocessor => github.com/odigos-io/odigos/collector/processors/odigosextractattributeprocessor v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor => github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor => github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor v1.36.0-pre4
 
 replace github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor => ../processors/odigosprofilesprocessor
 
@@ -813,21 +813,21 @@ replace github.com/odigos-io/odigos-enterprise/odigosauth => ../../odigosauth
 
 replace github.com/odigos-io/odigos-enterprise/ebpfshare => ../../ebpfshare
 
-replace odigosk8scmprovider => github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v0.0.0-feat.amir-testing.4
+replace odigosk8scmprovider => github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector => github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector => github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/collector/connectors/serviceioconnector => github.com/odigos-io/odigos/collector/connectors/serviceioconnector v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/collector/connectors/serviceioconnector => github.com/odigos-io/odigos/collector/connectors/serviceioconnector v1.36.0-pre4
 
-replace github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector => github.com/odigos-io/odigos/collector/connectors/servicegraphconnector v0.0.0-feat.amir-testing.4
+replace github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector => github.com/odigos-io/odigos/collector/connectors/servicegraphconnector v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.36.0-pre4
 
-replace go.opentelemetry.io/collector/config/configgrpc => github.com/odigos-io/odigos/collector/config/configgrpc v0.0.0-feat.amir-testing.4
+replace go.opentelemetry.io/collector/config/configgrpc => github.com/odigos-io/odigos/collector/config/configgrpc v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension => github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension => github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension => github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension => github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v1.36.0-pre4
 
 replace github.com/apache/thrift => github.com/apache/thrift v0.23.0
 

@@ -106,22 +106,22 @@ replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
-replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/instrumentor => github.com/odigos-io/odigos/instrumentor v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/instrumentor => github.com/odigos-io/odigos/instrumentor v1.36.0-pre4
 
-replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v1.36.0-pre4
 
 // k8sutils requires this via its own local-only replace, which doesn't propagate across repos.
-replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v0.0.0-feat.amir-testing.4
+replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.36.0-pre4
 
 // argo-rollouts@v1.9.1 requires this via its own internal-only replace, which doesn't propagate to us.
 replace k8s.io/kubelet => k8s.io/kubelet v0.34.1
