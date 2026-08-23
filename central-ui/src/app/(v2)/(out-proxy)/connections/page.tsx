@@ -103,6 +103,7 @@ export default function Page() {
       cloudConnectorProviders={providersData?.cloudConnectorProviders ?? []}
       onCreateCloudConnector={onCreateCloudConnector}
       configMinSupportedVersion={1.16}
+      snapshotMinSupportedVersion="1.20"
     />
   );
 }
