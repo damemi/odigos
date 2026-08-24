@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"time"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
@@ -26,12 +27,22 @@ const (
 	// EnvOdigosManaged marks a Container App as instrumented by THIS connector and carries, in its JSON
 	// value, the pre-Odigos value of every env key we changed so rollback restores the app exactly.
 	//
-	// It is the SINGLE authority on Odigos ownership. Every decision keys off it and nothing else:
-	// discovery deriving the instrumented flag, the gate that authorizes a mutation, and rollback. A
-	// second, weaker signal would let those disagree — a workload one of them calls ours and another does
-	// not oscillates between states, and worse, the mutation gate is the safety boundary that keeps Odigos
-	// out of a workload a customer instrumented themselves.
+	// It is the SINGLE authority on Odigos OWNERSHIP — the right to mutate an app and to roll it back — and
+	// nothing widens that: the mutation gate is the safety boundary that keeps Odigos out of an app a customer
+	// instrumented themselves, and only this marker records what undoing a mutation restores.
+	//
+	// It is NOT the authority on whether an app is instrumented. That question also accepts EnvOdigosIaC
+	// (below), because in manual (IaC) mode the connector never mutates the app and never writes this marker at
+	// all. Keeping the two questions apart is what stops them contradicting each other: the wider read reports
+	// what is applied, the narrower one authorizes changing it, and neither flips the other.
 	EnvOdigosManaged = "ODIGOS_MANAGED"
+	// EnvOdigosIaC is the base-owned attribution marker an Odigos IaC artifact writes on an app the CUSTOMER
+	// instrumented in their own deployment definition (see api.EnvOdigosIaC). It carries the staged agent's
+	// language, which is what the desired activation environment is derived from, and deliberately no rollback
+	// snapshot — nothing converges a manual-mode app, so there is no mutation to undo.
+	//
+	// It answers "is this instrumented by Odigos" and never "may Odigos change this".
+	EnvOdigosIaC = baseapi.EnvOdigosIaC
 	// EnvCollectorEndpoint carries the user-configured OTLP destination as raw host:port (no scheme — the
 	// same convention the AWS connector uses for this variable name).
 	//

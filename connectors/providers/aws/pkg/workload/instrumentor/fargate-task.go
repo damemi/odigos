@@ -627,8 +627,11 @@ func (i *ecsInspector) recordContainers(ctx context.Context, td *ecstypes.TaskDe
 	// as a target, the new one reported instrumented; and in manual (IaC) mode, where nothing writes the
 	// service flag until the observer does, every container reported uninstrumented no matter what the
 	// customer had applied.
+	// Either marker: a container the CUSTOMER instrumented in their own definition is instrumented, and the
+	// report is what tells them so. Restricting this to the ownership marker is exactly the manual-mode bug the
+	// comment above describes, one layer down.
 	owned := make(map[int]bool, len(td.ContainerDefinitions))
-	for _, idx := range ownedContainerIndexes(td) {
+	for _, idx := range instrumentedContainerIndexes(td) {
 		owned[idx] = true
 	}
 	out := make([]store.ECSContainer, 0, len(td.ContainerDefinitions))

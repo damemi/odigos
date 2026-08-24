@@ -269,6 +269,14 @@ func lambdaPlanNotes(lang, activation string) []string {
 		fmt.Sprintf("%s must match the workload's name in Odigos. A different value is reported as instrumentation drift, not as a naming preference.", EnvServiceName),
 		fmt.Sprintf("%s carries the in-Lambda collector's ENTIRE configuration inline, so no other variable describes your destination. Substitute %s and %s inside it, and leave the rest byte-for-byte as shown — Odigos compares the whole value, so an extra space is reported as drift.",
 			EnvCollectorConfigURI, plan.PlaceholderOTLPEndpoint, plan.PlaceholderOTLPInsecure),
+		// The template above is rendered with NO headers, deliberately: this string ends up in Terraform,
+		// CloudFormation and shell files that get committed and pasted into tickets, so the destination's
+		// credential must not be baked into it (see lambdaCollectorConfigTemplate). But the observer renders
+		// the desired configuration WITH the destination's headers and compares the whole value, so a customer
+		// whose destination authenticates and who applies this verbatim is reported as drifted forever — and
+		// exports without the credential. Saying exactly how to add them is the only way both can be true.
+		fmt.Sprintf("If the destination configured on this connector sends authentication headers, they are part of the value Odigos compares and you have to add them: inside the `otlp:` exporter map, immediately after the `tls:` entry, append `, headers: {\"<name>\": \"<value>\"}` listing every header in ascending order of name. Treat the result as a secret — anyone with lambda:GetFunctionConfiguration can read it — and prefer a destination that authenticates by network position, or a collector you control, if that is not acceptable. With no headers configured, leave %s exactly as shown.",
+			EnvCollectorConfigURI),
 		fmt.Sprintf("%s is \"true\" only if the destination is plaintext; it has to match how the destination is configured on this connector.", plan.PlaceholderOTLPInsecure),
 		fmt.Sprintf("If your destination speaks OTLP/HTTP rather than gRPC, replace the whole `otlp:` exporter with `otlphttp: {endpoint: \"<your https URL>\"}` and name `otlphttp` in each pipeline's exporters. The gRPC exporter takes host:port and a TLS flag; the HTTP one takes a scheme-qualified URL and no TLS flag."),
 		fmt.Sprintf("Delete the pipeline for any signal your destination does not accept, and set that signal's %s / %s / %s to \"%s\" so the agent never produces it. Leave the variable UNSET for a signal your destination does accept — \"%s\" is already the SDK default, and Odigos compares those variables against unset.",
@@ -282,7 +290,7 @@ func lambdaPlanNotes(lang, activation string) []string {
 		fmt.Sprintf("Attach at most %d layers in total, the AWS limit, and do not attach two versions of the same layer — Odigos reports a duplicate as a layer-version conflict.", maxLambdaLayers),
 		fmt.Sprintf("%s / %s must NOT be set. They point the SDK straight at the destination, which blocks the invocation on a remote endpoint; the layer exports to the in-Lambda collector on localhost instead, and the collector forwards asynchronously.",
 			envLegacyOTLPEndpoint, envLegacyOTLPHeaders),
-		fmt.Sprintf("Leave %s unset unless this connector has debug telemetry enabled, in which case set it to %q. It is compared exactly, so any other value is reported as drift.",
+		fmt.Sprintf("Leave %s unset unless this connector has debug telemetry enabled, in which case set it to %q. On a handler-activation function it is compared exactly, so any other value is reported as drift; on a web-server function Odigos does not check it at all, but the agent still reads it.",
 			EnvOtelLogLevel, otelLogLevelDebug),
 	}
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
 
@@ -96,12 +97,55 @@ func ecsPriorValue(key string, env map[string]string) *string {
 	return nil
 }
 
+// ecsMarker is what a container's Odigos markers say about it, resolved from whichever of the two it carries.
+//
+// The two are not alternatives for the same fact — they are written by different parties and answer different
+// questions (see api.EnvOdigosIaC). Managed is the one that matters downstream: it says the CONNECTOR wrote
+// this and a rollback snapshot exists, which is the only basis on which anything here may mutate or restore a
+// container. An IaC-marked container is read, reported and judged; it is never rolled back, because there is
+// nothing recorded to roll back to.
+type ecsMarker struct {
+	// Managed is true when the container carries the connector's own ownership marker (automatic mode).
+	Managed bool
+	// Language is the agent that was staged, from whichever marker recorded it. Empty means unrecorded, which
+	// a customer's hand-authored IaC marker legitimately can be — see containerDiff for why that skips the
+	// language check rather than reporting drift.
+	Language string
+	// PrevEnv is the rollback snapshot, and it exists ONLY on a Managed marker.
+	PrevEnv map[string]*string
+}
+
+// readECSMarker resolves a container's Odigos attribution, reporting false when neither marker is present.
+//
+// The ownership marker wins when both are there, for the same reason Lambda's recordedLayer prefers it: it is
+// the richer record — it carries the snapshot — and a container the connector has taken over is the
+// connector's to describe, whatever an earlier manual application also left behind.
+func readECSMarker(env map[string]string) (ecsMarker, bool) {
+	if m, ok := parseECSManifest(env[store.EnvOdigosManaged]); ok {
+		return ecsMarker{Managed: true, Language: m.Language, PrevEnv: m.PrevEnv}, true
+	}
+	if m, ok := baseapi.ParseIaCMarker(env[store.EnvOdigosIaC]); ok {
+		return ecsMarker{Language: m.Language}, true
+	}
+	return ecsMarker{}, false
+}
+
 // ecsPriorEnv returns the customer's original value for an env key from the snapshot ("" if it was
 // absent). Used to rebuild append-style loader vars (JAVA_TOOL_OPTIONS/NODE_OPTIONS/PYTHONPATH) from the
 // original rather than from the current (already-modified) value, so re-instrument does not accumulate
 // our value.
 func ecsPriorEnv(m ecsManagedManifest, key string) string {
-	if prev, ok := m.PrevEnv[key]; ok && prev != nil {
+	return priorEnvFrom(m.PrevEnv, key)
+}
+
+// markerPriorEnv is ecsPriorEnv over a resolved marker. An IaC marker carries no snapshot, so this returns ""
+// for one — which is correct rather than lossy: the manual-mode loader check never asks for a prior value.
+func markerPriorEnv(m ecsMarker, key string) string {
+	return priorEnvFrom(m.PrevEnv, key)
+}
+
+func priorEnvFrom(prevEnv map[string]*string, key string) string {
+	if prev, ok := prevEnv[key]; ok && prev != nil {
 		return *prev
 	}
 	return ""

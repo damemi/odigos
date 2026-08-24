@@ -196,3 +196,173 @@ func TestInstrumentationSectionNamespacesByType(t *testing.T) {
 		t.Errorf("an unknown type returned %d artifacts", len(got))
 	}
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// Language scoping
+// ---------------------------------------------------------------------------------------------------------
+
+// TestInstrumentationArtifactsForNarrowsByLanguage is the behaviour the whole per-language change rests on:
+// a workload is served ITS language's documents and not the others'. A selection that returned everything
+// would put five runtimes' environment variables in front of a customer who runs one, which is the shape this
+// replaced; one that returned nothing would fall back to prose for a language that has real snippets.
+func TestInstrumentationArtifactsForNarrowsByLanguage(t *testing.T) {
+	for _, s := range All() {
+		for _, ty := range s.Workloads.Instrumentation.Types {
+			all := s.InstrumentationArtifacts(ty.Name)
+			langs := map[string]bool{}
+			for _, a := range all {
+				if a.Language != "" {
+					langs[a.Language] = true
+				}
+			}
+			if len(langs) < 2 {
+				// A language-neutral (or single-language) type has nothing to narrow.
+				continue
+			}
+			for lang := range langs {
+				got := s.InstrumentationArtifactsFor(ty.Name, lang)
+				if len(got) == 0 {
+					t.Errorf("%s/%s: no artifacts served for language %q, though it declares some", s.Provider, ty.Name, lang)
+				}
+				if len(got) == len(all) {
+					t.Errorf("%s/%s: language %q was served all %d artifacts, so nothing was narrowed", s.Provider, ty.Name, lang, len(all))
+				}
+				for _, a := range got {
+					if a.Language != lang {
+						t.Errorf("%s/%s: language %q was served artifact %q, which declares language %q",
+							s.Provider, ty.Name, lang, a.ID, a.Language)
+					}
+				}
+			}
+			// An unknown language must not silently receive another one's instructions. With no
+			// language-neutral artifacts declared the honest answer is none, and the caller renders prose.
+			if got := s.InstrumentationArtifactsFor(ty.Name, "cobol"); len(got) != 0 {
+				t.Errorf("%s/%s: an unknown language was served %d artifacts, the first being %q",
+					s.Provider, ty.Name, len(got), got[0].ID)
+			}
+		}
+	}
+}
+
+// TestInstrumentationArtifactsForFallsBackToLanguageNeutral: a type whose instrumentation does not depend on
+// the language declares neutral artifacts, and every language must still be served them. Without the
+// fallback, adding the language dimension would have silently emptied such a type's instructions.
+func TestInstrumentationArtifactsForFallsBackToLanguageNeutral(t *testing.T) {
+	s, err := Parse([]byte(`
+provider: test
+setup:
+  artifacts:
+    - id: neutral-terraform
+      section: instrumentation:test.thing
+      variant: terraform
+      format: shell
+      template: "x"
+`))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	for _, lang := range []string{"", "java", "cobol"} {
+		if got := s.InstrumentationArtifactsFor("test.thing", lang); len(got) != 1 {
+			t.Errorf("language %q was served %d artifacts, want the 1 language-neutral one", lang, len(got))
+		}
+	}
+}
+
+func TestParseAllowsTheSameVariantForDifferentLanguages(t *testing.T) {
+	// One Terraform snippet per language IS the shape: only one language's set is ever served, so they are
+	// not two options in one chooser.
+	if _, err := Parse([]byte(`
+provider: test
+setup:
+  artifacts:
+    - id: a
+      section: instrumentation:test.thing
+      language: java
+      variant: terraform
+      format: shell
+      template: "x"
+    - id: b
+      section: instrumentation:test.thing
+      language: python
+      variant: terraform
+      format: shell
+      template: "y"
+`)); err != nil {
+		t.Fatalf("the same variant for two languages was rejected: %v", err)
+	}
+}
+
+func TestParseRejectsDuplicateVariantForOneLanguage(t *testing.T) {
+	_, err := Parse([]byte(`
+provider: test
+setup:
+  artifacts:
+    - id: a
+      section: instrumentation:test.thing
+      language: java
+      variant: terraform
+      format: shell
+      template: "x"
+    - id: b
+      section: instrumentation:test.thing
+      language: java
+      variant: terraform
+      format: shell
+      template: "y"
+`))
+	if err == nil {
+		t.Fatal("two artifacts declaring the same variant for the same language were accepted")
+	}
+	if !strings.Contains(err.Error(), "java") || !strings.Contains(err.Error(), "terraform") {
+		t.Errorf("error should name the language and the variant, got: %v", err)
+	}
+}
+
+// TestParseRejectsMixingLanguageScopedAndNeutralArtifacts pins why the mix cannot be allowed: the selection
+// prefers a language's own artifacts and only falls back to the neutral ones when it has none, so a section
+// holding both would serve Java its Terraform snippet and silently withhold the CloudFormation one beside it.
+func TestParseRejectsMixingLanguageScopedAndNeutralArtifacts(t *testing.T) {
+	_, err := Parse([]byte(`
+provider: test
+setup:
+  artifacts:
+    - id: a
+      section: instrumentation:test.thing
+      language: java
+      variant: terraform
+      format: shell
+      template: "x"
+    - id: b
+      section: instrumentation:test.thing
+      variant: cloudformation
+      format: yaml
+      template: "y"
+`))
+	if err == nil {
+		t.Fatal("a section mixing language-scoped and language-neutral artifacts was accepted")
+	}
+	if !strings.Contains(err.Error(), "instrumentation:test.thing") {
+		t.Errorf("error should name the section, got: %v", err)
+	}
+}
+
+// TestParseRejectsLanguageOutsideAnInstrumentationSection: nothing selects by language anywhere else, so the
+// key would read as a scoping that quietly does nothing — an IAM policy document has no language.
+func TestParseRejectsLanguageOutsideAnInstrumentationSection(t *testing.T) {
+	_, err := Parse([]byte(`
+provider: test
+setup:
+  artifacts:
+    - id: policy-preview
+      section: permissions
+      language: java
+      format: json
+      template: "{}"
+`))
+	if err == nil {
+		t.Fatal("a language on an onboarding artifact was accepted")
+	}
+	if !strings.Contains(err.Error(), "policy-preview") {
+		t.Errorf("error should name the artifact, got: %v", err)
+	}
+}

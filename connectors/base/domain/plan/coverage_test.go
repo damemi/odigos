@@ -121,3 +121,172 @@ func TestCoverageProblemsRejectsEmptyInputs(t *testing.T) {
 		t.Errorf("no artifacts should be reported as a problem, got %v", got)
 	}
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// CoverageProblemsByLanguage
+// ---------------------------------------------------------------------------------------------------------
+
+// javaArtifact / pythonArtifact are the per-language shape the providers publish: each carries its OWN
+// language's staging command and loader variable, and neither documents the other's.
+func javaArtifact() string {
+	return strings.Join([]string{
+		`volume "odigos-agent" size 500Mi mounted at /var/odigos`,
+		`container odigos-agent image odigos/agents:v1 probe 2400`,
+		`command: sh -c "cp -r /instrumentations/java /var/odigos/java"`,
+		`OTEL_SERVICE_NAME = "api"`,
+		`JAVA_TOOL_OPTIONS: append "-javaagent:/var/odigos/java/javaagent.jar" to the current value`,
+	}, "\n")
+}
+
+func pythonArtifact() string {
+	return strings.Join([]string{
+		`volume "odigos-agent" size 500Mi mounted at /var/odigos`,
+		`container odigos-agent image odigos/agents:v1 probe 2400`,
+		`command: sh -c "cp -r /instrumentations/python /var/odigos/python"`,
+		`OTEL_SERVICE_NAME = "api"`,
+		`PYTHONPATH: prepend "/var/odigos/python" to the current value`,
+	}, "\n")
+}
+
+func perLanguageArtifacts() map[string]Artifact {
+	return map[string]Artifact{
+		"tf-java":   {Language: "java", Body: javaArtifact()},
+		"tf-python": {Language: "python", Body: pythonArtifact()},
+	}
+}
+
+// TestCoverageProblemsByLanguagePassesPerLanguageArtifacts is the whole point of grouping: a Java document
+// that says nothing about Python is complete, where the flat check would demand Python's agent path in it.
+func TestCoverageProblemsByLanguagePassesPerLanguageArtifacts(t *testing.T) {
+	got := CoverageProblemsByLanguage(perLanguageArtifacts(), []Plan{javaPlan(), pythonPlan()})
+	if len(got) != 0 {
+		t.Fatalf("per-language artifacts reported problems:\n%s", strings.Join(got, "\n"))
+	}
+}
+
+// TestCoverageProblemsByLanguageCatchesALanguageMissingItsOwnValue is the failure a flat check cannot see:
+// python's document loses python's agent path, and the java document never mentioned it, so the union check
+// would still find the literal nowhere — but only because the java plan does not need it. Grouped, the
+// omission lands on the artifact a reader has to go fix.
+func TestCoverageProblemsByLanguageCatchesALanguageMissingItsOwnValue(t *testing.T) {
+	arts := perLanguageArtifacts()
+	arts["tf-python"] = Artifact{Language: "python", Body: strings.ReplaceAll(pythonArtifact(), "/var/odigos/python", "/var/odigos/py")}
+	got := CoverageProblemsByLanguage(arts, []Plan{javaPlan(), pythonPlan()})
+	if len(got) == 0 {
+		t.Fatal("a stale python agent path in python's own artifact was accepted")
+	}
+	joined := strings.Join(got, "\n")
+	if !strings.Contains(joined, "python") {
+		t.Errorf("the problem should name the language, got:\n%s", joined)
+	}
+	if strings.Contains(joined, "tf-java") {
+		t.Errorf("java's artifact was blamed for python's omission:\n%s", joined)
+	}
+}
+
+// A language with no artifact of its own and no language-neutral fallback is served nothing, so the customer
+// gets prose for a language the connector can fully instrument.
+func TestCoverageProblemsByLanguageCatchesALanguageWithNoArtifact(t *testing.T) {
+	arts := map[string]Artifact{"tf-java": {Language: "java", Body: javaArtifact()}}
+	got := CoverageProblemsByLanguage(arts, []Plan{javaPlan(), pythonPlan()})
+	if len(got) == 0 {
+		t.Fatal("a language with no artifact at all was accepted")
+	}
+	if !strings.Contains(strings.Join(got, "\n"), "python") {
+		t.Errorf("the problem should name the unserved language, got:\n%s", strings.Join(got, "\n"))
+	}
+}
+
+// TestCoverageProblemsByLanguageCatchesAnUnreachableLanguage: a misspelled language key fails no other
+// check — the selection asks for "python", finds nothing, falls back to a neutral set that does not exist,
+// and the customer gets prose while a correct template sits unused in the spec.
+func TestCoverageProblemsByLanguageCatchesAnUnreachableLanguage(t *testing.T) {
+	arts := perLanguageArtifacts()
+	arts["tf-python"] = Artifact{Language: "py", Body: pythonArtifact()}
+	got := CoverageProblemsByLanguage(arts, []Plan{javaPlan(), pythonPlan()})
+	joined := strings.Join(got, "\n")
+	if !strings.Contains(joined, `"py"`) {
+		t.Errorf("an artifact tagged with a language no plan builds was not reported, got:\n%s", joined)
+	}
+}
+
+// Language-neutral artifacts serve every language, which is what a type whose instrumentation does not depend
+// on the language declares — so the fallback must be checked against every plan rather than skipped.
+func TestCoverageProblemsByLanguageChecksTheNeutralFallbackAgainstEveryLanguage(t *testing.T) {
+	arts := map[string]Artifact{"reference": {Body: fullArtifact()}}
+	if got := CoverageProblemsByLanguage(arts, []Plan{javaPlan(), pythonPlan()}); len(got) != 0 {
+		t.Fatalf("a complete language-neutral artifact reported problems:\n%s", strings.Join(got, "\n"))
+	}
+
+	arts["reference"] = Artifact{Body: javaArtifact()}
+	if got := CoverageProblemsByLanguage(arts, []Plan{javaPlan(), pythonPlan()}); len(got) == 0 {
+		t.Fatal("a language-neutral artifact that only documents java was accepted for both languages")
+	}
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// MarkerAttachmentProblems
+// ---------------------------------------------------------------------------------------------------------
+
+const (
+	testMarkerPayload  = `{"v":1,"lang":"java"}`
+	testWantMarkerVar  = "ODIGOS_IAC"
+	testOtherMarkerVar = "ODIGOS_MANAGED"
+)
+
+func markerArtifact(varName string) string {
+	return strings.Join([]string{
+		"env:",
+		"  - name: " + varName,
+		"    value: '" + testMarkerPayload + "'",
+		"",
+		"NOTES",
+		"- Set ODIGOS_IAC exactly as shown. Do NOT set ODIGOS_MANAGED.",
+	}, "\n")
+}
+
+func TestMarkerAttachmentProblemsPassesTheRightVariable(t *testing.T) {
+	arts := map[string]Artifact{"az-cli": {Language: "java", Body: markerArtifact(testWantMarkerVar)}}
+	if got := MarkerAttachmentProblems(arts, testMarkerPayload, testWantMarkerVar, testOtherMarkerVar); len(got) != 0 {
+		t.Fatalf("a correctly wired marker reported problems:\n%s", strings.Join(got, "\n"))
+	}
+}
+
+// TestMarkerAttachmentProblemsCatchesTheWrongVariable is the exact failure this guard was added for: both
+// variable names appear in the document, so every substring check passes, and the snippet a customer copies
+// still writes the ownership marker.
+func TestMarkerAttachmentProblemsCatchesTheWrongVariable(t *testing.T) {
+	body := markerArtifact(testOtherMarkerVar)
+	// Prove the substring sweep cannot see it: the wanted variable IS present, in the notes.
+	if !strings.Contains(body, testWantMarkerVar) {
+		t.Fatal("fixture is wrong: the wanted variable must be present so a literal check would pass")
+	}
+	arts := map[string]Artifact{"az-cli": {Language: "java", Body: body}}
+	got := MarkerAttachmentProblems(arts, testMarkerPayload, testWantMarkerVar, testOtherMarkerVar)
+	if len(got) == 0 {
+		t.Fatal("a payload wired to the ownership marker was accepted")
+	}
+	if !strings.Contains(got[0], "az-cli") || !strings.Contains(got[0], testOtherMarkerVar) {
+		t.Errorf("the problem should name the artifact and the wrong variable, got: %s", got[0])
+	}
+}
+
+// An escaped payload (HCL, a shell heredoc) has to be recognized too, or the guard silently skips exactly the
+// artifacts whose syntax makes the mistake hardest to spot.
+func TestMarkerAttachmentProblemsSeesTheEscapedPayload(t *testing.T) {
+	escaped := strings.ReplaceAll(testMarkerPayload, `"`, `\"`)
+	body := "{ name = \"" + testOtherMarkerVar + "\", value = \"" + escaped + "\" },\n# Set ODIGOS_IAC, not this one."
+	arts := map[string]Artifact{"terraform": {Language: "java", Body: body}}
+	if got := MarkerAttachmentProblems(arts, testMarkerPayload, testWantMarkerVar, testOtherMarkerVar); len(got) == 0 {
+		t.Fatal("an escaped payload wired to the ownership marker was accepted")
+	}
+}
+
+// A payload sitting next to neither variable names no variable at all, which is its own bug: the customer is
+// shown a value with nowhere to put it.
+func TestMarkerAttachmentProblemsCatchesAnUnattachedPayload(t *testing.T) {
+	arts := map[string]Artifact{"reference": {Language: "java", Body: "the marker value is " + testMarkerPayload}}
+	if got := MarkerAttachmentProblems(arts, testMarkerPayload, testWantMarkerVar, testOtherMarkerVar); len(got) == 0 {
+		t.Fatal("a payload with no variable beside it was accepted")
+	}
+}

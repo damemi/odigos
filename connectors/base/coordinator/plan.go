@@ -8,19 +8,11 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
 )
 
-// InstrumentationPlan returns what a customer has to apply to instrument one workload, or nil when there is
-// nothing to publish for it.
+// InstrumentationPlan returns what a customer must apply to instrument one workload, or nil when there is
+// nothing to publish (unsupported type, no planner, uninstrumentable language — the report already explains).
 //
-// It is served in BOTH modes deliberately. Manual mode is the reason it exists — the connector reports the
-// workload as awaiting a deployment, so it had better be able to describe that deployment. But the same plan
-// in automatic mode answers "what exactly did Odigos change here", which today can only be answered by
-// reading a provider console. Restricting it to manual mode would withhold the desired state from the mode
-// where Odigos is the one applying it.
-//
-// nil (with no error) is the answer for every "nothing to say" case, and they are all legitimate: a workload
-// whose type has no instrumentation defined, a provider with no planner for the type, a language the planner
-// cannot instrument. The report already explains each of those; a plan invented for one would be instructions
-// that cannot work.
+// Served in both modes: manual needs it to describe the pending deployment; automatic uses it to show the
+// desired state Odigos applied (otherwise only visible in the provider console).
 func (c *Coordinator) InstrumentationPlan(ctx context.Context, serviceName, kind, region string) (*api.InstrumentationPlanResult, error) {
 	coordLog.Debug("instrumentation plan", "service", serviceName, "kind", kind, "region", region)
 
@@ -58,8 +50,11 @@ func (c *Coordinator) InstrumentationPlan(ctx context.Context, serviceName, kind
 		InstrumentationType: w.InstrumentationType,
 		Mode:                w.ManagementMode,
 		Plan:                planned.Plan,
-		Artifacts:           c.instrumentationArtifacts(w.InstrumentationType),
-		Resolved:            c.resolvePlaceholders(ctx, *w, planned.Resolved),
+		// Narrowed to the language the planner resolved for THIS workload — its detected runtime, or the
+		// runtime override when the customer set one, whichever the plan was built from. A customer opening a
+		// Java service gets the Java instructions and not a document covering six languages.
+		Artifacts: c.instrumentationArtifacts(w.InstrumentationType, planned.Plan.Language),
+		Resolved:  c.resolvePlaceholders(ctx, *w, planned.Resolved),
 	}
 	return res, nil
 }
@@ -76,13 +71,14 @@ func (c *Coordinator) workloadPlanner(typeName string) (api.InstrumentationPlann
 	return p, ok && p != nil
 }
 
-// instrumentationArtifacts is the provider's spec-declared delivery variants for one instrumentation type.
+// instrumentationArtifacts returns the provider's spec-declared delivery variants for one (type, language).
+// Spec-owned (not planner) so templates are shared across workloads and testable against the injector;
+// the planner only supplies workload-specific values.
 //
-// They come from the spec rather than from the planner because they are per TYPE, not per workload: one set of
-// templates serves a whole account, which is what lets them be authored once and checked against the injector
-// by a provider test. The planner supplies the values that make them workload-specific.
-func (c *Coordinator) instrumentationArtifacts(typeName string) []api.InstrumentationArtifact {
-	arts := c.provider.Spec().InstrumentationArtifacts(typeName)
+// language must be the plan's (detected runtime + override), not the report's — otherwise instructions and
+// conformance disagree. Empty means no templates for that language; the caller falls back to prose.
+func (c *Coordinator) instrumentationArtifacts(typeName, language string) []api.InstrumentationArtifact {
+	arts := c.provider.Spec().InstrumentationArtifactsFor(typeName, language)
 	if len(arts) == 0 {
 		return nil
 	}
@@ -102,18 +98,10 @@ func (c *Coordinator) instrumentationArtifacts(typeName string) []api.Instrument
 	return out
 }
 
-// resolvePlaceholders fills the placeholder values that are properties of the CONNECTOR rather than of the
-// workload's own definition: the reported service name, the region, and the destination endpoint in both the
-// raw host:port and scheme-qualified forms.
-//
-// These are resolved here rather than in each planner for one reason: the two endpoint forms are not
-// interchangeable — the OpenTelemetry SDK variables need a scheme and silently export nowhere without one,
-// while the Odigos-namespaced collector variables take a bare authority — and four providers deriving that
-// independently is four chances to hand a customer an endpoint that looks right and drops their telemetry.
-//
-// A placeholder this cannot resolve is simply absent from the map. The client renders it as a field to fill
-// in, which is the truth: a container name lives in a definition the connector may never have read, and no
-// Odigos Lambda layer is published yet at all.
+// resolvePlaceholders fills connector-owned placeholders: service name, region, and the destination
+// endpoint in both forms (scheme-qualified for OTel SDK vars; bare host:port for Odigos collector vars).
+// Centralized so providers cannot disagree on those two forms. Unresolvable keys are omitted — the client
+// shows them as fields to fill in.
 func (c *Coordinator) resolvePlaceholders(ctx context.Context, w api.DiscoveredWorkload, fromProvider map[string]string) map[string]string {
 	// The provider's resolutions first, then the connector-owned ones on top: the base is authoritative for
 	// those, so a provider that also filled one does not get to disagree.

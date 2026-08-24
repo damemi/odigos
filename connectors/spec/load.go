@@ -77,18 +77,29 @@ func Parse(data []byte) (CloudConnectorSpec, error) {
 	return s, nil
 }
 
-// validateSetupArtifacts enforces the two invariants the artifact list's consumers assume.
+// validateSetupArtifacts enforces the invariants the artifact list's consumers assume.
 //
 // The id must be unique: it is the only key an artifact has, and it is what a UI keys a rendered list by and
 // what a test names when an artifact is incomplete. A duplicate does not fail anywhere — one entry simply
 // shadows the other, in whichever place happens to index by id — so it has to be rejected here.
 //
-// Within a section, the variant must be unique too, because distinct variants in a section ARE the "choose a
-// method" chooser: two artifacts declaring the same variant give the chooser two identical options and only
-// one of them can ever be selected. A section with a single artifact legitimately declares no variant.
+// Within a section, the variant must be unique PER LANGUAGE, because distinct variants in a section ARE the
+// "choose a method" chooser and the language is chosen for the customer (from the workload's detected runtime,
+// or its override): two artifacts claiming the same variant for the same language give the chooser two
+// identical options and only one of them can ever be selected. The same variant for two different languages is
+// the normal shape — one Terraform snippet per language — because only one language's set is ever served at a
+// time. A section with a single artifact legitimately declares no variant.
+//
+// An instrumentation section must also not MIX language-scoped and language-neutral artifacts.
+// InstrumentationArtifactsFor prefers the language-scoped ones and falls back to the neutral ones only when a
+// language has none, so a section holding both would serve a Java workload its Java variants and silently
+// withhold every neutral variant beside them — a chooser missing options that exist, which reads as the
+// connector not supporting a tool it does support.
 func validateSetupArtifacts(s CloudConnectorSpec) error {
 	ids := map[string]bool{}
 	variants := map[string]bool{}
+	// Per instrumentation section: whether it has declared a language-scoped / a language-neutral artifact.
+	scoped, neutral := map[string]bool{}, map[string]bool{}
 	for _, a := range s.Setup.Artifacts {
 		if a.ID == "" {
 			return fmt.Errorf("connector spec: setup artifact id is required")
@@ -97,12 +108,33 @@ func validateSetupArtifacts(s CloudConnectorSpec) error {
 			return fmt.Errorf("connector spec: duplicate setup artifact id %q", a.ID)
 		}
 		ids[a.ID] = true
+
+		if strings.HasPrefix(a.Section, instrumentationSectionPrefix) {
+			if a.Language == "" {
+				neutral[a.Section] = true
+			} else {
+				scoped[a.Section] = true
+			}
+			if scoped[a.Section] && neutral[a.Section] {
+				return fmt.Errorf("connector spec: setup section %q mixes language-scoped and language-neutral artifacts; "+
+					"a language that declares its own would be served those alone and the neutral ones withheld", a.Section)
+			}
+		} else if a.Language != "" {
+			// Outside an instrumentation section nothing selects by language, so a language here is a
+			// declaration that quietly does nothing — a policy document has no language.
+			return fmt.Errorf("connector spec: setup artifact %q declares language %q outside an instrumentation section (%q), where nothing selects by it",
+				a.ID, a.Language, a.Section)
+		}
+
 		if a.Variant == "" {
 			continue
 		}
-		k := a.Section + "/" + a.Variant
+		k := a.Section + "/" + a.Language + "/" + a.Variant
 		if variants[k] {
-			return fmt.Errorf("connector spec: setup section %q declares variant %q twice", a.Section, a.Variant)
+			if a.Language == "" {
+				return fmt.Errorf("connector spec: setup section %q declares variant %q twice", a.Section, a.Variant)
+			}
+			return fmt.Errorf("connector spec: setup section %q declares variant %q twice for language %q", a.Section, a.Variant, a.Language)
 		}
 		variants[k] = true
 	}

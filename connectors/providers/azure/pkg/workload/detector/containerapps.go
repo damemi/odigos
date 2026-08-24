@@ -19,9 +19,15 @@ import (
 
 var log = connlog.Subsystem("azure-workload-detector")
 
-// envOdigosManaged is the sole ownership signal, defined in the workload store — shared with the
-// instrumentor that writes it, so reader and writer cannot drift (see store.EnvOdigosManaged).
-const envOdigosManaged = store.EnvOdigosManaged
+// The two markers a discovered app may carry, both defined in the workload store — shared with the
+// instrumentor that writes one of them, so reader and writer cannot drift.
+const (
+	// envOdigosManaged is written by the connector when IT instruments an app (automatic mode).
+	envOdigosManaged = store.EnvOdigosManaged
+	// envOdigosIaC is written by the CUSTOMER's own deployment definition in manual (IaC) mode, from the
+	// instructions this connector publishes. Nothing else about the app differs.
+	envOdigosIaC = store.EnvOdigosIaC
+)
 
 // ContainerAppsDetector discovers Azure Container Apps across the subscription.
 type ContainerAppsDetector struct {
@@ -120,14 +126,20 @@ func toContainerApp(app *armappcontainers.ContainerApp) store.ContainerApp {
 	}
 }
 
-// odigosInstrumented reports whether a Container App's template shows instrumentation owned by THIS
-// connector. A customer's own OpenTelemetry setup is deliberately not treated as ours.
+// odigosInstrumented reports whether a Container App's template shows Odigos instrumentation. A customer's own
+// OpenTelemetry setup is deliberately not treated as ours.
 //
-// The ownership marker is the ONLY signal, deliberately. It is also what gates every mutation
-// (instrumentor.appOwned) and what rollback restores from, so deriving the flag from anything else would let
-// discovery and the instrumentor disagree: an app discovery called ours but the mutation gate did not would
-// flip between instrumented and not on every cycle, one write each, and never settle. Other
-// odigos-namespaced vars we set (store.EnvCollectorEndpoint) are values we own, not proof of ownership.
+// EITHER marker counts, and the pair is exhaustive: the connector writes the ownership marker when it performs
+// the mutation, and the customer's own deployment definition writes the IaC marker when they applied the
+// published instructions. Recognizing only the first is what made manual mode unreportable — an app with every
+// fragment correctly applied has no ownership marker and never will, so it read as untouched and the report told
+// the customer to go and deploy what they had already deployed.
+//
+// Widening THIS does not widen the mutation gate (instrumentor.appOwned), which still requires the ownership
+// marker alone. That asymmetry is the point rather than an inconsistency: the two answer different questions, so
+// they cannot disagree in the way a second ownership signal would — discovery reports what is applied, the gate
+// authorizes changing it, and an IaC-marked app is reported and never touched. Other odigos-namespaced vars we
+// set (store.EnvCollectorEndpoint) are values we own, not proof of anything.
 func odigosInstrumented(app *armappcontainers.ContainerApp) bool {
 	if app.Properties == nil || app.Properties.Template == nil {
 		return false
@@ -140,7 +152,7 @@ func odigosInstrumented(app *armappcontainers.ContainerApp) bool {
 			if e == nil || e.Name == nil {
 				continue
 			}
-			if *e.Name == envOdigosManaged {
+			if *e.Name == envOdigosManaged || *e.Name == envOdigosIaC {
 				return true
 			}
 		}

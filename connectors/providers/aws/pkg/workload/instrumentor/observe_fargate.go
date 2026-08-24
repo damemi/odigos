@@ -126,7 +126,9 @@ func (o *ECSFargateObserver) refreshOwnership(ctx context.Context, client *ecs.C
 	if err != nil {
 		return err
 	}
-	owned := len(ownedContainerIndexes(td)) > 0
+	// Either marker: this flag is "does the service carry Odigos instrumentation", and in manual mode the
+	// only marker on it is the one the customer's own deployment definition applied.
+	owned := len(instrumentedContainerIndexes(td)) > 0
 	if owned == svc.Instrumented {
 		return nil
 	}
@@ -193,7 +195,7 @@ func (o *ECSFargateObserver) observeService(ctx context.Context, client *ecs.Cli
 // to persist alongside it.
 type ecsEvaluation struct {
 	obs store.ECSObservation
-	// owned is whether ANY container carries the Odigos ownership marker — the service's instrumented flag.
+	// owned is whether ANY container carries an Odigos marker (ownership or IaC) — the service's instrumented flag.
 	owned bool
 	// terminal is an unsupported-prefixed message to record, or "" to clear whatever is recorded.
 	terminal string
@@ -205,7 +207,9 @@ type ecsEvaluation struct {
 func evaluateECSObservation(td *ecstypes.TaskDefinition, targets []containerTarget, selectErr error,
 	src enabledFargateSource, svc store.ECSService, image string, debug bool) ecsEvaluation {
 
-	ownedIdx := ownedContainerIndexes(td)
+	// Either marker — see instrumentedContainerIndexes. The observer is the read-only half, and it judges what
+	// is applied regardless of who applied it; only the mutating path needs the narrower ownership question.
+	ownedIdx := instrumentedContainerIndexes(td)
 	owned := len(ownedIdx) > 0
 
 	// The one exclusion that is genuinely terminal in BOTH modes: the Odigos Fargate agents bundle is

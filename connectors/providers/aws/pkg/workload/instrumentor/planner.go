@@ -119,14 +119,65 @@ func (p *ECSFargatePlanner) PlanFor(_ context.Context, w baseapi.DiscoveredWorkl
 // resolveECSRuntime's precedence, so the plan names the agent the reconcile would inject rather than the one
 // detection guessed and the customer overrode.
 //
-// A per-container override is deliberately NOT consulted. A plan is per workload and its container-scoped
-// fragments are anchored at one container; honoring a per-container override here would produce a plan for
-// whichever container happened to be first while presenting it as the whole task's instructions.
+// The container fallback is what makes this work in MANUAL mode at all, and without it Fargate published no
+// instructions there — the one mode they exist for. w.RuntimeLanguage is the service row's aggregate, and its
+// only writer is instrumentService (fargate-task.go), which runs from the reconciler; the coordinator gives a
+// manual-mode type no reconciler (activeReconcilers), so the field is permanently empty for exactly the
+// workloads that need a plan. Lambda never hit this because a function's runtime comes from the function
+// itself. The per-container runtimes ARE resolved in manual mode — the observer runs selectTargets and
+// recordContainers on every pass — so they are the workload-level answer that the aggregate should have been.
 func fargatePlanRuntime(w baseapi.DiscoveredWorkload) (lang, version string) {
 	if l := normalizeLanguage(w.Overrides.RuntimeLanguage); l != "" {
 		return l, w.Overrides.RuntimeVersion
 	}
-	return normalizeLanguage(w.RuntimeLanguage), w.RuntimeVersion
+	if l := normalizeLanguage(w.RuntimeLanguage); l != "" {
+		return l, w.RuntimeVersion
+	}
+	return detectedContainerRuntime(w)
+}
+
+// detectedContainerRuntime is the language every instrumentable container in the task definition agrees on,
+// and "" when they do not agree or none resolved.
+//
+// UNANIMITY is what makes consulting per-container values safe here, and it is the distinction from the
+// per-container override this function used to refuse outright. Refusing was right against "pick one
+// container's language and present it as the task's": the plan is per workload and a task definition can pack
+// several applications, so choosing whichever came first would publish instructions that instrument one of
+// them and silently leave the rest. Requiring every eligible container to resolve the same way cannot make
+// that mistake — there is nothing to choose between — while a genuinely mixed task still returns "" and gets
+// no plan, matching aggregateRuntime's "multiple".
+//
+// Each container is read with the same precedence resolveECSRuntime uses (its own override, else what was
+// detected for it), because that is the agent the connector would judge that container against.
+func detectedContainerRuntime(w baseapi.DiscoveredWorkload) (lang, version string) {
+	if w.Details == nil {
+		return "", ""
+	}
+	for _, c := range w.Details.Containers {
+		if !c.Eligible {
+			continue
+		}
+		l, v := normalizeLanguage(c.OverrideLanguage), c.OverrideVersion
+		if l == "" {
+			l, v = normalizeLanguage(c.RuntimeLanguage), c.RuntimeVersion
+		}
+		if l == "" {
+			continue
+		}
+		if lang == "" {
+			lang, version = l, v
+			continue
+		}
+		if l != lang {
+			return "", "" // several languages in one task: no single plan describes it
+		}
+		if v != version {
+			// Same language, different versions. The language still has one plan; the version-templated
+			// agents (php, ruby) fall back to their placeholder rather than naming one container's version.
+			version = ""
+		}
+	}
+	return lang, version
 }
 
 // soleInstrumentableContainer returns the container name when the workload has exactly one Odigos could

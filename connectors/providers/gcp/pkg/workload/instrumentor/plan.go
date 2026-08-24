@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
 )
 
@@ -114,11 +115,22 @@ func DesiredPlans(image string) ([]plan.Plan, error) {
 // the plan the same desired state the observer judges against.
 func desiredEnv(lang string, spec languageSpec) []plan.EnvVar {
 	env := []plan.EnvVar{
-		// The ownership marker is FIRST because it is the one a customer skips and the one that makes
-		// everything else invisible. Ownership is derived from this variable alone (Wave 0 made it the sole
-		// authority), so a service with every other fragment applied and no marker reports as
-		// "waiting for your deployment" forever, and the connector cannot tell it from an untouched service.
-		{Name: EnvOdigosManaged, Value: markerValue(lang), Merge: plan.MergeSet},
+		// The marker is FIRST because it is the one a customer skips and the one that makes everything else
+		// invisible: attribution is derived from this variable alone, so a service with every other fragment
+		// applied and no marker reports as "waiting for your deployment" forever, and the connector cannot
+		// tell it from an untouched service.
+		//
+		// The IaC marker, NOT the ownership marker, and that is the whole difference between the modes. The
+		// ownership marker's payload is a rollback snapshot of what the connector changed; in manual mode
+		// nothing converges the service and nothing will ever roll it back, so asking a customer to hand-author
+		// one asks them to describe a rollback that will never run — and the connector would then have had to
+		// honour it. What their definition can honestly state is that Odigos instrumentation is here and which
+		// agent it stages, which is exactly this marker.
+		{Name: EnvOdigosIaC, Value: iacMarkerValue(lang), Merge: plan.MergeSet},
+		// A removal, not an omission: the ownership marker is the connector's own record of a mutation IT
+		// performed. A hand-authored one claims a snapshot that was never taken, and one left over from an
+		// earlier automatic-mode run would have Odigos restore values nobody has any more.
+		{Name: EnvOdigosManaged, Merge: plan.MergeRemove},
 
 		{Name: EnvServiceName, Value: plan.PlaceholderServiceName, Merge: plan.MergeSet},
 		{Name: EnvResourceAttributes, Value: resourceAttributes(plan.PlaceholderRegion), Merge: plan.MergeSet},
@@ -150,33 +162,41 @@ func desiredEnv(lang string, spec languageSpec) []plan.EnvVar {
 	return env
 }
 
-// markerValue is the ownership marker a customer applies: the wire format the observer parses, carrying the
-// version and the language.
+// iacMarkerValue is the attribution marker a manual-mode customer applies: the wire format
+// api.ParseIaCMarker reads, carrying the schema version and the staged agent's language.
 //
-// prevEnv is deliberately omitted. It is the rollback snapshot — the pre-Odigos value of every key the
+// The language is load-bearing rather than informational — it is what the desired activation environment is
+// derived from, so a service whose image later changed runtime would otherwise be judged against an agent its
+// definition never named. "source"/"version" are attribution an Odigos IaC module fills in about itself; a
+// customer pasting a fragment by hand has nothing true to write there.
+//
+// prevEnv is deliberately absent. It is the rollback snapshot — the pre-Odigos value of every key the
 // INSTRUMENTOR changed — and in manual mode there is nothing for Odigos to roll back: the customer's own
 // deployment definition is the record of what they had, and reverting it is a git operation. Asking them to
-// hand-write a nested JSON snapshot of their own previous env would be busywork with a real chance of
-// getting it wrong. The note explains the one case where it matters.
-func markerValue(lang string) string {
-	return fmt.Sprintf(`{"v":%d,"lang":%q}`, managedManifestVersion, lang)
+// hand-write a nested JSON snapshot of their own previous env would be busywork with a real chance of getting
+// it wrong, and the marker that carries such a snapshot is the one they must not write at all.
+func iacMarkerValue(lang string) string {
+	return fmt.Sprintf(`{"v":%d,"lang":%q}`, baseapi.IaCMarkerVersion, lang)
 }
 
 func planNotes(lang string) []string {
 	notes := []string{
-		fmt.Sprintf("Set %s exactly as shown, including the language. It is the only thing that tells Odigos this service is instrumented: without it the service is reported as awaiting your deployment however completely the rest is applied, and the recorded language is what Odigos compares the live configuration against.",
+		fmt.Sprintf("Set %s exactly as shown, including the language. It is the only thing that tells Odigos this service is instrumented: without it the service is reported as awaiting your deployment however completely the rest is applied. Odigos does not decode the payload on this platform yet — it matches on the variable itself — so the recorded language changes nothing that is reported today; record it anyway, because it is what identifies the staged agent to anything that later reads it.",
+			EnvOdigosIaC),
+		fmt.Sprintf("Do NOT set %s. That variable is the connector's own record of a mutation it performed, including the snapshot it restores from on rollback, and it is written only when you hand instrumentation over to Odigos by enabling the instrumentation capability for this type. Setting it by hand claims a rollback that was never recorded, so a later hand-over would have Odigos restore values nobody ever captured. It does not by itself hand the service over: what decides that is the instrumentation capability for this type, and while the type is in manual mode nothing in the connector can mutate the service at all.",
 			EnvOdigosManaged),
 		fmt.Sprintf("%s must match the workload's name in Odigos. A different value is reported as instrumentation drift, not as a naming preference.", EnvServiceName),
 		fmt.Sprintf("Set %s / %s / %s to \"%s\" for any signal your destination does not accept, so the agent never produces it.",
 			EnvTracesExporter, EnvMetricsExporter, EnvLogsExporter, exporterNone),
 		fmt.Sprintf("Cloud Run has no run-to-completion containers, so %q stays running and holds TCP port %d once it has staged the agent. The ingress container's dependency on it is what keeps the application from starting before the agent files exist.",
 			sidecarContainerName, startupProbePort),
-		fmt.Sprintf("If you later hand instrumentation over to Odigos (enable the instrumentation capability for this type), add a \"prevEnv\" object to %s recording your pre-Odigos value for each variable above, so Odigos can restore them on rollback.", EnvOdigosManaged),
+		fmt.Sprintf("If you later hand instrumentation over to Odigos (enable the instrumentation capability for this type), the connector takes its own snapshot of the service as it finds it and stamps %s itself — there is nothing for you to record in advance, and %s should be removed from your definition at that point so the two are not both claiming the service.",
+			EnvOdigosManaged, EnvOdigosIaC),
 		// The image is pulled by the CUSTOMER's Cloud Run service, not by the connector, so its availability
 		// is their account's problem to hit and ours to warn about. Cloud Run also restricts image hosts to
 		// *.gcr.io, *-docker.pkg.dev and docker.io, so a mirror has to be one of those.
 		"The agent image is pulled by your own Cloud Run service. If your project cannot pull it, mirror it into your own Artifact Registry and use that reference — Cloud Run only accepts images from *.gcr.io, *-docker.pkg.dev or docker.io.",
-		"If this connector is configured with an agent-image override (ODIGOS_CLOUDRUN_AGENT_IMAGE), use that image instead of the one shown here.",
+		"The image shown above is the one this connector is configured with: when ODIGOS_CLOUDRUN_AGENT_IMAGE is set, this plan already renders that image rather than the default. Apply it exactly as shown.",
 	}
 	if lang == LangDotNet {
 		notes = append(notes, "The .NET agent bundled for Cloud Run is glibc-only; a musl (Alpine) based image is not supported.")

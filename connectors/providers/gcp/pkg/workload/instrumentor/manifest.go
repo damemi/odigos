@@ -16,6 +16,13 @@ import (
 // cannot drift.
 const EnvOdigosManaged = store.EnvOdigosManaged
 
+// EnvOdigosIaC is the attribution marker the CUSTOMER's own deployment definition carries in manual (IaC)
+// mode, from the instructions this connector publishes (see api.EnvOdigosIaC). The connector never writes it.
+//
+// It proves instrumentation is applied and records which agent was staged; it does NOT prove ownership and
+// grants no mutation rights, because it carries no snapshot of what a rollback would restore.
+const EnvOdigosIaC = store.EnvOdigosIaC
+
 const managedManifestVersion = 1
 
 // managedManifest is the JSON payload stored in the EnvOdigosManaged env var on the ingress container.

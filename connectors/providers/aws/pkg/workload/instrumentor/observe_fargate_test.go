@@ -402,7 +402,7 @@ func TestOwnedDiffDeduplicatesAcrossContainers(t *testing.T) {
 	removeAppMount(&td.ContainerDefinitions[1])
 
 	svc := store.ECSService{ClusterARN: "arn:cluster", ServiceName: "checkout", Region: "us-east-1"}
-	diff, incomplete := ecsOwnedDiff(td, ownedContainerIndexes(td), targets, "svc-checkout", svc, testAgentsImage, false)
+	diff, incomplete := ecsOwnedDiff(td, instrumentedContainerIndexes(td), targets, "svc-checkout", svc, testAgentsImage, false)
 	if incomplete != "" {
 		t.Fatalf("unexpected incomplete check: %s", incomplete)
 	}
@@ -464,7 +464,7 @@ func judgeSignals(t *testing.T, instr, dest signalSet) (td *ecstypes.TaskDefinit
 	td = tdFromRegisterInput(in)
 	targets = oneTarget(0, rec, exportWithSignals(dest.traces, dest.metrics, dest.logs))
 	svc := store.ECSService{ClusterARN: "arn:cluster", ServiceName: "checkout", Region: "us-east-1"}
-	diff, incomplete := ecsOwnedDiff(td, ownedContainerIndexes(td), targets, "svc-checkout", svc, testAgentsImage, false)
+	diff, incomplete := ecsOwnedDiff(td, instrumentedContainerIndexes(td), targets, "svc-checkout", svc, testAgentsImage, false)
 	if incomplete != "" {
 		t.Fatalf("check reported incomplete (%s); every case here has a resolvable target", incomplete)
 	}
@@ -560,7 +560,7 @@ func TestNarrowingKeepsTheTransportExact(t *testing.T) {
 
 			targets := oneTarget(0, rec, exportWithSignals(allSignals.traces, allSignals.metrics, allSignals.logs))
 			svc := store.ECSService{ClusterARN: "arn:cluster", ServiceName: "checkout", Region: "us-east-1"}
-			got, incomplete := ecsOwnedDiff(td, ownedContainerIndexes(td), targets, "svc-checkout", svc, testAgentsImage, false)
+			got, incomplete := ecsOwnedDiff(td, instrumentedContainerIndexes(td), targets, "svc-checkout", svc, testAgentsImage, false)
 			if incomplete != "" {
 				t.Fatalf("check reported incomplete: %s", incomplete)
 			}

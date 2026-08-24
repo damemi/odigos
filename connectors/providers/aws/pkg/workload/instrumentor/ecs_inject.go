@@ -96,7 +96,7 @@ func applyInstrumentation(td *ecstypes.TaskDefinition, targets []containerTarget
 	for _, t := range targets {
 		targetIdx[t.idx] = true
 	}
-	for _, idx := range ownedContainerIndexes(td) {
+	for _, idx := range managedContainerIndexes(td) {
 		if !targetIdx[idx] {
 			rollbackContainer(&td.ContainerDefinitions[idx])
 		}
@@ -207,7 +207,7 @@ func alreadyInstrumented(td *ecstypes.TaskDefinition, targets []containerTarget,
 	// deployment has drifted because Odigos detected a container they did not instrument — a coverage
 	// opinion, not decay, and one that rests on language detection the manual-mode policy does not fully
 	// grant. See ecsObservedDiff.
-	owned := ownedContainerIndexes(td)
+	owned := managedContainerIndexes(td)
 	if len(owned) != len(targets) {
 		return false
 	}
@@ -261,18 +261,17 @@ func taskLevelDiff(td *ecstypes.TaskDefinition, targets []containerTarget, image
 // same call site for the mutating path (alreadyInstrumented above), one new consumer that needs the facts.
 func containerDiff(app *ecstypes.ContainerDefinition, t containerTarget, serviceName, region string, debug bool) []string {
 	env := containerEnvMap(app)
-	manifest, ok := parseECSManifest(env[store.EnvOdigosManaged])
+	marker, ok := readECSMarker(env)
 	if !ok {
-		// No marker: nothing on this container is attributable to Odigos, so there is nothing to compare
+		// NEITHER marker: nothing on this container is attributable to Odigos, so there is nothing to compare
 		// against. Reporting the individual components would describe an uninstrumented container — or a
 		// customer's own OpenTelemetry setup — as broken Odigos instrumentation.
 		return []string{componentOwnershipMarker}
 	}
 	var diff []string
-	// The recorded language is what we injected last time. A container whose resolved language has
-	// changed (a customer swapped its image) carries the wrong agent, which the env comparison below would
-	// not always catch on its own.
-	if manifest.Language != t.recipe.lang {
+	// Cross-check the recorded agent language against the resolved one (env alone can miss an image swap).
+	// Missing language → skip: omission is not drift (only hand-authored markers omit it; published IaC includes it).
+	if marker.Language != "" && marker.Language != t.recipe.lang {
 		diff = append(diff, componentAgentLanguage)
 	}
 	if env[EnvServiceName] != serviceName {
@@ -306,7 +305,7 @@ func containerDiff(app *ecstypes.ContainerDefinition, t containerTarget, service
 	}
 	if activated {
 		for _, a := range t.recipe.appendEnv {
-			if env[a.name] != a.evaluate(ecsPriorEnv(manifest, a.name)) {
+			if !loaderActivated(env[a.name], a, marker) {
 				activated = false
 				break
 			}
@@ -324,11 +323,34 @@ func containerDiff(app *ecstypes.ContainerDefinition, t containerTarget, service
 	return diff
 }
 
+// loaderActivated reports whether the container's loader variable loads our agent.
+// Ownership marker: exact match — the connector owns the whole value from the snapshot.
+// IaC marker: our fragment must be present on the required side; the rest of the value is the customer's
+// and was never snapshotted (demanding an exact value would invent drift from a typo).
+func loaderActivated(live string, a appendEnvVar, marker ecsMarker) bool {
+	if marker.Managed {
+		return live == a.evaluate(markerPriorEnv(marker, a.name))
+	}
+	ours := a.evaluate("")
+	if ours == "" {
+		return true
+	}
+	// A SUFFIX test, not a substring one: the pattern appends, so our fragment has to come last. A value that
+	// merely contains it — prepended, or spliced into the middle of a PYTHONPATH — resolves a different copy of
+	// the agent first, or none, and calling that conformant would tell a customer instrumentation works when it
+	// does not.
+	if sep := a.separator(); sep != "" && strings.HasSuffix(live, sep+ours) {
+		return true
+	}
+	// The container carried nothing of its own, so our fragment IS the whole value.
+	return live == ours
+}
+
 // rollbackInstrumentation restores td to its pre-Odigos state from the ownership marker and returns the
 // RegisterTaskDefinitionInput for the clean revision. It returns (nil, false) when the task definition
 // carries no Odigos ownership marker (never ours — left completely untouched).
 func rollbackInstrumentation(td *ecstypes.TaskDefinition, tags []ecstypes.Tag) (*ecs.RegisterTaskDefinitionInput, bool) {
-	owned := ownedContainerIndexes(td)
+	owned := managedContainerIndexes(td)
 	if len(owned) == 0 {
 		return nil, false
 	}
@@ -404,8 +426,15 @@ func registerInputFromTaskDefinition(td *ecstypes.TaskDefinition, tags []ecstype
 
 // --- app container selection ---
 
-// ownedContainerIndexes returns every container carrying our ownership marker, ascending.
-func ownedContainerIndexes(td *ecstypes.TaskDefinition) []int {
+// managedContainerIndexes returns every container carrying our OWNERSHIP marker, ascending. This is the
+// mutation predicate: only a container the connector instrumented itself may be re-instrumented or rolled
+// back, because only its marker records what undoing the change means.
+//
+// It is deliberately narrower than instrumentedContainerIndexes. A container a customer instrumented in their
+// own deployment definition carries the IaC marker and no snapshot, so treating it as ours would have the
+// connector "restore" a container to values it never recorded — which in practice means deleting the
+// customer's own JAVA_TOOL_OPTIONS.
+func managedContainerIndexes(td *ecstypes.TaskDefinition) []int {
 	var out []int
 	for i := range td.ContainerDefinitions {
 		if _, ok := containerEnvValue(&td.ContainerDefinitions[i], store.EnvOdigosManaged); ok {
@@ -415,15 +444,29 @@ func ownedContainerIndexes(td *ecstypes.TaskDefinition) []int {
 	return out
 }
 
-// containerManifestLanguage returns the language recorded in a container's ownership marker, or "".
-// It is the precise per-container memory of what we injected last time — more reliable than the
-// workload-level stored runtime once a task holds several languages.
-func containerManifestLanguage(c *ecstypes.ContainerDefinition) string {
-	marker, ok := containerEnvValue(c, store.EnvOdigosManaged)
-	if !ok {
-		return ""
+// instrumentedContainerIndexes returns every container carrying EITHER marker, ascending. This is the
+// read-only predicate — "does this container have Odigos instrumentation on it" — and it is what the observer
+// and the report ask.
+//
+// Widening it here is what makes manual mode work at all: the customer applies the IaC marker, nothing ever
+// writes the ownership marker, and a reader that recognized only the latter would report a fully and correctly
+// instrumented task as awaiting a deployment that had already happened.
+func instrumentedContainerIndexes(td *ecstypes.TaskDefinition) []int {
+	var out []int
+	for i := range td.ContainerDefinitions {
+		if _, ok := readECSMarker(containerEnvMap(&td.ContainerDefinitions[i])); ok {
+			out = append(out, i)
+		}
 	}
-	m, ok := parseECSManifest(marker)
+	return out
+}
+
+// containerManifestLanguage returns the language recorded in a container's marker, or "".
+// It is the precise per-container memory of which agent was staged — more reliable than the
+// workload-level stored runtime once a task holds several languages — and it comes from either marker,
+// because in manual mode the customer's own definition is the only place that fact is written.
+func containerManifestLanguage(c *ecstypes.ContainerDefinition) string {
+	m, ok := readECSMarker(containerEnvMap(c))
 	if !ok {
 		return ""
 	}

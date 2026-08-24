@@ -33,6 +33,11 @@ import (
 // satisfies every literal check and is still the bug — it discards whatever the customer had set.
 //
 // artifacts is keyed by artifact id, so a problem names the artifact a reader has to go fix.
+//
+// It takes ONE language's artifacts and that language's plans. Use CoverageProblemsByLanguage for a provider's
+// whole published set: the instructions are authored per language, and checking a Java template against a
+// Python plan's literals would demand every language's values in every document — which is the shape this
+// feature moved away from.
 func CoverageProblems(artifacts map[string]string, plans []Plan) []string {
 	if len(plans) == 0 {
 		return []string{"no plans supplied, so the artifacts are trivially covered"}
@@ -167,4 +172,173 @@ func describePlans(keys []string) string {
 	}
 	sort.Strings(out)
 	return strings.Join(out, ", ")
+}
+
+// Artifact is one published instruction template plus the language it serves. Language is "" for a
+// language-neutral artifact, matching spec.SetupArtifact.Language.
+type Artifact struct {
+	Language string
+	Body     string
+}
+
+// CoverageProblemsByLanguage is CoverageProblems over a provider's WHOLE published set for one instrumentation
+// type: it groups the plans and the artifacts by language and checks each language against its own artifacts.
+//
+// Grouping is what makes the guard mean anything now that the instructions are per language. A Ruby Fargate
+// task's Terraform must carry Ruby's agent path and RUBYOPT; demanding that it also carry .NET's profiler
+// GUID — which a single flat check does, because some plan needs that literal — is what forced every artifact
+// to document every language in the first place. Conversely a flat check cannot notice that Ruby's artifact
+// omits Ruby's own values, as long as some other language's document happens to mention them.
+//
+// The grouping mirrors spec.InstrumentationArtifactsFor exactly, including the fallback to the
+// language-neutral artifacts, because the point is to check what a customer is actually SERVED. A guard that
+// checked a different selection than the connector serves would pass on instructions nobody sees and fail on
+// ones nobody gets.
+func CoverageProblemsByLanguage(artifacts map[string]Artifact, plans []Plan) []string {
+	if len(plans) == 0 {
+		return []string{"no plans supplied, so the artifacts are trivially covered"}
+	}
+	if len(artifacts) == 0 {
+		return []string{"no artifacts supplied, so nothing publishes these plans to a customer"}
+	}
+
+	plansByLang := map[string][]Plan{}
+	for _, p := range plans {
+		plansByLang[p.Language] = append(plansByLang[p.Language], p)
+	}
+
+	var problems []string
+	for _, lang := range sortedKeys(plansByLang) {
+		bodies := bodiesForLanguage(artifacts, lang)
+		if len(bodies) == 0 {
+			problems = append(problems, fmt.Sprintf(
+				"no artifact serves language %s, so a customer running it falls back to the base's prose rendering and is never offered a snippet in their own toolchain",
+				describeLanguage(lang)))
+			continue
+		}
+		for _, prob := range CoverageProblems(bodies, plansByLang[lang]) {
+			problems = append(problems, describeLanguage(lang)+": "+prob)
+		}
+	}
+
+	// An artifact tagged with a language no plan builds is unreachable: the selection asks for the plan's
+	// language, finds nothing, and falls back to the neutral set — so a customer gets prose while a perfectly
+	// good template sits in the spec. A misspelled language key fails no other check.
+	for _, id := range sortedKeys(artifacts) {
+		lang := artifacts[id].Language
+		if lang == "" {
+			continue
+		}
+		if _, ok := plansByLang[lang]; !ok {
+			problems = append(problems, fmt.Sprintf(
+				"artifact %s declares language %q, which no plan builds, so nothing ever serves it (misspelled language key?)", id, lang))
+		}
+	}
+	return problems
+}
+
+// bodiesForLanguage selects the artifact bodies served for one language: the ones declaring it, or the
+// language-neutral ones when it declares none.
+func bodiesForLanguage(artifacts map[string]Artifact, lang string) map[string]string {
+	pick := func(want string) map[string]string {
+		out := map[string]string{}
+		for id, a := range artifacts {
+			if a.Language == want {
+				out[id] = a.Body
+			}
+		}
+		return out
+	}
+	if lang != "" {
+		if scoped := pick(lang); len(scoped) > 0 {
+			return scoped
+		}
+	}
+	return pick("")
+}
+
+func describeLanguage(lang string) string {
+	if lang == "" {
+		return "(language-independent)"
+	}
+	return lang
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// MarkerAttachmentProblems reports artifacts that attach a marker PAYLOAD to the wrong variable.
+//
+// It exists because the literal sweep in CoverageProblems cannot see this failure, and the failure is a real
+// one that happened: an artifact's snippet still said
+//
+//   - name: ODIGOS_MANAGED
+//     value: '{"v":1,"lang":"java"}'
+//
+// while its notes said "set ODIGOS_IAC". Both variable names were present in the document, so every substring
+// check passed — and a customer copying the snippet writes the ownership marker, which claims a rollback
+// snapshot that was never taken and, on the staged-agent platforms, is also what authorizes Odigos to mutate
+// their workload. The two markers are not interchangeable (see api.EnvOdigosIaC), so which one the payload is
+// wired to is the whole meaning of the fragment.
+//
+// Proximity, for the same reason statesDirection uses it: the assignment and the variable name are adjacent in
+// every syntax these artifacts are written in (same line in HCL and Bicep, the line below in a YAML `- name:`
+// pair), while a prose mention of either variable is paragraphs away from any payload.
+func MarkerAttachmentProblems(artifacts map[string]Artifact, payload, wantVar, forbidVar string) []string {
+	if payload == "" {
+		return []string{"no marker payload supplied, so nothing was checked"}
+	}
+	var problems []string
+	for _, id := range sortedKeys(artifacts) {
+		body := artifacts[id].Body
+		hits := payloadLines(body, payload)
+		if len(hits) == 0 {
+			// Whether the payload has to be present at all is CoverageProblems' question, not this one.
+			continue
+		}
+		for _, i := range hits {
+			if nearLine(body, i, forbidVar) {
+				problems = append(problems, fmt.Sprintf(
+					"artifact %s attaches the marker payload to %s; it belongs to %s, and a customer copying this writes the wrong marker",
+					id, forbidVar, wantVar))
+				break
+			}
+			if !nearLine(body, i, wantVar) {
+				problems = append(problems, fmt.Sprintf(
+					"artifact %s carries the marker payload with no %s beside it, so nothing says which variable it goes in", id, wantVar))
+				break
+			}
+		}
+	}
+	return problems
+}
+
+// payloadLines returns the indexes of the lines carrying the payload, in either its bare or its
+// backslash-escaped form — HCL and shell heredocs carry the escaped one, YAML and Bicep the bare one.
+func payloadLines(body, payload string) []int {
+	escaped := strings.ReplaceAll(payload, `"`, `\"`)
+	var out []int
+	for i, line := range strings.Split(body, "\n") {
+		if strings.Contains(line, payload) || strings.Contains(line, escaped) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// nearLine reports whether needle appears on line i or immediately either side of it.
+func nearLine(body string, i int, needle string) bool {
+	lines := strings.Split(body, "\n")
+	for j := max(0, i-1); j <= min(len(lines)-1, i+1); j++ {
+		if strings.Contains(lines[j], needle) {
+			return true
+		}
+	}
+	return false
 }

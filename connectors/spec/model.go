@@ -90,6 +90,22 @@ type SetupArtifact struct {
 	// create-role instructions + snippet. Empty for single-artifact sections (e.g. policy-preview).
 	Variant      string `yaml:"variant"`
 	VariantLabel string `yaml:"variantLabel"`
+	// Language narrows an INSTRUMENTATION artifact to one connector language key ("java", "python", …) —
+	// the same key plan.Plan.Language carries, which is the workload's detected runtime or the runtime
+	// override when the customer set one.
+	//
+	// It exists because the instructions are not the same document per language. A Fargate task stages a
+	// different agent directory and activates it through a different variable for each; a Lambda function's
+	// exec wrapper is /opt/otel-instrument for Python and /opt/otel-handler for everything else, and the
+	// wrong one fails the function at cold start. An artifact that covered every language had to carry all of
+	// them, which put six languages' worth of environment variables in front of a customer who has one — and
+	// left the one that matters as an appendix to be found rather than as the snippet to copy.
+	//
+	// Empty means the artifact is language-neutral. That is correct for the onboarding sections (a policy
+	// document has no language) and for an instrumentation type whose plan carries no language; validation
+	// rejects an instrumentation section that mixes the two, because the selection below would then hide the
+	// neutral variants from a language that has its own.
+	Language string `yaml:"language"`
 	// Title / Description are for the UI header.
 	Title       string `yaml:"title"`
 	Description string `yaml:"description"`
@@ -137,11 +153,49 @@ const instrumentationSectionPrefix = "instrumentation:"
 // for one workload instrumentation type (e.g. "instrumentation:aws.lambda").
 func InstrumentationSection(typeName string) string { return instrumentationSectionPrefix + typeName }
 
-// InstrumentationArtifacts returns the manual-mode instrumentation instructions declared for one
-// instrumentation type, in spec order. Each is a delivery variant (terraform, cloudformation, manual, …) of
-// the same underlying change.
+// InstrumentationArtifacts returns EVERY manual-mode instrumentation instruction declared for one
+// instrumentation type, in spec order, across all languages. Each is a delivery variant (terraform,
+// cloudformation, manual, …) of the same underlying change, for one language.
+//
+// Callers serving a specific workload want InstrumentationArtifactsFor: the whole list is a Java function's
+// instructions and a Ruby function's side by side. This one is for the checks that have to see all of them —
+// the coverage guard that asserts the published instructions still match what the injector applies.
 func (s CloudConnectorSpec) InstrumentationArtifacts(typeName string) []SetupArtifact {
 	return s.SetupArtifactsForSection(InstrumentationSection(typeName))
+}
+
+// InstrumentationArtifactsFor returns the artifacts for one instrumentation type narrowed to ONE language —
+// the instructions a customer with a Java service should be handed, and only those.
+//
+// Selection, in order: the artifacts declaring this language; failing that, the language-neutral ones. The
+// fallback is what keeps the two useful things possible — a type whose instrumentation does not depend on the
+// language declares neutral artifacts and is served them for any language, and a provider that has not yet
+// authored a language's snippets serves its neutral ones rather than nothing. Mixing the two within one
+// section is rejected at parse time, so the fallback is never a silent half-answer for a language that does
+// have its own artifacts.
+//
+// An empty result is a legitimate answer and not a gap to paper over: the caller renders the plan as prose
+// instead, which describes the same desired state in the one form every platform shares. Handing over another
+// language's snippet would be worse than describing the change.
+func (s CloudConnectorSpec) InstrumentationArtifactsFor(typeName, language string) []SetupArtifact {
+	all := s.InstrumentationArtifacts(typeName)
+	if language != "" {
+		if matched := artifactsForLanguage(all, language); len(matched) > 0 {
+			return matched
+		}
+	}
+	return artifactsForLanguage(all, "")
+}
+
+// artifactsForLanguage filters to the artifacts declaring exactly the given language ("" = language-neutral).
+func artifactsForLanguage(arts []SetupArtifact, language string) []SetupArtifact {
+	var out []SetupArtifact
+	for _, a := range arts {
+		if a.Language == language {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // WorkloadDomain groups the two features that operate on directly-instrumentable resources: Discovery
