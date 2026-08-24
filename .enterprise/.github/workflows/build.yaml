@@ -299,7 +299,7 @@ jobs:
 
       - name: Upload scan results JSON
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
         with:
           name: vuln-scan-result-${{ matrix.service }}-${{ matrix.extended == 'true' && 'extended' || (matrix.rhel == 'true' && 'rhel' || 'standard') }}-${{ github.sha }}.json
           path: /tmp/scan-results/*.json
@@ -436,7 +436,7 @@ jobs:
 
       - name: Upload OSS scan results JSON
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
         with:
           name: vuln-scan-result-oss-components.json
           path: /tmp/scan-results/*.json
@@ -891,7 +891,7 @@ jobs:
 
       - name: Upload diagnose artifact
         if: failure() && steps.should-run.outputs.skip != 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
         with:
           name: run-details-${{ matrix.test-scenario }}-${{ matrix.kube-version }}
           path: odigos_debug*.tar.gz
@@ -921,7 +921,7 @@ jobs:
           fi
 
       - name: Upload scan results
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 #v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
         with:
           name: vulnerability-report
           path: scan-results.zip
