@@ -19,6 +19,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
+	coreotel "github.com/odigos-io/ebpf-core/pkg/otel"
 	"github.com/odigos-io/ebpf-core/pkg/wasp"
 	waspserver "github.com/odigos-io/ebpf-core/pkg/wasp/server"
 	enterprisedistros "github.com/odigos-io/odigos-enterprise/distros"
@@ -32,6 +33,7 @@ import (
 	"github.com/odigos-io/odigos/odiglet"
 	"github.com/odigos-io/odigos/odiglet/pkg/ebpf"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
+	"go.opentelemetry.io/collector/consumer"
 )
 
 func getLogLevel() string {
@@ -96,6 +98,8 @@ func main() {
 		}
 	}
 
+	ctx := signals.SetupSignalHandler()
+
 	// create a single gRPC connection that will be shared across instrumentations
 	// of different processes and different languages.
 	// this allows us to keep a single connection to the local collector.
@@ -103,6 +107,8 @@ func main() {
 	// its own exporter with its own lifecycle.
 	// using WithGRPCConn when creating the exporter allows us to manage the lifecycle of this connection
 	// which is open the entire lifecycle of the odiglet.
+	// TODO: we should eventually delete this and move into the collector components such as
+	// NewOTLPGRPCTracesExporter. New instrumentations should avoid using this and use the collector sink instead.
 	otlpCommonConn, err := grpc.NewClient(
 		fmt.Sprintf("localhost:%d", consts.OTLPPort),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -118,7 +124,26 @@ func main() {
 		}
 	}()
 
-	factories, err := ebpfInstrumentationFactories(uint8(suffix), waspEnabled, enterpriseDistrosProvider.Getter, otlpCommonConn)
+	// Build the shared OTLP/gRPC traces exporter once for the whole odiglet. Every
+	// eBPF instrumentation stacks a per-process pdata pipeline on top of it, so a
+	// single connection and send queue serve all instrumented processes while each
+	// keeps its own process Resource. It is drained on odiglet shutdown.
+	tracesConsumer, err := coreotel.NewOTLPGRPCTracesExporter(
+		ctx,
+		commonlogger.Logger().Named("ebpf-traces"),
+		fmt.Sprintf("localhost:%d", consts.OTLPPort),
+	)
+	if err != nil {
+		logger.Error("failed to create shared traces exporter for ebpf", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := tracesConsumer.Shutdown(context.Background()); err != nil {
+			logger.Error("failed to shut down shared ebpf traces exporter", "error", err)
+		}
+	}()
+
+	factories, err := ebpfInstrumentationFactories(uint8(suffix), waspEnabled, enterpriseDistrosProvider.Getter, otlpCommonConn, tracesConsumer)
 	if err != nil {
 		logger.Error("failed to set up ebpf factories", "error", err)
 		os.Exit(1)
@@ -154,8 +179,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx := signals.SetupSignalHandler()
-
 	o.AddRunnable(odiglet.Runnable{
 		Name: "ebpf map fd server",
 		Run:  mapExchange.serve,
@@ -189,7 +212,7 @@ func main() {
 	logger.Info("odiglet exiting")
 }
 
-func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distros.Getter, otlpConn *grpc.ClientConn) (map[string]commonInstrumentation.Factory, error) {
+func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distros.Getter, otlpConn *grpc.ClientConn, tracesConsumer consumer.Traces) (map[string]commonInstrumentation.Factory, error) {
 	var wp wasp.MapsProvider
 	if waspEnabled {
 		wp = waspserver.NewServer(slog.Default(), k8sconsts.OdigletWaspServicePort, process.HostProcDir())
@@ -208,7 +231,7 @@ func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distro
 		return nil, errors.New("java-ebpf-instrumentations distro not found")
 	}
 
-	javaEbpfFactory, err := sdks.NewJavaInstrumentationFactoryEnterprise(suffix, d, wp, otlpConn)
+	javaEbpfFactory, err := sdks.NewJavaInstrumentationFactoryEnterprise(suffix, d, wp, otlpConn, tracesConsumer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create java ebpf factory: %w", err)
 	}

@@ -22,13 +22,13 @@ import (
 	commonapisampling "github.com/odigos-io/odigos/common/api/sampling"
 	"github.com/odigos-io/odigos/distros/distro"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
+	"go.opentelemetry.io/collector/consumer"
 	"google.golang.org/grpc"
 
 	auto "github.com/odigos-io/ebpf-java-instrumentation/v2"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/instrumentation"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 )
 
 const (
@@ -50,15 +50,24 @@ type JavaInstrumentationFactoryEnterprise struct {
 	agentJarName  string
 	// location where the agent relevant files are located on the host
 	agentFilesSourceDir string
-	otlpConn            *grpc.ClientConn
+	// used only by otel-go sdk components like meterProvider and exporter
+	// Deprecated: we should move away from using the sdk components and move into the collector components
+	// such `consumer.Traces` or `consumer.Metrics`
+	otlpConn *grpc.ClientConn
+	// tracesConsumer is the single OTLP/gRPC traces exporter shared by every
+	// instrumented Java process.
+	tracesConsumer consumer.Traces
 	// logger is shared across every *auto.Instrumentation
 	logger           *slog.Logger
 	waspMapsProvider wasp.MapsProvider
 }
 
-func NewJavaInstrumentationFactoryEnterprise(traceIdSuffix uint8, otelDistro *distro.OtelDistro, ws wasp.MapsProvider, otlpConn *grpc.ClientConn) (instrumentation.Factory, error) {
+func NewJavaInstrumentationFactoryEnterprise(traceIdSuffix uint8, otelDistro *distro.OtelDistro, ws wasp.MapsProvider, otlpConn *grpc.ClientConn, tracesConsumer consumer.Traces) (instrumentation.Factory, error) {
 	if otlpConn == nil {
 		return nil, errNoOTLPConn
+	}
+	if tracesConsumer == nil {
+		return nil, errors.New("traces consumer is nil")
 	}
 	if otelDistro == nil {
 		return nil, errors.New("otel distro is nil")
@@ -80,20 +89,12 @@ func NewJavaInstrumentationFactoryEnterprise(traceIdSuffix uint8, otelDistro *di
 		agentJarName:        agentJar,
 		agentFilesSourceDir: sourceDir,
 		otlpConn:            otlpConn,
+		tracesConsumer:      tracesConsumer,
 		logger:              slog.New(commonlogger.NewSlogHandler("ebpfjava")),
 	}, nil
 }
 
 func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
-	defaultExporter, err := otlptracegrpc.New(
-		ctx,
-		otlptracegrpc.WithGRPCConn(g.otlpConn),
-	)
-	if err != nil {
-		g.logger.Error("failed to create exporter", "error", err)
-		return nil, err
-	}
-
 	metricExporter, err := otlpmetricgrpc.New(
 		ctx,
 		otlpmetricgrpc.WithGRPCConn(g.otlpConn),
@@ -107,7 +108,6 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 		auto.WithPID(pid),
 		auto.WithResourceAttributes(settings.ResourceAttributes...),
 		auto.WithServiceName(settings.ServiceName),
-		auto.WithTraceExporter(defaultExporter),
 		auto.WithMetricExporter(metricExporter),
 		auto.WithProcFS(process.HostProcDir()),
 		auto.WithLogger(g.logger),
@@ -165,6 +165,7 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 
 	inst, err := auto.NewInstrumentation(
 		ctx,
+		g.tracesConsumer,
 		opts...,
 	)
 	if err != nil {
