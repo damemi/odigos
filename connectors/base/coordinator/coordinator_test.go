@@ -42,19 +42,21 @@ var testConnectorSpec = spec.CloudConnectorSpec{
 
 // fakeProvider exercises the capability-driven detector/reconciler resolution without a database.
 type fakeProvider struct {
-	workloadDetectors map[string]api.Detector
-	computePlatformDetectors  map[string]api.Detector
-	recs              map[string]api.Reconciler
-	svcRecs           map[string]api.ComputePlatformReconciler
+	workloadDetectors        map[string]api.Detector
+	computePlatformDetectors map[string]api.Detector
+	recs                     map[string]api.Reconciler
+	svcRecs                  map[string]api.ComputePlatformReconciler
 }
 
 func (f fakeProvider) Spec() spec.CloudConnectorSpec              { return testConnectorSpec }
 func (f fakeProvider) SupportedKinds() []string                   { return []string{"cloud.workload-a"} }
 func (f fakeProvider) SupportedWorkloadKinds() []string           { return []string{"cloud.workload-a"} }
-func (f fakeProvider) SupportedComputePlatformKinds() []string            { return nil }
+func (f fakeProvider) SupportedComputePlatformKinds() []string    { return nil }
 func (f fakeProvider) WorkloadDetectors() map[string]api.Detector { return f.workloadDetectors }
-func (f fakeProvider) ComputePlatformDetectors() map[string]api.Detector  { return f.computePlatformDetectors }
-func (f fakeProvider) Reconcilers() map[string]api.Reconciler     { return f.recs }
+func (f fakeProvider) ComputePlatformDetectors() map[string]api.Detector {
+	return f.computePlatformDetectors
+}
+func (f fakeProvider) Reconcilers() map[string]api.Reconciler { return f.recs }
 func (f fakeProvider) ComputePlatformReconcilers() map[string]api.ComputePlatformReconciler {
 	return f.svcRecs
 }
@@ -112,8 +114,8 @@ func detectorNames(nds []namedDetector) map[string]bool {
 
 func TestActiveDetectorsResolvedFromCapabilities(t *testing.T) {
 	p := fakeProvider{
-		workloadDetectors: map[string]api.Detector{"workload-a": noopDetector{}, "workload-b": noopDetector{}},
-		computePlatformDetectors:  map[string]api.Detector{"service-a": noopDetector{}, "service-b": noopDetector{}},
+		workloadDetectors:        map[string]api.Detector{"workload-a": noopDetector{}, "workload-b": noopDetector{}},
+		computePlatformDetectors: map[string]api.Detector{"service-a": noopDetector{}, "service-b": noopDetector{}},
 	}
 	caps := spec.Capabilities{
 		Workloads: []spec.WorkloadCapability{
@@ -264,5 +266,110 @@ func TestEnrichComputePlatforms(t *testing.T) {
 	}
 	if out[1].Status != "Disabled" {
 		t.Errorf("cluster-b should be Disabled, got %q", out[1].Status)
+	}
+}
+
+func TestOrphanedInstrumentedWorkload(t *testing.T) {
+	tests := []struct {
+		name string
+		w    api.DiscoveredWorkload
+		want bool
+	}{
+		{
+			name: "instrumented, unmatched, has region -> orphaned",
+			w:    api.DiscoveredWorkload{Instrumented: true, SourceMatched: false, Region: "us-east-1"},
+			want: true,
+		},
+		{
+			name: "matched -> not orphaned, regardless of instrumented",
+			w:    api.DiscoveredWorkload{Instrumented: true, SourceMatched: true, Region: "us-east-1"},
+			want: false,
+		},
+		{
+			name: "not instrumented, unmatched -> nothing to adopt",
+			w:    api.DiscoveredWorkload{Instrumented: false, SourceMatched: false, Region: "us-east-1"},
+			want: false,
+		},
+		{
+			name: "instrumented, unmatched, no region -> skipped (CreateSource requires one)",
+			w:    api.DiscoveredWorkload{Instrumented: true, SourceMatched: false, Region: ""},
+			want: false,
+		},
+		{
+			// Marker-neutral: an automatic-mode (ODIGOS_MANAGED) orphan is adopted exactly like a
+			// manual-mode (ODIGOS_IAC) one. ManagementMode plays no part in the decision.
+			name: "orphaned regardless of management mode",
+			w:    api.DiscoveredWorkload{Instrumented: true, SourceMatched: false, Region: "us-east-1", ManagementMode: spec.ModeAutomatic},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := orphanedInstrumentedWorkload(tt.w); got != tt.want {
+				t.Errorf("orphanedInstrumentedWorkload(%+v) = %v, want %v", tt.w, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestShouldAdoptRespectsDeletedSources is the guard on the one rule that keeps this pass from overriding
+// people: a source a human deleted must never come back on its own, in either mode. Both modes are covered
+// because the tombstone is the ONLY thing stopping it in either — the deleted workload stays instrumented
+// (manual mode's IaC marker is not ours to strip; automatic mode's rollback has not landed yet), so without
+// the tombstone both look exactly like a fresh orphan on the very next pass.
+func TestShouldAdoptRespectsDeletedSources(t *testing.T) {
+	orphan := func(kind, extID, mode string) api.DiscoveredWorkload {
+		return api.DiscoveredWorkload{
+			ServiceName: "svc", Kind: kind, Region: "us-east-1", ExternalID: extID,
+			Instrumented: true, SourceMatched: false, ManagementMode: mode,
+		}
+	}
+	manual := orphan("aws.lambda", "arn:fn", spec.ModeManual)
+	automatic := orphan("aws.fargate-task", "arn:cluster/svc", spec.ModeAutomatic)
+
+	if !shouldAdopt(manual, nil) || !shouldAdopt(automatic, nil) {
+		t.Fatal("an orphan with no tombstone must be adopted in both modes")
+	}
+
+	deleted := map[string]bool{
+		store.SourceIdentityKey(manual.Kind, manual.ExternalID):       true,
+		store.SourceIdentityKey(automatic.Kind, automatic.ExternalID): true,
+	}
+	if shouldAdopt(manual, deleted) {
+		t.Error("a deleted manual-mode source must not be re-adopted (its IaC marker is still applied, and always will be)")
+	}
+	if shouldAdopt(automatic, deleted) {
+		t.Error("a deleted automatic-mode source must not be re-adopted (rollback may not have landed yet)")
+	}
+
+	// A tombstone is keyed by identity, so it must not suppress a DIFFERENT workload — including one of the
+	// same kind, which is what a per-kind or per-name key would wrongly collapse.
+	other := orphan("aws.lambda", "arn:other-fn", spec.ModeManual)
+	if !shouldAdopt(other, deleted) {
+		t.Error("a tombstone must only suppress its own identity, not every workload of that kind")
+	}
+}
+
+func TestAdoptedSourceEnabled(t *testing.T) {
+	tests := []struct {
+		name string
+		mode string
+		want bool
+	}{
+		// The marker is the customer's own IaC applying it directly — that already IS their intent, so
+		// adoption just catches Odigos's bookkeeping up to it.
+		{name: "manual (ODIGOS_IAC) -> adopted enabled", mode: spec.ModeManual, want: true},
+		// The marker exists only because Odigos itself wrote it under a source that is now gone; the
+		// customer's current wish is unknown, so adoption must not assume they still want it managed.
+		{name: "automatic (ODIGOS_MANAGED) -> adopted disabled", mode: spec.ModeAutomatic, want: false},
+		{name: "unknown mode -> adopted disabled (safe default)", mode: "", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := api.DiscoveredWorkload{ManagementMode: tt.mode}
+			if got := adoptedSourceEnabled(w); got != tt.want {
+				t.Errorf("adoptedSourceEnabled(mode=%q) = %v, want %v", tt.mode, got, tt.want)
+			}
+		})
 	}
 }

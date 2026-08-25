@@ -47,7 +47,13 @@ type ECSService struct {
 	// Observation is the read-only conformance verdict, written by the observer rather than by discovery or
 	// the instrumentor. Zero until a pass has run.
 	Observation ECSObservation
-	Metadata    map[string]any
+	// OwnershipCheckedRevision is the taskDefinition ARN the observer last read to decide Instrumented, for a
+	// service with no enabled source (see ECSFargateObserver.Observe and api.FingerprintChanged). It is what
+	// lets the observer skip a service on most passes — nothing to check has changed — while still catching
+	// the one pass where TaskDefinition moves to a revision it has not yet inspected. Empty until the observer
+	// has looked at this service at least once.
+	OwnershipCheckedRevision string
+	Metadata                 map[string]any
 }
 
 // ECSObservation is the persisted result of one read-only conformance observation of a Fargate service: does
@@ -95,6 +101,9 @@ const (
 	metaConformanceSince   = "conformance_since"
 	metaObservationError   = "observation_error"
 	metaSettling           = "settling"
+	// metaOwnershipCheckedRevision is written only by the observer's no-source path (refreshOwnership), never
+	// by discovery or the instrumentor — see ECSService.OwnershipCheckedRevision.
+	metaOwnershipCheckedRevision = "ownership_checked_revision"
 )
 
 // ECSContainer is one container of a service's task definition as the instrumentor resolved it.
@@ -172,6 +181,7 @@ func (s *Store) ListECSServices(ctx context.Context) ([]ECSService, error) {
 			COALESCE(metadata->>'runtime_version',''),
 			COALESCE(metadata->>'instrumentation_error',''),
 			COALESCE(metadata->>'instrumentation_phase',''),
+			COALESCE(metadata->>'`+metaOwnershipCheckedRevision+`',''),
 			`+ecsObservationCols+`
 		FROM connector_aws.ecs_services WHERE connector_name = $1 AND deleted_at IS NULL
 	`, s.ConnectorName())
@@ -187,7 +197,7 @@ func (s *Store) ListECSServices(ctx context.Context) ([]ECSService, error) {
 		if err := rows.Scan(&svc.Region, &svc.ClusterARN, &svc.ServiceName, &svc.ServiceARN, &svc.TaskDefinition,
 			&svc.LaunchType, &svc.DeploymentController, &svc.Status, &svc.DesiredCount, &svc.RunningCount,
 			&svc.Instrumented, &svc.RuntimeLanguage, &svc.RuntimeVersion,
-			&svc.InstrumentationError, &svc.InstrumentationPhase,
+			&svc.InstrumentationError, &svc.InstrumentationPhase, &svc.OwnershipCheckedRevision,
 			&conformanceTarget{&svc.Observation.Conformance}, &missingJSON, &since,
 			&svc.Observation.Error, &svc.Observation.Settling); err != nil {
 			return nil, err
@@ -267,6 +277,15 @@ func (s *Store) SetECSServiceObservation(ctx context.Context, clusterARN, servic
 // the task definition the service points at.
 func (s *Store) SetECSServiceInstrumented(ctx context.Context, clusterARN, serviceName string, instrumented bool) error {
 	return s.mergeECSServiceMetadata(ctx, clusterARN, serviceName, map[string]any{metaInstrumented: instrumented})
+}
+
+// SetECSServiceOwnershipChecked records the taskDefinition revision the observer just inspected for a service
+// with no enabled source, regardless of what it found — see ECSService.OwnershipCheckedRevision. Written on
+// every no-source observation pass (not merged conditionally like SetECSServiceInstrumented, which only fires
+// on a change) because the whole point is to remember that THIS revision has been looked at, so
+// api.FingerprintChanged stops asking for it again until the service moves to a different one.
+func (s *Store) SetECSServiceOwnershipChecked(ctx context.Context, clusterARN, serviceName, revision string) error {
+	return s.mergeECSServiceMetadata(ctx, clusterARN, serviceName, map[string]any{metaOwnershipCheckedRevision: revision})
 }
 
 // SetECSServiceRuntime records the detected/overridden runtime language (and major.minor version, when known).

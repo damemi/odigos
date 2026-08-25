@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 
@@ -44,13 +45,20 @@ func NewECSFargateObserver(st *store.Store, cache *awsclient.Cache, image string
 
 // Observe implements baseapi.InstrumentationObserver.
 //
-// Scope is every service the customer MARKED, plus every service Odigos records as instrumented even without an
-// enabled source. That second set is not optional: unlike Lambda — where discovery re-derives instrumentation
-// from the same ListFunctions call it already makes — a Fargate service's ownership marker lives inside its task
-// definition, one DescribeTaskDefinition away, which discovery deliberately does not pay across a whole
-// account every cycle. So the flag is sticky, and without observing the previously-instrumented set a customer
-// who removes instrumentation from their IaC would be told "instrumentation is still applied, go remove it"
-// forever. Bounded by services Odigos has actually seen instrumented, not by account size.
+// Scope is every service the customer MARKED, every service Odigos already records as instrumented, and every
+// service whose taskDefinition has moved to a revision the no-source path has not yet inspected
+// (api.FingerprintChanged). The first two are not optional: unlike Lambda — where discovery re-derives
+// instrumentation from the same ListFunctions call it already makes — a Fargate service's ownership marker
+// lives inside its task definition, one DescribeTaskDefinition away, which discovery deliberately does not pay
+// across a whole account every cycle. So the flag is sticky, and without observing the previously-instrumented
+// set a customer who removes instrumentation from their IaC would be told "instrumentation is still applied, go
+// remove it" forever.
+//
+// The third clause is what makes a service with NEITHER a source NOR a prior instrumented verdict still
+// discoverable at all: refreshOwnership stamps the revision it inspected on every no-source pass regardless of
+// outcome, so a service sits out every cycle where nothing has redeployed and only re-enters scope on the one
+// cycle where TaskDefinition actually changes — which is the earliest a customer's freshly-applied marker could
+// possibly show up. That bounds the cost to one DescribeTaskDefinition per redeploy, not per cycle forever.
 func (o *ECSFargateObserver) Observe(ctx context.Context) error {
 	enabled, err := o.enabledSources(ctx)
 	if err != nil {
@@ -73,7 +81,7 @@ func (o *ECSFargateObserver) Observe(ctx context.Context) error {
 		if want {
 			matched[extID] = true
 		}
-		if want || svc.Instrumented {
+		if shouldObserveService(svc, want) {
 			byRegion[svc.Region] = append(byRegion[svc.Region], svc)
 		}
 	}
@@ -112,8 +120,16 @@ func (o *ECSFargateObserver) Observe(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// refreshOwnership updates only the instrumented flag for a service with no enabled source, from the ownership
-// markers on the task definition it currently runs.
+// shouldObserveService decides whether Observe inspects a service this pass, kept pure (no AWS client, no
+// database) so the scan-set decision is testable on its own — see evaluateECSObservation for the same
+// reasoning applied to the judgment half. marked is whether the service has an enabled source.
+func shouldObserveService(svc store.ECSService, marked bool) bool {
+	return marked || svc.Instrumented || baseapi.FingerprintChanged(svc.TaskDefinition, svc.OwnershipCheckedRevision)
+}
+
+// refreshOwnership updates the instrumented flag for a service with no enabled source, from the ownership
+// markers on the task definition it currently runs, and always stamps the revision it just inspected — see
+// api.FingerprintChanged — so Observe's scan does not pay for this same revision again next cycle.
 func (o *ECSFargateObserver) refreshOwnership(ctx context.Context, client *ecs.Client, svc store.ECSService) error {
 	live, err := describeService(ctx, client, svc.ClusterARN, svc.ServiceName)
 	if err != nil {
@@ -124,6 +140,13 @@ func (o *ECSFargateObserver) refreshOwnership(ctx context.Context, client *ecs.C
 	}
 	td, err := o.describeTaskDefinition(ctx, client, live)
 	if err != nil {
+		return err
+	}
+	// Stamped unconditionally, unlike the instrumented flag below: a revision that turns out NOT to carry a
+	// marker still needs recording, or this service would be re-inspected on every single pass forever instead
+	// of only on its next actual redeploy.
+	revision := aws.ToString(live.TaskDefinition)
+	if err := o.store.SetECSServiceOwnershipChecked(ctx, svc.ClusterARN, svc.ServiceName, revision); err != nil {
 		return err
 	}
 	// Either marker: this flag is "does the service carry Odigos instrumentation", and in manual mode the

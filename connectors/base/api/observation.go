@@ -101,6 +101,26 @@ func ConformanceSince(prev Conformance, prevSince time.Time, next Conformance, n
 	return now.UTC()
 }
 
+// FingerprintChanged reports whether a workload's cheap change-fingerprint — an ECS task-definition ARN, a
+// Cloud Run/Container Apps revision id, or anything else that already changes value on every redeploy and is
+// already known to the connector from ordinary discovery, at no extra API cost — differs from the one an
+// observer last inspected for it.
+//
+// It is the shared basis for bounding an observer's cost on a workload it does not yet know is instrumented.
+// Confirming instrumentation on such a workload needs a read beyond what discovery already makes (an ECS
+// DescribeTaskDefinition, say), which is too expensive to repeat every observation cycle for every workload in
+// an account — see ECSFargateObserver.Observe for why that scan used to skip such workloads entirely. Gating
+// that read on the fingerprint having moved since the last inspection pays it exactly once per actual
+// redeploy — the only time a workload's instrumentation could possibly have changed — rather than once per
+// cycle forever, and it is why a workload with no source and no prior "instrumented" verdict is still
+// eventually discovered: the very deploy that first applies the marker is what moves the fingerprint.
+//
+// An empty current fingerprint never counts as changed — a workload with nothing to key on must not use this
+// to justify a read on every pass.
+func FingerprintChanged(current, lastChecked string) bool {
+	return current != "" && current != lastChecked
+}
+
 // InstrumentationObserver observes ONE instrumentation type read-only in a single pass, and persists what
 // it found through the provider's own inventory so ListWorkloads can report it. It is the manual-mode
 // counterpart to Reconciler and is keyed by spec instrumentation type name the same way.

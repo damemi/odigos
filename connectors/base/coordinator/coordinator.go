@@ -68,6 +68,7 @@ type Coordinator struct {
 	reconcileTrigger         chan struct{}
 	computePlatformTrigger           chan struct{}
 	observeTrigger           chan struct{}
+	adoptTrigger             chan struct{}
 }
 
 func New(cfg config.Config, cfgMgr *config.Manager, st *store.Store, p api.Provider) *Coordinator {
@@ -85,6 +86,7 @@ func New(cfg config.Config, cfgMgr *config.Manager, st *store.Store, p api.Provi
 		reconcileTrigger:         make(chan struct{}, 1),
 		computePlatformTrigger:           make(chan struct{}, 1),
 		observeTrigger:           make(chan struct{}, 1),
+		adoptTrigger:             make(chan struct{}, 1),
 	}
 }
 
@@ -144,6 +146,7 @@ func (c *Coordinator) Start(ctx context.Context) {
 	go c.heartbeatLoop(loopCtx, cancelLoops)
 	go c.reconcileLoop(loopCtx)
 	go c.observeLoop(loopCtx)
+	go c.adoptLoop(loopCtx)
 	go c.computePlatformReconcileLoop(loopCtx)
 	// Workloads and compute platforms discover on independent loops over their own detector sets + stores.
 	go c.discoveryLoop(loopCtx, "computePlatform", c.activeComputePlatformDetectors, c.computePlatformDiscoveryTrigger)
@@ -330,6 +333,10 @@ func (c *Coordinator) runDiscovery(ctx context.Context, domain string, dets []na
 	// Manual-mode types have no reconciler to converge, so their equivalent of that is an observation pass:
 	// a workload discovered just now should have its conformance read in this cycle, not in the next one.
 	c.triggerObserve()
+	// A workload can carry live Odigos instrumentation (an ODIGOS_MANAGED or ODIGOS_IAC marker) that no
+	// source tracks at all — the source was deleted, never created, or lost with the connector's own
+	// state. Nothing else in this cycle notices that case, so adopt it as its own pass.
+	c.triggerAdopt()
 }
 
 // namedReconciler pairs a spec instrumentation type name with its reconciler.

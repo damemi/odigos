@@ -615,3 +615,56 @@ func TestNarrowingTheContainerExportNeverWidensIt(t *testing.T) {
 		}
 	}
 }
+
+func TestShouldObserveService(t *testing.T) {
+	tests := []struct {
+		name   string
+		svc    store.ECSService
+		marked bool
+		want   bool
+	}{
+		{
+			name:   "marked always enters scope, regardless of revision",
+			svc:    store.ECSService{TaskDefinition: "td:1", OwnershipCheckedRevision: "td:1"},
+			marked: true,
+			want:   true,
+		},
+		{
+			name:   "already known instrumented always enters scope, regardless of revision",
+			svc:    store.ECSService{Instrumented: true, TaskDefinition: "td:1", OwnershipCheckedRevision: "td:1"},
+			marked: false,
+			want:   true,
+		},
+		{
+			name:   "unmarked, not instrumented, never checked -> enters scope (bootstraps a fresh orphan)",
+			svc:    store.ECSService{TaskDefinition: "td:1", OwnershipCheckedRevision: ""},
+			marked: false,
+			want:   true,
+		},
+		{
+			name:   "unmarked, not instrumented, revision unchanged since last check -> skipped",
+			svc:    store.ECSService{TaskDefinition: "td:1", OwnershipCheckedRevision: "td:1"},
+			marked: false,
+			want:   false,
+		},
+		{
+			name:   "unmarked, not instrumented, redeployed to a new revision -> enters scope again",
+			svc:    store.ECSService{TaskDefinition: "td:2", OwnershipCheckedRevision: "td:1"},
+			marked: false,
+			want:   true,
+		},
+		{
+			name:   "no taskDefinition known at all -> nothing to key on, skipped",
+			svc:    store.ECSService{TaskDefinition: "", OwnershipCheckedRevision: ""},
+			marked: false,
+			want:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := shouldObserveService(tt.svc, tt.marked); got != tt.want {
+				t.Errorf("shouldObserveService(%+v, marked=%v) = %v, want %v", tt.svc, tt.marked, got, tt.want)
+			}
+		})
+	}
+}

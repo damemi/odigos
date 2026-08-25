@@ -35,7 +35,7 @@ func (s *Store) ListSources(ctx context.Context) ([]SourceRecord, error) {
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT source_name, kind, COALESCE(service_name, ''), enabled, external_resource_id, COALESCE(region, ''), config, updated_at
 		FROM %s.sources
-		WHERE connector_name = $1
+		WHERE connector_name = $1 AND deleted_at IS NULL
 		ORDER BY source_name
 	`, s.schema), s.connectorName)
 	if err != nil {
@@ -73,7 +73,7 @@ func (s *Store) FindSource(ctx context.Context, name, kind, region string) (*Sou
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT source_name, kind, COALESCE(service_name, ''), enabled, external_resource_id, COALESCE(region, ''), config, updated_at
 		FROM %s.sources
-		WHERE connector_name = $1 AND source_name = $2
+		WHERE connector_name = $1 AND source_name = $2 AND deleted_at IS NULL
 		  AND ($3 = '' OR kind = $3)
 		  AND ($4 = '' OR region = $4)
 	`, s.schema), s.connectorName, name, kind, region)
@@ -132,6 +132,10 @@ type pgExecer interface {
 // sqlUpsertSource / sqlDeleteSource are shared by the standalone methods and the transactional MoveSource
 // so the identity keying (connector_name, kind, external_resource_id) stays in one place. Format with the
 // provider schema.
+//
+// deleted_at = NULL on conflict is what makes CreateSource double as "undelete": a source is never hard
+// gone once created (see DeleteSourceByKey), so recreating one under the same identity is ordinary upsert
+// conflict resolution rather than a special case this has to detect.
 const sqlUpsertSource = `
 	INSERT INTO %s.sources
 		(connector_name, source_name, kind, service_name, enabled, external_resource_id, region, config, created_at, updated_at)
@@ -142,9 +146,18 @@ const sqlUpsertSource = `
 		enabled = EXCLUDED.enabled,
 		region = EXCLUDED.region,
 		config = EXCLUDED.config,
-		updated_at = now()`
+		updated_at = now(),
+		deleted_at = NULL`
 
-const sqlDeleteSource = `DELETE FROM %s.sources WHERE connector_name = $1 AND kind = $2 AND external_resource_id = $3`
+// sqlHardDeleteSource is MoveSource's exclusively: relocating a source to a new identity is not a human
+// decision to stop tracking the old one, so the old-identity row is actually removed rather than
+// tombstoned — otherwise a later, unrelated workload that happens to reuse that exact old identity would
+// find adoption permanently blocked by a move that has nothing to do with it.
+const sqlHardDeleteSource = `DELETE FROM %s.sources WHERE connector_name = $1 AND kind = $2 AND external_resource_id = $3`
+
+// sqlSoftDeleteSource is DeleteSourceByKey's: see DeleteSourceByKey for why a human-initiated delete is
+// tombstoned rather than removed.
+const sqlSoftDeleteSource = `UPDATE %s.sources SET deleted_at = now() WHERE connector_name = $1 AND kind = $2 AND external_resource_id = $3 AND deleted_at IS NULL`
 
 func (s *Store) upsertSourceExec(ctx context.Context, db pgExecer, src domainsrc.Source) error {
 	configJSON, err := json.Marshal(src.Config)
@@ -172,17 +185,60 @@ func (s *Store) UpsertSource(ctx context.Context, src domainsrc.Source) error {
 	return nil
 }
 
-// DeleteSourceByKey removes a source addressed by its full identity (kind + external_resource_id), the
+// DeleteSourceByKey tombstones a source addressed by its full identity (kind + external_resource_id), the
 // primary key. This is the only delete path: callers resolve the exact row (via FindSource) and pass its
 // true identity from the resolved record, so the right row is removed regardless of the display handle or
 // a service-name override.
+//
+// It is a soft delete (deleted_at set, row kept) rather than a hard one: a hard delete would make a
+// human's explicit "stop tracking this workload" indistinguishable, to orphan adoption, from a workload
+// nobody has ever looked at — and adoption would resurrect it the moment the workload's live
+// instrumentation (which this delete does nothing to remove) is next observed. Idempotent: deleting an
+// already-deleted identity is a no-op, not an error.
 func (s *Store) DeleteSourceByKey(ctx context.Context, kind, externalResourceID string) error {
 	sourcesLog.Info("delete source by key", "connector", s.connectorName, "kind", kind, "external_id", externalResourceID)
-	_, err := s.pool.Exec(ctx, fmt.Sprintf(sqlDeleteSource, s.schema), s.connectorName, kind, externalResourceID)
+	_, err := s.pool.Exec(ctx, fmt.Sprintf(sqlSoftDeleteSource, s.schema), s.connectorName, kind, externalResourceID)
 	if err != nil {
 		sourcesLog.Error("delete source by key failed", "connector", s.connectorName, "kind", kind, "external_id", externalResourceID, "error", err)
 	}
 	return err
+}
+
+// SourceIdentityKey is the composite form of a source's true identity (kind + external_resource_id), for
+// callers that need to test membership in a set of identities (see DeletedSourceKeys) rather than query
+// per-identity. Exported so a caller outside this package builds the exact same key, never its own format.
+func SourceIdentityKey(kind, externalResourceID string) string {
+	return kind + "\x00" + externalResourceID
+}
+
+// DeletedSourceKeys returns the identity of every tombstoned source for this connector, keyed by
+// SourceIdentityKey. Orphan adoption fetches this once per pass and checks candidates against it in
+// memory, rather than a query per candidate workload.
+func (s *Store) DeletedSourceKeys(ctx context.Context) (map[string]bool, error) {
+	sourcesLog.Debug("list deleted source keys", "connector", s.connectorName, "schema", s.schema)
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+		SELECT kind, external_resource_id FROM %s.sources
+		WHERE connector_name = $1 AND deleted_at IS NOT NULL
+	`, s.schema), s.connectorName)
+	if err != nil {
+		sourcesLog.Error("list deleted source keys failed", "connector", s.connectorName, "error", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := map[string]bool{}
+	for rows.Next() {
+		var kind, externalID string
+		if err := rows.Scan(&kind, &externalID); err != nil {
+			return nil, err
+		}
+		out[SourceIdentityKey(kind, externalID)] = true
+	}
+	if err := rows.Err(); err != nil {
+		sourcesLog.Error("list deleted source keys failed", "connector", s.connectorName, "error", err)
+		return nil, err
+	}
+	return out, nil
 }
 
 // MoveSource atomically repoints a source to a new identity: it deletes the old-identity row and upserts
@@ -197,7 +253,7 @@ func (s *Store) MoveSource(ctx context.Context, oldKind, oldExternalID string, s
 		return err
 	}
 	defer tx.Rollback(ctx) // no-op after a successful Commit
-	if _, err := tx.Exec(ctx, fmt.Sprintf(sqlDeleteSource, s.schema), s.connectorName, oldKind, oldExternalID); err != nil {
+	if _, err := tx.Exec(ctx, fmt.Sprintf(sqlHardDeleteSource, s.schema), s.connectorName, oldKind, oldExternalID); err != nil {
 		sourcesLog.Error("move source delete-old failed", "connector", s.connectorName, "name", src.Name, "error", err)
 		return err
 	}

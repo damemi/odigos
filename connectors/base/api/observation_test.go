@@ -73,3 +73,27 @@ func TestConformanceSinceNormalizesToUTC(t *testing.T) {
 		t.Errorf("since = %v, want the same instant as %v", got, local)
 	}
 }
+
+func TestFingerprintChanged(t *testing.T) {
+	cases := []struct {
+		name                 string
+		current, lastChecked string
+		want                 bool
+	}{
+		{name: "never checked, has a current value -> changed", current: "td:1", lastChecked: "", want: true},
+		{name: "same value as last checked -> unchanged", current: "td:1", lastChecked: "td:1", want: false},
+		{name: "redeployed to a new value -> changed", current: "td:2", lastChecked: "td:1", want: true},
+		{
+			// Nothing to key on must never be treated as a change — an observer with no fingerprint at all must
+			// not use this to justify inspecting on every pass.
+			name: "no current value -> never counts as changed", current: "", lastChecked: "", want: false,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := FingerprintChanged(c.current, c.lastChecked); got != c.want {
+				t.Errorf("FingerprintChanged(%q, %q) = %v, want %v", c.current, c.lastChecked, got, c.want)
+			}
+		})
+	}
+}

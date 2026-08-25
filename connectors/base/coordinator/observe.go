@@ -108,6 +108,13 @@ func (c *Coordinator) runObserve(ctx context.Context, obs []namedObserver) {
 		}
 	}
 	coordLog.Debug("observation pass complete", "types", len(obs), "duration", time.Since(start).Round(time.Millisecond))
+	// runDiscovery already fires this trigger too, but that one races this pass: for a type whose Instrumented
+	// flag is observer-derived (ECS Fargate today) rather than discovery-derived (Lambda), adopt reading
+	// ListWorkloads before THIS pass writes the flag sees a stale "not instrumented" and correctly concludes
+	// there is nothing to adopt yet — the AWS calls above can easily outlast adopt's near-instant DB read.
+	// Firing it again here, now that this pass's writes are visible, is what actually closes that window; the
+	// discovery-triggered one still matters on its own for discovery-derived types, which have no such race.
+	c.triggerAdopt()
 }
 
 // triggerObserve requests an out-of-band observation pass, coalescing with any already queued. A no-op when
