@@ -28,6 +28,14 @@ const IaCMarkerVersion = 1
 // ships today, so a new release is not reported as drift until the customer re-applies. Unrecorded
 // layer → incomplete check, not a wrong verdict (manual mode must not look layers up).
 //
+// Image — optional (staged-agent platforms). The agents-bundle image the artifact staged the agent files
+// from: the Fargate counterpart of Layer, with the same rule and for the same reason. Conformance holds
+// the workload to the image RECORDED here rather than to the one this connector build happens to pin, so
+// bumping the connector's artifacts version does not report every manually instrumented task as drifted
+// the moment it lands. Unrecorded image → the check falls back from identity to signature (a staging
+// container is present, non-essential and staging the right agents, whatever its tag), never to today's
+// pin — which is exactly the fallback the Lambda layer check makes for an unrecorded layer.
+//
 // Language — optional (staged-agent platforms). A cross-check against freshly resolved language, not
 // the desired state itself. Only ECS Fargate reads it today; Cloud Run / Container Apps key off
 // presence. Missing language → skip the cross-check (omission is not drift).
@@ -36,6 +44,7 @@ type IaCMarker struct {
 	Source   string `json:"source,omitempty"`
 	Release  string `json:"version,omitempty"`
 	Layer    string `json:"layer,omitempty"`
+	Image    string `json:"image,omitempty"`
 	Language string `json:"lang,omitempty"`
 }
 

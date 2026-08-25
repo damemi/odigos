@@ -24,7 +24,7 @@ func instrumentedTaskDef(t *testing.T) (*ecstypes.TaskDefinition, []containerTar
 	}
 	td := tdFromRegisterInput(in)
 	if len(containerDiff(&td.ContainerDefinitions[0], targets[0], "svc-checkout", "us-east-1", false)) != 0 ||
-		len(taskLevelDiff(td, targets, testAgentsImage)) != 0 {
+		len(taskLevelDiff(td, targets, connectorAgentsImage(testAgentsImage))) != 0 {
 		t.Fatal("test setup: a freshly instrumented task definition must be conformant, or every case below is vacuous")
 	}
 	return td, targets
@@ -213,7 +213,7 @@ func TestTaskLevelDiffCoversAgentStaging(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			td, targets := instrumentedTaskDef(t)
 			c.mutate(td)
-			if got := taskLevelDiff(td, targets, testAgentsImage); !sameSet(got, c.want) {
+			if got := taskLevelDiff(td, targets, connectorAgentsImage(testAgentsImage)); !sameSet(got, c.want) {
 				t.Errorf("diff = %v, want %v", got, c.want)
 			}
 		})

@@ -284,6 +284,9 @@ func evaluateECSObservation(td *ecstypes.TaskDefinition, targets []containerTarg
 // perfect env and no sidecar exports nothing at all — the exact ECS analog of Lambda's detached layer, and the
 // false green this pass exists to close.
 func ecsOwnedDiff(td *ecstypes.TaskDefinition, ownedIdx []int, targets []containerTarget, reportedServiceName string, svc store.ECSService, image string, debug bool) (diff []string, incomplete string) {
+	// The ECS service name is the DEFAULT reported service.name, not a last resort — see enabledSources for
+	// why the source's own "<cluster>-<service>" name is not it. Same resolution as instrument(), so this
+	// judges exactly what the mutating path writes and what the IaC snippets tell a customer to set.
 	serviceName := reportedServiceName
 	if serviceName == "" {
 		serviceName = svc.ServiceName
@@ -325,7 +328,12 @@ func ecsOwnedDiff(td *ecstypes.TaskDefinition, ownedIdx []int, targets []contain
 	// The sidecar command stages the union of the AGENTS THE OWNED CONTAINERS NEED, so it is compared against
 	// the owned set for the same reason the containers are: a language the customer chose not to instrument
 	// must not make the sidecar look wrong.
-	add(taskLevelDiff(td, ownedTargets, image))
+	//
+	// The IMAGE, unlike the command, is not this connector's to assert in manual mode. It is resolved from
+	// what the applied instrumentation recorded, falling back to a signature check when nothing did — so a
+	// customer whose IaC staged an earlier bundle keeps a Conformant verdict until they re-apply, exactly as
+	// a Lambda function pinned to an older layer does. See desiredAgentsImage.
+	add(taskLevelDiff(td, ownedTargets, desiredAgentsImage(td, ownedIdx, image)))
 	return diff, ""
 }
 

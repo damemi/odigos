@@ -145,12 +145,25 @@ func fargateIaCMarkerValue(lang string) string {
 	return fmt.Sprintf(`{"v":%d,"lang":%q}`, baseapi.IaCMarkerVersion, lang)
 }
 
+// fargateServiceNamePlaceholder narrows the base's description for the one type where the workload's name in
+// Odigos and its reported service.name are not the same string. A Fargate source is named
+// "<cluster>-<service>" to keep same-named services in two clusters distinct; the value that goes here is the
+// ECS SERVICE name, which is also the only one a task definition can express — it cannot reference the service
+// that will run it. See fargateSourceIntent for the resolution rule this describes.
+var fargateServiceNamePlaceholder = plan.Placeholder{
+	Token: plan.PlaceholderServiceName,
+	Description: "Your ECS service's name. It must match exactly: a different value is reported as " +
+		"instrumentation drift, not as a naming preference. Note this is the ECS service name, not the " +
+		"cluster-prefixed name the source is listed under in Odigos — unless you set a reported service name " +
+		"on the source, in which case use that.",
+}
+
 // fargatePlaceholders is what this plan asks the customer to substitute.
 // Runtime version only when the plan actually carries the token (otherwise nothing would substitute it).
 func fargatePlaceholders(p plan.Plan) []plan.Placeholder {
 	out := []plan.Placeholder{
 		plan.ContainerPlaceholder,
-		plan.ServiceNamePlaceholder,
+		fargateServiceNamePlaceholder,
 		plan.RegionPlaceholder,
 		plan.OTLPEndpointURLPlaceholder,
 	}

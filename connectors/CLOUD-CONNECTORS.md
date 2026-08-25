@@ -57,13 +57,18 @@ Two resolvers follow from this, and picking the wrong one is the easiest mistake
   so a marked workload reports as awaiting the customer's deployment rather than "no instrumentation
   defined".
 
-A marked manual-mode workload reports `current.state: NotInstrumented` with
-`progress.stage: WaitingForCustomer` and a transient, non-error issue, and flips to `Instrumented` on its own
-once discovery observes an Odigos marker on the applied workload — `ODIGOS_IAC`, written by the Odigos IaC
-artifact the customer applied, or `ODIGOS_MANAGED` where the connector itself instrumented it. If the source
-is later disabled or deleted while that instrumentation is still live, the workload reports `Error` with
+A marked manual-mode workload reports `current.state: NotInstrumented` with a transient, non-error issue
+coded `WaitingForCustomer`, and flips to `Instrumented` on its own once discovery observes an Odigos marker
+on the applied workload — `ODIGOS_IAC`, written by the Odigos IaC artifact the customer applied, or
+`ODIGOS_MANAGED` where the connector itself instrumented it. If the source is later disabled or deleted while
+that instrumentation is still live, the workload reports `Error` with an issue coded
 `SourceDisabledButInstrumented` / `SourceMissingButInstrumented` and `current.instrumented: true` — Odigos
 will not strip instrumentation the customer applied, so removing it is theirs to do.
+
+**Branch on `current.state` and `issues[].code`, never on `progress.stage`.** The first two are identifiers
+and are stable; `progress.stage` is the reader-facing sentence for the same condition ("Waiting for you to
+apply the instrumentation"), written for a person and free to be reworded. A client that matched on the
+stage's old identifier spelling is matching on copy.
 
 > **Behavior change.** Connectors already running with `discovery: true, instrumentation: false` previously
 > reported a marked source as `Unknown` / `NoInstrumentationDefined` ("no instrumentation defined for this

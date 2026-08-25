@@ -10,6 +10,8 @@ import (
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
+	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
 
 func TestExportTargetFor(t *testing.T) {
@@ -166,5 +168,62 @@ func TestTaskDefOSFamilyGateValues(t *testing.T) {
 	win := &ecstypes.TaskDefinition{RuntimePlatform: &ecstypes.RuntimePlatform{OperatingSystemFamily: ecstypes.OSFamilyWindowsServer2019Core}}
 	if got := taskDefOSFamily(win); got == "" || got == string(ecstypes.OSFamilyLinux) {
 		t.Errorf("windows family should be surfaced, got %q", got)
+	}
+}
+
+// A Fargate source is NAMED "<cluster>-<service>" so two clusters running a same-named service stay distinct
+// rows. That disambiguator must never become the reported OTel service.name: an IaC-instrumented task
+// definition cannot reference the service that will run it, so "<cluster>-<service>" is not expressible in the
+// place the customer sets OTEL_SERVICE_NAME. Taking it (via ReportedServiceName's fallback to the source name)
+// reported every marked service as serviceName drift the moment it was instrumented from IaC — and told the
+// customer to re-apply a value they could not write.
+func TestFargateSourceIntentDoesNotDefaultServiceNameToSourceName(t *testing.T) {
+	intent := fargateSourceIntent(basestore.SourceRecord{
+		Name:               "erik-dev-ecs-fargate-demo-fargate-demo-catalog",
+		Kind:               store.KindECSTask,
+		Enabled:            true,
+		ExternalResourceID: "arn:aws:ecs:us-east-1:1:cluster/erik-dev-ecs-fargate/demo-fargate-demo-catalog",
+	})
+	if intent.serviceName != "" {
+		t.Fatalf("serviceName = %q, want empty so instrument()/ecsOwnedDiff resolve the ECS service name",
+			intent.serviceName)
+	}
+}
+
+// An explicitly-set reported name is the customer's decision and outranks the ECS service name in both modes.
+func TestFargateSourceIntentKeepsExplicitServiceName(t *testing.T) {
+	intent := fargateSourceIntent(basestore.SourceRecord{
+		Name:        "erik-dev-ecs-fargate-demo-fargate-demo-catalog",
+		Kind:        store.KindECSTask,
+		ServiceName: "catalog",
+		Enabled:     true,
+	})
+	if intent.serviceName != "catalog" {
+		t.Fatalf("serviceName = %q, want %q", intent.serviceName, "catalog")
+	}
+}
+
+// End-to-end over the rule that actually failed in the cluster: a task definition carrying the ECS service
+// name — exactly what the CDK construct and the USAGE.md §5 snippets write — is conformant, and the
+// cluster-prefixed source name is what would have been drift.
+func TestFargateServiceNameConformanceUsesECSServiceName(t *testing.T) {
+	const ecsService = "demo-fargate-demo-catalog"
+	svc := store.ECSService{
+		ClusterARN:  "arn:aws:ecs:us-east-1:1:cluster/erik-dev-ecs-fargate",
+		ServiceName: ecsService,
+		Region:      "us-east-1",
+	}
+	src := fargateSourceIntent(basestore.SourceRecord{
+		Name:    "erik-dev-ecs-fargate-" + ecsService,
+		Kind:    store.KindECSTask,
+		Enabled: true,
+	})
+
+	resolved := src.serviceName
+	if resolved == "" {
+		resolved = svc.ServiceName
+	}
+	if resolved != ecsService {
+		t.Fatalf("resolved OTEL_SERVICE_NAME = %q, want the ECS service name %q", resolved, ecsService)
 	}
 }

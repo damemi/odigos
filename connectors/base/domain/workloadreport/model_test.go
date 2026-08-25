@@ -284,8 +284,10 @@ func TestToModelEcsDetailsCarryContainers(t *testing.T) {
 	if ptr(ecs.LaunchType) != "FARGATE" || ptr(ecs.DeploymentController) != "ECS" {
 		t.Errorf("launch type / controller not carried: %+v", ecs)
 	}
-	if len(ecs.Containers) != 3 {
-		t.Fatalf("got %d containers, want 3", len(ecs.Containers))
+	// Two, not three: the odigos-agent staging container is Odigos's own, and the report carries the
+	// CUSTOMER's container inventory. See containersToModel.
+	if len(ecs.Containers) != 2 {
+		t.Fatalf("got %d containers, want 2", len(ecs.Containers))
 	}
 
 	front := ecs.Containers[0]
@@ -303,11 +305,29 @@ func TestToModelEcsDetailsCarryContainers(t *testing.T) {
 	if geo := ecs.Containers[1]; geo.InstrumentationEligible || ptr(geo.ExcludedReason) == "" {
 		t.Errorf("an uninstrumentable container must be ineligible with a reason: %+v", geo)
 	}
-	// Odigos's own sidecar carries no flag of its own — the wire has no `odigosManaged`, on purpose.
-	// A client tells it apart the same way it tells apart every other uninstrumented container: it is
-	// ineligible and the excluded reason says why. Same for ECS's `essential`.
-	if side := ecs.Containers[2]; side.InstrumentationEligible || ptr(side.ExcludedReason) != "Odigos agents sidecar" {
-		t.Errorf("the sidecar must be reported as ineligible with its reason, not a flag: %+v", side)
+	// Odigos's own staging sidecar is not in the inventory at all. Reporting it — even correctly, as an
+	// ineligible container with a reason — put a container the customer never wrote and cannot act on in
+	// front of them, with no language to detect and no instrumentation that would ever be applied.
+	for _, c := range ecs.Containers {
+		if c.Name == "odigos-agent" {
+			t.Errorf("the Odigos staging sidecar must not appear in the reported container inventory: %+v", c)
+		}
+	}
+}
+
+// A task definition whose only containers are Odigos's own reports no inventory rather than an empty list:
+// an empty list is a claim that the workload HAS no containers, which is a different (and false) statement.
+func TestToModelOmitsInventoryThatIsOnlyOdigosContainers(t *testing.T) {
+	w := api.DiscoveredWorkload{
+		ServiceName: "svc",
+		Kind:        "aws.fargate-task",
+		Details: &api.WorkloadDetails{Kind: "aws.fargate-task", Containers: []api.WorkloadContainer{
+			{Name: "odigos-agent", OdigosManaged: true, ExcludedReason: "Odigos agents sidecar"},
+		}},
+	}
+	ecs := ToModel(w).Details.(model.EcsWorkloadDetails)
+	if ecs.Containers != nil {
+		t.Errorf("containers = %+v, want nil", ecs.Containers)
 	}
 }
 

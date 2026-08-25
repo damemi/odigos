@@ -42,7 +42,7 @@ There is no separate "mode" field anywhere — it's derived from those two boole
 safe across connector versions: an older image with no reconciler for a type simply can't mutate a
 workload you chose to own.
 
-A manual-mode workload reports `NotInstrumented` / `WaitingForCustomer` until discovery sees the
+A manual-mode workload reports `NotInstrumented`, with an issue coded `WaitingForCustomer`, until discovery sees the
 **`ODIGOS_IAC`** marker your IaC applied (§§4–5), at which point it flips to `Instrumented` on its own —
 there is nothing to click. `ODIGOS_MANAGED` is the opposite marker: the connector's own record of a mutation *it*
 performed (with the rollback snapshot), written only in automatic mode. Never hand-write `ODIGOS_MANAGED`;
@@ -184,7 +184,7 @@ Volumes:
   - Name: odigos-agent          # ephemeral-storage bind mount, scoped to the task
 ContainerDefinitions:
   - Name: odigos-agent
-    Image: "registry.odigos.io/odigos-fargate-agents:v0.0.9"
+    Image: "registry.odigos.io/odigos-fargate-agents:v0.0.15"
     Essential: false            # required: SUCCESS below is only valid against a non-essential container
     Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
     MountPoints:
@@ -251,8 +251,8 @@ import { OdigosFargateInstrumentation, OdigosFargateLanguage } from '@odigos/aws
 
 const odigos = new OdigosFargateInstrumentation(this, 'Odigos', {
   destination: { httpEndpoint: 'https://otlp.example.com:4318' },
-  // Pin the image THIS connector expects, not the package's own default (see below).
-  agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.9',
+  // Optional — the package already defaults to its own release's bundle, and records it (see below).
+  agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.15',
 });
 
 odigos.instrument({
@@ -265,16 +265,23 @@ odigos.instrument({
 
 Three things it does not paper over, because they are decisions rather than boilerplate:
 
-- **The service name has no default.** `OTEL_SERVICE_NAME` must equal the workload's name in Odigos, which
-  is the ECS *service* name, so pass `service` or `serviceName`. A CFN-generated service name throws at
-  synth: it is a `Ref` to the service, and the task definition that service runs cannot reference it.
+- **The service name has no default.** `OTEL_SERVICE_NAME` must equal the ECS *service* name, so pass
+  `service` or `serviceName`. A CFN-generated service name throws at synth: it is a `Ref` to the service, and
+  the task definition that service runs cannot reference it. Note this is deliberately *not* the name the
+  source is listed under in Odigos — Fargate sources are named `<cluster>-<service>` so that same-named
+  services in two clusters stay distinct rows, and that prefix is not expressible in a task definition. If you
+  set a reported service name on the source, that value wins over the ECS service name in both modes.
 - **The language is stated, not detected.** A container declares an image, not a runtime, so there is no
   aspect equivalent to the Lambda one.
-- **`agentsImage` should be pinned to this connector's image.** The package defaults to the agents bundle of
-  its OWN release, and `taskLevelDiff` compares the staging container's image exactly against
-  `config.FargateAgentsImage` — with no recorded-image escape hatch of the kind the Lambda marker's `layer`
-  field provides. A package release ahead of `ARTIFACTS_VERSION` therefore reports as drift on the
-  agent-staging component of a task definition that is otherwise correct.
+- **The agents image is recorded, not assumed.** The construct writes the image it staged into the
+  `ODIGOS_IAC` marker as `image`, and `desiredAgentsImage` holds the task definition to THAT rather than to
+  `config.FargateAgentsImage` — the Fargate counterpart of the Lambda marker's `layer` field, and for the
+  same reason: bumping `ARTIFACTS_VERSION` here must not report every manually instrumented service in the
+  account as drifted for a change made in Odigos. So `agentsImage` is only needed to point at a mirror, and
+  a mirror is then judged against itself. A marker that records no image at all — which is what the
+  Terraform and CloudFormation snippets above produce — falls back to a signature check on the staging
+  container rather than to this build's pin. Two containers recording *different* images is a conflict and
+  is reported: one staging container cannot serve two bundles.
 
 Multi-language task definitions work the way they do above: one `instrument()` call per container, one
 staging container for the task definition, and the construct builds its command from the union of every
@@ -381,7 +388,7 @@ running there — it's pulled by real Fargate *tasks*, at task-start time, strai
 in `ODIGOS_FARGATE_AGENTS_IMAGE`. So "local" here means: build it locally, push it somewhere your test
 Fargate tasks can actually reach (your own ECR repo, a private registry with a public endpoint, etc.),
 then point the connector at that tag instead of the compiled-in default
-(`registry.odigos.io/odigos-fargate-agents:v0.0.9`, see `config.DefaultFargateAgentsImage`):
+(`registry.odigos.io/odigos-fargate-agents:v0.0.15`, see `config.DefaultFargateAgentsImage`):
 
 ```bash
 ODIGOS_FARGATE_AGENTS_IMAGE=<your-registry>/odigos-fargate-agents:dev

@@ -288,6 +288,19 @@ func detailsToModel(w api.DiscoveredWorkload) model.WorkloadDetails {
 	}
 }
 
+// containersToModel renders the container inventory a client sees: the containers of the CUSTOMER's
+// application, and only those.
+//
+// OdigosManaged containers are dropped rather than reported as ineligible ones. They are not the customer's
+// containers at all — the agents-staging sidecar the instrumentation adds is Odigos's own plumbing, created
+// and removed by instrumentation itself — and listing it invites every question the customer's containers
+// legitimately raise and it cannot answer: which language does it run, why is its runtime undetected, why is
+// it not instrumented. A client showing "detecting runtime info" against Odigos's own sidecar is describing
+// work that will never happen, on a container the customer cannot act on.
+//
+// It stays in the connector's own inventory (api.WorkloadContainer.OdigosManaged, the store's
+// odigos_managed) — that record is what lets the instrumentor tell its sidecar from a customer container
+// with the same name, which is a question the mutating path has to answer. Only the REPORT drops it.
 func containersToModel(rows []api.WorkloadContainer) []*model.WorkloadContainer {
 	if len(rows) == 0 {
 		return nil
@@ -295,6 +308,9 @@ func containersToModel(rows []api.WorkloadContainer) []*model.WorkloadContainer 
 	out := make([]*model.WorkloadContainer, 0, len(rows))
 	for i := range rows {
 		c := rows[i]
+		if c.OdigosManaged {
+			continue
+		}
 		out = append(out, &model.WorkloadContainer{
 			Name:  c.Name,
 			Image: strPtrOrNil(c.Image),
@@ -312,6 +328,12 @@ func containersToModel(rows []api.WorkloadContainer) []*model.WorkloadContainer 
 			ExcludedReason:          strPtrOrNil(c.ExcludedReason),
 			Distro:                  strPtrOrNil(c.Distro),
 		})
+	}
+	// A task definition whose only containers were Odigos's own reports no inventory rather than an empty
+	// list — the same answer a workload with no container facts at all gives, which is what a client already
+	// renders correctly.
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }

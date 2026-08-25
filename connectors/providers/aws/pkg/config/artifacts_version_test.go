@@ -63,6 +63,27 @@ func TestArtifactVersions(t *testing.T) {
 				got, want)
 		}
 	})
+
+	// The Go constant is a FOURTH copy of the version, and the one the published instructions are rendered
+	// from — a stale value here tells customers to install a CDK package built against different agent bytes
+	// than the connector expects, which is the same skew the two image pins above exist to prevent.
+	t.Run("ArtifactsVersion constant", func(t *testing.T) {
+		if ArtifactsVersion != want {
+			t.Errorf("ArtifactsVersion = %q but the ARTIFACTS_VERSION file says %q", ArtifactsVersion, want)
+		}
+	})
+
+	// npm and PyPI both reject a leading "v", so the CDK packages are cut as bare semver. The conversion is
+	// one line and therefore easy to believe without checking — which is why it is checked.
+	t.Run("CDKPackageVersion", func(t *testing.T) {
+		if got, expect := CDKPackageVersion(), strings.TrimPrefix(want, "v"); got != expect {
+			t.Errorf("CDKPackageVersion() = %q, want %q", got, expect)
+		}
+		if strings.HasPrefix(CDKPackageVersion(), "v") {
+			t.Error("CDKPackageVersion() kept the tag's leading \"v\"; npm and PyPI reject that form, so the " +
+				"install command the artifacts publish would not resolve")
+		}
+	})
 }
 
 func artifactsVersion(t *testing.T) string {

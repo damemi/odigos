@@ -117,6 +117,7 @@ var wellKnown = func() map[string]Placeholder {
 		RegionPlaceholder,
 		RuntimeVersionPlaceholder,
 		ExistingValuePlaceholder,
+		PackageVersionPlaceholder,
 	}
 	m := make(map[string]Placeholder, len(all))
 	for _, ph := range all {

@@ -311,6 +311,10 @@ const (
 	// layout is per-version (PHP, Ruby). Those languages have no single correct activation path, so a plan
 	// for them is necessarily parameterized rather than copy-paste complete.
 	PlaceholderRuntimeVersion = "<RUNTIME_VERSION>"
+	// PlaceholderPackageVersion is the version of the Odigos IaC package an artifact tells the customer to
+	// install (@odigos/aws-cdk today). Resolved by the provider, not by the customer — see
+	// PackageVersionPlaceholder.
+	PlaceholderPackageVersion = "<PACKAGE_VERSION>"
 )
 
 // Placeholder is one substitution a customer (or the connector, when it can resolve the value) has to make,
@@ -368,6 +372,16 @@ var (
 	RuntimeVersionPlaceholder = Placeholder{
 		Token:       PlaceholderRuntimeVersion,
 		Description: "Your application's runtime major.minor version, for example 8.3. This agent's file paths are per version, so it has to be the version your application actually runs.",
+	}
+	// PackageVersionPlaceholder is the IaC package release an artifact tells the customer to install.
+	//
+	// It is the odd one out among these: every other placeholder names something only the customer's account
+	// can answer, and this one names something only ODIGOS can. Left undeclared it fell to the generic
+	// fallback — "a value from your own account or deployment definition" — which is not merely unhelpful but
+	// wrong, and it is wrong about the version of a package that pins which agent bytes get installed.
+	PackageVersionPlaceholder = Placeholder{
+		Token:       PlaceholderPackageVersion,
+		Description: "The Odigos IaC package version to install. It is the release this connector is built against, so pin it exactly rather than tracking latest — the package version is what decides which agent build your workload gets.",
 	}
 )
 

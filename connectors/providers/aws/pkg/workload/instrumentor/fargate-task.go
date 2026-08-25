@@ -36,6 +36,7 @@ import (
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 	domainsrc "github.com/odigos-io/odigos-enterprise/connectors/base/domain/source"
+	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/awsclient"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
@@ -146,15 +147,34 @@ func (i *ecsInspector) enabledSources(ctx context.Context) (map[string]enabledFa
 	enabled := make(map[string]enabledFargateSource)
 	for _, s := range sources {
 		if s.Kind == store.KindECSTask && s.Enabled && s.ExternalResourceID != "" {
-			enabled[s.ExternalResourceID] = enabledFargateSource{
-				serviceName: s.ReportedServiceName(),
-				language:    s.Config.RuntimeOverride.Language,
-				version:     s.Config.RuntimeOverride.Version,
-				containers:  s.Config.ContainerOverrides,
-			}
+			enabled[s.ExternalResourceID] = fargateSourceIntent(s)
 		}
 	}
 	return enabled, nil
+}
+
+// fargateSourceIntent maps one source row to the intent the instrumentor and the observer both read. Split out
+// of enabledSources so the serviceName rule below is reachable from a test without a database — it is the rule
+// a whole account's conformance verdict hangs on.
+func fargateSourceIntent(s basestore.SourceRecord) enabledFargateSource {
+	return enabledFargateSource{
+		// The source's EXPLICIT reported name only — deliberately NOT ReportedServiceName(), whose fallback is
+		// the SOURCE name. A Fargate source is named "<cluster>-<service>" so that two clusters running a
+		// same-named service stay distinct rows; that disambiguator is an identity concern and was never the
+		// OTel service.name. Using it as the default reported every IaC-instrumented service as serviceName
+		// drift the moment it was marked: the CDK construct — and the CloudFormation/Terraform snippets in
+		// USAGE.md §5 — set OTEL_SERVICE_NAME to the ECS service name, which is the only thing they CAN set. A
+		// task definition cannot Ref the service that will run it, so "<cluster>-<service>" is not expressible
+		// there at all; demanding it made manual mode structurally impossible to satisfy.
+		//
+		// Empty leaves the ECS service name to the fallback both consumers already carry (instrument() and
+		// ecsOwnedDiff), so automatic and manual mode converge on one value — and a customer who DID set a
+		// reported name still wins over both.
+		serviceName: s.ServiceName,
+		language:    s.Config.RuntimeOverride.Language,
+		version:     s.Config.RuntimeOverride.Version,
+		containers:  s.Config.ContainerOverrides,
+	}
 }
 
 // standaloneUnsupportedMsg is the terminal error recorded on an enabled standalone-task source. Prefixed
@@ -237,6 +257,9 @@ func (i *ECSFargateInstrumentor) Reconcile(ctx context.Context) error {
 }
 
 func (i *ECSFargateInstrumentor) instrument(ctx context.Context, svc store.ECSService, src enabledFargateSource, dest domaindest.OTLPTarget) error {
+	// The ECS service name is the DEFAULT reported service.name, not a last resort — see enabledSources for
+	// why the source's own "<cluster>-<service>" name is not it. Same resolution as the observer's
+	// ecsOwnedDiff, so what this writes is exactly what that judges.
 	serviceName := src.serviceName
 	if serviceName == "" {
 		serviceName = svc.ServiceName

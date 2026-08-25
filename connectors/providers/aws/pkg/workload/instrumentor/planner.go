@@ -5,6 +5,7 @@ import (
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
+	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/config"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
 
@@ -53,7 +54,12 @@ func (p *LambdaPlanner) PlanFor(ctx context.Context, w baseapi.DiscoveredWorkloa
 	if err != nil {
 		return nil, err
 	}
-	return &baseapi.PlannedInstrumentation{Plan: pl, Resolved: p.resolveLayer(ctx, fn)}, nil
+	resolved := p.resolveLayer(ctx, fn)
+	if resolved == nil {
+		resolved = map[string]string{}
+	}
+	resolved[plan.PlaceholderPackageVersion] = config.CDKPackageVersion()
+	return &baseapi.PlannedInstrumentation{Plan: pl, Resolved: resolved}, nil
 }
 
 // resolveLayer fills <OTEL_LAYER_ARN> with the version the connector would actually attach.
@@ -108,7 +114,12 @@ func (p *ECSFargatePlanner) PlanFor(_ context.Context, w baseapi.DiscoveredWorkl
 	if err != nil {
 		return nil, err
 	}
-	resolved := map[string]string{}
+	resolved := map[string]string{
+		// The CDK artifacts name the package to install, and its version is this connector build's release
+		// rather than anything in the customer's account — so it is resolved here instead of being left as a
+		// blank they would have to guess, and guess wrong.
+		plan.PlaceholderPackageVersion: config.CDKPackageVersion(),
+	}
 	if name := soleInstrumentableContainer(w); name != "" {
 		resolved[plan.PlaceholderContainer] = name
 	}

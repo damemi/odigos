@@ -223,7 +223,70 @@ func alreadyInstrumented(td *ecstypes.TaskDefinition, targets []containerTarget,
 			return false
 		}
 	}
-	return len(taskLevelDiff(td, targets, image)) == 0
+	return len(taskLevelDiff(td, targets, connectorAgentsImage(image))) == 0
+}
+
+// agentsImageTarget is which agents bundle a task definition's staging container is HELD TO, and whether it
+// is held to one at all.
+//
+// The distinction exists because the answer has two different sources. When the connector owns the task
+// definition it wrote the staging container itself and converges it to its own configured image, so the
+// image is pinned and exact. When a customer's IaC applied the instrumentation, the image they staged from
+// is whatever their artifact named — and holding them to THIS connector build's pin instead is what turns
+// an ordinary artifacts-version bump into drift reported against every manually instrumented task in the
+// account, all at once, for a change nobody made to their deployment.
+type agentsImageTarget struct {
+	// image is the reference the staging container must carry. Empty when nothing recorded one.
+	image string
+	// pinned is false when no image was recorded, in which case the staging container is checked by
+	// SIGNATURE (present, non-essential, staging the right agents) and not by identity — the same fallback
+	// the Lambda layer check makes for a function whose marker recorded no layer ARN.
+	pinned bool
+	// conflict is true when the instrumented containers recorded DIFFERENT images, which is a task
+	// definition assembled from two releases of the artifacts and cannot be satisfied by one staging
+	// container. Reported as drift rather than resolved by picking one.
+	conflict bool
+}
+
+// connectorAgentsImage is the target for a task definition the connector owns: its own configured image,
+// exactly. Recorded images play no part — see agentsImageTarget.
+func connectorAgentsImage(image string) agentsImageTarget {
+	return agentsImageTarget{image: image, pinned: true}
+}
+
+// desiredAgentsImage resolves which agents bundle the staging container is held to, from the markers the
+// instrumented containers carry.
+//
+// One OWNERSHIP marker anywhere is decisive: the connector may mutate this task definition and converges it
+// to its own pin, so a recorded image on some other container is not a version to honour but a leftover from
+// before the takeover.
+//
+// Otherwise every container is the customer's own, and the recorded images are the only statement of what
+// they meant to stage. They must agree — one staging container cannot serve two bundles — so more than one
+// distinct value is a conflict, and none at all leaves the check unpinned.
+func desiredAgentsImage(td *ecstypes.TaskDefinition, instrumentedIdx []int, connectorImage string) agentsImageTarget {
+	recorded := map[string]bool{}
+	for _, idx := range instrumentedIdx {
+		m, ok := readECSMarker(containerEnvMap(&td.ContainerDefinitions[idx]))
+		if !ok {
+			continue
+		}
+		if m.Managed {
+			return connectorAgentsImage(connectorImage)
+		}
+		if m.Image != "" {
+			recorded[m.Image] = true
+		}
+	}
+	switch len(recorded) {
+	case 0:
+		return agentsImageTarget{}
+	case 1:
+		for image := range recorded {
+			return agentsImageTarget{image: image, pinned: true}
+		}
+	}
+	return agentsImageTarget{conflict: true}
 }
 
 // taskLevelDiff reports what is missing from the task-level agent staging: the sidecar that copies the agent
@@ -233,19 +296,24 @@ func alreadyInstrumented(td *ecstypes.TaskDefinition, targets []containerTarget,
 // green here too: a container can carry a complete, correct set of activation env vars while the sidecar that
 // puts the agent on disk is gone, in which case the application starts, finds nothing at /var/odigos, and
 // exports no telemetry at all — while reporting as instrumented.
-func taskLevelDiff(td *ecstypes.TaskDefinition, targets []containerTarget, image string) []string {
+func taskLevelDiff(td *ecstypes.TaskDefinition, targets []containerTarget, want agentsImageTarget) []string {
 	var diff []string
 	if !hasAgentVolume(td) {
 		diff = append(diff, componentAgentVolume)
 	}
 	sc := findECSContainer(td, sidecarContainerName)
-	// Image, non-essentiality and the exact copy command all matter: a stale image stages the wrong agent
-	// build, an essential copier fails the whole task when it exits, and a command missing a language's
-	// directory stages nothing for that container.
-	if sc == nil ||
-		aws.ToString(sc.Image) != image ||
+	// Non-essentiality and the exact copy command always matter: an essential copier fails the whole task
+	// when it exits, and a command missing a language's directory stages nothing for that container.
+	stale := sc == nil ||
 		sc.Essential == nil || *sc.Essential ||
-		strings.Join(sc.Command, "\x00") != strings.Join(sidecarCommand(unionAgentDirs(targets)), "\x00") {
+		strings.Join(sc.Command, "\x00") != strings.Join(sidecarCommand(unionAgentDirs(targets)), "\x00")
+	// The image is compared only when something states which one this task definition is supposed to carry.
+	// A stale image stages the wrong agent build, so where there IS a pin the comparison is exact; where
+	// there is not, demanding this build's pin would manufacture drift out of an Odigos release.
+	if want.conflict || (want.pinned && sc != nil && aws.ToString(sc.Image) != want.image) {
+		stale = true
+	}
+	if stale {
 		diff = append(diff, componentAgentSidecar)
 	}
 	return diff
@@ -363,10 +431,20 @@ func rollbackInstrumentation(td *ecstypes.TaskDefinition, tags []ecstypes.Tag) (
 	if !restored {
 		return nil, false
 	}
-	// The sidecar and volume are shared by every instrumented container, so they go once all of them
-	// have been restored.
-	removeECSContainer(td, sidecarContainerName)
-	removeAgentVolume(td)
+	// The sidecar and volume are shared by every instrumented container, so they go once all of them have
+	// been restored — UNLESS a container the connector never owned is still relying on them.
+	//
+	// That is the takeover-then-release case, and stripping them there is destructive rather than merely
+	// untidy: a container carrying the customer's own IaC marker keeps its activation environment through
+	// this rollback (that environment IS what the snapshot restores), so removing the staging container
+	// leaves it pointing at agent files nothing puts on disk — instrumented, reporting as instrumented, and
+	// exporting nothing. Leaving them is recoverable and visible: the customer's own next deploy reasserts
+	// their definition, and until then the observer judges the staging container against the containers that
+	// still carry a marker, so a command that has become wrong is reported rather than hidden.
+	if len(instrumentedContainerIndexes(td)) == 0 {
+		removeECSContainer(td, sidecarContainerName)
+		removeAgentVolume(td)
+	}
 	return registerInputFromTaskDefinition(td, tags), true
 }
 
@@ -387,8 +465,15 @@ func rollbackContainer(app *ecstypes.ContainerDefinition) bool {
 		}
 	}
 	deleteContainerEnv(app, store.EnvOdigosManaged)
-	removeAppMount(app)
-	removeDependsOn(app, sidecarContainerName)
+	// The mount and the startup dependency are removed only if this container is not still instrumented by
+	// the customer's own IaC. The snapshot cannot decide this on its own: ensureAppMount and ensureDependsOn
+	// are idempotent, so a container that already had them when the connector took it over recorded no
+	// difference to restore, and removing them unconditionally would delete wiring the connector never added.
+	// The surviving IaC marker is the evidence that they are still needed.
+	if _, stillInstrumented := readECSMarker(containerEnvMap(app)); !stillInstrumented {
+		removeAppMount(app)
+		removeDependsOn(app, sidecarContainerName)
+	}
 	return true
 }
 

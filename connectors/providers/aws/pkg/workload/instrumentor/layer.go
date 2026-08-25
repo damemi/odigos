@@ -1,7 +1,17 @@
-// Package instrumentor implements per-type AWS instrumentation. Lambda is implemented (attach an
-// OpenTelemetry layer + OTEL_* env to the function); ECS Fargate (sidecar) and ECS on EC2 (node agent)
-// are declared but not yet implemented. Instrumentation is reconcile-style and idempotent: it converges
-// live AWS state to the source intent each cycle.
+// Package instrumentor implements per-type AWS instrumentation, for the two workload types that are
+// instrumented in place:
+//
+//   - aws.lambda — attach an OpenTelemetry layer and the OTEL_* env to the function;
+//   - aws.fargate-task — stage the language agent into the task through a run-to-completion container and a
+//     shared volume, and activate it through the app container's env.
+//
+// ECS on EC2 is not here and does not belong here: it is covered by a cluster-wide node agent rather than by
+// mutating workloads, which makes it a compute-platform concern (pkg/computeplatform), and that install flow
+// is still stubbed.
+//
+// Both implemented paths are reconcile-style and idempotent — they converge live AWS state to the source
+// intent each cycle — and each has a read-only twin (observe_lambda.go, observe_fargate.go) that judges
+// instrumentation a customer applied themselves without mutating anything.
 package instrumentor
 
 import (

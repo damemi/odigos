@@ -6,6 +6,7 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"strings"
 
 	baseconfig "github.com/odigos-io/odigos-enterprise/connectors/base/config"
 	cpg "github.com/odigos-io/odigos-enterprise/connectors/postgres"
@@ -60,7 +61,25 @@ type Config struct {
 // build arg, with nothing forcing them to agree — a connector could ship v0.3.0 Lambda layers while
 // staging v0.1.0 Fargate agents, and nobody would notice until a customer's ECS task behaved unlike
 // their Lambdas.
-const DefaultFargateAgentsImage = "registry.odigos.io/odigos-fargate-agents:v0.0.9"
+const DefaultFargateAgentsImage = "registry.odigos.io/odigos-fargate-agents:v0.0.15"
+
+// ArtifactsVersion is the odigos-io/aws-connector-artifacts release this connector build is pinned to, as
+// a Go value rather than only as a file the tests read.
+//
+// It exists because the published instrumentation instructions have to NAME it. The CDK artifacts tell a
+// customer which @odigos/aws-cdk to install, and that package's version is this release's — so leaving
+// <PACKAGE_VERSION> for the customer to guess would hand them the one blank in the document that Odigos
+// actually knows the answer to. See CDKPackageVersion.
+//
+// TestArtifactVersions keeps this equal to the ARTIFACTS_VERSION file, alongside the two image pins.
+const ArtifactsVersion = "v0.0.15"
+
+// CDKPackageVersion is the @odigos/aws-cdk (and odigos-aws-cdk) version matching this connector build.
+//
+// The CDK packages are cut by the same release that publishes the layers and the agents bundle, and are
+// versioned as semver without the tag's leading "v" — npm and PyPI both reject it. One conversion here
+// rather than a second version constant, so there is nothing to keep in sync.
+func CDKPackageVersion() string { return strings.TrimPrefix(ArtifactsVersion, "v") }
 
 // FromEnv builds the Config from environment variables (base requires connector name + database URL).
 func FromEnv() (Config, error) {

@@ -111,6 +111,11 @@ type ecsMarker struct {
 	// a customer's hand-authored IaC marker legitimately can be — see containerDiff for why that skips the
 	// language check rather than reporting drift.
 	Language string
+	// Image is the agents bundle the applied instrumentation staged from, and it exists ONLY on an IaC
+	// marker. On a Managed one there is deliberately nothing to read: the connector wrote that container
+	// itself and converges the staging container to its own configured image, so a value recorded there
+	// could only restate the pin or contradict it. See desiredAgentsImage.
+	Image string
 	// PrevEnv is the rollback snapshot, and it exists ONLY on a Managed marker.
 	PrevEnv map[string]*string
 }
@@ -125,7 +130,7 @@ func readECSMarker(env map[string]string) (ecsMarker, bool) {
 		return ecsMarker{Managed: true, Language: m.Language, PrevEnv: m.PrevEnv}, true
 	}
 	if m, ok := baseapi.ParseIaCMarker(env[store.EnvOdigosIaC]); ok {
-		return ecsMarker{Language: m.Language}, true
+		return ecsMarker{Language: m.Language, Image: m.Image}, true
 	}
 	return ecsMarker{}, false
 }
