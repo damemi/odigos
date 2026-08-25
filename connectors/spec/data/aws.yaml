@@ -638,6 +638,9 @@ setup:
         - Add the environment variables to environment.variables.
         - Replace every <ANGLE_BRACKETED> value.
         - Behind the AWS Lambda Web Adapter, follow the web-server activation at the end instead — it swaps the wrapper for JAVA_TOOL_OPTIONS.
+      prerequisites:
+        - >-
+          Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         resource "aws_lambda_function" "app" {
           # ... your existing configuration ...
@@ -696,6 +699,9 @@ setup:
         - Keep any layers already listed — add the OpenTelemetry layer to them.
         - Replace every <ANGLE_BRACKETED> value.
         - Behind the AWS Lambda Web Adapter, follow the web-server activation at the end instead — it swaps the wrapper for JAVA_TOOL_OPTIONS.
+      prerequisites:
+        - >-
+          Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         # Merge into Resources.<YourFunction>.Properties
         Layers:
@@ -745,6 +751,9 @@ setup:
         - Replace <OTLP_ENDPOINT> and <OTLP_INSECURE> inside odigos-env.json, and re-list any variables your function already needs.
         - Run the script. It merges the OpenTelemetry layer into the function's existing layers.
         - Re-run it after any deploy that resets the function configuration.
+      prerequisites:
+        - >-
+          Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         FUNCTION="<YOUR_FUNCTION_NAME>"
         LAYER="<OTEL_LAYER_ARN>"
@@ -818,6 +827,9 @@ setup:
         - Install @odigos/aws-cdk in the app that defines the function, pinned to an exact version — the package version IS the layer version.
         - Add one OdigosLambdaInstrumentation per function, passing serviceName explicitly.
         - Run cdk diff to check the layer and the variables, then cdk deploy. Your function code is untouched, so this is a configuration-only update.
+      prerequisites:
+        - >-
+          Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
 
@@ -907,25 +919,6 @@ setup:
         destination with all three signals on — this is what Odigos compares the live variable against:
           yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: "<OTLP_ENDPOINT>", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}
 
-        NOTES
-        - ODIGOS_IAC is what Odigos reads to attribute the function to itself and to learn which layer version
-          the function is supposed to carry — so the version you pinned is respected rather than reported as
-          an available upgrade. Its "source"/"version" fields are attribution only.
-        - The package version is the layer version: @odigos/aws-cdk 0.0.10 resolves the layer built by Odigos
-          release v0.0.10 and pins the SAR application to 0.0.10, which is immutable. Upgrading a layer is
-          therefore npm update plus a cdk diff that shows the change.
-        - destination.headers is rendered into OPENTELEMETRY_COLLECTOR_CONFIG_URI, a plain Lambda environment
-          variable readable by anyone with lambda:GetFunctionConfiguration. Prefer a destination that
-          authenticates by network position, or terminate at a collector you control.
-        - A container-image function (DockerImageFunction) cannot carry layers at all, and the construct
-          takes a mutable lambda.Function — a function imported with Function.fromFunctionArn cannot be
-          instrumented this way, because CDK cannot modify a resource it does not own.
-        - Do not also enable these functions as automatic-mode connector sources. Both sides would then own
-          the function: every cdk deploy reasserts your stack's environment, every reconcile reasserts the
-          connector's, and each round trip publishes a new function version.
-        - Attach at most 5 layers in total (the AWS limit) and never two versions of the same layer — Odigos
-          reports a duplicate as a layer-version conflict.
-
     - id: instrument-lambda-terraform-nodejs
       section: instrumentation:aws.lambda
       language: nodejs
@@ -941,6 +934,9 @@ setup:
         - Add the environment variables to environment.variables.
         - Replace every <ANGLE_BRACKETED> value.
         - Behind the AWS Lambda Web Adapter, follow the web-server activation at the end instead — it swaps the wrapper for NODE_OPTIONS.
+      prerequisites:
+        - >-
+          Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         resource "aws_lambda_function" "app" {
           # ... your existing configuration ...
@@ -999,6 +995,9 @@ setup:
         - Keep any layers already listed — add the OpenTelemetry layer to them.
         - Replace every <ANGLE_BRACKETED> value.
         - Behind the AWS Lambda Web Adapter, follow the web-server activation at the end instead — it swaps the wrapper for NODE_OPTIONS.
+      prerequisites:
+        - >-
+          Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         # Merge into Resources.<YourFunction>.Properties
         Layers:
@@ -1048,6 +1047,9 @@ setup:
         - Replace <OTLP_ENDPOINT> and <OTLP_INSECURE> inside odigos-env.json, and re-list any variables your function already needs.
         - Run the script. It merges the OpenTelemetry layer into the function's existing layers.
         - Re-run it after any deploy that resets the function configuration.
+      prerequisites:
+        - >-
+          Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         FUNCTION="<YOUR_FUNCTION_NAME>"
         LAYER="<OTEL_LAYER_ARN>"
@@ -1121,6 +1123,9 @@ setup:
         - Install @odigos/aws-cdk in the app that defines the function, pinned to an exact version — the package version IS the layer version.
         - Add one OdigosLambdaInstrumentation per function, passing serviceName explicitly.
         - Run cdk diff to check the layer and the variables, then cdk deploy. Your function code is untouched, so this is a configuration-only update.
+      prerequisites:
+        - >-
+          Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
 
@@ -1206,25 +1211,6 @@ setup:
         destination with all three signals on — this is what Odigos compares the live variable against:
           yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: "<OTLP_ENDPOINT>", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}
 
-        NOTES
-        - ODIGOS_IAC is what Odigos reads to attribute the function to itself and to learn which layer version
-          the function is supposed to carry — so the version you pinned is respected rather than reported as
-          an available upgrade. Its "source"/"version" fields are attribution only.
-        - The package version is the layer version: @odigos/aws-cdk 0.0.10 resolves the layer built by Odigos
-          release v0.0.10 and pins the SAR application to 0.0.10, which is immutable. Upgrading a layer is
-          therefore npm update plus a cdk diff that shows the change.
-        - destination.headers is rendered into OPENTELEMETRY_COLLECTOR_CONFIG_URI, a plain Lambda environment
-          variable readable by anyone with lambda:GetFunctionConfiguration. Prefer a destination that
-          authenticates by network position, or terminate at a collector you control.
-        - A container-image function (DockerImageFunction) cannot carry layers at all, and the construct
-          takes a mutable lambda.Function — a function imported with Function.fromFunctionArn cannot be
-          instrumented this way, because CDK cannot modify a resource it does not own.
-        - Do not also enable these functions as automatic-mode connector sources. Both sides would then own
-          the function: every cdk deploy reasserts your stack's environment, every reconcile reasserts the
-          connector's, and each round trip publishes a new function version.
-        - Attach at most 5 layers in total (the AWS limit) and never two versions of the same layer — Odigos
-          reports a duplicate as a layer-version conflict.
-
     - id: instrument-lambda-terraform-python
       section: instrumentation:aws.lambda
       language: python
@@ -1240,6 +1226,9 @@ setup:
         - Add the environment variables to environment.variables.
         - Replace every <ANGLE_BRACKETED> value.
         - Behind the AWS Lambda Web Adapter, follow the web-server activation at the end instead — it swaps the wrapper for PYTHONPATH.
+      prerequisites:
+        - >-
+          Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         resource "aws_lambda_function" "app" {
           # ... your existing configuration ...
@@ -1303,6 +1292,9 @@ setup:
         - Keep any layers already listed — add the OpenTelemetry layer to them.
         - Replace every <ANGLE_BRACKETED> value.
         - Behind the AWS Lambda Web Adapter, follow the web-server activation at the end instead — it swaps the wrapper for PYTHONPATH.
+      prerequisites:
+        - >-
+          Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         # Merge into Resources.<YourFunction>.Properties
         Layers:
@@ -1353,6 +1345,9 @@ setup:
         - Replace <OTLP_ENDPOINT> and <OTLP_INSECURE> inside odigos-env.json, and re-list any variables your function already needs.
         - Run the script. It merges the OpenTelemetry layer into the function's existing layers.
         - Re-run it after any deploy that resets the function configuration.
+      prerequisites:
+        - >-
+          Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         FUNCTION="<YOUR_FUNCTION_NAME>"
         LAYER="<OTEL_LAYER_ARN>"
@@ -1428,6 +1423,9 @@ setup:
         - Install @odigos/aws-cdk in the app that defines the function, pinned to an exact version — the package version IS the layer version.
         - Add one OdigosLambdaInstrumentation per function, passing serviceName explicitly.
         - Run cdk diff to check the layer and the variables, then cdk deploy. Your function code is untouched, so this is a configuration-only update.
+      prerequisites:
+        - >-
+          Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
 
@@ -1514,25 +1512,6 @@ setup:
         destination with all three signals on — this is what Odigos compares the live variable against:
           yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: "<OTLP_ENDPOINT>", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}
 
-        NOTES
-        - ODIGOS_IAC is what Odigos reads to attribute the function to itself and to learn which layer version
-          the function is supposed to carry — so the version you pinned is respected rather than reported as
-          an available upgrade. Its "source"/"version" fields are attribution only.
-        - The package version is the layer version: @odigos/aws-cdk 0.0.10 resolves the layer built by Odigos
-          release v0.0.10 and pins the SAR application to 0.0.10, which is immutable. Upgrading a layer is
-          therefore npm update plus a cdk diff that shows the change.
-        - destination.headers is rendered into OPENTELEMETRY_COLLECTOR_CONFIG_URI, a plain Lambda environment
-          variable readable by anyone with lambda:GetFunctionConfiguration. Prefer a destination that
-          authenticates by network position, or terminate at a collector you control.
-        - A container-image function (DockerImageFunction) cannot carry layers at all, and the construct
-          takes a mutable lambda.Function — a function imported with Function.fromFunctionArn cannot be
-          instrumented this way, because CDK cannot modify a resource it does not own.
-        - Do not also enable these functions as automatic-mode connector sources. Both sides would then own
-          the function: every cdk deploy reasserts your stack's environment, every reconcile reasserts the
-          connector's, and each round trip publishes a new function version.
-        - Attach at most 5 layers in total (the AWS limit) and never two versions of the same layer — Odigos
-          reports a duplicate as a layer-version conflict.
-
     - id: instrument-lambda-terraform-ruby
       section: instrumentation:aws.lambda
       language: ruby
@@ -1547,6 +1526,9 @@ setup:
         - Add the layer to your function's layers list — keep the ones already there.
         - Add the environment variables to environment.variables.
         - Replace every <ANGLE_BRACKETED> value.
+      prerequisites:
+        - >-
+          Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         resource "aws_lambda_function" "app" {
           # ... your existing configuration ...
@@ -1607,6 +1589,9 @@ setup:
         - Merge these properties into your function resource.
         - Keep any layers already listed — add the OpenTelemetry layer to them.
         - Replace every <ANGLE_BRACKETED> value.
+      prerequisites:
+        - >-
+          Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         # Merge into Resources.<YourFunction>.Properties
         Layers:
@@ -1659,6 +1644,9 @@ setup:
         - Replace <OTLP_ENDPOINT> and <OTLP_INSECURE> inside odigos-env.json, and re-list any variables your function already needs.
         - Run the script. It merges the OpenTelemetry layer into the function's existing layers.
         - Re-run it after any deploy that resets the function configuration.
+      prerequisites:
+        - >-
+          Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         FUNCTION="<YOUR_FUNCTION_NAME>"
         LAYER="<OTEL_LAYER_ARN>"
@@ -1734,6 +1722,9 @@ setup:
         - Install @odigos/aws-cdk in the app that defines the function, pinned to an exact version — the package version IS the layer version.
         - Add one OdigosLambdaInstrumentation per function, passing serviceName explicitly.
         - Run cdk diff to check the layer and the variables, then cdk deploy. Your function code is untouched, so this is a configuration-only update.
+      prerequisites:
+        - >-
+          Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
 
@@ -1813,25 +1804,6 @@ setup:
         destination with all three signals on — this is what Odigos compares the live variable against:
           yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: "<OTLP_ENDPOINT>", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}
 
-        NOTES
-        - ODIGOS_IAC is what Odigos reads to attribute the function to itself and to learn which layer version
-          the function is supposed to carry — so the version you pinned is respected rather than reported as
-          an available upgrade. Its "source"/"version" fields are attribution only.
-        - The package version is the layer version: @odigos/aws-cdk 0.0.10 resolves the layer built by Odigos
-          release v0.0.10 and pins the SAR application to 0.0.10, which is immutable. Upgrading a layer is
-          therefore npm update plus a cdk diff that shows the change.
-        - destination.headers is rendered into OPENTELEMETRY_COLLECTOR_CONFIG_URI, a plain Lambda environment
-          variable readable by anyone with lambda:GetFunctionConfiguration. Prefer a destination that
-          authenticates by network position, or terminate at a collector you control.
-        - A container-image function (DockerImageFunction) cannot carry layers at all, and the construct
-          takes a mutable lambda.Function — a function imported with Function.fromFunctionArn cannot be
-          instrumented this way, because CDK cannot modify a resource it does not own.
-        - Do not also enable these functions as automatic-mode connector sources. Both sides would then own
-          the function: every cdk deploy reasserts your stack's environment, every reconcile reasserts the
-          connector's, and each round trip publishes a new function version.
-        - Attach at most 5 layers in total (the AWS limit) and never two versions of the same layer — Odigos
-          reports a duplicate as a layer-version conflict.
-
     - id: instrument-fargate-terraform-java
       section: instrumentation:aws.fargate-task
       language: java
@@ -1842,9 +1814,12 @@ setup:
         Anchored fragments for aws_ecs_task_definition, staging and activating the Java agent.
       format: shell
       steps:
-        - Add the volume block and the odigos-agent container to your task definition.
-        - Add the mount, dependency and environment to each Java application container.
-        - Apply, then make sure the service rolls onto the new revision.
+        - Add the volume and the odigos-agent container to your task definition.
+        - Add the mount, dependency and environment to each application container.
+        - Apply, then roll the service onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         resource "aws_ecs_task_definition" "app" {
           # ... your existing configuration ...
@@ -1891,9 +1866,7 @@ setup:
 
                 { name = "OTEL_SERVICE_NAME", value = "<ODIGOS_SOURCE_NAME>" },
                 { name = "OTEL_RESOURCE_ATTRIBUTES", value = "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>" },
-                # Endpoint and protocol are ONE decision and are both compared exactly. Which
-                # transport applies is decided by the destination configured on this connector —
-                # see the note below before taking the two values as shown.
+                # Endpoint and protocol are one decision — both compared exactly against the destination on this connector.
                 { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "<OTLP_ENDPOINT_URL>" },
                 { name = "OTEL_EXPORTER_OTLP_PROTOCOL", value = "http/protobuf" },
                 { name = "OTEL_TRACES_EXPORTER", value = "otlp" },
@@ -1911,46 +1884,6 @@ setup:
           ])
         }
 
-        # ---------------------------------------------------------------------------------------------
-        # NOTES
-        # - ODIGOS_IAC is per container and is the ONLY thing that tells Odigos a container is instrumented. Without
-        #   it the container is reported as awaiting your deployment however completely the rest is applied, and the
-        #   recorded language (java) is the agent the activation environment above is checked against.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand instrumentation
-        #   over to Odigos by enabling the instrumentation capability for this type. Setting it by hand claims a
-        #   rollback that was never recorded, and Odigos would then judge the container against values nobody has.
-        # - If the container ALREADY sets JAVA_TOOL_OPTIONS, keep its value and put the Odigos value AFTER it, joined
-        #   by the separator shown — never assign ours over it. Odigos checks that its value is present and comes
-        #   last, so whatever your application needs in front of it is yours to keep and is not reported as drift.
-        # - The Java agent PREFERS http/protobuf, but the transport is decided by the destination configured on this
-        #   connector, and Odigos compares the endpoint and OTEL_EXPORTER_OTLP_PROTOCOL exactly against the one it
-        #   resolved. If that destination offers an OTLP/HTTP endpoint, use it (standard port 4318) with
-        #   OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf as shown. If it offers only OTLP/gRPC, this SDK honours the
-        #   variable: use the gRPC endpoint (standard port 4317) and set OTEL_EXPORTER_OTLP_PROTOCOL=grpc instead —
-        #   the values shown above assume the HTTP case. Pairing an endpoint with the other transport both fails at
-        #   runtime and is reported as drift.
-        # - ONE odigos-agent container serves the WHOLE task definition, so its command is per task and not per
-        #   language. If this task definition holds application containers in more than one language, chain a `&& cp
-        #   -r /instrumentations/<lang> /var/odigos/<lang>` clause for each of them, in alphabetical order of the
-        #   directory name — Odigos compares this command exactly against the union of the languages of every
-        #   container it finds marked, so a single-language command in a two-language task is reported as drift AND
-        #   leaves the other container with no agent on disk.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or it is reported as drift. Set a
-        #   signal's exporter to "none" for a signal your destination does not accept.
-        # - Declare odigos-agent NON-essential: ECS only accepts a SUCCESS dependency against a
-        #   non-essential container, so the two settings are one decision.
-        # - AWS caps a task definition at 10 containers; one already at the limit has no room for the stager.
-        # - Registering the revision is not enough — update the service to it, or it keeps running the old
-        #   one. The image is pulled by the task's execution role; mirror it into a registry the task can
-        #   reach if it cannot pull this one. The agents bundle is Linux-only, so a Windows task definition
-        #   cannot be instrumented at all.
-        # - AWS CDK: the same four moves through aws-cdk-lib/aws-ecs — taskDefinition.addVolume({ name:
-        #   'odigos-agent' }), addContainer for the stager with essential: false, addMountPoints on each
-        #   application container, and addContainerDependencies with
-        #   ecs.ContainerDependencyCondition.SUCCESS. There is no addEnvironment on an ECS container, so the
-        #   variables above go in the `environment` prop where the container is created.
-
     - id: instrument-fargate-cloudformation-java
       section: instrumentation:aws.fargate-task
       language: java
@@ -1962,18 +1895,20 @@ setup:
       format: yaml
       steps:
         - Merge Volumes and the odigos-agent entry into your task definition.
-        - Add the mount, dependency and environment to each Java application container.
-        - Deploy, then make sure the service rolls onto the new revision.
+        - Add the mount, dependency and environment to each application container.
+        - Deploy, then roll the service onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         # Merge into Resources.<YourTaskDefinition>.Properties
         Volumes:
-          # Bare name: on Fargate this is an ephemeral-storage bind mount scoped to the task.
+          # Bare-name volume: Fargate ephemeral-storage bind mount scoped to the task.
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
             Image: "registry.odigos.io/odigos-fargate-agents:v0.0.9"
-            # Non-essential: it copies the Java agent into the shared volume and exits 0. SUCCESS below is
-            # only valid against a non-essential container, so the two settings are one decision.
+            # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
             MountPoints:
@@ -1990,18 +1925,19 @@ setup:
                 Condition: SUCCESS
             Environment:
               # The IaC marker: it is what attributes this container to Odigos, and its recorded
-              # language is the agent the activation environment below is checked against. Do NOT add
-              # ODIGOS_MANAGED — that is the connector's record of a mutation it performed, including
-              # the rollback snapshot, and a hand-authored one claims a rollback nobody recorded.
+              # language is the agent the activation environment below is checked against.
+              # The value, unescaped, is exactly: {"v":1,"lang":"java"}
               - Name: ODIGOS_IAC
                 Value: '{"v":1,"lang":"java"}'
+
+              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
+              # performed, including the rollback snapshot; setting it by hand claims a rollback that
+              # was never recorded. Remove it if an earlier attempt left one.
               - Name: OTEL_SERVICE_NAME
                 Value: "<ODIGOS_SOURCE_NAME>"
               - Name: OTEL_RESOURCE_ATTRIBUTES
                 Value: "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>"
-              # Endpoint and protocol are ONE decision and are both compared exactly. Which transport
-              # applies is decided by the destination configured on this connector — see the note below
-              # before taking the two values as shown.
+              # Endpoint and protocol are one decision — both compared exactly against the destination on this connector.
               - Name: OTEL_EXPORTER_OTLP_ENDPOINT
                 Value: "<OTLP_ENDPOINT_URL>"
               - Name: OTEL_EXPORTER_OTLP_PROTOCOL
@@ -2013,51 +1949,64 @@ setup:
               - Name: OTEL_LOGS_EXPORTER
                 Value: "otlp"
               # --- Java activation ---
-              # CloudFormation cannot read a variable back, so fold your own value in by hand.
-              # APPEND ours after yours, joined by a space — assigning it discards yours.
+              # APPEND — CloudFormation cannot read a variable back; fold your value in by hand.
               - Name: JAVA_TOOL_OPTIONS
                 Value: "<YOUR_EXISTING_VALUE> -javaagent:/var/odigos/java/javaagent.jar"
               # Do NOT set OTEL_LOG_LEVEL: compared against unset, so a value is reported as drift.
 
-        # ---------------------------------------------------------------------------------------------
-        # NOTES
-        # - ODIGOS_IAC is per container and is the ONLY thing that tells Odigos a container is instrumented. Without
-        #   it the container is reported as awaiting your deployment however completely the rest is applied, and the
-        #   recorded language (java) is the agent the activation environment above is checked against.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand instrumentation
-        #   over to Odigos by enabling the instrumentation capability for this type. Setting it by hand claims a
-        #   rollback that was never recorded, and Odigos would then judge the container against values nobody has.
-        # - If the container ALREADY sets JAVA_TOOL_OPTIONS, keep its value and put the Odigos value AFTER it, joined
-        #   by the separator shown — never assign ours over it. Odigos checks that its value is present and comes
-        #   last, so whatever your application needs in front of it is yours to keep and is not reported as drift.
-        # - The Java agent PREFERS http/protobuf, but the transport is decided by the destination configured on this
-        #   connector, and Odigos compares the endpoint and OTEL_EXPORTER_OTLP_PROTOCOL exactly against the one it
-        #   resolved. If that destination offers an OTLP/HTTP endpoint, use it (standard port 4318) with
-        #   OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf as shown. If it offers only OTLP/gRPC, this SDK honours the
-        #   variable: use the gRPC endpoint (standard port 4317) and set OTEL_EXPORTER_OTLP_PROTOCOL=grpc instead —
-        #   the values shown above assume the HTTP case. Pairing an endpoint with the other transport both fails at
-        #   runtime and is reported as drift.
-        # - ONE odigos-agent container serves the WHOLE task definition, so its command is per task and not per
-        #   language. If this task definition holds application containers in more than one language, chain a `&& cp
-        #   -r /instrumentations/<lang> /var/odigos/<lang>` clause for each of them, in alphabetical order of the
-        #   directory name — Odigos compares this command exactly against the union of the languages of every
-        #   container it finds marked, so a single-language command in a two-language task is reported as drift AND
-        #   leaves the other container with no agent on disk.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or it is reported as drift. Set a
-        #   signal's exporter to "none" for a signal your destination does not accept.
-        # - Declare odigos-agent NON-essential: ECS only accepts a SUCCESS dependency against a
-        #   non-essential container, so the two settings are one decision.
-        # - AWS caps a task definition at 10 containers; one already at the limit has no room for the stager.
-        # - Registering the revision is not enough — update the service to it, or it keeps running the old
-        #   one. The image is pulled by the task's execution role; mirror it into a registry the task can
-        #   reach if it cannot pull this one. The agents bundle is Linux-only, so a Windows task definition
-        #   cannot be instrumented at all.
-        # - AWS CDK: the same four moves through aws-cdk-lib/aws-ecs — taskDefinition.addVolume({ name:
-        #   'odigos-agent' }), addContainer for the stager with essential: false, addMountPoints on each
-        #   application container, and addContainerDependencies with
-        #   ecs.ContainerDependencyCondition.SUCCESS. There is no addEnvironment on an ECS container, so the
-        #   variables above go in the `environment` prop where the container is created.
+    - id: instrument-fargate-cdk-java
+      section: instrumentation:aws.fargate-task
+      language: java
+      variant: cdk
+      variantLabel: AWS CDK
+      title: Instrument a Java ECS Fargate service (AWS CDK)
+      description: >-
+        Minimal AWS CDK usage for a Java container. Full construct reference:
+        https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
+      format: text
+      steps:
+        - Install @odigos/aws-cdk (pin the exact version).
+        - Create one OdigosFargateInstrumentation and call instrument() once per container.
+        - cdk diff, then cdk deploy — the service must roll onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
+      template: |-
+        npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
+
+        import { OdigosFargateInstrumentation, OdigosFargateLanguage } from '@odigos/aws-cdk';
+
+        const odigos = new OdigosFargateInstrumentation(this, 'Odigos', {
+          destination: {
+            httpEndpoint: '<OTLP_ENDPOINT_URL>', // OTLP/HTTP, scheme-qualified
+            // endpoint: 'host:4317',            // OTLP/gRPC as host:port, no scheme
+          },
+          // Pin to the image this connector expects — the package default may differ.
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.9',
+        });
+
+        odigos.instrument({
+          container: appContainer,
+          language: OdigosFargateLanguage.JAVA,
+          service: appService, // OTEL_SERVICE_NAME = ECS service name
+          // serviceName: '<ODIGOS_SOURCE_NAME>',
+        });
+
+        // Full construct reference: https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
+        // What the construct writes (for cdk diff). Do NOT set ODIGOS_MANAGED or OTEL_LOG_LEVEL.
+        // Staging: volume odigos-agent + non-essential container odigos-agent
+        //   command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
+        //   mount /var/odigos read-only, DependsOn SUCCESS
+          ODIGOS_IAC                  = {"v":1,"lang":"java"}
+          OTEL_SERVICE_NAME           = <ODIGOS_SOURCE_NAME>
+          OTEL_RESOURCE_ATTRIBUTES    = cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>
+          OTEL_EXPORTER_OTLP_ENDPOINT = <OTLP_ENDPOINT_URL>
+          OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+          OTEL_TRACES_EXPORTER        = otlp
+          OTEL_METRICS_EXPORTER       = otlp
+          OTEL_LOGS_EXPORTER          = otlp
+          JAVA_TOOL_OPTIONS           = <existing> -javaagent:/var/odigos/java/javaagent.jar
+              # APPEND — joined by a space
 
     - id: instrument-fargate-terraform-python
       section: instrumentation:aws.fargate-task
@@ -2069,9 +2018,12 @@ setup:
         Anchored fragments for aws_ecs_task_definition, staging and activating the Python agent.
       format: shell
       steps:
-        - Add the volume block and the odigos-agent container to your task definition.
-        - Add the mount, dependency and environment to each Python application container.
-        - Apply, then make sure the service rolls onto the new revision.
+        - Add the volume and the odigos-agent container to your task definition.
+        - Add the mount, dependency and environment to each application container.
+        - Apply, then roll the service onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         resource "aws_ecs_task_definition" "app" {
           # ... your existing configuration ...
@@ -2118,9 +2070,7 @@ setup:
 
                 { name = "OTEL_SERVICE_NAME", value = "<ODIGOS_SOURCE_NAME>" },
                 { name = "OTEL_RESOURCE_ATTRIBUTES", value = "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>" },
-                # Endpoint and protocol are ONE decision and are both compared exactly. Which
-                # transport applies is decided by the destination configured on this connector —
-                # see the note below before taking the two values as shown.
+                # Endpoint and protocol are one decision — both compared exactly against the destination on this connector.
                 { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "<OTLP_ENDPOINT_URL>" },
                 { name = "OTEL_EXPORTER_OTLP_PROTOCOL", value = "http/protobuf" },
                 { name = "OTEL_TRACES_EXPORTER", value = "otlp" },
@@ -2139,46 +2089,6 @@ setup:
           ])
         }
 
-        # ---------------------------------------------------------------------------------------------
-        # NOTES
-        # - ODIGOS_IAC is per container and is the ONLY thing that tells Odigos a container is instrumented. Without
-        #   it the container is reported as awaiting your deployment however completely the rest is applied, and the
-        #   recorded language (python) is the agent the activation environment above is checked against.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand instrumentation
-        #   over to Odigos by enabling the instrumentation capability for this type. Setting it by hand claims a
-        #   rollback that was never recorded, and Odigos would then judge the container against values nobody has.
-        # - If the container ALREADY sets PYTHONPATH, keep its value and put the Odigos value AFTER it, joined by the
-        #   separator shown — never assign ours over it. Odigos checks that its value is present and comes last, so
-        #   whatever your application needs in front of it is yours to keep and is not reported as drift.
-        # - The Python agent PREFERS http/protobuf, but the transport is decided by the destination configured on this
-        #   connector, and Odigos compares the endpoint and OTEL_EXPORTER_OTLP_PROTOCOL exactly against the one it
-        #   resolved. If that destination offers an OTLP/HTTP endpoint, use it (standard port 4318) with
-        #   OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf as shown. If it offers only OTLP/gRPC, this SDK honours the
-        #   variable: use the gRPC endpoint (standard port 4317) and set OTEL_EXPORTER_OTLP_PROTOCOL=grpc instead —
-        #   the values shown above assume the HTTP case. Pairing an endpoint with the other transport both fails at
-        #   runtime and is reported as drift.
-        # - ONE odigos-agent container serves the WHOLE task definition, so its command is per task and not per
-        #   language. If this task definition holds application containers in more than one language, chain a `&& cp
-        #   -r /instrumentations/<lang> /var/odigos/<lang>` clause for each of them, in alphabetical order of the
-        #   directory name — Odigos compares this command exactly against the union of the languages of every
-        #   container it finds marked, so a single-language command in a two-language task is reported as drift AND
-        #   leaves the other container with no agent on disk.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or it is reported as drift. Set a
-        #   signal's exporter to "none" for a signal your destination does not accept.
-        # - Declare odigos-agent NON-essential: ECS only accepts a SUCCESS dependency against a
-        #   non-essential container, so the two settings are one decision.
-        # - AWS caps a task definition at 10 containers; one already at the limit has no room for the stager.
-        # - Registering the revision is not enough — update the service to it, or it keeps running the old
-        #   one. The image is pulled by the task's execution role; mirror it into a registry the task can
-        #   reach if it cannot pull this one. The agents bundle is Linux-only, so a Windows task definition
-        #   cannot be instrumented at all.
-        # - AWS CDK: the same four moves through aws-cdk-lib/aws-ecs — taskDefinition.addVolume({ name:
-        #   'odigos-agent' }), addContainer for the stager with essential: false, addMountPoints on each
-        #   application container, and addContainerDependencies with
-        #   ecs.ContainerDependencyCondition.SUCCESS. There is no addEnvironment on an ECS container, so the
-        #   variables above go in the `environment` prop where the container is created.
-
     - id: instrument-fargate-cloudformation-python
       section: instrumentation:aws.fargate-task
       language: python
@@ -2190,18 +2100,20 @@ setup:
       format: yaml
       steps:
         - Merge Volumes and the odigos-agent entry into your task definition.
-        - Add the mount, dependency and environment to each Python application container.
-        - Deploy, then make sure the service rolls onto the new revision.
+        - Add the mount, dependency and environment to each application container.
+        - Deploy, then roll the service onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         # Merge into Resources.<YourTaskDefinition>.Properties
         Volumes:
-          # Bare name: on Fargate this is an ephemeral-storage bind mount scoped to the task.
+          # Bare-name volume: Fargate ephemeral-storage bind mount scoped to the task.
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
             Image: "registry.odigos.io/odigos-fargate-agents:v0.0.9"
-            # Non-essential: it copies the Python agent into the shared volume and exits 0. SUCCESS below is
-            # only valid against a non-essential container, so the two settings are one decision.
+            # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python"]
             MountPoints:
@@ -2218,18 +2130,19 @@ setup:
                 Condition: SUCCESS
             Environment:
               # The IaC marker: it is what attributes this container to Odigos, and its recorded
-              # language is the agent the activation environment below is checked against. Do NOT add
-              # ODIGOS_MANAGED — that is the connector's record of a mutation it performed, including
-              # the rollback snapshot, and a hand-authored one claims a rollback nobody recorded.
+              # language is the agent the activation environment below is checked against.
+              # The value, unescaped, is exactly: {"v":1,"lang":"python"}
               - Name: ODIGOS_IAC
                 Value: '{"v":1,"lang":"python"}'
+
+              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
+              # performed, including the rollback snapshot; setting it by hand claims a rollback that
+              # was never recorded. Remove it if an earlier attempt left one.
               - Name: OTEL_SERVICE_NAME
                 Value: "<ODIGOS_SOURCE_NAME>"
               - Name: OTEL_RESOURCE_ATTRIBUTES
                 Value: "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>"
-              # Endpoint and protocol are ONE decision and are both compared exactly. Which transport
-              # applies is decided by the destination configured on this connector — see the note below
-              # before taking the two values as shown.
+              # Endpoint and protocol are one decision — both compared exactly against the destination on this connector.
               - Name: OTEL_EXPORTER_OTLP_ENDPOINT
                 Value: "<OTLP_ENDPOINT_URL>"
               - Name: OTEL_EXPORTER_OTLP_PROTOCOL
@@ -2243,51 +2156,65 @@ setup:
               # --- Python activation ---
               - Name: OTEL_PYTHON_CONFIGURATOR
                 Value: "odigos-python-configurator"
-              # CloudFormation cannot read a variable back, so fold your own value in by hand.
-              # APPEND ours after yours, joined by ":" — assigning it discards yours.
+              # APPEND — CloudFormation cannot read a variable back; fold your value in by hand.
               - Name: PYTHONPATH
                 Value: "<YOUR_EXISTING_VALUE>:/var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation"
               # Do NOT set OTEL_LOG_LEVEL: compared against unset, so a value is reported as drift.
 
-        # ---------------------------------------------------------------------------------------------
-        # NOTES
-        # - ODIGOS_IAC is per container and is the ONLY thing that tells Odigos a container is instrumented. Without
-        #   it the container is reported as awaiting your deployment however completely the rest is applied, and the
-        #   recorded language (python) is the agent the activation environment above is checked against.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand instrumentation
-        #   over to Odigos by enabling the instrumentation capability for this type. Setting it by hand claims a
-        #   rollback that was never recorded, and Odigos would then judge the container against values nobody has.
-        # - If the container ALREADY sets PYTHONPATH, keep its value and put the Odigos value AFTER it, joined by the
-        #   separator shown — never assign ours over it. Odigos checks that its value is present and comes last, so
-        #   whatever your application needs in front of it is yours to keep and is not reported as drift.
-        # - The Python agent PREFERS http/protobuf, but the transport is decided by the destination configured on this
-        #   connector, and Odigos compares the endpoint and OTEL_EXPORTER_OTLP_PROTOCOL exactly against the one it
-        #   resolved. If that destination offers an OTLP/HTTP endpoint, use it (standard port 4318) with
-        #   OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf as shown. If it offers only OTLP/gRPC, this SDK honours the
-        #   variable: use the gRPC endpoint (standard port 4317) and set OTEL_EXPORTER_OTLP_PROTOCOL=grpc instead —
-        #   the values shown above assume the HTTP case. Pairing an endpoint with the other transport both fails at
-        #   runtime and is reported as drift.
-        # - ONE odigos-agent container serves the WHOLE task definition, so its command is per task and not per
-        #   language. If this task definition holds application containers in more than one language, chain a `&& cp
-        #   -r /instrumentations/<lang> /var/odigos/<lang>` clause for each of them, in alphabetical order of the
-        #   directory name — Odigos compares this command exactly against the union of the languages of every
-        #   container it finds marked, so a single-language command in a two-language task is reported as drift AND
-        #   leaves the other container with no agent on disk.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or it is reported as drift. Set a
-        #   signal's exporter to "none" for a signal your destination does not accept.
-        # - Declare odigos-agent NON-essential: ECS only accepts a SUCCESS dependency against a
-        #   non-essential container, so the two settings are one decision.
-        # - AWS caps a task definition at 10 containers; one already at the limit has no room for the stager.
-        # - Registering the revision is not enough — update the service to it, or it keeps running the old
-        #   one. The image is pulled by the task's execution role; mirror it into a registry the task can
-        #   reach if it cannot pull this one. The agents bundle is Linux-only, so a Windows task definition
-        #   cannot be instrumented at all.
-        # - AWS CDK: the same four moves through aws-cdk-lib/aws-ecs — taskDefinition.addVolume({ name:
-        #   'odigos-agent' }), addContainer for the stager with essential: false, addMountPoints on each
-        #   application container, and addContainerDependencies with
-        #   ecs.ContainerDependencyCondition.SUCCESS. There is no addEnvironment on an ECS container, so the
-        #   variables above go in the `environment` prop where the container is created.
+    - id: instrument-fargate-cdk-python
+      section: instrumentation:aws.fargate-task
+      language: python
+      variant: cdk
+      variantLabel: AWS CDK
+      title: Instrument a Python ECS Fargate service (AWS CDK)
+      description: >-
+        Minimal AWS CDK usage for a Python container. Full construct reference:
+        https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
+      format: text
+      steps:
+        - Install @odigos/aws-cdk (pin the exact version).
+        - Create one OdigosFargateInstrumentation and call instrument() once per container.
+        - cdk diff, then cdk deploy — the service must roll onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
+      template: |-
+        npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
+
+        import { OdigosFargateInstrumentation, OdigosFargateLanguage } from '@odigos/aws-cdk';
+
+        const odigos = new OdigosFargateInstrumentation(this, 'Odigos', {
+          destination: {
+            httpEndpoint: '<OTLP_ENDPOINT_URL>', // OTLP/HTTP, scheme-qualified
+            // endpoint: 'host:4317',            // OTLP/gRPC as host:port, no scheme
+          },
+          // Pin to the image this connector expects — the package default may differ.
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.9',
+        });
+
+        odigos.instrument({
+          container: appContainer,
+          language: OdigosFargateLanguage.PYTHON,
+          service: appService, // OTEL_SERVICE_NAME = ECS service name
+          // serviceName: '<ODIGOS_SOURCE_NAME>',
+        });
+
+        // Full construct reference: https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
+        // What the construct writes (for cdk diff). Do NOT set ODIGOS_MANAGED or OTEL_LOG_LEVEL.
+        // Staging: volume odigos-agent + non-essential container odigos-agent
+        //   command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python"]
+        //   mount /var/odigos read-only, DependsOn SUCCESS
+          ODIGOS_IAC                  = {"v":1,"lang":"python"}
+          OTEL_SERVICE_NAME           = <ODIGOS_SOURCE_NAME>
+          OTEL_RESOURCE_ATTRIBUTES    = cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>
+          OTEL_EXPORTER_OTLP_ENDPOINT = <OTLP_ENDPOINT_URL>
+          OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+          OTEL_TRACES_EXPORTER        = otlp
+          OTEL_METRICS_EXPORTER       = otlp
+          OTEL_LOGS_EXPORTER          = otlp
+          OTEL_PYTHON_CONFIGURATOR    = odigos-python-configurator
+          PYTHONPATH                  = <existing>:/var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation
+              # APPEND — joined by :
 
     - id: instrument-fargate-terraform-nodejs
       section: instrumentation:aws.fargate-task
@@ -2299,9 +2226,12 @@ setup:
         Anchored fragments for aws_ecs_task_definition, staging and activating the Node.js agent.
       format: shell
       steps:
-        - Add the volume block and the odigos-agent container to your task definition.
-        - Add the mount, dependency and environment to each Node.js application container.
-        - Apply, then make sure the service rolls onto the new revision.
+        - Add the volume and the odigos-agent container to your task definition.
+        - Add the mount, dependency and environment to each application container.
+        - Apply, then roll the service onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         resource "aws_ecs_task_definition" "app" {
           # ... your existing configuration ...
@@ -2348,9 +2278,7 @@ setup:
 
                 { name = "OTEL_SERVICE_NAME", value = "<ODIGOS_SOURCE_NAME>" },
                 { name = "OTEL_RESOURCE_ATTRIBUTES", value = "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>" },
-                # Endpoint and protocol are ONE decision and are both compared exactly. Which
-                # transport applies is decided by the destination configured on this connector —
-                # see the note below before taking the two values as shown.
+                # Endpoint and protocol are one decision — both compared exactly against the destination on this connector.
                 { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "<OTLP_ENDPOINT_URL>" },
                 { name = "OTEL_EXPORTER_OTLP_PROTOCOL", value = "http/protobuf" },
                 { name = "OTEL_TRACES_EXPORTER", value = "otlp" },
@@ -2368,46 +2296,6 @@ setup:
           ])
         }
 
-        # ---------------------------------------------------------------------------------------------
-        # NOTES
-        # - ODIGOS_IAC is per container and is the ONLY thing that tells Odigos a container is instrumented. Without
-        #   it the container is reported as awaiting your deployment however completely the rest is applied, and the
-        #   recorded language (nodejs) is the agent the activation environment above is checked against.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand instrumentation
-        #   over to Odigos by enabling the instrumentation capability for this type. Setting it by hand claims a
-        #   rollback that was never recorded, and Odigos would then judge the container against values nobody has.
-        # - If the container ALREADY sets NODE_OPTIONS, keep its value and put the Odigos value AFTER it, joined by
-        #   the separator shown — never assign ours over it. Odigos checks that its value is present and comes last,
-        #   so whatever your application needs in front of it is yours to keep and is not reported as drift.
-        # - The Node.js agent PREFERS http/protobuf, but the transport is decided by the destination configured on
-        #   this connector, and Odigos compares the endpoint and OTEL_EXPORTER_OTLP_PROTOCOL exactly against the one
-        #   it resolved. If that destination offers an OTLP/HTTP endpoint, use it (standard port 4318) with
-        #   OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf as shown. If it offers only OTLP/gRPC, this SDK honours the
-        #   variable: use the gRPC endpoint (standard port 4317) and set OTEL_EXPORTER_OTLP_PROTOCOL=grpc instead —
-        #   the values shown above assume the HTTP case. Pairing an endpoint with the other transport both fails at
-        #   runtime and is reported as drift.
-        # - ONE odigos-agent container serves the WHOLE task definition, so its command is per task and not per
-        #   language. If this task definition holds application containers in more than one language, chain a `&& cp
-        #   -r /instrumentations/<lang> /var/odigos/<lang>` clause for each of them, in alphabetical order of the
-        #   directory name — Odigos compares this command exactly against the union of the languages of every
-        #   container it finds marked, so a single-language command in a two-language task is reported as drift AND
-        #   leaves the other container with no agent on disk.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or it is reported as drift. Set a
-        #   signal's exporter to "none" for a signal your destination does not accept.
-        # - Declare odigos-agent NON-essential: ECS only accepts a SUCCESS dependency against a
-        #   non-essential container, so the two settings are one decision.
-        # - AWS caps a task definition at 10 containers; one already at the limit has no room for the stager.
-        # - Registering the revision is not enough — update the service to it, or it keeps running the old
-        #   one. The image is pulled by the task's execution role; mirror it into a registry the task can
-        #   reach if it cannot pull this one. The agents bundle is Linux-only, so a Windows task definition
-        #   cannot be instrumented at all.
-        # - AWS CDK: the same four moves through aws-cdk-lib/aws-ecs — taskDefinition.addVolume({ name:
-        #   'odigos-agent' }), addContainer for the stager with essential: false, addMountPoints on each
-        #   application container, and addContainerDependencies with
-        #   ecs.ContainerDependencyCondition.SUCCESS. There is no addEnvironment on an ECS container, so the
-        #   variables above go in the `environment` prop where the container is created.
-
     - id: instrument-fargate-cloudformation-nodejs
       section: instrumentation:aws.fargate-task
       language: nodejs
@@ -2419,18 +2307,20 @@ setup:
       format: yaml
       steps:
         - Merge Volumes and the odigos-agent entry into your task definition.
-        - Add the mount, dependency and environment to each Node.js application container.
-        - Deploy, then make sure the service rolls onto the new revision.
+        - Add the mount, dependency and environment to each application container.
+        - Deploy, then roll the service onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         # Merge into Resources.<YourTaskDefinition>.Properties
         Volumes:
-          # Bare name: on Fargate this is an ephemeral-storage bind mount scoped to the task.
+          # Bare-name volume: Fargate ephemeral-storage bind mount scoped to the task.
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
             Image: "registry.odigos.io/odigos-fargate-agents:v0.0.9"
-            # Non-essential: it copies the Node.js agent into the shared volume and exits 0. SUCCESS below is
-            # only valid against a non-essential container, so the two settings are one decision.
+            # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs"]
             MountPoints:
@@ -2447,18 +2337,19 @@ setup:
                 Condition: SUCCESS
             Environment:
               # The IaC marker: it is what attributes this container to Odigos, and its recorded
-              # language is the agent the activation environment below is checked against. Do NOT add
-              # ODIGOS_MANAGED — that is the connector's record of a mutation it performed, including
-              # the rollback snapshot, and a hand-authored one claims a rollback nobody recorded.
+              # language is the agent the activation environment below is checked against.
+              # The value, unescaped, is exactly: {"v":1,"lang":"nodejs"}
               - Name: ODIGOS_IAC
                 Value: '{"v":1,"lang":"nodejs"}'
+
+              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
+              # performed, including the rollback snapshot; setting it by hand claims a rollback that
+              # was never recorded. Remove it if an earlier attempt left one.
               - Name: OTEL_SERVICE_NAME
                 Value: "<ODIGOS_SOURCE_NAME>"
               - Name: OTEL_RESOURCE_ATTRIBUTES
                 Value: "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>"
-              # Endpoint and protocol are ONE decision and are both compared exactly. Which transport
-              # applies is decided by the destination configured on this connector — see the note below
-              # before taking the two values as shown.
+              # Endpoint and protocol are one decision — both compared exactly against the destination on this connector.
               - Name: OTEL_EXPORTER_OTLP_ENDPOINT
                 Value: "<OTLP_ENDPOINT_URL>"
               - Name: OTEL_EXPORTER_OTLP_PROTOCOL
@@ -2470,51 +2361,64 @@ setup:
               - Name: OTEL_LOGS_EXPORTER
                 Value: "otlp"
               # --- Node.js activation ---
-              # CloudFormation cannot read a variable back, so fold your own value in by hand.
-              # APPEND ours after yours, joined by a space — assigning it discards yours.
+              # APPEND — CloudFormation cannot read a variable back; fold your value in by hand.
               - Name: NODE_OPTIONS
                 Value: "<YOUR_EXISTING_VALUE> --require /var/odigos/nodejs/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js"
               # Do NOT set OTEL_LOG_LEVEL: compared against unset, so a value is reported as drift.
 
-        # ---------------------------------------------------------------------------------------------
-        # NOTES
-        # - ODIGOS_IAC is per container and is the ONLY thing that tells Odigos a container is instrumented. Without
-        #   it the container is reported as awaiting your deployment however completely the rest is applied, and the
-        #   recorded language (nodejs) is the agent the activation environment above is checked against.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand instrumentation
-        #   over to Odigos by enabling the instrumentation capability for this type. Setting it by hand claims a
-        #   rollback that was never recorded, and Odigos would then judge the container against values nobody has.
-        # - If the container ALREADY sets NODE_OPTIONS, keep its value and put the Odigos value AFTER it, joined by
-        #   the separator shown — never assign ours over it. Odigos checks that its value is present and comes last,
-        #   so whatever your application needs in front of it is yours to keep and is not reported as drift.
-        # - The Node.js agent PREFERS http/protobuf, but the transport is decided by the destination configured on
-        #   this connector, and Odigos compares the endpoint and OTEL_EXPORTER_OTLP_PROTOCOL exactly against the one
-        #   it resolved. If that destination offers an OTLP/HTTP endpoint, use it (standard port 4318) with
-        #   OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf as shown. If it offers only OTLP/gRPC, this SDK honours the
-        #   variable: use the gRPC endpoint (standard port 4317) and set OTEL_EXPORTER_OTLP_PROTOCOL=grpc instead —
-        #   the values shown above assume the HTTP case. Pairing an endpoint with the other transport both fails at
-        #   runtime and is reported as drift.
-        # - ONE odigos-agent container serves the WHOLE task definition, so its command is per task and not per
-        #   language. If this task definition holds application containers in more than one language, chain a `&& cp
-        #   -r /instrumentations/<lang> /var/odigos/<lang>` clause for each of them, in alphabetical order of the
-        #   directory name — Odigos compares this command exactly against the union of the languages of every
-        #   container it finds marked, so a single-language command in a two-language task is reported as drift AND
-        #   leaves the other container with no agent on disk.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or it is reported as drift. Set a
-        #   signal's exporter to "none" for a signal your destination does not accept.
-        # - Declare odigos-agent NON-essential: ECS only accepts a SUCCESS dependency against a
-        #   non-essential container, so the two settings are one decision.
-        # - AWS caps a task definition at 10 containers; one already at the limit has no room for the stager.
-        # - Registering the revision is not enough — update the service to it, or it keeps running the old
-        #   one. The image is pulled by the task's execution role; mirror it into a registry the task can
-        #   reach if it cannot pull this one. The agents bundle is Linux-only, so a Windows task definition
-        #   cannot be instrumented at all.
-        # - AWS CDK: the same four moves through aws-cdk-lib/aws-ecs — taskDefinition.addVolume({ name:
-        #   'odigos-agent' }), addContainer for the stager with essential: false, addMountPoints on each
-        #   application container, and addContainerDependencies with
-        #   ecs.ContainerDependencyCondition.SUCCESS. There is no addEnvironment on an ECS container, so the
-        #   variables above go in the `environment` prop where the container is created.
+    - id: instrument-fargate-cdk-nodejs
+      section: instrumentation:aws.fargate-task
+      language: nodejs
+      variant: cdk
+      variantLabel: AWS CDK
+      title: Instrument a Node.js ECS Fargate service (AWS CDK)
+      description: >-
+        Minimal AWS CDK usage for a Node.js container. Full construct reference:
+        https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
+      format: text
+      steps:
+        - Install @odigos/aws-cdk (pin the exact version).
+        - Create one OdigosFargateInstrumentation and call instrument() once per container.
+        - cdk diff, then cdk deploy — the service must roll onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
+      template: |-
+        npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
+
+        import { OdigosFargateInstrumentation, OdigosFargateLanguage } from '@odigos/aws-cdk';
+
+        const odigos = new OdigosFargateInstrumentation(this, 'Odigos', {
+          destination: {
+            httpEndpoint: '<OTLP_ENDPOINT_URL>', // OTLP/HTTP, scheme-qualified
+            // endpoint: 'host:4317',            // OTLP/gRPC as host:port, no scheme
+          },
+          // Pin to the image this connector expects — the package default may differ.
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.9',
+        });
+
+        odigos.instrument({
+          container: appContainer,
+          language: OdigosFargateLanguage.NODEJS,
+          service: appService, // OTEL_SERVICE_NAME = ECS service name
+          // serviceName: '<ODIGOS_SOURCE_NAME>',
+        });
+
+        // Full construct reference: https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
+        // What the construct writes (for cdk diff). Do NOT set ODIGOS_MANAGED or OTEL_LOG_LEVEL.
+        // Staging: volume odigos-agent + non-essential container odigos-agent
+        //   command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs"]
+        //   mount /var/odigos read-only, DependsOn SUCCESS
+          ODIGOS_IAC                  = {"v":1,"lang":"nodejs"}
+          OTEL_SERVICE_NAME           = <ODIGOS_SOURCE_NAME>
+          OTEL_RESOURCE_ATTRIBUTES    = cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>
+          OTEL_EXPORTER_OTLP_ENDPOINT = <OTLP_ENDPOINT_URL>
+          OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+          OTEL_TRACES_EXPORTER        = otlp
+          OTEL_METRICS_EXPORTER       = otlp
+          OTEL_LOGS_EXPORTER          = otlp
+          NODE_OPTIONS                = <existing> --require /var/odigos/nodejs/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js
+              # APPEND — joined by a space
 
     - id: instrument-fargate-terraform-dotnet
       section: instrumentation:aws.fargate-task
@@ -2526,9 +2430,12 @@ setup:
         Anchored fragments for aws_ecs_task_definition, staging and activating the .NET agent.
       format: shell
       steps:
-        - Add the volume block and the odigos-agent container to your task definition.
-        - Add the mount, dependency and environment to each .NET application container.
-        - Apply, then make sure the service rolls onto the new revision.
+        - Add the volume and the odigos-agent container to your task definition.
+        - Add the mount, dependency and environment to each application container.
+        - Apply, then roll the service onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         resource "aws_ecs_task_definition" "app" {
           # ... your existing configuration ...
@@ -2575,9 +2482,7 @@ setup:
 
                 { name = "OTEL_SERVICE_NAME", value = "<ODIGOS_SOURCE_NAME>" },
                 { name = "OTEL_RESOURCE_ATTRIBUTES", value = "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>" },
-                # Endpoint and protocol are ONE decision and are both compared exactly. Which
-                # transport applies is decided by the destination configured on this connector —
-                # see the note below before taking the two values as shown.
+                # Endpoint and protocol are one decision — both compared exactly against the destination on this connector.
                 { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "<OTLP_ENDPOINT_URL>" },
                 { name = "OTEL_EXPORTER_OTLP_PROTOCOL", value = "http/protobuf" },
                 { name = "OTEL_TRACES_EXPORTER", value = "otlp" },
@@ -2599,47 +2504,6 @@ setup:
           ])
         }
 
-        # ---------------------------------------------------------------------------------------------
-        # NOTES
-        # - ODIGOS_IAC is per container and is the ONLY thing that tells Odigos a container is instrumented. Without
-        #   it the container is reported as awaiting your deployment however completely the rest is applied, and the
-        #   recorded language (dotnet) is the agent the activation environment above is checked against.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand instrumentation
-        #   over to Odigos by enabling the instrumentation capability for this type. Setting it by hand claims a
-        #   rollback that was never recorded, and Odigos would then judge the container against values nobody has.
-        # - The .NET agent is glibc-only. A musl (Alpine) based image cannot be instrumented this way — the profiler
-        #   shared object above will not load, and the container starts uninstrumented.
-        # - Every variable above is SET to exactly the value shown and compared exactly. None of them is a list your
-        #   image is likely to already carry, so there is nothing to fold in.
-        # - The .NET agent PREFERS http/protobuf, but the transport is decided by the destination configured on this
-        #   connector, and Odigos compares the endpoint and OTEL_EXPORTER_OTLP_PROTOCOL exactly against the one it
-        #   resolved. If that destination offers an OTLP/HTTP endpoint, use it (standard port 4318) with
-        #   OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf as shown. If it offers only OTLP/gRPC, this SDK honours the
-        #   variable: use the gRPC endpoint (standard port 4317) and set OTEL_EXPORTER_OTLP_PROTOCOL=grpc instead —
-        #   the values shown above assume the HTTP case. Pairing an endpoint with the other transport both fails at
-        #   runtime and is reported as drift.
-        # - ONE odigos-agent container serves the WHOLE task definition, so its command is per task and not per
-        #   language. If this task definition holds application containers in more than one language, chain a `&& cp
-        #   -r /instrumentations/<lang> /var/odigos/<lang>` clause for each of them, in alphabetical order of the
-        #   directory name — Odigos compares this command exactly against the union of the languages of every
-        #   container it finds marked, so a single-language command in a two-language task is reported as drift AND
-        #   leaves the other container with no agent on disk.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or it is reported as drift. Set a
-        #   signal's exporter to "none" for a signal your destination does not accept.
-        # - Declare odigos-agent NON-essential: ECS only accepts a SUCCESS dependency against a
-        #   non-essential container, so the two settings are one decision.
-        # - AWS caps a task definition at 10 containers; one already at the limit has no room for the stager.
-        # - Registering the revision is not enough — update the service to it, or it keeps running the old
-        #   one. The image is pulled by the task's execution role; mirror it into a registry the task can
-        #   reach if it cannot pull this one. The agents bundle is Linux-only, so a Windows task definition
-        #   cannot be instrumented at all.
-        # - AWS CDK: the same four moves through aws-cdk-lib/aws-ecs — taskDefinition.addVolume({ name:
-        #   'odigos-agent' }), addContainer for the stager with essential: false, addMountPoints on each
-        #   application container, and addContainerDependencies with
-        #   ecs.ContainerDependencyCondition.SUCCESS. There is no addEnvironment on an ECS container, so the
-        #   variables above go in the `environment` prop where the container is created.
-
     - id: instrument-fargate-cloudformation-dotnet
       section: instrumentation:aws.fargate-task
       language: dotnet
@@ -2651,18 +2515,20 @@ setup:
       format: yaml
       steps:
         - Merge Volumes and the odigos-agent entry into your task definition.
-        - Add the mount, dependency and environment to each .NET application container.
-        - Deploy, then make sure the service rolls onto the new revision.
+        - Add the mount, dependency and environment to each application container.
+        - Deploy, then roll the service onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         # Merge into Resources.<YourTaskDefinition>.Properties
         Volumes:
-          # Bare name: on Fargate this is an ephemeral-storage bind mount scoped to the task.
+          # Bare-name volume: Fargate ephemeral-storage bind mount scoped to the task.
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
             Image: "registry.odigos.io/odigos-fargate-agents:v0.0.9"
-            # Non-essential: it copies the .NET agent into the shared volume and exits 0. SUCCESS below is
-            # only valid against a non-essential container, so the two settings are one decision.
+            # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet"]
             MountPoints:
@@ -2679,18 +2545,19 @@ setup:
                 Condition: SUCCESS
             Environment:
               # The IaC marker: it is what attributes this container to Odigos, and its recorded
-              # language is the agent the activation environment below is checked against. Do NOT add
-              # ODIGOS_MANAGED — that is the connector's record of a mutation it performed, including
-              # the rollback snapshot, and a hand-authored one claims a rollback nobody recorded.
+              # language is the agent the activation environment below is checked against.
+              # The value, unescaped, is exactly: {"v":1,"lang":"dotnet"}
               - Name: ODIGOS_IAC
                 Value: '{"v":1,"lang":"dotnet"}'
+
+              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
+              # performed, including the rollback snapshot; setting it by hand claims a rollback that
+              # was never recorded. Remove it if an earlier attempt left one.
               - Name: OTEL_SERVICE_NAME
                 Value: "<ODIGOS_SOURCE_NAME>"
               - Name: OTEL_RESOURCE_ATTRIBUTES
                 Value: "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>"
-              # Endpoint and protocol are ONE decision and are both compared exactly. Which transport
-              # applies is decided by the destination configured on this connector — see the note below
-              # before taking the two values as shown.
+              # Endpoint and protocol are one decision — both compared exactly against the destination on this connector.
               - Name: OTEL_EXPORTER_OTLP_ENDPOINT
                 Value: "<OTLP_ENDPOINT_URL>"
               - Name: OTEL_EXPORTER_OTLP_PROTOCOL
@@ -2718,46 +2585,64 @@ setup:
                 Value: "/var/odigos/dotnet/store"
               # Do NOT set OTEL_LOG_LEVEL: compared against unset, so a value is reported as drift.
 
-        # ---------------------------------------------------------------------------------------------
-        # NOTES
-        # - ODIGOS_IAC is per container and is the ONLY thing that tells Odigos a container is instrumented. Without
-        #   it the container is reported as awaiting your deployment however completely the rest is applied, and the
-        #   recorded language (dotnet) is the agent the activation environment above is checked against.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand instrumentation
-        #   over to Odigos by enabling the instrumentation capability for this type. Setting it by hand claims a
-        #   rollback that was never recorded, and Odigos would then judge the container against values nobody has.
-        # - The .NET agent is glibc-only. A musl (Alpine) based image cannot be instrumented this way — the profiler
-        #   shared object above will not load, and the container starts uninstrumented.
-        # - Every variable above is SET to exactly the value shown and compared exactly. None of them is a list your
-        #   image is likely to already carry, so there is nothing to fold in.
-        # - The .NET agent PREFERS http/protobuf, but the transport is decided by the destination configured on this
-        #   connector, and Odigos compares the endpoint and OTEL_EXPORTER_OTLP_PROTOCOL exactly against the one it
-        #   resolved. If that destination offers an OTLP/HTTP endpoint, use it (standard port 4318) with
-        #   OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf as shown. If it offers only OTLP/gRPC, this SDK honours the
-        #   variable: use the gRPC endpoint (standard port 4317) and set OTEL_EXPORTER_OTLP_PROTOCOL=grpc instead —
-        #   the values shown above assume the HTTP case. Pairing an endpoint with the other transport both fails at
-        #   runtime and is reported as drift.
-        # - ONE odigos-agent container serves the WHOLE task definition, so its command is per task and not per
-        #   language. If this task definition holds application containers in more than one language, chain a `&& cp
-        #   -r /instrumentations/<lang> /var/odigos/<lang>` clause for each of them, in alphabetical order of the
-        #   directory name — Odigos compares this command exactly against the union of the languages of every
-        #   container it finds marked, so a single-language command in a two-language task is reported as drift AND
-        #   leaves the other container with no agent on disk.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or it is reported as drift. Set a
-        #   signal's exporter to "none" for a signal your destination does not accept.
-        # - Declare odigos-agent NON-essential: ECS only accepts a SUCCESS dependency against a
-        #   non-essential container, so the two settings are one decision.
-        # - AWS caps a task definition at 10 containers; one already at the limit has no room for the stager.
-        # - Registering the revision is not enough — update the service to it, or it keeps running the old
-        #   one. The image is pulled by the task's execution role; mirror it into a registry the task can
-        #   reach if it cannot pull this one. The agents bundle is Linux-only, so a Windows task definition
-        #   cannot be instrumented at all.
-        # - AWS CDK: the same four moves through aws-cdk-lib/aws-ecs — taskDefinition.addVolume({ name:
-        #   'odigos-agent' }), addContainer for the stager with essential: false, addMountPoints on each
-        #   application container, and addContainerDependencies with
-        #   ecs.ContainerDependencyCondition.SUCCESS. There is no addEnvironment on an ECS container, so the
-        #   variables above go in the `environment` prop where the container is created.
+    - id: instrument-fargate-cdk-dotnet
+      section: instrumentation:aws.fargate-task
+      language: dotnet
+      variant: cdk
+      variantLabel: AWS CDK
+      title: Instrument a .NET ECS Fargate service (AWS CDK)
+      description: >-
+        Minimal AWS CDK usage for a .NET container. Full construct reference:
+        https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
+      format: text
+      steps:
+        - Install @odigos/aws-cdk (pin the exact version).
+        - Create one OdigosFargateInstrumentation and call instrument() once per container.
+        - cdk diff, then cdk deploy — the service must roll onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
+      template: |-
+        npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
+
+        import { OdigosFargateInstrumentation, OdigosFargateLanguage } from '@odigos/aws-cdk';
+
+        const odigos = new OdigosFargateInstrumentation(this, 'Odigos', {
+          destination: {
+            httpEndpoint: '<OTLP_ENDPOINT_URL>', // OTLP/HTTP, scheme-qualified
+            // endpoint: 'host:4317',            // OTLP/gRPC as host:port, no scheme
+          },
+          // Pin to the image this connector expects — the package default may differ.
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.9',
+        });
+
+        odigos.instrument({
+          container: appContainer,
+          language: OdigosFargateLanguage.DOTNET,
+          service: appService, // OTEL_SERVICE_NAME = ECS service name
+          // serviceName: '<ODIGOS_SOURCE_NAME>',
+        });
+
+        // Full construct reference: https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
+        // What the construct writes (for cdk diff). Do NOT set ODIGOS_MANAGED or OTEL_LOG_LEVEL.
+        // Staging: volume odigos-agent + non-essential container odigos-agent
+        //   command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet"]
+        //   mount /var/odigos read-only, DependsOn SUCCESS
+          ODIGOS_IAC                  = {"v":1,"lang":"dotnet"}
+          OTEL_SERVICE_NAME           = <ODIGOS_SOURCE_NAME>
+          OTEL_RESOURCE_ATTRIBUTES    = cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>
+          OTEL_EXPORTER_OTLP_ENDPOINT = <OTLP_ENDPOINT_URL>
+          OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+          OTEL_TRACES_EXPORTER        = otlp
+          OTEL_METRICS_EXPORTER       = otlp
+          OTEL_LOGS_EXPORTER          = otlp
+          CORECLR_ENABLE_PROFILING    = 1
+          CORECLR_PROFILER            = {918728DD-259F-4A6A-AC2B-B85E1B658318}
+          CORECLR_PROFILER_PATH       = /var/odigos/dotnet/linux-glibc/OpenTelemetry.AutoInstrumentation.Native.so
+          OTEL_DOTNET_AUTO_HOME       = /var/odigos/dotnet
+          DOTNET_STARTUP_HOOKS        = /var/odigos/dotnet/net/OpenTelemetry.AutoInstrumentation.StartupHook.dll
+          DOTNET_ADDITIONAL_DEPS      = /var/odigos/dotnet/AdditionalDeps
+          DOTNET_SHARED_STORE         = /var/odigos/dotnet/store
 
     - id: instrument-fargate-terraform-php
       section: instrumentation:aws.fargate-task
@@ -2769,9 +2654,12 @@ setup:
         Anchored fragments for aws_ecs_task_definition, staging and activating the PHP agent.
       format: shell
       steps:
-        - Add the volume block and the odigos-agent container to your task definition.
-        - Add the mount, dependency and environment to each PHP application container.
-        - Apply, then make sure the service rolls onto the new revision.
+        - Add the volume and the odigos-agent container to your task definition.
+        - Add the mount, dependency and environment to each application container.
+        - Apply, then roll the service onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         resource "aws_ecs_task_definition" "app" {
           # ... your existing configuration ...
@@ -2818,9 +2706,7 @@ setup:
 
                 { name = "OTEL_SERVICE_NAME", value = "<ODIGOS_SOURCE_NAME>" },
                 { name = "OTEL_RESOURCE_ATTRIBUTES", value = "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>" },
-                # Endpoint and protocol are ONE decision and are both compared exactly. Which
-                # transport applies is decided by the destination configured on this connector —
-                # see the note below before taking the two values as shown.
+                # Endpoint and protocol are one decision — both compared exactly against the destination on this connector.
                 { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "<OTLP_ENDPOINT_URL>" },
                 { name = "OTEL_EXPORTER_OTLP_PROTOCOL", value = "http/protobuf" },
                 { name = "OTEL_TRACES_EXPORTER", value = "otlp" },
@@ -2838,47 +2724,6 @@ setup:
           ])
         }
 
-        # ---------------------------------------------------------------------------------------------
-        # NOTES
-        # - ODIGOS_IAC is per container and is the ONLY thing that tells Odigos a container is instrumented. Without
-        #   it the container is reported as awaiting your deployment however completely the rest is applied, and the
-        #   recorded language (php) is the agent the activation environment above is checked against.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand instrumentation
-        #   over to Odigos by enabling the instrumentation capability for this type. Setting it by hand claims a
-        #   rollback that was never recorded, and Odigos would then judge the container against values nobody has.
-        # - The PHP agent path is per runtime version: replace <RUNTIME_VERSION> with your application's major.minor
-        #   (for example 8.3), and set a runtime override on the source so Odigos resolves the same version and judges
-        #   the container against the path you actually mounted.
-        # - PHP_INI_SCAN_DIR is SET, replacing anything already there, and compared exactly — its leading colon keeps
-        #   PHP's built-in scan directory in the list, so fold any directory of your own into the same value rather
-        #   than adding a second variable.
-        # - The PHP community SDK speaks http/protobuf ONLY — it cannot be switched to gRPC. <OTLP_ENDPOINT_URL> must
-        #   therefore be the destination's OTLP/HTTP endpoint (standard port 4318, not the gRPC 4317), and the
-        #   destination configured on this connector has to offer one: without an OTLP/HTTP endpoint Odigos cannot
-        #   instrument this container at all. Endpoint and protocol are compared exactly, and pairing one with the
-        #   other transport fails at runtime as a connection reset that points nowhere near it.
-        # - ONE odigos-agent container serves the WHOLE task definition, so its command is per task and not per
-        #   language. If this task definition holds application containers in more than one language, chain a `&& cp
-        #   -r /instrumentations/<lang> /var/odigos/<lang>` clause for each of them, in alphabetical order of the
-        #   directory name — Odigos compares this command exactly against the union of the languages of every
-        #   container it finds marked, so a single-language command in a two-language task is reported as drift AND
-        #   leaves the other container with no agent on disk.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or it is reported as drift. Set a
-        #   signal's exporter to "none" for a signal your destination does not accept.
-        # - Declare odigos-agent NON-essential: ECS only accepts a SUCCESS dependency against a
-        #   non-essential container, so the two settings are one decision.
-        # - AWS caps a task definition at 10 containers; one already at the limit has no room for the stager.
-        # - Registering the revision is not enough — update the service to it, or it keeps running the old
-        #   one. The image is pulled by the task's execution role; mirror it into a registry the task can
-        #   reach if it cannot pull this one. The agents bundle is Linux-only, so a Windows task definition
-        #   cannot be instrumented at all.
-        # - AWS CDK: the same four moves through aws-cdk-lib/aws-ecs — taskDefinition.addVolume({ name:
-        #   'odigos-agent' }), addContainer for the stager with essential: false, addMountPoints on each
-        #   application container, and addContainerDependencies with
-        #   ecs.ContainerDependencyCondition.SUCCESS. There is no addEnvironment on an ECS container, so the
-        #   variables above go in the `environment` prop where the container is created.
-
     - id: instrument-fargate-cloudformation-php
       section: instrumentation:aws.fargate-task
       language: php
@@ -2890,18 +2735,20 @@ setup:
       format: yaml
       steps:
         - Merge Volumes and the odigos-agent entry into your task definition.
-        - Add the mount, dependency and environment to each PHP application container.
-        - Deploy, then make sure the service rolls onto the new revision.
+        - Add the mount, dependency and environment to each application container.
+        - Deploy, then roll the service onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         # Merge into Resources.<YourTaskDefinition>.Properties
         Volumes:
-          # Bare name: on Fargate this is an ephemeral-storage bind mount scoped to the task.
+          # Bare-name volume: Fargate ephemeral-storage bind mount scoped to the task.
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
             Image: "registry.odigos.io/odigos-fargate-agents:v0.0.9"
-            # Non-essential: it copies the PHP agent into the shared volume and exits 0. SUCCESS below is
-            # only valid against a non-essential container, so the two settings are one decision.
+            # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/php /var/odigos/php"]
             MountPoints:
@@ -2918,18 +2765,19 @@ setup:
                 Condition: SUCCESS
             Environment:
               # The IaC marker: it is what attributes this container to Odigos, and its recorded
-              # language is the agent the activation environment below is checked against. Do NOT add
-              # ODIGOS_MANAGED — that is the connector's record of a mutation it performed, including
-              # the rollback snapshot, and a hand-authored one claims a rollback nobody recorded.
+              # language is the agent the activation environment below is checked against.
+              # The value, unescaped, is exactly: {"v":1,"lang":"php"}
               - Name: ODIGOS_IAC
                 Value: '{"v":1,"lang":"php"}'
+
+              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
+              # performed, including the rollback snapshot; setting it by hand claims a rollback that
+              # was never recorded. Remove it if an earlier attempt left one.
               - Name: OTEL_SERVICE_NAME
                 Value: "<ODIGOS_SOURCE_NAME>"
               - Name: OTEL_RESOURCE_ATTRIBUTES
                 Value: "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>"
-              # Endpoint and protocol are ONE decision and are both compared exactly. Which transport
-              # applies is decided by the destination configured on this connector — see the note below
-              # before taking the two values as shown.
+              # Endpoint and protocol are one decision — both compared exactly against the destination on this connector.
               - Name: OTEL_EXPORTER_OTLP_ENDPOINT
                 Value: "<OTLP_ENDPOINT_URL>"
               - Name: OTEL_EXPORTER_OTLP_PROTOCOL
@@ -2949,46 +2797,62 @@ setup:
                 Value: "tracecontext,baggage"
               # Do NOT set OTEL_LOG_LEVEL: compared against unset, so a value is reported as drift.
 
-        # ---------------------------------------------------------------------------------------------
-        # NOTES
-        # - ODIGOS_IAC is per container and is the ONLY thing that tells Odigos a container is instrumented. Without
-        #   it the container is reported as awaiting your deployment however completely the rest is applied, and the
-        #   recorded language (php) is the agent the activation environment above is checked against.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand instrumentation
-        #   over to Odigos by enabling the instrumentation capability for this type. Setting it by hand claims a
-        #   rollback that was never recorded, and Odigos would then judge the container against values nobody has.
-        # - The PHP agent path is per runtime version: replace <RUNTIME_VERSION> with your application's major.minor
-        #   (for example 8.3), and set a runtime override on the source so Odigos resolves the same version and judges
-        #   the container against the path you actually mounted.
-        # - PHP_INI_SCAN_DIR is SET, replacing anything already there, and compared exactly — its leading colon keeps
-        #   PHP's built-in scan directory in the list, so fold any directory of your own into the same value rather
-        #   than adding a second variable.
-        # - The PHP community SDK speaks http/protobuf ONLY — it cannot be switched to gRPC. <OTLP_ENDPOINT_URL> must
-        #   therefore be the destination's OTLP/HTTP endpoint (standard port 4318, not the gRPC 4317), and the
-        #   destination configured on this connector has to offer one: without an OTLP/HTTP endpoint Odigos cannot
-        #   instrument this container at all. Endpoint and protocol are compared exactly, and pairing one with the
-        #   other transport fails at runtime as a connection reset that points nowhere near it.
-        # - ONE odigos-agent container serves the WHOLE task definition, so its command is per task and not per
-        #   language. If this task definition holds application containers in more than one language, chain a `&& cp
-        #   -r /instrumentations/<lang> /var/odigos/<lang>` clause for each of them, in alphabetical order of the
-        #   directory name — Odigos compares this command exactly against the union of the languages of every
-        #   container it finds marked, so a single-language command in a two-language task is reported as drift AND
-        #   leaves the other container with no agent on disk.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or it is reported as drift. Set a
-        #   signal's exporter to "none" for a signal your destination does not accept.
-        # - Declare odigos-agent NON-essential: ECS only accepts a SUCCESS dependency against a
-        #   non-essential container, so the two settings are one decision.
-        # - AWS caps a task definition at 10 containers; one already at the limit has no room for the stager.
-        # - Registering the revision is not enough — update the service to it, or it keeps running the old
-        #   one. The image is pulled by the task's execution role; mirror it into a registry the task can
-        #   reach if it cannot pull this one. The agents bundle is Linux-only, so a Windows task definition
-        #   cannot be instrumented at all.
-        # - AWS CDK: the same four moves through aws-cdk-lib/aws-ecs — taskDefinition.addVolume({ name:
-        #   'odigos-agent' }), addContainer for the stager with essential: false, addMountPoints on each
-        #   application container, and addContainerDependencies with
-        #   ecs.ContainerDependencyCondition.SUCCESS. There is no addEnvironment on an ECS container, so the
-        #   variables above go in the `environment` prop where the container is created.
+    - id: instrument-fargate-cdk-php
+      section: instrumentation:aws.fargate-task
+      language: php
+      variant: cdk
+      variantLabel: AWS CDK
+      title: Instrument a PHP ECS Fargate service (AWS CDK)
+      description: >-
+        Minimal AWS CDK usage for a PHP container. Full construct reference:
+        https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
+      format: text
+      steps:
+        - Install @odigos/aws-cdk (pin the exact version).
+        - Create one OdigosFargateInstrumentation and call instrument() once per container.
+        - Pass runtimeVersion as the app major.minor — the PHP agent is per runtime version.
+        - cdk diff, then cdk deploy — the service must roll onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
+      template: |-
+        npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
+
+        import { OdigosFargateInstrumentation, OdigosFargateLanguage } from '@odigos/aws-cdk';
+
+        const odigos = new OdigosFargateInstrumentation(this, 'Odigos', {
+          destination: {
+            httpEndpoint: '<OTLP_ENDPOINT_URL>', // OTLP/HTTP, scheme-qualified
+            // endpoint: 'host:4317',            // OTLP/gRPC as host:port, no scheme
+          },
+          // Pin to the image this connector expects — the package default may differ.
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.9',
+        });
+
+        odigos.instrument({
+          container: appContainer,
+          language: OdigosFargateLanguage.PHP,
+          service: appService, // OTEL_SERVICE_NAME = ECS service name
+          // serviceName: '<ODIGOS_SOURCE_NAME>',
+            runtimeVersion: '<RUNTIME_VERSION>', // app major.minor
+        });
+
+        // Full construct reference: https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
+        // What the construct writes (for cdk diff). Do NOT set ODIGOS_MANAGED or OTEL_LOG_LEVEL.
+        // Staging: volume odigos-agent + non-essential container odigos-agent
+        //   command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/php /var/odigos/php"]
+        //   mount /var/odigos read-only, DependsOn SUCCESS
+          ODIGOS_IAC                  = {"v":1,"lang":"php"}
+          OTEL_SERVICE_NAME           = <ODIGOS_SOURCE_NAME>
+          OTEL_RESOURCE_ATTRIBUTES    = cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>
+          OTEL_EXPORTER_OTLP_ENDPOINT = <OTLP_ENDPOINT_URL>
+          OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+          OTEL_TRACES_EXPORTER        = otlp
+          OTEL_METRICS_EXPORTER       = otlp
+          OTEL_LOGS_EXPORTER          = otlp
+          PHP_INI_SCAN_DIR            = :/var/odigos/php/<RUNTIME_VERSION>
+          OTEL_PHP_AUTOLOAD_ENABLED   = true
+          OTEL_PROPAGATORS            = tracecontext,baggage
 
     - id: instrument-fargate-terraform-ruby
       section: instrumentation:aws.fargate-task
@@ -3000,9 +2864,12 @@ setup:
         Anchored fragments for aws_ecs_task_definition, staging and activating the Ruby agent.
       format: shell
       steps:
-        - Add the volume block and the odigos-agent container to your task definition.
-        - Add the mount, dependency and environment to each Ruby application container.
-        - Apply, then make sure the service rolls onto the new revision.
+        - Add the volume and the odigos-agent container to your task definition.
+        - Add the mount, dependency and environment to each application container.
+        - Apply, then roll the service onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         resource "aws_ecs_task_definition" "app" {
           # ... your existing configuration ...
@@ -3049,9 +2916,7 @@ setup:
 
                 { name = "OTEL_SERVICE_NAME", value = "<ODIGOS_SOURCE_NAME>" },
                 { name = "OTEL_RESOURCE_ATTRIBUTES", value = "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>" },
-                # Endpoint and protocol are ONE decision and are both compared exactly. Which
-                # transport applies is decided by the destination configured on this connector —
-                # see the note below before taking the two values as shown.
+                # Endpoint and protocol are one decision — both compared exactly against the destination on this connector.
                 { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "<OTLP_ENDPOINT_URL>" },
                 { name = "OTEL_EXPORTER_OTLP_PROTOCOL", value = "http/protobuf" },
                 { name = "OTEL_TRACES_EXPORTER", value = "otlp" },
@@ -3069,46 +2934,6 @@ setup:
           ])
         }
 
-        # ---------------------------------------------------------------------------------------------
-        # NOTES
-        # - ODIGOS_IAC is per container and is the ONLY thing that tells Odigos a container is instrumented. Without
-        #   it the container is reported as awaiting your deployment however completely the rest is applied, and the
-        #   recorded language (ruby) is the agent the activation environment above is checked against.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand instrumentation
-        #   over to Odigos by enabling the instrumentation capability for this type. Setting it by hand claims a
-        #   rollback that was never recorded, and Odigos would then judge the container against values nobody has.
-        # - The Ruby agent path is per runtime version: replace <RUNTIME_VERSION> with your application's major.minor
-        #   (for example 3.3), and set a runtime override on the source so Odigos resolves the same version and judges
-        #   the container against the path you actually mounted.
-        # - RUBYOPT is SET, replacing anything already there, and compared exactly — fold any option your application
-        #   needs into the same value before applying.
-        # - The Ruby community SDK speaks http/protobuf ONLY — it cannot be switched to gRPC. <OTLP_ENDPOINT_URL> must
-        #   therefore be the destination's OTLP/HTTP endpoint (standard port 4318, not the gRPC 4317), and the
-        #   destination configured on this connector has to offer one: without an OTLP/HTTP endpoint Odigos cannot
-        #   instrument this container at all. Endpoint and protocol are compared exactly, and pairing one with the
-        #   other transport fails at runtime as a connection reset that points nowhere near it.
-        # - ONE odigos-agent container serves the WHOLE task definition, so its command is per task and not per
-        #   language. If this task definition holds application containers in more than one language, chain a `&& cp
-        #   -r /instrumentations/<lang> /var/odigos/<lang>` clause for each of them, in alphabetical order of the
-        #   directory name — Odigos compares this command exactly against the union of the languages of every
-        #   container it finds marked, so a single-language command in a two-language task is reported as drift AND
-        #   leaves the other container with no agent on disk.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or it is reported as drift. Set a
-        #   signal's exporter to "none" for a signal your destination does not accept.
-        # - Declare odigos-agent NON-essential: ECS only accepts a SUCCESS dependency against a
-        #   non-essential container, so the two settings are one decision.
-        # - AWS caps a task definition at 10 containers; one already at the limit has no room for the stager.
-        # - Registering the revision is not enough — update the service to it, or it keeps running the old
-        #   one. The image is pulled by the task's execution role; mirror it into a registry the task can
-        #   reach if it cannot pull this one. The agents bundle is Linux-only, so a Windows task definition
-        #   cannot be instrumented at all.
-        # - AWS CDK: the same four moves through aws-cdk-lib/aws-ecs — taskDefinition.addVolume({ name:
-        #   'odigos-agent' }), addContainer for the stager with essential: false, addMountPoints on each
-        #   application container, and addContainerDependencies with
-        #   ecs.ContainerDependencyCondition.SUCCESS. There is no addEnvironment on an ECS container, so the
-        #   variables above go in the `environment` prop where the container is created.
-
     - id: instrument-fargate-cloudformation-ruby
       section: instrumentation:aws.fargate-task
       language: ruby
@@ -3120,18 +2945,20 @@ setup:
       format: yaml
       steps:
         - Merge Volumes and the odigos-agent entry into your task definition.
-        - Add the mount, dependency and environment to each Ruby application container.
-        - Deploy, then make sure the service rolls onto the new revision.
+        - Add the mount, dependency and environment to each application container.
+        - Deploy, then roll the service onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         # Merge into Resources.<YourTaskDefinition>.Properties
         Volumes:
-          # Bare name: on Fargate this is an ephemeral-storage bind mount scoped to the task.
+          # Bare-name volume: Fargate ephemeral-storage bind mount scoped to the task.
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
             Image: "registry.odigos.io/odigos-fargate-agents:v0.0.9"
-            # Non-essential: it copies the Ruby agent into the shared volume and exits 0. SUCCESS below is
-            # only valid against a non-essential container, so the two settings are one decision.
+            # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/ruby /var/odigos/ruby"]
             MountPoints:
@@ -3148,18 +2975,19 @@ setup:
                 Condition: SUCCESS
             Environment:
               # The IaC marker: it is what attributes this container to Odigos, and its recorded
-              # language is the agent the activation environment below is checked against. Do NOT add
-              # ODIGOS_MANAGED — that is the connector's record of a mutation it performed, including
-              # the rollback snapshot, and a hand-authored one claims a rollback nobody recorded.
+              # language is the agent the activation environment below is checked against.
+              # The value, unescaped, is exactly: {"v":1,"lang":"ruby"}
               - Name: ODIGOS_IAC
                 Value: '{"v":1,"lang":"ruby"}'
+
+              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
+              # performed, including the rollback snapshot; setting it by hand claims a rollback that
+              # was never recorded. Remove it if an earlier attempt left one.
               - Name: OTEL_SERVICE_NAME
                 Value: "<ODIGOS_SOURCE_NAME>"
               - Name: OTEL_RESOURCE_ATTRIBUTES
                 Value: "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>"
-              # Endpoint and protocol are ONE decision and are both compared exactly. Which transport
-              # applies is decided by the destination configured on this connector — see the note below
-              # before taking the two values as shown.
+              # Endpoint and protocol are one decision — both compared exactly against the destination on this connector.
               - Name: OTEL_EXPORTER_OTLP_ENDPOINT
                 Value: "<OTLP_ENDPOINT_URL>"
               - Name: OTEL_EXPORTER_OTLP_PROTOCOL
@@ -3179,46 +3007,62 @@ setup:
                 Value: "tracecontext,baggage"
               # Do NOT set OTEL_LOG_LEVEL: compared against unset, so a value is reported as drift.
 
-        # ---------------------------------------------------------------------------------------------
-        # NOTES
-        # - ODIGOS_IAC is per container and is the ONLY thing that tells Odigos a container is instrumented. Without
-        #   it the container is reported as awaiting your deployment however completely the rest is applied, and the
-        #   recorded language (ruby) is the agent the activation environment above is checked against.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand instrumentation
-        #   over to Odigos by enabling the instrumentation capability for this type. Setting it by hand claims a
-        #   rollback that was never recorded, and Odigos would then judge the container against values nobody has.
-        # - The Ruby agent path is per runtime version: replace <RUNTIME_VERSION> with your application's major.minor
-        #   (for example 3.3), and set a runtime override on the source so Odigos resolves the same version and judges
-        #   the container against the path you actually mounted.
-        # - RUBYOPT is SET, replacing anything already there, and compared exactly — fold any option your application
-        #   needs into the same value before applying.
-        # - The Ruby community SDK speaks http/protobuf ONLY — it cannot be switched to gRPC. <OTLP_ENDPOINT_URL> must
-        #   therefore be the destination's OTLP/HTTP endpoint (standard port 4318, not the gRPC 4317), and the
-        #   destination configured on this connector has to offer one: without an OTLP/HTTP endpoint Odigos cannot
-        #   instrument this container at all. Endpoint and protocol are compared exactly, and pairing one with the
-        #   other transport fails at runtime as a connection reset that points nowhere near it.
-        # - ONE odigos-agent container serves the WHOLE task definition, so its command is per task and not per
-        #   language. If this task definition holds application containers in more than one language, chain a `&& cp
-        #   -r /instrumentations/<lang> /var/odigos/<lang>` clause for each of them, in alphabetical order of the
-        #   directory name — Odigos compares this command exactly against the union of the languages of every
-        #   container it finds marked, so a single-language command in a two-language task is reported as drift AND
-        #   leaves the other container with no agent on disk.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or it is reported as drift. Set a
-        #   signal's exporter to "none" for a signal your destination does not accept.
-        # - Declare odigos-agent NON-essential: ECS only accepts a SUCCESS dependency against a
-        #   non-essential container, so the two settings are one decision.
-        # - AWS caps a task definition at 10 containers; one already at the limit has no room for the stager.
-        # - Registering the revision is not enough — update the service to it, or it keeps running the old
-        #   one. The image is pulled by the task's execution role; mirror it into a registry the task can
-        #   reach if it cannot pull this one. The agents bundle is Linux-only, so a Windows task definition
-        #   cannot be instrumented at all.
-        # - AWS CDK: the same four moves through aws-cdk-lib/aws-ecs — taskDefinition.addVolume({ name:
-        #   'odigos-agent' }), addContainer for the stager with essential: false, addMountPoints on each
-        #   application container, and addContainerDependencies with
-        #   ecs.ContainerDependencyCondition.SUCCESS. There is no addEnvironment on an ECS container, so the
-        #   variables above go in the `environment` prop where the container is created.
+    - id: instrument-fargate-cdk-ruby
+      section: instrumentation:aws.fargate-task
+      language: ruby
+      variant: cdk
+      variantLabel: AWS CDK
+      title: Instrument a Ruby ECS Fargate service (AWS CDK)
+      description: >-
+        Minimal AWS CDK usage for a Ruby container. Full construct reference:
+        https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
+      format: text
+      steps:
+        - Install @odigos/aws-cdk (pin the exact version).
+        - Create one OdigosFargateInstrumentation and call instrument() once per container.
+        - Pass runtimeVersion as the app major.minor — the Ruby agent is per runtime version.
+        - cdk diff, then cdk deploy — the service must roll onto the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
+      template: |-
+        npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
 
+        import { OdigosFargateInstrumentation, OdigosFargateLanguage } from '@odigos/aws-cdk';
+
+        const odigos = new OdigosFargateInstrumentation(this, 'Odigos', {
+          destination: {
+            httpEndpoint: '<OTLP_ENDPOINT_URL>', // OTLP/HTTP, scheme-qualified
+            // endpoint: 'host:4317',            // OTLP/gRPC as host:port, no scheme
+          },
+          // Pin to the image this connector expects — the package default may differ.
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.9',
+        });
+
+        odigos.instrument({
+          container: appContainer,
+          language: OdigosFargateLanguage.RUBY,
+          service: appService, // OTEL_SERVICE_NAME = ECS service name
+          // serviceName: '<ODIGOS_SOURCE_NAME>',
+            runtimeVersion: '<RUNTIME_VERSION>', // app major.minor
+        });
+
+        // Full construct reference: https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
+        // What the construct writes (for cdk diff). Do NOT set ODIGOS_MANAGED or OTEL_LOG_LEVEL.
+        // Staging: volume odigos-agent + non-essential container odigos-agent
+        //   command ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/ruby /var/odigos/ruby"]
+        //   mount /var/odigos read-only, DependsOn SUCCESS
+          ODIGOS_IAC                  = {"v":1,"lang":"ruby"}
+          OTEL_SERVICE_NAME           = <ODIGOS_SOURCE_NAME>
+          OTEL_RESOURCE_ATTRIBUTES    = cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>
+          OTEL_EXPORTER_OTLP_ENDPOINT = <OTLP_ENDPOINT_URL>
+          OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+          OTEL_TRACES_EXPORTER        = otlp
+          OTEL_METRICS_EXPORTER       = otlp
+          OTEL_LOGS_EXPORTER          = otlp
+          RUBYOPT                     = -r/var/odigos/ruby/<RUNTIME_VERSION>/index.rb
+          ODIGOS_GEM_PATH             = /var/odigos/ruby/<RUNTIME_VERSION>/bundle
+          OTEL_PROPAGATORS            = tracecontext,baggage
 
 # gateway: connector-wide collector wiring; not part of either domain. Implemented in a later phase.
 gateway:

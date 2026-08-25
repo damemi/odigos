@@ -75,7 +75,6 @@ func DesiredPlan(lang, image string) (plan.Plan, error) {
 				Env:    desiredEnv(lang, spec),
 			},
 		},
-		Notes: planNotes(lang),
 		Placeholders: []plan.Placeholder{
 			plan.ContainerPlaceholder,
 			plan.ServiceNamePlaceholder,
@@ -141,7 +140,7 @@ func desiredEnv(lang string, spec languageSpec) []plan.EnvVar {
 		{Name: EnvOTLPProtocol, Value: otlpProtocolGRPC, Merge: plan.MergeSet},
 		// Per-signal exporters: the connector sets these from what the destination actually accepts, so a
 		// signal the backend does not implement is never produced. A plan cannot know the destination, so it
-		// names the enabled value and the note below explains the "none" case.
+		// names the enabled value; set a signal your destination rejects to "none" instead.
 		{Name: EnvTracesExporter, Value: exporterOTLP, Merge: plan.MergeSet},
 		{Name: EnvMetricsExporter, Value: exporterOTLP, Merge: plan.MergeSet},
 		{Name: EnvLogsExporter, Value: exporterOTLP, Merge: plan.MergeSet},
@@ -177,29 +176,4 @@ func desiredEnv(lang string, spec languageSpec) []plan.EnvVar {
 // it wrong, and the marker that carries such a snapshot is the one they must not write at all.
 func iacMarkerValue(lang string) string {
 	return fmt.Sprintf(`{"v":%d,"lang":%q}`, baseapi.IaCMarkerVersion, lang)
-}
-
-func planNotes(lang string) []string {
-	notes := []string{
-		fmt.Sprintf("Set %s exactly as shown, including the language. It is the only thing that tells Odigos this service is instrumented: without it the service is reported as awaiting your deployment however completely the rest is applied. Odigos does not decode the payload on this platform yet — it matches on the variable itself — so the recorded language changes nothing that is reported today; record it anyway, because it is what identifies the staged agent to anything that later reads it.",
-			EnvOdigosIaC),
-		fmt.Sprintf("Do NOT set %s. That variable is the connector's own record of a mutation it performed, including the snapshot it restores from on rollback, and it is written only when you hand instrumentation over to Odigos by enabling the instrumentation capability for this type. Setting it by hand claims a rollback that was never recorded, so a later hand-over would have Odigos restore values nobody ever captured. It does not by itself hand the service over: what decides that is the instrumentation capability for this type, and while the type is in manual mode nothing in the connector can mutate the service at all.",
-			EnvOdigosManaged),
-		fmt.Sprintf("%s must match the workload's name in Odigos. A different value is reported as instrumentation drift, not as a naming preference.", EnvServiceName),
-		fmt.Sprintf("Set %s / %s / %s to \"%s\" for any signal your destination does not accept, so the agent never produces it.",
-			EnvTracesExporter, EnvMetricsExporter, EnvLogsExporter, exporterNone),
-		fmt.Sprintf("Cloud Run has no run-to-completion containers, so %q stays running and holds TCP port %d once it has staged the agent. The ingress container's dependency on it is what keeps the application from starting before the agent files exist.",
-			sidecarContainerName, startupProbePort),
-		fmt.Sprintf("If you later hand instrumentation over to Odigos (enable the instrumentation capability for this type), the connector takes its own snapshot of the service as it finds it and stamps %s itself — there is nothing for you to record in advance, and %s should be removed from your definition at that point so the two are not both claiming the service.",
-			EnvOdigosManaged, EnvOdigosIaC),
-		// The image is pulled by the CUSTOMER's Cloud Run service, not by the connector, so its availability
-		// is their account's problem to hit and ours to warn about. Cloud Run also restricts image hosts to
-		// *.gcr.io, *-docker.pkg.dev and docker.io, so a mirror has to be one of those.
-		"The agent image is pulled by your own Cloud Run service. If your project cannot pull it, mirror it into your own Artifact Registry and use that reference — Cloud Run only accepts images from *.gcr.io, *-docker.pkg.dev or docker.io.",
-		"The image shown above is the one this connector is configured with: when ODIGOS_CLOUDRUN_AGENT_IMAGE is set, this plan already renders that image rather than the default. Apply it exactly as shown.",
-	}
-	if lang == LangDotNet {
-		notes = append(notes, "The .NET agent bundled for Cloud Run is glibc-only; a musl (Alpine) based image is not supported.")
-	}
-	return notes
 }

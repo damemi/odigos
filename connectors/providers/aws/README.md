@@ -3,6 +3,10 @@
 The AWS provider connector runtime for the Odigos cloud-connectors feature. One instance owns one AWS
 account boundary. It speaks the shared **agents-api** GraphQL contract (like the vm-agent).
 
+> For the customer/operator-facing side — automatic vs. manual (IaC) flows, instrumenting Lambda/Fargate
+> yourself via CloudFormation or CDK, publishing/consuming the Lambda layer through SAR, and building the
+> Fargate/ECS agent images locally instead of pulling the released ones — see [USAGE.md](USAGE.md).
+
 ## Architecture: workloads vs compute platforms
 
 The connector splits discovery and reconciliation into two domains:

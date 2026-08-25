@@ -70,6 +70,83 @@ func TestInstrumentationArtifactsAreSelfDescribing(t *testing.T) {
 	}
 }
 
+// TestInstrumentationTemplatesDoNotCarryANotesHeading: the "Before you deploy" copy lives on
+// prerequisites, not as a NOTES block inside the snippet a customer copies.
+func TestInstrumentationTemplatesDoNotCarryANotesHeading(t *testing.T) {
+	for _, s := range All() {
+		for _, a := range s.SetupArtifacts() {
+			if !strings.HasPrefix(a.Section, instrumentationSectionPrefix) {
+				continue
+			}
+			for _, line := range strings.Split(a.Template, "\n") {
+				if st := strings.TrimSpace(line); st == "# NOTES" || st == "NOTES" || st == "// NOTES" {
+					t.Errorf("%s/%s: template still contains a NOTES heading; move that copy to prerequisites", s.Provider, a.ID)
+				}
+			}
+		}
+	}
+}
+
+func TestFargateInstrumentationArtifactsDeclarePrerequisites(t *testing.T) {
+	const want = "https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+	for _, a := range MustGet("aws").InstrumentationArtifacts("aws.fargate-task") {
+		if len(a.Prerequisites) == 0 {
+			t.Errorf("%s: no prerequisites, so Before you deploy has nothing to show for this snippet", a.ID)
+			continue
+		}
+		joined := strings.Join(a.Prerequisites, "\n")
+		if !strings.Contains(joined, "registry.odigos.io") || !strings.Contains(joined, want) {
+			t.Errorf("%s: prerequisites must mention registry.odigos.io accessibility and link %s; got %v",
+				a.ID, want, a.Prerequisites)
+		}
+	}
+}
+
+func TestGCPInstrumentationArtifactsDeclarePrerequisites(t *testing.T) {
+	const want = "https://docs.odigos.io/cloud-connectors/add-connectors/add-gcp-connector"
+	for _, a := range MustGet("gcp").InstrumentationArtifacts("gcp.cloud-run") {
+		if len(a.Prerequisites) == 0 {
+			t.Errorf("%s: no prerequisites, so Before you deploy has nothing to show for this snippet", a.ID)
+			continue
+		}
+		joined := strings.Join(a.Prerequisites, "\n")
+		if !strings.Contains(joined, "registry.odigos.io") || !strings.Contains(joined, want) {
+			t.Errorf("%s: prerequisites must mention registry.odigos.io accessibility and link %s; got %v",
+				a.ID, want, a.Prerequisites)
+		}
+	}
+}
+
+func TestAzureInstrumentationArtifactsDeclarePrerequisites(t *testing.T) {
+	const want = "https://docs.odigos.io/cloud-connectors/add-connectors/add-azure-connector"
+	for _, a := range MustGet("azure").InstrumentationArtifacts("azure.container-apps") {
+		if len(a.Prerequisites) == 0 {
+			t.Errorf("%s: no prerequisites, so Before you deploy has nothing to show for this snippet", a.ID)
+			continue
+		}
+		joined := strings.Join(a.Prerequisites, "\n")
+		if !strings.Contains(joined, "registry.odigos.io") || !strings.Contains(joined, want) {
+			t.Errorf("%s: prerequisites must mention registry.odigos.io accessibility and link %s; got %v",
+				a.ID, want, a.Prerequisites)
+		}
+	}
+}
+
+func TestLambdaInstrumentationArtifactsRequirePreloadedLayers(t *testing.T) {
+	const want = "https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+	for _, a := range MustGet("aws").InstrumentationArtifacts("aws.lambda") {
+		if len(a.Prerequisites) == 0 {
+			t.Errorf("%s: no prerequisites", a.ID)
+			continue
+		}
+		joined := strings.Join(a.Prerequisites, "\n")
+		if !strings.Contains(joined, "preloaded") || !strings.Contains(joined, want) {
+			t.Errorf("%s: prerequisites must tell the customer to preload Odigos Lambda layers and link %s; got %v",
+				a.ID, want, a.Prerequisites)
+		}
+	}
+}
+
 // TestInstrumentationArtifactsUseTheAngleBracketPlaceholderConvention pins the deliberate difference from the
 // onboarding artifacts. {{token}} is substituted client-side from create-connector FORM values and left
 // verbatim when there is none — so a per-workload token spelled that way reaches the customer as a literal

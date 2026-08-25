@@ -68,7 +68,6 @@ func DesiredPlan(lang, image string) (plan.Plan, error) {
 				Env:    desiredEnv(lang, spec),
 			},
 		},
-		Notes: planNotes(lang),
 		Placeholders: []plan.Placeholder{
 			plan.ContainerPlaceholder,
 			plan.ServiceNamePlaceholder,
@@ -162,29 +161,4 @@ func desiredEnv(lang string, spec languageSpec) []plan.EnvVar {
 // performs. The marker that carries such a snapshot is the one they must not write at all.
 func iacMarkerValue(lang string) string {
 	return fmt.Sprintf(`{"v":%d,"lang":%q}`, baseapi.IaCMarkerVersion, lang)
-}
-
-func planNotes(lang string) []string {
-	notes := []string{
-		fmt.Sprintf("Set %s exactly as shown, including the language. It is the only thing that tells Odigos this app is instrumented: without it the app is reported as awaiting your deployment however completely the rest is applied. Odigos does not decode the payload on this platform yet — it matches on the variable itself — so the recorded language changes nothing that is reported today; record it anyway, because it is what identifies the staged agent to anything that later reads it.",
-			EnvOdigosIaC),
-		fmt.Sprintf("Do NOT set %s. That variable is the connector's own record of a mutation it performed, including the snapshot it restores from on rollback, and it is written only when you hand instrumentation over to Odigos by enabling the instrumentation capability for this type. Setting it by hand claims a rollback that was never recorded, so a later hand-over would have Odigos restore values nobody ever captured. It does not by itself hand the app over: what decides that is the instrumentation capability for this type, and while the type is in manual mode nothing in the connector can mutate the app at all.",
-			EnvOdigosManaged),
-		fmt.Sprintf("%s must match the workload's name in Odigos. A different value is reported as instrumentation drift, not as a naming preference.", EnvServiceName),
-		fmt.Sprintf("Set %s / %s / %s to \"%s\" for any signal your destination does not accept, so the agent never produces it.",
-			EnvTracesExporter, EnvMetricsExporter, EnvLogsExporter, exporterNone),
-		fmt.Sprintf("%q is a real init container: it stages the agent and exits, and Container Apps starts your container only after it succeeds. No startup probe or explicit dependency is needed.", initContainerName),
-		// Revisions are immutable and, in Multiple-revision mode, an ingress traffic split can keep weighting
-		// an older one. A customer who applies this and leaves traffic where it was has done everything right
-		// and will still see nothing.
-		"Container Apps revisions are immutable, so this creates a new revision. In Multiple-revision mode, move ingress traffic onto it — until you do, the app keeps serving the previous, uninstrumented revision.",
-		fmt.Sprintf("If you later hand instrumentation over to Odigos (enable the instrumentation capability for this type), the connector takes its own snapshot of the app as it finds it and stamps %s itself — there is nothing for you to record in advance, and %s should come out of your definition at that point so the two are not both claiming the app.",
-			EnvOdigosManaged, EnvOdigosIaC),
-		"The agent image is pulled by your own Container App. If your environment cannot pull it, mirror it into a registry the app can reach and use that reference.",
-		"The image shown above is the one this connector is configured with: when ODIGOS_CONTAINERAPPS_AGENT_IMAGE is set, this plan already renders that image rather than the default. Apply it exactly as shown.",
-	}
-	if lang == LangDotNet {
-		notes = append(notes, "The .NET agent bundled here is glibc-only; a musl (Alpine) based image is not supported.")
-	}
-	return notes
 }

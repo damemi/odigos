@@ -346,6 +346,9 @@ setup:
         - Mount the volume into your ingress container and make it depend on the sidecar.
         - Set the Java environment variables listed below.
         - Deploy. Cloud Run revisions are immutable, so this creates a new revision — make sure traffic moves to it.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-gcp-connector).
       template: |-
         The Java agent is staged by a container, not baked into your image: "odigos-agent" copies the
         Java agent into a shared in-memory volume your ingress container reads at /var/odigos.
@@ -374,6 +377,10 @@ setup:
 
         ENVIRONMENT — identity and export
           ODIGOS_IAC                  = {"v":1,"lang":"java"}
+
+        Do NOT set ODIGOS_MANAGED — that is the connector's own record of a mutation IT
+        performed, including the rollback snapshot; setting it by hand claims a rollback that
+        was never recorded.
           OTEL_SERVICE_NAME           = <ODIGOS_SOURCE_NAME>
           OTEL_RESOURCE_ATTRIBUTES    = cloud.provider=gcp,cloud.platform=gcp_cloud_run,cloud.region=<REGION>
           ODIGOS_OTLP_ENDPOINT        = <OTLP_ENDPOINT>
@@ -382,47 +389,13 @@ setup:
           OTEL_TRACES_EXPORTER        = otlp
           OTEL_METRICS_EXPORTER       = otlp
           OTEL_LOGS_EXPORTER          = otlp
-        Leave OTEL_LOG_LEVEL unset unless this connector has debug telemetry enabled, in which case set it to
-        "debug" — that is the value the connector's own comparator expects. (It is not currently reported: there
-        is no conformance observer for this platform, so nothing checks a service you instrumented yourself.)
+        Leave OTEL_LOG_LEVEL unset unless debug telemetry is enabled on this connector (then set it to "debug").
 
-        The two endpoint variables are not interchangeable: ODIGOS_OTLP_ENDPOINT is the raw host:port, and
-        OTEL_EXPORTER_OTLP_ENDPOINT is the scheme-qualified URL. The SDK accepts a bare host:port and then
-        exports nowhere.
+        ODIGOS_OTLP_ENDPOINT is host:port; OTEL_EXPORTER_OTLP_ENDPOINT is the scheme-qualified URL — they are not interchangeable.
 
         ENVIRONMENT — Java activation
-        APPEND means: keep the value your container already has, then add ours joined by the separator shown.
-        Assigning it instead discards your value.
+        APPEND, never assign — keep your existing value and put ours after it, joined by the separator shown.
           JAVA_TOOL_OPTIONS           APPEND a space  -javaagent:/var/odigos/java/javaagent.jar
-
-        NOTES
-        - ODIGOS_IAC is the ONLY thing that tells Odigos this service is instrumented: without it the service is
-          reported as awaiting your deployment however completely the rest is applied. Record the language (java)
-          in it as shown — Odigos does not read the payload back on this platform yet, so it does not change what
-          is reported today, but it is what identifies the staged agent to anything that does.
-        - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-          including the snapshot it restores from on rollback, and it is written only when you hand
-          instrumentation over to Odigos by enabling the instrumentation capability for this type. Setting it by
-          hand claims a rollback that was never recorded: Odigos would restore values nobody ever handed over. It
-          does not by itself hand the service to Odigos — what decides that is the instrumentation capability for
-          this type, not the variable.
-        - If your container ALREADY sets JAVA_TOOL_OPTIONS, keep its value and put the Odigos value AFTER it,
-          joined by the separator shown — never assign ours over it. Position matters to the agent, not to a
-          check: your value must stay in front so your own settings keep precedence.
-        - OTEL_SERVICE_NAME must match the workload's name in Odigos, or the telemetry arrives under a name Odigos
-          cannot correlate with this service. Odigos does not verify it for a service you instrumented yourself —
-          there is no conformance observer for this platform yet — so a mismatch is silent rather than reported.
-        - Set any exporter to "none" for a signal your destination does not accept.
-        - The in-memory volume counts against the instance memory, which is why it is capped at 500Mi.
-        - The agent image is pulled by YOUR service. Cloud Run only accepts images from *.gcr.io, *-docker.pkg.dev
-          or docker.io, so mirror it into your own Artifact Registry if this one is unreachable — and use that
-          reference here.
-        - If this connector is configured with an agent-image override (ODIGOS_CLOUDRUN_AGENT_IMAGE), use that
-          image instead.
-        - If you later hand instrumentation over to Odigos, the connector takes its own snapshot of the service as
-          it finds it and stamps ODIGOS_MANAGED itself — there is nothing for you to record in advance, and
-          ODIGOS_IAC should come out of your definition at that point so the two are not both claiming the
-          service.
 
     - id: instrument-cloud-run-terraform-java
       section: instrumentation:gcp.cloud-run
@@ -437,6 +410,9 @@ setup:
         - Add the volume and the odigos-agent container blocks inside template.
         - Add the volume mount, depends_on and env to your ingress container.
         - Apply, then make sure traffic is serving the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-gcp-connector).
       template: |-
         resource "google_cloud_run_v2_service" "app" {
           # ... your existing configuration ...
@@ -485,13 +461,14 @@ setup:
 
               env {
                 # The IaC marker: it is what attributes this container to Odigos, and its recorded
-                # language is the agent the activation environment below is checked against. Do NOT set
-                # ODIGOS_MANAGED — that is the connector's record of a mutation it performed, and it is
-                # what authorizes Odigos to change this service.
+                # language is the agent the activation environment below is checked against.
                 # The value, unescaped, is exactly: {"v":1,"lang":"java"}
                 name  = "ODIGOS_IAC"
                 value = "{\"v\":1,\"lang\":\"java\"}"
               }
+              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
+              # performed, including the rollback snapshot; setting it by hand claims a rollback that
+              # was never recorded. Remove it if an earlier attempt left one.
               env {
                 name  = "OTEL_SERVICE_NAME"
                 value = "<ODIGOS_SOURCE_NAME>"
@@ -537,36 +514,6 @@ setup:
           }
         }
 
-        # ---------------------------------------------------------------------------------------------
-        # NOTES
-        # - ODIGOS_IAC is the ONLY thing that tells Odigos this service is instrumented: without it the service is
-        #   reported as awaiting your deployment however completely the rest is applied. Record the language (java)
-        #   in it as shown — Odigos does not read the payload back on this platform yet, so it does not change what
-        #   is reported today, but it is what identifies the staged agent to anything that does.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand
-        #   instrumentation over to Odigos by enabling the instrumentation capability for this type. Setting it by
-        #   hand claims a rollback that was never recorded: Odigos would restore values nobody ever handed over. It
-        #   does not by itself hand the service to Odigos — what decides that is the instrumentation capability for
-        #   this type, not the variable.
-        # - If your container ALREADY sets JAVA_TOOL_OPTIONS, keep its value and put the Odigos value AFTER it,
-        #   joined by the separator shown — never assign ours over it. Position matters to the agent, not to a
-        #   check: your value must stay in front so your own settings keep precedence.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or the telemetry arrives under a name Odigos
-        #   cannot correlate with this service. Odigos does not verify it for a service you instrumented yourself —
-        #   there is no conformance observer for this platform yet — so a mismatch is silent rather than reported.
-        # - Set any exporter to "none" for a signal your destination does not accept.
-        # - The in-memory volume counts against the instance memory, which is why it is capped at 500Mi.
-        # - The agent image is pulled by YOUR service. Cloud Run only accepts images from *.gcr.io, *-docker.pkg.dev
-        #   or docker.io, so mirror it into your own Artifact Registry if this one is unreachable — and use that
-        #   reference here.
-        # - If this connector is configured with an agent-image override (ODIGOS_CLOUDRUN_AGENT_IMAGE), use that
-        #   image instead.
-        # - If you later hand instrumentation over to Odigos, the connector takes its own snapshot of the service as
-        #   it finds it and stamps ODIGOS_MANAGED itself — there is nothing for you to record in advance, and
-        #   ODIGOS_IAC should come out of your definition at that point so the two are not both claiming the
-        #   service.
-
     - id: instrument-cloud-run-gcloud-java
       section: instrumentation:gcp.cloud-run
       language: java
@@ -583,6 +530,9 @@ setup:
         - Merge the volume, the odigos-agent container and your container's mount/dependency/env into it, as shown.
         - Apply it - gcloud run services replace service.yaml --region REGION
         - Check that traffic is serving the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-gcp-connector).
       template: |-
         # gcloud run services replace takes the WHOLE object, so start from the live service:
         #   gcloud run services describe SERVICE --region REGION --format export > service.yaml
@@ -618,37 +568,6 @@ setup:
         #   OTEL_LOGS_EXPORTER          otlp
         #   JAVA_TOOL_OPTIONS           APPEND a space — <YOUR_EXISTING_VALUE> -javaagent:/var/odigos/java/javaagent.jar
         #   (do NOT set OTEL_LOG_LEVEL — compared against unset, so a value is reported as drift)
-        #
-        # NOTES
-        # - ODIGOS_IAC is the ONLY thing that tells Odigos this service is instrumented: without it the service is
-        #   reported as awaiting your deployment however completely the rest is applied. Record the language (java)
-        #   in it as shown — Odigos does not read the payload back on this platform yet, so it does not change what
-        #   is reported today, but it is what identifies the staged agent to anything that does.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand
-        #   instrumentation over to Odigos by enabling the instrumentation capability for this type. Setting it by
-        #   hand claims a rollback that was never recorded: Odigos would restore values nobody ever handed over. It
-        #   does not by itself hand the service to Odigos — what decides that is the instrumentation capability for
-        #   this type, not the variable.
-        # - If your container ALREADY sets JAVA_TOOL_OPTIONS, keep its value and put the Odigos value AFTER it,
-        #   joined by the separator shown — never assign ours over it. Position matters to the agent, not to a
-        #   check: your value must stay in front so your own settings keep precedence.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or the telemetry arrives under a name Odigos
-        #   cannot correlate with this service. Odigos does not verify it for a service you instrumented yourself —
-        #   there is no conformance observer for this platform yet — so a mismatch is silent rather than reported.
-        # - Set any exporter to "none" for a signal your destination does not accept.
-        # - The in-memory volume counts against the instance memory, which is why it is capped at 500Mi.
-        # - The agent image is pulled by YOUR service. Cloud Run only accepts images from *.gcr.io, *-docker.pkg.dev
-        #   or docker.io, so mirror it into your own Artifact Registry if this one is unreachable — and use that
-        #   reference here.
-        # - If this connector is configured with an agent-image override (ODIGOS_CLOUDRUN_AGENT_IMAGE), use that
-        #   image instead.
-        # - If you later hand instrumentation over to Odigos, the connector takes its own snapshot of the service as
-        #   it finds it and stamps ODIGOS_MANAGED itself — there is nothing for you to record in advance, and
-        #   ODIGOS_IAC should come out of your definition at that point so the two are not both claiming the
-        #   service.
-
-        gcloud run services replace service.yaml --region "<REGION>"
 
     - id: instrument-cloud-run-manual-python
       section: instrumentation:gcp.cloud-run
@@ -665,6 +584,9 @@ setup:
         - Mount the volume into your ingress container and make it depend on the sidecar.
         - Set the Python environment variables listed below.
         - Deploy. Cloud Run revisions are immutable, so this creates a new revision — make sure traffic moves to it.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-gcp-connector).
       template: |-
         The Python agent is staged by a container, not baked into your image: "odigos-agent" copies the
         Python agent into a shared in-memory volume your ingress container reads at /var/odigos.
@@ -693,6 +615,10 @@ setup:
 
         ENVIRONMENT — identity and export
           ODIGOS_IAC                  = {"v":1,"lang":"python"}
+
+        Do NOT set ODIGOS_MANAGED — that is the connector's own record of a mutation IT
+        performed, including the rollback snapshot; setting it by hand claims a rollback that
+        was never recorded.
           OTEL_SERVICE_NAME           = <ODIGOS_SOURCE_NAME>
           OTEL_RESOURCE_ATTRIBUTES    = cloud.provider=gcp,cloud.platform=gcp_cloud_run,cloud.region=<REGION>
           ODIGOS_OTLP_ENDPOINT        = <OTLP_ENDPOINT>
@@ -701,48 +627,14 @@ setup:
           OTEL_TRACES_EXPORTER        = otlp
           OTEL_METRICS_EXPORTER       = otlp
           OTEL_LOGS_EXPORTER          = otlp
-        Leave OTEL_LOG_LEVEL unset unless this connector has debug telemetry enabled, in which case set it to
-        "debug" — that is the value the connector's own comparator expects. (It is not currently reported: there
-        is no conformance observer for this platform, so nothing checks a service you instrumented yourself.)
+        Leave OTEL_LOG_LEVEL unset unless debug telemetry is enabled on this connector (then set it to "debug").
 
-        The two endpoint variables are not interchangeable: ODIGOS_OTLP_ENDPOINT is the raw host:port, and
-        OTEL_EXPORTER_OTLP_ENDPOINT is the scheme-qualified URL. The SDK accepts a bare host:port and then
-        exports nowhere.
+        ODIGOS_OTLP_ENDPOINT is host:port; OTEL_EXPORTER_OTLP_ENDPOINT is the scheme-qualified URL — they are not interchangeable.
 
         ENVIRONMENT — Python activation
-        APPEND means: keep the value your container already has, then add ours joined by the separator shown.
-        Assigning it instead discards your value.
+        APPEND, never assign — keep your existing value and put ours after it, joined by the separator shown.
           OTEL_PYTHON_CONFIGURATOR    = odigos-python-configurator
           PYTHONPATH                  APPEND ":"  /var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation
-
-        NOTES
-        - ODIGOS_IAC is the ONLY thing that tells Odigos this service is instrumented: without it the service is
-          reported as awaiting your deployment however completely the rest is applied. Record the language
-          (python) in it as shown — Odigos does not read the payload back on this platform yet, so it does not
-          change what is reported today, but it is what identifies the staged agent to anything that does.
-        - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-          including the snapshot it restores from on rollback, and it is written only when you hand
-          instrumentation over to Odigos by enabling the instrumentation capability for this type. Setting it by
-          hand claims a rollback that was never recorded: Odigos would restore values nobody ever handed over. It
-          does not by itself hand the service to Odigos — what decides that is the instrumentation capability for
-          this type, not the variable.
-        - If your container ALREADY sets PYTHONPATH, keep its value and put the Odigos value AFTER it, joined by
-          the separator shown — never assign ours over it. Position matters to the agent, not to a check: your
-          value must stay in front so your own settings keep precedence.
-        - OTEL_SERVICE_NAME must match the workload's name in Odigos, or the telemetry arrives under a name Odigos
-          cannot correlate with this service. Odigos does not verify it for a service you instrumented yourself —
-          there is no conformance observer for this platform yet — so a mismatch is silent rather than reported.
-        - Set any exporter to "none" for a signal your destination does not accept.
-        - The in-memory volume counts against the instance memory, which is why it is capped at 500Mi.
-        - The agent image is pulled by YOUR service. Cloud Run only accepts images from *.gcr.io, *-docker.pkg.dev
-          or docker.io, so mirror it into your own Artifact Registry if this one is unreachable — and use that
-          reference here.
-        - If this connector is configured with an agent-image override (ODIGOS_CLOUDRUN_AGENT_IMAGE), use that
-          image instead.
-        - If you later hand instrumentation over to Odigos, the connector takes its own snapshot of the service as
-          it finds it and stamps ODIGOS_MANAGED itself — there is nothing for you to record in advance, and
-          ODIGOS_IAC should come out of your definition at that point so the two are not both claiming the
-          service.
 
     - id: instrument-cloud-run-terraform-python
       section: instrumentation:gcp.cloud-run
@@ -757,6 +649,9 @@ setup:
         - Add the volume and the odigos-agent container blocks inside template.
         - Add the volume mount, depends_on and env to your ingress container.
         - Apply, then make sure traffic is serving the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-gcp-connector).
       template: |-
         resource "google_cloud_run_v2_service" "app" {
           # ... your existing configuration ...
@@ -805,13 +700,14 @@ setup:
 
               env {
                 # The IaC marker: it is what attributes this container to Odigos, and its recorded
-                # language is the agent the activation environment below is checked against. Do NOT set
-                # ODIGOS_MANAGED — that is the connector's record of a mutation it performed, and it is
-                # what authorizes Odigos to change this service.
+                # language is the agent the activation environment below is checked against.
                 # The value, unescaped, is exactly: {"v":1,"lang":"python"}
                 name  = "ODIGOS_IAC"
                 value = "{\"v\":1,\"lang\":\"python\"}"
               }
+              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
+              # performed, including the rollback snapshot; setting it by hand claims a rollback that
+              # was never recorded. Remove it if an earlier attempt left one.
               env {
                 name  = "OTEL_SERVICE_NAME"
                 value = "<ODIGOS_SOURCE_NAME>"
@@ -861,36 +757,6 @@ setup:
           }
         }
 
-        # ---------------------------------------------------------------------------------------------
-        # NOTES
-        # - ODIGOS_IAC is the ONLY thing that tells Odigos this service is instrumented: without it the service is
-        #   reported as awaiting your deployment however completely the rest is applied. Record the language
-        #   (python) in it as shown — Odigos does not read the payload back on this platform yet, so it does not
-        #   change what is reported today, but it is what identifies the staged agent to anything that does.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand
-        #   instrumentation over to Odigos by enabling the instrumentation capability for this type. Setting it by
-        #   hand claims a rollback that was never recorded: Odigos would restore values nobody ever handed over. It
-        #   does not by itself hand the service to Odigos — what decides that is the instrumentation capability for
-        #   this type, not the variable.
-        # - If your container ALREADY sets PYTHONPATH, keep its value and put the Odigos value AFTER it, joined by
-        #   the separator shown — never assign ours over it. Position matters to the agent, not to a check: your
-        #   value must stay in front so your own settings keep precedence.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or the telemetry arrives under a name Odigos
-        #   cannot correlate with this service. Odigos does not verify it for a service you instrumented yourself —
-        #   there is no conformance observer for this platform yet — so a mismatch is silent rather than reported.
-        # - Set any exporter to "none" for a signal your destination does not accept.
-        # - The in-memory volume counts against the instance memory, which is why it is capped at 500Mi.
-        # - The agent image is pulled by YOUR service. Cloud Run only accepts images from *.gcr.io, *-docker.pkg.dev
-        #   or docker.io, so mirror it into your own Artifact Registry if this one is unreachable — and use that
-        #   reference here.
-        # - If this connector is configured with an agent-image override (ODIGOS_CLOUDRUN_AGENT_IMAGE), use that
-        #   image instead.
-        # - If you later hand instrumentation over to Odigos, the connector takes its own snapshot of the service as
-        #   it finds it and stamps ODIGOS_MANAGED itself — there is nothing for you to record in advance, and
-        #   ODIGOS_IAC should come out of your definition at that point so the two are not both claiming the
-        #   service.
-
     - id: instrument-cloud-run-gcloud-python
       section: instrumentation:gcp.cloud-run
       language: python
@@ -907,6 +773,9 @@ setup:
         - Merge the volume, the odigos-agent container and your container's mount/dependency/env into it, as shown.
         - Apply it - gcloud run services replace service.yaml --region REGION
         - Check that traffic is serving the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-gcp-connector).
       template: |-
         # gcloud run services replace takes the WHOLE object, so start from the live service:
         #   gcloud run services describe SERVICE --region REGION --format export > service.yaml
@@ -943,37 +812,6 @@ setup:
         #   OTEL_PYTHON_CONFIGURATOR    odigos-python-configurator
         #   PYTHONPATH                  APPEND ":" — <YOUR_EXISTING_VALUE>:/var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation
         #   (do NOT set OTEL_LOG_LEVEL — compared against unset, so a value is reported as drift)
-        #
-        # NOTES
-        # - ODIGOS_IAC is the ONLY thing that tells Odigos this service is instrumented: without it the service is
-        #   reported as awaiting your deployment however completely the rest is applied. Record the language
-        #   (python) in it as shown — Odigos does not read the payload back on this platform yet, so it does not
-        #   change what is reported today, but it is what identifies the staged agent to anything that does.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand
-        #   instrumentation over to Odigos by enabling the instrumentation capability for this type. Setting it by
-        #   hand claims a rollback that was never recorded: Odigos would restore values nobody ever handed over. It
-        #   does not by itself hand the service to Odigos — what decides that is the instrumentation capability for
-        #   this type, not the variable.
-        # - If your container ALREADY sets PYTHONPATH, keep its value and put the Odigos value AFTER it, joined by
-        #   the separator shown — never assign ours over it. Position matters to the agent, not to a check: your
-        #   value must stay in front so your own settings keep precedence.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or the telemetry arrives under a name Odigos
-        #   cannot correlate with this service. Odigos does not verify it for a service you instrumented yourself —
-        #   there is no conformance observer for this platform yet — so a mismatch is silent rather than reported.
-        # - Set any exporter to "none" for a signal your destination does not accept.
-        # - The in-memory volume counts against the instance memory, which is why it is capped at 500Mi.
-        # - The agent image is pulled by YOUR service. Cloud Run only accepts images from *.gcr.io, *-docker.pkg.dev
-        #   or docker.io, so mirror it into your own Artifact Registry if this one is unreachable — and use that
-        #   reference here.
-        # - If this connector is configured with an agent-image override (ODIGOS_CLOUDRUN_AGENT_IMAGE), use that
-        #   image instead.
-        # - If you later hand instrumentation over to Odigos, the connector takes its own snapshot of the service as
-        #   it finds it and stamps ODIGOS_MANAGED itself — there is nothing for you to record in advance, and
-        #   ODIGOS_IAC should come out of your definition at that point so the two are not both claiming the
-        #   service.
-
-        gcloud run services replace service.yaml --region "<REGION>"
 
     - id: instrument-cloud-run-manual-nodejs
       section: instrumentation:gcp.cloud-run
@@ -990,6 +828,9 @@ setup:
         - Mount the volume into your ingress container and make it depend on the sidecar.
         - Set the Node.js environment variables listed below.
         - Deploy. Cloud Run revisions are immutable, so this creates a new revision — make sure traffic moves to it.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-gcp-connector).
       template: |-
         The Node.js agent is staged by a container, not baked into your image: "odigos-agent" copies the
         Node.js agent into a shared in-memory volume your ingress container reads at /var/odigos.
@@ -1018,6 +859,10 @@ setup:
 
         ENVIRONMENT — identity and export
           ODIGOS_IAC                  = {"v":1,"lang":"nodejs"}
+
+        Do NOT set ODIGOS_MANAGED — that is the connector's own record of a mutation IT
+        performed, including the rollback snapshot; setting it by hand claims a rollback that
+        was never recorded.
           OTEL_SERVICE_NAME           = <ODIGOS_SOURCE_NAME>
           OTEL_RESOURCE_ATTRIBUTES    = cloud.provider=gcp,cloud.platform=gcp_cloud_run,cloud.region=<REGION>
           ODIGOS_OTLP_ENDPOINT        = <OTLP_ENDPOINT>
@@ -1026,47 +871,13 @@ setup:
           OTEL_TRACES_EXPORTER        = otlp
           OTEL_METRICS_EXPORTER       = otlp
           OTEL_LOGS_EXPORTER          = otlp
-        Leave OTEL_LOG_LEVEL unset unless this connector has debug telemetry enabled, in which case set it to
-        "debug" — that is the value the connector's own comparator expects. (It is not currently reported: there
-        is no conformance observer for this platform, so nothing checks a service you instrumented yourself.)
+        Leave OTEL_LOG_LEVEL unset unless debug telemetry is enabled on this connector (then set it to "debug").
 
-        The two endpoint variables are not interchangeable: ODIGOS_OTLP_ENDPOINT is the raw host:port, and
-        OTEL_EXPORTER_OTLP_ENDPOINT is the scheme-qualified URL. The SDK accepts a bare host:port and then
-        exports nowhere.
+        ODIGOS_OTLP_ENDPOINT is host:port; OTEL_EXPORTER_OTLP_ENDPOINT is the scheme-qualified URL — they are not interchangeable.
 
         ENVIRONMENT — Node.js activation
-        APPEND means: keep the value your container already has, then add ours joined by the separator shown.
-        Assigning it instead discards your value.
+        APPEND, never assign — keep your existing value and put ours after it, joined by the separator shown.
           NODE_OPTIONS                APPEND a space  --require /var/odigos/nodejs/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js
-
-        NOTES
-        - ODIGOS_IAC is the ONLY thing that tells Odigos this service is instrumented: without it the service is
-          reported as awaiting your deployment however completely the rest is applied. Record the language
-          (nodejs) in it as shown — Odigos does not read the payload back on this platform yet, so it does not
-          change what is reported today, but it is what identifies the staged agent to anything that does.
-        - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-          including the snapshot it restores from on rollback, and it is written only when you hand
-          instrumentation over to Odigos by enabling the instrumentation capability for this type. Setting it by
-          hand claims a rollback that was never recorded: Odigos would restore values nobody ever handed over. It
-          does not by itself hand the service to Odigos — what decides that is the instrumentation capability for
-          this type, not the variable.
-        - If your container ALREADY sets NODE_OPTIONS, keep its value and put the Odigos value AFTER it, joined by
-          the separator shown — never assign ours over it. Position matters to the agent, not to a check: your
-          value must stay in front so your own settings keep precedence.
-        - OTEL_SERVICE_NAME must match the workload's name in Odigos, or the telemetry arrives under a name Odigos
-          cannot correlate with this service. Odigos does not verify it for a service you instrumented yourself —
-          there is no conformance observer for this platform yet — so a mismatch is silent rather than reported.
-        - Set any exporter to "none" for a signal your destination does not accept.
-        - The in-memory volume counts against the instance memory, which is why it is capped at 500Mi.
-        - The agent image is pulled by YOUR service. Cloud Run only accepts images from *.gcr.io, *-docker.pkg.dev
-          or docker.io, so mirror it into your own Artifact Registry if this one is unreachable — and use that
-          reference here.
-        - If this connector is configured with an agent-image override (ODIGOS_CLOUDRUN_AGENT_IMAGE), use that
-          image instead.
-        - If you later hand instrumentation over to Odigos, the connector takes its own snapshot of the service as
-          it finds it and stamps ODIGOS_MANAGED itself — there is nothing for you to record in advance, and
-          ODIGOS_IAC should come out of your definition at that point so the two are not both claiming the
-          service.
 
     - id: instrument-cloud-run-terraform-nodejs
       section: instrumentation:gcp.cloud-run
@@ -1081,6 +892,9 @@ setup:
         - Add the volume and the odigos-agent container blocks inside template.
         - Add the volume mount, depends_on and env to your ingress container.
         - Apply, then make sure traffic is serving the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-gcp-connector).
       template: |-
         resource "google_cloud_run_v2_service" "app" {
           # ... your existing configuration ...
@@ -1129,13 +943,14 @@ setup:
 
               env {
                 # The IaC marker: it is what attributes this container to Odigos, and its recorded
-                # language is the agent the activation environment below is checked against. Do NOT set
-                # ODIGOS_MANAGED — that is the connector's record of a mutation it performed, and it is
-                # what authorizes Odigos to change this service.
+                # language is the agent the activation environment below is checked against.
                 # The value, unescaped, is exactly: {"v":1,"lang":"nodejs"}
                 name  = "ODIGOS_IAC"
                 value = "{\"v\":1,\"lang\":\"nodejs\"}"
               }
+              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
+              # performed, including the rollback snapshot; setting it by hand claims a rollback that
+              # was never recorded. Remove it if an earlier attempt left one.
               env {
                 name  = "OTEL_SERVICE_NAME"
                 value = "<ODIGOS_SOURCE_NAME>"
@@ -1181,36 +996,6 @@ setup:
           }
         }
 
-        # ---------------------------------------------------------------------------------------------
-        # NOTES
-        # - ODIGOS_IAC is the ONLY thing that tells Odigos this service is instrumented: without it the service is
-        #   reported as awaiting your deployment however completely the rest is applied. Record the language
-        #   (nodejs) in it as shown — Odigos does not read the payload back on this platform yet, so it does not
-        #   change what is reported today, but it is what identifies the staged agent to anything that does.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand
-        #   instrumentation over to Odigos by enabling the instrumentation capability for this type. Setting it by
-        #   hand claims a rollback that was never recorded: Odigos would restore values nobody ever handed over. It
-        #   does not by itself hand the service to Odigos — what decides that is the instrumentation capability for
-        #   this type, not the variable.
-        # - If your container ALREADY sets NODE_OPTIONS, keep its value and put the Odigos value AFTER it, joined by
-        #   the separator shown — never assign ours over it. Position matters to the agent, not to a check: your
-        #   value must stay in front so your own settings keep precedence.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or the telemetry arrives under a name Odigos
-        #   cannot correlate with this service. Odigos does not verify it for a service you instrumented yourself —
-        #   there is no conformance observer for this platform yet — so a mismatch is silent rather than reported.
-        # - Set any exporter to "none" for a signal your destination does not accept.
-        # - The in-memory volume counts against the instance memory, which is why it is capped at 500Mi.
-        # - The agent image is pulled by YOUR service. Cloud Run only accepts images from *.gcr.io, *-docker.pkg.dev
-        #   or docker.io, so mirror it into your own Artifact Registry if this one is unreachable — and use that
-        #   reference here.
-        # - If this connector is configured with an agent-image override (ODIGOS_CLOUDRUN_AGENT_IMAGE), use that
-        #   image instead.
-        # - If you later hand instrumentation over to Odigos, the connector takes its own snapshot of the service as
-        #   it finds it and stamps ODIGOS_MANAGED itself — there is nothing for you to record in advance, and
-        #   ODIGOS_IAC should come out of your definition at that point so the two are not both claiming the
-        #   service.
-
     - id: instrument-cloud-run-gcloud-nodejs
       section: instrumentation:gcp.cloud-run
       language: nodejs
@@ -1227,6 +1012,9 @@ setup:
         - Merge the volume, the odigos-agent container and your container's mount/dependency/env into it, as shown.
         - Apply it - gcloud run services replace service.yaml --region REGION
         - Check that traffic is serving the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-gcp-connector).
       template: |-
         # gcloud run services replace takes the WHOLE object, so start from the live service:
         #   gcloud run services describe SERVICE --region REGION --format export > service.yaml
@@ -1262,37 +1050,6 @@ setup:
         #   OTEL_LOGS_EXPORTER          otlp
         #   NODE_OPTIONS                APPEND a space — <YOUR_EXISTING_VALUE> --require /var/odigos/nodejs/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js
         #   (do NOT set OTEL_LOG_LEVEL — compared against unset, so a value is reported as drift)
-        #
-        # NOTES
-        # - ODIGOS_IAC is the ONLY thing that tells Odigos this service is instrumented: without it the service is
-        #   reported as awaiting your deployment however completely the rest is applied. Record the language
-        #   (nodejs) in it as shown — Odigos does not read the payload back on this platform yet, so it does not
-        #   change what is reported today, but it is what identifies the staged agent to anything that does.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand
-        #   instrumentation over to Odigos by enabling the instrumentation capability for this type. Setting it by
-        #   hand claims a rollback that was never recorded: Odigos would restore values nobody ever handed over. It
-        #   does not by itself hand the service to Odigos — what decides that is the instrumentation capability for
-        #   this type, not the variable.
-        # - If your container ALREADY sets NODE_OPTIONS, keep its value and put the Odigos value AFTER it, joined by
-        #   the separator shown — never assign ours over it. Position matters to the agent, not to a check: your
-        #   value must stay in front so your own settings keep precedence.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or the telemetry arrives under a name Odigos
-        #   cannot correlate with this service. Odigos does not verify it for a service you instrumented yourself —
-        #   there is no conformance observer for this platform yet — so a mismatch is silent rather than reported.
-        # - Set any exporter to "none" for a signal your destination does not accept.
-        # - The in-memory volume counts against the instance memory, which is why it is capped at 500Mi.
-        # - The agent image is pulled by YOUR service. Cloud Run only accepts images from *.gcr.io, *-docker.pkg.dev
-        #   or docker.io, so mirror it into your own Artifact Registry if this one is unreachable — and use that
-        #   reference here.
-        # - If this connector is configured with an agent-image override (ODIGOS_CLOUDRUN_AGENT_IMAGE), use that
-        #   image instead.
-        # - If you later hand instrumentation over to Odigos, the connector takes its own snapshot of the service as
-        #   it finds it and stamps ODIGOS_MANAGED itself — there is nothing for you to record in advance, and
-        #   ODIGOS_IAC should come out of your definition at that point so the two are not both claiming the
-        #   service.
-
-        gcloud run services replace service.yaml --region "<REGION>"
 
     - id: instrument-cloud-run-manual-dotnet
       section: instrumentation:gcp.cloud-run
@@ -1309,6 +1066,9 @@ setup:
         - Mount the volume into your ingress container and make it depend on the sidecar.
         - Set the .NET environment variables listed below.
         - Deploy. Cloud Run revisions are immutable, so this creates a new revision — make sure traffic moves to it.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-gcp-connector).
       template: |-
         The .NET agent is staged by a container, not baked into your image: "odigos-agent" copies the
         .NET agent into a shared in-memory volume your ingress container reads at /var/odigos.
@@ -1337,6 +1097,10 @@ setup:
 
         ENVIRONMENT — identity and export
           ODIGOS_IAC                  = {"v":1,"lang":"dotnet"}
+
+        Do NOT set ODIGOS_MANAGED — that is the connector's own record of a mutation IT
+        performed, including the rollback snapshot; setting it by hand claims a rollback that
+        was never recorded.
           OTEL_SERVICE_NAME           = <ODIGOS_SOURCE_NAME>
           OTEL_RESOURCE_ATTRIBUTES    = cloud.provider=gcp,cloud.platform=gcp_cloud_run,cloud.region=<REGION>
           ODIGOS_OTLP_ENDPOINT        = <OTLP_ENDPOINT>
@@ -1345,13 +1109,9 @@ setup:
           OTEL_TRACES_EXPORTER        = otlp
           OTEL_METRICS_EXPORTER       = otlp
           OTEL_LOGS_EXPORTER          = otlp
-        Leave OTEL_LOG_LEVEL unset unless this connector has debug telemetry enabled, in which case set it to
-        "debug" — that is the value the connector's own comparator expects. (It is not currently reported: there
-        is no conformance observer for this platform, so nothing checks a service you instrumented yourself.)
+        Leave OTEL_LOG_LEVEL unset unless debug telemetry is enabled on this connector (then set it to "debug").
 
-        The two endpoint variables are not interchangeable: ODIGOS_OTLP_ENDPOINT is the raw host:port, and
-        OTEL_EXPORTER_OTLP_ENDPOINT is the scheme-qualified URL. The SDK accepts a bare host:port and then
-        exports nowhere.
+        ODIGOS_OTLP_ENDPOINT is host:port; OTEL_EXPORTER_OTLP_ENDPOINT is the scheme-qualified URL — they are not interchangeable.
 
         ENVIRONMENT — .NET activation
         Every variable below is SET to exactly the value shown; none of them is a list to merge into.
@@ -1362,36 +1122,6 @@ setup:
           DOTNET_STARTUP_HOOKS        = /var/odigos/dotnet/net/OpenTelemetry.AutoInstrumentation.StartupHook.dll
           DOTNET_ADDITIONAL_DEPS      = /var/odigos/dotnet/AdditionalDeps
           DOTNET_SHARED_STORE         = /var/odigos/dotnet/store
-
-        NOTES
-        - ODIGOS_IAC is the ONLY thing that tells Odigos this service is instrumented: without it the service is
-          reported as awaiting your deployment however completely the rest is applied. Record the language
-          (dotnet) in it as shown — Odigos does not read the payload back on this platform yet, so it does not
-          change what is reported today, but it is what identifies the staged agent to anything that does.
-        - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-          including the snapshot it restores from on rollback, and it is written only when you hand
-          instrumentation over to Odigos by enabling the instrumentation capability for this type. Setting it by
-          hand claims a rollback that was never recorded: Odigos would restore values nobody ever handed over. It
-          does not by itself hand the service to Odigos — what decides that is the instrumentation capability for
-          this type, not the variable.
-        - The .NET agent is glibc-only. A musl (Alpine) based image cannot be instrumented this way — the profiler
-          shared object above will not load, and the container starts uninstrumented.
-        - Every variable above is SET to exactly the value shown and compared exactly. None of them is a list your
-          image is likely to already carry, so there is nothing to fold in.
-        - OTEL_SERVICE_NAME must match the workload's name in Odigos, or the telemetry arrives under a name Odigos
-          cannot correlate with this service. Odigos does not verify it for a service you instrumented yourself —
-          there is no conformance observer for this platform yet — so a mismatch is silent rather than reported.
-        - Set any exporter to "none" for a signal your destination does not accept.
-        - The in-memory volume counts against the instance memory, which is why it is capped at 500Mi.
-        - The agent image is pulled by YOUR service. Cloud Run only accepts images from *.gcr.io, *-docker.pkg.dev
-          or docker.io, so mirror it into your own Artifact Registry if this one is unreachable — and use that
-          reference here.
-        - If this connector is configured with an agent-image override (ODIGOS_CLOUDRUN_AGENT_IMAGE), use that
-          image instead.
-        - If you later hand instrumentation over to Odigos, the connector takes its own snapshot of the service as
-          it finds it and stamps ODIGOS_MANAGED itself — there is nothing for you to record in advance, and
-          ODIGOS_IAC should come out of your definition at that point so the two are not both claiming the
-          service.
 
     - id: instrument-cloud-run-terraform-dotnet
       section: instrumentation:gcp.cloud-run
@@ -1406,6 +1136,9 @@ setup:
         - Add the volume and the odigos-agent container blocks inside template.
         - Add the volume mount, depends_on and env to your ingress container.
         - Apply, then make sure traffic is serving the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-gcp-connector).
       template: |-
         resource "google_cloud_run_v2_service" "app" {
           # ... your existing configuration ...
@@ -1454,13 +1187,14 @@ setup:
 
               env {
                 # The IaC marker: it is what attributes this container to Odigos, and its recorded
-                # language is the agent the activation environment below is checked against. Do NOT set
-                # ODIGOS_MANAGED — that is the connector's record of a mutation it performed, and it is
-                # what authorizes Odigos to change this service.
+                # language is the agent the activation environment below is checked against.
                 # The value, unescaped, is exactly: {"v":1,"lang":"dotnet"}
                 name  = "ODIGOS_IAC"
                 value = "{\"v\":1,\"lang\":\"dotnet\"}"
               }
+              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
+              # performed, including the rollback snapshot; setting it by hand claims a rollback that
+              # was never recorded. Remove it if an earlier attempt left one.
               env {
                 name  = "OTEL_SERVICE_NAME"
                 value = "<ODIGOS_SOURCE_NAME>"
@@ -1528,37 +1262,6 @@ setup:
           }
         }
 
-        # ---------------------------------------------------------------------------------------------
-        # NOTES
-        # - ODIGOS_IAC is the ONLY thing that tells Odigos this service is instrumented: without it the service is
-        #   reported as awaiting your deployment however completely the rest is applied. Record the language
-        #   (dotnet) in it as shown — Odigos does not read the payload back on this platform yet, so it does not
-        #   change what is reported today, but it is what identifies the staged agent to anything that does.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand
-        #   instrumentation over to Odigos by enabling the instrumentation capability for this type. Setting it by
-        #   hand claims a rollback that was never recorded: Odigos would restore values nobody ever handed over. It
-        #   does not by itself hand the service to Odigos — what decides that is the instrumentation capability for
-        #   this type, not the variable.
-        # - The .NET agent is glibc-only. A musl (Alpine) based image cannot be instrumented this way — the profiler
-        #   shared object above will not load, and the container starts uninstrumented.
-        # - Every variable above is SET to exactly the value shown and compared exactly. None of them is a list your
-        #   image is likely to already carry, so there is nothing to fold in.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or the telemetry arrives under a name Odigos
-        #   cannot correlate with this service. Odigos does not verify it for a service you instrumented yourself —
-        #   there is no conformance observer for this platform yet — so a mismatch is silent rather than reported.
-        # - Set any exporter to "none" for a signal your destination does not accept.
-        # - The in-memory volume counts against the instance memory, which is why it is capped at 500Mi.
-        # - The agent image is pulled by YOUR service. Cloud Run only accepts images from *.gcr.io, *-docker.pkg.dev
-        #   or docker.io, so mirror it into your own Artifact Registry if this one is unreachable — and use that
-        #   reference here.
-        # - If this connector is configured with an agent-image override (ODIGOS_CLOUDRUN_AGENT_IMAGE), use that
-        #   image instead.
-        # - If you later hand instrumentation over to Odigos, the connector takes its own snapshot of the service as
-        #   it finds it and stamps ODIGOS_MANAGED itself — there is nothing for you to record in advance, and
-        #   ODIGOS_IAC should come out of your definition at that point so the two are not both claiming the
-        #   service.
-
     - id: instrument-cloud-run-gcloud-dotnet
       section: instrumentation:gcp.cloud-run
       language: dotnet
@@ -1575,6 +1278,9 @@ setup:
         - Merge the volume, the odigos-agent container and your container's mount/dependency/env into it, as shown.
         - Apply it - gcloud run services replace service.yaml --region REGION
         - Check that traffic is serving the new revision.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-gcp-connector).
       template: |-
         # gcloud run services replace takes the WHOLE object, so start from the live service:
         #   gcloud run services describe SERVICE --region REGION --format export > service.yaml
@@ -1616,40 +1322,6 @@ setup:
         #   DOTNET_ADDITIONAL_DEPS      /var/odigos/dotnet/AdditionalDeps
         #   DOTNET_SHARED_STORE         /var/odigos/dotnet/store
         #   (do NOT set OTEL_LOG_LEVEL — compared against unset, so a value is reported as drift)
-        #
-        # NOTES
-        # - ODIGOS_IAC is the ONLY thing that tells Odigos this service is instrumented: without it the service is
-        #   reported as awaiting your deployment however completely the rest is applied. Record the language
-        #   (dotnet) in it as shown — Odigos does not read the payload back on this platform yet, so it does not
-        #   change what is reported today, but it is what identifies the staged agent to anything that does.
-        # - Do NOT set ODIGOS_MANAGED. That variable is the connector's own record of a mutation IT performed,
-        #   including the snapshot it restores from on rollback, and it is written only when you hand
-        #   instrumentation over to Odigos by enabling the instrumentation capability for this type. Setting it by
-        #   hand claims a rollback that was never recorded: Odigos would restore values nobody ever handed over. It
-        #   does not by itself hand the service to Odigos — what decides that is the instrumentation capability for
-        #   this type, not the variable.
-        # - The .NET agent is glibc-only. A musl (Alpine) based image cannot be instrumented this way — the profiler
-        #   shared object above will not load, and the container starts uninstrumented.
-        # - Every variable above is SET to exactly the value shown and compared exactly. None of them is a list your
-        #   image is likely to already carry, so there is nothing to fold in.
-        # - OTEL_SERVICE_NAME must match the workload's name in Odigos, or the telemetry arrives under a name Odigos
-        #   cannot correlate with this service. Odigos does not verify it for a service you instrumented yourself —
-        #   there is no conformance observer for this platform yet — so a mismatch is silent rather than reported.
-        # - Set any exporter to "none" for a signal your destination does not accept.
-        # - The in-memory volume counts against the instance memory, which is why it is capped at 500Mi.
-        # - The agent image is pulled by YOUR service. Cloud Run only accepts images from *.gcr.io, *-docker.pkg.dev
-        #   or docker.io, so mirror it into your own Artifact Registry if this one is unreachable — and use that
-        #   reference here.
-        # - If this connector is configured with an agent-image override (ODIGOS_CLOUDRUN_AGENT_IMAGE), use that
-        #   image instead.
-        # - If you later hand instrumentation over to Odigos, the connector takes its own snapshot of the service as
-        #   it finds it and stamps ODIGOS_MANAGED itself — there is nothing for you to record in advance, and
-        #   ODIGOS_IAC should come out of your definition at that point so the two are not both claiming the
-        #   service.
-
-        gcloud run services replace service.yaml --region "<REGION>"
-
-
 # gateway: connector-wide collector wiring; not part of either domain. Implemented in a later phase.
 gateway:
   enabled: false

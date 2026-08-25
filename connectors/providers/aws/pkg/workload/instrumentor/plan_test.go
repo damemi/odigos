@@ -575,12 +575,12 @@ func TestInstrumentationArtifactsDeclareTheExpectedVariants(t *testing.T) {
 			"ruby":   "aws-cli,cdk,cloudformation,terraform",
 		},
 		"aws.fargate-task": {
-			"dotnet": "cloudformation,terraform",
-			"java":   "cloudformation,terraform",
-			"nodejs": "cloudformation,terraform",
-			"php":    "cloudformation,terraform",
-			"python": "cloudformation,terraform",
-			"ruby":   "cloudformation,terraform",
+			"dotnet": "cdk,cloudformation,terraform",
+			"java":   "cdk,cloudformation,terraform",
+			"nodejs": "cdk,cloudformation,terraform",
+			"php":    "cdk,cloudformation,terraform",
+			"python": "cdk,cloudformation,terraform",
+			"ruby":   "cdk,cloudformation,terraform",
 		},
 	} {
 		byLang := map[string][]string{}

@@ -97,7 +97,8 @@ type InstrumentationArtifact struct {
 	VariantLabel string
 	Title        string
 	Description  string
-	Steps        []string
-	Format       string
-	Template     string
+	Steps         []string
+	Format        string
+	Template      string
+	Prerequisites []string
 }

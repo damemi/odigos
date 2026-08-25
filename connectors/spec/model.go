@@ -111,6 +111,10 @@ type SetupArtifact struct {
 	Description string `yaml:"description"`
 	// Steps are an ordered instruction list shown above the code snippet (create-role section).
 	Steps []string `yaml:"steps"`
+	// Prerequisites are caveats shown as "Before you deploy" for an instrumentation artifact.
+	// Authored here rather than scraped from a NOTES heading in Template: the snippet is what to
+	// copy, and these are what to know before copying it. Empty on onboarding artifacts.
+	Prerequisites []string `yaml:"prerequisites"`
 	// Format is a syntax hint for the UI code block: "json" | "yaml" | "shell" | "text".
 	Format string `yaml:"format"`
 	// Template is the artifact body. May contain "{{permissions}}" and/or scalar "{{name}}" tokens.

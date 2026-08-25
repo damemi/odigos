@@ -71,6 +71,7 @@ func stagedResult() api.InstrumentationPlanResult {
   env { name = "OTEL_SERVICE_NAME"  value = "<ODIGOS_SOURCE_NAME>" }
   env { name = "OTEL_EXPORTER_OTLP_ENDPOINT" value = "<OTLP_ENDPOINT_URL>" }
 }`,
+			Prerequisites: []string{"OTEL_SERVICE_NAME must be <ODIGOS_SOURCE_NAME>."},
 		}},
 		Resolved: map[string]string{
 			plan.PlaceholderServiceName:     "checkout",
@@ -123,6 +124,33 @@ func TestToModelSubstitutesStepsAndNotes(t *testing.T) {
 	}
 	if strings.Contains(strings.Join(got.Documents[0].Steps, "\n"), plan.PlaceholderServiceName) {
 		t.Errorf("steps kept a resolved token: %v", got.Documents[0].Steps)
+	}
+}
+
+// TestToModelServesSpecPrerequisitesAsNotes is the path the UI's "Before you deploy" section actually
+// reads: authored on the artifact, not scraped from a NOTES heading in the snippet, and not the
+// planner's notes when the spec declared its own.
+func TestToModelServesSpecPrerequisitesAsNotes(t *testing.T) {
+	res := stagedResult()
+	res.Plan.Notes = []string{"planner caveat that must not reach the client"}
+	res.Artifacts[0].Prerequisites = []string{"Apply this to <ODIGOS_SOURCE_NAME>."}
+
+	got := ToModel(res, testNow)
+	if len(got.Notes) != 1 || got.Notes[0] != "Apply this to checkout." {
+		t.Errorf("notes = %v, want the substituted spec prerequisite", got.Notes)
+	}
+}
+
+// TestToModelFallsBackToPlanNotesWhenPrerequisitesAreAbsent covers a type whose snippets have not
+// grown a prerequisites list yet. Plan.Notes is the fallback so "Before you deploy" is not empty.
+func TestToModelFallsBackToPlanNotesWhenPrerequisitesAreAbsent(t *testing.T) {
+	res := stagedResult()
+	res.Artifacts[0].Prerequisites = nil
+	res.Plan.Notes = []string{"OTEL_SERVICE_NAME must be <ODIGOS_SOURCE_NAME>."}
+
+	got := ToModel(res, testNow)
+	if len(got.Notes) != 1 || !strings.Contains(got.Notes[0], "checkout") {
+		t.Errorf("notes = %v, want the substituted planner notes", got.Notes)
 	}
 }
 

@@ -81,7 +81,6 @@ func DesiredLambdaPlan(lang, activation string) (plan.Plan, error) {
 				Env:    env,
 			},
 		},
-		Notes: lambdaPlanNotes(lang, activation),
 		Placeholders: []plan.Placeholder{
 			{
 				Token: PlaceholderLayerARN,
@@ -258,66 +257,4 @@ func lambdaCollectorConfigTemplate() string {
 // instructions that every module then has to contradict.
 func lambdaIaCMarkerValue() string {
 	return fmt.Sprintf(`{"v":%d,"layer":%q}`, baseapi.IaCMarkerVersion, PlaceholderLayerARN)
-}
-
-func lambdaPlanNotes(lang, activation string) []string {
-	notes := []string{
-		fmt.Sprintf("Set %s exactly as shown, with the layer version ARN you actually attached. Odigos attributes the function to this variable — without it the function is reported as awaiting your deployment however completely the rest is applied — and the recorded ARN is the version it checks the function against, so pinning your own version is respected rather than reported as drift.",
-			store.EnvOdigosIaC),
-		fmt.Sprintf("Do NOT set %s. That variable is the connector's own record of a mutation it performed, including the snapshot it restores from on rollback, and it is written only when you hand instrumentation over to Odigos by enabling the instrumentation capability for this type. Setting it by hand claims a rollback that was never recorded.",
-			store.EnvOdigosManaged),
-		fmt.Sprintf("%s must match the workload's name in Odigos. A different value is reported as instrumentation drift, not as a naming preference.", EnvServiceName),
-		fmt.Sprintf("%s carries the in-Lambda collector's ENTIRE configuration inline, so no other variable describes your destination. Substitute %s and %s inside it, and leave the rest byte-for-byte as shown — Odigos compares the whole value, so an extra space is reported as drift.",
-			EnvCollectorConfigURI, plan.PlaceholderOTLPEndpoint, plan.PlaceholderOTLPInsecure),
-		// The template above is rendered with NO headers, deliberately: this string ends up in Terraform,
-		// CloudFormation and shell files that get committed and pasted into tickets, so the destination's
-		// credential must not be baked into it (see lambdaCollectorConfigTemplate). But the observer renders
-		// the desired configuration WITH the destination's headers and compares the whole value, so a customer
-		// whose destination authenticates and who applies this verbatim is reported as drifted forever — and
-		// exports without the credential. Saying exactly how to add them is the only way both can be true.
-		fmt.Sprintf("If the destination configured on this connector sends authentication headers, they are part of the value Odigos compares and you have to add them: inside the `otlp:` exporter map, immediately after the `tls:` entry, append `, headers: {\"<name>\": \"<value>\"}` listing every header in ascending order of name. Treat the result as a secret — anyone with lambda:GetFunctionConfiguration can read it — and prefer a destination that authenticates by network position, or a collector you control, if that is not acceptable. With no headers configured, leave %s exactly as shown.",
-			EnvCollectorConfigURI),
-		fmt.Sprintf("%s is \"true\" only if the destination is plaintext; it has to match how the destination is configured on this connector.", plan.PlaceholderOTLPInsecure),
-		fmt.Sprintf("If your destination speaks OTLP/HTTP rather than gRPC, replace the whole `otlp:` exporter with `otlphttp: {endpoint: \"<your https URL>\"}` and name `otlphttp` in each pipeline's exporters. The gRPC exporter takes host:port and a TLS flag; the HTTP one takes a scheme-qualified URL and no TLS flag."),
-		fmt.Sprintf("Delete the pipeline for any signal your destination does not accept, and set that signal's %s / %s / %s to \"%s\" so the agent never produces it. Leave the variable UNSET for a signal your destination does accept — \"%s\" is already the SDK default, and Odigos compares those variables against unset.",
-			EnvTracesExporter, EnvMetricsExporter, EnvLogsExporter, exporterNone, exporterOTLP),
-		fmt.Sprintf("%s and %s must NOT be set. Earlier versions of this instrumentation used them to point the collector at the destination; the configuration above replaces them, and a function still carrying them is reported as drifted.",
-			EnvCollectorEndpoint, EnvCollectorInsecure),
-		// This is the one value in the plan a customer genuinely cannot derive, and there is no published
-		// Odigos layer to point at yet (see the artifact-distribution track), so say where it comes from.
-		fmt.Sprintf("%s is per region, runtime and architecture. Use the OpenTelemetry Lambda layer ARN for your function's region and runtime, matching its architecture (x86_64 or arm64). Attach it alongside your existing layers — do not replace them.",
-			PlaceholderLayerARN),
-		fmt.Sprintf("Attach at most %d layers in total, the AWS limit, and do not attach two versions of the same layer — Odigos reports a duplicate as a layer-version conflict.", maxLambdaLayers),
-		fmt.Sprintf("%s / %s must NOT be set. They point the SDK straight at the destination, which blocks the invocation on a remote endpoint; the layer exports to the in-Lambda collector on localhost instead, and the collector forwards asynchronously.",
-			envLegacyOTLPEndpoint, envLegacyOTLPHeaders),
-		fmt.Sprintf("Leave %s unset unless this connector has debug telemetry enabled, in which case set it to %q. On a handler-activation function it is compared exactly, so any other value is reported as drift; on a web-server function Odigos does not check it at all, but the agent still reads it.",
-			EnvOtelLogLevel, otelLogLevelDebug),
-	}
-
-	switch activation {
-	case ActivationHandler:
-		notes = append(notes,
-			fmt.Sprintf("This is for a normal Lambda RequestHandler function. %s is the layer's own wrapper script and is language-specific — %s for Python, %s for Node.js, Java and Ruby. The wrong one fails at cold start with \"does not exist\".",
-				store.EnvExecWrapper, execWrapperInstrument, execWrapperHandler),
-			fmt.Sprintf("If your function already sets %s to something of its own (a secrets or bootstrap wrapper, another vendor's), this plan does not apply: a function has only one exec wrapper, and taking it would disable your tooling. Odigos reports such a function as unsupported rather than instrumenting it.",
-				store.EnvExecWrapper),
-		)
-		if lang == "java" {
-			notes = append(notes, "Java: the OpenTelemetry layer can only wrap a standard class[::method] handler. A function whose handler is a script (run.sh, bootstrap) is a web-server function — use that plan instead.")
-			notes = append(notes, fmt.Sprintf("Java: the layer ships four wrapper scripts, one per handler interface, and %s above is the default for a plain RequestHandler. A function implementing RequestStreamHandler needs %s — %s BREAKS it, because the two interfaces have different signatures — and API Gateway proxy and SQS functions get richer spans from %s and %s. Odigos cannot tell which yours implements (the handler is a class name either way), so set the source's distro override to the script name you need and apply that value here instead.",
-				execWrapperHandler, execWrapperStreamHandler, execWrapperHandler, execWrapperProxyHandler, execWrapperSqsHandler))
-		}
-	case ActivationWebServer:
-		notes = append(notes,
-			fmt.Sprintf("This is for a function running a web server behind the AWS Lambda Web Adapter. The adapter owns %s, so the language agent is loaded through its own variable instead — do not set the OTel wrapper here, and remove it if an earlier attempt left one.",
-				store.EnvExecWrapper),
-		)
-		if lang == "python" {
-			notes = append(notes, fmt.Sprintf("Python: %s is prepended, not appended — the layer's OpenTelemetry packages and its sitecustomize must resolve before your application's own, or auto-instrumentation loads nothing. The path also includes your application's dependency locations, because a web-server process gets no automatic /var/task on sys.path.",
-				EnvPythonPath))
-			notes = append(notes, fmt.Sprintf("Python: %s is pinned to %s because the Python layer bundles only the HTTP OTLP exporter; the SDK would otherwise default to gRPC and fail to load it.",
-				EnvOtlpProtocol, otlpProtocolHTTP))
-		}
-	}
-	return notes
 }

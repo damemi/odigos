@@ -85,14 +85,15 @@ func (c *Coordinator) instrumentationArtifacts(typeName, language string) []api.
 	out := make([]api.InstrumentationArtifact, 0, len(arts))
 	for _, a := range arts {
 		out = append(out, api.InstrumentationArtifact{
-			ID:           a.ID,
-			Variant:      a.Variant,
-			VariantLabel: a.VariantLabel,
-			Title:        a.Title,
-			Description:  a.Description,
-			Steps:        a.Steps,
-			Format:       a.Format,
-			Template:     a.Template,
+			ID:            a.ID,
+			Variant:       a.Variant,
+			VariantLabel:  a.VariantLabel,
+			Title:         a.Title,
+			Description:   a.Description,
+			Steps:         a.Steps,
+			Format:        a.Format,
+			Template:      a.Template,
+			Prerequisites: a.Prerequisites,
 		})
 	}
 	return out

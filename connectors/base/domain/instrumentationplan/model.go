@@ -44,10 +44,21 @@ func ToModel(res api.InstrumentationPlanResult, now time.Time) *model.Instrument
 		// Notes are substituted too. A note that names the destination endpoint or the reported service name
 		// should say the value, not the token — a customer reading "set it to <ODIGOS_SOURCE_NAME>" in the
 		// caveats after the snippet already resolved it would reasonably conclude the two disagree.
-		Notes:     nonNilStrings(plan.SubstituteAll(res.Plan.Notes, values)),
+		Notes:     nonNilStrings(plan.SubstituteAll(instructionNotes(res), values)),
 		Documents: documentsToModel(res, values),
 		UpdatedAt: now.UTC().Format(time.RFC3339),
 	}
+}
+
+// instructionNotes is the "Before you deploy" copy. Spec-authored prerequisites on the served artifacts
+// win when the first artifact declares them — that is the language's Terraform (or only) document, and
+// scraping a NOTES heading out of Template is deliberately not done. When the first artifact has none,
+// Plan.Notes is the fallback (kept for providers that have not authored prerequisites yet).
+func instructionNotes(res api.InstrumentationPlanResult) []string {
+	if len(res.Artifacts) > 0 && len(res.Artifacts[0].Prerequisites) > 0 {
+		return res.Artifacts[0].Prerequisites
+	}
+	return res.Plan.Notes
 }
 
 // documentsToModel renders every delivery variant the provider declared for this type, or the base's own
