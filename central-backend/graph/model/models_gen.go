@@ -83,6 +83,7 @@ type CloudConnectorSetupArtifact struct {
 	Section       string   `json:"section"`
 	Variant       string   `json:"variant"`
 	VariantLabel  string   `json:"variantLabel"`
+	Language      string   `json:"language"`
 	Title         string   `json:"title"`
 	Description   string   `json:"description"`
 	Steps         []string `json:"steps"`

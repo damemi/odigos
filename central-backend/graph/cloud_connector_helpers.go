@@ -45,6 +45,11 @@ func cloudConnectorProviderFromSpec(s spec.CloudConnectorSpec) *model.CloudConne
 // GraphQL model. The UI renders these client-side (filling {{permissions}} and
 // scalar {{vars}} from the selected access level / form), so the connector owns
 // the artifact definition and the UI stays provider-agnostic.
+//
+// Every field is carried through uninterpreted, `language` included: in an
+// instrumentation section one variant exists per runtime language, so dropping it
+// would leave several artifacts indistinguishable by (section, variant) and make
+// the catalog look like it declared the same snippet four times.
 func cloudConnectorSetup(s spec.Setup) *model.CloudConnectorSetup {
 	artifacts := make([]*model.CloudConnectorSetupArtifact, 0, len(s.Artifacts))
 	for _, a := range s.Artifacts {
@@ -53,6 +58,7 @@ func cloudConnectorSetup(s spec.Setup) *model.CloudConnectorSetup {
 			Section:       a.Section,
 			Variant:       a.Variant,
 			VariantLabel:  a.VariantLabel,
+			Language:      a.Language,
 			Title:         a.Title,
 			Description:   a.Description,
 			Steps:         nonNilStrings(a.Steps),

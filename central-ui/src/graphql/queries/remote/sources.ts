@@ -481,3 +481,11 @@ export const GET_SOURCE_LIBRARIES: VersionedRemoteFetch = {
   }`,
   },
 };
+
+// Deliberately empty: `instrumentationInstructions` exists only on cloud connectors, and the VM
+// spec resolves it straight from the agents-api dialect registry (see the adapter's `select`).
+// K8s has no counterpart and never will — it instruments workloads itself, so there is nothing to
+// instruct a customer to deploy. An empty platform map makes `getVersionedQuery` return undefined,
+// which is what the operation's `canRun` reads as "not supported here": the kit then reports the
+// slot as unsupported and the drawer section never renders or fires a request.
+export const GET_INSTRUMENTATION_INSTRUCTIONS: VersionedRemoteFetch = {};

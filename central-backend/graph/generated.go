@@ -105,6 +105,7 @@ type ComplexityRoot struct {
 		ID            func(childComplexity int) int
 		ItemSeparator func(childComplexity int) int
 		ItemTemplate  func(childComplexity int) int
+		Language      func(childComplexity int) int
 		Section       func(childComplexity int) int
 		Steps         func(childComplexity int) int
 		Template      func(childComplexity int) int
@@ -630,6 +631,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CloudConnectorSetupArtifact.ItemTemplate(childComplexity), true
+	case "CloudConnectorSetupArtifact.language":
+		if e.ComplexityRoot.CloudConnectorSetupArtifact.Language == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorSetupArtifact.Language(childComplexity), true
 	case "CloudConnectorSetupArtifact.section":
 		if e.ComplexityRoot.CloudConnectorSetupArtifact.Section == nil {
 			break
@@ -1800,6 +1807,8 @@ func (ec *executionContext) childFields_CloudConnectorSetupArtifact(ctx context.
 		return ec.fieldContext_CloudConnectorSetupArtifact_variant(ctx, field)
 	case "variantLabel":
 		return ec.fieldContext_CloudConnectorSetupArtifact_variantLabel(ctx, field)
+	case "language":
+		return ec.fieldContext_CloudConnectorSetupArtifact_language(ctx, field)
 	case "title":
 		return ec.fieldContext_CloudConnectorSetupArtifact_title(ctx, field)
 	case "description":
@@ -3814,6 +3823,29 @@ func (ec *executionContext) _CloudConnectorSetupArtifact_variantLabel(ctx contex
 	)
 }
 func (ec *executionContext) fieldContext_CloudConnectorSetupArtifact_variantLabel(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CloudConnectorSetupArtifact", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CloudConnectorSetupArtifact_language(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorSetupArtifact) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorSetupArtifact_language(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Language, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorSetupArtifact_language(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CloudConnectorSetupArtifact", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
@@ -9662,6 +9694,11 @@ func (ec *executionContext) _CloudConnectorSetupArtifact(ctx context.Context, se
 			}
 		case "variantLabel":
 			out.Values[i] = ec._CloudConnectorSetupArtifact_variantLabel(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "language":
+			out.Values[i] = ec._CloudConnectorSetupArtifact_language(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

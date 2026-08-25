@@ -50,6 +50,7 @@ import { safeJsonParse, trimVersion } from '@odigos/ui-kit/functions';
 import { supportsWorkloadReportRegion } from '@/graphql/remote/utils';
 import { PlatformType, Tier, type Action } from '@odigos/ui-kit/types';
 import { mapVmRuleTypesToOptions } from '@/graphql/remote/vm-rule-types';
+import { mapVmInstrumentationInstructions, vmInstrumentationInstructionsVariables } from '@/graphql/remote/vm-instrumentation-instructions';
 import { CombinedGraphQLErrors, ServerError } from '@apollo/client/errors';
 import { mapVmActionTypesToOptions } from '@/graphql/remote/vm-action-types';
 import { ApolloLink, type ApolloClient, type DocumentNode } from '@apollo/client';
@@ -152,6 +153,8 @@ import {
   type GetServiceMapData,
   type GetSourceLibrariesData,
   type GetSourceLibrariesVars,
+  type GetInstrumentationInstructionsData,
+  type GetInstrumentationInstructionsVars,
   type GetWorkloadsByIdsData,
   type GetWorkloadsByIdsVars,
   type GetWorkloadsData,
@@ -268,6 +271,7 @@ import {
   GET_SOURCE_WITH_DETAILS,
   GET_PEER_SOURCES,
   GET_SOURCE_LIBRARIES,
+  GET_INSTRUMENTATION_INSTRUCTIONS,
   GET_TOKENS,
   GET_WORKLOADS,
   GET_WORKLOADS_BY_IDS_SLIM,
@@ -1085,6 +1089,15 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
       transformResult: (data) => mapVmSourceResult(data),
     }),
     GET_SOURCE_LIBRARIES: wrapVersioned<GetSourceLibrariesData, GetSourceLibrariesVars>(GET_SOURCE_LIBRARIES),
+    // Cloud-connector only: how the CUSTOMER instruments a workload the connector discovers but
+    // does not mutate. There is no k8s bucket (see the constant), so this resolves only for
+    // agents-api proxies; on a dialect snapshot that predates the query, `select` returns undefined
+    // and the kit reports the slot unsupported, which the drawer card renders as nothing at all.
+    GET_INSTRUMENTATION_INSTRUCTIONS: wrapVersioned<GetInstrumentationInstructionsData, GetInstrumentationInstructionsVars>(GET_INSTRUMENTATION_INSTRUCTIONS, undefined, undefined, {
+      select: (d) => d.GetInstrumentationInstructionsDocument,
+      transformVariables: (vars) => vmInstrumentationInstructionsVariables(vars),
+      transformResult: (data) => mapVmInstrumentationInstructions(data),
+    }),
     GET_PEER_SOURCES: wrapVersioned<{ peerSources?: PeerSources }, GetPeerSourcesVars>(GET_PEER_SOURCES),
     // VM: no bulk persist op — fan out into one combined, aliased
     // createSource/deleteSource mutation (enable -> create, disable -> delete).

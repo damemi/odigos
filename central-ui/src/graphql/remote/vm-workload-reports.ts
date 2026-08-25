@@ -53,6 +53,21 @@ const WorkloadReportState = {
 
 type WorkloadReportState = (typeof WorkloadReportState)[keyof typeof WorkloadReportState];
 
+/**
+ * `WorkloadReport.desired.mode` — who instruments the workload.
+ *
+ * Manual mode is the DEFAULT for a discovered cloud-connector workload type: granting a
+ * connector discovery without instrumentation means the customer applies instrumentation
+ * themselves and Odigos observes the result. So this is not an edge case to special-case,
+ * it is half of all cloud-connector workloads.
+ */
+const InstrumentationMode = {
+  Automatic: 'automatic',
+  Manual: 'manual',
+} as const;
+
+const isManualMode = (mode?: string | null): boolean => mode?.trim().toLowerCase() === InstrumentationMode.Manual;
+
 const WORKLOAD_ODIGOS_HEALTH_NAME = 'WorkloadOdigosHealth';
 const GET_SOURCES_WITH_WORKLOAD_REPORTS = 'GetSourcesWithWorkloadReports';
 
@@ -69,6 +84,28 @@ const HEALTH_MESSAGE = {
   [WorkloadReportState.NotImplemented]: 'instrumentation is not implemented for this source kind',
   [WorkloadReportState.NotInstrumented]: 'source is not instrumented',
 } as const;
+
+/**
+ * Manual-mode fallbacks for the states whose automatic-mode wording is not merely vague but
+ * WRONG about who acts next.
+ *
+ * "source is not instrumented" and "source instrumentation is in progress" both read as Odigos
+ * working on it. In manual mode Odigos never will: the customer applies instrumentation in their
+ * own deployment definition, and these are the two states where that distinction decides whether
+ * the reader goes and does something or waits. The other states mean the same thing in both modes
+ * and deliberately fall through to the shared copy.
+ *
+ * These are FALLBACKS only. The connector sends prose in `progress.message` for exactly these
+ * cases, and that always wins — this covers a connector that sends a state with no detail.
+ */
+const MANUAL_HEALTH_MESSAGE: Partial<Record<WorkloadReportState, string>> = {
+  [WorkloadReportState.NotInstrumented]: 'waiting for you to apply instrumentation to this workload in your own deployment definition',
+  [WorkloadReportState.Instrumenting]: 'verifying the change you applied to this workload',
+  [WorkloadReportState.Error]: 'the instrumentation applied to this workload does not match what Odigos expects',
+} as const;
+
+const healthMessageFor = (state: WorkloadReportState, mode?: string | null): string =>
+  (isManualMode(mode) ? MANUAL_HEALTH_MESSAGE[state] : undefined) ?? HEALTH_MESSAGE[state as keyof typeof HEALTH_MESSAGE] ?? '';
 
 const reportKey = (serviceName: string, kind: string, region?: string | null) => `${serviceName}\0${kind}\0${region ?? ''}`;
 
@@ -178,6 +215,11 @@ const mapReportToInstrumentation = (report: VmWorkloadReport): InstrumentationRe
   return {
     state,
     instrumented: report.current?.instrumented ?? state === WorkloadReportState.Instrumented,
+    // Who instruments this workload. It was already on the wire (every dialect snapshot selects
+    // `desired.mode`) and was being dropped here, which is why an enabled-but-uninstrumented
+    // manual-mode workload read as "Odigos is working on it" when nothing was going to happen
+    // until the customer deployed.
+    mode: report.desired?.mode ?? null,
     sdkType: report.desired?.sdkType ?? null,
     progressStage: report.progress?.stage ?? null,
     progressMessage: report.progress?.message ?? null,
@@ -335,37 +377,43 @@ const mapReportToHealthPresentation = (report: InstrumentationReport): { reasonE
   const detail = progressMessage || firstIssue;
   const stage = report.progressStage?.trim() || '';
   const state = normalizeWorkloadReportState(report.state);
+  const fallback = (s: WorkloadReportState) => healthMessageFor(s, report.mode);
 
   switch (state) {
     case WorkloadReportState.Instrumented:
       return {
         reasonEnum: HEALTH_REASON.SuccessAndEmittingTelemetry,
-        message: detail || HEALTH_MESSAGE[WorkloadReportState.Instrumented],
+        message: detail || fallback(WorkloadReportState.Instrumented),
       };
     case WorkloadReportState.Instrumenting:
       return {
         reasonEnum: stageToReasonEnum(stage, WorkloadReportState.Instrumenting),
-        message: detail || HEALTH_MESSAGE[WorkloadReportState.Instrumenting],
+        message: detail || fallback(WorkloadReportState.Instrumenting),
       };
     case WorkloadReportState.Error:
       return {
         reasonEnum: stageToReasonEnum(stage, WorkloadReportState.Error),
-        message: detail || HEALTH_MESSAGE[WorkloadReportState.Error],
+        message: detail || fallback(WorkloadReportState.Error),
       };
     case WorkloadReportState.Unsupported:
       return {
         reasonEnum: WorkloadReportState.Unsupported,
-        message: detail || HEALTH_MESSAGE[WorkloadReportState.Unsupported],
+        message: detail || fallback(WorkloadReportState.Unsupported),
       };
     case WorkloadReportState.NotImplemented:
       return {
         reasonEnum: WorkloadReportState.NotImplemented,
-        message: detail || HEALTH_MESSAGE[WorkloadReportState.NotImplemented],
+        message: detail || fallback(WorkloadReportState.NotImplemented),
       };
     case WorkloadReportState.NotInstrumented:
       return {
-        reasonEnum: WorkloadReportState.NotInstrumented,
-        message: detail || HEALTH_MESSAGE[WorkloadReportState.NotInstrumented],
+        // Derived from the STAGE, not from the state, and this is the branch where that matters
+        // most. A connector reports a manual-mode workload as NotInstrumented with stage
+        // `WaitingForCustomer`, and an automatic-mode one blocked on a destination as
+        // NotInstrumented with `WaitingForDestination` — two different asks for the reader.
+        // Titling both "Not Instrumented" threw away the only thing that said which.
+        reasonEnum: stageToReasonEnum(stage, WorkloadReportState.NotInstrumented),
+        message: detail || fallback(WorkloadReportState.NotInstrumented),
       };
     default:
       return {
