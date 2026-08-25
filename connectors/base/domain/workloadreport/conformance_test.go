@@ -54,7 +54,7 @@ func TestConformanceStateMatrix(t *testing.T) {
 			},
 			state:        "Error",
 			instrumented: true,
-			stage:        "InstrumentationDrift",
+			stage:        "Instrumentation does not match",
 			issueCodes:   []string{"InstrumentationPartiallyApplied"},
 			wantSince:    true,
 		},
@@ -69,7 +69,7 @@ func TestConformanceStateMatrix(t *testing.T) {
 			},
 			state:        api.WorkloadStateInstrumenting,
 			instrumented: true,
-			stage:        "VerifyingCustomerChanges",
+			stage:        "Verifying customer changes",
 		},
 		{
 			// Nothing applied yet: Absent is not an error, and the workload is simply waiting for the customer.
@@ -80,8 +80,8 @@ func TestConformanceStateMatrix(t *testing.T) {
 				w.WaitingFor = api.WaitingForCustomer
 			},
 			state:      api.WorkloadStateNotInstrumented,
-			stage:      "Waiting For Customer",
-			issueCodes: []string{"Waiting For Customer"},
+			stage:      "Waiting for you to apply the instrumentation",
+			issueCodes: []string{"WaitingForCustomer"},
 			wantSince:  true,
 		},
 		{
@@ -108,7 +108,7 @@ func TestConformanceStateMatrix(t *testing.T) {
 			},
 			state:        "Error",
 			instrumented: true,
-			stage:        "InstrumentationDrift",
+			stage:        "Instrumentation does not match",
 			issueCodes:   []string{"InstrumentationPartiallyApplied", "InstrumentationObservationFailed"},
 			wantSince:    true,
 		},
@@ -135,7 +135,7 @@ func TestConformanceStateMatrix(t *testing.T) {
 			},
 			state:        "Error",
 			instrumented: true,
-			stage:        "SourceDisabledButInstrumented",
+			stage:        "Source disabled but still instrumented",
 			issueCodes:   []string{"SourceDisabledButInstrumented"},
 			wantSince:    true,
 		},

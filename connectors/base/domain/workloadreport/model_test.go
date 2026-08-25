@@ -3,6 +3,7 @@ package workloadreport
 import (
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/odigos-io/agents-api/go/server/graph/model"
 
@@ -25,8 +26,8 @@ func TestToModelLiveInstrumentationPhase(t *testing.T) {
 			InstrumentationPhase:       phase,
 		}
 		m := ToModel(w)
-		if m.Progress.Stage != phase {
-			t.Errorf("phase %q: stage = %q, want %q", phase, m.Progress.Stage, phase)
+		if want := stageLabel(phase); m.Progress.Stage != want {
+			t.Errorf("phase %q: stage = %q, want %q", phase, m.Progress.Stage, want)
 		}
 		// An in-flight phase must report the distinct in-progress state so the UI/CLI show it as
 		// progressing, not NotInstrumented/disabled.
@@ -42,7 +43,7 @@ func TestToModelLiveInstrumentationPhase(t *testing.T) {
 		InstrumentationAvailable: true, InstrumentationImplemented: true,
 		SourceMatched: true, SourceEnabled: true, Instrumented: true,
 		InstrumentationPhase: "Instrumenting",
-	}); m.Current.State != api.WorkloadStateInstrumenting || m.Progress.Stage != "Instrumenting" {
+	}); m.Current.State != api.WorkloadStateInstrumenting || m.Progress.Stage != stageLabel("Instrumenting") {
 		t.Errorf("settling: state=%q stage=%q, want Instrumenting/Instrumenting", m.Current.State, m.Progress.Stage)
 	}
 
@@ -68,8 +69,8 @@ func TestToModelLiveInstrumentationPhase(t *testing.T) {
 		InstrumentationPhase:       "Instrumenting",
 		InstrumentationError:       "boom",
 	}
-	if m := ToModel(w); m.Progress.Stage != "Error" {
-		t.Errorf("error must override live phase: stage = %q, want Error", m.Progress.Stage)
+	if m := ToModel(w); m.Progress.Stage != stageLabel("Error") {
+		t.Errorf("error must override live phase: stage = %q, want %q", m.Progress.Stage, stageLabel("Error"))
 	}
 }
 
@@ -86,7 +87,7 @@ func TestToModelDriftLifecycle(t *testing.T) {
 	// Steady state: instrumented, no persisted phase -> Instrumented derived from the flag.
 	done := base
 	done.Instrumented = true
-	if m := ToModel(done); m.Current.State != api.WorkloadStateInstrumented || m.Progress.Stage != api.PhaseInstrumented {
+	if m := ToModel(done); m.Current.State != api.WorkloadStateInstrumented || m.Progress.Stage != stageLabel(api.PhaseInstrumented) {
 		t.Errorf("instrumented: state=%q stage=%q, want %q/%q", m.Current.State, m.Progress.Stage, api.WorkloadStateInstrumented, api.PhaseInstrumented)
 	}
 
@@ -118,8 +119,8 @@ func TestToModelNotImplemented(t *testing.T) {
 	if m.Current.State != "NotImplemented" {
 		t.Errorf("state = %q, want NotImplemented", m.Current.State)
 	}
-	if m.Progress.Stage != "NotImplemented" {
-		t.Errorf("stage = %q, want NotImplemented", m.Progress.Stage)
+	if m.Progress.Stage != "Not implemented yet" {
+		t.Errorf("stage = %q, want \"Not implemented yet\"", m.Progress.Stage)
 	}
 	if len(m.Issues) != 1 || m.Issues[0].Code != "InstrumentationNotImplemented" {
 		t.Errorf("issues = %+v, want one InstrumentationNotImplemented", m.Issues)
@@ -486,8 +487,8 @@ func TestToModelWaitingForDestination(t *testing.T) {
 	if got.Current.State != api.WorkloadStateNotInstrumented {
 		t.Errorf("state = %q, want %q — waiting is not a failure", got.Current.State, api.WorkloadStateNotInstrumented)
 	}
-	if got.Progress.Stage != "WaitingForDestination" {
-		t.Errorf("stage = %q, want WaitingForDestination", got.Progress.Stage)
+	if got.Progress.Stage != "Waiting for destination" {
+		t.Errorf("stage = %q, want \"Waiting for a destination\"", got.Progress.Stage)
 	}
 	if ptr(got.Progress.WaitingFor) != api.WaitingForDestination {
 		t.Errorf("waitingFor = %q, want %q", ptr(got.Progress.WaitingFor), api.WaitingForDestination)
@@ -530,8 +531,8 @@ func TestToModelErrorOverridesWaiting(t *testing.T) {
 	if got.Current.State != "Error" {
 		t.Errorf("state = %q, want Error", got.Current.State)
 	}
-	if got.Progress.Stage != "Error" {
-		t.Errorf("stage = %q, want Error", got.Progress.Stage)
+	if got.Progress.Stage != stageLabel("Error") {
+		t.Errorf("stage = %q, want %q", got.Progress.Stage, stageLabel("Error"))
 	}
 }
 
@@ -555,5 +556,73 @@ func TestToModelWaitingIgnoredWhenNotApplicable(t *testing.T) {
 	instrumented.SourceMatched, instrumented.SourceEnabled, instrumented.Instrumented = true, true, true
 	if got := ToModel(instrumented); got.Progress.Stage == "WaitingForDestination" {
 		t.Errorf("an instrumented workload must not report waiting: %+v", got.Progress)
+	}
+}
+
+// Every stage the report can emit is a sentence a person reads, not an identifier a client has to take
+// apart. This is the guarantee, and it is asserted over the whole vocabulary rather than case by case:
+// progress.stage is the one field that is both the condition's name and the line shown to a customer, and
+// the failure it replaced — central-ui rendering "VerifyingCustomerChanges" as "Verifyingcustomerchanges" —
+// came from a client trying to reconstruct prose the report never sent.
+//
+// A condition added later is covered by construction: stageLabel's fallback splits it, and this test fails
+// if the fallback is ever removed or a hand-written label slips back into identifier spelling.
+func TestEveryStageIsReadable(t *testing.T) {
+	// Every identifier ToModel assigns to progress.Stage, plus the ones stageLabels names.
+	identifiers := []string{
+		api.PhaseVerifying, api.PhaseLayerReady, api.PhaseInstrumenting, api.PhaseInstrumented,
+		"SourceMatched", "Discovered", "Unknown", "Error",
+		"NotImplemented", "Unsupported", "VerifyingCustomerChanges", "InstrumentationDrift",
+		"SourceDisabledButInstrumented", "SourceMissingButInstrumented",
+		waitingForLabel(api.WaitingForDestination), waitingForLabel(api.WaitingForCustomer),
+		// Not a real stage: a stand-in for one added after this test was written, which must read as a
+		// sentence with no entry in stageLabels.
+		"SomeConditionAddedLater",
+	}
+	for _, id := range identifiers {
+		label := stageLabel(id)
+		if label == "" {
+			t.Errorf("%s: empty label", id)
+			continue
+		}
+		// A run-together label is the exact defect: two words fused with no separator. A single word
+		// ("Unknown", "Verifying") is fine, so the test is "no capital after the first character".
+		for i, r := range label {
+			if i > 0 && unicode.IsUpper(r) {
+				t.Errorf("%s -> %q: capital mid-label at %d; a stage is a sentence, not an identifier", id, label, i)
+				break
+			}
+		}
+		// Multi-letter words and single spaces only, because central-ui rebuilds the stage into PascalCase
+		// and the kit re-splits it on a lowercase-then-capital boundary. Anything that boundary cannot
+		// recover is lost on the way to the customer: punctuation eats the space after it, and a
+		// one-letter word's capital butts straight against the next word's ("Waiting for destination"
+		// arrives as "Waiting For ADestination").
+		for _, r := range label {
+			if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != ' ' {
+				t.Errorf("%s -> %q: contains %q; a stage label is plain words, because clients reshape it", id, label, r)
+				break
+			}
+		}
+		for _, word := range strings.Fields(label) {
+			if len([]rune(word)) < 2 {
+				t.Errorf("%s -> %q: one-letter word %q; it fuses with the next word once a client "+
+					"round-trips the label through PascalCase", id, label, word)
+			}
+		}
+		if !unicode.IsUpper([]rune(label)[0]) {
+			t.Errorf("%s -> %q: a stage sentence starts with a capital", id, label)
+		}
+	}
+}
+
+// The issue codes stay identifiers. They are what a client BRANCHES on — the report's prose is
+// progress.message and progress.stage — so making them readable too would leave nothing stable to match.
+func TestWaitingIssueCodesStayIdentifiers(t *testing.T) {
+	for _, waitingFor := range []string{api.WaitingForCustomer, api.WaitingForDestination} {
+		code := waitingForLabel(waitingFor)
+		if strings.Contains(code, " ") {
+			t.Errorf("%s: issue code %q contains a space; codes are matched, not read", waitingFor, code)
+		}
 	}
 }

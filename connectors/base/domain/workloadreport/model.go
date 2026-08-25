@@ -3,6 +3,7 @@ package workloadreport
 import (
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/odigos-io/agents-api/go/server/graph/model"
 
@@ -210,6 +211,12 @@ func ToModel(w api.DiscoveredWorkload) *model.WorkloadReport {
 		}
 	}
 
+	// One normalization for every branch above, rather than prose at each assignment. The branches decide
+	// WHICH condition holds and say so in the vocabulary the rest of this file (and every issue Code) uses;
+	// this turns that one identifier into the sentence a person reads. Doing it here is what makes the
+	// guarantee total: a condition added later is readable without its author having to remember to be.
+	progress.Stage = stageLabel(progress.Stage)
+
 	return &model.WorkloadReport{
 		ServiceName: w.ServiceName,
 		Kind:        w.Kind,
@@ -408,21 +415,95 @@ func stageFor(w api.DiscoveredWorkload) string {
 	return "Discovered"
 }
 
-// waitingForLabel is the stage and issue-code name for a blocked prerequisite.
-//
-// WaitingForCustomer is spelled out with spaces and the others are not, which is deliberate rather than an
-// oversight. The other waits are internal states a customer never has to act on — a destination gets
-// configured and the wait clears itself. WaitingForCustomer is the manual (IaC) flow: it is the one wait
-// whose resolution IS the customer going and changing their own deployment definition, so it is read by a
-// person deciding whether to go do that, and it is rendered as prose for the same reason the message beside
-// it is prose.
+// waitingForLabel is the issue-code name for a blocked prerequisite: a stable PascalCase identifier, like
+// every other issue Code. It also seeds progress.Stage, which stageLabel then renders for a reader — so this
+// is spelled as an identifier and nothing here needs to be readable.
 //
 // Anything consuming these as identifiers must match the value, not reconstruct it from the WaitingFor key.
 func waitingForLabel(waitingFor string) string {
-	if waitingFor == api.WaitingForCustomer {
-		return "Waiting For Customer"
-	}
 	return "WaitingFor" + capitalizeFirst(waitingFor)
+}
+
+// stageLabel renders a progress stage as the sentence a person reads, from the PascalCase identifier the
+// branches in ToModel assign.
+//
+// progress.Stage is the one field on the report that is BOTH the condition's name and the line a UI puts in
+// front of a customer, and it used to travel as the identifier. Every client then had to turn
+// "VerifyingCustomerChanges" into words, which is a job with no single right answer done in as many places as
+// there are clients — central-ui's own attempt lowercased the tail and rendered "Verifyingcustomerchanges".
+// The report is the only place that knows what each stage MEANS, so it is the place that says it. Clients
+// that need to branch on the condition read issues[].Code and current.state, which stay identifiers.
+//
+// The map is for the stages whose split-on-capitals reading is wrong or merely clumsy; everything else falls
+// through to that split. The fallback is what makes this total rather than a list to keep in step: a stage
+// added tomorrow reads as a sentence with no edit here, and only needs an entry when the generic reading is
+// not good enough.
+func stageLabel(stage string) string {
+	if label, ok := stageLabels[stage]; ok {
+		return label
+	}
+	return sentenceFromPascal(stage)
+}
+
+var stageLabels = map[string]string{
+	// The waits. The customer-facing one has to name WHO is being waited on — that is the whole
+	// distinction between "Odigos is working on it" and "nothing happens until you deploy".
+	waitingForLabel(api.WaitingForDestination): "Waiting for destination",
+	waitingForLabel(api.WaitingForCustomer):    "Waiting for you to apply the instrumentation",
+
+	// Terminal / in-flight conditions where the generic split is right but the wording is not: these are
+	// read as a status line, so they say what is happening rather than naming a category.
+	//
+	// Every label here is plain multi-letter words: no punctuation, and no one-letter word. That is a
+	// constraint rather than a style preference, and it comes from the client. central-ui rebuilds a stage
+	// into PascalCase and the kit re-splits it on a lowercase-then-capital boundary, and that round trip
+	// loses anything that boundary cannot recover — the space after a comma ("No source, instrumentation
+	// still applied" arrives as "No Source,Instrumentation Still Applied") and the space after a
+	// single-letter word, whose capital is immediately followed by the next word's capital ("Waiting for a
+	// destination" arrives as "Waiting For ADestination"). TestEveryStageIsReadable enforces both.
+	"InstrumentationDrift":          "Instrumentation does not match",
+	"SourceDisabledButInstrumented": "Source disabled but still instrumented",
+	"SourceMissingButInstrumented":  "No source but still instrumented",
+	"NotImplemented":                "Not implemented yet",
+	"Unsupported":                   "Not supported",
+
+	// The happy path and the discovery states, where the identifier is already one word and the sentence
+	// wants a little more than that word alone.
+	api.PhaseInstrumented:  "Instrumented",
+	api.PhaseInstrumenting: "Applying instrumentation",
+	api.PhaseVerifying:     "Verifying",
+	api.PhaseLayerReady:    "Instrumentation artifact ready",
+	"SourceMatched":        "Marked for instrumentation",
+	"Discovered":           "Discovered",
+	"Unknown":              "Unknown",
+	"Error":                "Failed",
+}
+
+// sentenceFromPascal turns a PascalCase identifier into a sentence: "VerifyingCustomerChanges" becomes
+// "Verifying customer changes". Only the first word keeps its capital, because this is read as a line of
+// prose rather than as a title — and because an all-Title-Case rendering of a long condition
+// ("Source Missing But Instrumented") reads as a heading for something rather than as a statement about
+// this workload.
+//
+// A stage that is already a sentence (it contains a space) is returned untouched: re-splitting it would
+// mangle a label something upstream already wrote for a reader.
+func sentenceFromPascal(stage string) string {
+	if stage == "" || strings.Contains(stage, " ") {
+		return stage
+	}
+	var b strings.Builder
+	for i, r := range stage {
+		switch {
+		case i == 0:
+			b.WriteRune(unicode.ToUpper(r))
+		case unicode.IsUpper(r):
+			b.WriteByte(' ')
+			b.WriteRune(unicode.ToLower(r))
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // waitingForMessage is the customer-facing explanation for a blocked prerequisite: what is missing,

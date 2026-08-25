@@ -50,8 +50,8 @@ func TestManualModeStateMatrix(t *testing.T) {
 			name:      "marked and awaiting the customer's deployment",
 			mutate:    func(w *api.DiscoveredWorkload) { w.WaitingFor = api.WaitingForCustomer },
 			state:     api.WorkloadStateNotInstrumented,
-			stage:     "Waiting For Customer",
-			issueCode: "Waiting For Customer",
+			stage:     "Waiting for you to apply the instrumentation",
+			issueCode: "WaitingForCustomer",
 			severity:  "unknown",
 			transient: true,
 			wantSince: true,
@@ -73,7 +73,7 @@ func TestManualModeStateMatrix(t *testing.T) {
 			},
 			state:        "Error",
 			instrumented: true,
-			stage:        "SourceDisabledButInstrumented",
+			stage:        "Source disabled but still instrumented",
 			issueCode:    "SourceDisabledButInstrumented",
 			severity:     "error",
 			wantSince:    true,
@@ -89,7 +89,7 @@ func TestManualModeStateMatrix(t *testing.T) {
 			},
 			state:        "Error",
 			instrumented: true,
-			stage:        "SourceMissingButInstrumented",
+			stage:        "No source but still instrumented",
 			issueCode:    "SourceMissingButInstrumented",
 			severity:     "error",
 			wantSince:    false,
@@ -101,7 +101,7 @@ func TestManualModeStateMatrix(t *testing.T) {
 			name:      "missing destination outranks awaiting the customer",
 			mutate:    func(w *api.DiscoveredWorkload) { w.WaitingFor = api.WaitingForDestination },
 			state:     api.WorkloadStateNotInstrumented,
-			stage:     "WaitingForDestination",
+			stage:     "Waiting for destination",
 			issueCode: "WaitingForDestination",
 			severity:  "unknown",
 			transient: true,
@@ -232,8 +232,8 @@ func TestManualModeErrorStillOverrides(t *testing.T) {
 	if m.Current.State != "Unsupported" {
 		t.Errorf("state = %q, want Unsupported", m.Current.State)
 	}
-	if m.Progress.Stage != "Unsupported" {
-		t.Errorf("stage = %q, want Unsupported", m.Progress.Stage)
+	if m.Progress.Stage != "Not supported" {
+		t.Errorf("stage = %q, want \"Not supported\"", m.Progress.Stage)
 	}
 }
 
@@ -252,8 +252,8 @@ func TestStalePhaseIgnoredInManualMode(t *testing.T) {
 		if m.Current.State != api.WorkloadStateNotInstrumented {
 			t.Errorf("phase %q: state = %q, want %q", phase, m.Current.State, api.WorkloadStateNotInstrumented)
 		}
-		if m.Progress.Stage != "Waiting For Customer" {
-			t.Errorf("phase %q: stage = %q, want WaitingForCustomer", phase, m.Progress.Stage)
+		if m.Progress.Stage != "Waiting for you to apply the instrumentation" {
+			t.Errorf("phase %q: stage = %q, want the WaitingForCustomer label", phase, m.Progress.Stage)
 		}
 	}
 
