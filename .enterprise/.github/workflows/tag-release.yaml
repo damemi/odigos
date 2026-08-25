@@ -11,6 +11,9 @@ jobs:
   release-job:
     runs-on: depot-ubuntu-latest
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release-bot')
+    outputs:
+      version: ${{ steps.extract-version.outputs.version }}
+      start_sha: ${{ steps.generate-notes.outputs.start_sha }}
     steps:
     - name: Get STS token
       id: sts
@@ -89,3 +92,41 @@ jobs:
         success-description: "Tagged odigos enterprise due to release PR merge"
         failure-description: "ERROR: failed to tag odigos enterprise due to release PR merge"
         tag: ${{ steps.extract-version.outputs.version }}
+
+  # Records the release in Linear with the issues it shipped. Its own job so the
+  # third-party CLI never runs beside the release job's STS and bot tokens, and
+  # so a Linear problem cannot fail a release that is already tagged.
+  linear-release:
+    needs: release-job
+    if: needs.release-job.outputs.version != ''
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          ref: ${{ needs.release-job.outputs.version }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      # Linear only auto-generates notes from attached issues, so hand it the
+      # notes GitHub already has for this tag.
+      - name: Fetch the GitHub release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release-job.outputs.version }}
+        run: |
+          set -uo pipefail
+          if ! gh release view "${VERSION}" --repo "${GITHUB_REPOSITORY}" \
+               --json body --jq .body > release-notes.md; then
+            echo "::warning::could not read the GitHub release notes for ${VERSION}"
+          fi
+          [ -s release-notes.md ] || rm -f release-notes.md
+
+      - uses: odigos-io/ci-core/linear-release@main
+        with:
+          access-key: ${{ secrets.LINEAR_ACCESS_KEY }}
+          version: ${{ needs.release-job.outputs.version }}
+          base-ref: ${{ needs.release-job.outputs.start_sha }}
+          release-notes: release-notes.md
