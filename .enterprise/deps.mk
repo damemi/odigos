@@ -110,6 +110,10 @@ update-collector-oss-deps:
 	fi; \
 	cat "$$tmp/manifest" > collector/builder-config.yaml; \
 	echo "✅ $$(wc -l < "$$tmp/pins" | tr -d ' ') components pinned at $(OSS_TAG)"
+	# the owned component modules pull odigos/common indirectly through their local-replaced siblings
+	# (odigosauth, ebpfshare), so retidy them here to match the freshly bumped versions - otherwise
+	# verify-collector-ocb's `make generate` fails on stale component go.mod/go.sum
+	@$(MAKE) -C collector tidy
 	@$(MAKE) -C collector genodigoscol
 	@echo "✅ collector/odigosotelcol regenerated - commit it with the manifest"
 

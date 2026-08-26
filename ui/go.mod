@@ -5,10 +5,10 @@ go 1.26.4
 require (
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/api v1.36.0-pre6
-	github.com/odigos-io/odigos/common v1.36.0-pre6
-	github.com/odigos-io/odigos/frontend v1.36.0-pre6
-	github.com/odigos-io/odigos/profiles v1.36.0-pre6
+	github.com/odigos-io/odigos/api v1.36.0-pre7
+	github.com/odigos-io/odigos/common v1.36.0-pre7
+	github.com/odigos-io/odigos/frontend v1.36.0-pre7
+	github.com/odigos-io/odigos/profiles v1.36.0-pre7
 	k8s.io/klog/v2 v2.140.0
 	sigs.k8s.io/controller-runtime v0.24.1
 )
@@ -95,7 +95,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
-	github.com/go-logr/logr v1.4.3
+	github.com/go-logr/logr v1.4.4
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/analysis v0.24.2 // indirect
@@ -199,7 +199,7 @@ require (
 	github.com/odigos-io/odigos-enterprise/mcp v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/config v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos/destinations v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/distros v1.36.0-pre6
+	github.com/odigos-io/odigos/distros v1.36.0-pre7
 	github.com/odigos-io/odigos/k8sutils v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/odigosauth v0.0.0-00010101000000-000000000000 // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
@@ -230,10 +230,10 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_golang/exp v0.0.0-20260325093428-d8591d0db856 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
-	github.com/prometheus/common v0.67.5 // indirect
+	github.com/prometheus/common v0.70.1 // indirect
 	github.com/prometheus/exporter-toolkit v0.15.1 // indirect
 	github.com/prometheus/otlptranslator v1.0.0 // indirect
-	github.com/prometheus/procfs v0.20.1 // indirect
+	github.com/prometheus/procfs v0.21.0 // indirect
 	github.com/prometheus/prometheus v0.311.3 // indirect
 	github.com/prometheus/sigv4 v0.4.1 // indirect
 	github.com/puzpuzpuz/xsync/v4 v4.4.0 // indirect
@@ -248,7 +248,7 @@ require (
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/sosodev/duration v1.3.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
-	github.com/stretchr/testify v1.11.1 // indirect
+	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/thanos-io/objstore v0.0.0-20250813080715-4e5fd4289b50 // indirect
 	github.com/tinylib/msgp v1.3.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
@@ -347,7 +347,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.4 // indirect
 	golang.org/x/arch v0.25.0 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
@@ -388,27 +388,27 @@ replace github.com/hashicorp/memberlist => github.com/grafana/memberlist v0.3.1-
 
 replace gopkg.in/yaml.v3 => github.com/colega/go-yaml-yaml v0.0.0-20220720105220-255a8d16d094
 
-replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v1.36.0-pre6
+replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v1.36.0-pre7
 
-replace github.com/odigos-io/odigos/instrumentationrules => github.com/odigos-io/odigos/instrumentationrules v1.36.0-pre6
+replace github.com/odigos-io/odigos/instrumentationrules => github.com/odigos-io/odigos/instrumentationrules v1.36.0-pre7
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.36.0-pre6
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.36.0-pre7
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.36.0-pre6
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.36.0-pre7
 
-replace github.com/odigos-io/odigos/config => github.com/odigos-io/odigos/config v1.36.0-pre6
+replace github.com/odigos-io/odigos/config => github.com/odigos-io/odigos/config v1.36.0-pre7
 
-replace github.com/odigos-io/odigos/destinations => github.com/odigos-io/odigos/destinations v1.36.0-pre6
+replace github.com/odigos-io/odigos/destinations => github.com/odigos-io/odigos/destinations v1.36.0-pre7
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.36.0-pre6
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.36.0-pre7
 
-replace github.com/odigos-io/odigos/recommendations => github.com/odigos-io/odigos/recommendations v1.36.0-pre6
+replace github.com/odigos-io/odigos/recommendations => github.com/odigos-io/odigos/recommendations v1.36.0-pre7
 
-replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.36.0-pre6
+replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.36.0-pre7
 
-replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v1.36.0-pre6
+replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v1.36.0-pre7
 
-replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v1.36.0-pre6
+replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v1.36.0-pre7
 
 replace github.com/odigos-io/odigos-enterprise/mcp => ../mcp
 
@@ -416,10 +416,10 @@ replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
 replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 
-replace github.com/odigos-io/odigos/frontend => github.com/odigos-io/odigos/frontend v1.36.0-pre6
+replace github.com/odigos-io/odigos/frontend => github.com/odigos-io/odigos/frontend v1.36.0-pre7
 
 replace k8s.io/cloud-provider => k8s.io/cloud-provider v0.35.0
 
 replace k8s.io/kubelet => k8s.io/kubelet v0.35.0
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.36.0-pre6
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.36.0-pre7
