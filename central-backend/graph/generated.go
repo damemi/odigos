@@ -82,6 +82,7 @@ type ComplexityRoot struct {
 		Name           func(childComplexity int) int
 		Required       func(childComplexity int) int
 		Secret         func(childComplexity int) int
+		ShowInUI       func(childComplexity int) int
 		Tooltip        func(childComplexity int) int
 	}
 
@@ -544,6 +545,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CloudConnectorField.Secret(childComplexity), true
+	case "CloudConnectorField.showInUi":
+		if e.ComplexityRoot.CloudConnectorField.ShowInUI == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorField.ShowInUI(childComplexity), true
 	case "CloudConnectorField.tooltip":
 		if e.ComplexityRoot.CloudConnectorField.Tooltip == nil {
 			break
@@ -1763,6 +1770,8 @@ func (ec *executionContext) childFields_CloudConnectorField(ctx context.Context,
 		return ec.fieldContext_CloudConnectorField_tooltip(ctx, field)
 	case "initialValue":
 		return ec.fieldContext_CloudConnectorField_initialValue(ctx, field)
+	case "showInUi":
+		return ec.fieldContext_CloudConnectorField_showInUi(ctx, field)
 	case "envVar":
 		return ec.fieldContext_CloudConnectorField_envVar(ctx, field)
 	}
@@ -3480,6 +3489,29 @@ func (ec *executionContext) _CloudConnectorField_initialValue(ctx context.Contex
 }
 func (ec *executionContext) fieldContext_CloudConnectorField_initialValue(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CloudConnectorField", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CloudConnectorField_showInUi(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorField_showInUi(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ShowInUI, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorField_showInUi(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CloudConnectorField", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
 func (ec *executionContext) _CloudConnectorField_envVar(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorField) (ret graphql.Marshaler) {
@@ -9530,6 +9562,11 @@ func (ec *executionContext) _CloudConnectorField(ctx context.Context, sel ast.Se
 			}
 		case "initialValue":
 			out.Values[i] = ec._CloudConnectorField_initialValue(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "showInUi":
+			out.Values[i] = ec._CloudConnectorField_showInUi(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

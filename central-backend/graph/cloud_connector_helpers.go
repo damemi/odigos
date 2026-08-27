@@ -122,6 +122,13 @@ func cloudConnectorTypes(types []spec.Type) []*model.CloudConnectorType {
 	return out
 }
 
+// cloudConnectorFields maps the spec's form fields to their GraphQL model.
+//
+// ShowInUI has to be carried: it is the spec's only way to say a field belongs behind a
+// disclosure rather than on the common path (the AWS sessionToken, which only temporary
+// access keys use). Dropping it here is what made `showInUi: false` inert and put every
+// declared field on screen. It goes through the accessor, not the raw pointer, so a field
+// that omits the key stays visible.
 func cloudConnectorFields(fields []spec.Field) []*model.CloudConnectorField {
 	out := make([]*model.CloudConnectorField, 0, len(fields))
 	for _, f := range fields {
@@ -134,6 +141,7 @@ func cloudConnectorFields(fields []spec.Field) []*model.CloudConnectorField {
 			Secret:         f.Secret,
 			Tooltip:        f.Tooltip,
 			InitialValue:   f.InitialValue,
+			ShowInUI:       f.IsShownInUi(),
 			EnvVar:         f.EnvVar,
 		})
 	}

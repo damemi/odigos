@@ -128,17 +128,6 @@ func (s enabledFargateSource) names(name string) bool {
 	return ov != nil && ov.InstrumentationEnabled()
 }
 
-// runtimeFor returns the language/version override that applies to a named container: the
-// container's own when set, otherwise the workload-level one.
-func (s enabledFargateSource) runtimeFor(name string) (language, version string) {
-	if ov := s.containerOverride(name); ov != nil {
-		if ov.RuntimeOverride.Language != "" || ov.RuntimeOverride.Version != "" {
-			return ov.RuntimeOverride.Language, ov.RuntimeOverride.Version
-		}
-	}
-	return s.language, s.version
-}
-
 func (i *ecsInspector) enabledSources(ctx context.Context) (map[string]enabledFargateSource, error) {
 	sources, err := i.store.ListSources(ctx)
 	if err != nil {

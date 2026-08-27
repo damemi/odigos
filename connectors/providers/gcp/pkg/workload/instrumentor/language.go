@@ -111,24 +111,6 @@ func normalizeLanguage(v string) string {
 	}
 }
 
-// detectLanguage resolves the workload language for instrumentation. Precedence:
-//  1. the source runtime override (explicit, deterministic — the reliable path for Cloud Run, whose
-//     container images do not declare a runtime),
-//  2. a language already resolved and stored on the inventory record,
-//  3. a best-effort guess from the ingress container image/command.
-//
-// Returns "" when undetermined; the caller then reports the workload as unsupported until an override is
-// set.
-func detectLanguage(override, stored string, svc *runpb.Service) string {
-	if l := normalizeLanguage(override); l != "" {
-		return l
-	}
-	if l := normalizeLanguage(stored); l != "" {
-		return l
-	}
-	return guessLanguageFromService(svc)
-}
-
 // pythonExeRe matches a Python interpreter basename (python, python3, python3.12). Ported from the OSS
 // Odigos python inspector QuickScan (procdiscovery/pkg/inspectors/python), applied here to the container
 // entry command instead of a live /proc/<pid>/exe.

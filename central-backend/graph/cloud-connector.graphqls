@@ -94,6 +94,10 @@ type CloudConnectorField {
   secret: Boolean!
   tooltip: String!
   initialValue: String!
+  # Whether the create-connector form renders this field up-front. False keeps a
+  # rarely-needed optional credential (e.g. the AWS sessionToken, which only
+  # temporary access keys use) behind a disclosure instead of on the common path.
+  showInUi: Boolean!
   envVar: String!
 }
 

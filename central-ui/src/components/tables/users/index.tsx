@@ -78,17 +78,17 @@ export const UsersTable: React.FC = () => {
   const rows: TableProps['rows'] = useMemo(
     () =>
       users.map((user) => {
-        const UserIconCell: React.FC = () => (
+        const UserIconCell = () => (
           <IconCircle>
             <UserIcon strokeWidth={2} size={20} />
           </IconCircle>
         );
-        const EmailCell: React.FC = () => (
+        const EmailCell = () => (
           <Typography size={TypographySize.XS} nowrap>
             {user.email}
           </Typography>
         );
-        const RoleCell: React.FC = () => <Tag variant={UTILS.getTagVariantForRole(user.role)} label={UTILS.ROLE_LABELS[user.role] ?? user.role} />;
+        const RoleCell = () => <Tag variant={UTILS.getTagVariantForRole(user.role)} label={UTILS.ROLE_LABELS[user.role] ?? user.role} />;
 
         return {
           onClick: isAdmin ? () => setEditOpenForUser(user) : undefined,

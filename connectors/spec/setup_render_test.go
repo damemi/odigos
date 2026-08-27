@@ -253,7 +253,10 @@ func TestAWSManualTrustPolicyRenders(t *testing.T) {
 		t.Fatal("no manual create-role artifact declared")
 	}
 
-	rendered := renderSetupArtifact(art, nil, map[string]string{"externalId": "odigos-ext-id"})
+	rendered := renderSetupArtifact(art, nil, map[string]string{
+		"externalId": "odigos-ext-id",
+		"accountId":  "210987654321",
+	})
 
 	var doc struct {
 		Version   string `json:"Version"`
@@ -279,7 +282,10 @@ func TestAWSManualTrustPolicyRenders(t *testing.T) {
 	if got := st.Condition.StringEquals["sts:ExternalId"]; got != "odigos-ext-id" {
 		t.Errorf("sts:ExternalId = %q, want the substituted form value", got)
 	}
-	if !strings.HasPrefix(st.Principal["AWS"], "arn:aws:iam::") {
-		t.Errorf("trust principal = %q, want an arn:aws:iam:: principal", st.Principal["AWS"])
+	// The principal has to be the account the customer typed into the form. Asserting only the
+	// arn:aws:iam:: prefix let a literal account sit here undetected, which is how every customer came
+	// to be handed a trust policy naming an account that was not theirs.
+	if got, want := st.Principal["AWS"], "arn:aws:iam::210987654321:root"; got != want {
+		t.Errorf("trust principal = %q, want %q (the substituted form account)", got, want)
 	}
 }

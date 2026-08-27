@@ -595,20 +595,24 @@ type Field struct {
 	Secret         bool                   `yaml:"secret"`
 	Tooltip        string                 `yaml:"tooltip"`
 	InitialValue   string                 `yaml:"initialValue"`
-	// ShowInUi is a UI hint: whether the create-connector form renders this field up-front. It exists so a
-	// rarely-needed optional credential can stay hidden behind a disclosure (e.g. the AWS sessionToken,
-	// which only temporary access keys use) instead of cluttering the common path.
+	// ShowInUi is a UI hint: whether the create-connector form renders this field up-front. A nil value
+	// means shown (the default). Set `showInUi: false` for a rarely-needed optional credential that should
+	// stay behind a disclosure — the AWS sessionToken, which only temporary access keys use — instead of
+	// cluttering the common path.
 	//
-	// NOTE: it is declared here so the provider YAML is honest — spec.Parse now rejects undeclared keys —
-	// but nothing consumes it yet: central-backend's CloudConnectorField does not carry it, so every field
-	// currently renders regardless. Either plumb it through to the UI or drop it from the YAML; do not
-	// assume a `showInUi: false` field is hidden today.
-	ShowInUi bool `yaml:"showInUi"`
+	// It is carried all the way to the form: central-backend's CloudConnectorField.ShowInUI maps it and the
+	// create-connector drawer renders a hidden field behind "Show advanced fields". Default-shown is
+	// load-bearing: gcp.yaml declares the key on no field at all, so a default of hidden would empty its
+	// credentials panel.
+	ShowInUi *bool `yaml:"showInUi"`
 	// EnvVar is the environment variable the connector runtime stamps this field's value into (for
 	// auth fields, via a Secret keyRef whose key is Name). It is the bridge from the provider-agnostic
 	// field name to the env var the connector binary reads (e.g. accessKeyId -> AWS_ACCESS_KEY_ID).
 	EnvVar string `yaml:"envVar"`
 }
+
+// IsShownInUi reports whether the create-connector form renders this field up-front (nil == shown).
+func (f Field) IsShownInUi() bool { return f.ShowInUi == nil || *f.ShowInUi }
 
 // ConnectorFields returns the provider boundary configuration fields.
 func (s CloudConnectorSpec) ConnectorFields() []Field {

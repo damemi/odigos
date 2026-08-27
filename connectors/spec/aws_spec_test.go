@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -311,10 +312,20 @@ func TestAWSCreateRoleArtifacts(t *testing.T) {
 	}
 
 	// Every trust-policy-bearing variant interpolates the form's externalId, so the role Odigos is told
-	// to assume and the external id Odigos actually sends cannot drift apart.
+	// to assume and the external id Odigos actually sends cannot drift apart. The trust principal is the
+	// same contract: it must come from the form's accountId, never from a literal account baked into the
+	// YAML — a hardcoded one renders identically for every customer and yields a role their own Central
+	// deployment cannot assume.
 	for _, variant := range []string{"cloudformation", "terraform", "aws-cli", "manual"} {
-		if !strings.Contains(byVariant[variant].Template, "{{externalId}}") {
-			t.Errorf("%s create-role template should carry {{externalId}}, got:\n%s", variant, byVariant[variant].Template)
+		tmpl := byVariant[variant].Template
+		if !strings.Contains(tmpl, "{{externalId}}") {
+			t.Errorf("%s create-role template should carry {{externalId}}, got:\n%s", variant, tmpl)
+		}
+		if !strings.Contains(tmpl, "arn:aws:iam::{{accountId}}:root") {
+			t.Errorf("%s create-role template should name arn:aws:iam::{{accountId}}:root as the trust principal, got:\n%s", variant, tmpl)
+		}
+		if m := hardcodedAccountRe.FindString(tmpl); m != "" {
+			t.Errorf("%s create-role template hardcodes the account in %q; use {{accountId}}", variant, m)
 		}
 	}
 
@@ -332,6 +343,10 @@ func TestAWSCreateRoleArtifacts(t *testing.T) {
 		t.Errorf("credentials section artifact should declare a title, got %+v", creds)
 	}
 }
+
+// hardcodedAccountRe matches an IAM ARN carrying a literal 12-digit account instead of the
+// {{accountId}} token — the shape of the bug where every customer was handed the same account.
+var hardcodedAccountRe = regexp.MustCompile(`arn:aws:iam::\d{12}:`)
 
 func containsStr(xs []string, want string) bool {
 	for _, x := range xs {

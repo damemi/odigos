@@ -61,6 +61,7 @@ type CloudConnectorField struct {
 	Secret         bool           `json:"secret"`
 	Tooltip        string         `json:"tooltip"`
 	InitialValue   string         `json:"initialValue"`
+	ShowInUI       bool           `json:"showInUi"`
 	EnvVar         string         `json:"envVar"`
 }
 

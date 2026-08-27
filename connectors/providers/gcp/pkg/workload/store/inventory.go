@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"time"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
@@ -43,7 +42,7 @@ const (
 	// rollback snapshot — nothing converges a manual-mode service, so there is no mutation to undo.
 	//
 	// It answers "is this instrumented by Odigos" and never "may Odigos change this".
-	EnvOdigosIaC = baseapi.EnvOdigosIaC
+	EnvOdigosIaC = api.EnvOdigosIaC
 	// EnvCollectorEndpoint carries the user-configured OTLP destination as raw host:port (no scheme — the
 	// same convention the AWS connector uses for this variable name).
 	//

@@ -80,22 +80,22 @@ export const RoleMappingsTable: React.FC = () => {
   const rows: TableProps['rows'] = useMemo(
     () =>
       roleMappings.map((mapping) => {
-        const IconCell: React.FC = () => (
+        const IconCell = () => (
           <IconCircle>
             <RoleIcon size={20} />
           </IconCircle>
         );
-        const DisplayNameCell: React.FC = () => (
+        const DisplayNameCell = () => (
           <Typography size={TypographySize.XS} nowrap>
             {mapping.displayName || '-'}
           </Typography>
         );
-        const GroupCell: React.FC = () => (
+        const GroupCell = () => (
           <GroupIdText size={TypographySize.XS} nowrap>
             {mapping.claimValue}
           </GroupIdText>
         );
-        const RoleCell: React.FC = () => <Tag variant={UTILS.getTagVariantForRole(mapping.role)} label={UTILS.ROLE_LABELS[mapping.role] ?? mapping.role} />;
+        const RoleCell = () => <Tag variant={UTILS.getTagVariantForRole(mapping.role)} label={UTILS.ROLE_LABELS[mapping.role] ?? mapping.role} />;
 
         return {
           onClick: isAdmin ? () => setEditOpenFor(mapping) : undefined,

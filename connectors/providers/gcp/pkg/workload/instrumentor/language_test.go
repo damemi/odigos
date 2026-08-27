@@ -23,27 +23,6 @@ func TestNormalizeLanguage(t *testing.T) {
 	}
 }
 
-func TestDetectLanguagePrecedence(t *testing.T) {
-	svc := serviceWith(&runpb.Container{Image: "gcr.io/p/python-app:latest"})
-
-	// Override wins over everything (even a conflicting stored/guessed value).
-	if got := detectLanguage("java", "python", svc); got != LangJava {
-		t.Errorf("override should win, got %q", got)
-	}
-	// Stored value is used when no override.
-	if got := detectLanguage("", "nodejs", svc); got != LangNodeJS {
-		t.Errorf("stored value should be used, got %q", got)
-	}
-	// Falls back to a guess from the service image.
-	if got := detectLanguage("", "", svc); got != LangPython {
-		t.Errorf("guess should be python, got %q", got)
-	}
-	// Undetermined -> empty.
-	if got := detectLanguage("", "", serviceWith(&runpb.Container{Image: "gcr.io/p/mystery:latest"})); got != "" {
-		t.Errorf("undetermined should be empty, got %q", got)
-	}
-}
-
 func TestGuessLanguageFromService(t *testing.T) {
 	cases := []struct {
 		img  string

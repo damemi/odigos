@@ -648,22 +648,21 @@
   resolved "https://registry.yarnpkg.com/@nolyfill/is-core-module/-/is-core-module-1.0.39.tgz#3dc35ba0f1e66b403c00b39344f870298ebb1c8e"
   integrity sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==
 
-"@odigos/ui-kit@0.0.288":
-  version "0.0.288"
-  resolved "https://registry.yarnpkg.com/@odigos/ui-kit/-/ui-kit-0.0.288.tgz#21d61ca8ce5f8ad755656c528c152d2aefbf1a07"
-  integrity sha512-JinL00efS2LR7qZ/Taf+EpwpgslsZLq2Kz6p5OICY3294W9gxx0fY6dwxInXeDzlJBbe3BWy6kKUXLxy3Pgxpg==
+"@odigos/ui-kit@0.0.290":
+  version "0.0.290"
+  resolved "https://registry.yarnpkg.com/@odigos/ui-kit/-/ui-kit-0.0.290.tgz#facd0d79f4ac8c80ba0b88e3bcc489e30936dc75"
+  integrity sha512-RYjrhC2nQmoKT7pCXRKUHslf4ajGR6hZVVoxbXOmvRtLAAsOHEBTZstv92gMdJRu3EmopgDziHzl8ZouvbHGuQ==
   dependencies:
-    "@xyflow/react" "^12.11.2"
+    "@xyflow/react" "^12.11.5"
     elkjs "^0.12.0"
     javascript-time-ago "^2.6.4"
-    lottie-react "^2.4.1"
     prism-react-renderer "^2.4.1"
-    react "19.2.8"
-    react-dom "19.2.8"
-    react-error-boundary "^6.1.2"
-    styled-components "6.4.4"
-    virtua "^0.50.0"
-    zustand "^5.0.14"
+    react "^19.2.8"
+    react-dom "^19.2.8"
+    react-error-boundary "^6.1.3"
+    styled-components "6.5.3"
+    virtua "^0.50.5"
+    zustand "^5.0.15"
 
 "@odigos/vmagent-api-apollo-client@0.19.0":
   version "0.19.0"
@@ -1034,19 +1033,19 @@
   dependencies:
     tslib "^2.3.0"
 
-"@xyflow/react@^12.11.2":
-  version "12.11.3"
-  resolved "https://registry.yarnpkg.com/@xyflow/react/-/react-12.11.3.tgz#e9d6c53bae5d6c9296690ad91e84e8a6a2329204"
-  integrity sha512-G3jogHz2GWUtIOkhavUGno2YzY9u6fILIJBttfsBendb0/HWB90JG+sOTAvlIMEwyvq9zgy9V9ZQSwyQjR5QzQ==
+"@xyflow/react@^12.11.5":
+  version "12.11.5"
+  resolved "https://registry.yarnpkg.com/@xyflow/react/-/react-12.11.5.tgz#238fef260b4334ab4b9226de8cfc74407e71fd1b"
+  integrity sha512-QqoryGkqEhWBuQN9bZWRKhwr3Uoj9lCGj/tg0NnIWHHEOXV+5c8cYsc7Q9TST63V92lHqcNV9P5cjvJ9ZAmblQ==
   dependencies:
-    "@xyflow/system" "0.0.80"
+    "@xyflow/system" "0.0.81"
     classcat "^5.0.3"
     zustand "^4.4.0"
 
-"@xyflow/system@0.0.80":
-  version "0.0.80"
-  resolved "https://registry.yarnpkg.com/@xyflow/system/-/system-0.0.80.tgz#f5350fc3bec705715f4d5671e1dc9a2e157f297f"
-  integrity sha512-ywc3ZqG91brzWrH1WlwMdIX4goOfrpBy6AbLdVSaof/Xx9l138ijIKRExM6EkMro2F+OImGmSiA/WKcXvKVcfA==
+"@xyflow/system@0.0.81":
+  version "0.0.81"
+  resolved "https://registry.yarnpkg.com/@xyflow/system/-/system-0.0.81.tgz#3b704b9821d6ff99b41aad675dadc13c806ed137"
+  integrity sha512-hfbafW4i7uLq7ILok8QWFFm4KMFw22lbZNJHKfHOMSOOoCk5e5m8yfr84UV9NaJajmogWaLVnp2XFU9JQejlqg==
   dependencies:
     "@types/d3-drag" "^3.0.7"
     "@types/d3-interpolate" "^3.0.4"
@@ -2694,18 +2693,6 @@ loose-envify@^1.4.0:
   dependencies:
     js-tokens "^3.0.0 || ^4.0.0"
 
-lottie-react@^2.4.1:
-  version "2.4.2"
-  resolved "https://registry.yarnpkg.com/lottie-react/-/lottie-react-2.4.2.tgz#1917aad368149121513190f37c97163c1495d253"
-  integrity sha512-YkEEKN4E2Y2cFpPEwcvAXTAiRGy/P+0mJKYp9aDP1+r42xZgeXTZCf6No1csWRGmh4YQc3kbYtTq/b4c3IRCYg==
-  dependencies:
-    lottie-web "^5.13.0"
-
-lottie-web@^5.13.0:
-  version "5.13.0"
-  resolved "https://registry.yarnpkg.com/lottie-web/-/lottie-web-5.13.0.tgz#441d3df217cc8ba302338c3f168e1a3af0f221d3"
-  integrity sha512-+gfBXl6sxXMPe8tKQm7qzLnUy5DUPJPKIyRHwtpCpyUEYjHYRJC/5gjUvdkuO2c3JllrPtHXH5UJJK8LRYl5yQ==
-
 lru-cache@^10.2.0:
   version "10.4.3"
   resolved "https://registry.yarnpkg.com/lru-cache/-/lru-cache-10.4.3.tgz#410fc8a17b70e598013df257c2446b7f3383f119"
@@ -3053,14 +3040,14 @@ queue-microtask@^1.2.2:
   resolved "https://registry.yarnpkg.com/queue-microtask/-/queue-microtask-1.2.3.tgz#4929228bbc724dfac43e0efb058caf7b6cfb6243"
   integrity sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==
 
-react-dom@19.2.8:
+react-dom@19.2.8, react-dom@^19.2.8:
   version "19.2.8"
   resolved "https://registry.yarnpkg.com/react-dom/-/react-dom-19.2.8.tgz#3b46b9eeda877cdff2cf13d2770fff4ae36c2ec2"
   integrity sha512-rVprimfGBG3DR+Tq0IQG2DT5PxKth1WIGDmj5yPmlzr4YBe7uyE+Du4oVqTDXZSHGGGXRtTJEGSSePyQCMBglQ==
   dependencies:
     scheduler "^0.27.0"
 
-react-error-boundary@^6.1.2:
+react-error-boundary@^6.1.3:
   version "6.1.3"
   resolved "https://registry.yarnpkg.com/react-error-boundary/-/react-error-boundary-6.1.3.tgz#de20139249c074f141ce92eab733b900855ad081"
   integrity sha512-GnSKpCohFi2nQmJCWwP8O8wub7zexlePvpsejvQr35vS5RTouS1+utTNOmyc540yw5vyOXnSL1rBWsCQDmkyUA==
@@ -3070,7 +3057,7 @@ react-is@^16.13.1, react-is@^16.7.0:
   resolved "https://registry.yarnpkg.com/react-is/-/react-is-16.13.1.tgz#789729a4dc36de2999dc156dd6c1d9c18cea56a4"
   integrity sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==
 
-react@19.2.8:
+react@19.2.8, react@^19.2.8:
   version "19.2.8"
   resolved "https://registry.yarnpkg.com/react/-/react-19.2.8.tgz#a80663dbb58d69c6fe3fd291d3cb324e8a7dff2d"
   integrity sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw==
@@ -3503,10 +3490,10 @@ strip-json-comments@^3.1.1:
   resolved "https://registry.yarnpkg.com/strip-json-comments/-/strip-json-comments-3.1.1.tgz#31f1281b3832630434831c310c01cccda8cbe006"
   integrity sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==
 
-styled-components@6.4.4:
-  version "6.4.4"
-  resolved "https://registry.yarnpkg.com/styled-components/-/styled-components-6.4.4.tgz#403eb7046b9f59a170d13967d9e7d21d82e677bd"
-  integrity sha512-tJk5CmKUPMDoTsZQ8m0hHInBk9HFKUPSusqmbBuefDX+yUbMBWea2Ob/wdXFyHW8XZqXkprJscysAdKeGWNqlA==
+styled-components@6.5.3:
+  version "6.5.3"
+  resolved "https://registry.yarnpkg.com/styled-components/-/styled-components-6.5.3.tgz#3f9bf71579cba7e075b7217b8a1ec6f38e75cc0e"
+  integrity sha512-vAX79sfpmUerP9fsTTxoTrBDE0RuO4ahjInyWYoohNgqrdg63Ms4q6FJ/o2Fyity82NU3cujOT8Ewl9TThBdwg==
   dependencies:
     "@emotion/is-prop-valid" "1.4.0"
     css-to-react-native "3.2.0"
@@ -3732,10 +3719,10 @@ use-sync-external-store@^1.2.2:
   resolved "https://registry.yarnpkg.com/use-sync-external-store/-/use-sync-external-store-1.6.0.tgz#b174bfa65cb2b526732d9f2ac0a408027876f32d"
   integrity sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==
 
-virtua@^0.50.0:
-  version "0.50.1"
-  resolved "https://registry.yarnpkg.com/virtua/-/virtua-0.50.1.tgz#dbe058476f90116aa47448790d83b4a8b4bfb3f4"
-  integrity sha512-rNue/Cv/0Z14Yg9Pj6Xx9QaQPKhmlNWkx7Y7SytRnhojxvZ0z3GhCWr4QH2+tJm5mYL2vm4GudZPPt0i1PLzSA==
+virtua@^0.50.5:
+  version "0.50.5"
+  resolved "https://registry.yarnpkg.com/virtua/-/virtua-0.50.5.tgz#121fb03dc1c29e05472104cbcf6e53c96cecb267"
+  integrity sha512-dhr2b3fiK8jWlXzTZr1lICU6gIjF+Q9ftzlDR9KoAbW4vgusx0hEsNwdhxrEVVnm7ZpB+40jgGtJH8/BSsfrZg==
 
 webpack-bundle-analyzer@4.10.1:
   version "4.10.1"
@@ -3925,7 +3912,7 @@ zustand@^4.4.0:
   dependencies:
     use-sync-external-store "^1.2.2"
 
-zustand@^5.0.14:
+zustand@^5.0.14, zustand@^5.0.15:
   version "5.0.15"
   resolved "https://registry.yarnpkg.com/zustand/-/zustand-5.0.15.tgz#42bddf35647cb80a818a8943a69f6618c126fcfe"
   integrity sha512-MpSEjRiBkA9crSYeOUH32rJC7SVqAbm0Fqcqge/bUi2PPoLcBWKOsG+C8mevmpr8TwXHBVkChbbJiyvkE+i/3A==

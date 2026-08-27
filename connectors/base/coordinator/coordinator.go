@@ -95,9 +95,6 @@ func (c *Coordinator) SupportedKinds() []string {
 	return append(append([]string{}, c.workloadKinds...), c.computePlatformKinds...)
 }
 
-// SupportedWorkloadKinds returns directly-instrumentable workload kinds.
-func (c *Coordinator) SupportedWorkloadKinds() []string { return c.workloadKinds }
-
 // resetTicker resets t to want when it differs from the current interval (and want is valid), returning
 // the new current interval. Lets a loop pick up a live config-interval change without a restart.
 func resetTicker(t *time.Ticker, current, want time.Duration) time.Duration {

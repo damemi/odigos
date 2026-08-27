@@ -312,9 +312,14 @@ setup:
     # cross-artifact reference allowed is the policy preview above, saved as odigos-policy.json — the
     # steps always say so explicitly (mirrors the gcp.yaml convention).
     #
-    # ODIGOS_TRUST_ACCOUNT: 657451249928 is the AWS account allowed to assume the connector role. It is
-    # the Odigos Central platform account and is duplicated in each trust policy below — change all of
-    # them together, and keep them in sync with whatever Central actually runs as.
+    # TRUST PRINCIPAL: every trust policy below names arn:aws:iam::{{accountId}}:root — the account the
+    # customer entered in the AWS Account ID field, which is the account these snippets are applied to and
+    # the account the connector's own base identity lives in (the IAM user the iam-user variant creates, or
+    # the IRSA role of the Central pod running in it). It MUST stay a {{accountId}} token: a hardcoded
+    # account renders the same literal for every customer, so the role is assumable only by that account
+    # and never by the Central deployment that has to assume it — sts:AssumeRole then fails with
+    # AccessDenied for everyone. Cross-account Central (Central in account A managing account B) is not
+    # expressible with today's single account field; it needs its own trusted-principal field.
     - id: create-role-cloudformation
       section: create-role
       variant: cloudformation
@@ -327,7 +332,7 @@ setup:
       itemTemplate: '- {{permission}}'
       itemSeparator: "\n"
       steps:
-        - Enter an External ID in the field below first — it is baked into the template's trust policy.
+        - Fill in the AWS Account ID and an External ID first — both are baked into the template's trust policy.
         - Save the template below as odigos-connector.yaml.
         - "Console: open CloudFormation → Create stack → With new resources → Upload a template file."
         - "CLI: aws cloudformation deploy --stack-name odigos-connector --template-file odigos-connector.yaml --capabilities CAPABILITY_NAMED_IAM"
@@ -357,7 +362,7 @@ setup:
                 Statement:
                   - Effect: Allow
                     Principal:
-                      AWS: arn:aws:iam::657451249928:root
+                      AWS: arn:aws:iam::{{accountId}}:root
                     Action: sts:AssumeRole
                     Condition:
                       StringEquals:
@@ -390,7 +395,7 @@ setup:
       itemTemplate: '"{{permission}}"'
       itemSeparator: ",\n"
       steps:
-        - Enter an External ID in the field below first — it becomes the variable default.
+        - Fill in the AWS Account ID and an External ID first — the account is the trust principal, the external ID becomes the variable default.
         - Save the configuration below as odigos-connector.tf in your Terraform workspace.
         - Run terraform init, then terraform apply and confirm the plan.
         - Run terraform output -raw role_arn and paste the value into the field below.
@@ -415,7 +420,7 @@ setup:
 
             principals {
               type        = "AWS"
-              identifiers = ["arn:aws:iam::657451249928:root"]
+              identifiers = ["arn:aws:iam::{{accountId}}:root"]
             }
 
             condition {
@@ -464,7 +469,7 @@ setup:
         attaches the permissions policy, and prints the Role ARN.
       format: shell
       steps:
-        - Enter an External ID in the field below first — the script embeds it in the trust policy.
+        - Fill in the AWS Account ID and an External ID first — the script embeds both in the trust policy.
         - Save the policy preview from the previous step as odigos-policy.json in your working directory.
         - Make sure the AWS CLI is configured for the target account (aws configure).
         - Run the script below.
@@ -479,7 +484,7 @@ setup:
           "Statement": [
             {
               "Effect": "Allow",
-              "Principal": { "AWS": "arn:aws:iam::657451249928:root" },
+              "Principal": { "AWS": "arn:aws:iam::{{accountId}}:root" },
               "Action": "sts:AssumeRole",
               "Condition": {
                 "StringEquals": { "sts:ExternalId": "${ODIGOS_EXTERNAL_ID}" }
@@ -514,7 +519,7 @@ setup:
         Role ARN.
       format: json
       steps:
-        - Enter an External ID in the field below first — it is interpolated into the trust policy.
+        - Fill in the AWS Account ID and an External ID first — both are interpolated into the trust policy.
         - Open the AWS Console → IAM → Roles → Create role.
         - Select Custom trust policy and paste the policy below.
         - On the next screen, attach the permissions policy from the previous step.
@@ -526,7 +531,7 @@ setup:
           "Statement": [
             {
               "Effect": "Allow",
-              "Principal": { "AWS": "arn:aws:iam::657451249928:root" },
+              "Principal": { "AWS": "arn:aws:iam::{{accountId}}:root" },
               "Action": "sts:AssumeRole",
               "Condition": {
                 "StringEquals": { "sts:ExternalId": "{{externalId}}" }

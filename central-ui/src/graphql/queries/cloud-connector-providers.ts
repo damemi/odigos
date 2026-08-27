@@ -18,6 +18,7 @@ export const GET_CLOUD_CONNECTOR_PROVIDERS = gql`
         secret
         tooltip
         initialValue
+        showInUi
         envVar
       }
       auth {
@@ -37,6 +38,7 @@ export const GET_CLOUD_CONNECTOR_PROVIDERS = gql`
             secret
             tooltip
             initialValue
+            showInUi
             envVar
           }
         }
