@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
 // Only a workload the reconcile would actually try to instrument can be "waiting". Everything else
@@ -28,6 +29,45 @@ func TestBlockableForInstrumentation(t *testing.T) {
 		mutate(&w)
 		if blockableForInstrumentation(w) {
 			t.Errorf("%s: must not be reported as merely waiting", name)
+		}
+	}
+}
+
+// TestUnverifiableWithoutDestination is the counterpart predicate, covering the case blockableForInstrumentation
+// above deliberately excludes: a workload that IS instrumented.
+//
+// That exclusion is right for "would the reconcile try to instrument this" and wrong as a claim that the
+// workload is fine. In manual mode Instrumented means only that a marker is present, and confirming it MATCHES
+// needs the destination's endpoint as the desired value — so with no destination the connector is holding an
+// applied instrumentation it has nothing to compare against, and must say so rather than report it as working.
+func TestUnverifiableWithoutDestination(t *testing.T) {
+	full := api.DiscoveredWorkload{
+		ManagementMode: spec.ModeManual,
+		SourceMatched:  true, SourceEnabled: true, Instrumented: true,
+		InstrumentationAvailable: true, InstrumentationImplemented: true,
+		ConformanceObservable: true,
+	}
+	if !unverifiableWithoutDestination(full) {
+		t.Error("an instrumented manual-mode workload of an observable type cannot be verified without a destination")
+	}
+	for name, mutate := range map[string]func(*api.DiscoveredWorkload){
+		// The complement of the predicate above: an uninstrumented workload is blockable, not unverifiable.
+		"not instrumented": func(w *api.DiscoveredWorkload) { w.Instrumented = false },
+		// Automatic mode has no observer by design; the reconciler is what guarantees correctness there, so
+		// every automatic workload would otherwise report as unverified forever.
+		"automatic mode": func(w *api.DiscoveredWorkload) { w.ManagementMode = spec.ModeAutomatic },
+		// A type this connector registers no observer for — GCP Cloud Run and Azure Container Apps today, whose
+		// IaC flows are not wired. Nothing will ever verify these, so promising it would be a standing lie.
+		"type has no observer": func(w *api.DiscoveredWorkload) { w.ConformanceObservable = false },
+		"no source":            func(w *api.DiscoveredWorkload) { w.SourceMatched = false },
+		"source disabled":      func(w *api.DiscoveredWorkload) { w.SourceEnabled = false },
+		"type inactive":        func(w *api.DiscoveredWorkload) { w.InstrumentationAvailable = false },
+		"not implemented":      func(w *api.DiscoveredWorkload) { w.InstrumentationImplemented = false },
+	} {
+		w := full
+		mutate(&w)
+		if unverifiableWithoutDestination(w) {
+			t.Errorf("%s: must not be flagged as unverifiable for lack of a destination", name)
 		}
 	}
 }

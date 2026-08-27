@@ -307,14 +307,11 @@ func (i *ECSFargateInstrumentor) instrument(ctx context.Context, svc store.ECSSe
 	if err != nil {
 		return err
 	}
-	// Persist the workload-level runtime for the flat report fields (best-effort). With several
-	// languages in one task there is no single answer, so the aggregate says so and the container
-	// layer carries the real per-container runtimes.
-	if lang, ver := aggregateRuntime(targets); lang != svc.RuntimeLanguage || ver != svc.RuntimeVersion {
-		if serr := i.store.SetECSServiceRuntime(ctx, svc.ClusterARN, svc.ServiceName, lang, ver); serr != nil {
-			log.Warn("set fargate runtime failed", "service", svc.ServiceName, "error", serr)
-		}
-	}
+	// Persist the workload-level runtime for the flat report fields. With several languages in one task
+	// there is no single answer, so the aggregate says so and the container layer carries the real
+	// per-container runtimes.
+	lang, ver := aggregateRuntime(targets)
+	i.recordRuntime(ctx, svc, lang, ver)
 	for _, t := range targets {
 		// A destination whose port belongs to the other OTLP protocol still "works" here — we set a
 		// matching protocol — but it will fail at runtime as an opaque connection reset inside the
@@ -599,8 +596,8 @@ func (i *ecsInspector) retarget(ctx context.Context, td *ecstypes.TaskDefinition
 }
 
 // aggregateRuntime collapses the targets into the workload-level runtime the flat report fields
-// carry. One language is reported as itself; several are reported as "multiple", because no single
-// value is true and the container layer holds the real per-container answers.
+// carry. One language is reported as itself; several are reported as runtimeLanguageMultiple, because no
+// single value is true and the container layer holds the real per-container answers.
 func aggregateRuntime(targets []containerTarget) (language, version string) {
 	if len(targets) == 0 {
 		return "", ""
@@ -608,7 +605,7 @@ func aggregateRuntime(targets []containerTarget) (language, version string) {
 	lang, ver := targets[0].recipe.lang, targets[0].runtime.version
 	for _, t := range targets[1:] {
 		if t.recipe.lang != lang {
-			return "multiple", ""
+			return runtimeLanguageMultiple, ""
 		}
 		if t.runtime.version != ver {
 			ver = ""
@@ -629,6 +626,28 @@ func targetSummary(targets []containerTarget) string {
 func ovDisabled(src enabledFargateSource, name string) bool {
 	ov := src.containerOverride(name)
 	return ov != nil && !ov.InstrumentationEnabled()
+}
+
+// recordRuntime persists the workload-level runtime the flat report fields carry — the language and version
+// the central UI shows for the service. Written on change only, so a steady-state service costs no database
+// write per cycle, and best-effort: a report that cannot name the runtime is worse than one that can, but
+// neither is worth failing a pass over.
+//
+// It lives on the inspector because BOTH modes have to write it, and for a while only one did. The single
+// writer was the reconciler's instrumentService, which the coordinator never runs for a manual-mode type
+// (activeReconcilers) — so every workload the customer instruments themselves reported an unknown language in
+// the central UI no matter how plainly its task definition declared one. The observer now writes it from the
+// same resolution on both of its paths, which is the whole point of the two modes sharing this type.
+func (i *ecsInspector) recordRuntime(ctx context.Context, svc store.ECSService, language, version string) {
+	if language == svc.RuntimeLanguage && version == svc.RuntimeVersion {
+		return
+	}
+	if err := i.store.SetECSServiceRuntime(ctx, svc.ClusterARN, svc.ServiceName, language, version); err != nil {
+		log.Warn("set fargate runtime failed", "cluster", svc.ClusterARN, "service", svc.ServiceName, "error", err)
+		return
+	}
+	log.Debug("recorded fargate workload runtime", "cluster", svc.ClusterARN, "service", svc.ServiceName,
+		"language", language, "version", version)
 }
 
 // recordContainers persists the task definition's container inventory so the workload report can show

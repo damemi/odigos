@@ -64,6 +64,11 @@ func (c *Coordinator) activeObservers() []namedObserver {
 // multiplying a customer's control-plane call volume for state that only changes when they deploy. A
 // discovery cycle also kicks it directly, so a newly discovered workload is observed without waiting a
 // full interval.
+//
+// Those two mechanisms share an interval, so the kick would otherwise DOUBLE exactly the call volume the
+// paragraph above is about — a second full round of control-plane reads per cycle for state that had not
+// moved since the first. A triggered pass therefore defers the tick a full interval (deferNextTick), making
+// the interval mean "at most one pass per interval" whatever caused it.
 func (c *Coordinator) observeLoop(ctx context.Context) {
 	obs := c.activeObservers()
 	if len(obs) == 0 {
@@ -84,6 +89,7 @@ func (c *Coordinator) observeLoop(ctx context.Context) {
 		case <-c.observeTrigger:
 			coordLog.Debug("observation triggered")
 			c.runObserve(ctx, obs)
+			interval = deferNextTick(ticker, interval, c.cfgMgr.Settings().DiscoveryInterval)
 		}
 	}
 }

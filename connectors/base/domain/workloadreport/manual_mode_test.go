@@ -57,9 +57,15 @@ func TestManualModeStateMatrix(t *testing.T) {
 			wantSince: true,
 		},
 		{
+			// Named for what it asserts, and now actually set up that way. It used to leave Conformance at its
+			// zero value — Unknown — while claiming to be the conformant row, which is precisely the conflation
+			// that let an unverified workload report as healthy: the fixture asserted the clean report that only
+			// a real verdict earns.
 			name: "customer applied it: conformant and instrumented",
 			mutate: func(w *api.DiscoveredWorkload) {
 				w.Instrumented = true
+				w.Conformance = api.ConformanceConformant
+				w.ConformanceObservable = true
 			},
 			state:        api.WorkloadStateInstrumented,
 			instrumented: true,

@@ -109,6 +109,33 @@ func resetTicker(t *time.Ticker, current, want time.Duration) time.Duration {
 	return current
 }
 
+// deferNextTick pushes a loop's next PERIODIC pass a full interval into the future, and is called after a pass
+// that already ran because something TRIGGERED it out of band. It returns the interval now in force, picking up
+// a live config change the same way resetTicker does — a triggered pass is as good a moment to notice one.
+//
+// It exists because a loop's interval should mean "at most one pass per interval", not "one pass per interval
+// PLUS one per trigger". Every loop below is both ticked and triggered, and the triggers are not rare: a
+// successful discovery cycle kicks reconcile, observe and adopt, and observe kicks adopt again. The two loops
+// that tick on the DISCOVERY interval are therefore kicked at almost exactly the frequency they already tick
+// at, so their tick was a near-always redundant second pass — for observation, a whole second round of
+// provider control-plane reads per cycle (DescribeServices + DescribeTaskDefinition per in-scope workload, on
+// Fargate) for state that had not moved since the first.
+//
+// Nothing is skipped by deferring: the trigger RAN the pass, so the work the tick would have done is already
+// done, and the interval is now measured from that pass rather than from an unrelated earlier one. A stream of
+// triggers can keep the ticker from ever firing, which is the intended outcome and not starvation — each of
+// those triggers is itself a full pass. The tick keeps its own reason to exist for the case triggers cannot
+// cover: runDiscovery returns early on a failed cycle WITHOUT firing any trigger, so a connector whose
+// discovery is failing still reconciles, observes and adopts on the timer alone.
+func deferNextTick(t *time.Ticker, current, want time.Duration) time.Duration {
+	if want > 0 && want != current {
+		coordLog.Info("config interval changed; resetting ticker", "from", current, "to", want)
+		current = want
+	}
+	t.Reset(current)
+	return current
+}
+
 // Config returns the effective operational config (defaults + stored overrides) for the agents-api config
 // query. ConfigDefaults returns just the code defaults. UpdateConfig merges a patch and applies it live.
 func (c *Coordinator) Config(_ context.Context) (map[string]any, error) {
@@ -228,6 +255,7 @@ func (c *Coordinator) discoveryLoop(ctx context.Context, domain string, resolve 
 		case <-trigger:
 			coordLog.Info("discovery refresh triggered", "domain", domain)
 			c.runDiscovery(ctx, domain, resolve())
+			interval = deferNextTick(ticker, interval, c.cfgMgr.Settings().DiscoveryInterval)
 		}
 	}
 }
@@ -418,6 +446,7 @@ func (c *Coordinator) reconcileLoop(ctx context.Context) {
 		case <-c.reconcileTrigger:
 			coordLog.Info("reconcile triggered by source change")
 			c.runReconcile(ctx, recs)
+			interval = deferNextTick(ticker, interval, c.cfgMgr.Settings().ReconcileInterval)
 		}
 	}
 }
@@ -466,6 +495,7 @@ func (c *Coordinator) computePlatformReconcileLoop(ctx context.Context) {
 		case <-c.computePlatformTrigger:
 			coordLog.Info("compute-platform reconcile triggered by source change")
 			c.runComputePlatformReconcile(ctx, recs)
+			interval = deferNextTick(ticker, interval, c.cfgMgr.Settings().ReconcileInterval)
 		}
 	}
 }
@@ -530,11 +560,11 @@ func (c *Coordinator) markBlockedOnPrerequisites(ctx context.Context, workloads 
 	if len(workloads) == 0 {
 		return
 	}
-	// Only workloads that would otherwise be instrumented can be blocked, so skip the lookup entirely
-	// when none is waiting on anything.
+	// Only workloads the destination actually affects can be marked, so skip the lookup entirely when none
+	// is.
 	wanted := false
 	for i := range workloads {
-		if blockableForInstrumentation(workloads[i]) {
+		if blockableForInstrumentation(workloads[i]) || unverifiableWithoutDestination(workloads[i]) {
 			wanted = true
 			break
 		}
@@ -555,10 +585,30 @@ func (c *Coordinator) markBlockedOnPrerequisites(ctx context.Context, workloads 
 		return
 	}
 	for i := range workloads {
-		if blockableForInstrumentation(workloads[i]) {
+		if blockableForInstrumentation(workloads[i]) || unverifiableWithoutDestination(workloads[i]) {
 			workloads[i].WaitingFor = api.WaitingForDestination
 		}
 	}
+}
+
+// unverifiableWithoutDestination reports whether a workload's ALREADY-APPLIED instrumentation is one the
+// connector cannot verify while no destination exists. It is the counterpart to blockableForInstrumentation
+// above, for the case that predicate deliberately excludes: a workload that IS instrumented.
+//
+// That exclusion is right for what blockableForInstrumentation answers — the reconcile is not "skipping" a
+// workload that is already done — but its reasoning ("already working") does not survive manual mode. There,
+// Instrumented means only that a marker is present; whether the instrumentation MATCHES is a separate verdict,
+// and computing it needs the destination's endpoint as the desired value. So without a destination the
+// connector holds an applied instrumentation it has no expected state to compare against, and reporting that
+// as working is asserting a comparison it never made — see workloadreport's not-verified branch, which this
+// flag is what explains.
+//
+// Automatic mode is excluded deliberately. It has no observer at all (coordinator.activeObservers), so its
+// Conformance is permanently Unknown by design and the reconciler is what guarantees correctness: every
+// workload would otherwise report as unverified forever.
+func unverifiableWithoutDestination(w api.DiscoveredWorkload) bool {
+	return w.ManagementMode == spec.ModeManual && w.SourceMatched && w.SourceEnabled && w.Instrumented &&
+		w.InstrumentationAvailable && w.InstrumentationImplemented && w.ConformanceObservable
 }
 
 // blockableForInstrumentation reports whether a workload is one the reconcile would try to
@@ -591,10 +641,17 @@ func (c *Coordinator) markInstrumentationAvailability(workloads []api.Discovered
 		handled[t.Name] = true
 	}
 	unimplemented := c.provider.Spec().UnimplementedInstrumentationKinds()
+	// Which types a conformance verdict can actually be expected for. Resolved from the same activeObservers
+	// the observe loop runs, so "observable" cannot claim more than what is wired.
+	observable := make(map[string]bool)
+	for _, no := range c.activeObservers() {
+		observable[no.name] = true
+	}
 	for i := range workloads {
 		t := workloads[i].InstrumentationType
 		workloads[i].InstrumentationAvailable = t != "" && handled[t]
 		workloads[i].InstrumentationImplemented = !unimplemented[t]
+		workloads[i].ConformanceObservable = t != "" && observable[t]
 		if t != "" {
 			workloads[i].ManagementMode = c.cfg.Capabilities.WorkloadInstrumentationMode(t)
 		}

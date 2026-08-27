@@ -36,8 +36,13 @@ type ECSService struct {
 	// why they cannot disagree. Discovery never derives it: that would cost a DescribeTaskDefinition per
 	// service across the whole account every cycle.
 	Instrumented bool
-	// RuntimeLanguage / RuntimeVersion are the resolved workload runtime, written by the instrumentor once
-	// resolved (version is the major.minor used by version-templated agents, e.g. php/ruby).
+	// RuntimeLanguage / RuntimeVersion are the resolved workload runtime — the language the central UI shows
+	// for this service (version is the major.minor used by version-templated agents, e.g. php/ruby), or
+	// runtimeLanguageMultiple when the task definition's containers resolve to different languages.
+	//
+	// Written by the instrumentor in automatic mode and by the observer in manual mode, the same two writers
+	// Instrumented has and for the same reason: the instrumentor never runs for a manual-mode type, so while it
+	// was the only writer, every workload a customer instrumented themselves reported an unknown language.
 	RuntimeLanguage string
 	RuntimeVersion  string
 	// InstrumentationError is the last instrumentation/rollback error; empty when healthy.

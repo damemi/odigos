@@ -192,6 +192,16 @@ type DiscoveredWorkload struct {
 	// source-matched workload of such a type is reported as NotImplemented rather than as instrumented,
 	// so an unsupported capability is never shown as working.
 	InstrumentationImplemented bool
+	// ConformanceObservable is true when this connector actually has an InstrumentationObserver registered
+	// for this workload's instrumentation type, so a Conformance verdict is something that WILL arrive. Set by
+	// the coordinator, which is the only thing that knows (see activeObservers).
+	//
+	// It is what separates the two very different meanings of ConformanceUnknown. On an observable type it is
+	// temporary — no pass has run yet, or the last one failed — and the report can honestly say the check is
+	// pending. On a type with no observer it is PERMANENT: nothing will ever set it, and a report promising a
+	// verification that is never coming would be worse than saying nothing. That gap is a connector capability
+	// limit, already warned about once at startup rather than per workload forever.
+	ConformanceObservable bool
 	// WaitingFor names the prerequisite blocking a workload the customer HAS marked for
 	// instrumentation, when the connector is deliberately not attempting it yet. It is not a failure:
 	// nothing has gone wrong and nothing needs fixing on the workload — a precondition simply is not

@@ -35,7 +35,11 @@ import (
 // (see activeObservers), this pass has nothing to gate on.
 //
 // It ticks on the discovery interval, same as observeLoop, and a discovery cycle kicks it directly (see
-// runDiscovery) so a freshly discovered orphan is adopted without waiting a full interval.
+// runDiscovery) so a freshly discovered orphan is adopted without waiting a full interval. It is kicked again
+// once the observation pass has landed its writes (see runObserve), which is what a Fargate orphan actually
+// needs. A triggered pass defers the tick a full interval (deferNextTick), so those kicks do not each add a
+// pass on top of the periodic one — this loop was running four times per interval where it needed to run
+// twice, and only three of the four said anything in the log.
 func (c *Coordinator) adoptLoop(ctx context.Context) {
 	coordLog.Info("orphaned-workload adoption loop starting")
 	interval := c.cfgMgr.Settings().DiscoveryInterval
@@ -47,11 +51,16 @@ func (c *Coordinator) adoptLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			// Logged like the trigger below, and for a reason that cost someone an investigation: this path
+			// used to run a full pass silently, so the "triggered" lines a reader counted were always one
+			// short of the passes that actually ran, and the interval between them looked wrong.
+			coordLog.Debug("orphan adoption tick")
 			c.runAdopt(ctx)
 			interval = resetTicker(ticker, interval, c.cfgMgr.Settings().DiscoveryInterval)
 		case <-c.adoptTrigger:
 			coordLog.Debug("orphan adoption triggered")
 			c.runAdopt(ctx)
+			interval = deferNextTick(ticker, interval, c.cfgMgr.Settings().DiscoveryInterval)
 		}
 	}
 }
@@ -87,8 +96,23 @@ func (c *Coordinator) runAdopt(ctx context.Context) {
 	// ManagementMode is what adoptedSourceEnabled keys on; enrichWithSources does not set it (WorkloadReports
 	// is the only other caller, and it does this itself).
 	c.markInstrumentationAvailability(enriched)
+	// Counted so the pass can say what it FOUND, not merely that it ran. Several independent triggers fire
+	// this loop each interval (see adoptLoop), and with only a "triggered" line to go on, a pass that
+	// examined everything and correctly adopted nothing was indistinguishable from one doing real work —
+	// which reads, entirely reasonably, as the connector repeating itself for no reason.
+	var orphaned, adopted, tombstoned int
 	for _, w := range enriched {
+		// orphanedInstrumentedWorkload is used only to SPLIT the counter; shouldAdopt below stays the gate, so
+		// the decision has exactly one implementation and cannot drift from the one its test pins.
+		if !orphanedInstrumentedWorkload(w) {
+			continue
+		}
+		orphaned++
 		if !shouldAdopt(w, deleted) {
+			// Orphaned but tombstoned — a source a human deleted, which is never re-adopted. Counted rather
+			// than silent: "every pass finds an orphan it will never adopt" is the one case where repeated
+			// no-op passes are worth seeing in a log.
+			tombstoned++
 			continue
 		}
 		enabled := adoptedSourceEnabled(w)
@@ -103,9 +127,12 @@ func (c *Coordinator) runAdopt(ctx context.Context) {
 				"name", w.ServiceName, "kind", w.Kind, "region", w.Region, "error", err)
 			continue
 		}
+		adopted++
 		coordLog.Info("adopted orphaned instrumented workload as a source",
 			"name", w.ServiceName, "kind", w.Kind, "region", w.Region, "enabled", enabled)
 	}
+	coordLog.Debug("orphan adoption pass complete",
+		"workloads", len(enriched), "orphaned", orphaned, "adopted", adopted, "deliberatelyUntracked", tombstoned)
 }
 
 // shouldAdopt is the whole adoption decision for one workload, kept pure (no store, no provider) so every

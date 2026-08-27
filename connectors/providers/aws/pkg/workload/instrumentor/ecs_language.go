@@ -385,3 +385,96 @@ func languageFromBuildpackID(id string) string {
 	}
 	return ""
 }
+
+// --- workload-level runtime from the task definition alone ---
+
+// runtimeLanguageMultiple is the workload-level language reported for a task definition whose
+// instrumentable containers resolve to DIFFERENT languages. No single value is true for such a task, so the
+// flat report field says so explicitly and the container inventory carries the real per-container answers.
+// normalizeLanguage does not recognize it, which is what makes every consumer of the flat field (the planner
+// most of all) fall through to the per-container layer rather than treat it as a language.
+const runtimeLanguageMultiple = "multiple"
+
+// taskDefinitionRuntime resolves a service's workload-level language and major.minor version from its task
+// definition ALONE — the Odigos markers already on it plus each container's static signals — with no
+// image-config read, no OTLP destination and no source overrides.
+//
+// It exists for the observer's cheap path (refreshOwnership), which holds a freshly described task definition
+// but has no desired instrumentation to compute: the full selectTargets resolution needs a destination to
+// build each container's export wiring, and pays a registry fetch per container for the image-config layer.
+// Everything this needs is already in hand and free, so a service the connector cannot yet JUDGE still
+// reports what it RUNS instead of an empty language.
+//
+// The marker layer is the load-bearing one, and it is not detection at all. An instrumented task definition
+// RECORDS the agent that was staged into each container (see readECSMarker), so for the case this was written
+// for — a workload adopted from live instrumentation, whose language was known to whoever applied it and
+// nowhere in Odigos — the answer is the instrumentation naming itself.
+//
+// Ranking and aggregation mirror selectTargets and aggregateRuntime, so the value does not change meaning
+// between the two modes: the strongest evidence present in the task definition wins (a recorded marker or a
+// runtime env var over a bare image-reference substring), and containers that disagree report
+// runtimeLanguageMultiple. With no image config in play, resolveECSRuntime only ever yields a language this
+// connector can cover, so nothing here can name an agent that does not exist.
+func taskDefinitionRuntime(ctx context.Context, td *ecstypes.TaskDefinition) (language, version string) {
+	if td == nil {
+		return "", ""
+	}
+	// The same candidate set the mutating path uses, so a proxy sidecar is no more a source of the workload's
+	// language here than it is there. An error means there is no instrumentable container at all.
+	candidates, err := candidateContainerIndexes(td)
+	if err != nil {
+		return "", ""
+	}
+	var resolved []resolvedRuntime
+	var top detectionConfidence
+	for _, idx := range candidates {
+		c := &td.ContainerDefinitions[idx]
+		// images is deliberately nil: this path must stay free of network reads — see the doc comment.
+		rt := resolveECSRuntime(ctx, nil, "", "", containerManifestLanguage(c), "", c)
+		if rt.language == "" {
+			continue
+		}
+		resolved = append(resolved, rt)
+		if rt.confidence > top {
+			top = rt.confidence
+		}
+	}
+	for _, rt := range resolved {
+		// Relative, not absolute — see selectTargets' pass 2 for why the gate has to be a comparison between
+		// siblings: an nginx container that merely mentions index.php must not make a real PHP task "multiple".
+		if rt.confidence < top {
+			continue
+		}
+		switch {
+		case language == "":
+			language, version = rt.language, rt.version
+		case rt.language != language:
+			return runtimeLanguageMultiple, ""
+		case rt.version != version:
+			version = "" // same language, different versions: no single version is the workload's
+		}
+	}
+	return language, version
+}
+
+// taskDefRuntimeToStore returns the runtime a task-definition-only resolution should record for a service, and
+// whether it is worth a write at all.
+//
+// Both rules are about not letting the cheap path damage the rich one. It may FILL a gap — that is the whole
+// point — but an empty resolution must never erase a language a fully-resolved pass established, and a version
+// this read simply cannot see is carried forward rather than blanked: that pass had the image config and the
+// source's overrides, this one has neither, so a customer who deletes their destination must not lose the
+// php 8.3 the version-templated agents are staged against. An unchanged result writes nothing, so a
+// steady-state service costs no database write per observation cycle.
+func taskDefRuntimeToStore(language, version, storedLanguage, storedVersion string) (string, string, bool) {
+	if language == "" {
+		return "", "", false
+	}
+	if version == "" && language == storedLanguage {
+		version = storedVersion
+	}
+	if language == storedLanguage && version == storedVersion {
+		return "", "", false
+	}
+	return language, version, true
+}

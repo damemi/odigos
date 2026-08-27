@@ -149,6 +149,12 @@ func (o *ECSFargateObserver) refreshOwnership(ctx context.Context, client *ecs.C
 	if err := o.store.SetECSServiceOwnershipChecked(ctx, svc.ClusterARN, svc.ServiceName, revision); err != nil {
 		return err
 	}
+	// Record what the service RUNS while the task definition is in hand. This path used to keep nothing but
+	// the boolean below, and that is how a workload adopted from LIVE instrumentation reached the central UI
+	// with an unknown language: the language was written in the very marker this pass had just read, and was
+	// discarded along with the rest of the definition. nil targets — there is no destination here to resolve
+	// them against — so this reads the task definition alone, which costs no AWS or registry call.
+	o.recordObservedRuntime(ctx, td, svc, nil)
 	// Either marker: this flag is "does the service carry Odigos instrumentation", and in manual mode the
 	// only marker on it is the one the customer's own deployment definition applied.
 	owned := len(instrumentedContainerIndexes(td)) > 0
@@ -194,6 +200,8 @@ func (o *ECSFargateObserver) observeService(ctx context.Context, client *ecs.Cli
 	// needs to see each container and why it was skipped. In manual mode this is the whole container layer of
 	// the report, which nothing populated before — the instrumentor recorded it, and the instrumentor never runs.
 	o.recordContainers(ctx, td, src, svc, targets, excluded)
+	// And the flat workload-level runtime the container layer aggregates to, for the same reason.
+	o.recordObservedRuntime(ctx, td, svc, targets)
 
 	ev := evaluateECSObservation(td, targets, selectErr, src, svc, o.image, o.debug())
 	if ev.owned != svc.Instrumented {
@@ -212,6 +220,40 @@ func (o *ECSFargateObserver) observeService(ctx context.Context, client *ecs.Cli
 		ev.obs.Conformance, ev.obs.Missing = prev.Conformance, prev.Missing
 	}
 	return o.persist(ctx, svc, ev.obs)
+}
+
+// recordObservedRuntime persists the workload-level runtime the flat report fields carry — the language the
+// central UI shows for a service — from one observation pass. targets is what selection resolved, and is nil on
+// the cheap path (refreshOwnership), which has no destination to build export wiring against.
+func (o *ECSFargateObserver) recordObservedRuntime(ctx context.Context, td *ecstypes.TaskDefinition, svc store.ECSService, targets []containerTarget) {
+	if lang, ver, ok := observedRuntime(ctx, td, targets, svc); ok {
+		o.recordRuntime(ctx, svc, lang, ver)
+	}
+}
+
+// observedRuntime is the whole decision above, kept pure (no store, no AWS client) so both branches are
+// testable on their own — the same split evaluateECSObservation and shouldObserveService are written with.
+//
+// A pass that RESOLVED targets had the image config and the source's overrides in scope, so its aggregate is
+// authoritative: it writes on any change, exactly as instrumentService does in automatic mode.
+//
+// The fallback is the part worth reading. Empty targets are not the statement "this service's language is
+// unknown". Selection also comes back empty for a language Odigos cannot cover on Fargate, for a php/ruby
+// container whose major.minor it could not determine, and for a destination that cannot carry this agent's
+// transport — every one of which is a service whose language IS known and whose report says so, right next to
+// the reason it cannot be instrumented. Nor is it the statement made by refreshOwnership, which passes nil
+// because it never looked. Clearing the field in either case would answer "unknown" to a question the task
+// definition usually answers plainly, so the task-definition-only read stands in — and, being the poorer of the
+// two resolutions, may only fill a gap (taskDefRuntimeToStore).
+//
+// The write flag is about that fallback only — whether the poorer read has anything to add. Whether the value
+// actually MOVED is recordRuntime's single question, so it is not asked twice here.
+func observedRuntime(ctx context.Context, td *ecstypes.TaskDefinition, targets []containerTarget, svc store.ECSService) (language, version string, write bool) {
+	if lang, ver := aggregateRuntime(targets); lang != "" {
+		return lang, ver, true
+	}
+	lang, ver := taskDefinitionRuntime(ctx, td)
+	return taskDefRuntimeToStore(lang, ver, svc.RuntimeLanguage, svc.RuntimeVersion)
 }
 
 // ecsEvaluation is the verdict of judging one settled read of a service, and the two side facts the caller has

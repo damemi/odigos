@@ -131,12 +131,13 @@ func (p *ECSFargatePlanner) PlanFor(_ context.Context, w baseapi.DiscoveredWorkl
 // detection guessed and the customer overrode.
 //
 // The container fallback is what makes this work in MANUAL mode at all, and without it Fargate published no
-// instructions there — the one mode they exist for. w.RuntimeLanguage is the service row's aggregate, and its
-// only writer is instrumentService (fargate-task.go), which runs from the reconciler; the coordinator gives a
-// manual-mode type no reconciler (activeReconcilers), so the field is permanently empty for exactly the
-// workloads that need a plan. Lambda never hit this because a function's runtime comes from the function
-// itself. The per-container runtimes ARE resolved in manual mode — the observer runs selectTargets and
-// recordContainers on every pass — so they are the workload-level answer that the aggregate should have been.
+// instructions there — the one mode they exist for. w.RuntimeLanguage is the service row's aggregate, and it
+// used to have exactly one writer: instrumentService (fargate-task.go), which runs from the reconciler the
+// coordinator never wires for a manual-mode type (activeReconcilers), leaving the field permanently empty for
+// precisely the workloads that need a plan. Lambda never hit this because a function's runtime comes from the
+// function itself. The observer now writes the aggregate too (recordObservedRuntime), so the first branch below
+// usually answers; this one still stands behind it, for a row written by an older connector and for a pass that
+// resolved per-container runtimes without agreeing on a workload-level one.
 func fargatePlanRuntime(w baseapi.DiscoveredWorkload) (lang, version string) {
 	if l := normalizeLanguage(w.Overrides.RuntimeLanguage); l != "" {
 		return l, w.Overrides.RuntimeVersion

@@ -121,6 +121,50 @@ func ToModel(w api.DiscoveredWorkload) *model.WorkloadReport {
 		progress.Stage = "VerifyingCustomerChanges"
 		progress.Message = &msg
 	} else if w.ManagementMode == spec.ModeManual && w.SourceMatched && w.SourceEnabled && w.Instrumented &&
+		w.ConformanceObservable && w.ObservationError == "" &&
+		(w.WaitingFor == api.WaitingForDestination || w.Conformance == api.ConformanceUnknown) {
+		// Instrumentation IS applied, and Odigos has not established that it matches. Saying so is the whole
+		// point: api.Conformance defines its zero value as "a workload nobody has observed must not read as
+		// either conformant or drifted", and without this branch such a workload rendered byte-for-byte
+		// identically to one observed and confirmed Conformant — state Instrumented, no issues at all. An
+		// adopted workload hit that every time: adoption records the marker, and the observation that would
+		// judge it had not run yet, or could not.
+		//
+		// Deliberately NOT drift. Drift asserts a comparison against a desired state, and the two reasons this
+		// branch fires are the two where no such comparison happened. A missing destination in particular means
+		// the desired export endpoint does not exist, which is why the observers refuse to compute a verdict at
+		// all there rather than reporting every correctly instrumented workload as decayed on its export
+		// settings. The tell is that configuring a destination would clear an "error" without anything about the
+		// workload changing — so it was never an error with the workload.
+		//
+		// Equally NOT the NotInstrumented wait above: agents are live and exporting telemetry, and the state
+		// has to keep saying so, exactly as the source-gone branch below keeps instrumented true. So the state
+		// stays Instrumented (already set) and severity is "unknown" rather than "error" — nothing is broken,
+		// something is unconfirmed. Transient, because it resolves with no action on the workload itself.
+		//
+		// It precedes the drift branch so a missing destination outranks a STALE verdict: a Partial recorded
+		// while a destination existed describes a comparison against an endpoint that is now gone. With a
+		// destination present, WaitingFor is not "destination" and a Partial is not Unknown, so a genuine drift
+		// still falls through and reports as drift.
+		//
+		// ConformanceObservable is required because both messages below promise a verification. On a manual-mode
+		// type this connector registers no observer for, Unknown is permanent rather than pending, and every one
+		// of its workloads would carry a transient issue advertising a pass that never runs. That gap is a
+		// connector capability limit, and activeObservers already warns about it once at startup.
+		msg := notVerifiedMessage(w.WaitingFor)
+		progress.Stage = "InstrumentationNotVerified"
+		progress.Message = &msg
+		progress.WaitingFor = strPtrOrNil(w.WaitingFor)
+		issues = append(issues, &model.WorkloadIssue{
+			Code:     "InstrumentationNotVerified",
+			Severity: "unknown",
+			Message:  msg,
+			// Dated only when the cause is a standing one. A workload merely awaiting its first observation
+			// resolves within a cycle, and a timestamp on that would imply a condition worth triaging.
+			Since:     verificationBlockedSince(w),
+			Transient: boolPtr(true),
+		})
+	} else if w.ManagementMode == spec.ModeManual && w.SourceMatched && w.SourceEnabled && w.Instrumented &&
 		w.Conformance == api.ConformancePartial {
 		// Instrumentation is attributable to Odigos but does not match what it should be — a component was
 		// never applied, or carries a stale value after the destination or service name changed. In automatic
@@ -518,6 +562,29 @@ func waitingForMessage(waitingFor string) string {
 	default:
 		return "waiting for " + waitingFor
 	}
+}
+
+// notVerifiedMessage explains why an APPLIED instrumentation has not been confirmed to match, split by which
+// of the two causes holds. Both endings matter more than the diagnosis: neither is something to fix on the
+// workload, and a customer reading "not verified" will otherwise assume it is.
+func notVerifiedMessage(waitingFor string) string {
+	if waitingFor == api.WaitingForDestination {
+		return "instrumentation is applied to this workload, but Odigos cannot verify it matches what it should be: " +
+			"the connector has no OTLP destination, so there is no expected export configuration to compare against. " +
+			"Odigos verifies it automatically once a destination is configured."
+	}
+	return "instrumentation is applied to this workload, but Odigos has not verified yet that it matches what it " +
+		"should be. This resolves on its own at the next observation pass."
+}
+
+// verificationBlockedSince dates the not-verified condition only when its cause is a standing one — a missing
+// destination, which holds until the customer configures one. A workload awaiting its first observation pass
+// gets no timestamp: that clears within a cycle, and dating it would present a moment as a duration.
+func verificationBlockedSince(w api.DiscoveredWorkload) *string {
+	if w.WaitingFor != api.WaitingForDestination {
+		return nil
+	}
+	return sinceOrNil(w.SourceIntentAt)
 }
 
 // sourceGoneIssue names the manual-mode condition where instrumentation outlived the intent that asked for
