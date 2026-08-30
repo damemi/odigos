@@ -47,7 +47,7 @@ COPY --from=oss-clone /src/oss /
 ############################################################
 # 3) Webapp stage — yarn-build the Next.js frontend from oss-src
 ############################################################
-FROM --platform=$BUILDPLATFORM node:20.19.0-alpine AS webapp
+FROM --platform=$BUILDPLATFORM node:24-alpine AS webapp
 WORKDIR /src/oss/frontend
 COPY --from=oss-src /frontend .
 WORKDIR /src/oss/frontend/webapp
