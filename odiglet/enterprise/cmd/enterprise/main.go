@@ -221,7 +221,7 @@ func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distro
 		}
 	}
 
-	goFactory, err := sdks.NewGoInstrumentationFactoryEnterprise(suffix, wp, otlpConn)
+	goFactory, err := sdks.NewGoInstrumentationFactoryEnterprise(suffix, wp, tracesConsumer)
 	if err != nil {
 		return nil, err
 	}

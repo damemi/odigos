@@ -18,8 +18,7 @@ import (
 
 	"go.opentelemetry.io/auto"
 	goAutoConfig "go.opentelemetry.io/auto/config"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"google.golang.org/grpc"
+	"go.opentelemetry.io/collector/consumer"
 
 	"github.com/odigos-io/ebpf-core/pkg/collection"
 	"github.com/odigos-io/ebpf-core/pkg/wasp"
@@ -69,19 +68,21 @@ type GoInstrumentationFactoryEnterprise struct {
 	waspMapsProvider   wasp.MapsProvider
 	traceIdSuffix      uint8
 	logger             *commonlogger.OdigosLogger
-	otlpConn           *grpc.ClientConn
+	// tracesConsumer is the single OTLP/gRPC traces exporter shared by every
+	// instrumented Go process.
+	tracesConsumer consumer.Traces
 }
 
-func NewGoInstrumentationFactoryEnterprise(traceIdSuffix uint8, ws wasp.MapsProvider, otlpConn *grpc.ClientConn) (instrumentation.Factory, error) {
-	if otlpConn == nil {
-		return nil, errNoOTLPConn
+func NewGoInstrumentationFactoryEnterprise(traceIdSuffix uint8, ws wasp.MapsProvider, tracesConsumer consumer.Traces) (instrumentation.Factory, error) {
+	if tracesConsumer == nil {
+		return nil, errors.New("traces consumer is nil")
 	}
 	g := &GoInstrumentationFactoryEnterprise{
 		offsetLastModified: time.Time{},
 		waspMapsProvider:   ws,
 		traceIdSuffix:      traceIdSuffix,
 		logger:             commonlogger.LoggerCompat().With("subsystem", "ebpfgosdk"),
-		otlpConn:           otlpConn,
+		tracesConsumer:     tracesConsumer,
 	}
 	if err := g.updateLocalOffsets(); err != nil {
 		return nil, err
@@ -194,21 +195,9 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 		g.offsetFileBytes = []byte{}
 	}
 
-	defaultExporter, err := otlptracegrpc.New(
-		ctx,
-		otlptracegrpc.WithGRPCConn(g.otlpConn),
-	)
-	if err != nil {
-		g.logger.Error("failed to create exporter", "error", err)
-		return nil, err
-	}
-
 	// Fetch initial config based on the InstrumentationConfig CR
 	initialConfig, err := convertToGoInstrumentationConfig(settings.InitialConfig)
 	if err != nil {
-		if shutdownErr := defaultExporter.Shutdown(ctx); shutdownErr != nil {
-			g.logger.Error("failed to shutdown exporter after config error", "error", shutdownErr)
-		}
 		return nil, fmt.Errorf("invalid initial config type, expected *odigosv1.ContainerAgentConfig, got %T", settings.InitialConfig)
 	}
 
@@ -221,7 +210,6 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 		auto.WithPID(pid),
 		auto.WithResourceAttributes(settings.ResourceAttributes...),
 		auto.WithServiceName(settings.ServiceName),
-		auto.WithTraceExporter(defaultExporter),
 		auto.WithGlobal(),
 		auto.WithConfigProvider(cp),
 		auto.WithServiceIdentifyingAttrs(identifyingAttributeSet(settings.ResourceAttributes...)...),
@@ -253,13 +241,11 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 
 	inst, err := auto.NewInstrumentation(
 		ctx,
+		g.tracesConsumer,
 		opts...,
 	)
 	if err != nil {
 		g.logger.Error("instrumentation setup failed", "error", err)
-		if shutdownErr := defaultExporter.Shutdown(ctx); shutdownErr != nil {
-			g.logger.Error("failed to shutdown exporter after instrumentation setup failure", "error", shutdownErr)
-		}
 		if waspMaps != nil {
 			// return ownership of the wasp maps to the provider in case we failed to instrument this process
 			err = errors.Join(err, g.waspMapsProvider.Take(podName, waspMaps))

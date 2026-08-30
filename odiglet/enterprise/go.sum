@@ -281,8 +281,8 @@ github.com/odigos-io/ebpf-java-instrumentation/v2 v2.46.0 h1:kGSblt2S2Z2D7uoMD+S
 github.com/odigos-io/ebpf-java-instrumentation/v2 v2.46.0/go.mod h1:2BIqR03fpEWFOpHX3dodkYMGFUIAo+GPpOMjEsv+ytM=
 github.com/odigos-io/ebpf-nodejs-instrumentation v0.13.0 h1:ke0aZNfNzzf/hekDDAgO/tbVJa4/SOokYzbYeTaheqw=
 github.com/odigos-io/ebpf-nodejs-instrumentation v0.13.0/go.mod h1:pXCGQ5GpWuu6Rhvyye1qLpXS+loKe5aO4djbr3h7VM0=
-github.com/odigos-io/enterprise-go-instrumentation v1.24.0 h1:qMigRdtSljObZrD1Fmrpbe8+8+B01W/irpobIbKli48=
-github.com/odigos-io/enterprise-go-instrumentation v1.24.0/go.mod h1:4BXaVSh7a0W32Rn5c3xUnrIBmq5bq4yChh/CrBxMfls=
+github.com/odigos-io/enterprise-go-instrumentation v1.27.0 h1:9ZGHNNYrLvRjXDwb55oxvv+4oQnwPr01nIgnPOpxsYc=
+github.com/odigos-io/enterprise-go-instrumentation v1.27.0/go.mod h1:EBI+BUoNMcZGslF10RCfUsyzB06/KyXe53AZAN23W/0=
 github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752 h1:Fv18bWsleIZzGy+SWOuwva3IYlcoEOclDxRy/WnypB8=
 github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752/go.mod h1:J5jQgrjFpdwSS2N924u5suppg1rSDkm536Fb3ZHDFwU=
 github.com/odigos-io/odigos-device-plugin v1.19.8 h1:YsNALk+mZeMVvgvn7FYGUKEPuZizODyJnP17a0ZMgaY=
@@ -587,8 +587,6 @@ golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550/go.mod h1:yigFU9vqHzYiE8U
 golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
 golang.org/x/crypto v0.54.0 h1:YLIA59K4fiNzHzjnZt2tUJQjQtUWfWbeHBqKtk3eScw=
 golang.org/x/crypto v0.54.0/go.mod h1:KWL8ny2AZdGR2cWmzeHrp2azQPGogOv+HeQaVEXC2dk=
-golang.org/x/exp v0.0.0-20260527015227-08cc5374adb3 h1:VHEvKbpgPXcPXn40t9cDTGK3JZwMikIEyF/CTrFfu7k=
-golang.org/x/exp v0.0.0-20260527015227-08cc5374adb3/go.mod h1:d2fgXJLVs4dYDHUk5lwMIfzRzSrWCfGZb0ZqeLa/Vcw=
 golang.org/x/mod v0.2.0/go.mod h1:s0Qsj1ACt9ePp/hMypM3fl4fZqREWJwdYDEqhRiZZUA=
 golang.org/x/mod v0.3.0/go.mod h1:s0Qsj1ACt9ePp/hMypM3fl4fZqREWJwdYDEqhRiZZUA=
 golang.org/x/mod v0.40.0 h1:hUv+3cXcdRHz08UmSiOob7sadHig73uo5bkXxQ/tvUs=
@@ -684,8 +682,6 @@ k8s.io/utils v0.0.0-20260507154919-ff6756f316d2 h1:wU4tMEhLGgIbLvXQb1cfN+EcM0wf7
 k8s.io/utils v0.0.0-20260507154919-ff6756f316d2/go.mod h1:xDxuJ0whA3d0I4mf/C4ppKHxXynQ+fxnkmQH0vTHnuk=
 pgregory.net/rapid v1.2.0 h1:keKAYRcjm+e1F0oAuU5F5+YPAWcyxNNRK2wud503Gnk=
 pgregory.net/rapid v1.2.0/go.mod h1:PY5XlDGj0+V1FCq0o192FdRhpKHGTRIWBgqjDBTrq04=
-rsc.io/binaryregexp v0.2.0 h1:HfqmD5MEmC0zvwBuF187nq9mdnXjXsSivRiXN7SmRkE=
-rsc.io/binaryregexp v0.2.0/go.mod h1:qTv7/COck+e2FymRvadv62gMdZztPaShugOCi3I+8D8=
 sigs.k8s.io/controller-runtime v0.23.3 h1:VjB/vhoPoA9l1kEKZHBMnQF33tdCLQKJtydy4iqwZ80=
 sigs.k8s.io/controller-runtime v0.23.3/go.mod h1:B6COOxKptp+YaUT5q4l6LqUJTRpizbgf9KSRNdQGns0=
 sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 h1:IpInykpT6ceI+QxKBbEflcR5EXP7sU1kvOlxwZh5txg=
