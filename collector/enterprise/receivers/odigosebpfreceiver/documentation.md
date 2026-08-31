@@ -28,7 +28,7 @@ Total number of bytes read from the eBPF buffer (perf or ring).
 
 | Unit | Metric Type | Value Type | Monotonic | Stability |
 | ---- | ----------- | ---------- | --------- | --------- |
-| bytes | Sum | Int | true | Development |
+| By | Sum | Int | true | Development |
 
 ### otelcol_odigos_ebpf_accepted_spans
 

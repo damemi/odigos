@@ -55,7 +55,7 @@ func AssertEqualEbpfTotalBytesRead(t *testing.T, tt *componenttest.Telemetry, dp
 	want := metricdata.Metrics{
 		Name:        "otelcol_ebpf_total_bytes_read",
 		Description: "Total number of bytes read from the eBPF buffer (perf or ring). [Development]",
-		Unit:        "bytes",
+		Unit:        "By",
 		Data: metricdata.Sum[int64]{
 			Temporality: metricdata.CumulativeTemporality,
 			IsMonotonic: true,

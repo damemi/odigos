@@ -4,7 +4,7 @@ SRC_ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 
 TOOLS_BIN_DIR    := $(SRC_ROOT)/.tools
 
-BUILDER_VERSION = 0.151.0
+BUILDER_VERSION = 0.159.0
 BUILDER := $(TOOLS_BIN_DIR)/builder_$(BUILDER_VERSION)
 # mdatagen must track BUILDER_VERSION; it and goimports are pinned in internal/tools/go.mod
 GO_LICENSES_VERSION = v1.6.0
