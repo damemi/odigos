@@ -18,9 +18,9 @@ require (
 	github.com/odigos-io/odigos/common v1.36.0-pre8
 	github.com/odigos-io/odigos/deviceplugin v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/distros v1.36.0-pre8
-	github.com/odigos-io/odigos/instrumentation v1.36.0-pre8
+	github.com/odigos-io/odigos/instrumentation v0.0.0-feat.insights.5
 	github.com/odigos-io/odigos/k8sutils v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/odiglet v1.36.0-pre8
+	github.com/odigos-io/odigos/odiglet v0.0.0-feat.insights.5
 	github.com/odigos-io/odigos/procdiscovery v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/auto v0.24.0
 	go.opentelemetry.io/collector/consumer v1.57.0
@@ -153,8 +153,8 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/odigos-io/odigos-device-plugin v1.19.8 // indirect
-	github.com/odigos-io/odigos/odiglet/pkg/ebpf/sdks/obi v1.36.0-pre8 // indirect
-	github.com/odigos-io/odigos/opampserver v1.36.0-pre8 // indirect
+	github.com/odigos-io/odigos/odiglet/pkg/ebpf/sdks/obi v0.0.0-feat.insights.5 // indirect
+	github.com/odigos-io/odigos/opampserver v0.0.0-feat.insights.5 // indirect
 	github.com/odigos-io/runtime-detector v0.0.25 // indirect
 	github.com/ohler55/ojg v1.28.2 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
@@ -291,13 +291,13 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v1.27.0
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.36.0-pre8
+replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v0.0.0-feat.insights.5
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.36.0-pre8
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v0.0.0-feat.insights.5
 
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.36.0-pre8
+replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v0.0.0-feat.insights.5
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.36.0-pre8
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v0.0.0-feat.insights.5
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
@@ -309,16 +309,16 @@ replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 // Added during OBI change
 replace cloud.google.com/go/compute => cloud.google.com/go/compute v1.57.0
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.36.0-pre8
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v0.0.0-feat.insights.5
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.36.0-pre8
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v0.0.0-feat.insights.5
 
-replace github.com/odigos-io/odigos/deviceplugin => github.com/odigos-io/odigos/deviceplugin v1.36.0-pre8
+replace github.com/odigos-io/odigos/deviceplugin => github.com/odigos-io/odigos/deviceplugin v0.0.0-feat.insights.5
 
 // k8sutils requires this via its own local-only replace, which doesn't propagate across repos.
-replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v1.36.0-pre8
+replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v0.0.0-feat.insights.5
 
 // Same as actions above, required transitively via k8sutils.
-replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.36.0-pre8
+replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v0.0.0-feat.insights.5
 
 replace github.com/odigos-io/odigos-enterprise/ebpfshare => ../ebpfshare

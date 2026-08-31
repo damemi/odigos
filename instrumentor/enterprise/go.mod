@@ -6,10 +6,10 @@ require (
 	github.com/odigos-io/ebpf-core v0.21.0
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/api v1.36.0-pre8
+	github.com/odigos-io/odigos/api v0.0.0-feat.insights.5
 	github.com/odigos-io/odigos/common v1.36.0-pre8
-	github.com/odigos-io/odigos/instrumentor v1.36.0-pre8
-	github.com/odigos-io/odigos/k8sutils v1.36.0-pre8
+	github.com/odigos-io/odigos/instrumentor v0.0.0-feat.insights.5
+	github.com/odigos-io/odigos/k8sutils v0.0.0-feat.insights.5
 	k8s.io/api v0.35.4
 	k8s.io/client-go v0.35.4
 	sigs.k8s.io/controller-runtime v0.23.3
@@ -17,7 +17,7 @@ require (
 
 require (
 	github.com/argoproj/argo-rollouts v1.9.1 // indirect
-	github.com/odigos-io/odigos/actions v1.36.0-pre8 // indirect
+	github.com/odigos-io/odigos/actions v0.0.0-feat.insights.5 // indirect
 	github.com/openshift/api v3.9.0+incompatible // indirect
 	go.uber.org/zap/exp v0.3.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
@@ -106,22 +106,22 @@ replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
-replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v1.36.0-pre8
+replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v0.0.0-feat.insights.5
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.36.0-pre8
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v0.0.0-feat.insights.5
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.36.0-pre8
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v0.0.0-feat.insights.5
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.36.0-pre8
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v0.0.0-feat.insights.5
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.36.0-pre8
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v0.0.0-feat.insights.5
 
-replace github.com/odigos-io/odigos/instrumentor => github.com/odigos-io/odigos/instrumentor v1.36.0-pre8
+replace github.com/odigos-io/odigos/instrumentor => github.com/odigos-io/odigos/instrumentor v0.0.0-feat.insights.5
 
-replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v1.36.0-pre8
+replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v0.0.0-feat.insights.5
 
 // k8sutils requires this via its own local-only replace, which doesn't propagate across repos.
-replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.36.0-pre8
+replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v0.0.0-feat.insights.5
 
 // argo-rollouts@v1.9.1 requires this via its own internal-only replace, which doesn't propagate to us.
 replace k8s.io/kubelet => k8s.io/kubelet v0.34.1
