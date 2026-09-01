@@ -19,7 +19,7 @@ make test             # build a collector from the registry and run every signal
 Use the Go version in `odigosotelcol/go.mod`; if your toolchain is older, run in a container:
 
 ```bash
-docker run -it -v "$(pwd)":/app -w /app golang:1.26.2-trixie make build
+docker run -it -v "$(pwd)":/app -w /app golang:1.26.4-trixie make build
 ```
 
 `-checklinkname=0` is not optional — `github.com/odigos-io/go-rtml` uses `//go:linkname` into
@@ -66,3 +66,10 @@ on every PR touching `collector/`, then builds and runs the smoke test.
 If `make genodigoscol` fails to resolve dependencies (typically
 `invalid version: unknown revision 000000000000`), clear stale local tooling with
 `git clean -dxf collector/.tools`.
+
+## Remote management
+
+The normal and remotely managed modes use the same enterprise Collector image. Existing deployments
+still start `/odigosotelcol`; cloud connector deployments opt in by starting the bundled
+`/odigosopampsupervisor` instead. See [`managed/README.md`](./managed/README.md) for the deployment
+contract, persistent state, first-boot fallback, remote configuration behavior, and security boundary.

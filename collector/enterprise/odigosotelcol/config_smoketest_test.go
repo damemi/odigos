@@ -12,6 +12,7 @@ import (
 	envprovider "go.opentelemetry.io/collector/confmap/provider/envprovider"
 	fileprovider "go.opentelemetry.io/collector/confmap/provider/fileprovider"
 	"go.opentelemetry.io/collector/otelcol"
+	"go.opentelemetry.io/collector/otelcol/otelcoltest"
 )
 
 // TestFullSignalConfigStartsSuccessfully builds a real Collector — using the actual
@@ -76,5 +77,18 @@ func TestEnterpriseOnlyComponentsAreRegistered(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, factories.Extensions, component.MustNewType("odigos_enterprise_auth"))
+	assert.Contains(t, factories.Extensions, component.MustNewType("opamp"))
+	assert.Contains(t, factories.Receivers, component.MustNewType("nop"))
 	assert.Contains(t, factories.Receivers, component.MustNewType("odigosebpf"))
+}
+
+// The Supervisor uses this config when Central is unavailable on a first boot. Keep validation in
+// the generated distribution so a component change cannot silently break the managed-mode safety
+// path while the normal Collector configs continue to pass.
+func TestManagedFallbackConfigValidates(t *testing.T) {
+	factories, err := components()
+	require.NoError(t, err)
+
+	_, err = otelcoltest.LoadConfigAndValidate("../managed/fallback.yaml", factories)
+	require.NoError(t, err)
 }

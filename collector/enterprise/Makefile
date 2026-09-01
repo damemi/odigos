@@ -6,11 +6,14 @@ TOOLS_BIN_DIR    := $(SRC_ROOT)/.tools
 
 BUILDER_VERSION = 0.159.0
 BUILDER := $(TOOLS_BIN_DIR)/builder_$(BUILDER_VERSION)
+OPAMP_SUPERVISOR_DIR := $(SRC_ROOT)/cmd/odigosopampsupervisor
 # mdatagen must track BUILDER_VERSION; it and goimports are pinned in internal/tools/go.mod
 GO_LICENSES_VERSION = v1.6.0
 
 CURRENT_OS := $(shell go env GOOS)
 CURRENT_ARCH := $(shell go env GOHOSTARCH)
+TARGET_OS ?= $(CURRENT_OS)
+TARGET_ARCH ?= $(shell go env GOARCH)
 
 BUILDER_URL = https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/cmd%2Fbuilder%2Fv$(BUILDER_VERSION)/ocb_$(BUILDER_VERSION)_$(CURRENT_OS)_$(CURRENT_ARCH)
 
@@ -36,6 +39,14 @@ build-odigoscol: download_builder
 	--config builder-config.yaml \
 	--skip-generate \
 	--skip-get-modules
+
+# The Supervisor is a separate process and can move independently from the Collector component
+# version. The v0.159.0 pin includes pre-apply validation, startup fallback, automatic
+# last-known-good rollback, and the corresponding upstream process-management fixes.
+.PHONY: build-opamp-supervisor
+build-opamp-supervisor:
+	cd $(OPAMP_SUPERVISOR_DIR) && GOWORK=off CGO_ENABLED=0 GOOS=$(TARGET_OS) GOARCH=$(TARGET_ARCH) \
+		$(GOCMD) build -trimpath -ldflags="-s -w" -o odigosopampsupervisor .
 
 # the enterprise-owned components; odigosotelcol is generated and internal/tools holds no buildable
 # package, so both are excluded here and handled separately
@@ -110,7 +121,13 @@ licenses: go-licenses
 	@if [ -d "$(SRC_ROOT)/odigosotelcol/licenses" ]; then \
 		rm -rf $(SRC_ROOT)/odigosotelcol/licenses; \
 	fi
+	@if [ -d "$(OPAMP_SUPERVISOR_DIR)/licenses" ]; then \
+		rm -rf $(OPAMP_SUPERVISOR_DIR)/licenses; \
+	fi
 	cd odigosotelcol && $(TOOLS_BIN_DIR)/go-licenses save . --save_path=licenses --ignore=github.com/segmentio/asm --ignore=odigos.io/opentelemetry-collector --ignore=github.com/odigos-io/odigos-enterprise
+	cd $(OPAMP_SUPERVISOR_DIR) && $(TOOLS_BIN_DIR)/go-licenses save . --save_path=licenses --ignore=github.com/odigos-io/odigos-enterprise
+	cp -R $(OPAMP_SUPERVISOR_DIR)/licenses/. $(SRC_ROOT)/odigosotelcol/licenses/
+	rm -rf $(OPAMP_SUPERVISOR_DIR)/licenses
 
 .PHONY: build
-build: genodigoscol build-odigoscol
+build: genodigoscol build-odigoscol build-opamp-supervisor

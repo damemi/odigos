@@ -68,6 +68,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension v0.159.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/extension/opampextension v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/azureblobstorageexporter v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/googlecloudstorageexporter v0.159.0
@@ -115,10 +116,12 @@ require (
 	go.opentelemetry.io/collector/extension/zpagesextension v0.159.0
 	go.opentelemetry.io/collector/featuregate v1.65.0
 	go.opentelemetry.io/collector/otelcol v0.159.0
+	go.opentelemetry.io/collector/otelcol/otelcoltest v0.159.0
 	go.opentelemetry.io/collector/processor v1.65.0
 	go.opentelemetry.io/collector/processor/batchprocessor v0.159.0
 	go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.159.0
 	go.opentelemetry.io/collector/receiver v1.65.0
+	go.opentelemetry.io/collector/receiver/nopreceiver v0.159.0
 	go.opentelemetry.io/collector/receiver/otlpreceiver v0.159.0
 	go.opentelemetry.io/collector/service v0.159.0
 	go.opentelemetry.io/ebpf-profiler v0.0.202632
@@ -483,6 +486,7 @@ require (
 	github.com/mdlayher/netlink v1.7.2 // indirect
 	github.com/mdlayher/socket v0.6.0 // indirect
 	github.com/mdlayher/vsock v1.3.0 // indirect
+	github.com/michel-laterman/proxy-connect-dialer-go v0.1.0 // indirect
 	github.com/microsoft/ApplicationInsights-Go v0.4.4 // indirect
 	github.com/miekg/dns v1.1.72 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
@@ -503,10 +507,12 @@ require (
 	github.com/odigos-io/odigos-enterprise/ebpfshare v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos/common v1.36.0-pre8 // indirect
-	github.com/oklog/ulid/v2 v2.1.1 // indirect
+	github.com/oklog/ulid/v2 v2.1.2 // indirect
+	github.com/open-telemetry/opamp-go v0.23.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding v0.159.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/internal/basicauth v0.159.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/internal/credentialsfile v0.159.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/extension/opampcustommessages v0.159.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/sumologicextension v0.159.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/awsutil v0.159.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/cwlogs v0.159.0 // indirect
@@ -644,6 +650,8 @@ require (
 	go.opentelemetry.io/collector/config/configretry v1.65.0 // indirect
 	go.opentelemetry.io/collector/config/configtelemetry v0.159.0 // indirect
 	go.opentelemetry.io/collector/config/configtls v1.65.0 // indirect
+	go.opentelemetry.io/collector/confmap/provider/httpprovider v1.65.0 // indirect
+	go.opentelemetry.io/collector/confmap/provider/yamlprovider v1.65.0 // indirect
 	go.opentelemetry.io/collector/confmap/xconfmap v0.159.0 // indirect
 	go.opentelemetry.io/collector/connector/connectortest v0.159.0 // indirect
 	go.opentelemetry.io/collector/connector/xconnector v0.159.0 // indirect

@@ -15,6 +15,9 @@ extensions:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension v0.159.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension v0.159.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector v0.159.0
+  # Used by the OpAMP Supervisor bundled in the enterprise image. The Supervisor owns the
+  # connection to Central and injects this extension into every managed Collector config.
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/opampextension v0.159.0
   - gomod: github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v0.159.0
   - gomod: github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v0.159.0
   # Enterprise-only: verifies the Odigos on-prem token at startup and on expiry.
@@ -100,6 +103,9 @@ processors:
   - gomod: github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor v0.0.0-00010101000000-000000000000
 
 receivers:
+  # The Supervisor starts the Collector with a no-op pipeline until Central sends the first
+  # remote config, so this component is part of the managed-mode runtime contract.
+  - gomod: go.opentelemetry.io/collector/receiver/nopreceiver v0.159.0
   - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.159.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver v0.159.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.159.0

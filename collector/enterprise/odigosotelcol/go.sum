@@ -931,6 +931,8 @@ github.com/mdlayher/socket v0.6.0 h1:ScZPaAGyO1icQnbFrhPM8mnXyMu9qukC1K4ZoM2IQKU
 github.com/mdlayher/socket v0.6.0/go.mod h1:q7vozUAnxSqnjHc12Fik5yUKIzfZ8ITCfMkhOtE9z18=
 github.com/mdlayher/vsock v1.3.0 h1:bqQfZ1OznI03y6YiXp2sze05RVdzLn/zsfjnjd4+ivI=
 github.com/mdlayher/vsock v1.3.0/go.mod h1:WsuksavOvwCnV5UqGHUkvAvCy+Dqy81y4goKQTzxxNY=
+github.com/michel-laterman/proxy-connect-dialer-go v0.1.0 h1:Q8asukpmyrEheocd+R+6YEI4jcm62sHHalgTMG+LoLw=
+github.com/michel-laterman/proxy-connect-dialer-go v0.1.0/go.mod h1:HTlVkRAqzTRPYbWxgAiwMT9HRZMOqP3Mx7+toa3yJjc=
 github.com/microsoft/ApplicationInsights-Go v0.4.4 h1:G4+H9WNs6ygSCe6sUyxRc2U81TI5Es90b2t/MwX5KqY=
 github.com/microsoft/ApplicationInsights-Go v0.4.4/go.mod h1:fKRUseBqkw6bDiXTs3ESTiU/4YTIHsQS4W3fP2ieF4U=
 github.com/miekg/dns v1.1.72 h1:vhmr+TF2A3tuoGNkLDFK9zi36F2LS+hKTRW0Uf8kbzI=
@@ -1029,8 +1031,8 @@ github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v1.36.0-pre8
 github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v1.36.0-pre8.0.20260831124841-c2171d3b99d8/go.mod h1:JEZDKeKktKLl4QpG6X2HdW/YbftGo9HXWkXJ/FKQfoY=
 github.com/odigos-io/odigos/common v1.36.0-pre8.0.20260831124841-c2171d3b99d8 h1:CK1ZulaQB2Pjp3JZp5lmedSkFHQksTNvbX0m27c6Cz0=
 github.com/odigos-io/odigos/common v1.36.0-pre8.0.20260831124841-c2171d3b99d8/go.mod h1:WrHhNY0bxl5H/Qebeav3XQQmkkPYjIJjKkXMVRH15pY=
-github.com/oklog/ulid/v2 v2.1.1 h1:suPZ4ARWLOJLegGFiZZ1dFAkqzhMjL3J1TzI+5wHz8s=
-github.com/oklog/ulid/v2 v2.1.1/go.mod h1:rcEKHmBBKfef9DhnvX7y1HZBYxjXb0cP5ExxNsTT1QQ=
+github.com/oklog/ulid/v2 v2.1.2 h1:IEclFb9JNvzYA6MW2SCxbLzcHTVsfqm3PrqGQJH5zec=
+github.com/oklog/ulid/v2 v2.1.2/go.mod h1:rcEKHmBBKfef9DhnvX7y1HZBYxjXb0cP5ExxNsTT1QQ=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.8.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.16.5 h1:8xi0RTUf59SOSfEtZMvwTvXYMzG4gV23XVHOZiXNtnE=
@@ -1040,6 +1042,8 @@ github.com/onsi/ginkgo/v2 v2.27.2/go.mod h1:ArE1D/XhNXBXCBkKOLkbsb2c81dQHCRcF5zw
 github.com/onsi/gomega v1.5.0/go.mod h1:ex+gbHU/CVuBBDIJjb2X0qEXbFg53c61hWP/1CpauHY=
 github.com/onsi/gomega v1.38.2 h1:eZCjf2xjZAqe+LeWvKb5weQ+NcPwX84kqJ0cZNxok2A=
 github.com/onsi/gomega v1.38.2/go.mod h1:W2MJcYxRGV63b418Ai34Ud0hEdTVXq9NW9+Sx6uXf3k=
+github.com/open-telemetry/opamp-go v0.23.0 h1:k7h7w/muprut9/DAhUC4anX4v7hIdgO02gIsSjV4uq0=
+github.com/open-telemetry/opamp-go v0.23.0/go.mod h1:DIIVdkLefdqPW5L+4I2twmAicVrTB0Bp5XJAfedZzAM=
 github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.159.0 h1:GydJD6qg5Sx7ES/c0IrSlDAiFBL32LsxhJVj9matf8g=
 github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.159.0/go.mod h1:CsK7zb0f1qTyi3JdClDgnwU++2DLp0V7EEodpgdPHx4=
 github.com/open-telemetry/opentelemetry-collector-contrib/connector/datadogconnector v0.159.0 h1:Phci2IWITDp1yVHlp4XKq6j/Q5+9l7/IDQwnW0Q0dvM=
@@ -1138,6 +1142,10 @@ github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderele
 github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector v0.159.0/go.mod h1:aAcKNRUK1hi9JODiBlIGwOHxov/bUyVQD4vcl2z28SM=
 github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension v0.159.0 h1:4pkHy8yOrNITS3dklOgSEKqiH852rrpBHaGzMiOverU=
 github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension v0.159.0/go.mod h1:jvlPi7MgfofpQRohK3xF1oToPGyTMQ13Sikpwcz3kzU=
+github.com/open-telemetry/opentelemetry-collector-contrib/extension/opampcustommessages v0.159.0 h1:TFrC0x4hAZ7K4n/hyTF5K7qf6gja7nfJW1ePY+qqCvk=
+github.com/open-telemetry/opentelemetry-collector-contrib/extension/opampcustommessages v0.159.0/go.mod h1:cCs8yIxZMSpl1DGXKkTqa7uzGUVdkfGY7QnmyiRINMk=
+github.com/open-telemetry/opentelemetry-collector-contrib/extension/opampextension v0.159.0 h1:DlD3IPr+RNEpxsivEqPuYQjwi1IMGjsj4/Unsa3IdaI=
+github.com/open-telemetry/opentelemetry-collector-contrib/extension/opampextension v0.159.0/go.mod h1:gS8+OwAhzY3cG0N8f0YWgKpywcX9bssdEfo0oR1LJBs=
 github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.159.0 h1:wDVsWQm5a1Dv7CmqtWfsKyBLpa4WUpSiLpcHoXyTRDI=
 github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.159.0/go.mod h1:xyv2UutFweHcrqK0Rp3o3Rj1182Khw0qZ55Z5gd4hfg=
 github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage v0.159.0 h1:U6uzoElKwpSN2V07a/LziyJK2s8T8sCe644OqoEt8Zg=
@@ -1687,6 +1695,8 @@ go.opentelemetry.io/collector/processor/xprocessor v0.159.0 h1:CebI1CLvCf0vk0dy9
 go.opentelemetry.io/collector/processor/xprocessor v0.159.0/go.mod h1:TFQi79yVcJZmBwFQzb7GzfvBKzxhsxDykiJ9nmb58hI=
 go.opentelemetry.io/collector/receiver v1.65.0 h1:lVSzKBx3OkysH3H5DfRRhcTXeK8t4115kbfBXc2iems=
 go.opentelemetry.io/collector/receiver v1.65.0/go.mod h1:EeX+NMDAQlqqmZuL9aAIQKOcPsF4vqCRjhRAQJIitQ0=
+go.opentelemetry.io/collector/receiver/nopreceiver v0.159.0 h1:BWfH2skQcKImK/0Jf+bJBo+O2nGKNCYY266P+6vHtgc=
+go.opentelemetry.io/collector/receiver/nopreceiver v0.159.0/go.mod h1:vxgcAb23a625VD2MUlqAcBoZ84Z+q7Qy5vryl4Ob8GQ=
 go.opentelemetry.io/collector/receiver/otlpreceiver v0.159.0 h1:YkJsauGmydCz0oQnBImPtfJgKeeqX0zHJuFGlX9Va2c=
 go.opentelemetry.io/collector/receiver/otlpreceiver v0.159.0/go.mod h1:gr6bfXQtNOzfU1QXsYSDux/nO3q/ney4fb6Z38Ocvzc=
 go.opentelemetry.io/collector/receiver/receiverhelper v0.159.0 h1:8VQUdyQ1Ipah4LMlpH1DDsVvu/7I5ZKO8mrDL2ld3Qk=

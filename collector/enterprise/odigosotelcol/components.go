@@ -70,6 +70,7 @@ import (
 	oauth2clientauthextension "github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension"
 	googleclientauthextension "github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension"
 	k8sleaderelector "github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector"
+	opampextension "github.com/open-telemetry/opentelemetry-collector-contrib/extension/opampextension"
 	odigosconfigk8sextension "github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension"
 	odigoscapabilitiesextension "github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension"
 	odigosenterpriseauthextension "github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension"
@@ -107,6 +108,7 @@ import (
 	odigosprofilesprocessor "github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor"
 	odigosvmprofileattrsprocessor "github.com/odigos-io/odigos-enterprise/collector/processors/odigosvmprofileattrsprocessor"
 	odigossymbolizeprocessor "github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor"
+	nopreceiver "go.opentelemetry.io/collector/receiver/nopreceiver"
 	otlpreceiver "go.opentelemetry.io/collector/receiver/otlpreceiver"
 	zipkinreceiver "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver"
 	filelogreceiver "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
@@ -149,6 +151,7 @@ func components() (otelcol.Factories, error) {
 		oauth2clientauthextension.NewFactory(),
 		googleclientauthextension.NewFactory(),
 		k8sleaderelector.NewFactory(),
+		opampextension.NewFactory(),
 		odigosconfigk8sextension.NewFactory(),
 		odigoscapabilitiesextension.NewFactory(),
 		odigosenterpriseauthextension.NewFactory(),
@@ -166,12 +169,14 @@ func components() (otelcol.Factories, error) {
 		oauth2clientauthextension.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension v0.159.0",
 		googleclientauthextension.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension v0.159.0",
 		k8sleaderelector.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector v0.159.0",
+		opampextension.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/extension/opampextension v0.159.0",
 		odigosconfigk8sextension.NewFactory().Type(): "github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v0.159.0",
 		odigoscapabilitiesextension.NewFactory().Type(): "github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v0.159.0",
 		odigosenterpriseauthextension.NewFactory().Type(): "github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension v0.0.0-00010101000000-000000000000",
 	})
 
 	factories.Receivers, err = otelcol.MakeFactoryMap[receiver.Factory](
+		nopreceiver.NewFactory(),
 		otlpreceiver.NewFactory(),
 		zipkinreceiver.NewFactory(),
 		filelogreceiver.NewFactory(),
@@ -187,6 +192,7 @@ func components() (otelcol.Factories, error) {
 		return otelcol.Factories{}, err
 	}
 	factories.ReceiverModules = makeModulesMap(factories.Receivers, map[component.Type]string{
+		nopreceiver.NewFactory().Type(): "go.opentelemetry.io/collector/receiver/nopreceiver v0.159.0",
 		otlpreceiver.NewFactory().Type(): "go.opentelemetry.io/collector/receiver/otlpreceiver v0.159.0",
 		zipkinreceiver.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver v0.159.0",
 		filelogreceiver.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.159.0",
