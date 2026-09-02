@@ -297,7 +297,7 @@ spec:
               # Cypress is installed only in CI (not a package.json dependency).
               # Use yarn global add (not yarn dlx) — this repo uses Yarn classic
               # v1, which does not support `dlx`.
-              yarn add -D cypress@latest > yarn-add-cypress.log 2>&1
+              yarn add -D cypress@16 > yarn-add-cypress.log 2>&1
               export PATH="$(yarn global bin):$PATH"
               ./node_modules/.bin/cypress run --e2e -q > cy-run.log 2>&1
               exit $?

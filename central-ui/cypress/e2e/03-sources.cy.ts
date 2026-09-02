@@ -1,5 +1,5 @@
 import { CRD_NAMES, DATA_IDS, NAMESPACES, ROUTES, SELECTED_ENTITIES, TEXTS } from '../constants';
-import { awaitToast, clickRetryable, findCrdId, getCrdById, getCrdIds, handleExceptions, interceptGraphql, signInAndSelectProxy, updateV2Entity, visitPage, waitForCrdCount, waitForGraphqlOperation } from '../functions';
+import { awaitToast, clickRetryable, cyExec, findCrdId, getCrdById, getCrdIds, handleExceptions, interceptGraphql, signInAndSelectProxy, updateV2Entity, visitPage, waitForCrdCount, waitForGraphqlOperation } from '../functions';
 
 // All cluster-side assertions target the proxy's namespaces (which live on
 // the same kind cluster as central in the chainsaw test setup).
@@ -101,8 +101,8 @@ describe('Sources CRUD (via Central UI → Proxy)', () => {
   });
 
   it('Should uninstrument all sources via kubectl', () => {
-    cy.exec(`kubectl delete ${sourceCrdName} --all -n ${namespace}`, { failOnNonZeroExit: false });
-    cy.exec(`kubectl delete ${configCrdName} --all -n ${namespace}`, { failOnNonZeroExit: false });
+    cyExec(`kubectl delete ${sourceCrdName} --all -n ${namespace}`, { failOnNonZeroExit: false });
+    cyExec(`kubectl delete ${configCrdName} --all -n ${namespace}`, { failOnNonZeroExit: false });
 
     getCrdIds({ namespace, crdName: sourceCrdName, expectedError: TEXTS.NO_RESOURCES(namespace), expectedLength: 0 });
   });

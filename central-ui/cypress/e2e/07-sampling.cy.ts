@@ -1,5 +1,5 @@
 import { CRD_NAMES, DATA_IDS, NAMESPACES, ROUTES } from '../constants';
-import { awaitToast, dismissSamplingOnboardingModal, handleExceptions, interceptGraphql, signInAndSelectProxy, visitPage, waitForGraphqlOperation } from '../functions';
+import { awaitToast, cyExec, dismissSamplingOnboardingModal, handleExceptions, interceptGraphql, signInAndSelectProxy, visitPage, waitForGraphqlOperation } from '../functions';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CrdSpec = Record<string, any>;
@@ -76,7 +76,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   // ── Cleanup ──────────────────────────────────────────────────────────────
 
   it('Should clean up any existing sampling CRDs before tests', () => {
-    cy.exec(`kubectl delete ${crdName} --all -n ${namespace}`, { failOnNonZeroExit: false });
+    cyExec(`kubectl delete ${crdName} --all -n ${namespace}`, { failOnNonZeroExit: false });
     cy.wait(2000);
   });
 
@@ -163,7 +163,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   // ── VERIFY CREATE via kubectl ────────────────────────────────────────────
 
   it('Should have sampling CRDs in the cluster after creation', () => {
-    cy.exec(`kubectl get ${crdName} -n ${namespace} -o json`).then(({ stdout }) => {
+    cyExec(`kubectl get ${crdName} -n ${namespace} -o json`).then(({ stdout }) => {
       const parsed = JSON.parse(stdout);
       const items = parsed.items || [];
       expect(items.length).to.be.greaterThan(0);
@@ -273,7 +273,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   // ── VERIFY UPDATE via kubectl ────────────────────────────────────────────
 
   it('Should have updated rule names in the cluster', () => {
-    cy.exec(`kubectl get ${crdName} -n ${namespace} -o json`).then(({ stdout }) => {
+    cyExec(`kubectl get ${crdName} -n ${namespace} -o json`).then(({ stdout }) => {
       const parsed = JSON.parse(stdout);
       const items = parsed.items || [];
       expect(items.length).to.be.greaterThan(0);
@@ -347,7 +347,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
   // ── VERIFY DELETE via kubectl ────────────────────────────────────────────
 
   it('Should have no user-created sampling rules in the cluster after deletion', () => {
-    cy.exec(`kubectl get ${crdName} -n ${namespace} -o json`, { failOnNonZeroExit: false }).then(({ stdout, stderr }) => {
+    cyExec(`kubectl get ${crdName} -n ${namespace} -o json`, { failOnNonZeroExit: false }).then(({ stdout, stderr }) => {
       if (stderr.includes('No resources found') || !stdout.trim()) {
         return;
       }

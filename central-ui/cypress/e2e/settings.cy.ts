@@ -1,5 +1,5 @@
 import { CONFIG_MAPS, DATA_IDS, NAMESPACES, PROXY, ROUTES, TEXTS } from '../constants';
-import { awaitToast, handleExceptions, interceptGraphql, signInAndSelectProxy, visitPage, waitForGraphqlOperation } from '../functions';
+import { awaitToast, cyExec, handleExceptions, interceptGraphql, signInAndSelectProxy, visitPage, waitForGraphqlOperation } from '../functions';
 
 const namespace = NAMESPACES.ODIGOS;
 const testClusterName = 'cypress-e2e-test';
@@ -170,7 +170,7 @@ const withFieldPath = (fieldPath: string, extraDataIdSuffix: string, fn: (resolv
 };
 
 const getConfigMapYaml = (configMapName: string, callback: (yaml: string) => void) => {
-  cy.exec(`kubectl get configmap ${configMapName} -n ${namespace} -o jsonpath='{.data.config\\.yaml}'`).then(({ stdout }) => {
+  cyExec(`kubectl get configmap ${configMapName} -n ${namespace} -o jsonpath='{.data.config\\.yaml}'`).then(({ stdout }) => {
     callback(stdout);
   });
 };
@@ -323,7 +323,7 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
   // ── Setup ─────────────────────────────────────────────────────────────────
 
   it('Should capture initial state from the cluster', () => {
-    cy.exec(`kubectl delete configmap ${CONFIG_MAPS.LOCAL_UI_CONFIG} -n ${namespace}`, { failOnNonZeroExit: false });
+    cyExec(`kubectl delete configmap ${CONFIG_MAPS.LOCAL_UI_CONFIG} -n ${namespace}`, { failOnNonZeroExit: false });
     cy.wait(10000);
 
     getConfigMapYaml(CONFIG_MAPS.EFFECTIVE_CONFIG, (yaml) => {

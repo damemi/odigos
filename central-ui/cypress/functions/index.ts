@@ -72,6 +72,12 @@ export const visitPage = (path: string, callback?: () => void) => {
   }
 };
 
+export type CyExecResult = { code: number; stdout: string; stderr: string };
+
+/** Drop-in for removed Cypress 16 `cyExec()` — runs via `cy.task('exec')`. */
+export const cyExec = (command: string, options?: { failOnNonZeroExit?: boolean }) =>
+  cy.task<CyExecResult>('exec', { command, failOnNonZeroExit: options?.failOnNonZeroExit ?? true });
+
 // Arm the shared GraphQL alias AFTER auth/proxy bootstrap.
 //
 // Specs that called `cy.intercept('/graphql').as('gql')` before
@@ -190,11 +196,11 @@ interface FindCrdOptions {
 export const findCrdId = ({ namespace, crdName, targetKey, targetValue }: FindCrdOptions, callback: (crdId: string) => void) => {
   const [parentKey, childKey] = targetKey.split('.');
 
-  cy.exec(`kubectl get ${crdName} -n ${namespace} | awk 'NR>1 {print $1}'`).then(({ stdout }) => {
+  cyExec(`kubectl get ${crdName} -n ${namespace} | awk 'NR>1 {print $1}'`).then(({ stdout }) => {
     const crdIds = stdout.split('\n').filter((str) => !!str);
 
     crdIds.forEach((crdId) => {
-      cy.exec(`kubectl get ${crdName} ${crdId} -n ${namespace} -o json`).then(({ stdout }) => {
+      cyExec(`kubectl get ${crdName} ${crdId} -n ${namespace} -o json`).then(({ stdout }) => {
         const parsed = JSON.parse(stdout);
         const { spec } = parsed?.items?.[0] || parsed || {};
         expect(spec).to.not.be.empty;
@@ -223,7 +229,7 @@ interface GetCrdIdsOptions {
 // happy path on faster ones (it short-circuits on the first matching attempt).
 export const getCrdIds = ({ namespace, crdName, expectedError, expectedLength }: GetCrdIdsOptions, callback?: (crdIds: string[]) => void, maxAttempts = 15, intervalMs = 2000) => {
   const attempt = (remaining: number): Cypress.Chainable => {
-    return cy.exec(`kubectl get ${crdName} -n ${namespace} | awk 'NR>1 {print $1}'`, { failOnNonZeroExit: false }).then(({ stderr, stdout }) => {
+    return cyExec(`kubectl get ${crdName} -n ${namespace} | awk 'NR>1 {print $1}'`, { failOnNonZeroExit: false }).then(({ stderr, stdout }) => {
       const stderrMatches = stderr === expectedError;
       const stdoutMatches = expectedError ? stdout === '' : stdout !== '';
       const crdIds = stdout.split('\n').filter((str) => !!str);
@@ -265,7 +271,7 @@ interface WaitForCrdCountOptions {
 // id list so callers can select a specific CRD without a second kubectl.
 export const waitForCrdCount = ({ namespace, crdName, minCount }: WaitForCrdCountOptions, maxAttempts = 15, intervalMs = 2000): Cypress.Chainable<string[]> => {
   const attempt = (remaining: number): Cypress.Chainable<string[]> => {
-    return cy.exec(`kubectl get ${crdName} -n ${namespace} | awk 'NR>1 {print $1}'`, { failOnNonZeroExit: false }).then(({ stdout }) => {
+    return cyExec(`kubectl get ${crdName} -n ${namespace} | awk 'NR>1 {print $1}'`, { failOnNonZeroExit: false }).then(({ stdout }) => {
       const crdIds = stdout.split('\n').filter((str) => !!str);
       if (crdIds.length >= minCount) {
         return cy.wrap(crdIds);
@@ -300,7 +306,7 @@ export const getCrdById = ({ namespace, crdName, crdId, expectedError, expectedK
     throw new Error('No CRD ID provided to getCrdById');
   }
 
-  cy.exec(`kubectl get ${crdName} ${crdId} -n ${namespace} -o json`).then(({ stderr, stdout }) => {
+  cyExec(`kubectl get ${crdName} ${crdId} -n ${namespace} -o json`).then(({ stderr, stdout }) => {
     expect(stderr).to.eq(expectedError);
 
     if (!!expectedError) {
