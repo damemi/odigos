@@ -1,0 +1,268 @@
+{{define "title"}}Findings{{end}}
+
+{{define "content"}}
+<h2>Findings</h2>
+<p class="hint">Everything worth attention, grouped by service. Each service shows the <strong>policy violations</strong> it caused (a guardrail you declared was broken) and its <strong>transactions with anomalies</strong> (deviations from learned baselines) — expand a transaction to act on its anomalies inline. The tabs track what you've acted on.</p>
+
+{{template "timeRangePicker" .TimeRange}}
+
+<div class="tabs">
+  <a class="tab{{if eq .Tab "open"}} active{{end}}" href="{{.TabOpen}}">Open ({{.Counts.Open}})</a>
+  <a class="tab{{if eq .Tab "dismissed"}} active{{end}}" href="{{.TabDismissed}}">Dismissed ({{.Counts.Dismissed}})</a>
+  <a class="tab{{if eq .Tab "accepted"}} active{{end}}" href="{{.TabAccepted}}">Accepted ({{.Counts.Accepted}})</a>
+</div>
+
+{{if .Cards}}
+{{$tab := .Tab}}
+{{range $card := .Cards}}
+<details class="svc-card" data-key="svc:{{$card.ScopeKey}}">
+  <summary class="svc-card-head">
+    <span class="svc-caret">▸</span>
+    <span class="svc-title">{{$card.Service}}</span>
+    {{if $card.Namespace}}<span class="svc-ns">{{$card.Namespace}}</span>{{end}}
+    {{template "sevBadge" (dict "Sev" $card.Severity "Score" $card.MaxScore)}}
+    <span class="svc-meta">
+      {{if $card.Violations}}{{len $card.Violations}} policy violation{{if ne (len $card.Violations) 1}}s{{end}}{{end}}
+      {{if and $card.Violations $card.AnomalyCount}} · {{end}}
+      {{if $card.AnomalyCount}}{{$card.AnomalyCount}} anomal{{if eq $card.AnomalyCount 1}}y{{else}}ies{{end}}{{end}}
+    </span>
+  </summary>
+
+  <div class="svc-card-body">
+    {{if $card.Violations}}
+    <div class="subsec">
+      <div class="subsec-title"><span class="subsec-dot subsec-dot-warn"></span>Policy violations</div>
+      <table>
+        <thead>
+          <tr><th>Rule</th><th>Forbidden</th><th>Count</th><th class="pv-risk">Risk</th><th>Last seen</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          {{range $v := $card.Violations}}
+          <tr>
+            <td><span class="badge badge-warn tip" data-tip="{{$v.RuleDesc}}">{{$v.RuleLabel}}</span></td>
+            <td>{{template "offChips" $v.Offending}}</td>
+            <td><span class="badge tip" data-tip="How many times this edge broke the guardrail over the window. A one-off differs from a sustained campaign.">{{$v.Occurrences}}</span></td>
+            <td class="pv-risk">{{template "sevBadge" (dict "Sev" (severityForScore $v.MaxScore) "Score" $v.MaxScore)}}</td>
+            <td class="pv-when">{{$v.LastSeen.Format "2006-01-02 15:04:05"}}</td>
+            <td class="pv-actions">
+              <a class="btn tip tip-end" data-tip="Open a captured trace showing the forbidden edge — an investigation starting point." href="/debug/guardrails/violations/evidence?scope_key={{$v.ScopeKey}}&amp;rule_key={{$v.RuleKey}}&amp;offending={{$v.Offending}}">investigate</a>
+              {{if ne $v.Status "accepted"}}
+              <form class="js-resolve" method="POST" action="/debug/guardrails/violations/accept" data-confirm="Accept {{$v.Offending}}? It is added to {{$card.Service}}'s guardrail allowlist, so this edge becomes normal and stops alerting." data-label="✓ accepted">
+                <input type="hidden" name="scope_key" value="{{$v.ScopeKey}}">
+                <input type="hidden" name="rule_key" value="{{$v.RuleKey}}">
+                <input type="hidden" name="offending" value="{{$v.Offending}}">
+                <input type="hidden" name="tab" value="{{$tab}}">
+                <button type="submit" class="btn btn-primary tip tip-end" data-tip="Accept this edge as legitimate: add it to the service's allowlist and close the finding — the same affirmative action as accepting an anomaly.">accept</button>
+              </form>
+              {{end}}
+              {{if eq $v.Status "open"}}
+              <form class="js-resolve" method="POST" action="/debug/guardrails/violations/dismiss" data-confirm="Dismiss this violation? Closed without changing the guardrail; it moves to the Dismissed tab and its count keeps rising if the edge still fires." data-label="dismissed">
+                <input type="hidden" name="scope_key" value="{{$v.ScopeKey}}">
+                <input type="hidden" name="rule_key" value="{{$v.RuleKey}}">
+                <input type="hidden" name="offending" value="{{$v.Offending}}">
+                <input type="hidden" name="tab" value="{{$tab}}">
+                <button type="submit" class="btn tip tip-end" data-tip="Close without allowlisting. Moves to the Dismissed tab; the count keeps rising if the edge still fires.">dismiss</button>
+              </form>
+              {{end}}
+              {{if eq $v.Status "dismissed"}}
+              <form class="js-resolve" method="POST" action="/debug/guardrails/violations/reopen" data-label="reopened">
+                <input type="hidden" name="scope_key" value="{{$v.ScopeKey}}">
+                <input type="hidden" name="rule_key" value="{{$v.RuleKey}}">
+                <input type="hidden" name="offending" value="{{$v.Offending}}">
+                <input type="hidden" name="tab" value="{{$tab}}">
+                <button type="submit" class="btn tip tip-end" data-tip="Move this back to the Open tab for re-triage. Does not allowlist it; the guardrail stays enforced.">reopen</button>
+              </form>
+              {{end}}
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{end}}
+
+    {{if $card.Transactions}}
+    <div class="subsec">
+      <div class="subsec-title"><span class="subsec-dot subsec-dot-accent"></span>Transactions with anomalies</div>
+      {{range $txn := $card.Transactions}}
+      <details class="txn" data-key="txn:{{$txn.TransactionID}}">
+        <summary class="txn-head">
+          <span class="svc-caret">▸</span>
+          <strong>{{template "operationDisplay" (operationDisplay $txn.Operation)}}</strong>
+          <span class="badge badge-kind">{{$txn.Kind}}</span>
+          {{template "sevBadge" (dict "Sev" (severityForScore $txn.MaxScore) "Score" $txn.MaxScore)}}
+          <span class="svc-meta">{{$txn.TabCount}} {{$tab}} · {{$txn.TotalIssues}} total</span>
+        </summary>
+        <div class="txn-body" data-txn="{{$txn.TransactionID}}" data-redirect="/debug/anomalies?tab={{$tab}}">
+          {{if eq $tab "open"}}
+          <div class="bulk-bar">
+            <label class="bulk-check"><input type="checkbox" class="chk-master"> select all</label>
+            <button type="button" class="btn btn-primary bulk-accept tip" data-action="/debug/anomalies/accept-bulk" data-tip="Fold the selected issues' traces into the baseline so their behaviour becomes normal and stops alerting." disabled>Accept as baseline</button>
+            <button type="button" class="btn bulk-dismiss tip" data-action="/debug/anomalies/dismiss-bulk" data-tip="Close the selected issues without changing the baseline. They stay counted and can be reopened." disabled>Dismiss</button>
+            <span class="bulk-sel"></span>
+          </div>
+          {{end}}
+          <table>
+            <thead>
+              <tr>
+                {{if eq $tab "open"}}<th class="chk-col"></th>{{end}}
+                <th>Signals · offending</th><th>Count</th><th class="pv-risk">Risk</th><th>Last seen</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range $is := $txn.Issues}}
+              <tr data-sig="{{$is.Signature}}">
+                {{if eq $tab "open"}}<td class="chk-col"><input type="checkbox" class="anom-chk" value="{{$is.Signature}}"></td>{{end}}
+                <td>{{template "sigChips" (classChips $is)}}</td>
+                <td><span class="badge tip" data-tip="How many times this exact deviation fired over the window. A one-off differs from a sustained pattern.">{{$is.Occurrences}}</span></td>
+                <td class="pv-risk">{{template "sevBadge" (dict "Sev" (severityForScore $is.MaxScore) "Score" $is.MaxScore)}}</td>
+                <td class="pv-when">{{$is.LastSeen.Format "2006-01-02 15:04:05"}}</td>
+                <td class="pv-actions">
+                  <a class="btn tip tip-end" data-tip="Open the baseline-vs-anomaly trace comparison — see exactly what deviated." href="/debug/anomalies/issue?transaction_id={{$txn.TransactionID}}&amp;signature={{$is.Signature}}">investigate</a>
+                  {{if ne $tab "accepted"}}
+                  <form class="js-resolve" method="POST" action="/debug/anomalies/accept" data-confirm="Accept this anomaly as baseline? Its flagged behaviour becomes normal and stops alerting." data-label="✓ accepted">
+                    <input type="hidden" name="transaction_id" value="{{$txn.TransactionID}}">
+                    <input type="hidden" name="signature" value="{{$is.Signature}}">
+                    <input type="hidden" name="tab" value="{{$tab}}">
+                    <button type="submit" class="btn btn-primary tip tip-end" data-tip="Fold a captured trace into the baseline so its behaviour becomes normal and stops alerting.">accept</button>
+                  </form>
+                  {{end}}
+                  {{if eq $tab "open"}}
+                  <form class="js-resolve" method="POST" action="/debug/anomalies/dismiss" data-confirm="Dismiss this anomaly? Closed without changing the baseline; it stays counted and can be reopened." data-label="dismissed">
+                    <input type="hidden" name="transaction_id" value="{{$txn.TransactionID}}">
+                    <input type="hidden" name="signature" value="{{$is.Signature}}">
+                    <input type="hidden" name="tab" value="{{$tab}}">
+                    <button type="submit" class="btn tip tip-end" data-tip="Close without changing the baseline; it stays counted and can be reopened.">dismiss</button>
+                  </form>
+                  {{end}}
+                  {{if eq $tab "dismissed"}}
+                  <form class="js-resolve" method="POST" action="/debug/anomalies/reopen" data-label="reopened">
+                    <input type="hidden" name="transaction_id" value="{{$txn.TransactionID}}">
+                    <input type="hidden" name="signature" value="{{$is.Signature}}">
+                    <input type="hidden" name="tab" value="{{$tab}}">
+                    <button type="submit" class="btn tip tip-end" data-tip="Move this back to the Open tab for re-triage.">reopen</button>
+                  </form>
+                  {{end}}
+                </td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+</details>
+{{end}}
+{{else}}
+<div class="empty">
+  {{if eq .Tab "dismissed"}}Nothing dismissed yet.
+  {{else if eq .Tab "accepted"}}Nothing accepted yet — no accepted violations or anomalies.
+  {{else}}No open findings in {{.TimeRange.Label}} — no policy violations and no anomalies need attention.{{end}}
+</div>
+{{end}}
+
+<script>
+  // Persist expand/collapse across refreshes so a user inspecting a service (or a
+  // transaction's anomalies) keeps their place after refreshing — cards default
+  // closed, but anything opened stays open. Keyed by a stable data-key in
+  // sessionStorage (per tab, cleared when the tab closes).
+  (function persistDetails() {
+    var store;
+    try { store = window.sessionStorage; } catch (e) { return; }
+    var KEY = 'findingsOpen';
+    var openSet;
+    try { openSet = new Set(JSON.parse(store.getItem(KEY) || '[]')); } catch (e) { openSet = new Set(); }
+    document.querySelectorAll('details[data-key]').forEach(function (d) {
+      if (openSet.has(d.dataset.key)) d.open = true;
+      d.addEventListener('toggle', function () {
+        if (d.open) openSet.add(d.dataset.key); else openSet.delete(d.dataset.key);
+        try { store.setItem(KEY, JSON.stringify(Array.from(openSet))); } catch (e) { /* quota/full: best-effort */ }
+      });
+    });
+  })();
+
+  // Post a form/body and resolve only on a genuinely successful action. The
+  // handlers reply 204 to a fetch on success and a 4xx with a plain-text reason
+  // on failure (e.g. accepting an anomaly whose trace has aged out), so we gray
+  // the row only on 2xx and surface the server's message otherwise.
+  function postAction(action, body) {
+    return fetch(action, { method: 'POST', body: body, headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (r) {
+        if (r.ok) return r;
+        return r.text().then(function (t) { throw new Error((t && t.trim()) || ('HTTP ' + r.status)); });
+      });
+  }
+
+  // Gray a resolved row in place and swap its actions for a status pill, so the
+  // decision is visible immediately without a reload (the row leaves its tab on
+  // the next manual refresh).
+  function markResolved(tr, label) {
+    if (!tr) return;
+    tr.classList.add('resolved');
+    var actions = tr.querySelector('.pv-actions');
+    if (actions) actions.innerHTML = '<span class="st-badge st-done">' + (label || 'done') + '</span>';
+    var chk = tr.querySelector('.anom-chk');
+    if (chk) { chk.checked = false; chk.disabled = true; }
+  }
+
+  // Single-row actions (violation accept/dismiss, anomaly accept/dismiss).
+  document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!form.classList || !form.classList.contains('js-resolve')) return;
+    e.preventDefault();
+    if (form.dataset.confirm && !confirm(form.dataset.confirm)) return;
+    var btn = form.querySelector('[type=submit]');
+    if (btn) btn.disabled = true;
+    postAction(form.action, new FormData(form))
+      .then(function () { markResolved(form.closest('tr'), form.dataset.label); })
+      .catch(function (err) { if (btn) btn.disabled = false; alert('Action failed: ' + err.message); });
+  });
+
+  // Per-transaction bulk selection state.
+  function syncBulk(body) {
+    var boxes = Array.prototype.slice.call(body.querySelectorAll('.anom-chk'));
+    var live = boxes.filter(function (c) { return !c.disabled; });
+    var sel = boxes.filter(function (c) { return c.checked; }).length;
+    body.querySelectorAll('.bulk-accept, .bulk-dismiss').forEach(function (b) { b.disabled = sel === 0; });
+    var s = body.querySelector('.bulk-sel'); if (s) s.textContent = sel > 0 ? sel + ' selected' : '';
+    var m = body.querySelector('.chk-master');
+    if (m) { m.checked = live.length > 0 && sel === live.length; m.indeterminate = sel > 0 && sel < live.length; }
+  }
+
+  document.addEventListener('change', function (e) {
+    var t = e.target;
+    if (!t.classList) return;
+    var body = t.closest('.txn-body');
+    if (!body) return;
+    if (t.classList.contains('chk-master')) {
+      body.querySelectorAll('.anom-chk').forEach(function (c) { if (!c.disabled) c.checked = t.checked; });
+    }
+    if (t.classList.contains('chk-master') || t.classList.contains('anom-chk')) syncBulk(body);
+  });
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('.bulk-accept, .bulk-dismiss') : null;
+    if (!btn) return;
+    e.preventDefault();
+    var body = btn.closest('.txn-body');
+    var checked = Array.prototype.slice.call(body.querySelectorAll('.anom-chk:checked'));
+    if (checked.length === 0) return;
+    var isAccept = btn.classList.contains('bulk-accept');
+    var msg = isAccept
+      ? 'Accept ' + checked.length + ' anomal' + (checked.length === 1 ? 'y' : 'ies') + ' as baseline? Their behaviour becomes normal and stops alerting.'
+      : 'Dismiss ' + checked.length + ' anomal' + (checked.length === 1 ? 'y' : 'ies') + '? Closed without changing the baseline; they stay counted and can be reopened.';
+    if (!confirm(msg)) return;
+    var fd = new FormData();
+    checked.forEach(function (c) { fd.append('signature', c.value); });
+    fd.append('transaction_id', body.dataset.txn);
+    fd.append('redirect', body.dataset.redirect);
+    btn.disabled = true;
+    postAction(btn.dataset.action, fd)
+      .then(function () { checked.forEach(function (c) { markResolved(c.closest('tr'), isAccept ? '✓ accepted' : 'dismissed'); }); syncBulk(body); })
+      .catch(function (err) { btn.disabled = false; alert('Bulk action failed: ' + err.message); });
+  });
+</script>
+{{end}}

@@ -27,6 +27,7 @@ jobs:
           - central-backend
           - central-ui
           - agents
+          - insights
         extended: ['false']
         # Required for RHEL/OpenShift label build-args (matches odigos publish-modules-rhel.yml).
         include:
@@ -55,6 +56,9 @@ jobs:
           - service: agents
             summary: "Odigos Enterprise Agents"
             description: "The Odigos Agents used to copy Odigos agent relevant files into the user workloads."
+          - service: insights
+            summary: "Insights for Odigos"
+            description: "Insights ingests distributed traces, learns per-entity baselines, and exposes anomaly queries to the UI."
 
     runs-on: ${{ matrix.runner || 'depot-ubuntu-24.04-4' }}
     steps:

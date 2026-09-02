@@ -29,6 +29,7 @@ jobs:
             "central-backend",
             "central-ui",
             "agents",
+            "insights",
           ]
         extended: ['false']
         include:
@@ -57,6 +58,9 @@ jobs:
           - service: ui
             summary: "Enterprise UI for Odigos"
             description: "Enterprise build of the Odigos web frontend."
+          - service: insights
+            summary: "Insights for Odigos"
+            description: "Insights ingests distributed traces, learns per-entity baselines, and exposes anomaly queries to the UI."
           - service: collector
             runner: depot-ubuntu-24.04-16
             summary: "Collector for Odigos"

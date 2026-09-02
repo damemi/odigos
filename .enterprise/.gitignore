@@ -20,3 +20,6 @@ coverage.txt
 connectors/*/build/
 connector-runtime/build/
 connector-postgres/build/
+
+# Insights loadtest captures (metrics/pprof)
+insights/loadtest/results/

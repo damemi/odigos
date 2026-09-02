@@ -1,0 +1,83 @@
+name: Insights API
+
+on:
+  pull_request:
+    paths:
+      - "insights/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  api-contract:
+    name: API contract checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          persist-credentials: false
+
+      # The base branch's spec, for the breaking-change diff below. Sparse so we
+      # only fetch the one file; empty when the spec is new on this branch.
+      - name: Check out base spec
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          ref: ${{ github.base_ref }}
+          path: base
+          persist-credentials: false
+          sparse-checkout: insights/api/openapi.yaml
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 #v5.5.0
+        with:
+          go-version-file: "insights/go.mod"
+          cache-dependency-path: "insights/go.sum"
+
+      # Validates the embedded spec parses and the apimap wire shapes stay snake_case.
+      - name: API unit + contract tests
+        run: |
+          cd insights
+          go test ./api/... ./internal/api/...
+
+      # Fails the build if the OpenAPI spec is invalid.
+      - name: Lint OpenAPI spec
+        run: |
+          cd insights
+          make api-lint
+
+      # Breaking-change gate: diff this PR's spec against the base branch and fail
+      # on a breaking change (removed/renamed field, type change, new required,
+      # removed endpoint), so a contract break can't merge without a deliberate
+      # major version bump. See api/README.md "Versioning". Skipped when the spec
+      # is new on this branch (no baseline to break).
+      - name: Detect breaking API changes
+        run: |
+          if [ ! -f base/insights/api/openapi.yaml ]; then
+            echo "No base spec (new file); skipping breaking-change check."
+            exit 0
+          fi
+          cd insights
+          BASE_VER=$(grep '^  version:' ../base/insights/api/openapi.yaml | awk '{print $2}')
+          HEAD_VER=$(grep '^  version:' api/openapi.yaml | awk '{print $2}')
+          BASE_MAJOR=${BASE_VER%%.*}
+          HEAD_MAJOR=${HEAD_VER%%.*}
+          if [ "$HEAD_MAJOR" -gt "$BASE_MAJOR" ]; then
+            echo "Major contract bump ($BASE_VER -> $HEAD_VER); skipping breaking-change gate."
+            exit 0
+          fi
+          go run github.com/oasdiff/oasdiff@latest breaking \
+            ../base/insights/api/openapi.yaml api/openapi.yaml --fail-on ERR
+
+      # Drift guard: the checked-in Go wire types and TS client are the source of
+      # truth the handlers/frontend compile against, so they must match a fresh
+      # generation from the spec. Fails if someone edits the spec without
+      # regenerating (or hand-edits the generated files).
+      - name: Verify generated clients are up to date (Go + TS)
+        run: |
+          cd insights
+          make api-gen
+          git diff --exit-code -- \
+            internal/api/http/apitypes/models.gen.go \
+            api/client/api.d.ts

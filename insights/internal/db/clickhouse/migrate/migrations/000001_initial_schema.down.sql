@@ -1,0 +1,12 @@
+DROP TABLE IF EXISTS system_settings;
+DROP TABLE IF EXISTS guardrail_violations;
+DROP TABLE IF EXISTS service_guardrails;
+DROP TABLE IF EXISTS anomaly_issues;
+DROP TABLE IF EXISTS learning_policies;
+DROP TABLE IF EXISTS alert_policies;
+DROP TABLE IF EXISTS transaction_activity;
+DROP TABLE IF EXISTS trace_observations;
+DROP TABLE IF EXISTS baseline_meta;
+DROP TABLE IF EXISTS baseline_counters;
+DROP TABLE IF EXISTS baseline_set_members;
+DROP TABLE IF EXISTS transactions;

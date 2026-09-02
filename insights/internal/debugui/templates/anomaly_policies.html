@@ -1,0 +1,309 @@
+{{define "title"}}Anomaly policies{{end}}
+
+{{define "polCard"}}
+<div class="pol-card {{if .Deletable}}override{{end}}">
+  <div class="pol-head">
+    {{if eq .Scope "global"}}
+      <span class="badge badge-pending">global default</span>
+    {{else if eq .Scope "service"}}
+      <span class="pol-scope">service: <code>{{.Label}}</code></span>
+    {{else}}
+      <span class="pol-scope">transaction: {{if .Link}}<a href="{{.Link}}"><code>{{.Label}}</code></a>{{else}}<code>{{.Label}}</code>{{end}}</span>
+    {{end}}
+    {{if .Policy.Enabled}}<span class="badge badge-ok">enabled</span>{{else}}<span class="badge">disabled</span>{{end}}
+    {{if .Deletable}}
+    <form method="POST" action="/debug/settings/detection/delete" style="margin-left:auto;"
+          onsubmit="return confirm('Delete this override? The scope falls back to a broader policy.');">
+      <input type="hidden" name="scope" value="{{.Scope}}">
+      <input type="hidden" name="scope_key" value="{{.ScopeKey}}">
+      <button type="submit" class="btn-link">delete override</button>
+    </form>
+    {{end}}
+  </div>
+  <p class="pol-summary">Currently: {{anomalyPolicyText .Policy}}</p>
+
+  <form class="policy-editor" method="POST" action="/debug/settings/detection/save" data-policy="{{anomalyPolicyJSON .Policy}}">
+    <input type="hidden" name="scope" value="{{.Scope}}">
+    <input type="hidden" name="scope_key" value="{{.ScopeKey}}">
+
+    <div class="pol-controls">
+      <div class="pol-field">
+        <label>Name</label>
+        <input type="text" name="name" class="pol-name" size="22" placeholder="optional">
+      </div>
+      <div class="pol-field">
+        <label>Fire at risk score ≥</label>
+        <input type="number" name="fire_at" class="pol-fireat" min="0" max="100" value="20">
+        <span class="band pol-fireat-band">low</span>
+        <select class="pol-sevpick" title="Pick a severity tier to set the threshold to that band's floor">
+          <option value="0">info+</option>
+          <option value="20">low+</option>
+          <option value="35">medium+</option>
+          <option value="50">high+</option>
+          <option value="75">critical</option>
+        </select>
+      </div>
+      <div class="pol-field">
+        <label class="chk"><input type="checkbox" name="enabled" class="pol-enabled"> enabled</label>
+      </div>
+    </div>
+
+    <div class="pol-preview">Will <span class="preview-text">—</span></div>
+
+    <details class="adv">
+      <summary>Customize signal weights (advanced)</summary>
+      <div class="adv-body">
+        <div class="sig-legend">
+          <b>How scoring works.</b> Every detected signal adds its <b>weight</b> (points) to a 0–100 risk score; the
+          policy fires when the total reaches the threshold above. Weights are points, not percentages — where a signal
+          alone lands:
+          <span class="band band-low">low</span> 20 ·
+          <span class="band band-medium">medium</span> 35 ·
+          <span class="band band-high">high</span> 50 ·
+          <span class="band band-critical">critical</span> 75.
+          <br>
+          <b>Sub-cases add on top of the base.</b> Example: a new DB access is <code>25</code>
+          (<span class="band band-low">low</span>). If that access is a <code>DELETE</code>, the destructive sub-case
+          adds <code>+45</code> → <code>70</code> (<span class="band band-high">high</span>). That is why a sub-case can
+          outweigh the base novelty. Set any weight to <b>0</b> to mute that signal for this scope.
+        </div>
+
+        <div class="sig-groups">
+          {{range .Classes}}
+          <div class="sig-group">
+            <div class="sig-head">
+              <span class="sig-name">{{classLabel .}}</span>
+              <code class="sig-code">{{.}}</code>
+              {{if classMitre .}}<span class="badge cat tip" data-tip="MITRE {{classMitre .}} — {{tagDescription (classMitre .)}}">{{classCategory .}}</span>{{else}}<span class="badge cat">{{classCategory .}}</span>{{end}}
+            </div>
+            <div class="sig-desc">{{classDesc .}}</div>
+            <div class="wrow">
+              <span class="wlabel">Base weight</span>
+              <input type="number" name="weight_{{.}}" class="pol-weight" min="0" max="100" value="{{defaultWeight .}}" data-default="{{defaultWeight .}}">
+              <span class="wdef">def {{defaultWeight .}}</span>
+              <span class="band band-{{scoreBand (defaultWeight .)}}">{{scoreBand (defaultWeight .)}}</span>
+            </div>
+            {{$enr := enrichersForClass .}}
+            {{if $enr}}
+            <div class="subcases">
+              <div class="subcases-head">Dangerous sub-cases — added on top of the base when detected:</div>
+              {{range $enr}}
+              <div class="wrow sub">
+                <span class="wlabel">{{.Label}}</span>
+                <input type="number" name="weight_{{.Source}}" class="pol-weight" min="0" max="100" value="{{.Weight}}" data-default="{{.Weight}}">
+                <span class="wdef">def {{.Weight}}</span>
+                <span class="band band-{{scoreBand .Weight}}">{{scoreBand .Weight}}</span>
+                <span class="sub-desc">{{.Desc}}</span>
+              </div>
+              {{if .List}}
+              <div class="kw-row">
+                <span class="wlabel">{{.List.Label}}</span>
+                <textarea name="list_{{.List.Key}}" class="kw-box" rows="2">{{enricherList $.Policy .List.Key}}</textarea>
+              </div>
+              <div class="kw-hint">{{.List.Hint}} To turn this sub-case off entirely, set its weight above to <b>0</b>.</div>
+              {{end}}
+              {{end}}
+            </div>
+            {{end}}
+          </div>
+          {{end}}
+        </div>
+      </div>
+    </details>
+
+    <div class="pol-foot">
+      <button type="submit" class="btn btn-primary">Save</button>
+    </div>
+  </form>
+</div>
+{{end}}
+
+{{define "content"}}
+<style>
+  .pol-card { background:#fff; border:1px solid var(--border); border-radius:8px; padding:14px 16px; margin-bottom:10px; }
+  .pol-card.override { border-left:3px solid var(--accent); }
+  .pol-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+  .pol-scope { font-size:13px; font-weight:600; }
+  .pol-scope a { color:var(--accent); text-decoration:none; }
+  .pol-scope a:hover { text-decoration:underline; }
+  .pol-summary { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  .pol-controls { display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:10px; }
+  .pol-field { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .pol-field label { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px; }
+  .pol-field label.chk { text-transform:none; letter-spacing:0; color:var(--fg); font-size:13px; }
+  select, input[type=number], input[type=text] { padding:5px 8px; border:1px solid var(--border); border-radius:4px; font-size:13px; background:#fff; color:var(--fg); }
+  input[type=number] { width:64px; }
+
+  .pol-preview { font-size:13px; margin:4px 0 10px; padding:8px 12px; background:#f6f8fa; border-radius:4px; }
+  .pol-preview b { color:var(--accent); }
+
+  .adv { margin:6px 0 12px; }
+  .adv > summary { cursor:pointer; font-size:13px; color:var(--accent); font-weight:600; list-style:revert; }
+  .adv-body { margin-top:10px; }
+  .sig-legend { font-size:12px; color:var(--fg); background:#f6f8fa; border-radius:6px; padding:10px 12px; margin-bottom:12px; line-height:1.7; max-width:820px; }
+  .sig-legend code { background:#eef1f4; padding:0 4px; border-radius:3px; }
+
+  .sig-group { border:1px solid var(--border); border-radius:6px; padding:10px 12px; margin-bottom:8px; }
+  .sig-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .sig-name { font-weight:600; font-size:13px; }
+  .sig-code { font-size:11px; color:var(--muted); }
+  .badge.cat { background:#eef1f4; color:#3b4149; font-weight:600; }
+  .sig-desc { color:var(--muted); font-size:12px; margin:3px 0 8px; }
+
+  .wrow { display:flex; align-items:center; gap:8px; font-size:13px; margin:4px 0; }
+  .wrow .wlabel { min-width:120px; }
+  .wrow.sub .wlabel { min-width:170px; }
+  .wrow .pol-weight { width:62px; }
+  .wdef { color:var(--muted); font-size:11px; }
+  .sub-desc { color:var(--muted); font-size:11px; }
+
+  .subcases { margin:8px 0 2px 8px; padding:8px 10px; border-left:2px solid var(--accent); background:#faf9f7; border-radius:0 4px 4px 0; }
+  .subcases-head { font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .kw-row { display:flex; align-items:flex-start; gap:8px; margin:6px 0 2px; }
+  .kw-row .wlabel { min-width:170px; font-size:13px; padding-top:4px; }
+  .kw-box { flex:1; max-width:560px; padding:6px 8px; border:1px solid var(--border); border-radius:4px; font-size:12px; font-family:inherit; resize:vertical; }
+  .kw-hint { font-size:11px; color:var(--muted); margin:0 0 6px 178px; max-width:560px; }
+
+  .band { font-size:11px; padding:1px 7px; border-radius:10px; text-transform:capitalize; white-space:nowrap; }
+  .band-info { background:#eef1f4; color:#57606a; }
+  .band-low { background:#e6f4ea; color:#1a7f37; }
+  .band-medium { background:#fff4e5; color:#9a6700; }
+  .band-high { background:#ffe9e0; color:#bc4c00; }
+  .band-critical { background:#ffe0e0; color:#b42318; }
+
+  .pol-foot { display:flex; align-items:center; gap:12px; }
+  .add-override { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 12px; background:#f6f8fa; border:1px dashed var(--border); border-radius:8px; margin-top:14px; }
+  .add-override label { font-size:12px; color:var(--muted); }
+  .btn-link { background:none; border:none; color:var(--danger,#b42318); cursor:pointer; font-size:12px; padding:0; }
+</style>
+
+<div class="settings-layout">
+{{template "settingsNav" .}}
+<div class="settings-main">
+
+<h2>Anomaly policies</h2>
+<p class="hint" style="max-width:900px;">
+  A policy fires an anomaly when a trace's deviations add up to a <b>risk score</b> at or above its threshold. Most of
+  the time you only set the <b>threshold</b> — signal weights have sensible defaults. There is a <b>global default</b>
+  plus optional <b>overrides</b> for one service or one transaction; the <em>most specific</em> policy wins
+  (transaction &rarr; service &rarr; global) and fully replaces the broader one, and a disabled override silences
+  alerting for its scope. Lower the threshold to catch more, raise it to cut noise. Distinct from
+  <a href="/debug/settings/learning">learning policies</a>, which decide when a class stops learning and starts scoring.
+  Saved edits apply live, no restart.
+</p>
+
+<section class="class-group">
+  {{template "polCard" (dict "Policy" .Global "Scope" "global" "ScopeKey" "" "Deletable" false "Classes" .Classes)}}
+
+  {{range .Overrides}}
+  {{template "polCard" (dict "Policy" .Policy "Scope" .Scope "ScopeKey" .Policy.ScopeKey "Deletable" true "Label" .Label "Link" .Link "Classes" $.Classes)}}
+  {{end}}
+
+  <form class="add-override" method="POST" action="/debug/settings/detection/override">
+    <label>Add override</label>
+    <select name="scope" class="add-scope">
+      <option value="service">service (namespace/service)</option>
+      <option value="transaction">transaction (transaction id)</option>
+    </select>
+    <input type="text" name="scope_key" placeholder="e.g. billing/checkout" size="30" required>
+    <button type="submit" class="btn">+ add</button>
+  </form>
+</section>
+
+</div>
+</div>
+
+<script>
+  function severityBand(score) {
+    if (score >= 75) return 'critical';
+    if (score >= 50) return 'high';
+    if (score >= 35) return 'medium';
+    if (score >= 20) return 'low';
+    return 'info';
+  }
+
+  function bandFloor(band) {
+    return { info: 0, low: 20, medium: 35, high: 50, critical: 75 }[band];
+  }
+
+  // Keep the severity dropdown and the fire-at chip in sync with the number.
+  function syncFireAt(form) {
+    var at = parseInt(form.querySelector('.pol-fireat').value, 10);
+    if (isNaN(at)) at = 0;
+    var band = severityBand(at);
+    form.querySelector('.pol-sevpick').value = String(bandFloor(band));
+    var chip = form.querySelector('.pol-fireat-band');
+    chip.textContent = band; chip.className = 'band band-' + band;
+  }
+
+  // Recolor each weight's band chip to the band that weight alone reaches.
+  function updateBands(form) {
+    form.querySelectorAll('.pol-weight').forEach(function (el) {
+      var band = severityBand(parseInt(el.value, 10) || 0);
+      var chip = el.parentElement.querySelector('.band');
+      if (chip) { chip.textContent = band; chip.className = 'band band-' + band; }
+    });
+  }
+
+  function updatePreview(form) {
+    var out = form.querySelector('.preview-text');
+    if (!form.querySelector('.pol-enabled').checked) {
+      out.innerHTML = '<b>not alert</b> (policy disabled for this scope)';
+      return;
+    }
+    var at = parseInt(form.querySelector('.pol-fireat').value, 10);
+    if (isNaN(at)) at = 20;
+    var overrides = 0;
+    form.querySelectorAll('.pol-weight').forEach(function (el) {
+      if (parseInt(el.value, 10) !== parseInt(el.dataset.default, 10)) overrides++;
+    });
+    var msg = 'fire when the risk score is <b>≥ ' + at + '</b> (' + severityBand(at) + '+)';
+    if (overrides) msg += ' · <b>' + overrides + '</b> signal weight override' + (overrides === 1 ? '' : 's');
+    out.innerHTML = msg;
+  }
+
+  function initEditor(form) {
+    var data = {};
+    try { data = JSON.parse(form.dataset.policy || '{}'); } catch (e) {}
+    form.querySelector('.pol-name').value = data.name || '';
+    form.querySelector('.pol-fireat').value = (data.fireAt != null) ? data.fireAt : 20;
+    form.querySelector('.pol-enabled').checked = data.enabled !== false;
+    var weights = data.weights || {};
+    form.querySelectorAll('.pol-weight').forEach(function (el) {
+      var src = el.name.replace('weight_', '');
+      if (weights[src] != null) el.value = weights[src];
+    });
+
+    var sevPick = form.querySelector('.pol-sevpick');
+    sevPick.addEventListener('change', function () {
+      form.querySelector('.pol-fireat').value = sevPick.value;
+      syncFireAt(form); updatePreview(form);
+    });
+    form.querySelectorAll('input').forEach(function (el) {
+      ['change', 'input'].forEach(function (ev) {
+        el.addEventListener(ev, function () {
+          syncFireAt(form); updateBands(form); updatePreview(form);
+        });
+      });
+    });
+
+    // If any weight was overridden, open the advanced panel so it's visible.
+    if (Object.keys(weights).length > 0) {
+      var adv = form.querySelector('.adv'); if (adv) adv.open = true;
+    }
+
+    syncFireAt(form); updateBands(form); updatePreview(form);
+  }
+
+  document.querySelectorAll('.policy-editor').forEach(initEditor);
+
+  // The service/transaction picker only changes the placeholder to hint the
+  // expected key format; the value is validated server-side.
+  document.querySelectorAll('.add-override').forEach(function (f) {
+    var sel = f.querySelector('.add-scope');
+    var key = f.querySelector('input[name=scope_key]');
+    function sync() { key.placeholder = sel.value === 'transaction' ? 'e.g. 125538551172483654' : 'e.g. billing/checkout'; }
+    sel.addEventListener('change', sync); sync();
+  });
+</script>
+{{end}}

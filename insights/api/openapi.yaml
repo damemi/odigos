@@ -1,0 +1,2830 @@
+openapi: 3.1.0
+info:
+  title: Odigos Insights Service API
+  version: 7.0.0
+  description: >
+    HTTP API for the Odigos Insights (security) service. This spec is the source
+    of truth for the contract: the Go server wire types (internal/api/http/apitypes)
+    and the frontend TypeScript client are both generated/derived from it.
+    All responses are JSON. Collection endpoints return a {count, items}
+    envelope; errors return an {error: {code, message}} envelope.
+
+    ## Frontend pattern: list vs detail
+
+    Heavy fields (`raw_otlp`, anomaly `evidence`) are **never** on list endpoints.
+    Browse with list/summary APIs; load blobs only when the user opens a drill-down.
+
+    | UI need | Call | Do not call |
+    |---|---|---|
+    | Findings table / tabs | `GET /findings` (or `/anomalies` + `/guardrails/violations` separately) | Detail endpoints for every row |
+    | Anomaly investigate page | `GET /anomalies/{transaction_id}/{signature}` (class_findings + compare traces) | `GET /anomalies` (no evidence/traces); separate observation fetches for the default compare |
+    | Violation investigate page | `GET /guardrails/violations/evidence?scope_key=&rule_key=&offending=` (summary + evidence trace) | `GET /guardrails/violations` (no trace) |
+    | Extra / other sample traces | `GET …/observations` then `GET …/observations/{trace_id}` | Bundling every sample on the issue detail |
+    | Transaction page header | `GET /transactions/{transaction_id}` | `GET /transactions` + scan (no volume here) |
+    | Transaction directory | `GET /transactions` (+ optional `namespace`/`service`, `sort_by`/`sort_order`) | Per-id fetch for each row |
+    | Delete dead transaction | `DELETE /transactions/{transaction_id}` | Baseline reset (keeps identity) |
+    | Bulk-delete transactions | `POST /transactions` | Many single `DELETE`s |
+    | Promote all classes of a txn | `POST /transactions/{id}/baselines/promote` | Per-class promote |
+    | Bulk-promote transactions | `POST /transactions/promote` | Many single baselines/promote |
+    | Baseline editor on txn page | `GET …/baseline` | — |
+
+    Shared query params on findings list endpoints: `window_hours` (relative
+    lookback, default 168 = 7d, max 2880 = 120d) or absolute `from`/`to`
+    (RFC3339 or YYYY-MM-DD), plus `service`, `namespace`, `status`
+    (open | dismissed | accepted — `accepted` is the shared affirmative status
+    for both anomalies and violations).
+
+servers:
+  - url: /
+    description: The Insights service root (health probes live here).
+
+tags:
+  - name: health
+    description: Liveness and readiness probes.
+  - name: services
+    description: Per-service activity rollups.
+  - name: transactions
+    description: >
+      Baselined units of work. `GET /transactions` = directory with volume;
+      `GET /transactions/{id}` = identity only; `POST /transactions` = bulk delete;
+      `POST /transactions/promote` = bulk force-promote; observations use list-then-detail.
+  - name: policies
+    description: Alert and learning policies.
+  - name: findings
+    description: >
+      Unified feed of anomalies and policy violations. Prefer `GET /findings` for
+      the main Findings screen; use `/anomalies` or `/guardrails/violations` only
+      when you need one kind without merging.
+  - name: anomalies
+    description: >
+      Deduped anomaly issues. List = summaries (no evidence). Detail = investigate
+      payload: evidence, risk, class_findings, and anomaly/baseline compare traces.
+  - name: guardrails
+    description: Service guardrails and their violations.
+  - name: catalog
+    description: Risk-model reference data.
+  - name: system
+    description: Engine-wide operational settings and storage health.
+
+paths:
+  /healthz:
+    get:
+      tags: [health]
+      summary: Liveness probe
+      description: Always 200 while the process is up.
+      operationId: getHealthz
+      responses:
+        "200":
+          description: Process is alive.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+
+  /readyz:
+    get:
+      tags: [health]
+      summary: Readiness probe
+      description: 200 when the database is reachable, 503 otherwise.
+      operationId: getReadyz
+      responses:
+        "200":
+          description: Service is ready.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+        "503":
+          description: Service is not ready.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+
+  /api/v1/services:
+    get:
+      tags: [services]
+      summary: List services
+      description: Per-(namespace, service) rollups, most active first.
+      operationId: listServices
+      responses:
+        "200":
+          description: Service rollups.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceStatList" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/service-names:
+    get:
+      tags: [services]
+      summary: List distinct service names
+      description: >
+        Every distinct service name Insights has seen in transactions, sorted
+        alphabetically. Cluster-wide candidate set for guardrail caller/callee
+        allowlists — fetch once and combine client-side with a per-service
+        profile's observed callers/callees.
+      operationId: listServiceNames
+      responses:
+        "200":
+          description: Distinct service names.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceNameList" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/services/profile:
+    get:
+      tags: [services]
+      summary: Get observed service communication profile
+      description: >
+        Callers, callees, egress destinations, and transactions derived from
+        observed traffic for one service. Used by the Guardrails "Inspect a
+        service" flow to pre-fill allowlists before seeding. For the full
+        caller/callee candidate set, use GET /service-names once and combine
+        client-side.
+      operationId: getServiceProfile
+      parameters:
+        - $ref: "#/components/parameters/NamespaceFilter"
+        - name: service
+          in: query
+          required: true
+          description: Service name to inspect.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Observed communication profile.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceProfile" }
+        "400": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/services/blast-radius:
+    get:
+      tags: [services]
+      summary: Get a service's blast-radius subgraph
+      description: >
+        The service-graph neighborhood around one service: the callers an anomaly
+        here can affect and the callees it can implicate, out to `depth` hops in
+        both directions. Derived from the gateway's servicegraph connector
+        metrics (not per-trace), so it reflects recent aggregate topology rather
+        than a single request. Virtual (uninstrumented) dependencies — databases,
+        queues, external APIs — appear as leaf nodes. Backs the per-anomaly
+        "Blast radius" service map on the investigate page.
+      operationId: getServiceBlastRadius
+      parameters:
+        - $ref: "#/components/parameters/NamespaceFilter"
+        - name: service
+          in: query
+          required: true
+          description: Service name at the center of the subgraph.
+          schema: { type: string }
+        - name: depth
+          in: query
+          description: How many hops out to expand in each direction. Defaults to 2.
+          schema: { type: integer, minimum: 1, maximum: 5, default: 2 }
+      responses:
+        "200":
+          description: Blast-radius subgraph.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BlastRadiusSubgraph" }
+        "400": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/transactions:
+    get:
+      tags: [transactions]
+      summary: List transactions
+      description: >
+        **Use for:** transaction directory, service drill-down, sorting by
+        volume or last_seen (e.g. find inactive transactions). Pass `namespace`
+        + `service` together to scope to one service. Default sort is
+        `volume` descending.
+
+        **Not for:** page header on a known transaction — use
+        `GET /transactions/{transaction_id}` instead (cheaper, no volume).
+      operationId: listTransactions
+      parameters:
+        - name: namespace
+          in: query
+          description: Scope to one service (use together with `service`).
+          schema: { type: string }
+        - name: service
+          in: query
+          description: Scope to one service (use together with `namespace`).
+          schema: { type: string }
+        - name: kind
+          in: query
+          description: Filter by transaction kind.
+          schema: { $ref: "#/components/schemas/TransactionKind" }
+        - $ref: "#/components/parameters/TransactionSortBy"
+        - $ref: "#/components/parameters/SortOrder"
+      responses:
+        "200":
+          description: Transactions with activity.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransactionStatList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [transactions]
+      summary: Bulk-delete transactions
+      description: >
+        Permanently removes many transactions and their related state (same
+        cleanup as `DELETE /transactions/{transaction_id}` for each id).
+        Tolerates per-id failures and reports a 422 with how many succeeded
+        when any fail. Empty `transaction_ids` is a 400.
+      operationId: bulkDeleteTransactions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BulkDeleteTransactionsRequest" }
+      responses:
+        "200":
+          description: How many transactions were deleted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkDeleteTransactionsResult" }
+        "400": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/transactions/promote:
+    post:
+      tags: [transactions]
+      summary: Bulk-promote transactions
+      description: >
+        Force-promotes every scored baseline class on each listed transaction
+        (same as `POST /transactions/{id}/baselines/promote` per id), skipping
+        learning-phase gates. Tolerates per-id failures and reports a 422 with
+        how many succeeded when any fail. Empty `transaction_ids` is a 400.
+      operationId: bulkPromoteTransactions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BulkPromoteTransactionsRequest" }
+      responses:
+        "200":
+          description: How many transactions were fully promoted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkPromoteTransactionsResult" }
+        "400": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/transactions/{transaction_id}:
+    get:
+      tags: [transactions]
+      summary: Get transaction identity
+      description: >
+        **Use for:** transaction detail page title, breadcrumbs, policy scope when
+        you already have `transaction_id` (e.g. from a finding row).
+
+        **Not for:** browsing or sorting by traffic — use `GET /transactions`
+        (`TransactionStat` includes volume and last_seen).
+      operationId: getTransaction
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+      responses:
+        "200":
+          description: Transaction identity.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [transactions]
+      summary: Delete a transaction
+      description: >
+        Permanently removes a transaction and its related state: baselines,
+        activity, retained sample traces, anomaly issues, and any
+        transaction-scoped alert/learning policy overrides. Service-level
+        guardrails are left alone.
+
+        Use this to clean up inactive or obsolete transactions. If traffic for
+        the same (service, namespace, operation, kind) returns later, the
+        identity is recreated with the same id and learning starts fresh.
+      operationId: deleteTransaction
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/transactions/{transaction_id}/baseline:
+    get:
+      tags: [transactions]
+      summary: Get a transaction's baseline
+      description: >-
+        All per-class baseline rows for one transaction, in one payload. Every
+        scored class is always present: a class with no learned baseline yet
+        (freshly reset, or not observed yet) is returned as an empty placeholder
+        (`promoted: false`, `observation_count: 0`, `data: {}`), so the class
+        list stays stable across a re-learn instead of a row disappearing.
+
+        Each row includes a computed `learning` object so the UI can always
+        render promotion/stability without resolving learning policies itself.
+      operationId: getTransactionBaseline
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+      responses:
+        "200":
+          description: Baseline rows.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BaselineClassList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/transactions/{transaction_id}/baseline/{class}/promote:
+    post:
+      tags: [transactions]
+      summary: Promote a baseline class
+      description: >
+        Flips promoted=true for one (transaction, class), skipping the
+        learning-phase gates so the class starts scoring immediately.
+      operationId: promoteBaselineClass
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+        - name: class
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/DeviationClass" }
+      responses:
+        "200":
+          description: Class promoted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PromoteResult" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /api/v1/transactions/{transaction_id}/baseline/{class}/reset:
+    post:
+      tags: [transactions]
+      summary: Reset one baseline class
+      description: Wipe one class's baseline so it re-learns from the next trace.
+      operationId: resetBaselineClass
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+        - name: class
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/DeviationClass" }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/transactions/{transaction_id}/baselines/reset:
+    post:
+      tags: [transactions]
+      summary: Reset all baseline classes
+      description: Wipe every class of a transaction so they all re-learn.
+      operationId: resetTransactionBaselines
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/transactions/{transaction_id}/baselines/promote:
+    post:
+      tags: [transactions]
+      summary: Promote all baseline classes
+      description: >
+        Force-promotes every scored class of the transaction, skipping
+        learning-phase gates so the transaction starts scoring immediately.
+        May then auto-enable the service's allowed_transactions guardrail when
+        the global setting is on.
+      operationId: promoteTransactionBaselines
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/transactions/{transaction_id}/observations:
+    get:
+      tags: [transactions]
+      summary: List example traces
+      description: >
+        **Use for:** populating sample lists (examples tab, anomaly compare picker).
+        Returns metadata only — no `raw_otlp`.
+
+        **Not for:** rendering a waterfall — call
+        `GET …/observations/{trace_id}` when the user selects a trace
+        (lazy-load the blob).
+      operationId: listObservations
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+        - name: sample_reason
+          in: query
+          description: Filter to one sample bucket.
+          schema: { $ref: "#/components/schemas/SampleReason" }
+      responses:
+        "200":
+          description: Example-trace summaries (metadata only).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ObservationList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/transactions/{transaction_id}/observations/{trace_id}:
+    get:
+      tags: [transactions]
+      summary: Get one example trace
+      description: >
+        **Use for:** trace waterfall, span compare, accept-anomaly flow — any UI
+        that needs the verbatim OTLP protobuf (`raw_otlp`, base64).
+
+        **Call after:** `listObservations` (or when you already know `trace_id`
+        from an anomaly issue's `last_trace_id`).
+      operationId: getObservation
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+        - name: trace_id
+          in: path
+          required: true
+          description: Trace ID of the retained sample.
+          schema: { type: string }
+      responses:
+        "200":
+          description: The observation with raw_otlp.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Observation" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/policies:
+    get:
+      tags: [policies]
+      summary: List enabled alert policies
+      operationId: listPolicies
+      responses:
+        "200":
+          description: Enabled alert policies.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PolicyList" }
+        "500": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [policies]
+      summary: Upsert an alert policy
+      description: Insert or replace one scoped policy (keyed by scope + scope_key).
+      operationId: upsertPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Policy" }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    delete:
+      tags: [policies]
+      summary: Delete an alert-policy override
+      description: Only service/transaction overrides are deletable.
+      operationId: deletePolicy
+      parameters:
+        - name: scope
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/PolicyScope" }
+        - name: scope_key
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "422": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/learning-policies:
+    get:
+      tags: [policies]
+      summary: List learning policies
+      description: Global defaults plus scoped overrides for class promotion.
+      operationId: listLearningPolicies
+      responses:
+        "200":
+          description: Learning policies.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LearningPolicyList" }
+        "500": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [policies]
+      summary: Upsert a learning policy
+      description: Insert or replace one class's policy (keyed by class + scope + scope_key).
+      operationId: upsertLearningPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LearningPolicy" }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    delete:
+      tags: [policies]
+      summary: Delete a learning-policy override
+      description: Only service/transaction overrides are deletable.
+      operationId: deleteLearningPolicy
+      parameters:
+        - name: class
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/DeviationClass" }
+        - name: scope
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/PolicyScope" }
+        - name: scope_key
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/findings:
+    get:
+      tags: [findings]
+      summary: List findings
+      description: >
+        **Use for:** the main Findings page — one ranked feed mixing anomalies
+        and guardrail violations. Supports `?kind=anomaly|violation` to show one
+        kind only.
+
+        **Not for:** investigate view (no evidence / no trace blobs). On row
+        click: anomalies → `GET /anomalies/{transaction_id}/{signature}`;
+        violations → `GET /guardrails/violations/evidence?scope_key=&rule_key=&offending=`.
+
+        Drill-down keys on each row: anomalies use `transaction_id` + `signature`;
+        violations use `scope_key` + `rule_key` + `offending`.
+      operationId: listFindings
+      parameters:
+        - $ref: "#/components/parameters/WindowHours"
+        - $ref: "#/components/parameters/FromTime"
+        - $ref: "#/components/parameters/ToTime"
+        - $ref: "#/components/parameters/ServiceFilter"
+        - $ref: "#/components/parameters/NamespaceFilter"
+        - $ref: "#/components/parameters/StatusFilter"
+        - name: kind
+          in: query
+          description: Filter to one finding kind.
+          schema: { $ref: "#/components/schemas/FindingKind" }
+      responses:
+        "200":
+          description: Findings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FindingList" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/anomalies:
+    get:
+      tags: [anomalies]
+      summary: List anomaly issues
+      description: >
+        **Use for:** anomalies-only lists (e.g. transaction detail "issues"
+        section, or Findings if you merge client-side). Returns
+        `AnomalyIssueSummary` — no `evidence`, no `risk`.
+
+        **Not for:** investigate/compare — use `GET /anomalies/{transaction_id}/{signature}`.
+
+        Prefer `GET /findings` when the screen shows both anomalies and violations.
+      operationId: listAnomalies
+      parameters:
+        - $ref: "#/components/parameters/WindowHours"
+        - $ref: "#/components/parameters/FromTime"
+        - $ref: "#/components/parameters/ToTime"
+        - $ref: "#/components/parameters/ServiceFilter"
+        - $ref: "#/components/parameters/NamespaceFilter"
+        - $ref: "#/components/parameters/StatusFilter"
+        - name: transaction_id
+          in: query
+          description: Limit to one transaction's issues (e.g. transaction detail page).
+          schema: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: Anomaly issue summaries (no evidence).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnomalyIssueList" }
+        "500": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [anomalies]
+      summary: Bulk-resolve anomaly issues
+      description: Apply one resolution (accept | dismiss) to many issues.
+      operationId: bulkResolveAnomalies
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BulkAnomalyRequest" }
+      responses:
+        "200":
+          description: How many issues were resolved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkResolveResult" }
+        "400": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/anomalies/{transaction_id}/{signature}:
+    get:
+      tags: [anomalies]
+      summary: Get one anomaly issue
+      description: >
+        **Use for:** the full investigate / compare page in one call — per-class
+        `evidence`, recomputed `risk`, render-ready `class_findings` (title,
+        summary, span highlights), plus optional `anomaly_trace` and
+        `baseline_trace` OTLP blobs for the side-by-side waterfall.
+
+        **Call when:** user opens an anomaly from Findings or a transaction's
+        issue list. Traces are best-effort (omitted when no sample was retained
+        or the observation TTL aged them out). Extra samples still use
+        `listObservations` / `getObservation` when needed.
+      operationId: getAnomalyIssue
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+        - name: signature
+          in: path
+          required: true
+          description: The issue signature (transaction + classes + offending items).
+          schema: { type: string }
+      responses:
+        "200":
+          description: The anomaly issue with investigate payload.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnomalyIssue" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [anomalies]
+      summary: Resolve one anomaly issue
+      description: Apply one resolution (accept | dismiss | reopen) to this issue.
+      operationId: resolveAnomalyIssue
+      parameters:
+        - $ref: "#/components/parameters/TransactionId"
+        - name: signature
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnomalyResolveRequest" }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/guardrails:
+    get:
+      tags: [guardrails]
+      summary: List service guardrails
+      description: Every declared guardrail (all scopes) with its configured rules.
+      operationId: listGuardrails
+      responses:
+        "200":
+          description: Service guardrails.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceGuardrailList" }
+        "500": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [guardrails]
+      summary: Upsert a service guardrail
+      description: Insert or replace one service's guardrail (scope_key = namespace/service).
+      operationId: upsertGuardrail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ServiceGuardrail" }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    delete:
+      tags: [guardrails]
+      summary: Delete a service guardrail
+      operationId: deleteGuardrail
+      parameters:
+        - name: scope_key
+          in: query
+          required: true
+          description: The guardrail's namespace/service scope key.
+          schema: { type: string }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/guardrails/seed:
+    post:
+      tags: [guardrails]
+      summary: Seed a guardrail from observed traffic
+      description: Adopt observed callers/callees/egress/transactions into a service's guardrail.
+      operationId: seedGuardrail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GuardrailSeedRequest" }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/services/transaction-guardrail/enable:
+    post:
+      tags: [guardrails]
+      summary: Enable a service's transaction guardrail
+      description: >
+        Seed allowed_transactions from currently known transactions and enforce.
+        Works while the service is still learning. Clears a prior disable (mode off).
+      operationId: enableTransactionGuardrail
+      parameters:
+        - name: namespace
+          in: query
+          required: true
+          schema: { type: string }
+        - name: service
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/services/transaction-guardrail/disable:
+    post:
+      tags: [guardrails]
+      summary: Disable a service's transaction guardrail
+      description: >
+        Sets allowed_transactions mode to off so auto-enable will not recreate
+        enforcement. Learning/promoted status is unchanged.
+      operationId: disableTransactionGuardrail
+      parameters:
+        - name: namespace
+          in: query
+          required: true
+          schema: { type: string }
+        - name: service
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/services/transaction-guardrail/force-promote:
+    post:
+      tags: [guardrails]
+      summary: Force-promote all transactions of a service
+      description: >
+        Promotes every scored baseline class on every transaction of the service.
+        May then auto-enable the transaction guardrail when the global setting is on
+        and the service is not disabled.
+      operationId: forcePromoteServiceTransactions
+      parameters:
+        - name: namespace
+          in: query
+          required: true
+          schema: { type: string }
+        - name: service
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/guardrails/violations:
+    get:
+      tags: [guardrails]
+      summary: List guardrail violations
+      description: >
+        **Use for:** violations-only lists. Same lifecycle filters as anomalies
+        (`status`: open | dismissed | accepted).
+
+        Prefer `GET /findings` when the screen shows both kinds. No trace blob
+        on this endpoint. For investigate (summary + evidence trace) use
+        `GET /guardrails/violations/evidence`.
+      operationId: listGuardrailViolations
+      parameters:
+        - $ref: "#/components/parameters/WindowHours"
+        - $ref: "#/components/parameters/FromTime"
+        - $ref: "#/components/parameters/ToTime"
+        - $ref: "#/components/parameters/ServiceFilter"
+        - $ref: "#/components/parameters/NamespaceFilter"
+        - $ref: "#/components/parameters/StatusFilter"
+      responses:
+        "200":
+          description: Guardrail violations.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GuardrailViolationList" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/guardrails/violations/evidence:
+    get:
+      tags: [guardrails]
+      summary: Get one guardrail violation
+      description: >
+        **Use for:** the violation investigate page — the analog of
+        `GET /anomalies/{transaction_id}/{signature}`. Identity is
+        (`scope_key`, `rule_key`, `offending`) because `scope_key` contains a
+        slash and cannot be a path segment.
+
+        Returns the violation (service, rule, offending, status), a render-ready
+        `summary`, span highlights for the forbidden edge, and the retained
+        `evidence_trace` OTLP blob when one was captured.
+
+        **Not for:** the findings table — use `GET /guardrails/violations` or
+        `GET /findings`.
+      operationId: getGuardrailViolation
+      parameters:
+        - name: scope_key
+          in: query
+          required: true
+          schema: { type: string }
+          description: Service identity as `namespace/service`.
+        - name: rule_key
+          in: query
+          required: true
+          schema: { type: string }
+          description: Guardrail rule that fired (`allowed_callers`, `allowed_callees`, `allowed_egress`).
+        - name: offending
+          in: query
+          required: true
+          schema: { type: string }
+          description: The forbidden caller, callee, or egress destination.
+      responses:
+        "200":
+          description: The violation with investigate payload.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GuardrailViolationDetail" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/guardrails/violations/accept:
+    post:
+      tags: [guardrails]
+      summary: Accept a violation
+      description: >
+        Accept the offending edge as legitimate: allowlist it on the guardrail
+        (reloads the engine) and close the violation (sticky). "Accept" is the
+        shared affirmative resolution — the guardrail analogue of accepting an
+        anomaly into the baseline.
+      operationId: acceptViolation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ViolationActionRequest" }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/guardrails/violations/dismiss:
+    post:
+      tags: [guardrails]
+      summary: Dismiss a violation
+      description: Close without allowlisting; the rule stays enforced.
+      operationId: dismissViolation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ViolationActionRequest" }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /api/v1/guardrails/violations/reopen:
+    post:
+      tags: [guardrails]
+      summary: Reopen a dismissed violation
+      operationId: reopenViolation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ViolationActionRequest" }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /api/v1/catalog:
+    get:
+      tags: [catalog]
+      summary: Get the risk-model catalog
+      description: >
+        Reference data (deviation classes, enrichers, categories, guardrail
+        rules, severity bands, threat tags) so clients render labels and editors
+        without hardcoding the risk model.
+      operationId: getCatalog
+      responses:
+        "200":
+          description: Risk catalog.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Catalog" }
+
+  /api/v1/system-settings:
+    get:
+      tags: [system]
+      summary: Get system settings
+      description: >
+        Singleton engine-wide operational configuration (learning-example
+        sampling, observation retention, findings lookback, capacity).
+        Missing fields are filled with compiled defaults.
+      operationId: getSystemSettings
+      responses:
+        "200":
+          description: Current system settings.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SystemSettings" }
+        "500": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [system]
+      summary: Replace system settings
+      description: >
+        Full-document upsert of system settings. Applies immediately via an
+        engine reload; changing observation retention also updates the
+        ClickHouse TTL (capped at 120 days). When identity dimensions change,
+        set reset_transactions=true to wipe existing transactions and relearn;
+        omit or false to keep stale identities until deleted manually.
+      operationId: putSystemSettings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SystemSettings" }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/storage-health:
+    get:
+      tags: [system]
+      summary: Get storage health
+      description: >
+        Point-in-time ClickHouse health for this Insights deployment
+        (connection, disk, memory, running queries, table sizes, write
+        pressure) plus Insights writeback flush status. Intended as the first
+        debug surface for service ↔ database integration.
+      operationId: getStorageHealth
+      responses:
+        "200":
+          description: Current storage health snapshot.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorageHealth" }
+        "500": { $ref: "#/components/responses/Error" }
+
+components:
+  parameters:
+    TransactionId:
+      name: transaction_id
+      in: path
+      required: true
+      description: The transaction's numeric id.
+      schema: { type: integer, format: int64 }
+
+    TransactionSortBy:
+      name: sort_by
+      in: query
+      description: >
+        Column to sort by. Default `volume`. Use `last_seen` (with
+        `sort_order=asc`) to surface inactive transactions first.
+      schema:
+        $ref: "#/components/schemas/TransactionSortBy"
+
+    SortOrder:
+      name: sort_order
+      in: query
+      description: >
+        Sort direction. When omitted: `desc` for `volume`/`last_seen`,
+        `asc` for string columns.
+      schema:
+        $ref: "#/components/schemas/SortOrder"
+
+    WindowHours:
+      name: window_hours
+      in: query
+      description: >
+        Relative lookback in hours ending at now (default 168 = 7d, max 2880 = 120d).
+        Ignored when `from` is set.
+      schema: { type: integer, minimum: 1 }
+
+    FromTime:
+      name: from
+      in: query
+      description: >
+        Absolute range start (RFC3339 or YYYY-MM-DD). When set, overrides
+        `window_hours`. Span longer than 120d is clamped.
+      schema: { type: string }
+
+    ToTime:
+      name: to
+      in: query
+      description: >
+        Absolute range end (RFC3339 or YYYY-MM-DD). Defaults to now when `from`
+        is set without `to`.
+      schema: { type: string }
+
+    ServiceFilter:
+      name: service
+      in: query
+      description: Filter to one service name.
+      schema: { type: string }
+
+    NamespaceFilter:
+      name: namespace
+      in: query
+      description: Filter to one namespace.
+      schema: { type: string }
+
+    StatusFilter:
+      name: status
+      in: query
+      description: Filter to one lifecycle status (open, dismissed, ...).
+      schema: { type: string }
+
+  responses:
+    Error:
+      description: Error envelope.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    NoContent:
+      description: Success, no body.
+    Unavailable:
+      description: The engine is not ready yet (write endpoints only).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status: { type: string, examples: ["ok"] }
+        error: { type: string }
+      required: [status]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error: { $ref: "#/components/schemas/ErrorBody" }
+      required: [error]
+
+    ErrorBody:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Stable machine-readable code.
+          enum: [bad_request, not_found, conflict, unprocessable_entity, unavailable, internal_error]
+        message: { type: string }
+        details:
+          type: object
+          additionalProperties: true
+      required: [code, message]
+
+    TransactionKind:
+      type: string
+      enum: [HTTP, GRPC, CONSUMER, PRODUCER, CRON, INTERNAL]
+
+    TransactionSortBy:
+      type: string
+      description: Sortable columns on `GET /transactions`.
+      enum: [volume, last_seen, service, namespace]
+
+    SortOrder:
+      type: string
+      enum: [asc, desc]
+
+    DeviationClass:
+      type: string
+      description: One baseline dimension; the scoring engine is the source of truth.
+      enum:
+        - D1_call_edges
+        - D2_egress
+        - D3_latency
+        - D4_args_returns
+        - D5_libraries
+        - D6_attr_relations
+        - D7_db_access
+        - D8_payload_size
+
+    SampleReason:
+      type: string
+      description: >
+        How this sample was retained / which bucket to list.
+        `example` = learning-phase normal traffic for baseline compare.
+        Stored anomaly evidence uses `anomaly:<signature>` (one write-once
+        sample per issue); pass that exact string when filtering. The legacy
+        enum token `anomaly_evidence` is kept for contract compatibility —
+        it is not the tag written to storage.
+      enum: [example, anomaly_evidence]
+
+    PolicyScope:
+      type: string
+      enum: [global, service, transaction]
+
+    ServiceStat:
+      type: object
+      properties:
+        namespace: { type: string }
+        service: { type: string }
+        transaction_count: { type: integer, format: int64 }
+        volume: { type: integer, format: int64 }
+        last_seen: { type: string, format: date-time }
+      required: [namespace, service, transaction_count, volume, last_seen]
+      examples:
+        - namespace: default
+          service: frontend
+          transaction_count: 12
+          volume: 84213
+          last_seen: "2026-07-20T14:03:22Z"
+
+    ServiceStatList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ServiceStat" }
+      required: [count, items]
+
+    ServiceNameList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { type: string }
+          description: Distinct service names seen in transactions, sorted A–Z.
+      required: [count, items]
+      examples:
+        - count: 5
+          items: [backend, coupon, customers, frontend, inventory]
+
+    ServiceProfile:
+      type: object
+      description: >
+        Observed communication summary for one service (callers/callees/egress/transactions).
+        Used to seed guardrail allowlists. Callers/callees/egress are observed edges
+        (default selection). Egress destinations are open-ended in the editor (free-form
+        hosts beyond the observed list). For caller/callee candidates beyond observed
+        edges, combine with GET /service-names.
+      properties:
+        namespace: { type: string }
+        service: { type: string }
+        callers:
+          type: array
+          items: { type: string }
+          description: Service names observed calling this service.
+        callees:
+          type: array
+          items: { type: string }
+          description: Internal service names this service calls.
+        egress:
+          type: array
+          items: { type: string }
+          description: External hosts this service reaches.
+        transactions:
+          type: array
+          items: { type: string }
+          description: >
+            Transaction identities as "KIND\toperation" (e.g. "HTTP\tGET /products"),
+            used to seed allowed_transactions.
+      required: [namespace, service, callers, callees, egress, transactions]
+      examples:
+        - namespace: default
+          service: frontend
+          callers: []
+          callees: [coupon, inventory, shipping]
+          egress: []
+          transactions: ["HTTP\tGET /", "HTTP\tPOST /cart"]
+
+    BlastRadiusNode:
+      type: object
+      description: >
+        One service (or virtual dependency) in a blast-radius subgraph. Identity
+        is (namespace, service).
+      properties:
+        namespace: { type: string }
+        service: { type: string }
+        is_virtual:
+          type: boolean
+          description: >
+            True for an uninstrumented endpoint inferred by the connector rather
+            than a real instrumented service: a virtual server (database, queue,
+            external API) or a virtual client (unmatched ingress, labeled "user").
+            Virtual nodes are leaves — blast-radius expansion does not walk through them.
+          x-go-type-skip-optional-pointer: false
+      required: [namespace, service, is_virtual]
+
+    BlastRadiusEdge:
+      type: object
+      description: >
+        A directed client -> server edge. Request/failure counts are summed
+        across gateway pods; treat them as rough magnitude, not exact totals.
+      properties:
+        client_namespace: { type: string }
+        client_service: { type: string }
+        server_namespace: { type: string }
+        server_service: { type: string }
+        connection_type: { type: string }
+        request_count: { type: integer, format: int64 }
+        failed_count: { type: integer, format: int64 }
+        last_seen: { type: string, format: date-time }
+      required:
+        [client_namespace, client_service, server_namespace, server_service,
+         connection_type, request_count, failed_count, last_seen]
+
+    BlastRadiusSubgraph:
+      type: object
+      description: >
+        The neighborhood around an anchor service: the anchor plus every
+        node/edge reachable within the requested hop depth, inbound (callers) and
+        outbound (callees). Node count is capped server-side so a highly-connected
+        service can't expand into the whole cluster.
+      properties:
+        root: { $ref: "#/components/schemas/BlastRadiusNode" }
+        nodes:
+          type: array
+          items: { $ref: "#/components/schemas/BlastRadiusNode" }
+        edges:
+          type: array
+          items: { $ref: "#/components/schemas/BlastRadiusEdge" }
+      required: [root, nodes, edges]
+      examples:
+        - root: { namespace: default, service: frontend, is_virtual: false }
+          nodes:
+            - { namespace: default, service: frontend, is_virtual: false }
+            - { namespace: default, service: checkout, is_virtual: false }
+            - { namespace: "", service: "postgres:5432", is_virtual: true }
+          edges:
+            - client_namespace: default
+              client_service: frontend
+              server_namespace: default
+              server_service: checkout
+              connection_type: ""
+              request_count: 15000
+              failed_count: 0
+              last_seen: "2026-07-20T14:03:22Z"
+            - client_namespace: default
+              client_service: checkout
+              server_namespace: ""
+              server_service: "postgres:5432"
+              connection_type: database
+              request_count: 9100
+              failed_count: 37
+              last_seen: "2026-07-20T14:03:22Z"
+
+    TransactionStat:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        service: { type: string }
+        namespace: { type: string }
+        operation:
+          type: string
+          description: Full canonical identity string (hashed).
+        operation_name:
+          type: string
+          description: Entry-span operation without dimension suffixes.
+        identity_dimensions:
+          type: array
+          items: { $ref: "#/components/schemas/TransactionIdentityValue" }
+        kind: { $ref: "#/components/schemas/TransactionKind" }
+        volume: { type: integer, format: int64 }
+        last_seen: { type: string, format: date-time }
+        has_baseline:
+          type: boolean
+          description: False when no baseline class has been learned yet.
+          x-go-type-skip-optional-pointer: false
+        promoted:
+          type: boolean
+          description: True when every learned baseline class has graduated.
+          x-go-type-skip-optional-pointer: false
+      required: [id, service, namespace, operation, operation_name, identity_dimensions, kind, volume, last_seen]
+      examples:
+        - id: 4211
+          service: frontend
+          namespace: default
+          operation: "POST /buy [http.response.status_code=200]"
+          operation_name: POST /buy
+          identity_dimensions:
+            - key: http.response.status_code
+              value: "200"
+          kind: HTTP
+          volume: 51877
+          last_seen: "2026-07-20T14:03:22Z"
+          has_baseline: true
+          promoted: true
+
+    TransactionStatList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TransactionStat" }
+      required: [count, items]
+
+    TransactionIdentityValue:
+      type: object
+      description: >
+        One parsed low-cardinality dimension from the stored operation identity
+        suffix ([key=value]). For display only — canonical identity remains in
+        `operation`.
+      properties:
+        key:
+          type: string
+          description: Attribute key or built-in resolver name.
+        value:
+          type: string
+          description: Resolved value from the sub-transaction entry span.
+      required: [key, value]
+
+    Transaction:
+      type: object
+      description: >
+        One baselined unit of work (identity only). Activity volume lives on
+        TransactionStat from listTransactions.
+      properties:
+        id: { type: integer, format: int64 }
+        service: { type: string }
+        namespace: { type: string }
+        operation:
+          type: string
+          description: >
+            Full canonical identity string (hashed, guardrails). Includes
+            [key=value] suffixes when identity dimensions are enabled.
+        operation_name:
+          type: string
+          description: >
+            Human-readable entry-span operation without dimension suffixes.
+        identity_dimensions:
+          type: array
+          description: Parsed identity dimensions from `operation` suffix.
+          items: { $ref: "#/components/schemas/TransactionIdentityValue" }
+        kind: { $ref: "#/components/schemas/TransactionKind" }
+      required: [id, service, namespace, operation, operation_name, identity_dimensions, kind]
+      examples:
+        - id: 4211
+          service: frontend
+          namespace: default
+          operation: "POST /buy [http.response.status_code=200]"
+          operation_name: POST /buy
+          identity_dimensions:
+            - key: http.response.status_code
+              value: "200"
+          kind: HTTP
+
+    BaselineClass:
+      type: object
+      properties:
+        transaction_id: { type: integer, format: int64 }
+        class: { $ref: "#/components/schemas/DeviationClass" }
+        class_label:
+          type: string
+          description: >
+            Human-readable name for what this class learns on a transaction
+            (e.g. "Request latency" for D3_latency). Sourced from the risk
+            catalog; UI should display this and keep `class` as the stable id
+            for promote/reset paths.
+        class_description:
+          type: string
+          description: >
+            Tooltip text describing what this class learns for the transaction.
+            Suitable for hover UI; not the finding/anomaly wording.
+        data:
+          description: Opaque per-class JSON value, passed through verbatim.
+          type: object
+          additionalProperties: true
+          x-go-type: json.RawMessage
+          x-go-type-skip-optional-pointer: true
+        histogram:
+          allOf: [{ $ref: "#/components/schemas/BaselineHistogram" }]
+          description: >
+            Chart-ready exponential histogram for metric classes that store a
+            distribution (`D3_latency`, `D8_payload_size`). Omitted for all other
+            classes and when `data` has no decodeable buckets. Built server-side
+            from the stored bucket geometry (`layout_fingerprint` on the histogram
+            object). Clients should plot `series[].bars` and must not recompute
+            bounds from raw `data`.
+          x-go-type-skip-optional-pointer: false
+        data_schema_version: { type: integer }
+        observation_count: { type: integer, format: int64 }
+        promoted: { type: boolean }
+        learning_started_at: { type: string, format: date-time }
+        last_changed_at: { type: string, format: date-time }
+        observation_count_at_last_change: { type: integer, format: int64 }
+        learning: { $ref: "#/components/schemas/BaselineLearning" }
+      required: [transaction_id, class, class_label, class_description, promoted, observation_count, learning]
+      examples:
+        - transaction_id: 4211
+          class: D2_egress
+          class_label: Outbound peers
+          class_description: Learned set of external destinations (host:port) this transaction reaches.
+          data:
+            peers: ["default/pricing", "default/cart", "checkout.stripe.com:443"]
+          data_schema_version: 1
+          observation_count: 15234
+          promoted: true
+          learning_started_at: "2026-07-01T09:00:00Z"
+          last_changed_at: "2026-07-12T11:20:05Z"
+          observation_count_at_last_change: 8021
+          learning:
+            phase: promoted
+            observations_since_last_change: 7213
+            quiet_minutes: 1200
+            mode: any
+            ready_to_promote: false
+            stability:
+              observations:
+                current: 7213
+                target: 50
+                drives_promotion: true
+                met: true
+              duration:
+                current: 1200
+                target: 0
+                drives_promotion: false
+                met: false
+
+    BaselineClassList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/BaselineClass" }
+      required: [count, items]
+
+    BaselineHistogramUnit:
+      type: string
+      description: >
+        Physical unit of each bar's `lo`/`hi` bounds. `us` = microseconds
+        (latency); `bytes` = payload size.
+      enum: [us, bytes]
+
+    BaselineHistogramBar:
+      type: object
+      description: >
+        One exponential histogram bucket ready for a bar chart. `lo` is
+        inclusive; `hi` is exclusive for k≥1. Bucket 0 is the point value 0
+        (`lo` = `hi` = 0). `label` is a human-readable range in `unit`
+        (e.g. "64–127µs", "1.0–2.0 KB").
+      properties:
+        lo: { type: integer, format: int64, description: Inclusive lower bound in `unit`. }
+        hi: { type: integer, format: int64, description: Exclusive upper bound in `unit` (equal to `lo` for the zero bucket). }
+        count: { type: integer, format: int64, description: Observation count in this bucket (Y-axis). }
+        label: { type: string, description: Preformatted X-axis tick / tooltip for this bar. }
+      required: [lo, hi, count, label]
+
+    BaselineHistogramSeries:
+      type: object
+      description: >
+        One named distribution within a class (e.g. latency, request body,
+        response body). Bar count matches the stored bucket geometry.
+      properties:
+        name:
+          type: string
+          description: Stable series id (`latency`, `request`, `response`).
+        label:
+          type: string
+          description: Human-readable series title for legends.
+        bars:
+          type: array
+          items: { $ref: "#/components/schemas/BaselineHistogramBar" }
+      required: [name, label, bars]
+
+    BaselineHistogram:
+      type: object
+      description: >
+        Presentation payload for plotting a learned exponential histogram.
+        The engine uses a fixed geometry of 32 buckets (bucket 0 = value 0;
+        bucket k≥1 covers [2^(k-1), 2^k) of `unit`). `layout_fingerprint`
+        identifies this geometry on the chart payload.
+      properties:
+        unit: { $ref: "#/components/schemas/BaselineHistogramUnit" }
+        layout_fingerprint:
+          type: string
+          description: >
+            Short hash of the bucket geometry (`scheme` + `bucket_count`) used
+            for this chart. Compare across baselines to detect mixed layouts.
+        series:
+          type: array
+          items: { $ref: "#/components/schemas/BaselineHistogramSeries" }
+      required: [unit, series]
+      examples:
+        - unit: us
+          series:
+            - name: latency
+              label: Entry latency
+              bars:
+                - { lo: 0, hi: 0, count: 0, label: "0µs" }
+                - { lo: 1, hi: 2, count: 0, label: "1µs" }
+                - { lo: 64, hi: 128, count: 140, label: "64–127µs" }
+
+    BaselineLearningPhase:
+      type: string
+      description: >
+        Coarse learning state for one class. `promoted` means the baseline is
+        frozen. `empty` means it has never grown (no structure learned yet).
+        `learning` means it has grown and is still in the learning phase.
+      enum: [promoted, empty, learning]
+
+    BaselineStabilityProgress:
+      type: object
+      description: >
+        One stability dimension. For observations, `current`/`target` is a
+        count. For duration, both are minutes. `drives_promotion` is true when
+        the resolved policy has this condition. `target` is 0 when there is no
+        policy target and no display default — still render `current` as
+        "grew N ago". `met` is this dimension only.
+      properties:
+        current: { type: integer, format: int64 }
+        target: { type: integer, format: int64 }
+        drives_promotion: { type: boolean }
+        met: { type: boolean }
+      required: [current, target, drives_promotion, met]
+
+    BaselineLearningStability:
+      type: object
+      description: >
+        Both stability signals, always present so the UI can show
+        "X / Y observations" and "grew N minutes ago" together. A class may
+        promote on observations, on quiet time, on both, or on neither
+        (display-only observation window of 50). Under `all`, one dimension
+        `met` does not mean the class promotes — use `ready_to_promote`.
+      properties:
+        observations: { $ref: "#/components/schemas/BaselineStabilityProgress" }
+        duration: { $ref: "#/components/schemas/BaselineStabilityProgress" }
+      required: [observations, duration]
+
+    BaselineLearning:
+      type: object
+      description: >
+        Computed learning/stability snapshot for one baseline class against its
+        resolved learning policy (transaction override, else service, else
+        global). Always present, including on placeholder classes.
+      properties:
+        phase: { $ref: "#/components/schemas/BaselineLearningPhase" }
+        observations_since_last_change:
+          type: integer
+          format: int64
+          description: >
+            ObservationCount minus ObservationCountAtLastChange, clamped at 0.
+        quiet_minutes:
+          type: integer
+          format: int64
+          description: Whole minutes since the baseline last grew (or since learning started if it never grew).
+        mode: { $ref: "#/components/schemas/LearningMode" }
+        ready_to_promote:
+          type: boolean
+          description: >
+            True when the class is still learning and the full promotion gate
+            is already satisfied (every condition if `mode=all`, one if `any`,
+            K if `k_of`). Always false once `phase` is `promoted`.
+        stability: { $ref: "#/components/schemas/BaselineLearningStability" }
+      required: [phase, observations_since_last_change, quiet_minutes, mode, ready_to_promote, stability]
+
+    ObservationSummary:
+      type: object
+      description: >
+        Metadata for one retained sample. **List path only** — used by
+        `listObservations`. For the OTLP blob, call `getObservation`.
+      properties:
+        trace_id: { type: string }
+        transaction_id: { type: integer, format: int64 }
+        observed_at: { type: string, format: date-time }
+        duration_ms: { type: integer, format: int64 }
+        sample_reason: { $ref: "#/components/schemas/SampleReason" }
+      required: [trace_id, transaction_id, observed_at, duration_ms, sample_reason]
+      examples:
+        - trace_id: "3a5f9c7e1b2d4a6c8e0f1a2b3c4d5e6f"
+          transaction_id: 4211
+          observed_at: "2026-07-20T14:03:22Z"
+          duration_ms: 137
+          sample_reason: example
+
+    Observation:
+      type: object
+      description: >
+        One retained sample including the verbatim OTLP blob. Returned by
+        `getObservation` and embedded on the anomaly investigate detail as
+        `anomaly_trace` / `baseline_trace`. Never returned by `listObservations`.
+      properties:
+        trace_id: { type: string }
+        transaction_id: { type: integer, format: int64 }
+        observed_at: { type: string, format: date-time }
+        duration_ms: { type: integer, format: int64 }
+        sample_reason: { $ref: "#/components/schemas/SampleReason" }
+        raw_otlp:
+          type: string
+          format: byte
+          description: Verbatim OTLP protobuf, base64-encoded.
+      required: [trace_id, transaction_id, observed_at, duration_ms, sample_reason, raw_otlp]
+      examples:
+        - trace_id: "3a5f9c7e1b2d4a6c8e0f1a2b3c4d5e6f"
+          transaction_id: 4211
+          observed_at: "2026-07-20T14:03:22Z"
+          duration_ms: 137
+          sample_reason: example
+          raw_otlp: "b3RscC1wcm90b2J1Zi1ieXRlcw=="
+
+    ObservationList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ObservationSummary" }
+      required: [count, items]
+
+    PromoteResult:
+      type: object
+      properties:
+        transaction_id: { type: integer, format: int64 }
+        class: { $ref: "#/components/schemas/DeviationClass" }
+        promoted: { type: boolean }
+      required: [transaction_id, class, promoted]
+
+    Policy:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        enabled: { type: boolean }
+        fire_at_score:
+          type: integer
+          description: Risk-score threshold (0-100) at or above which the policy fires.
+        signal_weights:
+          type: object
+          additionalProperties: { type: integer }
+          description: Per-signal weight overrides (deviation class or enricher id).
+        enricher_lists:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+          description: Per-scope overrides of enricher keyword lists.
+        scope: { $ref: "#/components/schemas/PolicyScope" }
+        scope_key: { type: string }
+      required: [id, name, enabled, fire_at_score, scope, scope_key]
+      examples:
+        - id: 1
+          name: default
+          enabled: true
+          fire_at_score: 60
+          signal_weights:
+            D7_db_access: 30
+            d7_sensitive_table: 30
+          enricher_lists:
+            sensitive_tables: ["users", "secrets", "api_keys"]
+          scope: global
+          scope_key: ""
+
+    PolicyList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Policy" }
+      required: [count, items]
+
+    Severity:
+      type: string
+      enum: [info, low, medium, high, critical]
+
+    FindingKind:
+      type: string
+      enum: [anomaly, violation]
+
+    AnomalyStatus:
+      type: string
+      description: >
+        Lifecycle bucket. `accepted` means the operator confirmed the behaviour
+        is legitimate and folded it into the baseline (it stops re-alerting) —
+        the shared affirmative term with ViolationStatus.
+      enum: [open, accepted, dismissed]
+
+    ViolationStatus:
+      type: string
+      description: >
+        Lifecycle bucket. `accepted` means the operator accepted the offending
+        edge as legitimate (it is allowlisted on the guardrail and stops
+        alerting) — the shared affirmative term with AnomalyStatus.
+      enum: [open, dismissed, accepted]
+
+    RuleMode:
+      type: string
+      enum: [suggest, enforce, off]
+      description: >
+        suggest = observe only; enforce = fire findings; off = disabled
+        (per-service disable for auto transaction guardrail).
+
+    AnomalyResolution:
+      type: string
+      enum: [accept, dismiss, reopen]
+
+    BulkResolution:
+      type: string
+      enum: [accept, dismiss]
+
+    AnomalyRef:
+      type: object
+      properties:
+        transaction_id: { type: integer, format: int64 }
+        signature: { type: string }
+      required: [transaction_id, signature]
+
+    AnomalyResolveRequest:
+      type: object
+      properties:
+        resolution: { $ref: "#/components/schemas/AnomalyResolution" }
+      required: [resolution]
+
+    BulkAnomalyRequest:
+      type: object
+      properties:
+        resolution: { $ref: "#/components/schemas/BulkResolution" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AnomalyRef" }
+      required: [resolution, items]
+
+    BulkResolveResult:
+      type: object
+      properties:
+        resolution: { type: string }
+        resolved: { type: integer }
+      required: [resolution, resolved]
+
+    BulkDeleteTransactionsRequest:
+      type: object
+      properties:
+        transaction_ids:
+          type: array
+          items: { type: integer, format: int64 }
+          minItems: 1
+          description: Transaction ids to permanently delete.
+      required: [transaction_ids]
+
+    BulkDeleteTransactionsResult:
+      type: object
+      properties:
+        deleted: { type: integer }
+      required: [deleted]
+
+    BulkPromoteTransactionsRequest:
+      type: object
+      properties:
+        transaction_ids:
+          type: array
+          items: { type: integer, format: int64 }
+          minItems: 1
+          description: Transaction ids whose scored baseline classes to force-promote.
+      required: [transaction_ids]
+
+    BulkPromoteTransactionsResult:
+      type: object
+      properties:
+        promoted: { type: integer }
+      required: [promoted]
+
+    ViolationActionRequest:
+      type: object
+      properties:
+        scope_key: { type: string }
+        rule_key: { type: string }
+        offending: { type: string }
+      required: [scope_key, rule_key, offending]
+
+    GuardrailSeedRequest:
+      type: object
+      properties:
+        scope_key: { type: string }
+        mode: { $ref: "#/components/schemas/RuleMode" }
+        items:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+          description: Rule key (allowed_callers|allowed_callees|allowed_egress|allowed_transactions) to entries to adopt.
+      required: [scope_key, items]
+
+    RiskSignal:
+      type: object
+      properties:
+        source: { type: string }
+        category: { type: string }
+        weight: { type: integer }
+        confidence: { type: number, format: double }
+        contribution: { type: integer }
+        rationale: { type: string }
+        mitre: { type: string }
+        owasp: { type: string }
+      required: [source, category, weight, confidence, contribution]
+
+    RiskAssessment:
+      type: object
+      properties:
+        score: { type: integer }
+        severity: { $ref: "#/components/schemas/Severity" }
+        correlated: { type: boolean }
+        correlation_bonus: { type: integer }
+        fire_at_score: { type: integer }
+        categories:
+          type: array
+          items: { type: string }
+        signals:
+          type: array
+          items: { $ref: "#/components/schemas/RiskSignal" }
+      required: [score, severity, correlated, correlation_bonus, fire_at_score, signals]
+      examples:
+        - score: 70
+          severity: high
+          correlated: true
+          correlation_bonus: 15
+          fire_at_score: 60
+          categories: ["exfiltration", "lateral_movement"]
+          signals:
+            - source: D2_egress
+              category: lateral_movement
+              weight: 25
+              confidence: 1.0
+              contribution: 25
+              rationale: "new egress peer not in the learned baseline"
+              mitre: "TA0008"
+              owasp: "API10:2023"
+            - source: d2_dangerous_port
+              category: exfiltration
+              weight: 30
+              confidence: 1.0
+              contribution: 30
+              rationale: "egress to a sensitive port outside the mesh"
+              mitre: "TA0010"
+
+    LearningMode:
+      type: string
+      enum: [all, any, k_of]
+
+    LearningConditionType:
+      type: string
+      enum: [min_observations, min_duration, stable_observations, stable_duration]
+
+    Finding:
+      type: object
+      description: One unified feed row; a flattened anomaly issue or violation.
+      properties:
+        kind: { $ref: "#/components/schemas/FindingKind" }
+        service: { type: string }
+        namespace: { type: string }
+        title:
+          type: string
+          description: >
+            Human-readable headline. Anomalies use operation_name; violations
+            use the guardrail rule label.
+        operation:
+          type: string
+          description: >
+            Full canonical transaction operation (anomalies only). Omitted for
+            violations.
+        operation_name:
+          type: string
+          description: Entry-span operation without dimension suffixes (anomalies).
+        identity_dimensions:
+          type: array
+          description: Parsed identity dimensions (anomalies only).
+          items: { $ref: "#/components/schemas/TransactionIdentityValue" }
+        offending: { type: string }
+        score: { type: integer }
+        severity: { $ref: "#/components/schemas/Severity" }
+        occurrences: { type: integer, format: int64 }
+        first_seen:
+          type: string
+          format: date-time
+          description: >
+            Earliest occurrence of this finding (anomaly or guardrail violation).
+        last_seen: { type: string, format: date-time }
+        status: { type: string }
+        transaction_id:
+          type: integer
+          format: int64
+          description: Anomaly drill-down key (with signature).
+        signature:
+          type: string
+          description: Anomaly drill-down key (with transaction_id).
+        triggered_classes:
+          type: array
+          description: Anomaly signal classes (empty for violations).
+          items: { $ref: "#/components/schemas/DeviationClass" }
+        scope_key:
+          type: string
+          description: Violation drill-down key (with rule_key).
+        rule_key:
+          type: string
+          description: Violation drill-down key (with scope_key).
+      required: [kind, service, namespace, title, score, severity, occurrences, last_seen, status]
+      examples:
+        - kind: anomaly
+          service: frontend
+          namespace: default
+          title: POST /buy
+          operation: "POST /buy [http.response.status_code=403]"
+          operation_name: POST /buy
+          identity_dimensions:
+            - key: http.response.status_code
+              value: "403"
+          offending: "new egress to 45.83.12.7:8443"
+          score: 70
+          severity: high
+          occurrences: 342
+          first_seen: "2026-07-20T09:15:01Z"
+          last_seen: "2026-07-20T14:03:22Z"
+          status: open
+          transaction_id: 4211
+          signature: "7f3c2a9e5b1d4c8a"
+          triggered_classes: [D2_egress]
+        - kind: violation
+          service: frontend
+          namespace: default
+          title: Allowed egress destinations
+          offending: "postgres:5432"
+          score: 60
+          severity: high
+          occurrences: 27
+          first_seen: "2026-07-20T09:15:01Z"
+          last_seen: "2026-07-20T13:58:10Z"
+          status: open
+          scope_key: default/frontend
+          rule_key: allowed_egress
+
+    FindingList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Finding" }
+      required: [count, items]
+
+    AnomalyIssueSummary:
+      type: object
+      description: >
+        Deduped anomaly row for tables and feeds. **List path** — no `evidence`.
+        For investigate UI, call `getAnomalyIssue`.
+      properties:
+        transaction_id: { type: integer, format: int64 }
+        signature: { type: string }
+        service: { type: string }
+        namespace: { type: string }
+        operation:
+          type: string
+          description: Full canonical identity string.
+        operation_name:
+          type: string
+          description: Entry-span operation without dimension suffixes.
+        identity_dimensions:
+          type: array
+          items: { $ref: "#/components/schemas/TransactionIdentityValue" }
+        kind: { $ref: "#/components/schemas/TransactionKind" }
+        triggered_classes:
+          type: array
+          items: { $ref: "#/components/schemas/DeviationClass" }
+        offending: { type: string }
+        policy_id: { type: integer, format: int64 }
+        occurrences: { type: integer, format: int64 }
+        max_score: { type: integer }
+        severity: { $ref: "#/components/schemas/Severity" }
+        first_seen: { type: string, format: date-time }
+        last_seen: { type: string, format: date-time }
+        last_trace_id: { type: string }
+        status: { $ref: "#/components/schemas/AnomalyStatus" }
+      required:
+        - transaction_id
+        - signature
+        - service
+        - namespace
+        - operation
+        - operation_name
+        - identity_dimensions
+        - triggered_classes
+        - occurrences
+        - max_score
+        - severity
+        - status
+      examples:
+        - transaction_id: 4211
+          signature: "7f3c2a9e5b1d4c8a"
+          service: frontend
+          namespace: default
+          operation: "POST /buy [http.response.status_code=403]"
+          operation_name: POST /buy
+          identity_dimensions:
+            - key: http.response.status_code
+              value: "403"
+          kind: HTTP
+          triggered_classes: [D2_egress]
+          offending: "new egress to 45.83.12.7:8443"
+          policy_id: 1
+          occurrences: 342
+          max_score: 70
+          severity: high
+          first_seen: "2026-07-20T09:15:01Z"
+          last_seen: "2026-07-20T14:03:22Z"
+          last_trace_id: "3a5f9c7e1b2d4a6c8e0f1a2b3c4d5e6f"
+          status: open
+
+    AnomalyClassFindingKind:
+      type: string
+      enum: [structural, metric]
+      description: >
+        How to present one class finding. Structural = span-tree / attribute
+        highlights; metric = observed vs baseline gauge.
+
+    AnomalySpanHighlight:
+      type: object
+      description: Span the UI should call out on the anomaly waterfall.
+      properties:
+        span_id: { type: string }
+        severity: { type: string, description: "high | medium | low" }
+        reason: { type: string }
+      required: [span_id, severity, reason]
+
+    AnomalyAttrHighlight:
+      type: object
+      description: Attribute on a span worth surfacing (e.g. offending db.statement).
+      properties:
+        span_id: { type: string }
+        key: { type: string }
+        value: { type: string }
+      required: [span_id, key, value]
+
+    AnomalyMetricComparison:
+      type: object
+      description: Observed value vs learned baseline threshold for a metric class.
+      properties:
+        observed: { type: integer, format: int64 }
+        baseline: { type: integer, format: int64 }
+        unit: { type: string, description: "us | bytes" }
+      required: [observed, baseline, unit]
+
+    AnomalyClassFinding:
+      type: object
+      description: >
+        Render-ready explanation of one deviation class within an anomaly issue.
+        Built at read time from stored evidence (+ anomaly spans when available).
+        The UI should render title/summary/highlights and not parse raw evidence.
+      properties:
+        class: { $ref: "#/components/schemas/DeviationClass" }
+        kind: { $ref: "#/components/schemas/AnomalyClassFindingKind" }
+        title: { type: string }
+        summary: { type: string }
+        span_highlights:
+          type: array
+          items: { $ref: "#/components/schemas/AnomalySpanHighlight" }
+        attr_highlights:
+          type: array
+          items: { $ref: "#/components/schemas/AnomalyAttrHighlight" }
+        metric:
+          allOf: [{ $ref: "#/components/schemas/AnomalyMetricComparison" }]
+          x-go-type-skip-optional-pointer: false
+        raw_evidence:
+          type: object
+          additionalProperties: true
+          description: Original per-class evidence blob (fallback / debug).
+          x-go-type: json.RawMessage
+          x-go-type-skip-optional-pointer: true
+      required: [class, kind, title, summary]
+
+    AnomalyIssue:
+      type: object
+      description: >
+        Full anomaly for investigate/compare. **Detail path only** — includes
+        `evidence`, optional `risk`, render-ready `class_findings`, and optional
+        `anomaly_trace` / `baseline_trace` for the compare waterfall. Never
+        returned by `listAnomalies` or `listFindings`.
+      properties:
+        transaction_id: { type: integer, format: int64 }
+        signature: { type: string }
+        service: { type: string }
+        namespace: { type: string }
+        operation:
+          type: string
+          description: Full canonical identity string.
+        operation_name:
+          type: string
+          description: Entry-span operation without dimension suffixes.
+        identity_dimensions:
+          type: array
+          items: { $ref: "#/components/schemas/TransactionIdentityValue" }
+        kind: { $ref: "#/components/schemas/TransactionKind" }
+        triggered_classes:
+          type: array
+          items: { $ref: "#/components/schemas/DeviationClass" }
+        offending: { type: string }
+        evidence:
+          type: object
+          additionalProperties: true
+          description: Raw per-class deviation evidence.
+          x-go-type: json.RawMessage
+          x-go-type-skip-optional-pointer: true
+        policy_id: { type: integer, format: int64 }
+        occurrences: { type: integer, format: int64 }
+        max_score: { type: integer }
+        severity: { $ref: "#/components/schemas/Severity" }
+        first_seen: { type: string, format: date-time }
+        last_seen: { type: string, format: date-time }
+        last_trace_id: { type: string }
+        status: { $ref: "#/components/schemas/AnomalyStatus" }
+        risk:
+          allOf: [{ $ref: "#/components/schemas/RiskAssessment" }]
+          x-go-type-skip-optional-pointer: false
+        class_findings:
+          type: array
+          description: >
+            One render-ready finding per triggered class (title, summary,
+            highlights). Always present on detail; empty only if the issue has
+            no triggered classes.
+          items: { $ref: "#/components/schemas/AnomalyClassFinding" }
+        anomaly_trace:
+          allOf: [{ $ref: "#/components/schemas/Observation" }]
+          description: >
+            Evidence sample for this issue (`sample_reason=anomaly:<signature>`),
+            including `raw_otlp`. Omitted when no sample was retained.
+          x-go-type-skip-optional-pointer: false
+        baseline_trace:
+          allOf: [{ $ref: "#/components/schemas/Observation" }]
+          description: >
+            One learning-phase `example` sample for the same transaction,
+            including `raw_otlp`, for baseline compare. Omitted when none exist.
+          x-go-type-skip-optional-pointer: false
+      required:
+        - transaction_id
+        - signature
+        - service
+        - namespace
+        - operation
+        - operation_name
+        - identity_dimensions
+        - triggered_classes
+        - evidence
+        - occurrences
+        - max_score
+        - severity
+        - status
+        - class_findings
+      examples:
+        - transaction_id: 4211
+          signature: "7f3c2a9e5b1d4c8a"
+          service: frontend
+          namespace: default
+          operation: "POST /buy [http.response.status_code=403]"
+          operation_name: POST /buy
+          identity_dimensions:
+            - key: http.response.status_code
+              value: "403"
+          kind: HTTP
+          triggered_classes: [D2_egress]
+          offending: "new egress to 45.83.12.7:8443"
+          evidence:
+            D2_egress:
+              new_peers: ["45.83.12.7:8443"]
+              baseline_peers: ["default/pricing", "checkout.stripe.com:443"]
+          policy_id: 1
+          occurrences: 342
+          max_score: 70
+          severity: high
+          first_seen: "2026-07-20T09:15:01Z"
+          last_seen: "2026-07-20T14:03:22Z"
+          last_trace_id: "3a5f9c7e1b2d4a6c8e0f1a2b3c4d5e6f"
+          status: open
+          class_findings:
+            - class: D2_egress
+              kind: structural
+              title: Unexpected egress
+              summary: New peer 45.83.12.7:8443 not in the learned baseline.
+
+    AnomalyIssueList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AnomalyIssueSummary" }
+      required: [count, items]
+
+    GuardrailViolation:
+      type: object
+      properties:
+        service: { type: string }
+        namespace: { type: string }
+        scope_key: { type: string }
+        rule_key: { type: string }
+        rule_label: { type: string }
+        offending: { type: string }
+        occurrences: { type: integer, format: int64 }
+        max_score: { type: integer }
+        severity: { $ref: "#/components/schemas/Severity" }
+        first_seen: { type: string, format: date-time }
+        last_seen: { type: string, format: date-time }
+        status: { $ref: "#/components/schemas/ViolationStatus" }
+      required: [service, namespace, scope_key, rule_key, rule_label, occurrences, max_score, severity, status]
+      examples:
+        - service: frontend
+          namespace: default
+          scope_key: default/frontend
+          rule_key: allowed_egress
+          rule_label: Allowed egress destinations
+          offending: "postgres:5432"
+          occurrences: 27
+          max_score: 60
+          severity: high
+          first_seen: "2026-07-20T09:15:01Z"
+          last_seen: "2026-07-20T13:58:10Z"
+          status: open
+
+    GuardrailViolationList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/GuardrailViolation" }
+      required: [count, items]
+
+    GuardrailViolationDetail:
+      type: object
+      description: >
+        Full violation for investigate. **Detail path only** — includes a
+        render-ready `summary`, span highlights, and optional `evidence_trace`.
+        Never returned by `listGuardrailViolations` or `listFindings`. Identity
+        is (`scope_key`, `rule_key`, `offending`), analogous to an anomaly's
+        (`transaction_id`, `signature`).
+      properties:
+        service: { type: string }
+        namespace: { type: string }
+        scope_key: { type: string }
+        rule_key: { type: string }
+        rule_label: { type: string }
+        offending: { type: string }
+        occurrences: { type: integer, format: int64 }
+        max_score: { type: integer }
+        severity: { $ref: "#/components/schemas/Severity" }
+        first_seen: { type: string, format: date-time }
+        last_seen: { type: string, format: date-time }
+        status: { $ref: "#/components/schemas/ViolationStatus" }
+        summary:
+          type: string
+          description: >
+            Render-ready investigate sentence. The UI should display it as-is
+            (service, rule, offending, plus that this payload is evidence for
+            the forbidden edge).
+        span_highlights:
+          type: array
+          description: Spans on the evidence trace that witness the forbidden edge.
+          items: { $ref: "#/components/schemas/AnomalySpanHighlight" }
+        evidence_trace:
+          allOf: [{ $ref: "#/components/schemas/Observation" }]
+          description: >
+            Captured sample for this violation (`sample_reason=guardrail:<rule>:<offending>`),
+            including `raw_otlp`. Omitted when no sample was retained.
+          x-go-type-skip-optional-pointer: false
+      required: [service, namespace, scope_key, rule_key, rule_label, offending, occurrences, max_score, severity, status, summary]
+      examples:
+        - service: frontend
+          namespace: default
+          scope_key: default/frontend
+          rule_key: allowed_callees
+          rule_label: Allowed callees
+          offending: currency
+          occurrences: 12
+          max_score: 60
+          severity: high
+          first_seen: "2026-07-20T09:15:01Z"
+          last_seen: "2026-07-20T14:03:22Z"
+          status: open
+          summary: "frontend broke Allowed callees on currency. This is one captured trace as evidence — the highlighted span(s) show the forbidden edge."
+          span_highlights:
+            - span_id: "a1b2c3d4"
+              severity: high
+              reason: unauthorized callee
+
+    GuardrailRuleConfig:
+      type: object
+      properties:
+        key: { type: string }
+        label: { type: string }
+        mode: { $ref: "#/components/schemas/RuleMode" }
+        allowlist:
+          type: array
+          items: { type: string }
+        origin:
+          type: string
+          description: >
+            How this rule was created. `auto_transaction_guardrail` means it was
+            created automatically when the service's transactions promoted
+            (not a manual edit).
+      required: [key, label, mode]
+
+    ServiceGuardrail:
+      type: object
+      properties:
+        scope: { $ref: "#/components/schemas/PolicyScope" }
+        scope_key: { type: string }
+        rules:
+          type: array
+          items: { $ref: "#/components/schemas/GuardrailRuleConfig" }
+      required: [scope, scope_key, rules]
+      examples:
+        - scope: service
+          scope_key: default/frontend
+          rules:
+            - key: allowed_callers
+              label: Allowed callers
+              mode: enforce
+              allowlist: ["default/gateway"]
+            - key: allowed_egress
+              label: Allowed egress destinations
+              mode: suggest
+              allowlist: ["checkout.stripe.com:443"]
+
+    ServiceGuardrailList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ServiceGuardrail" }
+      required: [count, items]
+
+    LearningCondition:
+      type: object
+      properties:
+        type: { $ref: "#/components/schemas/LearningConditionType" }
+        minObservations: { type: integer, format: int64 }
+        minDurationMinutes: { type: integer, format: int64 }
+        stableObservations: { type: integer, format: int64 }
+        stableMinutes: { type: integer, format: int64 }
+      required: [type]
+
+    LearningPolicy:
+      type: object
+      properties:
+        class: { $ref: "#/components/schemas/DeviationClass" }
+        mode: { $ref: "#/components/schemas/LearningMode" }
+        conditions:
+          type: array
+          items: { $ref: "#/components/schemas/LearningCondition" }
+        min_matches: { type: integer }
+        scope: { $ref: "#/components/schemas/PolicyScope" }
+        scope_key: { type: string }
+      required: [class, mode, scope, scope_key]
+      examples:
+        - class: D2_egress
+          mode: any
+          conditions:
+            - type: stable_observations
+              stableObservations: 5000
+            - type: stable_duration
+              stableMinutes: 1440
+          min_matches: 1
+          scope: global
+          scope_key: ""
+
+    LearningPolicyList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LearningPolicy" }
+      required: [count, items]
+
+    CatalogClass:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        description: { type: string }
+        baseline_label:
+          type: string
+          description: Transaction-baseline name for this class (what is learned). Distinct from finding-oriented `label`.
+        baseline_description:
+          type: string
+          description: Tooltip for what this class learns on a transaction baseline.
+        category: { type: string }
+        category_label: { type: string }
+        weight: { type: integer }
+        mitre: { type: string }
+        owasp: { type: string }
+      required: [id, label, baseline_label, category, weight]
+
+    EnricherList:
+      type: object
+      properties:
+        key: { type: string }
+        label: { type: string }
+        hint: { type: string }
+        default:
+          type: array
+          items: { type: string }
+      required: [key, label]
+
+    CatalogEnricher:
+      type: object
+      properties:
+        source: { type: string }
+        parent_class: { type: string }
+        category: { type: string }
+        weight: { type: integer }
+        label: { type: string }
+        description: { type: string }
+        list:
+          allOf: [{ $ref: "#/components/schemas/EnricherList" }]
+          x-go-type-skip-optional-pointer: false
+      required: [source, parent_class, category, weight, label]
+
+    CatalogCategory:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        base: { type: integer }
+        mitre: { type: string }
+        owasp: { type: string }
+      required: [id, label, base]
+
+    CatalogGuardrailRule:
+      type: object
+      properties:
+        key: { type: string }
+        label: { type: string }
+        description: { type: string }
+        category: { type: string }
+        weight: { type: integer }
+        hint: { type: string }
+      required: [key, label, category, weight]
+
+    SeverityBand:
+      type: object
+      properties:
+        severity: { $ref: "#/components/schemas/Severity" }
+        min_score: { type: integer }
+      required: [severity, min_score]
+
+    Catalog:
+      type: object
+      properties:
+        deviation_classes:
+          type: array
+          items: { $ref: "#/components/schemas/CatalogClass" }
+        enrichers:
+          type: array
+          items: { $ref: "#/components/schemas/CatalogEnricher" }
+        categories:
+          type: array
+          items: { $ref: "#/components/schemas/CatalogCategory" }
+        guardrail_rules:
+          type: array
+          items: { $ref: "#/components/schemas/CatalogGuardrailRule" }
+        severity_bands:
+          type: array
+          items: { $ref: "#/components/schemas/SeverityBand" }
+        correlation_bonus: { type: integer }
+        tags:
+          type: object
+          additionalProperties: { type: string }
+      required: [deviation_classes, enrichers, categories, guardrail_rules, severity_bands, correlation_bonus, tags]
+
+    SystemSamplingSettings:
+      type: object
+      description: >
+        Learning-phase example sampling only: collect up to N examples per
+        transaction (throttled by interval), then stop. Anomaly and guardrail
+        evidence each keep a single write-once sample; occurrences are counted
+        separately.
+      properties:
+        examples_per_transaction: { type: integer, minimum: 1 }
+        example_sample_interval_seconds: { type: integer, minimum: 1 }
+      required:
+        - examples_per_transaction
+        - example_sample_interval_seconds
+
+    SystemRetentionSettings:
+      type: object
+      properties:
+        observation_retention_days:
+          type: integer
+          minimum: 1
+          maximum: 120
+          description: >
+            Days to keep sample traces (default 120); applied as ClickHouse TTL
+            on save. Matches the 120-day findings lookback ceiling.
+      required: [observation_retention_days]
+
+    SystemCapacitySettings:
+      type: object
+      description: >
+        In-memory limits for learned baselines. Higher values use more RAM;
+        lower values may evict cold transactions or truncate large sets.
+      properties:
+        max_resident_transactions:
+          type: integer
+          minimum: 1
+          description: >
+            Max transactions whose baselines stay hot in process memory.
+            Least-recently used entries are dropped when the cap is exceeded.
+        max_baseline_set_members:
+          type: integer
+          minimum: 1
+          description: >
+            Max unique members remembered in one baseline set (e.g. call edges
+            or paths for one class), so a noisy transaction cannot grow unbounded.
+      required: [max_resident_transactions, max_baseline_set_members]
+
+    SystemWritebackSettings:
+      type: object
+      description: >
+        How often the engine writes pending baseline learning and occurrence
+        counters to ClickHouse. Raise to reduce DB load; lower for fresher UI counts.
+      properties:
+        flush_interval_seconds:
+          type: integer
+          minimum: 1
+          maximum: 300
+          description: >
+            Seconds between write-behind flushes (default 15). Applies live —
+            no pod restart. Also covers anomaly and guardrail occurrence drains.
+            Time-based promotion is re-evaluated after each flush.
+      required: [flush_interval_seconds]
+
+    SystemDetectionSettings:
+      type: object
+      description: >
+        Global detection toggles (Threat detection → Detection config).
+      properties:
+        auto_transaction_guardrail:
+          type: boolean
+          description: >
+            When true, automatically create an enforced allowed_transactions
+            guardrail when a service finishes promoting (every transaction leaves
+            learning). Applies only going forward — already-promoted services are
+            not backfilled when this is turned on. Per-service disable uses rule
+            mode off.
+      required: [auto_transaction_guardrail]
+
+    SystemTransactionIdentityDimension:
+      type: object
+      description: >
+        One low-cardinality attribute (or built-in resolver key) folded into
+        transaction identity from the sub-transaction entry span only.
+      properties:
+        key:
+          type: string
+          minLength: 1
+          description: >
+            Attribute key or built-in resolver (e.g. http.response.status_code,
+            rpc.grpc.status_code). Must be low-cardinality — high-cardinality
+            keys explode transaction count, memory (max_resident_transactions),
+            and baseline rows.
+        enabled:
+          type: boolean
+          description: When true, this dimension is applied to new traffic.
+      required: [key, enabled]
+
+    SystemIdentitySettings:
+      type: object
+      description: >
+        Extra dimensions appended to transaction Operation before hashing.
+        Each enabled dimension multiplies cardinality. Use only low-cardinality
+        attributes (e.g. status codes). Do not use user.id, http.url,
+        request ids, emails, or other high-cardinality keys. Changing this
+        setting does not migrate existing baselines — new traffic creates new
+        transaction identities.
+      properties:
+        transaction_identity_dimensions:
+          type: array
+          maxItems: 32
+          items: { $ref: "#/components/schemas/SystemTransactionIdentityDimension" }
+      required: [transaction_identity_dimensions]
+
+    SystemSettings:
+      type: object
+      properties:
+        sampling: { $ref: "#/components/schemas/SystemSamplingSettings" }
+        retention: { $ref: "#/components/schemas/SystemRetentionSettings" }
+        capacity: { $ref: "#/components/schemas/SystemCapacitySettings" }
+        writeback: { $ref: "#/components/schemas/SystemWritebackSettings" }
+        detection: { $ref: "#/components/schemas/SystemDetectionSettings" }
+        identity: { $ref: "#/components/schemas/SystemIdentitySettings" }
+        reset_transactions:
+          type: boolean
+          description: >
+            Write-only. When true and identity.transaction_identity_dimensions
+            changed vs the stored settings, delete all transactions and related
+            baselines/samples/findings before applying. Ignored when dimensions
+            are unchanged. Never returned by GET.
+          x-go-type-skip-optional-pointer: false
+      required: [sampling, retention, capacity, writeback, detection, identity]
+
+    StorageHealthStatus:
+      type: string
+      enum: [healthy, degraded, critical, unreachable]
+
+    StorageDiskStatus:
+      type: string
+      enum: [ok, warning, critical]
+
+    StorageConnection:
+      type: object
+      properties:
+        reachable: { type: boolean }
+        ping_latency_ms: { type: integer, format: int64 }
+        version: { type: string }
+        database: { type: string }
+        error: { type: string }
+      required: [reachable, ping_latency_ms, version, database]
+
+    StorageDisk:
+      type: object
+      properties:
+        insights_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: >
+            Bytes used by Insights tables (sum of active parts). Prefer this over
+            filesystem used_bytes when judging Insights storage size — on shared
+            volumes (e.g. kind) filesystem used can include unrelated data.
+        total_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Filesystem total for the ClickHouse data volume.
+        used_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Filesystem used on the ClickHouse data volume.
+        available_bytes: { type: integer, format: int64, minimum: 0 }
+        used_percent: { type: number, format: double }
+        status: { $ref: "#/components/schemas/StorageDiskStatus" }
+      required: [insights_bytes, total_bytes, used_bytes, available_bytes, used_percent, status]
+
+    StorageMemory:
+      type: object
+      properties:
+        process_rss_bytes: { type: integer, format: int64, minimum: 0 }
+        cgroup_used_bytes: { type: integer, format: int64, minimum: 0 }
+        cgroup_total_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: 0 means no cgroup memory limit.
+        uptime_seconds: { type: number, format: double }
+      required: [process_rss_bytes, cgroup_used_bytes, cgroup_total_bytes, uptime_seconds]
+
+    StorageQuery:
+      type: object
+      properties:
+        elapsed_seconds: { type: number, format: double }
+        user: { type: string }
+        memory_bytes: { type: integer, format: int64, minimum: 0 }
+        query: { type: string }
+        finished_at:
+          type: string
+          format: date-time
+          description: >
+            Finish time from system.query_log. Omitted for currently running
+            queries (items).
+      required: [elapsed_seconds, user, memory_bytes, query]
+
+    StorageQueries:
+      type: object
+      properties:
+        active: { type: integer, minimum: 0 }
+        longest_seconds: { type: number, format: double }
+        peak_memory_bytes: { type: integer, format: int64, minimum: 0 }
+        items:
+          type: array
+          description: Currently running queries (system.processes).
+          items: { $ref: "#/components/schemas/StorageQuery" }
+        recent_heaviest:
+          type: array
+          description: >
+            Top finished queries from system.query_log in the last 5 minutes,
+            ordered by duration then memory (slowest / heaviest first). Capped
+            at 10. Prefer this when diagnosing storage pressure while idle.
+          items: { $ref: "#/components/schemas/StorageQuery" }
+        recent_latest:
+          type: array
+          description: >
+            Most recently finished queries from system.query_log in the last
+            5 minutes, ordered by finish time descending. Capped at 10.
+          items: { $ref: "#/components/schemas/StorageQuery" }
+      required: [active, longest_seconds, peak_memory_bytes, items, recent_heaviest, recent_latest]
+
+    StorageTable:
+      type: object
+      properties:
+        name: { type: string }
+        rows: { type: integer, format: int64, minimum: 0 }
+        bytes_on_disk: { type: integer, format: int64, minimum: 0 }
+        active_parts: { type: integer, format: int64, minimum: 0 }
+      required: [name, rows, bytes_on_disk, active_parts]
+
+    StorageWritePressure:
+      type: object
+      properties:
+        unfinished_mutations: { type: integer, format: int64, minimum: 0 }
+        active_parts: { type: integer, format: int64, minimum: 0 }
+      required: [unfinished_mutations, active_parts]
+
+    StorageWriteback:
+      type: object
+      properties:
+        flush_interval_seconds: { type: integer, minimum: 1 }
+        ever_flushed: { type: boolean }
+        last_flush_ok: { type: boolean }
+        last_flush_at:
+          type: string
+          format: date-time
+          description: Omitted when no flush has been observed yet.
+        last_flush_error: { type: string }
+      required: [flush_interval_seconds, ever_flushed, last_flush_ok]
+
+    StorageHealth:
+      type: object
+      properties:
+        checked_at: { type: string, format: date-time }
+        status: { $ref: "#/components/schemas/StorageHealthStatus" }
+        connection: { $ref: "#/components/schemas/StorageConnection" }
+        disk: { $ref: "#/components/schemas/StorageDisk" }
+        memory: { $ref: "#/components/schemas/StorageMemory" }
+        queries: { $ref: "#/components/schemas/StorageQueries" }
+        tables:
+          type: array
+          items: { $ref: "#/components/schemas/StorageTable" }
+        write_pressure: { $ref: "#/components/schemas/StorageWritePressure" }
+        writeback: { $ref: "#/components/schemas/StorageWriteback" }
+      required:
+        - checked_at
+        - status
+        - connection
+        - disk
+        - memory
+        - queries
+        - tables
+        - write_pressure
+        - writeback

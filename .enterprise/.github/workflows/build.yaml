@@ -33,6 +33,9 @@ jobs:
             fi
             BRANCH="$PARSED"
             echo "Feature PR: using base OSS branch from PR body: $BRANCH"
+          elif [ "$BRANCH" != "main" ] && [[ "$BRANCH" != releases/* ]]; then
+            echo "PR base '$BRANCH' is not an OSS branch (main or releases/*); falling back to main"
+            BRANCH="main"
           else
             echo "Using PR base ref: $BRANCH"
           fi
@@ -198,6 +201,7 @@ jobs:
             central-proxy,
             central-backend,
             agents,
+            insights,
           ]
         rhel: ["true", "false"]
         # extended: ['false'] is needed so that standard builds have extended=false explicitly.

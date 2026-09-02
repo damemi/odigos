@@ -1,0 +1,150 @@
+{{define "title"}}Transactions{{end}}
+
+{{define "content"}}
+<h2>{{.Scope}}</h2>
+<p class="hint">Sortable columns show ↕ — click to sort, click again to reverse. Sort by <strong>Last seen</strong> (oldest first) to find inactive transactions to delete. Use the checkboxes to promote or delete several at once.</p>
+
+<div class="tabs">
+  <a class="tab {{if not .ScopedToSvc}}active{{end}}" href="/debug/transactions?view=all">all transactions ({{.TransactionCount}})</a>
+  <a class="tab" href="/debug/transactions">by service ({{.ServiceCount}})</a>
+</div>
+
+{{if .Transactions}}
+{{$redirect := .DeleteRedirect}}
+<div id="txn-bulk"
+     data-delete-action="/debug/transactions/delete-bulk"
+     data-promote-action="/debug/transactions/promote-bulk"
+     data-redirect="{{$redirect}}">
+  <div class="bulk-bar">
+    <label class="bulk-check"><input type="checkbox" class="chk-master"> select all</label>
+    <button type="button" class="btn btn-primary bulk-promote" disabled>Promote selected</button>
+    <button type="button" class="btn btn-warn bulk-delete" disabled>Delete selected</button>
+    <span class="bulk-sel"></span>
+  </div>
+  <input type="search" class="search" placeholder="{{if .ScopedToSvc}}Filter by operation…{{else}}Filter by service / operation…{{end}}" data-target="#txn-table" oninput="filterRows(this); syncTxnBulk(document.getElementById('txn-bulk'));">
+  <table id="txn-table">
+    <thead>
+      <tr>
+        <th class="chk-col"></th>
+        {{if not .ScopedToSvc}}
+        <th>{{template "txnSortTh" (dict "Link" (index .SortLinks "namespace"))}}</th>
+        <th>{{template "txnSortTh" (dict "Link" (index .SortLinks "service"))}}</th>
+        {{end}}
+        <th>Operation</th>
+        <th>Kind</th>
+        <th>{{template "txnSortTh" (dict "Link" (index .SortLinks "volume"))}}</th>
+        <th>Baseline</th>
+        <th>{{template "txnSortTh" (dict "Link" (index .SortLinks "last_seen"))}}</th>
+        <th></th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Transactions}}
+      <tr>
+        <td class="chk-col"><input type="checkbox" class="txn-chk" value="{{.ID}}"></td>
+        {{if not $.ScopedToSvc}}<td>{{.Namespace}}</td><td>{{.Service}}</td>{{end}}
+        <td>{{template "operationDisplay" (operationDisplay .Operation)}}</td>
+        <td><span class="badge badge-kind">{{.Kind}}</span></td>
+        <td>{{.Volume}}</td>
+        <td>
+          {{if not .HasBaseline}}<span class="hint">—</span>
+          {{else if .Promoted}}<span class="badge badge-ok">&#10003; promoted</span>
+          {{else}}<span class="badge badge-pending">learning</span>{{end}}
+        </td>
+        <td>{{humanTime .LastSeen}}</td>
+        <td><a href="/debug/transactions/{{.ID}}">baseline &rarr;</a></td>
+        <td class="actions-cell">
+          <details class="row-menu">
+            <summary aria-label="Actions">⋯</summary>
+            <div class="row-menu-panel">
+              <button type="button" class="row-menu-item" data-copy="{{.ID}}" onclick="copyValue(this)">Copy ID</button>
+              <form method="POST" action="/debug/transactions/{{.ID}}/promote" onsubmit="return confirm('Promote all deviation classes for this transaction? Incomplete baselines will freeze and start scoring.');">
+                <input type="hidden" name="redirect" value="{{$redirect}}">
+                <button type="submit" class="row-menu-item">Promote all classes</button>
+              </form>
+              <form method="POST" action="/debug/transactions/{{.ID}}/delete" onsubmit="return confirm('Delete this transaction and all its baselines, samples, and findings?');">
+                <input type="hidden" name="redirect" value="{{$redirect}}">
+                <button type="submit" class="row-menu-item row-menu-danger">Delete</button>
+              </form>
+            </div>
+          </details>
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+<script>
+  function visibleTxnChecks(root) {
+    return Array.prototype.slice.call(root.querySelectorAll('.txn-chk')).filter(function (c) {
+      var tr = c.closest('tr');
+      return tr && tr.style.display !== 'none';
+    });
+  }
+  function syncTxnBulk(root) {
+    if (!root) return;
+    var boxes = visibleTxnChecks(root);
+    var sel = boxes.filter(function (c) { return c.checked; }).length;
+    root.querySelectorAll('.bulk-delete, .bulk-promote').forEach(function (b) { b.disabled = sel === 0; });
+    var s = root.querySelector('.bulk-sel');
+    if (s) s.textContent = sel > 0 ? sel + ' selected' : '';
+    var m = root.querySelector('.chk-master');
+    if (m) {
+      m.checked = boxes.length > 0 && sel === boxes.length;
+      m.indeterminate = sel > 0 && sel < boxes.length;
+    }
+  }
+  function submitTxnBulk(root, action, confirmMsg) {
+    var checked = Array.prototype.slice.call(root.querySelectorAll('.txn-chk:checked'));
+    if (checked.length === 0) return;
+    if (!confirm(confirmMsg.replace('%d', String(checked.length)).replace('%s', checked.length === 1 ? '' : 's'))) return;
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = action;
+    var redir = document.createElement('input');
+    redir.type = 'hidden';
+    redir.name = 'redirect';
+    redir.value = root.dataset.redirect || '/debug/transactions?view=all';
+    form.appendChild(redir);
+    checked.forEach(function (c) {
+      var inp = document.createElement('input');
+      inp.type = 'hidden';
+      inp.name = 'transaction_id';
+      inp.value = c.value;
+      form.appendChild(inp);
+    });
+    document.body.appendChild(form);
+    form.submit();
+  }
+  (function () {
+    var root = document.getElementById('txn-bulk');
+    if (!root) return;
+    root.addEventListener('change', function (e) {
+      var t = e.target;
+      if (!t.classList) return;
+      if (t.classList.contains('chk-master')) {
+        visibleTxnChecks(root).forEach(function (c) { c.checked = t.checked; });
+      }
+      if (t.classList.contains('chk-master') || t.classList.contains('txn-chk')) syncTxnBulk(root);
+    });
+    root.addEventListener('click', function (e) {
+      var del = e.target.closest ? e.target.closest('.bulk-delete') : null;
+      if (del) {
+        e.preventDefault();
+        submitTxnBulk(root, root.dataset.deleteAction, 'Delete %d transaction%s and all their baselines, samples, and findings?');
+        return;
+      }
+      var promo = e.target.closest ? e.target.closest('.bulk-promote') : null;
+      if (promo) {
+        e.preventDefault();
+        submitTxnBulk(root, root.dataset.promoteAction, 'Promote all deviation classes on %d transaction%s? Incomplete baselines will freeze and start scoring.');
+      }
+    });
+    syncTxnBulk(root);
+  })();
+</script>
+{{else}}
+<div class="empty">No transactions here yet.</div>
+{{end}}
+{{end}}

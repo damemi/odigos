@@ -9,9 +9,10 @@ OSS_TAG ?= main
 # Usage: make update-odigos-oss-mod-deps/odiglet [OSS_TAG=v1.5.0]
 # This target:
 # 1. Updates 'replace' directives in go.mod to use the specified OSS_TAG
-# 2. Updates direct version specifications to use OSS_TAG, except the unpublished
-#    local-replace placeholder v0.0.0-00010101000000-000000000000 (other v0.0.0 /
-#    v0.0.0-feat.* pins are rewritten).
+# 2. Updates direct version specifications (excluding unpublished local-replace
+#    placeholders like v0.0.0-00010101000000-000000000000) to use OSS_TAG.
+#    Do not use a bare v0.0.0 require: that is a real semver release, so without
+#    a replace Go fetches github.com/odigos-io/odigos/<mod>@v0.0.0 from the proxy.
 # 3. Runs 'go mod tidy' to resolve dependencies
 .PHONY: update-odigos-oss-mod-deps
 update-odigos-oss-mod-deps/%:
@@ -38,7 +39,7 @@ update-odigos-oss-mod-deps/%:
 update-odigos-oss-mod-deps-all:
 	@echo "🔄 Updating Odigos OSS module dependencies for all relevant directories..."
 	@echo "📌 Using OSS_TAG: $(OSS_TAG)"
-	@for dir in odiglet onprem-token-generator instrumentor distros central-proxy central-backend odigosauth ebpfshare ui; do \
+	@for dir in odiglet onprem-token-generator instrumentor distros central-proxy central-backend odigosauth ui ebpfshare insights; do \
 		if [ -f $$dir/go.mod ]; then \
 			echo "📦 Updating dependencies for $$dir..."; \
 			$(MAKE) update-odigos-oss-mod-deps/$$dir OSS_TAG=$(OSS_TAG); \

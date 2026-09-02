@@ -98,6 +98,10 @@ build-central-ui:
 build-central-proxy:
 	$(MAKE) build-image/central-proxy SUMMARY="Central Proxy for Odigos" DESCRIPTION="Central Proxy is handle the communication between the cluster that Odigos is running in and the Odigos Central." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
+.PHONY: build-insights
+build-insights:
+	$(MAKE) build-image/insights SUMMARY="Insights for Odigos" DESCRIPTION="Insights ingests distributed traces, learns per-entity baselines, and exposes anomaly queries to the UI." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
 .PHONY: build-agents
 build-agents:
 	$(MAKE) build-image/agents \
@@ -419,7 +423,7 @@ connector-dev-down:
 
 .PHONY: build-images
 build-images:
-	make build-odiglet build-instrumentor build-ui build-collector TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
+	make build-odiglet build-instrumentor build-ui build-insights build-collector TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
 
 .PHONY: build-central-images
 build-central-images:
@@ -443,7 +447,7 @@ push-images-with-agents-rhel:
 
 .PHONY: push-images
 push-images:
-	make push-odiglet push-instrumentor push-ui push-collector push-central-backend push-central-ui push-central-proxy TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)\
+	make push-odiglet push-instrumentor push-ui push-collector push-central-backend push-central-ui push-central-proxy push-insights TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)\
 
 .PHONY: push-images-with-agents
 push-images-with-agents:
@@ -483,12 +487,16 @@ push-collector:
 push-agents:
 	$(MAKE) push-image/agents DOCKERFILE=odiglet/$(DOCKERFILE) TARGET=agents SUMMARY="Odigos Enterprise Agents" DESCRIPTION="The Odigos Agents used to copy Odigos agent relevant files into the user workloads." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
+.PHONY: push-insights
+push-insights:
+	$(MAKE) push-image/insights SUMMARY="Insights for Odigos" DESCRIPTION="Insights ingests distributed traces, learns per-entity baselines, and exposes anomaly queries to the UI." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
 load-to-kind-%:
 	kind load docker-image $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG)
 
 .PHONY: load-to-kind
 load-to-kind:
-	make load-to-kind-instrumentor load-to-kind-odiglet load-to-kind-ui load-to-kind-collector ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
+	make load-to-kind-instrumentor load-to-kind-odiglet load-to-kind-ui load-to-kind-insights load-to-kind-collector ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: load-central-to-kind
 load-central-to-kind:
@@ -550,9 +558,13 @@ restart-central-ui:
 restart-central-proxy:
 	kubectl rollout restart deployment central-proxy -n odigos-system || true
 
+.PHONY: restart-insights
+restart-insights:
+	kubectl rollout restart deployment odigos-insights -n odigos-system || true
+
 .PHONY: restart-all
 restart-all:
-	make restart-odiglet && make restart-instrumentor && make restart-central-backend && make restart-central-ui && make restart-central-proxy
+	make restart-odiglet && make restart-instrumentor && make restart-central-backend && make restart-central-ui && make restart-central-proxy && make restart-insights
 
 .PHONY: restart-central
 restart-central:
@@ -606,13 +618,15 @@ deploy-connector-gcp:
 	make load-to-kind-connector-gcp TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) && \
 	make restart-connector-gcp
 
+.PHONY: deploy-insights
+deploy-insights:
+	make build-insights TAG=$(TAG) && make load-to-kind-insights TAG=$(TAG) && make restart-insights
 
 .PHONY: deploy-connector-azure
 deploy-connector-azure:
 	make build-connector-azure TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) && \
 	make load-to-kind-connector-azure TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) && \
 	make restart-connector-azure
-
 
 .PHONY: deploy
 deploy:

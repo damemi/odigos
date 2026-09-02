@@ -1,0 +1,603 @@
+{{define "base.html"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{template "title" .}} — Odigos Insights debug</title>
+{{/* Inline SVG shield favicon so the debug tabs are easy to spot, no asset file needed. */}}
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%231958d0' d='M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5z'/%3E%3Cpath fill='%23ffffff' d='m10.5 14.2-2.3-2.3 1.1-1.1 1.2 1.2 3.5-3.5 1.1 1.1z'/%3E%3C/svg%3E">
+<style>
+  :root { --fg: #1a1a1a; --muted: #6a6a6a; --border: #d8d8d8; --bg: #fcfcfc; --row: #f4f4f4; --accent: #1958d0; --warn: #c63a00; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+  header { padding: 12px 20px; border-bottom: 1px solid var(--border); background: #fff; display: flex; align-items: center; gap: 24px; }
+  header h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  header nav { display: flex; gap: 16px; }
+  header nav a { color: var(--fg); text-decoration: none; font-size: 14px; padding: 4px 0; border-bottom: 2px solid transparent; text-transform: capitalize; }
+  header nav a:hover { color: var(--accent); }
+  header nav a.active { border-bottom-color: var(--accent); }
+  header .spacer { flex: 1; }
+  header form { display: inline; }
+  main { padding: 20px; max-width: 1400px; margin: 0 auto; }
+  h2 { margin-top: 0; font-size: 20px; }
+  h3 { font-size: 15px; color: var(--muted); margin: 24px 0 8px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--border); font-size: 13px; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--row); font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--row); }
+  a { color: var(--accent); }
+  code, pre { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
+  pre { background: #f6f8fa; padding: 10px 12px; border-radius: 4px; overflow-x: auto; font-size: 12px; line-height: 1.5; margin: 4px 0; max-width: 700px; }
+  details { margin: 0; }
+  details summary { cursor: pointer; color: var(--accent); font-size: 12px; }
+  details[open] summary { margin-bottom: 4px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .badge-ok { background: #e0f1d9; color: #2c6e1a; }
+  .badge-pending { background: #fff3cd; color: #856404; }
+  .badge-warn { background: #fde2dc; color: var(--warn); }
+  .badge-kind { background: #e3ecfb; color: var(--accent); }
+  .badge-dim { background: #eef0f4; color: #444; margin-left: 2px; }
+  .operation-display { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; max-width: 100%; }
+  .operation-name { word-break: break-word; }
+  .identity-dim-panel { margin-top: 8px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+  .identity-dim-warning { margin: 0 0 12px; padding: 10px 12px; border-radius: 4px; background: #fff8e6; border: 1px solid #f0d78c; font-size: 13px; line-height: 1.45; color: #5c4a00; }
+  .identity-dim-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+  .identity-dim-row { display: flex; align-items: center; gap: 10px; }
+  .identity-dim-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; user-select: none; }
+  .identity-dim-row .dim-key { flex: 1; min-width: 0; max-width: none; }
+  .dim-remove { min-width: 32px; padding: 4px 8px; font-size: 16px; line-height: 1; color: var(--muted); }
+  .dim-remove:hover { color: var(--warn); border-color: var(--warn); }
+  .identity-dim-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+  .identity-dim-empty { margin: 0 0 8px; }
+  .modal[hidden] { display: none !important; }
+  .modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.35); }
+  .modal-card { position: relative; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; max-width: 440px; width: 100%; box-shadow: 0 8px 28px rgba(0,0,0,0.12); }
+  /* Severity pill for risk-scored anomalies. Colors escalate info->critical. */
+  .sev { display: inline-block; padding: 2px 9px; border-radius: 11px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .sev-info { background: #eef0f3; color: #57606a; }
+  .sev-low { background: #e3ecfb; color: #1958d0; }
+  .sev-medium { background: #fff3cd; color: #856404; }
+  .sev-high { background: #fde2dc; color: #c63a00; }
+  .sev-critical { background: #c1121f; color: #fff; }
+  /* font-family: inherit is load-bearing — native <button> does NOT inherit the
+     page font, so without it button-actions (allow/accept/dismiss) render in a
+     different font than the <a class=btn> investigate link sitting next to them. */
+  .btn { display: inline-block; padding: 6px 14px; border-radius: 4px; font-family: inherit; font-size: 13px; line-height: 1.3; text-decoration: none; cursor: pointer; border: 1px solid var(--border); background: #fff; color: var(--fg); }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-warn { background: #fff; color: var(--warn); border-color: var(--warn); }
+  .stats { display: flex; gap: 16px; margin-bottom: 24px; }
+  .stat { background: #fff; border: 1px solid var(--border); padding: 14px 18px; border-radius: 6px; min-width: 140px; }
+  .stat .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat .value { font-size: 22px; font-weight: 600; margin-top: 4px; }
+  .empty { padding: 32px; text-align: center; color: var(--muted); background: #fff; border: 1px dashed var(--border); border-radius: 4px; }
+  .hint { color: var(--muted); font-size: 13px; margin: -4px 0 16px; }
+  .search { padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; width: 280px; margin: 0 0 12px; }
+  .tabs { display: flex; gap: 8px; margin: 8px 0 16px; }
+  .tab { padding: 6px 14px; border: 1px solid var(--border); background: #fff; border-radius: 4px; cursor: pointer; font-size: 13px; color: var(--fg); text-decoration: none; }
+  .tab:hover { background: var(--row); }
+  .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* Page heading row: title + a muted right-of-title note on one baseline. */
+  .page-head { display: flex; align-items: baseline; gap: 12px; margin: 0 0 4px; }
+  .page-head h2 { margin: 0; }
+  .page-head-right { margin-left: auto; }
+
+  /* Findings lookback control — same visual language as .search so it reads as
+     an editable filter field, not a static label or primary action button. */
+  .tr-picker { position: relative; display: inline-block; margin: 0 0 12px; }
+  .tr-summary {
+    list-style: none; cursor: pointer; user-select: none;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px;
+    font-size: 13px; line-height: 1.3; background: #fff; color: var(--fg);
+    min-width: 280px; box-sizing: border-box;
+  }
+  .tr-summary::-webkit-details-marker { display: none; }
+  .tr-summary:hover { border-color: #b6bdc7; background: var(--row); }
+  .tr-picker[open] .tr-summary { border-color: var(--accent); }
+  .tr-prefix { color: var(--muted); flex: 0 0 auto; }
+  .tr-value { flex: 1 1 auto; font-weight: 500; }
+  .tr-caret { color: var(--muted); font-size: 11px; margin-left: auto; }
+  .tr-menu {
+    position: absolute; left: 0; top: calc(100% + 4px); z-index: 20;
+    min-width: 100%; background: #fff; border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px; display: flex; flex-direction: column; gap: 2px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.08);
+  }
+  .tr-item { display: block; padding: 6px 10px; border-radius: 4px; color: var(--fg); text-decoration: none; font-size: 13px; }
+  .tr-item:hover, .tr-item.active { background: var(--bg); }
+  .tr-item.active { font-weight: 600; }
+  .tr-sep { height: 1px; background: var(--border); margin: 4px 0; }
+  .tr-custom { padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 6px; }
+  .tr-custom-title { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .tr-custom label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+  .tr-custom input[type=date] { font: inherit; padding: 3px 6px; border: 1px solid var(--border); border-radius: 4px; }
+
+  /* Overview section card: a bordered box around each summary block (findings,
+     transactions) so the two sections read as clearly separate units. */
+  .ov-section { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 2px 18px 18px; margin: 0 0 22px; }
+  .ov-section .stats { margin-bottom: 16px; justify-content: center; }
+  .ov-section table { margin-bottom: 0; }
+  /* Small circled "i" info affordance; pair with .tip + data-tip for the text. */
+  .info-i { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; margin-left: 5px; border: 1px solid var(--muted); border-radius: 50%; font-size: 10px; font-weight: 700; font-style: normal; line-height: 1; color: var(--muted); vertical-align: middle; }
+  .ov-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 18px 0 12px; }
+  .ov-sec-head h3 { margin: 0; color: var(--fg); font-size: 16px; }
+  .ov-sec-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; margin-left: auto; }
+  .ov-sec-actions .tr-picker { margin: 0; }
+  .ov-sec-actions .tr-summary { min-width: 220px; }
+  .ov-sec-actions .tr-menu { left: auto; right: 0; }
+  .ov-viewall { font-size: 13px; text-decoration: none; white-space: nowrap; }
+  .ov-viewall:hover { text-decoration: underline; }
+
+  /* Service-centric Findings cards. Each service is a collapsible card whose body
+     holds one or two subsections (policy violations, transactions-with-anomalies),
+     so both finding kinds nest at the same depth under the service. */
+  /* overflow stays visible so row-action tooltips can escape the card instead of
+     being clipped; the summary rounds its own corners to keep the hover state neat
+     without the card needing overflow:hidden. */
+  .svc-card { background: #fff; border: 1px solid var(--border); border-radius: 8px; margin: 0 0 12px; }
+  .svc-card > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 12px 16px; user-select: none; border-radius: 7px; }
+  .svc-card[open] > summary { border-radius: 7px 7px 0 0; }
+  .svc-card > summary::-webkit-details-marker { display: none; }
+  .svc-card > summary:hover { background: var(--row); }
+  .svc-caret { color: var(--muted); font-size: 11px; transition: transform .12s ease; }
+  .svc-card[open] > summary .svc-caret { transform: rotate(90deg); }
+  .svc-title { font-size: 15px; font-weight: 600; }
+  .svc-ns { font-size: 11px; color: var(--muted); background: var(--row); padding: 2px 8px; border-radius: 10px; }
+  .svc-meta { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .svc-row-actions { margin-left: 8px; flex-shrink: 0; }
+  .svc-row-actions .row-menu-panel { min-width: 200px; }
+  .svc-card-body { padding: 4px 16px 16px; border-top: 1px solid var(--border); }
+  .svc-card-body table { border-left: none; border-right: none; }
+  .subsec { margin-top: 16px; }
+  .subsec:first-child { margin-top: 10px; }
+  .subsec-title { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); margin: 0 0 6px; }
+  .subsec-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .subsec-dot-warn { background: var(--warn); }
+  .subsec-dot-accent { background: var(--accent); }
+  .pv-off { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+  /* Offending chips: the readable rendering of an anomaly/violation's offending
+     item, shared by every findings view (see the "offChips" template). */
+  .off-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .off-chip { border: 1px solid var(--accent); border-radius: 6px; padding: 1px 8px; font-size: 12px; background: #eef3fd; white-space: nowrap; }
+  .off-chip .oc-cls { color: var(--muted); margin-right: 4px; }
+  .off-chip .oc-val { font-weight: 600; }
+  /* Signal chips: one per triggered deviation class in a findings summary row,
+     colored by the class's weight tone (hi/mid/lo) with the "why" on hover. */
+  .sig-op { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  .sig-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .sig-chip { border-radius: 6px; padding: 1px 8px; font-size: 12px; border: 1px solid; white-space: nowrap; font-weight: 600; }
+  .sig-chip[data-tone="hi"]  { background: #fdecea; border-color: #d64027; color: #a5281a; }
+  .sig-chip[data-tone="mid"] { background: #fff5e6; border-color: #e0a020; color: #8a6314; }
+  .sig-chip[data-tone="lo"]  { background: #eef3fd; border-color: var(--accent); color: #274b8f; }
+  /* Fixed widths on the shared right-hand columns (risk pill, timestamp) so the
+     policy-violations and anomalies tables line these up identically instead of
+     each auto-sizing to its own content. */
+  .pv-when { color: var(--muted); font-size: 12px; white-space: nowrap; width: 150px; }
+  .svc-card-body table td.pv-risk, .svc-card-body table th.pv-risk { width: 110px; }
+  /* Keep investigate / allow(accept) / dismiss lined up in consistent columns
+     across every row and both tables: the Actions column is a fixed width and
+     every action button is a uniform-width pill. Absent actions are always
+     trailing (dismiss, then allow/accept), so left alignment keeps the leading
+     buttons in the same place row to row. */
+  .svc-card-body table th:last-child,
+  .svc-card-body td.pv-actions { width: 300px; }
+  .pv-actions { display: flex; gap: 6px; align-items: center; }
+  .pv-actions form { margin: 0; display: inline-flex; }
+  .pv-actions .btn { min-width: 90px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; }
+
+  /* A transaction inside a card is a second-level collapsible: its anomalies
+     expand and are actioned inline (no navigating away). */
+  .txn { border: 1px solid var(--border); border-radius: 6px; margin: 8px 0; background: #fcfcfd; }
+  .txn > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 8px 12px; user-select: none; border-radius: 6px; }
+  .txn[open] > summary { border-radius: 6px 6px 0 0; }
+  .txn > summary::-webkit-details-marker { display: none; }
+  .txn > summary:hover { background: var(--row); }
+  .txn[open] > summary .svc-caret { transform: rotate(90deg); }
+  .txn-body { padding: 6px 12px 12px; border-top: 1px solid var(--border); }
+  .txn-body table { border-left: none; border-right: none; margin: 0; }
+
+  /* Per-transaction bulk action bar. */
+  .bulk-bar { display: flex; align-items: center; gap: 12px; margin: 6px 0 10px; }
+  .bulk-check { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .bulk-sel { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .chk-col { width: 28px; text-align: center; }
+
+  /* A row acted on in place: grayed, with its actions replaced by a status pill,
+     until the next manual refresh moves it to its new tab. */
+  tr.resolved { opacity: .5; }
+  .st-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 11px; font-size: 11px; font-weight: 600; }
+  .st-done { background: #eef0f3; color: #57606a; }
+  .pager { display: flex; align-items: center; gap: 12px; margin: 14px 0; }
+  .pager-info { color: var(--muted); font-size: 13px; }
+  .btn-disabled { opacity: 0.4; pointer-events: none; }
+  .flash { padding: 10px 14px; background: #e0f1d9; color: #2c6e1a; border-radius: 4px; margin-bottom: 16px; font-size: 13px; }
+  .flash-error { background: #fde2dc; color: var(--warn); }
+  .actions-cell { width: 48px; text-align: right; white-space: nowrap; }
+  .row-menu { position: relative; display: inline-block; }
+  .row-menu > summary { list-style: none; cursor: pointer; color: var(--muted); font-size: 18px; line-height: 1; padding: 2px 6px; border-radius: 4px; user-select: none; }
+  .row-menu > summary::-webkit-details-marker { display: none; }
+  .row-menu > summary:hover { background: var(--row); color: var(--fg); }
+  .row-menu-panel { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 160px; background: #fff; border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); padding: 4px 0; }
+  .row-menu-panel form { margin: 0; }
+  .row-menu-item { display: block; width: 100%; text-align: left; border: none; background: transparent; padding: 8px 14px; font-size: 13px; cursor: pointer; color: var(--fg); }
+  .row-menu-item:hover { background: var(--row); }
+  .row-menu-danger { color: var(--warn); }
+  .th-sort {
+    display: inline-flex; align-items: center; gap: 5px;
+    color: inherit; text-decoration: none; white-space: nowrap;
+    padding: 2px 6px; margin: -2px -6px; border-radius: 4px;
+  }
+  .th-sort:hover { background: var(--row); color: var(--accent); }
+  .th-sort.active { color: var(--accent); font-weight: 600; background: #eef3fd; }
+  .th-sort-icon { font-size: 15px; font-weight: 700; color: #6b7280; line-height: 1; }
+  .th-sort:hover .th-sort-icon { color: var(--accent); }
+  .th-sort.active .th-sort-icon { color: var(--accent); font-weight: 800; font-size: 16px; }
+  .trace { border: 1px solid var(--border); border-radius: 4px; background: #fff; font-size: 12px; }
+  .trace-row { display: grid; grid-template-columns: minmax(280px, 1fr) 360px; gap: 12px; align-items: center; padding: 5px 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+  .trace-row:last-child { border-bottom: none; }
+  .trace-row:hover { background: var(--row); }
+  .trace-label { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .trace-label code { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .trace-svc { color: var(--muted); font-size: 11px; }
+  .trace-bar-wrap { position: relative; height: 12px; background: #f0f2f5; border-radius: 2px; }
+  .trace-bar { position: absolute; top: 0; height: 100%; background: var(--accent); border-radius: 2px; min-width: 2px; }
+  .trace-dur { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 11px; margin-left: 6px; }
+
+  /* Per-span expander inside the trace dialog. Native <details>/<summary>
+     gives us the click toggle for free; we just hide the disclosure
+     triangle so the whole row reads as the affordance. */
+  .trace-row-wrap { border-bottom: 1px solid #eee; }
+  .trace-row-wrap:last-child { border-bottom: none; }
+  .trace-row-wrap > summary { list-style: none; }
+  .trace-row-wrap > summary::-webkit-details-marker { display: none; }
+  .trace-row-wrap[open] > summary { background: #f4f7fb; }
+  .trace-row-body { padding: 8px 16px 12px 32px; background: #fafbfc; font-size: 12px; border-top: 1px dashed #e6e6e6; }
+  .kv-line { margin: 6px 0 2px; }
+  .kv-key { display: inline-block; min-width: 90px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; margin-right: 8px; }
+  table.kv { width: auto; max-width: 900px; border: none; background: transparent; font-size: 11px; }
+  table.kv td { padding: 2px 10px 2px 0; border: none; vertical-align: top; }
+  table.kv td:first-child { color: var(--muted); white-space: nowrap; }
+  table.kv code { word-break: break-all; }
+  .event { margin: 6px 0 6px 4px; padding: 4px 0 4px 12px; border-left: 2px solid var(--accent); }
+  .event-time { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 10px; }
+  .event-name { font-weight: 600; }
+
+  /* Modal trace viewer. Native <dialog>.showModal() handles backdrop +
+     focus + ESC; we add a top-level click handler in the script below
+     so clicking the backdrop also closes. */
+  dialog.trace-dlg { width: 92vw; max-width: 1200px; max-height: 88vh; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--fg); }
+  dialog.trace-dlg::backdrop { background: rgba(0, 0, 0, 0.45); }
+  .trace-dlg-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--border); background: var(--row); position: sticky; top: 0; }
+  .trace-dlg-title { font-size: 13px; }
+  .trace-dlg-meta { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .trace-dlg-close { border: none; background: transparent; font-size: 22px; line-height: 1; cursor: pointer; padding: 0 8px; color: var(--muted); }
+  .trace-dlg-close:hover { color: var(--fg); }
+  .trace-dlg-actions { display: flex; align-items: center; gap: 8px; }
+  .trace-dlg-copy { border: 1px solid var(--border); background: #fff; font-size: 12px; line-height: 1; cursor: pointer; padding: 5px 10px; border-radius: 4px; color: var(--fg); }
+  .trace-dlg-copy:hover { background: var(--row); }
+  .trace-dlg-body { padding: 12px; max-height: calc(88vh - 70px); overflow: auto; }
+  .trace-dlg-body .trace { border: 1px solid var(--border); }
+  /* JSONB data dialog reuses the trace-dlg chrome; let its <pre> use the full
+     dialog width instead of the table-cell-friendly 700px cap. */
+  .data-dlg .trace-dlg-body pre { max-width: none; margin: 0; }
+  .data-dlg-tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+  .data-dlg-tab { border: 1px solid var(--border); background: #fff; font-size: 12px; padding: 5px 12px; border-radius: 4px; cursor: pointer; color: var(--muted); }
+  .data-dlg-tab:hover { background: var(--row); color: var(--fg); }
+  .data-dlg-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .hist-unit { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+  .hist-series { margin-bottom: 20px; }
+  .hist-series-label { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  .hist-bars { display: flex; align-items: flex-end; gap: 2px; height: 140px; border-bottom: 1px solid var(--border); padding: 0 2px; }
+  .hist-bar-wrap { flex: 1 1 0; min-width: 4px; height: 100%; display: flex; align-items: flex-end; cursor: help; }
+  .hist-bar { width: 100%; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 2px; }
+  .hist-axis { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* Learning-stability cell: a coarse verdict pill or a progress bar toward a
+     class's configured stability target, plus a muted detail line. */
+  .stab { display: flex; flex-direction: column; gap: 4px; min-width: 150px; }
+  .stab-pill { align-self: flex-start; }
+  .stab-detail { color: var(--muted); font-size: 11px; }
+  .stab-frozen { background: #ece9fb; color: #5a45c8; }
+  .stab-growing { background: #fdecd8; color: #9a5b00; }
+  .stab-settling { background: #e3ecfb; color: var(--accent); }
+  .stab-stable { background: #e0f1d9; color: #2c6e1a; }
+  .stab-bar-label { font-size: 11px; color: var(--fg); font-variant-numeric: tabular-nums; }
+  .stab-bar { position: relative; height: 6px; background: #eceef1; border-radius: 3px; overflow: hidden; }
+  .stab-bar-fill { position: absolute; left: 0; top: 0; height: 100%; background: var(--accent); border-radius: 3px; }
+
+  /* Instant hover tooltip. Native title= has a ~1s browser delay; this shows the
+     moment the pointer lands. Text comes from the data-tip attribute. */
+  .tip { position: relative; cursor: help; }
+  .tip::after {
+    content: attr(data-tip);
+    position: absolute; left: 0; top: calc(100% + 6px); z-index: 50;
+    width: max-content; max-width: 300px; white-space: normal;
+    background: #1f2430; color: #fff; font-size: 11px; font-style: normal;
+    font-weight: normal; line-height: 1.45; text-align: left;
+    padding: 8px 10px; border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,.25);
+    opacity: 0; visibility: hidden; pointer-events: none;
+  }
+  .tip:hover::after { opacity: 1; visibility: visible; }
+  /* Anchor the bubble to the element's right edge (for actions in a far-right
+     column, so the tooltip grows leftward and stays on screen). */
+  .tip-end::after { left: auto; right: 0; }
+
+  /* Settings shell: a fixed left rail + a fluid main column. The rail is the
+     sub-navigation for the settings area (learning / detection / risk model /
+     system); the top nav's single "settings" entry stays highlighted throughout. */
+  .settings-layout { display: flex; gap: 24px; align-items: flex-start; }
+  .settings-nav { width: 210px; flex: 0 0 210px; display: flex; flex-direction: column; gap: 2px; position: sticky; top: 20px; }
+  .settings-nav a { display: block; padding: 8px 10px; border-radius: 6px; text-decoration: none; color: var(--fg); border-left: 3px solid transparent; }
+  .settings-nav a:hover { background: var(--row); }
+  .settings-nav a.active { background: #eef3fd; border-left-color: var(--accent); }
+  .settings-nav a.active .sn-title { font-weight: 600; color: var(--accent); }
+  .settings-nav .sn-group { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); padding: 10px 10px 2px; }
+  .settings-nav .sn-group:first-child { padding-top: 0; }
+  .settings-nav .sn-title { font-size: 13px; }
+  .settings-nav .sn-desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .settings-nav .sn-planned { font-size: 9px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); border: 1px solid var(--border); border-radius: 8px; padding: 0 5px; margin-left: 6px; vertical-align: middle; }
+  .settings-main { flex: 1; min-width: 0; }
+  .settings-main h2:first-child { margin-top: 0; }
+  /* Severity/weight band chips, shared by the detection editor and the
+     read-only risk model table. */
+  .band { font-size: 11px; padding: 1px 7px; border-radius: 10px; text-transform: capitalize; white-space: nowrap; }
+  .band-info { background: #eef1f4; color: #57606a; }
+  .band-low { background: #e6f4ea; color: #1a7f37; }
+  .band-medium { background: #fff4e5; color: #9a6700; }
+  .band-high { background: #ffe9e0; color: #bc4c00; }
+  .band-critical { background: #ffe0e0; color: #b42318; }
+
+  /* Service map (blast radius): a layered SVG graph embedded per service on the
+     Findings page — callers left, the service in the center, callees right. */
+  .svcmap-legend { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin: 0 0 8px; font-size: 11px; color: var(--muted); }
+  .svcmap-leg { display: inline-flex; align-items: center; gap: 6px; }
+  .svcmap-swatch { width: 16px; height: 12px; border-radius: 3px; border: 1px solid var(--border); display: inline-block; }
+  .svcmap-swatch-root { background: var(--accent); border-color: var(--accent); }
+  .svcmap-swatch-svc { background: #fff; border-color: #c3ccd8; }
+  .svcmap-swatch-virtual { background: #f4f4f4; border-color: #b7bec9; border-style: dashed; }
+  .svcmap-line { width: 20px; border-top: 2px solid #8a94a6; display: inline-block; }
+  .svcmap-line-fail { border-top-color: var(--warn); }
+  .svcmap-canvas { overflow: auto; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 8px; max-width: 100%; }
+
+  .br-node rect { fill: #fff; stroke: #c3ccd8; stroke-width: 1.5; }
+  .br-node-name { font-size: 12px; font-weight: 600; fill: var(--fg); }
+  .br-node-ns { font-size: 10px; fill: var(--muted); }
+  .br-node-root rect { fill: var(--accent); stroke: var(--accent); }
+  .br-node-root .br-node-name { fill: #fff; }
+  .br-node-root .br-node-ns { fill: #dbe6fb; }
+  .br-node-virtual rect { fill: #f6f7f9; stroke: #b7bec9; stroke-dasharray: 4 3; }
+  .br-node-virtual .br-node-name { font-style: italic; fill: #57606a; font-weight: 500; }
+  .br-edge line { stroke: #8a94a6; stroke-width: 1.6; }
+  .br-edge-fail line { stroke: var(--warn); stroke-width: 2; }
+</style>
+<script>
+  // Close any modal trace viewer when the user clicks the dark backdrop
+  // (clicks outside the inner content land on the <dialog> element itself).
+  // Native ESC handling is built in, no extra wiring needed for that.
+  document.addEventListener('click', function (e) {
+    if (e.target.tagName === 'DIALOG') e.target.close();
+  });
+
+  // Lazy-load one retained sample's waterfall into a dialog. Page load lists
+  // metadata only; the OTLP blob is fetched on first "view trace" click.
+  function openTraceDlg(btn) {
+    var dlg = document.getElementById(btn.getAttribute('data-dlg'));
+    var url = btn.getAttribute('data-trace-url');
+    if (!dlg || !url) return;
+    var body = dlg.querySelector('.trace-dlg-body');
+    dlg.showModal();
+    if (!body || body.dataset.loaded === '1') return;
+    body.innerHTML = '<div class="empty">Loading…</div>';
+    fetch(url, { credentials: 'same-origin' }).then(function (r) {
+      if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+      return r.text();
+    }).then(function (html) {
+      body.innerHTML = html;
+      body.dataset.loaded = '1';
+    }).catch(function (err) {
+      body.innerHTML = '<div class="empty">Failed to load trace: ' +
+        String(err && err.message ? err.message : err) + '</div>';
+    });
+  }
+
+  // Copy the JSONB shown in a data dialog. Prefers the async Clipboard API
+  // (works on localhost / https) and falls back to execCommand for plain http.
+  function copyDlgData(btn) {
+    var dlg = btn.closest('dialog');
+    var pre = dlg && dlg.querySelector('pre');
+    if (!pre) return;
+    var text = pre.innerText;
+    var flash = function () {
+      var prev = btn.textContent;
+      btn.textContent = 'copied';
+      setTimeout(function () { btn.textContent = prev; }, 1200);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(flash, function () { fallbackCopy(text, flash); });
+    } else {
+      fallbackCopy(text, flash);
+    }
+  }
+
+  function switchDataDlgTab(btn) {
+    var dlg = btn.closest('dialog');
+    if (!dlg) return;
+    var pane = btn.getAttribute('data-pane');
+    dlg.querySelectorAll('.data-dlg-tab').forEach(function (t) {
+      t.classList.toggle('active', t === btn);
+    });
+    dlg.querySelectorAll('.data-dlg-pane').forEach(function (p) {
+      p.hidden = p.getAttribute('data-pane') !== pane;
+    });
+  }
+  function fallbackCopy(text, done) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    if (done) done();
+  }
+
+  // Client-side table filter: hide rows whose text doesn't contain the query.
+  // The input carries data-target="#tableId"; matching is case-insensitive over
+  // the whole row, so it works for service, namespace, or operation columns.
+  function filterRows(input) {
+    var q = input.value.trim().toLowerCase();
+    var table = document.querySelector(input.getAttribute('data-target'));
+    if (!table || !table.tBodies.length) return;
+    var rows = table.tBodies[0].rows;
+    for (var i = 0; i < rows.length; i++) {
+      var match = q === '' || rows[i].textContent.toLowerCase().indexOf(q) !== -1;
+      rows[i].style.display = match ? '' : 'none';
+    }
+  }
+
+  // Copy the value in a control's data-copy attribute (used by row-menu items).
+  // Briefly swaps the label to "copied", then closes the enclosing menu.
+  function copyValue(btn) {
+    var text = btn.getAttribute('data-copy');
+    if (text == null) return;
+    var menu = btn.closest('details.row-menu');
+    var done = function () {
+      var prev = btn.textContent;
+      btn.textContent = 'copied';
+      setTimeout(function () {
+        btn.textContent = prev;
+        if (menu) menu.removeAttribute('open');
+      }, 900);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done); });
+    } else {
+      fallbackCopy(text, done);
+    }
+  }
+</script>
+</head>
+<body>
+{{/* Shared arrowhead markers for every service-map SVG on the page. Kept once
+     here (not per-SVG) so ids are unique; each map references them by url(#id). */}}
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <marker id="br-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a94a6"></path></marker>
+  <marker id="br-arrow-fail" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c63a00"></path></marker>
+</defs></svg>
+<header>
+  <h1>Odigos Insights · debug</h1>
+  <nav>
+    <a href="/debug" {{if eq .Active "index"}}class="active"{{end}}>overview</a>
+    <a href="/debug/transactions" {{if eq .Active "transactions"}}class="active"{{end}}>transactions</a>
+    <a href="/debug/anomalies" {{if eq .Active "anomalies"}}class="active"{{end}}>findings</a>
+    <a href="/debug/settings/learning" {{if eq .Active "settings"}}class="active"{{end}}>settings</a>
+  </nav>
+  <div class="spacer"></div>
+  <button type="button" class="btn refresh-btn" onclick="location.reload()" title="Reload this page's data" aria-label="Refresh">⟳ refresh</button>
+</header>
+<main>
+  {{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}
+  {{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+  {{template "content" .}}
+</main>
+</body>
+</html>{{end}}
+
+{{/* Shared severity pill. Render with {{template "sevBadge" (dict "Sev" "high" "Score" 72)}}.
+     Sev is the tier string (info..critical); Score is the 0-100 risk score. */}}
+{{define "sevBadge"}}<span class="sev sev-{{.Sev}}">{{.Sev}} - {{.Score}}</span>{{end}}
+
+{{/* Shared offending renderer: pretty chips for a raw offending string. Render
+     with {{template "offChips" $someOffendingString}}. Empty input renders nothing. */}}
+{{define "offChips"}}{{$chips := offendingChips .}}{{if $chips}}<div class="off-chips">{{range $chips}}<span class="off-chip tip" data-tip="{{.Raw}}"><span class="oc-cls">{{.Class}}</span>{{range .Items}}<span class="oc-val">{{.}}</span> {{end}}</span>{{end}}</div>{{end}}{{end}}
+
+{{/* Signal chips: one compact, hover-explained chip per triggered class. Render
+     with {{template "sigChips" .Chips}} where Chips is []signalChip. */}}
+{{define "sigChips"}}{{if .}}<div class="sig-chips">{{range .}}<span class="sig-chip tip" data-tone="{{.Tone}}" data-tip="{{.Tip}}">{{.Label}}</span>{{end}}</div>{{end}}{{end}}
+
+{{/* Settings left rail, grouped into sub-categories. Each settings page renders
+     this at the top of its content and highlights the active tab via
+     .SettingsTab (learning | detection | guardrails | risk-model | system | storage). */}}
+{{define "settingsNav"}}
+<nav class="settings-nav">
+  <div class="sn-group">Threat detection</div>
+  <a href="/debug/settings/detection" {{if eq .SettingsTab "detection"}}class="active"{{end}}>
+    <div class="sn-title">Detection</div>
+    <div class="sn-desc">when a finding fires</div>
+  </a>
+  <a href="/debug/settings/guardrails" {{if eq .SettingsTab "guardrails"}}class="active"{{end}}>
+    <div class="sn-title">Guardrails</div>
+    <div class="sn-desc">L7 allowlist rules (enforce / suggest)</div>
+  </a>
+  <div class="sn-group">Learning</div>
+  <a href="/debug/settings/learning" {{if eq .SettingsTab "learning"}}class="active"{{end}}>
+    <div class="sn-title">Learning</div>
+    <div class="sn-desc">when a class stops learning</div>
+  </a>
+  <div class="sn-group">Advanced</div>
+  <a href="/debug/settings/risk-model" {{if eq .SettingsTab "risk-model"}}class="active"{{end}}>
+    <div class="sn-title">Risk model</div>
+    <div class="sn-desc">default weights &amp; categories</div>
+  </a>
+  <a href="/debug/settings/system" {{if eq .SettingsTab "system"}}class="active"{{end}}>
+    <div class="sn-title">System</div>
+    <div class="sn-desc">sampling, retention, capacity</div>
+  </a>
+  <a href="/debug/settings/storage" {{if eq .SettingsTab "storage"}}class="active"{{end}}>
+    <div class="sn-title">Storage</div>
+    <div class="sn-desc">ClickHouse health</div>
+  </a>
+</nav>
+{{end}}
+
+{{/* Service map (blast radius) for one service. Render with
+     {{template "serviceMap" $card.ServiceMap}} where the dot is a serviceMapView.
+     Callers sit left of the highlighted service, callees right; edges with
+     failures are red. Arrowhead markers come from the shared <defs> in body. */}}
+{{define "serviceMap"}}
+{{if .HasGraph}}
+<div class="svcmap-legend">
+  <span class="svcmap-leg"><span class="svcmap-swatch svcmap-swatch-root"></span> this service</span>
+  <span class="svcmap-leg"><span class="svcmap-swatch svcmap-swatch-svc"></span> instrumented</span>
+  <span class="svcmap-leg"><span class="svcmap-swatch svcmap-swatch-virtual"></span> external / uninstrumented</span>
+  <span class="svcmap-leg"><span class="svcmap-line svcmap-line-fail"></span> has failures</span>
+  <span class="svcmap-leg" style="margin-left:auto;">{{.NodeCount}} node{{if ne .NodeCount 1}}s{{end}} · {{.EdgeCount}} edge{{if ne .EdgeCount 1}}s{{end}} · up to {{.Depth}} hop{{if ne .Depth 1}}s{{end}}{{if .Truncated}} · truncated{{end}}</span>
+</div>
+<div class="svcmap-canvas">
+  <svg width="{{.Width}}" height="{{.Height}}" viewBox="0 0 {{.Width}} {{.Height}}" role="img" aria-label="Service map">
+    {{range $e := .Edges}}
+    <g class="br-edge{{if $e.HasFailures}} br-edge-fail{{end}}">
+      <title>{{$e.Title}}</title>
+      <line x1="{{$e.X1}}" y1="{{$e.Y1}}" x2="{{$e.X2}}" y2="{{$e.Y2}}" marker-end="url(#{{if $e.HasFailures}}br-arrow-fail{{else}}br-arrow{{end}})"></line>
+    </g>
+    {{end}}
+    {{range $n := .Nodes}}
+    <g class="br-node{{if $n.IsRoot}} br-node-root{{end}}{{if $n.IsVirtual}} br-node-virtual{{end}}">
+      <title>{{$n.Title}}</title>
+      <rect x="{{$n.RX}}" y="{{$n.RY}}" width="{{$n.RW}}" height="{{$n.RH}}" rx="6" ry="6"></rect>
+      <text x="{{$n.CX}}" y="{{$n.NameY}}" text-anchor="middle" class="br-node-name">{{$n.DisplayName}}</text>
+      {{if $n.ShowNs}}<text x="{{$n.CX}}" y="{{$n.NsY}}" text-anchor="middle" class="br-node-ns">{{$n.Namespace}}</text>{{end}}
+    </g>
+    {{end}}
+  </svg>
+</div>
+{{else}}
+<p class="hint" style="margin:4px 0;">No service-graph edges recorded for this service yet — they appear once the gateway ships servicegraph metrics for traffic touching it.</p>
+{{end}}
+{{end}}
+
+{{/* Shared prev/next pager. Render with {{template "pager" .Pager}} where
+     .Pager is a pager struct. Hidden entirely when there's only one page. */}}
+{{define "pager"}}
+{{if or .HasPrev .HasNext}}
+<div class="pager">
+  {{if .HasPrev}}<a class="btn" href="{{.BaseURL}}?page={{.PrevPage}}{{if .Extra}}&{{.Extra}}{{end}}">&larr; prev</a>{{else}}<span class="btn btn-disabled">&larr; prev</span>{{end}}
+  <span class="pager-info">page {{.Page}}</span>
+  {{if .HasNext}}<a class="btn" href="{{.BaseURL}}?page={{.NextPage}}{{if .Extra}}&{{.Extra}}{{end}}">next &rarr;</a>{{else}}<span class="btn btn-disabled">next &rarr;</span>{{end}}
+</div>
+{{end}}
+{{end}}

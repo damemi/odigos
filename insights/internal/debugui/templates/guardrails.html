@@ -1,0 +1,205 @@
+{{define "title"}}Guardrails{{end}}
+
+{{define "content"}}
+<style>
+  .gr-card { background:#fff; border:1px solid var(--border); border-radius:6px; padding:16px 18px; margin-bottom:16px; }
+  .gr-head { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .gr-head .svc { font-size:15px; font-weight:600; }
+  .gr-head form { margin-left:auto; }
+  .gr-rule { border-top:1px solid var(--border); padding-top:12px; margin-top:12px; }
+  .gr-rule:first-of-type { border-top:none; padding-top:0; margin-top:0; }
+  .gr-rule label { display:block; font-weight:600; font-size:13px; margin-bottom:2px; }
+  .gr-rule .desc { color:var(--muted); font-size:12px; margin:0 0 8px; }
+  .gr-rule textarea { width:100%; min-height:80px; font-family:ui-monospace,Menlo,monospace; font-size:12px; padding:8px; border:1px solid var(--border); border-radius:4px; }
+  .gr-mode { margin:8px 0; display:flex; gap:16px; align-items:center; font-size:13px; }
+  .gr-actions { margin-top:12px; display:flex; gap:8px; }
+  .gr-cols { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+  .gr-cols h4 { margin:0 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); }
+  .gr-cols ul { margin:0; padding-left:18px; font-size:13px; }
+  .gr-form-row { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; margin-bottom:8px; }
+  .gr-form-row .fld { display:flex; flex-direction:column; gap:4px; }
+  .gr-form-row label { font-size:12px; color:var(--muted); }
+  .gr-form-row select { padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-size:13px; min-width:200px; }
+  .gr-facet h4 { display:flex; align-items:center; gap:8px; }
+  .gr-facet .sel-link { font-size:11px; font-weight:normal; text-transform:none; letter-spacing:0; color:var(--accent); cursor:pointer; }
+  .gr-facet .sel-link:hover { text-decoration:underline; }
+  .gr-facet .chk-list { list-style:none; margin:0; padding:0; font-size:13px; }
+  .gr-facet .chk-list li { margin:2px 0; }
+  .gr-facet .chk-list label { display:flex; gap:6px; align-items:center; font-weight:normal; cursor:pointer; }
+  .gr-seed-bar { display:flex; align-items:center; gap:16px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border); flex-wrap:wrap; }
+  .gr-seed-bar .modes { display:flex; gap:14px; font-size:13px; }
+  /* Compact, collapsed list of configured guardrails. */
+  .gr-row { background:#fff; border:1px solid var(--border); border-radius:6px; margin-bottom:8px; }
+  .gr-summary { display:flex; align-items:center; gap:10px; padding:10px 14px; cursor:pointer; list-style:none; flex-wrap:wrap; }
+  .gr-summary::-webkit-details-marker { display:none; }
+  .gr-summary .svc { font-size:14px; font-weight:600; }
+  .gr-caret { color:var(--muted); font-size:11px; transition:transform .12s ease; }
+  .gr-row[open] .gr-caret { transform:rotate(90deg); }
+  .gr-chips { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .gr-chip { display:inline-flex; align-items:center; gap:5px; background:#f6f8fa; border:1px solid var(--border); border-radius:12px; padding:2px 9px; font-size:12px; }
+  .gr-chip-label { color:var(--muted); }
+  .gr-chip-n { font-weight:600; font-variant-numeric:tabular-nums; }
+  .gr-mode-badge { font-size:10px; text-transform:uppercase; letter-spacing:.3px; border-radius:8px; padding:1px 6px; font-weight:600; }
+  .gr-mode-enforce { background:#fdeaea; color:#b3261e; }
+  .gr-mode-suggest { background:#eef0f3; color:#57606a; }
+  .gr-edit-hint { margin-left:auto; font-size:12px; color:var(--accent); }
+  .gr-body { padding:0 14px 14px; border-top:1px solid var(--border); }
+  .gr-body .gr-head { margin:12px 0 8px; }
+</style>
+
+<div class="settings-layout">
+{{template "settingsNav" .}}
+<div class="settings-main">
+
+<h2>Service guardrails</h2>
+<p class="hint">Guardrails are rules you <em>declare</em> about how a service may communicate (L7 micro-segmentation) — unlike anomaly baselines, which are learned. A broken guardrail is a <strong>policy violation</strong>, surfaced in the Findings feed. Pick a service, check any seen callers/callees (not only ones already observed talking to it), add egress hosts free-form, and adopt them (default <code>enforce</code> alerts on violation; use <code>suggest</code> to observe only).</p>
+
+<h3>Inspect a service</h3>
+<div class="gr-form-row">
+  <div class="fld">
+    <label>namespace</label>
+    <select id="gr-ns" onchange="grFilterServices()">
+      <option value="">— all namespaces —</option>
+      {{range .Namespaces}}<option value="{{.}}" {{if eq . $.ProfileNamespace}}selected{{end}}>{{if .}}{{.}}{{else}}(none){{end}}</option>{{end}}
+    </select>
+  </div>
+  <div class="fld">
+    <label>service</label>
+    <select id="gr-svc" onchange="grLoadProfile()"><option value="">select a service…</option></select>
+  </div>
+</div>
+
+{{if .Profile}}
+<div class="gr-card">
+  <div class="gr-head"><span class="svc">{{.ProfileScopeKey}}</span> <span class="badge badge-kind">observed profile</span></div>
+  <form method="POST" action="/debug/settings/guardrails/seed">
+    <input type="hidden" name="scope_key" value="{{.ProfileScopeKey}}">
+    <div class="gr-cols">
+      <div class="gr-facet">
+        <h4>Callers ({{len .PeerServiceNames}}) {{if .PeerServiceNames}}<span class="sel-link" onclick="grToggleFacet('allowed_callers', this)">select all</span>{{end}}</h4>
+        <p class="desc" style="color:var(--muted);font-size:12px;margin:0 0 6px;">who may call this service (inbound) — any seen service; observed: {{len .Profile.Callers}}</p>
+        {{if .PeerServiceNames}}<ul class="chk-list">{{range .PeerServiceNames}}<li><label><input type="checkbox" name="allowed_callers" value="{{.}}"><code>{{.}}</code></label></li>{{end}}</ul>{{else}}<p class="hint">no other services seen yet</p>{{end}}
+      </div>
+      <div class="gr-facet">
+        <h4>Callees ({{len .PeerServiceNames}}) {{if .PeerServiceNames}}<span class="sel-link" onclick="grToggleFacet('allowed_callees', this)">select all</span>{{end}}</h4>
+        <p class="desc" style="color:var(--muted);font-size:12px;margin:0 0 6px;">internal services it may call (outbound) — any seen service; observed: {{len .Profile.Callees}}</p>
+        {{if .PeerServiceNames}}<ul class="chk-list">{{range .PeerServiceNames}}<li><label><input type="checkbox" name="allowed_callees" value="{{.}}"><code>{{.}}</code></label></li>{{end}}</ul>{{else}}<p class="hint">no other services seen yet</p>{{end}}
+      </div>
+      <div class="gr-facet">
+        <h4>Egress ({{len .Profile.Egress}}) {{if .Profile.Egress}}<span class="sel-link" onclick="grToggleFacet('allowed_egress', this)">select all</span>{{end}}</h4>
+        <p class="desc" style="color:var(--muted);font-size:12px;margin:0 0 6px;">external destinations it may reach — observed hosts below; add more free-form</p>
+        {{if .Profile.Egress}}<ul class="chk-list">{{range .Profile.Egress}}<li><label><input type="checkbox" name="allowed_egress" value="{{.}}"><code>{{.}}</code></label></li>{{end}}</ul>{{else}}<p class="hint">none observed</p>{{end}}
+        <div style="margin-top:8px;">
+          <label style="font-weight:normal;font-size:12px;color:var(--muted);">Add egress hosts (comma- or newline-separated host or host:port)</label>
+          <textarea name="allowed_egress_extra" placeholder="api.stripe.com:443&#10;payments.example.com" style="width:100%;min-height:56px;font-family:ui-monospace,Menlo,monospace;font-size:12px;padding:8px;border:1px solid var(--border);border-radius:4px;margin-top:4px;"></textarea>
+        </div>
+      </div>
+      <div class="gr-facet">
+        <h4>Transactions ({{len .Profile.Transactions}}) {{if .Profile.Transactions}}<span class="sel-link" onclick="grToggleFacet('allowed_transactions', this)">select all</span>{{end}}</h4>
+        <p class="desc" style="color:var(--muted);font-size:12px;margin:0 0 6px;">operations this service may expose</p>
+        {{if .Profile.Transactions}}<ul class="chk-list">{{range .Profile.Transactions}}<li><label><input type="checkbox" name="allowed_transactions" value="{{.}}"><code>{{.}}</code></label></li>{{end}}</ul>{{else}}<p class="hint">none observed</p>{{end}}
+      </div>
+    </div>
+    <div class="gr-seed-bar">
+      <div class="modes">
+        <label style="font-weight:normal;"><input type="radio" name="mode" value="enforce" checked> adopt as enforce (alert on violation)</label>
+        <label style="font-weight:normal;"><input type="radio" name="mode" value="suggest"> adopt as suggest (observe only)</label>
+      </div>
+      <button type="submit" class="btn btn-primary">add selected to guardrail</button>
+    </div>
+  </form>
+</div>
+{{else if .ProfileService}}
+<div class="empty">No observed communication for <code>{{.ProfileScopeKey}}</code> yet.</div>
+{{end}}
+
+<script>
+  var GR_SERVICES = {{.ServicesJSON}};       // { namespace: [service, ...] }
+  var GR_SEL_NS = {{.ProfileNamespace}};      // currently loaded profile, to re-select
+  var GR_SEL_SVC = {{.ProfileService}};
+  function grFilterServices() {
+    var nsSel = document.getElementById('gr-ns');
+    var svcSel = document.getElementById('gr-svc');
+    var ns = nsSel.value;
+    svcSel.innerHTML = '<option value="">select a service…</option>';
+    var add = function (namespace, service) {
+      var opt = document.createElement('option');
+      opt.value = service;
+      opt.setAttribute('data-ns', namespace);
+      opt.textContent = ns === '' && namespace !== '' ? service + '  (' + namespace + ')' : service;
+      if (namespace === GR_SEL_NS && service === GR_SEL_SVC) { opt.selected = true; }
+      svcSel.appendChild(opt);
+    };
+    if (ns === '') {
+      Object.keys(GR_SERVICES).sort().forEach(function (namespace) {
+        (GR_SERVICES[namespace] || []).forEach(function (s) { add(namespace, s); });
+      });
+    } else {
+      (GR_SERVICES[ns] || []).forEach(function (s) { add(ns, s); });
+    }
+  }
+  function grLoadProfile() {
+    var svcSel = document.getElementById('gr-svc');
+    var opt = svcSel.options[svcSel.selectedIndex];
+    if (!opt || !opt.value) { return; }
+    var ns = opt.getAttribute('data-ns') || '';
+    window.location = '/debug/settings/guardrails?namespace=' + encodeURIComponent(ns) + '&service=' + encodeURIComponent(opt.value);
+  }
+  function grToggleFacet(name, link) {
+    var boxes = document.querySelectorAll('input[name="' + name + '"]');
+    var anyUnchecked = Array.prototype.some.call(boxes, function (b) { return !b.checked; });
+    boxes.forEach(function (b) { b.checked = anyUnchecked; });
+    link.textContent = anyUnchecked ? 'clear all' : 'select all';
+  }
+  grFilterServices();
+</script>
+
+<h3>Guardrails <span class="hint" style="font-weight:normal;">({{len .Guardrails}})</span></h3>
+{{if .Guardrails}}
+  {{range .Guardrails}}
+  <details class="gr-row">
+    <summary class="gr-summary">
+      <span class="gr-caret">▸</span>
+      <span class="svc">{{.ScopeKey}}</span>
+      <span class="gr-chips">
+        {{$configured := false}}
+        {{range .Rules}}{{if .Count}}{{$configured = true}}<span class="gr-chip"><span class="gr-chip-label">{{.Rule.Label}}</span> <span class="gr-chip-n">{{.Count}}</span> <span class="gr-mode-badge gr-mode-{{.Mode}}">{{.Mode}}</span>{{if .Auto}} <span class="gr-mode-badge" style="background:#e8f0fe;color:#1967d2;" title="Created automatically when the service's transactions promoted">auto</span>{{end}}</span>{{end}}{{end}}
+        {{if not $configured}}<span class="hint">no rules configured</span>{{end}}
+      </span>
+      <span class="gr-edit-hint">edit</span>
+    </summary>
+    <div class="gr-body">
+      <div class="gr-head">
+        <span class="badge badge-kind">service</span>
+        <form method="POST" action="/debug/settings/guardrails/delete" onsubmit="return confirm('Delete this guardrail? The service is no longer segmented.');">
+          <input type="hidden" name="scope_key" value="{{.ScopeKey}}">
+          <button type="submit" class="btn btn-warn">delete</button>
+        </form>
+      </div>
+      <form method="POST" action="/debug/settings/guardrails/save">
+        <input type="hidden" name="scope_key" value="{{.ScopeKey}}">
+        {{range .Rules}}
+        <div class="gr-rule">
+          <label>{{.Rule.Label}}{{if .Auto}} <span class="badge badge-kind" title="Created automatically when the service's transactions promoted">auto txn guardrail</span>{{end}}</label>
+          <p class="desc">{{.Rule.Desc}}</p>
+          <div class="gr-mode">
+            <span>Mode:</span>
+            <label style="font-weight:normal;"><input type="radio" name="mode_{{.Rule.Key}}" value="enforce" {{if eq (printf "%s" .Mode) "enforce"}}checked{{end}}> enforce (alert on violation)</label>
+            <label style="font-weight:normal;"><input type="radio" name="mode_{{.Rule.Key}}" value="suggest" {{if eq (printf "%s" .Mode) "suggest"}}checked{{end}}> suggest (observe only)</label>
+          </div>
+          <textarea name="list_{{.Rule.Key}}" placeholder="{{.Rule.Hint}}">{{.ListText}}</textarea>
+          <p class="desc">{{.Rule.Hint}}</p>
+        </div>
+        {{end}}
+        <div class="gr-actions"><button type="submit" class="btn btn-primary">save</button></div>
+      </form>
+    </div>
+  </details>
+  {{end}}
+{{else}}
+  <div class="empty">No guardrails yet. Inspect a service above and adopt its observed callers, callees, or egress to create one.</div>
+{{end}}
+
+</div>
+</div>
+{{end}}

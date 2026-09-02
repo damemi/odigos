@@ -1,0 +1,201 @@
+{{define "title"}}Storage{{end}}
+
+{{define "content"}}
+<div class="settings-layout">
+{{template "settingsNav" .}}
+<div class="settings-main">
+
+<div class="page-head">
+  <h2>Storage</h2>
+  <span class="hint" style="margin:0;">auto-refresh 15s</span>
+</div>
+<p class="hint" style="max-width:760px;">ClickHouse health for this Insights deployment. First place to check when the service cannot read/write baselines, findings, or sample traces.</p>
+
+{{if .Error}}<div class="flash flash-error">{{.Error}}</div>{{end}}
+
+{{with .Health}}
+<div style="margin:0 0 18px;">
+  {{if eq .Status "healthy"}}<span class="badge" style="background:#2c6e1a;color:#fff;">Healthy</span>
+  {{else if eq .Status "degraded"}}<span class="badge badge-warn">Degraded</span>
+  {{else if eq .Status "critical"}}<span class="badge sev-critical">Critical</span>
+  {{else}}<span class="badge badge-warn">Unreachable</span>{{end}}
+  <span class="hint" style="margin-left:8px;">checked {{.CheckedAt.UTC.Format "15:04:05"}} UTC</span>
+</div>
+
+<h3>Connection</h3>
+<div class="stats" style="flex-wrap:wrap;">
+  <div class="stat"><div class="label">Reachable</div><div class="value">{{if .Connection.Reachable}}OK{{else}}No{{end}}</div></div>
+  <div class="stat"><div class="label">Ping latency</div><div class="value">{{if .Connection.Reachable}}{{.Connection.PingLatencyMs}} ms{{else}}—{{end}}</div></div>
+  <div class="stat"><div class="label">ClickHouse version</div><div class="value" style="font-size:16px;">{{or .Connection.Version "—"}}</div></div>
+  <div class="stat"><div class="label">Database</div><div class="value" style="font-size:16px;">{{or .Connection.Database "—"}}</div></div>
+</div>
+{{if .Connection.Error}}<p class="hint" style="color:var(--warn);">{{.Connection.Error}}</p>{{end}}
+
+<h3>Disk</h3>
+<div class="stats" style="flex-wrap:wrap;margin-bottom:12px;">
+  <div class="stat"><div class="label">Insights data</div><div class="value" style="font-size:18px;">{{humanBytes .Disk.InsightsBytes}}</div></div>
+</div>
+<div class="card" style="padding:16px 18px; margin-bottom:18px; max-width:760px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <strong>Filesystem (ClickHouse volume)</strong>
+    {{if eq .Disk.Status "critical"}}<span class="badge sev-critical">{{printf "%.0f" .Disk.UsedPercent}}% used</span>
+    {{else if eq .Disk.Status "warning"}}<span class="badge badge-warn">{{printf "%.0f" .Disk.UsedPercent}}% used</span>
+    {{else}}<span class="badge" style="background:#e0f1d9;color:#2c6e1a;">{{printf "%.0f" .Disk.UsedPercent}}% used</span>{{end}}
+  </div>
+  <p class="hint" style="margin:0 0 10px;">On kind/shared volumes this includes unrelated host data — use Insights data above for stored size.</p>
+  <div style="height:10px;background:#eee;border-radius:4px;overflow:hidden;margin-bottom:12px;">
+    <div style="height:100%;width:{{printf "%.1f" .Disk.UsedPercent}}%;background:var(--accent);"></div>
+  </div>
+  <div class="stats" style="margin-bottom:0;flex-wrap:wrap;">
+    <div class="stat"><div class="label">Total</div><div class="value" style="font-size:18px;">{{humanBytes .Disk.TotalBytes}}</div></div>
+    <div class="stat"><div class="label">Used</div><div class="value" style="font-size:18px;">{{humanBytes .Disk.UsedBytes}}</div></div>
+    <div class="stat"><div class="label">Available</div><div class="value" style="font-size:18px;">{{humanBytes .Disk.AvailableBytes}}</div></div>
+  </div>
+</div>
+
+<h3>Memory</h3>
+<div class="stats" style="flex-wrap:wrap;">
+  <div class="stat"><div class="label">Process RSS</div><div class="value" style="font-size:18px;">{{humanBytes .Memory.ProcessRssBytes}}</div></div>
+  <div class="stat"><div class="label">Pod (cgroup)</div><div class="value" style="font-size:18px;">{{if gt .Memory.CgroupTotalBytes 0}}{{humanBytes .Memory.CgroupUsedBytes}} / {{humanBytes .Memory.CgroupTotalBytes}}{{else}}{{humanBytes .Memory.CgroupUsedBytes}}{{end}}</div></div>
+  <div class="stat"><div class="label">Uptime</div><div class="value" style="font-size:18px;">{{humanDuration .Memory.UptimeSeconds}}</div></div>
+</div>
+
+<h3>Running queries</h3>
+<div class="stats" style="flex-wrap:wrap;">
+  <div class="stat"><div class="label">Active now</div><div class="value">{{.Queries.Active}}</div></div>
+  <div class="stat"><div class="label">Longest running</div><div class="value" style="font-size:18px;">{{humanDuration .Queries.LongestSeconds}}</div></div>
+  <div class="stat"><div class="label">Peak memory (active)</div><div class="value" style="font-size:18px;">{{humanBytes .Queries.PeakMemoryBytes}}</div></div>
+</div>
+{{if .Queries.Items}}
+<table>
+  <thead><tr><th>Elapsed</th><th>User</th><th>Memory</th><th>Query</th></tr></thead>
+  <tbody>
+  {{range .Queries.Items}}
+    <tr>
+      <td>{{humanDuration .ElapsedSeconds}}</td>
+      <td>{{.User}}</td>
+      <td>{{humanBytes .MemoryBytes}}</td>
+      <td style="font-family:ui-monospace,monospace;font-size:12px;max-width:520px;word-break:break-all;">{{.Query}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<div class="empty" style="padding:16px;margin-bottom:18px;">No active queries (idle is normal).</div>
+{{end}}
+
+<h3>Recent queries <span class="hint">(last 5 min · max 10)</span></h3>
+<div class="tabs" style="margin-top:0;">
+  <button type="button" class="tab active" id="recent-tab-heaviest" data-recent="heaviest">Heaviest</button>
+  <button type="button" class="tab" id="recent-tab-latest" data-recent="latest">Latest</button>
+  <span class="hint" id="recent-sort-hint" style="margin:0 0 0 8px;align-self:center;">Sorted by duration (then memory)</span>
+</div>
+<div id="recent-panel-heaviest" class="query-scroll" style="max-height:260px;overflow:auto;margin-bottom:18px;border:1px solid var(--border);border-radius:4px;background:#fff;">
+{{if .Queries.RecentHeaviest}}
+<table style="border:none;margin:0;">
+  <thead><tr><th>When</th><th>Duration</th><th>Memory</th><th>User</th><th>Query</th></tr></thead>
+  <tbody>
+  {{range .Queries.RecentHeaviest}}
+    <tr>
+      <td>{{humanTime .FinishedAt}}</td>
+      <td>{{humanDuration .ElapsedSeconds}}</td>
+      <td>{{humanBytes .MemoryBytes}}</td>
+      <td>{{.User}}</td>
+      <td style="font-family:ui-monospace,monospace;font-size:12px;max-width:420px;word-break:break-all;">{{.Query}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<div class="empty" style="padding:16px;border:none;">No finished queries in the last 5 minutes (or query_log unavailable).</div>
+{{end}}
+</div>
+<div id="recent-panel-latest" class="query-scroll" style="display:none;max-height:260px;overflow:auto;margin-bottom:18px;border:1px solid var(--border);border-radius:4px;background:#fff;">
+{{if .Queries.RecentLatest}}
+<table style="border:none;margin:0;">
+  <thead><tr><th>When</th><th>Duration</th><th>Memory</th><th>User</th><th>Query</th></tr></thead>
+  <tbody>
+  {{range .Queries.RecentLatest}}
+    <tr>
+      <td>{{humanTime .FinishedAt}}</td>
+      <td>{{humanDuration .ElapsedSeconds}}</td>
+      <td>{{humanBytes .MemoryBytes}}</td>
+      <td>{{.User}}</td>
+      <td style="font-family:ui-monospace,monospace;font-size:12px;max-width:420px;word-break:break-all;">{{.Query}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<div class="empty" style="padding:16px;border:none;">No finished queries in the last 5 minutes (or query_log unavailable).</div>
+{{end}}
+</div>
+
+<h3>Tables</h3>
+{{if .Tables}}
+<table>
+  <thead><tr><th>Table</th><th>Rows (approx)</th><th>On disk</th><th>Active parts</th></tr></thead>
+  <tbody>
+  {{range .Tables}}
+    <tr>
+      <td><code>{{.Name}}</code></td>
+      <td>{{humanCount .Rows}}</td>
+      <td>{{humanBytes .BytesOnDisk}}</td>
+      <td>{{.ActiveParts}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<div class="empty" style="padding:16px;margin-bottom:18px;">No table stats.</div>
+{{end}}
+
+<h3>Write pressure</h3>
+<div class="stats" style="flex-wrap:wrap;">
+  <div class="stat"><div class="label">Unfinished mutations</div><div class="value">{{.WritePressure.UnfinishedMutations}}</div></div>
+  <div class="stat"><div class="label">Active parts</div><div class="value">{{.WritePressure.ActiveParts}}</div></div>
+  <div class="stat"><div class="label">Flush interval</div><div class="value" style="font-size:18px;">{{.Writeback.FlushIntervalSeconds}} s</div></div>
+</div>
+
+<h3>Insights ↔ DB</h3>
+<div class="stats" style="flex-wrap:wrap;">
+  <div class="stat"><div class="label">Last flush</div><div class="value" style="font-size:18px;">{{if not .Writeback.EverFlushed}}—{{else if .Writeback.LastFlushOk}}OK{{else}}Error{{end}}</div></div>
+  <div class="stat"><div class="label">Last flush at</div><div class="value" style="font-size:18px;">{{if .Writeback.EverFlushed}}{{humanTime .Writeback.LastFlushAt}}{{else}}—{{end}}</div></div>
+  <div class="stat"><div class="label">Last flush error</div><div class="value" style="font-size:14px;">{{if .Writeback.LastFlushError}}{{.Writeback.LastFlushError}}{{else}}—{{end}}</div></div>
+</div>
+{{end}}
+
+</div>
+</div>
+<script>
+(function () {
+  var key = "insights.storage.recentSort";
+  var hints = {
+    heaviest: "Sorted by duration (then memory)",
+    latest: "Sorted by finish time"
+  };
+  function show(mode) {
+    var heaviest = mode === "heaviest";
+    var ph = document.getElementById("recent-panel-heaviest");
+    var pl = document.getElementById("recent-panel-latest");
+    var th = document.getElementById("recent-tab-heaviest");
+    var tl = document.getElementById("recent-tab-latest");
+    var hint = document.getElementById("recent-sort-hint");
+    if (!ph || !pl) return;
+    ph.style.display = heaviest ? "block" : "none";
+    pl.style.display = heaviest ? "none" : "block";
+    if (th) th.classList.toggle("active", heaviest);
+    if (tl) tl.classList.toggle("active", !heaviest);
+    if (hint) hint.textContent = hints[mode] || "";
+    try { sessionStorage.setItem(key, mode); } catch (e) {}
+  }
+  var saved = "heaviest";
+  try { saved = sessionStorage.getItem(key) || "heaviest"; } catch (e) {}
+  show(saved);
+  document.querySelectorAll("[data-recent]").forEach(function (btn) {
+    btn.addEventListener("click", function () { show(btn.getAttribute("data-recent")); });
+  });
+  setTimeout(function () { location.reload(); }, 15000);
+})();
+</script>
+{{end}}
