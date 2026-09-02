@@ -883,6 +883,86 @@ func (kc *KeycloakUserService) LogoutUserSessions(token string, userID string) e
 	return nil
 }
 
+// SetUserNotBefore sets the Keycloak user not-before timestamp so tokens issued
+// before notBeforeUnix are rejected by Keycloak and by our offline auth checks.
+func (kc *KeycloakUserService) SetUserNotBefore(token string, userID string, notBeforeUnix int64) error {
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", kc.host, kc.realm, userID)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create GET request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to get user for not-before update: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to get user for not-before update: status %d, response: %s", resp.StatusCode, string(responseBody))
+	}
+
+	var userData map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&userData); err != nil {
+		return fmt.Errorf("failed to decode user data: %w", err)
+	}
+
+	userData["notBefore"] = notBeforeUnix
+
+	body, err := json.Marshal(userData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal user data: %w", err)
+	}
+
+	putReq, err := http.NewRequest("PUT", url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to create PUT request: %w", err)
+	}
+	putReq.Header.Set("Authorization", "Bearer "+token)
+	putReq.Header.Set("Content-Type", "application/json")
+
+	putResp, err := http.DefaultClient.Do(putReq)
+	if err != nil {
+		return fmt.Errorf("failed to set user not-before: %w", err)
+	}
+	defer putResp.Body.Close()
+
+	if putResp.StatusCode != StatusNoContent && putResp.StatusCode != StatusOK {
+		responseBody, _ := io.ReadAll(putResp.Body)
+		return fmt.Errorf("failed to set user not-before: status %d, response: %s", putResp.StatusCode, string(responseBody))
+	}
+	return nil
+}
+
+// GetUserNotBefore returns the Keycloak user not-before unix timestamp.
+// A missing or zero value means no revocation timestamp is set.
+func (kc *KeycloakUserService) GetUserNotBefore(token string, userID string) (int64, error) {
+	userData, err := kc.GetUserByID(token, userID)
+	if err != nil {
+		return 0, err
+	}
+
+	switch v := userData["notBefore"].(type) {
+	case float64:
+		return int64(v), nil
+	case int64:
+		return v, nil
+	case int:
+		return int64(v), nil
+	case json.Number:
+		n, err := v.Int64()
+		if err != nil {
+			return 0, nil
+		}
+		return n, nil
+	default:
+		return 0, nil
+	}
+}
+
 func (kc *KeycloakUserService) DeleteUserByID(token string, userID string) error {
 	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", kc.host, kc.realm, userID)
 	req, err := http.NewRequest("DELETE", url, nil)

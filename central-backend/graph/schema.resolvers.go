@@ -231,6 +231,10 @@ func (r *mutationResolver) DeleteProxyConnection(ctx context.Context, proxyID st
 
 // RemoteFetch is the resolver for the remoteFetch field.
 func (r *queryResolver) RemoteFetch(ctx context.Context, proxyID string, query string, variables map[string]any) (string, error) {
+	if err := utils.RequireAuth(ctx); err != nil {
+		return "", err
+	}
+
 	requestId := utils.GenerateUUID()
 	requestsChannel := consts.GetRequestsChannel(proxyID)
 	platformName := proxyID

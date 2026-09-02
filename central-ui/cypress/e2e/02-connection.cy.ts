@@ -28,18 +28,19 @@ describe('Select Connection', () => {
   it('Should fetch compute platforms (proxy connections) on /connections', () => {
     visitPage(ROUTES.CONNECTIONS, () => {
       waitForGraphqlOperation('GetComputePlatforms').then(() => {
-        cy.contains(PROXY.NAME, { timeout: 60000 }).should('be.visible');
+        // Scope to `:visible` — ui-kit Table MeasurementLayer duplicates cell
+        // text with visibility:hidden before the real row in DOM order.
+        cy.contains(':visible', PROXY.NAME, { timeout: 60000 }).should('be.visible');
       });
     });
   });
 
   it(`Should show the test proxy "${PROXY.NAME}" as a live connection`, () => {
     visitPage(ROUTES.CONNECTIONS, () => {
-      cy.contains(PROXY.NAME, { timeout: 60000 }).should('be.visible');
       // The ui-kit Table renders a hidden MeasurementLayer that duplicates
-      // text from auto-width column cells (e.g. the Status badge) BEFORE
-      // the visible row in DOM order. Scope to `:visible` so we resolve the
-      // real badge instead of the hidden duplicate.
+      // cell text BEFORE the visible row in DOM order. Scope to `:visible`
+      // so we resolve the real cells instead of the hidden duplicates.
+      cy.contains(':visible', PROXY.NAME, { timeout: 60000 }).should('be.visible');
       cy.contains(':visible', 'Connection live', { timeout: 60000 }).should('be.visible');
     });
   });
@@ -49,9 +50,9 @@ describe('Select Connection', () => {
   // selection.
   it('Should select the proxy, redirect to /overview, and persist the SELECTED_PROXY', () => {
     visitPage(ROUTES.CONNECTIONS, () => {
-      cy.contains(PROXY.NAME, { timeout: 60000 }).should('be.visible');
+      cy.contains(':visible', PROXY.NAME, { timeout: 60000 }).should('be.visible');
       cy.contains(':visible', 'Connection live', { timeout: 60000 }).should('be.visible');
-      cy.contains(PROXY.NAME).click();
+      cy.get('[data-table-row-index="0"]', { timeout: 60000 }).should('be.visible').click();
 
       cy.location('pathname', { timeout: 30000 }).should('eq', ROUTES.OVERVIEW);
 

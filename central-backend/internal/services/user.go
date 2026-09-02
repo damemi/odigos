@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/keycloak"
@@ -151,6 +152,13 @@ func (svc *UserService) UpdateUser(ctx context.Context, userID string, input *mo
 		return nil, fmt.Errorf("failed to assign role: %w", err)
 	}
 
+	if utils.IsRoleDowngrade(oldRole, *newRole) {
+		if err := svc.revokeUserAccess(adminToken, userID); err != nil {
+			logger.Log.Warn("Failed to revoke sessions after role downgrade",
+				"userID", userID, "oldRole", oldRole, "newRole", *newRole, "error", err)
+		}
+	}
+
 	if len(input.AddTeamIds) > 0 {
 		err = svc.kcTeam.AssignTeamsToUser(adminToken, userID, utils.ConvertStringPtrsToStrings(input.AddTeamIds))
 		if err != nil {
@@ -178,6 +186,22 @@ func (svc *UserService) UpdateUser(ctx context.Context, userID string, input *mo
 	}
 
 	return &model.GeneralResult{Success: true, Error: nil}, nil
+}
+
+// revokeUserAccess ends Keycloak sessions and sets a not-before so existing
+// access JWTs are rejected immediately by per-request auth checks.
+func (svc *UserService) revokeUserAccess(adminToken, userID string) error {
+	notBefore := time.Now().Unix()
+	utils.RevokeUserTokens(userID, notBefore)
+	utils.InvalidateAuthCaches(userID)
+
+	if err := svc.kcUser.SetUserNotBefore(adminToken, userID, notBefore); err != nil {
+		return fmt.Errorf("set notBefore: %w", err)
+	}
+	if err := svc.kcUser.LogoutUserSessions(adminToken, userID); err != nil {
+		return fmt.Errorf("logout sessions: %w", err)
+	}
+	return nil
 }
 
 func (svc *UserService) DeleteUser(ctx context.Context, userID string) (*model.GeneralResult, error) {

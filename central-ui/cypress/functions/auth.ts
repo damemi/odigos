@@ -58,15 +58,16 @@ const performSignIn = () => {
 // proxy store (useProxy treats it as an out-of-proxy page), so this must only
 // run when we mean to re-select — never as a per-test warm-up.
 const performSelectTestProxy = () => {
-  cy.contains(PROXY.NAME, { timeout: 30000 }).should('be.visible');
   // The ui-kit Table renders a hidden MeasurementLayer (visibility: hidden)
-  // that duplicates the text of cells in auto-width columns (e.g. the Status
-  // badge) BEFORE the visible row in the DOM. Plain `cy.contains('Connection
-  // live')` would resolve to that hidden duplicate and fail the visibility
-  // / click assertions, so scope text lookups inside auto-width columns to
-  // `:visible` elements only.
+  // that duplicates cell text BEFORE the visible row in the DOM. Plain
+  // `cy.contains(...)` resolves to that hidden duplicate and fails visibility
+  // / click assertions, so scope these lookups to `:visible` elements only.
+  cy.contains(':visible', PROXY.NAME, { timeout: 30000 }).should('be.visible');
   cy.contains(':visible', 'Connection live', { timeout: 30000 }).should('be.visible');
-  cy.contains(PROXY.NAME).click();
+  // Click the real table row (Td onClick → onClickConnection). Text-only
+  // clicks can still miss the row handler when MeasurementLayer duplicates
+  // sit earlier in the DOM; data-table-row-index is on the interactive Row.
+  cy.get('[data-table-row-index="0"]', { timeout: 30000 }).should('be.visible').click();
 
   // selectProxy() pushes us to /overview and writes SELECTED_PROXY.
   cy.location('pathname', { timeout: 30000 }).should('eq', ROUTES.OVERVIEW);

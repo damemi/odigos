@@ -46,9 +46,11 @@ export default function Page() {
   }, [refetch]);
 
   const onClickConnection = useCallback(
-    ({ id, status }: { id: string; status: StatusType }) => {
-      if (status === StatusType.Success) {
-        selectProxy(id);
+    (conn: Connection) => {
+      if (conn.status === StatusType.Success) {
+        // Pass the row's Connection as fallback metadata so selectProxy does
+        // not silently no-op if the useComputePlatformsCRUD observer is empty.
+        selectProxy(conn.id, conn);
       } else {
         addNotification({ type: StatusType.Warning, title: 'Connection lost', message: 'Cannot connect to the platform', hideFromHistory: true });
       }
@@ -96,8 +98,7 @@ export default function Page() {
     <CentralConnections
       connections={connections}
       getConnections={getConnections}
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      onClickConnection={onClickConnection as any}
+      onClickConnection={onClickConnection}
       deleteConnection={deleteConnection}
       onCreateNew={onCreateNew}
       cloudConnectorProviders={providersData?.cloudConnectorProviders ?? []}

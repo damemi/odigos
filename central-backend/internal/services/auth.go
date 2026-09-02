@@ -323,6 +323,20 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 		return nil, err
 	}
 
+	roleStr, err := svc.kcUser.GetUserRole(adminToken, authResult.UserData.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user role after password login: %w", err)
+	}
+	if roleStr == keycloak.RoleNoAccess {
+		logger.Log.Info("Password login denied: user has no-access role", "userID", authResult.UserData.ID, "email", email)
+		if err := svc.kcUser.LogoutUserSessions(adminToken, authResult.UserData.ID); err != nil {
+			logger.Log.Warn("Failed to logout denied user sessions", "userID", authResult.UserData.ID, "error", err)
+		}
+		return &model.SignInResult{
+			Status: model.SignInStatusAccessDenied,
+		}, nil
+	}
+
 	needsPasswordChange, err := svc.kcUser.CheckUserNeedsPasswordChange(adminToken, email)
 	if err != nil {
 		logger.Log.Error("Failed to check if user needs password change", "error", err)

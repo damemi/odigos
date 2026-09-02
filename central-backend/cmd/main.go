@@ -185,7 +185,7 @@ func main() {
 		CloudConnectorService:  cloudConnectorService,
 	}}))
 
-	router := newRouter(gqlHandler, wsServer, centralSSEHub)
+	router := newRouter(gqlHandler, wsServer, centralSSEHub, adminService)
 
 	// Initialize Prometheus metrics server (runs in background goroutine)
 	metrics.InitMetrics()
@@ -204,7 +204,7 @@ func customLogger() gin.HandlerFunc {
 	})
 }
 
-func newRouter(gqlHandler *handler.Server, wsServer *websocketserver.WebSocketServer, sseHub *ssehub.Hub) *gin.Engine {
+func newRouter(gqlHandler *handler.Server, wsServer *websocketserver.WebSocketServer, sseHub *ssehub.Hub, adminService *services.AdminService) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(customLogger())
@@ -219,7 +219,7 @@ func newRouter(gqlHandler *handler.Server, wsServer *websocketserver.WebSocketSe
 	router.GET("/readyz", func(c *gin.Context) { c.Status(200) })
 	router.GET("/ws/proxy", func(c *gin.Context) { wsServer.HandleConnection(c.Writer, c.Request) })
 	router.GET("/sse/events", func(c *gin.Context) { sseHub.SSEHandler(c.Writer, c.Request) })
-	router.POST("/graphql", authContextMiddleware(), func(c *gin.Context) { gqlHandler.ServeHTTP(c.Writer, c.Request) })
+	router.POST("/graphql", authContextMiddleware(adminService), func(c *gin.Context) { gqlHandler.ServeHTTP(c.Writer, c.Request) })
 
 	// Reverse proxy to Keycloak for browser-facing auth endpoints.
 	// This keeps Keycloak fully internal — the browser only talks to the central-backend.
@@ -230,16 +230,69 @@ func newRouter(gqlHandler *handler.Server, wsServer *websocketserver.WebSocketSe
 	return router
 }
 
-func authContextMiddleware() gin.HandlerFunc {
+func authContextMiddleware(adminService *services.AdminService) gin.HandlerFunc {
+	kcUser := keycloak.NewKeycloakUserService()
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
 			token := strings.TrimPrefix(authHeader, "Bearer ")
 			ctx := utils.SetTokenInContext(c.Request.Context(), token)
+
+			if sub, err := utils.ExtractSubjectFromToken(token); err == nil {
+				ctx = enrichAuthContext(adminService, kcUser, sub, ctx)
+			}
+
 			c.Request = c.Request.WithContext(ctx)
 		}
 		c.Next()
 	}
+}
+
+// enrichAuthContext syncs not-before (once per user) and loads a short-lived
+// live role so privilege checks do not trust stale JWT claims alone.
+func enrichAuthContext(adminService *services.AdminService, kcUser *keycloak.KeycloakUserService, userID string, ctx context.Context) context.Context {
+	needNotBefore := utils.GlobalTokenRevocations.NotBefore(userID) == 0 && !utils.HasSyncedNotBefore(userID)
+	cachedRole, hasCachedRole := utils.GetCachedLiveRole(userID)
+	needLiveRole := !hasCachedRole
+
+	if !needNotBefore && !needLiveRole {
+		if hasCachedRole && cachedRole != "" {
+			return utils.SetLiveRoleInContext(ctx, cachedRole)
+		}
+		return ctx
+	}
+
+	adminToken, err := adminService.GetAdminToken()
+	if err != nil {
+		if hasCachedRole && cachedRole != "" {
+			return utils.SetLiveRoleInContext(ctx, cachedRole)
+		}
+		return ctx
+	}
+
+	if needNotBefore {
+		notBefore, err := kcUser.GetUserNotBefore(adminToken, userID)
+		utils.MarkNotBeforeSynced(userID)
+		if err == nil && notBefore > 0 {
+			utils.GlobalTokenRevocations.Revoke(userID, notBefore)
+		}
+	}
+
+	if needLiveRole {
+		role, err := kcUser.GetUserRole(adminToken, userID)
+		if err == nil {
+			utils.SetCachedLiveRole(userID, role)
+			if role != "" {
+				return utils.SetLiveRoleInContext(ctx, role)
+			}
+		}
+		return ctx
+	}
+
+	if hasCachedRole && cachedRole != "" {
+		return utils.SetLiveRoleInContext(ctx, cachedRole)
+	}
+	return ctx
 }
 
 func handleShutdown(shutdownCh <-chan struct{}, redisClient *redisclient.RedisClient, snapshotPool *snapshotworker.WorkerPool, tokenExpirationChan <-chan time.Time) {

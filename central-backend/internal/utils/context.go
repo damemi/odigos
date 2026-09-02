@@ -2,8 +2,6 @@ package utils
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -13,7 +11,8 @@ import (
 type contextKey string
 
 const (
-	tokenKey contextKey = "token"
+	tokenKey    contextKey = "token"
+	liveRoleKey contextKey = "liveRole"
 )
 
 // ErrForbidden is returned when a caller lacks the required role for an action.
@@ -33,21 +32,22 @@ func SetTokenInContext(ctx context.Context, token string) context.Context {
 	return context.WithValue(ctx, tokenKey, token)
 }
 
+// SetLiveRoleInContext stores the user's current Keycloak realm role for this
+// request so privilege checks do not rely solely on (possibly stale) JWT claims.
+func SetLiveRoleInContext(ctx context.Context, role string) context.Context {
+	return context.WithValue(ctx, liveRoleKey, role)
+}
+
+// GetLiveRoleFromContext returns the per-request live role when middleware set one.
+func GetLiveRoleFromContext(ctx context.Context) (string, bool) {
+	role, ok := ctx.Value(liveRoleKey).(string)
+	return role, ok && role != ""
+}
+
 func ExtractRolesFromToken(token string) ([]string, error) {
-
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return nil, fmt.Errorf("invalid JWT token format")
-	}
-
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	claims, err := decodeJWTClaims(token)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode JWT payload: %w", err)
-	}
-
-	var claims map[string]any
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return nil, fmt.Errorf("failed to parse JWT payload: %w", err)
+		return nil, err
 	}
 
 	if realmAccess, ok := claims["realm_access"].(map[string]any); ok {
@@ -66,20 +66,9 @@ func ExtractRolesFromToken(token string) ([]string, error) {
 }
 
 func ExtractEmailFromToken(token string) (string, error) {
-
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return "", fmt.Errorf("invalid JWT token format")
-	}
-
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	claims, err := decodeJWTClaims(token)
 	if err != nil {
-		return "", fmt.Errorf("failed to decode JWT payload: %w", err)
-	}
-
-	var claims map[string]any
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return "", fmt.Errorf("failed to parse JWT payload: %w", err)
+		return "", err
 	}
 
 	if email, ok := claims["email"].(string); ok {
@@ -90,19 +79,9 @@ func ExtractEmailFromToken(token string) (string, error) {
 }
 
 func IsTokenExpired(token string) (bool, error) {
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return true, fmt.Errorf("invalid JWT token format")
-	}
-
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	claims, err := decodeJWTClaims(token)
 	if err != nil {
-		return true, fmt.Errorf("failed to decode JWT payload: %w", err)
-	}
-
-	var claims map[string]any
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return true, fmt.Errorf("failed to parse JWT payload: %w", err)
+		return true, err
 	}
 
 	exp, ok := claims["exp"].(float64)
@@ -113,51 +92,63 @@ func IsTokenExpired(token string) (bool, error) {
 	return time.Now().Unix() >= int64(exp), nil
 }
 
+// IsTokenRevoked reports whether the access token was issued before a privilege
+// revoke (not-before). Used for immediate invalidation after role downgrades.
+func IsTokenRevoked(token string) bool {
+	sub, err := ExtractSubjectFromToken(token)
+	if err != nil {
+		return false
+	}
+	iat, err := ExtractIssuedAtFromToken(token)
+	if err != nil {
+		return false
+	}
+	return GlobalTokenRevocations.IsRevoked(sub, iat)
+}
+
+func rolesForAuthz(ctx context.Context) []string {
+	token := GetTokenFromContext(ctx)
+	if token != "" && IsTokenRevoked(token) {
+		return nil
+	}
+	if liveRole, ok := GetLiveRoleFromContext(ctx); ok {
+		return []string{liveRole}
+	}
+	if token == "" {
+		return nil
+	}
+	roles, err := ExtractRolesFromToken(token)
+	if err != nil {
+		return nil
+	}
+	return roles
+}
+
 func IsUserAdmin(ctx context.Context) bool {
-	isAdmin := false
-	if token := GetTokenFromContext(ctx); token != "" {
-		if roles, err := ExtractRolesFromToken(token); err == nil {
-			for _, role := range roles {
-				if strings.EqualFold(role, "ADMIN") || strings.EqualFold(role, "OWNER") {
-					isAdmin = true
-					break
-				}
-			}
+	for _, role := range rolesForAuthz(ctx) {
+		if strings.EqualFold(role, "ADMIN") || strings.EqualFold(role, "OWNER") {
+			return true
 		}
 	}
-	return isAdmin
+	return false
 }
 
 // IsUserEditor reports whether the requesting user may edit product configuration
 // (sources, destinations, actions, etc.). This includes ADMIN, OWNER and MAINTAINER.
 // User management and other admin-only operations should keep using IsUserAdmin.
 func IsUserEditor(ctx context.Context) bool {
-	isEditor := false
-	if token := GetTokenFromContext(ctx); token != "" {
-		if roles, err := ExtractRolesFromToken(token); err == nil {
-			for _, role := range roles {
-				if strings.EqualFold(role, "ADMIN") || strings.EqualFold(role, "OWNER") || strings.EqualFold(role, "MAINTAINER") {
-					isEditor = true
-					break
-				}
-			}
+	for _, role := range rolesForAuthz(ctx) {
+		if strings.EqualFold(role, "ADMIN") || strings.EqualFold(role, "OWNER") || strings.EqualFold(role, "MAINTAINER") {
+			return true
 		}
 	}
-	return isEditor
+	return false
 }
 
-// HasOdigosRole reports whether the JWT carries at least one Odigos realm role
-// (owner, admin, maintainer, or viewer).
+// HasOdigosRole reports whether the caller has at least one Odigos realm role
+// (owner, admin, maintainer, or viewer), preferring the live role when present.
 func HasOdigosRole(ctx context.Context) bool {
-	token := GetTokenFromContext(ctx)
-	if token == "" {
-		return false
-	}
-	roles, err := ExtractRolesFromToken(token)
-	if err != nil {
-		return false
-	}
-	for _, role := range roles {
+	for _, role := range rolesForAuthz(ctx) {
 		if strings.EqualFold(role, "OWNER") ||
 			strings.EqualFold(role, "ADMIN") ||
 			strings.EqualFold(role, "MAINTAINER") ||
@@ -169,7 +160,7 @@ func HasOdigosRole(ctx context.Context) bool {
 }
 
 // RequireAdmin returns ErrForbidden unless the caller carries an ADMIN or OWNER
-// role in their JWT. Use this to guard access-management mutations (user CRUD,
+// role. Use this to guard access-management mutations (user CRUD,
 // password resets, identity providers) so they cannot be reached by lower-privilege
 // roles such as MAINTAINER or VIEWER, even via a direct API call.
 func RequireAdmin(ctx context.Context) error {
@@ -179,15 +170,18 @@ func RequireAdmin(ctx context.Context) error {
 	return nil
 }
 
-// RequireAuth returns ErrUnauthenticated unless the caller presents a non-expired
-// JWT that includes at least one Odigos role. Anonymous callers and authenticated
-// users with no mapped role are both rejected.
+// RequireAuth returns ErrUnauthenticated unless the caller presents a non-expired,
+// non-revoked JWT that includes at least one Odigos role. Anonymous callers and
+// authenticated users with no mapped role are both rejected.
 func RequireAuth(ctx context.Context) error {
 	token := GetTokenFromContext(ctx)
 	if token == "" {
 		return ErrUnauthenticated
 	}
 	if expired, err := IsTokenExpired(token); err != nil || expired {
+		return ErrUnauthenticated
+	}
+	if IsTokenRevoked(token) {
 		return ErrUnauthenticated
 	}
 	if !HasOdigosRole(ctx) {

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ROUTES } from '@/utils';
 import { useProxyStore } from '@/store';
 import { useComputePlatformsCRUD } from '../compute-platforms';
+import type { ComputePlatform } from '@/types';
 import { PlatformType, StatusType } from '@odigos/ui-kit/types';
 import { useOdigosApi } from '@odigos/ui-kit/contexts';
 import { ProgressKeys, useDataStreamStore, useProgressStore, useSetupStore } from '@odigos/ui-kit/store';
@@ -13,9 +14,17 @@ interface UseProxy {
   odigosVersion?: string;
   graphqlSchemaVersion?: string;
   platformType?: PlatformType;
-  selectProxy: (id: string) => void;
+  selectProxy: (id: string, fallback?: Pick<ComputePlatform, 'name' | 'odigosVersion' | 'graphqlSchemaVersion' | 'type'>) => void;
   clearProxy: () => void;
 }
+
+// Module-scoped so EVERY `useProxy()` instance (page, OverviewHeader, in-proxy
+// layout) honors the same grace window. `selectProxy` writes SELECTED_PROXY
+// while still on /connections, then `router.push(/overview)`. Any remount of a
+// `useProxy` consumer in that window used to re-run the out-of-proxy clear
+// effect and wipe the selection before navigation landed (Cypress stayed on
+// /connections).
+let suppressOutOfProxyClearUntil = 0;
 
 export const useProxy = (): UseProxy => {
   const router = useRouter();
@@ -59,21 +68,27 @@ export const useProxy = (): UseProxy => {
     resetProgress(ProgressKeys.Uninstrumenting);
   };
 
-  const selectProxy = (id: string) => {
+  const selectProxy = (id: string, fallback?: Pick<ComputePlatform, 'name' | 'odigosVersion' | 'graphqlSchemaVersion' | 'type'>) => {
+    // Prefer the live Apollo list; fall back to the clicked Connection so a
+    // briefly-empty `computePlatforms` observer cannot silently no-op the click.
     const found = computePlatforms.find((cp) => cp.id === id);
-    if (found) {
-      // Cache was already cleared when landing on /connections. Do not clear
-      // again here — only reset local UI stores, then navigate.
-      setProxyStore({
-        proxyID: id,
-        proxyName: found?.name,
-        odigosVersion: found?.odigosVersion,
-        graphqlSchemaVersion: found?.graphqlSchemaVersion ?? undefined,
-        platformType: found?.type,
-      });
-      resetStores({ clearApollo: false });
-      router.push(ROUTES.OVERVIEW);
-    }
+    const platform = found ?? (fallback ? { id, ...fallback } : undefined);
+    if (!platform) return;
+
+    // Suppress out-of-proxy clears until /overview mounts — see module note.
+    suppressOutOfProxyClearUntil = Date.now() + 5000;
+
+    // Cache was already cleared when landing on /connections. Do not clear
+    // again here — only reset local UI stores, then navigate.
+    setProxyStore({
+      proxyID: id,
+      proxyName: platform.name,
+      odigosVersion: platform.odigosVersion,
+      graphqlSchemaVersion: platform.graphqlSchemaVersion ?? undefined,
+      platformType: platform.type,
+    });
+    resetStores({ clearApollo: false });
+    router.push(ROUTES.OVERVIEW);
   };
 
   const clearProxy = (opts?: { skipRedirect?: boolean }) => {
@@ -108,6 +123,7 @@ export const useProxy = (): UseProxy => {
   useEffect(() => {
     if (!proxyStoreHydrated) return;
     if (isOutOfProxyPage) {
+      if (Date.now() < suppressOutOfProxyClearUntil) return;
       clearProxy({ skipRedirect: true });
     } else if (!proxyID) {
       clearProxy();
