@@ -776,3 +776,95 @@ func TestUnionAgentDirsIsStableAndDeduplicated(t *testing.T) {
 		}
 	}
 }
+
+func colonLoader() appendEnvVar {
+	return appendEnvVar{
+		name:    "PYTHONPATH",
+		pattern: "{{ORIGINAL_ENV_VALUE}}:{{ODIGOS_AGENTS_DIR}}/python",
+	}
+}
+
+func spaceLoader() appendEnvVar {
+	return appendEnvVar{
+		name:    "JAVA_TOOL_OPTIONS",
+		pattern: "{{ORIGINAL_ENV_VALUE}} -javaagent:{{ODIGOS_AGENTS_DIR}}/java/javaagent.jar",
+	}
+}
+
+// TestLoaderActivatedPinsSuffixForIaCAndExactMatchForManaged is the case plan_test.go calls out as
+// uncovered: a container that already had a loader value. Managed mode owns the whole string from the
+// snapshot. IaC mode only asks that our fragment is last — a prepend or mid-PYTHONPATH splice loads a
+// different agent first and must not read as conformant.
+func TestLoaderActivatedPinsSuffixForIaCAndExactMatchForManaged(t *testing.T) {
+	iac := ecsMarker{}
+	python := colonLoader()
+	ours := python.evaluate("")
+	if ours == "" {
+		t.Fatal("test setup: evaluate(\"\") must produce the Odigos fragment")
+	}
+
+	t.Run("iac suffix after customer value is activated", func(t *testing.T) {
+		if !loaderActivated("/app:"+ours, python, iac) {
+			t.Error("PYTHONPATH ending in the agent path must count as activated")
+		}
+	})
+	t.Run("iac fragment alone is activated", func(t *testing.T) {
+		if !loaderActivated(ours, python, iac) {
+			t.Error("a container that carried no prior value must count as activated when the live value is ours")
+		}
+	})
+	t.Run("iac prepend is not activated", func(t *testing.T) {
+		if loaderActivated(ours+":/app", python, iac) {
+			t.Error("agent path first, customer path last, must not count as activated — the customer copy wins")
+		}
+	})
+	t.Run("iac mid-string splice is not activated", func(t *testing.T) {
+		if loaderActivated("/app:"+ours+":/vendor", python, iac) {
+			t.Error("agent path in the middle of PYTHONPATH must not count as activated")
+		}
+	})
+	t.Run("iac substring without the separator is not activated", func(t *testing.T) {
+		if loaderActivated("/opt"+ours, python, iac) {
+			t.Error("a value that merely contains the fragment must not count as activated")
+		}
+	})
+
+	java := spaceLoader()
+	javaOurs := java.evaluate("")
+	t.Run("iac space-joined suffix is activated", func(t *testing.T) {
+		if !loaderActivated("-Xmx512m "+javaOurs, java, iac) {
+			t.Error("JAVA_TOOL_OPTIONS ending in the agent fragment must count as activated")
+		}
+	})
+	t.Run("iac space-joined prepend is not activated", func(t *testing.T) {
+		if loaderActivated(javaOurs+" -Xmx512m", java, iac) {
+			t.Error("agent fragment first on JAVA_TOOL_OPTIONS must not count as activated")
+		}
+	})
+
+	prior := "-Xmx512m"
+	managed := ecsMarker{Managed: true, PrevEnv: map[string]*string{"JAVA_TOOL_OPTIONS": &prior}}
+	exact := java.evaluate(prior)
+	t.Run("managed exact snapshot match is activated", func(t *testing.T) {
+		if !loaderActivated(exact, java, managed) {
+			t.Error("managed mode must accept the value rebuilt from the snapshot")
+		}
+	})
+	t.Run("managed extra suffix is not activated", func(t *testing.T) {
+		if loaderActivated(exact+" extra", java, managed) {
+			t.Error("managed mode owns the whole value; extra tokens are drift")
+		}
+	})
+	t.Run("managed customer-only value is not activated", func(t *testing.T) {
+		if loaderActivated(prior, java, managed) {
+			t.Error("the pre-Odigos snapshot value alone is not an activated loader")
+		}
+	})
+
+	t.Run("empty fragment is always activated", func(t *testing.T) {
+		empty := appendEnvVar{name: "FOO", pattern: ""}
+		if !loaderActivated("anything", empty, iac) {
+			t.Error("nothing to require means the loader check must pass")
+		}
+	})
+}
