@@ -28,6 +28,23 @@ func TestTokenRevocationStore(t *testing.T) {
 	}
 }
 
+func TestTokenRevocationStoreIgnoresEmptyUser(t *testing.T) {
+	store := NewTokenRevocationStore()
+	store.Revoke("", time.Now().Unix())
+	if store.NotBefore("") != 0 {
+		t.Fatal("empty userID must not store a not-before")
+	}
+}
+
+func TestTokenRevocationStoreDoesNotLowerNotBefore(t *testing.T) {
+	store := NewTokenRevocationStore()
+	store.Revoke("user-1", 200)
+	store.Revoke("user-1", 100)
+	if got := store.NotBefore("user-1"); got != 200 {
+		t.Fatalf("NotBefore() = %d, want 200 (must keep the later revoke)", got)
+	}
+}
+
 func TestRequireAuthRejectsRevokedToken(t *testing.T) {
 	const userID = "revoked-user"
 	t.Cleanup(func() {
