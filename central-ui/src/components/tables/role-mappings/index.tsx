@@ -70,9 +70,9 @@ export const RoleMappingsTable: React.FC = () => {
   const columns: TableProps['columns'] = useMemo(
     () => [
       { key: RoleMappingTableColumn.Icon, label: '', noSort: true, noFilter: true },
-      { key: RoleMappingTableColumn.DisplayName, label: STRINGS.DISPLAY_NAME, minWidth: 180, noSort: true, noFilter: true },
-      { key: RoleMappingTableColumn.Group, label: STRINGS.GROUP, minWidth: 240, noSort: true, noFilter: true },
-      { key: RoleMappingTableColumn.Role, label: STRINGS.ROLE, flex: 1, noSort: true, noFilter: true },
+      { key: RoleMappingTableColumn.DisplayName, label: STRINGS.DISPLAY_NAME, noSort: true, noFilter: true },
+      { key: RoleMappingTableColumn.Group, label: STRINGS.GROUP, noSort: true, noFilter: true },
+      { key: RoleMappingTableColumn.Role, label: STRINGS.ROLE, noSort: true, noFilter: true },
     ],
     [],
   );

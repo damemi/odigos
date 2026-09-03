@@ -8,14 +8,6 @@ export const GET_USERS = gql`
       username
       role
       needsPasswordChange
-      teams {
-        id
-        name
-      }
-      computePlatforms {
-        id
-        name
-      }
     }
   }
 `;

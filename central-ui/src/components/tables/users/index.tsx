@@ -68,8 +68,8 @@ export const UsersTable: React.FC = () => {
   const columns: TableProps['columns'] = useMemo(
     () => [
       { key: UserTableColumn.Icon, label: '', noSort: true, noFilter: true },
-      { key: UserTableColumn.User, label: UTILS.EMAIL, minWidth: 240, noSort: true, noFilter: true },
-      { key: UserTableColumn.Role, label: UTILS.ROLE, flex: 1, noSort: true, noFilter: true },
+      { key: UserTableColumn.User, label: UTILS.EMAIL, noSort: true, noFilter: true },
+      { key: UserTableColumn.Role, label: UTILS.ROLE, noSort: true, noFilter: true },
       // { key: UserTableColumn.Teams, label: UTILS.TEAMS },
     ],
     [],

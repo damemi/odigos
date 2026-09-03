@@ -2,19 +2,9 @@
 
 import React, { useState } from 'react';
 import { useUserStore } from '@/store';
-import { FlexRow } from '@odigos/ui-kit/components';
 import styled from 'styled-components';
 import { UsersTable, CreateUserModal, RoleMappingsTable, CreateRoleMappingModal } from '@/components';
-import { Button, ButtonSize, Segment, type SegmentProps, SegmentVariant } from '@odigos/ui-kit/components';
-
-const Container = styled.div`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  height: stretch;
-  padding: 12px;
-`;
+import { Button, ButtonSize, FlexRow, PageContent, Segment, type SegmentProps, SegmentVariant } from '@odigos/ui-kit/components';
 
 const PushRight = styled.div`
   margin-left: auto;
@@ -52,7 +42,7 @@ export default function Page() {
   const onClickCloseCreate = () => setCreateModalOpenFor(null);
 
   return (
-    <Container>
+    <PageContent>
       <FlexRow>
         <Segment variant={SegmentVariant.Underline} options={tabs} selected={activeTab} setSelected={setActiveTab} />
 
@@ -67,6 +57,6 @@ export default function Page() {
 
       <CreateUserModal isOpen={createModalOpenFor === AccessTab.Users} onClose={onClickCloseCreate} />
       <CreateRoleMappingModal isOpen={createModalOpenFor === AccessTab.RoleMappings} onClose={onClickCloseCreate} />
-    </Container>
+    </PageContent>
   );
 }
