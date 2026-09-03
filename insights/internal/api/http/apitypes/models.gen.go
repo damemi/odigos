@@ -1645,6 +1645,15 @@ type ListTransactionsParams struct {
 	// Kind Filter by transaction kind.
 	Kind TransactionKind `form:"kind,omitempty" json:"kind,omitempty"`
 
+	// WindowHours Relative lookback in hours ending at now (default 168 = 7d, max 2880 = 120d). Ignored when `from` is set.
+	WindowHours WindowHours `form:"window_hours,omitempty" json:"window_hours,omitempty"`
+
+	// From Absolute range start (RFC3339 or YYYY-MM-DD). When set, overrides `window_hours`. Span longer than 120d is clamped.
+	From FromTime `form:"from,omitempty" json:"from,omitempty"`
+
+	// To Absolute range end (RFC3339 or YYYY-MM-DD). Defaults to now when `from` is set without `to`.
+	To ToTime `form:"to,omitempty" json:"to,omitempty"`
+
 	// SortBy Column to sort by. Default `volume`. Use `last_seen` (with `sort_order=asc`) to surface inactive transactions first.
 	SortBy TransactionSortBy `form:"sort_by,omitempty" json:"sort_by,omitempty"`
 

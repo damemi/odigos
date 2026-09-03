@@ -99,6 +99,20 @@ func findingListFilterFromTimeParams(
 	return filter, nil
 }
 
+// transactionActiveWindowFromParams resolves last_seen bounds for GET /transactions.
+// Omitted inputs default to the same 7d lookback as findings list endpoints.
+func transactionActiveWindowFromParams(
+	windowHours apitypes.WindowHours,
+	from apitypes.FromTime,
+	to apitypes.ToTime,
+) (since, until time.Time, err error) {
+	tr, err := findingsTimeRangeFromParams(windowHours, from, to)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	return tr.From, tr.Until, nil
+}
+
 func writeBindError(c *gin.Context, err error) {
 	writeError(c, http.StatusBadRequest, fmt.Errorf("invalid query: %w", err))
 }

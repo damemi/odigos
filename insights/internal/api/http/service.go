@@ -340,6 +340,12 @@ func (a *API) ListTransactions(ctx context.Context, params apitypes.ListTransact
 		SortOrder: sortOrder,
 		Limit:     1000,
 	}.WithDefaults()
+	since, until, err := transactionActiveWindowFromParams(params.WindowHours, params.From, params.To)
+	if err != nil {
+		return apitypes.TransactionStatList{}, err
+	}
+	listParams.ActiveSince = since
+	listParams.ActiveUntil = until
 	stats, err := a.Repo.ListTransactionStats(ctx, listParams)
 	if err != nil {
 		return apitypes.TransactionStatList{}, err

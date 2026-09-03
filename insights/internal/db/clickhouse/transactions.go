@@ -165,6 +165,22 @@ func (r *Repo) ListTransactionStats(ctx context.Context, params repo.Transaction
 		}
 		args = append(args, params.Kind)
 	}
+	if !params.ActiveSince.IsZero() {
+		if where == "" {
+			where = "WHERE a.last_seen >= ?"
+		} else {
+			where += " AND a.last_seen >= ?"
+		}
+		args = append(args, params.ActiveSince)
+	}
+	if !params.ActiveUntil.IsZero() {
+		if where == "" {
+			where = "WHERE a.last_seen <= ?"
+		} else {
+			where += " AND a.last_seen <= ?"
+		}
+		args = append(args, params.ActiveUntil)
+	}
 	orderBy, err := transactionStatsOrderBy(params.SortBy, params.SortOrder)
 	if err != nil {
 		return nil, err

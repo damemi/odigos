@@ -134,6 +134,7 @@ export interface paths {
         /**
          * List transactions
          * @description **Use for:** transaction directory, service drill-down, sorting by volume or last_seen (e.g. find inactive transactions). Pass `namespace` + `service` together to scope to one service. Default sort is `volume` descending.
+         *     Optional `window_hours` or `from`/`to` filters to transactions whose `last_seen` falls in the range (excludes inactive / never-seen rows). Same semantics as findings list endpoints (default lookback 7d when omitted).
          *     **Not for:** page header on a known transaction — use `GET /transactions/{transaction_id}` instead (cheaper, no volume).
          */
         get: operations["listTransactions"];
@@ -2277,6 +2278,12 @@ export interface operations {
                 service?: string;
                 /** @description Filter by transaction kind. */
                 kind?: components["schemas"]["TransactionKind"];
+                /** @description Relative lookback in hours ending at now (default 168 = 7d, max 2880 = 120d). Ignored when `from` is set. */
+                window_hours?: components["parameters"]["WindowHours"];
+                /** @description Absolute range start (RFC3339 or YYYY-MM-DD). When set, overrides `window_hours`. Span longer than 120d is clamped. */
+                from?: components["parameters"]["FromTime"];
+                /** @description Absolute range end (RFC3339 or YYYY-MM-DD). Defaults to now when `from` is set without `to`. */
+                to?: components["parameters"]["ToTime"];
                 /** @description Column to sort by. Default `volume`. Use `last_seen` (with `sort_order=asc`) to surface inactive transactions first. */
                 sort_by?: components["parameters"]["TransactionSortBy"];
                 /** @description Sort direction. When omitted: `desc` for `volume`/`last_seen`, `asc` for string columns. */

@@ -3,6 +3,7 @@ package repo
 import (
 	"errors"
 	"fmt"
+	"time"
 )
 
 // ErrInvalidSort is returned when sort_by / sort_order is not in the whitelist.
@@ -34,6 +35,10 @@ type TransactionListParams struct {
 	SortBy    TransactionSortBy
 	SortOrder SortOrder
 	Limit     int
+	// ActiveSince/ActiveUntil restrict to transactions whose last_seen falls in
+	// [ActiveSince, ActiveUntil]. Zero values mean no bound on that end.
+	ActiveSince time.Time
+	ActiveUntil time.Time
 }
 
 // WithDefaults fills sort/limit defaults used by the product API.

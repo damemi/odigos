@@ -32,7 +32,8 @@ info:
     lookback, default 168 = 7d, max 2880 = 120d) or absolute `from`/`to`
     (RFC3339 or YYYY-MM-DD), plus `service`, `namespace`, `status`
     (open | dismissed | accepted — `accepted` is the shared affirmative status
-    for both anomalies and violations).
+    for both anomalies and guardrail violations). Same time params on
+    `GET /transactions` filter by `last_seen` (active in range only).
 
 servers:
   - url: /
@@ -200,6 +201,10 @@ paths:
         + `service` together to scope to one service. Default sort is
         `volume` descending.
 
+        Optional `window_hours` or `from`/`to` filters to transactions whose
+        `last_seen` falls in the range (excludes inactive / never-seen rows).
+        Same semantics as findings list endpoints (default lookback 7d when omitted).
+
         **Not for:** page header on a known transaction — use
         `GET /transactions/{transaction_id}` instead (cheaper, no volume).
       operationId: listTransactions
@@ -216,6 +221,9 @@ paths:
           in: query
           description: Filter by transaction kind.
           schema: { $ref: "#/components/schemas/TransactionKind" }
+        - $ref: "#/components/parameters/WindowHours"
+        - $ref: "#/components/parameters/FromTime"
+        - $ref: "#/components/parameters/ToTime"
         - $ref: "#/components/parameters/TransactionSortBy"
         - $ref: "#/components/parameters/SortOrder"
       responses:

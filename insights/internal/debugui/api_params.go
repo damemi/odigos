@@ -10,11 +10,14 @@ import (
 
 func listTransactionsParamsFromRequest(c *gin.Context) apitypes.ListTransactionsParams {
 	return apitypes.ListTransactionsParams{
-		Namespace: c.Query("namespace"),
-		Service:   c.Query("service"),
-		Kind:      apitypes.TransactionKind(c.Query("kind")),
-		SortBy:    apitypes.TransactionSortBy(c.Query("sort_by")),
-		SortOrder: apitypes.SortOrder(c.Query("sort_order")),
+		Namespace:   c.Query("namespace"),
+		Service:     c.Query("service"),
+		Kind:        apitypes.TransactionKind(c.Query("kind")),
+		WindowHours: apitypes.WindowHours(repo.ParseWindowHoursQuery(c.Query("window_hours"))),
+		From:        apitypes.FromTime(c.Query("from")),
+		To:          apitypes.ToTime(c.Query("to")),
+		SortBy:      apitypes.TransactionSortBy(c.Query("sort_by")),
+		SortOrder:   apitypes.SortOrder(c.Query("sort_order")),
 	}
 }
 
