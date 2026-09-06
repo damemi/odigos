@@ -15,9 +15,13 @@ import (
 	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 )
 
+type proxyMetaReader interface {
+	GetProxyMetaKeyValues(ctx context.Context) (redisclient.RedisHashFieldValuesByKey, error)
+}
+
 // ComputePlatformService provides helpers around compute platform state derived from proxy connection & metadata stored in Redis.
 type ComputePlatformService struct {
-	redis *redisclient.RedisClient
+	redis proxyMetaReader
 }
 
 func NewComputePlatformService(redis *redisclient.RedisClient) *ComputePlatformService {
