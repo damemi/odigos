@@ -83,7 +83,7 @@ spec:
         # inject ODIGOS_ONPREM_TOKEN into collectors. Use the OSS assert (no token).
         # Post-upgrade asserts (assert-odigos-upgraded*) cover the enterprise collector env.
         - assert:
-            timeout: 1m10s
+            timeout: 4m
             file: ../../common/assert/odigos-installed.yaml
       catch:
         - script:
@@ -146,10 +146,10 @@ spec:
     - name: Upgrade to HEAD version with the current compiled cli
       try:
         - script:
-            timeout: 1m10s
+            timeout: 2m
             content: ../../../../odigos/cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY
         - assert:
-            timeout: 3m20s
+            timeout: 4m
             file: assert-odigos-upgraded-with-custom-offsets.yaml
 
     - name: Assert simple demo apps ready after upgrade

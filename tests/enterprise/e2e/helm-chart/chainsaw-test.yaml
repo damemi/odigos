@@ -19,7 +19,7 @@ spec:
     - name: Install Odigos
       try:
         - script:
-            timeout: 1m10s
+            timeout: 2m
             content: |
               # use the helm chart from main repo which is expected to be in a sibling directory to this repo
               helm upgrade --install odigos \
@@ -61,7 +61,7 @@ spec:
     - name: Verify Odigos Installation
       try:
         - script:
-            timeout: 1m10s
+            timeout: 2m
             content: |
               echo "Starting Odigos version check..."
               export ACTUAL_VERSION=$(../../../../odigos/cli/odigos version --cluster)
@@ -69,11 +69,11 @@ spec:
               echo "Expected Version: $IMAGE_TAG"
 
         - assert:
-            timeout: 3m10s
+            timeout: 4m
             file: ../../common/assert/odigos-installed.yaml
 
         - assert:
-            timeout: 3m10s
+            timeout: 4m
             file: initial-go-offeset-job-applied.yaml
 
       catch:

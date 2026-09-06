@@ -29,7 +29,7 @@ spec:
               kubectl label namespace odigos-test odigos.io/system-object="true"
               ../../common/verify_odigos_installation.sh odigos-test
         - assert:
-            timeout: 1m10s
+            timeout: 4m
             file: ../../common/assert/odigos-installed.yaml
       catch:
         - script:

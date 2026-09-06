@@ -24,7 +24,7 @@ spec:
     - name: Install Odigos (non-root / unprivileged)
       try:
         - script:
-            timeout: 3m10s
+            timeout: 5m
             content: |
               echo "Installing Odigos (non-root) with tag $IMAGE_TAG"
               # use the helm chart from main repo which is expected to be in a sibling directory to this repo
@@ -52,7 +52,7 @@ spec:
     - name: Verify Odigos Installed as non-root / unprivileged
       try:
         - assert:
-            timeout: 3m10s
+            timeout: 4m
             file: 01-odigos-installed-non-root.yaml
       catch:
         - script:

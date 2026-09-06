@@ -463,6 +463,9 @@ jobs:
     timeout-minutes: 25
     strategy:
       fail-fast: false
+      # No max-parallel: readiness recheck + apply-timeout + install waits absorb
+      # control-plane load better than serializing the matrix (which stretched CI
+      # wall-clock). Reintroduce a cap only if signal:killed / OOM returns.
       matrix:
         kube-version:
           - "1.21.12"
@@ -624,13 +627,16 @@ jobs:
           version: "v0.25.0"
           cluster_name: kind
           config: kind-config.yaml
+          # Ephemeral GHA runners: don't fail the job if kind/docker cleanup races
+          # (e.g. "did not receive an exit event" on docker rm). See DEVOPS-83.
+          ignore_failed_clean: true
 
       - name: wait for cluster readiness
         if: steps.should-run.outputs.skip != 'true'
-        run: |
-          kubectl wait --for=condition=Ready node --all --timeout=180s
-          kubectl wait -n kube-system --for=condition=Ready pod --all --timeout=300s
-          kubectl rollout status -n kube-system deployment/coredns --timeout=300s
+        # DEVOPS-84: also require stable kube-apiserver /readyz + a write probe.
+        # Node/pod Ready alone can pass while apiserver/etcd still flap under load.
+        working-directory: odigos-enterprise
+        run: bash tests/common/wait_for_kind_ready.sh
 
       - name: Restore Odiglet Enterprise from Cache
         if: steps.should-run.outputs.skip != 'true'
@@ -806,7 +812,6 @@ jobs:
           kind load image-archive /tmp/ui-enterprise.tar
           kind load image-archive /tmp/collector-enterprise.tar
 
-
       - name: Load Central Components to Kind Cluster
         if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui' || matrix.test-scenario == 'central-auth-idp')
         run: |
@@ -853,6 +858,13 @@ jobs:
           echo "LATEST_RELEASE_TAG=$LATEST_RELEASE_TAG" >> $GITHUB_OUTPUT
           echo "Latest release tag for branch $BRANCH: $LATEST_RELEASE_TAG"
 
+      # Image cache restore / kind load can take ~1m; apiserver/etcd may flap in
+      # that window even after the post-create readiness gate passed.
+      - name: recheck cluster readiness before E2E
+        if: steps.should-run.outputs.skip != 'true'
+        working-directory: odigos-enterprise
+        run: bash tests/common/wait_for_kind_ready.sh
+
       - name: Run E2E Tests
         if: steps.should-run.outputs.skip != 'true'
         env:
@@ -869,9 +881,11 @@ jobs:
           # We're doing that to run the tests against the base branch and not always main
           sed -i "s|{{BASE_BRANCH}}|$BASE_BRANCH|g" odigos-enterprise/tests/e2e/${{ matrix.test-scenario }}/chainsaw-test.yaml
 
-          # Run chainsaw with the extracted minor version
-
-          chainsaw test odigos-enterprise/tests/e2e/${{ matrix.test-scenario }} --values - <<EOF
+          # Default apply timeout is 5s — too short when apiserver briefly flaps
+          # under runner load (context deadline exceeded on early APPLY).
+          chainsaw test odigos-enterprise/tests/e2e/${{ matrix.test-scenario }} \
+            --apply-timeout 30s \
+            --values - <<EOF
           k8sMinorVersion: ${MINOR_VERSION}
           customer: "${{ matrix.customer }}"
           EOF
@@ -886,6 +900,10 @@ jobs:
             echo "--- describe deploy $ns/$name ---"
             kubectl describe deploy -n "$ns" "$name" || true
           done
+          echo "==== Runner memory ===="; free -h || true
+          echo "==== dmesg OOM / kill hints ===="
+          (sudo dmesg -T 2>/dev/null || dmesg -T 2>/dev/null || true) | \
+            grep -Ei "killed process|out of memory|oom|Memory cgroup" | tail -n 80 || true
 
       - name: Run diagnose command
         if: failure() && steps.should-run.outputs.skip != 'true'
@@ -903,7 +921,12 @@ jobs:
 
   vulnerability-report:
     name: Generate Vulnerability Report
-    needs: [detect-changes, build-enterprise-components, build-oss-components-for-tests]
+    needs:
+      [
+        detect-changes,
+        build-enterprise-components,
+        build-oss-components-for-tests,
+      ]
     runs-on: ubuntu-latest
     if: always() && needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
     steps:

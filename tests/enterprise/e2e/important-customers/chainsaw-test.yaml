@@ -23,7 +23,7 @@ spec:
     - name: Install Odigos
       try:
         - script:
-            timeout: 1m10s
+            timeout: 2m
             env:
               - name: CUSTOMER
                 value: ($values.customer)
@@ -38,7 +38,7 @@ spec:
     - name: Verify Odigos Installation
       try:
         - script:
-            timeout: 1m10s
+            timeout: 2m
             content: |
               echo "Starting Odigos version check..."
               export ACTUAL_VERSION=$(../../../../odigos/cli/odigos version --cluster)
@@ -59,7 +59,7 @@ spec:
               BASH_EOF
 
         - assert:
-            timeout: 2m30s
+            timeout: 4m
             file: /tmp/odigos-installed-assert.yaml
 
       catch:

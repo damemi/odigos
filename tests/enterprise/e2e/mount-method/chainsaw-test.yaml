@@ -19,14 +19,14 @@ spec:
     - name: '[1 - Setup] Install Odigos'
       try:
         - script:
-            timeout: 3m10s
+            timeout: 5m
             content: |
               echo "Installing Odigos with tag $IMAGE_TAG"
               ../../../../odigos/cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-init-container
               kubectl label namespace odigos-test odigos.io/system-object="true"
               curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/verify_odigos_installation.sh | bash -s -- odigos-test
         - assert:
-            timeout: 1m10s
+            timeout: 4m
             file: ../../common/assert/odigos-installed-no-device-plugin.yaml
 
     - name: '[1 - Setup] Assert config set successfully with init container mount method'
