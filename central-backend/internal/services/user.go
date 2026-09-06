@@ -219,6 +219,16 @@ func (svc *UserService) DeleteUser(ctx context.Context, userID string) (*model.G
 		return nil, err
 	}
 
+	// Removing the account from Keycloak does not invalidate access tokens already
+	// issued to it: authz here is offline, so a deleted user's JWT keeps satisfying
+	// role checks from its own claims for the rest of its lifetime (12h by default,
+	// see consts.GetAccessTokenLifespanSeconds). Revoke first — while the account
+	// still exists for the Keycloak-side calls — so the deleted user is locked out
+	// immediately, the same way a role downgrade already is.
+	if err := svc.revokeUserAccess(adminToken, userID); err != nil {
+		logger.Log.Warn("Failed to revoke access before deleting user", "userID", userID, "error", err)
+	}
+
 	err = svc.kcUser.DeleteUserByID(adminToken, userID)
 	if err != nil {
 		return nil, err
