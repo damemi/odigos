@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
 )
@@ -120,6 +121,55 @@ func TestLearningConfig_For_ZeroPolicyFallbacks(t *testing.T) {
 	if got := cfg.For("D99_unknown"); !reflect.DeepEqual(got, repo.LearningPolicy{}) {
 		t.Errorf("unknown class should return the zero policy")
 	}
+}
+
+func TestTimeSweepCutoffs(t *testing.T) {
+	now := time.Date(2026, 9, 5, 10, 0, 0, 0, time.UTC)
+
+	t.Run("nil and empty skip the sweep", func(t *testing.T) {
+		var nilCfg *LearningConfig
+		if _, ok := nilCfg.timeSweepCutoffs(now); ok {
+			t.Fatal("nil config must skip the DB sweep")
+		}
+		empty := newLearningConfig(map[repo.DeviationClass]repo.LearningPolicy{})
+		if _, ok := empty.timeSweepCutoffs(now); ok {
+			t.Fatal("no time conditions must skip the DB sweep")
+		}
+		countOnly := newLearningConfig(map[repo.DeviationClass]repo.LearningPolicy{
+			repo.D1CallEdges: {Conditions: []repo.LearningCondition{
+				{Type: repo.ConditionMinObservations, MinObservations: 50},
+			}},
+		})
+		if _, ok := countOnly.timeSweepCutoffs(now); ok {
+			t.Fatal("observation-only policies must not scan unpromoted baselines")
+		}
+	})
+
+	t.Run("takes the most permissive minutes across policies", func(t *testing.T) {
+		cfg := newLearningConfig(map[repo.DeviationClass]repo.LearningPolicy{
+			repo.D1CallEdges: {Conditions: []repo.LearningCondition{
+				{Type: repo.ConditionMinDuration, MinDurationMinutes: 60},
+				{Type: repo.ConditionStableDuration, StableMinutes: 30},
+			}},
+			repo.D3Latency: {Conditions: []repo.LearningCondition{
+				{Type: repo.ConditionMinDuration, MinDurationMinutes: 10},
+				{Type: repo.ConditionStableDuration, StableMinutes: 90},
+			}},
+		})
+		got, ok := cfg.timeSweepCutoffs(now)
+		if !ok {
+			t.Fatal("expected cutoffs when any policy uses a time condition")
+		}
+		if !got.MinDurationEnabled || !got.StableDurationEnabled {
+			t.Fatalf("both time conditions should be enabled, got %+v", got)
+		}
+		if !got.MinDurationCutoff.Equal(now.Add(-10 * time.Minute)) {
+			t.Fatalf("min-duration cutoff = %s, want now-10m (the smaller window)", got.MinDurationCutoff)
+		}
+		if !got.StableDurationCutoff.Equal(now.Add(-30 * time.Minute)) {
+			t.Fatalf("stable cutoff = %s, want now-30m (the smaller window)", got.StableDurationCutoff)
+		}
+	})
 }
 
 // listErrRepo wraps the in-memory fake but fails ListLearningPolicies, to
