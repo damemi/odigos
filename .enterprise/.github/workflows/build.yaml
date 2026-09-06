@@ -56,6 +56,7 @@ jobs:
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 #v3.0.2
         id: filter
         with:
+          list-files: json
           filters: |
             central:
               - 'central-backend/**'
@@ -73,26 +74,25 @@ jobs:
               - 'central-backend/**'
               - 'tests/e2e/central-auth-idp/**'
               - 'tests/common/assert/odigos-central-installed.yaml'
-            outside-connectors:
+            changed:
               - '**'
-              - '!connectors/**'
-              - '!connector-postgres/**'
-              - '!connector-runtime/**'
 
       - name: Check connector-only changes
         id: connector-only
         env:
-          OUTSIDE: ${{ steps.filter.outputs.outside-connectors }}
+          CHANGED_FILES: ${{ steps.filter.outputs.changed_files }}
         run: |
-          # OUTSIDE is true only when a changed file lives outside the connector
-          # directories. When it is false, every change is confined to one or more
-          # connector dirs, so we can skip the odigos-central, odigos-enterprise,
-          # and k8s tests.
-          if [ "$OUTSIDE" = "true" ]; then
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          else
+          if jq -e '
+            length > 0 and all(.[];
+              startswith("connectors/") or
+              startswith("connector-postgres/") or
+              startswith("connector-runtime/")
+            )
+          ' <<< "$CHANGED_FILES" > /dev/null; then
             echo "Skipping odigos-central, odigos-enterprise, and k8s tests - changes are only in connector directories"
             echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
   unit-tests:
@@ -534,8 +534,11 @@ jobs:
       - name: Check if test should run
         id: should-run
         run: |
+          if [[ "${{ needs.detect-changes.outputs.skip-enterprise-k8s }}" == "true" ]]; then
+            echo "Skipping ${{ matrix.test-scenario }} - changes are only in connector directories"
+            echo "skip=true" >> $GITHUB_OUTPUT
           # central-auth-idp only covers the backend's Keycloak integration
-          if [[ "${{ matrix.test-scenario }}" == "central-auth-idp" ]]; then
+          elif [[ "${{ matrix.test-scenario }}" == "central-auth-idp" ]]; then
             if [[ "${{ needs.detect-changes.outputs.central-backend }}" != "true" ]]; then
               echo "Skipping central-auth-idp - no central-backend files changed"
               echo "skip=true" >> $GITHUB_OUTPUT
