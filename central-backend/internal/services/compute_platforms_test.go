@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/consts"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
 )
@@ -105,7 +106,7 @@ func TestGetAllProxyMetadata_ParsesTwoPartKeysAndSkipsMalformedKeys(t *testing.T
 	if twoPartMeta.PlatformName != "platform-a" {
 		t.Fatalf("expected platform name platform-a, got %q", twoPartMeta.PlatformName)
 	}
-	if twoPartMeta.PlatformType != string(consts.PlatformTypeVM) {
+	if twoPartMeta.PlatformType != consts.PlatformTypeVM {
 		t.Fatalf("expected platform type %q, got %q", consts.PlatformTypeVM, twoPartMeta.PlatformType)
 	}
 	if twoPartMeta.ConnectedAt != 1712345 {
@@ -142,5 +143,89 @@ func TestGetAllProxyMetadata_PropagatesReaderErrors(t *testing.T) {
 	}
 	if metaByProxyID != nil {
 		t.Fatalf("expected nil metadata map when reader returns error")
+	}
+}
+
+func TestApplyProxyMetaToComputePlatform_PopulatesUnknownValues(t *testing.T) {
+	cp := &model.ComputePlatform{
+		ID:            "proxy-1",
+		Name:          consts.UnknownValue,
+		OdigosVersion: consts.UnknownValue,
+		Type:          string(consts.PlatformTypeK8s),
+		Status:        string(consts.StatusConnected),
+		Users:         []*model.User{},
+		Teams:         []*model.Team{},
+	}
+	meta := &redisclient.ProxyMetadata{
+		PlatformName:         "production-cluster",
+		PlatformType:         consts.PlatformTypeVM,
+		OdigosVersion:        "v1.2.3",
+		GraphQLSchemaVersion: "gql-1",
+		ConnectedAt:          10,
+		LastSeenAt:           25,
+	}
+
+	applyProxyMetaToComputePlatform(cp, meta)
+
+	if cp.Name != "production-cluster" {
+		t.Errorf("expected name to be populated from metadata, got %q", cp.Name)
+	}
+	if cp.OdigosVersion != "v1.2.3" {
+		t.Errorf("expected odigos version to be populated from metadata, got %q", cp.OdigosVersion)
+	}
+	if cp.GraphqlSchemaVersion == nil || *cp.GraphqlSchemaVersion != "gql-1" {
+		t.Errorf("expected graphql schema version to be populated from metadata, got %+v", cp.GraphqlSchemaVersion)
+	}
+	if cp.Type != string(consts.PlatformTypeVM) {
+		t.Errorf("expected platform type vm, got %q", cp.Type)
+	}
+	if cp.ConnectedAt == nil || *cp.ConnectedAt != 10000 {
+		t.Fatalf("expected connectedAt to be set to 10000ms, got %+v", cp.ConnectedAt)
+	}
+	if cp.LastSeenAt == nil || *cp.LastSeenAt != 25000 {
+		t.Fatalf("expected lastSeenAt to be set to 25000ms, got %+v", cp.LastSeenAt)
+	}
+}
+
+func TestApplyProxyMetaToComputePlatform_PreservesKnownValuesAndSkipsZeroTimestamps(t *testing.T) {
+	existingSchema := "existing-schema"
+	cp := &model.ComputePlatform{
+		ID:                   "proxy-2",
+		Name:                 "existing-name",
+		OdigosVersion:        "v9.9.9",
+		GraphqlSchemaVersion: &existingSchema,
+		Type:                 string(consts.PlatformTypeVM),
+		Status:               string(consts.StatusConnected),
+		Users:                []*model.User{},
+		Teams:                []*model.Team{},
+	}
+	meta := &redisclient.ProxyMetadata{
+		PlatformName:         "new-name",
+		PlatformType:         consts.PlatformTypeK8s,
+		OdigosVersion:        "v0.0.1",
+		GraphQLSchemaVersion: "new-schema",
+		ConnectedAt:          0,
+		LastSeenAt:           0,
+	}
+
+	applyProxyMetaToComputePlatform(cp, meta)
+
+	if cp.Name != "existing-name" {
+		t.Errorf("expected name to remain unchanged, got %q", cp.Name)
+	}
+	if cp.OdigosVersion != "v9.9.9" {
+		t.Errorf("expected odigos version to remain unchanged, got %q", cp.OdigosVersion)
+	}
+	if cp.GraphqlSchemaVersion == nil || *cp.GraphqlSchemaVersion != "existing-schema" {
+		t.Errorf("expected graphql schema version to remain unchanged, got %+v", cp.GraphqlSchemaVersion)
+	}
+	if cp.Type != string(consts.PlatformTypeK8s) {
+		t.Errorf("expected platform type to be updated to k8s, got %q", cp.Type)
+	}
+	if cp.ConnectedAt != nil {
+		t.Errorf("expected connectedAt to remain nil for zero timestamp, got %+v", cp.ConnectedAt)
+	}
+	if cp.LastSeenAt != nil {
+		t.Errorf("expected lastSeenAt to remain nil for zero timestamp, got %+v", cp.LastSeenAt)
 	}
 }
