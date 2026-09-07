@@ -98,7 +98,9 @@ jobs:
   unit-tests:
     name: Unit Tests (${{ matrix.module }})
     needs: detect-changes
-    if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
+    # This job is a required check, so on connector-only PRs it must report success
+    # rather than "skipped" - a skipped check does not satisfy a ruleset that names
+    # it. The job therefore always runs and every step below no-ops instead.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -108,17 +110,30 @@ jobs:
         # central-backend's `go test ./...` does not reach them.
         module: [central-backend, mcp, ui]
     steps:
+      - name: Check if tests should run
+        id: should-run
+        run: |
+          if [[ "${{ needs.detect-changes.outputs.skip-enterprise-k8s }}" == "true" ]]; then
+            echo "Skipping ${{ matrix.module }} unit tests - changes are only in connector directories"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        if: steps.should-run.outputs.skip != 'true'
         with:
           persist-credentials: false
 
       - name: Set up Go
+        if: steps.should-run.outputs.skip != 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e #v7.0.0
         with:
           go-version-file: "${{ matrix.module }}/go.mod"
           cache-dependency-path: "${{ matrix.module }}/go.sum"
 
       - name: Run unit tests
+        if: steps.should-run.outputs.skip != 'true'
         # The ui module pins OSS at the odigos commit that carries the importable
         # frontend/server package and McpAccessMode; -mod=mod lets the module
         # graph resolve it (and fall back to a direct fetch) until that lands in a
@@ -185,7 +200,9 @@ jobs:
   build-enterprise-components:
     name: build-enterprise-components (${{ matrix.service }}${{ matrix.rhel == 'true' && ', rhel' || '' }}${{ matrix.extended == 'true' && ', extended' || '' }})
     needs: [detect-changes, resolve-base-branch]
-    if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
+    # This job is a required check, so on connector-only PRs it must report success
+    # rather than "skipped" - a skipped check does not satisfy a ruleset that names
+    # it. The job therefore always runs and every step below no-ops instead.
     runs-on: depot-ubuntu-24.04-4
     env:
       BASE_BRANCH: ${{ needs.resolve-base-branch.outputs.base_branch }}
@@ -221,22 +238,37 @@ jobs:
             extended: "true"
 
     steps:
+      - name: Check if build should run
+        id: should-run
+        run: |
+          if [[ "${{ needs.detect-changes.outputs.skip-enterprise-k8s }}" == "true" ]]; then
+            echo "Skipping ${{ matrix.service }} build - changes are only in connector directories"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Print tests run info
+        if: steps.should-run.outputs.skip != 'true'
         run: |
           echo "Image tag: $IMAGE_TAG"
           echo "Base OSS branch: $BASE_BRANCH"
 
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        if: steps.should-run.outputs.skip != 'true'
         with:
           persist-credentials: false
       - name: Set up Docker Buildx
+        if: steps.should-run.outputs.skip != 'true'
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c #v4.2.0
       - name: Cache Docker Layers
+        if: steps.should-run.outputs.skip != 'true'
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
           path: ${{ matrix.service }}-enterprise-cache
           key: ${{ github.run_id }}-${{ matrix.service }}-docker-layers
       - name: Build Image
+        if: steps.should-run.outputs.skip != 'true'
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a #v7.3.0
         with:
           file: >-
@@ -268,16 +300,19 @@ jobs:
                 matrix.rhel == 'true' && 'rhel' ||
                 '' }}
       - name: Save enterprise component to cache
+        if: steps.should-run.outputs.skip != 'true'
         uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
           path: /tmp/${{ matrix.service }}-enterprise${{ matrix.extended == 'true' && '-extended' || '' }}.tar
           key: ${{ github.run_id }}-${{ matrix.service }}-enterprise-${{ matrix.extended == 'true' && 'extended' || (matrix.rhel == 'true' && 'rhel-certified' || 'standard') }}
 
       - name: Load Docker image for scanning
+        if: steps.should-run.outputs.skip != 'true'
         run: docker load -i /tmp/${{ matrix.service }}-enterprise${{ matrix.extended == 'true' && '-extended' || '' }}.tar
 
       - name: Scan image for vulnerabilities
         id: scan
+        if: steps.should-run.outputs.skip != 'true'
         uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
           image: registry.odigos.io/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.IMAGE_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
@@ -285,7 +320,7 @@ jobs:
         continue-on-error: true
 
       - name: Save scan JSON results
-        if: always()
+        if: always() && steps.should-run.outputs.skip != 'true'
         env:
           RESULTS_FILE: ${{ steps.scan.outputs.results-file }}
         run: |
@@ -302,7 +337,7 @@ jobs:
           jq --arg img "$IMAGE_NAME" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/${IMAGE_NAME}.json
 
       - name: Upload scan results JSON
-        if: always()
+        if: always() && steps.should-run.outputs.skip != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
         with:
           name: vuln-scan-result-${{ matrix.service }}-${{ matrix.extended == 'true' && 'extended' || (matrix.rhel == 'true' && 'rhel' || 'standard') }}-${{ github.sha }}.json
@@ -311,12 +346,25 @@ jobs:
 
   build-oss-components-for-tests:
     needs: [detect-changes, resolve-base-branch]
-    if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
+    # This job is a required check, so on connector-only PRs it must report success
+    # rather than "skipped" - a skipped check does not satisfy a ruleset that names
+    # it. The job therefore always runs and every step below no-ops instead.
     runs-on: depot-ubuntu-24.04-4
     env:
       BASE_BRANCH: ${{ needs.resolve-base-branch.outputs.base_branch }}
     steps:
+      - name: Check if build should run
+        id: should-run
+        run: |
+          if [[ "${{ needs.detect-changes.outputs.skip-enterprise-k8s }}" == "true" ]]; then
+            echo "Skipping OSS component build - changes are only in connector directories"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout Odigos OSS
+        if: steps.should-run.outputs.skip != 'true'
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
           repository: odigos-io/odigos
@@ -326,6 +374,7 @@ jobs:
 
       - name: Cache built OSS components
         id: cache-oss-components
+        if: steps.should-run.outputs.skip != 'true'
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
           path: |
@@ -336,14 +385,14 @@ jobs:
           key: ${{ github.run_id }}-odigos-oss-components
 
       - name: Set up Go # Needed to build the CLI
-        if: steps.cache-oss-components.outputs.cache-hit != 'true'
+        if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e #v7.0.0
         with:
           go-version-file: "odigos/cli/go.mod"
           cache-dependency-path: "odigos/cli/go.sum"
 
       - name: Build Odigos CLI
-        if: steps.cache-oss-components.outputs.cache-hit != 'true'
+        if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
           cd odigos/cli
           TAG=0.0.0-e2e-test
@@ -354,7 +403,7 @@ jobs:
             -o /tmp/odigos-cli
 
       - name: Build OSS Odigos Components Used in e2e Tests
-        if: steps.cache-oss-components.outputs.cache-hit != 'true'
+        if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
           cd odigos
           # Autoscaler + scheduler only. Collector is built enterprise-side
@@ -362,21 +411,22 @@ jobs:
           TAG=${{ env.IMAGE_TAG }} TAG=e2e-test ORG=registry.odigos.io make -j 2 build-autoscaler build-scheduler
 
       - uses: ko-build/setup-ko@v0.9
+        if: steps.should-run.outputs.skip != 'true'
       - name: Build Odigos CLI Image
-        if: steps.cache-oss-components.outputs.cache-hit != 'true'
+        if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
           cd odigos
           TAG=${{ env.IMAGE_TAG }} TAG=e2e-test ORG=registry.odigos.io make build-cli-image
 
       - name: Save Docker images as tar files
-        if: steps.cache-oss-components.outputs.cache-hit != 'true'
+        if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
           docker save registry.odigos.io/odigos-autoscaler:${{ env.IMAGE_TAG }} -o /tmp/odigos-autoscaler.tar
           docker save registry.odigos.io/odigos-scheduler:${{ env.IMAGE_TAG }} -o /tmp/odigos-scheduler.tar
           docker save registry.odigos.io/odigos-cli:${{ env.IMAGE_TAG }} -o /tmp/odigos-cli.tar
 
       - name: Scan autoscaler image for vulnerabilities
-        if: steps.cache-oss-components.outputs.cache-hit != 'true'
+        if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
         id: scan-autoscaler
         uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
@@ -385,7 +435,7 @@ jobs:
         continue-on-error: true
 
       - name: Save autoscaler scan JSON
-        if: always() && steps.cache-oss-components.outputs.cache-hit != 'true'
+        if: always() && steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
         env:
           RESULTS_FILE: ${{ steps.scan-autoscaler.outputs.results-file }}
         run: |
@@ -397,7 +447,7 @@ jobs:
           jq --arg img "odigos-autoscaler" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-autoscaler.json
 
       - name: Scan scheduler image for vulnerabilities
-        if: steps.cache-oss-components.outputs.cache-hit != 'true'
+        if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
         id: scan-scheduler
         uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
@@ -406,7 +456,7 @@ jobs:
         continue-on-error: true
 
       - name: Save scheduler scan JSON
-        if: always() && steps.cache-oss-components.outputs.cache-hit != 'true'
+        if: always() && steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
         env:
           RESULTS_FILE: ${{ steps.scan-scheduler.outputs.results-file }}
         run: |
@@ -418,7 +468,7 @@ jobs:
           jq --arg img "odigos-scheduler" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-scheduler.json
 
       - name: Scan cli image for vulnerabilities
-        if: steps.cache-oss-components.outputs.cache-hit != 'true'
+        if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
         id: scan-cli
         uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
@@ -427,7 +477,7 @@ jobs:
         continue-on-error: true
 
       - name: Save cli scan JSON
-        if: always() && steps.cache-oss-components.outputs.cache-hit != 'true'
+        if: always() && steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
         env:
           RESULTS_FILE: ${{ steps.scan-cli.outputs.results-file }}
         run: |
@@ -439,7 +489,7 @@ jobs:
           jq --arg img "odigos-cli" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-cli.json
 
       - name: Upload OSS scan results JSON
-        if: always()
+        if: always() && steps.should-run.outputs.skip != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
         with:
           name: vuln-scan-result-oss-components.json
@@ -453,7 +503,11 @@ jobs:
       - resolve-base-branch
       - build-enterprise-components
       - build-oss-components-for-tests
-    if: needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
+    # This job is a required check, so on connector-only PRs it must report success
+    # rather than "skipped" - a skipped check does not satisfy a ruleset that names
+    # it. No job-level condition here on purpose: the jobs above always run too, so
+    # the default "run when every dependency succeeded" semantics hold, and the
+    # should-run step below turns every scenario into a no-op on connector-only PRs.
     runs-on: depot-ubuntu-24.04-4
     env:
       BASE_BRANCH: ${{ needs.resolve-base-branch.outputs.base_branch }}
@@ -830,6 +884,7 @@ jobs:
 
       - name: Get latest release tag for branch from Helm
         id: get-latest-tag
+        if: steps.should-run.outputs.skip != 'true'
         run: |
           echo "📦 Updating Helm repositories..."
           helm repo add odigos https://odigos-io.github.io/odigos/ || true
@@ -931,9 +986,23 @@ jobs:
         build-oss-components-for-tests,
       ]
     runs-on: ubuntu-latest
-    if: always() && needs.detect-changes.outputs.skip-enterprise-k8s != 'true'
+    # This job is a required check, so on connector-only PRs it must report success
+    # rather than "skipped" - a skipped check does not satisfy a ruleset that names
+    # it. The job therefore always runs and every step below no-ops instead.
+    if: always()
     steps:
+      - name: Check if report should run
+        id: should-run
+        run: |
+          if [[ "${{ needs.detect-changes.outputs.skip-enterprise-k8s }}" == "true" ]]; then
+            echo "Skipping vulnerability report - changes are only in connector directories"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Download all scan JSON results
+        if: steps.should-run.outputs.skip != 'true'
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 #v4.1.8
         with:
           pattern: vuln-scan-result-*
@@ -941,6 +1010,7 @@ jobs:
           merge-multiple: true
 
       - name: Zip individual scan results
+        if: steps.should-run.outputs.skip != 'true'
         run: |
           if [ -d "scan-results" ] && ls scan-results/*.json 1> /dev/null 2>&1; then
             zip -j scan-results.zip scan-results/*.json
@@ -951,6 +1021,7 @@ jobs:
           fi
 
       - name: Upload scan results
+        if: steps.should-run.outputs.skip != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
         with:
           name: vulnerability-report
