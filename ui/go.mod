@@ -7,7 +7,7 @@ require (
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/api v1.36.0-pre9.0.20260903115356-b9930ee30945
 	github.com/odigos-io/odigos/common v1.36.0-pre9.0.20260903115356-b9930ee30945
-	github.com/odigos-io/odigos/frontend v1.36.0-pre9.0.20260903115356-b9930ee30945
+	github.com/odigos-io/odigos/frontend v1.36.0-pre9.0.20260903133859-a006c57814b5
 	github.com/odigos-io/odigos/profiles v1.36.0-pre9.0.20260903115356-b9930ee30945
 	k8s.io/klog/v2 v2.140.0
 	sigs.k8s.io/controller-runtime v0.24.1
@@ -417,7 +417,7 @@ replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
 replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 
-replace github.com/odigos-io/odigos/frontend => github.com/odigos-io/odigos/frontend v1.36.0-pre9.0.20260903115356-b9930ee30945
+replace github.com/odigos-io/odigos/frontend => github.com/odigos-io/odigos/frontend v1.36.0-pre9.0.20260903133859-a006c57814b5
 
 replace k8s.io/cloud-provider => k8s.io/cloud-provider v0.35.0
 

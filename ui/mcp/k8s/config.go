@@ -145,11 +145,10 @@ func setComponentLogLevelHandler(deps Deps) server.ToolHandlerFunc {
 func updateRemoteConfigHandler(deps Deps) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		dryRun := boolArg(req, "dry_run", true)
-		cfg := &common.OdigosConfiguration{}
 		changed := map[string]any{}
-		if dp := boolArgPtr(req, "rollout_automatic_disabled"); dp != nil {
-			cfg.Rollout = &common.RolloutConfiguration{AutomaticRolloutDisabled: dp}
-			changed["rollout.automaticRolloutDisabled"] = *dp
+		rolloutDisabled := boolArgPtr(req, "rollout_automatic_disabled")
+		if rolloutDisabled != nil {
+			changed["rollout.automaticRolloutDisabled"] = *rolloutDisabled
 		}
 		if len(changed) == 0 {
 			return withGuidance(map[string]any{"action": "noop"}, "Nothing to change; supply at least one supported field.", nil)
@@ -157,7 +156,14 @@ func updateRemoteConfigHandler(deps Deps) server.ToolHandlerFunc {
 		if dryRun {
 			return withGuidance(map[string]any{"action": "update_remote_config", "would_change": changed}, "Dry-run.", nil)
 		}
-		if _, err := services.UpdateRemoteConfig(ctx, cfg); err != nil {
+		if err := services.UpdateRemoteConfig(ctx, func(cfg *common.OdigosConfiguration) {
+			if rolloutDisabled != nil {
+				if cfg.Rollout == nil {
+					cfg.Rollout = &common.RolloutConfiguration{}
+				}
+				cfg.Rollout.AutomaticRolloutDisabled = rolloutDisabled
+			}
+		}); err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("update remote config: %v", err)), nil
 		}
 		return withGuidance(map[string]any{"action": "updated", "changed": changed}, "Remote config applied.", nil)
