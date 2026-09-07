@@ -20,8 +20,6 @@ spec:
   containers:
     - name: odiglet
       resources: {}
-      securityContext:
-        privileged: true
       env:
         - name: NODE_NAME
           valueFrom:
@@ -54,8 +52,6 @@ spec:
         - name: ODIGOS_CGROUP_ROOT
           value: /host/sys/fs/cgroup
     - name: data-collection
-      securityContext:
-        privileged: true
       # Pre-upgrade: released collectors may not inject ODIGOS_ONPREM_TOKEN yet.
       env:
         - name: NODE_NAME

@@ -5,7 +5,7 @@ metadata:
 spec:
   description: >
     This e2e test installs Odigos in a hardened / non-privileged configuration
-    (odiglet.unPrivileged=true, odiglet.runAsNonRoot=true, odiglet.noHostPathMounts=true,
+    (odiglet.runAsNonRoot=true, odiglet.noHostPathMounts=true,
     instrumentor.mountMethod=k8s-init-container, signals={traces}) and verifies that odiglet
     comes up healthy as a non-root, non-privileged workload and that distributed traces still
     arrive end-to-end.
@@ -34,7 +34,6 @@ spec:
                 --namespace odigos-test \
                 --set image.tag=$IMAGE_TAG \
                 --set onPremToken=$ODIGOS_API_KEY \
-                --set odiglet.unPrivileged=true \
                 --set odiglet.runAsNonRoot=true \
                 --set odiglet.noHostPathMounts=true \
                 --set instrumentor.mountMethod=k8s-init-container \

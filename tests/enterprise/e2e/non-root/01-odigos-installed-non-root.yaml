@@ -81,15 +81,12 @@ spec:
   initContainers:
     - name: odigos-agents-image-pull
   containers:
-    # unPrivileged=true: odiglet drops ALL and adds only the eBPF capabilities it needs.
     - name: odiglet
       securityContext:
         privileged: false
         capabilities:
           drop:
             - ALL
-    # signals={traces} only (no logs/metrics), so data-collection is unprivileged too
-    # and drops ALL caps, adding back only what the eBPF node collector needs.
     - name: data-collection
       securityContext:
         privileged: false

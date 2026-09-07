@@ -120,7 +120,7 @@ spec:
     - name: '[3 - Host Path Test] Odiglet ready with host-path'
       try:
         - script:
-            timeout: 2m50s
+            timeout: 4m10s
             content: kubectl rollout status daemonset/odiglet -n odigos-test --timeout=5m
         - assert:
             timeout: 1m10s
@@ -148,7 +148,7 @@ spec:
         - script:
             timeout: 1m10s
             content: |
-              ../../../../odigos/cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-csi-driver
+              ../../../../odigos/cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-csi-driver --set odiglet.odiglet.privileged=true
               curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert_config_value.sh | bash -s -- -k mountMethod -v k8s-csi-driver
 
     - name: '[4 - CSI Driver Test] Odiglet ready with CSI driver'

@@ -76,10 +76,10 @@ spec:
     - image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
       resources: {}
       securityContext:
-        privileged: true
+        privileged: false
   (containers[?name=='data-collection']):
     - securityContext:
-        privileged: true
+        privileged: false
       env:
         - name: NODE_NAME
           valueFrom:

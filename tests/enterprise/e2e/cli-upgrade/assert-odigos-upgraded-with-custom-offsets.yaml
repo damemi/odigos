@@ -75,7 +75,7 @@ spec:
   (containers[?name=='odiglet']):
     - resources: {}
       securityContext:
-        privileged: true
+        privileged: false
       image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
       env:
         - name: NODE_NAME
@@ -110,7 +110,7 @@ spec:
           value: /host/sys/fs/cgroup
   (containers[?name=='data-collection']):
     - securityContext:
-        privileged: true
+        privileged: false
       env:
         - name: NODE_NAME
           valueFrom:
@@ -185,11 +185,11 @@ spec:
   (containers[?name=='odiglet']):
     - resources: {}
       securityContext:
-        privileged: true
+        privileged: false
       image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
   (containers[?name=='data-collection']):
     - securityContext:
-        privileged: true
+        privileged: false
       env:
         - name: NODE_NAME
           valueFrom:
