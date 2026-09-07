@@ -29,7 +29,7 @@ func (r *Repo) InsertObservation(ctx context.Context, obs repo.Observation) erro
 	return nil
 }
 
-// Meta-only columns for list paths. raw_otlp is intentionally omitted — blobs
+// Meta-only columns for list paths. raw_otlp is intentionally omitted - blobs
 // are loaded via GetObservationByTrace / GetLatestObservationByReason.
 const observationMetaCols = `transaction_id, trace_id, observed_at, duration_ms, sample_reason`
 
@@ -66,7 +66,7 @@ func (r *Repo) latestObservation(ctx context.Context, what, where string, args .
 }
 
 // ListObservationsByTransaction returns the newest examples for one
-// (transaction, sample_reason), newest first. Metadata only — RawOTLP is
+// (transaction, sample_reason), newest first. Metadata only - RawOTLP is
 // empty; fetch the blob with GetObservationByTrace when needed (compare /
 // accept / view-trace). This keeps list scans off the large OTLP column.
 func (r *Repo) ListObservationsByTransaction(ctx context.Context, transactionID int64, sampleReason string, limit int) ([]repo.Observation, error) {

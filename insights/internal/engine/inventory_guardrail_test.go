@@ -210,7 +210,7 @@ func TestFlushViolationsDropsCountsFromWipedInventory(t *testing.T) {
 }
 
 // Anomaly firings counted before another replica deleted all transactions must
-// not be written afterwards — every anomaly names a transaction that is gone.
+// not be written afterwards - every anomaly names a transaction that is gone.
 func TestAnomalyFlushDropsFiringsFromWipedInventory(t *testing.T) {
 	const (
 		epochBeforeReset = 3

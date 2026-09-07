@@ -27,12 +27,12 @@ type peer struct {
 	Port int    `json:"port"`
 	// Owner and External are annotations for guardrail egress profiles (and
 	// live forbiddenEgress on the current trace). They are NOT part of D2
-	// Score/Merge identity — see coalesceD2Peers.
+	// Score/Merge identity - see coalesceD2Peers.
 	Owner    string `json:"owner,omitempty"`
 	External bool   `json:"external,omitempty"`
 }
 
-// peerKey is the identity D2 scores on — the {host,port} tuple, ignoring the
+// peerKey is the identity D2 scores on - the {host,port} tuple, ignoring the
 // service-scoped Owner/External annotations.
 type peerKey struct {
 	Host string
@@ -195,7 +195,7 @@ func (d2Egress) Merge(t *Trace, current json.RawMessage) (json.RawMessage, error
 }
 
 // coalesceD2Peers collapses peers to Score identity ({host,port}). Owner and
-// External are annotations for guardrail profiles — they must not create extra
+// External are annotations for guardrail profiles - they must not create extra
 // set members or the baseline "grows" forever when the same call is sometimes
 // flagged external. External sticks to internal once any observation saw the
 // call as in-mesh; Owner prefers an in-mesh observation's owner, else a
@@ -281,7 +281,7 @@ func peersFromTrace(t *Trace) []peer {
 			s.Attrs[semconv.LegacyNetPeerPort],
 		))
 		// A call is external only if it neither reached an instrumented service
-		// in-trace nor names one by host — see externalPeer.
+		// in-trace nor names one by host - see externalPeer.
 		out = append(out, peer{
 			Host:     host,
 			Port:     port,

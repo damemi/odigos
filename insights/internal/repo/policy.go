@@ -32,11 +32,11 @@ type Policy struct {
 
 	// SignalWeights overrides the risk catalog's default weight per signal,
 	// keyed by source (a deviation class or an enricher signal, so one map tunes
-	// both). Sparse — absent signals keep their catalog default; 0 mutes a signal.
+	// both). Sparse - absent signals keep their catalog default; 0 mutes a signal.
 	SignalWeights map[SignalSource]int
 
 	// EnricherLists holds this scope's overrides for enricher keyword lists,
-	// keyed by list key (see risk.EnricherList.Key). Sparse — an absent key uses
+	// keyed by list key (see risk.EnricherList.Key). Sparse - an absent key uses
 	// the enricher's built-in default, a present list replaces it for this scope.
 	EnricherLists map[EnricherListKey][]string
 

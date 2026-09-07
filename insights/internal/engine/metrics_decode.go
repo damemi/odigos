@@ -11,7 +11,7 @@ import (
 
 // Scope and metric names emitted by the vendored servicegraph connector. This
 // side-channel receives the RAW OTLP metrics (the gateway's prometheus exporter
-// is a separate pipeline), so the names are the connector's own — without the
+// is a separate pipeline), so the names are the connector's own - without the
 // "servicegraph_" namespace prefix prometheus would add.
 const (
 	serviceGraphScopeName         = "traces_service_graph"
@@ -23,8 +23,8 @@ const (
 // client/server names and connection_type are always present; the *_service.name
 // and *_k8s.namespace.name labels come from the configured dimensions
 // (service.name is always added; k8s.namespace.name is forced on when insights
-// is active). On the raw OTLP path the keys carry dots — prometheus would
-// normalise them to underscores, but we read before that — so we accept both to
+// is active). On the raw OTLP path the keys carry dots - prometheus would
+// normalise them to underscores, but we read before that - so we accept both to
 // stay robust.
 var (
 	sgAttrClientNamespace = []string{"client_" + semconv.K8SNamespaceName, "client_k8s_namespace_name"}

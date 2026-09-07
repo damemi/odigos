@@ -129,18 +129,18 @@ func (e *Engine) Process(ctx context.Context, t *Trace) {
 // processOne scores and learns a single (sub-)transaction. The Trace passed
 // in is already scoped to one service-entry's subtree: its Root is the entry
 // span and its Spans/RawOTLP cover the entry plus its descendants. full is the
-// original, undecomposed trace — passed through only so a guardrail violation
+// original, undecomposed trace - passed through only so a guardrail violation
 // can capture the whole trace as evidence (the offending caller lives above
 // this sub-trace's root and isn't in t's subtree).
 func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace) {
-	// 1. Resolve transaction identity locally (deterministic hash — no DB).
+	// 1. Resolve transaction identity locally (deterministic hash - no DB).
 	// Persistence of the transactions row rides the write-behind flush with
 	// activity/baselines, so delete+recreate works across replicas without a
 	// per-trace upsert or a cross-pod identity cache.
 	ident, ok := identifyTransaction(t)
 	if !ok {
 		// Broken-context trace (root is an outbound client span). Drop
-		// silently — see discardableRoot for the reasoning.
+		// silently - see discardableRoot for the reasoning.
 		return
 	}
 	// Fold configured low-cardinality dimensions from the entry span only into
@@ -159,7 +159,7 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace) {
 
 	// 1b. Service guardrails: police the caller→callee edge against the operator's
 	// declared rules, independently of the learned baselines. A violation fires
-	// its own finding but does NOT stop learning — the guardrail is about inbound
+	// its own finding but does NOT stop learning - the guardrail is about inbound
 	// identity, orthogonal to what this transaction learns about its own subtree.
 	e.guardrails.evaluate(ctx, t, tx, full, system)
 
@@ -196,8 +196,8 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace) {
 	// something another replica already learned.
 	//
 	// A fired anomaly does NOT skip the learn loop below. Poisoning protection
-	// of ESTABLISHED baselines is already enforced there — promoted classes are
-	// frozen (never merged) — so the only thing an early return would add is to
+	// of ESTABLISHED baselines is already enforced there - promoted classes are
+	// frozen (never merged) - so the only thing an early return would add is to
 	// starve classes that are still LEARNING. That breaks operator "re-learn":
 	// a reset class could never converge while any promoted sibling keeps
 	// firing. We instead let learning classes keep folding in, and only skip
@@ -230,9 +230,9 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace) {
 
 	// 5. Learn from this trace. For each class still learning: fold the trace
 	// in, count the observation, and promote it if it now meets its threshold.
-	// Promoted classes are skipped ("frozen") — anything genuinely new would
+	// Promoted classes are skipped ("frozen") - anything genuinely new would
 	// have been caught as a deviation in step 3, and this freeze is what keeps a
-	// fired anomaly from poisoning an established baseline — so once every class
+	// fired anomaly from poisoning an established baseline - so once every class
 	// promotes, the transaction stops writing baselines and only the activity
 	// counter (above) keeps flushing. Resolve scope once here; the promotion
 	// gate looks up the most specific policy per class below.
@@ -274,7 +274,7 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace) {
 		cs.dirty = true
 	}
 
-	// Only when this observation newly finished learning for the transaction —
+	// Only when this observation newly finished learning for the transaction -
 	// not on every subsequent trace of an already-promoted service.
 	if promotedThisTrace && e.allClassesPromoted(entry) {
 		e.maybeAutoEnableTransactionGuardrailAfterPromote(ctx, ident.Namespace, ident.Service, tx.ID)
@@ -345,7 +345,7 @@ func (e *Engine) scoreEntry(t *Trace, entry *transactionEntry, serviceKey string
 // subset of classes that STILL deviate (plus their evidence). A class is
 // re-confirmed only if the fresh DB data is present and non-empty and the
 // scorer still flags it; if the DB has nothing fresher (not yet flushed) we
-// trust the in-memory decision rather than suppress a real alert — except when
+// trust the in-memory decision rather than suppress a real alert - except when
 // memory holds an established (promoted, non-empty) baseline, which cannot
 // legitimately be missing from the DB and instead means the inventory was
 // wiped. Caller holds entry.mu.
@@ -374,7 +374,7 @@ func (e *Engine) confirmAnomaly(
 		if !ok || isEmptyData(fb.Data) {
 			// A promoted class with content in memory was necessarily persisted
 			// when it promoted, so an absent or empty row is not a lagging
-			// flush — the inventory was wiped underneath this replica (reset, or
+			// flush - the inventory was wiped underneath this replica (reset, or
 			// a per-transaction delete) and this deviation is measured against a
 			// baseline that no longer exists. Suppress it and let the class
 			// re-learn instead of reporting every structural fact as new.
@@ -477,7 +477,7 @@ func (e *Engine) Flush(ctx context.Context) error {
 // resolveAlertPolicy returns the single alert policy governing this transaction
 // (transaction override → service override → global default) from the in-memory
 // scope snapshot, if one exists and is enabled. A disabled policy for the
-// resolved scope suppresses alerting there — it does NOT fall back to a broader
+// resolved scope suppresses alerting there - it does NOT fall back to a broader
 // policy (replace semantics), so ok is false. The caller applies the policy's
 // threshold and weight overrides to the risk score to decide firing.
 func (e *Engine) resolveAlertPolicy(tx repo.Transaction) (repo.Policy, bool) {
@@ -516,7 +516,7 @@ func (e *Engine) storeObservation(ctx context.Context, t *Trace, tx repo.Transac
 const evidenceWriteTimeout = 5 * time.Second
 
 // detachedEvidenceContext derives the context used to retain a sample trace.
-// Evidence is what makes a finding actionable — it is the trace a user opens to
+// Evidence is what makes a finding actionable - it is the trace a user opens to
 // investigate, and the one Accept folds into the baseline. Once the engine has
 // judged a trace worth keeping, whether it survives must not depend on the
 // instrumented application still being connected. Request values are kept; only
@@ -557,7 +557,7 @@ func emptyOr(d json.RawMessage) json.RawMessage {
 }
 
 // isEmptyData reports whether baseline bytes carry no learned content, i.e. are
-// absent or the empty object — used by confirm-on-anomaly to decide a fresh
+// absent or the empty object - used by confirm-on-anomaly to decide a fresh
 // row can't disprove an in-memory deviation.
 func isEmptyData(d json.RawMessage) bool {
 	if len(d) == 0 {

@@ -106,13 +106,13 @@ func TestShouldPromote_Stability(t *testing.T) {
 		// zero observations can't be stable even if the arithmetic would allow it.
 		{"stable obs: no observations", policy(repo.LearningModeAny, stableObs(1)), bc(0, 0, -1), false},
 		// never grew (empty baseline): nothing settled, so it keeps learning even
-		// with many observations — otherwise it would promote empty and loop.
+		// with many observations - otherwise it would promote empty and loop.
 		{"stable obs: never grew stays learning", policy(repo.LearningModeAny, stableObs(20)), bc(60, 0, -1), false},
 
 		// stable-duration: measured from the last growth.
 		{"stable dur: changed recently", policy(repo.LearningModeAny, stableMin(60)), bc(100, 90, 30*time.Minute), false},
 		{"stable dur: quiet long enough", policy(repo.LearningModeAny, stableMin(60)), bc(100, 90, 2*time.Hour), true},
-		// never grew (empty baseline): stability can't be met — a class that
+		// never grew (empty baseline): stability can't be met - a class that
 		// learned nothing has nothing settled, so it stays in learning.
 		{"stable dur: never grew stays learning", policy(repo.LearningModeAny, stableMin(60)), bc(5, 0, -1), false},
 

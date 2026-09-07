@@ -100,7 +100,7 @@ func TestBaselineStore_AdoptInvalidatesDecodedCache(t *testing.T) {
 // TestScoreDecoded_DoesNotMutateSharedBaseline pins the contract that makes
 // sharing one decoded baseline safe. Every trace of a transaction scores
 // against the same value, so a scorer that folded the trace into it would
-// quietly teach the baseline the very thing it just flagged — the anomaly would
+// quietly teach the baseline the very thing it just flagged - the anomaly would
 // fire once and then never again.
 func TestScoreDecoded_DoesNotMutateSharedBaseline(t *testing.T) {
 	learned, novel := decodeCacheTraces()

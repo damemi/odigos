@@ -129,7 +129,7 @@ func TestStore_RollbackOnFlushError(t *testing.T) {
 // race: replica A's in-memory baseline is stale (missing an edge another
 // replica already persisted). A's score flags it, but confirm-on-anomaly
 // re-reads the fresh baseline, sees the edge is known, and suppresses the false
-// alert — and adopts the edge so it won't re-flag.
+// alert - and adopts the edge so it won't re-flag.
 func TestStore_ConfirmOnAnomalySuppressesKnownEdge(t *testing.T) {
 	r := newFakeRepo()
 	r.policies = append(r.policies, repo.Policy{ID: 1, Enabled: true, FireAtScore: 1})
@@ -146,7 +146,7 @@ func TestStore_ConfirmOnAnomalySuppressesKnownEdge(t *testing.T) {
 	// Another replica learns a NEW legitimate call edge and persists it to the
 	// shared DB, bypassing engine A's in-memory store. The differing span is an
 	// INTERNAL child with the same egress peer and library as learned traffic,
-	// so ONLY D1 (call edges) deviates — isolating the confirm-on-anomaly path.
+	// so ONLY D1 (call edges) deviates - isolating the confirm-on-anomaly path.
 	withPricing := mkTrace(
 		withRoot("POST /checkout", "user-svc", tracepb.Span_SPAN_KIND_SERVER,
 			map[string]string{"http.method": "POST"}),

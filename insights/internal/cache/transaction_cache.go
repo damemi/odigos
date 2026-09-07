@@ -2,7 +2,7 @@
 // database.
 //
 // Transaction identity is resolved in-process by the engine (deterministic
-// hash) and persisted on the write-behind flush via UpsertTransactions — see
+// hash) and persisted on the write-behind flush via UpsertTransactions - see
 // engine.processOne / baselineStore.flush. WrapTransactions remains available
 // for tests and optional cold-path callers, but main does not wrap the hot path
 // with it (a stale per-pod cache after DeleteTransaction caused missing UI rows
@@ -14,7 +14,7 @@
 // later UpsertTransaction re-inserts the row in storage.
 //
 // Metrics:
-//   - insights_txn_cache_lookups_total{result="hit|miss"} — cache hit ratio.
+//   - insights_txn_cache_lookups_total{result="hit|miss"} - cache hit ratio.
 //   - On a miss we fall through to UpsertTransaction, which the metrics layer
 //     counts under insights_repo_calls_total{method="UpsertTransaction"}.
 package cache
@@ -66,7 +66,7 @@ func (c *transactionCache) UpsertTransaction(ctx context.Context, service, names
 	}
 
 	// Not cached yet: look it up in the database. Two requests for the same
-	// key may both look it up at once, which is fine — the lookup returns the
+	// key may both look it up at once, which is fine - the lookup returns the
 	// same row either way.
 	tx, err := c.Repository.UpsertTransaction(ctx, service, namespace, operation, kind)
 	if err != nil {

@@ -33,7 +33,7 @@ type StorageConnection struct {
 }
 
 type StorageDisk struct {
-	// InsightsBytes is sum(bytes_on_disk) for Insights tables — the accurate
+	// InsightsBytes is sum(bytes_on_disk) for Insights tables - the accurate
 	// "how much data do we store?" figure. Filesystem UsedBytes can be much
 	// larger on shared volumes (kind / hostPath).
 	InsightsBytes  uint64

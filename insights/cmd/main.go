@@ -257,7 +257,7 @@ func openRepo(dsn string, log *commonlogger.OdigosLogger) (repo.Repository, func
 	// Order matters: the policy cache wraps the metrics layer, which wraps the
 	// real DB repo, so a cache hit returns before the metrics layer and the
 	// DB-call metric counts only true misses. Transaction identity is resolved
-	// in-memory by the engine and write-behind flushed — no per-trace txn cache.
+	// in-memory by the engine and write-behind flushed - no per-trace txn cache.
 	return cache.WrapPolicies(metrics.WrapRepo(r)), schemaReady, closeRepo, nil
 }
 

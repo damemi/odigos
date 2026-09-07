@@ -80,7 +80,7 @@
   {{if eq (printf "%s" .Issue.Status) "accepted"}}
   <span class="badge badge-ok tip" data-tip="Accepted: a sample trace was folded into the baseline, so this once-novel behaviour is now treated as normal and won't re-alert.">✓ Accepted</span>
   {{else if eq (printf "%s" .Issue.Status) "dismissed"}}
-  <span class="badge tip" data-tip="Closed without changing the baseline. The detection still stands — the count keeps rising if the pattern fires.">Dismissed</span>
+  <span class="badge tip" data-tip="Closed without changing the baseline. The detection still stands - the count keeps rising if the pattern fires.">Dismissed</span>
   <form method="POST" action="/debug/anomalies/accept"
         onsubmit="return confirm('Accept this issue as a new baseline? The flagged behaviour becomes normal and stops alerting.')">
     <input type="hidden" name="transaction_id" value="{{$txn}}"><input type="hidden" name="signature" value="{{$sig}}">
@@ -99,7 +99,7 @@
   <form method="POST" action="/debug/anomalies/dismiss"
         onsubmit="return confirm('Dismiss this issue? It is closed without changing the baseline; it stays counted and can be reopened.')">
     <input type="hidden" name="transaction_id" value="{{$txn}}"><input type="hidden" name="signature" value="{{$sig}}">
-    <button type="submit" class="btn tip" data-tip="Close without changing the baseline — use it for a real deviation you don't want to act on. It stays counted and can be reopened.">Dismiss</button>
+    <button type="submit" class="btn tip" data-tip="Close without changing the baseline - use it for a real deviation you don't want to act on. It stays counted and can be reopened.">Dismiss</button>
   </form>
   {{end}}
 </div>
@@ -154,7 +154,7 @@
       <tr class="corr-row">
         <td colspan="2">
           <span class="sig-name">Correlation bonus</span>
-          <span class="badge tip" data-tip="Added once when the signals span 2+ kill-chain categories — a multi-stage attack story scores higher than the sum of its parts.">multi-category</span>
+          <span class="badge tip" data-tip="Added once when the signals span 2+ kill-chain categories - a multi-stage attack story scores higher than the sum of its parts.">multi-category</span>
         </td>
         <td class="num"></td>
         <td class="num"></td>
@@ -192,7 +192,7 @@
     {{end}}
     {{if .SpanHighlights}}
     <ul class="hl-list">
-      {{range .SpanHighlights}}<li>• {{.Reason}} — <code>{{.SpanID}}</code></li>{{end}}
+      {{range .SpanHighlights}}<li>• {{.Reason}} - <code>{{.SpanID}}</code></li>{{end}}
     </ul>
     {{end}}
     {{if .AttrHighlights}}
@@ -219,7 +219,7 @@
 </div>
 
 <h3>Blast radius</h3>
-<p class="hint" style="margin:-4px 0 10px;">The service map around <strong>{{.Issue.Service}}</strong> — the callers an anomaly here can affect and the callees it can implicate, up to {{.ServiceMap.Depth}} hop{{if ne .ServiceMap.Depth 1}}s{{end}} out. Failing edges are red.</p>
+<p class="hint" style="margin:-4px 0 10px;">The service map around <strong>{{.Issue.Service}}</strong> - the callers an anomaly here can affect and the callees it can implicate, up to {{.ServiceMap.Depth}} hop{{if ne .ServiceMap.Depth 1}}s{{end}} out. Failing edges are red.</p>
 {{template "serviceMap" .ServiceMap}}
 {{end}}
 
@@ -241,7 +241,7 @@
     </summary>
     {{if .HasDetails}}
     <div class="trace-row-body">
-      {{if .StatusMsg}}<div class="kv-line"><span class="kv-key">status</span><span>{{.StatusCode}} — {{.StatusMsg}}</span></div>{{end}}
+      {{if .StatusMsg}}<div class="kv-line"><span class="kv-key">status</span><span>{{.StatusCode}} - {{.StatusMsg}}</span></div>{{end}}
       {{if .Scope}}<div class="kv-line"><span class="kv-key">scope</span><code>{{.Scope}}</code></div>{{end}}
       {{if .Attrs}}
       <div class="kv-line"><span class="kv-key">attributes</span></div>

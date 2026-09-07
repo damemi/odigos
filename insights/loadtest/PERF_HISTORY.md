@@ -21,7 +21,7 @@ Numbers are only comparable if the run used the same knobs. All runs below used:
 - HPA present (min 2 / max 8), pinned at 8 throughout
 - Cluster `arn:aws:eks:us-east-1:233171357117:cluster/tamir-insights`
 - ClickHouse already warm, so baselines are promoted and the engine is scoring
-  rather than learning — the state that matters in production
+  rather than learning - the state that matters in production
 
 **Always normalise per trace.** Offered load drifts a few percent between runs;
 raw `kubectl top` totals are not comparable on their own.
@@ -34,7 +34,7 @@ On the 09-01 run they agreed to within half a point.
 
 | Run | Change | traces/s | Cluster CPU | **CPU/trace** | vs prev | vs baseline |
 |-----|--------|----------|-------------|---------------|---------|-------------|
-| `2026-08-30-hotpath` | baseline (none) | 1,963.8 | 2,301m | **1.172 ms** | — | — |
+| `2026-08-30-hotpath` | baseline (none) | 1,963.8 | 2,301m | **1.172 ms** | - | - |
 | `2026-08-31-lazy-otlp` | don't build a trace copy per service | 1,866.8 | 1,371m | **0.735 ms** | −37.3% | −37.3% |
 | `2026-09-01-decode-cache` | decode each baseline once, not per trace | 1,869.7 | 1,018m | **0.545 ms** | −25.9% | **−53.5%** |
 
@@ -42,7 +42,7 @@ Busiest-pod profiler cross-check (same instrument both sides):
 
 | Run | Pod | traces/s | samples / 30s | CPU/trace | vs prev |
 |-----|-----|----------|---------------|-----------|---------|
-| `2026-08-30-hotpath` | `pqzzz` | 393.0 | 7.66s (25.5%) | 0.650 ms | — |
+| `2026-08-30-hotpath` | `pqzzz` | 393.0 | 7.66s (25.5%) | 0.650 ms | - |
 | `2026-08-31-lazy-otlp` | `d46q2` | 466.5 | 5.33s (17.8%) | 0.381 ms | −41.4% |
 | `2026-09-01-decode-cache` | `xvnr8` | 467.6 | 3.93s (13.1%) | 0.280 ms | −26.4% |
 
@@ -80,26 +80,26 @@ Allocation is now the lever on GC. From `alloc_space` (11.08 GB cumulative):
 Estimates are of **total pod CPU** and are rough: direct cost is measured, the
 GC follow-through is inferred by assuming GC scales with allocation share.
 
-1. ~~**Defer the root trace's OTLP copy** — ~10–12%.~~ Implemented on branch
+1. ~~**Defer the root trace's OTLP copy** - ~10–12%.~~ Implemented on branch
    `insights-encode-otlp-on-demand`, awaiting a run. `DecodeRequest` encoded
    every root trace even though only the few stored ones need the bytes; it now
    holds each trace's spans decoded and encodes in `RawOTLP()`. Also removes the
    encode/decode round trip `subTraces` used to do to re-root a nested entry.
-2. **Stop copying resource attributes into every span** — ~7–9%.
+2. **Stop copying resource attributes into every span** - ~7–9%.
    `decodeTraceTrees` calls `mergeAttrs(resourceAttrs, spanAttrs)` per span,
    allocating a fresh map holding a full copy of the resource attributes for
    each of ~8.5 spans per trace. Keep resource attrs shared and look through to
    them instead. Costs 3.8% CPU directly and a quarter of all allocations.
    Effort is the catch: ~36 non-test `.Attrs` reads become an accessor.
-3. **Generated protobuf unmarshal (vtprotobuf) for OTLP** — ~15–20%, the
+3. **Generated protobuf unmarshal (vtprotobuf) for OTLP** - ~15–20%, the
    largest single item but also the largest change. Reflection-based decode is
    24.7% of CPU and 32% of allocations. Needs generated `UnmarshalVT` for the
    OTLP types plus a custom gRPC codec, and we don't own `go.opentelemetry.io/proto`,
    so it means vendoring generated variants. Do 1 and 2 first.
-4. **Fixed-size span-ID keys instead of hex strings** — ~1%.
+4. **Fixed-size span-ID keys instead of hex strings** - ~1%.
    `hex.EncodeToString` is 0.9% of allocations; a `[16]byte`/`[8]byte` map key
    would remove it. Cheap but marginal.
-5. **Precompute per-class lookup sets in the decoded baseline** — ~1–2%.
+5. **Precompute per-class lookup sets in the decoded baseline** - ~1–2%.
    Tempting as a follow-on to the decode cache, but measured small: the
    allocations under `d1Data.score` are dominated by `edgesFromTrace` (per-trace
    facts, unavoidable) rather than building the `known` set. Listed so nobody
@@ -107,5 +107,5 @@ GC follow-through is inferred by assuming GC scales with allocation share.
 
 Not code changes, but worth knowing: `Syscall6` at 13.5% is socket I/O, and
 larger OTLP batches from the sender would amortise it. Per-pod load skew in
-these runs is a k6 connection artefact, not a balancing problem — the gateway
+these runs is a k6 connection artefact, not a balancing problem - the gateway
 reconnects on its own in a real deployment, so do not "fix" it in the server.

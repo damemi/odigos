@@ -13,7 +13,7 @@ import (
 )
 
 // TestParseTemplates ensures every page template (including anomaly_compare and
-// its cmpWaterfall sub-template) parses — parseTemplates uses template.Must, so
+// its cmpWaterfall sub-template) parses - parseTemplates uses template.Must, so
 // a broken template would panic here.
 func TestParseTemplates(t *testing.T) {
 	tmpls := parseTemplates()

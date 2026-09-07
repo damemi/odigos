@@ -27,7 +27,7 @@ fix. Add to this instead of letting TODOs scatter.
 - **Fix**: keep the merged value decoded on `classState` too, re-encoding only
   when the flusher needs bytes. Lower value than the scoring fix was: merging
   stops once every class promotes. Note: changing the on-disk shape (array →
-  JSON object) does NOT help — `json.Unmarshal` is O(n) either way and we'd
+  JSON object) does NOT help - `json.Unmarshal` is O(n) either way and we'd
   lose stable ordering.
 
 ### D1 call edges still depend on upstream span-name normalization
@@ -62,8 +62,8 @@ fix. Add to this instead of letting TODOs scatter.
 - **What**: we save learning progress to ClickHouse in batches ("flushes"). We
   send *increments* ("+5 observations") and ClickHouse sums them. If a flush
   lands in the DB but the reply is lost, we retry and send the same "+5" again,
-  so ClickHouse ends up with +10. Sets (D1/D2/D5/D7 members) are unaffected —
-  re-adding the same thing is a no-op — only the additive numbers
+  so ClickHouse ends up with +10. Sets (D1/D2/D5/D7 members) are unaffected -
+  re-adding the same thing is a no-op - only the additive numbers
   (`observation_count`, the D8 size histogram) can double.
 - **Example**: a flush writes "+5 observations", the reply is lost, we retry.
   ClickHouse now shows 10 for a class that really saw 5.
@@ -71,22 +71,22 @@ fix. Add to this instead of letting TODOs scatter.
   (going from learning to enforcing) a little early. But the seeded policies make
   that nearly a non-issue:
   - `D1/D2/D5/D7` are `match_mode=any` with a count of 50, so they already
-    promote on count alone — the bug just makes them reach 50 a few real traces
+    promote on count alone - the bug just makes them reach 50 a few real traces
     early. Negligible.
   - `D3/D4/D6/D8` are `match_mode=all` with a 2–3 day minimum duration, so the
     *time* gate holds them back no matter how inflated the count is. The one
     additive class (D8) is here, so its double-count never promotes anything
-    early — it only slightly skews the learned size distribution.
+    early - it only slightly skews the learned size distribution.
 - **Where**: `ApplyBaselineDeltas` in `internal/db/clickhouse/clickhouse.go`;
   the flusher's retry in `internal/engine/baseline_store.go`.
 - **The fix (deferred)**: stop sending "add 5" and instead have each replica
   write "my running total is 5" under its own id, into a `ReplacingMergeTree`
   that keeps only the latest row per id. Re-sending the same total then does
-  nothing (like a set), and the real total is the sum across ids at read time —
+  nothing (like a set), and the real total is the sum across ids at read time -
   which also stays correct across replicas and restarts. It's a bigger change
   (recreates the two additive tables + a store refactor), so we do it only when
   promotion *timing* starts to matter (e.g. before GA, or if we ship count-only
-  or low-threshold policies) — not in the current dev phase.
+  or low-threshold policies) - not in the current dev phase.
 
 ### A failed migration leaves the DB "dirty" and needs manual recovery
 - **What**: migrations run via golang-migrate. ClickHouse has no transactional
@@ -100,7 +100,7 @@ fix. Add to this instead of letting TODOs scatter.
 - **Fix**: prefer one statement per migration file so a partial multi-statement
   apply can't happen; document/automate the `migrate force <version>` recovery
   runbook. Revisit a declarative tool (e.g. Atlas) if/when the schema grows
-  materialized views/projections — note Atlas's ClickHouse driver is paid, so
+  materialized views/projections - note Atlas's ClickHouse driver is paid, so
   it can't ship in the OSS chart as-is.
 
 ## Service / operations
@@ -114,7 +114,7 @@ fix. Add to this instead of letting TODOs scatter.
   before resuming.
 - **Where**: `engine.Process` → `repo.*` calls in `internal/engine/engine.go`;
   the startup path is in `cmd/main.go` (`connectRepoWithRetry`).
-- **Why**: deliberately deferred — startup was the urgent fix; the runtime
+- **Why**: deliberately deferred - startup was the urgent fix; the runtime
   outage only wastes connection attempts + log lines, it doesn't crash.
 - **Fix**: add a small circuit breaker around the repo calls: open after N
   consecutive connection failures, short-circuit (drop + count) while open,
@@ -124,12 +124,12 @@ fix. Add to this instead of letting TODOs scatter.
 ### One DB round-trip per trace (no batching)
 - **What**: every trace does its own `UpsertTransaction`, baseline read, and
   baseline writes. At high trace volume that's a lot of small queries and a lot
-  of connection pressure (very visible during a DB outage — one failed query
+  of connection pressure (very visible during a DB outage - one failed query
   per trace).
 - **Where**: `engine.Process` in `internal/engine/engine.go`.
 - **Why**: simplest correct version for the skeleton; correctness over
   throughput.
-- **Fix**: batch writes — buffer transactions/observations and flush
+- **Fix**: batch writes - buffer transactions/observations and flush
   periodically or by size (single multi-row upsert), and/or cache the
   transaction-id lookup so repeat traffic skips the upsert. Pairs well with the
   circuit breaker above (a batch flush is also the natural place to trip it).

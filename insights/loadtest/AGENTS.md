@@ -1,4 +1,4 @@
-# AGENTS.md — Insights loadtest
+# AGENTS.md - Insights loadtest
 
 Guidance for agents working in `insights/loadtest/` or analyzing a load run against Insights.
 
@@ -6,7 +6,7 @@ Guidance for agents working in `insights/loadtest/` or analyzing a load run agai
 
 - Deploys a k6 + `xk6-client-tracing` Deployment that **pushes multi-service OTLP traces directly** to `odigos-insights-headless:4317` (bypasses the Odigos gateway).
 - Tunables via env / `make`: `VUS`, `SLEEP_MS`, `DURATION`, `ENDPOINT`, `TRACE_NAMESPACE`, `TENANTS`.
-- `script.js` defines 6 weighted scenarios over ~18 services, covering HTTP, gRPC, Kafka produce/consume, 4 datastore engines and one Odigos-probe span — **20 transactions per tenant**. `TENANTS=N` replays all of it under N `service.namespace` values, so it is the knob for resident-transaction pressure.
+- `script.js` defines 6 weighted scenarios over ~18 services, covering HTTP, gRPC, Kafka produce/consume, 4 datastore engines and one Odigos-probe span - **20 transactions per tenant**. `TENANTS=N` replays all of it under N `service.namespace` values, so it is the knob for resident-transaction pressure.
 
 ## Cardinality is a contract, not an accident
 
@@ -26,8 +26,8 @@ Before changing `script.js`, know which fields are keys:
 
 Two traps that cost us a run:
 
-- `tracing.SEMANTICS_DB` **emits nothing** — `TemplatedGenerator` only implements the HTTP one. DB spans must set `db.*` by hand or D7 learns nothing at all.
-- An unset `http.response.status_code` is filled randomly from `{200,201,202,204}`, and it is a transaction identity dimension — so every endpoint silently becomes 4 transactions, each learning from a quarter of the traffic. Pin it on every entry span.
+- `tracing.SEMANTICS_DB` **emits nothing** - `TemplatedGenerator` only implements the HTTP one. DB spans must set `db.*` by hand or D7 learns nothing at all.
+- An unset `http.response.status_code` is filled randomly from `{200,201,202,204}`, and it is a transaction identity dimension - so every endpoint silently becomes 4 transactions, each learning from a quarter of the traffic. Pin it on every entry span.
 
 To verify a `script.js` change, run k6 against a local collector with a file exporter and confirm the distinct D1/D2/D7 sets are the same at 100 traces and at 10k.
 - Image: `public.ecr.aws/e1u7m2k3/insights-k6-runner` (build with `./push.sh`; linux/amd64 by default).
@@ -49,7 +49,7 @@ Always compare:
 1. k6 `complete` iterations delta / Δt
 2. Sum of `insights_engine_traces_processed_total` across **all** insights pods / Δt
 
-If processed ≪ sent, investigate drops (`discardableRoot` / decode failures), Export errors in k6 logs, or Insights saturation — do **not** quietly report the lower number as “load generated”.
+If processed ≪ sent, investigate drops (`discardableRoot` / decode failures), Export errors in k6 logs, or Insights saturation - do **not** quietly report the lower number as “load generated”.
 
 Gateway is **out of path** for this loadtest; do not blame gateway unless `ENDPOINT` was pointed at it.
 
@@ -74,10 +74,10 @@ From each metrics scrape, always record **cache size gauges** (see template). Me
 | `insights_txn_cache_lookups_total` | Transaction-identity cache lookups |
 | `insights_policy_cache_lookups_total` | Alert/learning policy cache lookups |
 
-Save under `loadtest/results/<timestamp>/` (gitignored). **Do not** write a separate opaque `SUMMARY.md` — put everything in one `ANALYSIS.md`.
+Save under `loadtest/results/<timestamp>/` (gitignored). **Do not** write a separate opaque `SUMMARY.md` - put everything in one `ANALYSIS.md`.
 
 Because `results/` is gitignored, also add the run's comparable numbers to
-[`PERF_HISTORY.md`](./PERF_HISTORY.md) — the tracked cross-run ledger of CPU per
+[`PERF_HISTORY.md`](./PERF_HISTORY.md) - the tracked cross-run ledger of CPU per
 trace and the ranked optimisation backlog. Detail stays in `ANALYSIS.md`; only
 what survives a clean checkout goes in the ledger.
 
@@ -86,7 +86,7 @@ what survives a clean checkout goes in the ledger.
 When asked to analyze a load run, write **only** `results/<run-id>/ANALYSIS.md` using this structure:
 
 ```markdown
-# Loadtest analysis — <run-id>
+# Loadtest analysis - <run-id>
 
 ## Setup
 - Cluster / context:
@@ -159,5 +159,5 @@ Keep language concrete; cite numbers and **exact file paths** an engineer can op
 make -C insights loadtest-start          # or: VUS=20 SLEEP_MS=10 make -C insights loadtest-start
 make -C insights loadtest-stop
 make -C insights loadtest-restart
-make -C insights/loadtest push           # via ./push.sh — rebuild/push runner image
+make -C insights/loadtest push           # via ./push.sh - rebuild/push runner image
 ```

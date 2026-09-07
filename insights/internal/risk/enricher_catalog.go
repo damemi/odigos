@@ -2,14 +2,14 @@ package risk
 
 import "github.com/odigos-io/odigos-enterprise/insights/internal/repo"
 
-// Catalog of context-enricher signals — the counterpart to the deviation-class
+// Catalog of context-enricher signals - the counterpart to the deviation-class
 // Catalog in risk.go. A class fires a single base signal; an enricher adds
 // extra signals for dangerous sub-cases of that class's deviation (e.g. a new
 // DB access that is specifically a DELETE), so the score reflects how bad the
 // deviation is, not just that it happened.
 //
 // To add an enricher: (1) add a signal below with Parent set to the class it
-// refines, and (2) emit it — implement the RiskEnricher capability on that
+// refines, and (2) emit it - implement the RiskEnricher capability on that
 // class's scorer for single-class evidence (see engine's EnrichRisk), or a
 // crossClassEnricher in engine/enrich.go for cross-class correlation. Optionally
 // give it a List for a per-scope editable keyword list.
@@ -59,7 +59,7 @@ var EnricherSignals = []EnricherSignal{
 		List: &EnricherList{
 			Key:   "sensitive_tables",
 			Label: "Sensitive keywords",
-			Hint:  "Comma- or newline-separated substrings. A newly-accessed table whose name contains any of these is flagged. Pre-filled with the built-in defaults — edit to fit your schema.",
+			Hint:  "Comma- or newline-separated substrings. A newly-accessed table whose name contains any of these is flagged. Pre-filled with the built-in defaults - edit to fit your schema.",
 			Default: []string{
 				"credential", "password", "passwd", "secret", "token", "apikey", "api_key",
 				"payment", "card", "ssn", "account", "auth", "session", "admins", "users",
@@ -68,15 +68,15 @@ var EnricherSignals = []EnricherSignal{
 	},
 	{
 		Source: "d7_injection_shape", Parent: repo.D7DBAccess, Category: CategoryInjection, Weight: 35,
-		Label: "Multi-table / join shape", Desc: "A new query joining several tables — a classic injection / data-harvesting shape.",
+		Label: "Multi-table / join shape", Desc: "A new query joining several tables - a classic injection / data-harvesting shape.",
 	},
 	{
 		Source: "d7_schema_recon", Parent: repo.D7DBAccess, Category: CategoryInjection, Weight: 30,
-		Label: "Database schema recon", Desc: "New access to a DB system-catalog / metadata table (e.g. information_schema) — classic SQL-injection enumeration.",
+		Label: "Database schema recon", Desc: "New access to a DB system-catalog / metadata table (e.g. information_schema) - classic SQL-injection enumeration.",
 		List: &EnricherList{
 			Key:   "schema_catalog_tables",
 			Label: "Schema-catalog tables",
-			Hint:  "Comma- or newline-separated names/substrings. A newly-accessed table matching any is flagged as schema reconnaissance. Pre-filled with common DB system-catalog objects — edit to fit your databases.",
+			Hint:  "Comma- or newline-separated names/substrings. A newly-accessed table matching any is flagged as schema reconnaissance. Pre-filled with common DB system-catalog objects - edit to fit your databases.",
 			Default: []string{
 				"information_schema", "pg_catalog", "pg_class", "pg_tables", "pg_attribute",
 				"pg_shadow", "pg_user", "mysql.user", "mysql.db", "sqlite_master",
@@ -86,15 +86,15 @@ var EnricherSignals = []EnricherSignal{
 	},
 	{
 		Source: "d1_edge_fanout", Parent: repo.D1CallEdges, Category: CategoryLateralMovement, Weight: 30,
-		Label: "Call fan-out", Desc: "One request reached many new services at once — possible lateral movement / enumeration.",
+		Label: "Call fan-out", Desc: "One request reached many new services at once - possible lateral movement / enumeration.",
 	},
 	{
 		Source: "d2_metadata_endpoint", Parent: repo.D2Egress, Category: CategoryExfiltration, Weight: 50,
-		Label: "Cloud metadata endpoint", Desc: "New egress to a cloud metadata address (e.g. 169.254.169.254) — a hallmark of SSRF / credential theft.",
+		Label: "Cloud metadata endpoint", Desc: "New egress to a cloud metadata address (e.g. 169.254.169.254) - a hallmark of SSRF / credential theft.",
 		List: &EnricherList{
 			Key:   "metadata_endpoints",
 			Label: "Cloud metadata addresses",
-			Hint:  "Comma- or newline-separated hosts/IPs. A new egress to any of these is flagged. Pre-filled with the well-known cloud metadata addresses — add your provider's if missing.",
+			Hint:  "Comma- or newline-separated hosts/IPs. A new egress to any of these is flagged. Pre-filled with the well-known cloud metadata addresses - add your provider's if missing.",
 			Default: []string{
 				"169.254.169.254", "fd00:ec2::254", "metadata.google.internal", "100.100.100.200",
 			},
@@ -106,7 +106,7 @@ var EnricherSignals = []EnricherSignal{
 		List: &EnricherList{
 			Key:   "dangerous_ports",
 			Label: "Suspicious ports",
-			Hint:  "Comma- or newline-separated port numbers. New egress to any of these is flagged. Pre-filled with common reverse-shell / C2 / tunneling ports — add or remove to fit your environment.",
+			Hint:  "Comma- or newline-separated port numbers. New egress to any of these is flagged. Pre-filled with common reverse-shell / C2 / tunneling ports - add or remove to fit your environment.",
 			Default: []string{
 				"23", "1080", "1337", "2323", "4444", "6667", "6697", "9050", "12345", "31337",
 			},
@@ -114,7 +114,7 @@ var EnricherSignals = []EnricherSignal{
 	},
 	{
 		Source: "d8_response_exfil", Parent: repo.D8PayloadSize, Category: CategoryExfiltration, Weight: 40,
-		Label: "Oversized response (bulk data)", Desc: "Response body far larger than the learned baseline — possible bulk data extraction.",
+		Label: "Oversized response (bulk data)", Desc: "Response body far larger than the learned baseline - possible bulk data extraction.",
 	},
 	{
 		Source: "d4_injection_signature", Parent: repo.D4ArgsReturns, Category: CategoryInjection, Weight: 40,
@@ -122,7 +122,7 @@ var EnricherSignals = []EnricherSignal{
 		List: &EnricherList{
 			Key:   "injection_signatures",
 			Label: "Injection signatures",
-			Hint:  "Comma- or newline-separated substrings (case-insensitive). A deviating captured argument or return value containing any is flagged as an injection attempt. Pre-filled with common SQLi / traversal / command / template / SSRF markers — edit to fit your app.",
+			Hint:  "Comma- or newline-separated substrings (case-insensitive). A deviating captured argument or return value containing any is flagged as an injection attempt. Pre-filled with common SQLi / traversal / command / template / SSRF markers - edit to fit your app.",
 			Default: []string{
 				"' or ", "\" or ", " or 1=1", "union select", "'--", "\"--", "/*", "*/", "; drop ", "'; ", "sleep(", "waitfor delay", "information_schema", "pg_sleep(",
 				"../", "..\\", "/etc/passwd", "c:\\windows",

@@ -7,7 +7,7 @@
 --   - baseline_meta         AggregatingMergeTree -> per-class scalars
 -- Every CREATE is guarded with IF NOT EXISTS so a retried (dirty) migration
 -- can be replayed safely.
--- NOTE: keep semicolons out of comments — the migration runner splits on them.
+-- NOTE: keep semicolons out of comments - the migration runner splits on them.
 
 CREATE TABLE IF NOT EXISTS transactions (
     transaction_id Int64,

@@ -29,7 +29,7 @@ type Scorer interface {
 // score MUST NOT mutate the receiver's contents: one value is shared by every
 // trace of the transaction until the class's data changes. A value receiver
 // copies only the top level, so the danger is writing through what it points at
-// — an element of a set slice, a map entry, or a histogram bucket (Observe/Add,
+// - an element of a set slice, a map entry, or a histogram bucket (Observe/Add,
 // which belong to Merge). Doing so would teach the baseline the very thing it
 // just flagged, and the anomaly would fire once and never again.
 type decodedBaseline interface {
@@ -38,8 +38,8 @@ type decodedBaseline interface {
 
 // baselineDecoder is an optional Scorer capability: it exposes the decode half
 // of Score so the engine can do it once and score many traces against the
-// result. That is safe because a promoted baseline is frozen — processOne stops
-// merging into it, and only promoted classes are scored — so the value being
+// result. That is safe because a promoted baseline is frozen - processOne stops
+// merging into it, and only promoted classes are scored - so the value being
 // reused is one that has stopped changing. Consumed by classState.decodedFor
 // and Engine.scoreEntry; a scorer without this capability still works and is
 // decoded per trace as before.
@@ -81,7 +81,7 @@ type Explainer interface {
 // inspects its OWN evidence and emits EXTRA risk signals for dangerous
 // sub-cases (e.g. a new DB access that is a DELETE, or one on a sensitive
 // table). The base class signal stays low while these add on top, so a benign
-// new read scores "low" and a destructive one "critical" — same class,
+// new read scores "low" and a destructive one "critical" - same class,
 // different severity. Dispatched by Engine.enrichRisk. Signals that correlate
 // ACROSS classes belong in the cross-class registry in enrich.go instead.
 type RiskEnricher interface {
@@ -130,7 +130,7 @@ func ScoredClasses() []repo.DeviationClass {
 // before the transaction's first trace re-seeds it. Callers that present a
 // per-class view (the HTTP API and the debug UI) use this so a class never
 // blinks out of the list during that window: a placeholder is unpromoted with a
-// zero observation count and empty data — exactly "learning, nothing yet".
+// zero observation count and empty data - exactly "learning, nothing yet".
 func FillScoredPlaceholders(transactionID int64, rows []repo.BaselineClass) []repo.BaselineClass {
 	byClass := make(map[repo.DeviationClass]repo.BaselineClass, len(rows))
 	for _, bc := range rows {

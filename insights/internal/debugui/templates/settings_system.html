@@ -42,7 +42,7 @@
 
   <h3>Database writeback</h3>
   <p class="hint" style="margin-bottom:8px;">
-    How often pending learning and occurrence counts are written to ClickHouse. Raise this under DB load; lower it when you want fresher counts. Applies live — no restart.
+    How often pending learning and occurrence counts are written to ClickHouse. Raise this under DB load; lower it when you want fresher counts. Applies live - no restart.
   </p>
   <p class="hint">Flush every
     <input class="inline" type="number" min="1" max="300" name="flush_interval_seconds" value="{{.Settings.FlushIntervalSeconds}}" style="width:5em">
@@ -53,7 +53,7 @@
   <p class="hint" style="margin-bottom:8px;">
     When a service finishes promoting (every transaction leaves learning), automatically
     create an enforced <code>allowed_transactions</code> guardrail. Applies only from that
-    moment forward — services already promoted are not backfilled; enable their guardrail
+    moment forward - services already promoted are not backfilled; enable their guardrail
     from the by-service transactions menu. Per-service disable uses rule mode <code>off</code>.
   </p>
   <label class="hint" style="display:flex; gap:8px; align-items:center;">
@@ -85,7 +85,7 @@
     </div>
 
     <p id="identity-dim-empty" class="hint identity-dim-empty"{{if .Settings.TransactionIdentityDimensions}} style="display:none"{{end}}>
-      No dimensions configured — transactions use the entry span name only.
+      No dimensions configured - transactions use the entry span name only.
     </p>
 
     <div class="identity-dim-actions">

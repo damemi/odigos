@@ -141,7 +141,7 @@ func forbiddenEgress(t *Trace, guardrail repo.ServiceGuardrail, knownServices ma
 // The allowlist holds whole identity strings, so it only means anything for the
 // identity scheme it was seeded under. That scheme changes whenever an operator
 // edits the transaction identity dimensions (say, starts splitting transactions
-// by HTTP status), and every replica picks the edit up on its own reload tick —
+// by HTTP status), and every replica picks the edit up on its own reload tick -
 // so for a short window one replica builds identities the new way while still
 // holding the allowlist seeded the old way. Enforcing then would report every
 // relearned transaction as forbidden. Comparing the two stamps, both of which

@@ -132,7 +132,7 @@ func (baselineCodec) Decode(class repo.DeviationClass, members []string, counter
 		}
 		// Marshal directly (no empty short-circuit) so the Seen marker survives:
 		// a seen-but-siteless baseline decodes to {"seen":true}, and a truly
-		// empty one to {} — both matching a fresh Merge byte-for-byte.
+		// empty one to {} - both matching a fresh Merge byte-for-byte.
 		return json.Marshal(d)
 	case repo.D3Latency:
 		d := d3Data{Latency: histogram.New()}

@@ -17,7 +17,7 @@ import (
 // liveInventoryEpoch reads the generation from storage. Deliberately not taken
 // from a replica's settings snapshot: the snapshot is only what this replica
 // believes, and the comparison exists to catch a replica whose belief is stale.
-// Cold path — one read per flush interval, skipped when nothing accumulated.
+// Cold path - one read per flush interval, skipped when nothing accumulated.
 func liveInventoryEpoch(ctx context.Context, r repo.Repository) (int, error) {
 	settings, err := r.GetSystemSettings(ctx)
 	if err != nil {

@@ -64,7 +64,7 @@ func (g *guardrailRuntime) evaluate(ctx context.Context, t *Trace, tx repo.Trans
 
 // flushViolations drains the buffered occurrences and records them as summed
 // increments. Called on the flush cadence; a failure is logged, not fatal.
-// Counts an inventory reset invalidated are dropped — see liveInventoryEpoch.
+// Counts an inventory reset invalidated are dropped - see liveInventoryEpoch.
 func (g *guardrailRuntime) flushViolations(ctx context.Context) {
 	if g.buf.empty() {
 		return
@@ -88,7 +88,7 @@ func (g *guardrailRuntime) flushViolations(ctx context.Context) {
 
 // remember records an in-mesh service under its namespace. Fast path is a
 // wait-free membership check on the published map; a new (namespace, name)
-// publishes a copy via compare-and-swap, retrying if a racing writer won — so no
+// publishes a copy via compare-and-swap, retrying if a racing writer won - so no
 // writer lock is needed and readers never see a half-updated map.
 func (g *guardrailRuntime) remember(namespace, name string) {
 	if name == "" {
@@ -119,7 +119,7 @@ func (g *guardrailRuntime) inMeshServices(namespace string) map[string]struct{} 
 }
 
 // cloneKnownServices copies the namespace→names map with (namespace, name)
-// added — the copy-on-write input for the CAS in remember. Only the outer map
+// added - the copy-on-write input for the CAS in remember. Only the outer map
 // and the one inner set being extended are cloned; the other inner sets are
 // shared (they are never mutated after publish).
 func cloneKnownServices(cur *map[string]map[string]struct{}, namespace, name string) map[string]map[string]struct{} {
@@ -142,8 +142,8 @@ func cloneKnownServices(cur *map[string]map[string]struct{}, namespace, name str
 
 // captureEvidence stores one whole-trace UI example per violation group.
 // Occurrences are counted separately. The FULL (undecomposed) trace is stored
-// so a forbidden-caller violation — whose offending span sits above this
-// sub-trace's root — is visible.
+// so a forbidden-caller violation - whose offending span sits above this
+// sub-trace's root - is visible.
 func (g *guardrailRuntime) captureEvidence(ctx context.Context, full *Trace, tx repo.Transaction, serviceKey string, rule repo.RuleKey, offending string, now time.Time) {
 	if full == nil || len(full.RawOTLP()) == 0 {
 		return

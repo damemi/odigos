@@ -71,7 +71,7 @@ func scanPolicy(s rowScanner) (repo.Policy, error) {
 func (r *Repo) UpsertAlertPolicy(ctx context.Context, policy repo.Policy) error {
 	// The columns are native Maps: narrow the domain's int weights to the
 	// column's Int32 element type, and always pass a concrete (possibly empty)
-	// map — the driver rejects a nil Map value.
+	// map - the driver rejects a nil Map value.
 	signalWeights := make(map[string]int32, len(policy.SignalWeights))
 	for source, weight := range policy.SignalWeights {
 		signalWeights[string(source)] = int32(weight)

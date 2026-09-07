@@ -145,7 +145,7 @@ func FromGuardrailViolationDetail(g repo.GuardrailViolationGroup) apitypes.Guard
 // violationSummary is the render-ready investigate sentence. The UI should
 // display it as-is (same pattern as anomaly class_findings.summary).
 func violationSummary(service, ruleLabel, offending string) string {
-	return fmt.Sprintf("%s broke %s on %s. This is one captured trace as evidence — the highlighted span(s) show the forbidden edge.",
+	return fmt.Sprintf("%s broke %s on %s. This is one captured trace as evidence - the highlighted span(s) show the forbidden edge.",
 		service, ruleLabel, offending)
 }
 

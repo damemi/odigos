@@ -44,7 +44,7 @@ type findingCounts struct {
 // listAnomalies is the HTTP handler for GET /debug/anomalies (the Findings feed):
 // one card per service, ranked worst-severity first, each nesting the service's
 // policy violations and its transactions-with-anomalies. Everything is actioned
-// inline — a transaction expands to its anomaly issues (each with accept/dismiss)
+// inline - a transaction expands to its anomaly issues (each with accept/dismiss)
 // right here, so the user never leaves the feed. The top tabs
 // (open/dismissed/accepted) filter BOTH kinds by their shared lifecycle bucket.
 func (u *ui) listAnomalies(c *gin.Context) {
@@ -321,7 +321,7 @@ func (u *ui) acceptAnomaly(c *gin.Context) {
 		actionFail(c, redirect, "accept failed: "+err.Error())
 		return
 	}
-	actionOK(c, redirect, "accepted as baseline — this behaviour is now normal and won't re-alert")
+	actionOK(c, redirect, "accepted as baseline - this behaviour is now normal and won't re-alert")
 }
 
 // dismissAnomaly closes an issue without changing the baseline; it moves to the
@@ -340,7 +340,7 @@ func (u *ui) dismissAnomaly(c *gin.Context) {
 		actionFail(c, redirect, "dismiss failed: "+err.Error())
 		return
 	}
-	actionOK(c, redirect, "dismissed — closed without changing the baseline; moved to the Dismissed tab")
+	actionOK(c, redirect, "dismissed - closed without changing the baseline; moved to the Dismissed tab")
 }
 
 // reopenAnomaly moves a dismissed issue back to Open for re-triage.
@@ -358,7 +358,7 @@ func (u *ui) reopenAnomaly(c *gin.Context) {
 		actionFail(c, redirect, "reopen failed: "+err.Error())
 		return
 	}
-	actionOK(c, redirect, "reopened — moved back to the Open tab")
+	actionOK(c, redirect, "reopened - moved back to the Open tab")
 }
 
 // acceptAnomalies / dismissAnomalies apply a bulk action to the checkbox-selected
@@ -414,7 +414,7 @@ func (u *ui) bulkAnomalyAction(c *gin.Context, pastVerb, effect, resolution stri
 		actionFail(c, redirect, msg)
 		return
 	}
-	actionOK(c, redirect, fmt.Sprintf("%s %d anomal%s — %s", pastVerb, done, pluralY(done), effect))
+	actionOK(c, redirect, fmt.Sprintf("%s %d anomal%s - %s", pastVerb, done, pluralY(done), effect))
 }
 
 // pluralY returns the plural suffix for the "anomaly/anomalies" wording.
@@ -428,7 +428,7 @@ func pluralY(n int) string {
 // violationGroupView is one service-scoped policy violation as the Findings feed
 // renders it: a (service, rule, offending item) that broke a guardrail, with its
 // all-time occurrence count and how recently it last broke. Actions are keyed by
-// (scope_key, rule_key, offending) — the counter has no per-trace row id.
+// (scope_key, rule_key, offending) - the counter has no per-trace row id.
 type violationGroupView struct {
 	Service     string
 	Namespace   string
@@ -477,7 +477,7 @@ func (u *ui) acceptViolation(c *gin.Context) {
 		actionFail(c, redirect, "accept failed: "+err.Error())
 		return
 	}
-	actionOK(c, redirect, fmt.Sprintf("accepted %q on %s — this edge is now normal and won't re-alert", offending, scopeKey))
+	actionOK(c, redirect, fmt.Sprintf("accepted %q on %s - this edge is now normal and won't re-alert", offending, scopeKey))
 }
 
 // dismissViolation closes a policy-violation group WITHOUT allowlisting it: the
@@ -498,7 +498,7 @@ func (u *ui) dismissViolation(c *gin.Context) {
 		actionFail(c, redirect, "dismiss failed: "+err.Error())
 		return
 	}
-	actionOK(c, redirect, fmt.Sprintf("dismissed %q on %s — moved to the Dismissed tab", offending, scopeKey))
+	actionOK(c, redirect, fmt.Sprintf("dismissed %q on %s - moved to the Dismissed tab", offending, scopeKey))
 }
 
 // reopenViolation moves a dismissed policy-violation group back to Open for
@@ -518,7 +518,7 @@ func (u *ui) reopenViolation(c *gin.Context) {
 		actionFail(c, redirect, "reopen failed: "+err.Error())
 		return
 	}
-	actionOK(c, redirect, fmt.Sprintf("reopened %q on %s — moved back to the Open tab", offending, scopeKey))
+	actionOK(c, redirect, fmt.Sprintf("reopened %q on %s - moved back to the Open tab", offending, scopeKey))
 }
 
 // findingsRedirect is the Findings URL to return to after an action, preserving
@@ -564,8 +564,8 @@ func actionFail(c *gin.Context, redirect, msg string) {
 }
 
 // violationEvidence is the HTTP handler for GET /debug/guardrails/violations/evidence.
-// It consumes GetGuardrailViolationDetail — the same investigate payload the
-// product UI uses — and maps wire fields into the HTML template.
+// It consumes GetGuardrailViolationDetail - the same investigate payload the
+// product UI uses - and maps wire fields into the HTML template.
 func (u *ui) violationEvidence(c *gin.Context) {
 	scopeKey := strings.TrimSpace(c.Query("scope_key"))
 	ruleKey := repo.RuleKey(strings.TrimSpace(c.Query("rule_key")))

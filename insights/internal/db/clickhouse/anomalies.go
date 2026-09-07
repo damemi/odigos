@@ -131,7 +131,7 @@ const anomalyIssueCols = `a.transaction_id, a.signature, a.triggered_classes, a.
 	t.service, t.namespace, t.operation, t.kind`
 
 // ListAnomalyIssues returns deduped issue summaries whose newest timestamp is
-// within the window, worst/most-recent first. Evidence is not loaded — fetch
+// within the window, worst/most-recent first. Evidence is not loaded - fetch
 // with GetAnomalyIssue for the investigate view.
 func (r *Repo) ListAnomalyIssues(ctx context.Context, f repo.FindingListFilter) ([]repo.AnomalyIssue, error) {
 	limit := f.Limit

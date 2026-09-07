@@ -6,8 +6,8 @@ import (
 )
 
 // SchemaReady reports whether the schema migrations have been applied. The app
-// no longer creates the schema itself — that's done once per rollout by the
-// migration Job (see migrate.Apply) — so replicas use this to stay NOT-ready
+// no longer creates the schema itself - that's done once per rollout by the
+// migration Job (see migrate.Apply) - so replicas use this to stay NOT-ready
 // until the Job has finished, instead of serving against a missing/half-built
 // schema.
 //

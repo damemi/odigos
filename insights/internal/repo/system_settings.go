@@ -167,7 +167,7 @@ func validateTransactionIdentityDimensions(dims []TransactionIdentityDimension) 
 //
 // It exists so stored data can say which scheme it was built under. Editing the
 // identity dimensions is an operator action that reshapes every transaction
-// identity, and each replica applies the edit on its own reload tick — anything
+// identity, and each replica applies the edit on its own reload tick - anything
 // holding identity strings (today: allowed_transactions allowlists) must be able
 // to tell "built under the scheme I am using" from "built under the previous
 // one". Because every replica derives the same stamp from the same config with

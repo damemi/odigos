@@ -40,8 +40,8 @@ const (
 )
 
 // GuardrailRule is one rule type: its id, the signal a break emits, its risk
-// weight/category, and the editor metadata. Weight is deliberately high — a
-// violated rule is a declared-intent break, not a fuzzy anomaly — so an
+// weight/category, and the editor metadata. Weight is deliberately high - a
+// violated rule is a declared-intent break, not a fuzzy anomaly - so an
 // enforced violation lands in the "high" band on its own.
 type GuardrailRule struct {
 	Key       repo.RuleKey

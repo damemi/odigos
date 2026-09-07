@@ -8,8 +8,8 @@ import (
 )
 
 // anomalyBuffer accumulates anomaly firings in memory, keyed by (transaction,
-// signature), so a repeating deviation — which re-fires on every matching
-// request — is flushed as one summed increment per flush interval instead of one
+// signature), so a repeating deviation - which re-fires on every matching
+// request - is flushed as one summed increment per flush interval instead of one
 // row per trace. drain hands the accumulated issues to RecordAnomalyOccurrences
 // and resets the map. Every firing is still counted (no suppression): the count
 // is the security signal.
@@ -76,7 +76,7 @@ func (b *anomalyBuffer) add(o repo.AnomalyOccurrence, inventoryEpoch int) {
 // Every anomaly names a transaction, so a group left behind by an inventory
 // reset is discarded rather than returned: its transaction is gone and writing
 // it would put an issue back in the UI that the reset just cleared.
-// currentInventoryEpoch is the generation live in storage — see
+// currentInventoryEpoch is the generation live in storage - see
 // liveInventoryEpoch.
 func (b *anomalyBuffer) drain(currentInventoryEpoch int) []repo.AnomalyOccurrence {
 	b.mu.Lock()

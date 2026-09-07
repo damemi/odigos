@@ -10,7 +10,7 @@ import (
 )
 
 // Metrics:
-//   - insights_policy_cache_lookups_total{result="hit|miss"} — hit = served
+//   - insights_policy_cache_lookups_total{result="hit|miss"} - hit = served
 //     from memory, miss = refreshed from the DB. A miss falls through to the
 //     metrics layer, which counts it under
 //     insights_repo_calls_total{method="ListEnabledPolicies"}.

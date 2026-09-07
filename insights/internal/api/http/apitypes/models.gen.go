@@ -507,7 +507,7 @@ type AnomalyClassFinding struct {
 // AnomalyClassFindingKind How to present one class finding. Structural = span-tree / attribute highlights; metric = observed vs baseline gauge.
 type AnomalyClassFindingKind string
 
-// AnomalyIssue Full anomaly for investigate/compare. **Detail path only** — includes `evidence`, optional `risk`, render-ready `class_findings`, and optional `anomaly_trace` / `baseline_trace` for the compare waterfall. Never returned by `listAnomalies` or `listFindings`.
+// AnomalyIssue Full anomaly for investigate/compare. **Detail path only** - includes `evidence`, optional `risk`, render-ready `class_findings`, and optional `anomaly_trace` / `baseline_trace` for the compare waterfall. Never returned by `listAnomalies` or `listFindings`.
 //
 // Examples: {"class_findings":[{"class":"D2_egress","kind":"structural","summary":"New peer 45.83.12.7:8443 not in the learned baseline.","title":"Unexpected egress"}],"evidence":{"D2_egress":{"baseline_peers":["default/pricing","checkout.stripe.com:443"],"new_peers":["45.83.12.7:8443"]}},"first_seen":"2026-07-20T09:15:01Z","identity_dimensions":[{"key":"http.response.status_code","value":"403"}],"kind":"HTTP","last_seen":"2026-07-20T14:03:22Z","last_trace_id":"3a5f9c7e1b2d4a6c8e0f1a2b3c4d5e6f","max_score":70,"namespace":"default","occurrences":342,"offending":"new egress to 45.83.12.7:8443","operation":"POST /buy [http.response.status_code=403]","operation_name":"POST /buy","policy_id":1,"service":"frontend","severity":"high","signature":"7f3c2a9e5b1d4c8a","status":"open","transaction_id":4211,"triggered_classes":["D2_egress"]}
 type AnomalyIssue struct {
@@ -543,7 +543,7 @@ type AnomalyIssue struct {
 	Severity      Severity        `json:"severity"`
 	Signature     string          `json:"signature"`
 
-	// Status Lifecycle bucket. `accepted` means the operator confirmed the behaviour is legitimate and folded it into the baseline (it stops re-alerting) — the shared affirmative term with ViolationStatus.
+	// Status Lifecycle bucket. `accepted` means the operator confirmed the behaviour is legitimate and folded it into the baseline (it stops re-alerting) - the shared affirmative term with ViolationStatus.
 	Status           AnomalyStatus    `json:"status"`
 	TransactionId    int64            `json:"transaction_id"`
 	TriggeredClasses []DeviationClass `json:"triggered_classes"`
@@ -555,7 +555,7 @@ type AnomalyIssueList struct {
 	Items []AnomalyIssueSummary `json:"items"`
 }
 
-// AnomalyIssueSummary Deduped anomaly row for tables and feeds. **List path** — no `evidence`. For investigate UI, call `getAnomalyIssue`.
+// AnomalyIssueSummary Deduped anomaly row for tables and feeds. **List path** - no `evidence`. For investigate UI, call `getAnomalyIssue`.
 //
 // Examples: {"first_seen":"2026-07-20T09:15:01Z","identity_dimensions":[{"key":"http.response.status_code","value":"403"}],"kind":"HTTP","last_seen":"2026-07-20T14:03:22Z","last_trace_id":"3a5f9c7e1b2d4a6c8e0f1a2b3c4d5e6f","max_score":70,"namespace":"default","occurrences":342,"offending":"new egress to 45.83.12.7:8443","operation":"POST /buy [http.response.status_code=403]","operation_name":"POST /buy","policy_id":1,"service":"frontend","severity":"high","signature":"7f3c2a9e5b1d4c8a","status":"open","transaction_id":4211,"triggered_classes":["D2_egress"]}
 type AnomalyIssueSummary struct {
@@ -579,7 +579,7 @@ type AnomalyIssueSummary struct {
 	Severity      Severity `json:"severity"`
 	Signature     string   `json:"signature"`
 
-	// Status Lifecycle bucket. `accepted` means the operator confirmed the behaviour is legitimate and folded it into the baseline (it stops re-alerting) — the shared affirmative term with ViolationStatus.
+	// Status Lifecycle bucket. `accepted` means the operator confirmed the behaviour is legitimate and folded it into the baseline (it stops re-alerting) - the shared affirmative term with ViolationStatus.
 	Status           AnomalyStatus    `json:"status"`
 	TransactionId    int64            `json:"transaction_id"`
 	TriggeredClasses []DeviationClass `json:"triggered_classes"`
@@ -617,7 +617,7 @@ type AnomalySpanHighlight struct {
 	SpanId   string `json:"span_id"`
 }
 
-// AnomalyStatus Lifecycle bucket. `accepted` means the operator confirmed the behaviour is legitimate and folded it into the baseline (it stops re-alerting) — the shared affirmative term with ViolationStatus.
+// AnomalyStatus Lifecycle bucket. `accepted` means the operator confirmed the behaviour is legitimate and folded it into the baseline (it stops re-alerting) - the shared affirmative term with ViolationStatus.
 type AnomalyStatus string
 
 // BaselineClass Examples: {"class":"D2_egress","class_description":"Learned set of external destinations (host:port) this transaction reaches.","class_label":"Outbound peers","data":{"peers":["default/pricing","default/cart","checkout.stripe.com:443"]},"data_schema_version":1,"last_changed_at":"2026-07-12T11:20:05Z","learning":{"mode":"any","observations_since_last_change":7213,"phase":"promoted","quiet_minutes":1200,"ready_to_promote":false,"stability":{"duration":{"current":1200,"drives_promotion":false,"met":false,"target":0},"observations":{"current":7213,"drives_promotion":true,"met":true,"target":50}}},"learning_started_at":"2026-07-01T09:00:00Z","observation_count":15234,"observation_count_at_last_change":8021,"promoted":true,"transaction_id":4211}
@@ -711,23 +711,23 @@ type BaselineLearning struct {
 	// ReadyToPromote True when the class is still learning and the full promotion gate is already satisfied (every condition if `mode=all`, one if `any`, K if `k_of`). Always false once `phase` is `promoted`.
 	ReadyToPromote bool `json:"ready_to_promote"`
 
-	// Stability Both stability signals, always present so the UI can show "X / Y observations" and "grew N minutes ago" together. A class may promote on observations, on quiet time, on both, or on neither (display-only observation window of 50). Under `all`, one dimension `met` does not mean the class promotes — use `ready_to_promote`.
+	// Stability Both stability signals, always present so the UI can show "X / Y observations" and "grew N minutes ago" together. A class may promote on observations, on quiet time, on both, or on neither (display-only observation window of 50). Under `all`, one dimension `met` does not mean the class promotes - use `ready_to_promote`.
 	Stability BaselineLearningStability `json:"stability"`
 }
 
 // BaselineLearningPhase Coarse learning state for one class. `promoted` means the baseline is frozen. `empty` means it has never grown (no structure learned yet). `learning` means it has grown and is still in the learning phase.
 type BaselineLearningPhase string
 
-// BaselineLearningStability Both stability signals, always present so the UI can show "X / Y observations" and "grew N minutes ago" together. A class may promote on observations, on quiet time, on both, or on neither (display-only observation window of 50). Under `all`, one dimension `met` does not mean the class promotes — use `ready_to_promote`.
+// BaselineLearningStability Both stability signals, always present so the UI can show "X / Y observations" and "grew N minutes ago" together. A class may promote on observations, on quiet time, on both, or on neither (display-only observation window of 50). Under `all`, one dimension `met` does not mean the class promotes - use `ready_to_promote`.
 type BaselineLearningStability struct {
-	// Duration One stability dimension. For observations, `current`/`target` is a count. For duration, both are minutes. `drives_promotion` is true when the resolved policy has this condition. `target` is 0 when there is no policy target and no display default — still render `current` as "grew N ago". `met` is this dimension only.
+	// Duration One stability dimension. For observations, `current`/`target` is a count. For duration, both are minutes. `drives_promotion` is true when the resolved policy has this condition. `target` is 0 when there is no policy target and no display default - still render `current` as "grew N ago". `met` is this dimension only.
 	Duration BaselineStabilityProgress `json:"duration"`
 
-	// Observations One stability dimension. For observations, `current`/`target` is a count. For duration, both are minutes. `drives_promotion` is true when the resolved policy has this condition. `target` is 0 when there is no policy target and no display default — still render `current` as "grew N ago". `met` is this dimension only.
+	// Observations One stability dimension. For observations, `current`/`target` is a count. For duration, both are minutes. `drives_promotion` is true when the resolved policy has this condition. `target` is 0 when there is no policy target and no display default - still render `current` as "grew N ago". `met` is this dimension only.
 	Observations BaselineStabilityProgress `json:"observations"`
 }
 
-// BaselineStabilityProgress One stability dimension. For observations, `current`/`target` is a count. For duration, both are minutes. `drives_promotion` is true when the resolved policy has this condition. `target` is 0 when there is no policy target and no display default — still render `current` as "grew N ago". `met` is this dimension only.
+// BaselineStabilityProgress One stability dimension. For observations, `current`/`target` is a count. For duration, both are minutes. `drives_promotion` is true when the resolved policy has this condition. `target` is 0 when there is no policy target and no display default - still render `current` as "grew N ago". `met` is this dimension only.
 type BaselineStabilityProgress struct {
 	Current         int64 `json:"current"`
 	DrivesPromotion bool  `json:"drives_promotion"`
@@ -749,7 +749,7 @@ type BlastRadiusEdge struct {
 
 // BlastRadiusNode One service (or virtual dependency) in a blast-radius subgraph. Identity is (namespace, service).
 type BlastRadiusNode struct {
-	// IsVirtual True for an uninstrumented endpoint inferred by the connector rather than a real instrumented service: a virtual server (database, queue, external API) or a virtual client (unmatched ingress, labeled "user"). Virtual nodes are leaves — blast-radius expansion does not walk through them.
+	// IsVirtual True for an uninstrumented endpoint inferred by the connector rather than a real instrumented service: a virtual server (database, queue, external API) or a virtual client (unmatched ingress, labeled "user"). Virtual nodes are leaves - blast-radius expansion does not walk through them.
 	IsVirtual bool   `json:"is_virtual"`
 	Namespace string `json:"namespace"`
 	Service   string `json:"service"`
@@ -978,13 +978,13 @@ type GuardrailViolation struct {
 	Service     string    `json:"service"`
 	Severity    Severity  `json:"severity"`
 
-	// Status Lifecycle bucket. `accepted` means the operator accepted the offending edge as legitimate (it is allowlisted on the guardrail and stops alerting) — the shared affirmative term with AnomalyStatus.
+	// Status Lifecycle bucket. `accepted` means the operator accepted the offending edge as legitimate (it is allowlisted on the guardrail and stops alerting) - the shared affirmative term with AnomalyStatus.
 	Status ViolationStatus `json:"status"`
 }
 
-// GuardrailViolationDetail Full violation for investigate. **Detail path only** — includes a render-ready `summary`, span highlights, and optional `evidence_trace`. Never returned by `listGuardrailViolations` or `listFindings`. Identity is (`scope_key`, `rule_key`, `offending`), analogous to an anomaly's (`transaction_id`, `signature`).
+// GuardrailViolationDetail Full violation for investigate. **Detail path only** - includes a render-ready `summary`, span highlights, and optional `evidence_trace`. Never returned by `listGuardrailViolations` or `listFindings`. Identity is (`scope_key`, `rule_key`, `offending`), analogous to an anomaly's (`transaction_id`, `signature`).
 //
-// Examples: {"first_seen":"2026-07-20T09:15:01Z","last_seen":"2026-07-20T14:03:22Z","max_score":60,"namespace":"default","occurrences":12,"offending":"currency","rule_key":"allowed_callees","rule_label":"Allowed callees","scope_key":"default/frontend","service":"frontend","severity":"high","span_highlights":[{"reason":"unauthorized callee","severity":"high","span_id":"a1b2c3d4"}],"status":"open","summary":"frontend broke Allowed callees on currency. This is one captured trace as evidence — the highlighted span(s) show the forbidden edge."}
+// Examples: {"first_seen":"2026-07-20T09:15:01Z","last_seen":"2026-07-20T14:03:22Z","max_score":60,"namespace":"default","occurrences":12,"offending":"currency","rule_key":"allowed_callees","rule_label":"Allowed callees","scope_key":"default/frontend","service":"frontend","severity":"high","span_highlights":[{"reason":"unauthorized callee","severity":"high","span_id":"a1b2c3d4"}],"status":"open","summary":"frontend broke Allowed callees on currency. This is one captured trace as evidence - the highlighted span(s) show the forbidden edge."}
 type GuardrailViolationDetail struct {
 	// EvidenceTrace Captured sample for this violation (`sample_reason=guardrail:<rule>:<offending>`), including `raw_otlp`. Omitted when no sample was retained.
 	EvidenceTrace *Observation `json:"evidence_trace,omitempty"`
@@ -1003,7 +1003,7 @@ type GuardrailViolationDetail struct {
 	// SpanHighlights Spans on the evidence trace that witness the forbidden edge.
 	SpanHighlights []AnomalySpanHighlight `json:"span_highlights,omitempty"`
 
-	// Status Lifecycle bucket. `accepted` means the operator accepted the offending edge as legitimate (it is allowlisted on the guardrail and stops alerting) — the shared affirmative term with AnomalyStatus.
+	// Status Lifecycle bucket. `accepted` means the operator accepted the offending edge as legitimate (it is allowlisted on the guardrail and stops alerting) - the shared affirmative term with AnomalyStatus.
 	Status ViolationStatus `json:"status"`
 
 	// Summary Render-ready investigate sentence. The UI should display it as-is (service, rule, offending, plus that this payload is evidence for the forbidden edge).
@@ -1066,7 +1066,7 @@ type Observation struct {
 	// RawOtlp Verbatim OTLP protobuf, base64-encoded.
 	RawOtlp []byte `json:"raw_otlp"`
 
-	// SampleReason How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility — it is not the tag written to storage.
+	// SampleReason How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility - it is not the tag written to storage.
 	SampleReason  SampleReason `json:"sample_reason"`
 	TraceId       string       `json:"trace_id"`
 	TransactionId int64        `json:"transaction_id"`
@@ -1078,14 +1078,14 @@ type ObservationList struct {
 	Items []ObservationSummary `json:"items"`
 }
 
-// ObservationSummary Metadata for one retained sample. **List path only** — used by `listObservations`. For the OTLP blob, call `getObservation`.
+// ObservationSummary Metadata for one retained sample. **List path only** - used by `listObservations`. For the OTLP blob, call `getObservation`.
 //
 // Examples: {"duration_ms":137,"observed_at":"2026-07-20T14:03:22Z","sample_reason":"example","trace_id":"3a5f9c7e1b2d4a6c8e0f1a2b3c4d5e6f","transaction_id":4211}
 type ObservationSummary struct {
 	DurationMs int64     `json:"duration_ms"`
 	ObservedAt time.Time `json:"observed_at"`
 
-	// SampleReason How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility — it is not the tag written to storage.
+	// SampleReason How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility - it is not the tag written to storage.
 	SampleReason  SampleReason `json:"sample_reason"`
 	TraceId       string       `json:"trace_id"`
 	TransactionId int64        `json:"transaction_id"`
@@ -1152,7 +1152,7 @@ type RiskSignal struct {
 // RuleMode suggest = observe only; enforce = fire findings; off = disabled (per-service disable for auto transaction guardrail).
 type RuleMode string
 
-// SampleReason How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility — it is not the tag written to storage.
+// SampleReason How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility - it is not the tag written to storage.
 type SampleReason string
 
 // ServiceGuardrail Examples: {"rules":[{"allowlist":["default/gateway"],"key":"allowed_callers","label":"Allowed callers","mode":"enforce"},{"allowlist":["checkout.stripe.com:443"],"key":"allowed_egress","label":"Allowed egress destinations","mode":"suggest"}],"scope":"service","scope_key":"default/frontend"}
@@ -1235,7 +1235,7 @@ type StorageConnection struct {
 type StorageDisk struct {
 	AvailableBytes int64 `json:"available_bytes"`
 
-	// InsightsBytes Bytes used by Insights tables (sum of active parts). Prefer this over filesystem used_bytes when judging Insights storage size — on shared volumes (e.g. kind) filesystem used can include unrelated data.
+	// InsightsBytes Bytes used by Insights tables (sum of active parts). Prefer this over filesystem used_bytes when judging Insights storage size - on shared volumes (e.g. kind) filesystem used can include unrelated data.
 	InsightsBytes int64             `json:"insights_bytes"`
 	Status        StorageDiskStatus `json:"status"`
 
@@ -1338,11 +1338,11 @@ type SystemCapacitySettings struct {
 
 // SystemDetectionSettings Global detection toggles (Threat detection → Detection config).
 type SystemDetectionSettings struct {
-	// AutoTransactionGuardrail When true, automatically create an enforced allowed_transactions guardrail when a service finishes promoting (every transaction leaves learning). Applies only going forward — already-promoted services are not backfilled when this is turned on. Per-service disable uses rule mode off.
+	// AutoTransactionGuardrail When true, automatically create an enforced allowed_transactions guardrail when a service finishes promoting (every transaction leaves learning). Applies only going forward - already-promoted services are not backfilled when this is turned on. Per-service disable uses rule mode off.
 	AutoTransactionGuardrail bool `json:"auto_transaction_guardrail"`
 }
 
-// SystemIdentitySettings Extra dimensions appended to transaction Operation before hashing. Each enabled dimension multiplies cardinality. Use only low-cardinality attributes (e.g. status codes). Do not use user.id, http.url, request ids, emails, or other high-cardinality keys. Changing this setting does not migrate existing baselines — new traffic creates new transaction identities.
+// SystemIdentitySettings Extra dimensions appended to transaction Operation before hashing. Each enabled dimension multiplies cardinality. Use only low-cardinality attributes (e.g. status codes). Do not use user.id, http.url, request ids, emails, or other high-cardinality keys. Changing this setting does not migrate existing baselines - new traffic creates new transaction identities.
 type SystemIdentitySettings struct {
 	TransactionIdentityDimensions []SystemTransactionIdentityDimension `json:"transaction_identity_dimensions"`
 }
@@ -1367,7 +1367,7 @@ type SystemSettings struct {
 	// Detection Global detection toggles (Threat detection → Detection config).
 	Detection SystemDetectionSettings `json:"detection"`
 
-	// Identity Extra dimensions appended to transaction Operation before hashing. Each enabled dimension multiplies cardinality. Use only low-cardinality attributes (e.g. status codes). Do not use user.id, http.url, request ids, emails, or other high-cardinality keys. Changing this setting does not migrate existing baselines — new traffic creates new transaction identities.
+	// Identity Extra dimensions appended to transaction Operation before hashing. Each enabled dimension multiplies cardinality. Use only low-cardinality attributes (e.g. status codes). Do not use user.id, http.url, request ids, emails, or other high-cardinality keys. Changing this setting does not migrate existing baselines - new traffic creates new transaction identities.
 	Identity SystemIdentitySettings `json:"identity"`
 
 	// ResetTransactions Write-only. When true and identity.transaction_identity_dimensions changed vs the stored settings, delete all transactions and related baselines/samples/findings before applying. Ignored when dimensions are unchanged. Never returned by GET.
@@ -1386,13 +1386,13 @@ type SystemTransactionIdentityDimension struct {
 	// Enabled When true, this dimension is applied to new traffic.
 	Enabled bool `json:"enabled"`
 
-	// Key Attribute key or built-in resolver (e.g. http.response.status_code, rpc.grpc.status_code). Must be low-cardinality — high-cardinality keys explode transaction count, memory (max_resident_transactions), and baseline rows.
+	// Key Attribute key or built-in resolver (e.g. http.response.status_code, rpc.grpc.status_code). Must be low-cardinality - high-cardinality keys explode transaction count, memory (max_resident_transactions), and baseline rows.
 	Key string `json:"key"`
 }
 
 // SystemWritebackSettings How often the engine writes pending baseline learning and occurrence counters to ClickHouse. Raise to reduce DB load; lower for fresher UI counts.
 type SystemWritebackSettings struct {
-	// FlushIntervalSeconds Seconds between write-behind flushes (default 15). Applies live — no pod restart. Also covers anomaly and guardrail occurrence drains. Time-based promotion is re-evaluated after each flush.
+	// FlushIntervalSeconds Seconds between write-behind flushes (default 15). Applies live - no pod restart. Also covers anomaly and guardrail occurrence drains. Time-based promotion is re-evaluated after each flush.
 	FlushIntervalSeconds int `json:"flush_interval_seconds"`
 }
 
@@ -1415,7 +1415,7 @@ type Transaction struct {
 	Service       string `json:"service"`
 }
 
-// TransactionIdentityValue One parsed low-cardinality dimension from the stored operation identity suffix ([key=value]). For display only — canonical identity remains in `operation`.
+// TransactionIdentityValue One parsed low-cardinality dimension from the stored operation identity suffix ([key=value]). For display only - canonical identity remains in `operation`.
 type TransactionIdentityValue struct {
 	// Key Attribute key or built-in resolver name.
 	Key string `json:"key"`
@@ -1465,7 +1465,7 @@ type ViolationActionRequest struct {
 	ScopeKey  string `json:"scope_key"`
 }
 
-// ViolationStatus Lifecycle bucket. `accepted` means the operator accepted the offending edge as legitimate (it is allowlisted on the guardrail and stops alerting) — the shared affirmative term with AnomalyStatus.
+// ViolationStatus Lifecycle bucket. `accepted` means the operator accepted the offending edge as legitimate (it is allowlisted on the guardrail and stops alerting) - the shared affirmative term with AnomalyStatus.
 type ViolationStatus string
 
 // FromTime defines model for FromTime.

@@ -46,7 +46,7 @@ func NewRouter(r repo.Repository, log *commonlogger.OdigosLogger) (*gin.Engine, 
 		v1.GET("/service-names", api.listServiceNames)
 		v1.GET("/services/profile", api.getServiceProfile)
 		// Service-graph neighborhood (callers/callees + virtual deps) around one
-		// service — backs the per-anomaly blast-radius map.
+		// service - backs the per-anomaly blast-radius map.
 		v1.GET("/services/blast-radius", api.getServiceBlastRadius)
 
 		// Transactions the UI browses, most frequent first. Filterable by

@@ -77,7 +77,7 @@ func (h *Histogram) Observe(value int64, layout Layout) {
 
 // Add folds another histogram into this one bucket-wise, combining two disjoint
 // observation streams (e.g. a replica's flushed delta into the stored
-// distribution) — additive because each side counted different traces.
+// distribution) - additive because each side counted different traces.
 func (h *Histogram) Add(o Histogram, layout Layout) {
 	h.Ensure(layout)
 	n := layout.bucketCount()

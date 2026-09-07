@@ -10,8 +10,8 @@ import (
 )
 
 // guardrailBuffer accumulates guardrail-violation occurrences in memory, keyed
-// by (scope, scopeKey, rule, offending), so a steadily-broken edge — which
-// re-violates on every request — is flushed as one summed increment per flush
+// by (scope, scopeKey, rule, offending), so a steadily-broken edge - which
+// re-violates on every request - is flushed as one summed increment per flush
 // interval instead of one row per trace. drain hands the accumulated groups to
 // RecordGuardrailViolations and resets the map. Every occurrence is still
 // counted (no cooldown/suppression): the count is the security signal.
@@ -80,7 +80,7 @@ func (b *guardrailBuffer) add(scope repo.PolicyScope, scopeKey string, rule repo
 // after the operator deletes all transactions, the identities they name are gone
 // and writing them would put findings back in the UI that the reset just
 // cleared. currentInventoryEpoch is the generation live in storage, not the one
-// this replica believes in — see liveInventoryEpoch.
+// this replica believes in - see liveInventoryEpoch.
 func (b *guardrailBuffer) drain(currentInventoryEpoch int) []repo.GuardrailViolationHit {
 	b.mu.Lock()
 	agg := b.agg
@@ -110,7 +110,7 @@ func (b *guardrailBuffer) drain(currentInventoryEpoch int) []repo.GuardrailViola
 }
 
 // empty reports whether nothing has accumulated since the last drain, so the
-// flush can be skipped entirely (the common case — most services have no
+// flush can be skipped entirely (the common case - most services have no
 // guardrail).
 func (b *guardrailBuffer) empty() bool {
 	b.mu.Lock()

@@ -66,7 +66,7 @@
     </summary>
     {{if .HasDetails}}
     <div class="trace-row-body">
-      {{if .StatusMsg}}<div class="kv-line"><span class="kv-key">status</span><span>{{.StatusCode}} — {{.StatusMsg}}</span></div>{{end}}
+      {{if .StatusMsg}}<div class="kv-line"><span class="kv-key">status</span><span>{{.StatusCode}} - {{.StatusMsg}}</span></div>{{end}}
       {{if .Scope}}<div class="kv-line"><span class="kv-key">scope</span><code>{{.Scope}}</code></div>{{end}}
       {{if .Attrs}}
       <div class="kv-line"><span class="kv-key">attributes</span></div>

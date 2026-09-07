@@ -43,7 +43,7 @@ type CategoryInfo struct {
 }
 
 // Categories is the category taxonomy (insights plan §9). Bikeshed the numbers
-// here — this is the single source of truth.
+// here - this is the single source of truth.
 var Categories = map[Category]CategoryInfo{
 	CategoryInjection:       {Base: 40, Label: "Injection", Mitre: "T1190", Owasp: "A03"},
 	CategoryExfiltration:    {Base: 35, Label: "Exfiltration", Mitre: "TA0010"},
@@ -191,7 +191,7 @@ const (
 	bandCritical = 75
 
 	// CorrelationBonus is added once when signals span >= 2 kill-chain
-	// categories — a multi-stage attack story is worse than the sum of parts.
+	// categories - a multi-stage attack story is worse than the sum of parts.
 	// Exported so the UI can show it as its own line and reconcile the total.
 	CorrelationBonus = 15
 )
@@ -249,8 +249,8 @@ type Assessment struct {
 }
 
 // DefaultWeight returns the catalog's default weight for a deviation class. ok
-// is false for a class with no catalog entry (a placeholder), so callers — e.g.
-// the policy editor rendering per-class weight fields — can skip it.
+// is false for a class with no catalog entry (a placeholder), so callers - e.g.
+// the policy editor rendering per-class weight fields - can skip it.
 func DefaultWeight(class repo.DeviationClass) (int, bool) {
 	entry, ok := Catalog[class]
 	return entry.Weight, ok
@@ -290,7 +290,7 @@ func ApplyWeightOverrides(signals []Signal, weights map[repo.SignalSource]int) [
 	return signals
 }
 
-// NewCategorySignal builds a signal not tied to a deviation class — the output
+// NewCategorySignal builds a signal not tied to a deviation class - the output
 // of a context enricher or guardrail. The category supplies the threat-intel
 // tags; weight and confidence work as for a class signal. Unlike NewSignal
 // there is no catalog lookup, so it can model a signal the class catalog can't.

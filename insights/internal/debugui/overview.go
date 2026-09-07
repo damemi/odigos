@@ -82,7 +82,7 @@ func chipTone(class repo.DeviationClass) string {
 	}
 }
 
-// index is the HTTP handler for GET /debug: it renders the Overview — a Findings
+// index is the HTTP handler for GET /debug: it renders the Overview - a Findings
 // summary (metric boxes + top findings) and a Transactions summary (metric boxes
 // + busiest transactions), each with a view-all link to its dedicated page.
 // Read-only, cold path.

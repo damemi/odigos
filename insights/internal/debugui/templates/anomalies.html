@@ -2,7 +2,7 @@
 
 {{define "content"}}
 <h2>Findings</h2>
-<p class="hint">Everything worth attention, grouped by service. Each service shows the <strong>policy violations</strong> it caused (a guardrail you declared was broken) and its <strong>transactions with anomalies</strong> (deviations from learned baselines) — expand a transaction to act on its anomalies inline. The tabs track what you've acted on.</p>
+<p class="hint">Everything worth attention, grouped by service. Each service shows the <strong>policy violations</strong> it caused (a guardrail you declared was broken) and its <strong>transactions with anomalies</strong> (deviations from learned baselines) - expand a transaction to act on its anomalies inline. The tabs track what you've acted on.</p>
 
 {{template "timeRangePicker" .TimeRange}}
 
@@ -45,14 +45,14 @@
             <td class="pv-risk">{{template "sevBadge" (dict "Sev" (severityForScore $v.MaxScore) "Score" $v.MaxScore)}}</td>
             <td class="pv-when">{{$v.LastSeen.Format "2006-01-02 15:04:05"}}</td>
             <td class="pv-actions">
-              <a class="btn tip tip-end" data-tip="Open a captured trace showing the forbidden edge — an investigation starting point." href="/debug/guardrails/violations/evidence?scope_key={{$v.ScopeKey}}&amp;rule_key={{$v.RuleKey}}&amp;offending={{$v.Offending}}">investigate</a>
+              <a class="btn tip tip-end" data-tip="Open a captured trace showing the forbidden edge - an investigation starting point." href="/debug/guardrails/violations/evidence?scope_key={{$v.ScopeKey}}&amp;rule_key={{$v.RuleKey}}&amp;offending={{$v.Offending}}">investigate</a>
               {{if ne $v.Status "accepted"}}
               <form class="js-resolve" method="POST" action="/debug/guardrails/violations/accept" data-confirm="Accept {{$v.Offending}}? It is added to {{$card.Service}}'s guardrail allowlist, so this edge becomes normal and stops alerting." data-label="✓ accepted">
                 <input type="hidden" name="scope_key" value="{{$v.ScopeKey}}">
                 <input type="hidden" name="rule_key" value="{{$v.RuleKey}}">
                 <input type="hidden" name="offending" value="{{$v.Offending}}">
                 <input type="hidden" name="tab" value="{{$tab}}">
-                <button type="submit" class="btn btn-primary tip tip-end" data-tip="Accept this edge as legitimate: add it to the service's allowlist and close the finding — the same affirmative action as accepting an anomaly.">accept</button>
+                <button type="submit" class="btn btn-primary tip tip-end" data-tip="Accept this edge as legitimate: add it to the service's allowlist and close the finding - the same affirmative action as accepting an anomaly.">accept</button>
               </form>
               {{end}}
               {{if eq $v.Status "open"}}
@@ -118,7 +118,7 @@
                 <td class="pv-risk">{{template "sevBadge" (dict "Sev" (severityForScore $is.MaxScore) "Score" $is.MaxScore)}}</td>
                 <td class="pv-when">{{$is.LastSeen.Format "2006-01-02 15:04:05"}}</td>
                 <td class="pv-actions">
-                  <a class="btn tip tip-end" data-tip="Open the baseline-vs-anomaly trace comparison — see exactly what deviated." href="/debug/anomalies/issue?transaction_id={{$txn.TransactionID}}&amp;signature={{$is.Signature}}">investigate</a>
+                  <a class="btn tip tip-end" data-tip="Open the baseline-vs-anomaly trace comparison - see exactly what deviated." href="/debug/anomalies/issue?transaction_id={{$txn.TransactionID}}&amp;signature={{$is.Signature}}">investigate</a>
                   {{if ne $tab "accepted"}}
                   <form class="js-resolve" method="POST" action="/debug/anomalies/accept" data-confirm="Accept this anomaly as baseline? Its flagged behaviour becomes normal and stops alerting." data-label="✓ accepted">
                     <input type="hidden" name="transaction_id" value="{{$txn.TransactionID}}">
@@ -159,14 +159,14 @@
 {{else}}
 <div class="empty">
   {{if eq .Tab "dismissed"}}Nothing dismissed yet.
-  {{else if eq .Tab "accepted"}}Nothing accepted yet — no accepted violations or anomalies.
-  {{else}}No open findings in {{.TimeRange.Label}} — no policy violations and no anomalies need attention.{{end}}
+  {{else if eq .Tab "accepted"}}Nothing accepted yet - no accepted violations or anomalies.
+  {{else}}No open findings in {{.TimeRange.Label}} - no policy violations and no anomalies need attention.{{end}}
 </div>
 {{end}}
 
 <script>
   // Persist expand/collapse across refreshes so a user inspecting a service (or a
-  // transaction's anomalies) keeps their place after refreshing — cards default
+  // transaction's anomalies) keeps their place after refreshing - cards default
   // closed, but anything opened stays open. Keyed by a stable data-key in
   // sessionStorage (per tab, cleared when the tab closes).
   (function persistDetails() {

@@ -446,7 +446,7 @@ func TestEngine_ScoreGate(t *testing.T) {
 			if len(r.anomalies) != c.want {
 				t.Fatalf("anomalies = %d, want %d", len(r.anomalies), c.want)
 			}
-			// In a firing case, confirm the isolated signal really is just D1 —
+			// In a firing case, confirm the isolated signal really is just D1 -
 			// this is what makes the exact-threshold math above valid.
 			if c.want == 1 {
 				got := r.anomalies[0].TriggeredClasses
@@ -705,7 +705,7 @@ func TestEngine_TimeBasedPromotion(t *testing.T) {
 }
 
 // TestEngine_WriteBehindIdentity proves transaction rows are not inserted on
-// the hot path — only on Flush — and that delete+reprocess recreates them
+// the hot path - only on Flush - and that delete+reprocess recreates them
 // without an identity cache.
 func TestEngine_WriteBehindIdentity(t *testing.T) {
 	r := newFakeRepo()
@@ -975,8 +975,8 @@ func TestDecodeRequest_BuildsTrace(t *testing.T) {
 // saving: the engine scores every trace that arrives but stores only a handful
 // per transaction, so a decoded trace should carry nothing but a pointer to its
 // own spans and pay to encode them only if it turns out to be worth keeping.
-// Encoding up front would change no behaviour at all — which is exactly why it
-// needs a test — while costing about a tenth of the service's CPU.
+// Encoding up front would change no behaviour at all - which is exactly why it
+// needs a test - while costing about a tenth of the service's CPU.
 func TestDecodeRequest_EncodesOnlyWhenAsked(t *testing.T) {
 	tid := []byte{9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9}
 	rootID := []byte{1, 1, 1, 1, 1, 1, 1, 1}
@@ -1142,7 +1142,7 @@ func TestDecodeRequest_StripsNULBytes(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// fakeRepo — in-memory Repository for engine tests.
+// fakeRepo - in-memory Repository for engine tests.
 // -----------------------------------------------------------------------------
 
 type fakeRepo struct {
@@ -1195,7 +1195,7 @@ func countOnlyConfig(min int64) *LearningConfig {
 }
 
 // alertConfigFrom builds an AlertConfig from a set of policies, indexing each by
-// its scope via the shared repo.ScopeIndex — the same path the engine uses at
+// its scope via the shared repo.ScopeIndex - the same path the engine uses at
 // runtime. Used by integration tests that assert firing behaviour.
 func alertConfigFrom(policies ...repo.Policy) *AlertConfig {
 	idx := &repo.ScopeIndex[repo.Policy]{}

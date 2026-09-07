@@ -3,7 +3,7 @@
 // source of truth). Handlers call these mappers so repo refactors never leak
 // into the API, and adding a wire field is a spec change + a mapper line, never
 // a hand-maintained duplicate struct. This package holds no type definitions of
-// its own — only the repo<->apitypes conversions.
+// its own - only the repo<->apitypes conversions.
 package apimap
 
 import (
@@ -186,7 +186,7 @@ func BaselineClassList(in []repo.BaselineClass, learning []engine.BaselineLearni
 }
 
 // FromObservationSummary maps one repo.Observation to the list wire type
-// (metadata only — never includes raw_otlp).
+// (metadata only - never includes raw_otlp).
 func FromObservationSummary(o repo.Observation) apitypes.ObservationSummary {
 	return apitypes.ObservationSummary{
 		TraceId:       o.TraceID,

@@ -249,7 +249,7 @@ func TestEngine_NestedEntryFiresOwnAnomaly(t *testing.T) {
 	}
 
 	// Attack: coupon suddenly egresses to a new peer over a new library with a
-	// new edge — 3 deviation classes, all originating under coupon.
+	// new edge - 3 deviation classes, all originating under coupon.
 	attack := buyTrace("ldap.lookup", "coupon", tracepb.Span_SPAN_KIND_CLIENT,
 		map[string]string{"server.address": "attacker.com", "server.port": "1389"}, "ldap")
 	eng.Process(context.Background(), attack)

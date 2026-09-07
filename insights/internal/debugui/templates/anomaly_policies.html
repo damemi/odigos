@@ -48,14 +48,14 @@
       </div>
     </div>
 
-    <div class="pol-preview">Will <span class="preview-text">—</span></div>
+    <div class="pol-preview">Will <span class="preview-text">-</span></div>
 
     <details class="adv">
       <summary>Customize signal weights (advanced)</summary>
       <div class="adv-body">
         <div class="sig-legend">
           <b>How scoring works.</b> Every detected signal adds its <b>weight</b> (points) to a 0–100 risk score; the
-          policy fires when the total reaches the threshold above. Weights are points, not percentages — where a signal
+          policy fires when the total reaches the threshold above. Weights are points, not percentages - where a signal
           alone lands:
           <span class="band band-low">low</span> 20 ·
           <span class="band band-medium">medium</span> 35 ·
@@ -74,7 +74,7 @@
             <div class="sig-head">
               <span class="sig-name">{{classLabel .}}</span>
               <code class="sig-code">{{.}}</code>
-              {{if classMitre .}}<span class="badge cat tip" data-tip="MITRE {{classMitre .}} — {{tagDescription (classMitre .)}}">{{classCategory .}}</span>{{else}}<span class="badge cat">{{classCategory .}}</span>{{end}}
+              {{if classMitre .}}<span class="badge cat tip" data-tip="MITRE {{classMitre .}} - {{tagDescription (classMitre .)}}">{{classCategory .}}</span>{{else}}<span class="badge cat">{{classCategory .}}</span>{{end}}
             </div>
             <div class="sig-desc">{{classDesc .}}</div>
             <div class="wrow">
@@ -86,7 +86,7 @@
             {{$enr := enrichersForClass .}}
             {{if $enr}}
             <div class="subcases">
-              <div class="subcases-head">Dangerous sub-cases — added on top of the base when detected:</div>
+              <div class="subcases-head">Dangerous sub-cases - added on top of the base when detected:</div>
               {{range $enr}}
               <div class="wrow sub">
                 <span class="wlabel">{{.Label}}</span>
@@ -184,7 +184,7 @@
 <h2>Anomaly policies</h2>
 <p class="hint" style="max-width:900px;">
   A policy fires an anomaly when a trace's deviations add up to a <b>risk score</b> at or above its threshold. Most of
-  the time you only set the <b>threshold</b> — signal weights have sensible defaults. There is a <b>global default</b>
+  the time you only set the <b>threshold</b> - signal weights have sensible defaults. There is a <b>global default</b>
   plus optional <b>overrides</b> for one service or one transaction; the <em>most specific</em> policy wins
   (transaction &rarr; service &rarr; global) and fully replaces the broader one, and a disabled override silences
   alerting for its scope. Lower the threshold to catch more, raise it to cut noise. Distinct from

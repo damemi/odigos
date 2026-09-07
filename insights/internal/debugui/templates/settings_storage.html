@@ -25,9 +25,9 @@
 <h3>Connection</h3>
 <div class="stats" style="flex-wrap:wrap;">
   <div class="stat"><div class="label">Reachable</div><div class="value">{{if .Connection.Reachable}}OK{{else}}No{{end}}</div></div>
-  <div class="stat"><div class="label">Ping latency</div><div class="value">{{if .Connection.Reachable}}{{.Connection.PingLatencyMs}} ms{{else}}—{{end}}</div></div>
-  <div class="stat"><div class="label">ClickHouse version</div><div class="value" style="font-size:16px;">{{or .Connection.Version "—"}}</div></div>
-  <div class="stat"><div class="label">Database</div><div class="value" style="font-size:16px;">{{or .Connection.Database "—"}}</div></div>
+  <div class="stat"><div class="label">Ping latency</div><div class="value">{{if .Connection.Reachable}}{{.Connection.PingLatencyMs}} ms{{else}}-{{end}}</div></div>
+  <div class="stat"><div class="label">ClickHouse version</div><div class="value" style="font-size:16px;">{{or .Connection.Version "-"}}</div></div>
+  <div class="stat"><div class="label">Database</div><div class="value" style="font-size:16px;">{{or .Connection.Database "-"}}</div></div>
 </div>
 {{if .Connection.Error}}<p class="hint" style="color:var(--warn);">{{.Connection.Error}}</p>{{end}}
 
@@ -42,7 +42,7 @@
     {{else if eq .Disk.Status "warning"}}<span class="badge badge-warn">{{printf "%.0f" .Disk.UsedPercent}}% used</span>
     {{else}}<span class="badge" style="background:#e0f1d9;color:#2c6e1a;">{{printf "%.0f" .Disk.UsedPercent}}% used</span>{{end}}
   </div>
-  <p class="hint" style="margin:0 0 10px;">On kind/shared volumes this includes unrelated host data — use Insights data above for stored size.</p>
+  <p class="hint" style="margin:0 0 10px;">On kind/shared volumes this includes unrelated host data - use Insights data above for stored size.</p>
   <div style="height:10px;background:#eee;border-radius:4px;overflow:hidden;margin-bottom:12px;">
     <div style="height:100%;width:{{printf "%.1f" .Disk.UsedPercent}}%;background:var(--accent);"></div>
   </div>
@@ -159,9 +159,9 @@
 
 <h3>Insights ↔ DB</h3>
 <div class="stats" style="flex-wrap:wrap;">
-  <div class="stat"><div class="label">Last flush</div><div class="value" style="font-size:18px;">{{if not .Writeback.EverFlushed}}—{{else if .Writeback.LastFlushOk}}OK{{else}}Error{{end}}</div></div>
-  <div class="stat"><div class="label">Last flush at</div><div class="value" style="font-size:18px;">{{if .Writeback.EverFlushed}}{{humanTime .Writeback.LastFlushAt}}{{else}}—{{end}}</div></div>
-  <div class="stat"><div class="label">Last flush error</div><div class="value" style="font-size:14px;">{{if .Writeback.LastFlushError}}{{.Writeback.LastFlushError}}{{else}}—{{end}}</div></div>
+  <div class="stat"><div class="label">Last flush</div><div class="value" style="font-size:18px;">{{if not .Writeback.EverFlushed}}-{{else if .Writeback.LastFlushOk}}OK{{else}}Error{{end}}</div></div>
+  <div class="stat"><div class="label">Last flush at</div><div class="value" style="font-size:18px;">{{if .Writeback.EverFlushed}}{{humanTime .Writeback.LastFlushAt}}{{else}}-{{end}}</div></div>
+  <div class="stat"><div class="label">Last flush error</div><div class="value" style="font-size:14px;">{{if .Writeback.LastFlushError}}{{.Writeback.LastFlushError}}{{else}}-{{end}}</div></div>
 </div>
 {{end}}
 

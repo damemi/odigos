@@ -14,7 +14,7 @@ import (
 // anomalySignature is a stable identity for a class of identical anomaly firings
 // on one transaction, so repeated firings dedup into one issue instead of one
 // stored row per trace. It hashes the transaction, the sorted triggered classes,
-// and the offending items each class's evidence flags as new — the parts that
+// and the offending items each class's evidence flags as new - the parts that
 // make two firings "the same finding". Trace id, timestamp, and score vary per
 // firing and are deliberately excluded. Returns the hex signature and a short
 // human-readable offending summary for the feed.

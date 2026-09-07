@@ -90,12 +90,12 @@ func (baseline d8Data) scoreWithLayout(t *Trace, layout histogram.Layout) (bool,
 }
 
 // d8ResponseExfilRatio is how many times over the learned response p99 a
-// response body must be to be flagged as bulk extraction — a gross overshoot
+// response body must be to be flagged as bulk extraction - a gross overshoot
 // ("dumped the whole table"), not "returned a few extra rows".
 const d8ResponseExfilRatio = 10
 
 // EnrichRisk implements RiskEnricher: it flags a D8 deviation where the RESPONSE
-// body dwarfs the learned baseline — a classic bulk data-extraction signature
+// body dwarfs the learned baseline - a classic bulk data-extraction signature
 // (mass export / scraping). Only the response side matters; an oversized
 // request is already covered by the base signal. cfg is unused.
 func (d8PayloadSize) EnrichRisk(evidence json.RawMessage, _ enrichConfig) []risk.Signal {
@@ -113,7 +113,7 @@ func (d8PayloadSize) EnrichRisk(evidence json.RawMessage, _ enrichConfig) []risk
 		return nil
 	}
 	return []risk.Signal{enricherSignal("d8_response_exfil", risk.CategoryExfiltration,
-		fmt.Sprintf("response body %d bytes is ≥%d× the learned p99 (%d) — possible bulk data extraction",
+		fmt.Sprintf("response body %d bytes is ≥%d× the learned p99 (%d) - possible bulk data extraction",
 			ev.RespSize, d8ResponseExfilRatio, ev.RespP99))}
 }
 

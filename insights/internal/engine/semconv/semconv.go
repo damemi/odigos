@@ -72,7 +72,7 @@ const (
 	MaxCapturedArgs = 5
 )
 
-// Legacy fallbacks — attributes we still consult because pre-v1.21
+// Legacy fallbacks - attributes we still consult because pre-v1.21
 // instrumentations emit them. semconv no longer exposes typed constants for
 // them, so they live here as plain strings with a TODO.
 //

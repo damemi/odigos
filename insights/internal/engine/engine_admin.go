@@ -97,7 +97,7 @@ func (e *Engine) ResetTransactionBaselines(ctx context.Context, transactionID in
 	}
 	e.store.removeEntry(transactionID)
 	// Drop findings scored against the now-wiped baseline: they'd otherwise
-	// contradict the fresh baseline in the feed. Best-effort — if the behaviour
+	// contradict the fresh baseline in the feed. Best-effort - if the behaviour
 	// is still anomalous it re-fires against the new baseline as a fresh issue.
 	if err := e.repo.DeleteAnomalyIssues(ctx, transactionID); err != nil {
 		e.warn("delete anomaly issues on re-learn", err)
@@ -149,7 +149,7 @@ func (e *Engine) DeleteAllTransactions(ctx context.Context) error {
 // once-novel behaviour becomes normal and stops alerting. Only the classes that
 // triggered the issue are widened, and they stay promoted (not sent back to
 // learning). The issue is then marked accepted (sticky). The trace folded in is
-// the newest stored sample for the signature — LastTraceID may point at a firing
+// the newest stored sample for the signature - LastTraceID may point at a firing
 // the throttled sampler never captured, so we take what is actually on disk.
 func (e *Engine) AcceptAnomalyIssue(ctx context.Context, transactionID int64, signature string) error {
 	issue, ok, err := e.repo.GetAnomalyIssue(ctx, transactionID, signature)

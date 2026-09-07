@@ -33,7 +33,7 @@ func newAlertConfig(idx *repo.ScopeIndex[repo.Policy]) *AlertConfig {
 // Resolve returns the most specific policy governing a (transaction, service),
 // where serviceKey is repo.ServiceScopeKey(namespace, service). Disabled
 // overrides are indexed too, so a disabled scope suppresses alerting rather
-// than falling back to global — callers must check Policy.Enabled. ok is false
+// than falling back to global - callers must check Policy.Enabled. ok is false
 // when no scope matches at all.
 func (cfg *AlertConfig) Resolve(transactionID int64, serviceKey string) (repo.Policy, bool) {
 	if cfg == nil {

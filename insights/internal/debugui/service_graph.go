@@ -80,8 +80,8 @@ type serviceMapView struct {
 }
 
 // buildServiceMap turns a subgraph into a laid-out SVG view model. Columns are
-// assigned by directional BFS from the root — callees to the right (positive),
-// callers to the left (negative) — preferring the shorter relationship when a
+// assigned by directional BFS from the root - callees to the right (positive),
+// callers to the left (negative) - preferring the shorter relationship when a
 // node is reachable both ways, with an undirected fallback for mixed paths.
 func buildServiceMap(sub repo.BlastRadiusSubgraph) serviceMapView {
 	var v serviceMapView

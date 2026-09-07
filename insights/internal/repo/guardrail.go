@@ -67,7 +67,7 @@ func InventoryOptedOut(g ServiceGuardrail, rule RuleKey) bool {
 }
 
 // ServiceGuardrail is an operator-declared, service-scoped policy about how a
-// service may communicate — L7 micro-segmentation of intent, not learned
+// service may communicate - L7 micro-segmentation of intent, not learned
 // "normal". A break is a policy violation surfaced in the Findings feed.
 //
 // Rules are open-ended: each RuleKey names a rule type in the risk guardrail
@@ -93,7 +93,7 @@ type ServiceGuardrail struct {
 
 // SetRuleFingerprint stamps a rule with the config its allowlist was built
 // under, allocating the map on first use. An empty fingerprint clears the stamp,
-// which leaves the rule unenforceable — the intended state for a list whose
+// which leaves the rule unenforceable - the intended state for a list whose
 // provenance is unknown.
 func SetRuleFingerprint(guardrail *ServiceGuardrail, rule RuleKey, fingerprint string) {
 	if fingerprint == "" {
@@ -160,7 +160,7 @@ const (
 	// The count keeps rising if the edge still fires, so the operator can watch
 	// a "known but not acted on" violation without it cluttering the open tab.
 	GuardrailViolationDismissed GuardrailViolationStatus = "dismissed"
-	// GuardrailViolationAccepted was accepted as legitimate — the offending edge
+	// GuardrailViolationAccepted was accepted as legitimate - the offending edge
 	// is allowlisted on the guardrail so it stops alerting. Sticky: once accepted
 	// it stays here.
 	GuardrailViolationAccepted GuardrailViolationStatus = "accepted"

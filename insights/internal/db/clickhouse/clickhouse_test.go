@@ -140,7 +140,7 @@ func TestSetBaselineUnionAndIdempotency(t *testing.T) {
 	}}, nil); err != nil {
 		t.Fatalf("flush 2: %v", err)
 	}
-	// Flush 3: replay flush 2 exactly — must not add members (idempotent) but
+	// Flush 3: replay flush 2 exactly - must not add members (idempotent) but
 	// DOES add to observation_count (accepted counter behavior).
 	if _, err := r.ApplyBaselineDeltas(ctx, []repo.BaselineDelta{{
 		TransactionID: txID, Class: repo.D1CallEdges,
@@ -395,8 +395,8 @@ func TestAnomalyIssueLifecycle(t *testing.T) {
 
 // TestListAnomalyIssuesByTransactionScoped is the regression guard for the
 // deduped-anomaly read fragment. It asserts the transaction-scoped read (a) runs
-// at all — a shadowing alias once made argMax read an aggregate, failing with
-// ILLEGAL_AGGREGATION (error 184) — and (b) returns only the requested
+// at all - a shadowing alias once made argMax read an aggregate, failing with
+// ILLEGAL_AGGREGATION (error 184) - and (b) returns only the requested
 // transaction's issues, since the page filters in SQL, not in Go.
 func TestListAnomalyIssuesByTransactionScoped(t *testing.T) {
 	r := testRepo(t)
@@ -608,7 +608,7 @@ func TestObservationCountAndBoundedRead(t *testing.T) {
 // written as a row with occurrences=0 carrying the decision timestamp; a
 // SummingMergeTree drops any all-zero-summing-column row on merge, which would
 // silently discard the decision and leave the group "open" forever. The table is
-// therefore an AggregatingMergeTree — this test asserts a resolution sticks and
+// therefore an AggregatingMergeTree - this test asserts a resolution sticks and
 // the count still sums.
 func TestGuardrailViolationResolutionSticks(t *testing.T) {
 	r := testRepo(t)

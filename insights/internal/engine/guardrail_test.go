@@ -12,7 +12,7 @@ import (
 )
 
 // guardrailConfigFrom builds a GuardrailConfig from a set of guardrails via the
-// shared repo.ScopeIndex — the same path the engine uses at runtime.
+// shared repo.ScopeIndex - the same path the engine uses at runtime.
 func guardrailConfigFrom(guardrails ...repo.ServiceGuardrail) *GuardrailConfig {
 	idx := &repo.ScopeIndex[repo.ServiceGuardrail]{}
 	for _, g := range guardrails {

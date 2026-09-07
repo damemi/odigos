@@ -34,7 +34,7 @@ func dangerous(ev map[string]json.RawMessage) []risk.Signal {
 }
 
 func TestD7Enricher_BenignReadIsQuiet(t *testing.T) {
-	// A new SELECT on a mundane table must add NOTHING — the base D7 signal
+	// A new SELECT on a mundane table must add NOTHING - the base D7 signal
 	// already covers the "new access" novelty; we don't want to escalate noise.
 	got := dangerous(d7Evidence(
 		[]map[string]string{{"table": "products", "op": "SELECT"}}, nil))
@@ -81,7 +81,7 @@ func TestD7Enricher_InjectionShape(t *testing.T) {
 	}
 
 	// A two-table join is below the threshold; an opaque (#hash) shape is not a
-	// real table list — neither should trip the enricher.
+	// real table list - neither should trip the enricher.
 	quiet := dangerous(d7Evidence(nil, []map[string]string{
 		{"op": "SELECT", "tables": "orders,users"},
 		{"op": "SELECT", "tables": "#deadbeef"},
@@ -93,7 +93,7 @@ func TestD7Enricher_InjectionShape(t *testing.T) {
 
 func TestD7Enricher_SchemaRecon(t *testing.T) {
 	// A new access to a system-catalog table is schema enumeration; it must add
-	// an Injection-category signal, and — being Injection — a mundane new table
+	// an Injection-category signal, and - being Injection - a mundane new table
 	// beside it must not.
 	got := sourcesOf(dangerous(d7Evidence(
 		[]map[string]string{
@@ -137,7 +137,7 @@ func TestD7Enricher_NoD7EvidenceIsQuiet(t *testing.T) {
 
 // TestD7Enricher_EscalatesScore covers the core enricher property: a benign new
 // read stays "low", but a destructive op on a sensitive table becomes
-// "critical" — same base D7 deviation, very different score.
+// "critical" - same base D7 deviation, very different score.
 func TestD7Enricher_EscalatesScore(t *testing.T) {
 	base, _ := risk.NewSignal(repo.D7DBAccess, 1.0, "new db access")
 

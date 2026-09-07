@@ -2,7 +2,7 @@
 
 {{define "content"}}
 <h2>{{.Scope}}</h2>
-<p class="hint">Sortable columns show ↕ — click to sort, click again to reverse. Sort by <strong>Last seen</strong> (oldest first) to find inactive transactions to delete. Use the checkboxes to promote or delete several at once.</p>
+<p class="hint">Sortable columns show ↕ - click to sort, click again to reverse. Sort by <strong>Last seen</strong> (oldest first) to find inactive transactions to delete. Use the checkboxes to promote or delete several at once.</p>
 
 <div class="tabs">
   <a class="tab {{if not .ScopedToSvc}}active{{end}}" href="/debug/transactions?view=all">all transactions ({{.TransactionCount}})</a>
@@ -48,7 +48,7 @@
         <td><span class="badge badge-kind">{{.Kind}}</span></td>
         <td>{{.Volume}}</td>
         <td>
-          {{if not .HasBaseline}}<span class="hint">—</span>
+          {{if not .HasBaseline}}<span class="hint">-</span>
           {{else if .Promoted}}<span class="badge badge-ok">&#10003; promoted</span>
           {{else}}<span class="badge badge-pending">learning</span>{{end}}
         </td>

@@ -21,7 +21,7 @@ func (r *Repo) UpsertTransaction(ctx context.Context, service, namespace, operat
 	return tx, nil
 }
 
-// UpsertTransactions batch-inserts transaction identity rows. Idempotent —
+// UpsertTransactions batch-inserts transaction identity rows. Idempotent -
 // same id every time, so ReplacingMergeTree collapses repeats.
 func (r *Repo) UpsertTransactions(ctx context.Context, txs []repo.Transaction) error {
 	if len(txs) == 0 {

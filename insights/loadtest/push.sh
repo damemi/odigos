@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build + push insights-k6-runner to public ECR (single arch — fast).
+# Build + push insights-k6-runner to public ECR (single arch - fast).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"

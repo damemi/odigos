@@ -10,7 +10,7 @@ import "time"
 // ObservedAt. Because trace load balancing can spread an edge's spans across
 // several gateway pods, the counters are tracked per CollectorPod and the store
 // keeps the latest value per (edge, pod); reads sum across pods. Exact totals
-// are not the goal here — the blast-radius view needs edge existence, direction,
+// are not the goal here - the blast-radius view needs edge existence, direction,
 // virtual-ness, and rough magnitude/error presence.
 type ServiceGraphEdge struct {
 	ClientNamespace string

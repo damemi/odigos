@@ -15,7 +15,7 @@ import (
 )
 
 // d7DBAccess scores against the database accesses a transaction makes, tracking
-// two compact, bounded facets — never raw SQL text:
+// two compact, bounded facets - never raw SQL text:
 //
 //   - accesses: the set of (system, namespace, table, operation) touched.
 //     Catches a new table or a new operation on a known table (a read path that
@@ -237,9 +237,9 @@ const d7InjectionShapeMinTables = 3
 
 // EnrichRisk implements RiskEnricher: it escalates a D7 deviation beyond a
 // benign new read. The base D7 signal stays low while these add-on signals push
-// the score up only for dangerous sub-cases — a destructive operation, access
+// the score up only for dangerous sub-cases - a destructive operation, access
 // to a sensitive table, a new multi-table (join) query shape, or access to a
-// schema-catalog table (schema enumeration) — reusing the scorer's own
+// schema-catalog table (schema enumeration) - reusing the scorer's own
 // dbAccess/queryShape types from the evidence.
 func (d7DBAccess) EnrichRisk(evidence json.RawMessage, cfg enrichConfig) []risk.Signal {
 	if len(evidence) == 0 {
@@ -277,7 +277,7 @@ func (d7DBAccess) EnrichRisk(evidence json.RawMessage, cfg enrichConfig) []risk.
 	}
 	for _, shape := range ev.NewQueryShapes {
 		// A "#"-prefixed Tables value is an opaque statement hash, not a real
-		// table list — skip it (see buildQueryShape above).
+		// table list - skip it (see buildQueryShape above).
 		if shape.Tables == "" || strings.HasPrefix(shape.Tables, "#") {
 			continue
 		}
@@ -478,7 +478,7 @@ func tablesForSpan(s *Span, queryText string) []string {
 // operation plus the sorted, unique table list. When no table could be parsed
 // (a tableless statement like `SELECT 1`, or a shape the heuristic doesn't
 // understand) the Tables field becomes a "#"-prefixed hash of the normalized
-// text instead — bounding it to 16 chars and marking it opaque, while staying
+// text instead - bounding it to 16 chars and marking it opaque, while staying
 // stable across literals so the statement won't re-trigger after learning.
 func buildQueryShape(op string, tables []string, queryText string) queryShape {
 	if len(tables) > 0 {
@@ -520,14 +520,14 @@ var sqlTableKeywords = map[string]struct{}{
 
 // sqlNonTableTokens are words that can immediately follow a table keyword but
 // are not tables, so we skip them. The classic case is SQLAlchemy 2.0's
-// "insertmanyvalues": INSERT INTO t (...) SELECT ... FROM (VALUES (...)) — the
+// "insertmanyvalues": INSERT INTO t (...) SELECT ... FROM (VALUES (...)) - the
 // token after FROM is "(VALUES", which must not be learned as a table.
 var sqlNonTableTokens = map[string]struct{}{
 	"SELECT": {}, "VALUES": {}, "SET": {}, "WHERE": {}, "LATERAL": {},
 }
 
 // parseSQLTables is a lightweight heuristic: it captures the token following
-// FROM/JOIN/INTO/UPDATE. It is NOT a full SQL parser — CTEs, subqueries, and
+// FROM/JOIN/INTO/UPDATE. It is NOT a full SQL parser - CTEs, subqueries, and
 // comma-separated FROM lists beyond the first table are not covered.
 func parseSQLTables(query string) []string {
 	fields := strings.Fields(query)
@@ -576,7 +576,7 @@ func normalizeQuery(q string) string {
 	return strings.TrimSpace(q)
 }
 
-// shortHash returns the first 8 bytes (16 hex chars) of a SHA-1 of s — a
+// shortHash returns the first 8 bytes (16 hex chars) of a SHA-1 of s - a
 // non-cryptographic fingerprint for bounding opaque query shapes, not a
 // security primitive. 64 bits easily avoids collisions across the few tableless
 // statements a transaction makes.

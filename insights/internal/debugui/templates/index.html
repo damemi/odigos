@@ -65,7 +65,7 @@
         <td><span class="badge badge-kind">{{.Kind}}</span></td>
         <td>{{humanCount .Volume}}</td>
         <td>
-          {{if not .HasBaseline}}<span class="hint">—</span>
+          {{if not .HasBaseline}}<span class="hint">-</span>
           {{else if .Promoted}}<span class="badge badge-ok">&#10003; promoted</span>
           {{else}}<span class="badge badge-pending">learning</span>{{end}}
         </td>

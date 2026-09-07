@@ -56,7 +56,7 @@ func (a *API) ApplySystemSettings(ctx context.Context, body apitypes.SystemSetti
 	// another replica learns its resident baselines describe a deleted
 	// inventory. Wiping first leaves a window where a reloading replica still
 	// reads the old epoch and old dimensions, so it neither clears nor stops
-	// scoring — it keeps firing anomalies against baselines this call just
+	// scoring - it keeps firing anomalies against baselines this call just
 	// deleted, and keeps flushing them back into the emptied tables.
 	if err := a.Repo.UpsertSystemSettings(ctx, s); err != nil {
 		return err

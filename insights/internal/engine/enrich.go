@@ -30,7 +30,7 @@ type enrichConfig struct {
 }
 
 // list returns the scope's override for a list key, or defaultList when the
-// scope has none — how an enricher reads its configurable list without knowing
+// scope has none - how an enricher reads its configurable list without knowing
 // whether the scope customized it.
 func (c enrichConfig) list(key repo.EnricherListKey, defaultList []string) []string {
 	if override, ok := c.lists[key]; ok && len(override) > 0 {
@@ -46,7 +46,7 @@ func (c enrichConfig) list(key repo.EnricherListKey, defaultList []string) []str
 type crossClassEnricher func(evidence map[string]json.RawMessage, cfg enrichConfig) []risk.Signal
 
 // crossClassEnrichers is the registry of cross-class correlation enrichers,
-// consumed by enrichRisk. Intentionally empty today — register one here and it
+// consumed by enrichRisk. Intentionally empty today - register one here and it
 // runs for every fired trace.
 var crossClassEnrichers []crossClassEnricher
 

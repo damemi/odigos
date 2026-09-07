@@ -18,7 +18,7 @@ import (
 // migrationFiles holds the versioned SQL migrations (golang-migrate layout:
 // <version>_<name>.{up,down}.sql). They are embedded into the binary so the
 // same image can both serve traffic and, via `insights migrate`, apply the
-// schema — no separate migration image or mounted files needed.
+// schema - no separate migration image or mounted files needed.
 //
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
@@ -27,7 +27,7 @@ var migrationFiles embed.FS
 // own short-lived database/sql connection (independent of the serving Repo) so
 // it can run as a standalone step.
 //
-// This is meant to run exactly ONCE per rollout — from the Helm migration Job —
+// This is meant to run exactly ONCE per rollout - from the Helm migration Job -
 // not from every app replica, so replicas can scale without racing on DDL.
 // golang-migrate records applied versions in a schema_migrations table and skips
 // them next time, so re-running is a no-op.
@@ -75,8 +75,8 @@ func Apply(dsn string) error {
 //
 // golang-migrate flips schema_migrations.dirty=true before running a migration
 // and clears it only on success, then REFUSES to run anything while dirty
-// (ErrDirty). A single failed migration therefore wedges every future rollout —
-// even after the SQL is fixed — until a human manually forces the version. That
+// (ErrDirty). A single failed migration therefore wedges every future rollout -
+// even after the SQL is fixed - until a human manually forces the version. That
 // manual step is the "everytime the migrations fail I'm stuck" pain.
 //
 // Instead, on a dirty database we force the version back to the last good one

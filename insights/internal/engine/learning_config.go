@@ -4,7 +4,7 @@ package engine
 //
 // Defaults are seeded by the schema migrations (see the clickhouse/migrate
 // package). The engine keeps the learning_policies table in an in-memory
-// snapshot and consults it on the per-trace path with a plain map lookup — no
+// snapshot and consults it on the per-trace path with a plain map lookup - no
 // DB round-trip per request. The snapshot is swapped atomically, so a
 // background Reload can pick up edits at runtime without ever moving the read
 // onto the hot path and without a restart.
@@ -72,7 +72,7 @@ func (cfg *LearningConfig) For(class repo.DeviationClass) repo.LearningPolicy {
 // Resolve returns the most specific policy that governs a (transaction, class):
 // a transaction override wins over a service override, which wins over the
 // global default. serviceKey is repo.ServiceScopeKey(namespace, service). Pure
-// in-memory lookup (two map probes at most) — safe on the per-trace path. With
+// in-memory lookup (two map probes at most) - safe on the per-trace path. With
 // no match at any level it returns the zero policy (count-only default).
 func (cfg *LearningConfig) Resolve(class repo.DeviationClass, transactionID int64, serviceKey string) repo.LearningPolicy {
 	if cfg == nil {

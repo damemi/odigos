@@ -116,14 +116,14 @@ type Counter struct {
 // set members (kept as a union, idempotent) and counters (summed, additive). A
 // class uses one shape or the other; classes with no persisted data return
 // nothing. The engine owns the JSON shapes and supplies the implementation (see
-// engine.NewBaselineCodec), keeping the backend ignorant — like BaselineMerger.
+// engine.NewBaselineCodec), keeping the backend ignorant - like BaselineMerger.
 type BaselineCodec interface {
 	// Encode splits a class's stored JSON value into its set members and/or
 	// additive counters.
 	Encode(class DeviationClass, data json.RawMessage) (members []string, counters []Counter, err error)
 
 	// Decode rebuilds a class's JSON value from its merged members and summed
-	// counters — the inverse of Encode.
+	// counters - the inverse of Encode.
 	Decode(class DeviationClass, members []string, counters []Counter) (json.RawMessage, error)
 }
 

@@ -17,7 +17,7 @@ const DefaultMinObservations int64 = 50
 // each condition is evaluated independently and combined per the policy mode:
 // "all" needs every condition, "any" needs one, "k_of" needs MinMatches. An
 // unknown condition type is treated as unmet, so it can never satisfy "any"
-// and always blocks "all" — the safe direction (never promote on a criterion
+// and always blocks "all" - the safe direction (never promote on a criterion
 // this build can't evaluate).
 func shouldPromote(p repo.LearningPolicy, bc repo.BaselineClass, now time.Time) bool {
 	if bc.Promoted {
@@ -62,7 +62,7 @@ func conditionMet(c repo.LearningCondition, bc repo.BaselineClass, now time.Time
 		// Stability is only meaningful once the baseline has actually grown at
 		// least once. A class that has learned nothing (still empty) has nothing
 		// settled to lock in, and promoting it empty would leave a frozen,
-		// unusable class the health guard then resets — an endless reset loop.
+		// unusable class the health guard then resets - an endless reset loop.
 		// So an empty class keeps learning until it observes something.
 		if c.StableObservations <= 0 || !baselineGrewOnce(bc) {
 			return false
@@ -70,7 +70,7 @@ func conditionMet(c repo.LearningCondition, bc repo.BaselineClass, now time.Time
 		return observationsSinceChange(bc) >= c.StableObservations
 	case repo.ConditionStableDuration:
 		// Quiet time is measured from the last growth. Never grown (still empty)
-		// is not "stable" — same reasoning as ConditionStableObservations.
+		// is not "stable" - same reasoning as ConditionStableObservations.
 		if c.StableMinutes <= 0 || !baselineGrewOnce(bc) {
 			return false
 		}

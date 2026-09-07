@@ -22,7 +22,7 @@ func (e *Engine) assessRisk(deviated []repo.DeviationClass, evidence map[string]
 		confidence := confidenceForClass(class, evidence[string(class)])
 		signal, ok := risk.NewSignal(class, confidence, titleFor(class))
 		if !ok {
-			continue // class not in the catalog (placeholder) — skip, don't zero-score
+			continue // class not in the catalog (placeholder) - skip, don't zero-score
 		}
 		signals = append(signals, signal)
 	}

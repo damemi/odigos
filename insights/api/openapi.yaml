@@ -26,12 +26,12 @@ info:
     | Bulk-delete transactions | `POST /transactions` | Many single `DELETE`s |
     | Promote all classes of a txn | `POST /transactions/{id}/baselines/promote` | Per-class promote |
     | Bulk-promote transactions | `POST /transactions/promote` | Many single baselines/promote |
-    | Baseline editor on txn page | `GET …/baseline` | — |
+    | Baseline editor on txn page | `GET …/baseline` | - |
 
     Shared query params on findings list endpoints: `window_hours` (relative
     lookback, default 168 = 7d, max 2880 = 120d) or absolute `from`/`to`
     (RFC3339 or YYYY-MM-DD), plus `service`, `namespace`, `status`
-    (open | dismissed | accepted — `accepted` is the shared affirmative status
+    (open | dismissed | accepted - `accepted` is the shared affirmative status
     for both anomalies and guardrail violations). Same time params on
     `GET /transactions` filter by `last_seen` (active in range only).
 
@@ -120,7 +120,7 @@ paths:
       description: >
         Every distinct service name Insights has seen in transactions, sorted
         alphabetically. Cluster-wide candidate set for guardrail caller/callee
-        allowlists — fetch once and combine client-side with a per-service
+        allowlists - fetch once and combine client-side with a per-service
         profile's observed callers/callees.
       operationId: listServiceNames
       responses:
@@ -167,8 +167,8 @@ paths:
         here can affect and the callees it can implicate, out to `depth` hops in
         both directions. Derived from the gateway's servicegraph connector
         metrics (not per-trace), so it reflects recent aggregate topology rather
-        than a single request. Virtual (uninstrumented) dependencies — databases,
-        queues, external APIs — appear as leaf nodes. Backs the per-anomaly
+        than a single request. Virtual (uninstrumented) dependencies - databases,
+        queues, external APIs - appear as leaf nodes. Backs the per-anomaly
         "Blast radius" service map on the investigate page.
       operationId: getServiceBlastRadius
       parameters:
@@ -205,7 +205,7 @@ paths:
         `last_seen` falls in the range (excludes inactive / never-seen rows).
         Same semantics as findings list endpoints (default lookback 7d when omitted).
 
-        **Not for:** page header on a known transaction — use
+        **Not for:** page header on a known transaction - use
         `GET /transactions/{transaction_id}` instead (cheaper, no volume).
       operationId: listTransactions
       parameters:
@@ -293,7 +293,7 @@ paths:
         **Use for:** transaction detail page title, breadcrumbs, policy scope when
         you already have `transaction_id` (e.g. from a finding row).
 
-        **Not for:** browsing or sorting by traffic — use `GET /transactions`
+        **Not for:** browsing or sorting by traffic - use `GET /transactions`
         (`TransactionStat` includes volume and last_seen).
       operationId: getTransaction
       parameters:
@@ -431,9 +431,9 @@ paths:
       summary: List example traces
       description: >
         **Use for:** populating sample lists (examples tab, anomaly compare picker).
-        Returns metadata only — no `raw_otlp`.
+        Returns metadata only - no `raw_otlp`.
 
-        **Not for:** rendering a waterfall — call
+        **Not for:** rendering a waterfall - call
         `GET …/observations/{trace_id}` when the user selects a trace
         (lazy-load the blob).
       operationId: listObservations
@@ -457,7 +457,7 @@ paths:
       tags: [transactions]
       summary: Get one example trace
       description: >
-        **Use for:** trace waterfall, span compare, accept-anomaly flow — any UI
+        **Use for:** trace waterfall, span compare, accept-anomaly flow - any UI
         that needs the verbatim OTLP protobuf (`raw_otlp`, base64).
 
         **Call after:** `listObservations` (or when you already know `trace_id`
@@ -581,7 +581,7 @@ paths:
       tags: [findings]
       summary: List findings
       description: >
-        **Use for:** the main Findings page — one ranked feed mixing anomalies
+        **Use for:** the main Findings page - one ranked feed mixing anomalies
         and guardrail violations. Supports `?kind=anomaly|violation` to show one
         kind only.
 
@@ -618,9 +618,9 @@ paths:
       description: >
         **Use for:** anomalies-only lists (e.g. transaction detail "issues"
         section, or Findings if you merge client-side). Returns
-        `AnomalyIssueSummary` — no `evidence`, no `risk`.
+        `AnomalyIssueSummary` - no `evidence`, no `risk`.
 
-        **Not for:** investigate/compare — use `GET /anomalies/{transaction_id}/{signature}`.
+        **Not for:** investigate/compare - use `GET /anomalies/{transaction_id}/{signature}`.
 
         Prefer `GET /findings` when the screen shows both anomalies and violations.
       operationId: listAnomalies
@@ -667,7 +667,7 @@ paths:
       tags: [anomalies]
       summary: Get one anomaly issue
       description: >
-        **Use for:** the full investigate / compare page in one call — per-class
+        **Use for:** the full investigate / compare page in one call - per-class
         `evidence`, recomputed `risk`, render-ready `class_findings` (title,
         summary, span highlights), plus optional `anomaly_trace` and
         `baseline_trace` OTLP blobs for the side-by-side waterfall.
@@ -871,7 +871,7 @@ paths:
       tags: [guardrails]
       summary: Get one guardrail violation
       description: >
-        **Use for:** the violation investigate page — the analog of
+        **Use for:** the violation investigate page - the analog of
         `GET /anomalies/{transaction_id}/{signature}`. Identity is
         (`scope_key`, `rule_key`, `offending`) because `scope_key` contains a
         slash and cannot be a path segment.
@@ -880,7 +880,7 @@ paths:
         `summary`, span highlights for the forbidden edge, and the retained
         `evidence_trace` OTLP blob when one was captured.
 
-        **Not for:** the findings table — use `GET /guardrails/violations` or
+        **Not for:** the findings table - use `GET /guardrails/violations` or
         `GET /findings`.
       operationId: getGuardrailViolation
       parameters:
@@ -916,7 +916,7 @@ paths:
       description: >
         Accept the offending edge as legitimate: allowlist it on the guardrail
         (reloads the engine) and close the violation (sticky). "Accept" is the
-        shared affirmative resolution — the guardrail analogue of accepting an
+        shared affirmative resolution - the guardrail analogue of accepting an
         anomaly into the baseline.
       operationId: acceptViolation
       requestBody:
@@ -1173,7 +1173,7 @@ components:
         `example` = learning-phase normal traffic for baseline compare.
         Stored anomaly evidence uses `anomaly:<signature>` (one write-once
         sample per issue); pass that exact string when filtering. The legacy
-        enum token `anomaly_evidence` is kept for contract compatibility —
+        enum token `anomaly_evidence` is kept for contract compatibility -
         it is not the tag written to storage.
       enum: [example, anomaly_evidence]
 
@@ -1271,7 +1271,7 @@ components:
             True for an uninstrumented endpoint inferred by the connector rather
             than a real instrumented service: a virtual server (database, queue,
             external API) or a virtual client (unmatched ingress, labeled "user").
-            Virtual nodes are leaves — blast-radius expansion does not walk through them.
+            Virtual nodes are leaves - blast-radius expansion does not walk through them.
           x-go-type-skip-optional-pointer: false
       required: [namespace, service, is_virtual]
 
@@ -1388,7 +1388,7 @@ components:
       type: object
       description: >
         One parsed low-cardinality dimension from the stored operation identity
-        suffix ([key=value]). For display only — canonical identity remains in
+        suffix ([key=value]). For display only - canonical identity remains in
         `operation`.
       properties:
         key:
@@ -1595,7 +1595,7 @@ components:
         One stability dimension. For observations, `current`/`target` is a
         count. For duration, both are minutes. `drives_promotion` is true when
         the resolved policy has this condition. `target` is 0 when there is no
-        policy target and no display default — still render `current` as
+        policy target and no display default - still render `current` as
         "grew N ago". `met` is this dimension only.
       properties:
         current: { type: integer, format: int64 }
@@ -1611,7 +1611,7 @@ components:
         "X / Y observations" and "grew N minutes ago" together. A class may
         promote on observations, on quiet time, on both, or on neither
         (display-only observation window of 50). Under `all`, one dimension
-        `met` does not mean the class promotes — use `ready_to_promote`.
+        `met` does not mean the class promotes - use `ready_to_promote`.
       properties:
         observations: { $ref: "#/components/schemas/BaselineStabilityProgress" }
         duration: { $ref: "#/components/schemas/BaselineStabilityProgress" }
@@ -1647,7 +1647,7 @@ components:
     ObservationSummary:
       type: object
       description: >
-        Metadata for one retained sample. **List path only** — used by
+        Metadata for one retained sample. **List path only** - used by
         `listObservations`. For the OTLP blob, call `getObservation`.
       properties:
         trace_id: { type: string }
@@ -1761,7 +1761,7 @@ components:
       type: string
       description: >
         Lifecycle bucket. `accepted` means the operator confirmed the behaviour
-        is legitimate and folded it into the baseline (it stops re-alerting) —
+        is legitimate and folded it into the baseline (it stops re-alerting) -
         the shared affirmative term with ViolationStatus.
       enum: [open, accepted, dismissed]
 
@@ -1770,7 +1770,7 @@ components:
       description: >
         Lifecycle bucket. `accepted` means the operator accepted the offending
         edge as legitimate (it is allowlisted on the guardrail and stops
-        alerting) — the shared affirmative term with AnomalyStatus.
+        alerting) - the shared affirmative term with AnomalyStatus.
       enum: [open, dismissed, accepted]
 
     RuleMode:
@@ -2029,7 +2029,7 @@ components:
     AnomalyIssueSummary:
       type: object
       description: >
-        Deduped anomaly row for tables and feeds. **List path** — no `evidence`.
+        Deduped anomaly row for tables and feeds. **List path** - no `evidence`.
         For investigate UI, call `getAnomalyIssue`.
       properties:
         transaction_id: { type: integer, format: int64 }
@@ -2158,7 +2158,7 @@ components:
     AnomalyIssue:
       type: object
       description: >
-        Full anomaly for investigate/compare. **Detail path only** — includes
+        Full anomaly for investigate/compare. **Detail path only** - includes
         `evidence`, optional `risk`, render-ready `class_findings`, and optional
         `anomaly_trace` / `baseline_trace` for the compare waterfall. Never
         returned by `listAnomalies` or `listFindings`.
@@ -2314,7 +2314,7 @@ components:
     GuardrailViolationDetail:
       type: object
       description: >
-        Full violation for investigate. **Detail path only** — includes a
+        Full violation for investigate. **Detail path only** - includes a
         render-ready `summary`, span highlights, and optional `evidence_trace`.
         Never returned by `listGuardrailViolations` or `listFindings`. Identity
         is (`scope_key`, `rule_key`, `offending`), analogous to an anomaly's
@@ -2362,7 +2362,7 @@ components:
           first_seen: "2026-07-20T09:15:01Z"
           last_seen: "2026-07-20T14:03:22Z"
           status: open
-          summary: "frontend broke Allowed callees on currency. This is one captured trace as evidence — the highlighted span(s) show the forbidden edge."
+          summary: "frontend broke Allowed callees on currency. This is one captured trace as evidence - the highlighted span(s) show the forbidden edge."
           span_highlights:
             - span_id: "a1b2c3d4"
               severity: high
@@ -2612,7 +2612,7 @@ components:
           minimum: 1
           maximum: 300
           description: >
-            Seconds between write-behind flushes (default 15). Applies live —
+            Seconds between write-behind flushes (default 15). Applies live -
             no pod restart. Also covers anomaly and guardrail occurrence drains.
             Time-based promotion is re-evaluated after each flush.
       required: [flush_interval_seconds]
@@ -2627,7 +2627,7 @@ components:
           description: >
             When true, automatically create an enforced allowed_transactions
             guardrail when a service finishes promoting (every transaction leaves
-            learning). Applies only going forward — already-promoted services are
+            learning). Applies only going forward - already-promoted services are
             not backfilled when this is turned on. Per-service disable uses rule
             mode off.
       required: [auto_transaction_guardrail]
@@ -2643,7 +2643,7 @@ components:
           minLength: 1
           description: >
             Attribute key or built-in resolver (e.g. http.response.status_code,
-            rpc.grpc.status_code). Must be low-cardinality — high-cardinality
+            rpc.grpc.status_code). Must be low-cardinality - high-cardinality
             keys explode transaction count, memory (max_resident_transactions),
             and baseline rows.
         enabled:
@@ -2658,7 +2658,7 @@ components:
         Each enabled dimension multiplies cardinality. Use only low-cardinality
         attributes (e.g. status codes). Do not use user.id, http.url,
         request ids, emails, or other high-cardinality keys. Changing this
-        setting does not migrate existing baselines — new traffic creates new
+        setting does not migrate existing baselines - new traffic creates new
         transaction identities.
       properties:
         transaction_identity_dimensions:
@@ -2713,7 +2713,7 @@ components:
           minimum: 0
           description: >
             Bytes used by Insights tables (sum of active parts). Prefer this over
-            filesystem used_bytes when judging Insights storage size — on shared
+            filesystem used_bytes when judging Insights storage size - on shared
             volumes (e.g. kind) filesystem used can include unrelated data.
         total_bytes:
           type: integer

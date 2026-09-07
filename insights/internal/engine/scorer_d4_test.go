@@ -209,8 +209,8 @@ func TestD4_EmptyCaptureMergeGrowsOnceThenStable(t *testing.T) {
 func TestD4_SeenEmptyBaselineNeverDeviates(t *testing.T) {
 	// The safety property for customers NOT using custom instrumentation: a
 	// baseline that has only ever seen captureless traffic promotes as a "zero
-	// value" and must never flag anything — not even a later probed span with an
-	// injection-looking argument — because no site was ever learned.
+	// value" and must never flag anything - not even a later probed span with an
+	// injection-looking argument - because no site was ever learned.
 	empty := mkTrace(withRoot("GET /users", "users-svc", tracepb.Span_SPAN_KIND_SERVER, nil))
 	baseline := learnD4(t, empty, empty, empty)
 	if !contains(string(baseline), `"seen":true`) {

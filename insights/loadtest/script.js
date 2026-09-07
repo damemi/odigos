@@ -2,10 +2,10 @@ import { sleep } from 'k6';
 import tracing from 'k6/x/tracing';
 
 // Tunables via env (k6-operator / Deployment):
-//   ENDPOINT  — OTLP gRPC host:port (default: insights headless)
-//   VUS       — virtual users (also set via options / TestRun)
-//   SLEEP_MS  — pause between pushes (lower = more load)
-//   TENANTS   — distinct service.namespace values (default 1)
+//   ENDPOINT  - OTLP gRPC host:port (default: insights headless)
+//   VUS       - virtual users (also set via options / TestRun)
+//   SLEEP_MS  - pause between pushes (lower = more load)
+//   TENANTS   - distinct service.namespace values (default 1)
 export const options = {
   vus: Number(__ENV.VUS || 5),
   duration: __ENV.DURATION || '30m',
@@ -23,7 +23,7 @@ const ns = __ENV.TRACE_NAMESPACE || 'loadtest';
 
 // Cardinality contract for this file: every value Insights turns into a
 // baseline key appears below as a literal. A long run has to converge on a
-// stable finding count, so nothing randomized per push may reach these keys —
+// stable finding count, so nothing randomized per push may reach these keys -
 // adding a service, route, table or peer is a deliberate edit.
 //   D1 call edges  (service.name, span name) for every parent/child pair
 //   D2 egress      server.address + server.port on CLIENT and PRODUCER spans
@@ -46,7 +46,7 @@ const stores = {
 };
 
 // The generator fills an unset http.response.status_code from a random pick of
-// {200,201,202,204}, and that attribute is a transaction identity dimension —
+// {200,201,202,204}, and that attribute is a transaction identity dimension -
 // left alone it splits one endpoint into four transactions that each learn from
 // a quarter of the traffic. The method is pinned for a smaller reason: it
 // decides whether a request body size is emitted, which D8 histograms.

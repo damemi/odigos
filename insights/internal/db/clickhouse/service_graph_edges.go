@@ -102,7 +102,7 @@ func syntheticVirtualClient(e repo.BlastRadiusEdge) bool {
 }
 
 // edgesTouching returns every logical edge with (namespace, service) on either
-// end — the inbound (callers) and outbound (callees) of one node.
+// end - the inbound (callers) and outbound (callees) of one node.
 func (r *Repo) edgesTouching(ctx context.Context, namespace, service string) ([]sgEdgeRow, error) {
 	return queryRows(ctx, r.conn, "service graph edges touching",
 		`SELECT `+serviceGraphEdgeCols+`
@@ -117,9 +117,9 @@ func (r *Repo) edgesTouching(ctx context.Context, namespace, service string) ([]
 type nodeKey struct{ ns, svc string }
 
 // QueryBlastRadius does a breadth-first expansion from the anchor, following
-// edges in both directions up to depth hops. Virtual (uninstrumented) nodes —
+// edges in both directions up to depth hops. Virtual (uninstrumented) nodes -
 // both servers (DBs, external APIs) and clients (the synthetic "user" caller)
-// — are treated as leaves so they end the walk instead of acting as a hub.
+// - are treated as leaves so they end the walk instead of acting as a hub.
 func (r *Repo) QueryBlastRadius(ctx context.Context, namespace, service string, depth int) (repo.BlastRadiusSubgraph, error) {
 	return expandBlastRadius(ctx, namespace, service, depth, r.edgesTouching)
 }

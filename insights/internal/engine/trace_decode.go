@@ -47,7 +47,7 @@ type Trace struct {
 
 	// otlpSpans is this trace's spans, sliced out of the batch they arrived in.
 	// Kept in decoded form because a transaction keeps only a handful of traces
-	// — a few examples while it learns, one evidence trace per issue — so the
+	// - a few examples while it learns, one evidence trace per issue - so the
 	// overwhelming majority are scored, learned from and dropped without anyone
 	// ever opening them. Encoding them for storage is left to RawOTLP.
 	otlpSpans *tracepb.TracesData
@@ -68,8 +68,8 @@ type Trace struct {
 	CallerService string
 }
 
-// RawOTLP returns the spans behind the trace a user opens from a finding — the
-// waterfall shown next to the baseline, and what Accept folds back in — encoded
+// RawOTLP returns the spans behind the trace a user opens from a finding - the
+// waterfall shown next to the baseline, and what Accept folds back in - encoded
 // for storage. This is the only place a trace is encoded, and it runs on the
 // first ask, so traffic the engine scores and discards is never encoded at all.
 // Returns nil when the bytes cannot be produced, and the UI falls back as it
@@ -129,7 +129,7 @@ func DecodeRequest(req *tracepb.TracesData) []*Trace {
 // decodeTraceTrees groups an OTLP request's spans by trace_id, links each
 // trace's parent/child spans, and picks its root (copying service.name from the
 // resource onto every span). Traces with no identifiable root are dropped. It
-// does not give a trace access to its own OTLP spans — DecodeRequest wraps it
+// does not give a trace access to its own OTLP spans - DecodeRequest wraps it
 // for that. Also used directly by the render path (SpansFromOTLP).
 func decodeTraceTrees(req *tracepb.TracesData) []*Trace {
 	if req == nil {
@@ -244,7 +244,7 @@ func extractTraceSpans(req *tracepb.TracesData, traceIDHex string) *tracepb.Trac
 const zeroSpanID = "0000000000000000"
 
 // flattenAttrs converts OTLP KeyValues into a string map. Lossy for
-// array/kvlist/bytes values (rare) — the scorers only need scalar attributes.
+// array/kvlist/bytes values (rare) - the scorers only need scalar attributes.
 func flattenAttrs(kvs []*commonpb.KeyValue) map[string]string {
 	if len(kvs) == 0 {
 		return nil

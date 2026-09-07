@@ -2,7 +2,7 @@
 
 {{define "content"}}
 <h2>Transactions by service</h2>
-<p class="hint">Expand a service to see its transactions. Status is Learning or Promoted. A <strong>txn guardrail</strong> badge means an <code>allowed_transactions</code> rule is enforcing — new operations on this service become findings. Use the ⋯ menu to enable/disable that guardrail or force-promote. Use checkboxes to promote or delete several transactions at once.</p>
+<p class="hint">Expand a service to see its transactions. Status is Learning or Promoted. A <strong>txn guardrail</strong> badge means an <code>allowed_transactions</code> rule is enforcing - new operations on this service become findings. Use the ⋯ menu to enable/disable that guardrail or force-promote. Use checkboxes to promote or delete several transactions at once.</p>
 
 <div class="tabs">
   <a class="tab" href="/debug/transactions?view=all">all transactions ({{.TransactionCount}})</a>
@@ -93,7 +93,7 @@
           <td><span class="badge badge-kind">{{.Kind}}</span></td>
           <td>{{.Volume}}</td>
           <td>
-            {{if not .HasBaseline}}<span class="hint">—</span>
+            {{if not .HasBaseline}}<span class="hint">-</span>
             {{else if .Promoted}}<span class="badge badge-ok">&#10003; promoted</span>
             {{else}}<span class="badge badge-pending">learning</span>{{end}}
           </td>
@@ -229,6 +229,6 @@
   })();
 </script>
 {{else}}
-<div class="empty">No transactions yet. Send OTLP traces to <code>:4317</code> — see the overview page for the one-liner.</div>
+<div class="empty">No transactions yet. Send OTLP traces to <code>:4317</code> - see the overview page for the one-liner.</div>
 {{end}}
 {{end}}

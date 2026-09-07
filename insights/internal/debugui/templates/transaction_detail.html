@@ -36,7 +36,7 @@
     <tr>
       <td><span class="tip" data-tip="{{classBaselineDesc $b.Class}}">{{classBaselineLabel $b.Class}}</span></td>
       <td>{{if $b.Promoted}}<span class="badge badge-ok">promoted</span>{{else}}<span class="badge badge-pending">learning</span>{{end}}</td>
-      <td>{{if $b.LearningStartedAt.IsZero}}<span style="color: var(--muted);">—</span>{{else}}{{$b.LearningStartedAt.Format "2006-01-02 15:04:05"}}{{end}}</td>
+      <td>{{if $b.LearningStartedAt.IsZero}}<span style="color: var(--muted);">-</span>{{else}}{{$b.LearningStartedAt.Format "2006-01-02 15:04:05"}}{{end}}</td>
       <td>{{$b.ObservationCount}}</td>
       <td>
         {{$s := $b.Stability}}
@@ -148,12 +148,12 @@
   <button type="button" class="tab" id="tab-ev" onclick="showObsTab('ev')">Anomaly issues ({{len .Issues}})</button>
 </div>
 <div id="pane-ex">
-  <p class="hint">Representative sample of normal traffic — up to {{.ExampleCap}} collected while learning, then collection stops.</p>
+  <p class="hint">Representative sample of normal traffic - up to {{.ExampleCap}} collected while learning, then collection stops.</p>
   {{template "observationSection" .ExSection}}
 </div>
 <div id="pane-ev" style="display:none">
   {{if .Issues}}
-  <p class="hint">Deduped anomaly issues for this transaction — one row per distinct deviation (signature), with how often it fired. Investigate opens the baseline-vs-anomaly comparison.</p>
+  <p class="hint">Deduped anomaly issues for this transaction - one row per distinct deviation (signature), with how often it fired. Investigate opens the baseline-vs-anomaly comparison.</p>
   <table>
     <thead>
       <tr><th>Signals · offending</th><th>Count</th><th class="pv-risk">Risk</th><th>Status</th><th>Last seen</th><th></th></tr>
@@ -192,7 +192,7 @@
 {{end}}
 
 {{/* observationSection renders one tab's worth of trace observations: a table
-     plus one modal <dialog> per row. OTLP is not embedded — "view trace"
+     plus one modal <dialog> per row. OTLP is not embedded - "view trace"
      fetches /debug/transactions/{id}/traces/{trace_id} on click. */}}
 {{define "observationSection"}}
 {{if .Observations}}
@@ -259,7 +259,7 @@
     </summary>
     {{if .HasDetails}}
     <div class="trace-row-body">
-      {{if .StatusMsg}}<div class="kv-line"><span class="kv-key">status</span><span>{{.StatusCode}} — {{.StatusMsg}}</span></div>{{end}}
+      {{if .StatusMsg}}<div class="kv-line"><span class="kv-key">status</span><span>{{.StatusCode}} - {{.StatusMsg}}</span></div>{{end}}
       {{if .Scope}}<div class="kv-line"><span class="kv-key">scope</span><code>{{.Scope}}</code></div>{{end}}
       {{if .Attrs}}
       <div class="kv-line"><span class="kv-key">attributes</span></div>

@@ -71,7 +71,7 @@ type Finding struct {
 // falls back to a minimal finding (title + raw evidence, no highlights).
 //
 // Because both scoring and explaining resolve through the same registry, adding
-// a class is a single change in one place — there is no parallel switch here to
+// a class is a single change in one place - there is no parallel switch here to
 // keep in sync.
 func Explain(class repo.DeviationClass, evidence json.RawMessage, spans []SpanView) Finding {
 	if ex, ok := explainerByClass()[class]; ok {

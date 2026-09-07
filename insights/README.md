@@ -23,7 +23,7 @@ insights/
     repo/                                  # Repository interface + domain types (the DB-swap seam)
     db/clickhouse/                         # ClickHouse implementation (clickhouse-go/v2) + startup DDL
     api/http/                              # Gin HTTP server: /api/v1/* + /healthz + /readyz
-    otlp/                                  # OTLP gRPC receiver — thin shell; hands traces to engine
+    otlp/                                  # OTLP gRPC receiver - thin shell; hands traces to engine
     engine/                                # scoring core: decode, identify transaction, score, fire-or-merge
     debugui/                               # /debug/* HTML inspector (local-dev only)
 ```
@@ -56,7 +56,7 @@ The engine owns the per-class JSON shapes; a `repo.BaselineCodec`
 counters on write and rebuilds it on read, so the ClickHouse layer never has to
 understand what a single class's bytes mean.
 
-A transaction is whatever started the trace — HTTP request, gRPC method,
+A transaction is whatever started the trace - HTTP request, gRPC method,
 Kafka message, cron tick, background goroutine. Examples:
 
 | service | operation | kind |
@@ -70,13 +70,13 @@ Kafka message, cron tick, background goroutine. Examples:
 The built-in deviation classes (see `repo/repo.go` for the typed
 constants and per-class examples):
 
-- **D1_call_edges** — new (caller → callee) edges per transaction
-- **D2_egress** — new downstream destinations per service
-- **D3_latency** — per-span latency distribution / shape
-- **D4_args_returns** — argument / return-value structural anomalies
-- **D5_libraries** — new (code.namespace, library, version) tuples
-- **D6_attr_relations** — learned cross-attribute relations
-- **D7_db_access** — new database access (system, namespace, table, operation)
+- **D1_call_edges** - new (caller → callee) edges per transaction
+- **D2_egress** - new downstream destinations per service
+- **D3_latency** - per-span latency distribution / shape
+- **D4_args_returns** - argument / return-value structural anomalies
+- **D5_libraries** - new (code.namespace, library, version) tuples
+- **D6_attr_relations** - learned cross-attribute relations
+- **D7_db_access** - new database access (system, namespace, table, operation)
   and new query shapes (operation + sorted tables)
 
 Adding D8+ requires no schema change: add a constant and a scoring rule.
@@ -106,12 +106,12 @@ go run ./cmd           # start the service
 ```
 
 To evolve the schema after release, **add a new numbered migration** (e.g.
-`000002_add_team.up.sql` + `.down.sql`) — never edit an already-released one, or
+`000002_add_team.up.sql` + `.down.sql`) - never edit an already-released one, or
 clusters that ran the old version will diverge. Two ClickHouse gotchas:
 - No transactional DDL: if a multi-statement file fails partway, golang-migrate
   marks the version *dirty* and refuses to proceed until it's forced. Keep
   statements retry-safe (`IF [NOT] EXISTS`) and simple.
-- The multi-statement splitter splits on `;` literally — **never put a `;`
+- The multi-statement splitter splits on `;` literally - **never put a `;`
   inside a comment**, only inside real statements.
 
 **Adding a column.** New migration with
@@ -147,7 +147,7 @@ runs for every trace the OTLP receiver decodes and does the following:
    `kind` is derived from `Span.Kind` + a few OTel attributes
    (`rpc.system=grpc` → `GRPC`, `faas.trigger=timer` → `CRON`, etc.).
    Traces whose root is an outbound CLIENT span are dropped silently
-   (broken context propagation — see `discardableRoot` in
+   (broken context propagation - see `discardableRoot` in
    `engine/transaction.go`).
 2. **Load or seed the 6 baseline rows** for that transaction.
 3. **Score** the trace against every class that is already `promoted`.
@@ -156,7 +156,7 @@ runs for every trace the OTLP receiver decodes and does the following:
    `any-1-of-8`) against the deviated-class set.
 5. **Fire-or-merge.** If a policy matches, insert an `anomalies` row with
    per-class evidence and a `trace_observations` row tagged
-   `anomaly_evidence`, then return — the trace is NOT folded into the
+   `anomaly_evidence`, then return - the trace is NOT folded into the
    baseline (poisoning protection). Otherwise, merge the trace into every
    class, bump `observation_count`, and flip `promoted=true` for any class
    that meets its per-class learning policy (see
@@ -168,12 +168,12 @@ runs for every trace the OTLP receiver decodes and does the following:
    root span); the engine keeps a small bounded set of representatives so
    the debug UI / future product UI can render concrete examples. The
    sampling rules (see `sampler.go`):
-   - `example` — at most one normal trace per transaction per
+   - `example` - at most one normal trace per transaction per
      `ExampleSampleInterval` (default 30s), capped at
      `ExamplesPerTransaction` (10) per transaction. Oldest evicted first
      so the set stays fresh. Throttling by time (rather than by trace
      count) keeps observation writes independent of the trace rate.
-   - `anomaly_evidence` — the trace that fired an anomaly (1 per fire).
+   - `anomaly_evidence` - the trace that fired an anomaly (1 per fire).
      Written by the anomaly path, not by the sampler.
 
 ### What's implemented
@@ -189,7 +189,7 @@ runs for every trace the OTLP receiver decodes and does the following:
 
 Histogram classes (`D3`, `D8`) store a fixed **32-bucket exponential**
 histogram (bucket 0 = value 0; bucket k≥1 covers `[2^(k-1), 2^k)` of the
-observed unit — µs for latency, bytes for payload). `GET …/baseline` includes a
+observed unit - µs for latency, bytes for payload). `GET …/baseline` includes a
 chart-ready `histogram` object (`unit`, `layout_fingerprint`, `series[].bars[]`
 with `lo`/`hi`/`count`/`label`) so the UI can plot without recomputing bounds
 from opaque `data`.
@@ -197,7 +197,7 @@ from opaque `data`.
 #### How exponential buckets work (D3 / D8)
 
 Observations are counted in fixed **exponential** bands (same family as
-Prometheus native histograms / HdrHistogram — wide dynamic range, bounded memory):
+Prometheus native histograms / HdrHistogram - wide dynamic range, bounded memory):
 
 | Band | Values counted |
 |------|----------------|
@@ -205,7 +205,7 @@ Prometheus native histograms / HdrHistogram — wide dynamic range, bounded memo
 | 1 | 1 unit only |
 | k ≥ 1 | 2^(k−1) … 2^k − 1 (µs for latency, bytes for payload) |
 
-**Example — latency with 32 buckets (µs):**
+**Example - latency with 32 buckets (µs):**
 
 | Band | Range |
 |------|-------|
@@ -215,8 +215,8 @@ Prometheus native histograms / HdrHistogram — wide dynamic range, bounded memo
 | 20 | 0.5 s – 1.0 s |
 | 31 (top) | ~18 min and above (everything larger shares this bar) |
 
-| `D4_args_returns` | — (not implemented) | — | not learned or scored yet |
-| `D6_attr_relations` | — (not implemented) | — | not learned or scored yet |
+| `D4_args_returns` | - (not implemented) | - | not learned or scored yet |
+| `D6_attr_relations` | - (not implemented) | - | not learned or scored yet |
 
 ### Adding a not-yet-implemented class
 
@@ -243,11 +243,11 @@ promoting on its first trace. `match_mode=any` is what lets a **rare**
 transaction graduate: a once-a-week cron will never reach an observation count,
 but the time window promotes it anyway. A busy endpoint under the same policy
 promotes early via count. With `all`, a class needs both a large enough sample
-and a long enough soak — used for the distribution/shape classes (D3/D4/D6)
+and a long enough soak - used for the distribution/shape classes (D3/D4/D6)
 where stability matters more than speed.
 
 Default policies (seeded by `000001_initial_schema`): every class promotes on
-**stability** — `any` of "300 observations with no new structure" or "1 week
+**stability** - `any` of "300 observations with no new structure" or "1 week
 structurally stable".
 
 | class | conditions | match mode |
@@ -295,7 +295,7 @@ one trace with a brand-new child span name to fire a D1 deviation.
 - All callers depend on `internal/repo.Repository`, never on a specific DB.
 - Schema changes are versioned SQL migrations in
   `internal/db/clickhouse/migrations/`, applied by `clickhouse.Migrate`
-  (golang-migrate) — run once per rollout, not per replica.
+  (golang-migrate) - run once per rollout, not per replica.
 
 ## Running locally
 
@@ -323,9 +323,9 @@ hardcoded constants in `cmd/main.go` on purpose, configure it will be added in t
 
 Env vars the service reads:
 
-- `CLICKHOUSE_DSN` (required) — `clickhouse://user:pass@host:9000/db` URI.
+- `CLICKHOUSE_DSN` (required) - `clickhouse://user:pass@host:9000/db` URI.
 - `ODIGOS_LOG_LEVEL` (`error|warn|info|debug`, default `info`).
-- `ODIGOS_ONPREM_TOKEN` (or `ODIGOS_CLOUD_TOKEN`) — required to pass
+- `ODIGOS_ONPREM_TOKEN` (or `ODIGOS_CLOUD_TOKEN`) - required to pass
   `odigosauth.AssertEnterpriseOdigosToken` at startup.
 
 ## Debug UI
@@ -338,14 +338,14 @@ var or remove it before the first customer release.
 
 Pages:
 
-- `/debug` — counts of transactions, baseline rows, observations, anomalies, policies.
-- `/debug/transactions` — transactions grouped by service, most active first. Click a service to drill into its transactions, or "all transactions" for the flat list (both ordered by volume).
-- `/debug/transactions/:id` — drill into one: per-class baseline rows (with the rebuilt `data` JSON pretty-printed in a collapsible block) and the sampled trace observations. Each observation shows a waterfall (proto-decoded from `raw_otlp` at render time, same code path the engine uses) and a "show proto-JSON" expander with the full OTLP payload — events, links, status, all attributes.
-- `/debug/anomalies` — last 24h of fired anomalies with their per-class evidence blobs.
-- `/debug/anomaly-policies` — the scoped alert-policy editor: the global default plus per-service and per-transaction overrides (most-specific wins). Edits apply live.
-- `/debug/learning-policies` — the scoped learning-policy editor (per class, per scope).
+- `/debug` - counts of transactions, baseline rows, observations, anomalies, policies.
+- `/debug/transactions` - transactions grouped by service, most active first. Click a service to drill into its transactions, or "all transactions" for the flat list (both ordered by volume).
+- `/debug/transactions/:id` - drill into one: per-class baseline rows (with the rebuilt `data` JSON pretty-printed in a collapsible block) and the sampled trace observations. Each observation shows a waterfall (proto-decoded from `raw_otlp` at render time, same code path the engine uses) and a "show proto-JSON" expander with the full OTLP payload - events, links, status, all attributes.
+- `/debug/anomalies` - last 24h of fired anomalies with their per-class evidence blobs.
+- `/debug/anomaly-policies` - the scoped alert-policy editor: the global default plus per-service and per-transaction overrides (most-specific wins). Edits apply live.
+- `/debug/learning-policies` - the scoped learning-policy editor (per class, per scope).
 
-The UI is read-only for trace data — no seed, no wipe, no ingest routes;
+The UI is read-only for trace data - no seed, no wipe, no ingest routes;
 the only way trace data appears is by sending real OTLP traces to the
 receiver on `:4317` (the overview page has a one-liner with
 `telemetrygen`). It does expose policy/baseline admin actions (edit
@@ -355,7 +355,7 @@ ClickHouse PVC and let the migration Job + the engine repopulate.
 
 The UI talks to the same `Repository` the production HTTP API uses, so
 what you see is exactly what the scoring engine sees at runtime. It
-exists only to make engine development self-contained — no need to wire
+exists only to make engine development self-contained - no need to wire
 a real UI or query ClickHouse by hand while iterating on D1..D6 logic.
 
 

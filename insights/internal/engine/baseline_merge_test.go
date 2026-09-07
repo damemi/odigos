@@ -56,7 +56,7 @@ func TestMergeData_D1UnionsAndSorts(t *testing.T) {
 
 func TestMergeData_D2CoalescesExternalToInMesh(t *testing.T) {
 	// Two replicas saw the same {host,port}. One labeled it external, the
-	// other in-mesh. External must AND so an in-mesh observation wins — otherwise
+	// other in-mesh. External must AND so an in-mesh observation wins - otherwise
 	// the flush path would keep growing / flipping the egress profile.
 	a := json.RawMessage(`{"peers":[{"host":"stripe.com","port":443,"external":true,"owner":"unknown"}]}`)
 	b := json.RawMessage(`{"peers":[{"host":"stripe.com","port":443,"external":false,"owner":"payments"}]}`)

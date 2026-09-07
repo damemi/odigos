@@ -62,7 +62,7 @@ func (a *anomalyRuntime) record(
 
 // flush drains the buffered anomaly firings and records them as summed
 // increments. Called on the flush cadence; a failure is logged, not fatal.
-// Firings an inventory reset invalidated are dropped — see liveInventoryEpoch.
+// Firings an inventory reset invalidated are dropped - see liveInventoryEpoch.
 func (a *anomalyRuntime) flush(ctx context.Context) {
 	if a.buf.empty() {
 		return

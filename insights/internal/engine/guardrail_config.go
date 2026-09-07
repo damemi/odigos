@@ -5,7 +5,7 @@ package engine
 //
 // Mirrors AlertConfig. The engine keeps the service_guardrails table in an
 // in-memory snapshot and resolves the per-transaction guardrail with a lock-free
-// scope lookup — no DB round-trip on the per-trace path. The snapshot is swapped
+// scope lookup - no DB round-trip on the per-trace path. The snapshot is swapped
 // atomically, so a background Reload (and a UI edit) applies at runtime without a
 // restart. Most specific scope wins (transaction → service → global), though v1
 // only authors service-scoped guardrails.
@@ -34,7 +34,7 @@ func newGuardrailConfig(idx *repo.ScopeIndex[repo.ServiceGuardrail]) *GuardrailC
 // Resolve returns the most specific guardrail governing a (transaction,
 // service): a transaction override wins over a service guardrail, which wins over
 // a global one. serviceKey is repo.ServiceScopeKey(namespace, service). ok is
-// false when no scope matches (the common case — most services have no
+// false when no scope matches (the common case - most services have no
 // guardrail). Nil-safe so an engine without a loaded snapshot policing nothing.
 func (cfg *GuardrailConfig) Resolve(transactionID int64, serviceKey string) (repo.ServiceGuardrail, bool) {
 	if cfg == nil {

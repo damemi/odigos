@@ -76,7 +76,7 @@ func (baseline d1Data) score(t *Trace) (bool, json.RawMessage, error) {
 }
 
 // d1FanoutMinServices is the number of DISTINCT new target services one request
-// must reach to be flagged as fan-out — a breadth that looks like lateral
+// must reach to be flagged as fan-out - a breadth that looks like lateral
 // spread or enumeration rather than normal, stable dependencies.
 const d1FanoutMinServices = 5
 
@@ -103,7 +103,7 @@ func (d1CallEdges) EnrichRisk(evidence json.RawMessage, _ enrichConfig) []risk.S
 		return nil
 	}
 	return []risk.Signal{enricherSignal("d1_edge_fanout", risk.CategoryLateralMovement,
-		fmt.Sprintf("reached %d new services in one request — possible lateral movement / enumeration", len(services)))}
+		fmt.Sprintf("reached %d new services in one request - possible lateral movement / enumeration", len(services)))}
 }
 
 func (d1CallEdges) Merge(t *Trace, current json.RawMessage) (json.RawMessage, error) {
@@ -227,7 +227,7 @@ func edgeNodeLabel(n d1Node) string {
 
 // edgesFromTrace walks the span tree and emits a (parent → child) edge for
 // every parent/child pair, each node tagged with its service. The root itself
-// produces no edge — the transaction IS the root, captured by the Transaction
+// produces no edge - the transaction IS the root, captured by the Transaction
 // table, not D1. Used by Score and Merge.
 func edgesFromTrace(t *Trace) []d1Edge {
 	out := []d1Edge{}

@@ -106,8 +106,8 @@ func (a *API) deleteGuardrail(c *gin.Context) {
 }
 
 // seedGuardrail is the POST /api/v1/guardrails/seed handler; it adopts observed
-// communication (callers/callees/egress) into a service's guardrail — the
-// "adopt observed" flow — creating the guardrail if needed, then reloads.
+// communication (callers/callees/egress) into a service's guardrail - the
+// "adopt observed" flow - creating the guardrail if needed, then reloads.
 func (a *API) seedGuardrail(c *gin.Context) {
 	if _, ok := a.requireAdmin(c); !ok {
 		return

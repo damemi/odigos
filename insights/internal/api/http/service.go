@@ -122,7 +122,7 @@ func (a *API) UpsertServiceGuardrail(ctx context.Context, g repo.ServiceGuardrai
 // stampTransactionIdentityScheme records which identity scheme an
 // allowed_transactions allowlist was written under. Every path that stores such
 // a list goes through here, because the engine refuses to enforce a list whose
-// stamp does not match the scheme it is currently building identities with —
+// stamp does not match the scheme it is currently building identities with -
 // that is what stops a stale allowlist from reporting every transaction as
 // forbidden after an operator edits the identity dimensions. Clears the stamp
 // when the rule carries no entries.
@@ -321,7 +321,7 @@ func (a *API) ResetTransactionBaselines(ctx context.Context, txID int64) error {
 
 // ---------- transactions ----------
 
-// ListTransactions is the product API for GET /api/v1/transactions — same
+// ListTransactions is the product API for GET /api/v1/transactions - same
 // OpenAPI params and wire shape the real UI and debug UI consume.
 func (a *API) ListTransactions(ctx context.Context, params apitypes.ListTransactionsParams) (apitypes.TransactionStatList, error) {
 	sortBy, err := repo.NormalizeTransactionSortBy(string(params.SortBy))
@@ -473,7 +473,7 @@ func (a *API) GetObservation(ctx context.Context, transactionID int64, traceID s
 
 // ---------- anomalies / findings ----------
 
-// ListFindings is the product API for GET /api/v1/findings — same params and
+// ListFindings is the product API for GET /api/v1/findings - same params and
 // wire shape the real UI and debug UI consume.
 func (a *API) ListFindings(ctx context.Context, params apitypes.ListFindingsParams) (apitypes.FindingList, error) {
 	filter, err := findingListFilterFromTimeParams(

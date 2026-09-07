@@ -21,7 +21,7 @@ func HashTransactionID(service, namespace, operation string, kind TransactionKin
 }
 
 // NewTransaction builds a Transaction with a deterministic id from its identity
-// fields. Safe to call on the hot path — no DB.
+// fields. Safe to call on the hot path - no DB.
 func NewTransaction(service, namespace, operation string, kind TransactionKind) Transaction {
 	return Transaction{
 		ID:        HashTransactionID(service, namespace, operation, kind),
@@ -46,7 +46,7 @@ const (
 	KindInternal TransactionKind = "INTERNAL" // background goroutine / startup task that starts its own trace
 )
 
-// Transaction is the unique unit of work baselined against — the identity of a
+// Transaction is the unique unit of work baselined against - the identity of a
 // trace's root span. Examples by Kind:
 //
 //	HTTP:     (user-service,   "POST /checkout")

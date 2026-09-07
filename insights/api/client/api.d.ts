@@ -73,7 +73,7 @@ export interface paths {
         };
         /**
          * List distinct service names
-         * @description Every distinct service name Insights has seen in transactions, sorted alphabetically. Cluster-wide candidate set for guardrail caller/callee allowlists — fetch once and combine client-side with a per-service profile's observed callers/callees.
+         * @description Every distinct service name Insights has seen in transactions, sorted alphabetically. Cluster-wide candidate set for guardrail caller/callee allowlists - fetch once and combine client-side with a per-service profile's observed callers/callees.
          */
         get: operations["listServiceNames"];
         put?: never;
@@ -113,7 +113,7 @@ export interface paths {
         };
         /**
          * Get a service's blast-radius subgraph
-         * @description The service-graph neighborhood around one service: the callers an anomaly here can affect and the callees it can implicate, out to `depth` hops in both directions. Derived from the gateway's servicegraph connector metrics (not per-trace), so it reflects recent aggregate topology rather than a single request. Virtual (uninstrumented) dependencies — databases, queues, external APIs — appear as leaf nodes. Backs the per-anomaly "Blast radius" service map on the investigate page.
+         * @description The service-graph neighborhood around one service: the callers an anomaly here can affect and the callees it can implicate, out to `depth` hops in both directions. Derived from the gateway's servicegraph connector metrics (not per-trace), so it reflects recent aggregate topology rather than a single request. Virtual (uninstrumented) dependencies - databases, queues, external APIs - appear as leaf nodes. Backs the per-anomaly "Blast radius" service map on the investigate page.
          */
         get: operations["getServiceBlastRadius"];
         put?: never;
@@ -135,7 +135,7 @@ export interface paths {
          * List transactions
          * @description **Use for:** transaction directory, service drill-down, sorting by volume or last_seen (e.g. find inactive transactions). Pass `namespace` + `service` together to scope to one service. Default sort is `volume` descending.
          *     Optional `window_hours` or `from`/`to` filters to transactions whose `last_seen` falls in the range (excludes inactive / never-seen rows). Same semantics as findings list endpoints (default lookback 7d when omitted).
-         *     **Not for:** page header on a known transaction — use `GET /transactions/{transaction_id}` instead (cheaper, no volume).
+         *     **Not for:** page header on a known transaction - use `GET /transactions/{transaction_id}` instead (cheaper, no volume).
          */
         get: operations["listTransactions"];
         put?: never;
@@ -180,7 +180,7 @@ export interface paths {
         /**
          * Get transaction identity
          * @description **Use for:** transaction detail page title, breadcrumbs, policy scope when you already have `transaction_id` (e.g. from a finding row).
-         *     **Not for:** browsing or sorting by traffic — use `GET /transactions` (`TransactionStat` includes volume and last_seen).
+         *     **Not for:** browsing or sorting by traffic - use `GET /transactions` (`TransactionStat` includes volume and last_seen).
          */
         get: operations["getTransaction"];
         put?: never;
@@ -306,8 +306,8 @@ export interface paths {
         };
         /**
          * List example traces
-         * @description **Use for:** populating sample lists (examples tab, anomaly compare picker). Returns metadata only — no `raw_otlp`.
-         *     **Not for:** rendering a waterfall — call `GET …/observations/{trace_id}` when the user selects a trace (lazy-load the blob).
+         * @description **Use for:** populating sample lists (examples tab, anomaly compare picker). Returns metadata only - no `raw_otlp`.
+         *     **Not for:** rendering a waterfall - call `GET …/observations/{trace_id}` when the user selects a trace (lazy-load the blob).
          */
         get: operations["listObservations"];
         put?: never;
@@ -327,7 +327,7 @@ export interface paths {
         };
         /**
          * Get one example trace
-         * @description **Use for:** trace waterfall, span compare, accept-anomaly flow — any UI that needs the verbatim OTLP protobuf (`raw_otlp`, base64).
+         * @description **Use for:** trace waterfall, span compare, accept-anomaly flow - any UI that needs the verbatim OTLP protobuf (`raw_otlp`, base64).
          *     **Call after:** `listObservations` (or when you already know `trace_id` from an anomaly issue's `last_trace_id`).
          */
         get: operations["getObservation"];
@@ -401,7 +401,7 @@ export interface paths {
         };
         /**
          * List findings
-         * @description **Use for:** the main Findings page — one ranked feed mixing anomalies and guardrail violations. Supports `?kind=anomaly|violation` to show one kind only.
+         * @description **Use for:** the main Findings page - one ranked feed mixing anomalies and guardrail violations. Supports `?kind=anomaly|violation` to show one kind only.
          *     **Not for:** investigate view (no evidence / no trace blobs). On row click: anomalies → `GET /anomalies/{transaction_id}/{signature}`; violations → `GET /guardrails/violations/evidence?scope_key=&rule_key=&offending=`.
          *     Drill-down keys on each row: anomalies use `transaction_id` + `signature`; violations use `scope_key` + `rule_key` + `offending`.
          */
@@ -423,8 +423,8 @@ export interface paths {
         };
         /**
          * List anomaly issues
-         * @description **Use for:** anomalies-only lists (e.g. transaction detail "issues" section, or Findings if you merge client-side). Returns `AnomalyIssueSummary` — no `evidence`, no `risk`.
-         *     **Not for:** investigate/compare — use `GET /anomalies/{transaction_id}/{signature}`.
+         * @description **Use for:** anomalies-only lists (e.g. transaction detail "issues" section, or Findings if you merge client-side). Returns `AnomalyIssueSummary` - no `evidence`, no `risk`.
+         *     **Not for:** investigate/compare - use `GET /anomalies/{transaction_id}/{signature}`.
          *     Prefer `GET /findings` when the screen shows both anomalies and violations.
          */
         get: operations["listAnomalies"];
@@ -449,7 +449,7 @@ export interface paths {
         };
         /**
          * Get one anomaly issue
-         * @description **Use for:** the full investigate / compare page in one call — per-class `evidence`, recomputed `risk`, render-ready `class_findings` (title, summary, span highlights), plus optional `anomaly_trace` and `baseline_trace` OTLP blobs for the side-by-side waterfall.
+         * @description **Use for:** the full investigate / compare page in one call - per-class `evidence`, recomputed `risk`, render-ready `class_findings` (title, summary, span highlights), plus optional `anomaly_trace` and `baseline_trace` OTLP blobs for the side-by-side waterfall.
          *     **Call when:** user opens an anomaly from Findings or a transaction's issue list. Traces are best-effort (omitted when no sample was retained or the observation TTL aged them out). Extra samples still use `listObservations` / `getObservation` when needed.
          */
         get: operations["getAnomalyIssue"];
@@ -600,9 +600,9 @@ export interface paths {
         };
         /**
          * Get one guardrail violation
-         * @description **Use for:** the violation investigate page — the analog of `GET /anomalies/{transaction_id}/{signature}`. Identity is (`scope_key`, `rule_key`, `offending`) because `scope_key` contains a slash and cannot be a path segment.
+         * @description **Use for:** the violation investigate page - the analog of `GET /anomalies/{transaction_id}/{signature}`. Identity is (`scope_key`, `rule_key`, `offending`) because `scope_key` contains a slash and cannot be a path segment.
          *     Returns the violation (service, rule, offending, status), a render-ready `summary`, span highlights for the forbidden edge, and the retained `evidence_trace` OTLP blob when one was captured.
-         *     **Not for:** the findings table — use `GET /guardrails/violations` or `GET /findings`.
+         *     **Not for:** the findings table - use `GET /guardrails/violations` or `GET /findings`.
          */
         get: operations["getGuardrailViolation"];
         put?: never;
@@ -624,7 +624,7 @@ export interface paths {
         put?: never;
         /**
          * Accept a violation
-         * @description Accept the offending edge as legitimate: allowlist it on the guardrail (reloads the engine) and close the violation (sticky). "Accept" is the shared affirmative resolution — the guardrail analogue of accepting an anomaly into the baseline.
+         * @description Accept the offending edge as legitimate: allowlist it on the guardrail (reloads the engine) and close the violation (sticky). "Accept" is the shared affirmative resolution - the guardrail analogue of accepting an anomaly into the baseline.
          */
         post: operations["acceptViolation"];
         delete?: never;
@@ -772,7 +772,7 @@ export interface components {
          */
         DeviationClass: "D1_call_edges" | "D2_egress" | "D3_latency" | "D4_args_returns" | "D5_libraries" | "D6_attr_relations" | "D7_db_access" | "D8_payload_size";
         /**
-         * @description How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility — it is not the tag written to storage.
+         * @description How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility - it is not the tag written to storage.
          * @enum {string}
          */
         SampleReason: "example" | "anomaly_evidence";
@@ -852,7 +852,7 @@ export interface components {
         BlastRadiusNode: {
             namespace: string;
             service: string;
-            /** @description True for an uninstrumented endpoint inferred by the connector rather than a real instrumented service: a virtual server (database, queue, external API) or a virtual client (unmatched ingress, labeled "user"). Virtual nodes are leaves — blast-radius expansion does not walk through them. */
+            /** @description True for an uninstrumented endpoint inferred by the connector rather than a real instrumented service: a virtual server (database, queue, external API) or a virtual client (unmatched ingress, labeled "user"). Virtual nodes are leaves - blast-radius expansion does not walk through them. */
             is_virtual: boolean;
         };
         /** @description A directed client -> server edge. Request/failure counts are summed across gateway pods; treat them as rough magnitude, not exact totals. */
@@ -967,7 +967,7 @@ export interface components {
             count: number;
             items: components["schemas"]["TransactionStat"][];
         };
-        /** @description One parsed low-cardinality dimension from the stored operation identity suffix ([key=value]). For display only — canonical identity remains in `operation`. */
+        /** @description One parsed low-cardinality dimension from the stored operation identity suffix ([key=value]). For display only - canonical identity remains in `operation`. */
         TransactionIdentityValue: {
             /** @description Attribute key or built-in resolver name. */
             key: string;
@@ -1152,7 +1152,7 @@ export interface components {
          * @enum {string}
          */
         BaselineLearningPhase: "promoted" | "empty" | "learning";
-        /** @description One stability dimension. For observations, `current`/`target` is a count. For duration, both are minutes. `drives_promotion` is true when the resolved policy has this condition. `target` is 0 when there is no policy target and no display default — still render `current` as "grew N ago". `met` is this dimension only. */
+        /** @description One stability dimension. For observations, `current`/`target` is a count. For duration, both are minutes. `drives_promotion` is true when the resolved policy has this condition. `target` is 0 when there is no policy target and no display default - still render `current` as "grew N ago". `met` is this dimension only. */
         BaselineStabilityProgress: {
             /** Format: int64 */
             current: number;
@@ -1161,7 +1161,7 @@ export interface components {
             drives_promotion: boolean;
             met: boolean;
         };
-        /** @description Both stability signals, always present so the UI can show "X / Y observations" and "grew N minutes ago" together. A class may promote on observations, on quiet time, on both, or on neither (display-only observation window of 50). Under `all`, one dimension `met` does not mean the class promotes — use `ready_to_promote`. */
+        /** @description Both stability signals, always present so the UI can show "X / Y observations" and "grew N minutes ago" together. A class may promote on observations, on quiet time, on both, or on neither (display-only observation window of 50). Under `all`, one dimension `met` does not mean the class promotes - use `ready_to_promote`. */
         BaselineLearningStability: {
             observations: components["schemas"]["BaselineStabilityProgress"];
             duration: components["schemas"]["BaselineStabilityProgress"];
@@ -1185,7 +1185,7 @@ export interface components {
             stability: components["schemas"]["BaselineLearningStability"];
         };
         /**
-         * @description Metadata for one retained sample. **List path only** — used by `listObservations`. For the OTLP blob, call `getObservation`.
+         * @description Metadata for one retained sample. **List path only** - used by `listObservations`. For the OTLP blob, call `getObservation`.
          * @example {
          *       "trace_id": "3a5f9c7e1b2d4a6c8e0f1a2b3c4d5e6f",
          *       "transaction_id": 4211,
@@ -1288,12 +1288,12 @@ export interface components {
         /** @enum {string} */
         FindingKind: "anomaly" | "violation";
         /**
-         * @description Lifecycle bucket. `accepted` means the operator confirmed the behaviour is legitimate and folded it into the baseline (it stops re-alerting) — the shared affirmative term with ViolationStatus.
+         * @description Lifecycle bucket. `accepted` means the operator confirmed the behaviour is legitimate and folded it into the baseline (it stops re-alerting) - the shared affirmative term with ViolationStatus.
          * @enum {string}
          */
         AnomalyStatus: "open" | "accepted" | "dismissed";
         /**
-         * @description Lifecycle bucket. `accepted` means the operator accepted the offending edge as legitimate (it is allowlisted on the guardrail and stops alerting) — the shared affirmative term with AnomalyStatus.
+         * @description Lifecycle bucket. `accepted` means the operator accepted the offending edge as legitimate (it is allowlisted on the guardrail and stops alerting) - the shared affirmative term with AnomalyStatus.
          * @enum {string}
          */
         ViolationStatus: "open" | "dismissed" | "accepted";
@@ -1495,7 +1495,7 @@ export interface components {
             items: components["schemas"]["Finding"][];
         };
         /**
-         * @description Deduped anomaly row for tables and feeds. **List path** — no `evidence`. For investigate UI, call `getAnomalyIssue`.
+         * @description Deduped anomaly row for tables and feeds. **List path** - no `evidence`. For investigate UI, call `getAnomalyIssue`.
          * @example {
          *       "transaction_id": 4211,
          *       "signature": "7f3c2a9e5b1d4c8a",
@@ -1593,7 +1593,7 @@ export interface components {
             };
         };
         /**
-         * @description Full anomaly for investigate/compare. **Detail path only** — includes `evidence`, optional `risk`, render-ready `class_findings`, and optional `anomaly_trace` / `baseline_trace` for the compare waterfall. Never returned by `listAnomalies` or `listFindings`.
+         * @description Full anomaly for investigate/compare. **Detail path only** - includes `evidence`, optional `risk`, render-ready `class_findings`, and optional `anomaly_trace` / `baseline_trace` for the compare waterfall. Never returned by `listAnomalies` or `listFindings`.
          * @example {
          *       "transaction_id": 4211,
          *       "signature": "7f3c2a9e5b1d4c8a",
@@ -1721,7 +1721,7 @@ export interface components {
             items: components["schemas"]["GuardrailViolation"][];
         };
         /**
-         * @description Full violation for investigate. **Detail path only** — includes a render-ready `summary`, span highlights, and optional `evidence_trace`. Never returned by `listGuardrailViolations` or `listFindings`. Identity is (`scope_key`, `rule_key`, `offending`), analogous to an anomaly's (`transaction_id`, `signature`).
+         * @description Full violation for investigate. **Detail path only** - includes a render-ready `summary`, span highlights, and optional `evidence_trace`. Never returned by `listGuardrailViolations` or `listFindings`. Identity is (`scope_key`, `rule_key`, `offending`), analogous to an anomaly's (`transaction_id`, `signature`).
          * @example {
          *       "service": "frontend",
          *       "namespace": "default",
@@ -1735,7 +1735,7 @@ export interface components {
          *       "first_seen": "2026-07-20T09:15:01Z",
          *       "last_seen": "2026-07-20T14:03:22Z",
          *       "status": "open",
-         *       "summary": "frontend broke Allowed callees on currency. This is one captured trace as evidence — the highlighted span(s) show the forbidden edge.",
+         *       "summary": "frontend broke Allowed callees on currency. This is one captured trace as evidence - the highlighted span(s) show the forbidden edge.",
          *       "span_highlights": [
          *         {
          *           "span_id": "a1b2c3d4",
@@ -1928,22 +1928,22 @@ export interface components {
         };
         /** @description How often the engine writes pending baseline learning and occurrence counters to ClickHouse. Raise to reduce DB load; lower for fresher UI counts. */
         SystemWritebackSettings: {
-            /** @description Seconds between write-behind flushes (default 15). Applies live — no pod restart. Also covers anomaly and guardrail occurrence drains. Time-based promotion is re-evaluated after each flush. */
+            /** @description Seconds between write-behind flushes (default 15). Applies live - no pod restart. Also covers anomaly and guardrail occurrence drains. Time-based promotion is re-evaluated after each flush. */
             flush_interval_seconds: number;
         };
         /** @description Global detection toggles (Threat detection → Detection config). */
         SystemDetectionSettings: {
-            /** @description When true, automatically create an enforced allowed_transactions guardrail when a service finishes promoting (every transaction leaves learning). Applies only going forward — already-promoted services are not backfilled when this is turned on. Per-service disable uses rule mode off. */
+            /** @description When true, automatically create an enforced allowed_transactions guardrail when a service finishes promoting (every transaction leaves learning). Applies only going forward - already-promoted services are not backfilled when this is turned on. Per-service disable uses rule mode off. */
             auto_transaction_guardrail: boolean;
         };
         /** @description One low-cardinality attribute (or built-in resolver key) folded into transaction identity from the sub-transaction entry span only. */
         SystemTransactionIdentityDimension: {
-            /** @description Attribute key or built-in resolver (e.g. http.response.status_code, rpc.grpc.status_code). Must be low-cardinality — high-cardinality keys explode transaction count, memory (max_resident_transactions), and baseline rows. */
+            /** @description Attribute key or built-in resolver (e.g. http.response.status_code, rpc.grpc.status_code). Must be low-cardinality - high-cardinality keys explode transaction count, memory (max_resident_transactions), and baseline rows. */
             key: string;
             /** @description When true, this dimension is applied to new traffic. */
             enabled: boolean;
         };
-        /** @description Extra dimensions appended to transaction Operation before hashing. Each enabled dimension multiplies cardinality. Use only low-cardinality attributes (e.g. status codes). Do not use user.id, http.url, request ids, emails, or other high-cardinality keys. Changing this setting does not migrate existing baselines — new traffic creates new transaction identities. */
+        /** @description Extra dimensions appended to transaction Operation before hashing. Each enabled dimension multiplies cardinality. Use only low-cardinality attributes (e.g. status codes). Do not use user.id, http.url, request ids, emails, or other high-cardinality keys. Changing this setting does not migrate existing baselines - new traffic creates new transaction identities. */
         SystemIdentitySettings: {
             transaction_identity_dimensions: components["schemas"]["SystemTransactionIdentityDimension"][];
         };
@@ -1972,7 +1972,7 @@ export interface components {
         StorageDisk: {
             /**
              * Format: int64
-             * @description Bytes used by Insights tables (sum of active parts). Prefer this over filesystem used_bytes when judging Insights storage size — on shared volumes (e.g. kind) filesystem used can include unrelated data.
+             * @description Bytes used by Insights tables (sum of active parts). Prefer this over filesystem used_bytes when judging Insights storage size - on shared volumes (e.g. kind) filesystem used can include unrelated data.
              */
             insights_bytes: number;
             /**

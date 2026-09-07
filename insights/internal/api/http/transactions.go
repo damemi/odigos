@@ -222,7 +222,7 @@ func (a *API) promoteTransactionBaselines(c *gin.Context) {
 
 // listObservations is the GET /api/v1/transactions/{id}/observations handler; it
 // returns trace-example summaries for one transaction, capped at 100 (metadata
-// only — no raw_otlp). ?sample_reason=example|anomaly:<signature> filters to one
+// only - no raw_otlp). ?sample_reason=example|anomaly:<signature> filters to one
 // bucket. Use getObservation to load a specific blob.
 func (a *API) listObservations(c *gin.Context) {
 	id, ok := parseTransactionID(c)

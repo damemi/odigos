@@ -25,7 +25,7 @@ import (
 //	pricing /calc          learns {pricing}
 //
 // An entry keeps a single caller-independent identity while its baseline carries
-// only what lives at or below it — a transaction's own baseline IS its context,
+// only what lives at or below it - a transaction's own baseline IS its context,
 // with no edges table or union view. Outer and inner subtrees overlap on
 // purpose, so one deep deviation can surface under several transactions;
 // deduping via nearest-owner attribution is handled elsewhere.
@@ -80,7 +80,7 @@ func serviceEntrySpans(t *Trace) []*Span {
 	return entries
 }
 
-// subtreeSpans returns the entry span plus every descendant, flattened — the
+// subtreeSpans returns the entry span plus every descendant, flattened - the
 // sub-trace's Spans slice that the flat-iterating scorers (D2/D5/D7/D8) consume.
 func subtreeSpans(entry *Span) []*Span {
 	var out []*Span
@@ -197,7 +197,7 @@ func reRootedOTLP(td *tracepb.TracesData, entryID string, ids map[string]struct{
 					// Re-parent a copy: these spans are shared with this
 					// trace's other entries and with the batch they arrived in,
 					// and detaching the span in place would leave an enclosing
-					// entry's stored trace with two roots — a broken waterfall
+					// entry's stored trace with two roots - a broken waterfall
 					// for whoever opens it.
 					cp := proto.Clone(sp).(*tracepb.Span)
 					cp.ParentSpanId = nil

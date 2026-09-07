@@ -113,7 +113,7 @@ func joinOr(conds []string) string {
 // baselinesFor rebuilds baseline rows for one or more transactions from the
 // three storage tables, re-aggregating at read time (sum/max/min, group members)
 // so the result is correct even before ClickHouse collapses background parts.
-// Cold path — never per trace.
+// Cold path - never per trace.
 func (r *Repo) baselinesFor(ctx context.Context, transactionIDs []int64) ([]repo.BaselineClass, error) {
 	if len(transactionIDs) == 0 {
 		return nil, nil
@@ -269,7 +269,7 @@ func normalizeEpoch(t time.Time) time.Time {
 //
 // Idempotency: set members are idempotent by construction; the additive
 // counters/observation_count can double-count if the same flush is retried,
-// which at worst promotes a class marginally early — accepted in this phase
+// which at worst promotes a class marginally early - accepted in this phase
 // (see "Additive counters can be over-counted if a flush is retried" in
 // TECH_DEBT.md). Runs on the flush timer, never per trace.
 func (r *Repo) ApplyBaselineDeltas(ctx context.Context, deltas []repo.BaselineDelta, _ repo.BaselineMerger) ([]repo.BaselineClass, error) {
@@ -395,7 +395,7 @@ var baselineTables = []string{"baseline_meta", "baseline_set_members", "baseline
 
 // syncMutationCtx forces ALTER ... DELETE to run synchronously: Exec returns
 // only once the mutation has actually removed the rows. Reset MUST be
-// synchronous — the default async mutation returns immediately, and under live
+// synchronous - the default async mutation returns immediately, and under live
 // traffic the engine reloads the not-yet-deleted baseline and the write-behind
 // flusher re-inserts it, silently resurrecting a "reset" transaction (and,
 // worse, resurrecting a promoted class the engine then refuses to re-learn).

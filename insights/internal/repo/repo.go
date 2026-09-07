@@ -21,7 +21,7 @@ type Repository interface {
 
 	// UpsertTransaction returns the row for (service, namespace, operation,
 	// kind), creating it if missing. Idempotent; namespace is part of the
-	// identity. Cold path / tests — the engine resolves ids locally and
+	// identity. Cold path / tests - the engine resolves ids locally and
 	// persists via UpsertTransactions on the write-behind flush.
 	UpsertTransaction(ctx context.Context, service, namespace, operation string, kind TransactionKind) (Transaction, error)
 
@@ -57,11 +57,11 @@ type Repository interface {
 
 	// DeleteTransaction permanently removes a transaction and its related
 	// state (baselines, activity, observations, anomalies, txn-scoped policies).
-	// Cold path only — operator cleanup of inactive/obsolete transactions.
+	// Cold path only - operator cleanup of inactive/obsolete transactions.
 	DeleteTransaction(ctx context.Context, transactionID int64) error
 
 	// DeleteAllTransactions removes every transaction and related per-txn state.
-	// Cold path only — used when identity dimensions change and the operator
+	// Cold path only - used when identity dimensions change and the operator
 	// chooses to reset inventory.
 	DeleteAllTransactions(ctx context.Context) error
 
@@ -106,7 +106,7 @@ type Repository interface {
 	PromoteBaselineClass(ctx context.Context, transactionID int64, class DeviationClass) error
 
 	// ResetBaselineClass wipes one (transaction, class) baseline (members,
-	// counters, meta) so it re-learns from scratch. Cold path only — an operator
+	// counters, meta) so it re-learns from scratch. Cold path only - an operator
 	// "re-learn" action.
 	ResetBaselineClass(ctx context.Context, transactionID int64, class DeviationClass) error
 
@@ -136,7 +136,7 @@ type Repository interface {
 	InsertObservation(ctx context.Context, obs Observation) error
 
 	// ListObservationsByTransaction returns examples for one (transaction,
-	// sample_reason), newest first. Metadata only — RawOTLP is empty. Call
+	// sample_reason), newest first. Metadata only - RawOTLP is empty. Call
 	// GetObservationByTrace when the OTLP blob is needed.
 	ListObservationsByTransaction(ctx context.Context, transactionID int64, sampleReason string, limit int) ([]Observation, error)
 
@@ -206,7 +206,7 @@ type Repository interface {
 
 	// ListAnomalyIssues returns deduped anomaly findings over the window, one row
 	// per (transaction, signature) with Status and occurrence count, worst/most-
-	// recent first. Evidence is not loaded — use GetAnomalyIssue for detail.
+	// recent first. Evidence is not loaded - use GetAnomalyIssue for detail.
 	ListAnomalyIssues(ctx context.Context, filter FindingListFilter) ([]AnomalyIssue, error)
 
 	// ListAnomalyIssuesByTransaction is ListAnomalyIssues scoped to one
@@ -255,7 +255,7 @@ type Repository interface {
 	ResolveGuardrailViolation(ctx context.Context, scope PolicyScope, scopeKey string, rule RuleKey, offending string, resolution GuardrailResolution) error
 
 	// DeleteGuardrailViolationsForRule removes every violation row for one rule
-	// type. Cold path — used when transaction inventory is wiped so stale
+	// type. Cold path - used when transaction inventory is wiped so stale
 	// allowed_transactions findings do not linger in the UI.
 	DeleteGuardrailViolationsForRule(ctx context.Context, rule RuleKey) error
 

@@ -42,8 +42,8 @@ type Repo struct {
 }
 
 // Open dials ClickHouse at dsn (clickhouse://user:pass@host:9000/db) and returns
-// a Repo. It does NOT require the server to be reachable yet — the connection is
-// lazy — so the service can construct the repo, serve health checks, and wait
+// a Repo. It does NOT require the server to be reachable yet - the connection is
+// lazy - so the service can construct the repo, serve health checks, and wait
 // for the DB. The codec (from engine.NewBaselineCodec) decomposes/rebuilds each
 // class's baseline value.
 func Open(dsn string, codec repo.BaselineCodec) (*Repo, error) {

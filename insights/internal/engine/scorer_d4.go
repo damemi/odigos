@@ -19,9 +19,9 @@ import (
 // input is method-level: the Java eBPF agent (and equivalents) attach the
 // probed site (code.namespace + code.function) plus the stringified positional
 // arguments (arg.0..arg.4) and the return value (return.value) to a span. For
-// each (site, position) we learn the value's SHAPE — its format class(es), a
+// each (site, position) we learn the value's SHAPE - its format class(es), a
 // bounded set of literal values when cardinality is low, and whether it can be
-// null — then flag a promoted callsite whose argument/return takes on a new
+// null - then flag a promoted callsite whose argument/return takes on a new
 // format, a value outside a learned small enum, or a call to a site never seen
 // during learning. This turns "getUser(id)" always called with a numeric id
 // into a detector for getUser("1 OR 1=1"), and a role parameter always seen as
@@ -40,7 +40,7 @@ func (d4ArgsReturns) Class() repo.DeviationClass { return repo.D4ArgsReturns }
 
 // d4EnumCap bounds how many distinct literal values a (site, position) keeps as
 // an enforceable enum. Past this the position is considered open (free-valued)
-// and only its format is enforced — this both avoids learning high-cardinality
+// and only its format is enforced - this both avoids learning high-cardinality
 // / PII values and keeps the stored baseline small.
 const d4EnumCap = 12
 
@@ -91,8 +91,8 @@ type d4Site struct {
 // Seen records that the class has observed at least one trace, even one that
 // carried nothing to profile (no custom-instrumentation captures). It is the
 // D4 analogue of D8's zero-payload learning: without it, a transaction whose
-// spans never expose arguments/returns — most commonly one whose service isn't
-// custom-instrumented at all — would leave D4's baseline permanently empty, so
+// spans never expose arguments/returns - most commonly one whose service isn't
+// custom-instrumented at all - would leave D4's baseline permanently empty, so
 // it could never "grow once" and would stay in learning forever, blocking the
 // whole transaction from promoting (see promotion.go's baselineGrewOnce gate).
 // Setting Seen on the first observation lets the baseline grow off the empty
@@ -131,7 +131,7 @@ type d4Violation struct {
 // "new_" (see offendingItems), folding firings that share the same items into
 // one issue. It deliberately omits the per-trace span id and the raw offending
 // value: repeated firings of the same deviation collapse into one issue, while
-// genuinely different deviations stay distinct — a format change (getUser arg0
+// genuinely different deviations stay distinct - a format change (getUser arg0
 // -> freeform) and a traversal (getUser arg0 -> path) become two issues, as do
 // arg vs return and different call sites. Two different SQLi payloads (both
 // freeform) still dedup, which is the intended aggregation.
@@ -489,7 +489,7 @@ func summarizeD4(vs []d4Violation) string {
 
 // argSitesFromTrace collects one observation per custom-instrumentation span: a
 // span is one iff it carries a probed code site (the probe marker). Spans
-// without any captured argument or return value are skipped — the probe fired
+// without any captured argument or return value are skipped - the probe fired
 // but exposed nothing for D4 to profile.
 func argSitesFromTrace(t *Trace) []d4Observation {
 	if t == nil {
@@ -566,7 +566,7 @@ var (
 // classifyD4Format maps a captured string to a single primary format class.
 // Order matters: the most specific structured shapes win, with token (bare
 // identifier) and freeform as the fallbacks. A value that is unstructured
-// (spaces, quotes, SQL, shell metacharacters) lands in freeform — which is
+// (spaces, quotes, SQL, shell metacharacters) lands in freeform - which is
 // exactly the shape a normal id/enum argument should never take.
 func classifyD4Format(v string) string {
 	switch {
@@ -640,8 +640,8 @@ func isD4Path(v string) bool {
 // (see Repo.ApplyBaselineDeltas), so D4 cannot store an aggregating profile as
 // one opaque blob per position: two writers with different profiles for the
 // same position would union to two conflicting members. Instead each atomic
-// fact is its own member — one per (site, position, format), one per learned
-// enum value, and a marker once the enum opens — which union correctly across
+// fact is its own member - one per (site, position, format), one per learned
+// enum value, and a marker once the enum opens - which union correctly across
 // writers and replicas. Decode folds them back into profiles, re-applying the
 // enum cap so the reconstructed value is byte-identical to a fresh Merge.
 

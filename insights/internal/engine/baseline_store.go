@@ -110,7 +110,7 @@ type classState struct {
 
 // setData replaces this class's baseline bytes. Every in-place write to
 // value.Data MUST go through here: it drops the decoded cache, which is what
-// keeps a replica from scoring against a baseline it has already replaced —
+// keeps a replica from scoring against a baseline it has already replaced -
 // including one adopted from another replica after a flush. Callers that build
 // a fresh classState instead need nothing, since its cache starts empty.
 // Caller holds entry.mu.
@@ -226,7 +226,7 @@ func (s *baselineStore) markDirty(transactionID int64) {
 // under the cap. Dirty entries are skipped (flush-before-evict); if everything
 // resident is dirty we temporarily exceed the cap and let the flusher catch up
 // rather than lose an unflushed delta. keepTransactionID is the entry just created by
-// the caller — never a candidate, since it's about to be used. Caller MUST
+// the caller - never a candidate, since it's about to be used. Caller MUST
 // hold s.mu.
 func (s *baselineStore) evictLocked(keepTransactionID int64) {
 	for len(s.entries) > s.maxTxns {

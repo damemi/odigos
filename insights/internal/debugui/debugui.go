@@ -1,7 +1,7 @@
 // Package debugui mounts a tiny server-rendered HTML inspector under /debug
 // on the same Gin engine the production HTTP API uses.
 //
-// It exists for developer debugging only — there is no auth, no pagination,
+// It exists for developer debugging only - there is no auth, no pagination,
 // no rate limiting. The Helm chart never sets DEBUG_UI=true; this package is
 // gated entirely by the caller.
 //
@@ -38,7 +38,7 @@ import (
 var templatesFS embed.FS
 
 // ProductAPI is the product HTTP service surface. Debug UI reads/writes call
-// these methods — the same ones GET/PUT handlers use — so the frontend and
+// these methods - the same ones GET/PUT handlers use - so the frontend and
 // debug UI share one contract instead of talking to the repository directly.
 type ProductAPI interface {
 	LoadSystemSettings(ctx context.Context) (apitypes.SystemSettings, error)
@@ -79,7 +79,7 @@ type ProductAPI interface {
 	// GET /findings, GET /anomalies, GET /guardrails/violations.
 	ListFindings(ctx context.Context, params apitypes.ListFindingsParams) (apitypes.FindingList, error)
 	ListAnomalies(ctx context.Context, params apitypes.ListAnomaliesParams) (apitypes.AnomalyIssueList, error)
-	// GetAnomalyIssueDetail is GET /anomalies/{transaction_id}/{signature} — the
+	// GetAnomalyIssueDetail is GET /anomalies/{transaction_id}/{signature} - the
 	// full investigate payload (class_findings + compare traces).
 	GetAnomalyIssueDetail(ctx context.Context, transactionID int64, signature string) (apitypes.AnomalyIssue, bool, error)
 
@@ -91,7 +91,7 @@ type ProductAPI interface {
 	DeleteTransactions(ctx context.Context, transactionIDs []int64) (deleted int, err error)
 	PromoteTransactions(ctx context.Context, transactionIDs []int64) (promoted int, err error)
 	ListGuardrailViolations(ctx context.Context, params apitypes.ListGuardrailViolationsParams) (apitypes.GuardrailViolationList, error)
-	// GetGuardrailViolationDetail is GET /guardrails/violations/evidence — the
+	// GetGuardrailViolationDetail is GET /guardrails/violations/evidence - the
 	// investigate payload (summary + evidence trace).
 	GetGuardrailViolationDetail(ctx context.Context, scopeKey string, ruleKey repo.RuleKey, offending string) (apitypes.GuardrailViolationDetail, bool, error)
 }
@@ -205,40 +205,40 @@ func parseTemplates() map[string]*template.Template {
 		"guardrail_evidence",
 	}
 	funcs := template.FuncMap{
-		"prettyJSON":        prettyJSON,
-		"histBars":          histBars,
-		"traceSpans":        traceSpans,
-		"humanTime":         humanTime,
-		"humanBytes":        humanBytes,
-		"humanDuration":     humanDuration,
-		"metricValue":       metricValue,
-		"overPct":           overPct,
-		"conditionText":     conditionText,
-		"conditionsText":    conditionsText,
-		"sinceChange":       sinceChange,
-		"policyEditJSON":    policyEditJSON,
-		"anomalyPolicyJSON": anomalyPolicyJSON,
-		"anomalyPolicyText": anomalyPolicyText,
-		"defaultWeight":     defaultWeight,
+		"prettyJSON":         prettyJSON,
+		"histBars":           histBars,
+		"traceSpans":         traceSpans,
+		"humanTime":          humanTime,
+		"humanBytes":         humanBytes,
+		"humanDuration":      humanDuration,
+		"metricValue":        metricValue,
+		"overPct":            overPct,
+		"conditionText":      conditionText,
+		"conditionsText":     conditionsText,
+		"sinceChange":        sinceChange,
+		"policyEditJSON":     policyEditJSON,
+		"anomalyPolicyJSON":  anomalyPolicyJSON,
+		"anomalyPolicyText":  anomalyPolicyText,
+		"defaultWeight":      defaultWeight,
 		"classLabel":         risk.ClassLabel,
 		"classDesc":          risk.ClassDesc,
 		"classBaselineLabel": risk.ClassBaselineLabel,
 		"classBaselineDesc":  risk.ClassBaselineDesc,
-		"sub": func(a, b int) int { return a - b },
+		"sub":                func(a, b int) int { return a - b },
 		"classCategory":      classCategory,
-		"classMitre":        classMitre,
-		"enrichersForClass": risk.EnrichersForClass,
-		"scoreBand":         scoreBand,
-		"enricherList":      enricherListText,
-		"tagDescription":    risk.TagDescription,
-		"dict":              templateDict,
-		"severityForScore":  severityForScore,
-		"humanCount":        humanCount,
-		"offendingChips":    offendingChips,
-		"classChips":        classChips,
-		"operationDisplay":  operationDisplay,
-		"identityDimLabel":  identityDimLabel,
-		"mul100":            func(f float64) float64 { return f * 100 },
+		"classMitre":         classMitre,
+		"enrichersForClass":  risk.EnrichersForClass,
+		"scoreBand":          scoreBand,
+		"enricherList":       enricherListText,
+		"tagDescription":     risk.TagDescription,
+		"dict":               templateDict,
+		"severityForScore":   severityForScore,
+		"humanCount":         humanCount,
+		"offendingChips":     offendingChips,
+		"classChips":         classChips,
+		"operationDisplay":   operationDisplay,
+		"identityDimLabel":   identityDimLabel,
+		"mul100":             func(f float64) float64 { return f * 100 },
 	}
 	out := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
@@ -419,7 +419,7 @@ func firstString(vals ...any) string {
 }
 
 // compactPairs renders a map as "k=v" pairs (scalar values only), keys sorted,
-// dropping noise keys — the readable fallback for an unrecognized shape.
+// dropping noise keys - the readable fallback for an unrecognized shape.
 func compactPairs(m map[string]any) string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -471,7 +471,7 @@ func conditionText(c repo.LearningCondition) string {
 }
 
 // sinceChange is how many observations a class has folded in since its baseline
-// last grew — the live value the stability conditions test against. Clamped at
+// last grew - the live value the stability conditions test against. Clamped at
 // zero (cross-replica adoption can briefly leave the marker ahead of the count).
 func sinceChange(b repo.BaselineClass) int64 {
 	if b.ObservationCountAtLastChange <= 0 {
@@ -507,8 +507,8 @@ type stabilityView struct {
 // non-histogram classes).
 type baselineRow struct {
 	repo.BaselineClass
-	Stability  stabilityView
-	Histogram  *apitypes.BaselineHistogram
+	Stability stabilityView
+	Histogram *apitypes.BaselineHistogram
 }
 
 // histBarRender is one non-empty histogram bar sized for the debug chart.
@@ -650,7 +650,7 @@ func stabilityHelp(state string, policyBacked bool) string {
 		return "Settling: the baseline has been quiet for a bit but not long enough to look converged yet. " + estimateSuffix(false)
 	case "stable":
 		if policyBacked {
-			return "Stable: the baseline has met this class's configured stability target — it hasn't grown for the required window."
+			return "Stable: the baseline has met this class's configured stability target - it hasn't grown for the required window."
 		}
 		return "Stable: the baseline hasn't changed in a while, so it looks converged. " + estimateSuffix(false)
 	default:
@@ -664,7 +664,7 @@ func estimateSuffix(policyBacked bool) string {
 	if policyBacked {
 		return ""
 	}
-	return "This class doesn't promote on stability — this is only an informational estimate from a default window (50 unchanged observations or 30 min quiet); promotion is driven by its other conditions."
+	return "This class doesn't promote on stability - this is only an informational estimate from a default window (50 unchanged observations or 30 min quiet); promotion is driven by its other conditions."
 }
 
 // stableTarget returns the largest target across a policy's conditions of the
@@ -765,7 +765,7 @@ func compactDuration(d time.Duration) string {
 
 // learningPolicyIndex builds a per-class scope resolver from all learning
 // policy rows, so a caller can resolve the effective policy for any
-// (transaction, class). A load error yields a nil map — the page still renders,
+// (transaction, class). A load error yields a nil map - the page still renders,
 // just without stability targets (classes fall back to the coarse verdict).
 func learningPolicyIndex(ctx context.Context, r repo.Repository) map[repo.DeviationClass]*repo.ScopeIndex[repo.LearningPolicy] {
 	policies, err := r.ListLearningPolicies(ctx)
@@ -958,7 +958,7 @@ func overPct(observed, baseline int64) string {
 // ("just now", "12s ago", "5m ago", "3h ago", "2d ago"). Zero/epoch means never seen.
 func humanTime(t time.Time) string {
 	if t.IsZero() || t.Unix() <= 0 {
-		return "—"
+		return "-"
 	}
 	d := time.Since(t)
 	switch {
@@ -1233,18 +1233,18 @@ func (u *ui) settingsSystem(c *gin.Context) {
 	if err != nil {
 		s := repo.DefaultSystemSettings()
 		u.render(c, "settings_system", "settings", "", map[string]any{
-			"SettingsTab":           "system",
-			"Error":                 err.Error(),
-			"Settings":              s,
+			"SettingsTab":            "system",
+			"Error":                  err.Error(),
+			"Settings":               s,
 			"MaxEnabledIdentityDims": repo.MaxTransactionIdentityDimensions,
 		})
 		return
 	}
 	s := apimap.ToSystemSettings(wire)
 	u.render(c, "settings_system", "settings", c.Query("flash"), map[string]any{
-		"SettingsTab":           "system",
-		"Error":                   c.Query("error"),
-		"Settings":                s,
+		"SettingsTab":            "system",
+		"Error":                  c.Query("error"),
+		"Settings":               s,
 		"MaxEnabledIdentityDims": repo.MaxTransactionIdentityDimensions,
 	})
 }
@@ -1336,8 +1336,8 @@ func parseIdentityDimForm(c *gin.Context) []apitypes.SystemTransactionIdentityDi
 }
 
 // listTransactions renders views off /debug/transactions:
-//   - (default) / ?view=services — services as expandable cards with txns inline
-//   - ?view=all                  — flat "all transactions" list
+//   - (default) / ?view=services - services as expandable cards with txns inline
+//   - ?view=all                  - flat "all transactions" list
 //
 // Legacy ?service=&namespace= (without view=services) redirects into the
 // by-service view with that card opened.
@@ -1437,7 +1437,7 @@ func (u *ui) listTransactions(c *gin.Context) {
 	})
 }
 
-// deleteTransaction is POST /debug/transactions/:id/delete — same as
+// deleteTransaction is POST /debug/transactions/:id/delete - same as
 // DELETE /api/v1/transactions/{id}.
 func (u *ui) deleteTransaction(c *gin.Context) {
 	api, ok := u.productAPI(c)
@@ -1459,7 +1459,7 @@ func (u *ui) deleteTransaction(c *gin.Context) {
 	c.Redirect(http.StatusSeeOther, redirect+"?flash="+url.QueryEscape("transaction deleted"))
 }
 
-// deleteTransactions is POST /debug/transactions/delete-bulk — same as
+// deleteTransactions is POST /debug/transactions/delete-bulk - same as
 // POST /api/v1/transactions (bulkDeleteTransactions).
 func (u *ui) deleteTransactions(c *gin.Context) {
 	api, ok := u.productAPI(c)
@@ -1486,7 +1486,7 @@ func (u *ui) deleteTransactions(c *gin.Context) {
 	c.Redirect(http.StatusSeeOther, redirect+"?flash="+url.QueryEscape(fmt.Sprintf("deleted %d %s", deleted, noun)))
 }
 
-// promoteTransactions is POST /debug/transactions/promote-bulk — same as
+// promoteTransactions is POST /debug/transactions/promote-bulk - same as
 // POST /api/v1/transactions/promote (bulkPromoteTransactions).
 func (u *ui) promoteTransactions(c *gin.Context) {
 	api, ok := u.productAPI(c)
@@ -1533,7 +1533,7 @@ func parseTransactionIDForm(c *gin.Context, redirect string) ([]int64, bool) {
 	return ids, true
 }
 
-// promoteTransaction is POST /debug/transactions/:id/promote — same as
+// promoteTransaction is POST /debug/transactions/:id/promote - same as
 // POST /api/v1/transactions/{id}/baselines/promote.
 func (u *ui) promoteTransaction(c *gin.Context) {
 	api, ok := u.productAPI(c)
@@ -1574,7 +1574,7 @@ func (u *ui) transactionDetail(c *gin.Context) {
 
 	// Each of the three data reads below is scoped to this transaction and cheap,
 	// but a transient DB failure (e.g. ClickHouse over its query-memory cap under
-	// load) must NOT render as an empty page that reads as "no baseline" — that
+	// load) must NOT render as an empty page that reads as "no baseline" - that
 	// was the confusing "data vanishes, reappears on refresh" behaviour. Collect
 	// any failure and surface it as a banner instead of silently dropping data.
 	var loadErrs []string
@@ -1654,7 +1654,7 @@ func (u *ui) transactionDetail(c *gin.Context) {
 
 // transactionTraceFragment serves the waterfall HTML for one retained sample.
 // Called from the txn-detail "view trace" button so page load never pulls
-// raw_otlp — only the clicked trace's blob is fetched.
+// raw_otlp - only the clicked trace's blob is fetched.
 func (u *ui) transactionTraceFragment(c *gin.Context) {
 	var id int64
 	if _, err := parseInt64Param(c, "id", &id); err != nil {
@@ -1722,7 +1722,7 @@ func (u *ui) promoteBaselineClass(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, redirect+"?error="+url.QueryEscape("promote failed: "+err.Error()))
 		return
 	}
-	c.Redirect(http.StatusSeeOther, redirect+"?flash="+url.QueryEscape(string(class)+" promoted — class will score on the next trace"))
+	c.Redirect(http.StatusSeeOther, redirect+"?flash="+url.QueryEscape(string(class)+" promoted - class will score on the next trace"))
 }
 
 // resetBaselineClass wipes one class's baseline so it re-learns from scratch.
@@ -1745,7 +1745,7 @@ func (u *ui) resetBaselineClass(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, redirect+"?error="+url.QueryEscape("reset failed: "+err.Error()))
 		return
 	}
-	c.Redirect(http.StatusSeeOther, redirect+"?flash="+url.QueryEscape(string(class)+" reset — it will re-learn from the next trace"))
+	c.Redirect(http.StatusSeeOther, redirect+"?flash="+url.QueryEscape(string(class)+" reset - it will re-learn from the next trace"))
 }
 
 // resetTransactionBaselines wipes every class of a transaction.
@@ -1763,7 +1763,7 @@ func (u *ui) resetTransactionBaselines(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, redirect+"?error="+url.QueryEscape("reset failed: "+err.Error()))
 		return
 	}
-	c.Redirect(http.StatusSeeOther, redirect+"?flash="+url.QueryEscape("all classes reset — they will re-learn from the next trace"))
+	c.Redirect(http.StatusSeeOther, redirect+"?flash="+url.QueryEscape("all classes reset - they will re-learn from the next trace"))
 }
 
 // sampleView is one entry in the compare view's sample-trace picker: a captured
@@ -1774,8 +1774,8 @@ type sampleView struct {
 }
 
 // compareAnomalyIssue renders the issue-vs-baseline trace comparison for one
-// (transaction, signature) issue. It consumes GetAnomalyIssueDetail — the same
-// investigate payload the product UI uses — and only maps wire fields into the
+// (transaction, signature) issue. It consumes GetAnomalyIssueDetail - the same
+// investigate payload the product UI uses - and only maps wire fields into the
 // HTML template view (no parallel explain/risk/trace loading).
 func (u *ui) compareAnomalyIssue(c *gin.Context) {
 	txnID, err := strconv.ParseInt(strings.TrimSpace(c.Query("transaction_id")), 10, 64)
@@ -1847,7 +1847,7 @@ func (u *ui) compareAnomalyIssue(c *gin.Context) {
 	tx, _ := u.getTransaction(ctx, txnID)
 
 	// Blast-radius service map for this issue's service: the callers/callees up
-	// to serviceMapDepth hops it can ripple to. Best-effort — a query error
+	// to serviceMapDepth hops it can ripple to. Best-effort - a query error
 	// leaves an empty map, rendered as a short note rather than failing the page.
 	serviceMap := serviceMapView{Depth: serviceMapDepth}
 	if sub, err := u.repo.QueryBlastRadius(ctx, issue.Namespace, issue.Service, serviceMapDepth); err == nil {
@@ -2147,7 +2147,7 @@ func (u *ui) addAnomalyOverride(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, redirect+"?error="+url.QueryEscape("add override failed: "+err.Error()))
 		return
 	}
-	c.Redirect(http.StatusSeeOther, redirect+"?flash="+url.QueryEscape(anomalyScopeSummary(scope, scopeKey)+" override added — edit it below"))
+	c.Redirect(http.StatusSeeOther, redirect+"?flash="+url.QueryEscape(anomalyScopeSummary(scope, scopeKey)+" override added - edit it below"))
 }
 
 // deleteAnomalyPolicy drops one scoped override so the scope falls back to a
@@ -2199,7 +2199,7 @@ func parseAnomalyPolicyForm(c *gin.Context, scope repo.PolicyScope, scopeKey str
 		}
 		weight, err := strconv.Atoi(raw)
 		if err != nil || weight < 0 || weight == defaultWeight {
-			return // invalid or matches the catalog default — not an override
+			return // invalid or matches the catalog default - not an override
 		}
 		signalWeights[source] = weight
 	}
@@ -2251,7 +2251,7 @@ func parseAnomalyPolicyForm(c *gin.Context, scope repo.PolicyScope, scopeKey str
 // parseKeywordList splits an editor textarea (comma- or newline-separated) into
 // a normalized keyword list: trimmed, lowercased, de-duplicated, order
 // preserved. Matching is a lowercased substring test, so casing/dupes don't
-// matter functionally — normalizing just keeps storage and the defaults
+// matter functionally - normalizing just keeps storage and the defaults
 // comparison stable.
 func parseKeywordList(raw string) []string {
 	fields := strings.FieldsFunc(raw, func(r rune) bool {
@@ -2480,7 +2480,7 @@ func (u *ui) addLearningOverride(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, redirect+"?error="+url.QueryEscape("add override failed: "+err.Error()))
 		return
 	}
-	c.Redirect(http.StatusSeeOther, redirect+"?flash="+url.QueryEscape(scopeSummary(class, scope, scopeKey)+" override added — edit it below"))
+	c.Redirect(http.StatusSeeOther, redirect+"?flash="+url.QueryEscape(scopeSummary(class, scope, scopeKey)+" override added - edit it below"))
 }
 
 // deleteLearningPolicy drops one scoped override so the class falls back to a

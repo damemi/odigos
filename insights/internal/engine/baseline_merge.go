@@ -32,7 +32,7 @@ func (classMerger) MergeData(class repo.DeviationClass, stored, contribution jso
 		return mergeD8Values(stored, contribution)
 	default:
 		// TODO: D6 isn't implemented yet (noop scorer), so it never produces
-		// real data to merge — always empty. Give it a real merge here once the
+		// real data to merge - always empty. Give it a real merge here once the
 		// class is built.
 		return json.RawMessage(`{}`), nil
 	}

@@ -11,7 +11,7 @@ import (
 )
 
 // Admin is the engine-backed side of the write endpoints: the actions that must
-// also touch the engine's in-memory state, not just the DB — accepting an
+// also touch the engine's in-memory state, not just the DB - accepting an
 // anomaly folds its trace into the baseline; resetting a baseline drops it from
 // the cache; and every policy/guardrail write must reload the engine's snapshot
 // to apply live. It mirrors the debug UI's Admin and is satisfied by

@@ -71,7 +71,7 @@ func scanServiceGuardrail(s rowScanner) (repo.ServiceGuardrail, error) {
 // replaces it.
 func (r *Repo) UpsertServiceGuardrail(ctx context.Context, guardrail repo.ServiceGuardrail) error {
 	// Narrow the domain's typed keys to plain strings and always pass concrete
-	// (possibly empty) maps — the driver rejects a nil Map value.
+	// (possibly empty) maps - the driver rejects a nil Map value.
 	ruleLists := make(map[string][]string, len(guardrail.RuleLists))
 	for key, list := range guardrail.RuleLists {
 		ruleLists[string(key)] = list
@@ -201,10 +201,10 @@ func (r *Repo) ResolveGuardrailViolation(ctx context.Context, scope repo.PolicyS
 }
 
 // guardrailViolationAgg folds AggregatingMergeTree rows per violation group
-// WITHOUT FINAL — same pattern as anomalyIssueAggLean.
+// WITHOUT FINAL - same pattern as anomalyIssueAggLean.
 // Decision timestamps use distinct aliases (newest_seen, latest_accepted, …)
 // so a window WHERE on raw columns never resolves to the aggregate alias
-// (ILLEGAL_AGGREGATION, error 184) — same pitfall as anomalyIssueAggLean.
+// (ILLEGAL_AGGREGATION, error 184) - same pitfall as anomalyIssueAggLean.
 const guardrailViolationAgg = `SELECT
 		scope_key, rule_key, offending,
 		sum(occurrences)                     AS occurrences,
@@ -259,9 +259,9 @@ func (r *Repo) GetGuardrailViolation(ctx context.Context, scopeKey string, rule 
 
 func scanGuardrailViolationGroup(s rowScanner) (repo.GuardrailViolationGroup, error) {
 	var (
-		scopeKey, ruleKey, offending                            string
-		occ                                                     uint64
-		maxScore                                                int32
+		scopeKey, ruleKey, offending                             string
+		occ                                                      uint64
+		maxScore                                                 int32
 		firstSeen, lastSeen, acceptedAt, dismissedAt, reopenedAt time.Time
 	)
 	if err := s.Scan(&scopeKey, &ruleKey, &offending, &occ, &maxScore, &firstSeen, &lastSeen, &acceptedAt, &dismissedAt, &reopenedAt); err != nil {
@@ -304,7 +304,7 @@ func splitServiceScopeKey(key string) (namespace, service string) {
 }
 
 // GetServiceProfile derives a service's communication summary from the existing
-// D1 (call-edge) and D2 (egress) baselines — no dedicated store. It is a
+// D1 (call-edge) and D2 (egress) baselines - no dedicated store. It is a
 // cold-path UI query (guardrail editor seeding), so scanning the D1 members with
 // JSON extraction is fine.
 //
@@ -378,10 +378,10 @@ func (r *Repo) distinctEdgePeers(ctx context.Context, selectSide, matchSide, ser
 // transaction-scoped and records every client peer in a subtree, so three
 // filters narrow it to genuine, service-scoped egress:
 //
-//   - owner == service — calls this service made, not a downstream dependency's.
-//   - external — the per-trace signal that the call didn't reach an instrumented
+//   - owner == service - calls this service made, not a downstream dependency's.
+//   - external - the per-trace signal that the call didn't reach an instrumented
 //     service in-trace.
-//   - host is not a known service in this namespace — the cross-trace guard: the
+//   - host is not a known service in this namespace - the cross-trace guard: the
 //     external flag misfires when a callee's SERVER span didn't nest under the
 //     caller, so a stale external=true row can linger. Scoped to this namespace
 //     because a bare hostname resolves in-namespace.

@@ -36,7 +36,7 @@ const (
 	// were seen.
 	ConditionStableObservations LearningConditionType = "stable_observations"
 	// ConditionStableDuration is met once the baseline has not grown for at
-	// least StableMinutes — the time-based twin of ConditionStableObservations,
+	// least StableMinutes - the time-based twin of ConditionStableObservations,
 	// so a low-traffic transaction can converge on wall-clock quiet rather than
 	// a trace count it may never reach.
 	ConditionStableDuration LearningConditionType = "stable_duration"

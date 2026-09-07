@@ -35,7 +35,7 @@ func TestStickyDecisionStatus(t *testing.T) {
 			terminal: epoch, dismissed: t1, reopen: t2,
 		},
 		{
-			name:     "accept ties dismiss — accept wins",
+			name:     "accept ties dismiss - accept wins",
 			terminal: t2, dismissed: t2, reopen: t1,
 			wantTerminal: true,
 		},
