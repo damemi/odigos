@@ -5,7 +5,7 @@ go 1.26.2
 require (
 	github.com/cilium/ebpf v0.20.0
 	github.com/go-logr/logr v1.4.4
-	github.com/odigos-io/odigos/common v1.36.0-pre9.0.20260903115356-b9930ee30945
+	github.com/odigos-io/odigos/common v1.37.0-pre1
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/zap v1.28.0
 	golang.org/x/sys v0.45.0
