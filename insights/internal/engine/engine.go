@@ -124,7 +124,7 @@ func (e *Engine) Process(ctx context.Context, t *Trace) {
 	// One deviation is visible to every entry enclosing it, so claims carries
 	// each firing down the trace and keeps it to a single finding on the
 	// outermost transaction that flagged it. See anomaly_claims.go.
-	claims := newAnomalyClaims()
+	claims := newAnomalyClaims(t)
 	for _, sub := range subs {
 		e.processOne(ctx, sub, t, claims)
 	}
@@ -197,7 +197,7 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 	// reporting is suppressed — learning below continues, so each transaction
 	// still knows its own subtree and can flag on its own once it is no longer
 	// enclosed (its caller restarts, or traffic arrives at it directly).
-	deviated, evidence = claims.filter(deviated, evidence)
+	deviated, evidence = claims.filter(t.Root, deviated, evidence)
 
 	// 4. Decide whether to fire. The resolved policy gives the risk-score
 	// threshold and any per-class weight overrides. Score the in-memory
@@ -228,7 +228,7 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 				if len(confirmed) > 0 {
 					if assessment := e.assessRisk(confirmed, confEv, policy); assessment.Score >= threshold {
 						e.anomalies.record(ctx, t, tx, &policy, confirmed, confEv, assessment, system.settings.TransactionInventoryEpoch)
-						claims.take(confirmed, confEv)
+						claims.take(t.Root, confirmed, confEv)
 						anomalyFired = true
 					}
 				}

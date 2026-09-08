@@ -10,6 +10,7 @@ import (
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/semconv"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
 )
 
@@ -274,6 +275,94 @@ func TestEngine_NestedDeviationFiresOnceOnOutermost(t *testing.T) {
 	}
 	if len(fired.TriggeredClasses) < 3 {
 		t.Errorf("expected >=3 triggered classes, got %v", fired.TriggeredClasses)
+	}
+}
+
+// checkoutFork builds frontend /checkout -> [orders /create -> db, audit /log ->
+// db]: two sibling service entries, neither enclosing the other, each with its
+// own DB call. Both run the same statement, so the two branches deviate on the
+// identical D7 item (a DB access carries no owning service).
+func checkoutFork(query string) *Trace {
+	entry := func(id, parent, name, svc string) *Span {
+		return &Span{
+			SpanID: id, ParentSpanID: parent, Name: name, Service: svc,
+			Kind: tracepb.Span_SPAN_KIND_SERVER, ScopeName: "nethttp",
+		}
+	}
+	db := func(id, parent, svc string) *Span {
+		return &Span{
+			SpanID: id, ParentSpanID: parent, Name: "query", Service: svc,
+			Kind: tracepb.Span_SPAN_KIND_CLIENT, ScopeName: "pgx",
+			Attrs: map[string]string{
+				semconv.DBSystem:    "postgresql",
+				semconv.DBNamespace: "shop",
+				semconv.DBQueryText: query,
+			},
+		}
+	}
+	frontend := entry("frontend", "", "POST /checkout", "frontend")
+	orders, audit := entry("orders", "frontend", "POST /create", "orders"), entry("audit", "frontend", "POST /log", "audit")
+	ordersDB, auditDB := db("orders-db", "orders", "orders"), db("audit-db", "audit", "audit")
+	orders.Children, audit.Children = []*Span{ordersDB}, []*Span{auditDB}
+	frontend.Children = []*Span{orders, audit}
+
+	return &Trace{
+		TraceID: "tid", Root: frontend,
+		Spans: []*Span{frontend, orders, ordersDB, audit, auditDB},
+	}
+}
+
+// TestEngine_SiblingBranchDeviationStillFires is the boundary of firing on the
+// outermost entry only: two services on separate branches of one trace each
+// start running the same new DELETE, and their only common ancestor is
+// re-learning, so it reports for neither. Each branch owns its finding - the
+// other branch is not above it and cannot speak for it. Collapsing the two
+// would leave the second service's destructive new access reported nowhere.
+func TestEngine_SiblingBranchDeviationStillFires(t *testing.T) {
+	ctx := context.Background()
+	r := newFakeRepo()
+	alerts := alertConfigFrom(repo.Policy{ID: 1, Name: "fire-at-1", Enabled: true, FireAtScore: 1})
+	eng := New(r, nil, countOnlyConfig(DefaultMinObservations), alerts)
+
+	for i := int64(0); i < DefaultMinObservations; i++ {
+		eng.Process(ctx, checkoutFork("SELECT id FROM orders WHERE id = 1"))
+	}
+	if err := eng.Flush(ctx); err != nil {
+		t.Fatalf("flush learn: %v", err)
+	}
+	ids := map[string]int64{}
+	for _, tx := range r.transactions {
+		ids[tx.Service] = tx.ID
+	}
+	for _, svc := range []string{"frontend", "orders", "audit"} {
+		if ids[svc] == 0 {
+			t.Fatalf("expected a %s transaction, got %+v", svc, r.transactions)
+		}
+	}
+	if len(r.anomalies) != 0 {
+		t.Fatalf("expected no anomalies during learning, got %+v", r.anomalies)
+	}
+
+	// Send the entry above both branches back to learning, so nothing encloses
+	// them that can flag the deviation on their behalf.
+	if err := eng.ResetTransactionBaselines(ctx, ids["frontend"]); err != nil {
+		t.Fatalf("reset frontend: %v", err)
+	}
+
+	eng.Process(ctx, checkoutFork("DELETE FROM users WHERE id = 1"))
+	if err := eng.Flush(ctx); err != nil {
+		t.Fatalf("flush attack: %v", err)
+	}
+
+	fired := map[int64]bool{}
+	for _, a := range r.anomalies {
+		fired[a.TransactionID] = true
+	}
+	if !fired[ids["orders"]] {
+		t.Errorf("orders never reported its new DELETE; anomalies=%+v", r.anomalies)
+	}
+	if !fired[ids["audit"]] {
+		t.Errorf("audit is a sibling of orders, not enclosed by it, and must report its own new DELETE; anomalies=%+v", r.anomalies)
 	}
 }
 
