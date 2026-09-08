@@ -121,8 +121,12 @@ func (e *Engine) Process(ctx context.Context, t *Trace) {
 	subs := subTraces(t)
 	metrics.IncTracesProcessed()
 	metrics.AddSubtransactionsProcessed(len(subs))
+	// One deviation is visible to every entry enclosing it, so claims carries
+	// each firing down the trace and keeps it to a single finding on the
+	// outermost transaction that flagged it. See anomaly_claims.go.
+	claims := newAnomalyClaims()
 	for _, sub := range subs {
-		e.processOne(ctx, sub, t)
+		e.processOne(ctx, sub, t, claims)
 	}
 }
 
@@ -131,9 +135,10 @@ func (e *Engine) Process(ctx context.Context, t *Trace) {
 // span and its Spans/RawOTLP cover the entry plus its descendants. full is the
 // original, undecomposed trace - passed through only so a guardrail violation
 // can capture the whole trace as evidence (the offending caller lives above
-// this sub-trace's root and isn't in t's subtree).
-func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace) {
-	// 1. Resolve transaction identity locally (deterministic hash - no DB).
+// this sub-trace's root and isn't in t's subtree). claims is shared across the
+// trace's entries and suppresses deviations an enclosing entry already fired.
+func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *anomalyClaims) {
+	// 1. Resolve transaction identity locally (deterministic hash — no DB).
 	// Persistence of the transactions row rides the write-behind flush with
 	// activity/baselines, so delete+recreate works across replicas without a
 	// per-trace upsert or a cross-pod identity cache.
@@ -187,6 +192,12 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace) {
 	// 3. Score every PROMOTED class against the in-memory value.
 	serviceKey := repo.ServiceScopeKey(ident.Namespace, ident.Service)
 	deviated, evidence := e.scoreEntry(t, entry, serviceKey)
+	// Drop what an enclosing entry already fired, so this stays one finding on
+	// the broadest transaction that saw it rather than one per level. Only
+	// reporting is suppressed — learning below continues, so each transaction
+	// still knows its own subtree and can flag on its own once it is no longer
+	// enclosed (its caller restarts, or traffic arrives at it directly).
+	deviated, evidence = claims.filter(deviated, evidence)
 
 	// 4. Decide whether to fire. The resolved policy gives the risk-score
 	// threshold and any per-class weight overrides. Score the in-memory
@@ -217,6 +228,7 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace) {
 				if len(confirmed) > 0 {
 					if assessment := e.assessRisk(confirmed, confEv, policy); assessment.Score >= threshold {
 						e.anomalies.record(ctx, t, tx, &policy, confirmed, confEv, assessment, system.settings.TransactionInventoryEpoch)
+						claims.take(confirmed, confEv)
 						anomalyFired = true
 					}
 				}

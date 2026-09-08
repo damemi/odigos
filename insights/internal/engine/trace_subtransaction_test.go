@@ -212,10 +212,12 @@ func spanParentIn(t *testing.T, td *tracepb.TracesData, spanID []byte) []byte {
 	return nil
 }
 
-// TestEngine_NestedEntryFiresOwnAnomaly proves a sub-transaction is first-class:
-// after both frontend and coupon learn, an anomaly that originates under coupon
-// fires under coupon's own transaction.
-func TestEngine_NestedEntryFiresOwnAnomaly(t *testing.T) {
+// TestEngine_NestedDeviationFiresOnceOnOutermost proves the overlap between a
+// trace's entries produces one finding, not one per level. Both frontend and
+// coupon learn and stay first-class transactions, but a deviation originating
+// under coupon is visible to both subtrees and must be reported only on
+// frontend — the outermost entry that flagged it, and the one with the context.
+func TestEngine_NestedDeviationFiresOnceOnOutermost(t *testing.T) {
 	r := newFakeRepo()
 	alerts := alertConfigFrom(repo.Policy{ID: 1, Name: "fire-at-1", Enabled: true, FireAtScore: 1})
 	eng := New(r, nil, countOnlyConfig(DefaultMinObservations), alerts)
@@ -235,14 +237,17 @@ func TestEngine_NestedEntryFiresOwnAnomaly(t *testing.T) {
 	if len(r.transactions) != 2 {
 		t.Fatalf("expected 2 transactions (frontend, coupon), got %d", len(r.transactions))
 	}
-	var couponID int64
+	var couponID, frontendID int64
 	for _, tx := range r.transactions {
-		if tx.Service == "coupon" {
+		switch tx.Service {
+		case "coupon":
 			couponID = tx.ID
+		case "frontend":
+			frontendID = tx.ID
 		}
 	}
-	if couponID == 0 {
-		t.Fatalf("coupon transaction was never created")
+	if couponID == 0 || frontendID == 0 {
+		t.Fatalf("expected both frontend and coupon transactions, got %+v", r.transactions)
 	}
 	if len(r.anomalies) != 0 {
 		t.Fatalf("expected no anomalies during learning, got %d", len(r.anomalies))
@@ -257,17 +262,18 @@ func TestEngine_NestedEntryFiresOwnAnomaly(t *testing.T) {
 		t.Fatalf("flush: %v", err)
 	}
 
-	var couponFired bool
-	for _, a := range r.anomalies {
-		if a.TransactionID == couponID {
-			couponFired = true
-			if len(a.TriggeredClasses) < 3 {
-				t.Errorf("coupon anomaly: expected >=3 triggered classes, got %v", a.TriggeredClasses)
-			}
-		}
+	if len(r.anomalies) != 1 {
+		t.Fatalf("one deviation must produce one finding, not one per entry; anomalies=%+v", r.anomalies)
 	}
-	if !couponFired {
-		t.Fatalf("expected coupon sub-transaction to fire its own anomaly; anomalies=%+v", r.anomalies)
+	fired := r.anomalies[0]
+	if fired.TransactionID != frontendID {
+		t.Errorf("expected the finding on frontend (outermost entry that flagged), got transaction %d", fired.TransactionID)
+	}
+	if fired.TransactionID == couponID {
+		t.Errorf("coupon is enclosed by frontend and must not refire the same deviation")
+	}
+	if len(fired.TriggeredClasses) < 3 {
+		t.Errorf("expected >=3 triggered classes, got %v", fired.TriggeredClasses)
 	}
 }
 

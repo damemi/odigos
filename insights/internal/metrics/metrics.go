@@ -141,6 +141,18 @@ var (
 		Name:      "promotion_sweeper_classes_total",
 		Help:      "Classes promoted by the time-based promotion sweeper, by source (memory|db).",
 	}, []string{"source"})
+
+	// anomalyDuplicatesSuppressed counts the repeat findings an operator never
+	// had to triage: a deviation a nested sub-transaction would have reported
+	// had an enclosing one in the same trace not already reported the same
+	// item. Read against the anomaly count, it says how much of the findings
+	// feed the overlapping subtrees would otherwise be repeating.
+	anomalyDuplicatesSuppressed = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "engine",
+		Name:      "anomaly_duplicates_suppressed_total",
+		Help:      "Deviations suppressed because an enclosing sub-transaction already fired them, by class.",
+	}, []string{"class"})
 )
 
 func init() {
@@ -148,6 +160,7 @@ func init() {
 		repoCalls, repoCallDuration, tracesProcessed, subtransactionsProcessed,
 		transactionCache, policyCache, baselineCache, baselineEvictions, baselineDirty, baselineResident,
 		baselineFlush, baselineFlushDuration, promotionSweeperClasses,
+		anomalyDuplicatesSuppressed,
 	)
 }
 
@@ -167,6 +180,12 @@ func AddSubtransactionsProcessed(n int) {
 	if n > 0 {
 		subtransactionsProcessed.Add(float64(n))
 	}
+}
+
+// IncAnomalyDuplicateSuppressed records one deviation suppressed as a duplicate
+// of a firing on an enclosing sub-transaction.
+func IncAnomalyDuplicateSuppressed(class string) {
+	anomalyDuplicatesSuppressed.WithLabelValues(class).Inc()
 }
 
 // IncTransactionCache records one transaction lookup cache result ("hit"|"miss").

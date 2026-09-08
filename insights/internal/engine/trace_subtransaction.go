@@ -27,8 +27,9 @@ import (
 // An entry keeps a single caller-independent identity while its baseline carries
 // only what lives at or below it - a transaction's own baseline IS its context,
 // with no edges table or union view. Outer and inner subtrees overlap on
-// purpose, so one deep deviation can surface under several transactions;
-// deduping via nearest-owner attribution is handled elsewhere.
+// purpose, so one deep deviation is visible to several transactions; it fires
+// on the outermost one that flagged it and is suppressed below (see
+// anomaly_claims.go), which is why entries are returned outermost-first.
 
 // maxSubtransactionDepth bounds how many nested service-entry levels become
 // transactions (root = level 0), capping write amplification since a span is

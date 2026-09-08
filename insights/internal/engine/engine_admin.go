@@ -151,6 +151,14 @@ func (e *Engine) DeleteAllTransactions(ctx context.Context) error {
 // learning). The issue is then marked accepted (sticky). The trace folded in is
 // the newest stored sample for the signature - LastTraceID may point at a firing
 // the throttled sampler never captured, so we take what is actually on disk.
+//
+// Accepting covers every transaction the behaviour is part of, not just the one
+// that reported it. Findings are deduped to the outermost transaction that
+// flagged them, so the levels below stayed quiet only because this one spoke
+// for them. Widening this one alone would hand the deviation down: it stops
+// flagging, the next entry inside becomes the outermost that still does, and
+// the same finding returns one service deeper. The operator would end up
+// accepting the same behaviour once per service in the call chain.
 func (e *Engine) AcceptAnomalyIssue(ctx context.Context, transactionID int64, signature string) error {
 	issue, ok, err := e.repo.GetAnomalyIssue(ctx, transactionID, signature)
 	if err != nil {
@@ -179,11 +187,79 @@ func (e *Engine) AcceptAnomalyIssue(ctx context.Context, transactionID int64, si
 		return err
 	}
 
-	// Each class's contribution is the trace folded into an empty value, the
-	// per-class shape ApplyBaselineDeltas expects.
-	fresh, err := e.repo.GetBaselineForTransaction(ctx, transactionID)
+	// The stored evidence is re-rooted at the entry that reported the issue, so
+	// the first sub-trace is that entry and the rest are the nested ones the
+	// behaviour is also part of.
+	subs := subTraces(t)
+	if len(subs) == 0 {
+		return fmt.Errorf("anomaly issue %d/%s: stored trace %s has no service entry", transactionID, signature, full.TraceID)
+	}
+
+	deltas, err := e.acceptDeltas(ctx, subs[0], transactionID, issue.TriggeredClasses, false)
 	if err != nil {
 		return err
+	}
+	widened := []int64{transactionID}
+
+	dims := e.system.snapshot().settings.TransactionIdentityDimensions
+	for _, sub := range subs[1:] {
+		nestedID, ok := subTransactionID(sub, dims)
+		if !ok || nestedID == transactionID {
+			continue
+		}
+		nested, nErr := e.acceptDeltas(ctx, sub, nestedID, issue.TriggeredClasses, true)
+		if nErr != nil {
+			// Best-effort: one unreadable transaction must not fail the whole
+			// accept. It keeps its old baseline and reports the behaviour again
+			// later, which the operator can accept there — the same outcome as
+			// before this widening existed.
+			e.warn(fmt.Sprintf("accept anomaly: widen nested transaction %d", nestedID), nErr)
+			continue
+		}
+		if len(nested) == 0 {
+			continue
+		}
+		deltas = append(deltas, nested...)
+		widened = append(widened, nestedID)
+	}
+
+	if len(deltas) > 0 {
+		if _, err := e.repo.ApplyBaselineDeltas(ctx, deltas, e.store.merger); err != nil {
+			return err
+		}
+		for _, id := range widened {
+			e.store.removeEntry(id)
+		}
+	}
+
+	return e.repo.ResolveAnomalyIssue(ctx, transactionID, signature, repo.AnomalyResolveAccept)
+}
+
+// acceptDeltas folds one entry's subtree into that entry's own transaction for
+// the accepted classes, each contribution merged into an empty value — the
+// per-class shape ApplyBaselineDeltas expects. What goes in is always the
+// subtree, never the whole trace: a baseline is meant to describe what its own
+// transaction does, so folding the full trace into pricing would teach it the
+// callers above it and leave it blind to a genuine deviation there later.
+//
+// enclosed marks a transaction widened on the operator's behalf rather than the
+// one they clicked accept on, and holds those to two further rules. A class
+// still learning is left alone, since it picks the behaviour up from live
+// traffic on its own and seeding it here would freeze a baseline that never
+// finished learning. A class the subtree adds nothing to is skipped, so a
+// sibling branch that never made the accepted call is not stamped as having
+// just grown — that marker drives promotion-by-stability and the learning
+// progress the UI shows.
+func (e *Engine) acceptDeltas(
+	ctx context.Context,
+	sub *Trace,
+	transactionID int64,
+	classes []repo.DeviationClass,
+	enclosed bool,
+) ([]repo.BaselineDelta, error) {
+	fresh, err := e.repo.GetBaselineForTransaction(ctx, transactionID)
+	if err != nil {
+		return nil, err
 	}
 	freshByClass := make(map[repo.DeviationClass]repo.BaselineClass, len(fresh))
 	for _, b := range fresh {
@@ -192,17 +268,23 @@ func (e *Engine) AcceptAnomalyIssue(ctx context.Context, transactionID int64, si
 
 	now := e.clock()
 	var deltas []repo.BaselineDelta
-	for _, class := range issue.TriggeredClasses {
+	for _, class := range classes {
+		cur, held := freshByClass[class]
+		if enclosed && (!held || !cur.Promoted) {
+			continue
+		}
 		sc := e.scorerForClass(class)
 		if sc == nil {
 			continue
 		}
-		contribution, mErr := sc.Merge(t, json.RawMessage(`{}`))
+		if enclosed && !e.subtreeWidens(sc, sub, cur.Data) {
+			continue
+		}
+		contribution, mErr := sc.Merge(sub, json.RawMessage(`{}`))
 		if mErr != nil {
 			e.warn(fmt.Sprintf("accept anomaly: merge %s", class), mErr)
 			continue
 		}
-		cur := freshByClass[class]
 		deltas = append(deltas, repo.BaselineDelta{
 			TransactionID:                transactionID,
 			Class:                        class,
@@ -215,15 +297,30 @@ func (e *Engine) AcceptAnomalyIssue(ctx context.Context, transactionID int64, si
 			ObservationCountAtLastChange: cur.ObservationCount + 1,
 		})
 	}
+	return deltas, nil
+}
 
-	if len(deltas) > 0 {
-		if _, err := e.repo.ApplyBaselineDeltas(ctx, deltas, e.store.merger); err != nil {
-			return err
-		}
-		e.store.removeEntry(transactionID)
+// subtreeWidens reports whether folding this subtree into the stored baseline
+// would actually add anything, using the same growth test the learning path
+// uses to move the stability clock.
+func (e *Engine) subtreeWidens(sc Scorer, sub *Trace, stored json.RawMessage) bool {
+	merged, err := sc.Merge(sub, emptyOr(stored))
+	if err != nil {
+		e.warn(fmt.Sprintf("accept anomaly: probe %s", sc.Class()), err)
+		return false
 	}
+	return baselineGrew(sc, emptyOr(stored), merged)
+}
 
-	return e.repo.ResolveAnomalyIssue(ctx, transactionID, signature, repo.AnomalyResolveAccept)
+// subTransactionID resolves a sub-trace's transaction id the same way ingest
+// does, so accept widens the identities live traffic will actually hit.
+func subTransactionID(sub *Trace, dims []repo.TransactionIdentityDimension) (int64, bool) {
+	ident, ok := identifyTransaction(sub)
+	if !ok {
+		return 0, false
+	}
+	operation := applyIdentityDimensions(ident.Operation, sub.Root, dims)
+	return repo.HashTransactionID(ident.Service, ident.Namespace, operation, ident.Kind), true
 }
 
 // DismissAnomalyIssue closes an issue without widening the baseline. The decision
