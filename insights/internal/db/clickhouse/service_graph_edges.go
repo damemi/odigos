@@ -3,6 +3,7 @@ package clickhouse
 import (
 	"context"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -101,6 +102,24 @@ func syntheticVirtualClient(e repo.BlastRadiusEdge) bool {
 	return e.ClientNamespace == "" && e.ClientService == "user"
 }
 
+// virtualIPNode reports whether an endpoint is a virtual node named by a raw IP
+// address (with or without a port). These appear when an instrumented client
+// talks to an uninstrumented peer by address - most notably a metrics scraper
+// hitting pods by IP, which spawns a distinct virtual node per target and
+// floods the blast-radius view. The edges stay in storage; we just skip them
+// when building the returned subgraph. A meaningfully-named virtual dependency
+// (a DB, queue, or hostname) is unaffected.
+func virtualIPNode(service string, virtual bool) bool {
+	if !virtual {
+		return false
+	}
+	if net.ParseIP(service) != nil {
+		return true
+	}
+	host, _, err := net.SplitHostPort(service)
+	return err == nil && net.ParseIP(host) != nil
+}
+
 // edgesTouching returns every logical edge with (namespace, service) on either
 // end - the inbound (callers) and outbound (callees) of one node.
 func (r *Repo) edgesTouching(ctx context.Context, namespace, service string) ([]sgEdgeRow, error) {
@@ -143,6 +162,13 @@ func expandBlastRadius(ctx context.Context, namespace, service string, depth int
 				return repo.BlastRadiusSubgraph{}, err
 			}
 			for _, row := range rows {
+				// Drop edges to/from raw-IP virtual nodes (e.g. a metrics
+				// scraper hitting pods by IP) so they neither clutter the
+				// subgraph nor consume the node cap. Still persisted upstream.
+				if virtualIPNode(row.edge.ClientService, row.clientIsVirtual) ||
+					virtualIPNode(row.edge.ServerService, row.serverIsVirtual) {
+					continue
+				}
 				id := edgeID(row.edge)
 				if _, ok := seenEdge[id]; !ok {
 					seenEdge[id] = struct{}{}

@@ -99,6 +99,83 @@ func TestExpandBlastRadius_VirtualClientIsLeaf(t *testing.T) {
 	}
 }
 
+func TestExpandBlastRadius_SkipsVirtualIPNodes(t *testing.T) {
+	// frontend calls a real backend, but also gets scraped by a metrics agent
+	// that reaches it (and other pods) by raw IP. Those IP-named virtual nodes
+	// must not appear in the subgraph, while the real callee stays.
+	byNode := map[nodeKey][]sgEdgeRow{
+		{"default", "frontend"}: {
+			{
+				edge: repo.BlastRadiusEdge{
+					ClientNamespace: "default", ClientService: "frontend",
+					ServerNamespace: "default", ServerService: "backend",
+				},
+			},
+			{
+				edge: repo.BlastRadiusEdge{
+					ClientNamespace: "monitoring", ClientService: "alloy",
+					ServerService: "10.244.1.7", ConnectionType: "virtual_node",
+				},
+				serverIsVirtual: true,
+			},
+			{
+				edge: repo.BlastRadiusEdge{
+					ClientNamespace: "monitoring", ClientService: "alloy",
+					ServerService: "10.244.1.8:9090", ConnectionType: "virtual_node",
+				},
+				serverIsVirtual: true,
+			},
+		},
+	}
+	touching := func(_ context.Context, ns, svc string) ([]sgEdgeRow, error) {
+		return byNode[nodeKey{ns, svc}], nil
+	}
+
+	sub, err := expandBlastRadius(context.Background(), "default", "frontend", 2, touching)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := map[string]bool{}
+	for _, n := range sub.Nodes {
+		got[n.Namespace+"/"+n.Service] = n.IsVirtual
+	}
+	if _, ok := got["/10.244.1.7"]; ok {
+		t.Errorf("raw-IP virtual node leaked into subgraph: %+v", got)
+	}
+	if _, ok := got["/10.244.1.8:9090"]; ok {
+		t.Errorf("raw-IP:port virtual node leaked into subgraph: %+v", got)
+	}
+	if _, ok := got["default/backend"]; !ok {
+		t.Errorf("real callee should remain: %+v", got)
+	}
+	if len(sub.Nodes) != 2 {
+		t.Errorf("expected 2 nodes (frontend, backend), got %d: %+v", len(sub.Nodes), got)
+	}
+}
+
+func TestVirtualIPNode(t *testing.T) {
+	cases := []struct {
+		service string
+		virtual bool
+		want    bool
+	}{
+		{"10.244.1.7", true, true},
+		{"10.244.1.8:9090", true, true},
+		{"::1", true, true},
+		{"[fe80::1]:80", true, true},
+		{"10.244.1.7", false, false},
+		{"postgres", true, false},
+		{"postgres:5432", true, false},
+		{"backend", false, false},
+	}
+	for _, tc := range cases {
+		if got := virtualIPNode(tc.service, tc.virtual); got != tc.want {
+			t.Errorf("virtualIPNode(%q, %v) = %v, want %v", tc.service, tc.virtual, got, tc.want)
+		}
+	}
+}
+
 func TestSyntheticVirtualClient(t *testing.T) {
 	if !syntheticVirtualClient(repo.BlastRadiusEdge{ClientService: "user"}) {
 		t.Error("empty-ns user should be treated as virtual")
