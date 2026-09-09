@@ -92,10 +92,10 @@ RUN --mount=type=bind,from=dotnet-builder,source=/legacy-dotnet-instrumentation,
     fi
 
 # java-ebpf-instrumentations
-COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.48.0@sha256:3b3581edee5568852c9475b2943e4eb742e27dd2b3cf8332ef35de9cf4ce7ac2 /instrumentations/java-ebpf /instrumentations/java-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.51.0@sha256:86e196062ebca482dbd7667fdd0ede404b9669682d202f3ea129702d01909e19 /instrumentations/java-ebpf /instrumentations/java-ebpf
 
 # java-enterprise
-COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.48.0@sha256:7348ac0b9f411c740d1695ad435e90bb40af0937272fbc61910fc25ed031b695 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.51.0@sha256:84855925d9f204fe0086f5d47498ee37dcef08d33eb2e0ebadd2db2473aa9008 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
 
 # php-community
 COPY --from=public.ecr.aws/odigos/agents/php-community:v0.7.0@sha256:b3ed955a65f7c6f67d4143e99ab778a70126669352f14dc1d8e20687e7af9ca0 /instrumentations/php /instrumentations/php
