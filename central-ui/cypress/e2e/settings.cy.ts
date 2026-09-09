@@ -63,7 +63,6 @@ const LEGACY_FIELD_PATHS: Record<string, string> = {
   'instrumentor.mountMethod': 'mountMethod',
   'instrumentor.agentEnvVarsInjectionMethod': 'agentEnvVarsInjectionMethod',
   'instrumentor.checkDeviceHealthBeforeInjection': 'checkDeviceHealthBeforeInjection',
-  'wasp.enabled': 'waspEnabled',
   'karpenter.enabled': 'karpenterEnabled',
   // pre-v1.24 stored this as a flat boolean, not an `{enabled: bool}` object,
   // so the legacy data-id is just `allowConcurrentAgents`.
@@ -402,7 +401,6 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
       selectDropdownOption('instrumentor.agentEnvVarsInjectionMethod', 'pod-manifest');
       clickToggle('allowConcurrentAgents.enabled');
       clickToggle('instrumentor.checkDeviceHealthBeforeInjection');
-      clickToggle('wasp.enabled');
 
       // ─ Rollout & Rollback ─
       clickToggle('rollout.automaticRolloutDisabled');
@@ -458,7 +456,6 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
       yamlExpectIfSet('instrumentor.agentEnvVarsInjectionMethod', yaml, 'agentEnvVarsInjectionMethod: pod-manifest');
       yamlExpectIfSet('allowConcurrentAgents.enabled', yaml, 'allowConcurrentAgents:');
       yamlExpectIfSet('instrumentor.checkDeviceHealthBeforeInjection', yaml, 'checkDeviceHealthBeforeInjection:');
-      yamlExpectIfSet('wasp.enabled', yaml, 'waspEnabled:');
 
       yamlExpectIfSet('rollout.automaticRolloutDisabled', yaml, 'automaticRolloutDisabled:');
       yamlExpectIfSet('rollout.maxConcurrentRollouts', yaml, 'maxConcurrentRollouts: 5');
@@ -492,7 +489,6 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
         yamlExpectIfSet('instrumentor.agentEnvVarsInjectionMethod', yaml, 'agentEnvVarsInjectionMethod: pod-manifest');
         yamlExpectIfSet('allowConcurrentAgents.enabled', yaml, 'allowConcurrentAgents:');
         yamlExpectIfSet('instrumentor.checkDeviceHealthBeforeInjection', yaml, 'checkDeviceHealthBeforeInjection:');
-        yamlExpectIfSet('wasp.enabled', yaml, 'waspEnabled:');
 
         yamlExpectIfSet('rollout.automaticRolloutDisabled', yaml, 'automaticRolloutDisabled:');
         yamlExpectIfSet('rollout.maxConcurrentRollouts', yaml, 'maxConcurrentRollouts: 5');
@@ -544,7 +540,6 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
       verifyDropdown('instrumentor.agentEnvVarsInjectionMethod', 'pod-manifest');
       verifyToggle('allowConcurrentAgents.enabled', true);
       verifyToggle('instrumentor.checkDeviceHealthBeforeInjection', true);
-      verifyToggle('wasp.enabled', true);
 
       // ─ Rollout & Rollback ─
       verifyToggle('rollout.automaticRolloutDisabled', true);
@@ -615,7 +610,6 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
         yamlExpectAbsentIfSet('ignoredContainers', yaml, 'cypress-test-container');
         yamlExpectAbsentIfSet('rollout.maxConcurrentRollouts', yaml, 'maxConcurrentRollouts: 5');
         yamlExpectAbsentIfSet('sampling.k8sHealthProbesSampling.keepPercentage', yaml, 'keepPercentage: 50');
-        yamlExpectAbsentIfSet('wasp.enabled', yaml, 'waspEnabled:');
         yamlExpectAbsentIfSet('allowConcurrentAgents.enabled', yaml, 'allowConcurrentAgents:');
       });
     });
