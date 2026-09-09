@@ -102,6 +102,10 @@ func (e *Engine) ResetTransactionBaselines(ctx context.Context, transactionID in
 	if err := e.repo.DeleteAnomalyIssues(ctx, transactionID); err != nil {
 		e.warn("delete anomaly issues on re-learn", err)
 	}
+	// Firings counted since the last flush live only in memory, so the delete
+	// above cannot see them. Drop them too, or the next flush writes the
+	// pre-reset issue back in behind the reset.
+	e.anomalies.forgetTransaction(transactionID)
 	return nil
 }
 
@@ -114,6 +118,10 @@ func (e *Engine) DeleteTransaction(ctx context.Context, transactionID int64) err
 		return err
 	}
 	e.store.removeEntry(transactionID)
+	// Only once the rows are actually gone: unlike a baseline entry, a buffered
+	// firing cannot be reloaded, so dropping it ahead of a delete that then
+	// failed would lose a real finding.
+	e.anomalies.forgetTransaction(transactionID)
 	if err := e.ReloadLearningConfig(ctx); err != nil {
 		e.warn("reload learning config after delete transaction", err)
 	}

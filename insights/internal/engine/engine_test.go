@@ -1343,7 +1343,12 @@ func (f *fakeRepo) ListTransactionStats(_ context.Context, params repo.Transacti
 	return out, nil
 }
 
-func (f *fakeRepo) DeleteTransaction(_ context.Context, transactionID int64) error {
+// DeleteTransaction mirrors the ClickHouse repo: findings and stored traces go
+// with the transaction, not just its identity and baselines.
+func (f *fakeRepo) DeleteTransaction(ctx context.Context, transactionID int64) error {
+	if err := f.DeleteAnomalyIssues(ctx, transactionID); err != nil {
+		return err
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	kept := f.transactions[:0]
@@ -1361,6 +1366,13 @@ func (f *fakeRepo) DeleteTransaction(_ context.Context, transactionID int64) err
 		}
 	}
 	f.baselines = keptB
+	keptO := f.observations[:0]
+	for _, o := range f.observations {
+		if o.TransactionID != transactionID {
+			keptO = append(keptO, o)
+		}
+	}
+	f.observations = keptO
 	return nil
 }
 

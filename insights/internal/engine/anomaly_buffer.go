@@ -98,6 +98,22 @@ func (b *anomalyBuffer) drain(currentInventoryEpoch int) []repo.AnomalyOccurrenc
 	return occs
 }
 
+// dropTransaction discards everything buffered for one transaction. An operator
+// deleting a transaction (or resetting its baselines) also clears its findings,
+// and a firing counted since the last flush is only in here - without this the
+// next drain writes it straight back, against a transaction the delete removed.
+// The inventory epoch covers the same hazard for a full wipe; this is its
+// per-transaction counterpart.
+func (b *anomalyBuffer) dropTransaction(transactionID int64) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for key, a := range b.agg {
+		if a.transactionID == transactionID {
+			delete(b.agg, key)
+		}
+	}
+}
+
 // empty reports whether nothing has accumulated, so the flush can skip reading
 // the live inventory generation on the common idle path.
 func (b *anomalyBuffer) empty() bool {

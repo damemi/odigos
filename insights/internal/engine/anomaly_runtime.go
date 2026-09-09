@@ -16,8 +16,12 @@ type anomalyRuntime struct {
 	warn  func(msg string, err error)
 	store func(ctx context.Context, t *Trace, tx repo.Transaction, reason string) error
 
-	buf     *anomalyBuffer
-	samples sync.Map // signature string -> struct{}, write-once evidence gate
+	buf *anomalyBuffer
+	// samples is the write-once evidence gate: signature string -> int64
+	// transaction id. The id is held so a single transaction's entries can be
+	// released on delete; the key stays the signature alone because that is what
+	// identifies an issue.
+	samples sync.Map
 }
 
 func newAnomalyRuntime(
@@ -95,6 +99,31 @@ func (a *anomalyRuntime) clearSamples() {
 	a.samples.Clear()
 }
 
+// forgetTransaction drops the in-memory state one transaction accumulated:
+// firings buffered since the last flush, and its slots in the evidence gate.
+// Called after an operator delete or baseline reset has removed the same state
+// from storage, so the write-behind flush cannot put it back.
+//
+// Releasing the gate matters as much as dropping the buffer. A transaction id is
+// a stable hash of its identity, so a deleted transaction relearned from live
+// traffic comes back under the same id and fires the same signature - and the
+// gate, keyed by signature alone, would still be holding it. The issue would
+// then re-open with no evidence trace: nothing to investigate, and Accept fails
+// outright ("no stored sample trace"). This is the single-transaction
+// counterpart of clearSamples on the wipe path.
+func (a *anomalyRuntime) forgetTransaction(transactionID int64) {
+	if a == nil {
+		return
+	}
+	a.buf.dropTransaction(transactionID)
+	a.samples.Range(func(key, value any) bool {
+		if id, ok := value.(int64); ok && id == transactionID {
+			a.samples.Delete(key)
+		}
+		return true
+	})
+}
+
 // captureSample keeps one evidence trace per issue signature. Occurrences are
 // counted separately; extra samples are not useful. Best-effort: the in-memory
 // gate races harmlessly across concurrent firings; CountObservations covers
@@ -104,7 +133,7 @@ func (a *anomalyRuntime) clearSamples() {
 // Otherwise the issue goes on counting occurrences with no trace to show for
 // them: nothing to investigate, and nothing Accept can fold into the baseline.
 func (a *anomalyRuntime) captureSample(ctx context.Context, t *Trace, tx repo.Transaction, signature string) {
-	if _, loaded := a.samples.LoadOrStore(signature, struct{}{}); loaded {
+	if _, loaded := a.samples.LoadOrStore(signature, tx.ID); loaded {
 		return
 	}
 	ctx, cancel := detachedEvidenceContext(ctx)
