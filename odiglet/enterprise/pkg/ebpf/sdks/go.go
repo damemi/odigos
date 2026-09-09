@@ -57,8 +57,6 @@ type GoOtelEbpfSdkEnterprise struct {
 	inst             *auto.Instrumentation
 	cp               *configprovider.ConfigProvider[goAutoConfig.InstrumentationConfig]
 	waspMaps         *wasp.Maps
-	waspMapsProvider wasp.MapsProvider
-	podName          string
 	pid              int
 }
 
@@ -219,20 +217,15 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 		opts = append(opts, auto.WithOffsetFile(g.offsetFileBytes))
 	}
 
-	var (
-		waspMaps *wasp.Maps
-		podName  string
-	)
+	var waspMaps *wasp.Maps
 
 	if g.waspMapsProvider != nil {
-		if podName = podNameFromSettings(settings); podName != "" {
-			g.logger.Info("using wasp handshake for Go process", "pod", podName)
-			waspMaps, err = g.waspMapsProvider.Release(podName, pid)
-			if err != nil {
-				g.logger.Error("failed to acquire wasp maps", "error", err)
-			} else {
-				opts = append(opts, auto.WithWASPHandshakeMaps(waspMaps))
-			}
+		g.logger.Info("using wasp handshake for Go process")
+		waspMaps, err = g.waspMapsProvider.Get(pid)
+		if err != nil {
+			g.logger.Error("failed to acquire wasp maps", "error", err)
+		} else {
+			opts = append(opts, auto.WithWASPHandshakeMaps(waspMaps))
 		}
 	}
 	if g.traceIdSuffix != 0 {
@@ -247,8 +240,7 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 	if err != nil {
 		g.logger.Error("instrumentation setup failed", "error", err)
 		if waspMaps != nil {
-			// return ownership of the wasp maps to the provider in case we failed to instrument this process
-			err = errors.Join(err, g.waspMapsProvider.Take(podName, waspMaps))
+			err = errors.Join(err, waspMaps.Close())
 		}
 		return nil, err
 	}
@@ -257,8 +249,6 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 		inst:             inst,
 		cp:               cp,
 		waspMaps:         waspMaps,
-		waspMapsProvider: g.waspMapsProvider,
-		podName:          podName,
 		pid:              pid,
 	}
 
@@ -276,9 +266,7 @@ func (g *GoOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.Sta
 
 	if err != nil {
 		if g.waspMaps != nil {
-			// if we failed to load, and the instrumentation took ownership over the wasp maps
-			// we return ownership back to the provider
-			err = errors.Join(err, g.waspMapsProvider.Take(g.podName, g.waspMaps))
+			err = errors.Join(err, g.waspMaps.Close())
 		}
 		return status, err
 	}
@@ -317,9 +305,7 @@ func (g *GoOtelEbpfSdkEnterprise) Run(ctx context.Context) error {
 func (g *GoOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 	var err error
 	if g.waspMaps != nil {
-		// if the instrumentation had ownership of wasp maps - return ownership to the provider
-		// this will allow us to re-use the wasp maps if a new instrumentation is required in the same pod after this.
-		err = errors.Join(err, g.waspMapsProvider.Take(g.podName, g.waspMaps))
+		err = errors.Join(err, g.waspMaps.Close())
 	}
 	err = errors.Join(err, g.inst.Close())
 	return err

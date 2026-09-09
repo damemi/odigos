@@ -7,7 +7,7 @@ require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/common v1.37.0-pre5
+	github.com/odigos-io/odigos/common v1.37.0-pre5.0.20260909134459-5103e83a9bfd
 	github.com/prometheus/client_golang v1.23.2
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/proto/otlp v1.5.0

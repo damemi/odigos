@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log/slog"
 	_ "net/http/pprof"
 	"os"
 	"strconv"
@@ -21,7 +20,6 @@ import (
 
 	coreotel "github.com/odigos-io/ebpf-core/pkg/otel"
 	"github.com/odigos-io/ebpf-core/pkg/wasp"
-	waspserver "github.com/odigos-io/ebpf-core/pkg/wasp/server"
 	enterprisedistros "github.com/odigos-io/odigos-enterprise/distros"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/logcapture"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/sdks"
@@ -49,10 +47,10 @@ func main() {
 
 	var healthProbeBindPort int
 	var traceIdSuffix string
-	var waspEnabled bool
+	var waspDisabled bool
 	flag.IntVar(&healthProbeBindPort, "health-probe-bind-port", k8sconsts.OdigletDefaultHealthProbeBindPort, "The port the probe endpoint binds to.")
 	flag.StringVar(&traceIdSuffix, "trace-id-suffix", "", "Hex value for the unique identifier for timestamp-based trace IDs. Must be 1 byte. Example: 5E.")
-	flag.BoolVar(&waspEnabled, "wasp-enabled", false, "Enable Wasp integration")
+	flag.BoolVar(&waspDisabled, "wasp-disabled", false, "Opt out of wasp, even on kernels that require it for writing into instrumented processes.")
 	flag.Parse()
 
 	if err := capabilities.AlignEffectiveCapToPermitted(); err != nil {
@@ -143,7 +141,7 @@ func main() {
 		}
 	}()
 
-	factories, err := ebpfInstrumentationFactories(uint8(suffix), waspEnabled, enterpriseDistrosProvider.Getter, otlpCommonConn, tracesConsumer)
+	factories, err := ebpfInstrumentationFactories(uint8(suffix), logger, enterpriseDistrosProvider.Getter, otlpCommonConn, tracesConsumer, waspDisabled)
 	if err != nil {
 		logger.Error("failed to set up ebpf factories", "error", err)
 		os.Exit(1)
@@ -217,14 +215,31 @@ func main() {
 	logger.Info("odiglet exiting")
 }
 
-func ebpfInstrumentationFactories(suffix uint8, waspEnabled bool, getter *distros.Getter, otlpConn *grpc.ClientConn, tracesConsumer consumer.Traces) (map[string]commonInstrumentation.Factory, error) {
-	var wp wasp.MapsProvider
-	if waspEnabled {
-		wp = waspserver.NewServer(slog.Default(), k8sconsts.OdigletWaspServicePort, process.HostProcDir())
-		if server, ok := wp.(*waspserver.Server); ok {
-			go server.Start()
-		}
+// waspProvider returns the provider to use for writing into instrumented processes, or nil
+// when wasp is not the mechanism for this kernel. Nil means probes use bpf_probe_write_user,
+// or fail to load if the kernel offers neither.
+func waspProvider(logger *commonlogger.OdigosLogger, disabled bool) wasp.MapsProvider {
+	if disabled {
+		logger.Info("wasp is explicitly disabled, it will not be used for eBPF instrumentations")
+		return nil
 	}
+
+	if !wasp.IsRequired() {
+		logger.Info("wasp is not required, it will not be used for eBPF instrumentations")
+		return nil
+	}
+
+	if !wasp.IsWaspSupportedByKernel() {
+		logger.Error("wasp is required but not supported by the kernel, probes that write to user memory will not load")
+		return nil
+	}
+
+	logger.Info("wasp is required and supported by the kernel, it will be used for eBPF instrumentations")
+	return wasp.NewSimpleProvider(process.HostProcDir())
+}
+
+func ebpfInstrumentationFactories(suffix uint8, logger *commonlogger.OdigosLogger, getter *distros.Getter, otlpConn *grpc.ClientConn, tracesConsumer consumer.Traces, waspDisabled bool) (map[string]commonInstrumentation.Factory, error) {
+	wp := waspProvider(logger, waspDisabled)
 
 	goFactory, err := sdks.NewGoInstrumentationFactoryEnterprise(suffix, wp, tracesConsumer)
 	if err != nil {

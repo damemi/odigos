@@ -12,7 +12,6 @@ import (
 
 	"github.com/odigos-io/odigos/instrumentor"
 
-	"github.com/odigos-io/odigos-enterprise/instrumentor/wasp"
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -57,8 +56,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// always pass the wasp mutator function, it will only be invoked if wasp is opt in in the effective configuration
-	i, err := instrumentor.New(managerOptions, dp, wasp.PodMutator)
+	i, err := instrumentor.New(managerOptions, dp)
 	if err != nil {
 		logger.Error("Failed to initialize instrumentor", "err", err)
 		os.Exit(1)

@@ -29,8 +29,7 @@ spec:
                 --set image.tag=$IMAGE_TAG \
                 --set onPremToken=$ODIGOS_API_KEY \
                 --set goAutoOffsetsCron="0 0 * * *" \
-                --set goAutoOffsetsMode="direct" \
-                --set wasp.enabled=$WASP_ENABLED
+                --set goAutoOffsetsMode="direct"
               kubectl label namespace odigos-test odigos.io/system-object="true"
               # if WASP is enabled in the test, we need to force the instrumentations supporting it to use it since
               # the underlying kernel where the test runs might not require WASP, but we want to force its usage for testing purposes.

@@ -54,7 +54,7 @@ func registerConfigTools(s *server.MCPServer, deps Deps) {
 	s.AddTool(
 		mcp.NewTool("update_local_ui_config",
 			writeAnno(),
-			mcp.WithDescription("Write the local UI override of OdigosConfiguration. Use to set ignored namespaces/containers, telemetry-enabled, cluster name, GoAutoOffsets cron/mode, component log levels, sampling toggles, rollout / auto-rollback / WASP / instrumentor knobs. Pass only the fields you want to change."),
+			mcp.WithDescription("Write the local UI override of OdigosConfiguration. Use to set ignored namespaces/containers, telemetry-enabled, cluster name, GoAutoOffsets cron/mode, component log levels, sampling toggles, rollout / auto-rollback / instrumentor knobs. Pass only the fields you want to change."),
 			mcp.WithBoolean("telemetry_enabled", mcp.Description("Optional.")),
 			mcp.WithArray("ignored_namespaces", mcp.Description("Optional: replace ignored namespaces list."), mcp.Items(map[string]any{"type": "string"})),
 			mcp.WithArray("ignored_containers", mcp.Description("Optional: replace ignored containers list."), mcp.Items(map[string]any{"type": "string"})),
@@ -65,7 +65,6 @@ func registerConfigTools(s *server.MCPServer, deps Deps) {
 			mcp.WithObject("rollout", mcp.Description("Optional: rollout knobs (e.g. automaticRolloutDisabled, maxConcurrentRollouts)."), mcp.AdditionalProperties(true)),
 			mcp.WithObject("auto_rollback", mcp.Description("Optional: autoRollback knobs (rollbackDisabled, rollbackGraceTime, rollbackStabilityWindow)."), mcp.AdditionalProperties(true)),
 			mcp.WithObject("sampling", mcp.Description("Optional: global sampling toggles (dry_run, k8sHealthProbesSampling, etc)."), mcp.AdditionalProperties(true)),
-			mcp.WithObject("wasp", mcp.Description("Optional: WASP knobs."), mcp.AdditionalProperties(true)),
 			mcp.WithObject("instrumentor", mcp.Description("Optional: instrumentor knobs (agentEnvVarsInjectionMethod, checkDeviceHealthBeforeInjection)."), mcp.AdditionalProperties(true)),
 			mcp.WithObject("allow_concurrent_agents", mcp.Description("Optional: allowConcurrentAgents knobs."), mcp.AdditionalProperties(true)),
 			mcp.WithObject("component_log_levels", mcp.Description("Optional: per-component log levels (autoscaler, scheduler, instrumentor, odiglet, deviceplugin, ui, collector)."), mcp.AdditionalProperties(true)),
@@ -205,9 +204,6 @@ func updateLocalUIConfigHandler(deps Deps) server.ToolHandlerFunc {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		if _, err := decodeArg(req, "sampling", &input.Sampling); err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-		if _, err := decodeArg(req, "wasp", &input.Wasp); err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		if _, err := decodeArg(req, "instrumentor", &input.Instrumentor); err != nil {
