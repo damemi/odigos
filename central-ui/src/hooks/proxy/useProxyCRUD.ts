@@ -4,6 +4,12 @@ import { DELETE_CLOUD_CONNECTOR, DELETE_PROXY_CONNECTION } from '@/graphql';
 import { Crud, PlatformType, StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 
+/**
+ * @deprecated Prefer `useOdigosApi().connectionsApi.deleteConnection` — the
+ * kit owns connection teardown via the adapter's DELETE_PROXY_CONNECTION /
+ * DELETE_CLOUD_CONNECTOR slots. Kept for any host code that still calls
+ * Apollo directly outside the connections page.
+ */
 export const useProxyCRUD = () => {
   const { addNotification } = useNotificationStore();
   const notifyError = (error: { name?: string; message: string; cause?: unknown }, crudType: Crud) =>

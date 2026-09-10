@@ -1,15 +1,5 @@
 import { PROXY, ROUTES } from '../constants';
-import {
-  DEAD_PROXY,
-  awaitToast,
-  handleExceptions,
-  interceptGraphql,
-  interceptGraphqlWithDeadConnection,
-  invokeDeleteConnection,
-  signInAsAdmin,
-  visitPage,
-  waitForGraphqlOperation,
-} from '../functions';
+import { DEAD_PROXY, awaitToast, deleteConnectionViaUi, handleExceptions, interceptGraphql, interceptGraphqlWithDeadConnection, signInAsAdmin, visitPage, waitForGraphqlOperation } from '../functions';
 
 // The Central UI lists every Central Proxy as a row in /connections. Until a
 // row is clicked, the user is on an out-of-proxy page and cannot reach the
@@ -75,12 +65,10 @@ describe('Select Connection', () => {
 // Regression for PLAT-1316: DeleteProxyConnection must send variables.proxyID.
 // Sending `{ id }` (or omitting proxyID) yields HTTP 422 / GRAPHQL_VALIDATION_FAILED.
 //
-// We do NOT drive this through HoverActions: those only mount while a table row
-// is hovered, and headless Cypress cannot reliably hover the real row (the
-// table's aria-hidden MeasurementLayer duplicates cell text earlier in the DOM,
-// so row-targeting via .parents().filter fails). Instead we invoke the same
-// `deleteConnection` callback the page passes into `<CentralConnections>` —
-// that is the callback that was buggy in #2940.
+// Driven through the real UI path (row action → DeleteModal → approve). Hover is
+// skipped: kit HoverActions only mount while hovered and that flakes in headless
+// CI. deleteConnectionViaUi asserts `connection-row-{id}`, invokes the same
+// getRowActions delete onClick the HoverAction would, then clicks `approve`.
 describe('Delete Connection (PLAT-1316)', () => {
   beforeEach(() => {
     handleExceptions();
@@ -91,9 +79,7 @@ describe('Delete Connection (PLAT-1316)', () => {
   it('Should send DeleteProxyConnection with variables.proxyID (not id)', () => {
     visitPage(ROUTES.CONNECTIONS, () => {
       waitForGraphqlOperation('GetComputePlatforms').then(() => {
-        cy.contains(DEAD_PROXY.NAME, { timeout: 60000 }).should('exist');
-
-        invokeDeleteConnection(DEAD_PROXY.ID);
+        deleteConnectionViaUi(DEAD_PROXY.ID);
 
         waitForGraphqlOperation('DeleteProxyConnection').then((interception) => {
           const raw = interception.request.body;

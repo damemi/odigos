@@ -14,7 +14,9 @@
  *      `transformVariablesMulti` / `transformMultiResult` so the kit can
  *      fan out across multiple proxies via REMOTE_MULTI_FETCH (grouped by
  *      resolved version).
- *   4. Out-of-proxy operations (DELETE_PROXY_CONNECTION, GET_COMPUTE_PLATFORMS,
+ *   4. Out-of-proxy operations (GET_COMPUTE_PLATFORMS,
+ *      GET_CLOUD_CONNECTOR_PROVIDERS, CREATE_CLOUD_CONNECTOR,
+ *      DELETE_PROXY_CONNECTION, DELETE_CLOUD_CONNECTOR,
  *      GET_ALL_CLUSTER_SNAPSHOTS, etc.) — bare `gql` documents.
  *   5. Operation context derived from the active `useProxy()` proxy id
  *      (platformType + odigosVersion + proxyID) plus `useConfig().isReadonly`.
@@ -48,14 +50,14 @@ import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { vmQuery, type VmSelect } from '@/graphql/remote/vm-dialect';
 import { safeJsonParse, trimVersion } from '@odigos/ui-kit/functions';
 import { supportsWorkloadReportRegion } from '@/graphql/remote/utils';
-import { PlatformType, Tier, type Action } from '@odigos/ui-kit/types';
 import { mapVmRuleTypesToOptions } from '@/graphql/remote/vm-rule-types';
-import { mapVmInstrumentationInstructions, vmInstrumentationInstructionsVariables } from '@/graphql/remote/vm-instrumentation-instructions';
 import { CombinedGraphQLErrors, ServerError } from '@apollo/client/errors';
 import { mapVmActionTypesToOptions } from '@/graphql/remote/vm-action-types';
 import { ApolloLink, type ApolloClient, type DocumentNode } from '@apollo/client';
 import type { VersionedRemoteFetch, WorkloadWithOdigosHealthStatus } from '@/types';
 import { normalizeActionForWire, parseRenamesString } from '@/lib/action-form-normalization';
+import { mapVmInstrumentationInstructions, vmInstrumentationInstructionsVariables } from '@/graphql/remote/vm-instrumentation-instructions';
+import { PlatformType, Tier, type Action, type CloudConnectorCreateResult, type CloudConnectorProvider, type Connection } from '@odigos/ui-kit/types';
 import { mapVmClearProfileCache, mapVmEnableSourceProfiling, mapVmHotFunctions, mapVmProfilingSlots, mapVmSourceProfile, vmProfilingService } from '@/graphql/remote/vm-profiling';
 import { mapVmActions, vmCreateActionResult, vmCreateActionVariables, vmDeleteActionResult, vmDeleteActionVariables, vmUpdateActionResult, vmUpdateActionVariables } from '@/graphql/remote/vm-actions';
 import {
@@ -119,6 +121,7 @@ import {
   OdigosApiProvider,
   type CreateActionResult,
   type CreateActionVars,
+  type ConnectionCrudResult,
   type CreateCostReductionRuleResult,
   type CreateDestinationResult,
   type CreateDestinationVars,
@@ -235,6 +238,9 @@ import {
   GET_COMPUTE_PLATFORMS,
   UPDATE_COMPUTE_PLATFORM,
   DELETE_PROXY_CONNECTION,
+  DELETE_CLOUD_CONNECTOR,
+  CREATE_CLOUD_CONNECTOR,
+  GET_CLOUD_CONNECTOR_PROVIDERS,
   GET_ALL_CLUSTER_SNAPSHOTS,
   GET_CLUSTER_SNAPSHOT,
   GET_HEALTH,
@@ -923,19 +929,27 @@ const parseActionRenamesInData = <T,>(data: T | undefined): T | undefined => {
 // So any throw from a `transformVariables` (e.g. a VM builder rejecting an
 // action type with no VM equivalent, or a rule with an empty required
 // collection) escapes as an unhandled rejection that silently aborts the
-// save/refetch with only a console error. By giving EVERY operation a `run`,
-// we move execution onto the guarded path for all operations — current and
-// future — so validation errors always surface as normal error toasts without
-// every call site having to remember to opt in.
+// save/refetch with only a console error. By giving query / REMOTE_FETCH ops a
+// `run`, we move execution onto the guarded path so validation errors surface
+// as normal error toasts without every call site having to opt in.
 //
-// `run` delegates to `runRemoteSingle` (the same single-REMOTE_FETCH executor
-// the legacy paths already use): for reads it's identical to the kit's default
-// (`client.query`, network-only); for the REMOTE_FETCH-wrapped "mutations" the
-// outer document is a `query RemoteFetch` either way, so the wire request is
-// unchanged. Operations that already define their own `run` (the legacy
+// `run` delegates to `runRemoteSingle` (client.query). That is correct for
+// reads and for REMOTE_FETCH-wrapped "mutations" (outer document is still
+// `query RemoteFetch`). Bare GraphQL mutations (DELETE_PROXY_CONNECTION,
+// CREATE_CLOUD_CONNECTOR, …) must NOT get a `run` — runMutation would take
+// that path and client.query rejects mutation documents before any network
+// I/O, silently no-oping deletes/creates. Those stay on runMutation's
+// client.mutate path. Ops that already define their own `run` (legacy
 // multi-step executors) are left untouched — the kit already guards those.
+const isBareGraphqlMutation = (op: Operation<unknown, unknown>): boolean => {
+  const doc = op.document;
+  if (!doc || typeof doc === 'function') return false;
+  return doc.definitions.some((d) => d.kind === 'OperationDefinition' && d.operation === 'mutation');
+};
+
 const withGuardedRun = <TData, TVars>(op: Operation<TData, TVars>): Operation<TData, TVars> => {
   if (op.run) return op;
+  if (isBareGraphqlMutation(op as Operation<unknown, unknown>)) return op;
   return {
     ...op,
     run: async (client, vars, ctx) => {
@@ -948,8 +962,7 @@ const withGuardedRun = <TData, TVars>(op: Operation<TData, TVars>): Operation<TD
   };
 };
 
-// Apply `withGuardedRun` to every operation in the map so the guard is a root
-// behavior of the adapter rather than an opt-in per operation.
+// Apply `withGuardedRun` to query / REMOTE_FETCH ops (skips bare GraphQL mutations).
 const withGuardedRuns = (ops: OdigosApiOperations): OdigosApiOperations => {
   const guarded = {} as Record<string, Operation<unknown, unknown> | undefined>;
   for (const [key, op] of Object.entries(ops)) {
@@ -1461,6 +1474,30 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
       canRun: (ctx) => !isAgentsApiPlatform(ctx) && !isLegacySelectedProxy(ctx),
       transformResult: (raw) => (raw as { clusterSnapshot?: ClusterSnapshot } | null | undefined)?.clusterSnapshot,
     },
+
+    // connections — central-only, direct (NOT versioned-remote-fetch). Meta-ops
+    // on the connection registry itself (list / create connector / delete).
+    GET_COMPUTE_PLATFORMS: {
+      document: GET_COMPUTE_PLATFORMS as DocumentNode,
+      transformResult: (raw) => ((raw as { computePlatforms?: Connection[] } | null | undefined)?.computePlatforms ?? []) as Connection[],
+    },
+    GET_CLOUD_CONNECTOR_PROVIDERS: {
+      document: GET_CLOUD_CONNECTOR_PROVIDERS as DocumentNode,
+      transformResult: (raw) => (raw as { cloudConnectorProviders?: CloudConnectorProvider[] } | null | undefined)?.cloudConnectorProviders ?? [],
+    },
+    CREATE_CLOUD_CONNECTOR: {
+      document: CREATE_CLOUD_CONNECTOR as DocumentNode,
+      transformResult: (raw) => (raw as { createCloudConnector?: CloudConnectorCreateResult } | null | undefined)?.createCloudConnector,
+    },
+    // PLAT-1316: variables must be `{ proxyID }`, never `{ id }`.
+    DELETE_PROXY_CONNECTION: {
+      document: DELETE_PROXY_CONNECTION as DocumentNode,
+      transformResult: (raw) => (raw as { deleteProxyConnection?: ConnectionCrudResult } | null | undefined)?.deleteProxyConnection,
+    },
+    DELETE_CLOUD_CONNECTOR: {
+      document: DELETE_CLOUD_CONNECTOR as DocumentNode,
+      transformResult: (raw) => (raw as { deleteCloudConnector?: ConnectionCrudResult } | null | undefined)?.deleteCloudConnector,
+    },
   }),
 );
 
@@ -1620,8 +1657,8 @@ const OdigosApiAdapter: FC<AdapterProps> = ({ children }) => {
 };
 
 // Out-of-proxy operations also live in this file as bare gql constants
-// re-exported for any host code that needs them directly (e.g. signin
-// page using SIGN_IN, or the connections page deleting a proxy).
+// re-exported for any host code that still needs them directly (e.g. the
+// sign-in page). Connection CRUD prefers the kit's `connectionsApi` slots.
 export { GET_COMPUTE_PLATFORMS, UPDATE_COMPUTE_PLATFORM, DELETE_PROXY_CONNECTION };
 
 export default OdigosApiAdapter;
