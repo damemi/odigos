@@ -96,6 +96,22 @@ func SpansFromOTLP(raw []byte) []SpanView {
 	root := traces[0].Root
 	rootStartNs := root.StartUnix
 
+	// Siblings are linked in OTLP payload order (grouped by resource/scope), so
+	// two children from different instrumentation scopes come out in scope-block
+	// order rather than execution order. Sort each parent's children by start
+	// time so the waterfall reflects when spans actually ran. Render-only: these
+	// Span values are freshly decoded here and not shared with the scoring pass.
+	var sortChildren func(n *Span)
+	sortChildren = func(n *Span) {
+		sort.SliceStable(n.Children, func(i, j int) bool {
+			return n.Children[i].StartUnix < n.Children[j].StartUnix
+		})
+		for _, c := range n.Children {
+			sortChildren(c)
+		}
+	}
+	sortChildren(root)
+
 	var out []SpanView
 	var walk func(n *Span, depth int)
 	walk = func(n *Span, depth int) {
