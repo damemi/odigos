@@ -12,10 +12,12 @@ func TransactionsToModel(txs []Transaction) []*model.InterrogationTransaction {
 				Name:       fn.Name,
 				FrameType:  fn.FrameType,
 				SampleType: fn.SampleType,
+				SeenCount:  int(fn.SeenCount),
 			})
 		}
 		out = append(out, &model.InterrogationTransaction{
 			ID:        tx.ID,
+			SeenCount: int(tx.SeenCount),
 			Functions: fns,
 		})
 	}

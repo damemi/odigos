@@ -17,4 +17,5 @@ export * from './tokens';
 export * from './recommendations';
 export * from './sampling';
 export * from './insights';
+export * from './interrogation';
 export * from './workload';

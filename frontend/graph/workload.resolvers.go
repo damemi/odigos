@@ -18,10 +18,45 @@ import (
 	"github.com/odigos-io/odigos/frontend/graph/model"
 	"github.com/odigos-io/odigos/frontend/graph/status"
 	"github.com/odigos-io/odigos/frontend/services"
-	"github.com/odigos-io/odigos/frontend/services/interrogation"
 	frontendcommon "github.com/odigos-io/odigos/frontend/services/common"
+	"github.com/odigos-io/odigos/frontend/services/interrogation"
 	sourceutils "github.com/odigos-io/odigos/k8sutils/pkg/source"
 )
+
+// SampleTrace is the resolver for the sampleTrace field.
+func (r *interrogationTransactionResolver) SampleTrace(ctx context.Context, obj *model.InterrogationTransaction) (*string, error) {
+	if obj == nil || obj.ID == "" {
+		return nil, nil
+	}
+	enabled, err := interrogation.IsEnabled(ctx, r.K8sCacheClient)
+	if err != nil {
+		return nil, fmt.Errorf("reading effective config for interrogation: %w", err)
+	}
+	if !enabled || r.InterrogationClient == nil {
+		return nil, nil
+	}
+
+	workloadID, containerName, err := interrogationTransactionParents(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	raw, err := r.InterrogationClient.GetTransactionSampleTrace(
+		ctx,
+		workloadID.Namespace,
+		string(workloadID.Kind),
+		workloadID.Name,
+		containerName,
+		obj.ID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if raw == "" {
+		return nil, nil
+	}
+	return &raw, nil
+}
 
 // MarkedForInstrumentation is the resolver for the markedForInstrumentation field.
 func (r *k8sNamespaceResolver) MarkedForInstrumentation(ctx context.Context, obj *model.K8sNamespace) (bool, error) {
@@ -823,21 +858,6 @@ func (r *k8sWorkloadContainerResolver) InterrogationTransactions(ctx context.Con
 	return interrogation.TransactionsToModel(got.Transactions), nil
 }
 
-// parentWorkloadID walks the GraphQL field context to the parent K8sWorkload.
-// Field path for list items: interrogationTransactions -> container ->
-// containers (list) -> workload.
-func parentWorkloadID(ctx context.Context) (model.K8sWorkloadID, error) {
-	fc := graphql.GetFieldContext(ctx)
-	if fc == nil || fc.Parent == nil || fc.Parent.Parent == nil || fc.Parent.Parent.Parent == nil {
-		return model.K8sWorkloadID{}, fmt.Errorf("missing parent resolver context")
-	}
-	w, ok := fc.Parent.Parent.Parent.Result.(**model.K8sWorkload)
-	if !ok || w == nil || (*w).ID == nil {
-		return model.K8sWorkloadID{}, fmt.Errorf("parent is not a workload")
-	}
-	return *(*w).ID, nil
-}
-
 // Processes is the resolver for the processes field.
 func (r *k8sWorkloadPodContainerResolver) Processes(ctx context.Context, obj *model.K8sWorkloadPodContainer) ([]*model.K8sWorkloadPodContainerProcess, error) {
 	l := loaders.For(ctx)
@@ -1053,6 +1073,11 @@ func (r *queryResolver) Namespaces(ctx context.Context) ([]*model.K8sNamespace, 
 	return gqlNss, nil
 }
 
+// InterrogationTransaction returns InterrogationTransactionResolver implementation.
+func (r *Resolver) InterrogationTransaction() InterrogationTransactionResolver {
+	return &interrogationTransactionResolver{r}
+}
+
 // K8sNamespace returns K8sNamespaceResolver implementation.
 func (r *Resolver) K8sNamespace() K8sNamespaceResolver { return &k8sNamespaceResolver{r} }
 
@@ -1079,9 +1104,11 @@ func (r *Resolver) K8sWorkloadTelemetryMetrics() K8sWorkloadTelemetryMetricsReso
 	return &k8sWorkloadTelemetryMetricsResolver{r}
 }
 
+type interrogationTransactionResolver struct{ *Resolver }
 type k8sNamespaceResolver struct{ *Resolver }
 type k8sWorkloadResolver struct{ *Resolver }
 type k8sWorkloadContainerResolver struct{ *Resolver }
 type k8sWorkloadPodContainerResolver struct{ *Resolver }
 type k8sWorkloadRolloutResolver struct{ *Resolver }
 type k8sWorkloadTelemetryMetricsResolver struct{ *Resolver }
+

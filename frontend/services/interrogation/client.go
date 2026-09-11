@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,6 +20,9 @@ import (
 const (
 	// Must match odigosinterrogationtracesexporter key format.
 	txFunctionsKeyPrefix = "interrogation:tx:funcs:"
+	txCountKeyPrefix     = "interrogation:tx:count:"
+	txFnCountsKeyPrefix  = "interrogation:tx:fncounts:"
+	txSpansKeyPrefix     = "interrogation:tx:spans:"
 
 	redisDialTimeout  = 5 * time.Second
 	redisReadTimeout  = 2 * time.Second
@@ -37,11 +41,15 @@ type Function struct {
 	Name       string
 	FrameType  string
 	SampleType string
+	// SeenCount is how many times this function was observed for the transaction.
+	SeenCount int64
 }
 
 // Transaction is one Redis key's transaction id and its function set.
 type Transaction struct {
-	ID        string
+	ID string
+	// SeenCount is how many times this transaction was observed.
+	SeenCount int64
 	Functions []Function
 }
 
@@ -142,22 +150,75 @@ func (c *Client) ListContainerTransactions(ctx context.Context, namespace, kind,
 		if err != nil {
 			return nil, fmt.Errorf("%w: smembers %s: %v", ErrUnavailable, key, err)
 		}
+		txSeen, err := c.rdb.Get(ctx, txCountKey(namespace, kind, name, containerName, txID)).Int64()
+		if err != nil && err != redis.Nil {
+			return nil, fmt.Errorf("%w: get tx count: %v", ErrUnavailable, err)
+		}
+		fnCounts, err := c.rdb.HGetAll(ctx, txFnCountsKey(namespace, kind, name, containerName, txID)).Result()
+		if err != nil {
+			return nil, fmt.Errorf("%w: hgetall fn counts: %v", ErrUnavailable, err)
+		}
 		fns := make([]Function, 0, len(members))
 		for _, m := range members {
-			if fn, ok := parseFunctionMember(m); ok {
-				fns = append(fns, fn)
+			fn, ok := parseFunctionMember(m)
+			if !ok {
+				continue
 			}
+			if raw, ok := fnCounts[m]; ok {
+				if n, parseErr := strconv.ParseInt(raw, 10, 64); parseErr == nil {
+					fn.SeenCount = n
+				}
+			}
+			fns = append(fns, fn)
 		}
 		out.Transactions = append(out.Transactions, Transaction{
 			ID:        txID,
+			SeenCount: txSeen,
 			Functions: fns,
 		})
 	}
 	return out, nil
 }
 
+// GetTransactionSampleTrace returns the OTLP JSON traces sample stored for the
+// transaction, or empty string when none exists.
+func (c *Client) GetTransactionSampleTrace(ctx context.Context, namespace, kind, name, containerName, txID string) (string, error) {
+	if c == nil || c.rdb == nil {
+		return "", ErrUnavailable
+	}
+	namespace = strings.TrimSpace(namespace)
+	kind = strings.TrimSpace(kind)
+	name = strings.TrimSpace(name)
+	containerName = strings.TrimSpace(containerName)
+	txID = strings.TrimSpace(txID)
+	if namespace == "" || kind == "" || name == "" || containerName == "" || txID == "" {
+		return "", fmt.Errorf("namespace, kind, name, containerName, and transactionId are required")
+	}
+
+	raw, err := c.rdb.Get(ctx, txSpansKey(namespace, kind, name, containerName, txID)).Result()
+	if err == redis.Nil {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("%w: get tx spans: %v", ErrUnavailable, err)
+	}
+	return raw, nil
+}
+
 func workloadContainerPrefix(namespace, kind, name, containerName string) string {
 	return fmt.Sprintf("%s%s/%s/%s/%s:", txFunctionsKeyPrefix, namespace, kind, name, containerName)
+}
+
+func txCountKey(namespace, kind, name, containerName, txID string) string {
+	return fmt.Sprintf("%s%s/%s/%s/%s:%s", txCountKeyPrefix, namespace, kind, name, containerName, txID)
+}
+
+func txFnCountsKey(namespace, kind, name, containerName, txID string) string {
+	return fmt.Sprintf("%s%s/%s/%s/%s:%s", txFnCountsKeyPrefix, namespace, kind, name, containerName, txID)
+}
+
+func txSpansKey(namespace, kind, name, containerName, txID string) string {
+	return fmt.Sprintf("%s%s/%s/%s/%s:%s", txSpansKeyPrefix, namespace, kind, name, containerName, txID)
 }
 
 func transactionIDFromKey(key, prefix string) (string, bool) {

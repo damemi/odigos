@@ -305,10 +305,12 @@ export const GET_WORKLOADS_BY_IDS = gql`
         }
         interrogationTransactions {
           id
+          seenCount
           functions {
             name
             frameType
             sampleType
+            seenCount
           }
         }
       }

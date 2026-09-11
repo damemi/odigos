@@ -1574,13 +1574,20 @@ type InterrogationFunction struct {
 	FrameType string `json:"frameType"`
 	// Profile sample type: events (probe) or samples (periodic CPU).
 	SampleType string `json:"sampleType"`
+	// Times this function was observed while the transaction ran.
+	SeenCount int `json:"seenCount"`
 }
 
 // One transaction observed for a workload container, with its Redis-stored functions.
 type InterrogationTransaction struct {
 	// Transaction id as stored in the Redis key suffix.
-	ID        string                   `json:"id"`
+	ID string `json:"id"`
+	// Times this transaction was observed.
+	SeenCount int                      `json:"seenCount"`
 	Functions []*InterrogationFunction `json:"functions"`
+	// OTLP JSON traces sample for this transaction, if stored.
+	// Resolved on demand from Redis when selected; null when missing or interrogation is off.
+	SampleTrace *string `json:"sampleTrace,omitempty"`
 }
 
 type JavaCustomProbe struct {

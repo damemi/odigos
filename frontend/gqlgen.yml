@@ -130,6 +130,11 @@ models:
       interrogationTransactions:
         resolver: true
 
+  InterrogationTransaction:
+    fields:
+      sampleTrace:
+        resolver: true
+
   K8sActualSource:
     fields:
       profiling:

@@ -403,6 +403,10 @@ type InterrogationFunction {
   Profile sample type: events (probe) or samples (periodic CPU).
   """
   sampleType: String!
+  """
+  Times this function was observed while the transaction ran.
+  """
+  seenCount: Int!
 }
 
 """
@@ -413,7 +417,16 @@ type InterrogationTransaction {
   Transaction id as stored in the Redis key suffix.
   """
   id: String!
+  """
+  Times this transaction was observed.
+  """
+  seenCount: Int!
   functions: [InterrogationFunction!]!
+  """
+  OTLP JSON traces sample for this transaction, if stored.
+  Resolved on demand from Redis when selected; null when missing or interrogation is off.
+  """
+  sampleTrace: String
 }
 
 # describes a single attribute of a process.
