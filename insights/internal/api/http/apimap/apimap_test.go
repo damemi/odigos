@@ -256,8 +256,8 @@ func TestViolationSummaryOnDetail(t *testing.T) {
 	if !strings.Contains(d.Summary, "frontend") || !strings.Contains(d.Summary, "currency") {
 		t.Errorf("summary missing identity: %q", d.Summary)
 	}
-	if !strings.Contains(d.Summary, "captured trace") || !strings.Contains(d.Summary, "forbidden edge") {
-		t.Errorf("summary missing evidence sentence: %q", d.Summary)
+	if !strings.Contains(d.Summary, "broke Allowed callees") {
+		t.Errorf("summary missing rule label: %q", d.Summary)
 	}
 }
 
@@ -385,5 +385,88 @@ func TestBaselineClassHistogramWire(t *testing.T) {
 	}
 	if bars[7].Count != 1 || bars[7].Lo != 64 || bars[7].Hi != 128 || bars[7].Label == "" {
 		t.Fatalf("bar7 = %+v", bars[7])
+	}
+}
+
+// validCorrelationGuardrail is a transaction-scoped guardrail carrying one
+// well-formed cross-span correlation spec, used as the baseline the validation
+// tests mutate.
+func validCorrelationGuardrail() apitypes.ServiceGuardrail {
+	return apitypes.ServiceGuardrail{
+		Scope:    apitypes.PolicyScopeTransaction,
+		ScopeKey: "42",
+		Rules: []apitypes.GuardrailRuleConfig{{
+			Key:  "attribute_correlation",
+			Mode: "enforce",
+			Correlations: []apitypes.CorrelationSpec{{
+				Name:     "principal-matches-account",
+				Left:     apitypes.CorrelationSelector{Service: "edge-gateway", Span: "resolvePrincipal", Attr: "return.value", Extract: `(\d+)`},
+				Right:    apitypes.CorrelationSelector{Service: "account-service", Span: "getAccount", Attr: "arg.0"},
+				Relation: apitypes.Equals,
+			}},
+		}},
+	}
+}
+
+func TestValidateServiceGuardrail(t *testing.T) {
+	if err := ValidateServiceGuardrail(validCorrelationGuardrail()); err != nil {
+		t.Fatalf("valid guardrail rejected: %v", err)
+	}
+
+	serviceScoped := validCorrelationGuardrail()
+	serviceScoped.Scope = apitypes.PolicyScopeService
+	if err := ValidateServiceGuardrail(serviceScoped); err == nil {
+		t.Fatal("correlation on a service scope should be rejected")
+	}
+
+	badRegex := validCorrelationGuardrail()
+	badRegex.Rules[0].Correlations[0].Left.Extract = "(unterminated"
+	if err := ValidateServiceGuardrail(badRegex); err == nil {
+		t.Fatal("uncompilable extract regex should be rejected")
+	}
+
+	missingAttr := validCorrelationGuardrail()
+	missingAttr.Rules[0].Correlations[0].Right.Attr = ""
+	if err := ValidateServiceGuardrail(missingAttr); err == nil {
+		t.Fatal("selector without attr should be rejected")
+	}
+
+	badRelation := validCorrelationGuardrail()
+	badRelation.Rules[0].Correlations[0].Relation = "greater_than"
+	if err := ValidateServiceGuardrail(badRelation); err == nil {
+		t.Fatal("unknown relation should be rejected")
+	}
+}
+
+// TestCorrelationRoundTrip checks the correlation spec survives wire->repo->wire
+// and that an empty severity defaults to critical.
+func TestCorrelationRoundTrip(t *testing.T) {
+	repoG := ToServiceGuardrail(validCorrelationGuardrail())
+	if repoG.Scope != repo.ScopeTransaction {
+		t.Fatalf("scope = %q, want transaction", repoG.Scope)
+	}
+	specs := repoG.RuleCorrelations[repo.RuleKey("attribute_correlation")]
+	if len(specs) != 1 {
+		t.Fatalf("correlations = %d, want 1", len(specs))
+	}
+	if specs[0].Severity != "critical" {
+		t.Fatalf("empty severity should default to critical, got %q", specs[0].Severity)
+	}
+	if specs[0].Left.Extract != `(\d+)` || specs[0].Relation != "equals" {
+		t.Fatalf("spec not rebuilt: %+v", specs[0])
+	}
+
+	wire := FromServiceGuardrail(repoG)
+	var got *apitypes.GuardrailRuleConfig
+	for i := range wire.Rules {
+		if wire.Rules[i].Key == "attribute_correlation" {
+			got = &wire.Rules[i]
+		}
+	}
+	if got == nil || len(got.Correlations) != 1 {
+		t.Fatalf("wire correlations missing: %+v", wire.Rules)
+	}
+	if got.Correlations[0].Severity != apitypes.SeverityCritical {
+		t.Fatalf("severity not round-tripped: %q", got.Correlations[0].Severity)
 	}
 }

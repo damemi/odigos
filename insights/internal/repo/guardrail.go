@@ -89,7 +89,42 @@ type ServiceGuardrail struct {
 	// list service and host names, which no setting reshapes, so they leave it
 	// unset.
 	RuleFingerprints map[RuleKey]string
+	// RuleCorrelations holds structured cross-span correlation specs per rule,
+	// used by the attribute_correlation rule (transaction-scoped). Sparse: an
+	// absent rule has no correlations. Unlike RuleLists, these carry span
+	// selectors, a relation, and a per-rule severity rather than plain strings.
+	RuleCorrelations map[RuleKey][]CorrelationSpec
 }
+
+// CorrelationSelector locates one attribute on one span within a trace. Span
+// matches either the span name or the captured code.function.name (e.g.
+// resolvePrincipal, getAccount). Extract is an optional regex applied to the
+// attribute value; capture group 1 is used when present, else the whole match.
+type CorrelationSelector struct {
+	Service string
+	Span    string
+	Attr    string
+	Extract string
+}
+
+// CorrelationSpec is one cross-span consistency assertion for the
+// attribute_correlation rule: compare Left vs Right within a single trace and
+// fire a violation when they do not satisfy Relation. Severity is the per-rule
+// risk of a violation (defaults to critical when empty).
+type CorrelationSpec struct {
+	Name     string
+	Left     CorrelationSelector
+	Right    CorrelationSelector
+	Relation string
+	Severity string
+	Why      string
+}
+
+// CorrelationRelation values for CorrelationSpec.Relation.
+const (
+	CorrelationEquals    = "equals"
+	CorrelationNotEquals = "not_equals"
+)
 
 // SetRuleFingerprint stamps a rule with the config its allowlist was built
 // under, allocating the map on first use. An empty fingerprint clears the stamp,

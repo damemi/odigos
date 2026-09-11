@@ -19,6 +19,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -55,7 +56,7 @@ type ProductAPI interface {
 
 	ListServiceGuardrails(ctx context.Context) ([]repo.ServiceGuardrail, error)
 	UpsertServiceGuardrail(ctx context.Context, g repo.ServiceGuardrail) error
-	DeleteServiceGuardrail(ctx context.Context, scopeKey string) error
+	DeleteServiceGuardrail(ctx context.Context, scope repo.PolicyScope, scopeKey string) error
 	SeedServiceGuardrail(ctx context.Context, req apitypes.GuardrailSeedRequest) error
 	EnableTransactionGuardrail(ctx context.Context, namespace, service string) error
 	DisableTransactionGuardrail(ctx context.Context, namespace, service string) error
@@ -67,6 +68,10 @@ type ProductAPI interface {
 	PromoteTransactionBaselines(ctx context.Context, txID int64) error
 	ResetBaselineClass(ctx context.Context, txID int64, class repo.DeviationClass) error
 	ResetTransactionBaselines(ctx context.Context, txID int64) error
+	// GetTransactionBaseline is GET /transactions/{id}/baselines - every scored
+	// class with its data and learning snapshot. The correlation editor reads a
+	// transaction's D1 call-edge data through this to suggest observed spans.
+	GetTransactionBaseline(ctx context.Context, txID int64) (apitypes.BaselineClassList, error)
 
 	ResolveAnomalyIssue(ctx context.Context, txID int64, signature, resolution string) error
 	LiveSystemSettings() repo.SystemSettings
@@ -149,6 +154,7 @@ func Register(engine *gin.Engine, r repo.Repository) *Handle {
 	g.POST("/settings/detection/override", ui.addAnomalyOverride)
 	g.POST("/settings/detection/delete", ui.deleteAnomalyPolicy)
 	g.GET("/settings/guardrails", ui.listGuardrails)
+	g.GET("/settings/guardrails/txn-spans", ui.guardrailTxnSpans)
 	g.POST("/settings/guardrails/save", ui.saveGuardrail)
 	g.POST("/settings/guardrails/seed", ui.seedGuardrail)
 	g.POST("/settings/guardrails/delete", ui.deleteGuardrail)
@@ -2607,14 +2613,19 @@ type guardrailRuleView struct {
 	Auto     bool // true when origin is auto_transaction_guardrail
 }
 
-// guardrailView is one service's guardrail as the editor renders it: the scope
-// key split into namespace/service for display, plus a row per catalog rule
-// type (so a rule with no config still renders an empty editor).
+// guardrailView is one guardrail as the editor renders it: the scope key split
+// into namespace/service for display (service scope), plus a row per allowlist
+// catalog rule type. Transaction-scoped guardrails carry their cross-span
+// correlation specs instead of allowlist rows.
 type guardrailView struct {
-	ScopeKey  string
-	Namespace string
-	Service   string
-	Rules     []guardrailRuleView
+	ScopeKey        string
+	Title           string
+	Scope           repo.PolicyScope
+	Namespace       string
+	Service         string
+	Rules           []guardrailRuleView
+	Correlations    []repo.CorrelationSpec
+	CorrelationMode repo.RuleMode
 }
 
 // buildGuardrailViews turns stored guardrails into editor rows, one per catalog
@@ -2622,9 +2633,15 @@ type guardrailView struct {
 func buildGuardrailViews(guardrails []repo.ServiceGuardrail) []guardrailView {
 	out := make([]guardrailView, 0, len(guardrails))
 	for _, g := range guardrails {
+		scope := repo.NormalizePolicyScope(g.Scope)
 		ns, svc := splitScopeKey(g.ScopeKey)
-		view := guardrailView{ScopeKey: g.ScopeKey, Namespace: ns, Service: svc}
+		view := guardrailView{ScopeKey: g.ScopeKey, Title: g.ScopeKey, Scope: scope, Namespace: ns, Service: svc}
 		for _, rule := range risk.GuardrailRules {
+			// The attribute_correlation rule has no allowlist; it is rendered from
+			// Correlations below, not as an allowlist row.
+			if rule.Key == risk.RuleAttributeCorrelation {
+				continue
+			}
 			list := g.RuleLists[rule.Key]
 			origin := ""
 			if g.RuleOrigins != nil {
@@ -2639,6 +2656,8 @@ func buildGuardrailViews(guardrails []repo.ServiceGuardrail) []guardrailView {
 				Auto:     origin == repo.GuardrailOriginAutoTransactionGuardrail,
 			})
 		}
+		view.Correlations = g.RuleCorrelations[risk.RuleAttributeCorrelation]
+		view.CorrelationMode = repo.NormalizeRuleMode(g.RuleModes[risk.RuleAttributeCorrelation])
 		out = append(out, view)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ScopeKey < out[j].ScopeKey })
@@ -2671,13 +2690,31 @@ func (u *ui) listGuardrails(c *gin.Context) {
 	namespaces, servicesByNamespace := u.serviceDirectory(ctx)
 	servicesJSON, _ := json.Marshal(servicesByNamespace)
 	serviceNames, _ := u.repo.ListServiceNames(ctx)
+	transactions := guardrailTransactionOptions(ctx, api)
+	transactionsJSON, _ := json.Marshal(transactions)
+	views := buildGuardrailViews(guardrails)
+	// Transaction guardrails are keyed by numeric transaction id; show the
+	// transaction's human-readable label as the title (the scope key stays the
+	// id for form submission).
+	txnLabels := make(map[string]string, len(transactions))
+	for _, t := range transactions {
+		txnLabels[strconv.FormatInt(t.ID, 10)] = t.Label
+	}
+	for i := range views {
+		if views[i].Scope == repo.ScopeTransaction {
+			if lbl := txnLabels[views[i].ScopeKey]; lbl != "" {
+				views[i].Title = lbl
+			}
+		}
+	}
 	data := map[string]any{
-		"SettingsTab":  "guardrails",
-		"Guardrails":   buildGuardrailViews(guardrails),
-		"Rules":        risk.GuardrailRules,
-		"Namespaces":   namespaces,
-		"ServicesJSON": template.JS(servicesJSON),
-		"ServiceNames": serviceNames,
+		"SettingsTab":      "guardrails",
+		"Guardrails":       views,
+		"Rules":            risk.GuardrailRules,
+		"Namespaces":       namespaces,
+		"ServicesJSON":     template.JS(servicesJSON),
+		"ServiceNames":     serviceNames,
+		"TransactionsJSON": template.JS(transactionsJSON),
 	}
 	ns := strings.TrimSpace(c.Query("namespace"))
 	svc := strings.TrimSpace(c.Query("service"))
@@ -2727,12 +2764,18 @@ func (u *ui) serviceDirectory(ctx context.Context) ([]string, map[string][]strin
 	return namespaces, byNamespace
 }
 
-// saveGuardrail upserts one service's guardrail from the editor and reloads the
-// in-memory snapshot so it takes effect immediately.
+// saveGuardrail upserts one guardrail from the editor and reloads the in-memory
+// snapshot so it takes effect immediately. Scope defaults to service (the
+// allowlist rules); scope=transaction saves the cross-span attribute_correlation
+// rule against a single transaction.
 func (u *ui) saveGuardrail(c *gin.Context) {
 	redirect := "/debug/settings/guardrails"
 	api, ok := u.productAPI(c)
 	if !ok {
+		return
+	}
+	if repo.PolicyScope(c.PostForm("scope")) == repo.ScopeTransaction {
+		u.saveTransactionGuardrail(c, api, redirect)
 		return
 	}
 	scopeKey := strings.TrimSpace(c.PostForm("scope_key"))
@@ -2760,6 +2803,10 @@ func (u *ui) saveGuardrail(c *gin.Context) {
 		RuleOrigins: existingOrigins,
 	}
 	for _, rule := range risk.GuardrailRules {
+		// attribute_correlation is transaction-scoped and has no allowlist row.
+		if rule.Key == risk.RuleAttributeCorrelation {
+			continue
+		}
 		if list := splitList(c.PostForm("list_" + string(rule.Key))); len(list) > 0 {
 			guardrail.RuleLists[rule.Key] = list
 		}
@@ -2770,6 +2817,229 @@ func (u *ui) saveGuardrail(c *gin.Context) {
 		return
 	}
 	c.Redirect(http.StatusSeeOther, redirect+"?flash="+url.QueryEscape("guardrail for "+scopeKey+" saved and live"))
+}
+
+// saveTransactionGuardrail upserts a transaction-scoped guardrail carrying the
+// cross-span attribute_correlation rule. scope_key is the numeric transaction id
+// from the picker.
+func (u *ui) saveTransactionGuardrail(c *gin.Context, api ProductAPI, redirect string) {
+	scopeKey := strings.TrimSpace(c.PostForm("scope_key"))
+	if _, err := strconv.ParseInt(scopeKey, 10, 64); err != nil {
+		c.Redirect(http.StatusSeeOther, redirect+"?error="+url.QueryEscape("pick a transaction for a transaction-scoped guardrail"))
+		return
+	}
+	specs, err := parseCorrelationsForm(c)
+	if err != nil {
+		c.Redirect(http.StatusSeeOther, redirect+"?error="+url.QueryEscape(err.Error()))
+		return
+	}
+	if len(specs) == 0 {
+		c.Redirect(http.StatusSeeOther, redirect+"?error="+url.QueryEscape("add at least one correlation rule"))
+		return
+	}
+	guardrail := repo.ServiceGuardrail{
+		Scope:            repo.ScopeTransaction,
+		ScopeKey:         scopeKey,
+		RuleModes:        map[repo.RuleKey]repo.RuleMode{risk.RuleAttributeCorrelation: repo.NormalizeRuleMode(repo.RuleMode(c.PostForm("mode_attribute_correlation")))},
+		RuleCorrelations: map[repo.RuleKey][]repo.CorrelationSpec{risk.RuleAttributeCorrelation: specs},
+	}
+	if err := api.UpsertServiceGuardrail(c.Request.Context(), guardrail); err != nil {
+		c.Redirect(http.StatusSeeOther, redirect+"?error="+url.QueryEscape("save failed: "+err.Error()))
+		return
+	}
+	c.Redirect(http.StatusSeeOther, redirect+"?flash="+url.QueryEscape("transaction guardrail saved and live"))
+}
+
+// parseCorrelationsForm turns the correlation editor's parallel form arrays into
+// typed specs. Rows with no name and empty selectors are skipped (an empty row
+// is harmless); a populated row is validated (selectors present, known relation,
+// compilable extract). Severity defaults to critical.
+func parseCorrelationsForm(c *gin.Context) ([]repo.CorrelationSpec, error) {
+	names := c.PostFormArray("corr_name")
+	relations := c.PostFormArray("corr_relation")
+	severities := c.PostFormArray("corr_severity")
+	whys := c.PostFormArray("corr_why")
+	lSvc := c.PostFormArray("corr_left_service")
+	lSpan := c.PostFormArray("corr_left_span")
+	lAttr := c.PostFormArray("corr_left_attr")
+	lExtract := c.PostFormArray("corr_left_extract")
+	rSvc := c.PostFormArray("corr_right_service")
+	rSpan := c.PostFormArray("corr_right_span")
+	rAttr := c.PostFormArray("corr_right_attr")
+	rExtract := c.PostFormArray("corr_right_extract")
+
+	at := func(a []string, i int) string {
+		if i < len(a) {
+			return strings.TrimSpace(a[i])
+		}
+		return ""
+	}
+	out := make([]repo.CorrelationSpec, 0, len(names))
+	for i := range names {
+		left := repo.CorrelationSelector{Service: at(lSvc, i), Span: at(lSpan, i), Attr: at(lAttr, i), Extract: at(lExtract, i)}
+		right := repo.CorrelationSelector{Service: at(rSvc, i), Span: at(rSpan, i), Attr: at(rAttr, i), Extract: at(rExtract, i)}
+		name := at(names, i)
+		if name == "" && left == (repo.CorrelationSelector{}) && right == (repo.CorrelationSelector{}) {
+			continue
+		}
+		if name == "" {
+			return nil, fmt.Errorf("correlation %d: name is required", i+1)
+		}
+		relation := at(relations, i)
+		if relation != repo.CorrelationEquals && relation != repo.CorrelationNotEquals {
+			return nil, fmt.Errorf("correlation %q: unknown relation %q", name, relation)
+		}
+		if err := validateFormSelector("left", left); err != nil {
+			return nil, fmt.Errorf("correlation %q: %w", name, err)
+		}
+		if err := validateFormSelector("right", right); err != nil {
+			return nil, fmt.Errorf("correlation %q: %w", name, err)
+		}
+		severity := at(severities, i)
+		if severity == "" {
+			severity = string(risk.SeverityCritical)
+		}
+		out = append(out, repo.CorrelationSpec{
+			Name:     name,
+			Left:     left,
+			Right:    right,
+			Relation: relation,
+			Severity: severity,
+			Why:      at(whys, i),
+		})
+	}
+	return out, nil
+}
+
+func validateFormSelector(side string, sel repo.CorrelationSelector) error {
+	if sel.Service == "" || sel.Span == "" || sel.Attr == "" {
+		return fmt.Errorf("%s selector needs service, span and attr", side)
+	}
+	if sel.Extract != "" {
+		if _, err := regexp.Compile(sel.Extract); err != nil {
+			return fmt.Errorf("%s selector extract regex: %w", side, err)
+		}
+	}
+	return nil
+}
+
+// guardrailTransactionOption is one transaction the correlation editor can be
+// scoped to: its id and a human label.
+type guardrailTransactionOption struct {
+	// ID is emitted as a JSON string: transaction ids are int64 values that
+	// exceed JavaScript's safe-integer range, so a numeric literal would be
+	// silently rounded in the browser and break the txn-spans lookup.
+	ID    int64 `json:"ID,string"`
+	Label string
+}
+
+// guardrailTransactionOptions lists transactions for the correlation editor's
+// transaction picker, labelled "namespace/service — KIND operation". It reads
+// through the product API (GET /transactions) so the picker shows exactly what
+// the real frontend can list.
+func guardrailTransactionOptions(ctx context.Context, api ProductAPI) []guardrailTransactionOption {
+	list, err := api.ListTransactions(ctx, apitypes.ListTransactionsParams{WindowHours: 2880})
+	if err != nil {
+		return nil
+	}
+	out := make([]guardrailTransactionOption, 0, len(list.Items))
+	for _, t := range list.Items {
+		out = append(out, guardrailTransactionOption{
+			ID:    t.Id,
+			Label: fmt.Sprintf("%s — %s %s", repo.ServiceScopeKey(t.Namespace, t.Service), t.Kind, t.OperationName),
+		})
+	}
+	return out
+}
+
+// guardrailSpanPair is one observed (service, span) the correlation editor can
+// suggest, derived from a transaction's D1 call-edge baseline.
+type guardrailSpanPair struct {
+	Service string `json:"service"`
+	Span    string `json:"span"`
+}
+
+// d1EdgesJSON mirrors the D1 baseline's stored shape (see scorer_d1.go) so the
+// debug UI can pull observed (service, span) pairs from the API's raw baseline
+// data without importing the engine.
+type d1EdgesJSON struct {
+	Edges []struct {
+		From struct {
+			Svc string `json:"svc"`
+			Op  string `json:"op"`
+		} `json:"from"`
+		To struct {
+			Svc string `json:"svc"`
+			Op  string `json:"op"`
+		} `json:"to"`
+	} `json:"edges"`
+}
+
+// guardrailTxnSpans returns the distinct (service, span) pairs observed in a
+// transaction's D1 call-edge baseline as JSON, so the correlation editor can
+// offer real span/service suggestions instead of free text. The D1 baseline
+// covers the whole sub-tree of the transaction, so it spans every downstream
+// service in the trace.
+func (u *ui) guardrailTxnSpans(c *gin.Context) {
+	api, ok := u.productAPI(c)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(strings.TrimSpace(c.Query("transaction_id")), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid transaction_id"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"pairs": transactionSpanPairs(c.Request.Context(), api, id)})
+}
+
+// transactionSpanPairs decodes a transaction's D1 baseline into the sorted,
+// de-duplicated set of (service, span) pairs it observed (both edge endpoints).
+// It reads through the product API (GET /transactions/{id}/baselines) so the
+// suggestions come from the same data the real frontend receives.
+func transactionSpanPairs(ctx context.Context, api ProductAPI, transactionID int64) []guardrailSpanPair {
+	baselines, err := api.GetTransactionBaseline(ctx, transactionID)
+	if err != nil {
+		return nil
+	}
+	var data json.RawMessage
+	for _, b := range baselines.Items {
+		if b.Class == apitypes.DeviationClass(repo.D1CallEdges) {
+			data = b.Data
+			break
+		}
+	}
+	if len(data) == 0 {
+		return nil
+	}
+	var decoded d1EdgesJSON
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return nil
+	}
+	seen := map[guardrailSpanPair]struct{}{}
+	out := make([]guardrailSpanPair, 0, len(decoded.Edges))
+	add := func(svc, op string) {
+		if svc == "" || op == "" {
+			return
+		}
+		p := guardrailSpanPair{Service: svc, Span: op}
+		if _, dup := seen[p]; dup {
+			return
+		}
+		seen[p] = struct{}{}
+		out = append(out, p)
+	}
+	for _, e := range decoded.Edges {
+		add(e.From.Svc, e.From.Op)
+		add(e.To.Svc, e.To.Op)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Service != out[j].Service {
+			return out[i].Service < out[j].Service
+		}
+		return out[i].Span < out[j].Span
+	})
+	return out
 }
 
 // deleteGuardrail removes one service's guardrail so it is no longer segmented.
@@ -2784,7 +3054,8 @@ func (u *ui) deleteGuardrail(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, redirect+"?error="+url.QueryEscape("missing scope key"))
 		return
 	}
-	if err := api.DeleteServiceGuardrail(c.Request.Context(), scopeKey); err != nil {
+	scope := repo.NormalizePolicyScope(repo.PolicyScope(c.PostForm("scope")))
+	if err := api.DeleteServiceGuardrail(c.Request.Context(), scope, scopeKey); err != nil {
 		c.Redirect(http.StatusSeeOther, redirect+"?error="+url.QueryEscape("delete failed: "+err.Error()))
 		return
 	}

@@ -2,6 +2,7 @@ package clickhouse
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -15,7 +16,7 @@ import (
 // ListServiceGuardrails returns every declared guardrail across all scopes.
 func (r *Repo) ListServiceGuardrails(ctx context.Context) ([]repo.ServiceGuardrail, error) {
 	return queryRows(ctx, r.conn, "list service guardrails",
-		`SELECT scope_type, scope_key, rule_lists, rule_modes, rule_origins, rule_fingerprints
+		`SELECT scope_type, scope_key, rule_lists, rule_modes, rule_origins, rule_fingerprints, rule_correlations
 		 FROM service_guardrails FINAL
 		 ORDER BY scope_type ASC, scope_key ASC`,
 		scanServiceGuardrail)
@@ -29,8 +30,9 @@ func scanServiceGuardrail(s rowScanner) (repo.ServiceGuardrail, error) {
 		ruleModes        map[string]string   // native Map(String, String)
 		ruleOrigins      map[string]string
 		ruleFingerprints map[string]string
+		ruleCorrelations map[string]string // rule_key -> JSON([]CorrelationSpec)
 	)
-	if err := s.Scan(&scopeType, &scopeKey, &ruleLists, &ruleModes, &ruleOrigins, &ruleFingerprints); err != nil {
+	if err := s.Scan(&scopeType, &scopeKey, &ruleLists, &ruleModes, &ruleOrigins, &ruleFingerprints, &ruleCorrelations); err != nil {
 		return repo.ServiceGuardrail{}, err
 	}
 	guardrail := repo.ServiceGuardrail{
@@ -61,6 +63,19 @@ func scanServiceGuardrail(s rowScanner) (repo.ServiceGuardrail, error) {
 		guardrail.RuleFingerprints = make(map[repo.RuleKey]string, len(ruleFingerprints))
 		for key, fingerprint := range ruleFingerprints {
 			guardrail.RuleFingerprints[repo.RuleKey(key)] = fingerprint
+		}
+	}
+	if len(ruleCorrelations) > 0 {
+		guardrail.RuleCorrelations = make(map[repo.RuleKey][]repo.CorrelationSpec, len(ruleCorrelations))
+		for key, encoded := range ruleCorrelations {
+			if encoded == "" {
+				continue
+			}
+			var specs []repo.CorrelationSpec
+			if err := json.Unmarshal([]byte(encoded), &specs); err != nil {
+				return repo.ServiceGuardrail{}, fmt.Errorf("decode rule_correlations[%s]: %w", key, err)
+			}
+			guardrail.RuleCorrelations[repo.RuleKey(key)] = specs
 		}
 	}
 	return guardrail, nil
@@ -94,11 +109,22 @@ func (r *Repo) UpsertServiceGuardrail(ctx context.Context, guardrail repo.Servic
 		}
 		ruleFingerprints[string(key)] = fingerprint
 	}
+	ruleCorrelations := make(map[string]string, len(guardrail.RuleCorrelations))
+	for key, specs := range guardrail.RuleCorrelations {
+		if len(specs) == 0 {
+			continue
+		}
+		encoded, err := json.Marshal(specs)
+		if err != nil {
+			return fmt.Errorf("encode rule_correlations[%s]: %w", key, err)
+		}
+		ruleCorrelations[string(key)] = string(encoded)
+	}
 	scope := repo.NormalizePolicyScope(guardrail.Scope)
 	err := r.insert(ctx,
-		"INSERT INTO service_guardrails (scope_type, scope_key, rule_lists, rule_modes, rule_origins, rule_fingerprints, updated_at)",
+		"INSERT INTO service_guardrails (scope_type, scope_key, rule_lists, rule_modes, rule_origins, rule_fingerprints, rule_correlations, updated_at)",
 		func(batch driver.Batch) error {
-			return batch.Append(string(scope), guardrail.ScopeKey, ruleLists, ruleModes, ruleOrigins, ruleFingerprints, time.Now())
+			return batch.Append(string(scope), guardrail.ScopeKey, ruleLists, ruleModes, ruleOrigins, ruleFingerprints, ruleCorrelations, time.Now())
 		})
 	if err != nil {
 		return fmt.Errorf("upsert service guardrail: %w", err)

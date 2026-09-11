@@ -125,6 +125,24 @@ func (e BulkResolution) Valid() bool {
 	}
 }
 
+// Defines values for CorrelationSpecRelation.
+const (
+	Equals    CorrelationSpecRelation = "equals"
+	NotEquals CorrelationSpecRelation = "not_equals"
+)
+
+// Valid indicates whether the value is a known member of the CorrelationSpecRelation enum.
+func (e CorrelationSpecRelation) Valid() bool {
+	switch e {
+	case Equals:
+		return true
+	case NotEquals:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DeviationClass.
 const (
 	D1CallEdges     DeviationClass = "D1_call_edges"
@@ -861,6 +879,43 @@ type CatalogGuardrailRule struct {
 	Weight      int    `json:"weight"`
 }
 
+// CorrelationSelector Locates one attribute on one span within a trace.
+type CorrelationSelector struct {
+	// Attr Attribute key to read (e.g. return.value, arg.0, url.full).
+	Attr string `json:"attr"`
+
+	// Extract Optional regex applied to the attribute value. Capture group 1 is used when present, otherwise the whole match. Empty = use the value verbatim.
+	Extract string `json:"extract,omitempty"`
+
+	// Service Owning service name of the span.
+	Service string `json:"service"`
+
+	// Span Span match - the span name or the captured `code.function.name` (e.g. resolvePrincipal, getAccount).
+	Span string `json:"span"`
+}
+
+// CorrelationSpec One cross-span consistency assertion: compare `left` vs `right` within a single trace and fire a violation when they do not satisfy `relation`.
+type CorrelationSpec struct {
+	// Left Locates one attribute on one span within a trace.
+	Left CorrelationSelector `json:"left"`
+	Name string              `json:"name"`
+
+	// Relation Required relation between the two extracted values.
+	Relation CorrelationSpecRelation `json:"relation"`
+
+	// Right Locates one attribute on one span within a trace.
+	Right CorrelationSelector `json:"right"`
+
+	// Severity Risk of a violation of this rule. Defaults to critical.
+	Severity Severity `json:"severity,omitempty"`
+
+	// Why Operator rationale, shown in the finding.
+	Why string `json:"why,omitempty"`
+}
+
+// CorrelationSpecRelation Required relation between the two extracted values.
+type CorrelationSpecRelation string
+
 // DeviationClass One baseline dimension; the scoring engine is the source of truth.
 type DeviationClass string
 
@@ -944,8 +999,11 @@ type FindingList struct {
 // GuardrailRuleConfig defines model for GuardrailRuleConfig.
 type GuardrailRuleConfig struct {
 	Allowlist []string `json:"allowlist,omitempty"`
-	Key       string   `json:"key"`
-	Label     string   `json:"label"`
+
+	// Correlations Cross-span correlation specs. Only used by the `attribute_correlation` rule (transaction-scoped): each spec asserts two captured span attributes stay consistent within one trace.
+	Correlations []CorrelationSpec `json:"correlations,omitempty"`
+	Key          string            `json:"key"`
+	Label        string            `json:"label"`
 
 	// Mode suggest = observe only; enforce = fire findings; off = disabled (per-service disable for auto transaction guardrail).
 	Mode RuleMode `json:"mode"`
@@ -984,7 +1042,7 @@ type GuardrailViolation struct {
 
 // GuardrailViolationDetail Full violation for investigate. **Detail path only** - includes a render-ready `summary`, span highlights, and optional `evidence_trace`. Never returned by `listGuardrailViolations` or `listFindings`. Identity is (`scope_key`, `rule_key`, `offending`), analogous to an anomaly's (`transaction_id`, `signature`).
 //
-// Examples: {"first_seen":"2026-07-20T09:15:01Z","last_seen":"2026-07-20T14:03:22Z","max_score":60,"namespace":"default","occurrences":12,"offending":"currency","rule_key":"allowed_callees","rule_label":"Allowed callees","scope_key":"default/frontend","service":"frontend","severity":"high","span_highlights":[{"reason":"unauthorized callee","severity":"high","span_id":"a1b2c3d4"}],"status":"open","summary":"frontend broke Allowed callees on currency. This is one captured trace as evidence - the highlighted span(s) show the forbidden edge."}
+// Examples: {"first_seen":"2026-07-20T09:15:01Z","last_seen":"2026-07-20T14:03:22Z","max_score":60,"namespace":"default","occurrences":12,"offending":"currency","rule_key":"allowed_callees","rule_label":"Allowed callees","scope_key":"default/frontend","service":"frontend","severity":"high","span_highlights":[{"reason":"unauthorized callee","severity":"high","span_id":"a1b2c3d4"}],"status":"open","summary":"frontend broke Allowed callees on currency."}
 type GuardrailViolationDetail struct {
 	// EvidenceTrace Captured sample for this violation (`sample_reason=guardrail:<rule>:<offending>`), including `raw_otlp`. Omitted when no sample was retained.
 	EvidenceTrace *Observation `json:"evidence_trace,omitempty"`
@@ -1006,7 +1064,7 @@ type GuardrailViolationDetail struct {
 	// Status Lifecycle bucket. `accepted` means the operator accepted the offending edge as legitimate (it is allowlisted on the guardrail and stops alerting) - the shared affirmative term with AnomalyStatus.
 	Status ViolationStatus `json:"status"`
 
-	// Summary Render-ready investigate sentence. The UI should display it as-is (service, rule, offending, plus that this payload is evidence for the forbidden edge).
+	// Summary Render-ready investigate sentence. The UI should display it as-is (service, rule, and offending edge).
 	Summary string `json:"summary"`
 }
 

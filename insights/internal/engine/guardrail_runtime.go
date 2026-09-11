@@ -50,14 +50,35 @@ func (g *guardrailRuntime) reload(ctx context.Context, r repo.Repository) error 
 // generation the buffered counts belong to.
 func (g *guardrailRuntime) evaluate(ctx context.Context, t *Trace, tx repo.Transaction, full *Trace, system *systemSnapshot) {
 	serviceKey := repo.ServiceScopeKey(tx.Namespace, tx.Service)
-	guardrail, ok := g.config.Load().Resolve(tx.ID, serviceKey)
+	now := g.clock()
+	inventoryEpoch := system.settings.TransactionInventoryEpoch
+	if guardrail, ok := g.config.Load().Resolve(tx.ID, serviceKey); ok {
+		for _, violation := range guardrailViolations(t, tx, guardrail, g.inMeshServices(tx.Namespace), system.identityFingerprint) {
+			g.buf.add(repo.ScopeService, serviceKey, violation.rule, violation.item, violation.score, t.TraceID, now, inventoryEpoch)
+			g.captureEvidence(ctx, full, tx, serviceKey, violation.rule, violation.item, now)
+		}
+	}
+	// Transaction-scoped guardrails are additive and independent of any service
+	// allowlist, so they run even when this transaction has no service guardrail.
+	g.evaluateTransactionGuardrail(ctx, tx, full, serviceKey, now, inventoryEpoch)
+}
+
+// evaluateTransactionGuardrail runs the transaction-scoped guardrail (if any)
+// additively over the FULL trace. It resolves by transaction id, so it fires
+// once per trace - on the sub-transaction whose id matches - and its cross-span
+// rules can reference spans in other services' sub-traces. Violations are
+// recorded under the entry service's scope key so they flow through the same
+// Findings/evidence pipeline as the allowlist rules.
+func (g *guardrailRuntime) evaluateTransactionGuardrail(ctx context.Context, tx repo.Transaction, full *Trace, serviceKey string, now time.Time, inventoryEpoch int) {
+	if full == nil {
+		return
+	}
+	txnGuardrail, ok := g.config.Load().ResolveTransactionGuardrail(tx.ID)
 	if !ok {
 		return
 	}
-	now := g.clock()
-	inventoryEpoch := system.settings.TransactionInventoryEpoch
-	for _, violation := range guardrailViolations(t, tx, guardrail, g.inMeshServices(tx.Namespace), system.identityFingerprint) {
-		g.buf.add(repo.ScopeService, serviceKey, violation.rule, violation.item, violation.score, t.TraceID, now, inventoryEpoch)
+	for _, violation := range correlationViolations(full, txnGuardrail) {
+		g.buf.add(repo.ScopeService, serviceKey, violation.rule, violation.item, violation.score, full.TraceID, now, inventoryEpoch)
 		g.captureEvidence(ctx, full, tx, serviceKey, violation.rule, violation.item, now)
 	}
 }

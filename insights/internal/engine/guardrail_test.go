@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -11,14 +12,22 @@ import (
 	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
 )
 
-// guardrailConfigFrom builds a GuardrailConfig from a set of guardrails via the
-// shared repo.ScopeIndex - the same path the engine uses at runtime.
+// guardrailConfigFrom builds a GuardrailConfig from a set of guardrails the same
+// way the engine does at load: service/global rows go into the shared scope
+// index, transaction rows into the additive byTxn map.
 func guardrailConfigFrom(guardrails ...repo.ServiceGuardrail) *GuardrailConfig {
 	idx := &repo.ScopeIndex[repo.ServiceGuardrail]{}
+	byTxn := map[int64]repo.ServiceGuardrail{}
 	for _, g := range guardrails {
+		if repo.NormalizePolicyScope(g.Scope) == repo.ScopeTransaction {
+			if id, err := strconv.ParseInt(g.ScopeKey, 10, 64); err == nil {
+				byTxn[id] = g
+			}
+			continue
+		}
 		idx.Put(g.Scope, g.ScopeKey, g)
 	}
-	return newGuardrailConfig(idx)
+	return newGuardrailConfig(idx, byTxn)
 }
 
 // mkCallTrace builds a two-service trace: callerSvc's SERVER root calls into

@@ -1,4 +1,5 @@
 DROP TABLE IF EXISTS system_settings;
+DROP TABLE IF EXISTS service_graph_edges;
 DROP TABLE IF EXISTS guardrail_violations;
 DROP TABLE IF EXISTS service_guardrails;
 DROP TABLE IF EXISTS anomaly_issues;

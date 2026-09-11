@@ -76,6 +76,10 @@ func (a *API) upsertGuardrail(c *gin.Context) {
 		writeError(c, http.StatusBadRequest, err)
 		return
 	}
+	if err := apimap.ValidateServiceGuardrail(body); err != nil {
+		writeError(c, http.StatusBadRequest, err)
+		return
+	}
 	if err := a.UpsertServiceGuardrail(c.Request.Context(), apimap.ToServiceGuardrail(body)); err != nil {
 		if strings.Contains(err.Error(), "namespace/service") {
 			writeError(c, http.StatusBadRequest, err)
@@ -94,7 +98,7 @@ func (a *API) deleteGuardrail(c *gin.Context) {
 	if _, ok := a.requireAdmin(c); !ok {
 		return
 	}
-	if err := a.DeleteServiceGuardrail(c.Request.Context(), c.Query("scope_key")); err != nil {
+	if err := a.DeleteServiceGuardrail(c.Request.Context(), repo.ScopeService, c.Query("scope_key")); err != nil {
 		if strings.Contains(err.Error(), "missing scope_key") {
 			writeError(c, http.StatusBadRequest, err)
 			return

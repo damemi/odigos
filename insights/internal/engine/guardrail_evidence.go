@@ -29,9 +29,98 @@ func GuardrailSpanHighlights(rule repo.RuleKey, offending string, spans []SpanVi
 		return highlightByService(spans, offending, "unauthorized callee")
 	case risk.RuleAllowedEgress:
 		return highlightEgress(spans, offending)
+	case risk.RuleAttributeCorrelation:
+		return highlightCorrelation(spans, offending)
 	default:
 		return nil
 	}
+}
+
+// highlightCorrelation flags the two spans that witness a cross-span correlation
+// violation. The offending string leads with the two "service/span" sites (see
+// correlationOffending), so we parse them back out and highlight every span that
+// matches a site by service + name/code.function.name. Values trail in a quoted
+// parenthetical and are ignored here.
+func highlightCorrelation(spans []SpanView, offending string) []SpanHighlight {
+	lsite, rsite, ok := parseCorrelationSites(offending)
+	if !ok {
+		return nil
+	}
+	var out []SpanHighlight
+	for _, s := range spans {
+		if spanViewMatchesSite(s, lsite) || spanViewMatchesSite(s, rsite) {
+			out = append(out, SpanHighlight{SpanID: s.SpanID, Severity: "high", Reason: "correlation mismatch"})
+		}
+	}
+	return out
+}
+
+// correlationSite is a (service, span) selector parsed from an offending string.
+type correlationSite struct{ service, span string }
+
+// parseCorrelationSites extracts the two service/span sites from a correlation
+// offending string of the form
+// "<name>: <lsvc>/<lspan> <op> <rsvc>/<rspan> (\"lval\" vs \"rval\")".
+func parseCorrelationSites(offending string) (correlationSite, correlationSite, bool) {
+	i := strings.Index(offending, ": ")
+	if i < 0 {
+		return correlationSite{}, correlationSite{}, false
+	}
+	region := offending[i+2:]
+	if p := strings.LastIndex(region, " ("); p >= 0 {
+		region = region[:p]
+	}
+	var sides []string
+	switch {
+	case strings.Contains(region, " "+correlationOpNotEqual+" "):
+		sides = strings.SplitN(region, " "+correlationOpNotEqual+" ", 2)
+	case strings.Contains(region, " "+correlationOpEqual+" "):
+		sides = strings.SplitN(region, " "+correlationOpEqual+" ", 2)
+	default:
+		return correlationSite{}, correlationSite{}, false
+	}
+	if len(sides) != 2 {
+		return correlationSite{}, correlationSite{}, false
+	}
+	return parseSite(sides[0]), parseSite(sides[1]), true
+}
+
+// parseSite splits "service/span" on the first slash; span may itself contain
+// slashes (e.g. an HTTP span name), so only the first separator is used.
+func parseSite(s string) correlationSite {
+	if j := strings.Index(s, "/"); j >= 0 {
+		return correlationSite{service: s[:j], span: s[j+1:]}
+	}
+	return correlationSite{service: s}
+}
+
+// spanViewMatchesSite mirrors spanMatchesSelector for the rendered SpanView.
+func spanViewMatchesSite(s SpanView, site correlationSite) bool {
+	if site.span == "" {
+		return false
+	}
+	if site.service != "" && !strings.EqualFold(s.Service, site.service) {
+		return false
+	}
+	if s.Name == site.span {
+		return true
+	}
+	attrs := s.AttrMap()
+	if fqn := attrs[semconv.CodeFunctionName]; fqn != "" {
+		if fqn == site.span || strings.HasSuffix(fqn, "."+site.span) {
+			return true
+		}
+	}
+	if ns, fn := attrs[semconv.CodeNamespace], attrs[semconv.CodeFunction]; fn != "" {
+		site2 := fn
+		if ns != "" {
+			site2 = ns + "." + fn
+		}
+		if site2 == site.span || strings.HasSuffix(site2, "."+site.span) {
+			return true
+		}
+	}
+	return false
 }
 
 // highlightByService flags every span owned by the named service.

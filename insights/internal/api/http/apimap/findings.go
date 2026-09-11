@@ -145,7 +145,7 @@ func FromGuardrailViolationDetail(g repo.GuardrailViolationGroup) apitypes.Guard
 // violationSummary is the render-ready investigate sentence. The UI should
 // display it as-is (same pattern as anomaly class_findings.summary).
 func violationSummary(service, ruleLabel, offending string) string {
-	return fmt.Sprintf("%s broke %s on %s. This is one captured trace as evidence - the highlighted span(s) show the forbidden edge.",
+	return fmt.Sprintf("%s broke %s on %s.",
 		service, ruleLabel, offending)
 }
 
@@ -160,17 +160,47 @@ func FromServiceGuardrail(g repo.ServiceGuardrail) apitypes.ServiceGuardrail {
 			continue
 		}
 		rules = append(rules, apitypes.GuardrailRuleConfig{
-			Key:       string(rule.Key),
-			Label:     rule.Label,
-			Mode:      apitypes.RuleMode(repo.NormalizeRuleMode(mode)),
-			Allowlist: list,
-			Origin:    g.RuleOrigins[rule.Key],
+			Key:          string(rule.Key),
+			Label:        rule.Label,
+			Mode:         apitypes.RuleMode(repo.NormalizeRuleMode(mode)),
+			Allowlist:    list,
+			Correlations: fromCorrelationSpecs(g.RuleCorrelations[rule.Key]),
+			Origin:       g.RuleOrigins[rule.Key],
 		})
 	}
 	return apitypes.ServiceGuardrail{
 		Scope:    apitypes.PolicyScope(repo.NormalizePolicyScope(g.Scope)),
 		ScopeKey: g.ScopeKey,
 		Rules:    rules,
+	}
+}
+
+// fromCorrelationSpecs maps repo correlation specs to their wire form. Returns
+// nil for an empty input so the field stays omitted on rules that don't use it.
+func fromCorrelationSpecs(specs []repo.CorrelationSpec) []apitypes.CorrelationSpec {
+	if len(specs) == 0 {
+		return nil
+	}
+	out := make([]apitypes.CorrelationSpec, len(specs))
+	for i, s := range specs {
+		out[i] = apitypes.CorrelationSpec{
+			Name:     s.Name,
+			Left:     fromCorrelationSelector(s.Left),
+			Right:    fromCorrelationSelector(s.Right),
+			Relation: apitypes.CorrelationSpecRelation(s.Relation),
+			Severity: apitypes.Severity(s.Severity),
+			Why:      s.Why,
+		}
+	}
+	return out
+}
+
+func fromCorrelationSelector(sel repo.CorrelationSelector) apitypes.CorrelationSelector {
+	return apitypes.CorrelationSelector{
+		Service: sel.Service,
+		Span:    sel.Span,
+		Attr:    sel.Attr,
+		Extract: sel.Extract,
 	}
 }
 

@@ -1735,7 +1735,7 @@ export interface components {
          *       "first_seen": "2026-07-20T09:15:01Z",
          *       "last_seen": "2026-07-20T14:03:22Z",
          *       "status": "open",
-         *       "summary": "frontend broke Allowed callees on currency. This is one captured trace as evidence - the highlighted span(s) show the forbidden edge.",
+         *       "summary": "frontend broke Allowed callees on currency.",
          *       "span_highlights": [
          *         {
          *           "span_id": "a1b2c3d4",
@@ -1761,7 +1761,7 @@ export interface components {
             /** Format: date-time */
             last_seen?: string;
             status: components["schemas"]["ViolationStatus"];
-            /** @description Render-ready investigate sentence. The UI should display it as-is (service, rule, offending, plus that this payload is evidence for the forbidden edge). */
+            /** @description Render-ready investigate sentence. The UI should display it as-is (service, rule, and offending edge). */
             summary: string;
             /** @description Spans on the evidence trace that witness the forbidden edge. */
             span_highlights?: components["schemas"]["AnomalySpanHighlight"][];
@@ -1773,8 +1773,39 @@ export interface components {
             label: string;
             mode: components["schemas"]["RuleMode"];
             allowlist?: string[];
+            /** @description Cross-span correlation specs. Only used by the `attribute_correlation` rule (transaction-scoped): each spec asserts two captured span attributes stay consistent within one trace. */
+            correlations?: components["schemas"]["CorrelationSpec"][];
             /** @description How this rule was created. `auto_transaction_guardrail` means it was created automatically when the service's transactions promoted (not a manual edit). */
             origin?: string;
+        };
+        /** @description Locates one attribute on one span within a trace. */
+        CorrelationSelector: {
+            /** @description Owning service name of the span. */
+            service: string;
+            /** @description Span match - the span name or the captured `code.function.name` (e.g. resolvePrincipal, getAccount). */
+            span: string;
+            /** @description Attribute key to read (e.g. return.value, arg.0, url.full). */
+            attr: string;
+            /** @description Optional regex applied to the attribute value. Capture group 1 is used when present, otherwise the whole match. Empty = use the value verbatim. */
+            extract?: string;
+        };
+        /** @description One cross-span consistency assertion: compare `left` vs `right` within a single trace and fire a violation when they do not satisfy `relation`. */
+        CorrelationSpec: {
+            name: string;
+            left: components["schemas"]["CorrelationSelector"];
+            right: components["schemas"]["CorrelationSelector"];
+            /**
+             * @description Required relation between the two extracted values.
+             * @enum {string}
+             */
+            relation: "equals" | "not_equals";
+            /**
+             * @description Risk of a violation of this rule. Defaults to critical.
+             * @default critical
+             */
+            severity: components["schemas"]["Severity"];
+            /** @description Operator rationale, shown in the finding. */
+            why?: string;
         };
         /**
          * @example {

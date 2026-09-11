@@ -107,7 +107,11 @@ func (a *API) UpsertServiceGuardrail(ctx context.Context, g repo.ServiceGuardrai
 	if err != nil {
 		return err
 	}
-	if !isServiceScopeKey(g.ScopeKey) {
+	if repo.NormalizePolicyScope(g.Scope) == repo.ScopeTransaction {
+		if strings.TrimSpace(g.ScopeKey) == "" {
+			return fmt.Errorf("a transaction guardrail needs a transaction id scope key")
+		}
+	} else if !isServiceScopeKey(g.ScopeKey) {
 		return fmt.Errorf("a guardrail needs a service scope of the form namespace/service")
 	}
 	if err := a.stampTransactionIdentityScheme(ctx, &g); err != nil {
@@ -140,7 +144,7 @@ func (a *API) stampTransactionIdentityScheme(ctx context.Context, guardrail *rep
 	return nil
 }
 
-func (a *API) DeleteServiceGuardrail(ctx context.Context, scopeKey string) error {
+func (a *API) DeleteServiceGuardrail(ctx context.Context, scope repo.PolicyScope, scopeKey string) error {
 	admin, err := a.adminOrErr()
 	if err != nil {
 		return err
@@ -149,7 +153,7 @@ func (a *API) DeleteServiceGuardrail(ctx context.Context, scopeKey string) error
 	if scopeKey == "" {
 		return fmt.Errorf("missing scope_key")
 	}
-	if err := a.Repo.DeleteServiceGuardrail(ctx, repo.ScopeService, scopeKey); err != nil {
+	if err := a.Repo.DeleteServiceGuardrail(ctx, repo.NormalizePolicyScope(scope), scopeKey); err != nil {
 		return err
 	}
 	return admin.ReloadGuardrailConfig(ctx)

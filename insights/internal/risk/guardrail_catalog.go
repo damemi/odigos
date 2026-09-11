@@ -32,11 +32,16 @@ const (
 	RuleAllowedCallees      repo.RuleKey = "allowed_callees"
 	RuleAllowedEgress       repo.RuleKey = "allowed_egress"
 	RuleAllowedTransactions repo.RuleKey = "allowed_transactions"
+	// RuleAttributeCorrelation asserts two captured span attributes stay
+	// consistent within one trace. Transaction-scoped, no learning; the per-rule
+	// severity on each spec drives the emitted score, not the catalog Weight.
+	RuleAttributeCorrelation repo.RuleKey = "attribute_correlation"
 
 	SignalForbiddenCaller      repo.SignalSource = "guardrail_forbidden_caller"
 	SignalForbiddenCallee      repo.SignalSource = "guardrail_forbidden_callee"
 	SignalForbiddenEgress      repo.SignalSource = "guardrail_forbidden_egress"
 	SignalForbiddenTransaction repo.SignalSource = "guardrail_forbidden_transaction"
+	SignalAttributeCorrelation repo.SignalSource = "guardrail_attribute_correlation"
 )
 
 // GuardrailRule is one rule type: its id, the signal a break emits, its risk
@@ -96,6 +101,33 @@ var GuardrailRules = []GuardrailRule{
 		Hint:      "One entry per line as KIND operation (e.g. HTTP GET /products, GRPC myapp.User/Login).",
 		SeedFacet: FacetTransactions,
 	},
+	{
+		Key:      RuleAttributeCorrelation,
+		Source:   SignalAttributeCorrelation,
+		Category: CategoryAccessAnomaly,
+		// Fallback only; the per-rule Severity on each CorrelationSpec drives the
+		// emitted score (see ScoreForSeverity).
+		Weight: bandCritical,
+		Label:  "Attribute correlation",
+		Desc:   "Two captured span attributes must stay consistent within one trace; a mismatch is a violation (transaction-scoped).",
+		Hint:   "Configured per transaction as span/attribute selectors with a relation and optional regex extract.",
+	},
+}
+
+// ScoreForSeverity maps a per-rule severity tier to a representative score in
+// that band, so a rule's chosen risk survives the round-trip through
+// SeverityForScore on the finding. An empty/unknown tier defaults to critical.
+func ScoreForSeverity(severity string) int {
+	switch Severity(severity) {
+	case SeverityLow:
+		return bandLow
+	case SeverityMedium:
+		return bandMedium
+	case SeverityHigh:
+		return bandHigh
+	default:
+		return bandCritical
+	}
 }
 
 // GuardrailRuleByKey returns the rule type for a key.

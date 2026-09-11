@@ -2336,8 +2336,7 @@ components:
           type: string
           description: >
             Render-ready investigate sentence. The UI should display it as-is
-            (service, rule, offending, plus that this payload is evidence for
-            the forbidden edge).
+            (service, rule, and offending edge).
         span_highlights:
           type: array
           description: Spans on the evidence trace that witness the forbidden edge.
@@ -2362,7 +2361,7 @@ components:
           first_seen: "2026-07-20T09:15:01Z"
           last_seen: "2026-07-20T14:03:22Z"
           status: open
-          summary: "frontend broke Allowed callees on currency. This is one captured trace as evidence - the highlighted span(s) show the forbidden edge."
+          summary: "frontend broke Allowed callees on currency."
           span_highlights:
             - span_id: "a1b2c3d4"
               severity: high
@@ -2377,6 +2376,13 @@ components:
         allowlist:
           type: array
           items: { type: string }
+        correlations:
+          type: array
+          description: >
+            Cross-span correlation specs. Only used by the
+            `attribute_correlation` rule (transaction-scoped): each spec asserts
+            two captured span attributes stay consistent within one trace.
+          items: { $ref: "#/components/schemas/CorrelationSpec" }
         origin:
           type: string
           description: >
@@ -2384,6 +2390,50 @@ components:
             created automatically when the service's transactions promoted
             (not a manual edit).
       required: [key, label, mode]
+
+    CorrelationSelector:
+      type: object
+      description: Locates one attribute on one span within a trace.
+      properties:
+        service: { type: string, description: Owning service name of the span. }
+        span:
+          type: string
+          description: >
+            Span match - the span name or the captured `code.function.name`
+            (e.g. resolvePrincipal, getAccount).
+        attr:
+          type: string
+          description: >
+            Attribute key to read (e.g. return.value, arg.0, url.full).
+        extract:
+          type: string
+          description: >
+            Optional regex applied to the attribute value. Capture group 1 is
+            used when present, otherwise the whole match. Empty = use the value
+            verbatim.
+      required: [service, span, attr]
+
+    CorrelationSpec:
+      type: object
+      description: >
+        One cross-span consistency assertion: compare `left` vs `right` within a
+        single trace and fire a violation when they do not satisfy `relation`.
+      properties:
+        name: { type: string }
+        left: { $ref: "#/components/schemas/CorrelationSelector" }
+        right: { $ref: "#/components/schemas/CorrelationSelector" }
+        relation:
+          type: string
+          enum: [equals, not_equals]
+          description: Required relation between the two extracted values.
+        severity:
+          allOf: [{ $ref: "#/components/schemas/Severity" }]
+          default: critical
+          description: Risk of a violation of this rule. Defaults to critical.
+        why:
+          type: string
+          description: Operator rationale, shown in the finding.
+      required: [name, left, right, relation]
 
     ServiceGuardrail:
       type: object

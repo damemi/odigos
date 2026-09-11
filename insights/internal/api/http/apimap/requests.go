@@ -1,8 +1,12 @@
 package apimap
 
 import (
+	"fmt"
+	"regexp"
+
 	"github.com/odigos-io/odigos-enterprise/insights/internal/api/http/apitypes"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
 )
 
 // ToPolicy maps an alert-policy wire body to the repo type, narrowing the string
@@ -66,11 +70,12 @@ func ToServiceGuardrail(g apitypes.ServiceGuardrail) repo.ServiceGuardrail {
 		scope = repo.ScopeService
 	}
 	out := repo.ServiceGuardrail{
-		Scope:       repo.NormalizePolicyScope(scope),
-		ScopeKey:    g.ScopeKey,
-		RuleLists:   map[repo.RuleKey][]string{},
-		RuleModes:   map[repo.RuleKey]repo.RuleMode{},
-		RuleOrigins: map[repo.RuleKey]string{},
+		Scope:            repo.NormalizePolicyScope(scope),
+		ScopeKey:         g.ScopeKey,
+		RuleLists:        map[repo.RuleKey][]string{},
+		RuleModes:        map[repo.RuleKey]repo.RuleMode{},
+		RuleOrigins:      map[repo.RuleKey]string{},
+		RuleCorrelations: map[repo.RuleKey][]repo.CorrelationSpec{},
 	}
 	for _, r := range g.Rules {
 		key := repo.RuleKey(r.Key)
@@ -81,6 +86,97 @@ func ToServiceGuardrail(g apitypes.ServiceGuardrail) repo.ServiceGuardrail {
 		if r.Origin != "" {
 			out.RuleOrigins[key] = r.Origin
 		}
+		if specs := toCorrelationSpecs(r.Correlations); len(specs) > 0 {
+			out.RuleCorrelations[key] = specs
+		}
 	}
 	return out
+}
+
+// toCorrelationSpecs maps wire correlation specs to their repo form, defaulting
+// an empty severity to critical (the field is the per-rule risk of a violation).
+func toCorrelationSpecs(specs []apitypes.CorrelationSpec) []repo.CorrelationSpec {
+	if len(specs) == 0 {
+		return nil
+	}
+	out := make([]repo.CorrelationSpec, len(specs))
+	for i, s := range specs {
+		severity := string(s.Severity)
+		if severity == "" {
+			severity = string(apitypes.SeverityCritical)
+		}
+		out[i] = repo.CorrelationSpec{
+			Name:     s.Name,
+			Left:     toCorrelationSelector(s.Left),
+			Right:    toCorrelationSelector(s.Right),
+			Relation: string(s.Relation),
+			Severity: severity,
+			Why:      s.Why,
+		}
+	}
+	return out
+}
+
+func toCorrelationSelector(sel apitypes.CorrelationSelector) repo.CorrelationSelector {
+	return repo.CorrelationSelector{
+		Service: sel.Service,
+		Span:    sel.Span,
+		Attr:    sel.Attr,
+		Extract: sel.Extract,
+	}
+}
+
+// ValidateServiceGuardrail rejects a malformed guardrail body before it is
+// mapped and persisted. It focuses on the attribute_correlation rule, whose
+// specs carry structure the schema can't fully constrain: a compilable extract
+// regex, a known relation, a valid severity tier, populated selectors, and a
+// transaction scope (correlation is only meaningful per transaction).
+func ValidateServiceGuardrail(g apitypes.ServiceGuardrail) error {
+	for _, r := range g.Rules {
+		if r.Key != string(risk.RuleAttributeCorrelation) {
+			continue
+		}
+		if len(r.Correlations) > 0 && repo.NormalizePolicyScope(repo.PolicyScope(g.Scope)) != repo.ScopeTransaction {
+			return fmt.Errorf("attribute_correlation is transaction-scoped; set scope to transaction")
+		}
+		for i, spec := range r.Correlations {
+			if err := validateCorrelationSpec(spec); err != nil {
+				return fmt.Errorf("correlation %d (%q): %w", i, spec.Name, err)
+			}
+		}
+	}
+	return nil
+}
+
+func validateCorrelationSpec(spec apitypes.CorrelationSpec) error {
+	if spec.Name == "" {
+		return fmt.Errorf("name is required")
+	}
+	switch spec.Relation {
+	case apitypes.Equals, apitypes.NotEquals:
+	default:
+		return fmt.Errorf("unknown relation %q", spec.Relation)
+	}
+	if spec.Severity != "" && !spec.Severity.Valid() {
+		return fmt.Errorf("invalid severity %q", spec.Severity)
+	}
+	if err := validateCorrelationSelector("left", spec.Left); err != nil {
+		return err
+	}
+	if err := validateCorrelationSelector("right", spec.Right); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateCorrelationSelector(side string, sel apitypes.CorrelationSelector) error {
+	if sel.Service == "" || sel.Span == "" || sel.Attr == "" {
+		return fmt.Errorf("%s selector needs service, span and attr", side)
+	}
+	if sel.Extract != "" {
+		if _, err := regexp.Compile(sel.Extract); err != nil {
+			return fmt.Errorf("%s selector extract regex: %w", side, err)
+		}
+	}
+	return nil
 }

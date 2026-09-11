@@ -1,4 +1,4 @@
--- Initial schema (pre-release squash of former migrations 000001-000016).
+-- Initial schema (pre-release squash of former migrations 000001-000009).
 -- The baseline model is deliberately "tall" so ClickHouse does the
 -- cross-replica merge in its background merges instead of us locking and
 -- rewriting rows:
@@ -112,6 +112,12 @@ CREATE TABLE IF NOT EXISTS service_guardrails (
     rule_modes Map(String, String),
     -- Per-rule provenance, e.g. allowed_transactions -> auto_transaction_guardrail.
     rule_origins Map(String, String),
+    -- Per-rule stamp of the config a rule's allowlist was built under, e.g.
+    -- allowed_transactions -> fingerprint of the enabled identity dimensions.
+    rule_fingerprints Map(String, String),
+    -- Per-rule structured payloads keyed by rule_key, JSON-encoded. Used by the
+    -- attribute_correlation rule to store its cross-span correlation specs.
+    rule_correlations Map(String, String),
     updated_at DateTime64(3)
 ) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (scope_type, scope_key);
@@ -125,12 +131,35 @@ CREATE TABLE IF NOT EXISTS guardrail_violations (
     max_score     SimpleAggregateFunction(max, Int32),
     first_seen    SimpleAggregateFunction(min, DateTime64(3)),
     last_seen     SimpleAggregateFunction(max, DateTime64(3)),
-    allowed_at    SimpleAggregateFunction(max, DateTime64(3)), -- renamed to accepted_at in 000005
+    accepted_at   SimpleAggregateFunction(max, DateTime64(3)),
     dismissed_at  SimpleAggregateFunction(max, DateTime64(3)),
     reopened_at   SimpleAggregateFunction(max, DateTime64(3)),
     last_trace_id SimpleAggregateFunction(anyLast, String)
 ) ENGINE = AggregatingMergeTree()
 ORDER BY (scope_type, scope_key, rule_key, offending);
+
+-- Service-graph edges: the client -> server topology the vendored servicegraph
+-- connector emits in the Odigos gateway, shipped to insights over OTLP and
+-- stored here so the UI can draw a per-anomaly blast-radius subgraph.
+-- ReplacingMergeTree(observed_at) collapses repeated inserts for the same key to
+-- the newest observed_at, so re-sending the same edge is idempotent.
+-- server_is_virtual marks an uninstrumented dependency (DB, queue, external API)
+-- inferred as a virtual node. client_is_virtual marks the connector's synthetic
+-- "user" node so blast-radius BFS treats it as a leaf.
+CREATE TABLE IF NOT EXISTS service_graph_edges (
+    client_namespace  LowCardinality(String),
+    client_service    String,
+    server_namespace  LowCardinality(String),
+    server_service    String,
+    connection_type   LowCardinality(String),
+    server_is_virtual UInt8,
+    client_is_virtual UInt8 DEFAULT 0,
+    collector_pod     LowCardinality(String),
+    request_count     UInt64,
+    failed_count      UInt64,
+    observed_at       DateTime64(3)
+) ENGINE = ReplacingMergeTree(observed_at)
+ORDER BY (server_namespace, server_service, client_namespace, client_service, connection_type, collector_pod);
 
 CREATE TABLE IF NOT EXISTS system_settings (
     id UInt8,
@@ -148,7 +177,16 @@ CREATE TABLE IF NOT EXISTS system_settings (
 
     -- When 1, auto-enable allowed_transactions guardrail once all of a service's
     -- transactions are promoted. Per-service disable uses rule mode "off".
-    auto_transaction_guardrail UInt8 DEFAULT 1
+    auto_transaction_guardrail UInt8 DEFAULT 1,
+
+    -- Configurable low-cardinality transaction identity dimensions, JSON array of
+    -- {key, enabled}. Nil/missing is filled by DefaultTransactionIdentityDimensions.
+    transaction_identity_dimensions String
+        DEFAULT '[{"key":"http.response.status_code","enabled":true},{"key":"rpc.grpc.status_code","enabled":true}]',
+
+    -- Bumpable epoch so multi-replica engines clear in-memory transaction state
+    -- after an identity-dimension reset wipe. Not an operator-facing setting.
+    transaction_inventory_epoch UInt32 DEFAULT 0
 ) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY id;
 
