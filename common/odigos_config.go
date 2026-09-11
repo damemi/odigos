@@ -628,6 +628,17 @@ type InsightsConfiguration struct {
 }
 
 // +kubebuilder:object:generate=true
+// TransactionIdentityConfiguration is shared across features that key work by
+// transaction (interrogation now; insights later). Independent of whether the
+// insights service is deployed.
+type TransactionIdentityConfiguration struct {
+	// Dimensions is an ordered list of low-cardinality attribute keys (or
+	// built-in resolver names) folded into transaction identity from the entry
+	// span. Presence means enabled; omit a key to disable it.
+	Dimensions []string `json:"dimensions,omitempty" yaml:"dimensions,omitempty"`
+}
+
+// +kubebuilder:object:generate=true
 // InterrogationLLMConfiguration configures the optional LLM used by the
 // interrogation traces exporter to suggest which stack frames should become spans.
 type InterrogationLLMConfiguration struct {
@@ -724,6 +735,10 @@ type OdigosConfiguration struct {
 	Profiling *ProfilingConfiguration `json:"profiling,omitempty" yaml:"profiling,omitempty"`
 
 	Insights *InsightsConfiguration `json:"insights,omitempty" yaml:"insights,omitempty"`
+
+	// TransactionIdentity configures how entry-span attributes are folded into
+	// transaction identity. Shared by interrogation (and later insights).
+	TransactionIdentity *TransactionIdentityConfiguration `json:"transactionIdentity,omitempty" yaml:"transactionIdentity,omitempty"`
 
 	Interrogation *InterrogationConfiguration `json:"interrogation,omitempty" yaml:"interrogation,omitempty"`
 }

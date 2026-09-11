@@ -22,6 +22,7 @@ import (
 	"github.com/odigos-io/odigos/frontend/services"
 	collectormetrics "github.com/odigos-io/odigos/frontend/services/collector_metrics"
 	"github.com/odigos-io/odigos/frontend/services/insights"
+	"github.com/odigos-io/odigos/frontend/services/interrogation"
 	"github.com/odigos-io/odigos/frontend/services/metrics"
 	"github.com/odigos-io/odigos/frontend/services/otlp"
 	"github.com/odigos-io/odigos/frontend/services/profiles"
@@ -45,11 +46,13 @@ type Deps struct {
 	CorrelationsPromAPI         v1.API
 	CorrelationsMetricsStoreURL string
 	// InsightsClient is the client for the Odigos Insights service.
-	InsightsClient   *insights.Client
-	ProfileStore     *profiles.ProfileStore
-	ProfilingGate    *profiles.IngestGate
-	ProfilesConsumer *profiles.OdigosProfilesConsumer
-	OtlpReceiver     *otlp.Receiver
+	InsightsClient *insights.Client
+	// InterrogationClient reads transaction functions from interrogation Redis.
+	InterrogationClient *interrogation.Client
+	ProfileStore        *profiles.ProfileStore
+	ProfilingGate       *profiles.IngestGate
+	ProfilesConsumer    *profiles.OdigosProfilesConsumer
+	OtlpReceiver        *otlp.Receiver
 }
 
 // Bootstrap performs the synchronous startup work: load embedded destination
@@ -142,6 +145,8 @@ func Bootstrap(ctx context.Context, flags Flags, logger logr.Logger) (*Deps, err
 		return nil, fmt.Errorf("initializing insights client: %w", err)
 	}
 
+	interrogationClient := interrogation.NewClient(k8sconsts.InterrogationRedisEndpoint(flags.Namespace))
+
 	return &Deps{
 		Flags:                       flags,
 		Logger:                      logger,
@@ -152,6 +157,7 @@ func Bootstrap(ctx context.Context, flags Flags, logger logr.Logger) (*Deps, err
 		CorrelationsPromAPI:         correlationsPromAPI,
 		CorrelationsMetricsStoreURL: correlationsURL,
 		InsightsClient:              insightsClient,
+		InterrogationClient:         interrogationClient,
 		ProfileStore:                profileStore,
 		ProfilingGate:               profilingGate,
 		ProfilesConsumer:            profilesConsumer,

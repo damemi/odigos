@@ -204,9 +204,11 @@ func syncConfigMap(enabledDests *odigosv1.DestinationList, allProcessors *odigos
 	var profilingCfg *odigoscommon.ProfilingConfiguration
 	var insightsCfg *odigoscommon.InsightsConfiguration
 	var interrogationCfg *odigoscommon.InterrogationConfiguration
+	var transactionIdentityCfg *odigoscommon.TransactionIdentityConfiguration
 	if odigosCfg, err := utils.GetCurrentOdigosConfiguration(ctx, c); err == nil {
 		profilingCfg = odigosCfg.Profiling
 		interrogationCfg = odigosCfg.Interrogation
+		transactionIdentityCfg = odigosCfg.TransactionIdentity
 		insightsCfg = effectiveInsightsConfig(odigosCfg.Insights, tier)
 		if odigosCfg.ComponentLogLevels != nil {
 			collectorLogLevel = odigosCfg.ComponentLogLevels.Resolve("collector")
@@ -248,7 +250,7 @@ func syncConfigMap(enabledDests *odigosv1.DestinationList, allProcessors *odigos
 				if err := addProfilingGatewayPipeline(c, env.GetCurrentNamespace(), profilingCfg); err != nil {
 					return err
 				}
-				if err := addInterrogationExporters(c, interrogationCfg); err != nil {
+				if err := addInterrogationExporters(c, env.GetCurrentNamespace(), interrogationCfg, transactionIdentityCfg); err != nil {
 					return err
 				}
 				addEnterpriseAuthExtension(c)

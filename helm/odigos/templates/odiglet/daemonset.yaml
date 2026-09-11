@@ -324,6 +324,7 @@ spec:
               {{- /* the eBPF profiler reads /proc/kallsyms addresses and raises RLIMIT_MEMLOCK */}}
               {{- if not (has "SYSLOG" $caps) }}{{- $caps = append $caps "SYSLOG" }}{{- end }}
               {{- if not (has "SYS_RESOURCE" $caps) }}{{- $caps = append $caps "SYS_RESOURCE" }}{{- end }}
+              {{- if not (has "SYS_PTRACE" $caps) }}{{- $caps = append $caps "SYS_PTRACE" }}{{- end }}
               {{- end }}
               {{- toYaml $caps | nindent 14 }}
               drop:

@@ -303,6 +303,14 @@ export const GET_WORKLOADS_BY_IDS = gql`
           message
           isStandardLibrary
         }
+        interrogationTransactions {
+          id
+          functions {
+            name
+            frameType
+            sampleType
+          }
+        }
       }
       pods {
         podName

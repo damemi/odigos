@@ -3,6 +3,7 @@ package clustercollector
 import (
 	"slices"
 
+	"github.com/odigos-io/odigos/api/k8sconsts"
 	commonconf "github.com/odigos-io/odigos/autoscaler/controllers/common"
 	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/config"
@@ -16,7 +17,9 @@ const gatewayProfilesPipeline = "profiles"
 // appended only when the gateway profiles pipeline exists. Traces exporter is
 // appended to the root traces pipeline (traces/in), which is post-groupbytrace —
 // the same attachment point as insights and service I/O correlations.
-func addInterrogationExporters(c *config.Config, interrogation *common.InterrogationConfiguration) error {
+// transactionIdentity supplies optional dimensions for the traces exporter config
+// (from OdigosConfiguration.transactionIdentity).
+func addInterrogationExporters(c *config.Config, odigosNs string, interrogation *common.InterrogationConfiguration, transactionIdentity *common.TransactionIdentityConfiguration) error {
 	if !common.InterrogationActive(interrogation) {
 		return nil
 	}
@@ -45,6 +48,10 @@ func addInterrogationExporters(c *config.Config, interrogation *common.Interroga
 	if hasTraces {
 		tracesExp := config.GenericMap{
 			"interrogation_cache_extension": commonconf.InterrogationCacheExtension,
+			"redis_endpoint":                k8sconsts.InterrogationRedisEndpoint(odigosNs),
+		}
+		if dims := transactionIdentityDimensions(transactionIdentity); len(dims) > 0 {
+			tracesExp["transaction_identity_dimensions"] = dims
 		}
 		if llm := interrogationLLMExporterConfig(interrogation); llm != nil {
 			tracesExp["llm"] = llm
@@ -55,6 +62,13 @@ func addInterrogationExporters(c *config.Config, interrogation *common.Interroga
 	}
 
 	return nil
+}
+
+func transactionIdentityDimensions(cfg *common.TransactionIdentityConfiguration) []string {
+	if cfg == nil || len(cfg.Dimensions) == 0 {
+		return nil
+	}
+	return cfg.Dimensions
 }
 
 func interrogationLLMExporterConfig(interrogation *common.InterrogationConfiguration) config.GenericMap {

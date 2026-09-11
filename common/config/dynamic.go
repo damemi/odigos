@@ -67,5 +67,13 @@ func (g *Dynamic) ModifyConfig(dest ExporterConfigurer, currentConfig *Config) (
 		pipelineNames = append(pipelineNames, logsPipelineName)
 	}
 
+	if isProfilingEnabled(dest) {
+		profilesPipelineName := "profiles/" + dest.GetID()
+		currentConfig.Service.Pipelines[profilesPipelineName] = Pipeline{
+			Exporters: []string{exporterName},
+		}
+		pipelineNames = append(pipelineNames, profilesPipelineName)
+	}
+
 	return pipelineNames, nil
 }

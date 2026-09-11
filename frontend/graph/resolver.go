@@ -5,6 +5,7 @@ import (
 	collectormetrics "github.com/odigos-io/odigos/frontend/services/collector_metrics"
 	fecommon "github.com/odigos-io/odigos/frontend/services/common"
 	"github.com/odigos-io/odigos/frontend/services/insights"
+	"github.com/odigos-io/odigos/frontend/services/interrogation"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -25,4 +26,6 @@ type Resolver struct {
 	ProfileStore fecommon.ProfileStoreRef
 	// InsightsClient is the client for the Odigos Insights service.
 	InsightsClient *insights.Client
+	// InterrogationClient reads transaction functions from interrogation Redis.
+	InterrogationClient *interrogation.Client
 }

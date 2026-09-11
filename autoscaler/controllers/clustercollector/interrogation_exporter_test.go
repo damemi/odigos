@@ -47,7 +47,7 @@ func configWithTracesRootPipeline() *config.Config {
 func TestAddInterrogationExporters_Disabled(t *testing.T) {
 	t.Run("nil_config_noop", func(t *testing.T) {
 		c := configWithProfilesPipeline()
-		require.NoError(t, addInterrogationExporters(c, nil))
+		require.NoError(t, addInterrogationExporters(c, "odigos-system", nil, nil))
 
 		_, hasExp := c.Exporters[commonconf.InterrogationProfilesExporter]
 		assert.False(t, hasExp)
@@ -59,7 +59,7 @@ func TestAddInterrogationExporters_Disabled(t *testing.T) {
 	t.Run("explicit_false_noop", func(t *testing.T) {
 		off := false
 		c := configWithProfilesPipeline()
-		require.NoError(t, addInterrogationExporters(c, &common.InterrogationConfiguration{Enabled: &off}))
+		require.NoError(t, addInterrogationExporters(c, "odigos-system", &common.InterrogationConfiguration{Enabled: &off}, nil))
 
 		_, hasExp := c.Exporters[commonconf.InterrogationProfilesExporter]
 		assert.False(t, hasExp)
@@ -69,7 +69,7 @@ func TestAddInterrogationExporters_Disabled(t *testing.T) {
 func TestAddInterrogationExporters_NoPipelinesNoop(t *testing.T) {
 	on := true
 	c := &config.Config{Service: config.Service{Pipelines: map[string]config.Pipeline{}}}
-	require.NoError(t, addInterrogationExporters(c, &common.InterrogationConfiguration{Enabled: &on}))
+	require.NoError(t, addInterrogationExporters(c, "odigos-system", &common.InterrogationConfiguration{Enabled: &on}, nil))
 
 	_, hasProfiles := c.Exporters[commonconf.InterrogationProfilesExporter]
 	_, hasTraces := c.Exporters[commonconf.InterrogationTracesExporter]
@@ -80,7 +80,7 @@ func TestAddInterrogationExporters_NoPipelinesNoop(t *testing.T) {
 func TestAddInterrogationExporters_EnabledAppendsToProfilesPipeline(t *testing.T) {
 	on := true
 	c := configWithProfilesPipeline()
-	require.NoError(t, addInterrogationExporters(c, &common.InterrogationConfiguration{Enabled: &on}))
+	require.NoError(t, addInterrogationExporters(c, "odigos-system", &common.InterrogationConfiguration{Enabled: &on}, nil))
 
 	exp, ok := c.Exporters[commonconf.InterrogationProfilesExporter].(config.GenericMap)
 	require.True(t, ok, "profiles exporter must be registered")
@@ -101,11 +101,12 @@ func TestAddInterrogationExporters_EnabledAppendsToProfilesPipeline(t *testing.T
 func TestAddInterrogationExporters_EnabledAppendsToTracesPipeline(t *testing.T) {
 	on := true
 	c := configWithTracesRootPipeline()
-	require.NoError(t, addInterrogationExporters(c, &common.InterrogationConfiguration{Enabled: &on}))
+	require.NoError(t, addInterrogationExporters(c, "odigos-system", &common.InterrogationConfiguration{Enabled: &on}, nil))
 
 	exp, ok := c.Exporters[commonconf.InterrogationTracesExporter].(config.GenericMap)
 	require.True(t, ok, "traces exporter must be registered")
 	assert.Equal(t, commonconf.InterrogationCacheExtension, exp["interrogation_cache_extension"])
+	assert.Equal(t, "odigos-interrogation-redis.odigos-system:6379", exp["redis_endpoint"])
 
 	_, hasExt := c.Extensions[commonconf.InterrogationCacheExtension]
 	assert.True(t, hasExt)
@@ -128,7 +129,7 @@ func TestAddInterrogationExporters_BothPipelines(t *testing.T) {
 		Exporters: []string{"odigosrouterconnector/traces"},
 	}
 
-	require.NoError(t, addInterrogationExporters(c, &common.InterrogationConfiguration{Enabled: &on}))
+	require.NoError(t, addInterrogationExporters(c, "odigos-system", &common.InterrogationConfiguration{Enabled: &on}, nil))
 
 	_, hasProfiles := c.Exporters[commonconf.InterrogationProfilesExporter]
 	_, hasTraces := c.Exporters[commonconf.InterrogationTracesExporter]
@@ -139,7 +140,7 @@ func TestAddInterrogationExporters_BothPipelines(t *testing.T) {
 func TestAddInterrogationExporters_LLMConfigOnTracesExporter(t *testing.T) {
 	on := true
 	c := configWithTracesRootPipeline()
-	require.NoError(t, addInterrogationExporters(c, &common.InterrogationConfiguration{
+	require.NoError(t, addInterrogationExporters(c, "odigos-system", &common.InterrogationConfiguration{
 		Enabled: &on,
 		LLM: &common.InterrogationLLMConfiguration{
 			Provider: "openai",
@@ -147,7 +148,7 @@ func TestAddInterrogationExporters_LLMConfigOnTracesExporter(t *testing.T) {
 			APIKey:   "sk-test",
 			BaseURL:  "https://api.openai.com/v1",
 		},
-	}))
+	}, nil))
 
 	exp, ok := c.Exporters[commonconf.InterrogationTracesExporter].(config.GenericMap)
 	require.True(t, ok)
@@ -162,15 +163,39 @@ func TestAddInterrogationExporters_LLMConfigOnTracesExporter(t *testing.T) {
 func TestAddInterrogationExporters_LLMSkippedWithoutAPIKey(t *testing.T) {
 	on := true
 	c := configWithTracesRootPipeline()
-	require.NoError(t, addInterrogationExporters(c, &common.InterrogationConfiguration{
+	require.NoError(t, addInterrogationExporters(c, "odigos-system", &common.InterrogationConfiguration{
 		Enabled: &on,
 		LLM: &common.InterrogationLLMConfiguration{
 			Provider: "openai",
 			Model:    "gpt-4o-mini",
 		},
-	}))
+	}, nil))
 
 	exp := c.Exporters[commonconf.InterrogationTracesExporter].(config.GenericMap)
 	_, hasLLM := exp["llm"]
 	assert.False(t, hasLLM)
+}
+
+func TestAddInterrogationExporters_TransactionIdentityDimensions(t *testing.T) {
+	on := true
+	c := configWithTracesRootPipeline()
+	require.NoError(t, addInterrogationExporters(c, "odigos-system", &common.InterrogationConfiguration{Enabled: &on},
+		&common.TransactionIdentityConfiguration{
+			Dimensions: []string{"http.response.status_code", "rpc.grpc.status_code"},
+		}))
+
+	exp, ok := c.Exporters[commonconf.InterrogationTracesExporter].(config.GenericMap)
+	require.True(t, ok)
+	assert.Equal(t, []string{"http.response.status_code", "rpc.grpc.status_code"}, exp["transaction_identity_dimensions"])
+}
+
+func TestAddInterrogationExporters_TransactionIdentityDimensionsOmittedWhenEmpty(t *testing.T) {
+	on := true
+	c := configWithTracesRootPipeline()
+	require.NoError(t, addInterrogationExporters(c, "odigos-system", &common.InterrogationConfiguration{Enabled: &on},
+		&common.TransactionIdentityConfiguration{Dimensions: nil}))
+
+	exp := c.Exporters[commonconf.InterrogationTracesExporter].(config.GenericMap)
+	_, hasDims := exp["transaction_identity_dimensions"]
+	assert.False(t, hasDims)
 }

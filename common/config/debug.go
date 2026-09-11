@@ -71,5 +71,9 @@ func (s *Debug) ModifyConfig(dest ExporterConfigurer, currentConfig *Config) ([]
 		pipelineNames = append(pipelineNames, logsPipelineName)
 	}
 
+	if isProfilingEnabled(dest) {
+		pipelineNames = append(pipelineNames, addProfilesPipeline(currentConfig, "debug", dest.GetID(), exporterName))
+	}
+
 	return pipelineNames, nil
 }

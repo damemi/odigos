@@ -1566,6 +1566,23 @@ type InstrumentorConfig struct {
 	CheckDeviceHealthBeforeInjection *bool   `json:"checkDeviceHealthBeforeInjection,omitempty"`
 }
 
+// One detected function from a profile sample linked to a transaction.
+// Redis member format: name|frameType|sampleType.
+type InterrogationFunction struct {
+	Name string `json:"name"`
+	// profile.frame.type (e.g. jvm, hotspot).
+	FrameType string `json:"frameType"`
+	// Profile sample type: events (probe) or samples (periodic CPU).
+	SampleType string `json:"sampleType"`
+}
+
+// One transaction observed for a workload container, with its Redis-stored functions.
+type InterrogationTransaction struct {
+	// Transaction id as stored in the Redis key suffix.
+	ID        string                   `json:"id"`
+	Functions []*InterrogationFunction `json:"functions"`
+}
+
 type JavaCustomProbe struct {
 	ClassName  *string `json:"className,omitempty"`
 	MethodName *string `json:"methodName,omitempty"`
@@ -1740,6 +1757,10 @@ type K8sWorkloadContainer struct {
 	AgentConfig      *K8sWorkloadContainerAgentConfig                 `json:"agentConfig,omitempty"`
 	CollectorConfig  *K8sWorkloadContainerCollectorConfig             `json:"collectorConfig,omitempty"`
 	Instrumentations []*K8sWorkloadPodContainerProcessInstrumentation `json:"instrumentations,omitempty"`
+	// Trace interrogation: transactions and detected stack functions for this
+	// container, read from interrogation Redis. Empty when interrogation is
+	// disabled or nothing has been stored yet.
+	InterrogationTransactions []*InterrogationTransaction `json:"interrogationTransactions"`
 }
 
 type K8sWorkloadContainerAgentConfig struct {

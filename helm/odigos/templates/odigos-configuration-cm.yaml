@@ -73,6 +73,13 @@ data:
     insights:
       enabled: {{ .Values.insights.enabled }}
     {{- end }}
+    {{- if .Values.transactionIdentity }}
+    transactionIdentity:
+      {{- with .Values.transactionIdentity.dimensions }}
+      dimensions:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- end }}
     {{- if .Values.interrogation.enabled }}
     interrogation:
       enabled: {{ .Values.interrogation.enabled }}

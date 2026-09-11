@@ -380,6 +380,40 @@ type K8sWorkloadContainer {
 
   # this part is a summary of all the instrumentations that were found in any process of this container.
   instrumentations: [K8sWorkloadPodContainerProcessInstrumentation!]
+
+  """
+  Trace interrogation: transactions and detected stack functions for this
+  container, read from interrogation Redis. Empty when interrogation is
+  disabled or nothing has been stored yet.
+  """
+  interrogationTransactions: [InterrogationTransaction!]!
+}
+
+"""
+One detected function from a profile sample linked to a transaction.
+Redis member format: name|frameType|sampleType.
+"""
+type InterrogationFunction {
+  name: String!
+  """
+  profile.frame.type (e.g. jvm, hotspot).
+  """
+  frameType: String!
+  """
+  Profile sample type: events (probe) or samples (periodic CPU).
+  """
+  sampleType: String!
+}
+
+"""
+One transaction observed for a workload container, with its Redis-stored functions.
+"""
+type InterrogationTransaction {
+  """
+  Transaction id as stored in the Redis key suffix.
+  """
+  id: String!
+  functions: [InterrogationFunction!]!
 }
 
 # describes a single attribute of a process.

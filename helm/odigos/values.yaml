@@ -155,8 +155,32 @@ profiling:
 
 # @schema
 # description: |-
+#   Shared transaction identity settings. Low-cardinality attributes from the
+#   entry span folded into how a transaction is named/keyed (appended as
+#   [key=value] on the operation). Prefer stable, low-cardinality keys —
+#   high-cardinality attributes explode transaction count and memory.
+# @schema
+transactionIdentity:
+  # @schema
+  # type: array
+  # items:
+  #   type: string
+  # description: |-
+  #   Ordered list of identity dimension keys. Keys with a value on the entry
+  #   span are appended to the operation identity. Built-in resolvers:
+  #   http.response.status_code (also reads legacy http.status_code),
+  #   rpc.grpc.status_code. Any other key is read as a span attribute.
+  #   Keep the list short (insights caps at 5); omit a key to disable it.
+  # @schema
+  dimensions:
+    - http.response.status_code
+    - rpc.grpc.status_code
+
+# @schema
+# description: |-
 #   Interrogation loop (off by default): correlates traces and profiles via a bounding join
 #   so uprobe/probe profiles can be tied to spans. Opt-in; leave disabled unless you need it.
+#   When enabled, also deploys a bundled Redis (odigos-interrogation-redis) in the Odigos namespace.
 # @schema
 interrogation:
   # @schema
@@ -186,6 +210,96 @@ interrogation:
     # description: Optional API root including /v1. Required when provider is openai_compatible.
     # @schema
     baseUrl: ""
+
+  # @schema
+  # description: |-
+  #   Bundled Redis for interrogation (deployed when interrogation.enabled is true).
+  #   Single replica, no persistence - used as a cache by the collector.
+  # @schema
+  redis:
+    # @schema
+    # description: Redis server image (third-party; override for private mirrors or version pins).
+    # @schema
+    image: redis:7.4.2
+    # @schema
+    # description: Redis listen port.
+    # @schema
+    port: 6379
+    # @schema
+    # description: Kubernetes port name.
+    # @schema
+    portName: redis
+    # @schema
+    # description: |-
+    #   Max memory for Redis. Set to ~85% of the memory limit to leave headroom
+    #   for Redis overhead (220mb is about 85% of 256Mi).
+    # @schema
+    maxmemory: 220mb
+    # @schema
+    # description: Eviction policy when maxmemory is reached (e.g. allkeys-lru).
+    # @schema
+    maxmemoryPolicy: allkeys-lru
+    # @schema
+    # description: TCP keepalive interval in seconds for idle connections.
+    # @schema
+    tcpKeepalive: 30
+    # @schema
+    # description: Liveness probe (redis-cli ping).
+    # @schema
+    livenessProbe:
+      enabled: true
+      initialDelaySeconds: 15
+      periodSeconds: 20
+      timeoutSeconds: 3
+      failureThreshold: 5
+      successThreshold: 1
+    # @schema
+    # description: Readiness probe (redis-cli ping).
+    # @schema
+    readinessProbe:
+      enabled: true
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 3
+      failureThreshold: 3
+      successThreshold: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+
+    # @schema
+    # description: |-
+    #   Override the global nodeSelector for Redis. Falls back to values.nodeSelector
+    #   when unset.
+    # @schema
+    # nodeSelector:
+    #   kubernetes.io/os: linux
+
+    # @schema
+    # items:
+    #   description: |-
+    #     A Kubernetes Toleration. See https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
+    #     Common fields: key, operator, value, effect, tolerationSeconds.
+    #   type: object
+    #   properties:
+    #     key:
+    #       type: string
+    #     operator:
+    #       type: string
+    #     value:
+    #       type: string
+    #     effect:
+    #       type: string
+    # @schema
+    tolerations: []
+    # @schema
+    # additionalProperties: true
+    # @schema
+    affinity: {}
 
 # @schema
 # description: Configuration for OpenTelemetry (OTEL) agents instrumentation environment variables.

@@ -1158,7 +1158,7 @@
     },
     "interrogation": {
       "additionalProperties": false,
-      "description": "Interrogation loop (off by default): correlates traces and profiles via a bounding join\nso uprobe/probe profiles can be tied to spans. Opt-in; leave disabled unless you need it.",
+      "description": "Interrogation loop (off by default): correlates traces and profiles via a bounding join\nso uprobe/probe profiles can be tied to spans. Opt-in; leave disabled unless you need it.\nWhen enabled, also deploys a bundled Redis (odigos-interrogation-redis) in the Odigos namespace.",
       "properties": {
         "enabled": {
           "default": "false",
@@ -1168,28 +1168,233 @@
         },
         "llm": {
           "additionalProperties": false,
-          "description": "Optional LLM used by the interrogation traces exporter to suggest instrumentation targets.",
+          "description": "Optional LLM used by the interrogation traces exporter to suggest which\nprofile stack frames should become spans. Uses the OpenAI Chat Completions\nAPI (also works with openai_compatible gateways via baseUrl).",
           "properties": {
-            "provider": {
-              "description": "LLM provider. Supported values - openai (default), openai_compatible.",
-              "type": "string"
-            },
-            "model": {
-              "description": "Model id (e.g. gpt-4o-mini).",
-              "type": "string"
-            },
             "apiKey": {
-              "description": "Bearer API key for the provider.",
-              "type": "string"
+              "default": "",
+              "description": "Bearer API key for the provider. Prefer injecting via --set or a secret overlay.",
+              "required": [],
+              "title": "apiKey"
             },
             "baseUrl": {
+              "default": "",
               "description": "Optional API root including /v1. Required when provider is openai_compatible.",
-              "type": "string"
+              "required": [],
+              "title": "baseUrl"
+            },
+            "model": {
+              "default": "gpt-4o-mini",
+              "description": "Model id (e.g. gpt-4o-mini).",
+              "required": [],
+              "title": "model"
+            },
+            "provider": {
+              "default": "openai",
+              "description": "LLM provider. Supported values - openai (default), openai_compatible.",
+              "required": [],
+              "title": "provider"
             }
           },
           "required": [],
-          "title": "llm",
-          "type": "object"
+          "title": "llm"
+        },
+        "redis": {
+          "additionalProperties": false,
+          "description": "Bundled Redis for interrogation (deployed when interrogation.enabled is true).\nSingle replica, no persistence - used as a cache by the collector.",
+          "properties": {
+            "affinity": {
+              "additionalProperties": true,
+              "required": [],
+              "title": "affinity"
+            },
+            "image": {
+              "default": "redis:7.4.2",
+              "description": "Redis server image (third-party; override for private mirrors or version pins).",
+              "required": [],
+              "title": "image"
+            },
+            "livenessProbe": {
+              "additionalProperties": false,
+              "description": "Liveness probe (redis-cli ping).",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "title": "enabled",
+                  "type": "boolean"
+                },
+                "failureThreshold": {
+                  "default": 5,
+                  "title": "failureThreshold",
+                  "type": "integer"
+                },
+                "initialDelaySeconds": {
+                  "default": 15,
+                  "title": "initialDelaySeconds",
+                  "type": "integer"
+                },
+                "periodSeconds": {
+                  "default": 20,
+                  "title": "periodSeconds",
+                  "type": "integer"
+                },
+                "successThreshold": {
+                  "default": 1,
+                  "title": "successThreshold",
+                  "type": "integer"
+                },
+                "timeoutSeconds": {
+                  "default": 3,
+                  "title": "timeoutSeconds",
+                  "type": "integer"
+                }
+              },
+              "required": [],
+              "title": "livenessProbe"
+            },
+            "maxmemory": {
+              "default": "220mb",
+              "description": "Max memory for Redis. Set to ~85% of the memory limit to leave headroom\nfor Redis overhead (220mb is about 85% of 256Mi).",
+              "required": [],
+              "title": "maxmemory"
+            },
+            "maxmemoryPolicy": {
+              "default": "allkeys-lru",
+              "description": "Eviction policy when maxmemory is reached (e.g. allkeys-lru).",
+              "required": [],
+              "title": "maxmemoryPolicy"
+            },
+            "nodeSelector": {
+              "default": "",
+              "description": "Override the global nodeSelector for Redis. Falls back to values.nodeSelector\nwhen unset.",
+              "required": [],
+              "title": "nodeSelector"
+            },
+            "port": {
+              "default": "6379",
+              "description": "Redis listen port.",
+              "required": [],
+              "title": "port"
+            },
+            "portName": {
+              "default": "redis",
+              "description": "Kubernetes port name.",
+              "required": [],
+              "title": "portName"
+            },
+            "readinessProbe": {
+              "additionalProperties": false,
+              "description": "Readiness probe (redis-cli ping).",
+              "properties": {
+                "enabled": {
+                  "default": true,
+                  "title": "enabled",
+                  "type": "boolean"
+                },
+                "failureThreshold": {
+                  "default": 3,
+                  "title": "failureThreshold",
+                  "type": "integer"
+                },
+                "initialDelaySeconds": {
+                  "default": 5,
+                  "title": "initialDelaySeconds",
+                  "type": "integer"
+                },
+                "periodSeconds": {
+                  "default": 10,
+                  "title": "periodSeconds",
+                  "type": "integer"
+                },
+                "successThreshold": {
+                  "default": 1,
+                  "title": "successThreshold",
+                  "type": "integer"
+                },
+                "timeoutSeconds": {
+                  "default": 3,
+                  "title": "timeoutSeconds",
+                  "type": "integer"
+                }
+              },
+              "required": [],
+              "title": "readinessProbe"
+            },
+            "resources": {
+              "additionalProperties": false,
+              "properties": {
+                "limits": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "cpu": {
+                      "default": "200m",
+                      "title": "cpu",
+                      "type": "string"
+                    },
+                    "memory": {
+                      "default": "256Mi",
+                      "title": "memory",
+                      "type": "string"
+                    }
+                  },
+                  "required": [],
+                  "title": "limits",
+                  "type": "object"
+                },
+                "requests": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "cpu": {
+                      "default": "100m",
+                      "title": "cpu",
+                      "type": "string"
+                    },
+                    "memory": {
+                      "default": "128Mi",
+                      "title": "memory",
+                      "type": "string"
+                    }
+                  },
+                  "required": [],
+                  "title": "requests",
+                  "type": "object"
+                }
+              },
+              "required": [],
+              "title": "resources",
+              "type": "object"
+            },
+            "tcpKeepalive": {
+              "default": "30",
+              "description": "TCP keepalive interval in seconds for idle connections.",
+              "required": [],
+              "title": "tcpKeepalive"
+            },
+            "tolerations": {
+              "items": {
+                "description": "A Kubernetes Toleration. See https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/\nCommon fields: key, operator, value, effect, tolerationSeconds.",
+                "properties": {
+                  "effect": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "operator": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              },
+              "required": [],
+              "title": "tolerations"
+            }
+          },
+          "required": [],
+          "title": "redis"
         }
       },
       "required": [],
@@ -2646,6 +2851,22 @@
       },
       "required": [],
       "title": "traceCorrelations"
+    },
+    "transactionIdentity": {
+      "additionalProperties": false,
+      "description": "Shared transaction identity settings. Low-cardinality attributes from the\nentry span folded into how a transaction is named/keyed (appended as\n[key=value] on the operation). Prefer stable, low-cardinality keys —\nhigh-cardinality attributes explode transaction count and memory.",
+      "properties": {
+        "dimensions": {
+          "description": "Ordered list of identity dimension keys. Keys with a value on the entry\nspan are appended to the operation identity. Built-in resolvers:\nhttp.response.status_code (also reads legacy http.status_code),\nrpc.grpc.status_code. Any other key is read as a span attribute.\nKeep the list short (insights caps at 5); omit a key to disable it.",
+          "items": {
+            "type": "string"
+          },
+          "title": "dimensions",
+          "type": "array"
+        }
+      },
+      "required": [],
+      "title": "transactionIdentity"
     },
     "ui": {
       "additionalProperties": false,

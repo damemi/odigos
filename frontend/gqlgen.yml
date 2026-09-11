@@ -125,6 +125,11 @@ models:
       processes:
         resolver: true
 
+  K8sWorkloadContainer:
+    fields:
+      interrogationTransactions:
+        resolver: true
+
   K8sActualSource:
     fields:
       profiling:

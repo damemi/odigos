@@ -18,6 +18,7 @@ import (
 	"github.com/odigos-io/odigos/frontend/graph/model"
 	"github.com/odigos-io/odigos/frontend/graph/status"
 	"github.com/odigos-io/odigos/frontend/services"
+	"github.com/odigos-io/odigos/frontend/services/interrogation"
 	frontendcommon "github.com/odigos-io/odigos/frontend/services/common"
 	sourceutils "github.com/odigos-io/odigos/k8sutils/pkg/source"
 )
@@ -787,6 +788,56 @@ func (r *k8sWorkloadResolver) RollbackOccurred(ctx context.Context, obj *model.K
 	return ic.Status.RollbackOccurred, nil
 }
 
+// InterrogationTransactions is the resolver for the interrogationTransactions field.
+func (r *k8sWorkloadContainerResolver) InterrogationTransactions(ctx context.Context, obj *model.K8sWorkloadContainer) ([]*model.InterrogationTransaction, error) {
+	if obj == nil || obj.ContainerName == "" {
+		return []*model.InterrogationTransaction{}, nil
+	}
+
+	enabled, err := interrogation.IsEnabled(ctx, r.K8sCacheClient)
+	if err != nil {
+		return nil, fmt.Errorf("reading effective config for interrogation: %w", err)
+	}
+	if !enabled {
+		return []*model.InterrogationTransaction{}, nil
+	}
+	if r.InterrogationClient == nil {
+		return []*model.InterrogationTransaction{}, nil
+	}
+
+	workloadID, err := parentWorkloadID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	got, err := r.InterrogationClient.ListContainerTransactions(
+		ctx,
+		workloadID.Namespace,
+		string(workloadID.Kind),
+		workloadID.Name,
+		obj.ContainerName,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return interrogation.TransactionsToModel(got.Transactions), nil
+}
+
+// parentWorkloadID walks the GraphQL field context to the parent K8sWorkload.
+// Field path for list items: interrogationTransactions -> container ->
+// containers (list) -> workload.
+func parentWorkloadID(ctx context.Context) (model.K8sWorkloadID, error) {
+	fc := graphql.GetFieldContext(ctx)
+	if fc == nil || fc.Parent == nil || fc.Parent.Parent == nil || fc.Parent.Parent.Parent == nil {
+		return model.K8sWorkloadID{}, fmt.Errorf("missing parent resolver context")
+	}
+	w, ok := fc.Parent.Parent.Parent.Result.(**model.K8sWorkload)
+	if !ok || w == nil || (*w).ID == nil {
+		return model.K8sWorkloadID{}, fmt.Errorf("parent is not a workload")
+	}
+	return *(*w).ID, nil
+}
+
 // Processes is the resolver for the processes field.
 func (r *k8sWorkloadPodContainerResolver) Processes(ctx context.Context, obj *model.K8sWorkloadPodContainer) ([]*model.K8sWorkloadPodContainerProcess, error) {
 	l := loaders.For(ctx)
@@ -1008,6 +1059,11 @@ func (r *Resolver) K8sNamespace() K8sNamespaceResolver { return &k8sNamespaceRes
 // K8sWorkload returns K8sWorkloadResolver implementation.
 func (r *Resolver) K8sWorkload() K8sWorkloadResolver { return &k8sWorkloadResolver{r} }
 
+// K8sWorkloadContainer returns K8sWorkloadContainerResolver implementation.
+func (r *Resolver) K8sWorkloadContainer() K8sWorkloadContainerResolver {
+	return &k8sWorkloadContainerResolver{r}
+}
+
 // K8sWorkloadPodContainer returns K8sWorkloadPodContainerResolver implementation.
 func (r *Resolver) K8sWorkloadPodContainer() K8sWorkloadPodContainerResolver {
 	return &k8sWorkloadPodContainerResolver{r}
@@ -1025,6 +1081,7 @@ func (r *Resolver) K8sWorkloadTelemetryMetrics() K8sWorkloadTelemetryMetricsReso
 
 type k8sNamespaceResolver struct{ *Resolver }
 type k8sWorkloadResolver struct{ *Resolver }
+type k8sWorkloadContainerResolver struct{ *Resolver }
 type k8sWorkloadPodContainerResolver struct{ *Resolver }
 type k8sWorkloadRolloutResolver struct{ *Resolver }
 type k8sWorkloadTelemetryMetricsResolver struct{ *Resolver }
