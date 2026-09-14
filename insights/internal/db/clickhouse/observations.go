@@ -11,20 +11,30 @@ import (
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
 )
 
-// InsertObservation stores one trace as a UI/debug example. The caller (the
-// engine's scoring and guardrail paths) picks the sample_reason; the repo does
-// not sample.
-func (r *Repo) InsertObservation(ctx context.Context, obs repo.Observation) error {
-	if obs.ObservedAt.IsZero() {
-		obs.ObservedAt = time.Now()
+// InsertObservations stores traces as UI/debug examples in one insert. The
+// caller (the engine's background sample writer) picks each sample_reason; the
+// repo does not sample.
+func (r *Repo) InsertObservations(ctx context.Context, obs []repo.Observation) error {
+	if len(obs) == 0 {
+		return nil
 	}
+	now := time.Now()
 	err := r.insert(ctx,
 		"INSERT INTO trace_observations (transaction_id, trace_id, observed_at, duration_ms, sample_reason, raw_otlp)",
 		func(b driver.Batch) error {
-			return b.Append(obs.TransactionID, obs.TraceID, obs.ObservedAt, obs.DurationMs, obs.SampleReason, string(obs.RawOTLP))
+			for _, o := range obs {
+				observedAt := o.ObservedAt
+				if observedAt.IsZero() {
+					observedAt = now
+				}
+				if err := b.Append(o.TransactionID, o.TraceID, observedAt, o.DurationMs, o.SampleReason, string(o.RawOTLP)); err != nil {
+					return err
+				}
+			}
+			return nil
 		})
 	if err != nil {
-		return fmt.Errorf("insert observation: %w", err)
+		return fmt.Errorf("insert observations: %w", err)
 	}
 	return nil
 }
@@ -112,14 +122,29 @@ func (r *Repo) GetLatestObservationByReason(ctx context.Context, sampleReason st
 	return r.latestObservation(ctx, "get observation by reason", "sample_reason = ?", sampleReason)
 }
 
-// CountObservations returns how many distinct traces are stored for one
-// (transaction, sample_reason).
-func (r *Repo) CountObservations(ctx context.Context, transactionID int64, sampleReason string) (int, error) {
-	var distinct uint64
-	if err := r.conn.QueryRow(ctx,
-		`SELECT uniqExact(trace_id) FROM trace_observations WHERE transaction_id = ? AND sample_reason = ?`,
-		transactionID, sampleReason).Scan(&distinct); err != nil {
-		return 0, fmt.Errorf("count observations: %w", err)
+// CountObservationsByReason returns how many distinct traces are stored for
+// one transaction, per sample_reason.
+func (r *Repo) CountObservationsByReason(ctx context.Context, transactionID int64) (map[string]int, error) {
+	rows, err := r.conn.Query(ctx,
+		`SELECT sample_reason, uniqExact(trace_id) FROM trace_observations WHERE transaction_id = ? GROUP BY sample_reason`,
+		transactionID)
+	if err != nil {
+		return nil, fmt.Errorf("count observations by reason: %w", err)
 	}
-	return int(distinct), nil
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var (
+			reason   string
+			distinct uint64
+		)
+		if err := rows.Scan(&reason, &distinct); err != nil {
+			return nil, fmt.Errorf("count observations by reason: %w", err)
+		}
+		out[reason] = int(distinct)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("count observations by reason: %w", err)
+	}
+	return out, nil
 }

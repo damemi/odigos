@@ -268,17 +268,17 @@ func peersFromTrace(t *Trace) []peer {
 			continue
 		}
 		host := firstNonEmpty(
-			s.Attrs[semconv.ServerAddress],
-			s.Attrs[semconv.LegacyNetPeerName],
-			s.Attrs[semconv.LegacyHTTPHost],
-			s.Attrs[semconv.LegacyDBConnectionString], // crude, but better than nothing for DB peers
+			s.Attr(semconv.ServerAddress),
+			s.Attr(semconv.LegacyNetPeerName),
+			s.Attr(semconv.LegacyHTTPHost),
+			s.Attr(semconv.LegacyDBConnectionString), // crude, but better than nothing for DB peers
 		)
 		if host == "" {
 			continue
 		}
 		port := atoiOrZero(firstNonEmpty(
-			s.Attrs[semconv.ServerPort],
-			s.Attrs[semconv.LegacyNetPeerPort],
+			s.Attr(semconv.ServerPort),
+			s.Attr(semconv.LegacyNetPeerPort),
 		))
 		// A call is external only if it neither reached an instrumented service
 		// in-trace nor names one by host - see externalPeer.

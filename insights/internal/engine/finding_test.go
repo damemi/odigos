@@ -25,8 +25,8 @@ func spanViewsWithDB(t *testing.T) []SpanView {
 	// explainer can match. We fake minimal SpanViews here rather than proto.
 	views := make([]SpanView, 0, len(tr.Spans))
 	for _, s := range tr.Spans {
-		attrs := make([]KV, 0, len(s.Attrs))
-		for k, v := range s.Attrs {
+		attrs := make([]KV, 0, len(s.SpanAttrs))
+		for k, v := range s.SpanAttrs {
 			attrs = append(attrs, KV{Key: k, Value: v})
 		}
 		views = append(views, SpanView{SpanID: s.SpanID, Name: s.Name, Service: s.Service, Attrs: attrs})

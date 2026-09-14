@@ -106,6 +106,7 @@ func (e *Engine) ResetTransactionBaselines(ctx context.Context, transactionID in
 	// above cannot see them. Drop them too, or the next flush writes the
 	// pre-reset issue back in behind the reset.
 	e.anomalies.forgetTransaction(transactionID)
+	e.sampleCounts.forget(transactionID)
 	return nil
 }
 
@@ -122,6 +123,11 @@ func (e *Engine) DeleteTransaction(ctx context.Context, transactionID int64) err
 	// firing cannot be reloaded, so dropping it ahead of a delete that then
 	// failed would lose a real finding.
 	e.anomalies.forgetTransaction(transactionID)
+	// The transaction's stored samples went with it. A relearned transaction
+	// comes back under the same id (a hash of its identity) and would otherwise
+	// believe its evidence slots are still taken - and re-open issues with
+	// nothing to investigate.
+	e.sampleCounts.forget(transactionID)
 	if err := e.ReloadLearningConfig(ctx); err != nil {
 		e.warn("reload learning config after delete transaction", err)
 	}
@@ -140,7 +146,7 @@ func (e *Engine) DeleteAllTransactions(ctx context.Context) error {
 		return err
 	}
 	e.store.clearAll()
-	e.anomalies.clearSamples()
+	e.sampleCounts.clear()
 	if err := e.resetInventoryGuardrails(ctx); err != nil {
 		return err
 	}
@@ -382,7 +388,7 @@ func (e *Engine) ReloadSystemConfig(ctx context.Context) error {
 	dimsChanged := !repo.IdentityDimensionsEqual(prev.TransactionIdentityDimensions, next.TransactionIdentityDimensions)
 	if epochAdvanced || dimsChanged {
 		e.store.clearAll()
-		e.anomalies.clearSamples()
+		e.sampleCounts.clear()
 	}
 	// Epoch bump means another replica wiped transactions and cleared the
 	// allowed_transactions rules. Pick the cleared rules up now instead of

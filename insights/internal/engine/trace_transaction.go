@@ -60,7 +60,7 @@ func identifyTransaction(t *Trace) (TransactionID, bool) {
 // service.namespace and falling back to the k8s namespace Odigos injects. Empty
 // when neither is present (identifyTransaction then defaults it to "unknown").
 func namespaceFromRoot(s *Span) string {
-	return firstNonEmpty(s.Attrs[semconv.ServiceNamespace], s.Attrs[semconv.K8SNamespaceName])
+	return firstNonEmpty(s.Attr(semconv.ServiceNamespace), s.Attr(semconv.K8SNamespaceName))
 }
 
 // discardableRoot rejects traces whose root is broken context rather than a
@@ -78,14 +78,14 @@ func discardableRoot(s *Span) bool {
 		return false
 	}
 	// RPC clients are not the HTTP-cardinality problem; keep them.
-	if s.Attrs[semconv.RPCSystem] != "" {
+	if s.Attr(semconv.RPCSystem) != "" {
 		return false
 	}
 	return true
 }
 
 func kindFromRoot(s *Span) repo.TransactionKind {
-	if s.Attrs[semconv.RPCSystem] == semconv.RPCSystemGRPC {
+	if s.Attr(semconv.RPCSystem) == semconv.RPCSystemGRPC {
 		return repo.KindGRPC
 	}
 	switch s.Kind {
@@ -96,7 +96,7 @@ func kindFromRoot(s *Span) repo.TransactionKind {
 	case tracepb.Span_SPAN_KIND_PRODUCER:
 		return repo.KindProducer
 	case tracepb.Span_SPAN_KIND_INTERNAL:
-		if s.Attrs[semconv.FaaSTrigger] == semconv.FaaSTriggerTimer {
+		if s.Attr(semconv.FaaSTrigger) == semconv.FaaSTriggerTimer {
 			return repo.KindCron
 		}
 		return repo.KindInternal

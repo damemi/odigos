@@ -257,11 +257,11 @@ func TestObservationsAndPolicies(t *testing.T) {
 		TraceID: fmt.Sprintf("trace-%d", rand.Int63()), TransactionID: txID,
 		ObservedAt: time.Now(), DurationMs: 42, SampleReason: "example", RawOTLP: []byte("rawbytes"),
 	}
-	if err := r.InsertObservation(ctx, obs); err != nil {
+	if err := r.InsertObservations(ctx, []repo.Observation{obs}); err != nil {
 		t.Fatalf("insert observation: %v", err)
 	}
 	// Replaying the same (transaction, reason, trace) must not duplicate.
-	if err := r.InsertObservation(ctx, obs); err != nil {
+	if err := r.InsertObservations(ctx, []repo.Observation{obs}); err != nil {
 		t.Fatalf("insert observation again: %v", err)
 	}
 	list, err := r.ListObservationsByTransaction(ctx, txID, "example", 100)
@@ -549,9 +549,10 @@ func TestSystemSettingsRoundTrip(t *testing.T) {
 	}
 }
 
-// TestObservationCountAndBoundedRead covers CountObservations and the bounded
-// list read (at most `limit` rows with raw_otlp intact) that keeps the
-// transaction page from blowing query memory.
+// TestObservationCountAndBoundedRead covers the batched insert,
+// CountObservationsByReason and the bounded list read (at most `limit` rows
+// with raw_otlp intact) that keeps the transaction page from blowing query
+// memory.
 func TestObservationCountAndBoundedRead(t *testing.T) {
 	r := testRepo(t)
 	ctx := context.Background()
@@ -563,22 +564,28 @@ func TestObservationCountAndBoundedRead(t *testing.T) {
 	const keepN = 3
 	base := time.Now().Add(-time.Hour)
 	total := keepN + 2
+	batch := make([]repo.Observation, 0, total+1)
 	for i := 0; i < total; i++ {
-		if err := r.InsertObservation(ctx, repo.Observation{
+		batch = append(batch, repo.Observation{
 			TransactionID: tx.ID, TraceID: fmt.Sprintf("cap-%d-%d", tx.ID, i),
 			ObservedAt: base.Add(time.Duration(i) * time.Second), DurationMs: int64(i),
 			SampleReason: "example", RawOTLP: []byte(fmt.Sprintf("blob-%d", i)),
-		}); err != nil {
-			t.Fatalf("insert observation %d: %v", i, err)
-		}
+		})
+	}
+	batch = append(batch, repo.Observation{
+		TransactionID: tx.ID, TraceID: fmt.Sprintf("cap-%d-evidence", tx.ID),
+		ObservedAt: base, SampleReason: "anomaly:sig", RawOTLP: []byte("evidence"),
+	})
+	if err := r.InsertObservations(ctx, batch); err != nil {
+		t.Fatalf("insert observations: %v", err)
 	}
 
-	n, err := r.CountObservations(ctx, tx.ID, "example")
+	counts, err := r.CountObservationsByReason(ctx, tx.ID)
 	if err != nil {
 		t.Fatalf("count: %v", err)
 	}
-	if n != total {
-		t.Fatalf("count = %d, want %d", n, total)
+	if counts["example"] != total || counts["anomaly:sig"] != 1 {
+		t.Fatalf("counts = %v, want example=%d anomaly:sig=1", counts, total)
 	}
 
 	list, err := r.ListObservationsByTransaction(ctx, tx.ID, "example", keepN)

@@ -3,40 +3,43 @@ package engine
 import (
 	"context"
 	"encoding/json"
-	"sync"
 	"time"
 
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
 )
 
+// keepSampleFunc is Engine.keepSample as the runtimes see it. They are wired
+// with it as a closure so they stay testable without a full Engine.
+type keepSampleFunc func(ctx context.Context, t *Trace, tx repo.Transaction, reason string, max int, released func()) bool
+
 type anomalyRuntime struct {
 	repo  repo.Repository
 	clock func() time.Time
 	warn  func(msg string, err error)
-	store func(ctx context.Context, t *Trace, tx repo.Transaction, reason string) error
+	keep  keepSampleFunc
 
 	buf *anomalyBuffer
-	// samples is the write-once evidence gate: signature string -> int64
-	// transaction id. The id is held so a single transaction's entries can be
-	// released on delete; the key stays the signature alone because that is what
-	// identifies an issue.
-	samples sync.Map
 }
 
 func newAnomalyRuntime(
 	r repo.Repository,
 	clock func() time.Time,
 	warn func(string, error),
-	store func(context.Context, *Trace, repo.Transaction, string) error,
+	keep keepSampleFunc,
 ) *anomalyRuntime {
-	return &anomalyRuntime{repo: r, clock: clock, warn: warn, store: store, buf: newAnomalyBuffer()}
+	return &anomalyRuntime{repo: r, clock: clock, warn: warn, keep: keep, buf: newAnomalyBuffer()}
 }
 
 // record buffers one anomaly firing. Firings are deduped by signature: the
 // occurrence is summed into the in-memory buffer (flushed as one incrementing
 // issue per interval, not one row per trace), and a single evidence trace is
-// kept write-once for the investigation view.
+// kept per issue for the investigation view. Extra samples are not useful;
+// occurrences are counted separately.
+//
+// The evidence cap (one per issue) used to be a write-once in-memory gate backed
+// by a DB count per firing; both are now the shared sample counts behind keep,
+// which also queue the write instead of blocking on it.
 func (a *anomalyRuntime) record(
 	ctx context.Context,
 	t *Trace,
@@ -61,7 +64,7 @@ func (a *anomalyRuntime) record(
 		LastSeen:         now,
 		LastTraceID:      t.TraceID,
 	}, inventoryEpoch)
-	a.captureSample(ctx, t, tx, signature)
+	a.keep(ctx, t, tx, repo.AnomalySampleReason(signature), repo.AnomalyEvidenceSamplesPerIssue, nil)
 }
 
 // flush drains the buffered anomaly firings and records them as summed
@@ -88,68 +91,13 @@ func (a *anomalyRuntime) flush(ctx context.Context) {
 	}
 }
 
-// clearSamples forgets the write-once evidence gate so issues relearned after an
-// inventory reset or an identity-dimension change capture a fresh sample. The
-// gate is keyed by signature only, so without this the first post-reset firing
-// of a signature seen before the reset would store no evidence.
-func (a *anomalyRuntime) clearSamples() {
-	if a == nil {
-		return
-	}
-	a.samples.Clear()
-}
-
-// forgetTransaction drops the in-memory state one transaction accumulated:
-// firings buffered since the last flush, and its slots in the evidence gate.
-// Called after an operator delete or baseline reset has removed the same state
-// from storage, so the write-behind flush cannot put it back.
-//
-// Releasing the gate matters as much as dropping the buffer. A transaction id is
-// a stable hash of its identity, so a deleted transaction relearned from live
-// traffic comes back under the same id and fires the same signature - and the
-// gate, keyed by signature alone, would still be holding it. The issue would
-// then re-open with no evidence trace: nothing to investigate, and Accept fails
-// outright ("no stored sample trace"). This is the single-transaction
-// counterpart of clearSamples on the wipe path.
+// forgetTransaction drops the firings one transaction buffered since the last
+// flush. Called after an operator delete or baseline reset has removed the same
+// state from storage, so the write-behind flush cannot put it back. The
+// transaction's evidence slots are released by Engine (sampleCounts.forget).
 func (a *anomalyRuntime) forgetTransaction(transactionID int64) {
 	if a == nil {
 		return
 	}
 	a.buf.dropTransaction(transactionID)
-	a.samples.Range(func(key, value any) bool {
-		if id, ok := value.(int64); ok && id == transactionID {
-			a.samples.Delete(key)
-		}
-		return true
-	})
-}
-
-// captureSample keeps one evidence trace per issue signature. Occurrences are
-// counted separately; extra samples are not useful. Best-effort: the in-memory
-// gate races harmlessly across concurrent firings; CountObservations covers
-// restarts where the gate is empty.
-//
-// The slot is claimed before the write, so a failed write has to hand it back.
-// Otherwise the issue goes on counting occurrences with no trace to show for
-// them: nothing to investigate, and nothing Accept can fold into the baseline.
-func (a *anomalyRuntime) captureSample(ctx context.Context, t *Trace, tx repo.Transaction, signature string) {
-	if _, loaded := a.samples.LoadOrStore(signature, tx.ID); loaded {
-		return
-	}
-	ctx, cancel := detachedEvidenceContext(ctx)
-	defer cancel()
-
-	reason := repo.AnomalySampleReason(signature)
-	n, err := a.repo.CountObservations(ctx, tx.ID, reason)
-	if err != nil {
-		a.warn("count anomaly samples", err)
-		a.samples.Delete(signature)
-		return
-	}
-	if n >= repo.AnomalyEvidenceSamplesPerIssue {
-		return
-	}
-	if err := a.store(ctx, t, tx, reason); err != nil {
-		a.samples.Delete(signature)
-	}
 }

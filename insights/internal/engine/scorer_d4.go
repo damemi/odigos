@@ -500,17 +500,17 @@ func argSitesFromTrace(t *Trace) []d4Observation {
 		if s == nil {
 			continue
 		}
-		site := d4SiteFromAttrs(s.Attrs)
+		site := d4SiteOf(s)
 		if site == "" {
 			continue
 		}
 		o := d4Observation{Site: site, SpanID: s.SpanID, Args: map[int]string{}}
 		for i := 0; i < semconv.MaxCapturedArgs; i++ {
-			if v, ok := argAttr(s.Attrs, i); ok {
+			if v, ok := argAttr(s, i); ok {
 				o.Args[i] = v
 			}
 		}
-		if rv, ok := s.Attrs[semconv.ReturnValue]; ok && rv != "" {
+		if rv := s.Attr(semconv.ReturnValue); rv != "" {
 			o.Ret = rv
 			o.HasRet = true
 		}
@@ -522,21 +522,21 @@ func argSitesFromTrace(t *Trace) []d4Observation {
 	return out
 }
 
-// d4SiteFromAttrs derives the probed callsite identity from a span's
-// attributes, spanning the OTel code-attribute deprecation. It prefers the
-// current, already fully-qualified code.function.name; otherwise it
-// reconstructs the same value from the deprecated code.namespace +
-// code.function pair the Java eBPF agent emits today. Returns "" when the span
-// carries no probe marker (not a custom-instrumentation span).
-func d4SiteFromAttrs(attrs map[string]string) string {
-	if fqn := attrs[semconv.CodeFunctionName]; fqn != "" {
+// d4SiteOf derives the probed callsite identity from a span's attributes,
+// spanning the OTel code-attribute deprecation. It prefers the current, already
+// fully-qualified code.function.name; otherwise it reconstructs the same value
+// from the deprecated code.namespace + code.function pair the Java eBPF agent
+// emits today. Returns "" when the span carries no probe marker (not a
+// custom-instrumentation span).
+func d4SiteOf(s *Span) string {
+	if fqn := s.Attr(semconv.CodeFunctionName); fqn != "" {
 		return fqn
 	}
-	fn := attrs[semconv.CodeFunction]
+	fn := s.Attr(semconv.CodeFunction)
 	if fn == "" {
 		return ""
 	}
-	if ns := attrs[semconv.CodeNamespace]; ns != "" {
+	if ns := s.Attr(semconv.CodeNamespace); ns != "" {
 		return ns + "." + fn
 	}
 	return fn
@@ -544,11 +544,11 @@ func d4SiteFromAttrs(attrs map[string]string) string {
 
 // argAttr reads positional argument i, accepting both the eBPF spelling
 // ("arg.0") and the dotless form ("arg0") some extensions emit.
-func argAttr(attrs map[string]string, i int) (string, bool) {
-	if v, ok := attrs["arg."+strconv.Itoa(i)]; ok && v != "" {
+func argAttr(s *Span, i int) (string, bool) {
+	if v := s.Attr("arg." + strconv.Itoa(i)); v != "" {
 		return v, true
 	}
-	if v, ok := attrs["arg"+strconv.Itoa(i)]; ok && v != "" {
+	if v := s.Attr("arg" + strconv.Itoa(i)); v != "" {
 		return v, true
 	}
 	return "", false

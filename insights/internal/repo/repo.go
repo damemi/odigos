@@ -131,9 +131,11 @@ type Repository interface {
 
 	// ---------- observations ----------
 
-	// InsertObservation stores a trace as a UI/debug example. Callers pre-decide
-	// the sample_reason; the repo does not sample. Called by the engine.
-	InsertObservation(ctx context.Context, obs Observation) error
+	// InsertObservations stores traces as UI/debug examples, all in one insert.
+	// Callers pre-decide the sample_reason; the repo does not sample. Called by
+	// the engine's background sample writer, which batches so ClickHouse sees a
+	// few large inserts instead of one per sampled trace.
+	InsertObservations(ctx context.Context, obs []Observation) error
 
 	// ListObservationsByTransaction returns examples for one (transaction,
 	// sample_reason), newest first. Metadata only - RawOTLP is empty. Call
@@ -150,10 +152,11 @@ type Repository interface {
 	// Backs guardrail investigate evidence (see GuardrailEvidenceReason).
 	GetLatestObservationByReason(ctx context.Context, sampleReason string) (Observation, bool, error)
 
-	// CountObservations returns how many distinct traces are stored for one
-	// (transaction, sample_reason). Used by the engine to stop collecting once
-	// the configured cap is reached.
-	CountObservations(ctx context.Context, transactionID int64, sampleReason string) (int, error)
+	// CountObservationsByReason returns how many distinct traces are stored for
+	// one transaction, keyed by sample_reason. The engine loads this once per
+	// transaction and counts in memory from there, so the per-reason sample caps
+	// hold across restarts without a query per candidate sample.
+	CountObservationsByReason(ctx context.Context, transactionID int64) (map[string]int, error)
 
 	// ---------- policies ----------
 

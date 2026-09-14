@@ -37,9 +37,15 @@ type Engine struct {
 	// throttle). See guardrail_runtime.go.
 	guardrails *guardrailRuntime
 
-	// anomalies owns the runtime state for recording anomalies (firing buffer
-	// plus the per-issue sample-trace throttle). See anomaly_runtime.go.
+	// anomalies owns the runtime state for recording anomalies (the firing
+	// buffer). See anomaly_runtime.go.
 	anomalies *anomalyRuntime
+
+	// samples writes sample traces (examples, evidence) to the DB in batches
+	// off the ingest path; sampleCounts enforces their per-transaction caps
+	// from memory. See sample_writer.go.
+	samples      *sampleWriter
+	sampleCounts *sampleCounts
 
 	// store serves baseline reads from memory and accumulates merges as
 	// deltas; Flush (and the background flusher) write them behind in batches.
@@ -76,11 +82,20 @@ func New(r repo.Repository, logger *commonlogger.OdigosLogger, learning *Learnin
 		warnThrottle: map[string]*warnState{},
 	}
 	e.store = newBaselineStore(r, logger)
+	e.samples = newSampleWriter(r, e.warn)
+	e.sampleCounts = newSampleCounts(r)
 	// The runtimes read the clock through a closure (not e.clock's current value)
 	// so a test that overrides e.clock after New still drives their timing.
-	e.guardrails = newGuardrailRuntime(r, func() time.Time { return e.clock() }, e.warn)
-	e.anomalies = newAnomalyRuntime(r, func() time.Time { return e.clock() }, e.warn, e.storeObservation)
+	e.guardrails = newGuardrailRuntime(r, func() time.Time { return e.clock() }, e.warn, e.keepSample)
+	e.anomalies = newAnomalyRuntime(r, func() time.Time { return e.clock() }, e.warn, e.keepSample)
 	return e
+}
+
+// RunSampleWriter writes queued sample traces in batches until ctx is
+// cancelled, then drains what is left. Run in its own goroutine, next to
+// RunBaselineFlusher.
+func (e *Engine) RunSampleWriter(ctx context.Context) {
+	e.samples.run(ctx)
 }
 
 func (e *Engine) SetSystemConfig(cfg *SystemConfig) {
@@ -474,6 +489,7 @@ func (e *Engine) scorerForClass(class repo.DeviationClass) Scorer {
 func (e *Engine) Flush(ctx context.Context) error {
 	e.guardrails.flushViolations(ctx)
 	e.anomalies.flush(ctx)
+	e.samples.drain(ctx)
 	start := time.Now()
 	err := e.store.flush(ctx)
 	// Record every flusher cycle (including activity-only / idle) so Storage
@@ -501,30 +517,10 @@ func (e *Engine) resolveAlertPolicy(tx repo.Transaction) (repo.Policy, bool) {
 	return p, true
 }
 
-// storeObservation persists one trace as an Observation row. RawOTLP is
-// guaranteed non-empty by DecodeRequest (see Trace.RawOTLP docs); if a
-// future code path constructs a Trace by hand and forgets to set it, the
-// `raw_otlp NOT NULL` constraint will surface a clear DB error here. The error
-// is returned so callers that reserved a sample slot up front can hand it back
-// and stay eligible to capture the trace later.
-func (e *Engine) storeObservation(ctx context.Context, t *Trace, tx repo.Transaction, reason string) error {
-	if err := e.repo.InsertObservation(ctx, repo.Observation{
-		TraceID:       t.TraceID,
-		TransactionID: tx.ID,
-		ObservedAt:    e.clock(),
-		DurationMs:    t.DurationMs,
-		SampleReason:  reason,
-		RawOTLP:       t.RawOTLP(),
-	}); err != nil {
-		e.warn("insert observation", err)
-		return err
-	}
-	return nil
-}
-
-// evidenceWriteTimeout bounds a detached evidence write. Keeping a sample is
-// never worth stalling the pipeline for: past this point, dropping the trace
-// is the better trade.
+// evidenceWriteTimeout bounds the DB work behind keeping a sample trace (the
+// one-time count load, and the writer's final drain on shutdown). Keeping a
+// sample is never worth stalling for: past this point, dropping the trace is
+// the better trade.
 const evidenceWriteTimeout = 5 * time.Second
 
 // detachedEvidenceContext derives the context used to retain a sample trace.

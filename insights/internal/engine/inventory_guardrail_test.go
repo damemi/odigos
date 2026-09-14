@@ -104,8 +104,8 @@ func TestEngine_AllowedTransactionsFires(t *testing.T) {
 
 	root := &Span{
 		SpanID: "root", Name: "GET /malicious/request", Service: "shop",
-		Kind:  tracepb.Span_SPAN_KIND_SERVER,
-		Attrs: map[string]string{"http.method": "GET", "service.namespace": "ns"},
+		Kind:      tracepb.Span_SPAN_KIND_SERVER,
+		SpanAttrs: map[string]string{"http.method": "GET", "service.namespace": "ns"},
 	}
 	eng.Process(context.Background(), &Trace{TraceID: "tid", Root: root, Spans: []*Span{root}})
 	if err := eng.Flush(context.Background()); err != nil {
@@ -153,7 +153,7 @@ func TestEngine_AllowedTransactionsSilentUnderStaleAllowlist(t *testing.T) {
 	root := &Span{
 		SpanID: "root", Name: "GET /anything", Service: "shop",
 		Kind: tracepb.Span_SPAN_KIND_SERVER,
-		Attrs: map[string]string{
+		SpanAttrs: map[string]string{
 			"http.method": "GET", "service.namespace": "ns",
 			"deployment.environment": "prod",
 		},
@@ -252,19 +252,28 @@ func TestAnomalyFlushDropsFiringsFromWipedInventory(t *testing.T) {
 	}
 }
 
-// The evidence gate is keyed by signature alone, so a reset must clear it or a
-// relearned issue reusing a pre-reset signature would never capture a sample.
-func TestDeleteAllTransactionsClearsAnomalySampleGate(t *testing.T) {
+// A reset wipes the stored samples, so the in-memory sample counts must go with
+// them or a relearned issue reusing a pre-reset signature would never capture a
+// sample.
+func TestDeleteAllTransactionsClearsSampleCounts(t *testing.T) {
 	r := newFakeRepo()
 	eng := New(r, nil, nil, nil)
+	ctx := context.Background()
 
-	const signature = "sig-recurring"
-	eng.anomalies.samples.Store(signature, struct{}{})
-	if err := eng.DeleteAllTransactions(context.Background()); err != nil {
+	tx := repo.Transaction{ID: 21}
+	reason := repo.AnomalySampleReason("sig-recurring")
+	trace := &Trace{TraceID: "trace-1", rawOTLP: []byte("otlp")}
+	if !eng.keepSample(ctx, trace, tx, reason, repo.AnomalyEvidenceSamplesPerIssue, nil) {
+		t.Fatal("first evidence sample should be kept")
+	}
+	if eng.keepSample(ctx, trace, tx, reason, repo.AnomalyEvidenceSamplesPerIssue, nil) {
+		t.Fatal("second evidence sample should hit the per-issue cap")
+	}
+	if err := eng.DeleteAllTransactions(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := eng.anomalies.samples.Load(signature); ok {
-		t.Fatal("sample gate should be cleared so the issue can capture fresh evidence")
+	if !eng.keepSample(ctx, trace, tx, reason, repo.AnomalyEvidenceSamplesPerIssue, nil) {
+		t.Fatal("sample counts should be cleared so the issue can capture fresh evidence")
 	}
 }
 
@@ -280,8 +289,8 @@ func TestEngine_AllowedTransactionsSuggestSilent(t *testing.T) {
 	eng.SetGuardrailConfig(guardrailConfigFrom(guardrail))
 	root := &Span{
 		SpanID: "root", Name: "GET /x", Service: "shop",
-		Kind:  tracepb.Span_SPAN_KIND_SERVER,
-		Attrs: map[string]string{"http.method": "GET", "service.namespace": "ns"},
+		Kind:      tracepb.Span_SPAN_KIND_SERVER,
+		SpanAttrs: map[string]string{"http.method": "GET", "service.namespace": "ns"},
 	}
 	eng.Process(context.Background(), &Trace{TraceID: "tid", Root: root, Spans: []*Span{root}})
 	_ = eng.Flush(context.Background())

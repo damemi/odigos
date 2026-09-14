@@ -394,13 +394,13 @@ func TestD4_CodeFunctionNamePreferredAndCompatible(t *testing.T) {
 	// code.namespace + code.function pair resolve to the same site, and the new
 	// key wins when both are present.
 	const want = "com.acme.UserService.getUser"
-	if got := d4SiteFromAttrs(map[string]string{"code.function.name": want}); got != want {
+	if got := d4SiteOf(&Span{SpanAttrs: map[string]string{"code.function.name": want}}); got != want {
 		t.Fatalf("code.function.name site = %q, want %q", got, want)
 	}
-	if got := d4SiteFromAttrs(map[string]string{"code.namespace": "com.acme.UserService", "code.function": "getUser"}); got != want {
+	if got := d4SiteOf(&Span{SpanAttrs: map[string]string{"code.namespace": "com.acme.UserService", "code.function": "getUser"}}); got != want {
 		t.Fatalf("deprecated pair site = %q, want %q", got, want)
 	}
-	if got := d4SiteFromAttrs(map[string]string{"code.function.name": want, "code.function": "other", "code.namespace": "wrong"}); got != want {
+	if got := d4SiteOf(&Span{SpanAttrs: map[string]string{"code.function.name": want, "code.function": "other", "code.namespace": "wrong"}}); got != want {
 		t.Fatalf("code.function.name must win, got %q", got)
 	}
 

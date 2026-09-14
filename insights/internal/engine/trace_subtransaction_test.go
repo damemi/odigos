@@ -29,7 +29,7 @@ func mustUnmarshalTraces(t *testing.T, raw []byte) *tracepb.TracesData {
 func buyTrace(innerName, innerSvc string, innerKind tracepb.Span_SpanKind, innerAttrs map[string]string, innerScope string) *Trace {
 	frontend := &Span{SpanID: "frontend", Name: "POST /buy", Service: "frontend", Kind: tracepb.Span_SPAN_KIND_SERVER, ScopeName: "nethttp"}
 	coupon := &Span{SpanID: "coupon", ParentSpanID: "frontend", Name: "POST /apply-coupon", Service: "coupon", Kind: tracepb.Span_SPAN_KIND_SERVER, ScopeName: "nethttp"}
-	inner := &Span{SpanID: "inner", ParentSpanID: "coupon", Name: innerName, Service: innerSvc, Kind: innerKind, Attrs: innerAttrs, ScopeName: innerScope}
+	inner := &Span{SpanID: "inner", ParentSpanID: "coupon", Name: innerName, Service: innerSvc, Kind: innerKind, SpanAttrs: innerAttrs, ScopeName: innerScope}
 	coupon.Children = []*Span{inner}
 	frontend.Children = []*Span{coupon}
 	return &Trace{TraceID: "tid", Root: frontend, Spans: []*Span{frontend, coupon, inner}}
@@ -293,7 +293,7 @@ func checkoutFork(query string) *Trace {
 		return &Span{
 			SpanID: id, ParentSpanID: parent, Name: "query", Service: svc,
 			Kind: tracepb.Span_SPAN_KIND_CLIENT, ScopeName: "pgx",
-			Attrs: map[string]string{
+			SpanAttrs: map[string]string{
 				semconv.DBSystem:    "postgresql",
 				semconv.DBNamespace: "shop",
 				semconv.DBQueryText: query,

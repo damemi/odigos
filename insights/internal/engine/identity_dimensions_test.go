@@ -12,12 +12,12 @@ func TestApplyIdentityDimensions_StatusSplitsIdentity(t *testing.T) {
 		{Key: repo.IdentityDimHTTPStatusCode, Enabled: true},
 	}
 	op200 := applyIdentityDimensions("POST /buy", &Span{
-		Name:  "POST /buy",
-		Attrs: map[string]string{semconv.HTTPResponseStatusCode: "200"},
+		Name:      "POST /buy",
+		SpanAttrs: map[string]string{semconv.HTTPResponseStatusCode: "200"},
 	}, dims)
 	op403 := applyIdentityDimensions("POST /buy", &Span{
-		Name:  "POST /buy",
-		Attrs: map[string]string{semconv.HTTPResponseStatusCode: "403"},
+		Name:      "POST /buy",
+		SpanAttrs: map[string]string{semconv.HTTPResponseStatusCode: "403"},
 	}, dims)
 	if op200 == op403 {
 		t.Fatalf("expected different operations for 200 vs 403, both %q", op200)
@@ -41,8 +41,8 @@ func TestApplyIdentityDimensions_MissingStatusOmits(t *testing.T) {
 		{Key: repo.IdentityDimRPCGRPCStatus, Enabled: true},
 	}
 	got := applyIdentityDimensions("POST /buy", &Span{
-		Name:  "POST /buy",
-		Attrs: map[string]string{},
+		Name:      "POST /buy",
+		SpanAttrs: map[string]string{},
 	}, dims)
 	if got != "POST /buy" {
 		t.Fatalf("got %q, want unchanged operation", got)
@@ -54,13 +54,13 @@ func TestApplyIdentityDimensions_DisabledConfig(t *testing.T) {
 		{Key: repo.IdentityDimHTTPStatusCode, Enabled: false},
 	}
 	got := applyIdentityDimensions("POST /buy", &Span{
-		Attrs: map[string]string{semconv.HTTPResponseStatusCode: "500"},
+		SpanAttrs: map[string]string{semconv.HTTPResponseStatusCode: "500"},
 	}, dims)
 	if got != "POST /buy" {
 		t.Fatalf("disabled dim should not append, got %q", got)
 	}
 	gotEmpty := applyIdentityDimensions("POST /buy", &Span{
-		Attrs: map[string]string{semconv.HTTPResponseStatusCode: "500"},
+		SpanAttrs: map[string]string{semconv.HTTPResponseStatusCode: "500"},
 	}, []repo.TransactionIdentityDimension{})
 	if gotEmpty != "POST /buy" {
 		t.Fatalf("empty config should not append, got %q", gotEmpty)
@@ -68,7 +68,7 @@ func TestApplyIdentityDimensions_DisabledConfig(t *testing.T) {
 }
 
 func TestApplyIdentityDimensions_OrderStable(t *testing.T) {
-	root := &Span{Attrs: map[string]string{
+	root := &Span{SpanAttrs: map[string]string{
 		"a": "1",
 		"b": "2",
 	}}
@@ -93,7 +93,7 @@ func TestApplyIdentityDimensions_OrderStable(t *testing.T) {
 
 func TestApplyIdentityDimensions_LegacyHTTPStatus(t *testing.T) {
 	got := applyIdentityDimensions("GET /x", &Span{
-		Attrs: map[string]string{semconv.LegacyHTTPStatusCode: "404"},
+		SpanAttrs: map[string]string{semconv.LegacyHTTPStatusCode: "404"},
 	}, []repo.TransactionIdentityDimension{
 		{Key: repo.IdentityDimHTTPStatusCode, Enabled: true},
 	})
@@ -104,7 +104,7 @@ func TestApplyIdentityDimensions_LegacyHTTPStatus(t *testing.T) {
 
 func TestEscapeIdentityDimToken(t *testing.T) {
 	got := applyIdentityDimensions("op", &Span{
-		Attrs: map[string]string{"weird": "a=b]c"},
+		SpanAttrs: map[string]string{"weird": "a=b]c"},
 	}, []repo.TransactionIdentityDimension{
 		{Key: "weird", Enabled: true},
 	})

@@ -73,12 +73,7 @@ type transactionEntry struct {
 	// "example" observation. The sampler uses it to throttle by time
 	// (see sampler.go). Zero means none kept yet.
 	lastExampleAt time.Time
-	// examplesStored is how many example observations this entry believes are
-	// already kept. Seeded lazily from the DB (examplesCounted) so a restart or
-	// LRU reload does not over-collect past the configured cap.
-	examplesStored  int
-	examplesCounted bool
-	loaded          bool
+	loaded        bool
 
 	// activityVolume is the number of sub-transactions seen since the last
 	// flush; lastSeen is the most recent time one arrived. Drained by flush

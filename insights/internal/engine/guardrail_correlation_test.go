@@ -14,11 +14,11 @@ import (
 func bolaTrace(returnValue, accountArg string) *Trace {
 	resolve := &Span{
 		SpanID: "s1", Service: "edge-gateway", Name: "resolvePrincipal",
-		Attrs: map[string]string{"return.value": returnValue},
+		SpanAttrs: map[string]string{"return.value": returnValue},
 	}
 	getAccount := &Span{
 		SpanID: "s2", Service: "account-service", Name: "getAccount",
-		Attrs: map[string]string{"arg.0": accountArg},
+		SpanAttrs: map[string]string{"arg.0": accountArg},
 	}
 	return &Trace{TraceID: "tid", Root: resolve, Spans: []*Span{resolve, getAccount}}
 }
@@ -68,7 +68,7 @@ func TestCorrelationViolations_MissingSpanNoOp(t *testing.T) {
 	// Only the resolvePrincipal span present; getAccount is absent, so the
 	// assertion cannot be evaluated and nothing fires.
 	resolve := &Span{SpanID: "s1", Service: "edge-gateway", Name: "resolvePrincipal",
-		Attrs: map[string]string{"return.value": "client-1001"}}
+		SpanAttrs: map[string]string{"return.value": "client-1001"}}
 	trace := &Trace{TraceID: "tid", Root: resolve, Spans: []*Span{resolve}}
 	g := correlationGuardrail(repo.RuleModeEnforce, principalMatchesAccount(""))
 	if got := correlationViolations(trace, g); len(got) != 0 {
@@ -102,7 +102,7 @@ func TestCorrelationViolations_SeverityRespected(t *testing.T) {
 		severity string
 		want     int
 	}{
-		{"", risk.ScoreForSeverity("")},          // default critical
+		{"", risk.ScoreForSeverity("")}, // default critical
 		{"critical", risk.ScoreForSeverity("critical")},
 		{"high", risk.ScoreForSeverity("high")},
 		{"medium", risk.ScoreForSeverity("medium")},

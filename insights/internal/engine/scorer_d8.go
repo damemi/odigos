@@ -216,10 +216,10 @@ func httpPayloadSizesFromTrace(t *Trace) (reqSize, respSize int64, ok bool) {
 }
 
 func absorbPayloadSizes(s *Span, reqSize, respSize *int64) {
-	if r, ok := bodySizeFromAttrs(s.Attrs, requestBodySizeKeys); ok && *reqSize < 0 {
+	if r, ok := bodySizeFromSpan(s, requestBodySizeKeys); ok && *reqSize < 0 {
 		*reqSize = r
 	}
-	if r, ok := bodySizeFromAttrs(s.Attrs, responseBodySizeKeys); ok && *respSize < 0 {
+	if r, ok := bodySizeFromSpan(s, responseBodySizeKeys); ok && *respSize < 0 {
 		*respSize = r
 	}
 }
@@ -243,10 +243,10 @@ var (
 	}
 )
 
-func bodySizeFromAttrs(attrs map[string]string, keys []string) (int64, bool) {
+func bodySizeFromSpan(s *Span, keys []string) (int64, bool) {
 	for _, key := range keys {
-		v, ok := attrs[key]
-		if !ok || v == "" {
+		v := s.Attr(key)
+		if v == "" {
 			continue
 		}
 		if key == semconv.HTTPRequestBody || key == semconv.HTTPResponseBody {

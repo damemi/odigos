@@ -54,8 +54,8 @@ func extractSelectorValue(full *Trace, sel repo.CorrelationSelector) (string, bo
 		if !spanMatchesSelector(s, sel) {
 			continue
 		}
-		raw, ok := s.Attrs[sel.Attr]
-		if !ok || raw == "" {
+		raw := s.Attr(sel.Attr)
+		if raw == "" {
 			continue
 		}
 		return applyExtract(raw, sel.Extract), true
@@ -77,12 +77,12 @@ func spanMatchesSelector(s *Span, sel repo.CorrelationSelector) bool {
 	if s.Name == sel.Span {
 		return true
 	}
-	if site := d4SiteFromAttrs(s.Attrs); site != "" {
+	if site := d4SiteOf(s); site != "" {
 		if site == sel.Span || strings.HasSuffix(site, "."+sel.Span) {
 			return true
 		}
 	}
-	if fn := s.Attrs[semconv.CodeFunctionName]; fn != "" {
+	if fn := s.Attr(semconv.CodeFunctionName); fn != "" {
 		if fn == sel.Span || strings.HasSuffix(fn, "."+sel.Span) {
 			return true
 		}

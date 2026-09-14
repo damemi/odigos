@@ -42,10 +42,10 @@ func applyIdentityDimensions(operation string, root *Span, dims []repo.Transacti
 func resolveIdentityDimension(root *Span, key string) string {
 	switch key {
 	case repo.IdentityDimHTTPStatusCode:
-		return firstNonEmpty(root.Attrs[semconv.HTTPResponseStatusCode], root.Attrs[semconv.LegacyHTTPStatusCode])
+		return firstNonEmpty(root.Attr(semconv.HTTPResponseStatusCode), root.Attr(semconv.LegacyHTTPStatusCode))
 	case repo.IdentityDimRPCGRPCStatus:
-		return root.Attrs[semconv.RPCGRPCStatusCode]
+		return root.Attr(semconv.RPCGRPCStatusCode)
 	default:
-		return root.Attrs[key]
+		return root.Attr(key)
 	}
 }

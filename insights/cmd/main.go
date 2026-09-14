@@ -184,6 +184,13 @@ func main() {
 		eng.RunBaselineFlusher(flusherCtx)
 		close(flusherDone)
 	}()
+	// Same idea for sample traces (examples and finding evidence): the ingest
+	// path only queues them, and this goroutine writes them in batches.
+	sampleWriterDone := make(chan struct{})
+	go func() {
+		eng.RunSampleWriter(flusherCtx)
+		close(sampleWriterDone)
+	}()
 
 	otlpSrv := otlp.NewServer(otlpAddr, eng, log)
 	otlpErrCh, err := otlpSrv.Start()
@@ -211,11 +218,13 @@ func main() {
 		log.Info("enterprise token expired; shutting down. contact Odigos support to renew.")
 	}
 
-	// Stop accepting traces first, then drain the last baseline deltas before
-	// exiting (stopFlusher triggers RunBaselineFlusher's final flush).
+	// Stop accepting traces first, then drain the last baseline deltas and
+	// queued sample traces before exiting (stopFlusher triggers the final flush
+	// of both RunBaselineFlusher and RunSampleWriter).
 	otlpSrv.Stop()
 	stopFlusher()
 	<-flusherDone
+	<-sampleWriterDone
 	shutdownHTTP(httpSrv, log)
 	log.Info("insights service exited")
 }

@@ -134,12 +134,13 @@ func TestEngine_ResetTransactionBaselinesDropsBufferedFiring(t *testing.T) {
 }
 
 // TestEngine_DeleteTransactionReleasesEvidenceGate covers the second half of the
-// same oversight. The write-once evidence gate is keyed by signature alone, and
-// a deleted-then-relearned transaction hashes back to the same id and so the
-// same signature. Without clearing the gate on delete, the issue re-fires with
-// no evidence trace ever stored: nothing to investigate, and Accept fails with
-// "no stored sample trace". DeleteAllTransactions already clears the whole gate
-// (clearSamples); a single delete has to clear its own transaction's entries.
+// same oversight. Evidence is capped per (transaction, signature) by in-memory
+// sample counts, and a deleted-then-relearned transaction hashes back to the
+// same id and so the same signature. Without dropping its counts on delete, the
+// issue re-fires with no evidence trace ever stored: nothing to investigate,
+// and Accept fails with "no stored sample trace". DeleteAllTransactions already
+// clears every count (sampleCounts.clear); a single delete has to drop its own
+// transaction's.
 func TestEngine_DeleteTransactionReleasesEvidenceGate(t *testing.T) {
 	r := newFakeRepo()
 	eng := newDeleteFixtureEngine(r)

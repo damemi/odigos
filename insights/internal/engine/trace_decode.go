@@ -24,11 +24,31 @@ type Span struct {
 	Kind         tracepb.Span_SpanKind
 	StartUnix    uint64
 	EndUnix      uint64
-	Attrs        map[string]string // attrs + resource attrs flattened together
-	ScopeName    string            // OTel instrumentation library name (D5 input)
-	ScopeVersion string
+	// SpanAttrs holds the span's own attributes. ResourceAttrs is the resource
+	// (service, k8s pod, ...) the span came from, shared read-only by every span
+	// of that resource in the batch. Read both through Attr.
+	//
+	// They used to be merged into one map per span. A resource carries dozens
+	// of attributes and a batch holds hundreds of spans from the same handful of
+	// resources, so that merge copied the same entries hundreds of times per
+	// request - the single largest allocation on the ingest path, and the GC
+	// churn that came with it. Sharing the resource map removes it entirely.
+	SpanAttrs     map[string]string
+	ResourceAttrs map[string]string
+	ScopeName     string // OTel instrumentation library name (D5 input)
+	ScopeVersion  string
 
 	Children []*Span // built after grouping
+}
+
+// Attr returns one attribute by key, preferring the span's own value over the
+// resource's, or "" when neither has it. Decoding never stores empty values, so
+// "" always means absent.
+func (s *Span) Attr(key string) string {
+	if v, ok := s.SpanAttrs[key]; ok {
+		return v
+	}
+	return s.ResourceAttrs[key]
 }
 
 // Trace is a complete trace as the engine sees it: the root span plus every
@@ -128,7 +148,8 @@ func DecodeRequest(req *tracepb.TracesData) []*Trace {
 
 // decodeTraceTrees groups an OTLP request's spans by trace_id, links each
 // trace's parent/child spans, and picks its root (copying service.name from the
-// resource onto every span). Traces with no identifiable root are dropped. It
+// resource onto every span; the rest of the resource attributes are shared, not
+// copied). Traces with no identifiable root are dropped. It
 // does not give a trace access to its own OTLP spans - DecodeRequest wraps it
 // for that. Also used directly by the render path (SpansFromOTLP).
 func decodeTraceTrees(req *tracepb.TracesData) []*Trace {
@@ -148,16 +169,17 @@ func decodeTraceTrees(req *tracepb.TracesData) []*Trace {
 
 			for _, sp := range ss.GetSpans() {
 				out := &Span{
-					SpanID:       hex.EncodeToString(sp.GetSpanId()),
-					ParentSpanID: hex.EncodeToString(sp.GetParentSpanId()),
-					Service:      serviceName,
-					Name:         stripNUL(sp.GetName()),
-					Kind:         sp.GetKind(),
-					StartUnix:    sp.GetStartTimeUnixNano(),
-					EndUnix:      sp.GetEndTimeUnixNano(),
-					ScopeName:    scopeName,
-					ScopeVersion: scopeVer,
-					Attrs:        mergeAttrs(resourceAttrs, flattenAttrs(sp.GetAttributes())),
+					SpanID:        hex.EncodeToString(sp.GetSpanId()),
+					ParentSpanID:  hex.EncodeToString(sp.GetParentSpanId()),
+					Service:       serviceName,
+					Name:          stripNUL(sp.GetName()),
+					Kind:          sp.GetKind(),
+					StartUnix:     sp.GetStartTimeUnixNano(),
+					EndUnix:       sp.GetEndTimeUnixNano(),
+					ScopeName:     scopeName,
+					ScopeVersion:  scopeVer,
+					SpanAttrs:     flattenAttrs(sp.GetAttributes()),
+					ResourceAttrs: resourceAttrs,
 				}
 				tid := hex.EncodeToString(sp.GetTraceId())
 				bySpanID[out.SpanID] = out
@@ -293,18 +315,4 @@ func stripNUL(s string) string {
 		return s
 	}
 	return strings.ReplaceAll(s, "\x00", "")
-}
-
-func mergeAttrs(base, override map[string]string) map[string]string {
-	if len(base) == 0 {
-		return override
-	}
-	out := make(map[string]string, len(base)+len(override))
-	for k, v := range base {
-		out[k] = v
-	}
-	for k, v := range override {
-		out[k] = v
-	}
-	return out
 }

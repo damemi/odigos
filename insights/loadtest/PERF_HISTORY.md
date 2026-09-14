@@ -37,6 +37,12 @@ On the 09-01 run they agreed to within half a point.
 | `2026-08-30-hotpath` | baseline (none) | 1,963.8 | 2,301m | **1.172 ms** | - | - |
 | `2026-08-31-lazy-otlp` | don't build a trace copy per service | 1,866.8 | 1,371m | **0.735 ms** | −37.3% | −37.3% |
 | `2026-09-01-decode-cache` | decode each baseline once, not per trace | 1,869.7 | 1,018m | **0.545 ms** | −25.9% | **−53.5%** |
+| `2026-09-14-shared-attrs-async-samples` (upstream leg) | re-baseline on `v1.37.0-rc1`, DB reset first | 1,890.2 | 954m | **0.505 ms** | −7.3% ¹ | −56.9% |
+| `2026-09-14-shared-attrs-async-samples` (branch leg) | shared resource attrs on `Span` (no `mergeAttrs`) + async batched sample writer | 1,884.8 | 894m | **0.474 ms** | **−6.1%** | **−59.6%** |
+
+¹ Not a code change: rc1 includes the lazy-OTLP encode (backlog item 1) and the
+run started from a reset DB, so this row is the new reference point, and the
+branch row is measured against it on the same day and cluster.
 
 Busiest-pod profiler cross-check (same instrument both sides):
 
@@ -45,6 +51,11 @@ Busiest-pod profiler cross-check (same instrument both sides):
 | `2026-08-30-hotpath` | `pqzzz` | 393.0 | 7.66s (25.5%) | 0.650 ms | - |
 | `2026-08-31-lazy-otlp` | `d46q2` | 466.5 | 5.33s (17.8%) | 0.381 ms | −41.4% |
 | `2026-09-01-decode-cache` | `xvnr8` | 467.6 | 3.93s (13.1%) | 0.280 ms | −26.4% |
+| `2026-09-14-…` (upstream leg) | `gmt5f` | 565.7 | 3.98s (13.3%) | 0.235 ms | −16.1% ¹ |
+| `2026-09-14-…` (branch leg) | `nnxgw` | 658.0 | 4.47s (14.9%) | 0.226 ms | −3.5% |
+
+The profiler sees a smaller delta than the cgroup (−3.5% vs −6.1%) because it
+does not attribute GC background workers, which is where allocation savings land.
 
 Supporting signals, latest run: heap ≈8.7 MB inuse (from 8.2 MB), RSS 20–21 Mi,
 baseline cache 100% hit / 0 evictions / 47 resident per pod / 3.52 lookups per
@@ -54,43 +65,43 @@ is what makes the CPU deltas trustworthy.
 
 ## Where the CPU goes now
 
-Busiest pod `xvnr8`, 3.93s of samples over 30s at 467.6 traces/s.
+Busiest pod `nnxgw` (branch leg of `2026-09-14`), 4.47s of samples over 30s at
+658.0 traces/s.
 
 | Cost | Samples | % CPU | Nature |
 |------|---------|-------|--------|
-| gRPC codec `proto.Unmarshal` (reflection) | 0.97s | 24.7% | request decode |
-| GC (`mallocgc` + `gcBgMarkWorker`) | 0.94s | 23.9% | follows allocation |
-| `Syscall6` (socket read/write) | 0.53s | 13.5% | network I/O |
-| `extractTraceOTLP` | 0.43s | 10.9% | **addressable** |
-| `scoreEntry` | 0.39s | 9.9% | real comparison work now |
-| `decodeTraceTrees` | 0.20s | 5.1% | of which `mergeAttrs` 0.12s |
-| `guardrailRuntime.evaluate` | 0.08s | 2.0% | |
+| gRPC codec `proto.Unmarshal` (reflection) | 1.47s | 32.9% | request decode |
+| `scoreEntry` | 0.54s | 12.1% | real comparison work |
+| `Syscall6` (socket read/write) | 0.53s | 11.9% | network I/O |
+| `DecodeRequest` | 0.31s | 6.9% | of which `decodeTraceTrees` 0.29s, `flattenAttrs` 0.21s |
+| `guardrailRuntime.evaluate` | 0.06s | 1.3% | |
 
-Allocation is now the lever on GC. From `alloc_space` (11.08 GB cumulative):
+`extractTraceOTLP` and `mergeAttrs` no longer appear. From `alloc_space`
+(11.6 GB cumulative):
 
 | Allocator | Share | Note |
 |-----------|-------|------|
-| `reflect.unsafe_New` (protobuf) | 32.0% | reflection-based message alloc |
-| `decodeTraceTrees` total | 29.3% | `mergeAttrs` 14.5% + `flattenAttrs` 10.9% |
-| `extractTraceOTLP` | 9.3% | incl. `proto.Marshal` 8.0% |
-| `scoreEntry` | 7.2% | mostly per-trace fact extraction, not baseline |
+| `reflect.unsafe_New` (protobuf) | 41.2% | reflection-based message alloc - now the clear lever |
+| `decodeTraceTrees` total | 18.4% | was 31.2% on the upstream leg; `flattenAttrs` 13.4% is what remains |
+| `scoreEntry` | 8.3% | per-trace fact extraction |
+| `extractTraceSpans` | 1.9% | only for stored traces |
 
 ## Backlog, ranked
 
 Estimates are of **total pod CPU** and are rough: direct cost is measured, the
 GC follow-through is inferred by assuming GC scales with allocation share.
 
-1. ~~**Defer the root trace's OTLP copy** - ~10–12%.~~ Implemented on branch
-   `insights-encode-otlp-on-demand`, awaiting a run. `DecodeRequest` encoded
-   every root trace even though only the few stored ones need the bytes; it now
-   holds each trace's spans decoded and encodes in `RawOTLP()`. Also removes the
-   encode/decode round trip `subTraces` used to do to re-root a nested entry.
-2. **Stop copying resource attributes into every span** - ~7–9%.
-   `decodeTraceTrees` calls `mergeAttrs(resourceAttrs, spanAttrs)` per span,
-   allocating a fresh map holding a full copy of the resource attributes for
-   each of ~8.5 spans per trace. Keep resource attrs shared and look through to
-   them instead. Costs 3.8% CPU directly and a quarter of all allocations.
-   Effort is the catch: ~36 non-test `.Attrs` reads become an accessor.
+1. ~~**Defer the root trace's OTLP copy** - ~10–12%.~~ Shipped in `v1.37.0-rc1`;
+   `extractTraceOTLP` is gone from the profile (`2026-09-14` upstream leg).
+2. ~~**Stop copying resource attributes into every span** - ~7–9%.~~ Measured
+   **−6.1%** on `2026-09-14` (branch `insights-hotpath-async-samples-shared-attrs`):
+   `Span` keeps `SpanAttrs` and a shared `ResourceAttrs` map behind `Attr(key)`,
+   `mergeAttrs` is removed, `decodeTraceTrees` allocation share 31% → 18%.
+   The same branch also moves sample/evidence inserts to a background batched
+   writer (1,050 synchronous inserts → 0 on the ack path during learning) but
+   still does the first-use observation count synchronously (50–60 ms under
+   load, once per transaction per replica) - finish that before claiming the
+   learning-phase latency win.
 3. **Generated protobuf unmarshal (vtprotobuf) for OTLP** - ~15–20%, the
    largest single item but also the largest change. Reflection-based decode is
    24.7% of CPU and 32% of allocations. Needs generated `UnmarshalVT` for the

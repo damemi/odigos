@@ -41,8 +41,8 @@ func mkCallTrace(callerSvc, calleeSvc string) *Trace {
 	}
 	callee := &Span{
 		SpanID: "c1", ParentSpanID: "root", Name: "POST /charge", Service: calleeSvc,
-		Kind:  tracepb.Span_SPAN_KIND_SERVER,
-		Attrs: map[string]string{"service.namespace": "ns", "http.method": "POST"},
+		Kind:      tracepb.Span_SPAN_KIND_SERVER,
+		SpanAttrs: map[string]string{"service.namespace": "ns", "http.method": "POST"},
 	}
 	root.Children = []*Span{callee}
 	return &Trace{TraceID: "tid", Root: root, Spans: []*Span{root, callee}}
@@ -88,9 +88,9 @@ func TestForbiddenCalleesAndEgress(t *testing.T) {
 	ledger := &Span{SpanID: "c2", ParentSpanID: checkout.SpanID, Name: "GET /post", Service: "ledger", Kind: tracepb.Span_SPAN_KIND_SERVER}
 	payments := &Span{SpanID: "c3", ParentSpanID: checkout.SpanID, Name: "POST /charge", Service: "payments", Kind: tracepb.Span_SPAN_KIND_SERVER}
 	egressOK := &Span{SpanID: "c4", ParentSpanID: checkout.SpanID, Name: "GET", Service: "checkout", Kind: tracepb.Span_SPAN_KIND_CLIENT,
-		Attrs: map[string]string{"server.address": "api.stripe.com", "server.port": "443"}}
+		SpanAttrs: map[string]string{"server.address": "api.stripe.com", "server.port": "443"}}
 	egressBad := &Span{SpanID: "c5", ParentSpanID: checkout.SpanID, Name: "GET", Service: "checkout", Kind: tracepb.Span_SPAN_KIND_CLIENT,
-		Attrs: map[string]string{"server.address": "evil.example.com", "server.port": "4444"}}
+		SpanAttrs: map[string]string{"server.address": "evil.example.com", "server.port": "4444"}}
 	checkout.Children = []*Span{ledger, payments, egressOK, egressBad}
 	sub := &Trace{TraceID: "tid", Root: checkout, Spans: []*Span{checkout, ledger, payments, egressOK, egressBad}}
 
@@ -114,7 +114,7 @@ func TestForbiddenEgressSkipsKnownService(t *testing.T) {
 	// absent from this trace, so the client span is a leaf → External=true.
 	checkout := &Span{SpanID: "root", Name: "POST /pay", Service: "checkout", Kind: tracepb.Span_SPAN_KIND_SERVER}
 	toGeo := &Span{SpanID: "c1", ParentSpanID: checkout.SpanID, Name: "GET", Service: "checkout", Kind: tracepb.Span_SPAN_KIND_CLIENT,
-		Attrs: map[string]string{"server.address": "geolocation", "server.port": "8080"}}
+		SpanAttrs: map[string]string{"server.address": "geolocation", "server.port": "8080"}}
 	checkout.Children = []*Span{toGeo}
 	sub := &Trace{TraceID: "tid", Root: checkout, Spans: []*Span{checkout, toGeo}}
 

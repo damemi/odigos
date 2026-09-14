@@ -206,9 +206,9 @@ func (m *instrumentedRepo) DeleteLearningPolicy(ctx context.Context, class repo.
 	})
 }
 
-func (m *instrumentedRepo) InsertObservation(ctx context.Context, obs repo.Observation) error {
-	return observe("InsertObservation", func() error {
-		return m.inner.InsertObservation(ctx, obs)
+func (m *instrumentedRepo) InsertObservations(ctx context.Context, obs []repo.Observation) error {
+	return observe("InsertObservations", func() error {
+		return m.inner.InsertObservations(ctx, obs)
 	})
 }
 
@@ -248,14 +248,14 @@ func (m *instrumentedRepo) GetLatestObservationByReason(ctx context.Context, sam
 	return out, ok, err
 }
 
-func (m *instrumentedRepo) CountObservations(ctx context.Context, transactionID int64, sampleReason string) (int, error) {
-	var n int
-	err := observe("CountObservations", func() error {
+func (m *instrumentedRepo) CountObservationsByReason(ctx context.Context, transactionID int64) (map[string]int, error) {
+	var out map[string]int
+	err := observe("CountObservationsByReason", func() error {
 		var e error
-		n, e = m.inner.CountObservations(ctx, transactionID, sampleReason)
+		out, e = m.inner.CountObservationsByReason(ctx, transactionID)
 		return e
 	})
-	return n, err
+	return out, err
 }
 
 func (m *instrumentedRepo) ListEnabledPolicies(ctx context.Context) ([]repo.Policy, error) {

@@ -153,6 +153,17 @@ var (
 		Name:      "anomaly_duplicates_suppressed_total",
 		Help:      "Deviations suppressed because an enclosing sub-transaction already fired them, by class.",
 	}, []string{"class"})
+
+	// samplesDropped counts sample traces (examples / evidence) the background
+	// writer could not keep because its queue was full. Samples are best-effort
+	// context for a finding, so ingestion is never stalled to store one; a
+	// non-zero rate means ClickHouse writes are lagging the sample rate.
+	samplesDropped = prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "engine",
+		Name:      "samples_dropped_total",
+		Help:      "Sample traces dropped because the background sample writer queue was full.",
+	})
 )
 
 func init() {
@@ -160,9 +171,12 @@ func init() {
 		repoCalls, repoCallDuration, tracesProcessed, subtransactionsProcessed,
 		transactionCache, policyCache, baselineCache, baselineEvictions, baselineDirty, baselineResident,
 		baselineFlush, baselineFlushDuration, promotionSweeperClasses,
-		anomalyDuplicatesSuppressed,
+		anomalyDuplicatesSuppressed, samplesDropped,
 	)
 }
+
+// IncSamplesDropped records one sample trace dropped by the background writer.
+func IncSamplesDropped() { samplesDropped.Inc() }
 
 // Handler serves the insights service's metrics for Prometheus scraping.
 // Mount it at GET /metrics.

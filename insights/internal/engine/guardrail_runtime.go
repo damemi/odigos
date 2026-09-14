@@ -14,6 +14,7 @@ type guardrailRuntime struct {
 	repo  repo.Repository
 	clock func() time.Time
 	warn  func(msg string, err error)
+	keep  keepSampleFunc
 
 	config   atomic.Pointer[GuardrailConfig]
 	buf      *guardrailBuffer
@@ -21,8 +22,8 @@ type guardrailRuntime struct {
 	evidence sync.Map // groupKey string -> struct{}, write-once evidence gate
 }
 
-func newGuardrailRuntime(r repo.Repository, clock func() time.Time, warn func(string, error)) *guardrailRuntime {
-	return &guardrailRuntime{repo: r, clock: clock, warn: warn, buf: newGuardrailBuffer()}
+func newGuardrailRuntime(r repo.Repository, clock func() time.Time, warn func(string, error), keep keepSampleFunc) *guardrailRuntime {
+	return &guardrailRuntime{repo: r, clock: clock, warn: warn, keep: keep, buf: newGuardrailBuffer()}
 }
 
 // setConfig installs (or replaces) the guardrail snapshot; a nil snapshot
@@ -55,7 +56,7 @@ func (g *guardrailRuntime) evaluate(ctx context.Context, t *Trace, tx repo.Trans
 	if guardrail, ok := g.config.Load().Resolve(tx.ID, serviceKey); ok {
 		for _, violation := range guardrailViolations(t, tx, guardrail, g.inMeshServices(tx.Namespace), system.identityFingerprint) {
 			g.buf.add(repo.ScopeService, serviceKey, violation.rule, violation.item, violation.score, t.TraceID, now, inventoryEpoch)
-			g.captureEvidence(ctx, full, tx, serviceKey, violation.rule, violation.item, now)
+			g.captureEvidence(ctx, full, tx, serviceKey, violation.rule, violation.item)
 		}
 	}
 	// Transaction-scoped guardrails are additive and independent of any service
@@ -79,7 +80,7 @@ func (g *guardrailRuntime) evaluateTransactionGuardrail(ctx context.Context, tx 
 	}
 	for _, violation := range correlationViolations(full, txnGuardrail) {
 		g.buf.add(repo.ScopeService, serviceKey, violation.rule, violation.item, violation.score, full.TraceID, now, inventoryEpoch)
-		g.captureEvidence(ctx, full, tx, serviceKey, violation.rule, violation.item, now)
+		g.captureEvidence(ctx, full, tx, serviceKey, violation.rule, violation.item)
 	}
 }
 
@@ -165,7 +166,11 @@ func cloneKnownServices(cur *map[string]map[string]struct{}, namespace, name str
 // Occurrences are counted separately. The FULL (undecomposed) trace is stored
 // so a forbidden-caller violation - whose offending span sits above this
 // sub-trace's root - is visible.
-func (g *guardrailRuntime) captureEvidence(ctx context.Context, full *Trace, tx repo.Transaction, serviceKey string, rule repo.RuleKey, offending string, now time.Time) {
+//
+// The group gate makes "one per group" a single in-memory check for every
+// repeat violation. The per-transaction cap behind keep is what makes it hold
+// across restarts, and it queues the write instead of blocking the trace on it.
+func (g *guardrailRuntime) captureEvidence(ctx context.Context, full *Trace, tx repo.Transaction, serviceKey string, rule repo.RuleKey, offending string) {
 	if full == nil || len(full.RawOTLP()) == 0 {
 		return
 	}
@@ -173,29 +178,7 @@ func (g *guardrailRuntime) captureEvidence(ctx context.Context, full *Trace, tx 
 	if _, loaded := g.evidence.LoadOrStore(groupKey, struct{}{}); loaded {
 		return
 	}
-	ctx, cancel := detachedEvidenceContext(ctx)
-	defer cancel()
-
-	reason := repo.GuardrailEvidenceReason(rule, offending)
-	n, err := g.repo.CountObservations(ctx, tx.ID, reason)
-	if err != nil {
-		g.warn("count guardrail evidence", err)
-		g.evidence.Delete(groupKey)
-		return
-	}
-	if n >= repo.GuardrailEvidenceSamples {
-		return
-	}
-	if err := g.repo.InsertObservation(ctx, repo.Observation{
-		TransactionID: tx.ID,
-		TraceID:       full.TraceID,
-		ObservedAt:    now,
-		DurationMs:    full.DurationMs,
-		SampleReason:  reason,
-		RawOTLP:       full.RawOTLP(),
-	}); err != nil {
-		g.warn("store guardrail evidence", err)
-		g.evidence.Delete(groupKey)
-		return
-	}
+	// If the write never lands, reopen the gate so a later violation can retry.
+	g.keep(ctx, full, tx, repo.GuardrailEvidenceReason(rule, offending), repo.GuardrailEvidenceSamples,
+		func() { g.evidence.Delete(groupKey) })
 }

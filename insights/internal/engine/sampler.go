@@ -15,27 +15,14 @@ const (
 )
 
 // recordExampleSample keeps up to ExamplesPerTransaction normal-traffic traces
-// while learning, at most one per configured interval. Once the cap is reached
-// collection stops (no rolling window / prune).
+// while learning, at most one per configured interval, so a user has real
+// traces to compare against the baseline. Once the cap is reached collection
+// stops (no rolling window / prune). The cap itself is enforced by keepSample
+// from in-memory counts; the only DB work here is the background write.
 func (e *Engine) recordExampleSample(ctx context.Context, t *Trace, tx repo.Transaction, entry *transactionEntry) {
 	cfg := e.system.Get()
 	maxN := cfg.ExamplesPerTransaction
 	if maxN <= 0 {
-		return
-	}
-	ctx, cancel := detachedEvidenceContext(ctx)
-	defer cancel()
-
-	if !entry.examplesCounted {
-		n, err := e.repo.CountObservations(ctx, tx.ID, repo.ExampleSampleReason)
-		if err != nil {
-			e.warn("count example samples", err)
-			return
-		}
-		entry.examplesStored = n
-		entry.examplesCounted = true
-	}
-	if entry.examplesStored >= maxN {
 		return
 	}
 	interval := time.Duration(cfg.ExampleSampleIntervalSeconds) * time.Second
@@ -43,12 +30,8 @@ func (e *Engine) recordExampleSample(ctx context.Context, t *Trace, tx repo.Tran
 	if !entry.lastExampleAt.IsZero() && now.Sub(entry.lastExampleAt) < interval {
 		return
 	}
-	// The quota counts traces a user can actually open next to the baseline, so
-	// only a sample that landed spends one. The interval still advances on
-	// failure to keep retries off a struggling database.
+	// The interval advances whether or not a sample is kept, so a transaction
+	// at its cap does not re-check on every trace.
 	entry.lastExampleAt = now
-	if err := e.storeObservation(ctx, t, tx, repo.ExampleSampleReason); err != nil {
-		return
-	}
-	entry.examplesStored++
+	e.keepSample(ctx, t, tx, repo.ExampleSampleReason, maxN, nil)
 }

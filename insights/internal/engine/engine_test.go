@@ -33,7 +33,7 @@ func mkTrace(opts ...func(*Trace)) *Trace {
 func withRoot(name, service string, kind tracepb.Span_SpanKind, attrs map[string]string) func(*Trace) {
 	return func(t *Trace) {
 		s := &Span{
-			SpanID: "root", Name: name, Service: service, Kind: kind, Attrs: attrs,
+			SpanID: "root", Name: name, Service: service, Kind: kind, SpanAttrs: attrs,
 			ScopeName: "rootlib", ScopeVersion: "1.0",
 		}
 		t.Root = s
@@ -55,7 +55,7 @@ func withChild(parent, name string, kind tracepb.Span_SpanKind, attrs map[string
 		}
 		c := &Span{
 			SpanID: "c-" + name, ParentSpanID: parent, Name: name, Service: p.Service,
-			Kind: kind, Attrs: attrs, ScopeName: scope, ScopeVersion: "1.0",
+			Kind: kind, SpanAttrs: attrs, ScopeName: scope, ScopeVersion: "1.0",
 		}
 		p.Children = append(p.Children, c)
 		t.Spans = append(t.Spans, c)
@@ -491,7 +491,10 @@ func TestSampler_StopsAfterCap(t *testing.T) {
 	mk := func() *Trace {
 		return mkTrace(withRoot("/x", "svc", tracepb.Span_SPAN_KIND_SERVER, nil))
 	}
+	// Examples are written behind by the sample writer; drain so the count
+	// reflects what Process decided to keep.
 	countExamples := func() int {
+		eng.samples.drain(context.Background())
 		n := 0
 		for _, o := range r.observations {
 			if o.SampleReason == repo.ExampleSampleReason {
@@ -529,6 +532,7 @@ func TestSampler_ExampleByInterval(t *testing.T) {
 	}
 
 	countExamples := func() int {
+		eng.samples.drain(context.Background())
 		n := 0
 		for _, o := range r.observations {
 			if o.SampleReason == "example" {
@@ -1051,10 +1055,10 @@ func TestIdentifyTransaction_KindFromRoot(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			got, ok := identifyTransaction(&Trace{Root: &Span{
-				Service: "svc",
-				Name:    "op",
-				Kind:    tc.kind,
-				Attrs:   tc.attrs,
+				Service:   "svc",
+				Name:      "op",
+				Kind:      tc.kind,
+				SpanAttrs: tc.attrs,
 			}})
 			if !ok {
 				t.Fatalf("identifyTransaction dropped a kind we expected to keep: %v", tc.kind)
@@ -1088,10 +1092,10 @@ func TestIdentifyTransaction_DropsClientRoots(t *testing.T) {
 
 	t.Run("grpc client root is kept", func(t *testing.T) {
 		got, ok := identifyTransaction(&Trace{Root: &Span{
-			Service: "cli-tool",
-			Name:    "myapp.Greeter/SayHello",
-			Kind:    tracepb.Span_SPAN_KIND_CLIENT,
-			Attrs:   map[string]string{"rpc.system": "grpc"},
+			Service:   "cli-tool",
+			Name:      "myapp.Greeter/SayHello",
+			Kind:      tracepb.Span_SPAN_KIND_CLIENT,
+			SpanAttrs: map[string]string{"rpc.system": "grpc"},
 		}})
 		if !ok {
 			t.Fatalf("expected gRPC CLIENT root span to be kept, but identifyTransaction dropped it")
@@ -1129,7 +1133,7 @@ func TestDecodeRequest_StripsNULBytes(t *testing.T) {
 	if len(traces) != 1 {
 		t.Fatalf("expected 1 trace, got %d", len(traces))
 	}
-	got := traces[0].Root.Attrs["process.command"]
+	got := traces[0].Root.Attr("process.command")
 	if got == "" {
 		t.Fatalf("expected process.command to be present after stripping NULs, got empty")
 	}
@@ -1168,7 +1172,8 @@ type fakeRepo struct {
 	applyErr         error // when set, ApplyBaselineDeltas fails without applying
 	getBaselineCalls int   // number of GetBaselineForTransaction invocations
 
-	insertObservationErr error // when set, InsertObservation fails without storing
+	insertObservationErr  error // when set, InsertObservations fails without storing
+	countObservationCalls int   // number of CountObservationsByReason invocations
 }
 
 // allDeviationClasses is the built-in class set, used by tests to build a
@@ -1583,13 +1588,13 @@ func (f *fakeRepo) ApplyBaselineDeltas(_ context.Context, deltas []repo.Baseline
 	return out, nil
 }
 
-func (f *fakeRepo) InsertObservation(_ context.Context, obs repo.Observation) error {
+func (f *fakeRepo) InsertObservations(_ context.Context, obs []repo.Observation) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.insertObservationErr != nil {
 		return f.insertObservationErr
 	}
-	f.observations = append(f.observations, obs)
+	f.observations = append(f.observations, obs...)
 	return nil
 }
 
@@ -1605,21 +1610,24 @@ func (f *fakeRepo) ListObservationsByTransaction(_ context.Context, transactionI
 	return out, nil
 }
 
-func (f *fakeRepo) CountObservations(_ context.Context, transactionID int64, reason string) (int, error) {
+func (f *fakeRepo) CountObservationsByReason(_ context.Context, transactionID int64) (map[string]int, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	n := 0
+	f.countObservationCalls++
+	out := map[string]int{}
 	seen := map[string]struct{}{}
 	for _, o := range f.observations {
-		if o.TransactionID == transactionID && (reason == "" || o.SampleReason == reason) {
-			if _, ok := seen[o.TraceID]; ok {
-				continue
-			}
-			seen[o.TraceID] = struct{}{}
-			n++
+		if o.TransactionID != transactionID {
+			continue
 		}
+		key := o.SampleReason + "\x00" + o.TraceID
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out[o.SampleReason]++
 	}
-	return n, nil
+	return out, nil
 }
 
 func (f *fakeRepo) GetObservationByTrace(_ context.Context, transactionID int64, traceID string) (repo.Observation, bool, error) {

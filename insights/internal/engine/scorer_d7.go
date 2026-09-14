@@ -177,7 +177,7 @@ func (d7DBAccess) Explain(evidence json.RawMessage, spans []SpanView) Finding {
 	// Attribute each new access/shape back to the span that produced it, using
 	// the same derivation the scorer uses.
 	for _, v := range spans {
-		syntheticSpan := &Span{SpanID: v.SpanID, Attrs: v.AttrMap()}
+		syntheticSpan := &Span{SpanID: v.SpanID, SpanAttrs: v.AttrMap()}
 		accesses, shapes := dbFactsForSpan(syntheticSpan)
 		matched := false
 		for _, a := range accesses {
@@ -425,11 +425,11 @@ func dbFactsForSpan(s *Span) ([]dbAccess, []queryShape) {
 	if !isDBSpan(s) {
 		return nil, nil
 	}
-	system := firstNonEmpty(s.Attrs[semconv.DBSystem], s.Attrs[semconv.LegacyDBSystemName])
-	ns := firstNonEmpty(s.Attrs[semconv.DBNamespace], s.Attrs[semconv.LegacyDBName])
-	queryText := firstNonEmpty(s.Attrs[semconv.DBQueryText], s.Attrs[semconv.LegacyDBStatement])
+	system := firstNonEmpty(s.Attr(semconv.DBSystem), s.Attr(semconv.LegacyDBSystemName))
+	ns := firstNonEmpty(s.Attr(semconv.DBNamespace), s.Attr(semconv.LegacyDBName))
+	queryText := firstNonEmpty(s.Attr(semconv.DBQueryText), s.Attr(semconv.LegacyDBStatement))
 
-	op := s.Attrs[semconv.DBOperationName]
+	op := s.Attr(semconv.DBOperationName)
 	if op == "" {
 		// db.operation.name isn't guaranteed (the gateway's
 		// odigossqldboperationprocessor may not be in the pipeline), so
@@ -455,17 +455,17 @@ func isDBSpan(s *Span) bool {
 	if s == nil {
 		return false
 	}
-	return s.Attrs[semconv.DBSystem] != "" ||
-		s.Attrs[semconv.LegacyDBSystemName] != "" ||
-		s.Attrs[semconv.DBQueryText] != "" ||
-		s.Attrs[semconv.LegacyDBStatement] != "" ||
-		s.Attrs[semconv.DBCollectionName] != ""
+	return s.Attr(semconv.DBSystem) != "" ||
+		s.Attr(semconv.LegacyDBSystemName) != "" ||
+		s.Attr(semconv.DBQueryText) != "" ||
+		s.Attr(semconv.LegacyDBStatement) != "" ||
+		s.Attr(semconv.DBCollectionName) != ""
 }
 
 // tablesForSpan prefers the standardized db.collection.name (NoSQL and some
 // SQL instrumentations); otherwise it parses table names out of the SQL text.
 func tablesForSpan(s *Span, queryText string) []string {
-	if c := s.Attrs[semconv.DBCollectionName]; c != "" {
+	if c := s.Attr(semconv.DBCollectionName); c != "" {
 		return []string{strings.ToLower(c)}
 	}
 	if queryText == "" {

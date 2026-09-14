@@ -51,6 +51,7 @@ func TestSamplerUsesSystemInterval(t *testing.T) {
 	eng.Process(context.Background(), mk())
 	now = now.Add(30 * time.Second)
 	eng.Process(context.Background(), mk())
+	eng.samples.drain(context.Background())
 	n := 0
 	for _, o := range r.observations {
 		if o.SampleReason == repo.ExampleSampleReason {
