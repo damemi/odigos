@@ -175,16 +175,26 @@
      policy-violations and anomalies tables line these up identically instead of
      each auto-sizing to its own content. */
   .pv-when { color: var(--muted); font-size: 12px; white-space: nowrap; width: 150px; }
-  .svc-card-body table td.pv-risk, .svc-card-body table th.pv-risk { width: 110px; }
+  .svc-card-body table td.pv-risk, .svc-card-body table th.pv-risk,
+  .findings-table td.pv-risk, .findings-table th.pv-risk { width: 110px; }
   /* Keep investigate / allow(accept) / dismiss lined up in consistent columns
      across every row and both tables: the Actions column is a fixed width and
      every action button is a uniform-width pill. Absent actions are always
      trailing (dismiss, then allow/accept), so left alignment keeps the leading
      buttons in the same place row to row. */
   .svc-card-body table th:last-child,
-  .svc-card-body td.pv-actions { width: 300px; }
+  .svc-card-body td.pv-actions,
+  .findings-table th:last-child,
+  .findings-table td.pv-actions { width: 300px; }
   .pv-actions { display: flex; gap: 6px; align-items: center; }
   .pv-actions form { margin: 0; display: inline-flex; }
+  /* Reference for the product UI: each finding's render-ready summary sentence
+     (Finding.summary from the API), shown as an always-visible line directly
+     under its row so the feed reads without opening investigate. The lead row
+     drops its bottom border so the summary reads as part of the same finding. */
+  .findings-table tr.finding-lead > td { border-bottom: none; }
+  .findings-table tr.finding-summary-row > td { padding-top: 0; padding-bottom: 10px; }
+  .finding-summary { color: var(--muted); font-size: 12.5px; line-height: 1.4; }
   .pv-actions .btn { min-width: 90px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; }
 
   /* A transaction inside a card is a second-level collapsible: its anomalies

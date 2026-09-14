@@ -1414,6 +1414,7 @@ export interface components {
          *       "service": "frontend",
          *       "namespace": "default",
          *       "title": "POST /buy",
+         *       "summary": "Transaction deviated from its baseline: New egress destination.",
          *       "operation": "POST /buy [http.response.status_code=403]",
          *       "operation_name": "POST /buy",
          *       "identity_dimensions": [
@@ -1440,6 +1441,7 @@ export interface components {
          *       "service": "frontend",
          *       "namespace": "default",
          *       "title": "Allowed egress destinations",
+         *       "summary": "Allowed egress destinations broken by postgres:5432.",
          *       "offending": "postgres:5432",
          *       "score": 60,
          *       "severity": "high",
@@ -1457,6 +1459,8 @@ export interface components {
             namespace: string;
             /** @description Human-readable headline. Anomalies use operation_name; violations use the guardrail rule label. */
             title: string;
+            /** @description Render-ready one-line explanation of what the finding is, so the list conveys the gist without opening investigate. Deliberately omits service and title (already on the row): anomalies name the deviated classes; violations name the rule and what broke it. Display as-is. */
+            summary?: string;
             /** @description Full canonical transaction operation (anomalies only). Omitted for violations. */
             operation?: string;
             /** @description Entry-span operation without dimension suffixes (anomalies). */
@@ -1735,7 +1739,7 @@ export interface components {
          *       "first_seen": "2026-07-20T09:15:01Z",
          *       "last_seen": "2026-07-20T14:03:22Z",
          *       "status": "open",
-         *       "summary": "frontend broke Allowed callees on currency.",
+         *       "summary": "Allowed callees broken by currency.",
          *       "span_highlights": [
          *         {
          *           "span_id": "a1b2c3d4",
@@ -1761,7 +1765,7 @@ export interface components {
             /** Format: date-time */
             last_seen?: string;
             status: components["schemas"]["ViolationStatus"];
-            /** @description Render-ready investigate sentence. The UI should display it as-is (service, rule, and offending edge). */
+            /** @description Render-ready investigate sentence (rule and offending edge; the service is a separate field). The UI should display it as-is. */
             summary: string;
             /** @description Spans on the evidence trace that witness the forbidden edge. */
             span_highlights?: components["schemas"]["AnomalySpanHighlight"][];

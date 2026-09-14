@@ -1942,6 +1942,14 @@ components:
           description: >
             Human-readable headline. Anomalies use operation_name; violations
             use the guardrail rule label.
+        summary:
+          type: string
+          description: >
+            Render-ready one-line explanation of what the finding is, so the
+            list conveys the gist without opening investigate. Deliberately
+            omits service and title (already on the row): anomalies name the
+            deviated classes; violations name the rule and what broke it.
+            Display as-is.
         operation:
           type: string
           description: >
@@ -1988,6 +1996,7 @@ components:
           service: frontend
           namespace: default
           title: POST /buy
+          summary: "Transaction deviated from its baseline: New egress destination."
           operation: "POST /buy [http.response.status_code=403]"
           operation_name: POST /buy
           identity_dimensions:
@@ -2007,6 +2016,7 @@ components:
           service: frontend
           namespace: default
           title: Allowed egress destinations
+          summary: "Allowed egress destinations broken by postgres:5432."
           offending: "postgres:5432"
           score: 60
           severity: high
@@ -2335,8 +2345,8 @@ components:
         summary:
           type: string
           description: >
-            Render-ready investigate sentence. The UI should display it as-is
-            (service, rule, and offending edge).
+            Render-ready investigate sentence (rule and offending edge; the
+            service is a separate field). The UI should display it as-is.
         span_highlights:
           type: array
           description: Spans on the evidence trace that witness the forbidden edge.
@@ -2361,7 +2371,7 @@ components:
           first_seen: "2026-07-20T09:15:01Z"
           last_seen: "2026-07-20T14:03:22Z"
           status: open
-          summary: "frontend broke Allowed callees on currency."
+          summary: "Allowed callees broken by currency."
           span_highlights:
             - span_id: "a1b2c3d4"
               severity: high

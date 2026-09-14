@@ -253,11 +253,11 @@ func TestViolationSummaryOnDetail(t *testing.T) {
 		Service: "frontend", Namespace: "default", ScopeKey: "default/frontend",
 		RuleKey: "allowed_callees", Offending: "currency", Occurrences: 12, MaxScore: 60,
 	})
-	if !strings.Contains(d.Summary, "frontend") || !strings.Contains(d.Summary, "currency") {
-		t.Errorf("summary missing identity: %q", d.Summary)
+	if d.Summary != "Allowed callees broken by currency." {
+		t.Errorf("summary = %q", d.Summary)
 	}
-	if !strings.Contains(d.Summary, "broke Allowed callees") {
-		t.Errorf("summary missing rule label: %q", d.Summary)
+	if strings.Contains(d.Summary, "frontend") {
+		t.Errorf("summary should not repeat the service (shown separately): %q", d.Summary)
 	}
 }
 

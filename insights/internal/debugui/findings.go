@@ -4,16 +4,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/odigos-io/odigos-enterprise/insights/internal/api/http/apitypes"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/engine"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
 )
 
 // Findings tabs are the lifecycle buckets SHARED by both finding kinds: a policy
@@ -28,11 +27,6 @@ const (
 	findingsAccepted  = "accepted"
 )
 
-// findingsIssuesPerTxn caps how many anomaly issues one transaction expands
-// inline; a transaction with more is rare and the extras aren't lost (the count
-// stays exact), just not all drawn at once.
-const findingsIssuesPerTxn = 100
-
 // findingCounts is the per-tab tally across BOTH kinds, so a tab shows the real
 // number of findings (violations + anomaly issues), not the number of services.
 type findingCounts struct {
@@ -41,12 +35,12 @@ type findingCounts struct {
 	Accepted  int
 }
 
-// listAnomalies is the HTTP handler for GET /debug/anomalies (the Findings feed):
-// one card per service, ranked worst-severity first, each nesting the service's
-// policy violations and its transactions-with-anomalies. Everything is actioned
-// inline - a transaction expands to its anomaly issues (each with accept/dismiss)
-// right here, so the user never leaves the feed. The top tabs
-// (open/dismissed/accepted) filter BOTH kinds by their shared lifecycle bucket.
+// listAnomalies is the HTTP handler for GET /debug/anomalies (the Findings feed).
+// It mirrors the product UI's Findings page: one unified GET /api/v1/findings
+// call (anomalies + policy violations, ranked worst-first by the server) rendered
+// as a flat list, with the open/dismissed/accepted tabs bucketed client-side from
+// that same feed. Each row carries its render-ready summary from the API and the
+// kind-specific drill-down keys the product UI uses for investigate/resolve.
 func (u *ui) listAnomalies(c *gin.Context) {
 	ctx := c.Request.Context()
 	timeRange, err := findingsTimeRangeFromRequest(c)
@@ -61,118 +55,99 @@ func (u *ui) listAnomalies(c *gin.Context) {
 	}
 	rangeView := findingsTimeRangeViewFor("/debug/anomalies", baseQuery, timeRange)
 
-	var loadErrs []string
-	var allViolations []violationGroupView
 	api, ok := u.productAPI(c)
 	if !ok {
 		return
 	}
-	if listed, err := api.ListGuardrailViolations(ctx, listGuardrailViolationsParamsFromRequest(c)); err != nil {
-		loadErrs = append(loadErrs, "policy violations: "+err.Error())
+	var loadErr string
+	var all []findingRow
+	if listed, err := api.ListFindings(ctx, listFindingsParamsFromRequest(c)); err != nil {
+		loadErr = err.Error()
 	} else {
-		allViolations = violationViewsFromWire(listed.Items)
+		all = findingRowsFromWire(listed.Items)
 	}
-	var allIssues []repo.AnomalyIssue
-	if listed, err := api.ListAnomalies(ctx, listAnomaliesParamsFromRequest(c)); err != nil {
-		loadErrs = append(loadErrs, "anomalies: "+err.Error())
-	} else {
-		allIssues = anomalyIssuesFromWire(listed.Items)
-	}
-
-	counts := countFindings(allViolations, allIssues)
-	cards := buildFindingsCards(
-		filterViolationsForTab(allViolations, tab),
-		txnsForTab(allIssues, tab),
-	)
 
 	tabQuery := findingsTimeRangeQuery(timeRange)
 	data := map[string]any{
-		"Cards":        cards,
+		"Findings":     filterFindingRowsForTab(all, tab),
 		"Tab":          tab,
-		"Counts":       counts,
+		"Counts":       countFindingRows(all),
 		"TimeRange":    rangeView,
 		"TabOpen":      pathWithQuery("/debug/anomalies", mergeQuery(tabQuery, url.Values{"tab": {"open"}})),
 		"TabDismissed": pathWithQuery("/debug/anomalies", mergeQuery(tabQuery, url.Values{"tab": {"dismissed"}})),
 		"TabAccepted":  pathWithQuery("/debug/anomalies", mergeQuery(tabQuery, url.Values{"tab": {"accepted"}})),
 	}
-	if len(loadErrs) > 0 {
-		data["Error"] = "Couldn't load some findings (try refresh): " + strings.Join(loadErrs, "; ")
+	if loadErr != "" {
+		data["Error"] = "Couldn't load findings (try refresh): " + loadErr
 	}
 	u.render(c, "anomalies", "anomalies", c.Query("flash"), data)
 }
 
-// findingTxn is one transaction's anomaly issues as the feed drills into them
-// inline: the transaction identity and worst score (for the collapsed row) plus
-// the issues in the active tab (for the expanded body, each independently
-// actionable). TotalIssues is across all statuses, for the "N total" hint.
-type findingTxn struct {
+// findingRow is one row of the unified Findings feed, mapped straight from the
+// product Finding wire type so the debug UI shows exactly what the product UI
+// gets from GET /api/v1/findings. Both kinds share the visible columns; the
+// kind-specific identity keys (transaction_id+signature for anomalies,
+// scope_key+rule_key+offending for violations) ride along so investigate and
+// accept/dismiss resolve the same way the product UI does.
+type findingRow struct {
+	Kind        string
+	Service     string
+	Namespace   string
+	Title       string
+	Summary     string
+	Severity    string
+	Score       int
+	Occurrences int64
+	LastSeen    time.Time
+	Status      string
+	// Tab is the lifecycle bucket derived from Status, so the tabs filter one
+	// feed client-side the way the product UI does instead of querying per tab.
+	Tab string
+
 	TransactionID int64
-	Service       string
-	Namespace     string
-	Operation     string
-	Kind          repo.TransactionKind
-	MaxScore      int
-	Issues        []repo.AnomalyIssue
-	TabCount      int
-	TotalIssues   int
+	Signature     string
+	ScopeKey      string
+	RuleKey       string
+	Offending     string
 }
 
-// findingsCard is one service's slice of the Findings feed: its policy violations
-// (already tab-filtered) and its transactions-with-anomalies, plus the worst
-// severity across both for ranking and the header pill.
-type findingsCard struct {
-	Namespace    string
-	Service      string
-	ScopeKey     string
-	MaxScore     int
-	Severity     string
-	Violations   []violationGroupView
-	Transactions []findingTxn
-	AnomalyCount int // anomaly issues across Transactions (for the header)
-}
-
-// buildFindingsCards folds service-scoped violations and per-transaction anomaly
-// drill-downs into one card per (namespace, service), worst-severity first. Both
-// finding kinds hang off the service they belong to, so they nest at the same
-// depth under a shared parent.
-func buildFindingsCards(violations []violationGroupView, txns []findingTxn) []findingsCard {
-	byKey := map[string]*findingsCard{}
-	card := func(namespace, service string) *findingsCard {
-		key := repo.ServiceScopeKey(namespace, service)
-		c := byKey[key]
-		if c == nil {
-			c = &findingsCard{Namespace: namespace, Service: service, ScopeKey: key}
-			byKey[key] = c
-		}
-		return c
-	}
-	for _, v := range violations {
-		c := card(v.Namespace, v.Service)
-		c.Violations = append(c.Violations, v)
-		if v.MaxScore > c.MaxScore {
-			c.MaxScore = v.MaxScore
+func findingRowsFromWire(items []apitypes.Finding) []findingRow {
+	out := make([]findingRow, len(items))
+	for i, f := range items {
+		out[i] = findingRow{
+			Kind:          string(f.Kind),
+			Service:       f.Service,
+			Namespace:     f.Namespace,
+			Title:         f.Title,
+			Summary:       f.Summary,
+			Severity:      string(f.Severity),
+			Score:         f.Score,
+			Occurrences:   f.Occurrences,
+			LastSeen:      f.LastSeen,
+			Status:        f.Status,
+			Tab:           findingTab(f.Status),
+			TransactionID: f.TransactionId,
+			Signature:     f.Signature,
+			ScopeKey:      f.ScopeKey,
+			RuleKey:       f.RuleKey,
+			Offending:     f.Offending,
 		}
 	}
-	for _, t := range txns {
-		c := card(t.Namespace, t.Service)
-		c.Transactions = append(c.Transactions, t)
-		c.AnomalyCount += t.TabCount
-		if t.MaxScore > c.MaxScore {
-			c.MaxScore = t.MaxScore
-		}
-	}
-	out := make([]findingsCard, 0, len(byKey))
-	for _, c := range byKey {
-		c.Severity = string(risk.SeverityForScore(c.MaxScore))
-		out = append(out, *c)
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].MaxScore != out[j].MaxScore {
-			return out[i].MaxScore > out[j].MaxScore
-		}
-		return out[i].ScopeKey < out[j].ScopeKey
-	})
 	return out
+}
+
+// findingTab maps a finding's status to the shared lifecycle bucket. Anomalies
+// and violations use the same status literals, and anything not explicitly
+// accepted/dismissed is open - the same rule as the product UI's isOpenFinding.
+func findingTab(status string) string {
+	switch status {
+	case findingsAccepted:
+		return findingsAccepted
+	case findingsDismissed:
+		return findingsDismissed
+	default:
+		return findingsOpen
+	}
 }
 
 // normalizeFindingsTab clamps ?tab= to a known bucket, defaulting to the
@@ -186,13 +161,10 @@ func normalizeFindingsTab(s string) string {
 	}
 }
 
-// countFindings tallies every finding of both kinds into its lifecycle bucket so
-// the tab labels reflect real finding counts. Each anomaly issue counts once, by
-// its own sticky status.
-func countFindings(violations []violationGroupView, issues []repo.AnomalyIssue) findingCounts {
+func countFindingRows(rows []findingRow) findingCounts {
 	var c findingCounts
-	bump := func(tab string) {
-		switch tab {
+	for _, r := range rows {
+		switch r.Tab {
 		case findingsAccepted:
 			c.Accepted++
 		case findingsDismissed:
@@ -201,91 +173,16 @@ func countFindings(violations []violationGroupView, issues []repo.AnomalyIssue) 
 			c.Open++
 		}
 	}
-	for _, v := range violations {
-		bump(violationTabOf(v.Status))
-	}
-	for _, is := range issues {
-		bump(issueTabOf(is.Status))
-	}
 	return c
 }
 
-// violationTabOf maps a violation's status to the shared findings bucket
-// (accepted → accepted; dismissed → dismissed; anything else → open).
-func violationTabOf(status string) string {
-	switch status {
-	case string(repo.GuardrailViolationAccepted):
-		return findingsAccepted
-	case string(repo.GuardrailViolationDismissed):
-		return findingsDismissed
-	default:
-		return findingsOpen
-	}
-}
-
-// issueTabOf maps an anomaly issue's status to the shared findings bucket
-// (accepted → accepted; dismissed → dismissed; anything else → open).
-func issueTabOf(status repo.AnomalyIssueStatus) string {
-	switch status {
-	case repo.AnomalyIssueAccepted:
-		return findingsAccepted
-	case repo.AnomalyIssueDismissed:
-		return findingsDismissed
-	default:
-		return findingsOpen
-	}
-}
-
-// filterViolationsForTab keeps the violations whose lifecycle maps to the tab.
-func filterViolationsForTab(all []violationGroupView, tab string) []violationGroupView {
-	out := make([]violationGroupView, 0, len(all))
-	for _, v := range all {
-		if violationTabOf(v.Status) == tab {
-			out = append(out, v)
+// filterFindingRowsForTab keeps the tab's rows in the feed's server-side ranking.
+func filterFindingRowsForTab(rows []findingRow, tab string) []findingRow {
+	out := make([]findingRow, 0, len(rows))
+	for _, r := range rows {
+		if r.Tab == tab {
+			out = append(out, r)
 		}
-	}
-	return out
-}
-
-// txnsForTab groups the tab's anomaly issues by transaction, in memory (issues
-// arrive pre-deduped and worst-first, so no per-transaction query is needed).
-// TotalIssues counts the transaction's issues across all statuses for the "N
-// total" hint; the returned slice keeps the repo's worst-first order.
-func txnsForTab(issues []repo.AnomalyIssue, tab string) []findingTxn {
-	total := map[int64]int{}
-	for _, is := range issues {
-		total[is.TransactionID]++
-	}
-	byTxn := map[int64]*findingTxn{}
-	var order []int64
-	for _, is := range issues {
-		if issueTabOf(is.Status) != tab {
-			continue
-		}
-		ft := byTxn[is.TransactionID]
-		if ft == nil {
-			ft = &findingTxn{
-				TransactionID: is.TransactionID,
-				Service:       is.Service,
-				Namespace:     is.Namespace,
-				Operation:     is.Operation,
-				Kind:          is.Kind,
-				TotalIssues:   total[is.TransactionID],
-			}
-			byTxn[is.TransactionID] = ft
-			order = append(order, is.TransactionID)
-		}
-		ft.TabCount++
-		if len(ft.Issues) < findingsIssuesPerTxn {
-			ft.Issues = append(ft.Issues, is)
-		}
-		if is.MaxScore > ft.MaxScore {
-			ft.MaxScore = is.MaxScore
-		}
-	}
-	out := make([]findingTxn, 0, len(order))
-	for _, id := range order {
-		out = append(out, *byTxn[id])
 	}
 	return out
 }
@@ -423,25 +320,6 @@ func pluralY(n int) string {
 		return "y"
 	}
 	return "ies"
-}
-
-// violationGroupView is one service-scoped policy violation as the Findings feed
-// renders it: a (service, rule, offending item) that broke a guardrail, with its
-// all-time occurrence count and how recently it last broke. Actions are keyed by
-// (scope_key, rule_key, offending) - the counter has no per-trace row id.
-type violationGroupView struct {
-	Service     string
-	Namespace   string
-	ScopeKey    string
-	RuleKey     string
-	RuleLabel   string
-	RuleDesc    string // one-line "what it enforces", for the rule chip's hover
-	Offending   string
-	Occurrences int64
-	LastSeen    time.Time
-	MaxScore    int
-	Severity    string
-	Status      string // open | dismissed | accepted
 }
 
 // violationFormKeys pulls the (scope_key, rule_key, offending) identity of a

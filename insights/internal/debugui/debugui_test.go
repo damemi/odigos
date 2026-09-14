@@ -241,44 +241,37 @@ func TestRenderSettingsPages(t *testing.T) {
 	}
 }
 
-// TestRenderFindings executes the service-centric Findings feed against a
-// representative data map (a service card with one policy violation and one
-// transaction that expands to an inline anomaly), catching field/method
-// mismatches in the nested drill-down the parse step can't.
+// TestRenderFindings executes the unified Findings feed against representative
+// rows of both kinds (a policy violation and an anomaly, as mapped from the
+// product Finding wire type), in every status, catching field/method mismatches
+// in the kind-specific investigate/resolve branches the parse step can't.
 func TestRenderFindings(t *testing.T) {
 	tmpls := parseTemplates()
-	cards := []findingsCard{{
-		Namespace: "nodejs-db-permissions-leak",
-		Service:   "db-permissions-leak",
-		ScopeKey:  "nodejs-db-permissions-leak/db-permissions-leak",
-		MaxScore:  45,
-		Severity:  "high",
-		Violations: []violationGroupView{{
-			Service: "db-permissions-leak", Namespace: "nodejs-db-permissions-leak",
-			ScopeKey: "nodejs-db-permissions-leak/db-permissions-leak",
-			RuleKey:  "allowed_egress", RuleLabel: "allowed egress",
-			Offending: "postgres:5432", Occurrences: 760, LastSeen: time.Now(),
-			MaxScore: 25, Severity: "low", Status: "open",
-		}},
-		Transactions: []findingTxn{{
-			TransactionID: 1, Service: "db-permissions-leak",
-			Namespace: "nodejs-db-permissions-leak", Operation: "GET /api/users",
-			Kind: repo.KindHTTP, MaxScore: 25, TabCount: 1, TotalIssues: 2,
-			Issues: []repo.AnomalyIssue{{
-				TransactionID: 1, Signature: "sig1", Occurrences: 12, MaxScore: 25,
-				TriggeredClasses: []repo.DeviationClass{repo.D7DBAccess},
-				Offending:        "d7_db_access", LastSeen: time.Now(), Status: repo.AnomalyIssueOpen,
-			}},
-		}},
-		AnomalyCount: 1,
-	}}
 	rangeView := findingsTimeRangeViewFor("/debug/anomalies", nil, repo.FindingsTimeRange{
 		From: time.Now().Add(-7 * 24 * time.Hour), Until: time.Now(), WindowHours: 168,
 	})
 	for _, tab := range []string{"open", "dismissed", "accepted"} {
+		rows := findingRowsFromWire([]apitypes.Finding{{
+			Kind: "violation", Service: "db-permissions-leak", Namespace: "nodejs-db-permissions-leak",
+			Title:   "allowed egress",
+			Summary: "Allowed egress broken by postgres:5432.",
+			Score:   25, Severity: "low", Occurrences: 760, LastSeen: time.Now(), Status: tab,
+			ScopeKey: "nodejs-db-permissions-leak/db-permissions-leak",
+			RuleKey:  "allowed_egress", Offending: "postgres:5432",
+		}, {
+			Kind: "anomaly", Service: "db-permissions-leak", Namespace: "nodejs-db-permissions-leak",
+			Title:   "GET /api/users",
+			Summary: "Transaction deviated from its baseline: Database access anomaly.",
+			Score:   45, Severity: "high", Occurrences: 12, LastSeen: time.Now(), Status: tab,
+			TransactionId: 1, Signature: "sig1",
+			TriggeredClasses: []apitypes.DeviationClass{apitypes.DeviationClass(repo.D7DBAccess)},
+		}})
+		if got := len(filterFindingRowsForTab(rows, tab)); got != 2 {
+			t.Fatalf("tab=%s: filtered %d rows, want both kinds", tab, got)
+		}
 		data := map[string]any{
 			"Active": "anomalies", "Flash": "", "Error": "",
-			"Cards": cards, "Tab": tab,
+			"Findings": rows, "Tab": tab,
 			"Counts":       findingCounts{Open: 3, Dismissed: 1, Accepted: 2},
 			"TimeRange":    rangeView,
 			"TabOpen":      "/debug/anomalies?tab=open",
@@ -289,8 +282,16 @@ func TestRenderFindings(t *testing.T) {
 		if err := tmpls["anomalies"].ExecuteTemplate(&buf, "base.html", data); err != nil {
 			t.Fatalf("execute anomalies (tab=%s): %v", tab, err)
 		}
-		if buf.Len() == 0 {
-			t.Fatalf("empty render (tab=%s)", tab)
+		out := buf.String()
+		for _, want := range []string{
+			"Allowed egress broken by postgres:5432.",
+			"Transaction deviated from its baseline: Database access anomaly.",
+			"/debug/anomalies/issue?transaction_id=1&amp;signature=sig1",
+			"/debug/guardrails/violations/evidence?scope_key=nodejs-db-permissions-leak%2fdb-permissions-leak&amp;rule_key=allowed_egress&amp;offending=postgres%3a5432",
+		} {
+			if !strings.Contains(out, want) {
+				t.Fatalf("tab=%s: render missing %q", tab, want)
+			}
 		}
 	}
 }

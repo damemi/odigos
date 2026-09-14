@@ -945,7 +945,7 @@ type ErrorResponse struct {
 
 // Finding One unified feed row; a flattened anomaly issue or violation.
 //
-// Examples: {"first_seen":"2026-07-20T09:15:01Z","identity_dimensions":[{"key":"http.response.status_code","value":"403"}],"kind":"anomaly","last_seen":"2026-07-20T14:03:22Z","namespace":"default","occurrences":342,"offending":"new egress to 45.83.12.7:8443","operation":"POST /buy [http.response.status_code=403]","operation_name":"POST /buy","score":70,"service":"frontend","severity":"high","signature":"7f3c2a9e5b1d4c8a","status":"open","title":"POST /buy","transaction_id":4211,"triggered_classes":["D2_egress"]}, {"first_seen":"2026-07-20T09:15:01Z","kind":"violation","last_seen":"2026-07-20T13:58:10Z","namespace":"default","occurrences":27,"offending":"postgres:5432","rule_key":"allowed_egress","scope_key":"default/frontend","score":60,"service":"frontend","severity":"high","status":"open","title":"Allowed egress destinations"}
+// Examples: {"first_seen":"2026-07-20T09:15:01Z","identity_dimensions":[{"key":"http.response.status_code","value":"403"}],"kind":"anomaly","last_seen":"2026-07-20T14:03:22Z","namespace":"default","occurrences":342,"offending":"new egress to 45.83.12.7:8443","operation":"POST /buy [http.response.status_code=403]","operation_name":"POST /buy","score":70,"service":"frontend","severity":"high","signature":"7f3c2a9e5b1d4c8a","status":"open","summary":"Transaction deviated from its baseline: New egress destination.","title":"POST /buy","transaction_id":4211,"triggered_classes":["D2_egress"]}, {"first_seen":"2026-07-20T09:15:01Z","kind":"violation","last_seen":"2026-07-20T13:58:10Z","namespace":"default","occurrences":27,"offending":"postgres:5432","rule_key":"allowed_egress","scope_key":"default/frontend","score":60,"service":"frontend","severity":"high","status":"open","summary":"Allowed egress destinations broken by postgres:5432.","title":"Allowed egress destinations"}
 type Finding struct {
 	// FirstSeen Earliest occurrence of this finding (anomaly or guardrail violation).
 	FirstSeen time.Time `json:"first_seen,omitempty"`
@@ -976,6 +976,9 @@ type Finding struct {
 	// Signature Anomaly drill-down key (with transaction_id).
 	Signature string `json:"signature,omitempty"`
 	Status    string `json:"status"`
+
+	// Summary Render-ready one-line explanation of what the finding is, so the list conveys the gist without opening investigate. Deliberately omits service and title (already on the row): anomalies name the deviated classes; violations name the rule and what broke it. Display as-is.
+	Summary string `json:"summary,omitempty"`
 
 	// Title Human-readable headline. Anomalies use operation_name; violations use the guardrail rule label.
 	Title string `json:"title"`
@@ -1042,7 +1045,7 @@ type GuardrailViolation struct {
 
 // GuardrailViolationDetail Full violation for investigate. **Detail path only** - includes a render-ready `summary`, span highlights, and optional `evidence_trace`. Never returned by `listGuardrailViolations` or `listFindings`. Identity is (`scope_key`, `rule_key`, `offending`), analogous to an anomaly's (`transaction_id`, `signature`).
 //
-// Examples: {"first_seen":"2026-07-20T09:15:01Z","last_seen":"2026-07-20T14:03:22Z","max_score":60,"namespace":"default","occurrences":12,"offending":"currency","rule_key":"allowed_callees","rule_label":"Allowed callees","scope_key":"default/frontend","service":"frontend","severity":"high","span_highlights":[{"reason":"unauthorized callee","severity":"high","span_id":"a1b2c3d4"}],"status":"open","summary":"frontend broke Allowed callees on currency."}
+// Examples: {"first_seen":"2026-07-20T09:15:01Z","last_seen":"2026-07-20T14:03:22Z","max_score":60,"namespace":"default","occurrences":12,"offending":"currency","rule_key":"allowed_callees","rule_label":"Allowed callees","scope_key":"default/frontend","service":"frontend","severity":"high","span_highlights":[{"reason":"unauthorized callee","severity":"high","span_id":"a1b2c3d4"}],"status":"open","summary":"Allowed callees broken by currency."}
 type GuardrailViolationDetail struct {
 	// EvidenceTrace Captured sample for this violation (`sample_reason=guardrail:<rule>:<offending>`), including `raw_otlp`. Omitted when no sample was retained.
 	EvidenceTrace *Observation `json:"evidence_trace,omitempty"`
@@ -1064,7 +1067,7 @@ type GuardrailViolationDetail struct {
 	// Status Lifecycle bucket. `accepted` means the operator accepted the offending edge as legitimate (it is allowlisted on the guardrail and stops alerting) - the shared affirmative term with AnomalyStatus.
 	Status ViolationStatus `json:"status"`
 
-	// Summary Render-ready investigate sentence. The UI should display it as-is (service, rule, and offending edge).
+	// Summary Render-ready investigate sentence (rule and offending edge; the service is a separate field). The UI should display it as-is.
 	Summary string `json:"summary"`
 }
 
