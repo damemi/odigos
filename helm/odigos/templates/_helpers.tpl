@@ -63,6 +63,29 @@ true
 {{- end -}}
 {{- end -}}
 
+{{- define "odigos.aidenSlackEnabled" -}}
+{{- if and (.Values.aiden.slack.key | default "") (.Values.aiden.slack.botToken | default "") -}}true{{- end -}}
+{{- end -}}
+
+{{/*
+Gateway token for the in-UI Aiden chat proxy. Prefer an explicit values override,
+then the existing Secret so upgrades keep the same token, otherwise generate one.
+Only invoke this helper once per render (the Secret); the UI and Aiden pods read
+the token from odigos-aiden/gateway-token.
+*/}}
+{{- define "odigos.aidenGatewayToken" -}}
+{{- if .Values.aiden.gateway.token -}}
+{{- .Values.aiden.gateway.token -}}
+{{- else -}}
+{{- $secret := lookup "v1" "Secret" .Release.Namespace "odigos-aiden" -}}
+{{- if and $secret $secret.data (index $secret.data "gateway-token") -}}
+{{- index $secret.data "gateway-token" | b64dec -}}
+{{- else -}}
+{{- randAlphaNum 48 -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "odigos.validateAiden" -}}
 {{- if .Values.aiden.enabled -}}
 {{- if not (include "odigos.secretExists" .) -}}
@@ -74,14 +97,21 @@ true
 {{- if not .Values.aiden.gemini.key -}}
 {{- fail "aiden.enabled is true, but aiden.gemini.key is empty. Provide a Google Gemini API key so Aiden can reach its LLM backend." -}}
 {{- end -}}
-{{- if not .Values.aiden.slack.key -}}
-{{- fail "aiden.enabled is true, but aiden.slack.key is empty. Provide a Slack app-level token (xapp-...) so Aiden can open its Socket Mode connection." -}}
+{{- $slackKey := .Values.aiden.slack.key | default "" -}}
+{{- $slackBot := .Values.aiden.slack.botToken | default "" -}}
+{{- if and $slackKey (not $slackBot) -}}
+{{- fail "aiden.slack.key is set, but aiden.slack.botToken is empty. Provide both Slack tokens, or leave both empty to use only the in-UI Aiden chat." -}}
 {{- end -}}
-{{- if not .Values.aiden.slack.botToken -}}
-{{- fail "aiden.enabled is true, but aiden.slack.botToken is empty. Provide a Slack bot user OAuth token (xoxb-...) so Aiden can call the Slack Web API." -}}
+{{- if and $slackBot (not $slackKey) -}}
+{{- fail "aiden.slack.botToken is set, but aiden.slack.key is empty. Provide both Slack tokens, or leave both empty to use only the in-UI Aiden chat." -}}
 {{- end -}}
-{{- if and .Values.aiden.interrogation.enabled (not .Values.aiden.slack.interrogationTarget) -}}
+{{- if .Values.aiden.interrogation.enabled -}}
+{{- if not (and $slackKey $slackBot) -}}
+{{- fail "aiden.interrogation.enabled is true, but Slack is not configured. Interrogation posts proposals to Slack; set aiden.slack.key and aiden.slack.botToken, or disable interrogation and use the in-UI chat." -}}
+{{- end -}}
+{{- if not .Values.aiden.slack.interrogationTarget -}}
 {{- fail "aiden.interrogation.enabled is true, but aiden.slack.interrogationTarget is empty. Set a Slack target such as channel:C0123456789." -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

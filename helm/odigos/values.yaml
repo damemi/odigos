@@ -1545,10 +1545,10 @@ insights:
 # @schema
 # description: |-
 #   Aiden is Odigos' in-cluster AI agent, running an OpenClaw gateway image built for Odigos
-#   (see aiden/README.md and `make build-aiden-image`). When enabled, Aiden connects to Google
-#   Gemini as its LLM backend, to Slack as a chat interface (via Socket Mode, so no inbound
-#   Service/Ingress is required), and to the Odigos Enterprise MCP server mounted on the `ui`
-#   Service (see ui.mcp) to inspect and configure the cluster on your behalf.
+#   (see aiden/README.md and `make build-aiden-image`). When enabled, the in-UI Aiden chat is
+#   always configured (Control UI + ClusterIP gateway, reverse-proxied by the Odigos UI).
+#   Slack is optional. Aiden also talks to Google Gemini and to the Odigos Enterprise MCP
+#   server mounted on the `ui` Service (see ui.mcp).
 #   Requires Odigos Enterprise (a valid on-prem token) and ui.mcp.enabled (default true).
 # @schema
 aiden:
@@ -1561,7 +1561,7 @@ aiden:
   # description: |-
   #   Enable Aiden interrogation: collector profile/trace correlation, evidence delivery
   #   to the Enterprise UI inbox, and the analysis-only cron that proposes instrumentation
-  #   for Slack approval. Requires aiden.slack.interrogationTarget.
+  #   for Slack approval. Requires Slack tokens and aiden.slack.interrogationTarget.
   # @schema
   interrogation:
     enabled: false
@@ -1630,21 +1630,36 @@ aiden:
     model: google/gemini-3-flash-preview
 
   # @schema
-  # description: Configuration for connecting Aiden to Slack.
+  # description: |-
+  #   Optional shared secret for the OpenClaw gateway (in-UI chat). Empty (default)
+  #   generates a token on first install and reuses it from the odigos-aiden Secret
+  #   on upgrade. The Odigos UI injects this token when proxying /api/aiden/ws;
+  #   do not put the gateway behind a public Ingress.
+  # @schema
+  gateway:
+    token: ''
+
+  # @schema
+  # description: |-
+  #   Optional Slack Socket Mode connection. Leave both tokens empty to use only
+  #   the in-UI Aiden chat. Both key and botToken are required together if set.
+  #   Interrogation still requires Slack.
   # @schema
   slack:
     # @schema
     # description: |-
     #   Slack app-level token (starts with 'xapp-', requires the connections:write scope).
     #   Used by Aiden to open an outbound Socket Mode connection to Slack, so no public
-    #   endpoint needs to be exposed for Aiden to receive messages.
+    #   endpoint needs to be exposed for Aiden to receive Slack messages. Optional when
+    #   using only the in-UI chat.
     # @schema
     key: ''
 
     # @schema
     # description: |-
     #   Slack bot user OAuth token (starts with 'xoxb-'). Used by Aiden to call the Slack Web
-    #   API, e.g. to post messages back into a channel or thread.
+    #   API, e.g. to post messages back into a channel or thread. Optional when using only
+    #   the in-UI chat.
     # @schema
     botToken: ''
 

@@ -14,7 +14,7 @@ spec:
     matchLabels:
       app.kubernetes.io/name: odigos-aiden
   strategy:
-    # Single replica with local ephemeral state (Slack Socket Mode connection, /home/node/.openclaw);
+    # Single replica with local ephemeral state (gateway chat session, /home/node/.openclaw);
     # avoid two pods running the same OpenClaw gateway identity at once during a rollout.
     type: Recreate
   template:
@@ -140,6 +140,12 @@ spec:
               secretKeyRef:
                 name: odigos-aiden
                 key: gemini-api-key
+          - name: OPENCLAW_GATEWAY_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: odigos-aiden
+                key: gateway-token
+          {{- if include "odigos.aidenSlackEnabled" . }}
           # Env fallback consumed by openclaw.json's channels.slack (mode: socket) for the
           # default Slack account; see /home/node/.openclaw/openclaw.json.
           - name: SLACK_APP_TOKEN
@@ -152,6 +158,7 @@ spec:
               secretKeyRef:
                 name: odigos-aiden
                 key: slack-bot-token
+          {{- end }}
           # Jaeger skill reads endpoints from Helm-rendered config (not baked into the image).
           - name: JAEGER_SKILL_CONFIG
             value: /config/jaeger-config.json

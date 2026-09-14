@@ -10,7 +10,7 @@
     },
     "aiden": {
       "additionalProperties": false,
-      "description": "Aiden is Odigos' in-cluster AI agent, running an OpenClaw gateway image built for Odigos\n(see aiden/README.md and `make build-aiden-image`). When enabled, Aiden connects to Google\nGemini as its LLM backend, to Slack as a chat interface (via Socket Mode, so no inbound\nService/Ingress is required), and to the Odigos Enterprise MCP server mounted on the `ui`\nService (see ui.mcp) to inspect and configure the cluster on your behalf.\nRequires Odigos Enterprise (a valid on-prem token) and ui.mcp.enabled (default true).",
+      "description": "Aiden is Odigos' in-cluster AI agent, running an OpenClaw gateway image built for Odigos\n(see aiden/README.md and `make build-aiden-image`). When enabled, the in-UI Aiden chat is\nalways configured (Control UI + ClusterIP gateway, reverse-proxied by the Odigos UI).\nSlack is optional. Aiden also talks to Google Gemini and to the Odigos Enterprise MCP\nserver mounted on the `ui` Service (see ui.mcp).\nRequires Odigos Enterprise (a valid on-prem token) and ui.mcp.enabled (default true).",
       "properties": {
         "affinity": {
           "additionalProperties": true,
@@ -31,7 +31,7 @@
         },
         "interrogation": {
           "additionalProperties": false,
-          "description": "Enable Aiden interrogation: collector profile/trace correlation, UI evidence inbox, and the analysis-only Slack approval cron. Requires aiden.slack.interrogationTarget.",
+          "description": "Enable Aiden interrogation: collector profile/trace correlation, evidence delivery\nto the Enterprise UI inbox, and the analysis-only cron that proposes instrumentation\nfor Slack approval. Requires Slack tokens and aiden.slack.interrogationTarget.",
           "properties": {
             "enabled": {
               "default": false,
@@ -42,6 +42,20 @@
           "required": [],
           "title": "interrogation",
           "type": "object"
+        },
+        "gateway": {
+          "additionalProperties": false,
+          "description": "Optional shared secret for the OpenClaw gateway (in-UI chat). Empty (default)\ngenerates a token on first install and reuses it from the odigos-aiden Secret\non upgrade. The Odigos UI injects this token when proxying /api/aiden/ws;\ndo not put the gateway behind a public Ingress.",
+          "properties": {
+            "token": {
+              "default": "",
+              "description": "Optional shared secret for the OpenClaw gateway (in-UI chat). Empty (default) generates a token on first install and reuses it from the odigos-aiden Secret on upgrade.",
+              "required": [],
+              "title": "token"
+            }
+          },
+          "required": [],
+          "title": "gateway"
         },
         "gemini": {
           "additionalProperties": false,
@@ -184,17 +198,17 @@
         },
         "slack": {
           "additionalProperties": false,
-          "description": "Configuration for connecting Aiden to Slack.",
+          "description": "Optional Slack Socket Mode connection. Leave both tokens empty to use only\nthe in-UI Aiden chat. Both key and botToken are required together if set.\nInterrogation still requires Slack.",
           "properties": {
             "botToken": {
               "default": "",
-              "description": "Slack bot user OAuth token (starts with 'xoxb-'). Used by Aiden to call the Slack Web\nAPI, e.g. to post messages back into a channel or thread.",
+              "description": "Slack bot user OAuth token (starts with 'xoxb-'). Used by Aiden to call the Slack Web\nAPI, e.g. to post messages back into a channel or thread. Optional when using only\nthe in-UI chat.",
               "required": [],
               "title": "botToken"
             },
             "key": {
               "default": "",
-              "description": "Slack app-level token (starts with 'xapp-', requires the connections:write scope).\nUsed by Aiden to open an outbound Socket Mode connection to Slack, so no public\nendpoint needs to be exposed for Aiden to receive messages.",
+              "description": "Slack app-level token (starts with 'xapp-', requires the connections:write scope).\nUsed by Aiden to open an outbound Socket Mode connection to Slack, so no public\nendpoint needs to be exposed for Aiden to receive Slack messages. Optional when\nusing only the in-UI chat.",
               "required": [],
               "title": "key"
             },
