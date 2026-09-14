@@ -6,21 +6,24 @@ package aiden
 
 import (
 	"os"
+)
 
-	"github.com/odigos-io/odigos/api/k8sconsts"
+const (
+	gatewayURLEnv   = "AIDEN_GATEWAY_URL"
+	gatewayTokenEnv = "AIDEN_GATEWAY_TOKEN"
 )
 
 // IsEnabled reports whether the UI should expose the Aiden chat. Helm sets
 // AIDEN_GATEWAY_URL and AIDEN_GATEWAY_TOKEN on the UI pod when aiden.enabled
 // is true.
 func IsEnabled() bool {
-	return os.Getenv(k8sconsts.AidenGatewayURLEnv) != "" && os.Getenv(k8sconsts.AidenGatewayTokenEnv) != ""
+	return os.Getenv(gatewayURLEnv) != "" && os.Getenv(gatewayTokenEnv) != ""
 }
 
 func gatewayURL() string {
-	return os.Getenv(k8sconsts.AidenGatewayURLEnv)
+	return os.Getenv(gatewayURLEnv)
 }
 
 func gatewayToken() string {
-	return os.Getenv(k8sconsts.AidenGatewayTokenEnv)
+	return os.Getenv(gatewayTokenEnv)
 }

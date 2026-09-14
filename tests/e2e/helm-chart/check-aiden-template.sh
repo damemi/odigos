@@ -38,7 +38,8 @@ grep -q 'OPENCLAW_GATEWAY_TOKEN' "$rendered"
 grep -q 'AIDEN_GATEWAY_URL' "$rendered"
 grep -q 'kind: Service' "$rendered"
 grep -q 'name: odigos-aiden' "$rendered"
-grep -q '"bind": "lan"' "$rendered"
+grep -q '"bind": "loopback"' "$rendered"
+grep -q '"port": 18790' "$rendered"
 # Slack channel must not be configured when tokens are omitted.
 if grep -q '"slack"' "$rendered"; then
   echo "expected no Slack channel when slack tokens are empty" >&2

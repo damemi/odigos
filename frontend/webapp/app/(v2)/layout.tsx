@@ -5,10 +5,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import styled from 'styled-components';
 import { OverviewHeader } from '@/components';
 import { Navbar } from '@odigos/ui-kit/components';
-import { ToastList } from '@odigos/ui-kit/containers';
+import { Aiden, ToastList } from '@odigos/ui-kit/containers';
 import OdigosApiAdapter from '@/lib/odigos-api-adapter';
 import { OdigosProvider } from '@odigos/ui-kit/contexts';
-import { getNavbarIcons, INITIAL_CONTEXT, toPlatformType } from '@/utils';
+import { API, getNavbarIcons, INITIAL_CONTEXT, toPlatformType } from '@/utils';
 import { useConfig, useSSE, useTokenTracker } from '@/hooks';
 import { ErrorBoundary, FlexColumn, FlexRow } from '@odigos/ui-kit/components';
 
@@ -35,11 +35,12 @@ function InnerLayout({ children }: PropsWithChildren) {
       <ViewportColumn $gap={0}>
         <OverviewHeader />
         <ContentRow $gap={0}>
-          <Navbar height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname, config?.insightsEnabled, config?.aidenEnabled)} />
+          <Navbar height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname, config?.insightsEnabled)} />
           {children}
         </ContentRow>
       </ViewportColumn>
 
+      {config?.aidenEnabled && <Aiden wsUrl={`${API.BACKEND_HTTP_ORIGIN.replace(/^http/, 'ws')}/api/aiden/ws`} />}
       <ToastList />
     </OdigosProvider>
   );

@@ -8,8 +8,8 @@
 {{- $openclawConfig := dict
       "gateway" (dict
         "mode" "local"
-        "bind" "lan"
-        "port" 18789
+        "bind" "loopback"
+        "port" 18790
         "auth" (dict
           "mode" "token"
           "token" (dict "source" "env" "provider" "default" "id" "OPENCLAW_GATEWAY_TOKEN")
@@ -35,9 +35,8 @@
           "skipBootstrap" true
           "model" (dict "primary" (.Values.aiden.gemini.model | default "google/gemini-3-flash-preview"))
         )
-        "list" (list
-          (dict
-            "id" "default"
+        "entries" (dict
+          "default" (dict
             "name" "Odigos Aiden"
             "workspace" "~/.openclaw/workspace"
             "identity" (dict
