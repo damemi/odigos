@@ -49,6 +49,45 @@ if grep -q 'SLACK_APP_TOKEN' "$rendered"; then
   exit 1
 fi
 
+# Interrogation without Slack: cron targets the UI main session, no Slack announce.
+cat >"$values_file" <<'EOF'
+onPremToken: test-token
+aiden:
+  enabled: true
+  interrogation:
+    enabled: true
+  gemini:
+    key: placeholder-gemini-key
+  jaeger:
+    endpoints:
+      default: http://jaeger-query.tracing.svc:16686
+EOF
+
+helm template odigos "$P/helm/odigos" \
+  --namespace odigos-system \
+  -f "$values_file" \
+  --show-only templates/aiden/deployment.yaml \
+  >"$rendered"
+
+grep -q -- '--session main' "$rendered"
+grep -q -- '--name odigos-interrogation' "$rendered"
+if grep -q -- '--channel slack' "$rendered"; then
+  echo "expected no Slack announce when interrogation is on and Slack is omitted" >&2
+  exit 1
+fi
+
+# interrogationTarget without Slack tokens must fail.
+if helm template odigos "$P/helm/odigos" \
+  --namespace odigos-system \
+  -f "$values_file" \
+  --set aiden.slack.interrogationTarget='channel:C0123456789' \
+  --show-only templates/aiden/deployment.yaml \
+  >/dev/null 2>"$rendered"; then
+  echo "expected helm template to fail when interrogationTarget is set without Slack tokens" >&2
+  exit 1
+fi
+grep -q 'interrogationTarget is set' "$rendered"
+
 cat >"$values_file" <<'EOF'
 onPremToken: test-token
 aiden:
@@ -73,5 +112,34 @@ helm template odigos "$P/helm/odigos" \
 grep -q 'jaeger-config.json' "$rendered"
 grep -q 'SLACK_APP_TOKEN' "$rendered"
 grep -q '"slack"' "$rendered"
+
+# Interrogation with Slack: UI session plus Slack announce of the same reply.
+cat >"$values_file" <<'EOF'
+onPremToken: test-token
+aiden:
+  enabled: true
+  interrogation:
+    enabled: true
+  gemini:
+    key: placeholder-gemini-key
+  slack:
+    key: xapp-placeholder
+    botToken: xoxb-placeholder
+    interrogationTarget: channel:C0123456789
+  jaeger:
+    endpoints:
+      default: http://jaeger-query.tracing.svc:16686
+EOF
+
+helm template odigos "$P/helm/odigos" \
+  --namespace odigos-system \
+  -f "$values_file" \
+  --show-only templates/aiden/deployment.yaml \
+  >"$rendered"
+
+grep -q -- '--session main' "$rendered"
+grep -q -- '--announce' "$rendered"
+grep -q -- '--channel slack' "$rendered"
+grep -q -- 'channel:C0123456789' "$rendered"
 
 echo "Aiden helm template checks passed"

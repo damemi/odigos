@@ -1561,7 +1561,8 @@ aiden:
   # description: |-
   #   Enable Aiden interrogation: collector profile/trace correlation, evidence delivery
   #   to the Enterprise UI inbox, and the analysis-only cron that proposes instrumentation
-  #   for Slack approval. Requires Slack tokens and aiden.slack.interrogationTarget.
+  #   in the in-UI Aiden chat. Slack is an optional extra copy of the same ask
+  #   (aiden.slack.interrogationTarget) when Slack tokens are also set.
   # @schema
   interrogation:
     enabled: false
@@ -1643,7 +1644,7 @@ aiden:
   # description: |-
   #   Optional Slack Socket Mode connection. Leave both tokens empty to use only
   #   the in-UI Aiden chat. Both key and botToken are required together if set.
-  #   Interrogation still requires Slack.
+  #   Interrogation uses the UI chat by default; Slack is an optional extra output.
   # @schema
   slack:
     # @schema
@@ -1664,7 +1665,10 @@ aiden:
     botToken: ''
 
     # @schema
-    # description: Slack destination for scheduled interrogation proposals (for example channel:C0123456789).
+    # description: |-
+    #   Optional Slack destination that also receives interrogation proposals
+    #   (for example channel:C0123456789). The in-UI Aiden chat always gets the
+    #   ask; this is an extra copy. Requires Slack tokens when set.
     # @schema
     interrogationTarget: ''
 

@@ -67,6 +67,11 @@ true
 {{- if and (.Values.aiden.slack.key | default "") (.Values.aiden.slack.botToken | default "") -}}true{{- end -}}
 {{- end -}}
 
+{{/* True when interrogation should also announce the same reply to Slack. */}}
+{{- define "odigos.aidenSlackInterrogationAnnounce" -}}
+{{- if and (include "odigos.aidenSlackEnabled" .) (.Values.aiden.slack.interrogationTarget | default "") -}}true{{- end -}}
+{{- end -}}
+
 {{/*
 Gateway token for the in-UI Aiden chat proxy. Prefer an explicit values override,
 then the existing Secret so upgrades keep the same token, otherwise generate one.
@@ -105,13 +110,8 @@ the token from odigos-aiden/gateway-token.
 {{- if and $slackBot (not $slackKey) -}}
 {{- fail "aiden.slack.botToken is set, but aiden.slack.key is empty. Provide both Slack tokens, or leave both empty to use only the in-UI Aiden chat." -}}
 {{- end -}}
-{{- if .Values.aiden.interrogation.enabled -}}
-{{- if not (and $slackKey $slackBot) -}}
-{{- fail "aiden.interrogation.enabled is true, but Slack is not configured. Interrogation posts proposals to Slack; set aiden.slack.key and aiden.slack.botToken, or disable interrogation and use the in-UI chat." -}}
-{{- end -}}
-{{- if not .Values.aiden.slack.interrogationTarget -}}
-{{- fail "aiden.interrogation.enabled is true, but aiden.slack.interrogationTarget is empty. Set a Slack target such as channel:C0123456789." -}}
-{{- end -}}
+{{- if and (.Values.aiden.slack.interrogationTarget | default "") (not (and $slackKey $slackBot)) -}}
+{{- fail "aiden.slack.interrogationTarget is set, but Slack tokens are empty. Provide aiden.slack.key and aiden.slack.botToken to mirror interrogation to Slack, or clear interrogationTarget to use only the in-UI chat." -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

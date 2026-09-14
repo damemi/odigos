@@ -31,7 +31,7 @@
         },
         "interrogation": {
           "additionalProperties": false,
-          "description": "Enable Aiden interrogation: collector profile/trace correlation, evidence delivery\nto the Enterprise UI inbox, and the analysis-only cron that proposes instrumentation\nfor Slack approval. Requires Slack tokens and aiden.slack.interrogationTarget.",
+          "description": "Enable Aiden interrogation: collector profile/trace correlation, evidence delivery\nto the Enterprise UI inbox, and the analysis-only cron that proposes instrumentation\nin the in-UI Aiden chat. Slack is an optional extra copy of the same ask\n(aiden.slack.interrogationTarget) when Slack tokens are also set.",
           "properties": {
             "enabled": {
               "default": false,
@@ -198,7 +198,7 @@
         },
         "slack": {
           "additionalProperties": false,
-          "description": "Optional Slack Socket Mode connection. Leave both tokens empty to use only\nthe in-UI Aiden chat. Both key and botToken are required together if set.\nInterrogation still requires Slack.",
+          "description": "Optional Slack Socket Mode connection. Leave both tokens empty to use only\nthe in-UI Aiden chat. Both key and botToken are required together if set.\nInterrogation uses the UI chat by default; Slack is an optional extra output.",
           "properties": {
             "botToken": {
               "default": "",
@@ -214,7 +214,7 @@
             },
             "interrogationTarget": {
               "default": "",
-              "description": "Slack destination for scheduled interrogation proposals (for example channel:C0123456789).",
+              "description": "Optional Slack destination that also receives interrogation proposals\n(for example channel:C0123456789). The in-UI Aiden chat always gets the\nask; this is an extra copy. Requires Slack tokens when set.",
               "required": [],
               "title": "interrogationTarget",
               "type": "string"
