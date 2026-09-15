@@ -85,6 +85,7 @@ func TestAddInterrogationExporters_EnabledAppendsToProfilesPipeline(t *testing.T
 	exp, ok := c.Exporters[commonconf.InterrogationProfilesExporter].(config.GenericMap)
 	require.True(t, ok, "profiles exporter must be registered")
 	assert.Equal(t, commonconf.InterrogationCacheExtension, exp["interrogation_cache_extension"])
+	assert.Equal(t, "odigos-interrogation-redis.odigos-system:6379", exp["redis_endpoint"])
 
 	_, hasExt := c.Extensions[commonconf.InterrogationCacheExtension]
 	assert.True(t, hasExt, "cache extension must be registered")

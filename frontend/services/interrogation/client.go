@@ -19,10 +19,15 @@ import (
 
 const (
 	// Must match odigosinterrogationtracesexporter key format.
-	txFunctionsKeyPrefix = "interrogation:tx:funcs:"
-	txCountKeyPrefix     = "interrogation:tx:count:"
-	txFnCountsKeyPrefix  = "interrogation:tx:fncounts:"
-	txSpansKeyPrefix     = "interrogation:tx:spans:"
+	txFunctionsKeyPrefix  = "interrogation:tx:funcs:"
+	txCountKeyPrefix      = "interrogation:tx:count:"
+	txFnCountsKeyPrefix   = "interrogation:tx:fncounts:"
+	txSpansKeyPrefix      = "interrogation:tx:spans:"
+	txTrieCountsKeyPrefix = "interrogation:tx:trie:counts:"
+	txTrieMetaKeyPrefix   = "interrogation:tx:trie:meta:"
+
+	trieRootParent = "root"
+	trieMetaSep    = "\x1f"
 
 	redisDialTimeout  = 5 * time.Second
 	redisReadTimeout  = 2 * time.Second
@@ -51,6 +56,17 @@ type Transaction struct {
 	// SeenCount is how many times this transaction was observed.
 	SeenCount int64
 	Functions []Function
+}
+
+// CallTrieNode is one flat node in a transaction call-path trie.
+// ParentID is empty for roots (Redis parent "root").
+type CallTrieNode struct {
+	ID         string
+	ParentID   string
+	Name       string
+	FrameType  string
+	SampleType string
+	SeenCount  int64
 }
 
 // ContainerTransactions is the result for one workload container.
@@ -205,6 +221,35 @@ func (c *Client) GetTransactionSampleTrace(ctx context.Context, namespace, kind,
 	return raw, nil
 }
 
+// GetTransactionCallTrie returns flat call-path trie nodes for a transaction.
+// ok is false when neither trie hash exists (caller should treat as null).
+func (c *Client) GetTransactionCallTrie(ctx context.Context, namespace, kind, name, containerName, txID string) (nodes []CallTrieNode, ok bool, err error) {
+	if c == nil || c.rdb == nil {
+		return nil, false, ErrUnavailable
+	}
+	namespace = strings.TrimSpace(namespace)
+	kind = strings.TrimSpace(kind)
+	name = strings.TrimSpace(name)
+	containerName = strings.TrimSpace(containerName)
+	txID = strings.TrimSpace(txID)
+	if namespace == "" || kind == "" || name == "" || containerName == "" || txID == "" {
+		return nil, false, fmt.Errorf("namespace, kind, name, containerName, and transactionId are required")
+	}
+
+	counts, err := c.rdb.HGetAll(ctx, txTrieCountsKey(namespace, kind, name, containerName, txID)).Result()
+	if err != nil {
+		return nil, false, fmt.Errorf("%w: hgetall trie counts: %v", ErrUnavailable, err)
+	}
+	meta, err := c.rdb.HGetAll(ctx, txTrieMetaKey(namespace, kind, name, containerName, txID)).Result()
+	if err != nil {
+		return nil, false, fmt.Errorf("%w: hgetall trie meta: %v", ErrUnavailable, err)
+	}
+	if len(counts) == 0 && len(meta) == 0 {
+		return nil, false, nil
+	}
+	return buildCallTrie(meta, counts), true, nil
+}
+
 func workloadContainerPrefix(namespace, kind, name, containerName string) string {
 	return fmt.Sprintf("%s%s/%s/%s/%s:", txFunctionsKeyPrefix, namespace, kind, name, containerName)
 }
@@ -221,6 +266,14 @@ func txSpansKey(namespace, kind, name, containerName, txID string) string {
 	return fmt.Sprintf("%s%s/%s/%s/%s:%s", txSpansKeyPrefix, namespace, kind, name, containerName, txID)
 }
 
+func txTrieCountsKey(namespace, kind, name, containerName, txID string) string {
+	return fmt.Sprintf("%s%s/%s/%s/%s:%s", txTrieCountsKeyPrefix, namespace, kind, name, containerName, txID)
+}
+
+func txTrieMetaKey(namespace, kind, name, containerName, txID string) string {
+	return fmt.Sprintf("%s%s/%s/%s/%s:%s", txTrieMetaKeyPrefix, namespace, kind, name, containerName, txID)
+}
+
 func transactionIDFromKey(key, prefix string) (string, bool) {
 	if !strings.HasPrefix(key, prefix) {
 		return "", false
@@ -229,6 +282,7 @@ func transactionIDFromKey(key, prefix string) (string, bool) {
 }
 
 // parseFunctionMember parses "name|frameType|sampleType".
+// Stack separators and other non-members return ok=false.
 func parseFunctionMember(member string) (Function, bool) {
 	parts := strings.SplitN(member, "|", 3)
 	if len(parts) != 3 || parts[0] == "" {

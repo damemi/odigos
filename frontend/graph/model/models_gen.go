@@ -1566,6 +1566,19 @@ type InstrumentorConfig struct {
 	CheckDeviceHealthBeforeInjection *bool   `json:"checkDeviceHealthBeforeInjection,omitempty"`
 }
 
+// One node in a transaction's call-path trie (flat list; assemble tree via parentId).
+type InterrogationCallTrieNode struct {
+	// Stable Redis node id for this call-path frame.
+	ID string `json:"id"`
+	// Parent node id, or null for roots (children of the Redis parent "root").
+	ParentID   *string `json:"parentId,omitempty"`
+	Name       string  `json:"name"`
+	FrameType  string  `json:"frameType"`
+	SampleType string  `json:"sampleType"`
+	// Times this call-path node was observed.
+	SeenCount int `json:"seenCount"`
+}
+
 // One detected function from a profile sample linked to a transaction.
 // Redis member format: name|frameType|sampleType.
 type InterrogationFunction struct {
@@ -1588,6 +1601,10 @@ type InterrogationTransaction struct {
 	// OTLP JSON traces sample for this transaction, if stored.
 	// Resolved on demand from Redis when selected; null when missing or interrogation is off.
 	SampleTrace *string `json:"sampleTrace,omitempty"`
+	// Flat call-path trie nodes for this transaction. Resolved on demand from Redis
+	// when selected; null when missing or interrogation is off. Empty when keys exist
+	// but have no nodes. Build the tree in the client via id/parentId.
+	CallTrie []*InterrogationCallTrieNode `json:"callTrie,omitempty"`
 }
 
 type JavaCustomProbe struct {

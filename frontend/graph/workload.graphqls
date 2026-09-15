@@ -410,6 +410,27 @@ type InterrogationFunction {
 }
 
 """
+One node in a transaction's call-path trie (flat list; assemble tree via parentId).
+"""
+type InterrogationCallTrieNode {
+  """
+  Stable Redis node id for this call-path frame.
+  """
+  id: String!
+  """
+  Parent node id, or null for roots (children of the Redis parent "root").
+  """
+  parentId: String
+  name: String!
+  frameType: String!
+  sampleType: String!
+  """
+  Times this call-path node was observed.
+  """
+  seenCount: Int!
+}
+
+"""
 One transaction observed for a workload container, with its Redis-stored functions.
 """
 type InterrogationTransaction {
@@ -427,6 +448,12 @@ type InterrogationTransaction {
   Resolved on demand from Redis when selected; null when missing or interrogation is off.
   """
   sampleTrace: String
+  """
+  Flat call-path trie nodes for this transaction. Resolved on demand from Redis
+  when selected; null when missing or interrogation is off. Empty when keys exist
+  but have no nodes. Build the tree in the client via id/parentId.
+  """
+  callTrie: [InterrogationCallTrieNode!]
 }
 
 # describes a single attribute of a process.

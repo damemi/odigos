@@ -134,6 +134,8 @@ models:
     fields:
       sampleTrace:
         resolver: true
+      callTrie:
+        resolver: true
 
   K8sActualSource:
     fields:

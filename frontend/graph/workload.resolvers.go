@@ -58,6 +58,41 @@ func (r *interrogationTransactionResolver) SampleTrace(ctx context.Context, obj 
 	return &raw, nil
 }
 
+// CallTrie is the resolver for the callTrie field.
+func (r *interrogationTransactionResolver) CallTrie(ctx context.Context, obj *model.InterrogationTransaction) ([]*model.InterrogationCallTrieNode, error) {
+	if obj == nil || obj.ID == "" {
+		return nil, nil
+	}
+	enabled, err := interrogation.IsEnabled(ctx, r.K8sCacheClient)
+	if err != nil {
+		return nil, fmt.Errorf("reading effective config for interrogation: %w", err)
+	}
+	if !enabled || r.InterrogationClient == nil {
+		return nil, nil
+	}
+
+	workloadID, containerName, err := interrogationTransactionParents(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	nodes, ok, err := r.InterrogationClient.GetTransactionCallTrie(
+		ctx,
+		workloadID.Namespace,
+		string(workloadID.Kind),
+		workloadID.Name,
+		containerName,
+		obj.ID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+	return interrogation.CallTrieToModel(nodes), nil
+}
+
 // MarkedForInstrumentation is the resolver for the markedForInstrumentation field.
 func (r *k8sNamespaceResolver) MarkedForInstrumentation(ctx context.Context, obj *model.K8sNamespace) (bool, error) {
 	l := loaders.For(ctx)
@@ -1111,4 +1146,3 @@ type k8sWorkloadContainerResolver struct{ *Resolver }
 type k8sWorkloadPodContainerResolver struct{ *Resolver }
 type k8sWorkloadRolloutResolver struct{ *Resolver }
 type k8sWorkloadTelemetryMetricsResolver struct{ *Resolver }
-

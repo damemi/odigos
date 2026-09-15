@@ -19,6 +19,8 @@ func TestParseFunctionMember(t *testing.T) {
 	assert.False(t, ok)
 	_, ok = parseFunctionMember("|jvm|events")
 	assert.False(t, ok)
+	_, ok = parseFunctionMember("\x1e") // stack separator stored in the funcs set
+	assert.False(t, ok)
 }
 
 func TestListContainerTransactions(t *testing.T) {

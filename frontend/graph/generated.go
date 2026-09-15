@@ -1231,6 +1231,15 @@ type ComplexityRoot struct {
 		MountMethod                      func(childComplexity int) int
 	}
 
+	InterrogationCallTrieNode struct {
+		FrameType  func(childComplexity int) int
+		ID         func(childComplexity int) int
+		Name       func(childComplexity int) int
+		ParentID   func(childComplexity int) int
+		SampleType func(childComplexity int) int
+		SeenCount  func(childComplexity int) int
+	}
+
 	InterrogationFunction struct {
 		FrameType  func(childComplexity int) int
 		Name       func(childComplexity int) int
@@ -1239,6 +1248,7 @@ type ComplexityRoot struct {
 	}
 
 	InterrogationTransaction struct {
+		CallTrie    func(childComplexity int) int
 		Functions   func(childComplexity int) int
 		ID          func(childComplexity int) int
 		SampleTrace func(childComplexity int) int
@@ -2218,6 +2228,7 @@ type InsightsResolver interface {
 }
 type InterrogationTransactionResolver interface {
 	SampleTrace(ctx context.Context, obj *model.InterrogationTransaction) (*string, error)
+	CallTrie(ctx context.Context, obj *model.InterrogationTransaction) ([]*model.InterrogationCallTrieNode, error)
 }
 type K8sActualNamespaceResolver interface {
 	Sources(ctx context.Context, obj *model.K8sActualNamespace) ([]*model.K8sActualSource, error)
@@ -7884,6 +7895,48 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.InstrumentorConfig.MountMethod(childComplexity), true
 
+	case "InterrogationCallTrieNode.frameType":
+		if e.complexity.InterrogationCallTrieNode.FrameType == nil {
+			break
+		}
+
+		return e.complexity.InterrogationCallTrieNode.FrameType(childComplexity), true
+
+	case "InterrogationCallTrieNode.id":
+		if e.complexity.InterrogationCallTrieNode.ID == nil {
+			break
+		}
+
+		return e.complexity.InterrogationCallTrieNode.ID(childComplexity), true
+
+	case "InterrogationCallTrieNode.name":
+		if e.complexity.InterrogationCallTrieNode.Name == nil {
+			break
+		}
+
+		return e.complexity.InterrogationCallTrieNode.Name(childComplexity), true
+
+	case "InterrogationCallTrieNode.parentId":
+		if e.complexity.InterrogationCallTrieNode.ParentID == nil {
+			break
+		}
+
+		return e.complexity.InterrogationCallTrieNode.ParentID(childComplexity), true
+
+	case "InterrogationCallTrieNode.sampleType":
+		if e.complexity.InterrogationCallTrieNode.SampleType == nil {
+			break
+		}
+
+		return e.complexity.InterrogationCallTrieNode.SampleType(childComplexity), true
+
+	case "InterrogationCallTrieNode.seenCount":
+		if e.complexity.InterrogationCallTrieNode.SeenCount == nil {
+			break
+		}
+
+		return e.complexity.InterrogationCallTrieNode.SeenCount(childComplexity), true
+
 	case "InterrogationFunction.frameType":
 		if e.complexity.InterrogationFunction.FrameType == nil {
 			break
@@ -7911,6 +7964,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.InterrogationFunction.SeenCount(childComplexity), true
+
+	case "InterrogationTransaction.callTrie":
+		if e.complexity.InterrogationTransaction.CallTrie == nil {
+			break
+		}
+
+		return e.complexity.InterrogationTransaction.CallTrie(childComplexity), true
 
 	case "InterrogationTransaction.functions":
 		if e.complexity.InterrogationTransaction.Functions == nil {
@@ -52063,6 +52123,267 @@ func (ec *executionContext) fieldContext_InstrumentorConfig_checkDeviceHealthBef
 	return fc, nil
 }
 
+func (ec *executionContext) _InterrogationCallTrieNode_id(ctx context.Context, field graphql.CollectedField, obj *model.InterrogationCallTrieNode) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InterrogationCallTrieNode_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InterrogationCallTrieNode_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InterrogationCallTrieNode",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InterrogationCallTrieNode_parentId(ctx context.Context, field graphql.CollectedField, obj *model.InterrogationCallTrieNode) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InterrogationCallTrieNode_parentId(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ParentID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InterrogationCallTrieNode_parentId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InterrogationCallTrieNode",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InterrogationCallTrieNode_name(ctx context.Context, field graphql.CollectedField, obj *model.InterrogationCallTrieNode) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InterrogationCallTrieNode_name(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InterrogationCallTrieNode_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InterrogationCallTrieNode",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InterrogationCallTrieNode_frameType(ctx context.Context, field graphql.CollectedField, obj *model.InterrogationCallTrieNode) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InterrogationCallTrieNode_frameType(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.FrameType, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InterrogationCallTrieNode_frameType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InterrogationCallTrieNode",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InterrogationCallTrieNode_sampleType(ctx context.Context, field graphql.CollectedField, obj *model.InterrogationCallTrieNode) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InterrogationCallTrieNode_sampleType(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.SampleType, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InterrogationCallTrieNode_sampleType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InterrogationCallTrieNode",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InterrogationCallTrieNode_seenCount(ctx context.Context, field graphql.CollectedField, obj *model.InterrogationCallTrieNode) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InterrogationCallTrieNode_seenCount(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.SeenCount, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InterrogationCallTrieNode_seenCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InterrogationCallTrieNode",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _InterrogationFunction_name(ctx context.Context, field graphql.CollectedField, obj *model.InterrogationFunction) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_InterrogationFunction_name(ctx, field)
 	if err != nil {
@@ -52417,6 +52738,61 @@ func (ec *executionContext) fieldContext_InterrogationTransaction_sampleTrace(_ 
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InterrogationTransaction_callTrie(ctx context.Context, field graphql.CollectedField, obj *model.InterrogationTransaction) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InterrogationTransaction_callTrie(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.InterrogationTransaction().CallTrie(rctx, obj)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]*model.InterrogationCallTrieNode)
+	fc.Result = res
+	return ec.marshalOInterrogationCallTrieNode2ᚕᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInterrogationCallTrieNodeᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InterrogationTransaction_callTrie(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InterrogationTransaction",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_InterrogationCallTrieNode_id(ctx, field)
+			case "parentId":
+				return ec.fieldContext_InterrogationCallTrieNode_parentId(ctx, field)
+			case "name":
+				return ec.fieldContext_InterrogationCallTrieNode_name(ctx, field)
+			case "frameType":
+				return ec.fieldContext_InterrogationCallTrieNode_frameType(ctx, field)
+			case "sampleType":
+				return ec.fieldContext_InterrogationCallTrieNode_sampleType(ctx, field)
+			case "seenCount":
+				return ec.fieldContext_InterrogationCallTrieNode_seenCount(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type InterrogationCallTrieNode", field.Name)
 		},
 	}
 	return fc, nil
@@ -56557,6 +56933,8 @@ func (ec *executionContext) fieldContext_K8sWorkloadContainer_interrogationTrans
 				return ec.fieldContext_InterrogationTransaction_functions(ctx, field)
 			case "sampleTrace":
 				return ec.fieldContext_InterrogationTransaction_sampleTrace(ctx, field)
+			case "callTrie":
+				return ec.fieldContext_InterrogationTransaction_callTrie(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type InterrogationTransaction", field.Name)
 		},
@@ -94675,6 +95053,67 @@ func (ec *executionContext) _InstrumentorConfig(ctx context.Context, sel ast.Sel
 	return out
 }
 
+var interrogationCallTrieNodeImplementors = []string{"InterrogationCallTrieNode"}
+
+func (ec *executionContext) _InterrogationCallTrieNode(ctx context.Context, sel ast.SelectionSet, obj *model.InterrogationCallTrieNode) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, interrogationCallTrieNodeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InterrogationCallTrieNode")
+		case "id":
+			out.Values[i] = ec._InterrogationCallTrieNode_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "parentId":
+			out.Values[i] = ec._InterrogationCallTrieNode_parentId(ctx, field, obj)
+		case "name":
+			out.Values[i] = ec._InterrogationCallTrieNode_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "frameType":
+			out.Values[i] = ec._InterrogationCallTrieNode_frameType(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sampleType":
+			out.Values[i] = ec._InterrogationCallTrieNode_sampleType(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "seenCount":
+			out.Values[i] = ec._InterrogationCallTrieNode_seenCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var interrogationFunctionImplementors = []string{"InterrogationFunction"}
 
 func (ec *executionContext) _InterrogationFunction(ctx context.Context, sel ast.SelectionSet, obj *model.InterrogationFunction) graphql.Marshaler {
@@ -94765,6 +95204,39 @@ func (ec *executionContext) _InterrogationTransaction(ctx context.Context, sel a
 					}
 				}()
 				res = ec._InterrogationTransaction_sampleTrace(ctx, field, obj)
+				return res
+			}
+
+			if field.Deferrable != nil {
+				dfs, ok := deferred[field.Deferrable.Label]
+				di := 0
+				if ok {
+					dfs.AddField(field)
+					di = len(dfs.Values) - 1
+				} else {
+					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
+					deferred[field.Deferrable.Label] = dfs
+				}
+				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
+					return innerFunc(ctx, dfs)
+				})
+
+				// don't run the out.Concurrently() call below
+				out.Values[i] = graphql.Null
+				continue
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+		case "callTrie":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._InterrogationTransaction_callTrie(ctx, field, obj)
 				return res
 			}
 
@@ -107216,6 +107688,16 @@ func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.Selecti
 	return res
 }
 
+func (ec *executionContext) marshalNInterrogationCallTrieNode2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInterrogationCallTrieNode(ctx context.Context, sel ast.SelectionSet, v *model.InterrogationCallTrieNode) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InterrogationCallTrieNode(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNInterrogationFunction2ᚕᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInterrogationFunctionᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.InterrogationFunction) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
@@ -111541,6 +112023,53 @@ func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.Sele
 	}
 	res := graphql.MarshalInt(*v)
 	return res
+}
+
+func (ec *executionContext) marshalOInterrogationCallTrieNode2ᚕᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInterrogationCallTrieNodeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.InterrogationCallTrieNode) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNInterrogationCallTrieNode2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInterrogationCallTrieNode(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) marshalOJavaCustomProbe2ᚕᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐJavaCustomProbe(ctx context.Context, sel ast.SelectionSet, v []*model.JavaCustomProbe) graphql.Marshaler {

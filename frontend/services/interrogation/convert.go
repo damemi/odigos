@@ -23,3 +23,23 @@ func TransactionsToModel(txs []Transaction) []*model.InterrogationTransaction {
 	}
 	return out
 }
+
+// CallTrieToModel converts flat call-path trie nodes to GraphQL models.
+func CallTrieToModel(nodes []CallTrieNode) []*model.InterrogationCallTrieNode {
+	out := make([]*model.InterrogationCallTrieNode, 0, len(nodes))
+	for _, n := range nodes {
+		var parentID *string
+		if n.ParentID != "" {
+			parentID = &n.ParentID
+		}
+		out = append(out, &model.InterrogationCallTrieNode{
+			ID:         n.ID,
+			ParentID:   parentID,
+			Name:       n.Name,
+			FrameType:  n.FrameType,
+			SampleType: n.SampleType,
+			SeenCount:  int(n.SeenCount),
+		})
+	}
+	return out
+}
