@@ -31,14 +31,40 @@ import (
 type GuardrailConfig struct {
 	index atomic.Pointer[repo.ScopeIndex[repo.ServiceGuardrail]]
 	byTxn atomic.Pointer[map[int64]repo.ServiceGuardrail]
+	// shadow holds the open recommendations per transaction, evaluated on live
+	// traffic to build confidence without ever firing a finding.
+	shadow atomic.Pointer[map[int64][]shadowSpec]
 }
 
-// newGuardrailConfig wraps an already-built scope index and byTxn map.
-func newGuardrailConfig(idx *repo.ScopeIndex[repo.ServiceGuardrail], byTxn map[int64]repo.ServiceGuardrail) *GuardrailConfig {
+// shadowSpec is one open recommendation as the per-trace path checks it.
+type shadowSpec struct {
+	id   string
+	spec repo.CorrelationSpec
+}
+
+// maxShadowSpecsPerTransaction bounds the per-trace cost of shadow evaluation:
+// only the strongest open recommendations of a transaction are checked live.
+const maxShadowSpecsPerTransaction = 10
+
+// newGuardrailConfig wraps an already-built scope index, byTxn map, and shadow set.
+func newGuardrailConfig(idx *repo.ScopeIndex[repo.ServiceGuardrail], byTxn map[int64]repo.ServiceGuardrail, shadow map[int64][]shadowSpec) *GuardrailConfig {
 	cfg := &GuardrailConfig{}
 	cfg.index.Store(idx)
 	cfg.byTxn.Store(&byTxn)
+	cfg.shadow.Store(&shadow)
 	return cfg
+}
+
+// ShadowSpecs returns the open recommendations to shadow-evaluate for a
+// transaction. The common case (no open recommendations) is one map miss.
+func (cfg *GuardrailConfig) shadowSpecs(transactionID int64) []shadowSpec {
+	if cfg == nil {
+		return nil
+	}
+	if m := cfg.shadow.Load(); m != nil {
+		return (*m)[transactionID]
+	}
+	return nil
 }
 
 // Resolve returns the most specific guardrail governing a (transaction,
@@ -79,8 +105,13 @@ func (cfg *GuardrailConfig) Reload(ctx context.Context, r repo.Repository) error
 	if err != nil {
 		return err
 	}
+	shadow, err := loadShadowSpecs(ctx, r)
+	if err != nil {
+		return err
+	}
 	cfg.index.Store(idx)
 	cfg.byTxn.Store(&byTxn)
+	cfg.shadow.Store(&shadow)
 	return nil
 }
 
@@ -91,9 +122,33 @@ func (cfg *GuardrailConfig) Reload(ctx context.Context, r repo.Repository) error
 func LoadGuardrailConfig(ctx context.Context, r repo.Repository) (*GuardrailConfig, error) {
 	idx, byTxn, err := loadServiceGuardrails(ctx, r)
 	if err != nil {
-		return newGuardrailConfig(&repo.ScopeIndex[repo.ServiceGuardrail]{}, map[int64]repo.ServiceGuardrail{}), err
+		return newGuardrailConfig(&repo.ScopeIndex[repo.ServiceGuardrail]{}, map[int64]repo.ServiceGuardrail{}, nil), err
 	}
-	return newGuardrailConfig(idx, byTxn), nil
+	shadow, err := loadShadowSpecs(ctx, r)
+	if err != nil {
+		return newGuardrailConfig(idx, byTxn, nil), err
+	}
+	return newGuardrailConfig(idx, byTxn, shadow), nil
+}
+
+// loadShadowSpecs reads the open attribute_correlation recommendations, best
+// rank first, keeping at most maxShadowSpecsPerTransaction per transaction.
+func loadShadowSpecs(ctx context.Context, r repo.Repository) (map[int64][]shadowSpec, error) {
+	recs, err := r.ListRecommendations(ctx, repo.RecommendationFilter{
+		Kind:  repo.RecommendationKindAttributeCorrelation,
+		State: repo.RecommendationOpen,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := map[int64][]shadowSpec{}
+	for _, rec := range recs {
+		if len(out[rec.TransactionID]) >= maxShadowSpecsPerTransaction {
+			continue
+		}
+		out[rec.TransactionID] = append(out[rec.TransactionID], shadowSpec{id: rec.ID, spec: rec.Spec})
+	}
+	return out, nil
 }
 
 // loadServiceGuardrails reads every guardrail row and indexes it: service/global

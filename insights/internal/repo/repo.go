@@ -10,6 +10,7 @@ package repo
 
 import (
 	"context"
+	"time"
 )
 
 // Repository is the single backend-facing dependency callers hold, implemented
@@ -157,6 +158,50 @@ type Repository interface {
 	// transaction and counts in memory from there, so the per-reason sample caps
 	// hold across restarts without a query per candidate sample.
 	CountObservationsByReason(ctx context.Context, transactionID int64) (map[string]int, error)
+
+	// ListObservationsWithRaw returns the newest stored traces for one
+	// (transaction, sample_reason) including raw OTLP, newest first. Cold path
+	// only - the recommendation miner reads a transaction's relation samples in
+	// one query instead of one blob fetch per trace.
+	ListObservationsWithRaw(ctx context.Context, transactionID int64, sampleReason string, limit int) ([]Observation, error)
+
+	// ---------- guardrail recommendations ----------
+
+	// UpsertRecommendations writes a mining run's rows for one transaction,
+	// keyed by recommendation id; re-inserting an id replaces it. The caller
+	// carries over State/CreatedAt from the previous rows so decisions survive.
+	UpsertRecommendations(ctx context.Context, recs []Recommendation) error
+
+	// ListRecommendations returns recommendations matching filter with live
+	// counters and transaction identity joined, best rank first.
+	ListRecommendations(ctx context.Context, filter RecommendationFilter) ([]Recommendation, error)
+
+	// GetRecommendation returns one recommendation by id; ok=false when unknown.
+	GetRecommendation(ctx context.Context, id string) (Recommendation, bool, error)
+
+	// SetRecommendationState records the operator's decision on one
+	// recommendation. Called by apply / dismiss / restore / revert.
+	SetRecommendationState(ctx context.Context, id string, state RecommendationState) error
+
+	// AddRecommendationLiveCounts folds a flush batch of shadow-evaluation
+	// outcomes into the live counters. Called from the engine's buffered flush,
+	// never per trace.
+	AddRecommendationLiveCounts(ctx context.Context, deltas []RecommendationLiveDelta) error
+
+	// DeleteRecommendations removes every recommendation (and live counter) of
+	// one transaction, or of all transactions when transactionID is 0. Cold path
+	// - transaction delete / inventory reset.
+	DeleteRecommendations(ctx context.Context, transactionID int64) error
+
+	// ListRecommendationMiningCandidates returns promoted transactions whose
+	// relation samples are not yet mined, gained samples since the last run, or
+	// whose in-progress claim is older than staleClaim. scoredClasses is how
+	// many baseline classes must be promoted for a transaction to count.
+	ListRecommendationMiningCandidates(ctx context.Context, scoredClasses int, staleClaim time.Duration, limit int) ([]RecommendationMiningCandidate, error)
+
+	// RecordRecommendationMiningRun writes the claim (zero MinedAt) or the
+	// outcome of mining one transaction.
+	RecordRecommendationMiningRun(ctx context.Context, run RecommendationMiningRun) error
 
 	// ---------- policies ----------
 

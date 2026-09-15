@@ -296,6 +296,87 @@ func TestRenderFindings(t *testing.T) {
 	}
 }
 
+// TestRenderRecommendations executes the recommendations page for every tab
+// with more rows than the fold shows, so the row layout, the "show more" row,
+// and the edit dialogs all get exercised.
+func TestRenderRecommendations(t *testing.T) {
+	tmpls := parseTemplates()
+	var items []apitypes.Recommendation
+	for i := 0; i < recRowsShown+2; i++ {
+		items = append(items, apitypes.Recommendation{
+			Id: "rec-" + string(rune('a'+i)), Kind: apitypes.AttributeCorrelation, State: apitypes.RecommendationStateOpen,
+			Rank: i, TransactionId: 7, Service: "edge-gateway", Namespace: "bank", Operation: "GET banking/statements/{id}",
+			TransactionKind: apitypes.TransactionKind(repo.KindHTTP),
+			Title:           "edge-gateway/resolvePrincipal return.value matches account-service/getStatement arg.0",
+			Summary:         "In 51 of 51 sampled traces (10 distinct values), return.value ...",
+			Transform:       "core",
+			Spec: apitypes.CorrelationSpec{
+				Name:     "principal-matches-statement",
+				Left:     apitypes.CorrelationSelector{Service: "edge-gateway", Span: "resolvePrincipal", Attr: "return.value", Extract: `^client-(\d+)$`},
+				Right:    apitypes.CorrelationSelector{Service: "account-service", Span: "getStatement", Attr: "arg.0"},
+				Relation: apitypes.Equals, Severity: apitypes.SeverityCritical, Why: "why",
+			},
+			Confidence: apitypes.RecommendationConfidence{Level: apitypes.RecommendationConfidenceLevelHigh, Observed: 51, Held: 51, Distinct: 10, SampleCount: 51,
+				HoldRatio: 1, Reasons: []string{"Held on 51 of 51"}, LiveHeld: 12, LiveSince: time.Now(), LiveLast: time.Now()},
+			Examples: []apitypes.RecommendationExample{{TraceId: "t1", LeftValue: "client-1001", RightValue: "1001", ObservedAt: time.Now()}},
+			MinedAt:  time.Now(),
+		})
+	}
+	items[1].Examples = nil
+	items[2].Stale, items[3].AlreadyCovered = true, true
+	// Transport-mirrored relations: ordinary low-severity rows with the tag.
+	for _, id := range []string{"rec-t1", "rec-t2"} {
+		tr := items[0]
+		tr.Id, tr.Rank, tr.Transport = id, 100, true
+		tr.Spec.Severity = apitypes.SeverityLow
+		tr.Spec.Left = apitypes.CorrelationSelector{Service: "edge-gateway", Span: "documents publish", Attr: "messaging.kafka.message.key"}
+		tr.Spec.Right = apitypes.CorrelationSelector{Service: "render-worker", Span: "documents receive", Attr: "messaging.kafka.message.key"}
+		items = append(items, tr)
+	}
+	cards := buildRecommendationCards(items)
+	if len(cards) != 1 || len(cards[0].Transactions) != 1 || cards[0].Transactions[0].Shown != recRowsShown {
+		t.Fatalf("cards = %+v", cards)
+	}
+	if txn := cards[0].Transactions[0]; len(txn.Items) != recRowsShown+4 || cards[0].Count != recRowsShown+4 || txn.Items[len(txn.Items)-1].Id != "rec-t2" {
+		t.Fatalf("transport rows should list with the rest in rank order: %+v", txn)
+	}
+	for _, tab := range []string{"open", "applied", "dismissed"} {
+		data := map[string]any{
+			"Active": "recommendations", "Flash": "", "Error": "",
+			"Tab": tab, "Kind": "", "Kinds": recommendationKinds, "Namespace": "", "Service": "", "TransactionID": int64(0), "IncludeStale": false,
+			"Cards": cards, "Counts": recCounts{Open: 7},
+			"TabOpen": "/debug/recommendations?tab=open", "TabApplied": "/debug/recommendations?tab=applied", "TabDismissed": "/debug/recommendations?tab=dismissed",
+			"SelfURL":    "/debug/recommendations?tab=" + tab,
+			"Namespaces": []string{"bank"}, "Services": map[string][]string{"bank": {"edge-gateway"}},
+		}
+		var buf bytes.Buffer
+		if err := tmpls["recommendations"].ExecuteTemplate(&buf, "base.html", data); err != nil {
+			t.Fatalf("execute recommendations (tab=%s): %v", tab, err)
+		}
+		html := buf.String()
+		if !strings.Contains(html, "show 4 more") || strings.Count(html, `class="rec-more" hidden`) != 4 {
+			t.Fatalf("tab=%s: fold row missing", tab)
+		}
+		// Sample values live in the per-row samples dialog, not in the row; the
+		// row without stored samples gets a plain count instead of a link.
+		if !strings.Contains(html, `id="rec-samples-rec-a"`) || !strings.Contains(html, "<code>client-1001</code>") || strings.Contains(html, "rec-summary") || strings.Contains(html, "rec-ex-line") {
+			t.Fatalf("tab=%s: samples should render in the dialog only", tab)
+		}
+		if strings.Contains(html, `id="rec-samples-rec-b"`) || strings.Count(html, `class="conf-detail conf-link`) != recRowsShown+3 {
+			t.Fatalf("tab=%s: sample link should exist only for rows with stored samples", tab)
+		}
+		// Low severity, transport tag, explanation on hover.
+		if strings.Count(html, `class="rec-flag rec-flag-transport`) != 2 || !strings.Contains(html, `class="sev sev-low`) ||
+			!strings.Contains(html, "in-flight tampering or misattribution") || !strings.Contains(html, `id="rec-samples-rec-t1"`) {
+			t.Fatalf("tab=%s: transport tag missing", tab)
+		}
+		// The card is edge-gateway's, so only the account-service side names its service.
+		if strings.Contains(html, `<span class="rc-svc">edge-gateway /</span>`) || !strings.Contains(html, `<span class="rc-svc">account-service /</span>`) {
+			t.Fatalf("tab=%s: service prefix should only appear on the foreign side", tab)
+		}
+	}
+}
+
 // TestDumpComparePreview writes a fully-populated compare page to
 // INSIGHTS_PREVIEW_OUT (a file path) so the layout can be eyeballed in a
 // browser without a cluster. Skipped unless the env var is set.

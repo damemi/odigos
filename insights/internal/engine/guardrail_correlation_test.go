@@ -3,6 +3,7 @@ package engine
 import (
 	"testing"
 
+	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/semconv"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
 )
@@ -14,11 +15,11 @@ import (
 func bolaTrace(returnValue, accountArg string) *Trace {
 	resolve := &Span{
 		SpanID: "s1", Service: "edge-gateway", Name: "resolvePrincipal",
-		SpanAttrs: map[string]string{"return.value": returnValue},
+		SpanAttrs: map[string]string{semconv.ReturnValue: returnValue},
 	}
 	getAccount := &Span{
 		SpanID: "s2", Service: "account-service", Name: "getAccount",
-		SpanAttrs: map[string]string{"arg.0": accountArg},
+		SpanAttrs: map[string]string{semconv.ArgKey(0): accountArg},
 	}
 	return &Trace{TraceID: "tid", Root: resolve, Spans: []*Span{resolve, getAccount}}
 }
@@ -35,8 +36,8 @@ func correlationGuardrail(mode repo.RuleMode, specs ...repo.CorrelationSpec) rep
 func principalMatchesAccount(severity string) repo.CorrelationSpec {
 	return repo.CorrelationSpec{
 		Name:     "principal-matches-account",
-		Left:     repo.CorrelationSelector{Service: "edge-gateway", Span: "resolvePrincipal", Attr: "return.value", Extract: `(\d+)`},
-		Right:    repo.CorrelationSelector{Service: "account-service", Span: "getAccount", Attr: "arg.0", Extract: `(\d+)`},
+		Left:     repo.CorrelationSelector{Service: "edge-gateway", Span: "resolvePrincipal", Attr: semconv.ReturnValue, Extract: `(\d+)`},
+		Right:    repo.CorrelationSelector{Service: "account-service", Span: "getAccount", Attr: semconv.ArgKey(0), Extract: `(\d+)`},
 		Relation: repo.CorrelationEquals,
 		Severity: severity,
 	}
@@ -64,11 +65,43 @@ func TestCorrelationViolations_EqualIDsPass(t *testing.T) {
 	}
 }
 
+// The attack calls getAccount twice, once for the caller's own account and
+// once for the victim's; the violation fires whichever runs first.
+func TestCorrelationViolations_AnyMatchingSpanBreaks(t *testing.T) {
+	g := correlationGuardrail(repo.RuleModeEnforce, principalMatchesAccount(""))
+	for _, order := range [][2]string{{"1001", "1002"}, {"1002", "1001"}} {
+		tr := bolaTrace("client-1001", order[0])
+		tr.Spans = append(tr.Spans, &Span{SpanID: "s3", Service: "account-service", Name: "getAccount", SpanAttrs: map[string]string{semconv.ArgKey(0): order[1]}})
+		got := correlationViolations(tr, g)
+		if len(got) != 1 {
+			t.Fatalf("order %v: violations = %d, want 1", order, len(got))
+		}
+		res := evaluateCorrelation(tr, principalMatchesAccount(""))
+		if res.held || res.left != "1001" || res.right != "1002" {
+			t.Fatalf("order %v: result = %+v, want the breaking pair 1001/1002", order, res)
+		}
+	}
+	// Two legitimate calls with the caller's own id still hold.
+	tr := bolaTrace("client-1001", "1001")
+	tr.Spans = append(tr.Spans, &Span{SpanID: "s3", Service: "account-service", Name: "getAccount", SpanAttrs: map[string]string{semconv.ArgKey(0): "1001"}})
+	if got := correlationViolations(tr, g); len(got) != 0 {
+		t.Fatalf("violations = %v, want none when every call agrees", got)
+	}
+	// not_equals breaks as soon as any pair is equal.
+	ne := principalMatchesAccount("")
+	ne.Relation = repo.CorrelationNotEquals
+	tr = bolaTrace("client-1001", "1002")
+	tr.Spans = append(tr.Spans, &Span{SpanID: "s3", Service: "account-service", Name: "getAccount", SpanAttrs: map[string]string{semconv.ArgKey(0): "1001"}})
+	if res := evaluateCorrelation(tr, ne); !res.evaluated || res.held || res.right != "1001" {
+		t.Fatalf("not_equals result = %+v, want broken on the equal pair", res)
+	}
+}
+
 func TestCorrelationViolations_MissingSpanNoOp(t *testing.T) {
 	// Only the resolvePrincipal span present; getAccount is absent, so the
 	// assertion cannot be evaluated and nothing fires.
 	resolve := &Span{SpanID: "s1", Service: "edge-gateway", Name: "resolvePrincipal",
-		SpanAttrs: map[string]string{"return.value": "client-1001"}}
+		SpanAttrs: map[string]string{semconv.ReturnValue: "client-1001"}}
 	trace := &Trace{TraceID: "tid", Root: resolve, Spans: []*Span{resolve}}
 	g := correlationGuardrail(repo.RuleModeEnforce, principalMatchesAccount(""))
 	if got := correlationViolations(trace, g); len(got) != 0 {

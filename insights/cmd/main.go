@@ -191,6 +191,11 @@ func main() {
 		eng.RunSampleWriter(flusherCtx)
 		close(sampleWriterDone)
 	}()
+	// The recommendation miner reads stored relation samples of promoted
+	// transactions and suggests guardrail rules; it is fully off the ingest path
+	// and stops with the root context (no final drain needed - the mining-run
+	// table lets any replica pick up where it left off).
+	go eng.RunRecommendationMiner(rootCtx)
 
 	otlpSrv := otlp.NewServer(otlpAddr, eng, log)
 	otlpErrCh, err := otlpSrv.Start()

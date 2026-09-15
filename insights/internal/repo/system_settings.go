@@ -21,6 +21,17 @@ const (
 	DefaultFlushIntervalSeconds         = 15
 	DefaultAutoTransactionGuardrail     = true
 
+	// Relation samples feed the correlation recommendation miner. They need
+	// more traces than UI examples (a relation that holds on 10 traces is weak
+	// evidence, on 50 it is a pattern) but are only useful until the transaction
+	// is mined, so they age out much sooner.
+	DefaultRelationSamplesPerTransaction = 50
+	DefaultRelationSampleIntervalSeconds = 5
+	DefaultRelationSampleRetentionDays   = 14
+	DefaultRecommendationMinDistinct     = 5
+	DefaultRecommendationMinHoldPercent  = 98
+	MaxRelationSamplesPerTransaction     = 500
+
 	// MaxTransactionIdentityDimensions caps how many identity dimensions may be
 	// enabled at once. Each enabled dimension multiplies transaction cardinality.
 	MaxTransactionIdentityDimensions = 5
@@ -47,6 +58,12 @@ type SystemSettings struct {
 	FlushIntervalSeconds          int                            `json:"flush_interval_seconds"`
 	AutoTransactionGuardrail      bool                           `json:"auto_transaction_guardrail"`
 	TransactionIdentityDimensions []TransactionIdentityDimension `json:"transaction_identity_dimensions"`
+	// Relation samples and the thresholds a mined correlation must clear to be
+	// recommended (see recommendation.go).
+	RelationSamplesPerTransaction int `json:"relation_samples_per_transaction"`
+	RelationSampleIntervalSeconds int `json:"relation_sample_interval_seconds"`
+	RecommendationMinDistinct     int `json:"recommendation_min_distinct"`
+	RecommendationMinHoldPercent  int `json:"recommendation_min_hold_percent"`
 	// TransactionInventoryEpoch is bumped when all transactions are wiped
 	// (identity-dimension reset). Engines clear in-memory baselines when it
 	// changes so multi-replica pods drop resurrectable state. Not an API field.
@@ -70,6 +87,10 @@ func DefaultSystemSettings() SystemSettings {
 		FlushIntervalSeconds:          DefaultFlushIntervalSeconds,
 		AutoTransactionGuardrail:      DefaultAutoTransactionGuardrail,
 		TransactionIdentityDimensions: DefaultTransactionIdentityDimensions(),
+		RelationSamplesPerTransaction: DefaultRelationSamplesPerTransaction,
+		RelationSampleIntervalSeconds: DefaultRelationSampleIntervalSeconds,
+		RecommendationMinDistinct:     DefaultRecommendationMinDistinct,
+		RecommendationMinHoldPercent:  DefaultRecommendationMinHoldPercent,
 	}
 }
 
@@ -92,6 +113,18 @@ func (s SystemSettings) WithDefaults() SystemSettings {
 	}
 	if s.FlushIntervalSeconds <= 0 {
 		s.FlushIntervalSeconds = d.FlushIntervalSeconds
+	}
+	if s.RelationSamplesPerTransaction <= 0 {
+		s.RelationSamplesPerTransaction = d.RelationSamplesPerTransaction
+	}
+	if s.RelationSampleIntervalSeconds <= 0 {
+		s.RelationSampleIntervalSeconds = d.RelationSampleIntervalSeconds
+	}
+	if s.RecommendationMinDistinct <= 0 {
+		s.RecommendationMinDistinct = d.RecommendationMinDistinct
+	}
+	if s.RecommendationMinHoldPercent <= 0 {
+		s.RecommendationMinHoldPercent = d.RecommendationMinHoldPercent
 	}
 	// AutoTransactionGuardrail is a real bool (false is valid); default
 	// applies only via DefaultSystemSettings when no row exists.
@@ -116,11 +149,21 @@ func (s SystemSettings) Validate() error {
 		{"max_resident_transactions", s.MaxResidentTransactions},
 		{"max_baseline_set_members", s.MaxBaselineSetMembers},
 		{"flush_interval_seconds", s.FlushIntervalSeconds},
+		{"relation_samples_per_transaction", s.RelationSamplesPerTransaction},
+		{"relation_sample_interval_seconds", s.RelationSampleIntervalSeconds},
+		{"recommendation_min_distinct", s.RecommendationMinDistinct},
+		{"recommendation_min_hold_percent", s.RecommendationMinHoldPercent},
 	}
 	for _, f := range positive {
 		if f.v <= 0 {
 			return fmt.Errorf("%s must be > 0", f.name)
 		}
+	}
+	if s.RelationSamplesPerTransaction > MaxRelationSamplesPerTransaction {
+		return fmt.Errorf("relation_samples_per_transaction must be <= %d", MaxRelationSamplesPerTransaction)
+	}
+	if s.RecommendationMinHoldPercent > 100 {
+		return fmt.Errorf("recommendation_min_hold_percent must be <= 100")
 	}
 	if s.ObservationRetentionDays > MaxObservationRetentionDays {
 		return fmt.Errorf("observation_retention_days must be <= %d", MaxObservationRetentionDays)

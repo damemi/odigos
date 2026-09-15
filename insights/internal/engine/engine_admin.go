@@ -86,6 +86,7 @@ func (e *Engine) PromoteBaselineClass(ctx context.Context, transactionID int64, 
 			return nil
 		}
 	}
+	e.recommendations.requestMine(transactionID)
 	return e.maybeAutoEnableTransactionGuardrail(ctx, tx.Namespace, tx.Service, transactionID)
 }
 

@@ -164,6 +164,40 @@ var (
 		Name:      "samples_dropped_total",
 		Help:      "Sample traces dropped because the background sample writer queue was full.",
 	})
+
+	// recommendationMiningRuns counts mining runs per outcome, and
+	// recommendationMiningDuration how long one transaction takes to mine. Both
+	// run in the miner goroutine, so a rising duration is a storage or sample
+	// volume signal, never an ingest one.
+	recommendationMiningRuns = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "engine",
+		Name:      "recommendation_mining_runs_total",
+		Help:      "Recommendation mining runs by result (ok|error|empty).",
+	}, []string{"result"})
+	recommendationMiningDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: namespace,
+		Subsystem: "engine",
+		Name:      "recommendation_mining_duration_seconds",
+		Help:      "Wall-clock duration of mining one transaction.",
+		Buckets:   prometheus.ExponentialBuckets(0.01, 2, 12),
+	})
+	recommendationMiningCandidates = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: namespace,
+		Subsystem: "engine",
+		Name:      "recommendation_mining_candidates",
+		Help:      "Recommendations produced per mining run.",
+		Buckets:   []float64{0, 1, 2, 3, 5, 8, 13, 20},
+	})
+	// recommendationShadow counts live traces evaluated against open
+	// recommendations, by whether the relation held. It is the only per-trace
+	// cost of recommendations and should stay a small fraction of traces.
+	recommendationShadow = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "engine",
+		Name:      "recommendation_shadow_evaluations_total",
+		Help:      "Live traces evaluated against open recommendations, by outcome (held|broken).",
+	}, []string{"outcome"})
 )
 
 func init() {
@@ -172,11 +206,32 @@ func init() {
 		transactionCache, policyCache, baselineCache, baselineEvictions, baselineDirty, baselineResident,
 		baselineFlush, baselineFlushDuration, promotionSweeperClasses,
 		anomalyDuplicatesSuppressed, samplesDropped,
+		recommendationMiningRuns, recommendationMiningDuration, recommendationMiningCandidates, recommendationShadow,
 	)
 }
 
 // IncSamplesDropped records one sample trace dropped by the background writer.
 func IncSamplesDropped() { samplesDropped.Inc() }
+
+// ObserveRecommendationMining records one mining run: its result
+// ("ok"|"error"|"empty"), duration, and how many recommendations it produced.
+func ObserveRecommendationMining(result string, seconds float64, candidates int) {
+	recommendationMiningRuns.WithLabelValues(result).Inc()
+	recommendationMiningDuration.Observe(seconds)
+	if result != "error" {
+		recommendationMiningCandidates.Observe(float64(candidates))
+	}
+}
+
+// AddRecommendationShadow records live shadow evaluations by outcome.
+func AddRecommendationShadow(held, broken int) {
+	if held > 0 {
+		recommendationShadow.WithLabelValues("held").Add(float64(held))
+	}
+	if broken > 0 {
+		recommendationShadow.WithLabelValues("broken").Add(float64(broken))
+	}
+}
 
 // Handler serves the insights service's metrics for Prometheus scraping.
 // Mount it at GET /metrics.

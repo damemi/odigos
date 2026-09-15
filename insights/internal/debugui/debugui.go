@@ -99,6 +99,17 @@ type ProductAPI interface {
 	// GetGuardrailViolationDetail is GET /guardrails/violations/evidence - the
 	// investigate payload (summary + evidence trace).
 	GetGuardrailViolationDetail(ctx context.Context, scopeKey string, ruleKey repo.RuleKey, offending string) (apitypes.GuardrailViolationDetail, bool, error)
+
+	// Guardrail recommendations: same OpenAPI params/wire types as
+	// GET /recommendations and the POST …/recommendations/{action} endpoints.
+	ListRecommendations(ctx context.Context, params apitypes.ListRecommendationsParams) (apitypes.RecommendationList, error)
+	GetRecommendation(ctx context.Context, id string) (apitypes.Recommendation, bool, error)
+	ApplyRecommendations(ctx context.Context, req apitypes.RecommendationApplyRequest) (apitypes.RecommendationBulkResult, error)
+	DismissRecommendations(ctx context.Context, ids []string) (apitypes.RecommendationBulkResult, error)
+	RestoreRecommendations(ctx context.Context, ids []string) (apitypes.RecommendationBulkResult, error)
+	RevertRecommendations(ctx context.Context, ids []string) (apitypes.RecommendationBulkResult, error)
+	PreviewRecommendation(ctx context.Context, req apitypes.RecommendationPreviewRequest) (apitypes.RecommendationPreview, error)
+	RecomputeRecommendations(ctx context.Context, transactionID int64) error
 }
 
 // Handle is returned by Register so the caller can attach dependencies once
@@ -141,6 +152,15 @@ func Register(engine *gin.Engine, r repo.Repository) *Handle {
 	g.POST("/anomalies/reopen", ui.reopenAnomaly)
 	g.POST("/anomalies/accept-bulk", ui.acceptAnomalies)
 	g.POST("/anomalies/dismiss-bulk", ui.dismissAnomalies)
+	// Recommendations: guardrail rules Insights mined and suggests. Row and
+	// bulk actions share one handler each (one or many "id" form values).
+	g.GET("/recommendations", ui.listRecommendations)
+	g.POST("/recommendations/apply", ui.applyRecommendations)
+	g.POST("/recommendations/dismiss", ui.dismissRecommendations)
+	g.POST("/recommendations/restore", ui.restoreRecommendations)
+	g.POST("/recommendations/revert", ui.revertRecommendations)
+	g.POST("/recommendations/preview", ui.previewRecommendation)
+	g.POST("/recommendations/recompute", ui.recomputeRecommendations)
 	// Settings area: the tuning knobs and rule authoring, all under one nav
 	// entry. The "threat detection" group holds detection policies + guardrail
 	// rules; guardrail *violations* live in the Findings feed, not here.
@@ -209,6 +229,7 @@ func parseTemplates() map[string]*template.Template {
 		"settings_storage",
 		"guardrails",
 		"guardrail_evidence",
+		"recommendations",
 	}
 	funcs := template.FuncMap{
 		"prettyJSON":         prettyJSON,
@@ -245,6 +266,7 @@ func parseTemplates() map[string]*template.Template {
 		"operationDisplay":   operationDisplay,
 		"identityDimLabel":   identityDimLabel,
 		"mul100":             func(f float64) float64 { return f * 100 },
+		"list":               func(items ...string) []string { return items },
 	}
 	out := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {

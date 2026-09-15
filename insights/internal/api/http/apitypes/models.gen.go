@@ -293,6 +293,63 @@ func (e PolicyScope) Valid() bool {
 	}
 }
 
+// Defines values for RecommendationConfidenceLevel.
+const (
+	RecommendationConfidenceLevelHigh   RecommendationConfidenceLevel = "high"
+	RecommendationConfidenceLevelLow    RecommendationConfidenceLevel = "low"
+	RecommendationConfidenceLevelMedium RecommendationConfidenceLevel = "medium"
+)
+
+// Valid indicates whether the value is a known member of the RecommendationConfidenceLevel enum.
+func (e RecommendationConfidenceLevel) Valid() bool {
+	switch e {
+	case RecommendationConfidenceLevelHigh:
+		return true
+	case RecommendationConfidenceLevelLow:
+		return true
+	case RecommendationConfidenceLevelMedium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RecommendationKind.
+const (
+	AttributeCorrelation RecommendationKind = "attribute_correlation"
+)
+
+// Valid indicates whether the value is a known member of the RecommendationKind enum.
+func (e RecommendationKind) Valid() bool {
+	switch e {
+	case AttributeCorrelation:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RecommendationState.
+const (
+	RecommendationStateApplied   RecommendationState = "applied"
+	RecommendationStateDismissed RecommendationState = "dismissed"
+	RecommendationStateOpen      RecommendationState = "open"
+)
+
+// Valid indicates whether the value is a known member of the RecommendationState enum.
+func (e RecommendationState) Valid() bool {
+	switch e {
+	case RecommendationStateApplied:
+		return true
+	case RecommendationStateDismissed:
+		return true
+	case RecommendationStateOpen:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RuleMode.
 const (
 	Enforce RuleMode = "enforce"
@@ -308,24 +365,6 @@ func (e RuleMode) Valid() bool {
 	case Off:
 		return true
 	case Suggest:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for SampleReason.
-const (
-	AnomalyEvidence SampleReason = "anomaly_evidence"
-	Example         SampleReason = "example"
-)
-
-// Valid indicates whether the value is a known member of the SampleReason enum.
-func (e SampleReason) Valid() bool {
-	switch e {
-	case AnomalyEvidence:
-		return true
-	case Example:
 		return true
 	default:
 		return false
@@ -491,6 +530,27 @@ func (e ViolationStatus) Valid() bool {
 	case ViolationStatusDismissed:
 		return true
 	case ViolationStatusOpen:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListObservationsParamsSampleReason.
+const (
+	AnomalyEvidence ListObservationsParamsSampleReason = "anomaly_evidence"
+	Example         ListObservationsParamsSampleReason = "example"
+	Relation        ListObservationsParamsSampleReason = "relation"
+)
+
+// Valid indicates whether the value is a known member of the ListObservationsParamsSampleReason enum.
+func (e ListObservationsParamsSampleReason) Valid() bool {
+	switch e {
+	case AnomalyEvidence:
+		return true
+	case Example:
+		return true
+	case Relation:
 		return true
 	default:
 		return false
@@ -1011,7 +1071,7 @@ type GuardrailRuleConfig struct {
 	// Mode suggest = observe only; enforce = fire findings; off = disabled (per-service disable for auto transaction guardrail).
 	Mode RuleMode `json:"mode"`
 
-	// Origin How this rule was created. `auto_transaction_guardrail` means it was created automatically when the service's transactions promoted (not a manual edit).
+	// Origin How this rule was created. `auto_transaction_guardrail` means it was created automatically when the service's transactions promoted (not a manual edit). `recommendation` means an operator applied a mined recommendation.
 	Origin string `json:"origin,omitempty"`
 }
 
@@ -1127,7 +1187,7 @@ type Observation struct {
 	// RawOtlp Verbatim OTLP protobuf, base64-encoded.
 	RawOtlp []byte `json:"raw_otlp"`
 
-	// SampleReason How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility - it is not the tag written to storage.
+	// SampleReason How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. `relation` = learning-phase traces kept for the correlation recommendation miner (larger cap, 14-day retention). Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility - it is not the tag written to storage. Open set: storage tags like `anomaly:<signature>` and `guardrail:<rule>:<offending>` are valid values too, so clients must tolerate values not listed here.
 	SampleReason  SampleReason `json:"sample_reason"`
 	TraceId       string       `json:"trace_id"`
 	TransactionId int64        `json:"transaction_id"`
@@ -1146,7 +1206,7 @@ type ObservationSummary struct {
 	DurationMs int64     `json:"duration_ms"`
 	ObservedAt time.Time `json:"observed_at"`
 
-	// SampleReason How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility - it is not the tag written to storage.
+	// SampleReason How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. `relation` = learning-phase traces kept for the correlation recommendation miner (larger cap, 14-day retention). Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility - it is not the tag written to storage. Open set: storage tags like `anomaly:<signature>` and `guardrail:<rule>:<offending>` are valid values too, so clients must tolerate values not listed here.
 	SampleReason  SampleReason `json:"sample_reason"`
 	TraceId       string       `json:"trace_id"`
 	TransactionId int64        `json:"transaction_id"`
@@ -1187,6 +1247,170 @@ type PromoteResult struct {
 	TransactionId int64          `json:"transaction_id"`
 }
 
+// Recommendation defines model for Recommendation.
+type Recommendation struct {
+	// AlreadyCovered The transaction's guardrail already has a rule on the same two attributes (e.g. added by hand). Apply would duplicate it.
+	AlreadyCovered bool `json:"already_covered"`
+
+	// Confidence Why the engine believes the relation. Sample stats come from the stored relation samples the miner read; live counters come from shadow evaluation of the open recommendation against real traffic and keep growing until it is applied or dismissed.
+	Confidence RecommendationConfidence `json:"confidence"`
+	CreatedAt  time.Time                `json:"created_at"`
+	Examples   []RecommendationExample  `json:"examples"`
+	Id         string                   `json:"id"`
+
+	// Kind The guardrail rule type a recommendation would create.
+	Kind      RecommendationKind `json:"kind"`
+	MinedAt   time.Time          `json:"mined_at"`
+	Namespace string             `json:"namespace"`
+	Operation string             `json:"operation"`
+
+	// Rank Position among the scope's recommendations, 0 = strongest.
+	Rank int `json:"rank"`
+
+	// Scope The guardrail the recommendation would extend, with the same meaning as a guardrail's scope/scope_key. attribute_correlation is always transaction-scoped; future kinds may target a service or global.
+	Scope    PolicyScope `json:"scope,omitempty"`
+	ScopeKey string      `json:"scope_key,omitempty"`
+	Service  string      `json:"service"`
+
+	// Spec The exact rule `apply` adds to the transaction guardrail.
+	Spec CorrelationSpec `json:"spec"`
+
+	// Stale The latest mining run no longer produced this row.
+	Stale bool `json:"stale"`
+
+	// State Lifecycle bucket. `open` awaits a decision, `applied` became a guardrail rule, `dismissed` was rejected (sticky across re-mining).
+	State RecommendationState `json:"state"`
+
+	// Summary One sentence explaining the relation in plain words.
+	Summary string `json:"summary"`
+
+	// Title One-line headline, e.g. "resolvePrincipal returns the account getAccount reads".
+	Title string `json:"title"`
+
+	// TransactionId Resolved id for transaction scope, 0 otherwise.
+	TransactionId   int64           `json:"transaction_id"`
+	TransactionKind TransactionKind `json:"transaction_kind"`
+
+	// Transform How the two values relate: `exact` (identical), `core` (identical after a constant prefix/suffix), `digits` (same numeric id), `contains` (one value is embedded in the other).
+	Transform string `json:"transform"`
+
+	// Transport Guaranteed by the transport rather than by business logic: the same field on both ends of one hop (a Kafka message key on producer and consumer). A break means in-flight tampering or misattribution, so it is mined at `low` severity and ranked after every business relation. Shown as a tag on the row.
+	Transport bool      `json:"transport"`
+	UpdatedAt time.Time `json:"updated_at"`
+
+	// WhyItMatters The security story - what breaking this relation would mean.
+	WhyItMatters string `json:"why_it_matters"`
+}
+
+// RecommendationApplyItem defines model for RecommendationApplyItem.
+type RecommendationApplyItem struct {
+	Id string `json:"id"`
+
+	// Spec Optional edited rule. Left/right service, span and attr must match the recommendation; name, severity, why, relation and extract regexes may differ.
+	Spec *CorrelationSpec `json:"spec,omitempty"`
+}
+
+// RecommendationApplyRequest defines model for RecommendationApplyRequest.
+type RecommendationApplyRequest struct {
+	Items []RecommendationApplyItem `json:"items"`
+}
+
+// RecommendationBulkResult defines model for RecommendationBulkResult.
+type RecommendationBulkResult struct {
+	Done   int                       `json:"done"`
+	Errors []RecommendationItemError `json:"errors"`
+	Failed int                       `json:"failed"`
+}
+
+// RecommendationConfidence Why the engine believes the relation. Sample stats come from the stored relation samples the miner read; live counters come from shadow evaluation of the open recommendation against real traffic and keep growing until it is applied or dismissed.
+type RecommendationConfidence struct {
+	// Distinct Distinct left-hand values seen agreeing.
+	Distinct int `json:"distinct"`
+
+	// Held Of those, how many satisfied the relation.
+	Held int `json:"held"`
+
+	// HoldRatio held / observed on stored samples (0..1).
+	HoldRatio  float64                       `json:"hold_ratio"`
+	Level      RecommendationConfidenceLevel `json:"level"`
+	LiveBroken int64                         `json:"live_broken"`
+	LiveHeld   int64                         `json:"live_held"`
+
+	// LiveLast Omitted until the first live trace was evaluated.
+	LiveLast time.Time `json:"live_last,omitempty"`
+
+	// LiveSince Omitted until the first live trace was evaluated.
+	LiveSince time.Time `json:"live_since,omitempty"`
+
+	// Observed Stored samples where both values were present.
+	Observed int `json:"observed"`
+
+	// Reasons Human-readable evidence lines, e.g. "Held on 50 of 50 samples".
+	Reasons []string `json:"reasons"`
+
+	// SampleCount Relation samples the mining run looked at.
+	SampleCount int `json:"sample_count"`
+}
+
+// RecommendationConfidenceLevel defines model for RecommendationConfidenceLevel.
+type RecommendationConfidenceLevel string
+
+// RecommendationExample One stored sample the relation held on, with the two values.
+type RecommendationExample struct {
+	LeftValue  string    `json:"left_value"`
+	ObservedAt time.Time `json:"observed_at"`
+	RightValue string    `json:"right_value"`
+	TraceId    string    `json:"trace_id"`
+}
+
+// RecommendationIDsRequest defines model for RecommendationIDsRequest.
+type RecommendationIDsRequest struct {
+	Ids []string `json:"ids"`
+}
+
+// RecommendationItemError defines model for RecommendationItemError.
+type RecommendationItemError struct {
+	Error string `json:"error"`
+	Id    string `json:"id"`
+}
+
+// RecommendationKind The guardrail rule type a recommendation would create.
+type RecommendationKind string
+
+// RecommendationList defines model for RecommendationList.
+type RecommendationList struct {
+	Count int              `json:"count"`
+	Items []Recommendation `json:"items"`
+}
+
+// RecommendationPreview How a spec fares on the transaction's stored relation samples.
+type RecommendationPreview struct {
+	// CounterExamples Up to three samples where the relation did not hold.
+	CounterExamples []RecommendationExample `json:"counter_examples"`
+	Distinct        int                     `json:"distinct"`
+	Examples        []RecommendationExample `json:"examples"`
+	Held            int                     `json:"held"`
+	HoldRatio       float64                 `json:"hold_ratio"`
+	Observed        int                     `json:"observed"`
+	SampleCount     int                     `json:"sample_count"`
+}
+
+// RecommendationPreviewRequest defines model for RecommendationPreviewRequest.
+type RecommendationPreviewRequest struct {
+	// Spec One cross-span consistency assertion: compare `left` vs `right` within a single trace and fire a violation when they do not satisfy `relation`.
+	Spec          CorrelationSpec `json:"spec"`
+	TransactionId int64           `json:"transaction_id"`
+}
+
+// RecommendationRecomputeRequest defines model for RecommendationRecomputeRequest.
+type RecommendationRecomputeRequest struct {
+	// TransactionId Omit or 0 to sweep every promoted transaction with unmined samples.
+	TransactionId int64 `json:"transaction_id,omitempty"`
+}
+
+// RecommendationState Lifecycle bucket. `open` awaits a decision, `applied` became a guardrail rule, `dismissed` was rejected (sticky across re-mining).
+type RecommendationState string
+
 // RiskAssessment Examples: {"categories":["exfiltration","lateral_movement"],"correlated":true,"correlation_bonus":15,"fire_at_score":60,"score":70,"severity":"high","signals":[{"category":"lateral_movement","confidence":1,"contribution":25,"mitre":"TA0008","owasp":"API10:2023","rationale":"new egress peer not in the learned baseline","source":"D2_egress","weight":25},{"category":"exfiltration","confidence":1,"contribution":30,"mitre":"TA0010","rationale":"egress to a sensitive port outside the mesh","source":"d2_dangerous_port","weight":30}]}
 type RiskAssessment struct {
 	Categories       []string     `json:"categories,omitempty"`
@@ -1213,8 +1437,8 @@ type RiskSignal struct {
 // RuleMode suggest = observe only; enforce = fire findings; off = disabled (per-service disable for auto transaction guardrail).
 type RuleMode string
 
-// SampleReason How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility - it is not the tag written to storage.
-type SampleReason string
+// SampleReason How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. `relation` = learning-phase traces kept for the correlation recommendation miner (larger cap, 14-day retention). Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility - it is not the tag written to storage. Open set: storage tags like `anomaly:<signature>` and `guardrail:<rule>:<offending>` are valid values too, so clients must tolerate values not listed here.
+type SampleReason = string
 
 // ServiceGuardrail Examples: {"rules":[{"allowlist":["default/gateway"],"key":"allowed_callers","label":"Allowed callers","mode":"enforce"},{"allowlist":["checkout.stripe.com:443"],"key":"allowed_egress","label":"Allowed egress destinations","mode":"suggest"}],"scope":"service","scope_key":"default/frontend"}
 type ServiceGuardrail struct {
@@ -1401,6 +1625,12 @@ type SystemCapacitySettings struct {
 type SystemDetectionSettings struct {
 	// AutoTransactionGuardrail When true, automatically create an enforced allowed_transactions guardrail when a service finishes promoting (every transaction leaves learning). Applies only going forward - already-promoted services are not backfilled when this is turned on. Per-service disable uses rule mode off.
 	AutoTransactionGuardrail bool `json:"auto_transaction_guardrail"`
+
+	// RecommendationMinDistinct A mined correlation is only recommended when at least this many different values were seen agreeing (default 5). Guards against two attributes that merely share a constant.
+	RecommendationMinDistinct int `json:"recommendation_min_distinct,omitempty"`
+
+	// RecommendationMinHoldPercent Share of samples (with both values present) on which the relation must hold to be recommended (default 98).
+	RecommendationMinHoldPercent int `json:"recommendation_min_hold_percent,omitempty"`
 }
 
 // SystemIdentitySettings Extra dimensions appended to transaction Operation before hashing. Each enabled dimension multiplies cardinality. Use only low-cardinality attributes (e.g. status codes). Do not use user.id, http.url, request ids, emails, or other high-cardinality keys. Changing this setting does not migrate existing baselines - new traffic creates new transaction identities.
@@ -1418,6 +1648,12 @@ type SystemRetentionSettings struct {
 type SystemSamplingSettings struct {
 	ExampleSampleIntervalSeconds int `json:"example_sample_interval_seconds"`
 	ExamplesPerTransaction       int `json:"examples_per_transaction"`
+
+	// RelationSampleIntervalSeconds Minimum seconds between two relation samples (default 5).
+	RelationSampleIntervalSeconds int `json:"relation_sample_interval_seconds,omitempty"`
+
+	// RelationSamplesPerTransaction Whole traces kept per learning transaction for the correlation recommendation miner (default 50). More samples = stronger evidence for a mined relation, at the cost of storage for 14 days. Omit to keep the default.
+	RelationSamplesPerTransaction int `json:"relation_samples_per_transaction,omitempty"`
 }
 
 // SystemSettings defines model for SystemSettings.
@@ -1656,6 +1892,20 @@ type DeletePolicyParams struct {
 	ScopeKey string      `form:"scope_key" json:"scope_key"`
 }
 
+// ListRecommendationsParams defines parameters for ListRecommendations.
+type ListRecommendationsParams struct {
+	Kind          RecommendationKind  `form:"kind,omitempty" json:"kind,omitempty"`
+	State         RecommendationState `form:"state,omitempty" json:"state,omitempty"`
+	TransactionId int64               `form:"transaction_id,omitempty" json:"transaction_id,omitempty"`
+
+	// Service Filter to one service name.
+	Service ServiceFilter `form:"service,omitempty" json:"service,omitempty"`
+
+	// Namespace Filter to one namespace.
+	Namespace    NamespaceFilter `form:"namespace,omitempty" json:"namespace,omitempty"`
+	IncludeStale bool            `form:"include_stale,omitempty" json:"include_stale,omitempty"`
+}
+
 // GetServiceBlastRadiusParams defines parameters for GetServiceBlastRadius.
 type GetServiceBlastRadiusParams struct {
 	// Namespace Filter to one namespace.
@@ -1724,9 +1974,12 @@ type ListTransactionsParams struct {
 
 // ListObservationsParams defines parameters for ListObservations.
 type ListObservationsParams struct {
-	// SampleReason Filter to one sample bucket.
-	SampleReason SampleReason `form:"sample_reason,omitempty" json:"sample_reason,omitempty"`
+	// SampleReason Filter to one sample bucket. Kept as a closed list on the request side so the contract diff stays additive; the response's `sample_reason` is the open `SampleReason` set.
+	SampleReason ListObservationsParamsSampleReason `form:"sample_reason,omitempty" json:"sample_reason,omitempty"`
 }
+
+// ListObservationsParamsSampleReason defines parameters for ListObservations.
+type ListObservationsParamsSampleReason string
 
 // BulkResolveAnomaliesJSONRequestBody defines body for BulkResolveAnomalies for application/json ContentType.
 type BulkResolveAnomaliesJSONRequestBody = BulkAnomalyRequest
@@ -1754,6 +2007,24 @@ type UpsertLearningPolicyJSONRequestBody = LearningPolicy
 
 // UpsertPolicyJSONRequestBody defines body for UpsertPolicy for application/json ContentType.
 type UpsertPolicyJSONRequestBody = Policy
+
+// ApplyRecommendationsJSONRequestBody defines body for ApplyRecommendations for application/json ContentType.
+type ApplyRecommendationsJSONRequestBody = RecommendationApplyRequest
+
+// DismissRecommendationsJSONRequestBody defines body for DismissRecommendations for application/json ContentType.
+type DismissRecommendationsJSONRequestBody = RecommendationIDsRequest
+
+// PreviewRecommendationJSONRequestBody defines body for PreviewRecommendation for application/json ContentType.
+type PreviewRecommendationJSONRequestBody = RecommendationPreviewRequest
+
+// RecomputeRecommendationsJSONRequestBody defines body for RecomputeRecommendations for application/json ContentType.
+type RecomputeRecommendationsJSONRequestBody = RecommendationRecomputeRequest
+
+// RestoreRecommendationsJSONRequestBody defines body for RestoreRecommendations for application/json ContentType.
+type RestoreRecommendationsJSONRequestBody = RecommendationIDsRequest
+
+// RevertRecommendationsJSONRequestBody defines body for RevertRecommendations for application/json ContentType.
+type RevertRecommendationsJSONRequestBody = RecommendationIDsRequest
 
 // PutSystemSettingsJSONRequestBody defines body for PutSystemSettings for application/json ContentType.
 type PutSystemSettingsJSONRequestBody = SystemSettings

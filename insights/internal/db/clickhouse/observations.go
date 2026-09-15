@@ -122,6 +122,20 @@ func (r *Repo) GetLatestObservationByReason(ctx context.Context, sampleReason st
 	return r.latestObservation(ctx, "get observation by reason", "sample_reason = ?", sampleReason)
 }
 
+// ListObservationsWithRaw returns the newest stored traces for one
+// (transaction, sample_reason) including raw OTLP, newest first. Cold path only
+// (the recommendation miner); list/UI paths use the meta-only variant.
+func (r *Repo) ListObservationsWithRaw(ctx context.Context, transactionID int64, sampleReason string, limit int) ([]repo.Observation, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	return queryRows(ctx, r.conn, "list observations with raw",
+		`SELECT `+observationCols+` FROM trace_observations
+		 WHERE transaction_id = ? AND sample_reason = ?
+		 ORDER BY observed_at DESC LIMIT 1 BY trace_id LIMIT ?`,
+		scanObservation, transactionID, sampleReason, uint64(limit))
+}
+
 // CountObservationsByReason returns how many distinct traces are stored for
 // one transaction, per sample_reason.
 func (r *Repo) CountObservationsByReason(ctx context.Context, transactionID int64) (map[string]int, error) {

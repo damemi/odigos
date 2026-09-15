@@ -73,7 +73,10 @@ type transactionEntry struct {
 	// "example" observation. The sampler uses it to throttle by time
 	// (see sampler.go). Zero means none kept yet.
 	lastExampleAt time.Time
-	loaded        bool
+	// lastRelationAt is the same throttle for "relation" samples, the whole
+	// traces the recommendation miner reads (see recordRelationSample).
+	lastRelationAt time.Time
+	loaded         bool
 
 	// activityVolume is the number of sub-transactions seen since the last
 	// flush; lastSeen is the most recent time one arrived. Drained by flush

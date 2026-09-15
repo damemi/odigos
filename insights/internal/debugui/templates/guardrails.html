@@ -508,7 +508,7 @@
 <h3>Guardrails <span class="hint" style="font-weight:normal;">({{len .Guardrails}})</span></h3>
 {{if .Guardrails}}
   {{range .Guardrails}}
-  <details class="gr-row">
+  <details class="gr-row" id="gr-{{.Scope}}-{{.ScopeKey}}">
     <summary class="gr-summary">
       <span class="gr-caret">▸</span>
       <span class="svc">{{.Title}}</span>
@@ -573,6 +573,16 @@
 {{else}}
   <div class="empty">No guardrails yet. Use <em>Add a guardrail</em> above: pick a service to adopt its observed callers/callees/egress, or pick a transaction to declare an attribute correlation.</div>
 {{end}}
+<p class="hint" style="margin-top:12px;">Insights also mines promoted transactions for attribute correlations worth enforcing - review them under <a href="/debug/recommendations">recommendations</a>.</p>
+<script>
+  // Deep link from the Recommendations page ("view guardrail"): open the
+  // guardrail the hash names, since a closed <details> ignores :target.
+  (function () {
+    if (!location.hash) return;
+    var el = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (el && el.tagName === 'DETAILS') { el.open = true; el.scrollIntoView(); }
+  })();
+</script>
 
 </div>
 </div>

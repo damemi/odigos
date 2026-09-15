@@ -1174,6 +1174,10 @@ type fakeRepo struct {
 
 	insertObservationErr  error // when set, InsertObservations fails without storing
 	countObservationCalls int   // number of CountObservationsByReason invocations
+
+	recommendations map[string]repo.Recommendation
+	liveDeltas      []repo.RecommendationLiveDelta
+	miningRuns      map[int64]repo.RecommendationMiningRun
 }
 
 // allDeviationClasses is the built-in class set, used by tests to build a
@@ -1628,6 +1632,136 @@ func (f *fakeRepo) CountObservationsByReason(_ context.Context, transactionID in
 		out[o.SampleReason]++
 	}
 	return out, nil
+}
+
+func (f *fakeRepo) ListObservationsWithRaw(ctx context.Context, transactionID int64, reason string, limit int) ([]repo.Observation, error) {
+	out, err := f.ListObservationsByTransaction(ctx, transactionID, reason, limit)
+	if err != nil {
+		return nil, err
+	}
+	if limit > 0 && len(out) > limit {
+		out = out[len(out)-limit:]
+	}
+	return out, nil
+}
+
+func (f *fakeRepo) UpsertRecommendations(_ context.Context, recs []repo.Recommendation) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.recommendations == nil {
+		f.recommendations = map[string]repo.Recommendation{}
+	}
+	for _, rec := range recs {
+		f.recommendations[rec.ID] = rec
+	}
+	return nil
+}
+
+func (f *fakeRepo) ListRecommendations(_ context.Context, filter repo.RecommendationFilter) ([]repo.Recommendation, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []repo.Recommendation
+	for _, rec := range f.recommendations {
+		if !filter.IncludeStale && rec.Stale {
+			continue
+		}
+		if filter.Kind != "" && rec.Kind != filter.Kind {
+			continue
+		}
+		if filter.State != "" && rec.State != filter.State {
+			continue
+		}
+		if filter.TransactionID != 0 && rec.TransactionID != filter.TransactionID {
+			continue
+		}
+		for _, tx := range f.transactions {
+			if tx.ID == rec.TransactionID {
+				rec.Service, rec.Namespace, rec.Operation, rec.TxKind = tx.Service, tx.Namespace, tx.Operation, tx.Kind
+			}
+		}
+		if filter.Namespace != "" && rec.Namespace != filter.Namespace {
+			continue
+		}
+		if filter.Service != "" && rec.Service != filter.Service {
+			continue
+		}
+		for _, d := range f.liveDeltas {
+			if d.ID == rec.ID {
+				rec.LiveHeld += d.Held
+				rec.LiveBroken += d.Broken
+			}
+		}
+		out = append(out, rec)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].TransactionID != out[j].TransactionID {
+			return out[i].TransactionID < out[j].TransactionID
+		}
+		return out[i].Rank < out[j].Rank
+	})
+	return out, nil
+}
+
+func (f *fakeRepo) GetRecommendation(ctx context.Context, id string) (repo.Recommendation, bool, error) {
+	all, err := f.ListRecommendations(ctx, repo.RecommendationFilter{IncludeStale: true})
+	if err != nil {
+		return repo.Recommendation{}, false, err
+	}
+	for _, rec := range all {
+		if rec.ID == id {
+			return rec, true, nil
+		}
+	}
+	return repo.Recommendation{}, false, nil
+}
+
+func (f *fakeRepo) SetRecommendationState(_ context.Context, id string, state repo.RecommendationState) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	rec, ok := f.recommendations[id]
+	if !ok {
+		return fmt.Errorf("recommendation %s not found", id)
+	}
+	rec.State = state
+	f.recommendations[id] = rec
+	return nil
+}
+
+func (f *fakeRepo) AddRecommendationLiveCounts(_ context.Context, deltas []repo.RecommendationLiveDelta) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.liveDeltas = append(f.liveDeltas, deltas...)
+	return nil
+}
+
+func (f *fakeRepo) DeleteRecommendations(_ context.Context, transactionID int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for id, rec := range f.recommendations {
+		if transactionID == 0 || rec.TransactionID == transactionID {
+			delete(f.recommendations, id)
+		}
+	}
+	if transactionID == 0 {
+		f.miningRuns = nil
+	} else {
+		delete(f.miningRuns, transactionID)
+	}
+	return nil
+}
+
+func (f *fakeRepo) ListRecommendationMiningCandidates(_ context.Context, _ int, _ time.Duration, _ int) ([]repo.RecommendationMiningCandidate, error) {
+	return nil, nil
+}
+
+func (f *fakeRepo) RecordRecommendationMiningRun(_ context.Context, run repo.RecommendationMiningRun) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.miningRuns == nil {
+		f.miningRuns = map[int64]repo.RecommendationMiningRun{}
+	}
+	f.miningRuns[run.TransactionID] = run
+	return nil
 }
 
 func (f *fakeRepo) GetObservationByTrace(_ context.Context, transactionID int64, traceID string) (repo.Observation, bool, error) {

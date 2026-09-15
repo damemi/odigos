@@ -9,8 +9,10 @@ func FromSystemSettings(s repo.SystemSettings) apitypes.SystemSettings {
 	s = s.WithDefaults()
 	return apitypes.SystemSettings{
 		Sampling: apitypes.SystemSamplingSettings{
-			ExamplesPerTransaction:       s.ExamplesPerTransaction,
-			ExampleSampleIntervalSeconds: s.ExampleSampleIntervalSeconds,
+			ExamplesPerTransaction:        s.ExamplesPerTransaction,
+			ExampleSampleIntervalSeconds:  s.ExampleSampleIntervalSeconds,
+			RelationSamplesPerTransaction: s.RelationSamplesPerTransaction,
+			RelationSampleIntervalSeconds: s.RelationSampleIntervalSeconds,
 		},
 		Retention: apitypes.SystemRetentionSettings{
 			ObservationRetentionDays: s.ObservationRetentionDays,
@@ -23,7 +25,9 @@ func FromSystemSettings(s repo.SystemSettings) apitypes.SystemSettings {
 			FlushIntervalSeconds: s.FlushIntervalSeconds,
 		},
 		Detection: apitypes.SystemDetectionSettings{
-			AutoTransactionGuardrail: s.AutoTransactionGuardrail,
+			AutoTransactionGuardrail:     s.AutoTransactionGuardrail,
+			RecommendationMinDistinct:    s.RecommendationMinDistinct,
+			RecommendationMinHoldPercent: s.RecommendationMinHoldPercent,
 		},
 		Identity: apitypes.SystemIdentitySettings{
 			TransactionIdentityDimensions: fromIdentityDimensions(s.TransactionIdentityDimensions),
@@ -41,6 +45,10 @@ func ToSystemSettings(in apitypes.SystemSettings) repo.SystemSettings {
 		FlushIntervalSeconds:          in.Writeback.FlushIntervalSeconds,
 		AutoTransactionGuardrail:      in.Detection.AutoTransactionGuardrail,
 		TransactionIdentityDimensions: toIdentityDimensions(in.Identity.TransactionIdentityDimensions),
+		RelationSamplesPerTransaction: in.Sampling.RelationSamplesPerTransaction,
+		RelationSampleIntervalSeconds: in.Sampling.RelationSampleIntervalSeconds,
+		RecommendationMinDistinct:     in.Detection.RecommendationMinDistinct,
+		RecommendationMinHoldPercent:  in.Detection.RecommendationMinHoldPercent,
 	}.WithDefaults()
 }
 

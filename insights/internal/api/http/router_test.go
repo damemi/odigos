@@ -64,6 +64,14 @@ func TestWritesReturn503BeforeAdmin(t *testing.T) {
 		{http.MethodPut, "/api/v1/system-settings", `{}`},
 		{http.MethodPost, "/api/v1/transactions/1/baseline/D2_egress/reset", ""},
 		{http.MethodPost, "/api/v1/transactions/1/baselines/reset", ""},
+		{http.MethodGet, "/api/v1/recommendations", ""},
+		{http.MethodGet, "/api/v1/recommendations/abc", ""},
+		{http.MethodPost, "/api/v1/recommendations/apply", `{"items":[{"id":"abc"}]}`},
+		{http.MethodPost, "/api/v1/recommendations/dismiss", `{"ids":["abc"]}`},
+		{http.MethodPost, "/api/v1/recommendations/restore", `{"ids":["abc"]}`},
+		{http.MethodPost, "/api/v1/recommendations/revert", `{"ids":["abc"]}`},
+		{http.MethodPost, "/api/v1/recommendations/preview", `{"transaction_id":1,"spec":{}}`},
+		{http.MethodPost, "/api/v1/recommendations/recompute", ""},
 	}
 	for _, tc := range cases {
 		if got := do(t, h, tc.method, tc.path, tc.body).Code; got != http.StatusServiceUnavailable {

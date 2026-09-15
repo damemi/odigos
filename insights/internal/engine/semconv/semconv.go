@@ -7,6 +7,9 @@
 package semconv
 
 import (
+	"strconv"
+	"strings"
+
 	otelsemconv "go.opentelemetry.io/otel/semconv/v1.27.0"
 )
 
@@ -40,6 +43,27 @@ var (
 	// Status codes used as optional transaction-identity dimensions (entry span).
 	HTTPResponseStatusCode = string(otelsemconv.HTTPResponseStatusCodeKey)
 	RPCGRPCStatusCode      = string(otelsemconv.RPCGRPCStatusCodeKey)
+
+	// Request identity: plumbing the relation miner ignores, or id carriers
+	// (a path embeds the id it addresses).
+	HTTPRequestMethod = string(otelsemconv.HTTPRequestMethodKey)
+	HTTPRoute         = string(otelsemconv.HTTPRouteKey)
+	URLFull           = string(otelsemconv.URLFullKey)
+	URLPath           = string(otelsemconv.URLPathKey)
+	URLScheme         = string(otelsemconv.URLSchemeKey)
+	RPCService        = string(otelsemconv.RPCServiceKey)
+	RPCMethod         = string(otelsemconv.RPCMethodKey)
+	PeerService       = string(otelsemconv.PeerServiceKey)
+
+	// Messaging. Key, offset and partition are copied by the broker between a
+	// producer and its consumers: the transport-mirrored fields.
+	MessagingSystem                 = string(otelsemconv.MessagingSystemKey)
+	MessagingOperationType          = string(otelsemconv.MessagingOperationTypeKey)
+	MessagingKafkaMessageKey        = string(otelsemconv.MessagingKafkaMessageKeyKey)
+	MessagingKafkaOffset            = string(otelsemconv.MessagingKafkaOffsetKey)
+	MessagingDestinationPartitionID = string(otelsemconv.MessagingDestinationPartitionIDKey)
+	MessagingMessageID              = string(otelsemconv.MessagingMessageIDKey)
+	MessagingMessageConversationID  = string(otelsemconv.MessagingMessageConversationIDKey)
 )
 
 // Odigos custom-instrumentation capture (D4). A custom-instrumented method
@@ -68,9 +92,43 @@ const (
 	// ReturnValue is the stringified method return value.
 	ReturnValue = "return.value"
 
+	// Prefix of a captured positional argument ("arg.0").
+	ArgPrefix = "arg."
+
 	// MaxCapturedArgs mirrors the producer's positional-argument cap.
 	MaxCapturedArgs = 5
 )
+
+// Captured positional argument i ("arg.0").
+func ArgKey(i int) string { return ArgPrefix + strconv.Itoa(i) }
+
+// Dotless spelling ("arg0") some extensions emit.
+func LegacyArgKey(i int) string { return "arg" + strconv.Itoa(i) }
+
+// A captured positional argument in either spelling.
+func IsCapturedArg(key string) bool {
+	if strings.HasPrefix(key, ArgPrefix) {
+		return isDigits(key[len(ArgPrefix):])
+	}
+	return strings.HasPrefix(key, "arg") && isDigits(key[3:])
+}
+
+// Captured by custom instrumentation: an argument or the return value.
+func IsProbeAttr(key string) bool {
+	return key == ReturnValue || IsCapturedArg(key)
+}
+
+func isDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
 
 // Legacy fallbacks - attributes we still consult because pre-v1.21
 // instrumentations emit them. semconv no longer exposes typed constants for
@@ -98,6 +156,19 @@ const (
 
 	// Legacy HTTP status (pre http.response.status_code).
 	LegacyHTTPStatusCode = "http.status_code"
+
+	// Pre-v1.23 HTTP request identity.
+	LegacyHTTPMethod = "http.method"
+	LegacyHTTPScheme = "http.scheme"
+	LegacyHTTPFlavor = "http.flavor"
+
+	// Pre-v1.25 db.operation and pre-v1.26 messaging.operation.
+	LegacyDBOperation        = "db.operation"
+	LegacyMessagingOperation = "messaging.operation"
+
+	// Pre-v1.27 Kafka spellings of the offset and partition.
+	LegacyMessagingKafkaMessageOffset = "messaging.kafka.message.offset"
+	LegacyMessagingKafkaPartition     = "messaging.kafka.destination.partition"
 
 	// Odigos header-capture naming (plural "headers"); distinct from OTel's
 	// http.response.header.content-length.

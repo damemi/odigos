@@ -266,6 +266,142 @@ func (a *API) ResolveGuardrailViolation(ctx context.Context, scopeKey string, ru
 	return a.Repo.ResolveGuardrailViolation(ctx, repo.ScopeService, scopeKey, ruleKey, offending, resolution)
 }
 
+// ---------- guardrail recommendations ----------
+
+// ListRecommendations is the product API for GET /api/v1/recommendations -
+// same params and wire shape the real UI and debug UI consume.
+func (a *API) ListRecommendations(ctx context.Context, params apitypes.ListRecommendationsParams) (apitypes.RecommendationList, error) {
+	admin, err := a.adminOrErr()
+	if err != nil {
+		return apitypes.RecommendationList{}, err
+	}
+	if params.Kind != "" && !params.Kind.Valid() {
+		return apitypes.RecommendationList{}, fmt.Errorf("%w: unknown recommendation kind %q", errBadRequest, params.Kind)
+	}
+	if params.State != "" && !params.State.Valid() {
+		return apitypes.RecommendationList{}, fmt.Errorf("%w: unknown recommendation state %q", errBadRequest, params.State)
+	}
+	views, err := admin.ListRecommendations(ctx, repo.RecommendationFilter{
+		Kind:          repo.RecommendationKind(params.Kind),
+		State:         repo.RecommendationState(params.State),
+		TransactionID: params.TransactionId,
+		Namespace:     string(params.Namespace),
+		Service:       string(params.Service),
+		IncludeStale:  params.IncludeStale,
+	})
+	if err != nil {
+		return apitypes.RecommendationList{}, err
+	}
+	return apimap.RecommendationList(views), nil
+}
+
+// GetRecommendation is GET /api/v1/recommendations/{id}.
+func (a *API) GetRecommendation(ctx context.Context, id string) (apitypes.Recommendation, bool, error) {
+	admin, err := a.adminOrErr()
+	if err != nil {
+		return apitypes.Recommendation{}, false, err
+	}
+	view, ok, err := admin.GetRecommendation(ctx, strings.TrimSpace(id))
+	if err != nil || !ok {
+		return apitypes.Recommendation{}, ok, err
+	}
+	return apimap.FromRecommendation(view), true, nil
+}
+
+// ApplyRecommendations is POST /api/v1/recommendations/apply: each item becomes
+// a rule on its transaction guardrail (optionally with the operator's edits).
+func (a *API) ApplyRecommendations(ctx context.Context, req apitypes.RecommendationApplyRequest) (apitypes.RecommendationBulkResult, error) {
+	admin, err := a.adminOrErr()
+	if err != nil {
+		return apitypes.RecommendationBulkResult{}, err
+	}
+	if len(req.Items) == 0 {
+		return apitypes.RecommendationBulkResult{}, fmt.Errorf("%w: select at least one recommendation", errBadRequest)
+	}
+	for _, it := range req.Items {
+		if it.Spec != nil {
+			if err := apimap.ValidateCorrelationSpec(*it.Spec); err != nil {
+				return apitypes.RecommendationBulkResult{}, fmt.Errorf("%w: recommendation %s: %v", errBadRequest, it.Id, err)
+			}
+		}
+	}
+	return apimap.FromRecommendationBulkResult(admin.ApplyRecommendations(ctx, apimap.ToRecommendationApplyItems(req))), nil
+}
+
+// DismissRecommendations is POST /api/v1/recommendations/dismiss.
+func (a *API) DismissRecommendations(ctx context.Context, ids []string) (apitypes.RecommendationBulkResult, error) {
+	return a.recommendationBulk(ctx, ids, func(admin Admin, ids []string) engine.RecommendationBulkResult {
+		return admin.DismissRecommendations(ctx, ids)
+	})
+}
+
+// RestoreRecommendations is POST /api/v1/recommendations/restore.
+func (a *API) RestoreRecommendations(ctx context.Context, ids []string) (apitypes.RecommendationBulkResult, error) {
+	return a.recommendationBulk(ctx, ids, func(admin Admin, ids []string) engine.RecommendationBulkResult {
+		return admin.RestoreRecommendations(ctx, ids)
+	})
+}
+
+// RevertRecommendations is POST /api/v1/recommendations/revert.
+func (a *API) RevertRecommendations(ctx context.Context, ids []string) (apitypes.RecommendationBulkResult, error) {
+	return a.recommendationBulk(ctx, ids, func(admin Admin, ids []string) engine.RecommendationBulkResult {
+		return admin.RevertRecommendations(ctx, ids)
+	})
+}
+
+func (a *API) recommendationBulk(ctx context.Context, ids []string, do func(Admin, []string) engine.RecommendationBulkResult) (apitypes.RecommendationBulkResult, error) {
+	admin, err := a.adminOrErr()
+	if err != nil {
+		return apitypes.RecommendationBulkResult{}, err
+	}
+	clean := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id = strings.TrimSpace(id); id != "" {
+			clean = append(clean, id)
+		}
+	}
+	if len(clean) == 0 {
+		return apitypes.RecommendationBulkResult{}, fmt.Errorf("%w: select at least one recommendation", errBadRequest)
+	}
+	return apimap.FromRecommendationBulkResult(do(admin, clean)), nil
+}
+
+// PreviewRecommendation is POST /api/v1/recommendations/preview: how an
+// (edited) spec fares on the transaction's stored relation samples.
+func (a *API) PreviewRecommendation(ctx context.Context, req apitypes.RecommendationPreviewRequest) (apitypes.RecommendationPreview, error) {
+	admin, err := a.adminOrErr()
+	if err != nil {
+		return apitypes.RecommendationPreview{}, err
+	}
+	if req.TransactionId <= 0 {
+		return apitypes.RecommendationPreview{}, fmt.Errorf("%w: transaction_id is required", errBadRequest)
+	}
+	if err := apimap.ValidateCorrelationSelectors(req.Spec); err != nil {
+		return apitypes.RecommendationPreview{}, fmt.Errorf("%w: %v", errBadRequest, err)
+	}
+	preview, err := admin.PreviewRecommendation(ctx, req.TransactionId, apimap.ToCorrelationSpec(req.Spec))
+	if err != nil {
+		return apitypes.RecommendationPreview{}, err
+	}
+	return apimap.FromRecommendationPreview(preview), nil
+}
+
+// RecomputeRecommendations is POST /api/v1/recommendations/recompute.
+func (a *API) RecomputeRecommendations(ctx context.Context, transactionID int64) error {
+	admin, err := a.adminOrErr()
+	if err != nil {
+		return err
+	}
+	if transactionID != 0 {
+		if _, found, err := a.Repo.GetTransactionByID(ctx, transactionID); err != nil {
+			return err
+		} else if !found {
+			return errTransactionNotFound
+		}
+	}
+	return admin.RecomputeRecommendations(ctx, transactionID)
+}
+
 // ---------- baselines ----------
 
 // GetTransactionBaseline returns every scored class for one transaction, with

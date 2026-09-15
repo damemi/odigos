@@ -258,6 +258,79 @@ func (m *instrumentedRepo) CountObservationsByReason(ctx context.Context, transa
 	return out, err
 }
 
+func (m *instrumentedRepo) ListObservationsWithRaw(ctx context.Context, transactionID int64, sampleReason string, limit int) ([]repo.Observation, error) {
+	var out []repo.Observation
+	err := observe("ListObservationsWithRaw", func() error {
+		var e error
+		out, e = m.inner.ListObservationsWithRaw(ctx, transactionID, sampleReason, limit)
+		return e
+	})
+	return out, err
+}
+
+func (m *instrumentedRepo) UpsertRecommendations(ctx context.Context, recs []repo.Recommendation) error {
+	return observe("UpsertRecommendations", func() error {
+		return m.inner.UpsertRecommendations(ctx, recs)
+	})
+}
+
+func (m *instrumentedRepo) ListRecommendations(ctx context.Context, filter repo.RecommendationFilter) ([]repo.Recommendation, error) {
+	var out []repo.Recommendation
+	err := observe("ListRecommendations", func() error {
+		var e error
+		out, e = m.inner.ListRecommendations(ctx, filter)
+		return e
+	})
+	return out, err
+}
+
+func (m *instrumentedRepo) GetRecommendation(ctx context.Context, id string) (repo.Recommendation, bool, error) {
+	var (
+		out repo.Recommendation
+		ok  bool
+	)
+	err := observe("GetRecommendation", func() error {
+		var e error
+		out, ok, e = m.inner.GetRecommendation(ctx, id)
+		return e
+	})
+	return out, ok, err
+}
+
+func (m *instrumentedRepo) SetRecommendationState(ctx context.Context, id string, state repo.RecommendationState) error {
+	return observe("SetRecommendationState", func() error {
+		return m.inner.SetRecommendationState(ctx, id, state)
+	})
+}
+
+func (m *instrumentedRepo) AddRecommendationLiveCounts(ctx context.Context, deltas []repo.RecommendationLiveDelta) error {
+	return observe("AddRecommendationLiveCounts", func() error {
+		return m.inner.AddRecommendationLiveCounts(ctx, deltas)
+	})
+}
+
+func (m *instrumentedRepo) DeleteRecommendations(ctx context.Context, transactionID int64) error {
+	return observe("DeleteRecommendations", func() error {
+		return m.inner.DeleteRecommendations(ctx, transactionID)
+	})
+}
+
+func (m *instrumentedRepo) ListRecommendationMiningCandidates(ctx context.Context, scoredClasses int, staleClaim time.Duration, limit int) ([]repo.RecommendationMiningCandidate, error) {
+	var out []repo.RecommendationMiningCandidate
+	err := observe("ListRecommendationMiningCandidates", func() error {
+		var e error
+		out, e = m.inner.ListRecommendationMiningCandidates(ctx, scoredClasses, staleClaim, limit)
+		return e
+	})
+	return out, err
+}
+
+func (m *instrumentedRepo) RecordRecommendationMiningRun(ctx context.Context, run repo.RecommendationMiningRun) error {
+	return observe("RecordRecommendationMiningRun", func() error {
+		return m.inner.RecordRecommendationMiningRun(ctx, run)
+	})
+}
+
 func (m *instrumentedRepo) ListEnabledPolicies(ctx context.Context) ([]repo.Policy, error) {
 	var out []repo.Policy
 	err := observe("ListEnabledPolicies", func() error {

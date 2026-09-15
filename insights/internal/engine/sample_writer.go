@@ -38,6 +38,9 @@ type sampleWriter struct {
 	repo  repo.Repository
 	warn  func(msg string, err error)
 	queue chan pendingSample
+	// afterInsert runs once per transaction after a batch landed, so the
+	// in-memory caps can re-sync with what every replica has stored.
+	afterInsert func(ctx context.Context, transactionID int64)
 }
 
 func newSampleWriter(r repo.Repository, warn func(string, error)) *sampleWriter {
@@ -99,6 +102,18 @@ func (w *sampleWriter) drain(ctx context.Context) {
 		for _, p := range batch {
 			p.release()
 		}
+		return
+	}
+	if w.afterInsert == nil {
+		return
+	}
+	seen := map[int64]struct{}{}
+	for _, o := range obs {
+		if _, ok := seen[o.TransactionID]; ok {
+			continue
+		}
+		seen[o.TransactionID] = struct{}{}
+		w.afterInsert(ctx, o.TransactionID)
 	}
 }
 
@@ -165,6 +180,31 @@ func (c *sampleCounts) load(ctx context.Context, transactionID int64) (map[strin
 	}
 	c.byTx[transactionID] = fromDB
 	return fromDB, nil
+}
+
+// refresh re-reads one transaction's counts from the DB after a batch of its
+// samples landed. Each replica reserves slots against its own memory, so with
+// N replicas the cap could be overshot N times over; re-syncing after every
+// write bounds the overshoot to what was queued between two writes. Only a
+// transaction that is already loaded is refreshed - an unknown one loads on its
+// next reserve anyway.
+func (c *sampleCounts) refresh(ctx context.Context, transactionID int64) {
+	c.mu.Lock()
+	_, loaded := c.byTx[transactionID]
+	c.mu.Unlock()
+	if !loaded {
+		return
+	}
+	fromDB, err := c.repo.CountObservationsByReason(ctx, transactionID)
+	if err != nil || fromDB == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, still := c.byTx[transactionID]; !still {
+		return
+	}
+	c.byTx[transactionID] = fromDB
 }
 
 // forget drops one transaction's counts after its stored samples were deleted,

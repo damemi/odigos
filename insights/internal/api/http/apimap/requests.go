@@ -148,6 +148,21 @@ func ValidateServiceGuardrail(g apitypes.ServiceGuardrail) error {
 	return nil
 }
 
+// ValidateCorrelationSpec checks one spec the way ValidateServiceGuardrail does
+// per rule entry; used by the recommendation apply path for edited specs.
+func ValidateCorrelationSpec(spec apitypes.CorrelationSpec) error {
+	return validateCorrelationSpec(spec)
+}
+
+// ValidateCorrelationSelectors checks only the two selectors (service, span,
+// attr, extract regex) - what a preview needs; name and relation may be blank.
+func ValidateCorrelationSelectors(spec apitypes.CorrelationSpec) error {
+	if err := validateCorrelationSelector("left", spec.Left); err != nil {
+		return err
+	}
+	return validateCorrelationSelector("right", spec.Right)
+}
+
 func validateCorrelationSpec(spec apitypes.CorrelationSpec) error {
 	if spec.Name == "" {
 		return fmt.Errorf("name is required")

@@ -105,6 +105,7 @@ func (e *Engine) PromoteTransactionBaselines(ctx context.Context, transactionID 
 		}
 	}
 	e.store.removeEntry(transactionID)
+	e.recommendations.requestMine(transactionID)
 	return e.maybeAutoEnableTransactionGuardrail(ctx, tx.Namespace, tx.Service, transactionID)
 }
 
@@ -130,6 +131,7 @@ func (e *Engine) ForcePromoteService(ctx context.Context, namespace, service str
 			}
 			e.store.removeEntry(tx.ID)
 		}
+		e.recommendations.requestMine(tx.ID)
 	}
 	// Treat these txns as promoted even if ListTransactionStats still lags
 	// behind the ClickHouse promote inserts (same race as natural promote).

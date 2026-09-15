@@ -47,6 +47,11 @@ type Engine struct {
 	samples      *sampleWriter
 	sampleCounts *sampleCounts
 
+	// recommendations mines promoted transactions' relation samples for
+	// guardrail rules worth suggesting, in its own goroutine. See
+	// recommendation_miner.go.
+	recommendations *recommendationMiner
+
 	// store serves baseline reads from memory and accumulates merges as
 	// deltas; Flush (and the background flusher) write them behind in batches.
 	// This is what keeps DB load off the per-trace hot path.
@@ -86,8 +91,10 @@ func New(r repo.Repository, logger *commonlogger.OdigosLogger, learning *Learnin
 	e.sampleCounts = newSampleCounts(r)
 	// The runtimes read the clock through a closure (not e.clock's current value)
 	// so a test that overrides e.clock after New still drives their timing.
+	e.samples.afterInsert = e.sampleCounts.refresh
 	e.guardrails = newGuardrailRuntime(r, func() time.Time { return e.clock() }, e.warn, e.keepSample)
 	e.anomalies = newAnomalyRuntime(r, func() time.Time { return e.clock() }, e.warn, e.keepSample)
+	e.recommendations = newRecommendationMiner(e)
 	return e
 }
 
@@ -96,6 +103,13 @@ func New(r repo.Repository, logger *commonlogger.OdigosLogger, learning *Learnin
 // RunBaselineFlusher.
 func (e *Engine) RunSampleWriter(ctx context.Context) {
 	e.samples.run(ctx)
+}
+
+// RunRecommendationMiner mines promoted transactions for guardrail
+// recommendations until ctx is cancelled. Run in its own goroutine; it never
+// touches the ingest path.
+func (e *Engine) RunRecommendationMiner(ctx context.Context) {
+	e.recommendations.run(ctx)
 }
 
 func (e *Engine) SetSystemConfig(cfg *SystemConfig) {
@@ -305,6 +319,9 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 	// not on every subsequent trace of an already-promoted service.
 	if promotedThisTrace && e.allClassesPromoted(entry) {
 		e.maybeAutoEnableTransactionGuardrailAfterPromote(ctx, ident.Namespace, ident.Service, tx.ID)
+		// The relation samples kept below are complete now; mine them for
+		// guardrail recommendations in the background.
+		e.recommendations.requestMine(tx.ID)
 	}
 
 	// 6. Keep representative traces for the UI, but never a fired anomaly (that
@@ -312,8 +329,10 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 	// throttled "example" samples only while learning and under the configured
 	// cap; once every class has promoted (or the cap is full), stop so the
 	// compare view's base column stays fixed instead of drifting with live traffic.
+	// Relation samples follow the same rule and feed the recommendation miner.
 	if !anomalyFired && !e.allClassesPromoted(entry) {
 		e.recordExampleSample(ctx, t, tx, entry)
+		e.recordRelationSample(ctx, full, tx, entry)
 	}
 }
 
@@ -488,6 +507,7 @@ func (e *Engine) scorerForClass(class repo.DeviationClass) Scorer {
 // same cadence; a buffer failure is logged but never blocks the baseline flush.
 func (e *Engine) Flush(ctx context.Context) error {
 	e.guardrails.flushViolations(ctx)
+	e.guardrails.flushShadow(ctx)
 	e.anomalies.flush(ctx)
 	e.samples.drain(ctx)
 	start := time.Now()

@@ -105,6 +105,17 @@ func NewRouter(r repo.Repository, log *commonlogger.OdigosLogger) (*gin.Engine, 
 		v1.POST("/guardrails/violations/dismiss", api.dismissViolation)
 		v1.POST("/guardrails/violations/reopen", api.reopenViolation)
 
+		// Guardrail recommendations: rules Insights mined and suggests; the
+		// operator applies / dismisses them, previews edits, or re-mines.
+		v1.GET("/recommendations", api.listRecommendations)
+		v1.GET("/recommendations/:recommendation_id", api.getRecommendation)
+		v1.POST("/recommendations/apply", api.applyRecommendations)
+		v1.POST("/recommendations/dismiss", api.dismissRecommendations)
+		v1.POST("/recommendations/restore", api.restoreRecommendations)
+		v1.POST("/recommendations/revert", api.revertRecommendations)
+		v1.POST("/recommendations/preview", api.previewRecommendation)
+		v1.POST("/recommendations/recompute", api.recomputeRecommendations)
+
 		// Risk-model reference data (classes, enrichers, categories, rules, tags).
 		v1.GET("/catalog", api.getCatalog)
 

@@ -464,7 +464,7 @@ func d4AttrKey(v d4Violation) (string, bool) {
 	case "ret":
 		return semconv.ReturnValue, true
 	case "arg":
-		return "arg." + strconv.Itoa(v.Index), true
+		return semconv.ArgKey(v.Index), true
 	default:
 		return "", false
 	}
@@ -545,10 +545,10 @@ func d4SiteOf(s *Span) string {
 // argAttr reads positional argument i, accepting both the eBPF spelling
 // ("arg.0") and the dotless form ("arg0") some extensions emit.
 func argAttr(s *Span, i int) (string, bool) {
-	if v := s.Attr("arg." + strconv.Itoa(i)); v != "" {
+	if v := s.Attr(semconv.ArgKey(i)); v != "" {
 		return v, true
 	}
-	if v := s.Attr("arg" + strconv.Itoa(i)); v != "" {
+	if v := s.Attr(semconv.LegacyArgKey(i)); v != "" {
 		return v, true
 	}
 	return "", false

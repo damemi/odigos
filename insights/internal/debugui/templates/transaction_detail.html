@@ -2,7 +2,7 @@
 
 {{define "content"}}
 <h2>{{.Transaction.Service}} · {{template "operationDisplay" (operationDisplay .Transaction.Operation)}} · <span class="badge badge-kind">{{.Transaction.Kind}}</span></h2>
-<p style="color: var(--muted); font-size: 13px;">transaction_id = {{.Transaction.ID}}</p>
+<p style="color: var(--muted); font-size: 13px;">transaction_id = {{.Transaction.ID}} · <a href="/debug/recommendations?transaction_id={{.Transaction.ID}}">recommendations for this transaction</a></p>
 
 <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin:24px 0 8px;">
   <h3 style="margin:0;">Baseline (one row per deviation class)</h3>

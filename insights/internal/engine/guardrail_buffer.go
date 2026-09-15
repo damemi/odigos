@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/odigos-io/odigos-enterprise/insights/internal/metrics"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
 )
@@ -116,6 +117,63 @@ func (b *guardrailBuffer) empty() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return len(b.agg) == 0
+}
+
+// shadowBuffer accumulates shadow-evaluation outcomes per open recommendation
+// (see guardrailRuntime.shadowEvaluate) so a transaction with thousands of
+// traces per flush interval costs one summed row, exactly like violations.
+type shadowBuffer struct {
+	mu  sync.Mutex
+	agg map[string]*repo.RecommendationLiveDelta
+}
+
+func newShadowBuffer() *shadowBuffer {
+	return &shadowBuffer{agg: map[string]*repo.RecommendationLiveDelta{}}
+}
+
+// add records one live trace on which recommendation id held or broke.
+func (b *shadowBuffer) add(id string, transactionID int64, held bool, at time.Time) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	d := b.agg[id]
+	if d == nil {
+		d = &repo.RecommendationLiveDelta{
+			ID: id, Scope: repo.ScopeTransaction, ScopeKey: repo.TransactionScopeKey(transactionID),
+			TransactionID: transactionID, FirstAt: at,
+		}
+		b.agg[id] = d
+	}
+	if held {
+		d.Held++
+	} else {
+		d.Broken++
+	}
+	if at.Before(d.FirstAt) {
+		d.FirstAt = at
+	}
+	if at.After(d.LastAt) {
+		d.LastAt = at
+	}
+}
+
+// drain returns the accumulated deltas and resets the buffer.
+func (b *shadowBuffer) drain() []repo.RecommendationLiveDelta {
+	b.mu.Lock()
+	agg := b.agg
+	b.agg = map[string]*repo.RecommendationLiveDelta{}
+	b.mu.Unlock()
+	if len(agg) == 0 {
+		return nil
+	}
+	out := make([]repo.RecommendationLiveDelta, 0, len(agg))
+	var held, broken int
+	for _, d := range agg {
+		out = append(out, *d)
+		held += int(d.Held)
+		broken += int(d.Broken)
+	}
+	metrics.AddRecommendationShadow(held, broken)
+	return out
 }
 
 // supersededByInventoryReset reports whether this group's counts describe

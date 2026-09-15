@@ -54,7 +54,9 @@ CREATE TABLE IF NOT EXISTS trace_observations (
     raw_otlp       String
 ) ENGINE = ReplacingMergeTree
 ORDER BY (transaction_id, sample_reason, trace_id)
-TTL toDateTime(observed_at) + INTERVAL 120 DAY;
+-- Relation samples only feed the recommendation miner, so they age out after
+-- 14 days regardless of the operator-set retention for examples and evidence.
+TTL toDateTime(observed_at) + toIntervalDay(if(sample_reason = 'relation', 14, 120));
 
 CREATE TABLE IF NOT EXISTS transaction_activity (
     transaction_id Int64,
@@ -138,6 +140,63 @@ CREATE TABLE IF NOT EXISTS guardrail_violations (
 ) ENGINE = AggregatingMergeTree()
 ORDER BY (scope_type, scope_key, rule_key, offending);
 
+-- Guardrail recommendations: rules Insights suggests instead of waiting for an
+-- operator to author them. Scoped like guardrails (scope_type/scope_key), so a
+-- future kind can target a service or the whole cluster. transaction_id is the
+-- resolved id for transaction scope (0 otherwise) and joins the transactions
+-- table. Mining stats are rewritten on every run, state is the operator's
+-- decision and is carried over by the writer. spec is kind-specific JSON (today
+-- always a CorrelationSpec) that applying the recommendation adds to a guardrail.
+CREATE TABLE IF NOT EXISTS guardrail_recommendations (
+    scope_type        LowCardinality(String) DEFAULT 'transaction',
+    scope_key         String,
+    transaction_id    Int64,
+    recommendation_id String,
+    kind              LowCardinality(String),
+    state             LowCardinality(String) DEFAULT 'open',
+    stale             UInt8 DEFAULT 0,
+    rank              Int32 DEFAULT 0,
+    spec              String,
+    transform         LowCardinality(String),
+    transport         UInt8 DEFAULT 0,
+    observed          Int32,
+    held              Int32,
+    distinct_values   Int32,
+    sample_count      Int32,
+    examples          String DEFAULT '[]',
+    mined_at          DateTime64(3),
+    created_at        DateTime64(3),
+    updated_at        DateTime64(3)
+) ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY (scope_type, scope_key, recommendation_id);
+
+-- Shadow-evaluation counters: how a still-open recommendation fares against
+-- live traffic. Summed across replicas and flush cycles like the other counters.
+CREATE TABLE IF NOT EXISTS recommendation_live_counts (
+    scope_type        LowCardinality(String) DEFAULT 'transaction',
+    scope_key         String,
+    transaction_id    Int64,
+    recommendation_id String,
+    held              SimpleAggregateFunction(sum, UInt64),
+    broken            SimpleAggregateFunction(sum, UInt64),
+    first_at          SimpleAggregateFunction(min, DateTime64(3)),
+    last_at           SimpleAggregateFunction(max, DateTime64(3))
+) ENGINE = AggregatingMergeTree()
+ORDER BY (scope_type, scope_key, recommendation_id);
+
+-- One row per transaction: the newest mining run, which also acts as the soft
+-- claim replicas use to avoid mining the same transaction at once (mined_at is
+-- zero while a run is in progress).
+CREATE TABLE IF NOT EXISTS recommendation_mining_runs (
+    transaction_id Int64,
+    claimed_at     DateTime64(3),
+    mined_at       DateTime64(3),
+    sample_count   Int32,
+    candidates     Int32,
+    updated_at     DateTime64(3)
+) ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY transaction_id;
+
 -- Service-graph edges: the client -> server topology the vendored servicegraph
 -- connector emits in the Odigos gateway, shipped to insights over OTLP and
 -- stored here so the UI can draw a per-anomaly blast-radius subgraph.
@@ -186,7 +245,14 @@ CREATE TABLE IF NOT EXISTS system_settings (
 
     -- Bumpable epoch so multi-replica engines clear in-memory transaction state
     -- after an identity-dimension reset wipe. Not an operator-facing setting.
-    transaction_inventory_epoch UInt32 DEFAULT 0
+    transaction_inventory_epoch UInt32 DEFAULT 0,
+
+    -- Relation samples kept per learning transaction for the recommendation
+    -- miner, and the bar a mined correlation must clear to be recommended.
+    relation_samples_per_transaction UInt32 DEFAULT 50,
+    relation_sample_interval_seconds UInt32 DEFAULT 5,
+    recommendation_min_distinct UInt32 DEFAULT 5,
+    recommendation_min_hold_percent UInt32 DEFAULT 98
 ) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY id;
 

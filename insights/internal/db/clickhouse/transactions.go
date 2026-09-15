@@ -250,6 +250,9 @@ func (r *Repo) DeleteTransaction(ctx context.Context, transactionID int64) error
 	if err := r.ResetTransactionBaselines(ctx, transactionID); err != nil {
 		return err
 	}
+	if err := r.DeleteRecommendations(ctx, transactionID); err != nil {
+		return err
+	}
 	if err := r.conn.Exec(sctx,
 		`ALTER TABLE transaction_activity DELETE WHERE transaction_id = ?`,
 		transactionID); err != nil {
@@ -291,6 +294,9 @@ func (r *Repo) DeleteAllTransactions(ctx context.Context) error {
 		tableDeletes = append(tableDeletes, tableDelete{tbl, fmt.Sprintf("ALTER TABLE %s DELETE WHERE 1", tbl), nil})
 	}
 	tableDeletes = append(tableDeletes,
+		tableDelete{"guardrail_recommendations", `ALTER TABLE guardrail_recommendations DELETE WHERE 1`, nil},
+		tableDelete{"recommendation_live_counts", `ALTER TABLE recommendation_live_counts DELETE WHERE 1`, nil},
+		tableDelete{"recommendation_mining_runs", `ALTER TABLE recommendation_mining_runs DELETE WHERE 1`, nil},
 		tableDelete{"transaction_activity", `ALTER TABLE transaction_activity DELETE WHERE 1`, nil},
 		tableDelete{"learning_policies", `ALTER TABLE learning_policies DELETE WHERE scope_type = ?`, []any{string(repo.ScopeTransaction)}},
 		tableDelete{"alert_policies", `ALTER TABLE alert_policies DELETE WHERE scope_type = ?`, []any{string(repo.ScopeTransaction)}},

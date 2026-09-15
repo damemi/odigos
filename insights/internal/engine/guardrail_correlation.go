@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/semconv"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
@@ -26,30 +27,54 @@ func correlationViolations(full *Trace, guardrail repo.ServiceGuardrail) []guard
 	}
 	var out []guardrailViolation
 	for _, spec := range specs {
-		left, lok := extractSelectorValue(full, spec.Left)
-		right, rok := extractSelectorValue(full, spec.Right)
-		if !lok || !rok {
-			continue
-		}
-		equal := left == right
-		violated := (spec.Relation == repo.CorrelationEquals && !equal) ||
-			(spec.Relation == repo.CorrelationNotEquals && equal)
-		if !violated {
+		res := evaluateCorrelation(full, spec)
+		if !res.evaluated || res.held {
 			continue
 		}
 		out = append(out, guardrailViolation{
 			rule:  risk.RuleAttributeCorrelation,
-			item:  correlationOffending(spec, equal),
+			item:  correlationOffending(spec, spec.Relation == repo.CorrelationNotEquals),
 			score: risk.ScoreForSeverity(spec.Severity),
 		})
 	}
 	return out
 }
 
-// extractSelectorValue finds the first span matching the selector, reads the
-// attribute, and applies the optional regex extract. ok is false when no span
-// matches or the attribute is absent.
-func extractSelectorValue(full *Trace, sel repo.CorrelationSelector) (string, bool) {
+// One rule checked on one trace. left/right are the pair that decided it: the
+// breaking pair on a violation, the first pair otherwise.
+type correlationResult struct {
+	// false when a side has no matching span: the rule says nothing here.
+	evaluated   bool
+	held        bool
+	left, right string
+}
+
+// Every span matching a side is checked, not just the first: when an operation
+// runs twice in one trace (a legitimate lookup and an attacker-induced one)
+// the rule breaks whichever ran first. Mining, preview, shadow counting and
+// enforcement share this, so a recommendation's numbers are what applying it
+// enforces.
+func evaluateCorrelation(full *Trace, spec repo.CorrelationSpec) correlationResult {
+	lefts := selectorValues(full, spec.Left)
+	rights := selectorValues(full, spec.Right)
+	if len(lefts) == 0 || len(rights) == 0 {
+		return correlationResult{}
+	}
+	res := correlationResult{evaluated: true, held: true, left: lefts[0], right: rights[0]}
+	wantEqual := spec.Relation != repo.CorrelationNotEquals
+	for _, l := range lefts {
+		for _, r := range rights {
+			if (l == r) != wantEqual {
+				return correlationResult{evaluated: true, held: false, left: l, right: r}
+			}
+		}
+	}
+	return res
+}
+
+// The attribute's value on every span the selector matches, extract applied.
+func selectorValues(full *Trace, sel repo.CorrelationSelector) []string {
+	var out []string
 	for _, s := range full.Spans {
 		if !spanMatchesSelector(s, sel) {
 			continue
@@ -58,9 +83,9 @@ func extractSelectorValue(full *Trace, sel repo.CorrelationSelector) (string, bo
 		if raw == "" {
 			continue
 		}
-		return applyExtract(raw, sel.Extract), true
+		out = append(out, applyExtract(raw, sel.Extract))
 	}
-	return "", false
+	return out
 }
 
 // spanMatchesSelector matches a span by owning service and by span identity: the
@@ -90,6 +115,24 @@ func spanMatchesSelector(s *Span, sel repo.CorrelationSelector) bool {
 	return false
 }
 
+// extractRegexes caches compiled extract patterns. Patterns come from a small,
+// operator-authored set (guardrail specs and open recommendations), so the
+// cache stays tiny while sparing the per-trace path a regexp compile.
+var extractRegexes sync.Map // pattern string -> *regexp.Regexp (nil when invalid)
+
+func compiledExtract(pattern string) *regexp.Regexp {
+	if cached, ok := extractRegexes.Load(pattern); ok {
+		re, _ := cached.(*regexp.Regexp)
+		return re
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		re = nil
+	}
+	extractRegexes.Store(pattern, re)
+	return re
+}
+
 // applyExtract returns capture group 1 of the regex (or the whole match when the
 // pattern has no groups); an empty pattern or a non-match returns the value
 // verbatim. The pattern is validated on write, so a compile error is treated as
@@ -98,8 +141,8 @@ func applyExtract(value, pattern string) string {
 	if pattern == "" {
 		return value
 	}
-	re, err := regexp.Compile(pattern)
-	if err != nil {
+	re := compiledExtract(pattern)
+	if re == nil {
 		return value
 	}
 	m := re.FindStringSubmatch(value)

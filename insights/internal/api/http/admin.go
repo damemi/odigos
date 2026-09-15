@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/odigos-io/odigos-enterprise/insights/internal/engine"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
 )
@@ -36,6 +37,16 @@ type Admin interface {
 	EnableTransactionGuardrail(ctx context.Context, namespace, service string) error
 	DisableTransactionGuardrail(ctx context.Context, namespace, service string) error
 	ForcePromoteService(ctx context.Context, namespace, service string) error
+
+	// Guardrail recommendations (see engine/recommendations.go).
+	ListRecommendations(ctx context.Context, filter repo.RecommendationFilter) ([]engine.RecommendationView, error)
+	GetRecommendation(ctx context.Context, id string) (engine.RecommendationView, bool, error)
+	ApplyRecommendations(ctx context.Context, items []engine.RecommendationApplyItem) engine.RecommendationBulkResult
+	DismissRecommendations(ctx context.Context, ids []string) engine.RecommendationBulkResult
+	RestoreRecommendations(ctx context.Context, ids []string) engine.RecommendationBulkResult
+	RevertRecommendations(ctx context.Context, ids []string) engine.RecommendationBulkResult
+	PreviewRecommendation(ctx context.Context, transactionID int64, spec repo.CorrelationSpec) (engine.RecommendationPreview, error)
+	RecomputeRecommendations(ctx context.Context, transactionID int64) error
 }
 
 // SetAdmin wires the engine-backed write actions. Called once at startup after

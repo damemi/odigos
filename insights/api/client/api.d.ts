@@ -670,6 +670,161 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/recommendations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List guardrail recommendations
+         * @description **Use for:** the Recommendations screen. One item per suggested rule, with a render-ready `title`/`summary`/`why_it_matters`, the exact `spec` that `apply` would add, a `confidence` block (sample stats plus live shadow counters), and up to three example value pairs.
+         *     Filter by lifecycle `state` (open | applied | dismissed), `kind`, service, or transaction. Stale rows (the latest mining run no longer produced them) are hidden unless `include_stale=true`.
+         */
+        get: operations["listRecommendations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recommendations/{recommendation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one recommendation */
+        get: operations["getRecommendation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recommendations/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply recommendations
+         * @description Turn each recommendation into an enforced `attribute_correlation` rule on its transaction's guardrail (created if missing), reload the engine, and mark the recommendation applied. An item may carry an edited `spec` (name, severity, why, extract regexes) which is applied instead of the mined one; selectors' service/span/attr must match the recommendation. Partial failures return 422 with per-item errors.
+         */
+        post: operations["applyRecommendations"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recommendations/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss recommendations
+         * @description Reject without creating a rule. Sticky across re-mining: the same relation found again stays dismissed. Shadow evaluation stops.
+         */
+        post: operations["dismissRecommendations"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recommendations/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore dismissed recommendations to open */
+        post: operations["restoreRecommendations"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recommendations/revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revert applied recommendations
+         * @description Remove the rule an earlier apply added from the transaction's guardrail, reload the engine, and move the recommendation back to open.
+         */
+        post: operations["revertRecommendations"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recommendations/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a correlation spec against stored samples
+         * @description Evaluate an (edited) spec against the transaction's stored relation samples without persisting anything. Backs the "edit & apply" flow so the operator sees how often the rule would have held before enforcing it.
+         */
+        post: operations["previewRecommendation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recommendations/recompute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-run mining
+         * @description Queue a mining run for one transaction (or, with transaction_id omitted, a sweep over every promoted transaction that still has unmined samples). Runs in the background; poll the list.
+         */
+        post: operations["recomputeRecommendations"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog": {
         parameters: {
             query?: never;
@@ -771,11 +926,8 @@ export interface components {
          * @enum {string}
          */
         DeviationClass: "D1_call_edges" | "D2_egress" | "D3_latency" | "D4_args_returns" | "D5_libraries" | "D6_attr_relations" | "D7_db_access" | "D8_payload_size";
-        /**
-         * @description How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility - it is not the tag written to storage.
-         * @enum {string}
-         */
-        SampleReason: "example" | "anomaly_evidence";
+        /** @description How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. `relation` = learning-phase traces kept for the correlation recommendation miner (larger cap, 14-day retention). Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility - it is not the tag written to storage. Open set: storage tags like `anomaly:<signature>` and `guardrail:<rule>:<offending>` are valid values too, so clients must tolerate values not listed here. */
+        SampleReason: string;
         /** @enum {string} */
         PolicyScope: "global" | "service" | "transaction";
         /**
@@ -1779,7 +1931,7 @@ export interface components {
             allowlist?: string[];
             /** @description Cross-span correlation specs. Only used by the `attribute_correlation` rule (transaction-scoped): each spec asserts two captured span attributes stay consistent within one trace. */
             correlations?: components["schemas"]["CorrelationSpec"][];
-            /** @description How this rule was created. `auto_transaction_guardrail` means it was created automatically when the service's transactions promoted (not a manual edit). */
+            /** @description How this rule was created. `auto_transaction_guardrail` means it was created automatically when the service's transactions promoted (not a manual edit). `recommendation` means an operator applied a mined recommendation. */
             origin?: string;
         };
         /** @description Locates one attribute on one span within a trace. */
@@ -1843,6 +1995,150 @@ export interface components {
         ServiceGuardrailList: {
             count: number;
             items: components["schemas"]["ServiceGuardrail"][];
+        };
+        /**
+         * @description The guardrail rule type a recommendation would create.
+         * @enum {string}
+         */
+        RecommendationKind: "attribute_correlation";
+        /**
+         * @description Lifecycle bucket. `open` awaits a decision, `applied` became a guardrail rule, `dismissed` was rejected (sticky across re-mining).
+         * @enum {string}
+         */
+        RecommendationState: "open" | "applied" | "dismissed";
+        /** @enum {string} */
+        RecommendationConfidenceLevel: "high" | "medium" | "low";
+        /** @description Why the engine believes the relation. Sample stats come from the stored relation samples the miner read; live counters come from shadow evaluation of the open recommendation against real traffic and keep growing until it is applied or dismissed. */
+        RecommendationConfidence: {
+            level: components["schemas"]["RecommendationConfidenceLevel"];
+            /**
+             * Format: double
+             * @description held / observed on stored samples (0..1).
+             */
+            hold_ratio: number;
+            /** @description Stored samples where both values were present. */
+            observed: number;
+            /** @description Of those, how many satisfied the relation. */
+            held: number;
+            /** @description Distinct left-hand values seen agreeing. */
+            distinct: number;
+            /** @description Relation samples the mining run looked at. */
+            sample_count: number;
+            /** Format: int64 */
+            live_held: number;
+            /** Format: int64 */
+            live_broken: number;
+            /**
+             * Format: date-time
+             * @description Omitted until the first live trace was evaluated.
+             */
+            live_since?: string;
+            /**
+             * Format: date-time
+             * @description Omitted until the first live trace was evaluated.
+             */
+            live_last?: string;
+            /** @description Human-readable evidence lines, e.g. "Held on 50 of 50 samples". */
+            reasons: string[];
+        };
+        /** @description One stored sample the relation held on, with the two values. */
+        RecommendationExample: {
+            trace_id: string;
+            left_value: string;
+            right_value: string;
+            /** Format: date-time */
+            observed_at: string;
+        };
+        Recommendation: {
+            id: string;
+            kind: components["schemas"]["RecommendationKind"];
+            state: components["schemas"]["RecommendationState"];
+            /** @description The latest mining run no longer produced this row. */
+            stale: boolean;
+            /** @description Position among the scope's recommendations, 0 = strongest. */
+            rank: number;
+            /** @description The guardrail the recommendation would extend, with the same meaning as a guardrail's scope/scope_key. attribute_correlation is always transaction-scoped; future kinds may target a service or global. */
+            scope?: components["schemas"]["PolicyScope"];
+            scope_key?: string;
+            /**
+             * Format: int64
+             * @description Resolved id for transaction scope, 0 otherwise.
+             */
+            transaction_id: number;
+            service: string;
+            namespace: string;
+            operation: string;
+            transaction_kind: components["schemas"]["TransactionKind"];
+            /** @description One-line headline, e.g. "resolvePrincipal returns the account getAccount reads". */
+            title: string;
+            /** @description One sentence explaining the relation in plain words. */
+            summary: string;
+            /** @description The security story - what breaking this relation would mean. */
+            why_it_matters: string;
+            /** @description How the two values relate: `exact` (identical), `core` (identical after a constant prefix/suffix), `digits` (same numeric id), `contains` (one value is embedded in the other). */
+            transform: string;
+            /** @description Guaranteed by the transport rather than by business logic: the same field on both ends of one hop (a Kafka message key on producer and consumer). A break means in-flight tampering or misattribution, so it is mined at `low` severity and ranked after every business relation. Shown as a tag on the row. */
+            transport: boolean;
+            /** @description The exact rule `apply` adds to the transaction guardrail. */
+            spec: components["schemas"]["CorrelationSpec"];
+            confidence: components["schemas"]["RecommendationConfidence"];
+            examples: components["schemas"]["RecommendationExample"][];
+            /** @description The transaction's guardrail already has a rule on the same two attributes (e.g. added by hand). Apply would duplicate it. */
+            already_covered: boolean;
+            /** Format: date-time */
+            mined_at: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        RecommendationList: {
+            count: number;
+            items: components["schemas"]["Recommendation"][];
+        };
+        RecommendationIDsRequest: {
+            ids: string[];
+        };
+        RecommendationApplyItem: {
+            id: string;
+            /** @description Optional edited rule. Left/right service, span and attr must match the recommendation; name, severity, why, relation and extract regexes may differ. */
+            spec?: components["schemas"]["CorrelationSpec"];
+        };
+        RecommendationApplyRequest: {
+            items: components["schemas"]["RecommendationApplyItem"][];
+        };
+        RecommendationItemError: {
+            id: string;
+            error: string;
+        };
+        RecommendationBulkResult: {
+            done: number;
+            failed: number;
+            errors: components["schemas"]["RecommendationItemError"][];
+        };
+        RecommendationPreviewRequest: {
+            /** Format: int64 */
+            transaction_id: number;
+            spec: components["schemas"]["CorrelationSpec"];
+        };
+        /** @description How a spec fares on the transaction's stored relation samples. */
+        RecommendationPreview: {
+            sample_count: number;
+            observed: number;
+            held: number;
+            distinct: number;
+            /** Format: double */
+            hold_ratio: number;
+            examples: components["schemas"]["RecommendationExample"][];
+            /** @description Up to three samples where the relation did not hold. */
+            counter_examples: components["schemas"]["RecommendationExample"][];
+        };
+        RecommendationRecomputeRequest: {
+            /**
+             * Format: int64
+             * @description Omit or 0 to sweep every promoted transaction with unmined samples.
+             */
+            transaction_id?: number;
         };
         LearningCondition: {
             type: components["schemas"]["LearningConditionType"];
@@ -1949,6 +2245,10 @@ export interface components {
         SystemSamplingSettings: {
             examples_per_transaction: number;
             example_sample_interval_seconds: number;
+            /** @description Whole traces kept per learning transaction for the correlation recommendation miner (default 50). More samples = stronger evidence for a mined relation, at the cost of storage for 14 days. Omit to keep the default. */
+            relation_samples_per_transaction?: number;
+            /** @description Minimum seconds between two relation samples (default 5). */
+            relation_sample_interval_seconds?: number;
         };
         SystemRetentionSettings: {
             /** @description Days to keep sample traces (default 120); applied as ClickHouse TTL on save. Matches the 120-day findings lookback ceiling. */
@@ -1970,6 +2270,10 @@ export interface components {
         SystemDetectionSettings: {
             /** @description When true, automatically create an enforced allowed_transactions guardrail when a service finishes promoting (every transaction leaves learning). Applies only going forward - already-promoted services are not backfilled when this is turned on. Per-service disable uses rule mode off. */
             auto_transaction_guardrail: boolean;
+            /** @description A mined correlation is only recommended when at least this many different values were seen agreeing (default 5). Guards against two attributes that merely share a constant. */
+            recommendation_min_distinct?: number;
+            /** @description Share of samples (with both values present) on which the relation must hold to be recommended (default 98). */
+            recommendation_min_hold_percent?: number;
         };
         /** @description One low-cardinality attribute (or built-in resolver key) folded into transaction identity from the sub-transaction entry span only. */
         SystemTransactionIdentityDimension: {
@@ -2551,8 +2855,8 @@ export interface operations {
     listObservations: {
         parameters: {
             query?: {
-                /** @description Filter to one sample bucket. */
-                sample_reason?: components["schemas"]["SampleReason"];
+                /** @description Filter to one sample bucket. Kept as a closed list on the request side so the contract diff stays additive; the response's `sample_reason` is the open `SampleReason` set. */
+                sample_reason?: "example" | "relation" | "anomaly_evidence";
             };
             header?: never;
             path: {
@@ -3106,6 +3410,251 @@ export interface operations {
         responses: {
             204: components["responses"]["NoContent"];
             400: components["responses"]["Error"];
+        };
+    };
+    listRecommendations: {
+        parameters: {
+            query?: {
+                kind?: components["schemas"]["RecommendationKind"];
+                state?: components["schemas"]["RecommendationState"];
+                transaction_id?: number;
+                /** @description Filter to one service name. */
+                service?: components["parameters"]["ServiceFilter"];
+                /** @description Filter to one namespace. */
+                namespace?: components["parameters"]["NamespaceFilter"];
+                include_stale?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recommendations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationList"];
+                };
+            };
+            400: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    getRecommendation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recommendation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The recommendation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recommendation"];
+                };
+            };
+            404: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    applyRecommendations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecommendationApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description All items applied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationBulkResult"];
+                };
+            };
+            400: components["responses"]["Error"];
+            /** @description Some items failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationBulkResult"];
+                };
+            };
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    dismissRecommendations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecommendationIDsRequest"];
+            };
+        };
+        responses: {
+            /** @description Result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationBulkResult"];
+                };
+            };
+            400: components["responses"]["Error"];
+            /** @description Some items failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationBulkResult"];
+                };
+            };
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    restoreRecommendations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecommendationIDsRequest"];
+            };
+        };
+        responses: {
+            /** @description Result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationBulkResult"];
+                };
+            };
+            400: components["responses"]["Error"];
+            /** @description Some items failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationBulkResult"];
+                };
+            };
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    revertRecommendations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecommendationIDsRequest"];
+            };
+        };
+        responses: {
+            /** @description Result. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationBulkResult"];
+                };
+            };
+            400: components["responses"]["Error"];
+            /** @description Some items failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationBulkResult"];
+                };
+            };
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    previewRecommendation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecommendationPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description How the spec fares on stored samples. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationPreview"];
+                };
+            };
+            400: components["responses"]["Error"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    recomputeRecommendations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RecommendationRecomputeRequest"];
+            };
+        };
+        responses: {
+            /** @description Queued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            503: components["responses"]["Unavailable"];
         };
     };
     getCatalog: {

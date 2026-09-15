@@ -18,12 +18,13 @@ type guardrailRuntime struct {
 
 	config   atomic.Pointer[GuardrailConfig]
 	buf      *guardrailBuffer
+	shadow   *shadowBuffer
 	known    atomic.Pointer[map[string]map[string]struct{}]
 	evidence sync.Map // groupKey string -> struct{}, write-once evidence gate
 }
 
 func newGuardrailRuntime(r repo.Repository, clock func() time.Time, warn func(string, error), keep keepSampleFunc) *guardrailRuntime {
-	return &guardrailRuntime{repo: r, clock: clock, warn: warn, keep: keep, buf: newGuardrailBuffer()}
+	return &guardrailRuntime{repo: r, clock: clock, warn: warn, keep: keep, buf: newGuardrailBuffer(), shadow: newShadowBuffer()}
 }
 
 // setConfig installs (or replaces) the guardrail snapshot; a nil snapshot
@@ -74,13 +75,50 @@ func (g *guardrailRuntime) evaluateTransactionGuardrail(ctx context.Context, tx 
 	if full == nil {
 		return
 	}
-	txnGuardrail, ok := g.config.Load().ResolveTransactionGuardrail(tx.ID)
+	cfg := g.config.Load()
+	g.shadowEvaluate(ctx, cfg, tx, full, now)
+	txnGuardrail, ok := cfg.ResolveTransactionGuardrail(tx.ID)
 	if !ok {
 		return
 	}
 	for _, violation := range correlationViolations(full, txnGuardrail) {
 		g.buf.add(repo.ScopeService, serviceKey, violation.rule, violation.item, violation.score, full.TraceID, now, inventoryEpoch)
 		g.captureEvidence(ctx, full, tx, serviceKey, violation.rule, violation.item)
+	}
+}
+
+// shadowEvaluate checks the transaction's open recommendations against this
+// live trace and counts whether each relation held. Nothing fires: the counts
+// are what the Recommendations screen shows as live confidence, so the
+// operator applies a rule knowing how it behaved on real traffic. The common
+// case (no open recommendations) is one map miss. One counter-example trace
+// per recommendation is kept so a drop in confidence can be investigated.
+func (g *guardrailRuntime) shadowEvaluate(ctx context.Context, cfg *GuardrailConfig, tx repo.Transaction, full *Trace, now time.Time) {
+	specs := cfg.shadowSpecs(tx.ID)
+	if len(specs) == 0 {
+		return
+	}
+	for _, s := range specs {
+		res := evaluateCorrelation(full, s.spec)
+		if !res.evaluated {
+			continue
+		}
+		g.shadow.add(s.id, tx.ID, res.held, now)
+		if !res.held {
+			g.keep(ctx, full, tx, repo.RecommendationShadowReason(s.id), 1, nil)
+		}
+	}
+}
+
+// flushShadow persists the buffered shadow outcomes as summed increments.
+// Called on the flush cadence next to flushViolations.
+func (g *guardrailRuntime) flushShadow(ctx context.Context) {
+	deltas := g.shadow.drain()
+	if len(deltas) == 0 {
+		return
+	}
+	if err := g.repo.AddRecommendationLiveCounts(ctx, deltas); err != nil {
+		g.warn("flush recommendation live counts", err)
 	}
 }
 
