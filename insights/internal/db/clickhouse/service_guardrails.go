@@ -342,8 +342,7 @@ func splitServiceScopeKey(key string) (namespace, service string) {
 //   - Egress: host of every D2 peer learned by this service's transactions.
 //
 // Matching is by service NAME (D1 edges carry no namespace); egress is scoped by
-// (namespace, service) via the transactions table. For caller/callee candidates
-// beyond observed edges, the UI fetches ListServiceNames once cluster-wide.
+// (namespace, service) via the transactions table.
 func (r *Repo) GetServiceProfile(ctx context.Context, namespace, service string) (repo.ServiceProfile, error) {
 	profile := repo.ServiceProfile{Namespace: namespace, Service: service}
 

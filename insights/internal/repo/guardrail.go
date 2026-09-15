@@ -152,9 +152,8 @@ const GuardrailOriginAutoTransactionGuardrail = "auto_transaction_guardrail"
 // matching is by service name, so cross-namespace collisions are a v1 limitation.
 //
 // Callers/Callees/Egress are the observed neighborhood (default checkbox
-// selection / "adopt observed"). Egress remainders are open-ended in the
-// UI (free-form hosts). Caller/callee candidates beyond observed edges come
-// from ListServiceNames (cluster-wide, fetched once by the UI).
+// selection / "adopt observed"). Free-form UI fields cover callers/callees/
+// egress beyond those observed edges.
 type ServiceProfile struct {
 	Namespace    string
 	Service      string

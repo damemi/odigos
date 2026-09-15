@@ -2711,7 +2711,6 @@ func (u *ui) listGuardrails(c *gin.Context) {
 	}
 	namespaces, servicesByNamespace := u.serviceDirectory(ctx)
 	servicesJSON, _ := json.Marshal(servicesByNamespace)
-	serviceNames, _ := u.repo.ListServiceNames(ctx)
 	transactions := guardrailTransactionOptions(ctx, api)
 	transactionsJSON, _ := json.Marshal(transactions)
 	views := buildGuardrailViews(guardrails)
@@ -2735,7 +2734,6 @@ func (u *ui) listGuardrails(c *gin.Context) {
 		"Rules":            risk.GuardrailRules,
 		"Namespaces":       namespaces,
 		"ServicesJSON":     template.JS(servicesJSON),
-		"ServiceNames":     serviceNames,
 		"TransactionsJSON": template.JS(transactionsJSON),
 	}
 	ns := strings.TrimSpace(c.Query("namespace"))
@@ -2749,13 +2747,6 @@ func (u *ui) listGuardrails(c *gin.Context) {
 		if profile, perr := u.repo.GetServiceProfile(ctx, ns, svc); perr == nil {
 			data["Profile"] = profile
 		}
-		peers := make([]string, 0, len(serviceNames))
-		for _, name := range serviceNames {
-			if name != svc {
-				peers = append(peers, name)
-			}
-		}
-		data["PeerServiceNames"] = peers
 	}
 	u.render(c, "guardrails", "settings", c.Query("flash"), data)
 }
@@ -3085,10 +3076,9 @@ func (u *ui) deleteGuardrail(c *gin.Context) {
 }
 
 // seedGuardrail adds the operator's checkbox-selected callers/callees/egress
-// (plus any free-form egress hosts) to that service's guardrail, creating it if
-// needed, in the chosen mode. Callers/callees may be any seen service name
-// (from the cluster-wide service-names list), not only observed edges; egress
-// is open-ended.
+// (from a service's observed profile, plus any free-form egress hosts) to that
+// service's guardrail, creating it if needed, in the chosen mode. This is the
+// "adopt observed" flow: curate from reality instead of typing allowlists by hand.
 func (u *ui) seedGuardrail(c *gin.Context) {
 	redirect := "/debug/settings/guardrails"
 	api, ok := u.productAPI(c)

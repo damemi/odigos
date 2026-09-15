@@ -48,7 +48,7 @@ type Repository interface {
 	ListServiceStats(ctx context.Context, limit int) ([]ServiceStat, error)
 
 	// ListServiceNames returns every distinct service name seen in transactions,
-	// sorted A–Z. Cluster-wide caller/callee candidate set for guardrails.
+	// sorted A–Z.
 	ListServiceNames(ctx context.Context) ([]string, error)
 
 	// ListTransactionStats returns transactions with volume/last_seen, ordered
@@ -241,8 +241,7 @@ type Repository interface {
 
 	// GetServiceProfile derives one service's communication summary from the
 	// existing D1/D2 baselines (observed callers/callees/egress). Backs the
-	// guardrail editor's allowlist seeding; combine with ListServiceNames for
-	// open caller/callee candidates.
+	// guardrail editor's allowlist seeding (checkbox candidates).
 	GetServiceProfile(ctx context.Context, namespace, service string) (ServiceProfile, error)
 
 	// ---------- anomalies ----------

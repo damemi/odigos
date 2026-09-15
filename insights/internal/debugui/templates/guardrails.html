@@ -108,7 +108,7 @@
 <div class="settings-main">
 
 <h2>Service guardrails</h2>
-<p class="hint">Guardrails are rules you <em>declare</em> about how a service may communicate (L7 micro-segmentation) - unlike anomaly baselines, which are learned. A broken guardrail is a <strong>policy violation</strong>, surfaced in the Findings feed. Pick a service, check any seen callers/callees (not only ones already observed talking to it), add egress hosts free-form, and adopt them (default <code>enforce</code> alerts on violation; use <code>suggest</code> to observe only).</p>
+<p class="hint">Guardrails are rules you <em>declare</em> about how a service may communicate (L7 micro-segmentation) - unlike anomaly baselines, which are learned. A broken guardrail is a <strong>policy violation</strong>, surfaced in the Findings feed. Pick a service to see what it actually talks to, check the callers/callees/egress you want to allow, add egress hosts free-form, and adopt them (default <code>enforce</code> alerts on violation; use <code>suggest</code> to observe only).</p>
 
 <h3>Add a guardrail</h3>
 <div class="gr-card">
@@ -175,14 +175,14 @@
     <input type="hidden" name="scope_key" value="{{.ProfileScopeKey}}">
     <div class="gr-cols">
       <div class="gr-facet">
-        <h4>Callers ({{len .PeerServiceNames}}) {{if .PeerServiceNames}}<span class="sel-link" onclick="grToggleFacet('allowed_callers', this)">select all</span>{{end}}</h4>
-        <p class="desc" style="color:var(--muted);font-size:12px;margin:0 0 6px;">who may call this service (inbound) - any seen service; observed: {{len .Profile.Callers}}</p>
-        {{if .PeerServiceNames}}<ul class="chk-list">{{range .PeerServiceNames}}<li><label><input type="checkbox" name="allowed_callers" value="{{.}}"><code>{{.}}</code></label></li>{{end}}</ul>{{else}}<p class="hint">no other services seen yet</p>{{end}}
+        <h4>Callers ({{len .Profile.Callers}}) {{if .Profile.Callers}}<span class="sel-link" onclick="grToggleFacet('allowed_callers', this)">select all</span>{{end}}</h4>
+        <p class="desc" style="color:var(--muted);font-size:12px;margin:0 0 6px;">who may call this service (inbound)</p>
+        {{if .Profile.Callers}}<ul class="chk-list">{{range .Profile.Callers}}<li><label><input type="checkbox" name="allowed_callers" value="{{.}}"><code>{{.}}</code></label></li>{{end}}</ul>{{else}}<p class="hint">none observed</p>{{end}}
       </div>
       <div class="gr-facet">
-        <h4>Callees ({{len .PeerServiceNames}}) {{if .PeerServiceNames}}<span class="sel-link" onclick="grToggleFacet('allowed_callees', this)">select all</span>{{end}}</h4>
-        <p class="desc" style="color:var(--muted);font-size:12px;margin:0 0 6px;">internal services it may call (outbound) - any seen service; observed: {{len .Profile.Callees}}</p>
-        {{if .PeerServiceNames}}<ul class="chk-list">{{range .PeerServiceNames}}<li><label><input type="checkbox" name="allowed_callees" value="{{.}}"><code>{{.}}</code></label></li>{{end}}</ul>{{else}}<p class="hint">no other services seen yet</p>{{end}}
+        <h4>Callees ({{len .Profile.Callees}}) {{if .Profile.Callees}}<span class="sel-link" onclick="grToggleFacet('allowed_callees', this)">select all</span>{{end}}</h4>
+        <p class="desc" style="color:var(--muted);font-size:12px;margin:0 0 6px;">internal services it may call (outbound)</p>
+        {{if .Profile.Callees}}<ul class="chk-list">{{range .Profile.Callees}}<li><label><input type="checkbox" name="allowed_callees" value="{{.}}"><code>{{.}}</code></label></li>{{end}}</ul>{{else}}<p class="hint">none observed</p>{{end}}
       </div>
       <div class="gr-facet">
         <h4>Egress ({{len .Profile.Egress}}) {{if .Profile.Egress}}<span class="sel-link" onclick="grToggleFacet('allowed_egress', this)">select all</span>{{end}}</h4>
