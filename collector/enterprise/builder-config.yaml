@@ -143,20 +143,20 @@ providers:
 # against the path it replaces, and a directory replacement skips that check while this does not.
 # Re-pin with `make update-collector-oss-deps`.
 replaces:
-  - odigosconditionalattributes => github.com/odigos-io/odigos/collector/processors/odigosconditionalattributes v1.38.0-pre0
-  - odigossqldboperationprocessor => github.com/odigos-io/odigos/collector/processors/odigossqldboperationprocessor v1.38.0-pre0
-  - github.com/odigos-io/odigos/collector/processor/odigossqlqueryprocessor => github.com/odigos-io/odigos/collector/processors/odigossqlqueryprocessor v1.38.0-pre0
-  - github.com/odigos-io/odigos/collector/processor/odigospiimaskingprocessor => github.com/odigos-io/odigos/collector/processors/odigospiimaskingprocessor v1.38.0-pre0
-  - github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor => github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor v1.38.0-pre0
-  - github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/azureblobstorageexporter => github.com/odigos-io/odigos/collector/exporters/azureblobstorageexporter v1.38.0-pre0
-  - github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/googlecloudstorageexporter => github.com/odigos-io/odigos/collector/exporters/googlecloudstorageexporter v1.38.0-pre0
-  - github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/mockdestinationexporter => github.com/odigos-io/odigos/collector/exporters/mockdestinationexporter v1.38.0-pre0
-  - github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigostrafficmetrics => github.com/odigos-io/odigos/collector/processors/odigostrafficmetrics v1.38.0-pre0
-  - github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor => github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor v1.38.0-pre0
-  - github.com/odigos-io/odigos/collector/processor/odigosurltemplateprocessor => github.com/odigos-io/odigos/collector/processors/odigosurltemplateprocessor v1.38.0-pre0
-  - github.com/odigos-io/odigos/collector/processor/odigoslogsresourceattrsprocessor => github.com/odigos-io/odigos/collector/processors/odigoslogsresourceattrsprocessor v1.38.0-pre0
-  - github.com/odigos-io/odigos/collector/processor/odigosextractattributeprocessor => github.com/odigos-io/odigos/collector/processors/odigosextractattributeprocessor v1.38.0-pre0
-  - github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor => github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor v1.38.0-pre0
+  - odigosconditionalattributes => github.com/odigos-io/odigos/collector/processors/odigosconditionalattributes v1.38.0-pre1
+  - odigossqldboperationprocessor => github.com/odigos-io/odigos/collector/processors/odigossqldboperationprocessor v1.38.0-pre1
+  - github.com/odigos-io/odigos/collector/processor/odigossqlqueryprocessor => github.com/odigos-io/odigos/collector/processors/odigossqlqueryprocessor v1.38.0-pre1
+  - github.com/odigos-io/odigos/collector/processor/odigospiimaskingprocessor => github.com/odigos-io/odigos/collector/processors/odigospiimaskingprocessor v1.38.0-pre1
+  - github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor => github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor v1.38.0-pre1
+  - github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/azureblobstorageexporter => github.com/odigos-io/odigos/collector/exporters/azureblobstorageexporter v1.38.0-pre1
+  - github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/googlecloudstorageexporter => github.com/odigos-io/odigos/collector/exporters/googlecloudstorageexporter v1.38.0-pre1
+  - github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/mockdestinationexporter => github.com/odigos-io/odigos/collector/exporters/mockdestinationexporter v1.38.0-pre1
+  - github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigostrafficmetrics => github.com/odigos-io/odigos/collector/processors/odigostrafficmetrics v1.38.0-pre1
+  - github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor => github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor v1.38.0-pre1
+  - github.com/odigos-io/odigos/collector/processor/odigosurltemplateprocessor => github.com/odigos-io/odigos/collector/processors/odigosurltemplateprocessor v1.38.0-pre1
+  - github.com/odigos-io/odigos/collector/processor/odigoslogsresourceattrsprocessor => github.com/odigos-io/odigos/collector/processors/odigoslogsresourceattrsprocessor v1.38.0-pre1
+  - github.com/odigos-io/odigos/collector/processor/odigosextractattributeprocessor => github.com/odigos-io/odigos/collector/processors/odigosextractattributeprocessor v1.38.0-pre1
+  - github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor => github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor v1.38.0-pre1
   # Enterprise-owned: ocb resolves these from the working tree, so they carry no
   # version and `make update-collector-oss-deps` leaves them alone.
   - github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor => ../processors/odigosprofilesprocessor
@@ -169,14 +169,14 @@ replaces:
   # Not a component itself - the eBPF map exchange the receiver and the vm profile attrs
   # processor share with odiglet, so the generated dist has to resolve it too.
   - github.com/odigos-io/odigos-enterprise/ebpfshare => ../../ebpfshare
-  - odigosk8scmprovider => github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v1.38.0-pre0
-  - github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector => github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v1.38.0-pre0
-  - github.com/odigos-io/odigos/collector/connectors/serviceioconnector => github.com/odigos-io/odigos/collector/connectors/serviceioconnector v1.38.0-pre0
-  - github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector => github.com/odigos-io/odigos/collector/connectors/servicegraphconnector v1.38.0-pre0
+  - odigosk8scmprovider => github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v1.38.0-pre1
+  - github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector => github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v1.38.0-pre1
+  - github.com/odigos-io/odigos/collector/connectors/serviceioconnector => github.com/odigos-io/odigos/collector/connectors/serviceioconnector v1.38.0-pre1
+  - github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector => github.com/odigos-io/odigos/collector/connectors/servicegraphconnector v1.38.0-pre1
   # Past the tag: odigoscapabilitiesextension needs common/capabilities, added after v1.34.0-pre3.
-  - github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.38.0-pre0
-  - go.opentelemetry.io/collector/config/configgrpc => github.com/odigos-io/odigos/collector/config/configgrpc v1.38.0-pre0
-  - github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension => github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v1.38.0-pre0
+  - github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.38.0-pre1
+  - go.opentelemetry.io/collector/config/configgrpc => github.com/odigos-io/odigos/collector/config/configgrpc v1.38.0-pre1
+  - github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension => github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v1.38.0-pre1
   # Same commit as common above; this module has no published tag yet.
-  - github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension => github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v1.38.0-pre0
+  - github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension => github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v1.38.0-pre1
   - github.com/apache/thrift => github.com/apache/thrift v0.23.0
