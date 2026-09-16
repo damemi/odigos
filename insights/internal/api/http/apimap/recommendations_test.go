@@ -57,8 +57,13 @@ func TestFromRecommendation_WireShape(t *testing.T) {
 	if out.Title != "edge-gateway/resolvePrincipal return.value matches account-service/getAccount arg.0" {
 		t.Fatalf("title = %q", out.Title)
 	}
-	if !strings.HasPrefix(out.Summary, "In 40 of 40 sampled traces (31 distinct values), return.value on resolvePrincipal (edge-gateway) matched, once a constant prefix/suffix is removed,") {
+	if out.Summary != "return.value on resolvePrincipal (edge-gateway) matches arg.0 on getAccount (account-service)." {
 		t.Fatalf("summary = %q", out.Summary)
+	}
+	recContains := rec
+	recContains.Transform = "contains"
+	if got := FromRecommendation(engine.RecommendationView{Recommendation: recContains}).Summary; got != "return.value on resolvePrincipal (edge-gateway) is included in arg.0 on getAccount (account-service)." {
+		t.Fatalf("contains summary = %q", got)
 	}
 	if out.Spec.Left.Extract != `^client-(\d+)$` || out.Spec.Right.Attr != "arg.0" || out.Spec.Relation != apitypes.Equals {
 		t.Fatalf("spec = %+v", out.Spec)

@@ -308,7 +308,7 @@ func TestRenderRecommendations(t *testing.T) {
 			Rank: i, TransactionId: 7, Service: "edge-gateway", Namespace: "bank", Operation: "GET banking/statements/{id}",
 			TransactionKind: apitypes.TransactionKind(repo.KindHTTP),
 			Title:           "edge-gateway/resolvePrincipal return.value matches account-service/getStatement arg.0",
-			Summary:         "In 51 of 51 sampled traces (10 distinct values), return.value ...",
+			Summary:         "return.value on resolvePrincipal (edge-gateway) matches arg.0 on getStatement (account-service).",
 			Transform:       "core",
 			Spec: apitypes.CorrelationSpec{
 				Name:     "principal-matches-statement",

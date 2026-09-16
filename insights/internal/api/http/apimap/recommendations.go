@@ -85,20 +85,18 @@ func recommendationTitle(rec repo.Recommendation) string {
 	return fmt.Sprintf("%s/%s %s matches %s/%s %s", l.Service, l.Span, l.Attr, r.Service, r.Span, r.Attr)
 }
 
-// recommendationSummary explains the relation and its evidence in one sentence.
+// recommendationSummary is a short human-readable description of the relation.
+// Evidence counts and transform nuance live on confidence reasons.
 func recommendationSummary(rec repo.Recommendation) string {
-	how := "carried the same value as"
-	switch rec.Transform {
-	case "core":
-		how = "matched, once a constant prefix/suffix is removed,"
-	case "digits":
-		how = "carried the same numeric id as"
-	case "contains":
-		how = "embedded the value of"
-	}
 	l, r := rec.Spec.Left, rec.Spec.Right
-	s := fmt.Sprintf("In %d of %d sampled traces (%d distinct values), %s on %s (%s) %s %s on %s (%s).",
-		rec.Held, rec.Observed, rec.Distinct, l.Attr, l.Span, l.Service, how, r.Attr, r.Span, r.Service)
+	var s string
+	if rec.Transform == "contains" {
+		s = fmt.Sprintf("%s on %s (%s) is included in %s on %s (%s).",
+			l.Attr, l.Span, l.Service, r.Attr, r.Span, r.Service)
+	} else {
+		s = fmt.Sprintf("%s on %s (%s) matches %s on %s (%s).",
+			l.Attr, l.Span, l.Service, r.Attr, r.Span, r.Service)
+	}
 	if rec.Transport {
 		s += " The transport copies this field between the two ends, so a break means tampering or misattribution in flight, not a business-logic bypass."
 	}
