@@ -40,7 +40,6 @@ func addInterrogationExporters(c *config.Config, odigosNs string, interrogation 
 	if hasProfiles {
 		c.Exporters[commonconf.InterrogationProfilesExporter] = config.GenericMap{
 			"interrogation_cache_extension": commonconf.InterrogationCacheExtension,
-			"redis_endpoint":                k8sconsts.InterrogationRedisEndpoint(odigosNs),
 		}
 		profilesPipeline.Exporters = append(profilesPipeline.Exporters, commonconf.InterrogationProfilesExporter)
 		c.Service.Pipelines[gatewayProfilesPipeline] = profilesPipeline
