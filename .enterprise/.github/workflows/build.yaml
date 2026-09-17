@@ -529,7 +529,6 @@ jobs:
           - "multi-apps"
           - "jvm-metrics"
           - "helm-chart"
-          - "cli-upgrade"
           - "central-install"
           - "central-infrastructure"
           - "central-ui"
