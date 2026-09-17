@@ -6,12 +6,12 @@ import styled from 'styled-components';
 import { getNavbarIcons } from '@/utils';
 import { OverviewHeader } from '@/components';
 import { Navbar } from '@odigos/ui-kit/components';
-import { OdigosProvider } from '@odigos/ui-kit/contexts';
-import { PlatformType, Tier } from '@odigos/ui-kit/types';
+import { PlatformType } from '@odigos/ui-kit/types';
 import { useProxy, useSSE, useTokenTracker } from '@/hooks';
 import { ErrorBoundary, FlexColumn, FlexRow } from '@odigos/ui-kit/components';
 
-// this is needed in the returned JSX to inherit values from odigos provider and not lose them in the root of the layout
+// Kept in the returned JSX so it renders under `<OdigosProvider>` (now mounted by the
+// shared `(v2)` layout) and inherits its values, instead of running at the root.
 const Listeners = () => {
   useSSE();
   useTokenTracker();
@@ -32,20 +32,18 @@ const ContentRow = styled(FlexRow)`
 function Layout({ children }: PropsWithChildren) {
   const router = useRouter();
   const pathname = usePathname();
-  const { proxyID, platformType, odigosVersion } = useProxy();
+  const { proxyID, platformType } = useProxy();
 
   return (
     <ErrorBoundary>
-      <OdigosProvider platformType={platformType} tier={Tier.Onprem} version={odigosVersion || ''}>
-        <Listeners />
-        <ViewportColumn $gap={0}>
-          <OverviewHeader />
-          <ContentRow $gap={0}>
-            <Navbar height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname, proxyID, platformType !== PlatformType.K8s)} />
-            {children}
-          </ContentRow>
-        </ViewportColumn>
-      </OdigosProvider>
+      <Listeners />
+      <ViewportColumn $gap={0}>
+        <OverviewHeader />
+        <ContentRow $gap={0}>
+          <Navbar height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname, proxyID, platformType !== PlatformType.K8s)} />
+          {children}
+        </ContentRow>
+      </ViewportColumn>
     </ErrorBoundary>
   );
 }
