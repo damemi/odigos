@@ -107,6 +107,15 @@ true
   {{- end -}}
 {{- end -}}
 
+{{/*
+  Bundled ClickHouse is shared by insights and interrogation.
+*/}}
+{{- define "odigos.clickhouseEnabled" -}}
+{{- if or .Values.insights.enabled .Values.interrogation.enabled -}}
+true
+{{- end -}}
+{{- end -}}
+
 
 {{/*
   Return cleaned Kubernetes version, keeping leading 'v', removing vendor suffix like -eks-...

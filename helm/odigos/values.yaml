@@ -180,11 +180,12 @@ transactionIdentity:
 # description: |-
 #   Interrogation loop (off by default): correlates traces and profiles via a bounding join
 #   so uprobe/probe profiles can be tied to spans. Opt-in; leave disabled unless you need it.
-#   When enabled, also deploys a bundled Redis (odigos-interrogation-redis) in the Odigos namespace.
+#   When enabled, also deploys a bundled Redis (odigos-interrogation-redis) and ClickHouse
+#   (odigos-insights-clickhouse; shared with insights) in the Odigos namespace.
 # @schema
 interrogation:
   # @schema
-  # description: When true, enables the interrogation loop (trace–profile correlation) on the collector.
+  # description: When true, enables the interrogation loop (trace–profile correlation) on the collector, and deploys bundled Redis and ClickHouse.
   # @schema
   enabled: false
   # @schema
@@ -1523,12 +1524,13 @@ insights:
 
   # @schema
   # description: |-
-  #   Bundled ClickHouse for the insights service. Single replica, no
-  #   replication, no backups. Data is on a PVC by default
-  #   (insights.clickhouse.storage.persistence); set that to false for
-  #   emptyDir. Scale insights pods for HA of ingestion; keep ClickHouse at
-  #   one replica. User and database name stay hardcoded (odigos_insights);
-  #   image, resources, scheduling, and storage are tunable.
+#   Bundled ClickHouse for insights and interrogation. Deployed when either
+#   insights.enabled or interrogation.enabled is true. Single replica, no
+#   replication, no backups. Data is on a PVC by default
+#   (insights.clickhouse.storage.persistence); set that to false for
+#   emptyDir. Scale insights pods for HA of ingestion; keep ClickHouse at
+#   one replica. User and database name stay hardcoded (odigos_insights);
+#   image, resources, scheduling, and storage are tunable.
   # @schema
   clickhouse:
     # @schema

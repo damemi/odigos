@@ -40,6 +40,8 @@ func addInterrogationExporters(c *config.Config, odigosNs string, interrogation 
 	if hasProfiles {
 		c.Exporters[commonconf.InterrogationProfilesExporter] = config.GenericMap{
 			"interrogation_cache_extension": commonconf.InterrogationCacheExtension,
+			"clickhouse_endpoint":           k8sconsts.InsightsClickHouseEndpoint(odigosNs),
+			"clickhouse_password":           "${" + k8sconsts.OdigosInsightsClickHousePasswordEnv + "}",
 		}
 		profilesPipeline.Exporters = append(profilesPipeline.Exporters, commonconf.InterrogationProfilesExporter)
 		c.Service.Pipelines[gatewayProfilesPipeline] = profilesPipeline

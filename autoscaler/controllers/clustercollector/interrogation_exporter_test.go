@@ -85,6 +85,8 @@ func TestAddInterrogationExporters_EnabledAppendsToProfilesPipeline(t *testing.T
 	exp, ok := c.Exporters[commonconf.InterrogationProfilesExporter].(config.GenericMap)
 	require.True(t, ok, "profiles exporter must be registered")
 	assert.Equal(t, commonconf.InterrogationCacheExtension, exp["interrogation_cache_extension"])
+	assert.Equal(t, "tcp://odigos-insights-clickhouse.odigos-system:9000", exp["clickhouse_endpoint"])
+	assert.Equal(t, "${ODIGOS_INSIGHTS_CLICKHOUSE_PASSWORD}", exp["clickhouse_password"])
 	_, hasRedis := exp["redis_endpoint"]
 	assert.False(t, hasRedis, "profiles exporter does not write to redis")
 
