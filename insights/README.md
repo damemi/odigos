@@ -1,16 +1,14 @@
 # Odigos Insights
 
 Enterprise service that ingests distributed traces, learns per-transaction
-baselines across **six independent deviation classes** (D1..D6), scores
+baselines across **seven independent deviation classes** (D1..D7), scores
 incoming traces against those baselines, and exposes results via an HTTP
 API consumed by the UI.
 
 This is the **skeleton** PR. Wiring is real; the schema is real; the OTLP
 receiver decodes traces and hands them to a real (if minimal) scoring
 engine. D1 (call edges), D2 (egress), D5 (libraries) actually learn and
-score; D3, D4, D6 are stubs that participate in the promotion lifecycle
-but contribute no data and never deviate. Replace each stub when its
-class is built. See [Engine](#engine) below.
+score. See [Engine](#engine) below.
 
 Known shortcuts and deferred work are tracked in [TECH_DEBT.md](TECH_DEBT.md).
 
@@ -43,8 +41,8 @@ merges to do the cross-replica merge instead of locking and rewriting rows:
 |---|---|---|
 | `transactions` | ReplacingMergeTree | identity of one (service, namespace, operation, kind) we baseline against. `transaction_id` is a deterministic hash of the identity (namespace included, so two same-named services in different namespaces stay distinct), so no auto-increment/upsert round-trip is needed. `kind` is `HTTP`, `GRPC`, `CONSUMER`, `PRODUCER`, `CRON`, `INTERNAL`, or anything new. |
 | `transaction_activity` | AggregatingMergeTree | per-transaction volume (`sum`) + `last_seen` (`max`), written by the write-behind flusher in batches (never per trace). Keeps counting after promotion, so the UI can order transactions "most frequent first" and roll volume up per service. |
-| `baseline_set_members` | ReplacingMergeTree | one row per member of a **set** baseline (D1 edges, D2 peers, D5 libs, D7 accesses/shapes). The union across flushes and replicas is free, and duplicate inserts collapse (idempotent, no dedup key). |
-| `baseline_counters` | SummingMergeTree | one row per bucket of an **additive** baseline (the D8 payload-size histogram). Each flush appends a delta and ClickHouse sums. |
+| `baseline_set_members` | ReplacingMergeTree | one row per member of a **set** baseline (D1 edges, D2 peers, D5 libs, D6 accesses/shapes). The union across flushes and replicas is free, and duplicate inserts collapse (idempotent, no dedup key). |
+| `baseline_counters` | SummingMergeTree | one row per bucket of an **additive** baseline (the D7 payload-size histogram). Each flush appends a delta and ClickHouse sums. |
 | `baseline_meta` | AggregatingMergeTree | per-class scalars: `observation_count` (summed), `promoted` (OR'd via max), `learning_started_at` (anchored via min), `data_schema_version` (max). |
 | `trace_observations` | ReplacingMergeTree | sampled traces kept as UI/debug examples per transaction. Stores the original OTLP protobuf bytes for just this trace's spans (`raw_otlp String`), so the UI gets Jaeger-grade fidelity (events, links, status, typed attributes) without an external trace backend. **NOT every trace is stored**; the engine keeps a bounded set (`example`) plus the trace that fired each anomaly (`anomaly_evidence`). A 120-day `TTL` matches the findings lookback ceiling. |
 | `alert_policies` | ReplacingMergeTree(updated_at) | rules: which combinations of deviated classes fire. One policy per scope (`scope_type`/`scope_key`: global, service, or transaction); most-specific scope wins and fully replaces the broader one. Seeded with the global `default-any-1-of-8`. |
@@ -75,11 +73,12 @@ constants and per-class examples):
 - **D3_latency** - per-span latency distribution / shape
 - **D4_args_returns** - argument / return-value structural anomalies
 - **D5_libraries** - new (code.namespace, library, version) tuples
-- **D6_attr_relations** - learned cross-attribute relations
-- **D7_db_access** - new database access (system, namespace, table, operation)
+- **D6_db_access** - new database access (system, namespace, table, operation)
   and new query shapes (operation + sorted tables)
 
-Adding D8+ requires no schema change: add a constant and a scoring rule.
+Adding a class requires no schema change: add a constant and a scoring rule.
+Cross-attribute relations are not a learned class; they are covered by the
+attribute-correlation transaction guardrail.
 
 ## Changing the schema
 
@@ -133,7 +132,7 @@ new shape, teach `engine.NewBaselineCodec` how to split/rebuild it if the layout
 of members/counters changed, and have the engine handle old rows on read (either
 re-learn or auto-upgrade).
 
-**Adding a new deviation class (D8, D9...).** No schema change needed. See the
+**Adding a new deviation class.** No schema change needed. See the
 comment on `DeviationClass` in `internal/repo/repo.go` for the recipe.
 
 ## Engine
@@ -183,18 +182,18 @@ runs for every trace the OTLP receiver decodes and does the following:
 | `D1_call_edges` | `scorer_d1.go` | `{"edges":[{"from":{svc,op},"to":{svc,op}}, ...]}` | a new `(service, op) → (service, op)` edge appears (a call into a new service deviates even if the op name is known elsewhere) |
 | `D2_egress` | `scorer_d2.go` | `{"peers":[{host,port}, ...]}` | a CLIENT/PRODUCER span hits a new (host, port) |
 | `D5_libraries` | `scorer_d5.go` | `{"libs":[{ns, ver}, ...]}` | a span's `ScopeName` is one we've never seen for this transaction |
-| `D7_db_access` | `scorer_d7.go` | `{"accesses":[{system, ns, table, op}], "query_shapes":[{op, tables}]}` | a new (system, ns, table, op) access or a new query shape (op + sorted tables) appears |
+| `D6_db_access` | `scorer_d6.go` | `{"accesses":[{system, ns, table, op}], "query_shapes":[{op, tables}]}` | a new (system, ns, table, op) access or a new query shape (op + sorted tables) appears |
 | `D3_latency` | `scorer_d3.go` | latency histogram | entry-span latency exceeds the learned p99 |
-| `D8_payload_size` | `scorer_d8.go` | request/response size histograms | a body size exceeds the learned p99 (a missing size counts as 0, so payload-less transactions still learn and stay silent) |
+| `D7_payload_size` | `scorer_d7.go` | request/response size histograms | a body size exceeds the learned p99 (a missing size counts as 0, so payload-less transactions still learn and stay silent) |
 
-Histogram classes (`D3`, `D8`) store a fixed **32-bucket exponential**
+Histogram classes (`D3`, `D7`) store a fixed **32-bucket exponential**
 histogram (bucket 0 = value 0; bucket k≥1 covers `[2^(k-1), 2^k)` of the
 observed unit - µs for latency, bytes for payload). `GET …/baseline` includes a
 chart-ready `histogram` object (`unit`, `layout_fingerprint`, `series[].bars[]`
 with `lo`/`hi`/`count`/`label`) so the UI can plot without recomputing bounds
 from opaque `data`.
 
-#### How exponential buckets work (D3 / D8)
+#### How exponential buckets work (D3 / D7)
 
 Observations are counted in fixed **exponential** bands (same family as
 Prometheus native histograms / HdrHistogram - wide dynamic range, bounded memory):
@@ -214,9 +213,6 @@ Prometheus native histograms / HdrHistogram - wide dynamic range, bounded memory
 | 17 | 65 ms – 131 ms |
 | 20 | 0.5 s – 1.0 s |
 | 31 (top) | ~18 min and above (everything larger shares this bar) |
-
-| `D4_args_returns` | - (not implemented) | - | not learned or scored yet |
-| `D6_attr_relations` | - (not implemented) | - | not learned or scored yet |
 
 ### Adding a not-yet-implemented class
 
@@ -243,7 +239,7 @@ promoting on its first trace. `match_mode=any` is what lets a **rare**
 transaction graduate: a once-a-week cron will never reach an observation count,
 but the time window promotes it anyway. A busy endpoint under the same policy
 promotes early via count. With `all`, a class needs both a large enough sample
-and a long enough soak - used for the distribution/shape classes (D3/D4/D6)
+and a long enough soak - used for the distribution/shape classes (D3/D4)
 where stability matters more than speed.
 
 Default policies (seeded by `000001_initial_schema`): every class promotes on
@@ -256,8 +252,8 @@ structurally stable".
 | `D2_egress` | 300 stable observations OR 1 week (10080 minutes) | `any` |
 | `D3_latency` | 300 stable observations OR 1 week (10080 minutes) | `any` |
 | `D5_libraries` | 300 stable observations OR 1 week (10080 minutes) | `any` |
-| `D7_db_access` | 300 stable observations OR 1 week (10080 minutes) | `any` |
-| `D8_payload_size` | 300 stable observations OR 1 week (10080 minutes) | `any` |
+| `D6_db_access` | 300 stable observations OR 1 week (10080 minutes) | `any` |
+| `D7_payload_size` | 300 stable observations OR 1 week (10080 minutes) | `any` |
 
 **Storage.** The `learning_policies` table is the single source of truth.
 Default rows are seeded at startup; the engine keeps the table in an in-memory
@@ -284,7 +280,7 @@ telemetrygen traces --otlp-insecure --otlp-endpoint=localhost:4317 \
 
 Promotion follows the per-class
 [learning policy](#learning-phase-configuration): with the seeded defaults,
-D1/D2/D5 promote after ~50 normal traces while D3/D4/D6 need ~100-200 (or
+D1/D2/D5 promote after ~50 normal traces while D3/D4 need ~100-200 (or
 their time window). To graduate every class quickly in local dev, send ~200
 traces or lower the counts in the `learning_policies` table and restart.
 Promotion is visible in `/debug/transactions/:id`. Once D1 is promoted, send
@@ -356,7 +352,7 @@ ClickHouse PVC and let the migration Job + the engine repopulate.
 The UI talks to the same `Repository` the production HTTP API uses, so
 what you see is exactly what the scoring engine sees at runtime. It
 exists only to make engine development self-contained - no need to wire
-a real UI or query ClickHouse by hand while iterating on D1..D6 logic.
+a real UI or query ClickHouse by hand while iterating on scorer logic.
 
 
 ## Building the image

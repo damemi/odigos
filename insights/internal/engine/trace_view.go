@@ -50,7 +50,7 @@ type SpanView struct {
 }
 
 // AttrMap re-materialises the flat attribute map for a span view so
-// evidence-matching code (e.g. the D7 explainer) can reuse the scorers'
+// evidence-matching code (e.g. the D6 explainer) can reuse the scorers'
 // attribute-keyed helpers against a rendered span.
 func (v SpanView) AttrMap() map[string]string {
 	m := make(map[string]string, len(v.Attrs))

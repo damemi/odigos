@@ -128,7 +128,7 @@ func TransactionStatList(in []repo.TransactionStat) apitypes.TransactionStatList
 
 // FromBaselineClass maps one repo.BaselineClass plus its computed learning
 // snapshot to the wire type. Data is the class's opaque JSON, passed through
-// verbatim. Histogram is a chart-ready view for D3/D8 when data decodes.
+// verbatim. Histogram is a chart-ready view for D3/D7 when data decodes.
 func FromBaselineClass(b repo.BaselineClass, learning engine.BaselineLearning) apitypes.BaselineClass {
 	return apitypes.BaselineClass{
 		TransactionId:                b.TransactionID,

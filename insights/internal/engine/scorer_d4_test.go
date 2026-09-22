@@ -175,7 +175,7 @@ func TestD4_UnprofiledArgIsLearnedNotFlagged(t *testing.T) {
 
 func TestD4_EmptyCaptureMergeGrowsOnceThenStable(t *testing.T) {
 	// A trace with no captured args/returns (e.g. a service with no custom
-	// instrumentation) must still let D4 promote, like D8's zero-payload
+	// instrumentation) must still let D4 promote, like D7's zero-payload
 	// learning: the FIRST such observation grows the baseline off the empty
 	// seed (so baselineGrewOnce becomes true), but subsequent captureless
 	// observations are byte-stable so the stability window can close instead of

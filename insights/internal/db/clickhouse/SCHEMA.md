@@ -52,8 +52,8 @@ flowchart LR
 
 | Table | Engine | Responsible for |
 |---|---|---|
-| `baseline_set_members` | ReplacingMergeTree | One row per learned member of a **set** class (D1 call edges, D2 egress, D5 libraries, D7 db access). The union across flushes/replicas is free and idempotent. |
-| `baseline_counters` | SummingMergeTree | **Additive** class buckets (D8 payload-size histogram) as `(bucket, count)` deltas that ClickHouse sums. |
+| `baseline_set_members` | ReplacingMergeTree | One row per learned member of a **set** class (D1 call edges, D2 egress, D5 libraries, D6 db access). The union across flushes/replicas is free and idempotent. |
+| `baseline_counters` | SummingMergeTree | **Additive** class buckets (D7 payload-size histogram) as `(bucket, count)` deltas that ClickHouse sums. |
 | `baseline_meta` | AggregatingMergeTree | Per-class scalars: observation count, promoted flag, learning start, stability markers. A class exists **iff** it has a meta row. |
 
 ## Policies - configuration, scoped global → service → transaction

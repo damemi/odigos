@@ -184,12 +184,12 @@ func TestFromClassFinding(t *testing.T) {
 func TestPolicyWire(t *testing.T) {
 	d := FromPolicy(repo.Policy{
 		ID: 1, Name: "default", Enabled: true, FireAtScore: 20,
-		SignalWeights: map[repo.SignalSource]int{"D7_db_access": 30},
+		SignalWeights: map[repo.SignalSource]int{"D6_db_access": 30},
 		EnricherLists: map[repo.EnricherListKey][]string{"sensitive_tables": {"admins"}},
 		Scope:         repo.ScopeGlobal, ScopeKey: "",
 	})
 	assertKeys(t, jsonKeys(t, d), "id", "name", "enabled", "fire_at_score", "signal_weights", "enricher_lists", "scope", "scope_key")
-	if d.SignalWeights["D7_db_access"] != 30 {
+	if d.SignalWeights["D6_db_access"] != 30 {
 		t.Error("signal weight not mapped")
 	}
 	if d.Scope != "global" {

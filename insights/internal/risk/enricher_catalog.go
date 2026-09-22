@@ -15,7 +15,7 @@ import "github.com/odigos-io/odigos-enterprise/insights/internal/repo"
 // give it a List for a per-scope editable keyword list.
 
 // EnricherList is an optional per-scope editable keyword list attached to an
-// enricher signal (e.g. the sensitive-table keywords for d7_sensitive_table).
+// enricher signal (e.g. the sensitive-table keywords for d6_sensitive_table).
 // It is the single definition the enricher reads its default from and the policy
 // editor renders a textarea for; the list is stored generically in
 // Policy.EnricherLists keyed by Key, so a config-driven enricher needs no new
@@ -49,12 +49,12 @@ type EnricherSignal struct {
 // Source (0 = off).
 var EnricherSignals = []EnricherSignal{
 	{
-		Source: "d7_destructive_op", Parent: repo.D7DBAccess, Category: CategoryImpact,
+		Source: "d6_destructive_op", Parent: repo.D6DBAccess, Category: CategoryImpact,
 		Weight: Categories[CategoryImpact].Base,
 		Label:  "Destructive operation", Desc: "New DELETE/DROP/TRUNCATE/ALTER/UPDATE not seen during learning.",
 	},
 	{
-		Source: "d7_sensitive_table", Parent: repo.D7DBAccess, Category: CategoryExfiltration, Weight: 30,
+		Source: "d6_sensitive_table", Parent: repo.D6DBAccess, Category: CategoryExfiltration, Weight: 30,
 		Label: "Sensitive table access", Desc: "New access to a table whose name looks sensitive (credentials, payment, token…).",
 		List: &EnricherList{
 			Key:   "sensitive_tables",
@@ -67,11 +67,11 @@ var EnricherSignals = []EnricherSignal{
 		},
 	},
 	{
-		Source: "d7_injection_shape", Parent: repo.D7DBAccess, Category: CategoryInjection, Weight: 35,
+		Source: "d6_injection_shape", Parent: repo.D6DBAccess, Category: CategoryInjection, Weight: 35,
 		Label: "Multi-table / join shape", Desc: "A new query joining several tables - a classic injection / data-harvesting shape.",
 	},
 	{
-		Source: "d7_schema_recon", Parent: repo.D7DBAccess, Category: CategoryInjection, Weight: 30,
+		Source: "d6_schema_recon", Parent: repo.D6DBAccess, Category: CategoryInjection, Weight: 30,
 		Label: "Database schema recon", Desc: "New access to a DB system-catalog / metadata table (e.g. information_schema) - classic SQL-injection enumeration.",
 		List: &EnricherList{
 			Key:   "schema_catalog_tables",
@@ -113,7 +113,7 @@ var EnricherSignals = []EnricherSignal{
 		},
 	},
 	{
-		Source: "d8_response_exfil", Parent: repo.D8PayloadSize, Category: CategoryExfiltration, Weight: 40,
+		Source: "d7_response_exfil", Parent: repo.D7PayloadSize, Category: CategoryExfiltration, Weight: 40,
 		Label: "Oversized response (bulk data)", Desc: "Response body far larger than the learned baseline - possible bulk data extraction.",
 	},
 	{

@@ -15,20 +15,18 @@ import (
 type DeviationClass string
 
 const (
-	D1CallEdges     DeviationClass = "D1_call_edges"
-	D2Egress        DeviationClass = "D2_egress"
-	D3Latency       DeviationClass = "D3_latency"
-	D4ArgsReturns   DeviationClass = "D4_args_returns"
-	D5Libraries     DeviationClass = "D5_libraries"
-	D6AttrRelations DeviationClass = "D6_attr_relations"
-	D7DBAccess      DeviationClass = "D7_db_access"
-
-	D8PayloadSize DeviationClass = "D8_payload_size"
+	D1CallEdges   DeviationClass = "D1_call_edges"
+	D2Egress      DeviationClass = "D2_egress"
+	D3Latency     DeviationClass = "D3_latency"
+	D4ArgsReturns DeviationClass = "D4_args_returns"
+	D5Libraries   DeviationClass = "D5_libraries"
+	D6DBAccess    DeviationClass = "D6_db_access"
+	D7PayloadSize DeviationClass = "D7_payload_size"
 )
 
 var AllDeviationClasses = []DeviationClass{
 	D1CallEdges, D2Egress, D3Latency, D4ArgsReturns,
-	D5Libraries, D6AttrRelations, D7DBAccess, D8PayloadSize,
+	D5Libraries, D6DBAccess, D7PayloadSize,
 }
 
 // BaselineClass holds the learned baseline for one (transaction, deviation
@@ -97,13 +95,13 @@ type UnpromotedBaselineCandidate struct {
 //
 // Per-class semantics (the engine's implementation is authoritative): set
 // classes send the full value and MergeData returns the union (idempotent);
-// additive classes (D8 histogram) send a since-last-flush delta and MergeData
+// additive classes (D7 histogram) send a since-last-flush delta and MergeData
 // adds it (the flusher applies each delta at most once).
 type BaselineMerger interface {
 	MergeData(class DeviationClass, stored, contribution json.RawMessage) (json.RawMessage, error)
 }
 
-// Counter is one additive (bucket, count) pair of a baseline class, e.g. a D8
+// Counter is one additive (bucket, count) pair of a baseline class, e.g. a D7
 // payload-size histogram bucket. The ClickHouse backend sums Count across
 // contributions for the same (transaction, class, Bucket).
 type Counter struct {

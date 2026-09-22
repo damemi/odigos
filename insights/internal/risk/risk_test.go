@@ -94,7 +94,7 @@ func TestAssessNoBonusForSymptomOnlyCategories(t *testing.T) {
 	// resource_abuse is not a kill-chain category, so two of them don't earn
 	// the correlation bonus.
 	lat, _ := NewSignal(repo.D3Latency, 1, "latency")
-	pay, _ := NewSignal(repo.D8PayloadSize, 1, "payload")
+	pay, _ := NewSignal(repo.D7PayloadSize, 1, "payload")
 	a := Assess([]Signal{lat, pay})
 	if a.Correlated {
 		t.Fatal("resource_abuse pair must not correlate")
@@ -105,11 +105,11 @@ func TestAssessNoBonusForSymptomOnlyCategories(t *testing.T) {
 }
 
 func TestAssessCapsAt100(t *testing.T) {
-	inj, _ := NewSignal(repo.D4ArgsReturns, 1, "inj")   // 40, injection
-	egr, _ := NewSignal(repo.D2Egress, 1, "egr")        // 35, exfiltration
-	lib, _ := NewSignal(repo.D5Libraries, 1, "lib")     // 30, supply_chain
-	acc, _ := NewSignal(repo.D6AttrRelations, 1, "acc") // 35, access_anomaly
-	a := Assess([]Signal{inj, egr, lib, acc})           // 140 + 15 bonus, capped
+	inj, _ := NewSignal(repo.D4ArgsReturns, 1, "inj") // 40, injection
+	egr, _ := NewSignal(repo.D2Egress, 1, "egr")      // 35, exfiltration
+	lib, _ := NewSignal(repo.D5Libraries, 1, "lib")   // 30, supply_chain
+	dbx, _ := NewSignal(repo.D6DBAccess, 1, "dbx")    // 25, lateral_movement
+	a := Assess([]Signal{inj, egr, lib, dbx})         // 130 + bonus, capped
 	if a.Score != 100 || a.Severity != SeverityCritical {
 		t.Fatalf("over-cap assess = %d/%q, want 100/critical", a.Score, a.Severity)
 	}

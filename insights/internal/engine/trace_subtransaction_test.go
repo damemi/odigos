@@ -281,7 +281,7 @@ func TestEngine_NestedDeviationFiresOnceOnOutermost(t *testing.T) {
 // checkoutFork builds frontend /checkout -> [orders /create -> db, audit /log ->
 // db]: two sibling service entries, neither enclosing the other, each with its
 // own DB call. Both run the same statement, so the two branches deviate on the
-// identical D7 item (a DB access carries no owning service).
+// identical D6 item (a DB access carries no owning service).
 func checkoutFork(query string) *Trace {
 	entry := func(id, parent, name, svc string) *Span {
 		return &Span{

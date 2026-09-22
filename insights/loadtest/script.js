@@ -28,8 +28,8 @@ const ns = __ENV.TRACE_NAMESPACE || 'loadtest';
 //   D1 call edges  (service.name, span name) for every parent/child pair
 //   D2 egress      server.address + server.port on CLIENT and PRODUCER spans
 //   D5 libraries   instrumentation scope, pinned by the Dockerfile sed patch
-//   D7 db access   db.system/namespace/collection/operation + query shape
-// D3 latency and D8 payload size are histograms, so varying durations and body
+//   D6 db access   db.system/namespace/collection/operation + query shape
+// D3 latency and D7 payload size are histograms, so varying durations and body
 // sizes costs nothing. Transaction identity is (service, namespace, entry span
 // name, kind) plus http.response.status_code and rpc.grpc.status_code.
 
@@ -49,7 +49,7 @@ const stores = {
 // {200,201,202,204}, and that attribute is a transaction identity dimension -
 // left alone it splits one endpoint into four transactions that each learn from
 // a quarter of the traffic. The method is pinned for a smaller reason: it
-// decides whether a request body size is emitted, which D8 histograms.
+// decides whether a request body size is emitted, which D7 histograms.
 function httpEntry(service, method, route, opts) {
   opts = opts || {};
   const span = {
@@ -83,7 +83,7 @@ function grpcEntry(service, method, opts) {
 
 // tracing.SEMANTICS_DB is declared by the extension but TemplatedGenerator only
 // implements the HTTP one, so a span tagged "db" emits no db.* attributes and
-// D7 never sees it. Everything D7 reads is set by hand here; the semantics tag
+// D6 never sees it. Everything D6 reads is set by hand here; the semantics tag
 // only suppresses the HTTP attributes the scenario defaults would add.
 function dbCall(service, store, operation, collection, query) {
   return {

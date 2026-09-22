@@ -90,7 +90,7 @@ type d4Site struct {
 //
 // Seen records that the class has observed at least one trace, even one that
 // carried nothing to profile (no custom-instrumentation captures). It is the
-// D4 analogue of D8's zero-payload learning: without it, a transaction whose
+// D4 analogue of D7's zero-payload learning: without it, a transaction whose
 // spans never expose arguments/returns - most commonly one whose service isn't
 // custom-instrumented at all - would leave D4's baseline permanently empty, so
 // it could never "grow once" and would stay in learning forever, blocking the

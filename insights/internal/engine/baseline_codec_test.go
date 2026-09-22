@@ -22,7 +22,7 @@ func TestCodecRoundTripSets(t *testing.T) {
 		// is written already sorted.
 		{repo.D2Egress, `{"peers":[{"host":"db","port":5432},{"host":"stripe.com","port":443}]}`},
 		{repo.D5Libraries, `{"libs":[{"ns":"okhttp3","ver":"4"},{"ns":"pg","ver":"42"}]}`},
-		{repo.D7DBAccess, `{"accesses":[{"system":"postgresql","ns":"app","table":"users","op":"SELECT"}],"query_shapes":[{"op":"SELECT","tables":"users"}]}`},
+		{repo.D6DBAccess, `{"accesses":[{"system":"postgresql","ns":"app","table":"users","op":"SELECT"}],"query_shapes":[{"op":"SELECT","tables":"users"}]}`},
 	}
 	for _, tc := range cases {
 		members, counters, err := c.Encode(tc.class, json.RawMessage(tc.data))
@@ -47,15 +47,15 @@ func TestCodecRoundTripSets(t *testing.T) {
 // buckets must reproduce the sum.
 func TestCodecHistogramSumsAcrossContributions(t *testing.T) {
 	c := NewBaselineCodec()
-	d8 := func(reqIdx int, n uint64) json.RawMessage {
+	d7 := func(reqIdx int, n uint64) json.RawMessage {
 		req := make([]uint64, histogram.BucketCount)
 		req[reqIdx] = n
-		b, _ := json.Marshal(d8Data{Request: histogram.Histogram{Buckets: req}, Response: histogram.New()})
+		b, _ := json.Marshal(d7Data{Request: histogram.Histogram{Buckets: req}, Response: histogram.New()})
 		return b
 	}
 
-	_, c1, _ := c.Encode(repo.D8PayloadSize, d8(3, 2))
-	_, c2, _ := c.Encode(repo.D8PayloadSize, d8(3, 5))
+	_, c1, _ := c.Encode(repo.D7PayloadSize, d7(3, 2))
+	_, c2, _ := c.Encode(repo.D7PayloadSize, d7(3, 5))
 
 	// Emulate SummingMergeTree: sum counts of identical buckets.
 	sum := map[string]int64{}
@@ -67,11 +67,11 @@ func TestCodecHistogramSumsAcrossContributions(t *testing.T) {
 		merged = append(merged, repo.Counter{Bucket: b, Count: n})
 	}
 
-	got, err := c.Decode(repo.D8PayloadSize, nil, merged)
+	got, err := c.Decode(repo.D7PayloadSize, nil, merged)
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	var d d8Data
+	var d d7Data
 	if err := json.Unmarshal(got, &d); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -116,17 +116,17 @@ func TestCodecD3HistogramSumsAcrossContributions(t *testing.T) {
 	}
 }
 
-// TestCodecNoopClasses: D6 has no scorer yet, so it never persists data.
-func TestCodecNoopClasses(t *testing.T) {
+// TestCodecUnknownClass: a class without a scorer (e.g. one retired from an
+// older build) must encode to nothing rather than fail the flush.
+func TestCodecUnknownClass(t *testing.T) {
 	c := NewBaselineCodec()
-	for _, class := range []repo.DeviationClass{repo.D6AttrRelations} {
-		members, counters, err := c.Encode(class, json.RawMessage(`{}`))
-		if err != nil {
-			t.Fatalf("%s encode: %v", class, err)
-		}
-		if len(members) != 0 || len(counters) != 0 {
-			t.Fatalf("%s: noop class produced data (%d members, %d counters)", class, len(members), len(counters))
-		}
+	class := repo.DeviationClass("D9_retired")
+	members, counters, err := c.Encode(class, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("%s encode: %v", class, err)
+	}
+	if len(members) != 0 || len(counters) != 0 {
+		t.Fatalf("%s: unknown class produced data (%d members, %d counters)", class, len(members), len(counters))
 	}
 }
 

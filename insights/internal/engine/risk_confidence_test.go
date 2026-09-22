@@ -61,12 +61,12 @@ func TestConfidenceForClass(t *testing.T) {
 		}
 	})
 
-	t.Run("D8 takes the worse of request and response", func(t *testing.T) {
+	t.Run("D7 takes the worse of request and response", func(t *testing.T) {
 		// Request is 2x (low confidence); response is 10x (full).
 		ev := json.RawMessage(`{"request_body_size":200,"request_p99":100,"response_body_size":1000,"response_p99":100}`)
-		got := confidenceForClass(repo.D8PayloadSize, ev)
+		got := confidenceForClass(repo.D7PayloadSize, ev)
 		if got != 1 {
-			t.Fatalf("D8 = %v, want 1 from the 10x response side", got)
+			t.Fatalf("D7 = %v, want 1 from the 10x response side", got)
 		}
 	})
 

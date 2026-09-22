@@ -9,7 +9,7 @@ import (
 )
 
 // classMerger knows how to combine two stored baseline values of the same
-// class into one: set classes take the union, the D3/D8 histograms add buckets.
+// class into one: set classes take the union, the D3/D7 histograms add buckets.
 // The DB layer calls this during a flush so it can merge values without
 // needing to understand each class's JSON shape.
 type classMerger struct{}
@@ -26,24 +26,21 @@ func (classMerger) MergeData(class repo.DeviationClass, stored, contribution jso
 		return mergeD3Values(stored, contribution)
 	case repo.D5Libraries:
 		return mergeD5Values(stored, contribution)
-	case repo.D7DBAccess:
+	case repo.D6DBAccess:
+		return mergeD6Values(stored, contribution)
+	case repo.D7PayloadSize:
 		return mergeD7Values(stored, contribution)
-	case repo.D8PayloadSize:
-		return mergeD8Values(stored, contribution)
 	default:
-		// TODO: D6 isn't implemented yet (noop scorer), so it never produces
-		// real data to merge - always empty. Give it a real merge here once the
-		// class is built.
 		return json.RawMessage(`{}`), nil
 	}
 }
 
 // isAdditiveClass reports whether a class's Data accumulates (so its flushed
 // contribution must be a since-last-flush DELTA, added by MergeData) versus
-// being an idempotent set (flushed as the full value, unioned). The D3 and D8
+// being an idempotent set (flushed as the full value, unioned). The D3 and D7
 // histogram classes are additive.
 func isAdditiveClass(c repo.DeviationClass) bool {
-	return c == repo.D3Latency || c == repo.D8PayloadSize
+	return c == repo.D3Latency || c == repo.D7PayloadSize
 }
 
 // D1CallEdges: union the set of edges.
@@ -99,10 +96,10 @@ func mergeD5Values(a, b json.RawMessage) (json.RawMessage, error) {
 	return json.Marshal(d5Data{Libs: merged})
 }
 
-// D7DBAccess: union the set of DB accesses and query shapes.
-func mergeD7Values(a, b json.RawMessage) (json.RawMessage, error) {
-	da, _ := decodeD7(a)
-	db, _ := decodeD7(b)
+// D6DBAccess: union the set of DB accesses and query shapes.
+func mergeD6Values(a, b json.RawMessage) (json.RawMessage, error) {
+	da, _ := decodeD6(a)
+	db, _ := decodeD6(b)
 	accSet := make(map[dbAccess]struct{}, len(da.Accesses)+len(db.Accesses))
 	for _, x := range da.Accesses {
 		accSet[x] = struct{}{}
@@ -132,7 +129,7 @@ func mergeD7Values(a, b json.RawMessage) (json.RawMessage, error) {
 		}
 		return mergedShapes[i].Tables < mergedShapes[j].Tables
 	})
-	return json.Marshal(d7Data{Accesses: mergedAcc, QueryShapes: mergedShapes})
+	return json.Marshal(d6Data{Accesses: mergedAcc, QueryShapes: mergedShapes})
 }
 
 // D4ArgsReturns: union the per-callsite value profiles (sites, formats, enum
@@ -155,10 +152,10 @@ func mergeD3Values(a, b json.RawMessage) (json.RawMessage, error) {
 	return json.Marshal(da)
 }
 
-// D8PayloadSize: add the histograms.
-func mergeD8Values(a, b json.RawMessage) (json.RawMessage, error) {
-	da, _ := decodeD8(a)
-	db, _ := decodeD8(b)
+// D7PayloadSize: add the histograms.
+func mergeD7Values(a, b json.RawMessage) (json.RawMessage, error) {
+	da, _ := decodeD7(a)
+	db, _ := decodeD7(b)
 	reqLayout := histogram.MergeLayout(da.Request, db.Request)
 	respLayout := histogram.MergeLayout(da.Response, db.Response)
 	da.Request.Add(db.Request, reqLayout)
@@ -170,8 +167,8 @@ func mergeD8Values(a, b json.RawMessage) (json.RawMessage, error) {
 // high-cardinality transaction (e.g. span names that embed IDs, minting a new
 // D1 edge per request) can't grow an unbounded row. The set is already sorted
 // by Merge, so keeping the first max is deterministic; it returns whether it
-// trimmed. Additive (D3/D8 histograms) and noop (D6) classes are fixed-size
-// and pass through unchanged.
+// trimmed. Additive (D3/D7 histograms) classes are fixed-size and pass through
+// unchanged.
 func capClassData(class repo.DeviationClass, data json.RawMessage, max int) (json.RawMessage, bool) {
 	if max <= 0 || len(data) == 0 {
 		return data, false
@@ -213,8 +210,8 @@ func capClassData(class repo.DeviationClass, data json.RawMessage, max int) (jso
 		}
 		d.Libs = d.Libs[:max]
 		return reencode(data, d)
-	case repo.D7DBAccess:
-		d, _ := decodeD7(data)
+	case repo.D6DBAccess:
+		d, _ := decodeD6(data)
 		if len(d.Accesses) <= max && len(d.QueryShapes) <= max {
 			return data, false
 		}

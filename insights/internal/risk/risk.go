@@ -107,17 +107,12 @@ var Catalog = map[repo.DeviationClass]CatalogEntry{
 		Label: "New instrumentation library", Desc: "An instrumentation library/runtime not seen during learning.",
 		BaselineLabel: "Libraries", BaselineDesc: "Learned set of instrumentation libraries and runtimes seen on this transaction.",
 	},
-	repo.D6AttrRelations: {
-		Category: CategoryAccessAnomaly, Weight: 35,
-		Label: "Attribute-relation anomaly", Desc: "Span attribute relationships outside the learned pattern.",
-		BaselineLabel: "Attribute relations", BaselineDesc: "Learned relationships between span attributes for this transaction.",
-	},
-	repo.D7DBAccess: {
+	repo.D6DBAccess: {
 		Category: CategoryLateralMovement, Weight: 25,
 		Label: "New database access", Desc: "A database table/operation not accessed during learning.",
 		BaselineLabel: "Database access", BaselineDesc: "Learned set of database systems, tables, and operations touched.",
 	},
-	repo.D8PayloadSize: {
+	repo.D7PayloadSize: {
 		Category: CategoryResourceAbuse, Weight: 20,
 		Label: "Payload size above baseline", Desc: "Request/response payload larger than the learned baseline.",
 		BaselineLabel: "Payload size", BaselineDesc: "Learned request/response body-size distribution for this transaction.",

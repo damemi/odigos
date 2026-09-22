@@ -929,7 +929,7 @@ export interface components {
          * @description One baseline dimension; the scoring engine is the source of truth.
          * @enum {string}
          */
-        DeviationClass: "D1_call_edges" | "D2_egress" | "D3_latency" | "D4_args_returns" | "D5_libraries" | "D6_attr_relations" | "D7_db_access" | "D8_payload_size";
+        DeviationClass: "D1_call_edges" | "D2_egress" | "D3_latency" | "D4_args_returns" | "D5_libraries" | "D6_db_access" | "D7_payload_size";
         /** @description How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. `relation` = learning-phase traces kept for the correlation recommendation miner (larger cap, 14-day retention). Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility - it is not the tag written to storage. Open set: storage tags like `anomaly:<signature>` and `guardrail:<rule>:<offending>` are valid values too, so clients must tolerate values not listed here. */
         SampleReason: string;
         /** @enum {string} */
@@ -1214,7 +1214,7 @@ export interface components {
             data?: {
                 [key: string]: unknown;
             };
-            /** @description Chart-ready exponential histogram for metric classes that store a distribution (`D3_latency`, `D8_payload_size`). Omitted for all other classes and when `data` has no decodeable buckets. Built server-side from the stored bucket geometry (`layout_fingerprint` on the histogram object). Clients should plot `series[].bars` and must not recompute bounds from raw `data`. */
+            /** @description Chart-ready exponential histogram for metric classes that store a distribution (`D3_latency`, `D7_payload_size`). Omitted for all other classes and when `data` has no decodeable buckets. Built server-side from the stored bucket geometry (`layout_fingerprint` on the histogram object). Clients should plot `series[].bars` and must not recompute bounds from raw `data`. */
             histogram?: components["schemas"]["BaselineHistogram"];
             data_schema_version?: number;
             /** Format: int64 */
@@ -1403,8 +1403,8 @@ export interface components {
          *       "enabled": true,
          *       "fire_at_score": 60,
          *       "signal_weights": {
-         *         "D7_db_access": 30,
-         *         "d7_sensitive_table": 30
+         *         "D6_db_access": 30,
+         *         "d6_sensitive_table": 30
          *       },
          *       "enricher_lists": {
          *         "sensitive_tables": [

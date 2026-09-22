@@ -6,10 +6,10 @@
 // repo.Repository seam) and leans on ClickHouse's background merges to do the
 // cross-replica baseline merge instead of locking and rewriting rows:
 //
-//   - Set baselines (D1/D2/D5/D7) are stored as one row per member in a
+//   - Set baselines (D1/D2/D5/D6) are stored as one row per member in a
 //     ReplacingMergeTree, so the union across flushes and replicas is free and
 //     duplicate inserts collapse (idempotent, no dedup key needed).
-//   - Additive baselines (the D8 histogram) are stored as (bucket, count) rows
+//   - Additive baselines (the D7 histogram) are stored as (bucket, count) rows
 //     in a SummingMergeTree; each flush appends a delta and ClickHouse sums.
 //   - Per-class scalars live in an AggregatingMergeTree (observation_count
 //     summed, promoted OR'd, learning_started_at anchored to the earliest).

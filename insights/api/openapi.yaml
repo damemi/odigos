@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Odigos Insights Service API
-  version: 8.0.0
+  version: 9.0.0
   description: >
     HTTP API for the Odigos Insights (security) service. This spec is the source
     of truth for the contract: the Go server wire types (internal/api/http/apitypes)
@@ -1404,9 +1404,8 @@ components:
         - D3_latency
         - D4_args_returns
         - D5_libraries
-        - D6_attr_relations
-        - D7_db_access
-        - D8_payload_size
+        - D6_db_access
+        - D7_payload_size
 
     SampleReason:
       type: string
@@ -1708,7 +1707,7 @@ components:
           allOf: [{ $ref: "#/components/schemas/BaselineHistogram" }]
           description: >
             Chart-ready exponential histogram for metric classes that store a
-            distribution (`D3_latency`, `D8_payload_size`). Omitted for all other
+            distribution (`D3_latency`, `D7_payload_size`). Omitted for all other
             classes and when `data` has no decodeable buckets. Built server-side
             from the stored bucket geometry (`layout_fingerprint` on the histogram
             object). Clients should plot `series[].bars` and must not recompute
@@ -1980,8 +1979,8 @@ components:
           enabled: true
           fire_at_score: 60
           signal_weights:
-            D7_db_access: 30
-            d7_sensitive_table: 30
+            D6_db_access: 30
+            d6_sensitive_table: 30
           enricher_lists:
             sensitive_tables: ["users", "secrets", "api_keys"]
           scope: global

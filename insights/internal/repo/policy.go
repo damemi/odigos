@@ -1,8 +1,8 @@
 package repo
 
 // SignalSource identifies a risk signal in a policy's weight map and the risk
-// catalog. It is either a deviation-class id (e.g. "D7_db_access") or an
-// enricher-signal id (e.g. "d7_destructive_op"); the risk catalog is the source
+// catalog. It is either a deviation-class id (e.g. "D6_db_access") or an
+// enricher-signal id (e.g. "d6_destructive_op"); the risk catalog is the source
 // of truth for valid values.
 type SignalSource string
 

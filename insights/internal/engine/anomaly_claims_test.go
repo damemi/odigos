@@ -88,7 +88,7 @@ func TestClaims_PartialOverlapKeepsClass(t *testing.T) {
 	}
 }
 
-// D3 and D8 report no "new_*" items, so the class itself is the dedup unit.
+// D3 and D7 report no "new_*" items, so the class itself is the dedup unit.
 func TestClaims_ItemlessClassDedupsByClass(t *testing.T) {
 	c, spans := claimsOverForkedTrace()
 	deviated := []repo.DeviationClass{repo.D3Latency}

@@ -89,10 +89,8 @@ type RiskEnricher interface {
 }
 
 // defaultScorers returns the fixed registry of scorers, used by the Engine and
-// the finding/explainer dispatch. Only implemented classes are listed: an
-// unimplemented class (currently D6_attr_relations) has no scorer, so it never
-// seeds a baseline and never counts toward a transaction's learning/promotion
-// state. Add its scorer here when the class is built.
+// the finding/explainer dispatch. A class only learns, promotes and scores if
+// its scorer is listed here.
 func defaultScorers() []Scorer {
 	return []Scorer{
 		&d1CallEdges{},
@@ -100,18 +98,15 @@ func defaultScorers() []Scorer {
 		&d3Latency{},
 		&d4ArgsReturns{},
 		&d5Libraries{},
-		&d7DBAccess{},
-		&d8PayloadSize{},
+		&d6DBAccess{},
+		&d7PayloadSize{},
 	}
 }
 
 // ScoredClasses lists the deviation classes the engine actively learns and
-// scores (one per default scorer), in registry order. Unlike
-// repo.AllDeviationClasses it omits classes that have no scorer yet
-// (D6_attr_relations): those never seed a baseline, so a caller
-// enumerating "what this transaction should be learning" (e.g. the debug UI
-// baseline table) can show a stable row per real class without inventing
-// placeholders for classes that will never learn.
+// scores (one per default scorer), in registry order. It is derived from the
+// scorer registry rather than repo.AllDeviationClasses so a class added to the
+// repo without a scorer never gets a learning placeholder it can't fill.
 func ScoredClasses() []repo.DeviationClass {
 	scorers := defaultScorers()
 	classes := make([]repo.DeviationClass, len(scorers))

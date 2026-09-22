@@ -81,7 +81,7 @@ func newAnomalyClaims(t *Trace) *anomalyClaims {
 // rather than the class is what lets a transaction stay quiet about the peer
 // its caller already reported while still reporting a different one of its own.
 // Classes that name no discrete items claim the whole class instead: D3 latency
-// and D8 payload size measure the entry itself rather than reporting new facts.
+// and D7 payload size measure the entry itself rather than reporting new facts.
 func claimKeys(class repo.DeviationClass, ev json.RawMessage) []string {
 	items := offendingItems(ev)
 	if len(items) == 0 {

@@ -16,10 +16,9 @@
 //
 // A DeviationClass (see repo) is one independent baseline dimension. Each learns,
 // scores, and promotes on its own; a deviation becomes a risk signal weighed by
-// class and magnitude into a 0-100 score (see risk.go). Implemented today: D1,
-// D2, D3, D5, D7, D8. D4 (args/returns) and D6 (cross-attribute relations) are
-// reserved constants wired as noop scorers - they ride the learning/promotion
-// lifecycle but never deviate until a real scorer is written.
+// class and magnitude into a 0-100 score (see risk.go). Every class in
+// repo.AllDeviationClasses has a scorer; cross-attribute relations are not a
+// learned class but a transaction guardrail (attribute correlation).
 //
 // Worked example - `POST /checkout` in user-service that calls inventory.reserve,
 // payment.charge, stripe.com, and a Postgres DB. After ~1000 normal traces:
@@ -41,11 +40,11 @@
 //	  Baseline: {okhttp3@4.x, postgresql@42.x, redis.clients@4.x}
 //	  Deviates: commons-text@1.10.0 loaded on a path that never used it.
 //
-//	D7 - DB ACCESS (db.system/table/operation touched)
+//	D6 - DB ACCESS (db.system/table/operation touched)
 //	  Baseline: {postgres:users:SELECT, postgres:orders:SELECT}
 //	  Deviates: a new table/op, e.g. postgres:users:DELETE, or a `secrets` table.
 //
-//	D8 - PAYLOAD SIZE (request/response body-size histogram)
+//	D7 - PAYLOAD SIZE (request/response body-size histogram)
 //	  Baseline: {req p95:2KB, resp p95:40KB}
 //	  Deviates: a 5MB response where p95 is 40KB (possible bulk exfiltration).
 //
@@ -95,6 +94,6 @@
 //
 // Subpackages hold the self-contained, reusable leaves:
 //
-//	histogram/  exponential histogram (D3 latency, D8 payload sizes)
+//	histogram/  exponential histogram (D3 latency, D7 payload sizes)
 //	semconv/    OTel semantic-convention attribute-key resolution
 package engine

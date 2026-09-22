@@ -3,7 +3,7 @@
 -- cross-replica merge in its background merges instead of us locking and
 -- rewriting rows:
 --   - baseline_set_members  ReplacingMergeTree  -> idempotent set union
---   - baseline_counters     SummingMergeTree     -> additive counts (D8 histogram)
+--   - baseline_counters     SummingMergeTree     -> additive counts (D7 histogram)
 --   - baseline_meta         AggregatingMergeTree -> per-class scalars
 -- Every CREATE is guarded with IF NOT EXISTS so a retried (dirty) migration
 -- can be replayed safely.
@@ -271,8 +271,7 @@ INSERT INTO alert_policies
 VALUES
     ('global', '', 1, 'global default', 20, map(), map(), 1, now64(3));
 
--- Per-class GLOBAL learning defaults for implemented scorers only
--- (D6_attr_relations has no scorer yet and is omitted).
+-- Per-class GLOBAL learning defaults, one per deviation class.
 -- Promote once the baseline is unchanged for 300 observations OR 1 week
 -- (10080 minutes), whichever comes first.
 INSERT INTO learning_policies
@@ -283,8 +282,8 @@ VALUES
     ('D3_latency',      'global', '', 'any', '[{"type":"stable_observations","stableObservations":300},{"type":"stable_duration","stableMinutes":10080}]', 1, now64(3)),
     ('D4_args_returns', 'global', '', 'any', '[{"type":"stable_observations","stableObservations":300},{"type":"stable_duration","stableMinutes":10080}]', 1, now64(3)),
     ('D5_libraries',    'global', '', 'any', '[{"type":"stable_observations","stableObservations":300},{"type":"stable_duration","stableMinutes":10080}]', 1, now64(3)),
-    ('D7_db_access',    'global', '', 'any', '[{"type":"stable_observations","stableObservations":300},{"type":"stable_duration","stableMinutes":10080}]', 1, now64(3)),
-    ('D8_payload_size', 'global', '', 'any', '[{"type":"stable_observations","stableObservations":300},{"type":"stable_duration","stableMinutes":10080}]', 1, now64(3));
+    ('D6_db_access',    'global', '', 'any', '[{"type":"stable_observations","stableObservations":300},{"type":"stable_duration","stableMinutes":10080}]', 1, now64(3)),
+    ('D7_payload_size', 'global', '', 'any', '[{"type":"stable_observations","stableObservations":300},{"type":"stable_duration","stableMinutes":10080}]', 1, now64(3));
 
 INSERT INTO system_settings (
     id, updated_at,

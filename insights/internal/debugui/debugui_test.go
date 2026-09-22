@@ -154,7 +154,7 @@ func TestRenderAnomalyPolicies(t *testing.T) {
 		"Overrides": []anomalyOverrideView{
 			{Scope: "service", Label: "billing/checkout", Policy: repo.Policy{
 				Scope: repo.ScopeService, ScopeKey: "billing/checkout", Name: "svc", FireAtScore: 35,
-				SignalWeights: map[repo.SignalSource]int{repo.SignalSource(repo.D7DBAccess): 10, "d7_destructive_op": 0}, Enabled: true,
+				SignalWeights: map[repo.SignalSource]int{repo.SignalSource(repo.D6DBAccess): 10, "d6_destructive_op": 0}, Enabled: true,
 			}},
 			{Scope: "transaction", Label: "123", Link: "/debug/transactions/123", Policy: repo.Policy{
 				Scope: repo.ScopeTransaction, ScopeKey: "123", Name: "txn", FireAtScore: 50, Enabled: false,
@@ -265,7 +265,7 @@ func TestRenderFindings(t *testing.T) {
 			Summary: "Transaction deviated from its baseline: Database access anomaly.",
 			Score:   45, Severity: "high", Occurrences: 12, LastSeen: time.Now(), Status: tab,
 			TransactionId: 1, Signature: "sig1",
-			TriggeredClasses: []apitypes.DeviationClass{apitypes.DeviationClass(repo.D7DBAccess)},
+			TriggeredClasses: []apitypes.DeviationClass{apitypes.DeviationClass(repo.D6DBAccess)},
 		}})
 		if got := len(filterFindingRowsForTab(rows, tab)); got != 2 {
 			t.Fatalf("tab=%s: filtered %d rows, want both kinds", tab, got)
@@ -471,8 +471,8 @@ func TestDumpComparePreview(t *testing.T) {
 		"ServiceMap": svcMap,
 		"Issue": repo.AnomalyIssue{
 			TransactionID: 42, Signature: "9f2cab", Occurrences: 15000, MaxScore: 62,
-			TriggeredClasses: []repo.DeviationClass{repo.D7DBAccess, repo.D3Latency},
-			Offending:        "d7_db_access=DELETE users", FirstSeen: time.Now().Add(-2 * time.Hour), LastSeen: time.Now(),
+			TriggeredClasses: []repo.DeviationClass{repo.D6DBAccess, repo.D3Latency},
+			Offending:        "d6_db_access=DELETE users", FirstSeen: time.Now().Add(-2 * time.Hour), LastSeen: time.Now(),
 			LastTraceID: "9f2c…ab", Status: repo.AnomalyIssueOpen, Namespace: "default", Service: "checkout-svc",
 		},
 		"Transaction":     &repo.Transaction{ID: 42, Service: "checkout-svc", Operation: "POST /checkout"},
@@ -483,7 +483,7 @@ func TestDumpComparePreview(t *testing.T) {
 		"ChosenTrace":     "9f2c…ab",
 		"Severity":        "high",
 		"Findings": []engine.Finding{
-			{Class: repo.D7DBAccess, Kind: engine.FindingStructural, Title: "New database access",
+			{Class: repo.D6DBAccess, Kind: engine.FindingStructural, Title: "New database access",
 				Summary:        "The anomalous trace made a new access: DELETE on users; new query shape: DELETE [users].",
 				SpanHighlights: []engine.SpanHighlight{{SpanID: "c-DELETE users", Severity: "high", Reason: "database access not seen during learning"}},
 				AttrHighlights: []engine.AttrHighlight{{SpanID: "c-DELETE users", Key: "db.query.text", Value: "DELETE FROM users WHERE id = $1"}}},

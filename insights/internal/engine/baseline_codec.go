@@ -21,22 +21,22 @@ func NewBaselineCodec() repo.BaselineCodec { return baselineCodec{} }
 
 type baselineCodec struct{}
 
-// D8 histogram buckets are stored as counters keyed by a one-letter side prefix
+// D7 histogram buckets are stored as counters keyed by a one-letter side prefix
 // plus the bucket index: "q3" is request bucket 3, "s7" is response bucket 7.
 const (
-	d8RequestPrefix  = "q"
-	d8ResponsePrefix = "s"
+	d7RequestPrefix  = "q"
+	d7ResponsePrefix = "s"
 )
 
 // D3 stores a single latency histogram; its bucket counters carry an "l"
 // prefix ("l3" is latency bucket 3) to keep the counter-key scheme uniform.
 const d3LatencyPrefix = "l"
 
-// D7 mixes two sets (accesses, query shapes) in one class, so its members carry
+// D6 mixes two sets (accesses, query shapes) in one class, so its members carry
 // a one-letter prefix to tell them apart on decode.
 const (
-	d7AccessPrefix = "a"
-	d7ShapePrefix  = "s"
+	d6AccessPrefix = "a"
+	d6ShapePrefix  = "s"
 )
 
 func (baselineCodec) Encode(class repo.DeviationClass, data json.RawMessage) ([]string, []repo.Counter, error) {
@@ -76,34 +76,33 @@ func (baselineCodec) Encode(class repo.DeviationClass, data json.RawMessage) ([]
 			return nil, nil, err
 		}
 		return marshalMembers(d.Libs, "")
-	case repo.D7DBAccess:
-		d, err := decodeD7(data)
+	case repo.D6DBAccess:
+		d, err := decodeD6(data)
 		if err != nil {
 			return nil, nil, err
 		}
 		members := make([]string, 0, len(d.Accesses)+len(d.QueryShapes))
-		acc, _, err := marshalMembers(d.Accesses, d7AccessPrefix)
+		acc, _, err := marshalMembers(d.Accesses, d6AccessPrefix)
 		if err != nil {
 			return nil, nil, err
 		}
-		shapes, _, err := marshalMembers(d.QueryShapes, d7ShapePrefix)
+		shapes, _, err := marshalMembers(d.QueryShapes, d6ShapePrefix)
 		if err != nil {
 			return nil, nil, err
 		}
 		members = append(members, acc...)
 		members = append(members, shapes...)
 		return members, nil, nil
-	case repo.D8PayloadSize:
-		d, err := decodeD8(data)
+	case repo.D7PayloadSize:
+		d, err := decodeD7(data)
 		if err != nil {
 			return nil, nil, err
 		}
 		counters := make([]repo.Counter, 0, histogram.BucketCount)
-		counters = appendHistogramCounters(counters, d8RequestPrefix, d.Request)
-		counters = appendHistogramCounters(counters, d8ResponsePrefix, d.Response)
+		counters = appendHistogramCounters(counters, d7RequestPrefix, d.Request)
+		counters = appendHistogramCounters(counters, d7ResponsePrefix, d.Response)
 		return nil, counters, nil
 	default:
-		// D6 is still a noop scorer with no persisted data yet.
 		return nil, nil, nil
 	}
 }
@@ -156,22 +155,22 @@ func (baselineCodec) Decode(class repo.DeviationClass, members []string, counter
 			return libs[i].Ver < libs[j].Ver
 		})
 		return json.Marshal(d5Data{Libs: libs})
-	case repo.D7DBAccess:
+	case repo.D6DBAccess:
 		var (
 			accesses = []dbAccess{}
 			shapes   = []queryShape{}
 		)
 		for _, m := range members {
 			switch {
-			case strings.HasPrefix(m, d7AccessPrefix):
+			case strings.HasPrefix(m, d6AccessPrefix):
 				var a dbAccess
-				if err := json.Unmarshal([]byte(m[len(d7AccessPrefix):]), &a); err != nil {
+				if err := json.Unmarshal([]byte(m[len(d6AccessPrefix):]), &a); err != nil {
 					return nil, err
 				}
 				accesses = append(accesses, a)
-			case strings.HasPrefix(m, d7ShapePrefix):
+			case strings.HasPrefix(m, d6ShapePrefix):
 				var s queryShape
-				if err := json.Unmarshal([]byte(m[len(d7ShapePrefix):]), &s); err != nil {
+				if err := json.Unmarshal([]byte(m[len(d6ShapePrefix):]), &s); err != nil {
 					return nil, err
 				}
 				shapes = append(shapes, s)
@@ -184,15 +183,15 @@ func (baselineCodec) Decode(class repo.DeviationClass, members []string, counter
 			}
 			return shapes[i].Tables < shapes[j].Tables
 		})
-		return json.Marshal(d7Data{Accesses: accesses, QueryShapes: shapes})
-	case repo.D8PayloadSize:
-		d := d8Data{Request: histogram.New(), Response: histogram.New()}
+		return json.Marshal(d6Data{Accesses: accesses, QueryShapes: shapes})
+	case repo.D7PayloadSize:
+		d := d7Data{Request: histogram.New(), Response: histogram.New()}
 		for _, c := range counters {
 			side, idx, ok := parseHistogramBucket(c.Bucket)
 			if !ok || idx < 0 || idx >= repo.MaxHistogramBucketCount {
 				continue
 			}
-			if side == d8RequestPrefix {
+			if side == d7RequestPrefix {
 				d.Request.Buckets[idx] = uint64(c.Count)
 			} else {
 				d.Response.Buckets[idx] = uint64(c.Count)
@@ -205,7 +204,7 @@ func (baselineCodec) Decode(class repo.DeviationClass, members []string, counter
 }
 
 // marshalMembers JSON-encodes each element of a set slice, optionally prefixing
-// it so a class that stores two sets (D7) can tell them apart on decode.
+// it so a class that stores two sets (D6) can tell them apart on decode.
 func marshalMembers[T any](elems []T, prefix string) ([]string, []repo.Counter, error) {
 	out := make([]string, 0, len(elems))
 	for _, e := range elems {
@@ -244,14 +243,14 @@ func appendHistogramCounters(dst []repo.Counter, prefix string, h histogram.Hist
 }
 
 // parseHistogramBucket splits a "q3"/"s7"/"l5" bucket key back into
-// (side, index). The side prefix tells D8's request/response apart and marks
+// (side, index). The side prefix tells D7's request/response apart and marks
 // D3's single latency histogram.
 func parseHistogramBucket(bucket string) (side string, idx int, ok bool) {
 	if len(bucket) < 2 {
 		return "", 0, false
 	}
 	side = bucket[:1]
-	if side != d8RequestPrefix && side != d8ResponsePrefix && side != d3LatencyPrefix {
+	if side != d7RequestPrefix && side != d7ResponsePrefix && side != d3LatencyPrefix {
 		return "", 0, false
 	}
 	n, err := strconv.Atoi(bucket[1:])

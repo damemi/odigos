@@ -7,23 +7,15 @@ import (
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
 )
 
-func TestScoredClassesOmitsUnimplementedD6(t *testing.T) {
+func TestScoredClassesMatchesRepo(t *testing.T) {
 	got := ScoredClasses()
-	want := []repo.DeviationClass{
-		repo.D1CallEdges, repo.D2Egress, repo.D3Latency, repo.D4ArgsReturns,
-		repo.D5Libraries, repo.D7DBAccess, repo.D8PayloadSize,
-	}
+	want := repo.AllDeviationClasses
 	if len(got) != len(want) {
-		t.Fatalf("ScoredClasses = %v, want %v", got, want)
+		t.Fatalf("ScoredClasses = %v, want every repo class %v", got, want)
 	}
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("ScoredClasses[%d] = %s, want %s", i, got[i], want[i])
-		}
-	}
-	for _, class := range got {
-		if class == repo.D6AttrRelations {
-			t.Fatal("D6 has no scorer and must not get a learning placeholder")
 		}
 	}
 }

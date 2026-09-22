@@ -6,15 +6,6 @@ fix. Add to this instead of letting TODOs scatter.
 
 ## Scoring engine
 
-### D4 / D6 are not implemented
-- **What**: D4 (args/returns) and D6 (attr relations) have no scorer, so they
-  never learn, deviate, or seed a baseline, and never count toward a
-  transaction's learning/promotion state. They remain in the risk catalog as
-  known-but-unbuilt dimensions.
-- **Where**: `defaultScorers()` in `internal/engine/scorer.go` (they are simply
-  absent); catalog/weights in `internal/risk/risk.go`.
-- **Fix**: implement real `Scorer`s and add them to `defaultScorers()`.
-
 ### Baseline JSONB is re-decoded on every merged observation
 - **What**: `Merge` unmarshals the full baseline blob (e.g. all D1 edges) from
   JSONB and re-marshals it, an O(n) parse per observation per class. Scoring no
@@ -41,7 +32,7 @@ fix. Add to this instead of letting TODOs scatter.
 - **Fix**: enforce / verify templatization, or normalize defensively in the
   receiver. Document the dependency on the gateway action.
 
-### D7 table extraction is a heuristic, not a SQL parser
+### D6 table extraction is a heuristic, not a SQL parser
 - **What**: when `db.collection.name` is absent we parse table names out of
   `db.query.text` by grabbing the token after `FROM`/`JOIN`/`INTO`/`UPDATE`.
   CTEs, subqueries, and comma-separated `FROM a, b` lists (beyond the first
@@ -49,7 +40,7 @@ fix. Add to this instead of letting TODOs scatter.
   fixed-size hash of the normalized text (`#<sha1[:8]>`), so two genuinely
   different opaque statements that normalize identically collapse to one shape.
 - **Where**: `parseSQLTables` / `buildQueryShape` in
-  `internal/engine/scorer_d7.go`.
+  `internal/engine/scorer_d6.go`.
 - **Why**: a real SQL grammar is heavy and dialect-specific; the heuristic
   covers the common single-table and JOIN cases cheaply on the hot path.
 - **Fix**: if missed tables become a real gap, swap in a proper lightweight SQL
@@ -62,20 +53,20 @@ fix. Add to this instead of letting TODOs scatter.
 - **What**: we save learning progress to ClickHouse in batches ("flushes"). We
   send *increments* ("+5 observations") and ClickHouse sums them. If a flush
   lands in the DB but the reply is lost, we retry and send the same "+5" again,
-  so ClickHouse ends up with +10. Sets (D1/D2/D5/D7 members) are unaffected -
+  so ClickHouse ends up with +10. Sets (D1/D2/D5/D6 members) are unaffected -
   re-adding the same thing is a no-op - only the additive numbers
-  (`observation_count`, the D8 size histogram) can double.
+  (`observation_count`, the D7 size histogram) can double.
 - **Example**: a flush writes "+5 observations", the reply is lost, we retry.
   ClickHouse now shows 10 for a class that really saw 5.
 - **Why it barely matters today**: the only real effect is a class *promoting*
   (going from learning to enforcing) a little early. But the seeded policies make
   that nearly a non-issue:
-  - `D1/D2/D5/D7` are `match_mode=any` with a count of 50, so they already
+  - `D1/D2/D5/D6` are `match_mode=any` with a count of 50, so they already
     promote on count alone - the bug just makes them reach 50 a few real traces
     early. Negligible.
-  - `D3/D4/D6/D8` are `match_mode=all` with a 2–3 day minimum duration, so the
+  - `D3/D4/D7` are `match_mode=all` with a 2–3 day minimum duration, so the
     *time* gate holds them back no matter how inflated the count is. The one
-    additive class (D8) is here, so its double-count never promotes anything
+    additive class (D7) is here, so its double-count never promotes anything
     early - it only slightly skews the learned size distribution.
 - **Where**: `ApplyBaselineDeltas` in `internal/db/clickhouse/clickhouse.go`;
   the flusher's retry in `internal/engine/baseline_store.go`.

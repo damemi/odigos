@@ -9,12 +9,12 @@ import (
 )
 
 func TestIsAdditiveClass(t *testing.T) {
-	if !isAdditiveClass(repo.D3Latency) || !isAdditiveClass(repo.D8PayloadSize) {
-		t.Fatal("D3 and D8 must flush as deltas so MergeData can add buckets")
+	if !isAdditiveClass(repo.D3Latency) || !isAdditiveClass(repo.D7PayloadSize) {
+		t.Fatal("D3 and D7 must flush as deltas so MergeData can add buckets")
 	}
 	for _, class := range []repo.DeviationClass{
 		repo.D1CallEdges, repo.D2Egress, repo.D4ArgsReturns,
-		repo.D5Libraries, repo.D6AttrRelations, repo.D7DBAccess,
+		repo.D5Libraries, repo.D6DBAccess,
 	} {
 		if isAdditiveClass(class) {
 			t.Fatalf("%s is a set class; flushing a delta would drop members", class)
@@ -134,13 +134,13 @@ func TestMergeData_D4SeenSurvivesEmptySites(t *testing.T) {
 	}
 }
 
-func TestMergeData_D6IsEmptyPassthrough(t *testing.T) {
-	got, err := (classMerger{}).MergeData(repo.D6AttrRelations, json.RawMessage(`{"anything":1}`), json.RawMessage(`{"else":2}`))
+func TestMergeData_UnknownClassIsEmptyPassthrough(t *testing.T) {
+	got, err := (classMerger{}).MergeData(repo.DeviationClass("D9_retired"), json.RawMessage(`{"anything":1}`), json.RawMessage(`{"else":2}`))
 	if err != nil {
 		t.Fatalf("MergeData: %v", err)
 	}
 	if string(got) != `{}` {
-		t.Fatalf("D6 has no scorer yet; merge must stay {}, got %s", got)
+		t.Fatalf("unknown class has no merge; must stay {}, got %s", got)
 	}
 }
 

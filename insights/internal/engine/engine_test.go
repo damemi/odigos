@@ -1182,11 +1182,7 @@ type fakeRepo struct {
 
 // allDeviationClasses is the built-in class set, used by tests to build a
 // policy snapshot covering every class.
-var allDeviationClasses = []repo.DeviationClass{
-	repo.D1CallEdges, repo.D2Egress, repo.D3Latency,
-	repo.D4ArgsReturns, repo.D5Libraries, repo.D6AttrRelations,
-	repo.D7DBAccess, repo.D8PayloadSize,
-}
+var allDeviationClasses = repo.AllDeviationClasses
 
 // countOnlyConfig builds a LearningConfig where every built-in class promotes
 // purely on observation count (no time knob). Used by integration tests that

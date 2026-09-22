@@ -82,7 +82,7 @@ func serviceEntrySpans(t *Trace) []*Span {
 }
 
 // subtreeSpans returns the entry span plus every descendant, flattened - the
-// sub-trace's Spans slice that the flat-iterating scorers (D2/D5/D7/D8) consume.
+// sub-trace's Spans slice that the flat-iterating scorers (D2/D5/D6/D7) consume.
 func subtreeSpans(entry *Span) []*Span {
 	var out []*Span
 	var walk func(s *Span)

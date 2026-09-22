@@ -33,7 +33,7 @@ func HistogramPresentation(class repo.DeviationClass, data json.RawMessage) *api
 				histogramSeries("latency", "Entry latency", apitypes.Us, d.Latency, layout),
 			},
 		}
-	case repo.D8PayloadSize:
+	case repo.D7PayloadSize:
 		var d struct {
 			Request  histogram.Histogram `json:"request"`
 			Response histogram.Histogram `json:"response"`

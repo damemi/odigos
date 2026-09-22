@@ -21,15 +21,15 @@ Before changing `script.js`, know which fields are keys:
 | D3 latency | entry span duration (histogram) | **yes** |
 | D4 args/returns | `code.function.name` + `arg.N` format classes | no |
 | D5 libraries | instrumentation scope name/version | no (pinned in Dockerfile) |
-| D7 db access | `db.system`/`namespace`/`collection`/`operation` + query shape | no |
-| D8 payload size | `http.{request,response}` body size (histogram) | **yes** |
+| D6 db access | `db.system`/`namespace`/`collection`/`operation` + query shape | no |
+| D7 payload size | `http.{request,response}` body size (histogram) | **yes** |
 
 Two traps that cost us a run:
 
-- `tracing.SEMANTICS_DB` **emits nothing** - `TemplatedGenerator` only implements the HTTP one. DB spans must set `db.*` by hand or D7 learns nothing at all.
+- `tracing.SEMANTICS_DB` **emits nothing** - `TemplatedGenerator` only implements the HTTP one. DB spans must set `db.*` by hand or D6 learns nothing at all.
 - An unset `http.response.status_code` is filled randomly from `{200,201,202,204}`, and it is a transaction identity dimension - so every endpoint silently becomes 4 transactions, each learning from a quarter of the traffic. Pin it on every entry span.
 
-To verify a `script.js` change, run k6 against a local collector with a file exporter and confirm the distinct D1/D2/D7 sets are the same at 100 traces and at 10k.
+To verify a `script.js` change, run k6 against a local collector with a file exporter and confirm the distinct D1/D2/D6 sets are the same at 100 traces and at 10k.
 - Image: `public.ecr.aws/e1u7m2k3/insights-k6-runner` (build with `./push.sh`; linux/amd64 by default).
 
 ## Expected send rate (sanity-check before quoting throughput)

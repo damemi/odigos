@@ -34,16 +34,16 @@ func spanViewsWithDB(t *testing.T) []SpanView {
 	return views
 }
 
-func TestExplainD7_HighlightsOffendingSpan(t *testing.T) {
+func TestExplainD6_HighlightsOffendingSpan(t *testing.T) {
 	views := spanViewsWithDB(t)
 	ev, _ := json.Marshal(map[string]any{
 		"new_accesses":     []dbAccess{{System: "postgresql", Table: "users", Op: "DELETE"}},
 		"new_query_shapes": []queryShape{{Op: "DELETE", Tables: "users"}},
 	})
 
-	f := Explain(repo.D7DBAccess, ev, views)
+	f := Explain(repo.D6DBAccess, ev, views)
 	if f.Kind != FindingStructural {
-		t.Fatalf("D7 kind = %q, want structural", f.Kind)
+		t.Fatalf("D6 kind = %q, want structural", f.Kind)
 	}
 	if len(f.SpanHighlights) != 1 {
 		t.Fatalf("expected 1 span highlight, got %d", len(f.SpanHighlights))
@@ -117,9 +117,10 @@ func TestExplainD3_MetricComparison(t *testing.T) {
 	}
 }
 
-func TestExplain_UnimplementedClassMinimal(t *testing.T) {
-	f := Explain(repo.D6AttrRelations, json.RawMessage(`{"foo":1}`), nil)
-	if f.Class != repo.D6AttrRelations {
+func TestExplain_UnknownClassMinimal(t *testing.T) {
+	class := repo.DeviationClass("D9_retired")
+	f := Explain(class, json.RawMessage(`{"foo":1}`), nil)
+	if f.Class != class {
 		t.Fatalf("class = %s", f.Class)
 	}
 	if f.Title == "" || f.Summary == "" {

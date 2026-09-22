@@ -1,5 +1,5 @@
 // Package histogram provides a configurable exponential histogram over a
-// non-negative integer value, used by the engine's metric scorers: D8 observes
+// non-negative integer value, used by the engine's metric scorers: D7 observes
 // payload byte sizes, D3 observes entry-span latency in microseconds. Counts
 // are additive across disjoint observation streams (see Add), which lets the
 // baseline store flush deltas and ClickHouse sum them across replicas.

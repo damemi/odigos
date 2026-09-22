@@ -44,7 +44,7 @@ WHERE transaction_id = <ID>
 ORDER BY class;
 ```
 
-**Learned set members** (D1 edges / D2 peers / D5 libs / D7 accesses)
+**Learned set members** (D1 edges / D2 peers / D5 libs / D6 accesses)
 
 ```sql
 SELECT class, member

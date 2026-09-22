@@ -8,14 +8,14 @@ import (
 	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
 )
 
-// d7Evidence builds the evidence map the engine passes to enrichers, with a D7
-// blob shaped like scorer_d7.go emits.
-func d7Evidence(accesses []map[string]string, shapes []map[string]string) map[string]json.RawMessage {
+// d6Evidence builds the evidence map the engine passes to enrichers, with a D6
+// blob shaped like scorer_d6.go emits.
+func d6Evidence(accesses []map[string]string, shapes []map[string]string) map[string]json.RawMessage {
 	blob, _ := json.Marshal(map[string]any{
 		"new_accesses":     accesses,
 		"new_query_shapes": shapes,
 	})
-	return map[string]json.RawMessage{string(repo.D7DBAccess): blob}
+	return map[string]json.RawMessage{string(repo.D6DBAccess): blob}
 }
 
 func sourcesOf(sigs []risk.Signal) map[string]risk.Signal {
@@ -26,53 +26,53 @@ func sourcesOf(sigs []risk.Signal) map[string]risk.Signal {
 	return out
 }
 
-// dangerous runs the D7 enricher with the built-in default config (the common
+// dangerous runs the D6 enricher with the built-in default config (the common
 // case for these tests); the sensitive-table override is exercised separately.
-// EnrichRisk takes the class's own evidence blob, so pull D7's out of the map.
+// EnrichRisk takes the class's own evidence blob, so pull D6's out of the map.
 func dangerous(ev map[string]json.RawMessage) []risk.Signal {
-	return d7DBAccess{}.EnrichRisk(ev[string(repo.D7DBAccess)], enrichConfig{})
+	return d6DBAccess{}.EnrichRisk(ev[string(repo.D6DBAccess)], enrichConfig{})
 }
 
-func TestD7Enricher_BenignReadIsQuiet(t *testing.T) {
-	// A new SELECT on a mundane table must add NOTHING - the base D7 signal
+func TestD6Enricher_BenignReadIsQuiet(t *testing.T) {
+	// A new SELECT on a mundane table must add NOTHING - the base D6 signal
 	// already covers the "new access" novelty; we don't want to escalate noise.
-	got := dangerous(d7Evidence(
+	got := dangerous(d6Evidence(
 		[]map[string]string{{"table": "products", "op": "SELECT"}}, nil))
 	if len(got) != 0 {
 		t.Fatalf("benign read should produce no enricher signals, got %+v", got)
 	}
 }
 
-func TestD7Enricher_DestructiveOp(t *testing.T) {
-	got := sourcesOf(dangerous(d7Evidence(
+func TestD6Enricher_DestructiveOp(t *testing.T) {
+	got := sourcesOf(dangerous(d6Evidence(
 		[]map[string]string{{"table": "orders", "op": "DELETE"}}, nil)))
-	s, ok := got["d7_destructive_op"]
+	s, ok := got["d6_destructive_op"]
 	if !ok {
 		t.Fatalf("expected a destructive-op signal, got %v", got)
 	}
 	if s.Category != risk.CategoryImpact {
 		t.Errorf("destructive op category = %q, want %q", s.Category, risk.CategoryImpact)
 	}
-	if _, extra := got["d7_sensitive_table"]; extra {
+	if _, extra := got["d6_sensitive_table"]; extra {
 		t.Errorf("orders is not sensitive; should not add a sensitive-table signal")
 	}
 }
 
-func TestD7Enricher_SensitiveTable(t *testing.T) {
-	got := sourcesOf(dangerous(d7Evidence(
+func TestD6Enricher_SensitiveTable(t *testing.T) {
+	got := sourcesOf(dangerous(d6Evidence(
 		[]map[string]string{{"table": "user_credentials", "op": "SELECT"}}, nil)))
-	if _, ok := got["d7_sensitive_table"]; !ok {
+	if _, ok := got["d6_sensitive_table"]; !ok {
 		t.Fatalf("expected a sensitive-table signal for user_credentials, got %v", got)
 	}
-	if _, ok := got["d7_destructive_op"]; ok {
+	if _, ok := got["d6_destructive_op"]; ok {
 		t.Errorf("SELECT is not destructive; should not add a destructive-op signal")
 	}
 }
 
-func TestD7Enricher_InjectionShape(t *testing.T) {
-	got := sourcesOf(dangerous(d7Evidence(nil,
+func TestD6Enricher_InjectionShape(t *testing.T) {
+	got := sourcesOf(dangerous(d6Evidence(nil,
 		[]map[string]string{{"op": "SELECT", "tables": "admins,orders,users"}})))
-	s, ok := got["d7_injection_shape"]
+	s, ok := got["d6_injection_shape"]
 	if !ok {
 		t.Fatalf("expected an injection-shape signal for a 3-table join, got %v", got)
 	}
@@ -82,7 +82,7 @@ func TestD7Enricher_InjectionShape(t *testing.T) {
 
 	// A two-table join is below the threshold; an opaque (#hash) shape is not a
 	// real table list - neither should trip the enricher.
-	quiet := dangerous(d7Evidence(nil, []map[string]string{
+	quiet := dangerous(d6Evidence(nil, []map[string]string{
 		{"op": "SELECT", "tables": "orders,users"},
 		{"op": "SELECT", "tables": "#deadbeef"},
 	}))
@@ -91,16 +91,16 @@ func TestD7Enricher_InjectionShape(t *testing.T) {
 	}
 }
 
-func TestD7Enricher_SchemaRecon(t *testing.T) {
+func TestD6Enricher_SchemaRecon(t *testing.T) {
 	// A new access to a system-catalog table is schema enumeration; it must add
 	// an Injection-category signal, and - being Injection - a mundane new table
 	// beside it must not.
-	got := sourcesOf(dangerous(d7Evidence(
+	got := sourcesOf(dangerous(d6Evidence(
 		[]map[string]string{
 			{"table": "information_schema.tables", "op": "SELECT"},
 			{"table": "products", "op": "SELECT"},
 		}, nil)))
-	s, ok := got["d7_schema_recon"]
+	s, ok := got["d6_schema_recon"]
 	if !ok {
 		t.Fatalf("access to information_schema should flag schema recon, got %v", got)
 	}
@@ -109,46 +109,46 @@ func TestD7Enricher_SchemaRecon(t *testing.T) {
 	}
 
 	// A plain business table must stay quiet.
-	if got := (d7DBAccess{}).EnrichRisk(d7Evidence(
-		[]map[string]string{{"table": "orders", "op": "SELECT"}}, nil)[string(repo.D7DBAccess)], enrichConfig{}); len(got) != 0 {
+	if got := (d6DBAccess{}).EnrichRisk(d6Evidence(
+		[]map[string]string{{"table": "orders", "op": "SELECT"}}, nil)[string(repo.D6DBAccess)], enrichConfig{}); len(got) != 0 {
 		t.Fatalf("ordinary table should not flag schema recon, got %+v", got)
 	}
 }
 
-func TestD7Enricher_CustomSchemaCatalog(t *testing.T) {
+func TestD6Enricher_CustomSchemaCatalog(t *testing.T) {
 	cfg := enrichConfig{lists: map[repo.EnricherListKey][]string{"schema_catalog_tables": {"catalog_meta"}}}
 	// Custom list replaces defaults: the bespoke catalog table is flagged...
-	if got := sourcesOf(d7DBAccess{}.EnrichRisk(d7Evidence(
-		[]map[string]string{{"table": "catalog_meta", "op": "SELECT"}}, nil)[string(repo.D7DBAccess)], cfg)); len(got) == 0 {
+	if got := sourcesOf(d6DBAccess{}.EnrichRisk(d6Evidence(
+		[]map[string]string{{"table": "catalog_meta", "op": "SELECT"}}, nil)[string(repo.D6DBAccess)], cfg)); len(got) == 0 {
 		t.Fatalf("custom catalog keyword should flag catalog_meta")
 	}
 	// ...while the built-in information_schema no longer is.
-	if got := (d7DBAccess{}).EnrichRisk(d7Evidence(
-		[]map[string]string{{"table": "information_schema.tables", "op": "SELECT"}}, nil)[string(repo.D7DBAccess)], cfg); len(got) != 0 {
+	if got := (d6DBAccess{}).EnrichRisk(d6Evidence(
+		[]map[string]string{{"table": "information_schema.tables", "op": "SELECT"}}, nil)[string(repo.D6DBAccess)], cfg); len(got) != 0 {
 		t.Errorf("custom list should replace defaults; information_schema should be quiet, got %v", got)
 	}
 }
 
-func TestD7Enricher_NoD7EvidenceIsQuiet(t *testing.T) {
+func TestD6Enricher_NoD6EvidenceIsQuiet(t *testing.T) {
 	if got := dangerous(map[string]json.RawMessage{}); got != nil {
-		t.Fatalf("no D7 evidence should yield nil, got %+v", got)
+		t.Fatalf("no D6 evidence should yield nil, got %+v", got)
 	}
 }
 
-// TestD7Enricher_EscalatesScore covers the core enricher property: a benign new
+// TestD6Enricher_EscalatesScore covers the core enricher property: a benign new
 // read stays "low", but a destructive op on a sensitive table becomes
-// "critical" - same base D7 deviation, very different score.
-func TestD7Enricher_EscalatesScore(t *testing.T) {
-	base, _ := risk.NewSignal(repo.D7DBAccess, 1.0, "new db access")
+// "critical" - same base D6 deviation, very different score.
+func TestD6Enricher_EscalatesScore(t *testing.T) {
+	base, _ := risk.NewSignal(repo.D6DBAccess, 1.0, "new db access")
 
 	benign := risk.Assess(append([]risk.Signal{base},
-		dangerous(d7Evidence([]map[string]string{{"table": "products", "op": "SELECT"}}, nil))...))
+		dangerous(d6Evidence([]map[string]string{{"table": "products", "op": "SELECT"}}, nil))...))
 	if benign.Severity != risk.SeverityLow {
 		t.Errorf("benign new read severity = %q, want %q (score %d)", benign.Severity, risk.SeverityLow, benign.Score)
 	}
 
 	danger := risk.Assess(append([]risk.Signal{base},
-		dangerous(d7Evidence([]map[string]string{{"table": "accounts", "op": "DELETE"}}, nil))...))
+		dangerous(d6Evidence([]map[string]string{{"table": "accounts", "op": "DELETE"}}, nil))...))
 	if danger.Severity != risk.SeverityCritical {
 		t.Errorf("DELETE on accounts severity = %q, want %q (score %d)", danger.Severity, risk.SeverityCritical, danger.Score)
 	}
@@ -158,37 +158,37 @@ func TestD7Enricher_EscalatesScore(t *testing.T) {
 }
 
 // TestEnricherWeightOverrideMutes proves a policy can tune an enricher by source
-// like any class signal: setting d7_destructive_op to 0 drops its contribution,
+// like any class signal: setting d6_destructive_op to 0 drops its contribution,
 // so the same DELETE no longer escalates.
 func TestEnricherWeightOverrideMutes(t *testing.T) {
-	base, _ := risk.NewSignal(repo.D7DBAccess, 1.0, "new db access")
+	base, _ := risk.NewSignal(repo.D6DBAccess, 1.0, "new db access")
 	sigs := append([]risk.Signal{base},
-		dangerous(d7Evidence([]map[string]string{{"table": "orders", "op": "DELETE"}}, nil))...)
+		dangerous(d6Evidence([]map[string]string{{"table": "orders", "op": "DELETE"}}, nil))...)
 
 	full := risk.Assess(sigs).Score
-	muted := risk.Assess(risk.ApplyWeightOverrides(sigs, map[repo.SignalSource]int{"d7_destructive_op": 0})).Score
+	muted := risk.Assess(risk.ApplyWeightOverrides(sigs, map[repo.SignalSource]int{"d6_destructive_op": 0})).Score
 	if muted >= full {
-		t.Fatalf("muting d7_destructive_op should lower the score: full=%d muted=%d", full, muted)
+		t.Fatalf("muting d6_destructive_op should lower the score: full=%d muted=%d", full, muted)
 	}
 }
 
-// TestD7Enricher_CustomSensitiveTables proves a scope's sensitive-table list
+// TestD6Enricher_CustomSensitiveTables proves a scope's sensitive-table list
 // replaces the built-in defaults: a table that matches only the custom keyword
 // is flagged, while one that matched a default keyword no longer is.
-func TestD7Enricher_CustomSensitiveTables(t *testing.T) {
+func TestD6Enricher_CustomSensitiveTables(t *testing.T) {
 	cfg := enrichConfig{lists: map[repo.EnricherListKey][]string{"sensitive_tables": {"ledger"}}}
 
-	got := sourcesOf(d7DBAccess{}.EnrichRisk(d7Evidence(
-		[]map[string]string{{"table": "billing_ledger", "op": "SELECT"}}, nil)[string(repo.D7DBAccess)], cfg))
-	if _, ok := got["d7_sensitive_table"]; !ok {
+	got := sourcesOf(d6DBAccess{}.EnrichRisk(d6Evidence(
+		[]map[string]string{{"table": "billing_ledger", "op": "SELECT"}}, nil)[string(repo.D6DBAccess)], cfg))
+	if _, ok := got["d6_sensitive_table"]; !ok {
 		t.Fatalf("custom keyword 'ledger' should flag billing_ledger, got %v", got)
 	}
 
 	// "account" is a default keyword but NOT in the custom list, so with the
 	// override in effect it must no longer be treated as sensitive.
-	got = sourcesOf(d7DBAccess{}.EnrichRisk(d7Evidence(
-		[]map[string]string{{"table": "accounts", "op": "SELECT"}}, nil)[string(repo.D7DBAccess)], cfg))
-	if _, ok := got["d7_sensitive_table"]; ok {
+	got = sourcesOf(d6DBAccess{}.EnrichRisk(d6Evidence(
+		[]map[string]string{{"table": "accounts", "op": "SELECT"}}, nil)[string(repo.D6DBAccess)], cfg))
+	if _, ok := got["d6_sensitive_table"]; ok {
 		t.Errorf("custom list should replace defaults; 'accounts' should not be flagged, got %v", got)
 	}
 }
@@ -331,8 +331,8 @@ func TestD2Enricher_CustomMetadataList(t *testing.T) {
 	}
 }
 
-// d8Evidence builds a D8 blob shaped like scorer_d8.go emits for the response side.
-func d8Evidence(respSize, respP99 int64) json.RawMessage {
+// d7Evidence builds a D7 blob shaped like scorer_d7.go emits for the response side.
+func d7Evidence(respSize, respP99 int64) json.RawMessage {
 	blob, _ := json.Marshal(map[string]any{
 		"response_body_size": respSize,
 		"response_p99":       respP99,
@@ -340,9 +340,9 @@ func d8Evidence(respSize, respP99 int64) json.RawMessage {
 	return blob
 }
 
-func TestD8Enricher_OversizedResponse(t *testing.T) {
-	got := sourcesOf(d8PayloadSize{}.EnrichRisk(d8Evidence(2_000_000, 100_000), enrichConfig{}))
-	s, ok := got["d8_response_exfil"]
+func TestD7Enricher_OversizedResponse(t *testing.T) {
+	got := sourcesOf(d7PayloadSize{}.EnrichRisk(d7Evidence(2_000_000, 100_000), enrichConfig{}))
+	s, ok := got["d7_response_exfil"]
 	if !ok {
 		t.Fatalf("20x response should flag bulk exfil, got %v", got)
 	}
@@ -351,14 +351,14 @@ func TestD8Enricher_OversizedResponse(t *testing.T) {
 	}
 }
 
-func TestD8Enricher_QuietBelowRatio(t *testing.T) {
-	// 3x over p99 trips the base D8 signal but is below the exfil ratio.
-	if got := (d8PayloadSize{}).EnrichRisk(d8Evidence(300_000, 100_000), enrichConfig{}); len(got) != 0 {
+func TestD7Enricher_QuietBelowRatio(t *testing.T) {
+	// 3x over p99 trips the base D7 signal but is below the exfil ratio.
+	if got := (d7PayloadSize{}).EnrichRisk(d7Evidence(300_000, 100_000), enrichConfig{}); len(got) != 0 {
 		t.Fatalf("3x response is below exfil ratio, should be quiet, got %+v", got)
 	}
 	// A request-only deviation carries no response fields; must be quiet.
 	reqOnly, _ := json.Marshal(map[string]any{"request_body_size": 9_000_000, "request_p99": 1_000})
-	if got := (d8PayloadSize{}).EnrichRisk(reqOnly, enrichConfig{}); len(got) != 0 {
+	if got := (d7PayloadSize{}).EnrichRisk(reqOnly, enrichConfig{}); len(got) != 0 {
 		t.Fatalf("request-only deviation should not trip response exfil, got %+v", got)
 	}
 }

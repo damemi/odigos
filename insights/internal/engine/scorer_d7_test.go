@@ -3,22 +3,24 @@ package engine
 import (
 	"testing"
 
+	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
+	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
+
+	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/histogram"
 )
 
-// dbTrace builds a trace with a single DB client span carrying the given attrs.
-func dbTrace(attrs map[string]string) *Trace {
+func httpTrace(attrs map[string]string) *Trace {
 	return mkTrace(
-		withRoot("POST /checkout", "checkout-svc", tracepb.Span_SPAN_KIND_SERVER, nil),
-		withChild("root", "query", tracepb.Span_SPAN_KIND_CLIENT, attrs, "jdbc"),
+		withRoot("POST /checkout", "checkout-svc", tracepb.Span_SPAN_KIND_SERVER, attrs),
 	)
 }
 
-func learnD7(t *testing.T, traces ...*Trace) (baseline []byte) {
+func learnD7(t *testing.T, traces ...*Trace) []byte {
 	t.Helper()
 	var raw []byte
 	for _, tr := range traces {
-		merged, err := (d7DBAccess{}).Merge(tr, raw)
+		merged, err := (d7PayloadSize{}).Merge(tr, raw)
 		if err != nil {
 			t.Fatalf("merge: %v", err)
 		}
@@ -28,192 +30,260 @@ func learnD7(t *testing.T, traces ...*Trace) (baseline []byte) {
 }
 
 func TestD7_EmptyBaselineNeverDeviates(t *testing.T) {
-	tr := dbTrace(map[string]string{
-		"db.system": "postgresql", "db.query.text": "SELECT * FROM users",
-	})
-	if dev, _, _ := (d7DBAccess{}).Score(tr, nil); dev {
+	tr := httpTrace(map[string]string{"http.request.body.size": "100"})
+	if dev, _, _ := (d7PayloadSize{}).Score(tr, nil); dev {
 		t.Errorf("empty baseline must not deviate")
 	}
 }
 
-func TestD7_NewTableDeviates(t *testing.T) {
-	baseline := learnD7(t, dbTrace(map[string]string{
-		"db.system": "postgresql", "db.namespace": "app",
-		"db.query.text": "SELECT * FROM users WHERE id = 1",
-	}))
+func TestD7_RequestAboveP99Deviates(t *testing.T) {
+	// 99 observations at 100 bytes, 1 at 127 bytes (same bucket) -> p99 upper bound 127.
+	var traces []*Trace
+	for i := 0; i < 99; i++ {
+		traces = append(traces, httpTrace(map[string]string{"http.request.body.size": "100"}))
+	}
+	traces = append(traces, httpTrace(map[string]string{"http.request.body.size": "127"}))
+	baseline := learnD7(t, traces...)
 
-	if dev, _, _ := (d7DBAccess{}).Score(dbTrace(map[string]string{
-		"db.system": "postgresql", "db.namespace": "app",
-		"db.query.text": "SELECT * FROM users WHERE id = 7",
+	if dev, _, _ := (d7PayloadSize{}).Score(httpTrace(map[string]string{"http.request.body.size": "127"}), baseline); dev {
+		t.Errorf("request at p99 must not deviate")
+	}
+
+	dev, ev, _ := (d7PayloadSize{}).Score(httpTrace(map[string]string{"http.request.body.size": "128"}), baseline)
+	if !dev {
+		t.Fatalf("expected deviation for request above p99")
+	}
+	if !contains(string(ev), "128") || !contains(string(ev), "request_p99") {
+		t.Errorf("evidence missing request size details: %s", ev)
+	}
+}
+
+func TestD7_ResponseAboveP99Deviates(t *testing.T) {
+	var traces []*Trace
+	for i := 0; i < 99; i++ {
+		traces = append(traces, httpTrace(map[string]string{
+			"http.response.headers.content-length": "100",
+		}))
+	}
+	traces = append(traces, httpTrace(map[string]string{
+		"http.response.headers.content-length": "127",
+	}))
+	baseline := learnD7(t, traces...)
+
+	if dev, _, _ := (d7PayloadSize{}).Score(httpTrace(map[string]string{
+		"http.response.headers.content-length": "127",
 	}), baseline); dev {
-		t.Errorf("same table with a different literal must not deviate")
+		t.Errorf("response at p99 must not deviate")
 	}
 
-	attack := dbTrace(map[string]string{
-		"db.system": "postgresql", "db.namespace": "app",
-		"db.query.text": "SELECT * FROM admins WHERE id = 1",
-	})
-	dev, ev, _ := (d7DBAccess{}).Score(attack, baseline)
+	dev, ev, _ := (d7PayloadSize{}).Score(httpTrace(map[string]string{
+		"http.response.headers.content-length": "128",
+	}), baseline)
 	if !dev {
-		t.Fatalf("expected deviation for a never-before-seen table")
+		t.Fatalf("expected deviation for response above p99")
 	}
-	if !contains(string(ev), "admins") {
-		t.Errorf("evidence missing the new table: %s", ev)
+	if !contains(string(ev), "128") || !contains(string(ev), "response_p99") {
+		t.Errorf("evidence missing response size details: %s", ev)
 	}
 }
 
-func TestD7_NewOperationOnKnownTableDeviates(t *testing.T) {
-	baseline := learnD7(t, dbTrace(map[string]string{
-		"db.system": "postgresql", "db.query.text": "SELECT * FROM users",
+func TestD7_ResponseAndRequestHistogramsMerge(t *testing.T) {
+	baseline := learnD7(t, httpTrace(map[string]string{
+		"http.request.body.size":  "50",
+		"http.response.body.size": "500",
 	}))
 
-	attack := dbTrace(map[string]string{
-		"db.system": "postgresql", "db.query.text": "DELETE FROM users",
-	})
-	dev, ev, _ := (d7DBAccess{}).Score(attack, baseline)
+	var d d7Data
+	if err := decodeD7JSON(baseline, &d); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if d.Request.Total() != 1 || d.Response.Total() != 1 {
+		t.Fatalf("expected both histograms updated, req=%d resp=%d", d.Request.Total(), d.Response.Total())
+	}
+}
+
+func TestD7_BodyContentFallback(t *testing.T) {
+	body := "hello" // 5 bytes
+	baseline := learnD7(t, httpTrace(map[string]string{"http.request.body": body}))
+
+	dev, _, _ := (d7PayloadSize{}).Score(httpTrace(map[string]string{
+		"http.request.body": "much-longer-body",
+	}), baseline)
 	if !dev {
-		t.Fatalf("expected deviation for a new operation on a known table")
-	}
-	if !contains(string(ev), "DELETE") {
-		t.Errorf("evidence missing the new operation: %s", ev)
+		t.Fatalf("expected deviation when captured body exceeds learned p99")
 	}
 }
 
-func TestD7_NewSystemDeviates(t *testing.T) {
-	baseline := learnD7(t, dbTrace(map[string]string{
-		"db.system": "postgresql", "db.collection.name": "users",
+func TestD7_ResponseHeadersContentLength(t *testing.T) {
+	baseline := learnD7(t, httpTrace(map[string]string{
+		"http.request.body.size":               "50",
+		"http.response.headers.content-length": "500",
 	}))
 
-	attack := dbTrace(map[string]string{
-		"db.system": "redis", "db.collection.name": "users",
-	})
-	if dev, _, _ := (d7DBAccess{}).Score(attack, baseline); !dev {
-		t.Fatalf("expected deviation for a new database system")
+	var d d7Data
+	if err := decodeD7JSON(baseline, &d); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if d.Response.Total() != 1 {
+		t.Fatalf("expected response histogram updated, got %d", d.Response.Total())
 	}
 }
 
-// db.operation.name (set by the gateway processor) wins over the parsed verb.
-func TestD7_OperationNameAttributeUsed(t *testing.T) {
-	baseline := learnD7(t, dbTrace(map[string]string{
-		"db.system": "postgresql", "db.collection.name": "users",
-		"db.operation.name": "SELECT",
-	}))
-
-	attack := dbTrace(map[string]string{
-		"db.system": "postgresql", "db.collection.name": "users",
-		"db.operation.name": "DELETE",
-	})
-	if dev, _, _ := (d7DBAccess{}).Score(attack, baseline); !dev {
-		t.Fatalf("expected deviation when db.operation.name changes")
-	}
-}
-
-// A join of two known tables is a new co-occurrence (query) shape even though
-// neither table is new on its own.
-func TestD7_NewJoinShapeDeviates(t *testing.T) {
-	baseline := learnD7(t,
-		dbTrace(map[string]string{"db.system": "postgresql", "db.query.text": "SELECT * FROM users"}),
-		dbTrace(map[string]string{"db.system": "postgresql", "db.query.text": "SELECT * FROM orders"}),
-	)
-
-	join := dbTrace(map[string]string{
-		"db.system":     "postgresql",
-		"db.query.text": "SELECT * FROM users JOIN orders ON users.id = orders.user_id",
-	})
-	dev, ev, _ := (d7DBAccess{}).Score(join, baseline)
-	if !dev {
-		t.Fatalf("expected deviation for a new join shape over known tables")
-	}
-	if !contains(string(ev), "orders,users") {
-		t.Errorf("evidence missing the canonical join shape: %s", ev)
-	}
-}
-
-// Opaque statements (no parseable table) collapse to a stable bounded hash, so
-// repeats of the same statement don't deviate.
-func TestD7_OpaqueStatementStable(t *testing.T) {
-	baseline := learnD7(t, dbTrace(map[string]string{
-		"db.system": "postgresql", "db.query.text": "BEGIN",
-	}))
-	if dev, _, _ := (d7DBAccess{}).Score(dbTrace(map[string]string{
-		"db.system": "postgresql", "db.query.text": "BEGIN",
-	}), baseline); dev {
-		t.Errorf("identical opaque statement must not deviate")
-	}
-}
-
-func TestD7_LegacyAttributesFallback(t *testing.T) {
-	// pre-v1.27 names: db.statement / db.name / db.system.name
-	baseline := learnD7(t, dbTrace(map[string]string{
-		"db.system.name": "mysql", "db.name": "shop",
-		"db.statement": "SELECT * FROM products",
-	}))
-
-	attack := dbTrace(map[string]string{
-		"db.system.name": "mysql", "db.name": "shop",
-		"db.statement": "SELECT * FROM secrets",
-	})
-	if dev, _, _ := (d7DBAccess{}).Score(attack, baseline); !dev {
-		t.Fatalf("expected deviation via legacy db.* attributes")
-	}
-}
-
-func TestD7_NonDBTraceProducesNothing(t *testing.T) {
+func TestD7_RequestHeadersContentLengthOnInternalRoot(t *testing.T) {
 	tr := mkTrace(
-		withRoot("GET /", "web", tracepb.Span_SPAN_KIND_SERVER, nil),
-		withChild("root", "GET /api", tracepb.Span_SPAN_KIND_CLIENT,
-			map[string]string{"server.address": "api.internal"}, "okhttp3"),
+		withRoot("POST /checkout", "checkout-svc", tracepb.Span_SPAN_KIND_INTERNAL, map[string]string{
+			"http.request.headers.content-length": "256",
+		}),
 	)
-	accesses, shapes := dbFactsFromTrace(tr)
-	if len(accesses) != 0 || len(shapes) != 0 {
-		t.Errorf("non-DB trace should yield no db facts, got %d accesses %d shapes", len(accesses), len(shapes))
+	baseline := learnD7(t, tr)
+
+	var d d7Data
+	if err := decodeD7JSON(baseline, &d); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if d.Request.Total() != 1 {
+		t.Fatalf("expected request histogram updated on INTERNAL root, got %d", d.Request.Total())
 	}
 }
 
-func TestParseSQLTables(t *testing.T) {
-	cases := map[string][]string{
-		"SELECT * FROM users WHERE id = 1":                        {"users"},
-		"select id from Orders o":                                 {"orders"},
-		"INSERT INTO audit_log (a) VALUES (1)":                    {"audit_log"},
-		"UPDATE accounts SET balance = 0":                         {"accounts"},
-		"DELETE FROM sessions":                                    {"sessions"},
-		"SELECT * FROM users u JOIN orders o ON u.id = o.user_id": {"orders", "users"},
-		"SELECT * FROM `users`":                                   {"users"},
-		// SQLAlchemy 2.0 insertmanyvalues: FROM (VALUES ...) must not yield "values".
-		"INSERT INTO health_logs (a, b) SELECT p0, p1 FROM (VALUES (1, 2)) AS sen(p0, p1)": {"health_logs"},
+func TestD7_SizesOnChildSpan(t *testing.T) {
+	tr := mkTrace(
+		withRoot("POST /checkout", "checkout-svc", tracepb.Span_SPAN_KIND_SERVER, nil),
+		withChild("root", "handler", tracepb.Span_SPAN_KIND_INTERNAL, map[string]string{
+			"http.response.headers.content-length": "1024",
+		}, "net/http"),
+	)
+	baseline := learnD7(t, tr)
+
+	var d d7Data
+	if err := decodeD7JSON(baseline, &d); err != nil {
+		t.Fatalf("decode: %v", err)
 	}
-	for q, want := range cases {
-		got := parseSQLTables(q)
-		if !equalStrings(got, want) {
-			t.Errorf("parseSQLTables(%q) = %v, want %v", q, got, want)
+	if d.Response.Total() != 1 {
+		t.Fatalf("expected response histogram from child span, got %d", d.Response.Total())
+	}
+}
+
+func TestD7_DecodeRequestArrayHeaderValue(t *testing.T) {
+	req := &tracepb.TracesData{
+		ResourceSpans: []*tracepb.ResourceSpans{{
+			Resource: &resourcepb.Resource{
+				Attributes: []*commonpb.KeyValue{kvStr("service.name", "checkout-svc")},
+			},
+			ScopeSpans: []*tracepb.ScopeSpans{{
+				Spans: []*tracepb.Span{{
+					TraceId:           []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+					SpanId:            []byte{1, 1, 1, 1, 1, 1, 1, 1},
+					Name:              "POST /checkout",
+					Kind:              tracepb.Span_SPAN_KIND_SERVER,
+					StartTimeUnixNano: 0,
+					EndTimeUnixNano:   1_000_000,
+					Attributes: []*commonpb.KeyValue{
+						kvStr("http.request.headers.content-length", "128"),
+						kvStrArr("http.response.headers.content-length", "512"),
+					},
+				}},
+			}},
+		}},
+	}
+	traces := DecodeRequest(req)
+	if len(traces) != 1 {
+		t.Fatalf("expected 1 trace, got %d", len(traces))
+	}
+
+	merged, err := (d7PayloadSize{}).Merge(traces[0], nil)
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	var d d7Data
+	if err := decodeD7JSON(merged, &d); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if d.Request.Total() != 1 || d.Response.Total() != 1 {
+		t.Fatalf("expected both histograms updated from OTLP attrs, req=%d resp=%d",
+			d.Request.Total(), d.Response.Total())
+	}
+}
+
+func TestParseBodySizeValue(t *testing.T) {
+	cases := map[string]int64{
+		"3495":          3495,
+		`["3495"]`:      3495,
+		`["1234", "0"]`: 1234,
+		"0":             0,
+	}
+	for in, want := range cases {
+		got, ok := parseBodySizeValue(in)
+		if !ok || got != want {
+			t.Errorf("parseBodySizeValue(%q) = (%d, %v), want %d", in, got, ok, want)
 		}
 	}
 }
 
-func TestDetectSQLOperation(t *testing.T) {
-	cases := map[string]string{
-		"SELECT 1":            "SELECT",
-		"  insert into x ...": "INSERT",
-		"UPDATE x SET a=1":    "UPDATE",
-		"delete from x":       "DELETE",
-		"BEGIN":               "",
-		"":                    "",
+func TestD7_MissingSizesTreatedAsZero(t *testing.T) {
+	// A size-less trace (here non-HTTP) yields 0 sizes rather than being skipped,
+	// so D7 still learns and promotes; the resulting all-zero baseline stays
+	// silent instead of leaving the class stuck in "learning".
+	tr := mkTrace(
+		withRoot("checkout", "user-svc", tracepb.Span_SPAN_KIND_SERVER, nil),
+		withChild("root", "query", tracepb.Span_SPAN_KIND_CLIENT,
+			map[string]string{"db.system": "postgresql"}, "jdbc"),
+	)
+	req, resp, ok := httpPayloadSizesFromTrace(tr)
+	if !ok || req != 0 || resp != 0 {
+		t.Fatalf("missing sizes should be (0, 0, true), got (%d, %d, %v)", req, resp, ok)
 	}
-	for q, want := range cases {
-		if got := detectSQLOperation(q); got != want {
-			t.Errorf("detectSQLOperation(%q) = %q, want %q", q, got, want)
-		}
+	merged, err := (d7PayloadSize{}).Merge(tr, nil)
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	if len(merged) == 0 {
+		t.Fatalf("a size-less trace should still be observed (as 0), growing the baseline")
+	}
+	deviated, _, err := (d7PayloadSize{}).Score(tr, merged)
+	if err != nil {
+		t.Fatalf("score: %v", err)
+	}
+	if deviated {
+		t.Errorf("an all-zero baseline should not deviate on a size-less trace")
 	}
 }
 
-func equalStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
+func TestExpHistogram_Percentile(t *testing.T) {
+	layout := histogram.DefaultLayout()
+	h := histogram.New()
+	for i := 0; i < 99; i++ {
+		h.Observe(100, layout)
 	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
+	h.Observe(500, layout)
+
+	p99, ok := h.Percentile(0.99, layout)
+	if !ok {
+		t.Fatal("expected p99")
 	}
-	return true
+	if p99 != 127 { // bucket for [64,128)
+		t.Errorf("p99 = %d, want 127", p99)
+	}
+}
+
+func decodeD7JSON(raw []byte, d *d7Data) error {
+	decoded, err := decodeD7(raw)
+	if err != nil {
+		return err
+	}
+	*d = decoded
+	return nil
+}
+
+func kvStrArr(k string, vals ...string) *commonpb.KeyValue {
+	avs := make([]*commonpb.AnyValue, len(vals))
+	for i, v := range vals {
+		avs[i] = &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: v}}
+	}
+	return &commonpb.KeyValue{
+		Key: k,
+		Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_ArrayValue{
+			ArrayValue: &commonpb.ArrayValue{Values: avs},
+		}},
+	}
 }

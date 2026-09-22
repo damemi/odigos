@@ -41,7 +41,7 @@ func (e *Engine) assessRisk(deviated []repo.DeviationClass, evidence map[string]
 const magnitudeSaturation = 10.0
 
 // confidenceForClass returns a 0-1 confidence for a class from its evidence.
-// Metric classes (D3, D8) derive it from magnitude; everything else is binary
+// Metric classes (D3, D7) derive it from magnitude; everything else is binary
 // novelty at full confidence. Used by assessRisk.
 func confidenceForClass(class repo.DeviationClass, evidence json.RawMessage) float64 {
 	switch class {
@@ -52,7 +52,7 @@ func confidenceForClass(class repo.DeviationClass, evidence json.RawMessage) flo
 		}
 		_ = json.Unmarshal(evidence, &decoded)
 		return magnitudeConfidence(decoded.Us, decoded.P99)
-	case repo.D8PayloadSize:
+	case repo.D7PayloadSize:
 		var decoded struct {
 			ReqSize  int64 `json:"request_body_size"`
 			ReqP99   int64 `json:"request_p99"`

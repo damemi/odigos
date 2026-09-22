@@ -167,7 +167,7 @@ func TestSetBaselineUnionAndIdempotency(t *testing.T) {
 	}
 }
 
-// TestAdditiveHistogram covers D8: two delta contributions sum bucket-wise.
+// TestAdditiveHistogram covers D7: two delta contributions sum bucket-wise.
 func TestAdditiveHistogram(t *testing.T) {
 	r := testRepo(t)
 	ctx := context.Background()
@@ -188,14 +188,14 @@ func TestAdditiveHistogram(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		if _, err := r.ApplyBaselineDeltas(ctx, []repo.BaselineDelta{{
-			TransactionID: txID, Class: repo.D8PayloadSize,
+			TransactionID: txID, Class: repo.D7PayloadSize,
 			Contribution: hist(1, 1), CountDelta: 1, DataSchemaVersion: 1, LearningStartedAt: time.Now(),
 		}}, nil); err != nil {
 			t.Fatalf("flush %d: %v", i, err)
 		}
 	}
 
-	got := getClass(t, r, txID, repo.D8PayloadSize)
+	got := getClass(t, r, txID, repo.D7PayloadSize)
 	var d struct {
 		Request  struct{ Buckets []uint64 } `json:"request"`
 		Response struct{ Buckets []uint64 } `json:"response"`

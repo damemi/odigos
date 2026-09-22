@@ -145,14 +145,13 @@ func (e CorrelationSpecRelation) Valid() bool {
 
 // Defines values for DeviationClass.
 const (
-	D1CallEdges     DeviationClass = "D1_call_edges"
-	D2Egress        DeviationClass = "D2_egress"
-	D3Latency       DeviationClass = "D3_latency"
-	D4ArgsReturns   DeviationClass = "D4_args_returns"
-	D5Libraries     DeviationClass = "D5_libraries"
-	D6AttrRelations DeviationClass = "D6_attr_relations"
-	D7DbAccess      DeviationClass = "D7_db_access"
-	D8PayloadSize   DeviationClass = "D8_payload_size"
+	D1CallEdges   DeviationClass = "D1_call_edges"
+	D2Egress      DeviationClass = "D2_egress"
+	D3Latency     DeviationClass = "D3_latency"
+	D4ArgsReturns DeviationClass = "D4_args_returns"
+	D5Libraries   DeviationClass = "D5_libraries"
+	D6DbAccess    DeviationClass = "D6_db_access"
+	D7PayloadSize DeviationClass = "D7_payload_size"
 )
 
 // Valid indicates whether the value is a known member of the DeviationClass enum.
@@ -168,11 +167,9 @@ func (e DeviationClass) Valid() bool {
 		return true
 	case D5Libraries:
 		return true
-	case D6AttrRelations:
+	case D6DbAccess:
 		return true
-	case D7DbAccess:
-		return true
-	case D8PayloadSize:
+	case D7PayloadSize:
 		return true
 	default:
 		return false
@@ -716,7 +713,7 @@ type BaselineClass struct {
 	Data              json.RawMessage `json:"data,omitempty"`
 	DataSchemaVersion int             `json:"data_schema_version,omitempty"`
 
-	// Histogram Chart-ready exponential histogram for metric classes that store a distribution (`D3_latency`, `D8_payload_size`). Omitted for all other classes and when `data` has no decodeable buckets. Built server-side from the stored bucket geometry (`layout_fingerprint` on the histogram object). Clients should plot `series[].bars` and must not recompute bounds from raw `data`.
+	// Histogram Chart-ready exponential histogram for metric classes that store a distribution (`D3_latency`, `D7_payload_size`). Omitted for all other classes and when `data` has no decodeable buckets. Built server-side from the stored bucket geometry (`layout_fingerprint` on the histogram object). Clients should plot `series[].bars` and must not recompute bounds from raw `data`.
 	Histogram     *BaselineHistogram `json:"histogram,omitempty"`
 	LastChangedAt time.Time          `json:"last_changed_at,omitempty"`
 
@@ -1215,7 +1212,7 @@ type ObservationSummary struct {
 	TransactionId int64        `json:"transaction_id"`
 }
 
-// Policy Examples: {"enabled":true,"enricher_lists":{"sensitive_tables":["users","secrets","api_keys"]},"fire_at_score":60,"id":1,"name":"default","scope":"global","scope_key":"","signal_weights":{"D7_db_access":30,"d7_sensitive_table":30}}
+// Policy Examples: {"enabled":true,"enricher_lists":{"sensitive_tables":["users","secrets","api_keys"]},"fire_at_score":60,"id":1,"name":"default","scope":"global","scope_key":"","signal_weights":{"D6_db_access":30,"d6_sensitive_table":30}}
 type Policy struct {
 	Enabled bool `json:"enabled"`
 

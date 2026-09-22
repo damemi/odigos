@@ -47,7 +47,7 @@ type signalChip struct {
 }
 
 // classChips renders one chip per triggered deviation class of an anomaly issue,
-// so a D7-only finding and a D7+D3 one look different at a glance. Registered as a
+// so a D6-only finding and a D6+D3 one look different at a glance. Registered as a
 // template func (used by anomalies.html) and also called here for the Overview
 // "Top findings" rows. The tooltip is the class's catalog description plus its
 // pretty-printed offending value(s) when present.

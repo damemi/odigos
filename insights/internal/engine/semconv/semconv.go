@@ -24,8 +24,8 @@ var (
 	RPCSystem        = string(otelsemconv.RPCSystemKey)
 	FaaSTrigger      = string(otelsemconv.FaaSTriggerKey)
 
-	// Database attributes (D7). db.operation.name is only set when the
-	// gateway's odigossqldboperationprocessor ran; the D7 scorer derives it
+	// Database attributes (D6). db.operation.name is only set when the
+	// gateway's odigossqldboperationprocessor ran; the D6 scorer derives it
 	// from db.query.text when absent.
 	DBSystem         = string(otelsemconv.DBSystemKey)
 	DBNamespace      = string(otelsemconv.DBNamespaceKey)
@@ -33,7 +33,7 @@ var (
 	DBQueryText      = string(otelsemconv.DBQueryTextKey)
 	DBCollectionName = string(otelsemconv.DBCollectionNameKey)
 
-	// HTTP payload sizes (D8). Opt-in semconv attributes; body content is an
+	// HTTP payload sizes (D7). Opt-in semconv attributes; body content is an
 	// Odigos payload-collection fallback when size attrs are absent.
 	HTTPRequestBodySize  = string(otelsemconv.HTTPRequestBodySizeKey)
 	HTTPResponseBodySize = string(otelsemconv.HTTPResponseBodySizeKey)
