@@ -20,37 +20,51 @@ const (
 	confidenceHighLive = 50
 )
 
-// FromRecommendation maps one engine view to its wire type, adding the
-// presentation fields (title, summary, confidence level and reasons) the UI
-// shows without having to know what the numbers mean.
+// FromRecommendation maps one engine view to the wire type shared by every
+// kind: the envelope (identity, scope, lifecycle, headline, confidence) is
+// filled the same way, then the fields of the recommendation's kind.
 func FromRecommendation(v engine.RecommendationView) apitypes.Recommendation {
 	rec := v.Recommendation
-	spec := fromCorrelationSpecs([]repo.CorrelationSpec{rec.Spec})[0]
-	return apitypes.Recommendation{
-		Id:              rec.ID,
-		Kind:            apitypes.RecommendationKind(rec.Kind),
-		State:           apitypes.RecommendationState(rec.State),
-		Stale:           rec.Stale,
-		Rank:            rec.Rank,
-		Scope:           apitypes.PolicyScope(rec.Scope),
-		ScopeKey:        rec.ScopeKey,
-		TransactionId:   rec.TransactionID,
-		TransactionKind: apitypes.TransactionKind(rec.TxKind),
-		Service:         rec.Service,
-		Namespace:       rec.Namespace,
-		Operation:       rec.Operation,
-		Title:           recommendationTitle(rec),
-		Summary:         recommendationSummary(rec),
-		Spec:            spec,
-		Transform:       rec.Transform,
-		Transport:       rec.Transport,
-		Confidence:      recommendationConfidence(rec),
-		Examples:        fromRecommendationExamples(rec.Examples),
-		AlreadyCovered:  v.AlreadyCovered,
-		MinedAt:         rec.MinedAt,
-		CreatedAt:       rec.CreatedAt,
-		UpdatedAt:       rec.UpdatedAt,
+	out := apitypes.Recommendation{
+		Id:        rec.ID,
+		Kind:      apitypes.RecommendationKind(rec.Kind),
+		State:     apitypes.RecommendationState(rec.State),
+		Stale:     rec.Stale,
+		Rank:      rec.Rank,
+		Scope:     apitypes.PolicyScope(rec.Scope),
+		ScopeKey:  rec.ScopeKey,
+		Namespace: rec.Namespace,
+		Service:   rec.Service,
+		MinedAt:   rec.MinedAt,
+		CreatedAt: rec.CreatedAt,
+		UpdatedAt: rec.UpdatedAt,
 	}
+	switch rec.Kind {
+	case repo.RecommendationKindServiceGuardrail:
+		fillServiceGuardrail(&out, rec)
+	default:
+		fillAttributeCorrelation(&out, v)
+	}
+	return out
+}
+
+// fillAttributeCorrelation adds the transaction, the exact rule apply would
+// add, the sample evidence and the relation's presentation text.
+func fillAttributeCorrelation(out *apitypes.Recommendation, v engine.RecommendationView) {
+	rec := v.Recommendation
+	spec := fromCorrelationSpecs([]repo.CorrelationSpec{rec.Spec})[0]
+	out.TransactionId = rec.TransactionID
+	out.TransactionKind = apitypes.TransactionKind(rec.TxKind)
+	out.Operation = rec.Operation
+	out.Title = recommendationTitle(rec)
+	out.Summary = recommendationSummary(rec)
+	out.WhyItMatters = rec.Spec.Why
+	out.Spec = &spec
+	out.Transform = rec.Transform
+	out.Transport = rec.Transport
+	out.Confidence = recommendationConfidence(rec)
+	out.Examples = fromRecommendationExamples(rec.Examples)
+	out.AlreadyCovered = v.AlreadyCovered
 }
 
 // RecommendationList wraps views in the wire list envelope.
@@ -174,7 +188,7 @@ func FromRecommendationBulkResult(r engine.RecommendationBulkResult) apitypes.Re
 func ToRecommendationApplyItems(req apitypes.RecommendationApplyRequest) []engine.RecommendationApplyItem {
 	items := make([]engine.RecommendationApplyItem, len(req.Items))
 	for i, it := range req.Items {
-		items[i] = engine.RecommendationApplyItem{ID: strings.TrimSpace(it.Id)}
+		items[i] = engine.RecommendationApplyItem{ID: strings.TrimSpace(it.Id), Rules: ToRecommendationRuleKeys(it.Rules)}
 		if it.Spec != nil {
 			spec := toCorrelationSpecs([]apitypes.CorrelationSpec{*it.Spec})[0]
 			items[i].Spec = &spec

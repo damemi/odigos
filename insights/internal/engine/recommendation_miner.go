@@ -9,18 +9,26 @@ import (
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
 )
 
-// recommendationMiner turns a promoted transaction's stored relation samples
-// into guardrail recommendations. It runs in its own goroutine: the ingest
-// path only drops a transaction id into its queue when learning finishes, and
-// a periodic sweep picks up whatever the queue missed (a replica restart, a
-// transaction promoted by another replica, samples that landed late). Every
+// recommendationMiner turns learned traffic into guardrail recommendations: a
+// promoted transaction's stored relation samples into attribute correlations,
+// and a fully-learned service's profile into a guardrail card. It runs in its
+// own goroutine: the ingest path only drops a transaction id (and its service)
+// into the queues when learning finishes, and periodic sweeps pick up whatever
+// the queues missed (a replica restart, a transaction promoted by another
+// replica, samples that landed late, a guardrail the operator edited). Every
 // replica runs a miner; the mining-run table acts as a soft claim so they do
 // not all mine the same transaction, and mining is deterministic so if two do,
 // they write the same rows.
 type recommendationMiner struct {
-	e     *Engine
-	queue chan int64
-	wake  chan struct{}
+	e        *Engine
+	queue    chan int64
+	services chan serviceRef
+	wake     chan struct{}
+}
+
+// serviceRef names one service to mine a guardrail card for.
+type serviceRef struct {
+	namespace, service string
 }
 
 const (
@@ -28,6 +36,11 @@ const (
 	// minerSweepInterval is how often the miner looks for unmined promoted
 	// transactions it was not told about.
 	minerSweepInterval = time.Minute
+	// minerServiceSweepInterval is how often open service cards are refreshed
+	// against the current guardrails and profiles. Slower than the transaction
+	// sweep: a card costs a few profile queries, and it only changes when an
+	// operator edits a guardrail or a service finishes learning.
+	minerServiceSweepInterval = 5 * time.Minute
 	// minerSweepBatch bounds how many transactions one sweep mines.
 	minerSweepBatch = 20
 	// minerClaimStale is how long another replica's in-progress claim is
@@ -41,7 +54,12 @@ const (
 )
 
 func newRecommendationMiner(e *Engine) *recommendationMiner {
-	return &recommendationMiner{e: e, queue: make(chan int64, minerQueueSize), wake: make(chan struct{}, 1)}
+	return &recommendationMiner{
+		e:        e,
+		queue:    make(chan int64, minerQueueSize),
+		services: make(chan serviceRef, minerQueueSize),
+		wake:     make(chan struct{}, 1),
+	}
 }
 
 // requestMine asks for one transaction to be mined soon. Never blocks: a full
@@ -49,6 +67,15 @@ func newRecommendationMiner(e *Engine) *recommendationMiner {
 func (m *recommendationMiner) requestMine(transactionID int64) {
 	select {
 	case m.queue <- transactionID:
+	default:
+	}
+}
+
+// requestMineService asks for one service's guardrail card to be refreshed
+// soon. Never blocks; the service sweep is the fallback.
+func (m *recommendationMiner) requestMineService(namespace, service string) {
+	select {
+	case m.services <- serviceRef{namespace: namespace, service: service}:
 	default:
 	}
 }
@@ -61,10 +88,12 @@ func (m *recommendationMiner) requestSweep() {
 	}
 }
 
-// run services the queue and the sweep ticker until ctx is cancelled.
+// run services the queues and the sweep tickers until ctx is cancelled.
 func (m *recommendationMiner) run(ctx context.Context) {
 	ticker := time.NewTicker(minerSweepInterval)
 	defer ticker.Stop()
+	serviceTicker := time.NewTicker(minerServiceSweepInterval)
+	defer serviceTicker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -77,11 +106,76 @@ func (m *recommendationMiner) run(ctx context.Context) {
 			case <-time.After(minerSettleDelay):
 			}
 			m.mine(ctx, id)
+		case ref := <-m.services:
+			// The promote flag and the automatic transaction guardrail that
+			// follow a promotion may still be in flight.
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(minerSettleDelay):
+			}
+			m.mineService(ctx, ref)
 		case <-m.wake:
 			m.sweep(ctx)
+			m.sweepServices(ctx)
 		case <-ticker.C:
 			m.sweep(ctx)
+		case <-serviceTicker.C:
+			m.sweepServices(ctx)
 		}
+	}
+}
+
+// sweepServices refreshes the guardrail card of every service that could have
+// one: services whose card is open (a guardrail edit may have changed what is
+// left to enforce) and services without a card yet. Applied and dismissed
+// cards are the operator's decision and are left alone.
+func (m *recommendationMiner) sweepServices(ctx context.Context) {
+	services, err := m.e.repo.ListServiceStats(ctx, 10000)
+	if err != nil {
+		m.e.warn("list services for guardrail recommendations", err)
+		return
+	}
+	decided, err := m.e.repo.ListRecommendations(ctx, repo.RecommendationFilter{Kind: repo.RecommendationKindServiceGuardrail, IncludeStale: true})
+	if err != nil {
+		m.e.warn("list service guardrail recommendations", err)
+		return
+	}
+	settled := map[string]struct{}{}
+	for _, rec := range decided {
+		if rec.State != repo.RecommendationOpen {
+			settled[rec.ID] = struct{}{}
+		}
+	}
+	for _, s := range services {
+		if ctx.Err() != nil {
+			return
+		}
+		if _, ok := settled[repo.ServiceGuardrailRecommendationID(s.Namespace, s.Service)]; ok {
+			continue
+		}
+		m.mineService(ctx, serviceRef{namespace: s.Namespace, service: s.Service})
+	}
+}
+
+// mineService rebuilds one service's guardrail card and refreshes the shadow
+// set so its lists are checked against live traffic right away.
+func (m *recommendationMiner) mineService(ctx context.Context, ref serviceRef) {
+	ctx, cancel := context.WithTimeout(ctx, minerRunTimeout)
+	defer cancel()
+	start := time.Now()
+	changed, err := m.e.refreshServiceGuardrailRecommendation(ctx, ref.namespace, ref.service)
+	if err != nil {
+		m.e.warn(fmt.Sprintf("mine guardrail recommendation for %s/%s", ref.namespace, ref.service), err)
+		metrics.ObserveRecommendationMining("error", time.Since(start).Seconds(), 0)
+		return
+	}
+	if !changed {
+		return
+	}
+	metrics.ObserveRecommendationMining("ok", time.Since(start).Seconds(), 1)
+	if err := m.e.ReloadGuardrailConfig(ctx); err != nil {
+		m.e.warn("reload guardrail config after mining", err)
 	}
 }
 

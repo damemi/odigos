@@ -47,6 +47,7 @@ type Admin interface {
 	RevertRecommendations(ctx context.Context, ids []string) engine.RecommendationBulkResult
 	PreviewRecommendation(ctx context.Context, transactionID int64, spec repo.CorrelationSpec) (engine.RecommendationPreview, error)
 	RecomputeRecommendations(ctx context.Context, transactionID int64) error
+	RecomputeServiceGuardrailRecommendation(ctx context.Context, namespace, service string) error
 }
 
 // SetAdmin wires the engine-backed write actions. Called once at startup after

@@ -131,17 +131,30 @@ func newShadowBuffer() *shadowBuffer {
 	return &shadowBuffer{agg: map[string]*repo.RecommendationLiveDelta{}}
 }
 
-// add records one live trace on which recommendation id held or broke.
+// add records one live trace on which a transaction recommendation held or broke.
 func (b *shadowBuffer) add(id string, transactionID int64, held bool, at time.Time) {
+	b.record(id, repo.RecommendationLiveDelta{
+		ID: id, Scope: repo.ScopeTransaction, ScopeKey: repo.TransactionScopeKey(transactionID),
+		TransactionID: transactionID,
+	}, held, at)
+}
+
+// addRule records one live trace on which a proposed rule of a service
+// guardrail card held or broke; each rule keeps its own counter.
+func (b *shadowBuffer) addRule(id, serviceKey string, rule repo.RuleKey, held bool, at time.Time) {
+	b.record(id+"\x00"+string(rule), repo.RecommendationLiveDelta{
+		ID: id, Scope: repo.ScopeService, ScopeKey: serviceKey, Rule: rule,
+	}, held, at)
+}
+
+func (b *shadowBuffer) record(key string, init repo.RecommendationLiveDelta, held bool, at time.Time) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	d := b.agg[id]
+	d := b.agg[key]
 	if d == nil {
-		d = &repo.RecommendationLiveDelta{
-			ID: id, Scope: repo.ScopeTransaction, ScopeKey: repo.TransactionScopeKey(transactionID),
-			TransactionID: transactionID, FirstAt: at,
-		}
-		b.agg[id] = d
+		init.FirstAt = at
+		d = &init
+		b.agg[key] = d
 	}
 	if held {
 		d.Held++

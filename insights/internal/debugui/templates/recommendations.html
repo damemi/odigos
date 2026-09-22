@@ -40,6 +40,20 @@
   .rec-flag-stale { background: #eef0f3; color: #57606a; }
   .rec-flag-covered { background: #ece9fb; color: #5a45c8; }
   .rec-flag-transport { background: #e6f1f8; color: #2b6a99; }
+  .rec-flag-guardrail { background: #e6f1f8; color: #2b6a99; }
+  /* Service guardrail card: the service's own recommendation, shown above its
+     transactions. One row per allowlist rule with the list apply would write. */
+  .rec-guardrail { margin: 0 0 8px; border: 1px solid var(--border); border-left: 3px solid #2b6a99; border-radius: 6px; background: #fff; }
+  .rec-guardrail-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .rec-guardrail-head form { margin: 0 0 0 auto; display: inline-flex; gap: 6px; }
+  .rec-guardrail table { width: 100%; }
+  .rec-guardrail td.rec-rule-name { white-space: nowrap; width: 200px; }
+  .rec-guardrail td.rec-rule-name .hint { display: block; margin: 2px 0 0; font-size: 11px; }
+  .rec-guardrail-items { display: flex; flex-wrap: wrap; gap: 4px; max-height: 84px; overflow-y: auto; }
+  .rec-guardrail-items code { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--row); border: 1px solid var(--border); }
+  .rec-guardrail-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 12px; border-top: 1px solid var(--border); }
+  .rec-guardrail-foot .hint { margin: 0 0 0 auto; }
+  .rec-guardrail.resolved { opacity: .6; }
   table.rec-ex { width: auto; border: none; background: transparent; font-size: 11px; margin-top: 4px; }
   table.rec-ex td, table.rec-ex th { padding: 2px 10px 2px 0; border: none; background: transparent; }
   table.rec-ex th { font-size: 10px; }
@@ -71,7 +85,7 @@
   <h2>Recommendations</h2>
   <span class="hint page-head-right" style="margin:0;">rules Insights mined and suggests - nothing is enforced until you apply it</span>
 </div>
-<p class="hint">Mined from the traces a transaction kept while learning: two span attributes that always agreed. Apply one and a trace where they differ raises a finding. Hover the confidence for the evidence; click the sample count to see the traces it was mined from.</p>
+<p class="hint">Two kinds, same actions: <em>apply</em> enforces as mined, <em>edit &amp; apply</em> lets you adjust first, <em>dismiss</em> rejects. <strong>Service guardrail</strong>: a service finished learning, so the callers, callees, egress and transactions it was seen with can become its guardrail; edit to leave a part out. <strong>Attribute correlation</strong>: two span attributes that always agreed on a transaction; apply and a trace where they differ raises a finding. Hover a confidence pill for the evidence.</p>
 
 <form method="GET" action="/debug/recommendations" class="rec-filters">
   <input type="hidden" name="tab" value="{{.Tab}}">
@@ -94,7 +108,7 @@
   </label>
   <label class="tip" data-tip="A stale recommendation is one the latest mining run no longer produced - the relation stopped holding or its samples aged out. Applied rules keep their provenance either way."><input type="checkbox" name="include_stale" value="1" {{if .IncludeStale}}checked{{end}} onchange="this.form.submit()"> include stale</label>
   <span class="spacer"></span>
-  <button type="submit" formaction="/debug/recommendations/recompute" formmethod="POST" class="btn tip tip-end" data-tip="Re-run the miner now on every promoted transaction whose stored samples are not mined yet (or gained samples). Runs in the background; refresh afterwards." onclick="return confirm('Re-mine every promoted transaction with unmined samples? This runs in the background.');">
+  <button type="submit" formaction="/debug/recommendations/recompute" formmethod="POST" class="btn tip tip-end" data-tip="Re-run the miner now: every promoted transaction whose stored samples are not mined yet, and every service whose guardrail card may have changed. Runs in the background; refresh afterwards." onclick="return confirm('Re-mine every promoted transaction and service? This runs in the background.');">
     recompute all
   </button>
 </form>
@@ -125,10 +139,12 @@
     <span class="svc-caret">▸</span>
     <span class="svc-title">{{$card.Service}}</span>
     {{if $card.Namespace}}<span class="svc-ns">{{$card.Namespace}}</span>{{end}}
+    {{if $card.Guardrail}}<span class="rec-flag rec-flag-guardrail tip" data-tip="{{$card.Guardrail.Title}}">service guardrail</span>{{end}}
     {{if $card.HighCount}}<span class="conf-pill conf-high">{{$card.HighCount}} high confidence</span>{{end}}
-    <span class="svc-meta">{{$card.Count}} recommendation{{if ne $card.Count 1}}s{{end}} · {{len $card.Transactions}} transaction{{if ne (len $card.Transactions) 1}}s{{end}}</span>
+    <span class="svc-meta">{{$card.Count}} recommendation{{if ne $card.Count 1}}s{{end}}{{if $card.Transactions}} · {{len $card.Transactions}} transaction{{if ne (len $card.Transactions) 1}}s{{end}}{{end}}</span>
   </summary>
   <div class="svc-card-body">
+    {{if $card.Guardrail}}{{template "recGuardrail" (dict "G" $card.Guardrail "Tab" $tab "Self" $self)}}{{end}}
     {{range $txn := $card.Transactions}}
     <details class="txn" data-key="rec-txn:{{$txn.TransactionID}}">
       <summary class="txn-head">
@@ -222,6 +238,41 @@
 {{/* Edit dialogs live outside the tables so a <form> inside a <dialog> inside a
      <td> does not fight the row's own forms. One per open recommendation. */}}
 {{if eq $tab "open"}}
+{{range $card := .Cards}}{{if $card.Guardrail}}{{$g := $card.Guardrail}}
+<dialog class="rec-dlg" id="rec-edit-{{$g.Id}}">
+  <div class="trace-dlg-header">
+    <div>
+      <div class="trace-dlg-title"><strong>Edit &amp; apply</strong> · {{$g.Title}}</div>
+      <div class="trace-dlg-meta">{{$card.Service}} · untick what you don't want this guardrail to cover; the lists are what was learned and can be edited later under Settings → Guardrails</div>
+    </div>
+    <button type="button" class="trace-dlg-close" onclick="this.closest('dialog').close()" aria-label="Close">×</button>
+  </div>
+  <div class="rec-dlg-body">
+    <form class="rec-edit-form" method="POST" action="/debug/recommendations/apply">
+      <input type="hidden" name="id" value="{{$g.Id}}">
+      <input type="hidden" name="edited_rules" value="1">
+      <input type="hidden" name="redirect" value="{{$self}}">
+      <table>
+        <thead><tr><th class="chk-col"></th><th>Covers</th><th>Allowlist apply writes</th></tr></thead>
+        <tbody>
+          {{range $r := $g.Rules}}
+          <tr>
+            <td class="chk-col"><input type="checkbox" class="rec-rule-chk" name="rule" value="{{$r.Rule}}" id="rec-edit-{{$g.Id}}-{{$r.Rule}}" checked></td>
+            <td class="rec-rule-name"><label for="rec-edit-{{$g.Id}}-{{$r.Rule}}"><strong class="tip" data-tip="{{$r.Description}}">{{$r.Label}}</strong></label> <span class="hint">{{len $r.Items}} item{{if ne (len $r.Items) 1}}s{{end}}{{if $r.LiveViolated}} · <span style="color:var(--warn);">{{$r.LiveViolated}} live ✗</span>{{end}}</span></td>
+            <td>{{if $r.Items}}<div class="rec-guardrail-items">{{range $r.Items}}<code>{{identityDisplay .}}</code>{{end}}</div>{{else}}<span class="hint">none observed - enforcing forbids any</span>{{end}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+      <div class="rec-dlg-actions">
+        <span class="spacer"></span>
+        <button type="button" class="btn" onclick="this.closest('dialog').close()">cancel</button>
+        <button type="submit" class="btn btn-primary" data-needs-rule="1" data-label="✓ applied">apply guardrail</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+{{end}}{{end}}
 {{range $card := .Cards}}{{range $txn := $card.Transactions}}{{range $r := $txn.Items}}
 <dialog class="rec-dlg" id="rec-edit-{{$r.Id}}">
   <div class="trace-dlg-header">
@@ -290,7 +341,7 @@
   {{else if eq .Tab "dismissed"}}Nothing dismissed.
   {{else if .TransactionID}}No open recommendations for this transaction. Recommendations appear once it has finished learning and its stored samples were mined - use <em>recompute</em> above to mine now, or lower the thresholds in Settings → System.
   {{else if or .Kind .Namespace .Service}}No open recommendations match these filters.
-  {{else}}No open recommendations yet. They appear after a transaction finishes learning: Insights keeps sample traces while it learns and mines them for attribute pairs that always agree. Transactions still learning, or whose attributes never correlate, produce none.{{end}}
+  {{else}}No open recommendations yet. They appear after a service finishes learning: its observed callers, callees, egress and transactions become a service guardrail card, and the sample traces kept while learning are mined for attribute pairs that always agree. Services still learning produce none.{{end}}
 </div>
 {{end}}
 
@@ -335,17 +386,16 @@
       });
   }
 
-  function markResolved(tr, label) {
-    if (!tr) return;
-    tr.classList.add('resolved');
-    var actions = tr.querySelector('.rec-actions');
+  // Works for a correlation row (<tr>) and for a service guardrail block.
+  function markResolved(el, label) {
+    if (!el) return;
+    el.classList.add('resolved');
+    var actions = el.querySelector('.rec-actions');
     if (actions) actions.innerHTML = '<span class="st-badge st-done">' + (label || 'done') + '</span>';
-    var chk = tr.querySelector('.rec-chk');
-    if (chk) { chk.checked = false; chk.disabled = true; }
+    el.querySelectorAll('.rec-chk').forEach(function (chk) { chk.disabled = true; });
   }
 
-  // Row actions and the edit dialog's apply both post the same way; the
-  // dialog form resolves the row it belongs to by recommendation id.
+  // Row actions and the edit dialogs post the same way for every kind.
   document.addEventListener('submit', function (e) {
     var form = e.target;
     if (!form.classList) return;
@@ -353,16 +403,23 @@
     var isEdit = form.classList.contains('rec-edit-form');
     if (!isRow && !isEdit) return;
     e.preventDefault();
-    if (form.dataset.confirm && !confirm(form.dataset.confirm)) return;
-    var btn = form.querySelector('[type=submit]');
-    if (btn) btn.disabled = true;
-    postAction(form.action, new FormData(form))
+    var btn = e.submitter || form.querySelector('[type=submit]');
+    var confirmText = (btn && btn.dataset.confirm) || form.dataset.confirm;
+    if (confirmText && !confirm(confirmText)) return;
+    var action = (btn && btn.getAttribute('formaction')) || form.action;
+    var label = (btn && btn.dataset.label) || form.dataset.label || '✓ applied';
+    if (btn && btn.dataset.needsRule && form.querySelectorAll('.rec-rule-chk:checked').length === 0) {
+      alert('Keep at least one thing for the guardrail to cover, or dismiss the recommendation instead.');
+      return;
+    }
+    form.querySelectorAll('[type=submit]').forEach(function (b) { b.disabled = true; });
+    postAction(action, new FormData(form))
       .then(function () {
         var id = form.querySelector('[name=id]').value;
-        markResolved(document.querySelector('tr[data-rec="' + id + '"]'), form.dataset.label || '✓ applied');
+        markResolved(document.querySelector('[data-rec="' + id + '"]'), label);
         var dlg = form.closest('dialog'); if (dlg) dlg.close();
       })
-      .catch(function (err) { if (btn) btn.disabled = false; alert('Action failed: ' + err.message); });
+      .catch(function (err) { form.querySelectorAll('[type=submit]').forEach(function (b) { b.disabled = false; }); alert('Action failed: ' + err.message); });
   });
 
   // Preview: post the edited spec, drop the returned fragment into the dialog.
@@ -457,6 +514,92 @@
 {{range .Examples}}<tr><td><code>{{.LeftValue}}</code></td><td><code>{{.RightValue}}</code></td><td><code>{{.TraceId}}</code></td></tr>{{end}}
 </tbody></table>
 {{end}}
+{{end}}
+
+{{/* The service guardrail recommendation: one guardrail, shown as what it
+     covers, with the same actions as a correlation row. Apply enforces it as
+     shown; edit & apply opens a dialog to leave parts out. */}}
+{{define "recGuardrail"}}{{$g := .G}}{{$tab := .Tab}}
+    <div class="rec-guardrail" data-rec="{{$g.Id}}">
+      <div class="rec-guardrail-head">
+        <strong>{{$g.Title}}</strong>
+        <span class="conf-pill conf-{{$g.Confidence.Level}} tip" data-tip="{{$g.Summary}} {{range $i, $reason := $g.Confidence.Reasons}}{{if $i}} · {{end}}{{$reason}}{{end}}">{{$g.Confidence.Level}}</span>
+        {{if $g.Stale}}<span class="rec-flag rec-flag-stale tip" data-tip="The latest run found nothing left for this guardrail to cover: everything is already enforced or turned off, or the service dropped out of the inventory.">nothing left to cover</span>{{end}}
+        <span class="svc-meta tip" data-tip="{{$g.WhyItMatters}}">{{$g.Confidence.SampleCount}} promoted transaction{{if ne $g.Confidence.SampleCount 1}}s{{end}} · why this matters</span>
+        <form method="POST" action="/debug/recommendations/recompute">
+          <input type="hidden" name="namespace" value="{{$g.Namespace}}">
+          <input type="hidden" name="service" value="{{$g.Service}}">
+          <input type="hidden" name="redirect" value="{{.Self}}">
+          <button type="submit" class="btn tip tip-end" data-tip="Rebuild this card from the service's current guardrail and learned profile (background)." style="font-size:12px;">recompute</button>
+        </form>
+      </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Covers</th><th>Allowlist apply writes</th><th>Confidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range $r := $g.Rules}}
+            <tr>
+              <td class="rec-rule-name">
+                <strong class="tip" data-tip="{{$r.Description}}">{{$r.Label}}</strong>
+                {{if eq $tab "applied"}}{{if hasString $g.AppliedRules $r.Rule}}<span class="rec-flag rec-flag-covered">enforced</span>{{else}}<span class="rec-flag rec-flag-stale tip" data-tip="Left out in edit &amp; apply. Enforce it from Settings → Guardrails.">left out</span>{{end}}{{end}}
+                <span class="hint">{{len $r.Items}} item{{if ne (len $r.Items) 1}}s{{end}}</span>
+              </td>
+              <td>
+                {{if $r.Items}}
+                <div class="rec-guardrail-items">{{range $r.Items}}<code>{{identityDisplay .}}</code>{{end}}</div>
+                {{else}}
+                <span class="hint tip" data-tip="Nothing of this kind was seen while learning. Enforcing an empty list forbids any - which is the point if the service is not supposed to have one.">none observed - enforcing forbids any</span>
+                {{end}}
+              </td>
+              <td>
+                <div class="conf">
+                  <span class="conf-pill conf-{{$r.Confidence}} tip" data-tip="How live traffic held against this list while the card was open. Broken means real traffic fell outside it - look before enforcing.">{{$r.Confidence}}</span>
+                  {{if or $r.LiveChecked $r.LiveViolated}}
+                  <span class="conf-detail tip" data-tip="Live traces checked silently since {{$r.LiveSince.Format "2006-01-02 15:04"}}; last {{$r.LiveLast.Format "15:04:05"}}.">live <b>{{$r.LiveChecked}}</b> checked{{if $r.LiveViolated}} · <b style="color:var(--warn);">{{$r.LiveViolated}}</b> ✗{{else}} · none outside{{end}}</span>
+                  {{else}}
+                  <span class="conf-detail tip" data-tip="Every live trace of this service is checked against the list silently; counts appear once traffic arrives.">live: none yet</span>
+                  {{end}}
+                </div>
+              </td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+        <div class="rec-guardrail-foot">
+          <div class="rec-actions">
+            {{if eq $tab "open"}}
+            <form class="js-resolve" method="POST" action="/debug/recommendations/apply" data-confirm="Put this guardrail on {{$g.Service}}? It is enforced immediately: anything outside the lists shown raises a finding. Lists already enforced by hand or automatically are extended, never replaced." data-label="✓ applied">
+              <input type="hidden" name="id" value="{{$g.Id}}">
+              <input type="hidden" name="redirect" value="{{.Self}}">
+              <button type="submit" class="btn btn-primary tip tip-end" data-tip="Enforce the guardrail as shown.">apply</button>
+            </form>
+            <button type="button" class="btn tip tip-end" data-tip="Trim what the guardrail covers, then apply." onclick="document.getElementById('rec-edit-{{$g.Id}}').showModal()">edit &amp; apply</button>
+            <form class="js-resolve" method="POST" action="/debug/recommendations/dismiss" data-confirm="Dismiss this recommendation? It moves to the Dismissed tab and is not rebuilt until you restore it." data-label="dismissed">
+              <input type="hidden" name="id" value="{{$g.Id}}">
+              <input type="hidden" name="redirect" value="{{.Self}}">
+              <button type="submit" class="btn tip tip-end" data-tip="Reject: hide from Open, sticky across re-mining.">dismiss</button>
+            </form>
+            {{else if eq $tab "applied"}}
+            <a class="btn tip tip-end" data-tip="Open the guardrail this recommendation put on {{$g.Service}}." href="/debug/settings/guardrails?namespace={{$g.Namespace}}&amp;service={{$g.Service}}">view guardrail</a>
+            <form class="js-resolve" method="POST" action="/debug/recommendations/revert" data-confirm="Take this guardrail off {{$g.Service}}? Anything you edited on it since stays as it is. The recommendation returns to Open." data-label="removed">
+              <input type="hidden" name="id" value="{{$g.Id}}">
+              <input type="hidden" name="redirect" value="{{.Self}}">
+              <button type="submit" class="btn btn-warn tip tip-end" data-tip="Undo what this recommendation enforced and reopen it.">remove from guardrail</button>
+            </form>
+            {{else}}
+            <form class="js-resolve" method="POST" action="/debug/recommendations/restore" data-label="restored">
+              <input type="hidden" name="id" value="{{$g.Id}}">
+              <input type="hidden" name="redirect" value="{{.Self}}">
+              <button type="submit" class="btn tip tip-end" data-tip="Move back to the Open tab; live checking resumes.">restore</button>
+            </form>
+            {{end}}
+          </div>
+          <span class="hint">mined {{$g.CreatedAt.Format "2006-01-02 15:04"}} · {{if eq $tab "applied"}}applied{{else if eq $tab "dismissed"}}dismissed{{else}}updated{{end}} {{$g.UpdatedAt.Format "2006-01-02 15:04"}}</span>
+        </div>
+    </div>
 {{end}}
 
 {{/* One recommendation row. */}}

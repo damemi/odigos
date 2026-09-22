@@ -27,7 +27,7 @@ func guardrailConfigFrom(guardrails ...repo.ServiceGuardrail) *GuardrailConfig {
 		}
 		idx.Put(g.Scope, g.ScopeKey, g)
 	}
-	return newGuardrailConfig(idx, byTxn, nil)
+	return newGuardrailConfig(idx, byTxn, nil, nil)
 }
 
 // mkCallTrace builds a two-service trace: callerSvc's SERVER root calls into

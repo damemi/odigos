@@ -117,7 +117,7 @@ func (a *API) previewRecommendation(c *gin.Context) {
 }
 
 // recomputeRecommendations is POST /api/v1/recommendations/recompute. The body
-// is optional; an empty one sweeps every promoted transaction.
+// is optional; an empty one sweeps every promoted transaction and service.
 func (a *API) recomputeRecommendations(c *gin.Context) {
 	if _, ok := a.requireAdmin(c); !ok {
 		return
@@ -129,7 +129,7 @@ func (a *API) recomputeRecommendations(c *gin.Context) {
 			return
 		}
 	}
-	if err := a.RecomputeRecommendations(c.Request.Context(), req.TransactionId); err != nil {
+	if err := a.RecomputeRecommendations(c.Request.Context(), req); err != nil {
 		writeAPIError(c, err)
 		return
 	}

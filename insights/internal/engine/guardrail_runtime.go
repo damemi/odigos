@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
 )
 
 type guardrailRuntime struct {
@@ -54,15 +55,60 @@ func (g *guardrailRuntime) evaluate(ctx context.Context, t *Trace, tx repo.Trans
 	serviceKey := repo.ServiceScopeKey(tx.Namespace, tx.Service)
 	now := g.clock()
 	inventoryEpoch := system.settings.TransactionInventoryEpoch
-	if guardrail, ok := g.config.Load().Resolve(tx.ID, serviceKey); ok {
+	cfg := g.config.Load()
+	if guardrail, ok := cfg.Resolve(tx.ID, serviceKey); ok {
 		for _, violation := range guardrailViolations(t, tx, guardrail, g.inMeshServices(tx.Namespace), system.identityFingerprint) {
 			g.buf.add(repo.ScopeService, serviceKey, violation.rule, violation.item, violation.score, t.TraceID, now, inventoryEpoch)
 			g.captureEvidence(ctx, full, tx, serviceKey, violation.rule, violation.item)
 		}
 	}
+	g.shadowEvaluateService(ctx, cfg, t, tx, full, serviceKey, system.identityFingerprint, now)
 	// Transaction-scoped guardrails are additive and independent of any service
 	// allowlist, so they run even when this transaction has no service guardrail.
 	g.evaluateTransactionGuardrail(ctx, tx, full, serviceKey, now, inventoryEpoch)
+}
+
+// shadowEvaluateService checks the service's open guardrail card - the
+// allowlists Insights proposes to enforce - against this live trace, one
+// counter per proposed rule. Nothing fires: the counts tell the operator how
+// each list would have fared before turning it on. The common case (no open
+// card) is one map miss. One counter-example trace per rule is kept.
+func (g *guardrailRuntime) shadowEvaluateService(ctx context.Context, cfg *GuardrailConfig, t *Trace, tx repo.Transaction, full *Trace, serviceKey, identityFingerprint string, now time.Time) {
+	card, ok := cfg.shadowService(serviceKey)
+	if !ok {
+		return
+	}
+	known := g.inMeshServices(tx.Namespace)
+	for _, rule := range card.rules {
+		var offending []string
+		switch rule {
+		case risk.RuleAllowedCallers:
+			// External ingress has no in-mesh caller to check; counting it
+			// would inflate confidence with traces the rule never looks at.
+			if t.CallerService == "" {
+				continue
+			}
+			offending = forbiddenCallers(t, card.guardrail)
+		case risk.RuleAllowedCallees:
+			offending = forbiddenCallees(t, card.guardrail)
+		case risk.RuleAllowedEgress:
+			offending = forbiddenEgress(t, card.guardrail, known)
+		case risk.RuleAllowedTransactions:
+			// Skipped (not counted) while the stored list was built under a
+			// different identity scheme - the same gate enforcement uses.
+			if card.guardrail.RuleFingerprints[rule] != identityFingerprint {
+				continue
+			}
+			offending = forbiddenTransactions(tx, card.guardrail, identityFingerprint)
+		default:
+			continue
+		}
+		held := len(offending) == 0
+		g.shadow.addRule(card.id, serviceKey, rule, held, now)
+		if !held && full != nil {
+			g.keep(ctx, full, tx, repo.RecommendationRuleShadowReason(card.id, rule), 1, nil)
+		}
+	}
 }
 
 // evaluateTransactionGuardrail runs the transaction-scoped guardrail (if any)

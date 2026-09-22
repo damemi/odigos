@@ -316,13 +316,16 @@ func (e RecommendationConfidenceLevel) Valid() bool {
 
 // Defines values for RecommendationKind.
 const (
-	AttributeCorrelation RecommendationKind = "attribute_correlation"
+	RecommendationKindAttributeCorrelation RecommendationKind = "attribute_correlation"
+	RecommendationKindServiceGuardrail     RecommendationKind = "service_guardrail"
 )
 
 // Valid indicates whether the value is a known member of the RecommendationKind enum.
 func (e RecommendationKind) Valid() bool {
 	switch e {
-	case AttributeCorrelation:
+	case RecommendationKindAttributeCorrelation:
+		return true
+	case RecommendationKindServiceGuardrail:
 		return true
 	default:
 		return false
@@ -1247,64 +1250,79 @@ type PromoteResult struct {
 	TransactionId int64          `json:"transaction_id"`
 }
 
-// Recommendation defines model for Recommendation.
+// Recommendation One suggestion of any `kind`. The envelope (identity, scope, lifecycle, headline, confidence) is the same for every kind so a screen can list, filter and act on them together; the fields of one kind are absent on the others. Switch on `kind` to read them.
 type Recommendation struct {
-	// AlreadyCovered The transaction's guardrail already has a rule on the same two attributes (e.g. added by hand). Apply would duplicate it.
-	AlreadyCovered bool `json:"already_covered"`
+	// AlreadyCovered `attribute_correlation`: the transaction's guardrail already has a rule on the same two attributes (e.g. added by hand). Apply would replace it.
+	AlreadyCovered bool `json:"already_covered,omitempty"`
 
-	// Confidence Why the engine believes the relation. Sample stats come from the stored relation samples the miner read; live counters come from shadow evaluation of the open recommendation against real traffic and keep growing until it is applied or dismissed.
+	// AppliedRules `service_guardrail`: rule keys an apply turned on. Set while `state` is `applied`; rules listed but not here were deselected by the operator.
+	AppliedRules []string `json:"applied_rules,omitempty"`
+
+	// Confidence Why the engine believes the recommendation. `level` and `reasons` are render-ready for every kind. Sample stats come from what the miner read; live counters come from checking the open recommendation silently against real traffic and keep growing until it is applied or dismissed. For `service_guardrail` the live counters are summed over the proposed rules; each rule carries its own on `rules[]`.
 	Confidence RecommendationConfidence `json:"confidence"`
 	CreatedAt  time.Time                `json:"created_at"`
-	Examples   []RecommendationExample  `json:"examples"`
-	Id         string                   `json:"id"`
 
-	// Kind The guardrail rule type a recommendation would create.
+	// Examples `attribute_correlation`: up to three stored samples the relation held on.
+	Examples []RecommendationExample `json:"examples,omitempty"`
+	Id       string                  `json:"id"`
+
+	// Kind What apply would write. `attribute_correlation`: one cross-span rule on a transaction guardrail. `service_guardrail`: a service's allowlist rules, pre-filled from what was learned.
 	Kind      RecommendationKind `json:"kind"`
 	MinedAt   time.Time          `json:"mined_at"`
 	Namespace string             `json:"namespace"`
-	Operation string             `json:"operation"`
+
+	// Operation `attribute_correlation`: that transaction's operation.
+	Operation string `json:"operation,omitempty"`
 
 	// Rank Position among the scope's recommendations, 0 = strongest.
 	Rank int `json:"rank"`
 
-	// Scope The guardrail the recommendation would extend, with the same meaning as a guardrail's scope/scope_key. attribute_correlation is always transaction-scoped; future kinds may target a service or global.
-	Scope    PolicyScope `json:"scope,omitempty"`
-	ScopeKey string      `json:"scope_key,omitempty"`
+	// Rules `service_guardrail`: the allowlist rules proposed for enforcement, in catalog order. Only rules the service does not enforce yet are listed - a rule already enforced by an operator or by the automatic transaction guardrail, or switched off, is not - so applying extends the guardrail and never overrides an existing rule.
+	Rules []RecommendationRule `json:"rules,omitempty"`
+
+	// Scope The guardrail apply would extend, with the same meaning as a guardrail's scope/scope_key: `transaction` for `attribute_correlation`, `service` for `service_guardrail`.
+	Scope    PolicyScope `json:"scope"`
+	ScopeKey string      `json:"scope_key"`
 	Service  string      `json:"service"`
 
-	// Spec The exact rule `apply` adds to the transaction guardrail.
-	Spec CorrelationSpec `json:"spec"`
+	// Spec `attribute_correlation`: the exact rule `apply` adds to the transaction guardrail.
+	Spec *CorrelationSpec `json:"spec,omitempty"`
 
-	// Stale The latest mining run no longer produced this row.
+	// Stale The latest mining run no longer produced this recommendation: the relation stopped holding or its samples aged out, or a service has nothing left to enforce.
 	Stale bool `json:"stale"`
 
 	// State Lifecycle bucket. `open` awaits a decision, `applied` became a guardrail rule, `dismissed` was rejected (sticky across re-mining).
 	State RecommendationState `json:"state"`
 
-	// Summary One sentence explaining the relation in plain words.
+	// Summary One or two sentences on what was learned and what apply does.
 	Summary string `json:"summary"`
 
-	// Title One-line headline, e.g. "resolvePrincipal returns the account getAccount reads".
+	// Title One-line headline, e.g. "resolvePrincipal return.value matches getAccount arg.0" or "Lock down account-service - 3 rules ready".
 	Title string `json:"title"`
 
-	// TransactionId Resolved id for transaction scope, 0 otherwise.
-	TransactionId   int64           `json:"transaction_id"`
-	TransactionKind TransactionKind `json:"transaction_kind"`
+	// TransactionId `attribute_correlation`: the transaction the rule belongs to.
+	TransactionId int64 `json:"transaction_id,omitempty"`
 
-	// Transform How the two values relate: `exact` (identical), `core` (identical after a constant prefix/suffix), `digits` (same numeric id), `contains` (one value is embedded in the other).
-	Transform string `json:"transform"`
+	// TransactionKind `attribute_correlation`: that transaction's kind.
+	TransactionKind TransactionKind `json:"transaction_kind,omitempty"`
 
-	// Transport Guaranteed by the transport rather than by business logic: the same field on both ends of one hop (a Kafka message key on producer and consumer). A break means in-flight tampering or misattribution, so it is mined at `low` severity and ranked after every business relation. Shown as a tag on the row.
-	Transport bool      `json:"transport"`
+	// Transform `attribute_correlation`: how the two values relate - `exact` (identical), `core` (identical after a constant prefix/suffix), `digits` (same numeric id), `contains` (one value is embedded in the other).
+	Transform string `json:"transform,omitempty"`
+
+	// Transport `attribute_correlation`: guaranteed by the transport rather than by business logic - the same field on both ends of one hop (a Kafka message key on producer and consumer). A break means in-flight tampering or misattribution, so it is mined at `low` severity and ranked after every business relation. Shown as a tag on the row.
+	Transport bool      `json:"transport,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
 
-	// WhyItMatters The security story - what breaking this relation would mean.
+	// WhyItMatters The security story - what enforcing buys.
 	WhyItMatters string `json:"why_it_matters"`
 }
 
 // RecommendationApplyItem defines model for RecommendationApplyItem.
 type RecommendationApplyItem struct {
 	Id string `json:"id"`
+
+	// Rules `service_guardrail` only: the rule keys to enable, a subset of the recommendation's `rules`. Omitted or empty enables every rule. Ignored for other kinds.
+	Rules []string `json:"rules,omitempty"`
 
 	// Spec Optional edited rule. Left/right service, span and attr must match the recommendation; name, severity, why, relation and extract regexes may differ.
 	Spec *CorrelationSpec `json:"spec,omitempty"`
@@ -1322,19 +1340,23 @@ type RecommendationBulkResult struct {
 	Failed int                       `json:"failed"`
 }
 
-// RecommendationConfidence Why the engine believes the relation. Sample stats come from the stored relation samples the miner read; live counters come from shadow evaluation of the open recommendation against real traffic and keep growing until it is applied or dismissed.
+// RecommendationConfidence Why the engine believes the recommendation. `level` and `reasons` are render-ready for every kind. Sample stats come from what the miner read; live counters come from checking the open recommendation silently against real traffic and keep growing until it is applied or dismissed. For `service_guardrail` the live counters are summed over the proposed rules; each rule carries its own on `rules[]`.
 type RecommendationConfidence struct {
-	// Distinct Distinct left-hand values seen agreeing.
-	Distinct int `json:"distinct"`
+	// Distinct `attribute_correlation` only: distinct left-hand values seen agreeing.
+	Distinct int `json:"distinct,omitempty"`
 
-	// Held Of those, how many satisfied the relation.
-	Held int `json:"held"`
+	// Held `attribute_correlation` only: of those, how many satisfied the relation.
+	Held int `json:"held,omitempty"`
 
-	// HoldRatio held / observed on stored samples (0..1).
-	HoldRatio  float64                       `json:"hold_ratio"`
-	Level      RecommendationConfidenceLevel `json:"level"`
-	LiveBroken int64                         `json:"live_broken"`
-	LiveHeld   int64                         `json:"live_held"`
+	// HoldRatio `attribute_correlation` only: held / observed on stored samples (0..1).
+	HoldRatio float64                       `json:"hold_ratio,omitempty"`
+	Level     RecommendationConfidenceLevel `json:"level"`
+
+	// LiveBroken Live traces on which it broke. Non-zero means real traffic already disagrees with what was learned - look before applying.
+	LiveBroken int64 `json:"live_broken"`
+
+	// LiveHeld Live traces on which the recommendation held.
+	LiveHeld int64 `json:"live_held"`
 
 	// LiveLast Omitted until the first live trace was evaluated.
 	LiveLast time.Time `json:"live_last,omitempty"`
@@ -1342,13 +1364,13 @@ type RecommendationConfidence struct {
 	// LiveSince Omitted until the first live trace was evaluated.
 	LiveSince time.Time `json:"live_since,omitempty"`
 
-	// Observed Stored samples where both values were present.
-	Observed int `json:"observed"`
+	// Observed `attribute_correlation` only: stored samples where both values were present.
+	Observed int `json:"observed,omitempty"`
 
 	// Reasons Human-readable evidence lines, e.g. "Held on 50 of 50 samples".
 	Reasons []string `json:"reasons"`
 
-	// SampleCount Relation samples the mining run looked at.
+	// SampleCount What was mined: stored relation samples for `attribute_correlation`, promoted transactions the profile was learned from for `service_guardrail`.
 	SampleCount int `json:"sample_count"`
 }
 
@@ -1374,7 +1396,7 @@ type RecommendationItemError struct {
 	Id    string `json:"id"`
 }
 
-// RecommendationKind The guardrail rule type a recommendation would create.
+// RecommendationKind What apply would write. `attribute_correlation`: one cross-span rule on a transaction guardrail. `service_guardrail`: a service's allowlist rules, pre-filled from what was learned.
 type RecommendationKind string
 
 // RecommendationList defines model for RecommendationList.
@@ -1402,10 +1424,43 @@ type RecommendationPreviewRequest struct {
 	TransactionId int64           `json:"transaction_id"`
 }
 
-// RecommendationRecomputeRequest defines model for RecommendationRecomputeRequest.
+// RecommendationRecomputeRequest Empty (or all fields unset) sweeps everything: every promoted transaction with unmined samples and every fully-learned service.
 type RecommendationRecomputeRequest struct {
-	// TransactionId Omit or 0 to sweep every promoted transaction with unmined samples.
+	// Namespace With `service`, re-mine that service's guardrail recommendation.
+	Namespace string `json:"namespace,omitempty"`
+	Service   string `json:"service,omitempty"`
+
+	// TransactionId Re-mine one transaction's rule recommendations.
 	TransactionId int64 `json:"transaction_id,omitempty"`
+}
+
+// RecommendationRule One allowlist rule a `service_guardrail` recommendation proposes, pre-filled from what was learned. Applying it enforces exactly `items`; an empty list is a valid, strict rule (e.g. "this service makes no external calls"). Each rule is checked silently against live traffic while the recommendation is open and carries its own counters.
+type RecommendationRule struct {
+	Confidence RecommendationConfidenceLevel `json:"confidence"`
+
+	// Description One line on what the rule enforces, from the catalog.
+	Description string `json:"description"`
+
+	// Items The allowlist apply would write - services, host[:port]s, or transaction identities.
+	Items []string `json:"items"`
+
+	// Label Catalog label, e.g. "Allowed egress".
+	Label string `json:"label"`
+
+	// LiveChecked Live traces of this service checked silently against the proposed list.
+	LiveChecked int64 `json:"live_checked"`
+
+	// LiveLast Omitted until the first live trace was checked.
+	LiveLast time.Time `json:"live_last,omitempty"`
+
+	// LiveSince Omitted until the first live trace was checked.
+	LiveSince time.Time `json:"live_since,omitempty"`
+
+	// LiveViolated Of those, how many carried something outside the list. Non-zero means real traffic already disagrees with what was learned - look before enforcing.
+	LiveViolated int64 `json:"live_violated"`
+
+	// Rule Rule key - allowed_callers | allowed_callees | allowed_egress | allowed_transactions.
+	Rule string `json:"rule"`
 }
 
 // RecommendationState Lifecycle bucket. `open` awaits a decision, `applied` became a guardrail rule, `dismissed` was rejected (sticky across re-mining).

@@ -141,16 +141,20 @@ CREATE TABLE IF NOT EXISTS guardrail_violations (
 ORDER BY (scope_type, scope_key, rule_key, offending);
 
 -- Guardrail recommendations: rules Insights suggests instead of waiting for an
--- operator to author them. Scoped like guardrails (scope_type/scope_key), so a
--- future kind can target a service or the whole cluster. transaction_id is the
--- resolved id for transaction scope (0 otherwise) and joins the transactions
--- table. Mining stats are rewritten on every run, state is the operator's
--- decision and is carried over by the writer. spec is kind-specific JSON (today
--- always a CorrelationSpec) that applying the recommendation adds to a guardrail.
+-- operator to author them. Scoped like guardrails (scope_type/scope_key).
+-- transaction_id is the resolved id for transaction scope (0 otherwise) and
+-- joins the transactions table. namespace/service are stored for service scope
+-- (empty otherwise, the transaction join supplies them). Mining stats are
+-- rewritten on every run, state is the operator's decision and is carried over
+-- by the writer. The payload is kind-specific JSON: spec (a CorrelationSpec)
+-- for attribute_correlation, rules (the allowlists to enforce) plus
+-- applied_rules (which of them an apply turned on) for service_guardrail.
 CREATE TABLE IF NOT EXISTS guardrail_recommendations (
     scope_type        LowCardinality(String) DEFAULT 'transaction',
     scope_key         String,
     transaction_id    Int64,
+    namespace         String DEFAULT '',
+    service           String DEFAULT '',
     recommendation_id String,
     kind              LowCardinality(String),
     state             LowCardinality(String) DEFAULT 'open',
@@ -159,6 +163,8 @@ CREATE TABLE IF NOT EXISTS guardrail_recommendations (
     spec              String,
     transform         LowCardinality(String),
     transport         UInt8 DEFAULT 0,
+    rules             String DEFAULT '[]',
+    applied_rules     String DEFAULT '[]',
     observed          Int32,
     held              Int32,
     distinct_values   Int32,
@@ -172,17 +178,20 @@ ORDER BY (scope_type, scope_key, recommendation_id);
 
 -- Shadow-evaluation counters: how a still-open recommendation fares against
 -- live traffic. Summed across replicas and flush cycles like the other counters.
+-- rule_key splits a service_guardrail card's counts per proposed rule; it is
+-- empty for correlation rows, which count as a whole.
 CREATE TABLE IF NOT EXISTS recommendation_live_counts (
     scope_type        LowCardinality(String) DEFAULT 'transaction',
     scope_key         String,
     transaction_id    Int64,
     recommendation_id String,
+    rule_key          LowCardinality(String) DEFAULT '',
     held              SimpleAggregateFunction(sum, UInt64),
     broken            SimpleAggregateFunction(sum, UInt64),
     first_at          SimpleAggregateFunction(min, DateTime64(3)),
     last_at           SimpleAggregateFunction(max, DateTime64(3))
 ) ENGINE = AggregatingMergeTree()
-ORDER BY (scope_type, scope_key, recommendation_id);
+ORDER BY (scope_type, scope_key, recommendation_id, rule_key);
 
 -- One row per transaction: the newest mining run, which also acts as the soft
 -- claim replicas use to avoid mining the same transaction at once (mined_at is

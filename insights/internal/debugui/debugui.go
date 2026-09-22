@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -109,7 +110,7 @@ type ProductAPI interface {
 	RestoreRecommendations(ctx context.Context, ids []string) (apitypes.RecommendationBulkResult, error)
 	RevertRecommendations(ctx context.Context, ids []string) (apitypes.RecommendationBulkResult, error)
 	PreviewRecommendation(ctx context.Context, req apitypes.RecommendationPreviewRequest) (apitypes.RecommendationPreview, error)
-	RecomputeRecommendations(ctx context.Context, transactionID int64) error
+	RecomputeRecommendations(ctx context.Context, req apitypes.RecommendationRecomputeRequest) error
 }
 
 // Handle is returned by Register so the caller can attach dependencies once
@@ -267,6 +268,9 @@ func parseTemplates() map[string]*template.Template {
 		"identityDimLabel":   identityDimLabel,
 		"mul100":             func(f float64) float64 { return f * 100 },
 		"list":               func(items ...string) []string { return items },
+		"hasString":          slices.Contains[[]string, string],
+		// Transaction identities are kind\toperation; the tab reads as a space.
+		"identityDisplay": func(s string) string { return strings.ReplaceAll(s, "\t", " ") },
 	}
 	out := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {

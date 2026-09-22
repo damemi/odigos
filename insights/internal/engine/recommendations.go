@@ -32,10 +32,12 @@ type RecommendationView struct {
 }
 
 // RecommendationApplyItem is one recommendation to apply, optionally with the
-// operator's edits to the rule it creates.
+// operator's edits: an edited Spec for a correlation rule, or the subset of
+// Rules to enable on a service guardrail card (all when empty).
 type RecommendationApplyItem struct {
-	ID   string
-	Spec *repo.CorrelationSpec
+	ID    string
+	Spec  *repo.CorrelationSpec
+	Rules []repo.RuleKey
 }
 
 // RecommendationItemError is one failed item of a bulk action.
@@ -134,7 +136,11 @@ func (e *Engine) applyRecommendation(ctx context.Context, item RecommendationApp
 	if !ok {
 		return ErrRecommendationNotFound
 	}
-	if rec.Kind != repo.RecommendationKindAttributeCorrelation {
+	switch rec.Kind {
+	case repo.RecommendationKindServiceGuardrail:
+		return e.applyServiceGuardrailRecommendation(ctx, rec, item.Rules)
+	case repo.RecommendationKindAttributeCorrelation:
+	default:
 		return ErrRecommendationUnsupported
 	}
 	spec := rec.Spec
@@ -204,6 +210,9 @@ func (e *Engine) revertRecommendation(ctx context.Context, id string) error {
 	if rec.State != repo.RecommendationApplied {
 		return fmt.Errorf("recommendation is %s, only applied recommendations can be reverted", rec.State)
 	}
+	if rec.Kind == repo.RecommendationKindServiceGuardrail {
+		return e.revertServiceGuardrailRecommendation(ctx, rec)
+	}
 	g, found, err := e.findTransactionGuardrail(ctx, rec.TransactionID)
 	if err != nil {
 		return err
@@ -266,6 +275,10 @@ func (e *Engine) setRecommendationStates(ctx context.Context, ids []string, to, 
 			continue
 		}
 		res.Done++
+		// A restored service card may be out of date; rebuild it in the background.
+		if to == repo.RecommendationOpen && rec.Kind == repo.RecommendationKindServiceGuardrail {
+			e.recommendations.requestMineService(rec.Namespace, rec.Service)
+		}
 	}
 	if res.Done > 0 {
 		// Open recommendations are shadow-evaluated; the set just changed.
@@ -302,8 +315,9 @@ func (e *Engine) PreviewRecommendation(ctx context.Context, transactionID int64,
 }
 
 // RecomputeRecommendations asks the miner to re-mine one transaction now, or
-// every promoted transaction with unmined samples when transactionID is 0. It
-// returns once the request is queued; mining runs in the background.
+// every promoted transaction with unmined samples and every fully-learned
+// service when transactionID is 0. It returns once the request is queued;
+// mining runs in the background.
 func (e *Engine) RecomputeRecommendations(ctx context.Context, transactionID int64) error {
 	if transactionID == 0 {
 		e.recommendations.requestSweep()

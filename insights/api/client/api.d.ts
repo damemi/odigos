@@ -679,8 +679,8 @@ export interface paths {
         };
         /**
          * List guardrail recommendations
-         * @description **Use for:** the Recommendations screen. One item per suggested rule, with a render-ready `title`/`summary`/`why_it_matters`, the exact `spec` that `apply` would add, a `confidence` block (sample stats plus live shadow counters), and up to three example value pairs.
-         *     Filter by lifecycle `state` (open | applied | dismissed), `kind`, service, or transaction. Stale rows (the latest mining run no longer produced them) are hidden unless `include_stale=true`.
+         * @description **Use for:** the Recommendations screen. Every item has the same envelope - `kind`, `scope`, lifecycle `state`, a render-ready `title`/`summary`/`why_it_matters` and a `confidence` block - plus the fields of its kind: an `attribute_correlation` carries the transaction, the exact `spec` that `apply` would add and example value pairs; a `service_guardrail` carries the `rules` it proposes to enforce, each pre-filled with the allowlist `apply` would write and its own live counters.
+         *     Filter by lifecycle `state`, `kind`, service, or transaction (`transaction_id` naturally narrows to transaction-scoped kinds). Stale rows (the latest mining run no longer produced them) are hidden unless `include_stale=true`.
          */
         get: operations["listRecommendations"];
         put?: never;
@@ -698,7 +698,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get one recommendation */
+        /**
+         * Get one recommendation
+         * @description Any kind, by id. Stale recommendations are returned as well.
+         */
         get: operations["getRecommendation"];
         put?: never;
         post?: never;
@@ -719,7 +722,8 @@ export interface paths {
         put?: never;
         /**
          * Apply recommendations
-         * @description Turn each recommendation into an enforced `attribute_correlation` rule on its transaction's guardrail (created if missing), reload the engine, and mark the recommendation applied. An item may carry an edited `spec` (name, severity, why, extract regexes) which is applied instead of the mined one; selectors' service/span/attr must match the recommendation. Partial failures return 422 with per-item errors.
+         * @description Turn each recommendation into enforced guardrail rules, reload the engine, and mark the recommendation applied. Partial failures return 422 with per-item errors.
+         *     What apply writes depends on `kind`. `attribute_correlation` becomes one rule on its transaction's guardrail (created if missing); the item may carry an edited `spec` (name, severity, why, extract regexes) which is applied instead of the mined one, as long as the selectors' service, span and attr match the recommendation. `service_guardrail` enables the selected `rules` (all of them when omitted) on the service's guardrail with the recommended allowlists, in enforce mode; rules already enforced or switched off by the time of the call are left untouched, and `applied_rules` records which ones this apply turned on.
          */
         post: operations["applyRecommendations"];
         delete?: never;
@@ -776,7 +780,7 @@ export interface paths {
         put?: never;
         /**
          * Revert applied recommendations
-         * @description Remove the rule an earlier apply added from the transaction's guardrail, reload the engine, and move the recommendation back to open.
+         * @description Remove the rules an earlier apply added (the correlation rule on the transaction's guardrail, or the `applied_rules` on the service's guardrail - a rule the operator has since taken over is kept), reload the engine, and move the recommendation back to open.
          */
         post: operations["revertRecommendations"];
         delete?: never;
@@ -816,7 +820,7 @@ export interface paths {
         put?: never;
         /**
          * Re-run mining
-         * @description Queue a mining run for one transaction (or, with transaction_id omitted, a sweep over every promoted transaction that still has unmined samples). Runs in the background; poll the list.
+         * @description Queue a mining run for one transaction (`transaction_id`), for one service's guardrail recommendation (`namespace` + `service`), or - with an empty body - a sweep over every promoted transaction that still has unmined samples and every fully-learned service. Runs in the background; poll the list.
          */
         post: operations["recomputeRecommendations"];
         delete?: never;
@@ -1997,10 +2001,10 @@ export interface components {
             items: components["schemas"]["ServiceGuardrail"][];
         };
         /**
-         * @description The guardrail rule type a recommendation would create.
+         * @description What apply would write. `attribute_correlation`: one cross-span rule on a transaction guardrail. `service_guardrail`: a service's allowlist rules, pre-filled from what was learned.
          * @enum {string}
          */
-        RecommendationKind: "attribute_correlation";
+        RecommendationKind: "attribute_correlation" | "service_guardrail";
         /**
          * @description Lifecycle bucket. `open` awaits a decision, `applied` became a guardrail rule, `dismissed` was rejected (sticky across re-mining).
          * @enum {string}
@@ -2008,25 +2012,22 @@ export interface components {
         RecommendationState: "open" | "applied" | "dismissed";
         /** @enum {string} */
         RecommendationConfidenceLevel: "high" | "medium" | "low";
-        /** @description Why the engine believes the relation. Sample stats come from the stored relation samples the miner read; live counters come from shadow evaluation of the open recommendation against real traffic and keep growing until it is applied or dismissed. */
+        /** @description Why the engine believes the recommendation. `level` and `reasons` are render-ready for every kind. Sample stats come from what the miner read; live counters come from checking the open recommendation silently against real traffic and keep growing until it is applied or dismissed. For `service_guardrail` the live counters are summed over the proposed rules; each rule carries its own on `rules[]`. */
         RecommendationConfidence: {
             level: components["schemas"]["RecommendationConfidenceLevel"];
-            /**
-             * Format: double
-             * @description held / observed on stored samples (0..1).
-             */
-            hold_ratio: number;
-            /** @description Stored samples where both values were present. */
-            observed: number;
-            /** @description Of those, how many satisfied the relation. */
-            held: number;
-            /** @description Distinct left-hand values seen agreeing. */
-            distinct: number;
-            /** @description Relation samples the mining run looked at. */
+            /** @description Human-readable evidence lines, e.g. "Held on 50 of 50 samples". */
+            reasons: string[];
+            /** @description What was mined: stored relation samples for `attribute_correlation`, promoted transactions the profile was learned from for `service_guardrail`. */
             sample_count: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Live traces on which the recommendation held.
+             */
             live_held: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Live traces on which it broke. Non-zero means real traffic already disagrees with what was learned - look before applying.
+             */
             live_broken: number;
             /**
              * Format: date-time
@@ -2038,8 +2039,17 @@ export interface components {
              * @description Omitted until the first live trace was evaluated.
              */
             live_last?: string;
-            /** @description Human-readable evidence lines, e.g. "Held on 50 of 50 samples". */
-            reasons: string[];
+            /**
+             * Format: double
+             * @description `attribute_correlation` only: held / observed on stored samples (0..1).
+             */
+            hold_ratio?: number;
+            /** @description `attribute_correlation` only: stored samples where both values were present. */
+            observed?: number;
+            /** @description `attribute_correlation` only: of those, how many satisfied the relation. */
+            held?: number;
+            /** @description `attribute_correlation` only: distinct left-hand values seen agreeing. */
+            distinct?: number;
         };
         /** @description One stored sample the relation held on, with the two values. */
         RecommendationExample: {
@@ -2049,48 +2059,56 @@ export interface components {
             /** Format: date-time */
             observed_at: string;
         };
+        /** @description One suggestion of any `kind`. The envelope (identity, scope, lifecycle, headline, confidence) is the same for every kind so a screen can list, filter and act on them together; the fields of one kind are absent on the others. Switch on `kind` to read them. */
         Recommendation: {
             id: string;
             kind: components["schemas"]["RecommendationKind"];
             state: components["schemas"]["RecommendationState"];
-            /** @description The latest mining run no longer produced this row. */
+            /** @description The latest mining run no longer produced this recommendation: the relation stopped holding or its samples aged out, or a service has nothing left to enforce. */
             stale: boolean;
             /** @description Position among the scope's recommendations, 0 = strongest. */
             rank: number;
-            /** @description The guardrail the recommendation would extend, with the same meaning as a guardrail's scope/scope_key. attribute_correlation is always transaction-scoped; future kinds may target a service or global. */
-            scope?: components["schemas"]["PolicyScope"];
-            scope_key?: string;
-            /**
-             * Format: int64
-             * @description Resolved id for transaction scope, 0 otherwise.
-             */
-            transaction_id: number;
-            service: string;
+            /** @description The guardrail apply would extend, with the same meaning as a guardrail's scope/scope_key: `transaction` for `attribute_correlation`, `service` for `service_guardrail`. */
+            scope: components["schemas"]["PolicyScope"];
+            scope_key: string;
             namespace: string;
-            operation: string;
-            transaction_kind: components["schemas"]["TransactionKind"];
-            /** @description One-line headline, e.g. "resolvePrincipal returns the account getAccount reads". */
+            service: string;
+            /** @description One-line headline, e.g. "resolvePrincipal return.value matches getAccount arg.0" or "Lock down account-service - 3 rules ready". */
             title: string;
-            /** @description One sentence explaining the relation in plain words. */
+            /** @description One or two sentences on what was learned and what apply does. */
             summary: string;
-            /** @description The security story - what breaking this relation would mean. */
+            /** @description The security story - what enforcing buys. */
             why_it_matters: string;
-            /** @description How the two values relate: `exact` (identical), `core` (identical after a constant prefix/suffix), `digits` (same numeric id), `contains` (one value is embedded in the other). */
-            transform: string;
-            /** @description Guaranteed by the transport rather than by business logic: the same field on both ends of one hop (a Kafka message key on producer and consumer). A break means in-flight tampering or misattribution, so it is mined at `low` severity and ranked after every business relation. Shown as a tag on the row. */
-            transport: boolean;
-            /** @description The exact rule `apply` adds to the transaction guardrail. */
-            spec: components["schemas"]["CorrelationSpec"];
             confidence: components["schemas"]["RecommendationConfidence"];
-            examples: components["schemas"]["RecommendationExample"][];
-            /** @description The transaction's guardrail already has a rule on the same two attributes (e.g. added by hand). Apply would duplicate it. */
-            already_covered: boolean;
             /** Format: date-time */
             mined_at: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            /**
+             * Format: int64
+             * @description `attribute_correlation`: the transaction the rule belongs to.
+             */
+            transaction_id?: number;
+            /** @description `attribute_correlation`: that transaction's operation. */
+            operation?: string;
+            /** @description `attribute_correlation`: that transaction's kind. */
+            transaction_kind?: components["schemas"]["TransactionKind"];
+            /** @description `attribute_correlation`: the exact rule `apply` adds to the transaction guardrail. */
+            spec?: components["schemas"]["CorrelationSpec"];
+            /** @description `attribute_correlation`: how the two values relate - `exact` (identical), `core` (identical after a constant prefix/suffix), `digits` (same numeric id), `contains` (one value is embedded in the other). */
+            transform?: string;
+            /** @description `attribute_correlation`: guaranteed by the transport rather than by business logic - the same field on both ends of one hop (a Kafka message key on producer and consumer). A break means in-flight tampering or misattribution, so it is mined at `low` severity and ranked after every business relation. Shown as a tag on the row. */
+            transport?: boolean;
+            /** @description `attribute_correlation`: up to three stored samples the relation held on. */
+            examples?: components["schemas"]["RecommendationExample"][];
+            /** @description `attribute_correlation`: the transaction's guardrail already has a rule on the same two attributes (e.g. added by hand). Apply would replace it. */
+            already_covered?: boolean;
+            /** @description `service_guardrail`: the allowlist rules proposed for enforcement, in catalog order. Only rules the service does not enforce yet are listed - a rule already enforced by an operator or by the automatic transaction guardrail, or switched off, is not - so applying extends the guardrail and never overrides an existing rule. */
+            rules?: components["schemas"]["RecommendationRule"][];
+            /** @description `service_guardrail`: rule keys an apply turned on. Set while `state` is `applied`; rules listed but not here were deselected by the operator. */
+            applied_rules?: string[];
         };
         RecommendationList: {
             count: number;
@@ -2103,6 +2121,8 @@ export interface components {
             id: string;
             /** @description Optional edited rule. Left/right service, span and attr must match the recommendation; name, severity, why, relation and extract regexes may differ. */
             spec?: components["schemas"]["CorrelationSpec"];
+            /** @description `service_guardrail` only: the rule keys to enable, a subset of the recommendation's `rules`. Omitted or empty enables every rule. Ignored for other kinds. */
+            rules?: string[];
         };
         RecommendationApplyRequest: {
             items: components["schemas"]["RecommendationApplyItem"][];
@@ -2133,12 +2153,48 @@ export interface components {
             /** @description Up to three samples where the relation did not hold. */
             counter_examples: components["schemas"]["RecommendationExample"][];
         };
+        /** @description Empty (or all fields unset) sweeps everything: every promoted transaction with unmined samples and every fully-learned service. */
         RecommendationRecomputeRequest: {
             /**
              * Format: int64
-             * @description Omit or 0 to sweep every promoted transaction with unmined samples.
+             * @description Re-mine one transaction's rule recommendations.
              */
             transaction_id?: number;
+            /** @description With `service`, re-mine that service's guardrail recommendation. */
+            namespace?: string;
+            service?: string;
+        };
+        /** @description One allowlist rule a `service_guardrail` recommendation proposes, pre-filled from what was learned. Applying it enforces exactly `items`; an empty list is a valid, strict rule (e.g. "this service makes no external calls"). Each rule is checked silently against live traffic while the recommendation is open and carries its own counters. */
+        RecommendationRule: {
+            /** @description Rule key - allowed_callers | allowed_callees | allowed_egress | allowed_transactions. */
+            rule: string;
+            /** @description Catalog label, e.g. "Allowed egress". */
+            label: string;
+            /** @description One line on what the rule enforces, from the catalog. */
+            description: string;
+            /** @description The allowlist apply would write - services, host[:port]s, or transaction identities. */
+            items: string[];
+            confidence: components["schemas"]["RecommendationConfidenceLevel"];
+            /**
+             * Format: int64
+             * @description Live traces of this service checked silently against the proposed list.
+             */
+            live_checked: number;
+            /**
+             * Format: int64
+             * @description Of those, how many carried something outside the list. Non-zero means real traffic already disagrees with what was learned - look before enforcing.
+             */
+            live_violated: number;
+            /**
+             * Format: date-time
+             * @description Omitted until the first live trace was checked.
+             */
+            live_since?: string;
+            /**
+             * Format: date-time
+             * @description Omitted until the first live trace was checked.
+             */
+            live_last?: string;
         };
         LearningCondition: {
             type: components["schemas"]["LearningConditionType"];

@@ -9,6 +9,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/insights/internal/api/http/apitypes"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/engine"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
 )
 
 func sampleRecommendation() repo.Recommendation {
@@ -46,9 +47,9 @@ func TestFromRecommendation_WireShape(t *testing.T) {
 	out := FromRecommendation(engine.RecommendationView{Recommendation: rec, AlreadyCovered: true})
 
 	assertKeys(t, jsonKeys(t, out), "id", "kind", "state", "stale", "rank", "scope", "scope_key", "transaction_id", "transaction_kind",
-		"service", "namespace", "operation", "title", "summary", "spec", "transform", "transport", "confidence", "examples",
+		"service", "namespace", "operation", "title", "summary", "why_it_matters", "spec", "transform", "confidence", "examples",
 		"already_covered", "mined_at", "created_at", "updated_at")
-	if out.Id != "rec-1" || out.Kind != apitypes.AttributeCorrelation || out.State != apitypes.RecommendationStateOpen || !out.AlreadyCovered {
+	if out.Id != "rec-1" || out.Kind != apitypes.RecommendationKindAttributeCorrelation || out.State != apitypes.RecommendationStateOpen || !out.AlreadyCovered {
 		t.Fatalf("identity fields = %+v", out)
 	}
 	if out.Scope != apitypes.PolicyScopeTransaction || out.ScopeKey != "42" || out.TransactionId != 42 {
@@ -75,6 +76,46 @@ func TestFromRecommendation_WireShape(t *testing.T) {
 	rec.Spec.Right.Service = "edge-gateway"
 	if got := FromRecommendation(engine.RecommendationView{Recommendation: rec}).Title; got != "resolvePrincipal return.value matches getAccount arg.0" {
 		t.Fatalf("same-service title = %q", got)
+	}
+}
+
+// A service_guardrail recommendation shares the envelope and omits the
+// correlation-only fields; its confidence sums the rules' live counters and
+// takes the weakest rule's level.
+func TestFromRecommendation_ServiceGuardrailWireShape(t *testing.T) {
+	since := time.Unix(1_700_000_000, 0)
+	rec := repo.Recommendation{
+		ID: "sg-1", Kind: repo.RecommendationKindServiceGuardrail, Scope: repo.ScopeService, ScopeKey: "bank/edge-gateway",
+		State: repo.RecommendationOpen, Service: "edge-gateway", Namespace: "bank", SampleCount: 3,
+		Rules: []repo.RecommendationRule{
+			{Rule: risk.RuleAllowedCallees, Items: []string{"account-service"}, LiveChecked: 60, LiveSince: since, LiveLast: since.Add(time.Hour)},
+			{Rule: risk.RuleAllowedEgress, LiveChecked: 10, LiveViolated: 1, LiveSince: since.Add(time.Minute), LiveLast: since.Add(2 * time.Hour)},
+		},
+	}
+	out := FromRecommendation(engine.RecommendationView{Recommendation: rec})
+
+	assertKeys(t, jsonKeys(t, out), "id", "kind", "state", "stale", "rank", "scope", "scope_key", "service", "namespace",
+		"title", "summary", "why_it_matters", "confidence", "rules", "mined_at", "created_at", "updated_at")
+	if out.Kind != apitypes.RecommendationKindServiceGuardrail || out.Scope != apitypes.PolicyScopeService || out.Spec != nil || out.TransactionId != 0 {
+		t.Fatalf("envelope = %+v", out)
+	}
+	if out.Title != "Lock down edge-gateway" || len(out.Rules) != 2 || out.Rules[0].Label != "Allowed callees" {
+		t.Fatalf("title/rules = %q %+v", out.Title, out.Rules)
+	}
+	if !strings.Contains(out.Summary, "covering allowed callees (1), allowed egress (0)") {
+		t.Fatalf("summary = %q", out.Summary)
+	}
+	rec.State, rec.AppliedRules = repo.RecommendationApplied, []repo.RuleKey{risk.RuleAllowedEgress}
+	applied := FromRecommendation(engine.RecommendationView{Recommendation: rec})
+	if applied.Title != "edge-gateway locked down" || !strings.Contains(applied.Summary, "now covers allowed egress (0).") || strings.Contains(applied.Summary, "callees") {
+		t.Fatalf("applied title/summary = %q %q", applied.Title, applied.Summary)
+	}
+	c := out.Confidence
+	if c.Level != apitypes.RecommendationConfidenceLevelLow || c.SampleCount != 3 || c.LiveHeld != 69 || c.LiveBroken != 1 || !c.LiveSince.Equal(since) || !c.LiveLast.Equal(since.Add(2*time.Hour)) {
+		t.Fatalf("confidence = %+v", c)
+	}
+	if !strings.Contains(strings.Join(c.Reasons, "\n"), "Allowed egress: 1 of 10 live traces") || !strings.Contains(strings.Join(c.Reasons, "\n"), "Allowed egress: nothing observed") {
+		t.Fatalf("reasons = %v", c.Reasons)
 	}
 }
 

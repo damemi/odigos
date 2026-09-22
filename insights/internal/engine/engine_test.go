@@ -1674,9 +1674,14 @@ func (f *fakeRepo) ListRecommendations(_ context.Context, filter repo.Recommenda
 		if filter.TransactionID != 0 && rec.TransactionID != filter.TransactionID {
 			continue
 		}
-		for _, tx := range f.transactions {
-			if tx.ID == rec.TransactionID {
-				rec.Service, rec.Namespace, rec.Operation, rec.TxKind = tx.Service, tx.Namespace, tx.Operation, tx.Kind
+		if scope, _ := repo.NormalizeRecommendationScope(rec.Scope, rec.ScopeKey, rec.TransactionID); filter.Scope != "" && scope != filter.Scope {
+			continue
+		}
+		if rec.TransactionID != 0 {
+			for _, tx := range f.transactions {
+				if tx.ID == rec.TransactionID {
+					rec.Service, rec.Namespace, rec.Operation, rec.TxKind = tx.Service, tx.Namespace, tx.Operation, tx.Kind
+				}
 			}
 		}
 		if filter.Namespace != "" && rec.Namespace != filter.Namespace {
@@ -1685,10 +1690,21 @@ func (f *fakeRepo) ListRecommendations(_ context.Context, filter repo.Recommenda
 		if filter.Service != "" && rec.Service != filter.Service {
 			continue
 		}
+		rec.Rules = append([]repo.RecommendationRule(nil), rec.Rules...)
 		for _, d := range f.liveDeltas {
-			if d.ID == rec.ID {
+			if d.ID != rec.ID {
+				continue
+			}
+			if d.Rule == "" {
 				rec.LiveHeld += d.Held
 				rec.LiveBroken += d.Broken
+				continue
+			}
+			for i := range rec.Rules {
+				if rec.Rules[i].Rule == d.Rule {
+					rec.Rules[i].LiveChecked += d.Held + d.Broken
+					rec.Rules[i].LiveViolated += d.Broken
+				}
 			}
 		}
 		out = append(out, rec)

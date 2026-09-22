@@ -269,7 +269,8 @@ func (a *API) ResolveGuardrailViolation(ctx context.Context, scopeKey string, ru
 // ---------- guardrail recommendations ----------
 
 // ListRecommendations is the product API for GET /api/v1/recommendations -
-// same params and wire shape the real UI and debug UI consume.
+// every kind in one list, same params and wire shape the real UI and debug UI
+// consume.
 func (a *API) ListRecommendations(ctx context.Context, params apitypes.ListRecommendationsParams) (apitypes.RecommendationList, error) {
 	admin, err := a.adminOrErr()
 	if err != nil {
@@ -295,7 +296,7 @@ func (a *API) ListRecommendations(ctx context.Context, params apitypes.ListRecom
 	return apimap.RecommendationList(views), nil
 }
 
-// GetRecommendation is GET /api/v1/recommendations/{id}.
+// GetRecommendation is GET /api/v1/recommendations/{id}, any kind.
 func (a *API) GetRecommendation(ctx context.Context, id string) (apitypes.Recommendation, bool, error) {
 	admin, err := a.adminOrErr()
 	if err != nil {
@@ -303,13 +304,14 @@ func (a *API) GetRecommendation(ctx context.Context, id string) (apitypes.Recomm
 	}
 	view, ok, err := admin.GetRecommendation(ctx, strings.TrimSpace(id))
 	if err != nil || !ok {
-		return apitypes.Recommendation{}, ok, err
+		return apitypes.Recommendation{}, false, err
 	}
 	return apimap.FromRecommendation(view), true, nil
 }
 
 // ApplyRecommendations is POST /api/v1/recommendations/apply: each item becomes
-// a rule on its transaction guardrail (optionally with the operator's edits).
+// a rule on its transaction guardrail (optionally with the operator's edits),
+// or the selected rules on its service guardrail.
 func (a *API) ApplyRecommendations(ctx context.Context, req apitypes.RecommendationApplyRequest) (apitypes.RecommendationBulkResult, error) {
 	admin, err := a.adminOrErr()
 	if err != nil {
@@ -386,20 +388,29 @@ func (a *API) PreviewRecommendation(ctx context.Context, req apitypes.Recommenda
 	return apimap.FromRecommendationPreview(preview), nil
 }
 
-// RecomputeRecommendations is POST /api/v1/recommendations/recompute.
-func (a *API) RecomputeRecommendations(ctx context.Context, transactionID int64) error {
+// RecomputeRecommendations is POST /api/v1/recommendations/recompute: one
+// transaction, one service's card, or (empty request) everything.
+func (a *API) RecomputeRecommendations(ctx context.Context, req apitypes.RecommendationRecomputeRequest) error {
 	admin, err := a.adminOrErr()
 	if err != nil {
 		return err
 	}
-	if transactionID != 0 {
-		if _, found, err := a.Repo.GetTransactionByID(ctx, transactionID); err != nil {
+	namespace, service := strings.TrimSpace(req.Namespace), strings.TrimSpace(req.Service)
+	switch {
+	case req.TransactionId != 0 && service != "":
+		return fmt.Errorf("%w: pass either transaction_id or namespace/service, not both", errBadRequest)
+	case service != "":
+		return admin.RecomputeServiceGuardrailRecommendation(ctx, namespace, service)
+	case namespace != "":
+		return fmt.Errorf("%w: service is required with namespace", errBadRequest)
+	case req.TransactionId != 0:
+		if _, found, err := a.Repo.GetTransactionByID(ctx, req.TransactionId); err != nil {
 			return err
 		} else if !found {
 			return errTransactionNotFound
 		}
 	}
-	return admin.RecomputeRecommendations(ctx, transactionID)
+	return admin.RecomputeRecommendations(ctx, req.TransactionId)
 }
 
 // ---------- baselines ----------

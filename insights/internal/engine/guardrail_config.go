@@ -34,6 +34,10 @@ type GuardrailConfig struct {
 	// shadow holds the open recommendations per transaction, evaluated on live
 	// traffic to build confidence without ever firing a finding.
 	shadow atomic.Pointer[map[int64][]shadowSpec]
+	// shadowServices holds the open service guardrail cards by service scope
+	// key, each proposed allowlist checked silently against the service's
+	// live traffic.
+	shadowServices atomic.Pointer[map[string]shadowServiceCard]
 }
 
 // shadowSpec is one open recommendation as the per-trace path checks it.
@@ -42,16 +46,26 @@ type shadowSpec struct {
 	spec repo.CorrelationSpec
 }
 
+// shadowServiceCard is one open service guardrail recommendation shaped for
+// the per-trace path: the proposed lists as a guardrail so the same allowlist
+// extractors that police enforced rules can be reused unchanged.
+type shadowServiceCard struct {
+	id        string
+	rules     []repo.RuleKey
+	guardrail repo.ServiceGuardrail
+}
+
 // maxShadowSpecsPerTransaction bounds the per-trace cost of shadow evaluation:
 // only the strongest open recommendations of a transaction are checked live.
 const maxShadowSpecsPerTransaction = 10
 
-// newGuardrailConfig wraps an already-built scope index, byTxn map, and shadow set.
-func newGuardrailConfig(idx *repo.ScopeIndex[repo.ServiceGuardrail], byTxn map[int64]repo.ServiceGuardrail, shadow map[int64][]shadowSpec) *GuardrailConfig {
+// newGuardrailConfig wraps an already-built scope index, byTxn map, and shadow sets.
+func newGuardrailConfig(idx *repo.ScopeIndex[repo.ServiceGuardrail], byTxn map[int64]repo.ServiceGuardrail, shadow map[int64][]shadowSpec, shadowServices map[string]shadowServiceCard) *GuardrailConfig {
 	cfg := &GuardrailConfig{}
 	cfg.index.Store(idx)
 	cfg.byTxn.Store(&byTxn)
 	cfg.shadow.Store(&shadow)
+	cfg.shadowServices.Store(&shadowServices)
 	return cfg
 }
 
@@ -65,6 +79,19 @@ func (cfg *GuardrailConfig) shadowSpecs(transactionID int64) []shadowSpec {
 		return (*m)[transactionID]
 	}
 	return nil
+}
+
+// shadowServiceCard returns the open service guardrail card for a service, if
+// any. The common case (no open card) is one map miss.
+func (cfg *GuardrailConfig) shadowService(serviceKey string) (shadowServiceCard, bool) {
+	if cfg == nil {
+		return shadowServiceCard{}, false
+	}
+	if m := cfg.shadowServices.Load(); m != nil {
+		card, ok := (*m)[serviceKey]
+		return card, ok
+	}
+	return shadowServiceCard{}, false
 }
 
 // Resolve returns the most specific guardrail governing a (transaction,
@@ -109,9 +136,14 @@ func (cfg *GuardrailConfig) Reload(ctx context.Context, r repo.Repository) error
 	if err != nil {
 		return err
 	}
+	shadowServices, err := loadShadowServiceCards(ctx, r)
+	if err != nil {
+		return err
+	}
 	cfg.index.Store(idx)
 	cfg.byTxn.Store(&byTxn)
 	cfg.shadow.Store(&shadow)
+	cfg.shadowServices.Store(&shadowServices)
 	return nil
 }
 
@@ -122,13 +154,51 @@ func (cfg *GuardrailConfig) Reload(ctx context.Context, r repo.Repository) error
 func LoadGuardrailConfig(ctx context.Context, r repo.Repository) (*GuardrailConfig, error) {
 	idx, byTxn, err := loadServiceGuardrails(ctx, r)
 	if err != nil {
-		return newGuardrailConfig(&repo.ScopeIndex[repo.ServiceGuardrail]{}, map[int64]repo.ServiceGuardrail{}, nil), err
+		return newGuardrailConfig(&repo.ScopeIndex[repo.ServiceGuardrail]{}, map[int64]repo.ServiceGuardrail{}, nil, nil), err
 	}
 	shadow, err := loadShadowSpecs(ctx, r)
 	if err != nil {
-		return newGuardrailConfig(idx, byTxn, nil), err
+		return newGuardrailConfig(idx, byTxn, nil, nil), err
 	}
-	return newGuardrailConfig(idx, byTxn, shadow), nil
+	shadowServices, err := loadShadowServiceCards(ctx, r)
+	if err != nil {
+		return newGuardrailConfig(idx, byTxn, shadow, nil), err
+	}
+	return newGuardrailConfig(idx, byTxn, shadow, shadowServices), nil
+}
+
+// loadShadowServiceCards reads the open service guardrail recommendations and
+// shapes each card's proposed lists as an all-enforced guardrail for the
+// per-trace check.
+func loadShadowServiceCards(ctx context.Context, r repo.Repository) (map[string]shadowServiceCard, error) {
+	recs, err := r.ListRecommendations(ctx, repo.RecommendationFilter{
+		Kind:  repo.RecommendationKindServiceGuardrail,
+		State: repo.RecommendationOpen,
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]shadowServiceCard, len(recs))
+	for _, rec := range recs {
+		if len(rec.Rules) == 0 {
+			continue
+		}
+		card := shadowServiceCard{id: rec.ID, guardrail: repo.ServiceGuardrail{
+			Scope: repo.ScopeService, ScopeKey: rec.ScopeKey,
+			RuleLists: make(map[repo.RuleKey][]string, len(rec.Rules)),
+			RuleModes: make(map[repo.RuleKey]repo.RuleMode, len(rec.Rules)),
+		}}
+		for _, rule := range rec.Rules {
+			card.rules = append(card.rules, rule.Rule)
+			card.guardrail.RuleLists[rule.Rule] = rule.Items
+			card.guardrail.RuleModes[rule.Rule] = repo.RuleModeEnforce
+			if rule.Fingerprint != "" {
+				repo.SetRuleFingerprint(&card.guardrail, rule.Rule, rule.Fingerprint)
+			}
+		}
+		out[rec.ScopeKey] = card
+	}
+	return out, nil
 }
 
 // loadShadowSpecs reads the open attribute_correlation recommendations, best

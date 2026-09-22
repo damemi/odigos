@@ -13,12 +13,14 @@ import (
 // rule), dismisses, or reverts them; a decision sticks across re-mining. A
 // recommendation is never enforced on its own.
 //
-// One kind is implemented today: attribute_correlation, a transaction-scoped
+// Two kinds exist today. attribute_correlation is a transaction-scoped
 // cross-span "these two values always agree" rule mined from the transaction's
-// stored relation samples. Adding a kind means a new RecommendationKind, its
-// own Spec shape and identity in RecommendationID, a miner that produces it,
+// stored relation samples. service_guardrail is a service-scoped card offering
+// to enforce the allowlist rules the service does not enforce yet, each
+// pre-filled from its learned profile. Adding a kind means a new
+// RecommendationKind, its own payload and identity, a miner that produces it,
 // and an apply branch in the engine; the storage, state machine, live
-// counters, API actions, and UI list need no change.
+// counters, and API actions need no change.
 
 // RelationSampleReason tags the whole traces kept while a transaction learns so
 // the miner has enough evidence to find cross-span attribute relations. They
@@ -31,6 +33,7 @@ type RecommendationKind string
 
 const (
 	RecommendationKindAttributeCorrelation RecommendationKind = "attribute_correlation"
+	RecommendationKindServiceGuardrail     RecommendationKind = "service_guardrail"
 )
 
 // RecommendationState is where a recommendation sits in its lifecycle. It is an
@@ -66,7 +69,24 @@ type RecommendationExample struct {
 	ObservedAt time.Time `json:"observed_at"`
 }
 
-// Recommendation is one suggested guardrail rule for one scope. Mining
+// RecommendationRule is one allowlist rule a service_guardrail recommendation
+// offers to enforce, with the list apply would write. Live counters come from
+// checking the proposed list silently against the service's real traffic.
+type RecommendationRule struct {
+	Rule  RuleKey  `json:"rule"`
+	Items []string `json:"items"`
+	// Fingerprint stamps the identity scheme an allowed_transactions list was
+	// built under (see ServiceGuardrail.RuleFingerprints); empty for the rules
+	// that list service and host names.
+	Fingerprint string `json:"fingerprint,omitempty"`
+
+	LiveChecked  int64     `json:"-"`
+	LiveViolated int64     `json:"-"`
+	LiveSince    time.Time `json:"-"`
+	LiveLast     time.Time `json:"-"`
+}
+
+// Recommendation is one suggested guardrail change for one scope. Mining
 // statistics (Observed, Held, Distinct, Examples) come from stored samples and
 // are rewritten on every mining run. Live counters (LiveHeld, LiveBroken) come
 // from shadow evaluation against real traffic and only ever grow. State is the
@@ -89,7 +109,8 @@ type Recommendation struct {
 	// Rank orders a transaction's open recommendations, 0 = strongest.
 	Rank int
 
-	// Spec is the guardrail rule this recommendation would apply.
+	// Spec is the guardrail rule this recommendation would apply
+	// (attribute_correlation only).
 	Spec CorrelationSpec
 	// Transform names how the two values relate: exact, core, digits, contains.
 	Transform string
@@ -97,12 +118,21 @@ type Recommendation struct {
 	// producer and consumer): a low-severity integrity tripwire, ranked last.
 	Transport bool
 
+	// Rules is what a service_guardrail recommendation offers to enforce: the
+	// service's allowlist rules that are neither enforced nor switched off, in
+	// catalog order. AppliedRules records which of them an apply turned on;
+	// the rest were deselected by the operator and stay that way.
+	Rules        []RecommendationRule
+	AppliedRules []RuleKey
+
 	// Observed is how many samples had both values, Held how many satisfied the
 	// relation, Distinct how many different left values were seen.
 	Observed int
 	Held     int
 	Distinct int
-	// SampleCount is how many relation samples the mining run looked at.
+	// SampleCount is how much evidence the mining run looked at: relation
+	// samples for attribute_correlation, promoted transactions for
+	// service_guardrail.
 	SampleCount int
 	Examples    []RecommendationExample
 
@@ -115,7 +145,9 @@ type Recommendation struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	// Transaction identity, joined at read time for filtering and display.
+	// Service and Namespace name the scope for filtering and display: stored on
+	// service-scoped rows, joined from the transaction otherwise. Operation and
+	// TxKind are the transaction identity, joined at read time.
 	Service   string
 	Namespace string
 	Operation string
@@ -151,10 +183,24 @@ func RecommendationID(transactionID int64, kind RecommendationKind, spec Correla
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
+// ServiceGuardrailRecommendationID is the stable identity of a service's
+// guardrail card: one per service, so re-mining refreshes the same row and the
+// operator's decision on it sticks.
+func ServiceGuardrailRecommendationID(namespace, service string) string {
+	h := sha256.New()
+	h.Write([]byte(string(RecommendationKindServiceGuardrail)))
+	h.Write([]byte{0})
+	h.Write([]byte(ServiceScopeKey(namespace, service)))
+	return hex.EncodeToString(h.Sum(nil))[:16]
+}
+
 // RecommendationFilter narrows ListRecommendations. Zero values mean "any".
 // Stale rows are excluded unless IncludeStale is set.
 type RecommendationFilter struct {
-	Kind          RecommendationKind
+	Kind RecommendationKind
+	// Scope keeps one list to one shape: transaction rows and service cards are
+	// served by different endpoints.
+	Scope         PolicyScope
 	State         RecommendationState
 	TransactionID int64
 	Namespace     string
@@ -164,12 +210,14 @@ type RecommendationFilter struct {
 
 // RecommendationLiveDelta is one flush batch's worth of shadow-evaluation
 // outcomes for a recommendation: how many live traces of its scope could be
-// checked and whether the rule held.
+// checked and whether the rule held. Rule is set for service_guardrail rows,
+// which count per proposed rule; a correlation row counts as a whole.
 type RecommendationLiveDelta struct {
 	ID            string
 	Scope         PolicyScope
 	ScopeKey      string
 	TransactionID int64
+	Rule          RuleKey
 	Held          int64
 	Broken        int64
 	FirstAt       time.Time
@@ -202,4 +250,10 @@ const GuardrailOriginRecommendation = "recommendation"
 // recommendation, so the UI can show why confidence dropped.
 func RecommendationShadowReason(id string) string {
 	return "recommendation:" + id
+}
+
+// RecommendationRuleShadowReason is the per-rule variant for service_guardrail
+// recommendations: one counter-example trace per proposed rule.
+func RecommendationRuleShadowReason(id string, rule RuleKey) string {
+	return RecommendationShadowReason(id) + ":" + string(rule)
 }

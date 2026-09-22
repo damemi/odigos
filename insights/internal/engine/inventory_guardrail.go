@@ -67,6 +67,8 @@ func (e *Engine) enableTransactionGuardrail(ctx context.Context, namespace, serv
 	if err := e.repo.UpsertServiceGuardrail(ctx, g); err != nil {
 		return err
 	}
+	// The service's guardrail card offers only what is left to enforce.
+	e.recommendations.requestMineService(namespace, service)
 	return e.ReloadGuardrailConfig(ctx)
 }
 
@@ -85,6 +87,7 @@ func (e *Engine) DisableTransactionGuardrail(ctx context.Context, namespace, ser
 	if err := e.repo.UpsertServiceGuardrail(ctx, g); err != nil {
 		return err
 	}
+	e.recommendations.requestMineService(namespace, service)
 	return e.ReloadGuardrailConfig(ctx)
 }
 
@@ -106,7 +109,9 @@ func (e *Engine) PromoteTransactionBaselines(ctx context.Context, transactionID 
 	}
 	e.store.removeEntry(transactionID)
 	e.recommendations.requestMine(transactionID)
-	return e.maybeAutoEnableTransactionGuardrail(ctx, tx.Namespace, tx.Service, transactionID)
+	err = e.maybeAutoEnableTransactionGuardrail(ctx, tx.Namespace, tx.Service, transactionID)
+	e.recommendations.requestMineService(tx.Namespace, tx.Service)
+	return err
 }
 
 // ForcePromoteService promotes every scored class on every transaction of the
@@ -135,7 +140,9 @@ func (e *Engine) ForcePromoteService(ctx context.Context, namespace, service str
 	}
 	// Treat these txns as promoted even if ListTransactionStats still lags
 	// behind the ClickHouse promote inserts (same race as natural promote).
-	return e.maybeAutoEnableTransactionGuardrail(ctx, namespace, service, ids...)
+	err = e.maybeAutoEnableTransactionGuardrail(ctx, namespace, service, ids...)
+	e.recommendations.requestMineService(namespace, service)
+	return err
 }
 
 func (e *Engine) loadOrInitServiceGuardrail(ctx context.Context, scopeKey string) (repo.ServiceGuardrail, error) {
@@ -232,10 +239,13 @@ func (e *Engine) maybeAutoEnableTransactionGuardrail(ctx context.Context, namesp
 // maybeAutoEnableTransactionGuardrailAfterPromote runs after a transaction
 // finishes learning all classes. The txn id is treated as promoted even before
 // write-behind flush so the service can become ready on this same observation.
+// The service's guardrail card is queued afterwards so it offers only what the
+// automatic guardrail did not already enforce.
 func (e *Engine) maybeAutoEnableTransactionGuardrailAfterPromote(ctx context.Context, namespace, service string, transactionID int64) {
 	if err := e.maybeAutoEnableTransactionGuardrail(ctx, namespace, service, transactionID); err != nil {
 		e.warn("auto-enable transaction guardrail", err)
 	}
+	e.recommendations.requestMineService(namespace, service)
 }
 
 // resetInventoryGuardrails clears stale allowed_transactions guardrail state

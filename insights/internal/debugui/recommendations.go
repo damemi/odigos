@@ -17,14 +17,16 @@ import (
 // The Recommendations page is the reference implementation for the product UI:
 // it consumes GET /recommendations and the POST …/recommendations/{action}
 // endpoints through the same ProductAPI functions the HTTP handlers call, and
-// renders the wire types as they are. Tabs are the recommendation lifecycle
-// (open / applied / dismissed); the kind filter is ready for more kinds than
-// attribute_correlation even though that is the only one mined today.
+// renders the wire types as they are. One list carries every kind; the page
+// switches on `kind` to lay a service's own guardrail recommendation out as a
+// card above its transactions' attribute correlation rows. Tabs are the
+// recommendation lifecycle (open / applied / dismissed).
 
 // recommendationKinds is the kind filter's option list. Add a kind here when
 // the miner learns a new one; the API's enum is the source of truth.
 var recommendationKinds = []struct{ Value, Label, Desc string }{
-	{string(apitypes.AttributeCorrelation), "Attribute correlation", "two span attributes that always agree within a trace"},
+	{string(apitypes.RecommendationKindAttributeCorrelation), "Attribute correlation", "two span attributes that always agree within a trace"},
+	{string(apitypes.RecommendationKindServiceGuardrail), "Service guardrail", "enforce a fully-learned service's allowlists from what was observed"},
 }
 
 // recRowsShown is how many of a transaction's recommendations render before
@@ -45,11 +47,14 @@ type recTxn struct {
 }
 
 // recCard is one service's recommendations, worst-first: the card header shows
-// how many are waiting and how many the engine is confident about.
+// how many are waiting and how many the engine is confident about. Guardrail
+// is the service's own service_guardrail recommendation in the active tab, if
+// any; Transactions hold its attribute_correlation rows.
 type recCard struct {
 	Namespace    string
 	Service      string
 	ScopeKey     string
+	Guardrail    *apitypes.Recommendation
 	Transactions []recTxn
 	Count        int
 	HighCount    int
@@ -97,7 +102,6 @@ func (u *ui) listRecommendations(c *gin.Context) {
 		u.render(c, "recommendations", "recommendations", "", data)
 		return
 	}
-
 	var counts recCounts
 	var inTab []apitypes.Recommendation
 	for _, rec := range listed.Items {
@@ -160,14 +164,16 @@ func normalizeRecommendationTab(s string) string {
 	}
 }
 
-// buildRecommendationCards nests the wire list as service → transaction →
-// recommendation, services with the most high-confidence items first and
-// recommendations in the engine's rank order within a transaction.
+// buildRecommendationCards nests the wire list as service → (its own guardrail
+// recommendation, transaction → attribute correlation rows), services with the
+// most high-confidence items first and rows in the engine's rank order within
+// a transaction.
 func buildRecommendationCards(items []apitypes.Recommendation) []recCard {
 	byService := map[string]*recCard{}
 	byTxn := map[int64]*recTxn{}
 	var serviceOrder []string
-	for _, rec := range items {
+	for i := range items {
+		rec := items[i]
 		key := repo.ServiceScopeKey(rec.Namespace, rec.Service)
 		card := byService[key]
 		if card == nil {
@@ -175,17 +181,23 @@ func buildRecommendationCards(items []apitypes.Recommendation) []recCard {
 			byService[key] = card
 			serviceOrder = append(serviceOrder, key)
 		}
+		card.Count++
+		if rec.Confidence.Level == apitypes.RecommendationConfidenceLevelHigh {
+			card.HighCount++
+		}
+		if rec.Kind == apitypes.RecommendationKindServiceGuardrail {
+			card.Guardrail = &items[i]
+			continue
+		}
 		txn := byTxn[rec.TransactionId]
 		if txn == nil {
 			txn = &recTxn{TransactionID: rec.TransactionId, Operation: rec.Operation, Kind: rec.TransactionKind}
 			byTxn[rec.TransactionId] = txn
 			card.Transactions = append(card.Transactions, recTxn{TransactionID: rec.TransactionId})
 		}
-		card.Count++
 		txn.Items = append(txn.Items, rec)
 		if rec.Confidence.Level == apitypes.RecommendationConfidenceLevelHigh {
 			txn.HighCount++
-			card.HighCount++
 		}
 	}
 	out := make([]recCard, 0, len(serviceOrder))
@@ -235,7 +247,8 @@ func recommendationIDs(c *gin.Context) []string {
 
 // applyRecommendations is POST /debug/recommendations/apply. Without an edited
 // spec it applies the recommendations as mined; with one (the edit dialog) it
-// applies the single edited rule.
+// applies the single edited rule. A service guardrail card posts its id plus
+// the checked "rule" boxes, which become the apply item's rule subset.
 func (u *ui) applyRecommendations(c *gin.Context) {
 	redirect := recommendationsRedirect(c)
 	api, ok := u.productAPI(c)
@@ -251,12 +264,23 @@ func (u *ui) applyRecommendations(c *gin.Context) {
 	for _, id := range ids {
 		req.Items = append(req.Items, apitypes.RecommendationApplyItem{Id: id})
 	}
+	// Plain apply enforces the recommendation as mined; the edit dialogs post
+	// the operator's changes on top - an edited spec for a correlation, the
+	// subset of rules to keep for a service guardrail.
 	if c.PostForm("edited") == "1" && len(ids) == 1 {
 		spec := correlationSpecFromForm(c)
 		req.Items[0].Spec = &spec
 	}
+	if c.PostForm("edited_rules") == "1" && len(ids) == 1 {
+		rules := c.PostFormArray("rule")
+		if len(rules) == 0 {
+			actionFail(c, redirect, "keep at least one thing for the guardrail to cover, or dismiss the recommendation")
+			return
+		}
+		req.Items[0].Rules = rules
+	}
 	res, err := api.ApplyRecommendations(c.Request.Context(), req)
-	finishRecommendationBulk(c, redirect, "applied", "now enforced on the transaction guardrail; a trace where the values differ raises a finding", res, err)
+	finishRecommendationBulk(c, redirect, "applied", "now enforced on the guardrail; a trace that breaks it raises a finding", res, err)
 }
 
 // correlationSpecFromForm reads the edit dialog's fields into a wire spec.
@@ -370,21 +394,28 @@ func (u *ui) previewRecommendation(c *gin.Context) {
 }
 
 // recomputeRecommendations is POST /debug/recommendations/recompute: re-mine
-// one transaction now, or every promoted transaction with unmined samples.
+// one transaction or one service's guardrail card now, or everything.
 func (u *ui) recomputeRecommendations(c *gin.Context) {
 	redirect := recommendationsRedirect(c)
 	api, ok := u.productAPI(c)
 	if !ok {
 		return
 	}
-	txnID, _ := strconv.ParseInt(strings.TrimSpace(c.PostForm("transaction_id")), 10, 64)
-	if err := api.RecomputeRecommendations(c.Request.Context(), txnID); err != nil {
+	req := apitypes.RecommendationRecomputeRequest{
+		Namespace: strings.TrimSpace(c.PostForm("namespace")),
+		Service:   strings.TrimSpace(c.PostForm("service")),
+	}
+	req.TransactionId, _ = strconv.ParseInt(strings.TrimSpace(c.PostForm("transaction_id")), 10, 64)
+	if err := api.RecomputeRecommendations(c.Request.Context(), req); err != nil {
 		actionFail(c, redirect, "recompute failed: "+err.Error())
 		return
 	}
-	if txnID != 0 {
+	switch {
+	case req.Service != "":
+		actionOK(c, redirect, "rebuilding this service's guardrail card in the background - refresh in a few seconds")
+	case req.TransactionId != 0:
 		actionOK(c, redirect, "re-mining this transaction in the background - refresh in a few seconds")
-		return
+	default:
+		actionOK(c, redirect, "re-mining every promoted transaction and service in the background - refresh in a minute")
 	}
-	actionOK(c, redirect, "re-mining every promoted transaction in the background - refresh in a minute")
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/insights/internal/api/http/apitypes"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/engine"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
 )
 
 // TestParseTemplates ensures every page template (including anomaly_compare and
@@ -304,13 +305,13 @@ func TestRenderRecommendations(t *testing.T) {
 	var items []apitypes.Recommendation
 	for i := 0; i < recRowsShown+2; i++ {
 		items = append(items, apitypes.Recommendation{
-			Id: "rec-" + string(rune('a'+i)), Kind: apitypes.AttributeCorrelation, State: apitypes.RecommendationStateOpen,
+			Id: "rec-" + string(rune('a'+i)), Kind: apitypes.RecommendationKindAttributeCorrelation, State: apitypes.RecommendationStateOpen,
 			Rank: i, TransactionId: 7, Service: "edge-gateway", Namespace: "bank", Operation: "GET banking/statements/{id}",
 			TransactionKind: apitypes.TransactionKind(repo.KindHTTP),
 			Title:           "edge-gateway/resolvePrincipal return.value matches account-service/getStatement arg.0",
 			Summary:         "return.value on resolvePrincipal (edge-gateway) matches arg.0 on getStatement (account-service).",
 			Transform:       "core",
-			Spec: apitypes.CorrelationSpec{
+			Spec: &apitypes.CorrelationSpec{
 				Name:     "principal-matches-statement",
 				Left:     apitypes.CorrelationSelector{Service: "edge-gateway", Span: "resolvePrincipal", Attr: "return.value", Extract: `^client-(\d+)$`},
 				Right:    apitypes.CorrelationSelector{Service: "account-service", Span: "getStatement", Attr: "arg.0"},
@@ -327,18 +328,43 @@ func TestRenderRecommendations(t *testing.T) {
 	// Transport-mirrored relations: ordinary low-severity rows with the tag.
 	for _, id := range []string{"rec-t1", "rec-t2"} {
 		tr := items[0]
+		spec := *tr.Spec
+		tr.Spec = &spec
 		tr.Id, tr.Rank, tr.Transport = id, 100, true
 		tr.Spec.Severity = apitypes.SeverityLow
 		tr.Spec.Left = apitypes.CorrelationSelector{Service: "edge-gateway", Span: "documents publish", Attr: "messaging.kafka.message.key"}
 		tr.Spec.Right = apitypes.CorrelationSelector{Service: "render-worker", Span: "documents receive", Attr: "messaging.kafka.message.key"}
 		items = append(items, tr)
 	}
+	// Service guardrail recommendations in the same list: one on the service
+	// that also has correlation rows, one on a service with nothing else, so
+	// both card shapes render.
+	items = append(items, apitypes.Recommendation{
+		Id: "sg-edge", Kind: apitypes.RecommendationKindServiceGuardrail, State: apitypes.RecommendationStateOpen, Scope: apitypes.PolicyScopeService,
+		Namespace: "bank", Service: "edge-gateway", Title: "Lock down edge-gateway - 2 rules ready", Summary: "summary", WhyItMatters: "why it matters",
+		Confidence: apitypes.RecommendationConfidence{Level: apitypes.RecommendationConfidenceLevelMedium, SampleCount: 3, LiveHeld: 40, Reasons: []string{"allowed_callees: 40 live traces held"}},
+		Rules: []apitypes.RecommendationRule{
+			{Rule: string(risk.RuleAllowedCallees), Label: "Allowed callees", Description: "desc", Items: []string{"account-service", "render-worker"}, Confidence: apitypes.RecommendationConfidenceLevelHigh, LiveChecked: 40, LiveSince: time.Now(), LiveLast: time.Now()},
+			{Rule: string(risk.RuleAllowedTransactions), Label: "Allowed transactions", Description: "desc", Items: []string{"HTTP\tGET banking/statements/{id}"}, Confidence: apitypes.RecommendationConfidenceLevelMedium},
+		},
+		AppliedRules: []string{string(risk.RuleAllowedCallees)},
+		CreatedAt:    time.Now(), UpdatedAt: time.Now(),
+	}, apitypes.Recommendation{
+		Id: "sg-render", Kind: apitypes.RecommendationKindServiceGuardrail, State: apitypes.RecommendationStateOpen, Scope: apitypes.PolicyScopeService,
+		Namespace: "bank", Service: "render-worker", Title: "Lock down render-worker - 1 rule ready", Summary: "summary", WhyItMatters: "why",
+		Confidence: apitypes.RecommendationConfidence{Level: apitypes.RecommendationConfidenceLevelHigh, SampleCount: 1, LiveHeld: 90},
+		Rules:      []apitypes.RecommendationRule{{Rule: string(risk.RuleAllowedEgress), Label: "Allowed egress", Description: "desc", Confidence: apitypes.RecommendationConfidenceLevelHigh, LiveChecked: 90}},
+		CreatedAt:  time.Now(), UpdatedAt: time.Now(),
+	})
 	cards := buildRecommendationCards(items)
-	if len(cards) != 1 || len(cards[0].Transactions) != 1 || cards[0].Transactions[0].Shown != recRowsShown {
+	if len(cards) != 2 || cards[0].Service != "edge-gateway" || cards[0].Guardrail == nil || len(cards[0].Transactions) != 1 || cards[0].Transactions[0].Shown != recRowsShown {
 		t.Fatalf("cards = %+v", cards)
 	}
-	if txn := cards[0].Transactions[0]; len(txn.Items) != recRowsShown+4 || cards[0].Count != recRowsShown+4 || txn.Items[len(txn.Items)-1].Id != "rec-t2" {
+	if txn := cards[0].Transactions[0]; len(txn.Items) != recRowsShown+4 || cards[0].Count != recRowsShown+5 || txn.Items[len(txn.Items)-1].Id != "rec-t2" {
 		t.Fatalf("transport rows should list with the rest in rank order: %+v", txn)
+	}
+	if c := cards[1]; c.Service != "render-worker" || c.Guardrail == nil || len(c.Transactions) != 0 || c.Count != 1 || c.HighCount != 1 {
+		t.Fatalf("guardrail-only card = %+v", c)
 	}
 	for _, tab := range []string{"open", "applied", "dismissed"} {
 		data := map[string]any{
@@ -373,6 +399,32 @@ func TestRenderRecommendations(t *testing.T) {
 		// The card is edge-gateway's, so only the account-service side names its service.
 		if strings.Contains(html, `<span class="rc-svc">edge-gateway /</span>`) || !strings.Contains(html, `<span class="rc-svc">account-service /</span>`) {
 			t.Fatalf("tab=%s: service prefix should only appear on the foreign side", tab)
+		}
+		// Service guardrail cards: one block per service, rule rows with the
+		// items apply writes, identities shown without the tab separator, an
+		// empty list spelled out rather than blank.
+		if strings.Count(html, `class="rec-guardrail" data-rec=`) != 2 || !strings.Contains(html, `Lock down render-worker`) ||
+			!strings.Contains(html, `<code>HTTP GET banking/statements/{id}</code>`) || !strings.Contains(html, "none observed - enforcing forbids any") {
+			t.Fatalf("tab=%s: service guardrail card missing", tab)
+		}
+		switch tab {
+		case "open":
+			// Same actions as a correlation row: apply (all rules) posts only the
+			// id; edit & apply opens a dialog with one ticked box per rule.
+			if !strings.Contains(html, `id="rec-edit-sg-edge"`) || !strings.Contains(html, `id="rec-edit-sg-render"`) ||
+				strings.Count(html, `class="rec-rule-chk" name="rule"`) != 3 || strings.Count(html, `name="rule" value="allowed_callees" id="rec-edit-sg-edge-allowed_callees" checked`) != 1 ||
+				!strings.Contains(html, `data-needs-rule="1"`) || strings.Contains(html, `name="guardrail"`) {
+				t.Fatalf("tab=%s: service guardrail actions wrong", tab)
+			}
+			if got := strings.Count(html, `>edit &amp; apply</button>`); got != recRowsShown+4+2 {
+				t.Fatalf("tab=%s: every open recommendation gets edit & apply, got %d", tab, got)
+			}
+		case "applied":
+			// The rule left out at apply time is marked, the enforced one too.
+			if !strings.Contains(html, `>enforced</span>`) || !strings.Contains(html, `>left out</span>`) || strings.Contains(html, `class="rec-rule-chk"`) ||
+				!strings.Contains(html, `href="/debug/settings/guardrails?namespace=bank&amp;service=edge-gateway"`) {
+				t.Fatalf("tab=%s: applied guardrail card wrong", tab)
+			}
 		}
 	}
 }
