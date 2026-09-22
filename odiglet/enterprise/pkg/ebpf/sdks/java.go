@@ -23,12 +23,10 @@ import (
 	"github.com/odigos-io/odigos/distros/distro"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
 	"go.opentelemetry.io/collector/consumer"
-	"google.golang.org/grpc"
 
 	auto "github.com/odigos-io/ebpf-java-instrumentation/v2"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/instrumentation"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 )
 
 const (
@@ -48,24 +46,23 @@ type JavaInstrumentationFactoryEnterprise struct {
 	agentJarName  string
 	// location where the agent relevant files are located on the host
 	agentFilesSourceDir string
-	// used only by otel-go sdk components like meterProvider and exporter
-	// Deprecated: we should move away from using the sdk components and move into the collector components
-	// such `consumer.Traces` or `consumer.Metrics`
-	otlpConn *grpc.ClientConn
 	// tracesConsumer is the single OTLP/gRPC traces exporter shared by every
 	// instrumented Java process.
 	tracesConsumer consumer.Traces
+	// metricsConsumer is the single OTLP/gRPC metrics exporter shared by every
+	// instrumented Java process.
+	metricsConsumer consumer.Metrics
 	// logger is shared across every *auto.Instrumentation
 	logger           *slog.Logger
 	waspMapsProvider wasp.MapsProvider
 }
 
-func NewJavaInstrumentationFactoryEnterprise(traceIdSuffix uint8, otelDistro *distro.OtelDistro, ws wasp.MapsProvider, otlpConn *grpc.ClientConn, tracesConsumer consumer.Traces) (instrumentation.Factory, error) {
-	if otlpConn == nil {
-		return nil, errNoOTLPConn
-	}
+func NewJavaInstrumentationFactoryEnterprise(traceIdSuffix uint8, otelDistro *distro.OtelDistro, ws wasp.MapsProvider, tracesConsumer consumer.Traces, metricsConsumer consumer.Metrics) (instrumentation.Factory, error) {
 	if tracesConsumer == nil {
 		return nil, errors.New("traces consumer is nil")
+	}
+	if metricsConsumer == nil {
+		return nil, errors.New("metrics consumer is nil")
 	}
 	if otelDistro == nil {
 		return nil, errors.New("otel distro is nil")
@@ -86,27 +83,18 @@ func NewJavaInstrumentationFactoryEnterprise(traceIdSuffix uint8, otelDistro *di
 		traceIdSuffix:       traceIdSuffix,
 		agentJarName:        agentJar,
 		agentFilesSourceDir: sourceDir,
-		otlpConn:            otlpConn,
 		tracesConsumer:      tracesConsumer,
+		metricsConsumer:     metricsConsumer,
 		logger:              slog.New(commonlogger.NewSlogHandler("ebpfjava")),
 	}, nil
 }
 
 func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
-	metricExporter, err := otlpmetricgrpc.New(
-		ctx,
-		otlpmetricgrpc.WithGRPCConn(g.otlpConn),
-	)
-	if err != nil {
-		g.logger.Error("failed to create metric exporter", "error", err)
-		return nil, err
-	}
-
 	opts := []auto.InstrumentationOption{
 		auto.WithPID(pid),
 		auto.WithResourceAttributes(settings.ResourceAttributes...),
 		auto.WithServiceName(settings.ServiceName),
-		auto.WithMetricExporter(metricExporter),
+		auto.WithMetricsConsumer(g.metricsConsumer),
 		auto.WithProcFS(process.HostProcDir()),
 		auto.WithLogger(g.logger),
 	}
@@ -114,9 +102,7 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 		opts = append(opts, auto.WithTraceIdSuffix(g.traceIdSuffix))
 	}
 
-	if settings.MetricsMap.HashMapOfMaps != nil {
-		opts = append(opts, auto.WithJVMMetrics(settings.MetricsMap.HashMapOfMaps, settings.MetricsMap.AttributesMap))
-	}
+	opts = append(opts, auto.WithJVMMetrics())
 
 	// check if the ODIGOS_POD_NAME is present in the target process environment variables.
 	// if it does, it means this process is from a pod that went through our mutating webhook - indicating it should have all the required files
@@ -279,13 +265,8 @@ func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instru
 		}
 	}
 
-	if containerConfig.Metrics != nil && containerConfig.Metrics.RuntimeMetrics != nil {
-		jvmConfig := createJVMMetricsConfig(containerConfig.Metrics.RuntimeMetrics.Java)
-		if jvmConfig != nil {
-			if err := g.inst.ApplyDynamicConfig(dynamic.JVMMetricsProbe(*jvmConfig)); err != nil {
-				return err
-			}
-		}
+	if err := g.inst.ApplyDynamicConfig(dynamic.JVMMetricsProbe(jvmMetricsConfig(containerConfig))); err != nil {
+		return err
 	}
 
 	kafkaBodyEnabled := false
@@ -347,6 +328,22 @@ func convertJavaHeadSampling(hs *commonapisampling.HeadSamplingConfig) *javaconf
 		cfg.NoisyOperations = append(cfg.NoisyOperations, rule)
 	}
 	return cfg
+}
+
+// jvmMetricsConfig is the JVM runtime metrics configuration for a container. The
+// instrumentor leaves Metrics nil when the metrics signal is disabled, which
+// turns JVM metrics off; otherwise they are on, with any per-metric settings.
+func jvmMetricsConfig(containerConfig *odigosv1.ContainerAgentConfig) jvmmetrics.JVMMetricsConfig {
+	if containerConfig.Metrics == nil {
+		disabled := true
+		return jvmmetrics.JVMMetricsConfig{Disabled: &disabled}
+	}
+	if containerConfig.Metrics.RuntimeMetrics != nil {
+		if cfg := createJVMMetricsConfig(containerConfig.Metrics.RuntimeMetrics.Java); cfg != nil {
+			return *cfg
+		}
+	}
+	return jvmmetrics.JVMMetricsConfig{}
 }
 
 func createJVMMetricsConfig(config *common.MetricsSourceAgentJavaRuntimeMetricsConfiguration) *jvmmetrics.JVMMetricsConfig {

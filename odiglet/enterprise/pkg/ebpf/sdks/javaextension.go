@@ -2,6 +2,7 @@ package sdks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -14,6 +15,7 @@ import (
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/instrumentation"
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
+	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 )
 
@@ -28,12 +30,19 @@ type JavaExtensionInstrumentationFactoryEnterprise struct {
 	// creates so the underlying otel_agent_extension library does not
 	// allocate a new logger per instrumented process.
 	logger *slog.Logger
+	// metricsConsumer is the single OTLP/gRPC metrics exporter shared by every
+	// instrumented Java process.
+	metricsConsumer consumer.Metrics
 }
 
-func NewJavaExtensionInstrumentationFactoryEnterprise() instrumentation.Factory {
-	return &JavaExtensionInstrumentationFactoryEnterprise{
-		logger: slog.New(commonlogger.NewSlogHandler("ebpfjavaext")),
+func NewJavaExtensionInstrumentationFactoryEnterprise(metricsConsumer consumer.Metrics) (instrumentation.Factory, error) {
+	if metricsConsumer == nil {
+		return nil, errors.New("metrics consumer is nil")
 	}
+	return &JavaExtensionInstrumentationFactoryEnterprise{
+		logger:          slog.New(commonlogger.NewSlogHandler("ebpfjavaext")),
+		metricsConsumer: metricsConsumer,
+	}, nil
 }
 
 func (p *JavaExtensionInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.Context, pid int, settings instrumentation.Settings) (instrumentation.Instrumentation, error) {
@@ -41,8 +50,10 @@ func (p *JavaExtensionInstrumentationFactoryEnterprise) CreateInstrumentation(ct
 		auto.WithPID(pid),
 		auto.WithResourceAttributes(settings.ResourceAttributes...),
 		auto.WithServiceName(settings.ServiceName),
+		auto.WithMetricsConsumer(p.metricsConsumer),
 		auto.WithProcFS(process.HostProcDir()),
 		auto.WithLogger(p.logger),
+		auto.WithJVMMetrics(),
 	}
 
 	if settings.TracesMap.Map == nil {
@@ -56,10 +67,6 @@ func (p *JavaExtensionInstrumentationFactoryEnterprise) CreateInstrumentation(ct
 		opts = append(opts, auto.WithTraceExporter(exporter))
 	} else {
 		opts = append(opts, auto.WithEventsBuffer(settings.TracesMap.Map, settings.TracesMap.ExternalReader))
-	}
-
-	if settings.MetricsMap.HashMapOfMaps != nil {
-		opts = append(opts, auto.WithJVMMetrics(settings.MetricsMap.HashMapOfMaps, settings.MetricsMap.AttributesMap))
 	}
 
 	inst, err := auto.NewInstrumentation(ctx, opts...)
@@ -121,13 +128,8 @@ func (p *JavaExtensionOtelEbpfSdk) ApplyConfig(ctx context.Context, conf instrum
 		}
 	}
 
-	if containerConfig.Metrics != nil && containerConfig.Metrics.RuntimeMetrics != nil {
-		jvmConfig := createJVMMetricsConfig(containerConfig.Metrics.RuntimeMetrics.Java)
-		if jvmConfig != nil {
-			if err := p.inst.ApplyDynamicConfig(dynamic.JVMMetricsProbe(*jvmConfig)); err != nil {
-				return err
-			}
-		}
+	if err := p.inst.ApplyDynamicConfig(dynamic.JVMMetricsProbe(jvmMetricsConfig(containerConfig))); err != nil {
+		return err
 	}
 
 	return nil

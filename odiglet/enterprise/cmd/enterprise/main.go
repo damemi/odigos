@@ -141,7 +141,25 @@ func main() {
 		}
 	}()
 
-	factories, err := ebpfInstrumentationFactories(uint8(suffix), logger, enterpriseDistrosProvider.Getter, otlpCommonConn, tracesConsumer, waspDisabled)
+	// The same story for agent emitted metrics: one OTLP/gRPC metrics exporter for the
+	// whole odiglet, with each instrumented process stacking its own pdata pipeline on
+	// top of it so it keeps its own process Resource. It is drained on odiglet shutdown.
+	metricsConsumer, err := coreotel.NewOTLPGRPCMetricsExporter(
+		ctx,
+		commonlogger.Logger().Named("ebpf-metrics"),
+		fmt.Sprintf("localhost:%d", consts.OTLPPort),
+	)
+	if err != nil {
+		logger.Error("failed to create shared metrics exporter for ebpf", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := metricsConsumer.Shutdown(context.Background()); err != nil {
+			logger.Error("failed to shut down shared ebpf metrics exporter", "error", err)
+		}
+	}()
+
+	factories, err := ebpfInstrumentationFactories(uint8(suffix), logger, enterpriseDistrosProvider.Getter, otlpCommonConn, tracesConsumer, metricsConsumer, waspDisabled)
 	if err != nil {
 		logger.Error("failed to set up ebpf factories", "error", err)
 		os.Exit(1)
@@ -238,7 +256,7 @@ func waspProvider(logger *commonlogger.OdigosLogger, disabled bool) wasp.MapsPro
 	return wasp.NewSimpleProvider(process.HostProcDir())
 }
 
-func ebpfInstrumentationFactories(suffix uint8, logger *commonlogger.OdigosLogger, getter *distros.Getter, otlpConn *grpc.ClientConn, tracesConsumer consumer.Traces, waspDisabled bool) (map[string]commonInstrumentation.Factory, error) {
+func ebpfInstrumentationFactories(suffix uint8, logger *commonlogger.OdigosLogger, getter *distros.Getter, otlpConn *grpc.ClientConn, tracesConsumer consumer.Traces, metricsConsumer consumer.Metrics, waspDisabled bool) (map[string]commonInstrumentation.Factory, error) {
 	wp := waspProvider(logger, waspDisabled)
 
 	goFactory, err := sdks.NewGoInstrumentationFactoryEnterprise(suffix, wp, tracesConsumer)
@@ -251,9 +269,14 @@ func ebpfInstrumentationFactories(suffix uint8, logger *commonlogger.OdigosLogge
 		return nil, errors.New("java-ebpf-instrumentations distro not found")
 	}
 
-	javaEbpfFactory, err := sdks.NewJavaInstrumentationFactoryEnterprise(suffix, d, wp, otlpConn, tracesConsumer)
+	javaEbpfFactory, err := sdks.NewJavaInstrumentationFactoryEnterprise(suffix, d, wp, tracesConsumer, metricsConsumer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create java ebpf factory: %w", err)
+	}
+
+	javaExtensionFactory, err := sdks.NewJavaExtensionInstrumentationFactoryEnterprise(metricsConsumer)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create java extension factory: %w", err)
 	}
 	pythonEbpfFactory := sdks.NewPythonInstrumentationFactoryEnterprise()
 	nodejsEbpfFactory := sdks.NewNodeJSInstrumentationFactoryEnterprise()
@@ -265,7 +288,7 @@ func ebpfInstrumentationFactories(suffix uint8, logger *commonlogger.OdigosLogge
 	return map[string]commonInstrumentation.Factory{
 		sdks.GoEnterpriseDistroName:  goFactory,
 		"java-ebpf-instrumentations": javaEbpfFactory,
-		"java-enterprise":            sdks.NewJavaExtensionInstrumentationFactoryEnterprise(),
+		"java-enterprise":            javaExtensionFactory,
 		"python-enterprise":          pythonEbpfFactory,
 		"python-enterprise3.8":       pythonEbpfFactory,
 		"nodejs-enterprise":          nodejsEbpfFactory,

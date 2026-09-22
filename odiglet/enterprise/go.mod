@@ -5,10 +5,10 @@ go 1.26.4
 require (
 	github.com/cilium/ebpf v0.22.0
 	github.com/container-storage-interface/spec v1.10.0
-	github.com/odigos-io/ebpf-core v0.26.0
+	github.com/odigos-io/ebpf-core v0.27.0
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.14
-	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.53.0
-	github.com/odigos-io/ebpf-java-instrumentation/v2 v2.53.0
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.55.0
+	github.com/odigos-io/ebpf-java-instrumentation/v2 v2.55.0
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.13.0
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0-00010101000000-000000000000
@@ -20,13 +20,11 @@ require (
 	github.com/odigos-io/odigos/distros v1.38.0-pre1.0.20260916163706-a01f7763a12d
 	github.com/odigos-io/odigos/instrumentation v1.38.0-pre1.0.20260916163706-a01f7763a12d
 	github.com/odigos-io/odigos/k8sutils v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/odiglet v1.38.0-pre1.0.20260916163706-a01f7763a12d
 	github.com/odigos-io/odigos/procdiscovery v0.0.0-00010101000000-000000000000
-	go.opentelemetry.io/auto v0.24.0
+	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/consumer v1.65.0
 	go.opentelemetry.io/collector/consumer/consumertest v0.159.0
 	go.opentelemetry.io/otel v1.46.0
-	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.44.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.46.0
 	google.golang.org/grpc v1.83.1
 	k8s.io/client-go v0.35.4
@@ -155,6 +153,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/odigos-io/odigos-device-plugin v1.19.8 // indirect
+	github.com/odigos-io/odigos/odiglet v1.38.0-pre1.0.20260916163706-a01f7763a12d
 	github.com/odigos-io/odigos/odiglet/pkg/ebpf/sdks/obi v1.38.0-pre1.0.20260916163706-a01f7763a12d // indirect
 	github.com/odigos-io/odigos/opampserver v1.38.0-pre1.0.20260916163706-a01f7763a12d // indirect
 	github.com/odigos-io/runtime-detector v0.0.25 // indirect
@@ -177,7 +176,6 @@ require (
 	github.com/samber/slog-multi v1.5.0 // indirect
 	github.com/samber/slog-sampling v1.5.4 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
-	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.36 // indirect
@@ -189,6 +187,7 @@ require (
 	github.com/yl2chen/cidranger v1.0.2 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.6.0 // indirect
+	go.opentelemetry.io/auto v0.24.0
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector v0.159.0 // indirect
 	go.opentelemetry.io/collector/client v1.65.0 // indirect
@@ -237,6 +236,7 @@ require (
 	go.opentelemetry.io/obi v0.10.1-0.20260706144415-c76a93c8775c // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.20.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.20.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.44.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.44.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.46.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.44.0 // indirect
