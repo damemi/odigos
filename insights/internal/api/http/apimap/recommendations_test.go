@@ -119,6 +119,37 @@ func TestFromRecommendation_ServiceGuardrailWireShape(t *testing.T) {
 	}
 }
 
+func TestServiceGuardrailConfidence_WeakestRuleAndEmpty(t *testing.T) {
+	high := repo.Recommendation{
+		Kind: repo.RecommendationKindServiceGuardrail, Service: "shop", SampleCount: 2,
+		Rules: []repo.RecommendationRule{
+			{Rule: risk.RuleAllowedCallees, Items: []string{"inventory"}, LiveChecked: serviceRuleHighLive},
+			{Rule: risk.RuleAllowedEgress, Items: []string{"api.stripe.com"}, LiveChecked: serviceRuleHighLive + 10},
+		},
+	}
+	if got := FromRecommendation(engine.RecommendationView{Recommendation: high}).Confidence; got.Level != apitypes.RecommendationConfidenceLevelHigh || got.LiveHeld != 2*serviceRuleHighLive+10 || got.LiveBroken != 0 {
+		t.Fatalf("all-held high = %+v", got)
+	}
+	if reasons := strings.Join(FromRecommendation(engine.RecommendationView{Recommendation: high}).Confidence.Reasons, "\n"); !strings.Contains(reasons, "Checked on") || !strings.Contains(reasons, "none outside the lists") {
+		t.Fatalf("held reasons = %s", reasons)
+	}
+
+	medium := high
+	medium.Rules[1].LiveChecked = serviceRuleHighLive - 1
+	if got := FromRecommendation(engine.RecommendationView{Recommendation: medium}).Confidence.Level; got != apitypes.RecommendationConfidenceLevelMedium {
+		t.Fatalf("one under-threshold rule must pull the card to medium, got %s", got)
+	}
+
+	empty := repo.Recommendation{Kind: repo.RecommendationKindServiceGuardrail, Service: "shop", State: repo.RecommendationApplied}
+	out := FromRecommendation(engine.RecommendationView{Recommendation: empty})
+	if out.Confidence.Level != apitypes.RecommendationConfidenceLevelMedium {
+		t.Fatalf("empty rules = %s", out.Confidence.Level)
+	}
+	if !strings.Contains(out.Summary, "now covers nothing yet") {
+		t.Fatalf("applied coverage with no rules = %q", out.Summary)
+	}
+}
+
 func TestRecommendationConfidence_Levels(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -185,12 +216,16 @@ func TestRecommendationBulkAndApplyMapping(t *testing.T) {
 			Relation: apitypes.NotEquals,
 			Severity: apitypes.SeverityHigh,
 		}},
+		{Id: "sg-1", Rules: []string{" allowed_callees ", "", "allowed_egress"}},
 	}})
-	if len(items) != 2 || items[0].ID != "a" || items[0].Spec != nil {
+	if len(items) != 3 || items[0].ID != "a" || items[0].Spec != nil || len(items[0].Rules) != 0 {
 		t.Fatalf("items = %+v", items)
 	}
 	if items[1].Spec == nil || items[1].Spec.Name != "edited" || items[1].Spec.Relation != repo.CorrelationNotEquals || items[1].Spec.Left.Extract != `(\d+)` || items[1].Spec.Severity != "high" {
 		t.Fatalf("edited spec = %+v", items[1].Spec)
+	}
+	if len(items[2].Rules) != 2 || items[2].Rules[0] != risk.RuleAllowedCallees || items[2].Rules[1] != risk.RuleAllowedEgress {
+		t.Fatalf("service apply subset = %v", items[2].Rules)
 	}
 
 	preview := FromRecommendationPreview(engine.RecommendationPreview{SampleCount: 10, Observed: 8, Held: 6, Distinct: 5,
