@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"slices"
 	"time"
 
 	"go.uber.org/zap"
@@ -69,40 +68,6 @@ func connectAndGetFD(ctx context.Context, socketPath string, requestType string)
 		return -1, fmt.Errorf("expected 1 fd, got %d", len(fds))
 	}
 	return fds[0], nil
-}
-
-// ConnectAndListenMulti is like ConnectAndListen but receives multiple file descriptors
-// in a single message. The onFDs callback is invoked only when the set of FDs changes.
-func ConnectAndListenMulti(ctx context.Context, socketPath string, requestType string, logger *zap.Logger, onFDs func(fds []int)) error {
-	var lastFDs []int
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		fds, err := connectAndGetFDs(ctx, socketPath, requestType)
-		if err != nil {
-			logger.Info("Waiting for odiglet unix socket to be ready to receive FDs", zap.Error(err), zap.Duration("sleepTime", reconnectBackoff))
-			time.Sleep(reconnectBackoff)
-			continue
-		}
-
-		if !slices.Equal(fds, lastFDs) {
-			lastFDs = fds
-			onFDs(fds)
-		}
-
-		if err := waitForSocketChange(ctx, socketPath); err != nil {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			lastFDs = nil
-			continue
-		}
-	}
 }
 
 // ConnectAndListenLogs receives the logs ring buffer FD and streams attribute

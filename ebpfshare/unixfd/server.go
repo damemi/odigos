@@ -18,11 +18,10 @@ import (
 // to the collector, which needs the map FDs to read telemetry and the attribute streams
 // to enrich resources with workload identity (service.name, etc.).
 type Server struct {
-	SocketPath         string
-	Logger             logr.Logger
-	TracesFDProvider   func() int   // Function that returns the traces eBPF map file descriptor
-	MetricsFDsProvider func() []int // Function that returns all metrics-related eBPF map file descriptors
-	LogsFDsProvider    func() []int // Function that returns all logs-related eBPF map file descriptors
+	SocketPath       string
+	Logger           logr.Logger
+	TracesFDProvider func() int   // Function that returns the traces eBPF map file descriptor
+	LogsFDsProvider  func() []int // Function that returns all logs-related eBPF map file descriptors
 
 	// LogsAttrSubscribe returns attribute event lines and a snapshot of current attrs.
 	// When non-nil, the logs connection stays open after FD exchange to stream events.
@@ -109,29 +108,6 @@ func (s *Server) handleRequest(ctx context.Context, conn *net.UnixConn) {
 			return
 		}
 		logger.Info("sent FD to client", "fd", fd, "request", request)
-
-	case ReqGetMetricsFD:
-		defer func() { _ = conn.Close() }()
-		if s.MetricsFDsProvider == nil {
-			logger.Error(fmt.Errorf("metrics FDs provider not configured"), "no metrics FDs provider")
-			return
-		}
-		fds := s.MetricsFDsProvider()
-		if len(fds) == 0 {
-			logger.Error(fmt.Errorf("no metrics FDs available"), "metrics FDs provider returned empty slice")
-			return
-		}
-		for _, fd := range fds {
-			if fd <= 0 {
-				logger.Error(fmt.Errorf("invalid fd %d", fd), "FD provider returned invalid fd", "request", request)
-				return
-			}
-		}
-		if err := sendFDs(conn, fds...); err != nil {
-			logger.Error(err, "failed to send metrics FDs")
-			return
-		}
-		logger.Info("sent metrics FDs to client", "fds", fds, "request", request)
 
 	case ReqGetLogsFD:
 		s.handleLogsRequest(ctx, conn)

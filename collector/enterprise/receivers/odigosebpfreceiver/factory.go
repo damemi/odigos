@@ -2,7 +2,6 @@ package odigosebpfreceiver
 
 import (
 	"context"
-	"time"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
@@ -18,17 +17,13 @@ func NewFactory() receiver.Factory {
 		component.MustNewType(TypeStr),
 		createDefaultConfig,
 		receiver.WithTraces(createTracesReceiver, component.StabilityLevelBeta),
-		receiver.WithMetrics(createMetricsReceiver, component.StabilityLevelBeta),
 		receiver.WithLogs(createLogsReceiver, component.StabilityLevelBeta),
+		receiver.WithMetrics(createMetricsReceiver, component.StabilityLevelDeprecated),
 	)
 }
 
 func createDefaultConfig() component.Config {
-	return &Config{
-		MetricsConfig: MetricsConfig{
-			Interval: 30 * time.Second, // Default to 30 seconds
-		},
-	}
+	return &Config{}
 }
 
 func createTracesReceiver(
@@ -41,21 +36,6 @@ func createTracesReceiver(
 		config:       cfg.(*Config),
 		receiverType: ReceiverTypeTraces,
 		nextTraces:   next,
-		logger:       set.Logger,
-		settings:     set,
-	}, nil
-}
-
-func createMetricsReceiver(
-	_ context.Context,
-	set receiver.Settings,
-	cfg component.Config,
-	next consumer.Metrics,
-) (receiver.Metrics, error) {
-	return &ebpfReceiver{
-		config:       cfg.(*Config),
-		receiverType: ReceiverTypeMetrics,
-		nextMetrics:  next,
 		logger:       set.Logger,
 		settings:     set,
 	}, nil

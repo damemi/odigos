@@ -2,6 +2,8 @@ package odigosebpfreceiver
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -11,6 +13,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	rtml "github.com/odigos-io/go-rtml"
 )
@@ -217,4 +220,88 @@ func logEventToPdata(event *logEvent) plog.Logs {
 	}
 
 	return ld
+}
+
+// attrKeysCapped renders the keys of a packed "k:v,k:v" blob for logging, bounded
+// so an unusual resource cannot produce an unbounded log line. Attribute values are
+// customer data and are deliberately excluded.
+func attrKeysCapped(packed string) string {
+	const maxLen = 512
+	var keys []string
+	for _, part := range strings.Split(packed, ",") {
+		k, _, ok := strings.Cut(strings.TrimSpace(part), ":")
+		if !ok {
+			continue
+		}
+		if k = strings.TrimSpace(k); k != "" {
+			keys = append(keys, k)
+		}
+	}
+	s := strings.Join(keys, ",")
+	if len(s) <= maxLen {
+		return s
+	}
+	// Cut on a key boundary so the result stays valid UTF-8 for non-ASCII keys.
+	if i := strings.LastIndexByte(s[:maxLen], ','); i > 0 {
+		return s[:i] + ",...(truncated)"
+	}
+	return "...(truncated)"
+}
+
+// parseResourceAttributes parses a delimited string and adds resource attributes
+// Format: "key1:value1,key2:value2,key3:value3"
+// This handles the specific format used by Odigos for eBPF resource attribute encoding
+func (r *ebpfReceiver) parseResourceAttributes(resourceAttrs pcommon.Map, attributesStr string, itemDelimiter string, keyValueSeparator string) error {
+	if attributesStr == "" {
+		return fmt.Errorf("empty attributes string")
+	}
+
+	parsed := false
+	dropped := 0
+	for _, part := range strings.Split(attributesStr, itemDelimiter) {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+
+		attrParts := strings.SplitN(part, keyValueSeparator, 2)
+		if len(attrParts) != 2 {
+			// A comma inside an attribute value produces a fragment with no
+			// separator here, and takes the value it was part of down with it.
+			dropped++
+			continue
+		}
+
+		attrKey := strings.TrimSpace(attrParts[0])
+		attrValue := strings.TrimSpace(attrParts[1])
+
+		if attrKey != "" && attrValue != "" {
+			resourceAttrs.PutStr(attrKey, attrValue)
+			parsed = true
+			continue
+		}
+
+		// An attribute with an empty value is silently invisible downstream, and
+		// service.name is the one that matters.
+		dropped++
+	}
+
+	// Aggregated rather than per-segment, and gated on the level actually being
+	// enabled: the logs pipeline calls this once per log record, so a per-segment
+	// line floods, and Check keeps the fields unallocated when debug is off.
+	if dropped > 0 {
+		if ce := r.logger.Check(zapcore.DebugLevel, "resource attributes parsed with drops"); ce != nil {
+			ce.Write(
+				zap.Int("dropped", dropped),
+				zap.Int("kept", resourceAttrs.Len()),
+				zap.String("attr_keys", attrKeysCapped(attributesStr)),
+			)
+		}
+	}
+
+	if !parsed {
+		return fmt.Errorf("no valid attributes parsed from: %s", attributesStr)
+	}
+
+	return nil
 }

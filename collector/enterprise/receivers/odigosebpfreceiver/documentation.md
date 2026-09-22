@@ -8,7 +8,7 @@ The following telemetry is emitted by this component.
 
 ### otelcol_ebpf_logs_attr_cache_size
 
-Current number of entries in the logs resource-attributes cache. Bounded by the eBPF map MaxProcessesCount.
+Current number of entries in the logs resource-attributes cache.
 
 | Unit | Metric Type | Value Type | Stability |
 | ---- | ----------- | ---------- | --------- |

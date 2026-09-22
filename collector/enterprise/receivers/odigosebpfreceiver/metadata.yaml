@@ -3,7 +3,12 @@ status:
   class: receiver
 
   stability:
-    beta: [traces, metrics, logs]
+    beta: [traces, logs]
+    deprecated: [metrics]
+  deprecation:
+    metrics:
+      date: "2026-09-17"
+      migration: "JVM runtime metrics are reported over OTLP by the Java agent and arrive on the otlp/in receiver. This receiver keeps accepting metrics as a no-op for one release; remove it from any metrics pipeline."
   codeowners:
     active: [tamirdavid]
 
@@ -11,7 +16,7 @@ telemetry:
   metrics:
     ebpf_logs_attr_cache_size:
       enabled: true
-      description: "Current number of entries in the logs resource-attributes cache. Bounded by the eBPF map MaxProcessesCount."
+      description: "Current number of entries in the logs resource-attributes cache."
       unit: "{entries}"
       gauge:
         value_type: int

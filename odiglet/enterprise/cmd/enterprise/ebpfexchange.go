@@ -18,10 +18,8 @@ import (
 // hands their file descriptors to the enterprise collector's odigosebpfreceiver. Both ends are
 // enterprise-only, so none of this exists in the OSS odiglet.
 type ebpfMapExchange struct {
-	traces            *cilumebpf.Map
-	metrics           *cilumebpf.Map
-	metricsAttributes *cilumebpf.Map
-	logs              *cilumebpf.Map
+	traces *cilumebpf.Map
+	logs   *cilumebpf.Map
 }
 
 // newEbpfMapExchange creates the shared maps. The maps live for the lifetime of the process;
@@ -38,18 +36,10 @@ func newEbpfMapExchange() (*ebpfMapExchange, error) {
 		return nil, fmt.Errorf("failed to create traces eBPF map: %w", err)
 	}
 
-	metrics, metricsAttributes, err := ebpfmaps.CreateMetricsMaps()
-	if err != nil {
-		traces.Close()
-		return nil, fmt.Errorf("failed to create metrics eBPF maps: %w", err)
-	}
-
 	// A kernel without ring buffer support yields a nil logs map rather than an error.
 	logs, err := ebpfmaps.CreateLogsMap()
 	if err != nil {
 		traces.Close()
-		metrics.Close()
-		metricsAttributes.Close()
 		return nil, fmt.Errorf("failed to create logs eBPF map: %w", err)
 	}
 
@@ -58,10 +48,8 @@ func newEbpfMapExchange() (*ebpfMapExchange, error) {
 	}
 
 	return &ebpfMapExchange{
-		traces:            traces,
-		metrics:           metrics,
-		metricsAttributes: metricsAttributes,
-		logs:              logs,
+		traces: traces,
+		logs:   logs,
 	}, nil
 }
 
@@ -69,8 +57,6 @@ func newEbpfMapExchange() (*ebpfMapExchange, error) {
 // external readers against them instead of creating maps of their own.
 func (e *ebpfMapExchange) applyTo(opts *ebpf.InstrumentationManagerOptions) {
 	opts.TracesMap = e.traces
-	opts.MetricsMap = e.metrics
-	opts.MetricsAttributesMap = e.metricsAttributes
 	opts.LogsMap = e.logs
 }
 
@@ -82,16 +68,6 @@ func (e *ebpfMapExchange) serve(ctx context.Context) error {
 		Logger:     commonlogger.ToLogr(),
 		TracesFDProvider: func() int {
 			return e.traces.FD()
-		},
-		MetricsFDsProvider: func() []int {
-			var fds []int
-			if e.metrics != nil {
-				fds = append(fds, e.metrics.FD())
-			}
-			if e.metricsAttributes != nil {
-				fds = append(fds, e.metricsAttributes.FD())
-			}
-			return fds
 		},
 		LogsFDsProvider: func() []int {
 			if e.logs != nil {
@@ -109,7 +85,7 @@ func (e *ebpfMapExchange) serve(ctx context.Context) error {
 
 // close releases the maps. Safe to call on a partially populated exchange.
 func (e *ebpfMapExchange) close() {
-	for _, m := range []*cilumebpf.Map{e.traces, e.metrics, e.metricsAttributes, e.logs} {
+	for _, m := range []*cilumebpf.Map{e.traces, e.logs} {
 		if m != nil {
 			m.Close()
 		}

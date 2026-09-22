@@ -66,7 +66,7 @@ func NewTelemetryBuilder(settings component.TelemetrySettings, options ...Teleme
 	var err, errs error
 	builder.EbpfLogsAttrCacheSize, err = builder.meter.Int64Gauge(
 		"otelcol_ebpf_logs_attr_cache_size",
-		metric.WithDescription("Current number of entries in the logs resource-attributes cache. Bounded by the eBPF map MaxProcessesCount. [Development]"),
+		metric.WithDescription("Current number of entries in the logs resource-attributes cache. [Development]"),
 		metric.WithUnit("{entries}"),
 	)
 	errs = errors.Join(errs, err)
