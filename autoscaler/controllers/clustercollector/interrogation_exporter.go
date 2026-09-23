@@ -50,9 +50,6 @@ func addInterrogationExporters(c *config.Config, odigosNs string, interrogation 
 		if dims := transactionIdentityDimensions(transactionIdentity); len(dims) > 0 {
 			tracesExp["transaction_identity_dimensions"] = dims
 		}
-		if llm := interrogationLLMExporterConfig(interrogation); llm != nil {
-			tracesExp["llm"] = llm
-		}
 		c.Exporters[commonconf.InterrogationTracesExporter] = tracesExp
 		rootPipeline.Exporters = append(rootPipeline.Exporters, commonconf.InterrogationTracesExporter)
 		c.Service.Pipelines[rootPipelineName] = rootPipeline
@@ -66,27 +63,4 @@ func transactionIdentityDimensions(cfg *common.TransactionIdentityConfiguration)
 		return nil
 	}
 	return cfg.Dimensions
-}
-
-func interrogationLLMExporterConfig(interrogation *common.InterrogationConfiguration) config.GenericMap {
-	if interrogation == nil || interrogation.LLM == nil {
-		return nil
-	}
-	llm := interrogation.LLM
-	if llm.APIKey == "" {
-		return nil
-	}
-	out := config.GenericMap{
-		"api_key": llm.APIKey,
-	}
-	if llm.Provider != "" {
-		out["provider"] = llm.Provider
-	}
-	if llm.Model != "" {
-		out["model"] = llm.Model
-	}
-	if llm.BaseURL != "" {
-		out["base_url"] = llm.BaseURL
-	}
-	return out
 }

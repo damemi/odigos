@@ -639,20 +639,6 @@ type TransactionIdentityConfiguration struct {
 }
 
 // +kubebuilder:object:generate=true
-// InterrogationLLMConfiguration configures the optional LLM used by the
-// interrogation traces exporter to suggest which stack frames should become spans.
-type InterrogationLLMConfiguration struct {
-	// Provider is the LLM backend. Supported: "openai" (default), "openai_compatible".
-	Provider string `json:"provider,omitempty" yaml:"provider,omitempty"`
-	// Model is the model id (e.g. "gpt-4o-mini").
-	Model string `json:"model,omitempty" yaml:"model,omitempty"`
-	// APIKey is the bearer token for the provider.
-	APIKey string `json:"apiKey,omitempty" yaml:"apiKey,omitempty"`
-	// BaseURL overrides the API root (include /v1). Required for openai_compatible.
-	BaseURL string `json:"baseUrl,omitempty" yaml:"baseUrl,omitempty"`
-}
-
-// +kubebuilder:object:generate=true
 // InterrogationConfiguration toggles the interrogation loop that correlates
 // traces and profiles via a bounding join. Disabled unless Enabled is set.
 // When on, the gateway installs groupbytrace and the traces-side exporter taps
@@ -660,9 +646,6 @@ type InterrogationLLMConfiguration struct {
 // I/O correlations.
 type InterrogationConfiguration struct {
 	Enabled *bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
-	// LLM optionally configures a chatbot that suggests instrumentation targets
-	// from joined profile stacks. When unset, prompts are only logged.
-	LLM *InterrogationLLMConfiguration `json:"llm,omitempty" yaml:"llm,omitempty"`
 }
 
 // OdigosConfiguration defines the desired state of OdigosConfiguration

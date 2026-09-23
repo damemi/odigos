@@ -1165,38 +1165,6 @@
           "description": "When true, enables the interrogation loop (trace–profile correlation) on the collector.",
           "required": [],
           "title": "enabled"
-        },
-        "llm": {
-          "additionalProperties": false,
-          "description": "Optional LLM used by the interrogation traces exporter to suggest which\nprofile stack frames should become spans. Uses the OpenAI Chat Completions\nAPI (also works with openai_compatible gateways via baseUrl).",
-          "properties": {
-            "apiKey": {
-              "default": "",
-              "description": "Bearer API key for the provider. Prefer injecting via --set or a secret overlay.",
-              "required": [],
-              "title": "apiKey"
-            },
-            "baseUrl": {
-              "default": "",
-              "description": "Optional API root including /v1. Required when provider is openai_compatible.",
-              "required": [],
-              "title": "baseUrl"
-            },
-            "model": {
-              "default": "gpt-4o-mini",
-              "description": "Model id (e.g. gpt-4o-mini).",
-              "required": [],
-              "title": "model"
-            },
-            "provider": {
-              "default": "openai",
-              "description": "LLM provider. Supported values - openai (default), openai_compatible.",
-              "required": [],
-              "title": "provider"
-            }
-          },
-          "required": [],
-          "title": "llm"
         }
       },
       "required": [],

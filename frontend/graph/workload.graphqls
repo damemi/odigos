@@ -443,8 +443,8 @@ type InterrogationTransaction {
   seenCount: Int!
   functions: [InterrogationFunction!]!
   """
-  OTLP JSON traces sample for this transaction, if stored.
-  Currently unavailable (no longer persisted); null when selected.
+  OTLP JSON traces sample for this transaction (service-invocation spans only),
+  if stored in interrogation.tx_transactions. Null when missing or interrogation is off.
   """
   sampleTrace: String
   """

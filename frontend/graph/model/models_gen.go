@@ -1650,7 +1650,6 @@ type InterrogationTransaction struct {
 	SeenCount int                      `json:"seenCount"`
 	Functions []*InterrogationFunction `json:"functions"`
 	// OTLP JSON traces sample for this transaction, if stored.
-	// Currently unavailable (no longer persisted); null when selected.
 	SampleTrace *string `json:"sampleTrace,omitempty"`
 	// Flat call-path trie nodes for this transaction. Resolved on demand from
 	// ClickHouse tx_call_trie when selected; null when missing or interrogation is

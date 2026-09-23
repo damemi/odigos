@@ -83,21 +83,6 @@ data:
     {{- if .Values.interrogation.enabled }}
     interrogation:
       enabled: {{ .Values.interrogation.enabled }}
-      {{- with .Values.interrogation.llm }}
-      {{- if .apiKey }}
-      llm:
-        {{- if .provider }}
-        provider: {{ .provider | quote }}
-        {{- end }}
-        {{- if .model }}
-        model: {{ .model | quote }}
-        {{- end }}
-        apiKey: {{ .apiKey | quote }}
-        {{- if .baseUrl }}
-        baseUrl: {{ .baseUrl | quote }}
-        {{- end }}
-      {{- end }}
-      {{- end }}
     {{- end }}
     {{- if .Values.profiling.enabled }}
     {{- $pex := .Values.profiling.exporter | default dict }}

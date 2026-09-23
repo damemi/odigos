@@ -188,29 +188,6 @@ interrogation:
   # description: When true, enables the interrogation loop (trace–profile correlation) on the collector, and deploys bundled ClickHouse when needed.
   # @schema
   enabled: false
-  # @schema
-  # description: |-
-  #   Optional LLM used by the interrogation traces exporter to suggest which
-  #   profile stack frames should become spans. Uses the OpenAI Chat Completions
-  #   API (also works with openai_compatible gateways via baseUrl).
-  # @schema
-  llm:
-    # @schema
-    # description: LLM provider. Supported values - openai (default), openai_compatible.
-    # @schema
-    provider: openai
-    # @schema
-    # description: Model id (e.g. gpt-4o-mini).
-    # @schema
-    model: gpt-4o-mini
-    # @schema
-    # description: Bearer API key for the provider. Prefer injecting via --set or a secret overlay.
-    # @schema
-    apiKey: ""
-    # @schema
-    # description: Optional API root including /v1. Required when provider is openai_compatible.
-    # @schema
-    baseUrl: ""
 
 # @schema
 # description: Configuration for OpenTelemetry (OTEL) agents instrumentation environment variables.

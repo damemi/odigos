@@ -23,6 +23,7 @@ const (
 	clickhouseUser     = "odigos_insights"
 	clickhouseDatabase = "interrogation"
 	callTrieTable      = "tx_call_trie"
+	transactionsTable  = "tx_transactions"
 	trieRootParent     = "root"
 
 	clickhouseDialTimeout = 5 * time.Second
@@ -85,9 +86,10 @@ type callTrieEdgeRow struct {
 
 // Client talks to interrogation ClickHouse (read-only).
 type Client struct {
-	db             driver.Conn
-	listEdgesSQL   string
-	callTrieSQL    string
+	db                 driver.Conn
+	listEdgesSQL       string
+	callTrieSQL        string
+	sampleTraceSQL     string
 }
 
 // NewClient builds a ClickHouse client for the interrogation database.
@@ -121,6 +123,7 @@ func NewClientWithConn(db driver.Conn) *Client {
 
 func newClientWithConn(db driver.Conn) *Client {
 	fqn := fmt.Sprintf("%q.%q", clickhouseDatabase, callTrieTable)
+	txFqn := fmt.Sprintf("%q.%q", clickhouseDatabase, transactionsTable)
 	return &Client{
 		db: db,
 		listEdgesSQL: fmt.Sprintf(`
@@ -156,6 +159,16 @@ WHERE Namespace = ?
 	AND TransactionId = ?
 GROUP BY TransactionId, NodeId, Parent, FunctionName, FrameType, SampleType
 `, fqn),
+		sampleTraceSQL: fmt.Sprintf(`
+SELECT SampleTrace
+FROM %s
+WHERE Namespace = ?
+	AND WorkloadKind = ?
+	AND WorkloadName = ?
+	AND ContainerName = ?
+	AND TransactionId = ?
+LIMIT 1
+`, txFqn),
 	}
 }
 
@@ -240,10 +253,12 @@ func (c *Client) ListContainerTransactions(ctx context.Context, namespace, kind,
 	}, nil
 }
 
-// GetTransactionSampleTrace used to return a stored OTLP JSON sample. Sample
-// traces are no longer persisted; always returns empty.
+// GetTransactionSampleTrace returns the stored OTLP JSON sample for a
+// transaction (service-invocation ResourceSpans only). Empty when none stored.
 func (c *Client) GetTransactionSampleTrace(ctx context.Context, namespace, kind, name, containerName, txID string) (string, error) {
-	_ = ctx
+	if c == nil || c.db == nil {
+		return "", ErrUnavailable
+	}
 	namespace = strings.TrimSpace(namespace)
 	kind = strings.TrimSpace(kind)
 	name = strings.TrimSpace(name)
@@ -252,7 +267,21 @@ func (c *Client) GetTransactionSampleTrace(ctx context.Context, namespace, kind,
 	if namespace == "" || kind == "" || name == "" || containerName == "" || txID == "" {
 		return "", fmt.Errorf("namespace, kind, name, containerName, and transactionId are required")
 	}
-	return "", nil
+
+	rows, err := c.db.Query(ctx, c.sampleTraceSQL, namespace, kind, name, containerName, txID)
+	if err != nil {
+		return "", fmt.Errorf("%w: query sample trace: %v", ErrUnavailable, err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return "", rows.Err()
+	}
+	var sample string
+	if err := rows.Scan(&sample); err != nil {
+		return "", fmt.Errorf("%w: scan sample trace: %v", ErrUnavailable, err)
+	}
+	return sample, nil
 }
 
 // GetTransactionCallTrie returns flat call-path trie nodes for a transaction.

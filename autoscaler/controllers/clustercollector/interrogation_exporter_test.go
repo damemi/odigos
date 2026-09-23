@@ -138,45 +138,6 @@ func TestAddInterrogationExporters_BothPipelines(t *testing.T) {
 	assert.True(t, hasTraces)
 }
 
-func TestAddInterrogationExporters_LLMConfigOnTracesExporter(t *testing.T) {
-	on := true
-	c := configWithTracesRootPipeline()
-	require.NoError(t, addInterrogationExporters(c, "odigos-system", &common.InterrogationConfiguration{
-		Enabled: &on,
-		LLM: &common.InterrogationLLMConfiguration{
-			Provider: "openai",
-			Model:    "gpt-4o-mini",
-			APIKey:   "sk-test",
-			BaseURL:  "https://api.openai.com/v1",
-		},
-	}, nil))
-
-	exp, ok := c.Exporters[commonconf.InterrogationTracesExporter].(config.GenericMap)
-	require.True(t, ok)
-	llm, ok := exp["llm"].(config.GenericMap)
-	require.True(t, ok)
-	assert.Equal(t, "openai", llm["provider"])
-	assert.Equal(t, "gpt-4o-mini", llm["model"])
-	assert.Equal(t, "sk-test", llm["api_key"])
-	assert.Equal(t, "https://api.openai.com/v1", llm["base_url"])
-}
-
-func TestAddInterrogationExporters_LLMSkippedWithoutAPIKey(t *testing.T) {
-	on := true
-	c := configWithTracesRootPipeline()
-	require.NoError(t, addInterrogationExporters(c, "odigos-system", &common.InterrogationConfiguration{
-		Enabled: &on,
-		LLM: &common.InterrogationLLMConfiguration{
-			Provider: "openai",
-			Model:    "gpt-4o-mini",
-		},
-	}, nil))
-
-	exp := c.Exporters[commonconf.InterrogationTracesExporter].(config.GenericMap)
-	_, hasLLM := exp["llm"]
-	assert.False(t, hasLLM)
-}
-
 func TestAddInterrogationExporters_TransactionIdentityDimensions(t *testing.T) {
 	on := true
 	c := configWithTracesRootPipeline()

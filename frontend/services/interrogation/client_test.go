@@ -83,10 +83,10 @@ func TestCallTrieFromEdgesSharedPrefix(t *testing.T) {
 	assert.Equal(t, nodeBC, nodes[2].ID)
 }
 
-func TestGetTransactionSampleTraceAlwaysEmpty(t *testing.T) {
+func TestGetTransactionSampleTraceUnavailable(t *testing.T) {
 	c := NewClient("", "")
 	got, err := c.GetTransactionSampleTrace(context.Background(), "default", "Deployment", "checkout", "app", "tx-1")
-	require.NoError(t, err)
+	assert.ErrorIs(t, err, ErrUnavailable)
 	assert.Empty(t, got)
 }
 
