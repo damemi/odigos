@@ -102,20 +102,37 @@ func TestFromRecommendation_ServiceGuardrailWireShape(t *testing.T) {
 	if out.Title != "Lock down edge-gateway" || len(out.Rules) != 2 || out.Rules[0].Label != "Allowed callees" {
 		t.Fatalf("title/rules = %q %+v", out.Title, out.Rules)
 	}
-	if !strings.Contains(out.Summary, "covering allowed callees (1), allowed egress (0)") {
+	if out.Summary != "Apply to raise a finding for any callee outside the 1 observed or any external host." {
 		t.Fatalf("summary = %q", out.Summary)
 	}
 	rec.State, rec.AppliedRules = repo.RecommendationApplied, []repo.RuleKey{risk.RuleAllowedEgress}
 	applied := FromRecommendation(engine.RecommendationView{Recommendation: rec})
-	if applied.Title != "edge-gateway locked down" || !strings.Contains(applied.Summary, "now covers allowed egress (0).") || strings.Contains(applied.Summary, "callees") {
+	if applied.Title != "edge-gateway locked down" || applied.Summary != "Raises a finding for any external host." {
 		t.Fatalf("applied title/summary = %q %q", applied.Title, applied.Summary)
 	}
 	c := out.Confidence
 	if c.Level != apitypes.RecommendationConfidenceLevelLow || c.SampleCount != 3 || c.LiveHeld != 69 || c.LiveBroken != 1 || !c.LiveSince.Equal(since) || !c.LiveLast.Equal(since.Add(2*time.Hour)) {
 		t.Fatalf("confidence = %+v", c)
 	}
-	if !strings.Contains(strings.Join(c.Reasons, "\n"), "Allowed egress: 1 of 10 live traces") || !strings.Contains(strings.Join(c.Reasons, "\n"), "Allowed egress: nothing observed") {
+	reasons := strings.Join(c.Reasons, "\n")
+	if !strings.Contains(reasons, "Allowed egress: 1 of 10 live traces") || strings.Contains(reasons, "nothing observed") {
 		t.Fatalf("reasons = %v", c.Reasons)
+	}
+}
+
+func TestServiceGuardrailSummary_EmptyListsStillFire(t *testing.T) {
+	rec := repo.Recommendation{
+		Kind: repo.RecommendationKindServiceGuardrail, State: repo.RecommendationOpen, Service: "edge-gateway",
+		Rules: []repo.RecommendationRule{
+			{Rule: risk.RuleAllowedCallers},
+			{Rule: risk.RuleAllowedCallees, Items: []string{"account-service", "pricing"}},
+			{Rule: risk.RuleAllowedEgress},
+		},
+	}
+	got := FromRecommendation(engine.RecommendationView{Recommendation: rec}).Summary
+	want := "Apply to raise a finding for any caller, any callee outside the 2 observed, or any external host."
+	if got != want {
+		t.Fatalf("summary = %q", got)
 	}
 }
 
@@ -145,7 +162,7 @@ func TestServiceGuardrailConfidence_WeakestRuleAndEmpty(t *testing.T) {
 	if out.Confidence.Level != apitypes.RecommendationConfidenceLevelMedium {
 		t.Fatalf("empty rules = %s", out.Confidence.Level)
 	}
-	if !strings.Contains(out.Summary, "now covers nothing yet") {
+	if out.Summary != "Guardrail is on." {
 		t.Fatalf("applied coverage with no rules = %q", out.Summary)
 	}
 }

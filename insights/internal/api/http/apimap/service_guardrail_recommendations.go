@@ -110,30 +110,69 @@ func serviceGuardrailTitle(rec repo.Recommendation) string {
 	return fmt.Sprintf("Lock down %s", rec.Service)
 }
 
+// One call to action. An empty list fires on any new item; a filled list fires
+// only outside what was already observed. Applied cards drop the "Apply to".
 func serviceGuardrailSummary(rec repo.Recommendation) string {
+	clause := serviceGuardrailCoverage(rec, rec.State == repo.RecommendationApplied)
 	if rec.State == repo.RecommendationApplied {
-		return fmt.Sprintf("A guardrail on %s now covers %s. Anything outside these lists raises a finding.",
-			rec.Service, serviceGuardrailCoverage(rec, true))
+		if clause == "" {
+			return "Guardrail is on."
+		}
+		return "Raises a finding for " + clause + "."
 	}
-	return fmt.Sprintf("Every one of %s's %d transaction%s has finished learning. Apply to put a guardrail on it covering %s, from what was observed; anything already enforced or switched off is left as is.",
-		rec.Service, rec.SampleCount, pluralS(rec.SampleCount), serviceGuardrailCoverage(rec, false))
+	if clause == "" {
+		return "Apply to raise a finding."
+	}
+	return "Apply to raise a finding for " + clause + "."
 }
 
-// serviceGuardrailCoverage spells out the categories and list sizes, e.g.
-// "allowed callees (2), allowed egress (0)"; appliedOnly narrows to the ones
-// an apply turned on.
+// Categories the guardrail enforces, in rule order. appliedOnly keeps the ones
+// a past apply turned on.
 func serviceGuardrailCoverage(rec repo.Recommendation, appliedOnly bool) string {
 	parts := make([]string, 0, len(rec.Rules))
 	for _, r := range rec.Rules {
 		if appliedOnly && !slices.Contains(rec.AppliedRules, r.Rule) {
 			continue
 		}
-		parts = append(parts, fmt.Sprintf("%s (%d)", strings.ToLower(ruleLabel(r.Rule)), len(r.Items)))
+		parts = append(parts, serviceGuardrailClause(r))
 	}
-	if len(parts) == 0 {
-		return "nothing yet"
+	return joinOr(parts)
+}
+
+func serviceGuardrailClause(r repo.RecommendationRule) string {
+	thing := serviceGuardrailThing(r.Rule)
+	if len(r.Items) == 0 {
+		return "any " + thing
 	}
-	return strings.Join(parts, ", ")
+	return fmt.Sprintf("any %s outside the %d observed", thing, len(r.Items))
+}
+
+func serviceGuardrailThing(key repo.RuleKey) string {
+	switch key {
+	case risk.RuleAllowedCallers:
+		return "caller"
+	case risk.RuleAllowedCallees:
+		return "callee"
+	case risk.RuleAllowedEgress:
+		return "external host"
+	case risk.RuleAllowedTransactions:
+		return "transaction"
+	default:
+		return strings.ToLower(ruleLabel(key))
+	}
+}
+
+func joinOr(parts []string) string {
+	switch len(parts) {
+	case 0:
+		return ""
+	case 1:
+		return parts[0]
+	case 2:
+		return parts[0] + " or " + parts[1]
+	default:
+		return strings.Join(parts[:len(parts)-1], ", ") + ", or " + parts[len(parts)-1]
+	}
 }
 
 func serviceGuardrailReasons(rec repo.Recommendation) []string {
@@ -151,11 +190,6 @@ func serviceGuardrailReasons(rec repo.Recommendation) []string {
 		reasons = append(reasons, "Not yet checked against live traffic")
 	case violated == 0:
 		reasons = append(reasons, fmt.Sprintf("Checked on %d live traces, none outside the lists", checked))
-	}
-	for _, r := range rec.Rules {
-		if len(r.Items) == 0 {
-			reasons = append(reasons, fmt.Sprintf("%s: nothing observed, enforcing forbids any", ruleLabel(r.Rule)))
-		}
 	}
 	return reasons
 }
