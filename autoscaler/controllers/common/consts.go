@@ -19,9 +19,6 @@ const (
 	// (and other backends) show workload names instead of unknown_service:<process>.
 	ProfilingNodeServiceNameProcessor = "transform/profiles-service-name"
 	ProfilingNodeToGatewayExporter    = "otlp_grpc/profiles-to-gateway"
-	// ProfilingNodeLoadbalancingExporter routes profile samples by TraceID to gateway
-	// backends. Used when interrogation is enabled so linked profile stacks co-locate with their spans.
-	ProfilingNodeLoadbalancingExporter = "odigos_profiles_loadbalancing"
 
 	// Cluster gateway profiles pipeline — OTLP in from nodes, export to UI (no extra processors).
 	ProfilingGatewayToUIExporter = "otlp_grpc/profiles-to-ui"

@@ -186,7 +186,6 @@ func TestCalculateConfigMapData(t *testing.T) {
 		false,                   /* onGKE */
 		true,                    /* loadBalancingNeeded */
 		nil,                     /* profiling */
-		false,                   /* interrogationEnabled */
 		common.OnPremOdigosTier, /* tier */
 	)
 
@@ -281,7 +280,6 @@ func TestNodeCollectorUsesLoadBalancingExporterForTailSampling(t *testing.T) {
 		false,                   /* onGKE */
 		loadBalancingNeeded,     /* loadBalancingNeeded */
 		nil,                     /* profiling */
-		false,                   /* interrogationEnabled */
 		common.OnPremOdigosTier, /* tier */
 	)
 
@@ -351,7 +349,6 @@ func TestCalculateConfigMapDataTracesOnlyNoLoadBalancing(t *testing.T) {
 		false,                   /* onGKE */
 		false,                   /* loadBalancingNeeded */
 		nil,                     /* profiling */
-		false,                   /* interrogationEnabled */
 		common.OnPremOdigosTier, /* tier */
 	)
 

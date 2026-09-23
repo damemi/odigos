@@ -1,8 +1,6 @@
 package collectorconfig
 
 import (
-	"fmt"
-
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	commonconf "github.com/odigos-io/odigos/autoscaler/controllers/common"
 	"github.com/odigos-io/odigos/common"
@@ -11,14 +9,17 @@ import (
 )
 
 // ProfilingPipelineConfig builds the node collector profiles domain when profiling is enabled.
-// When profilesLoadBalancingNeeded is true (interrogation), profiles are exported via
-// odigos_profiles_loadbalancing so TraceID-linked samples land on the same gateway as spans.
-func ProfilingPipelineConfig(odigosNamespace string, profiling *common.ProfilingConfiguration, manifestProcessorNames []string, profilesLoadBalancingNeeded bool) config.Config {
+func ProfilingPipelineConfig(odigosNamespace string, profiling *common.ProfilingConfiguration, manifestProcessorNames []string) config.Config {
 	if !common.ProfilingPipelineActive(profiling) {
 		return config.Config{}
 	}
 
-	exporters, exporterName := profilesExporters(odigosNamespace, profiling, profilesLoadBalancingNeeded)
+	endpoint := k8sconsts.OtlpGrpcDNSEndpoint(k8sconsts.OdigosClusterCollectorServiceName, odigosNamespace, odigosconsts.OTLPPort)
+	exp := commonconf.MergeProfilingOtlpExporter(config.GenericMap{
+		"endpoint":    endpoint,
+		"tls":         config.GenericMap{"insecure": true},
+		"compression": "none",
+	}, profiling.Exporter)
 
 	// memory_limiter itself is defined once, globally, by commonProcessors() (see
 	// common.go) — every pipeline just references its name, never redefines it.
@@ -55,47 +56,17 @@ func ProfilingPipelineConfig(odigosNamespace string, profiling *common.Profiling
 			},
 		},
 		Processors: processors,
-		Exporters:  exporters,
+		Exporters: config.GenericMap{
+			commonconf.ProfilingNodeToGatewayExporter: exp,
+		},
 		Service: config.Service{
 			Pipelines: map[string]config.Pipeline{
 				"profiles": {
 					Receivers:  []string{commonconf.ProfilingReceiver},
 					Processors: pipelineProcessors,
-					Exporters:  []string{exporterName},
+					Exporters:  []string{commonconf.ProfilingNodeToGatewayExporter},
 				},
 			},
 		},
 	}
-}
-
-func profilesExporters(odigosNamespace string, profiling *common.ProfilingConfiguration, profilesLoadBalancingNeeded bool) (config.GenericMap, string) {
-	if profilesLoadBalancingNeeded {
-		service := fmt.Sprintf("%s.%s", k8sconsts.OdigosClusterCollectorServiceName, odigosNamespace)
-		otlpConfig := commonconf.MergeProfilingOtlpExporter(config.GenericMap{
-			"tls":         config.GenericMap{"insecure": true},
-			"compression": "none",
-		}, profiling.Exporter)
-		return config.GenericMap{
-			commonconf.ProfilingNodeLoadbalancingExporter: config.GenericMap{
-				"protocol": config.GenericMap{
-					"otlp": otlpConfig,
-				},
-				"resolver": config.GenericMap{
-					"k8s": config.GenericMap{
-						"service": service,
-					},
-				},
-			},
-		}, commonconf.ProfilingNodeLoadbalancingExporter
-	}
-
-	endpoint := k8sconsts.OtlpGrpcDNSEndpoint(k8sconsts.OdigosClusterCollectorServiceName, odigosNamespace, odigosconsts.OTLPPort)
-	exp := commonconf.MergeProfilingOtlpExporter(config.GenericMap{
-		"endpoint":    endpoint,
-		"tls":         config.GenericMap{"insecure": true},
-		"compression": "none",
-	}, profiling.Exporter)
-	return config.GenericMap{
-		commonconf.ProfilingNodeToGatewayExporter: exp,
-	}, commonconf.ProfilingNodeToGatewayExporter
 }

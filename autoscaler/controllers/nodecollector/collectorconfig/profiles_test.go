@@ -12,27 +12,26 @@ import (
 )
 
 func TestProfilingPipelineConfig_Disabled(t *testing.T) {
-	got := ProfilingPipelineConfig("odigos-system", nil, nil, false)
+	got := ProfilingPipelineConfig("odigos-system", nil, nil)
 	assert.Empty(t, got.Receivers)
 	assert.Empty(t, got.Processors)
 	assert.Empty(t, got.Exporters)
 	assert.Empty(t, got.Service.Pipelines)
 
 	off := false
-	got = ProfilingPipelineConfig("odigos-system", &common.ProfilingConfiguration{Enabled: &off}, nil, false)
+	got = ProfilingPipelineConfig("odigos-system", &common.ProfilingConfiguration{Enabled: &off}, nil)
 	assert.Empty(t, got.Service.Pipelines)
 }
 
 func TestProfilingPipelineConfig_Enabled(t *testing.T) {
 	on := true
-	got := ProfilingPipelineConfig("odigos-system", &common.ProfilingConfiguration{Enabled: &on}, nil, false)
+	got := ProfilingPipelineConfig("odigos-system", &common.ProfilingConfiguration{Enabled: &on}, nil)
 	require.Contains(t, got.Receivers, commonconf.ProfilingReceiver)
 	require.Contains(t, got.Processors, commonconf.ProfilingNodeFilterProcessor)
 	require.Contains(t, got.Processors, commonconf.ProfilingNodeK8sAttributesProcessor)
 	require.Contains(t, got.Processors, commonconf.ProfilingNodeOdigosProfilesProcessor)
 	require.Contains(t, got.Processors, commonconf.ProfilingNodeServiceNameProcessor)
 	require.Contains(t, got.Exporters, commonconf.ProfilingNodeToGatewayExporter)
-	require.NotContains(t, got.Exporters, commonconf.ProfilingNodeLoadbalancingExporter)
 
 	pl, ok := got.Service.Pipelines["profiles"]
 	require.True(t, ok)
@@ -60,41 +59,10 @@ func TestProfilingPipelineConfig_Enabled(t *testing.T) {
 	assert.Equal(t, k8sconsts.OdigosConfigK8sExtensionType, odigosProfilesCfg["odigos_config_extension"])
 }
 
-func TestProfilingPipelineConfig_LoadBalancingWhenInterrogation(t *testing.T) {
-	on := true
-	got := ProfilingPipelineConfig("odigos-system", &common.ProfilingConfiguration{Enabled: &on}, nil, true)
-
-	require.Contains(t, got.Exporters, commonconf.ProfilingNodeLoadbalancingExporter)
-	require.NotContains(t, got.Exporters, commonconf.ProfilingNodeToGatewayExporter)
-
-	pl, ok := got.Service.Pipelines["profiles"]
-	require.True(t, ok)
-	assert.Equal(t, []string{commonconf.ProfilingNodeLoadbalancingExporter}, pl.Exporters)
-
-	exp, ok := got.Exporters[commonconf.ProfilingNodeLoadbalancingExporter].(config.GenericMap)
-	require.True(t, ok)
-	protocol, ok := exp["protocol"].(config.GenericMap)
-	require.True(t, ok)
-	otlp, ok := protocol["otlp"].(config.GenericMap)
-	require.True(t, ok)
-	assert.Equal(t, "none", otlp["compression"])
-	tls, ok := otlp["tls"].(config.GenericMap)
-	require.True(t, ok)
-	assert.Equal(t, true, tls["insecure"])
-	_, hasEndpoint := otlp["endpoint"]
-	assert.False(t, hasEndpoint, "LB child protocol must not set a static endpoint")
-
-	resolver, ok := exp["resolver"].(config.GenericMap)
-	require.True(t, ok)
-	k8s, ok := resolver["k8s"].(config.GenericMap)
-	require.True(t, ok)
-	assert.Equal(t, "odigos-gateway.odigos-system", k8s["service"])
-}
-
 func TestProfilingPipelineConfig_UserProcessorsAppended(t *testing.T) {
 	on := true
 	userProcessors := []string{"resource/addclusterinfo", "transform/rename"}
-	got := ProfilingPipelineConfig("odigos-system", &common.ProfilingConfiguration{Enabled: &on}, userProcessors, false)
+	got := ProfilingPipelineConfig("odigos-system", &common.ProfilingConfiguration{Enabled: &on}, userProcessors)
 
 	pl, ok := got.Service.Pipelines["profiles"]
 	require.True(t, ok)
@@ -120,7 +88,7 @@ func TestProfilingPipelineConfig_NativeSymbolizationDisabled(t *testing.T) {
 	got := ProfilingPipelineConfig("odigos-system", &common.ProfilingConfiguration{
 		Enabled:       &on,
 		Symbolization: &common.ProfilingSymbolizationConfiguration{Native: &off},
-	}, nil, false)
+	}, nil)
 	require.NotContains(t, got.Processors, commonconf.ProfilingNodeSymbolizeProcessor)
 
 	pl := got.Service.Pipelines["profiles"]
