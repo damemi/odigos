@@ -84,15 +84,12 @@ func TestAddInterrogationExporters_EnabledAppendsToProfilesPipeline(t *testing.T
 
 	exp, ok := c.Exporters[commonconf.InterrogationProfilesExporter].(config.GenericMap)
 	require.True(t, ok, "profiles exporter must be registered")
-	assert.Equal(t, commonconf.InterrogationCacheExtension, exp["interrogation_cache_extension"])
 	assert.Equal(t, "tcp://odigos-insights-clickhouse.odigos-system:9000", exp["clickhouse_endpoint"])
 	assert.Equal(t, "${ODIGOS_INSIGHTS_CLICKHOUSE_PASSWORD}", exp["clickhouse_password"])
+	_, hasCacheExt := exp["interrogation_cache_extension"]
+	assert.False(t, hasCacheExt, "profiles exporter does not use in-process cache")
 	_, hasRedis := exp["redis_endpoint"]
 	assert.False(t, hasRedis, "profiles exporter does not write to redis")
-
-	_, hasExt := c.Extensions[commonconf.InterrogationCacheExtension]
-	assert.True(t, hasExt, "cache extension must be registered")
-	assert.Contains(t, c.Service.Extensions, commonconf.InterrogationCacheExtension)
 
 	pl := c.Service.Pipelines[gatewayProfilesPipeline]
 	assert.Equal(t, []string{"otlp"}, pl.Receivers)
@@ -109,12 +106,12 @@ func TestAddInterrogationExporters_EnabledAppendsToTracesPipeline(t *testing.T) 
 
 	exp, ok := c.Exporters[commonconf.InterrogationTracesExporter].(config.GenericMap)
 	require.True(t, ok, "traces exporter must be registered")
-	assert.Equal(t, commonconf.InterrogationCacheExtension, exp["interrogation_cache_extension"])
-	assert.Equal(t, "odigos-interrogation-redis.odigos-system:6379", exp["redis_endpoint"])
-
-	_, hasExt := c.Extensions[commonconf.InterrogationCacheExtension]
-	assert.True(t, hasExt)
-	assert.Contains(t, c.Service.Extensions, commonconf.InterrogationCacheExtension)
+	_, hasCacheExt := exp["interrogation_cache_extension"]
+	assert.False(t, hasCacheExt, "traces exporter does not use in-process cache")
+	_, hasRedis := exp["redis_endpoint"]
+	assert.False(t, hasRedis, "traces exporter does not write to redis")
+	assert.Equal(t, "tcp://odigos-insights-clickhouse.odigos-system:9000", exp["clickhouse_endpoint"])
+	assert.Equal(t, "${ODIGOS_INSIGHTS_CLICKHOUSE_PASSWORD}", exp["clickhouse_password"])
 
 	rootName := pipelinegen.GetTelemetryRootPipelineName(common.TracesObservabilitySignal)
 	pl := c.Service.Pipelines[rootName]

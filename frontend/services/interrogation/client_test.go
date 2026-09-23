@@ -4,110 +4,108 @@ import (
 	"context"
 	"testing"
 
-	"github.com/alicebob/miniredis/v2"
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseFunctionMember(t *testing.T) {
-	fn, ok := parseFunctionMember("com.app.Handler.handle|jvm|events")
-	require.True(t, ok)
-	assert.Equal(t, Function{Name: "com.app.Handler.handle", FrameType: "jvm", SampleType: "events"}, fn)
+func TestAssembleTransactions(t *testing.T) {
+	edges := []callTrieEdgeRow{
+		{TransactionID: "tx-a", NodeID: "n1", Parent: "root", FunctionName: "Pay", FrameType: "jvm", SampleType: "events", Count: 7},
+		{TransactionID: "tx-a", NodeID: "n2", Parent: "root", FunctionName: "Encrypt", FrameType: "hotspot", SampleType: "samples", Count: 3},
+		{TransactionID: "tx-a", NodeID: "n3", Parent: "n2", FunctionName: "Encrypt", FrameType: "hotspot", SampleType: "samples", Count: 2},
+		{TransactionID: "tx-b", NodeID: "n4", Parent: "root", FunctionName: "Cart", FrameType: "jvm", SampleType: "events", Count: 4},
+		{TransactionID: "tx-b", NodeID: "n5", Parent: "root", FunctionName: "Cart", FrameType: "hotspot", SampleType: "samples", Count: 4},
+	}
 
-	_, ok = parseFunctionMember("only-name")
-	assert.False(t, ok)
-	_, ok = parseFunctionMember("|jvm|events")
-	assert.False(t, ok)
-	_, ok = parseFunctionMember("\x1e") // stack separator stored in the funcs set
-	assert.False(t, ok)
-}
-
-func TestListContainerTransactions(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { _ = rdb.Close() })
-	c := NewClientWithRedis(rdb)
-
-	key1 := "interrogation:tx:funcs:default/Deployment/checkout/app:lib@1 Server GET /pay"
-	key2 := "interrogation:tx:funcs:default/Deployment/checkout/app:lib@1 Server POST /cart"
-	other := "interrogation:tx:funcs:default/Deployment/checkout/sidecar:lib@1 Server GET /pay"
-	require.NoError(t, rdb.SAdd(context.Background(), key1,
-		"com.app.Pay|jvm|events",
-		"com.app.Encrypt|hotspot|samples",
-	).Err())
-	require.NoError(t, rdb.Set(context.Background(), "interrogation:tx:count:default/Deployment/checkout/app:lib@1 Server GET /pay", "10", 0).Err())
-	require.NoError(t, rdb.HSet(context.Background(), "interrogation:tx:fncounts:default/Deployment/checkout/app:lib@1 Server GET /pay",
-		"com.app.Pay|jvm|events", "7",
-		"com.app.Encrypt|hotspot|samples", "3",
-	).Err())
-	require.NoError(t, rdb.SAdd(context.Background(), key2, "com.app.Cart|jvm|events").Err())
-	require.NoError(t, rdb.Set(context.Background(), "interrogation:tx:count:default/Deployment/checkout/app:lib@1 Server POST /cart", "4", 0).Err())
-	require.NoError(t, rdb.HSet(context.Background(), "interrogation:tx:fncounts:default/Deployment/checkout/app:lib@1 Server POST /cart",
-		"com.app.Cart|jvm|events", "4",
-	).Err())
-	require.NoError(t, rdb.SAdd(context.Background(), other, "com.app.Other|jvm|events").Err())
-
-	got, err := c.ListContainerTransactions(context.Background(), "default", "Deployment", "checkout", "app")
-	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Equal(t, "default", got.Namespace)
-	assert.Equal(t, "Deployment", got.Kind)
-	assert.Equal(t, "checkout", got.Name)
-	assert.Equal(t, "app", got.ContainerName)
-	require.Len(t, got.Transactions, 2)
+	txs := assembleTransactions(edges)
+	require.Len(t, txs, 2)
 
 	byID := map[string]Transaction{}
-	for _, tx := range got.Transactions {
+	for _, tx := range txs {
 		byID[tx.ID] = tx
 	}
-	require.Contains(t, byID, "lib@1 Server GET /pay")
-	require.Contains(t, byID, "lib@1 Server POST /cart")
-	assert.Equal(t, int64(10), byID["lib@1 Server GET /pay"].SeenCount)
+	require.Contains(t, byID, "tx-a")
+	require.Contains(t, byID, "tx-b")
+
+	assert.Equal(t, int64(3), byID["tx-a"].SeenCount)
 	assert.ElementsMatch(t, []Function{
-		{Name: "com.app.Pay", FrameType: "jvm", SampleType: "events", SeenCount: 7},
-		{Name: "com.app.Encrypt", FrameType: "hotspot", SampleType: "samples", SeenCount: 3},
-	}, byID["lib@1 Server GET /pay"].Functions)
-	assert.Equal(t, int64(4), byID["lib@1 Server POST /cart"].SeenCount)
+		{Name: "Pay", FrameType: "jvm", SampleType: "events", SeenCount: 7},
+		{Name: "Encrypt", FrameType: "hotspot", SampleType: "samples", SeenCount: 5},
+	}, byID["tx-a"].Functions)
+
+	assert.Equal(t, int64(4), byID["tx-b"].SeenCount)
 	assert.ElementsMatch(t, []Function{
-		{Name: "com.app.Cart", FrameType: "jvm", SampleType: "events", SeenCount: 4},
-	}, byID["lib@1 Server POST /cart"].Functions)
+		{Name: "Cart", FrameType: "jvm", SampleType: "events", SeenCount: 4},
+		{Name: "Cart", FrameType: "hotspot", SampleType: "samples", SeenCount: 4},
+	}, byID["tx-b"].Functions)
+
+	// Sorted by seenCount desc: tx-b(4), tx-a(3)
+	assert.Equal(t, "tx-b", txs[0].ID)
+	assert.Equal(t, "tx-a", txs[1].ID)
 }
 
-func TestGetTransactionSampleTrace(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { _ = rdb.Close() })
-	c := NewClientWithRedis(rdb)
+func TestCallTrieFromEdgesSharedPrefix(t *testing.T) {
+	const (
+		nodeB  = "node-b"
+		nodeBA = "node-ba"
+		nodeBC = "node-bc"
+	)
+	edges := []callTrieEdgeRow{
+		{TransactionID: "tx", NodeID: nodeB, Parent: "root", FunctionName: "b", FrameType: "hotspot", SampleType: "samples", Count: 2},
+		{TransactionID: "tx", NodeID: nodeBA, Parent: nodeB, FunctionName: "a", FrameType: "hotspot", SampleType: "samples", Count: 1},
+		{TransactionID: "tx", NodeID: nodeBC, Parent: nodeB, FunctionName: "c", FrameType: "hotspot", SampleType: "samples", Count: 1},
+	}
 
-	const sample = `{"resourceSpans":[{"scopeSpans":[{"spans":[{"name":"GET /pay"}]}]}]}`
-	require.NoError(t, rdb.Set(context.Background(),
-		"interrogation:tx:spans:default/Deployment/checkout/app:lib@1 Server GET /pay",
-		sample, 0).Err())
+	nodes := callTrieFromEdges(edges)
+	require.Len(t, nodes, 3)
 
-	got, err := c.GetTransactionSampleTrace(context.Background(), "default", "Deployment", "checkout", "app", "lib@1 Server GET /pay")
-	require.NoError(t, err)
-	assert.Equal(t, sample, got)
+	byID := map[string]CallTrieNode{}
+	for _, n := range nodes {
+		byID[n.ID] = n
+	}
+	require.Contains(t, byID, nodeB)
+	assert.Equal(t, "", byID[nodeB].ParentID)
+	assert.Equal(t, "b", byID[nodeB].Name)
+	assert.Equal(t, int64(2), byID[nodeB].SeenCount)
 
-	missing, err := c.GetTransactionSampleTrace(context.Background(), "default", "Deployment", "checkout", "app", "missing")
-	require.NoError(t, err)
-	assert.Empty(t, missing)
+	require.Contains(t, byID, nodeBA)
+	assert.Equal(t, nodeB, byID[nodeBA].ParentID)
+	assert.Equal(t, "a", byID[nodeBA].Name)
+	assert.Equal(t, int64(1), byID[nodeBA].SeenCount)
+
+	require.Contains(t, byID, nodeBC)
+	assert.Equal(t, nodeB, byID[nodeBC].ParentID)
+	assert.Equal(t, "c", byID[nodeBC].Name)
+
+	// Sorted by seenCount desc, then name: b(2), a(1), c(1)
+	assert.Equal(t, nodeB, nodes[0].ID)
+	assert.Equal(t, nodeBA, nodes[1].ID)
+	assert.Equal(t, nodeBC, nodes[2].ID)
 }
 
-func TestListContainerTransactionsEmpty(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { _ = rdb.Close() })
-	c := NewClientWithRedis(rdb)
-
-	got, err := c.ListContainerTransactions(context.Background(), "default", "Deployment", "missing", "app")
+func TestGetTransactionSampleTraceAlwaysEmpty(t *testing.T) {
+	c := NewClient("", "")
+	got, err := c.GetTransactionSampleTrace(context.Background(), "default", "Deployment", "checkout", "app", "tx-1")
 	require.NoError(t, err)
-	require.NotNil(t, got)
-	assert.Empty(t, got.Transactions)
+	assert.Empty(t, got)
 }
 
 func TestListContainerTransactionsUnavailable(t *testing.T) {
-	c := NewClient("")
+	c := NewClient("", "")
 	_, err := c.ListContainerTransactions(context.Background(), "default", "Deployment", "checkout", "app")
 	assert.ErrorIs(t, err, ErrUnavailable)
+}
+
+func TestGetTransactionCallTrieUnavailable(t *testing.T) {
+	c := NewClient("tcp://localhost:9000", "")
+	_, ok, err := c.GetTransactionCallTrie(context.Background(), "default", "Deployment", "checkout", "app", "tx-1")
+	assert.ErrorIs(t, err, ErrUnavailable)
+	assert.False(t, ok)
+}
+
+func TestNewClientEmptyConfig(t *testing.T) {
+	c := NewClient("", "secret")
+	assert.Nil(t, c.db)
+	c = NewClient("tcp://localhost:9000", "")
+	assert.Nil(t, c.db)
 }

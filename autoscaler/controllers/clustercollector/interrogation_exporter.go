@@ -1,8 +1,6 @@
 package clustercollector
 
 import (
-	"slices"
-
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	commonconf "github.com/odigos-io/odigos/autoscaler/controllers/common"
 	"github.com/odigos-io/odigos/common"
@@ -12,11 +10,11 @@ import (
 
 const gatewayProfilesPipeline = "profiles"
 
-// addInterrogationExporters enables the interrogation bounding-join exporters and
-// the shared cache extension when interrogation is on. Profiles exporter is
-// appended only when the gateway profiles pipeline exists. Traces exporter is
-// appended to the root traces pipeline (traces/in), which is post-groupbytrace —
-// the same attachment point as insights and service I/O correlations.
+// addInterrogationExporters enables the interrogation exporters when interrogation
+// is on. Profiles exporter is appended only when the gateway profiles pipeline
+// exists. Traces exporter is appended to the root traces pipeline (traces/in),
+// which is post-groupbytrace — the same attachment point as insights and
+// service I/O correlations. Profile/trace correlation happens in ClickHouse.
 // transactionIdentity supplies optional dimensions for the traces exporter config
 // (from OdigosConfiguration.transactionIdentity).
 func addInterrogationExporters(c *config.Config, odigosNs string, interrogation *common.InterrogationConfiguration, transactionIdentity *common.TransactionIdentityConfiguration) error {
@@ -31,17 +29,14 @@ func addInterrogationExporters(c *config.Config, odigosNs string, interrogation 
 		return nil
 	}
 
-	ensureInterrogationCacheExtension(c)
-
 	if c.Exporters == nil {
 		c.Exporters = config.GenericMap{}
 	}
 
 	if hasProfiles {
 		c.Exporters[commonconf.InterrogationProfilesExporter] = config.GenericMap{
-			"interrogation_cache_extension": commonconf.InterrogationCacheExtension,
-			"clickhouse_endpoint":           k8sconsts.InsightsClickHouseEndpoint(odigosNs),
-			"clickhouse_password":           "${" + k8sconsts.OdigosInsightsClickHousePasswordEnv + "}",
+			"clickhouse_endpoint": k8sconsts.InsightsClickHouseEndpoint(odigosNs),
+			"clickhouse_password": "${" + k8sconsts.OdigosInsightsClickHousePasswordEnv + "}",
 		}
 		profilesPipeline.Exporters = append(profilesPipeline.Exporters, commonconf.InterrogationProfilesExporter)
 		c.Service.Pipelines[gatewayProfilesPipeline] = profilesPipeline
@@ -49,8 +44,8 @@ func addInterrogationExporters(c *config.Config, odigosNs string, interrogation 
 
 	if hasTraces {
 		tracesExp := config.GenericMap{
-			"interrogation_cache_extension": commonconf.InterrogationCacheExtension,
-			"redis_endpoint":                k8sconsts.InterrogationRedisEndpoint(odigosNs),
+			"clickhouse_endpoint": k8sconsts.InsightsClickHouseEndpoint(odigosNs),
+			"clickhouse_password": "${" + k8sconsts.OdigosInsightsClickHousePasswordEnv + "}",
 		}
 		if dims := transactionIdentityDimensions(transactionIdentity); len(dims) > 0 {
 			tracesExp["transaction_identity_dimensions"] = dims
@@ -94,14 +89,4 @@ func interrogationLLMExporterConfig(interrogation *common.InterrogationConfigura
 		out["base_url"] = llm.BaseURL
 	}
 	return out
-}
-
-func ensureInterrogationCacheExtension(c *config.Config) {
-	if c.Extensions == nil {
-		c.Extensions = config.GenericMap{}
-	}
-	c.Extensions[commonconf.InterrogationCacheExtension] = config.GenericMap{}
-	if !slices.Contains(c.Service.Extensions, commonconf.InterrogationCacheExtension) {
-		c.Service.Extensions = append(c.Service.Extensions, commonconf.InterrogationCacheExtension)
-	}
 }

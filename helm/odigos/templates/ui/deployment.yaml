@@ -59,6 +59,14 @@ spec:
             value: {{ .Values.ui.logLevel | default .Values.logLevel | default "info" | quote }}
           - name: GOMEMLIMIT
             value: {{ include "odigos.gomemlimitFromResources" (dict "Resources" .Values.ui.resources) }}
+          {{- if and (include "odigos.clickhouseEnabled" .) (include "odigos.secretExists" .) }}
+          # Interrogation (and insights) read from the bundled ClickHouse.
+          - name: ODIGOS_INSIGHTS_CLICKHOUSE_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: odigos-insights-clickhouse
+                key: password
+          {{- end }}
           {{- if $isEnterprise }}
           # Consumed by the enterprise UI at startup; ignored by the community image.
           - name: ODIGOS_ONPREM_TOKEN

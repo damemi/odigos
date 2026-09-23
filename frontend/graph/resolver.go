@@ -26,6 +26,6 @@ type Resolver struct {
 	ProfileStore fecommon.ProfileStoreRef
 	// InsightsClient is the client for the Odigos Insights service.
 	InsightsClient *insights.Client
-	// InterrogationClient reads transaction functions from interrogation Redis.
+	// InterrogationClient reads transaction call tries from interrogation ClickHouse.
 	InterrogationClient *interrogation.Client
 }

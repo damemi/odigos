@@ -1620,9 +1620,9 @@ type InstrumentorConfig struct {
 
 // One node in a transaction's call-path trie (flat list; assemble tree via parentId).
 type InterrogationCallTrieNode struct {
-	// Stable Redis node id for this call-path frame.
+	// Stable node id for this call-path frame (sha1 of parent + frame identity).
 	ID string `json:"id"`
-	// Parent node id, or null for roots (children of the Redis parent "root").
+	// Parent node id, or null for roots (children of the ClickHouse Parent "root").
 	ParentID   *string `json:"parentId,omitempty"`
 	Name       string  `json:"name"`
 	FrameType  string  `json:"frameType"`
@@ -1632,7 +1632,6 @@ type InterrogationCallTrieNode struct {
 }
 
 // One detected function from a profile sample linked to a transaction.
-// Redis member format: name|frameType|sampleType.
 type InterrogationFunction struct {
 	Name string `json:"name"`
 	// profile.frame.type (e.g. jvm, hotspot).
@@ -1643,19 +1642,20 @@ type InterrogationFunction struct {
 	SeenCount int `json:"seenCount"`
 }
 
-// One transaction observed for a workload container, with its Redis-stored functions.
+// One transaction observed for a workload container, with ClickHouse-stored functions.
 type InterrogationTransaction struct {
-	// Transaction id as stored in the Redis key suffix.
+	// Transaction id as stored in tx_call_trie.TransactionId.
 	ID string `json:"id"`
 	// Times this transaction was observed.
 	SeenCount int                      `json:"seenCount"`
 	Functions []*InterrogationFunction `json:"functions"`
 	// OTLP JSON traces sample for this transaction, if stored.
-	// Resolved on demand from Redis when selected; null when missing or interrogation is off.
+	// Currently unavailable (no longer persisted); null when selected.
 	SampleTrace *string `json:"sampleTrace,omitempty"`
-	// Flat call-path trie nodes for this transaction. Resolved on demand from Redis
-	// when selected; null when missing or interrogation is off. Empty when keys exist
-	// but have no nodes. Build the tree in the client via id/parentId.
+	// Flat call-path trie nodes for this transaction. Resolved on demand from
+	// ClickHouse tx_call_trie when selected; null when missing or interrogation is
+	// off. Empty when the query returns no nodes. Build the tree in the client via
+	// id/parentId.
 	CallTrie []*InterrogationCallTrieNode `json:"callTrie,omitempty"`
 }
 
@@ -1834,8 +1834,8 @@ type K8sWorkloadContainer struct {
 	CollectorConfig  *K8sWorkloadContainerCollectorConfig             `json:"collectorConfig,omitempty"`
 	Instrumentations []*K8sWorkloadPodContainerProcessInstrumentation `json:"instrumentations,omitempty"`
 	// Trace interrogation: transactions and detected stack functions for this
-	// container, read from interrogation Redis. Empty when interrogation is
-	// disabled or nothing has been stored yet.
+	// container, read from interrogation ClickHouse (tx_call_trie). Empty when
+	// interrogation is disabled or nothing has been stored yet.
 	InterrogationTransactions []*InterrogationTransaction `json:"interrogationTransactions"`
 }
 

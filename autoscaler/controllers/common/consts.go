@@ -26,17 +26,14 @@ const (
 	// Cluster gateway profiles pipeline — OTLP in from nodes, export to UI (no extra processors).
 	ProfilingGatewayToUIExporter = "otlp_grpc/profiles-to-ui"
 
-	// InterrogationProfilesExporter feeds the in-process profile cache used for the
-	// interrogation bounding join. Appended to the gateway profiles pipeline when enabled.
+	// InterrogationProfilesExporter persists profile samples to insights ClickHouse
+	// for async correlation. Appended to the gateway profiles pipeline when enabled.
 	InterrogationProfilesExporter = "odigos_interrogation_profiles"
 
-	// InterrogationTracesExporter looks up cached profile stacks for spans (bounding join).
-	// Appended to the gateway root traces pipeline when enabled.
+	// InterrogationTracesExporter persists service invocations to insights ClickHouse
+	// for async correlation with profile samples. Appended to the gateway root
+	// traces pipeline when enabled.
 	InterrogationTracesExporter = "odigos_interrogation_traces"
-
-	// InterrogationCacheExtension is the in-process stack cache used by the
-	// interrogation profiles and traces exporters.
-	InterrogationCacheExtension = "odigos_interrogation_cache"
 )
 
 // OpenTelemetry component instance name for the side-channel exporter

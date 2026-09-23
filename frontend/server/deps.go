@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/go-logr/logr"
@@ -47,7 +48,7 @@ type Deps struct {
 	CorrelationsMetricsStoreURL string
 	// InsightsClient is the client for the Odigos Insights service.
 	InsightsClient *insights.Client
-	// InterrogationClient reads transaction functions from interrogation Redis.
+	// InterrogationClient reads transaction call tries from interrogation ClickHouse.
 	InterrogationClient *interrogation.Client
 	ProfileStore        *profiles.ProfileStore
 	ProfilingGate       *profiles.IngestGate
@@ -145,7 +146,10 @@ func Bootstrap(ctx context.Context, flags Flags, logger logr.Logger) (*Deps, err
 		return nil, fmt.Errorf("initializing insights client: %w", err)
 	}
 
-	interrogationClient := interrogation.NewClient(k8sconsts.InterrogationRedisEndpoint(flags.Namespace))
+	interrogationClient := interrogation.NewClient(
+		k8sconsts.InsightsClickHouseEndpoint(flags.Namespace),
+		os.Getenv(k8sconsts.OdigosInsightsClickHousePasswordEnv),
+	)
 
 	return &Deps{
 		Flags:                       flags,

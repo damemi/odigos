@@ -383,15 +383,14 @@ type K8sWorkloadContainer {
 
   """
   Trace interrogation: transactions and detected stack functions for this
-  container, read from interrogation Redis. Empty when interrogation is
-  disabled or nothing has been stored yet.
+  container, read from interrogation ClickHouse (tx_call_trie). Empty when
+  interrogation is disabled or nothing has been stored yet.
   """
   interrogationTransactions: [InterrogationTransaction!]!
 }
 
 """
 One detected function from a profile sample linked to a transaction.
-Redis member format: name|frameType|sampleType.
 """
 type InterrogationFunction {
   name: String!
@@ -414,11 +413,11 @@ One node in a transaction's call-path trie (flat list; assemble tree via parentI
 """
 type InterrogationCallTrieNode {
   """
-  Stable Redis node id for this call-path frame.
+  Stable node id for this call-path frame (sha1 of parent + frame identity).
   """
   id: String!
   """
-  Parent node id, or null for roots (children of the Redis parent "root").
+  Parent node id, or null for roots (children of the ClickHouse Parent "root").
   """
   parentId: String
   name: String!
@@ -431,11 +430,11 @@ type InterrogationCallTrieNode {
 }
 
 """
-One transaction observed for a workload container, with its Redis-stored functions.
+One transaction observed for a workload container, with ClickHouse-stored functions.
 """
 type InterrogationTransaction {
   """
-  Transaction id as stored in the Redis key suffix.
+  Transaction id as stored in tx_call_trie.TransactionId.
   """
   id: String!
   """
@@ -445,13 +444,14 @@ type InterrogationTransaction {
   functions: [InterrogationFunction!]!
   """
   OTLP JSON traces sample for this transaction, if stored.
-  Resolved on demand from Redis when selected; null when missing or interrogation is off.
+  Currently unavailable (no longer persisted); null when selected.
   """
   sampleTrace: String
   """
-  Flat call-path trie nodes for this transaction. Resolved on demand from Redis
-  when selected; null when missing or interrogation is off. Empty when keys exist
-  but have no nodes. Build the tree in the client via id/parentId.
+  Flat call-path trie nodes for this transaction. Resolved on demand from
+  ClickHouse tx_call_trie when selected; null when missing or interrogation is
+  off. Empty when the query returns no nodes. Build the tree in the client via
+  id/parentId.
   """
   callTrie: [InterrogationCallTrieNode!]
 }
