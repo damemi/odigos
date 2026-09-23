@@ -178,7 +178,7 @@ ORDER BY (scope_type, scope_key, recommendation_id);
 
 -- Shadow-evaluation counters: how a still-open recommendation fares against
 -- live traffic. Summed across replicas and flush cycles like the other counters.
--- rule_key splits a service_guardrail card's counts per proposed rule; it is
+-- rule_key splits a service_guardrail card's counts per proposed rule. It is
 -- empty for correlation rows, which count as a whole.
 CREATE TABLE IF NOT EXISTS recommendation_live_counts (
     scope_type        LowCardinality(String) DEFAULT 'transaction',
