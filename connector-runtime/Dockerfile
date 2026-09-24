@@ -6,7 +6,7 @@
 # go.mod until odigos/api is published with OdigosCloudConnector):
 #   docker build -f connector-runtime/Dockerfile --build-context odigos=../odigos .
 
-FROM --platform=$BUILDPLATFORM golang:1.26.2 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.8 AS builder
 ARG TARGETARCH
 ARG LD_FLAGS
 WORKDIR /workspace

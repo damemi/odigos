@@ -38,7 +38,7 @@
 ARG LAMBDA_AGENTS_IMAGE=us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-lambda-agents:v0.0.15
 
 # --- Go build ------------------------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM golang:1.26.2 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.8 AS builder
 ARG TARGETARCH
 ARG LD_FLAGS
 WORKDIR /workspace

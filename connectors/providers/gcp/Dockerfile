@@ -8,7 +8,7 @@
 #   docker build -f connectors/providers/gcp/Dockerfile .
 
 # --- Go build ------------------------------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM golang:1.26.2 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.8 AS builder
 ARG TARGETARCH
 ARG LD_FLAGS
 WORKDIR /workspace
