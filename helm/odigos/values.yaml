@@ -31,7 +31,7 @@ imagePrefix:
 #       autoscaler: registry.connect.redhat.com/odigos/odigos-autoscaler-ubi9:v1.0.0
 #       collector: registry.connect.redhat.com/odigos/odigos-collector-ubi9:v1.0.0
 #   Supported component names: autoscaler, collector, enterprise-collector, ui, enterprise-ui,
-#     instrumentor, enterprise-instrumentor, odiglet, enterprise-odiglet, scheduler, agents, enterprise-agents, enterprise-insights
+#     instrumentor, enterprise-instrumentor, odiglet, enterprise-odiglet, scheduler, agents, enterprise-agents, enterprise-insights, enterprise-interrogation
 # additionalProperties: true
 # @schema
 images: {}
@@ -181,13 +181,50 @@ transactionIdentity:
 #   Interrogation loop (off by default): correlates traces and profiles in ClickHouse
 #   so uprobe/probe profiles can be tied to spans. Opt-in; leave disabled unless you need it.
 #   When enabled, also deploys bundled ClickHouse (odigos-insights-clickhouse; shared with
-#   insights) in the Odigos namespace if not already present.
+#   insights) in the Odigos namespace if not already present, and deploys the
+#   odigos-interrogation control-loop service (enterprise; requires on-prem token).
 # @schema
 interrogation:
   # @schema
-  # description: When true, enables the interrogation loop (trace–profile correlation) on the collector, and deploys bundled ClickHouse when needed.
+  # description: When true, enables the interrogation loop (trace–profile correlation) on the collector, deploys bundled ClickHouse when needed, and deploys the interrogation service.
   # @schema
   enabled: false
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # @schema
+  # description: Override the global nodeSelector (values.nodeSelector) for this component
+  # @schema
+  # nodeSelector:
+  #   kubernetes.io/os: linux
+
+  # @schema
+  # items:
+  #   description: |-
+  #     A Kubernetes Toleration. See https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
+  #   type: object
+  # @schema
+  tolerations: []
+  # @schema
+  # additionalProperties: true
+  # @schema
+  affinity: {}
+
+  # @schema
+  # description: Priority class name. Set to use your existing cluster priority classes.
+  # @schema
+  # priorityClassName: ''
+
+  # @schema
+  # description: Log level for the interrogation service (falls back to global logLevel).
+  # @schema
+  # logLevel: info
 
 # @schema
 # description: Configuration for OpenTelemetry (OTEL) agents instrumentation environment variables.
