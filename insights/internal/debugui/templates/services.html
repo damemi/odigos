@@ -34,6 +34,7 @@
     {{if .Namespace}}<span class="svc-ns">{{.Namespace}}</span>{{end}}
     {{if eq .InventoryStatus "promoted"}}<span class="badge badge-ok">promoted</span>
     {{else}}<span class="badge badge-pending">learning</span>{{end}}
+    {{if .TransactionLimitReached}}<span class="badge badge-warn" title="This service reached the limit of {{.TransactionLimit}} tracked transactions, so operations not seen before are dropped and not learned. If the service really has this many endpoints, raise Max transactions per service in Settings. If span names carry ids, templatize them.">transaction limit reached</span>{{end}}
     {{if .InventoryProtected}}{{if .InventoryAuto}}<span class="badge badge-kind" title="allowed_transactions guardrail created automatically when the service promoted">auto txn guardrail</span>{{else}}<span class="badge badge-kind" title="allowed_transactions guardrail is enforcing">txn guardrail</span>{{end}}{{end}}
     <span class="svc-meta">
       {{.PromotedCount}}/{{.ActiveCount}} promoted

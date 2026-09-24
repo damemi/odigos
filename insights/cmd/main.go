@@ -169,6 +169,9 @@ func main() {
 		log.Warn("failed to load system settings; using compiled defaults until the next reload", "error", err)
 	}
 	eng.SetSystemConfig(systemCfg)
+	if err := eng.SyncTransactionAdmission(rootCtx); err != nil {
+		log.Warn("failed to seed the per-service transaction index; the cap counts only this replica's admissions until the next reload", "error", err)
+	}
 	go runSystemSettingsReloader(rootCtx, log, eng)
 
 	// Engine-backed admin for REST and debug UI writes (ProductAPI already wired).

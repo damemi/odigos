@@ -35,6 +35,11 @@ type Repository interface {
 	// UI listings use ListTransactionStats / ListServiceStats instead.
 	ListTransactions(ctx context.Context, limit int) ([]Transaction, error)
 
+	// ListTransactionRefs returns every transaction's id and owning service.
+	// Backs the engine's per-service admission index (max_transactions_per_service),
+	// seeded at startup and re-synced on settings reload; not on the per-trace path.
+	ListTransactionRefs(ctx context.Context) ([]TransactionRef, error)
+
 	// GetTransactionByID returns one transaction's identity (service, namespace,
 	// operation, kind). ok=false when unknown.
 	GetTransactionByID(ctx context.Context, transactionID int64) (Transaction, bool, error)

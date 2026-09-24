@@ -100,6 +100,19 @@ var (
 		Help:      "Baseline store entries evicted by the LRU cap (flushed first).",
 	})
 
+	// transactionsDroppedOverCap counts sub-transactions dropped because their
+	// service already holds max_transactions_per_service identities. A steady
+	// rate means a service emits high-cardinality span names (request ids in
+	// paths) or the cap is too low for it. No service label: the offenders are
+	// visible on GET /services as transaction_limit_reached, and a label per
+	// service would itself be unbounded.
+	transactionsDroppedOverCap = prometheus.NewCounter(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "engine",
+		Name:      "transactions_dropped_over_cap_total",
+		Help:      "Sub-transactions dropped because their service reached max_transactions_per_service.",
+	})
+
 	// baselineDirty is the current number of transactions with unflushed
 	// deltas waiting for the write-behind flusher.
 	baselineDirty = prometheus.NewGauge(prometheus.GaugeOpts{
@@ -202,7 +215,7 @@ var (
 
 func init() {
 	registry.MustRegister(
-		repoCalls, repoCallDuration, tracesProcessed, subtransactionsProcessed,
+		repoCalls, repoCallDuration, tracesProcessed, subtransactionsProcessed, transactionsDroppedOverCap,
 		transactionCache, policyCache, baselineCache, baselineEvictions, baselineDirty, baselineResident,
 		baselineFlush, baselineFlushDuration, promotionSweeperClasses,
 		anomalyDuplicatesSuppressed, samplesDropped,
@@ -249,6 +262,10 @@ func AddSubtransactionsProcessed(n int) {
 	if n > 0 {
 		subtransactionsProcessed.Add(float64(n))
 	}
+}
+
+func IncTransactionsDroppedOverCap() {
+	transactionsDroppedOverCap.Inc()
 }
 
 // IncAnomalyDuplicateSuppressed records one deviation suppressed as a duplicate

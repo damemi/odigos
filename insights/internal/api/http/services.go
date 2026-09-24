@@ -27,7 +27,8 @@ func (a *API) listServices(c *gin.Context) {
 		writeError(c, http.StatusInternalServerError, err)
 		return
 	}
-	c.JSON(http.StatusOK, apimap.ServiceStatList(services))
+	limit := a.LiveSystemSettings().MaxTransactionsPerService
+	c.JSON(http.StatusOK, apimap.ServiceStatList(services, limit))
 }
 
 // listServiceNames is the GET /api/v1/service-names handler; it returns every

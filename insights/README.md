@@ -243,17 +243,19 @@ and a long enough soak - used for the distribution/shape classes (D3/D4)
 where stability matters more than speed.
 
 Default policies (seeded by `000001_initial_schema`): every class promotes on
-**stability** - `any` of "300 observations with no new structure" or "1 week
-structurally stable".
+**stability** - "2 weeks structurally stable". Time only: a busy transaction
+does not promote early on observation count, so weekly and bi-weekly patterns
+are learned before the baseline freezes.
 
 | class | conditions | match mode |
 |---|---|---|
-| `D1_call_edges` | 300 stable observations OR 1 week (10080 minutes) | `any` |
-| `D2_egress` | 300 stable observations OR 1 week (10080 minutes) | `any` |
-| `D3_latency` | 300 stable observations OR 1 week (10080 minutes) | `any` |
-| `D5_libraries` | 300 stable observations OR 1 week (10080 minutes) | `any` |
-| `D6_db_access` | 300 stable observations OR 1 week (10080 minutes) | `any` |
-| `D7_payload_size` | 300 stable observations OR 1 week (10080 minutes) | `any` |
+| `D1_call_edges` | 2 weeks stable (20160 minutes) | `all` |
+| `D2_egress` | 2 weeks stable (20160 minutes) | `all` |
+| `D3_latency` | 2 weeks stable (20160 minutes) | `all` |
+| `D4_args_returns` | 2 weeks stable (20160 minutes) | `all` |
+| `D5_libraries` | 2 weeks stable (20160 minutes) | `all` |
+| `D6_db_access` | 2 weeks stable (20160 minutes) | `all` |
+| `D7_payload_size` | 2 weeks stable (20160 minutes) | `all` |
 
 **Storage.** The `learning_policies` table is the single source of truth.
 Default rows are seeded at startup; the engine keeps the table in an in-memory

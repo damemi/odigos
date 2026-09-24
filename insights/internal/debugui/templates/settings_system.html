@@ -39,6 +39,12 @@
     <input class="inline" type="number" min="1" name="max_baseline_set_members" value="{{.Settings.MaxBaselineSetMembers}}" style="width:6em">
     members so a noisy transaction cannot grow unbounded.
   </p>
+  <p class="hint">Per service, admit at most
+    <input class="inline" type="number" min="1" name="max_transactions_per_service" value="{{.Settings.MaxTransactionsPerService}}" style="width:6em">
+    distinct transactions. Past that, operations not seen before are dropped before anything is stored and the
+    service is flagged as having reached the limit. Raise it for services that really have that many endpoints;
+    span names carrying request ids should be templatized instead.
+  </p>
 
   <h3>Database writeback</h3>
   <p class="hint" style="margin-bottom:8px;">

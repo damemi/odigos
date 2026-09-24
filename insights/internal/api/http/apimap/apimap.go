@@ -13,22 +13,27 @@ import (
 	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
 )
 
-// FromServiceStat maps one repo.ServiceStat to its wire type.
-func FromServiceStat(s repo.ServiceStat) apitypes.ServiceStat {
+// FromServiceStat maps one repo.ServiceStat to its wire type. transactionLimit
+// is the max_transactions_per_service setting in effect; a service whose
+// transaction count has reached it is flagged because the engine no longer
+// admits its unseen operations.
+func FromServiceStat(s repo.ServiceStat, transactionLimit int) apitypes.ServiceStat {
 	return apitypes.ServiceStat{
-		Namespace:        s.Namespace,
-		Service:          s.Service,
-		TransactionCount: s.TransactionCount,
-		Volume:           s.Volume,
-		LastSeen:         s.LastSeen,
+		Namespace:               s.Namespace,
+		Service:                 s.Service,
+		TransactionCount:        s.TransactionCount,
+		Volume:                  s.Volume,
+		LastSeen:                s.LastSeen,
+		TransactionLimit:        transactionLimit,
+		TransactionLimitReached: transactionLimit > 0 && s.TransactionCount >= int64(transactionLimit),
 	}
 }
 
 // ServiceStatList wraps repo.ServiceStat rows in the wire list envelope.
-func ServiceStatList(in []repo.ServiceStat) apitypes.ServiceStatList {
+func ServiceStatList(in []repo.ServiceStat, transactionLimit int) apitypes.ServiceStatList {
 	items := make([]apitypes.ServiceStat, len(in))
 	for i, s := range in {
-		items[i] = FromServiceStat(s)
+		items[i] = FromServiceStat(s, transactionLimit)
 	}
 	return apitypes.ServiceStatList{Count: len(items), Items: items}
 }

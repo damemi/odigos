@@ -57,6 +57,10 @@ type Engine struct {
 	// This is what keeps DB load off the per-trace hot path.
 	store *baselineStore
 
+	// admission bounds how many distinct transactions each service may add to
+	// the inventory (max_transactions_per_service). See transaction_admission.go.
+	admission *transactionAdmission
+
 	warnMu       sync.Mutex
 	warnThrottle map[string]*warnState
 }
@@ -85,6 +89,7 @@ func New(r repo.Repository, logger *commonlogger.OdigosLogger, learning *Learnin
 		alerts:       alerts,
 		system:       newSystemConfig(repo.DefaultSystemSettings()),
 		warnThrottle: map[string]*warnState{},
+		admission:    newTransactionAdmission(),
 	}
 	e.store = newBaselineStore(r, logger)
 	e.samples = newSampleWriter(r, e.warn)
@@ -186,6 +191,18 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 	system := e.system.snapshot()
 	ident.Operation = applyIdentityDimensions(ident.Operation, t.Root, system.settings.TransactionIdentityDimensions)
 	tx := repo.NewTransaction(ident.Service, ident.Namespace, ident.Operation, ident.Kind)
+	// 1a. Per-service cap on distinct transactions. An identity the inventory
+	// does not know yet is dropped once its service is full, before anything
+	// (guardrail state, baselines, activity, samples) is recorded for it. This
+	// is what stops a span name carrying a request id from growing the
+	// inventory tables without bound. Known identities always pass.
+	serviceKey := repo.ServiceScopeKey(ident.Namespace, ident.Service)
+	if !e.admission.admit(serviceKey, tx.ID, system.settings.MaxTransactionsPerService) {
+		metrics.IncTransactionsDroppedOverCap()
+		e.warn("drop unseen transaction, service at max_transactions_per_service",
+			fmt.Errorf("%s: %q holds %d transactions", serviceKey, ident.Operation, system.settings.MaxTransactionsPerService))
+		return
+	}
 	// Every service that anchors a transaction is in-mesh; remember it so
 	// guardrail egress enforcement won't police a call to it just because its
 	// SERVER span didn't nest under the caller in this particular trace.
@@ -219,7 +236,6 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 	e.store.markDirty(tx.ID)
 
 	// 3. Score every PROMOTED class against the in-memory value.
-	serviceKey := repo.ServiceScopeKey(ident.Namespace, ident.Service)
 	deviated, evidence := e.scoreEntry(t, entry, serviceKey)
 	// Drop what an enclosing entry already fired, so this stays one finding on
 	// the broadest transaction that saw it rather than one per level. Only

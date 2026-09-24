@@ -940,7 +940,9 @@ export interface components {
          *       "service": "frontend",
          *       "transaction_count": 12,
          *       "volume": 84213,
-         *       "last_seen": "2026-07-20T14:03:22Z"
+         *       "last_seen": "2026-07-20T14:03:22Z",
+         *       "transaction_limit": 200,
+         *       "transaction_limit_reached": false
          *     }
          */
         ServiceStat: {
@@ -952,6 +954,10 @@ export interface components {
             volume: number;
             /** Format: date-time */
             last_seen: string;
+            /** @description The `max_transactions_per_service` system setting in effect, so a client can explain the flag below without a second request. */
+            transaction_limit: number;
+            /** @description True once `transaction_count` has reached `transaction_limit`. Operations of this service not seen before are no longer admitted. Either the service is legitimately large (raise the limit in system settings) or its span names carry ids (templatize them). */
+            transaction_limit_reached: boolean;
         };
         ServiceStatList: {
             count: number;
@@ -2316,6 +2322,11 @@ export interface components {
             max_resident_transactions: number;
             /** @description Max unique members remembered in one baseline set (e.g. call edges or paths for one class), so a noisy transaction cannot grow unbounded. */
             max_baseline_set_members: number;
+            /**
+             * @description Max distinct transactions one service may add to the inventory (default 200). Once reached, operations not seen before are dropped before anything is stored, so span names that carry request ids cannot grow the transactions and baseline tables without bound. Transactions already in the inventory keep being learned and scored, and raising the limit resumes admission. Services at the limit are reported with `transaction_limit_reached` on `GET /services`. Optional on PUT so clients built before it existed stay valid; when omitted the default applies.
+             * @default 200
+             */
+            max_transactions_per_service: number;
         };
         /** @description How often the engine writes pending baseline learning and occurrence counters to ClickHouse. Raise to reduce DB load; lower for fresher UI counts. */
         SystemWritebackSettings: {

@@ -11,18 +11,22 @@ import (
 
 // serviceTxnCard is one expandable service row on the by-service transactions view.
 type serviceTxnCard struct {
-	Namespace            string
-	Service              string
-	TransactionCount     int64
-	Volume               int64
-	LastSeen             time.Time
-	Transactions         []repo.TransactionStat
-	Open                 bool
-	InventoryStatus      string // learning | promoted
-	PromotedCount        int
-	ActiveCount          int
-	InventoryProtected   bool
-	InventoryAuto        bool // auto-enabled transaction guardrail
+	Namespace          string
+	Service            string
+	TransactionCount   int64
+	Volume             int64
+	LastSeen           time.Time
+	Transactions       []repo.TransactionStat
+	Open               bool
+	InventoryStatus    string // learning | promoted
+	PromotedCount      int
+	ActiveCount        int
+	InventoryProtected bool
+	InventoryAuto      bool // auto-enabled transaction guardrail
+	TransactionLimit   int
+	// TransactionLimitReached: TransactionCount hit TransactionLimit, so unseen
+	// operations of this service are dropped.
+	TransactionLimitReached bool
 }
 
 func resolveTransactionSort(params apitypes.ListTransactionsParams) (sortBy, sortOrder string) {
@@ -47,10 +51,10 @@ func resolveTransactionSort(params apitypes.ListTransactionsParams) (sortBy, sor
 // buildServiceTxnCards joins service rollups with flat transaction stats, keeping
 // the service list's volume order and nesting each service's transactions.
 func buildServiceTxnCards(services []repo.ServiceStat, txs []repo.TransactionStat, openNS, openSvc string) []serviceTxnCard {
-	return buildServiceTxnCardsWithGuardrails(services, txs, nil, openNS, openSvc)
+	return buildServiceTxnCardsWithGuardrails(services, txs, nil, openNS, openSvc, 0)
 }
 
-func buildServiceTxnCardsWithGuardrails(services []repo.ServiceStat, txs []repo.TransactionStat, guardrails []repo.ServiceGuardrail, openNS, openSvc string) []serviceTxnCard {
+func buildServiceTxnCardsWithGuardrails(services []repo.ServiceStat, txs []repo.TransactionStat, guardrails []repo.ServiceGuardrail, openNS, openSvc string, transactionLimit int) []serviceTxnCard {
 	byKey := map[string][]repo.TransactionStat{}
 	for _, tx := range txs {
 		key := repo.ServiceScopeKey(tx.Namespace, tx.Service)
@@ -84,18 +88,20 @@ func buildServiceTxnCardsWithGuardrails(services []repo.ServiceStat, txs []repo.
 			status = "promoted"
 		}
 		out = append(out, serviceTxnCard{
-			Namespace:          s.Namespace,
-			Service:            s.Service,
-			TransactionCount:   s.TransactionCount,
-			Volume:             s.Volume,
-			LastSeen:           s.LastSeen,
-			Transactions:       txns,
-			Open:               openNS != "" && openSvc != "" && s.Namespace == openNS && s.Service == openSvc,
-			InventoryStatus:    status,
-			PromotedCount:      promoted,
-			ActiveCount:        active,
-			InventoryProtected: protected[key],
-			InventoryAuto:      autoProtected[key],
+			Namespace:               s.Namespace,
+			Service:                 s.Service,
+			TransactionCount:        s.TransactionCount,
+			Volume:                  s.Volume,
+			LastSeen:                s.LastSeen,
+			Transactions:            txns,
+			Open:                    openNS != "" && openSvc != "" && s.Namespace == openNS && s.Service == openSvc,
+			InventoryStatus:         status,
+			PromotedCount:           promoted,
+			ActiveCount:             active,
+			InventoryProtected:      protected[key],
+			InventoryAuto:           autoProtected[key],
+			TransactionLimit:        transactionLimit,
+			TransactionLimitReached: transactionLimit > 0 && s.TransactionCount >= int64(transactionLimit),
 		})
 	}
 	return out

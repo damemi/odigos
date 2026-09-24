@@ -120,6 +120,7 @@ func (e *Engine) DeleteTransaction(ctx context.Context, transactionID int64) err
 		return err
 	}
 	e.store.removeEntry(transactionID)
+	e.admission.forget(transactionID)
 	// Only once the rows are actually gone: unlike a baseline entry, a buffered
 	// firing cannot be reloaded, so dropping it ahead of a delete that then
 	// failed would lose a real finding.
@@ -148,6 +149,7 @@ func (e *Engine) DeleteAllTransactions(ctx context.Context) error {
 	}
 	e.store.clearAll()
 	e.sampleCounts.clear()
+	e.admission.reset()
 	if err := e.resetInventoryGuardrails(ctx); err != nil {
 		return err
 	}
@@ -390,6 +392,13 @@ func (e *Engine) ReloadSystemConfig(ctx context.Context) error {
 	if epochAdvanced || dimsChanged {
 		e.store.clearAll()
 		e.sampleCounts.clear()
+		e.admission.reset()
+	}
+	// Pick up identities other replicas admitted since the last reload (and the
+	// surviving inventory after a wipe) so every replica enforces the cap
+	// against the same set.
+	if err := e.SyncTransactionAdmission(ctx); err != nil {
+		e.warn("sync transaction admission index", err)
 	}
 	// Epoch bump means another replica wiped transactions and cleared the
 	// allowed_transactions rules. Pick the cleared rules up now instead of

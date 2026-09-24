@@ -59,6 +59,16 @@ func (m *instrumentedRepo) ListTransactions(ctx context.Context, limit int) ([]r
 	return out, err
 }
 
+func (m *instrumentedRepo) ListTransactionRefs(ctx context.Context) ([]repo.TransactionRef, error) {
+	var out []repo.TransactionRef
+	err := observe("ListTransactionRefs", func() error {
+		var e error
+		out, e = m.inner.ListTransactionRefs(ctx)
+		return e
+	})
+	return out, err
+}
+
 func (m *instrumentedRepo) GetTransactionByID(ctx context.Context, transactionID int64) (repo.Transaction, bool, error) {
 	var (
 		out repo.Transaction

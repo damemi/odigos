@@ -19,7 +19,8 @@ const systemSettingsCols = `examples_per_transaction, example_sample_interval_se
 	transaction_identity_dimensions,
 	transaction_inventory_epoch,
 	relation_samples_per_transaction, relation_sample_interval_seconds,
-	recommendation_min_distinct, recommendation_min_hold_percent`
+	recommendation_min_distinct, recommendation_min_hold_percent,
+	max_transactions_per_service`
 
 func (r *Repo) GetSystemSettings(ctx context.Context) (repo.SystemSettings, error) {
 	s, ok, err := queryRow(ctx, r.conn, "get system settings",
@@ -59,7 +60,8 @@ func (r *Repo) UpsertSystemSettings(ctx context.Context, s repo.SystemSettings) 
 			transaction_identity_dimensions,
 			transaction_inventory_epoch,
 			relation_samples_per_transaction, relation_sample_interval_seconds,
-			recommendation_min_distinct, recommendation_min_hold_percent)`,
+			recommendation_min_distinct, recommendation_min_hold_percent,
+			max_transactions_per_service)`,
 		func(b driver.Batch) error {
 			return b.Append(
 				uint8(repo.SystemSettingsID), time.Now(),
@@ -72,6 +74,7 @@ func (r *Repo) UpsertSystemSettings(ctx context.Context, s repo.SystemSettings) 
 				uint32(s.TransactionInventoryEpoch),
 				uint32(s.RelationSamplesPerTransaction), uint32(s.RelationSampleIntervalSeconds),
 				uint32(s.RecommendationMinDistinct), uint32(s.RecommendationMinHoldPercent),
+				uint32(s.MaxTransactionsPerService),
 			)
 		})
 	if err != nil {
@@ -104,6 +107,7 @@ func scanSystemSettings(s rowScanner) (repo.SystemSettings, error) {
 		inventoryEpoch                       uint32
 		relationSamples, relationInterval    uint32
 		recMinDistinct, recMinHoldPercent    uint32
+		maxPerService                        uint32
 	)
 	if err := s.Scan(
 		&examples, &exampleInterval,
@@ -115,9 +119,11 @@ func scanSystemSettings(s rowScanner) (repo.SystemSettings, error) {
 		&inventoryEpoch,
 		&relationSamples, &relationInterval,
 		&recMinDistinct, &recMinHoldPercent,
+		&maxPerService,
 	); err != nil {
 		return repo.SystemSettings{}, err
 	}
+	out.MaxTransactionsPerService = int(maxPerService)
 	out.RelationSamplesPerTransaction = int(relationSamples)
 	out.RelationSampleIntervalSeconds = int(relationInterval)
 	out.RecommendationMinDistinct = int(recMinDistinct)

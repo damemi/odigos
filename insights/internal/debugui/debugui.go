@@ -1320,8 +1320,9 @@ func (u *ui) saveSystemSettings(c *gin.Context) {
 			ObservationRetentionDays: atoi("observation_retention_days"),
 		},
 		Capacity: apitypes.SystemCapacitySettings{
-			MaxResidentTransactions: atoi("max_resident_transactions"),
-			MaxBaselineSetMembers:   atoi("max_baseline_set_members"),
+			MaxResidentTransactions:   atoi("max_resident_transactions"),
+			MaxBaselineSetMembers:     atoi("max_baseline_set_members"),
+			MaxTransactionsPerService: atoi("max_transactions_per_service"),
 		},
 		Writeback: apitypes.SystemWritebackSettings{
 			FlushIntervalSeconds: atoi("flush_interval_seconds"),
@@ -1365,6 +1366,19 @@ func parseIdentityDimForm(c *gin.Context) []apitypes.SystemTransactionIdentityDi
 		})
 	}
 	return out
+}
+
+// transactionLimit returns the max_transactions_per_service setting in effect,
+// preferring the engine's live copy over a fresh ClickHouse read.
+func (u *ui) transactionLimit(ctx context.Context) int {
+	if api := u.api.Load(); api != nil && *api != nil {
+		return (*api).LiveSystemSettings().MaxTransactionsPerService
+	}
+	s, err := u.repo.GetSystemSettings(ctx)
+	if err != nil {
+		return repo.DefaultMaxTransactionsPerService
+	}
+	return s.WithDefaults().MaxTransactionsPerService
 }
 
 // listTransactions renders views off /debug/transactions:
@@ -1430,7 +1444,7 @@ func (u *ui) listTransactions(c *gin.Context) {
 		}
 		guardrails, _ := u.repo.ListServiceGuardrails(ctx)
 		u.render(c, "services", "transactions", c.Query("flash"), map[string]any{
-			"Cards":            buildServiceTxnCardsWithGuardrails(services, txs, guardrails, namespace, service),
+			"Cards":            buildServiceTxnCardsWithGuardrails(services, txs, guardrails, namespace, service, u.transactionLimit(ctx)),
 			"ServiceCount":     serviceCount,
 			"TransactionCount": transactionCount,
 			"SortBy":           sortBy,

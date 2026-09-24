@@ -18,8 +18,9 @@ func FromSystemSettings(s repo.SystemSettings) apitypes.SystemSettings {
 			ObservationRetentionDays: s.ObservationRetentionDays,
 		},
 		Capacity: apitypes.SystemCapacitySettings{
-			MaxResidentTransactions: s.MaxResidentTransactions,
-			MaxBaselineSetMembers:   s.MaxBaselineSetMembers,
+			MaxResidentTransactions:   s.MaxResidentTransactions,
+			MaxBaselineSetMembers:     s.MaxBaselineSetMembers,
+			MaxTransactionsPerService: s.MaxTransactionsPerService,
 		},
 		Writeback: apitypes.SystemWritebackSettings{
 			FlushIntervalSeconds: s.FlushIntervalSeconds,
@@ -42,6 +43,7 @@ func ToSystemSettings(in apitypes.SystemSettings) repo.SystemSettings {
 		ObservationRetentionDays:      in.Retention.ObservationRetentionDays,
 		MaxResidentTransactions:       in.Capacity.MaxResidentTransactions,
 		MaxBaselineSetMembers:         in.Capacity.MaxBaselineSetMembers,
+		MaxTransactionsPerService:     in.Capacity.MaxTransactionsPerService,
 		FlushIntervalSeconds:          in.Writeback.FlushIntervalSeconds,
 		AutoTransactionGuardrail:      in.Detection.AutoTransactionGuardrail,
 		TransactionIdentityDimensions: toIdentityDimensions(in.Identity.TransactionIdentityDimensions),

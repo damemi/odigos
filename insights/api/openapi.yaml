@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Odigos Insights Service API
-  version: 9.0.0
+  version: 9.1.0
   description: >
     HTTP API for the Odigos Insights (security) service. This spec is the source
     of truth for the contract: the Go server wire types (internal/api/http/apitypes)
@@ -1435,13 +1435,27 @@ components:
         transaction_count: { type: integer, format: int64 }
         volume: { type: integer, format: int64 }
         last_seen: { type: string, format: date-time }
-      required: [namespace, service, transaction_count, volume, last_seen]
+        transaction_limit:
+          type: integer
+          description: >
+            The `max_transactions_per_service` system setting in effect, so a
+            client can explain the flag below without a second request.
+        transaction_limit_reached:
+          type: boolean
+          description: >
+            True once `transaction_count` has reached `transaction_limit`.
+            Operations of this service not seen before are no longer admitted.
+            Either the service is legitimately large (raise the limit in system
+            settings) or its span names carry ids (templatize them).
+      required: [namespace, service, transaction_count, volume, last_seen, transaction_limit, transaction_limit_reached]
       examples:
         - namespace: default
           service: frontend
           transaction_count: 12
           volume: 84213
           last_seen: "2026-07-20T14:03:22Z"
+          transaction_limit: 200
+          transaction_limit_reached: false
 
     ServiceStatList:
       type: object
@@ -3270,6 +3284,20 @@ components:
           description: >
             Max unique members remembered in one baseline set (e.g. call edges
             or paths for one class), so a noisy transaction cannot grow unbounded.
+        max_transactions_per_service:
+          type: integer
+          minimum: 1
+          default: 200
+          description: >
+            Max distinct transactions one service may add to the inventory
+            (default 200). Once reached, operations not seen before are dropped
+            before anything is stored, so span names that carry request ids
+            cannot grow the transactions and baseline tables without bound.
+            Transactions already in the inventory keep being learned and
+            scored, and raising the limit resumes admission. Services at the
+            limit are reported with `transaction_limit_reached` on `GET /services`.
+            Optional on PUT so clients built before it existed stay valid; when
+            omitted the default applies.
       required: [max_resident_transactions, max_baseline_set_members]
 
     SystemWritebackSettings:

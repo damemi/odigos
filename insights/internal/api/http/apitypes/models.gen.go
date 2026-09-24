@@ -1532,13 +1532,19 @@ type ServiceProfile struct {
 	Transactions []string `json:"transactions"`
 }
 
-// ServiceStat Examples: {"last_seen":"2026-07-20T14:03:22Z","namespace":"default","service":"frontend","transaction_count":12,"volume":84213}
+// ServiceStat Examples: {"last_seen":"2026-07-20T14:03:22Z","namespace":"default","service":"frontend","transaction_count":12,"transaction_limit":200,"transaction_limit_reached":false,"volume":84213}
 type ServiceStat struct {
 	LastSeen         time.Time `json:"last_seen"`
 	Namespace        string    `json:"namespace"`
 	Service          string    `json:"service"`
 	TransactionCount int64     `json:"transaction_count"`
-	Volume           int64     `json:"volume"`
+
+	// TransactionLimit The `max_transactions_per_service` system setting in effect, so a client can explain the flag below without a second request.
+	TransactionLimit int `json:"transaction_limit"`
+
+	// TransactionLimitReached True once `transaction_count` has reached `transaction_limit`. Operations of this service not seen before are no longer admitted. Either the service is legitimately large (raise the limit in system settings) or its span names carry ids (templatize them).
+	TransactionLimitReached bool  `json:"transaction_limit_reached"`
+	Volume                  int64 `json:"volume"`
 }
 
 // ServiceStatList defines model for ServiceStatList.
@@ -1671,6 +1677,9 @@ type SystemCapacitySettings struct {
 
 	// MaxResidentTransactions Max transactions whose baselines stay hot in process memory. Least-recently used entries are dropped when the cap is exceeded.
 	MaxResidentTransactions int `json:"max_resident_transactions"`
+
+	// MaxTransactionsPerService Max distinct transactions one service may add to the inventory (default 200). Once reached, operations not seen before are dropped before anything is stored, so span names that carry request ids cannot grow the transactions and baseline tables without bound. Transactions already in the inventory keep being learned and scored, and raising the limit resumes admission. Services at the limit are reported with `transaction_limit_reached` on `GET /services`. Optional on PUT so clients built before it existed stay valid; when omitted the default applies.
+	MaxTransactionsPerService int `json:"max_transactions_per_service,omitempty"`
 }
 
 // SystemDetectionSettings Global detection toggles (Threat detection → Detection config).

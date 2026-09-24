@@ -18,8 +18,13 @@ const (
 	DefaultObservationRetentionDays     = 120
 	DefaultMaxResidentTransactions      = 50000
 	DefaultMaxBaselineSetMembers        = 5000
-	DefaultFlushIntervalSeconds         = 15
-	DefaultAutoTransactionGuardrail     = true
+	// DefaultMaxTransactionsPerService bounds how many distinct transactions
+	// one service may add to the inventory. Span names that carry request ids
+	// would otherwise mint a new transaction per request, and every one of
+	// them is persisted (transactions, activity, baselines) with no TTL.
+	DefaultMaxTransactionsPerService = 200
+	DefaultFlushIntervalSeconds      = 15
+	DefaultAutoTransactionGuardrail  = true
 
 	// Relation samples feed the correlation recommendation miner. They need
 	// more traces than UI examples (a relation that holds on 10 traces is weak
@@ -55,6 +60,7 @@ type SystemSettings struct {
 	ObservationRetentionDays      int                            `json:"observation_retention_days"`
 	MaxResidentTransactions       int                            `json:"max_resident_transactions"`
 	MaxBaselineSetMembers         int                            `json:"max_baseline_set_members"`
+	MaxTransactionsPerService     int                            `json:"max_transactions_per_service"`
 	FlushIntervalSeconds          int                            `json:"flush_interval_seconds"`
 	AutoTransactionGuardrail      bool                           `json:"auto_transaction_guardrail"`
 	TransactionIdentityDimensions []TransactionIdentityDimension `json:"transaction_identity_dimensions"`
@@ -84,6 +90,7 @@ func DefaultSystemSettings() SystemSettings {
 		ObservationRetentionDays:      DefaultObservationRetentionDays,
 		MaxResidentTransactions:       DefaultMaxResidentTransactions,
 		MaxBaselineSetMembers:         DefaultMaxBaselineSetMembers,
+		MaxTransactionsPerService:     DefaultMaxTransactionsPerService,
 		FlushIntervalSeconds:          DefaultFlushIntervalSeconds,
 		AutoTransactionGuardrail:      DefaultAutoTransactionGuardrail,
 		TransactionIdentityDimensions: DefaultTransactionIdentityDimensions(),
@@ -110,6 +117,9 @@ func (s SystemSettings) WithDefaults() SystemSettings {
 	}
 	if s.MaxBaselineSetMembers <= 0 {
 		s.MaxBaselineSetMembers = d.MaxBaselineSetMembers
+	}
+	if s.MaxTransactionsPerService <= 0 {
+		s.MaxTransactionsPerService = d.MaxTransactionsPerService
 	}
 	if s.FlushIntervalSeconds <= 0 {
 		s.FlushIntervalSeconds = d.FlushIntervalSeconds
@@ -148,6 +158,7 @@ func (s SystemSettings) Validate() error {
 		{"observation_retention_days", s.ObservationRetentionDays},
 		{"max_resident_transactions", s.MaxResidentTransactions},
 		{"max_baseline_set_members", s.MaxBaselineSetMembers},
+		{"max_transactions_per_service", s.MaxTransactionsPerService},
 		{"flush_interval_seconds", s.FlushIntervalSeconds},
 		{"relation_samples_per_transaction", s.RelationSamplesPerTransaction},
 		{"relation_sample_interval_seconds", s.RelationSampleIntervalSeconds},

@@ -65,6 +65,15 @@ type Transaction struct {
 	Kind      TransactionKind
 }
 
+// TransactionRef is a transaction's id and the service it belongs to, without
+// the operation string. ListTransactionRefs returns these so the engine can
+// seed its per-service admission index from the whole inventory cheaply.
+type TransactionRef struct {
+	ID        int64
+	Namespace string
+	Service   string
+}
+
 // TransactionStat is a Transaction plus its observed activity and baseline
 // promotion state. Promoted is true only when every learned class has graduated;
 // HasBaseline distinguishes "still learning" from "no baseline yet".

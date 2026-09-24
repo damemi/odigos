@@ -67,8 +67,17 @@ func TestTransactionStatWire(t *testing.T) {
 
 // TestServiceStatWire checks the service rollup wire shape.
 func TestServiceStatWire(t *testing.T) {
-	d := FromServiceStat(repo.ServiceStat{Namespace: "ns", Service: "svc", TransactionCount: 2, Volume: 9})
-	assertKeys(t, jsonKeys(t, d), "namespace", "service", "transaction_count", "volume", "last_seen")
+	d := FromServiceStat(repo.ServiceStat{Namespace: "ns", Service: "svc", TransactionCount: 2, Volume: 9}, 200)
+	assertKeys(t, jsonKeys(t, d), "namespace", "service", "transaction_count", "volume", "last_seen", "transaction_limit", "transaction_limit_reached")
+	if d.TransactionLimit != 200 || d.TransactionLimitReached {
+		t.Errorf("limit = %d reached = %v, want 200/false", d.TransactionLimit, d.TransactionLimitReached)
+	}
+	if capped := FromServiceStat(repo.ServiceStat{TransactionCount: 200}, 200); !capped.TransactionLimitReached {
+		t.Errorf("service at the limit should be flagged transaction_limit_reached")
+	}
+	if none := FromServiceStat(repo.ServiceStat{TransactionCount: 200}, 0); none.TransactionLimitReached {
+		t.Errorf("no limit in effect should never flag transaction_limit_reached")
+	}
 }
 
 // TestServiceProfileWire checks callers/callees/egress/transactions always serialize as arrays.

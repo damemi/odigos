@@ -261,7 +261,12 @@ CREATE TABLE IF NOT EXISTS system_settings (
     relation_samples_per_transaction UInt32 DEFAULT 50,
     relation_sample_interval_seconds UInt32 DEFAULT 5,
     recommendation_min_distinct UInt32 DEFAULT 5,
-    recommendation_min_hold_percent UInt32 DEFAULT 98
+    recommendation_min_hold_percent UInt32 DEFAULT 98,
+
+    -- Per-service cap on distinct transactions. Unseen operations past it are
+    -- not admitted to the inventory, so span names that carry request ids
+    -- cannot grow the transactions and baseline tables without bound.
+    max_transactions_per_service UInt32 DEFAULT 200
 ) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY id;
 
@@ -272,18 +277,19 @@ VALUES
     ('global', '', 1, 'global default', 20, map(), map(), 1, now64(3));
 
 -- Per-class GLOBAL learning defaults, one per deviation class.
--- Promote once the baseline is unchanged for 300 observations OR 1 week
--- (10080 minutes), whichever comes first.
+-- Promote once the baseline has been structurally stable for 2 weeks
+-- (20160 minutes). Time only, so a busy transaction does not promote before
+-- its weekly and bi-weekly patterns have had a chance to show up.
 INSERT INTO learning_policies
     (class, scope_type, scope_key, match_mode, conditions, min_matches, updated_at)
 VALUES
-    ('D1_call_edges',   'global', '', 'any', '[{"type":"stable_observations","stableObservations":300},{"type":"stable_duration","stableMinutes":10080}]', 1, now64(3)),
-    ('D2_egress',       'global', '', 'any', '[{"type":"stable_observations","stableObservations":300},{"type":"stable_duration","stableMinutes":10080}]', 1, now64(3)),
-    ('D3_latency',      'global', '', 'any', '[{"type":"stable_observations","stableObservations":300},{"type":"stable_duration","stableMinutes":10080}]', 1, now64(3)),
-    ('D4_args_returns', 'global', '', 'any', '[{"type":"stable_observations","stableObservations":300},{"type":"stable_duration","stableMinutes":10080}]', 1, now64(3)),
-    ('D5_libraries',    'global', '', 'any', '[{"type":"stable_observations","stableObservations":300},{"type":"stable_duration","stableMinutes":10080}]', 1, now64(3)),
-    ('D6_db_access',    'global', '', 'any', '[{"type":"stable_observations","stableObservations":300},{"type":"stable_duration","stableMinutes":10080}]', 1, now64(3)),
-    ('D7_payload_size', 'global', '', 'any', '[{"type":"stable_observations","stableObservations":300},{"type":"stable_duration","stableMinutes":10080}]', 1, now64(3));
+    ('D1_call_edges',   'global', '', 'all', '[{"type":"stable_duration","stableMinutes":20160}]', 1, now64(3)),
+    ('D2_egress',       'global', '', 'all', '[{"type":"stable_duration","stableMinutes":20160}]', 1, now64(3)),
+    ('D3_latency',      'global', '', 'all', '[{"type":"stable_duration","stableMinutes":20160}]', 1, now64(3)),
+    ('D4_args_returns', 'global', '', 'all', '[{"type":"stable_duration","stableMinutes":20160}]', 1, now64(3)),
+    ('D5_libraries',    'global', '', 'all', '[{"type":"stable_duration","stableMinutes":20160}]', 1, now64(3)),
+    ('D6_db_access',    'global', '', 'all', '[{"type":"stable_duration","stableMinutes":20160}]', 1, now64(3)),
+    ('D7_payload_size', 'global', '', 'all', '[{"type":"stable_duration","stableMinutes":20160}]', 1, now64(3));
 
 INSERT INTO system_settings (
     id, updated_at,

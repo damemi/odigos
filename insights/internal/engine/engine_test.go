@@ -1249,6 +1249,16 @@ func (f *fakeRepo) ListTransactions(_ context.Context, _ int) ([]repo.Transactio
 	return out, nil
 }
 
+func (f *fakeRepo) ListTransactionRefs(_ context.Context) ([]repo.TransactionRef, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]repo.TransactionRef, 0, len(f.transactions))
+	for _, tx := range f.transactions {
+		out = append(out, repo.TransactionRef{ID: tx.ID, Namespace: tx.Namespace, Service: tx.Service})
+	}
+	return out, nil
+}
+
 func (f *fakeRepo) GetTransactionByID(_ context.Context, transactionID int64) (repo.Transaction, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

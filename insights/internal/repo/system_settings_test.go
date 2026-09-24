@@ -27,6 +27,9 @@ func TestSystemSettingsWithDefaults(t *testing.T) {
 	if got.MaxResidentTransactions != DefaultMaxResidentTransactions {
 		t.Fatalf("max resident = %d", got.MaxResidentTransactions)
 	}
+	if got.MaxTransactionsPerService != DefaultMaxTransactionsPerService {
+		t.Fatalf("max per service = %d", got.MaxTransactionsPerService)
+	}
 	if got.ObservationRetentionDays != DefaultObservationRetentionDays {
 		t.Fatalf("retention = %d", got.ObservationRetentionDays)
 	}

@@ -55,6 +55,18 @@ func (r *Repo) ListTransactions(ctx context.Context, limit int) ([]repo.Transact
 		scanTransaction, uint64(limit))
 }
 
+// ListTransactionRefs returns every transaction's id and owning service, for
+// the engine's per-service admission index.
+func (r *Repo) ListTransactionRefs(ctx context.Context) ([]repo.TransactionRef, error) {
+	return queryRows(ctx, r.conn, "list transaction refs",
+		"SELECT transaction_id, namespace, service FROM transactions FINAL",
+		func(s rowScanner) (repo.TransactionRef, error) {
+			var ref repo.TransactionRef
+			err := s.Scan(&ref.ID, &ref.Namespace, &ref.Service)
+			return ref, err
+		})
+}
+
 // GetTransactionByID returns one transaction's identity. ok=false when unknown.
 func (r *Repo) GetTransactionByID(ctx context.Context, transactionID int64) (repo.Transaction, bool, error) {
 	return queryRow(ctx, r.conn, "get transaction",
