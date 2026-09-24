@@ -752,7 +752,7 @@ require (
 	golang.org/x/term v0.45.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	golang.org/x/tools v0.48.0 // indirect
+	golang.org/x/tools v0.49.0 // indirect
 	gonum.org/v1/gonum v0.17.0 // indirect
 	google.golang.org/api v0.287.1 // indirect
 	google.golang.org/genproto v0.0.0-20260519071638-aa98bba5eb94 // indirect
@@ -838,6 +838,10 @@ replace github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension
 
 replace github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension => github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v1.38.0-pre4
 
-replace github.com/apache/thrift => github.com/apache/thrift v0.23.0
+replace golang.org/x/crypto v0.55.0 => golang.org/x/crypto v0.56.0
+
+replace golang.org/x/mod v0.39.0 => golang.org/x/mod v0.40.0
+
+replace google.golang.org/grpc v1.83.1 => google.golang.org/grpc v1.83.2
 
 exclude github.com/knadh/koanf v1.5.0

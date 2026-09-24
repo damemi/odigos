@@ -1,6 +1,8 @@
-# 1.26.4 rather than OSS's 1.26.2: odigosauth declares `go 1.26.4` (#3038) and the builder runs
-# with GOTOOLCHAIN=local.
-FROM --platform=$BUILDPLATFORM golang:1.26.4-trixie AS builder
+# Pinned independently of OSS's collector/Dockerfile, and may run ahead of it. The floor is the
+# `go 1.26.4` that odigosauth declares (#3038), since the builder runs with GOTOOLCHAIN=local; above
+# that it tracks the latest 1.26 patch, because the stdlib compiled into both binaries is what
+# image scans flag.
+FROM --platform=$BUILDPLATFORM golang:1.26.8-trixie AS builder
 # install the required tooling for calling `setcap` on the compiled binary
 RUN apt-get update && apt-get install -y --no-install-recommends libcap2-bin
 # The auth extension replaces odigosauth, which lives at the repo root rather than under collector/.

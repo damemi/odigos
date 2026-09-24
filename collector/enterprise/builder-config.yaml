@@ -179,4 +179,11 @@ replaces:
   - github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension => github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v1.38.0-pre4
   # Same commit as common above; this module has no published tag yet.
   - github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension => github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v1.38.0-pre4
-  - github.com/apache/thrift => github.com/apache/thrift v0.23.0
+  # Security floors for modules the component graph still resolves below the fixed version. The
+  # left-hand side names the vulnerable version, so each replace applies only while the graph
+  # selects exactly that version and goes inert once a component bump moves past it; an unversioned
+  # replace would instead hold the module back, as `apache/thrift => v0.23.0` did. Drop an entry
+  # once odigosotelcol/go.mod no longer requires its left-hand version.
+  - golang.org/x/crypto v0.55.0 => golang.org/x/crypto v0.56.0
+  - golang.org/x/mod v0.39.0 => golang.org/x/mod v0.40.0
+  - google.golang.org/grpc v1.83.1 => google.golang.org/grpc v1.83.2
