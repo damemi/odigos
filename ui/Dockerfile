@@ -61,7 +61,7 @@ RUN yarn install --frozen-lockfile && yarn build
 #    itself (webapp + graph packages), so compiling those packages from the
 #    yarn-built clone is all that's needed — this image embeds nothing of its own.
 ############################################################
-FROM --platform=$BUILDPLATFORM golang:1.26.4 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.8 AS builder
 ARG SERVICE_NAME=ui
 ARG TARGETARCH
 ARG LD_FLAGS
