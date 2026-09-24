@@ -15,6 +15,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	enterprisedistros "github.com/odigos-io/odigos-enterprise/distros"
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
 	"github.com/odigos-io/odigos-enterprise/ui/mcp"
 	"github.com/odigos-io/odigos-enterprise/ui/mcp/k8s"
@@ -69,6 +70,14 @@ func main() {
 	deps, err := server.Bootstrap(ctx, flags, logger)
 	if err != nil {
 		log.Error("Frontend server bootstrap failed", "err", err)
+		os.Exit(1)
+	}
+
+	// Bootstrap defaults to the community provider. Replace it with the enterprise
+	// one so the UI reports the distros the enterprise instrumentor actually injects.
+	deps.DistrosProvider, err = enterprisedistros.NewEnterpriseProvider()
+	if err != nil {
+		log.Error("Loading enterprise distros failed", "err", err)
 		os.Exit(1)
 	}
 
