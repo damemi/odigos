@@ -181,12 +181,14 @@ transactionIdentity:
 #   Interrogation loop (off by default): correlates traces and profiles in ClickHouse
 #   so uprobe/probe profiles can be tied to spans. Opt-in; leave disabled unless you need it.
 #   When enabled, also deploys bundled ClickHouse (odigos-insights-clickhouse; shared with
-#   insights) in the Odigos namespace if not already present, and deploys the
-#   odigos-interrogation control-loop service (enterprise; requires on-prem token).
+#   insights) in the Odigos namespace if not already present, deploys the
+#   odigos-interrogation control-loop service (enterprise; requires on-prem token),
+#   and deploys bundled LiteLLM (odigos-litellm) as the default model gateway
+#   unless interrogation.modelGateway.litellm.enabled is false.
 # @schema
 interrogation:
   # @schema
-  # description: When true, enables the interrogation loop (trace–profile correlation) on the collector, deploys bundled ClickHouse when needed, and deploys the interrogation service.
+  # description: When true, enables the interrogation loop (trace–profile correlation) on the collector, deploys bundled ClickHouse when needed, deploys the interrogation service, and deploys bundled LiteLLM unless modelGateway.litellm.enabled is false.
   # @schema
   enabled: false
 
@@ -226,17 +228,20 @@ interrogation:
   # @schema
   # logLevel: info
 
-  # OpenAI-compatible chat-completions gateway used by the interrogation
-  # service for single-shot analysis. Leave url empty to print prompts only
-  # (no model call). Point url at LiteLLM, OpenRouter, or any /v1 endpoint.
+  # @schema
+  # description: |-
+  #   OpenAI-compatible chat-completions gateway used by the interrogation
+  #   service for single-shot analysis. Empty url uses bundled LiteLLM when
+  #   litellm.enabled is true; otherwise the worker only prints the request JSON.
+  #   Set url (and disable litellm) to point at OpenRouter or any other /v1.
   # @schema
   modelGateway:
     # @schema
-    # description: Base URL of an OpenAI-compatible gateway (e.g. http://odigos-litellm:4000/v1). Empty disables model calls.
+    # description: Base URL of an OpenAI-compatible gateway. Empty uses bundled LiteLLM (http://odigos-litellm:4000/v1) when litellm.enabled is true.
     # @schema
     url: ""
     # @schema
-    # description: Model name sent in chat.completions (LiteLLM alias or provider model id).
+    # description: Model name sent in chat.completions. With bundled LiteLLM this is the alias in config.yaml (default interrogation).
     # @schema
     model: interrogation
     # @schema
@@ -244,7 +249,7 @@ interrogation:
     # @schema
     autoApply: false
     # @schema
-    # description: Optional gateway API key. Stored in Secret odigos-interrogation-model. Prefer --set or an existingSecret.
+    # description: Optional gateway API key (BYO). Bundled LiteLLM uses the generated master key instead.
     # @schema
     apiKey: ""
     # @schema
@@ -255,6 +260,100 @@ interrogation:
     # description: Key inside existingSecret (default api-key).
     # @schema
     existingSecretKey: api-key
+
+    # @schema
+    # description: |-
+    #   Bundled LiteLLM proxy. One in-cluster /v1 so the worker never talks to
+    #   OpenAI/Gemini/etc. directly. Disable and set url to use a BYO gateway.
+    # @schema
+    litellm:
+      # @schema
+      # description: Deploy odigos-litellm when interrogation is enabled. Default true.
+      # @schema
+      enabled: true
+
+      # @schema
+      # description: LiteLLM proxy image. Third-party (not built by Odigos); override for private mirrors or version pins.
+      # @schema
+      image:
+        # @schema
+        # description: Container image repository.
+        # @schema
+        repository: ghcr.io/berriai/litellm
+        # @schema
+        # description: Container image tag.
+        # @schema
+        tag: "v1.101.0"
+        # @schema
+        # description: Image pull policy.
+        # @schema
+        pullPolicy: IfNotPresent
+
+      # @schema
+      # description: Upstream LiteLLM model string (provider/model). Mapped to the interrogation alias.
+      # @schema
+      upstreamModel: openai/gpt-4o-mini
+
+      # @schema
+      # description: Optional upstream api_base (Azure, compatible proxies, local servers).
+      # @schema
+      apiBase: ""
+
+      # @schema
+      # description: Upstream provider API key. Stored in Secret odigos-litellm. Prefer --set or existingSecret.
+      # @schema
+      upstreamApiKey: ""
+
+      # @schema
+      # description: Existing Secret holding the upstream provider key (skips writing upstream-api-key into odigos-litellm).
+      # @schema
+      existingSecret: ""
+
+      # @schema
+      # description: Key inside existingSecret (default upstream-api-key).
+      # @schema
+      existingSecretKey: upstream-api-key
+
+      # @schema
+      # description: LiteLLM master key used by the interrogation worker. Empty generates and persists one on first install.
+      # @schema
+      masterKey: ""
+
+      resources:
+        requests:
+          cpu: 50m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+
+      # @schema
+      # description: Extra env vars on the LiteLLM container (provider-specific).
+      # additionalProperties: true
+      # @schema
+      extraEnv: {}
+
+      # @schema
+      # description: Override the global nodeSelector for LiteLLM.
+      # @schema
+      # nodeSelector:
+      #   kubernetes.io/os: linux
+
+      # @schema
+      # items:
+      #   description: A Kubernetes Toleration. See https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/
+      #   type: object
+      # @schema
+      tolerations: []
+      # @schema
+      # additionalProperties: true
+      # @schema
+      affinity: {}
+
+      # @schema
+      # description: Priority class name. Set to use your existing cluster priority classes.
+      # @schema
+      # priorityClassName: ''
 
 # @schema
 # description: Configuration for OpenTelemetry (OTEL) agents instrumentation environment variables.

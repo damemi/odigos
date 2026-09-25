@@ -116,6 +116,30 @@ true
 {{- end -}}
 {{- end -}}
 
+{{/*
+  Bundled LiteLLM is the default OpenAI-compatible gateway for interrogation.
+  Disable interrogation.modelGateway.litellm.enabled and set modelGateway.url
+  to point at a BYO /v1 endpoint instead.
+*/}}
+{{- define "odigos.litellmEnabled" -}}
+{{- if and .Values.interrogation.enabled .Values.interrogation.modelGateway.litellm.enabled -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+  Worker chat-completions base URL. An explicit modelGateway.url wins;
+  otherwise the in-cluster LiteLLM Service when that Deployment is on.
+*/}}
+{{- define "odigos.interrogationModelURL" -}}
+{{- $url := .Values.interrogation.modelGateway.url | default "" -}}
+{{- if $url -}}
+{{- $url -}}
+{{- else if include "odigos.litellmEnabled" . -}}
+http://odigos-litellm:4000/v1
+{{- end -}}
+{{- end -}}
+
 
 {{/*
   Return cleaned Kubernetes version, keeping leading 'v', removing vendor suffix like -eks-...

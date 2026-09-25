@@ -1,0 +1,28 @@
+{{- if and (include "odigos.litellmEnabled" .) (include "odigos.secretExists" .) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: odigos-litellm
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: odigos-litellm
+    odigos.io/system-object: "true"
+data:
+  config.yaml: |
+    model_list:
+      - model_name: {{ .Values.interrogation.modelGateway.model | default "interrogation" | quote }}
+        litellm_params:
+          model: {{ .Values.interrogation.modelGateway.litellm.upstreamModel | quote }}
+          {{- if or .Values.interrogation.modelGateway.litellm.upstreamApiKey .Values.interrogation.modelGateway.litellm.existingSecret }}
+          api_key: os.environ/LITELLM_UPSTREAM_API_KEY
+          {{- end }}
+          {{- if .Values.interrogation.modelGateway.litellm.apiBase }}
+          api_base: {{ .Values.interrogation.modelGateway.litellm.apiBase | quote }}
+          {{- end }}
+    litellm_settings:
+      # Drop provider-unsupported params (e.g. json_schema on Gemini) while
+      # keeping them for OpenAI-compatible upstreams that accept them.
+      drop_params: true
+    general_settings:
+      master_key: os.environ/LITELLM_MASTER_KEY
+{{- end }}

@@ -68,7 +68,7 @@ spec:
             - name: CLICKHOUSE_DSN
               value: "clickhouse://odigos_insights:$(CLICKHOUSE_PASSWORD)@odigos-insights-clickhouse:9000/interrogation"
             - name: INTERROGATION_MODEL_BASE_URL
-              value: {{ .Values.interrogation.modelGateway.url | default "" | quote }}
+              value: {{ include "odigos.interrogationModelURL" . | quote }}
             - name: INTERROGATION_MODEL
               value: {{ .Values.interrogation.modelGateway.model | default "interrogation" | quote }}
             - name: INTERROGATION_AUTO_APPLY
@@ -79,6 +79,12 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.interrogation.modelGateway.existingSecret | default "odigos-interrogation-model" }}
                   key: {{ .Values.interrogation.modelGateway.existingSecretKey | default "api-key" }}
+            {{- else if include "odigos.litellmEnabled" . }}
+            - name: INTERROGATION_MODEL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: odigos-litellm
+                  key: master-key
             {{- end }}
           livenessProbe:
             httpGet:
