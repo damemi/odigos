@@ -226,6 +226,36 @@ interrogation:
   # @schema
   # logLevel: info
 
+  # OpenAI-compatible chat-completions gateway used by the interrogation
+  # service for single-shot analysis. Leave url empty to print prompts only
+  # (no model call). Point url at LiteLLM, OpenRouter, or any /v1 endpoint.
+  # @schema
+  modelGateway:
+    # @schema
+    # description: Base URL of an OpenAI-compatible gateway (e.g. http://odigos-litellm:4000/v1). Empty disables model calls.
+    # @schema
+    url: ""
+    # @schema
+    # description: Model name sent in chat.completions (LiteLLM alias or provider model id).
+    # @schema
+    model: interrogation
+    # @schema
+    # description: When true, apply parsed probes as InstrumentationRules. Default is dry-run.
+    # @schema
+    autoApply: false
+    # @schema
+    # description: Optional gateway API key. Stored in Secret odigos-interrogation-model. Prefer --set or an existingSecret.
+    # @schema
+    apiKey: ""
+    # @schema
+    # description: Existing Secret name holding the gateway API key (skips creating odigos-interrogation-model).
+    # @schema
+    existingSecret: ""
+    # @schema
+    # description: Key inside existingSecret (default api-key).
+    # @schema
+    existingSecretKey: api-key
+
 # @schema
 # description: Configuration for OpenTelemetry (OTEL) agents instrumentation environment variables.
 # @schema

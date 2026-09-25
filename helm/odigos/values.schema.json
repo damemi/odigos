@@ -1177,6 +1177,57 @@
           "required": [],
           "title": "logLevel"
         },
+        "modelGateway": {
+          "additionalProperties": false,
+          "description": "OpenAI-compatible chat-completions gateway for single-shot interrogation analysis.",
+          "properties": {
+            "apiKey": {
+              "default": "",
+              "description": "Optional gateway API key. Stored in Secret odigos-interrogation-model.",
+              "required": [],
+              "title": "apiKey",
+              "type": "string"
+            },
+            "autoApply": {
+              "default": false,
+              "description": "When true, apply parsed probes as InstrumentationRules. Default is dry-run.",
+              "required": [],
+              "title": "autoApply",
+              "type": "boolean"
+            },
+            "existingSecret": {
+              "default": "",
+              "description": "Existing Secret name holding the gateway API key.",
+              "required": [],
+              "title": "existingSecret",
+              "type": "string"
+            },
+            "existingSecretKey": {
+              "default": "api-key",
+              "description": "Key inside existingSecret.",
+              "required": [],
+              "title": "existingSecretKey",
+              "type": "string"
+            },
+            "model": {
+              "default": "interrogation",
+              "description": "Model name sent in chat.completions (LiteLLM alias or provider model id).",
+              "required": [],
+              "title": "model",
+              "type": "string"
+            },
+            "url": {
+              "default": "",
+              "description": "Base URL of an OpenAI-compatible gateway. Empty disables model calls.",
+              "required": [],
+              "title": "url",
+              "type": "string"
+            }
+          },
+          "required": [],
+          "title": "modelGateway",
+          "type": "object"
+        },
         "nodeSelector": {
           "default": "",
           "description": "Override the global nodeSelector (values.nodeSelector) for this component",

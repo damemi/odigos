@@ -67,6 +67,19 @@ spec:
                   key: password
             - name: CLICKHOUSE_DSN
               value: "clickhouse://odigos_insights:$(CLICKHOUSE_PASSWORD)@odigos-insights-clickhouse:9000/interrogation"
+            - name: INTERROGATION_MODEL_BASE_URL
+              value: {{ .Values.interrogation.modelGateway.url | default "" | quote }}
+            - name: INTERROGATION_MODEL
+              value: {{ .Values.interrogation.modelGateway.model | default "interrogation" | quote }}
+            - name: INTERROGATION_AUTO_APPLY
+              value: {{ .Values.interrogation.modelGateway.autoApply | default false | quote }}
+            {{- if or .Values.interrogation.modelGateway.apiKey .Values.interrogation.modelGateway.existingSecret }}
+            - name: INTERROGATION_MODEL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.interrogation.modelGateway.existingSecret | default "odigos-interrogation-model" }}
+                  key: {{ .Values.interrogation.modelGateway.existingSecretKey | default "api-key" }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz
