@@ -24,6 +24,7 @@ const (
 	clickhouseDatabase = "interrogation"
 	callTrieTable      = "tx_call_trie"
 	transactionsTable  = "tx_transactions"
+	runsTable          = "tx_runs"
 	trieRootParent     = "root"
 
 	clickhouseDialTimeout = 5 * time.Second
@@ -65,6 +66,15 @@ type CallTrieNode struct {
 	SeenCount  int64
 }
 
+// Run is the newest analysis row for a transaction (tx_runs).
+type Run struct {
+	AnalyzedAt  time.Time
+	Model       string
+	ApplyStatus string
+	Parsed      string
+	Error       string
+}
+
 // ContainerTransactions is the result for one workload container.
 type ContainerTransactions struct {
 	Namespace     string
@@ -90,6 +100,7 @@ type Client struct {
 	listEdgesSQL       string
 	callTrieSQL        string
 	sampleTraceSQL     string
+	lastRunSQL         string
 }
 
 // NewClient builds a ClickHouse client for the interrogation database.
@@ -169,6 +180,17 @@ WHERE Namespace = ?
 	AND TransactionId = ?
 LIMIT 1
 `, txFqn),
+		lastRunSQL: fmt.Sprintf(`
+SELECT Timestamp, Model, ApplyStatus, Parsed, Error
+FROM %q.%q
+WHERE Namespace = ?
+	AND WorkloadKind = ?
+	AND WorkloadName = ?
+	AND ContainerName = ?
+	AND TransactionId = ?
+ORDER BY Timestamp DESC
+LIMIT 1
+`, clickhouseDatabase, runsTable),
 	}
 }
 
@@ -313,6 +335,36 @@ func (c *Client) GetTransactionCallTrie(ctx context.Context, namespace, kind, na
 		return nil, false, nil
 	}
 	return callTrieFromEdges(edges), true, nil
+}
+
+// GetLastRun returns the newest tx_runs row for a transaction.
+// ok is false when no run exists (including when the table is missing).
+func (c *Client) GetLastRun(ctx context.Context, namespace, kind, name, containerName, txID string) (run *Run, ok bool, err error) {
+	if c == nil || c.db == nil {
+		return nil, false, ErrUnavailable
+	}
+	namespace = strings.TrimSpace(namespace)
+	kind = strings.TrimSpace(kind)
+	name = strings.TrimSpace(name)
+	containerName = strings.TrimSpace(containerName)
+	txID = strings.TrimSpace(txID)
+	if namespace == "" || kind == "" || name == "" || containerName == "" || txID == "" {
+		return nil, false, fmt.Errorf("namespace, kind, name, containerName, and transactionId are required")
+	}
+
+	rows, err := c.db.Query(ctx, c.lastRunSQL, namespace, kind, name, containerName, txID)
+	if err != nil {
+		return nil, false, fmt.Errorf("%w: query last run: %v", ErrUnavailable, err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		return nil, false, rows.Err()
+	}
+	var out Run
+	if err := rows.Scan(&out.AnalyzedAt, &out.Model, &out.ApplyStatus, &out.Parsed, &out.Error); err != nil {
+		return nil, false, fmt.Errorf("%w: scan last run: %v", ErrUnavailable, err)
+	}
+	return &out, true, rows.Err()
 }
 
 func scanCallTrieEdges(rows driver.Rows) ([]callTrieEdgeRow, error) {
