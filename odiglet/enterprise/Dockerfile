@@ -225,8 +225,10 @@ USER 65532:65532
 CMD ["/root/odiglet"]
 
 ######### Default Odiglet #########
-# pinning the distroless base image to a specific commit since the hash after it broke rsync somehow.
-FROM gcr.io/distroless/base-debian12@sha256:e7e678c88c59e70e105a46549bb3fbfb3d732ee3b4afd3a19fdab2e15afaa6b3
+# Uses the distroless nossl variant: nothing in this image links OpenSSL (rsync, odiglet and grpc_health_probe
+# are static; odigos-csi-driver and deviceplugin need only libc), so this keeps libssl3 CVEs out of the image.
+# Pinned by digest. An earlier base-debian12 hash once broke rsync; rsync is now copied in statically compiled.
+FROM gcr.io/distroless/base-nossl-debian12@sha256:e35893f8ca1cabfbd60394af94899c20930c4615355adf97c5da660a51b61bca
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odigos-csi-driver /root/odigos-csi-driver
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/deviceplugin /root/deviceplugin
