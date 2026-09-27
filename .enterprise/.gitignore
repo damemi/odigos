@@ -5,6 +5,7 @@ dist/
 go.work.sum
 go.work
 .env
+gha-creds-*.json
 
 # Compiled binaries / dev-build outputs (e.g. `make build-connector-*-dev` writes `<module>/build/<bin>`).
 build/
