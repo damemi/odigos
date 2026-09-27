@@ -3,16 +3,26 @@ package services
 import (
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/keycloak"
 	"github.com/odigos-io/central-backend/internal/logger"
 	"github.com/odigos-io/central-backend/internal/utils"
+	"golang.org/x/sync/singleflight"
 )
 
 type AdminService struct {
 	adminCredentials *AdminCredentials
 	kcAdmin          *keycloak.KeycloakAdminService
+
+	// The admin token comes from a password grant, which is CPU-heavy on Keycloak.
+	// It is cached for most of its lifetime and concurrent refreshes share one grant.
+	tokenMu        sync.Mutex
+	token          string
+	tokenExpiresAt time.Time
+	tokenFlight    singleflight.Group
 }
 
 // ShouldIgnoreKeycloakUser returns true for users that should be filtered out
@@ -37,7 +47,33 @@ func NewAdminService(adminCredentials *AdminCredentials) *AdminService {
 }
 
 func (svc *AdminService) GetAdminToken() (string, error) {
-	return svc.kcAdmin.GetAdminToken(svc.adminCredentials.Username, svc.adminCredentials.Password)
+	svc.tokenMu.Lock()
+	if svc.token != "" && time.Now().Before(svc.tokenExpiresAt) {
+		token := svc.token
+		svc.tokenMu.Unlock()
+		return token, nil
+	}
+	svc.tokenMu.Unlock()
+
+	v, err, _ := svc.tokenFlight.Do("admin", func() (any, error) {
+		token, expiresIn, err := svc.kcAdmin.GetAdminTokenWithExpiry(svc.adminCredentials.Username, svc.adminCredentials.Password)
+		if err != nil {
+			return "", err
+		}
+		// Refresh at 3/4 of the lifetime so callers never receive a token about to expire.
+		// Without a reported lifetime, don't cache.
+		if expiresIn > 0 {
+			svc.tokenMu.Lock()
+			svc.token = token
+			svc.tokenExpiresAt = time.Now().Add(expiresIn * 3 / 4)
+			svc.tokenMu.Unlock()
+		}
+		return token, nil
+	})
+	if err != nil {
+		return "", err
+	}
+	return v.(string), nil
 }
 
 // GetAdminUsername returns the configured Keycloak admin username.

@@ -31,6 +31,7 @@ import (
 	websocketserver "github.com/odigos-io/central-backend/internal/websocket"
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
+	"golang.org/x/sync/singleflight"
 )
 
 func getLogLevel() string {
@@ -248,26 +249,38 @@ func authContextMiddleware(adminService *services.AdminService) gin.HandlerFunc 
 	}
 }
 
+// authLookups collapses concurrent Keycloak lookups for the same user. A page
+// load fires many GraphQL requests at once; without this each cache miss
+// would hit Keycloak separately.
+var authLookups singleflight.Group
+
 // enrichAuthContext syncs not-before (once per user) and loads a short-lived
 // live role so privilege checks do not trust stale JWT claims alone.
 func enrichAuthContext(adminService *services.AdminService, kcUser *keycloak.KeycloakUserService, userID string, ctx context.Context) context.Context {
-	needNotBefore := utils.GlobalTokenRevocations.NotBefore(userID) == 0 && !utils.HasSyncedNotBefore(userID)
 	cachedRole, hasCachedRole := utils.GetCachedLiveRole(userID)
-	needLiveRole := !hasCachedRole
-
-	if !needNotBefore && !needLiveRole {
-		if hasCachedRole && cachedRole != "" {
-			return utils.SetLiveRoleInContext(ctx, cachedRole)
-		}
-		return ctx
+	if hasCachedRole && !needsNotBeforeSync(userID) {
+		return withLiveRole(ctx, cachedRole)
 	}
+
+	v, _, _ := authLookups.Do(userID, func() (any, error) {
+		return syncAuthFromKeycloak(adminService, kcUser, userID), nil
+	})
+	return withLiveRole(ctx, v.(string))
+}
+
+func needsNotBeforeSync(userID string) bool {
+	return utils.GlobalTokenRevocations.NotBefore(userID) == 0 && !utils.HasSyncedNotBefore(userID)
+}
+
+// syncAuthFromKeycloak loads not-before and the live role from Keycloak as needed
+// and returns the role to apply (empty when unknown).
+func syncAuthFromKeycloak(adminService *services.AdminService, kcUser *keycloak.KeycloakUserService, userID string) string {
+	needNotBefore := needsNotBeforeSync(userID)
+	cachedRole, hasCachedRole := utils.GetCachedLiveRole(userID)
 
 	adminToken, err := adminService.GetAdminToken()
 	if err != nil {
-		if hasCachedRole && cachedRole != "" {
-			return utils.SetLiveRoleInContext(ctx, cachedRole)
-		}
-		return ctx
+		return cachedRole
 	}
 
 	if needNotBefore {
@@ -278,21 +291,23 @@ func enrichAuthContext(adminService *services.AdminService, kcUser *keycloak.Key
 		}
 	}
 
-	if needLiveRole {
-		role, err := kcUser.GetUserRole(adminToken, userID)
-		if err == nil {
-			utils.SetCachedLiveRole(userID, role)
-			if role != "" {
-				return utils.SetLiveRoleInContext(ctx, role)
-			}
-		}
-		return ctx
+	if hasCachedRole {
+		return cachedRole
 	}
 
-	if hasCachedRole && cachedRole != "" {
-		return utils.SetLiveRoleInContext(ctx, cachedRole)
+	role, err := kcUser.GetUserRole(adminToken, userID)
+	if err != nil {
+		return ""
 	}
-	return ctx
+	utils.SetCachedLiveRole(userID, role)
+	return role
+}
+
+func withLiveRole(ctx context.Context, role string) context.Context {
+	if role == "" {
+		return ctx
+	}
+	return utils.SetLiveRoleInContext(ctx, role)
 }
 
 func handleShutdown(shutdownCh <-chan struct{}, redisClient *redisclient.RedisClient, snapshotPool *snapshotworker.WorkerPool, tokenExpirationChan <-chan time.Time) {

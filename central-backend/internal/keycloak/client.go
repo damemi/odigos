@@ -28,6 +28,7 @@ const (
 
 type tokenResponse struct {
 	AccessToken string `json:"access_token"`
+	ExpiresIn   int    `json:"expires_in"`
 }
 
 type ClientConfig struct {
