@@ -203,7 +203,8 @@ func (e *Engine) applyServiceGuardrailRecommendation(ctx context.Context, rec re
 	}
 	fingerprint := e.system.IdentityFingerprint()
 	var applied []repo.RuleKey
-	for _, r := range rec.Rules {
+	for i := range rec.Rules {
+		r := rec.Rules[i]
 		if !want[r.Rule] {
 			continue
 		}
@@ -214,6 +215,17 @@ func (e *Engine) applyServiceGuardrailRecommendation(ctx context.Context, rec re
 			if r.Fingerprint != fingerprint {
 				return fmt.Errorf("the transaction identity scheme changed since this was mined, recompute the recommendation first")
 			}
+		}
+		// Record what the rule was before overwriting it: the card's list
+		// extends any allowlist the operator had drafted, so this is the only
+		// way a revert can give that draft back.
+		rec.Rules[i].Prior = &repo.RecommendationRulePrior{
+			Items:       slices.Clone(g.RuleLists[r.Rule]),
+			Mode:        g.RuleModes[r.Rule],
+			Origin:      g.RuleOrigins[r.Rule],
+			Fingerprint: g.RuleFingerprints[r.Rule],
+		}
+		if r.Rule == risk.RuleAllowedTransactions {
 			repo.SetRuleFingerprint(&g, r.Rule, fingerprint)
 		}
 		g.RuleLists[r.Rule] = slices.Clone(r.Items)
@@ -235,9 +247,11 @@ func (e *Engine) applyServiceGuardrailRecommendation(ctx context.Context, rec re
 	return e.ReloadGuardrailConfig(ctx)
 }
 
-// revertServiceGuardrailRecommendation removes the rules an apply turned on and
+// revertServiceGuardrailRecommendation undoes what an apply turned on and
 // reopens the card. A rule the operator has since taken over (its origin is no
-// longer the recommendation) is kept.
+// longer the recommendation) is left alone entirely; on the rest only the
+// entries the card contributed are withdrawn, so a list the operator drafted
+// before applying, or extended after, survives.
 func (e *Engine) revertServiceGuardrailRecommendation(ctx context.Context, rec repo.Recommendation) error {
 	g, found, err := e.findServiceGuardrail(ctx, rec.ScopeKey)
 	if err != nil {
@@ -249,10 +263,7 @@ func (e *Engine) revertServiceGuardrailRecommendation(ctx context.Context, rec r
 			if g.RuleOrigins[rule] != repo.GuardrailOriginRecommendation {
 				continue
 			}
-			delete(g.RuleLists, rule)
-			delete(g.RuleModes, rule)
-			delete(g.RuleOrigins, rule)
-			delete(g.RuleFingerprints, rule)
+			withdrawRecommendedRule(&g, recommendationRule(rec, rule))
 		}
 		if guardrailEmpty(g) {
 			err = e.repo.DeleteServiceGuardrail(ctx, repo.ScopeService, g.ScopeKey)
@@ -265,12 +276,79 @@ func (e *Engine) revertServiceGuardrailRecommendation(ctx context.Context, rec r
 	}
 	rec.State = repo.RecommendationOpen
 	rec.AppliedRules = nil
+	for i := range rec.Rules {
+		rec.Rules[i].Prior = nil
+	}
 	if err := e.repo.UpsertRecommendations(ctx, []repo.Recommendation{rec}); err != nil {
 		return err
 	}
 	// The card's lists may be out of date by now; rebuild it in the background.
 	e.recommendations.requestMineService(rec.Namespace, rec.Service)
 	return e.ReloadGuardrailConfig(ctx)
+}
+
+// recommendationRule returns the card's entry for one rule key, nil when the
+// rule is not on the card (so nothing is known about what an apply wrote).
+func recommendationRule(rec repo.Recommendation, rule repo.RuleKey) *repo.RecommendationRule {
+	for i := range rec.Rules {
+		if rec.Rules[i].Rule == rule {
+			return &rec.Rules[i]
+		}
+	}
+	return nil
+}
+
+// withdrawRecommendedRule takes one applied rule back off the guardrail. Only
+// the entries the card contributed are removed - the operator's own, whether
+// drafted before the apply or added after, stay - and the rule's previous mode,
+// origin and fingerprint are restored, which leaves it observe-only when it had
+// none. The rule is deleted outright only when nothing of it is left, the same
+// way reverting an attribute correlation deletes the rule once its last spec is
+// gone.
+func withdrawRecommendedRule(g *repo.ServiceGuardrail, r *repo.RecommendationRule) {
+	if r == nil {
+		return
+	}
+	rule := r.Rule
+	// Service and host names match case-insensitively, transaction identities
+	// exactly - the same comparison the lists were merged under.
+	contains := containsFold
+	if rule == risk.RuleAllowedTransactions {
+		contains = containsExact
+	}
+	var prior repo.RecommendationRulePrior
+	if r.Prior != nil {
+		prior = *r.Prior
+	}
+	kept := make([]string, 0, len(g.RuleLists[rule]))
+	for _, item := range g.RuleLists[rule] {
+		// An entry the card proposed and the rule did not already have is the
+		// card's; everything else is the operator's.
+		if contains(r.Items, item) && !contains(prior.Items, item) {
+			continue
+		}
+		kept = append(kept, item)
+	}
+	if len(kept) == 0 {
+		// Nothing of the rule predates the apply: it goes away whole, the same
+		// state the guardrail was in before.
+		delete(g.RuleLists, rule)
+	} else {
+		g.RuleLists[rule] = kept
+	}
+	setOrDelete(g.RuleModes, rule, prior.Mode)
+	setOrDelete(g.RuleOrigins, rule, prior.Origin)
+	repo.SetRuleFingerprint(g, rule, prior.Fingerprint)
+}
+
+// setOrDelete writes a sparse map entry, removing it when the value is empty so
+// "unconfigured" stays distinguishable from a written zero value.
+func setOrDelete[V ~string](m map[repo.RuleKey]V, rule repo.RuleKey, value V) {
+	if value == "" {
+		delete(m, rule)
+		return
+	}
+	m[rule] = value
 }
 
 func (e *Engine) findServiceGuardrail(ctx context.Context, scopeKey string) (repo.ServiceGuardrail, bool, error) {

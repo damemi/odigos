@@ -193,6 +193,76 @@ func TestServiceGuardrailRecommendation_ApplySubsetExtendsAndRevertRestores(t *t
 	}
 }
 
+// TestServiceGuardrailRecommendation_RevertKeepsOperatorEntries: a card extends
+// the allowlist the operator drafted rather than replacing it, so reverting must
+// withdraw only what the card contributed - the draft, and anything added after
+// applying, are the operator's and stay.
+func TestServiceGuardrailRecommendation_RevertKeepsOperatorEntries(t *testing.T) {
+	r := newFakeRepo()
+	eng := New(r, nil, nil, nil)
+	eng.SetGuardrailConfig(guardrailConfigFrom())
+	eng.SetSystemConfig(newSystemConfig(repo.SystemSettings{}))
+	ctx := context.Background()
+
+	seedPromotedService(t, r, "ns", "checkout", "POST /pay")
+	r.profiles = map[string]repo.ServiceProfile{"ns/checkout": {
+		Namespace: "ns", Service: "checkout", Egress: []string{"api.stripe.com:443"},
+	}}
+	// The operator has been drafting an egress allowlist by hand, observe-only.
+	if err := r.UpsertServiceGuardrail(ctx, repo.ServiceGuardrail{
+		Scope: repo.ScopeService, ScopeKey: "ns/checkout",
+		RuleModes: map[repo.RuleKey]repo.RuleMode{risk.RuleAllowedEgress: repo.RuleModeSuggest},
+		RuleLists: map[repo.RuleKey][]string{risk.RuleAllowedEgress: {"vault.internal:8200"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := eng.refreshServiceGuardrailRecommendation(ctx, "ns", "checkout"); err != nil {
+		t.Fatal(err)
+	}
+	id := repo.ServiceGuardrailRecommendationID("ns", "checkout")
+	if res := eng.ApplyRecommendations(ctx, []RecommendationApplyItem{{ID: id}}); res.Done != 1 {
+		t.Fatalf("apply: %+v", res)
+	}
+	g, _ := eng.loadOrInitServiceGuardrail(ctx, "ns/checkout")
+	if got := g.RuleLists[risk.RuleAllowedEgress]; !slices.Equal(got, []string{"api.stripe.com:443", "vault.internal:8200"}) {
+		t.Fatalf("apply should enforce the merged list, got %v", got)
+	}
+	// The operator adds one more host through the guardrail editor.
+	g.RuleLists[risk.RuleAllowedEgress] = append(g.RuleLists[risk.RuleAllowedEgress], "backup.corp:443")
+	if err := r.UpsertServiceGuardrail(ctx, g); err != nil {
+		t.Fatal(err)
+	}
+
+	if res := eng.RevertRecommendations(ctx, []string{id}); res.Done != 1 || len(res.Errors) != 0 {
+		t.Fatalf("revert: %+v", res)
+	}
+	g, _ = eng.loadOrInitServiceGuardrail(ctx, "ns/checkout")
+	if got := g.RuleLists[risk.RuleAllowedEgress]; !slices.Equal(got, []string{"vault.internal:8200", "backup.corp:443"}) {
+		t.Fatalf("revert must withdraw only the card's own entries, got %v", got)
+	}
+	if g.RuleModes[risk.RuleAllowedEgress] != repo.RuleModeSuggest {
+		t.Fatalf("the rule should be back to the mode it had before applying: %v", g.RuleModes)
+	}
+	if g.RuleOrigins[risk.RuleAllowedEgress] != "" {
+		t.Fatalf("the recommendation no longer owns the rule: %v", g.RuleOrigins)
+	}
+	// Applying and reverting again is idempotent - the draft is still not the
+	// card's to remove.
+	if _, err := eng.refreshServiceGuardrailRecommendation(ctx, "ns", "checkout"); err != nil {
+		t.Fatal(err)
+	}
+	if res := eng.ApplyRecommendations(ctx, []RecommendationApplyItem{{ID: id}}); res.Done != 1 {
+		t.Fatalf("re-apply: %+v", res)
+	}
+	if res := eng.RevertRecommendations(ctx, []string{id}); res.Done != 1 {
+		t.Fatalf("re-revert: %+v", res)
+	}
+	g, _ = eng.loadOrInitServiceGuardrail(ctx, "ns/checkout")
+	if got := g.RuleLists[risk.RuleAllowedEgress]; !slices.Equal(got, []string{"backup.corp:443", "vault.internal:8200"}) {
+		t.Fatalf("second revert = %v", got)
+	}
+}
+
 func TestServiceGuardrailRecommendation_ApplyRejectsUnknownRuleAndStaleFingerprint(t *testing.T) {
 	r := newFakeRepo()
 	eng := New(r, nil, nil, nil)

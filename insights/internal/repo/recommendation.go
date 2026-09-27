@@ -79,11 +79,26 @@ type RecommendationRule struct {
 	// built under (see ServiceGuardrail.RuleFingerprints); empty for the rules
 	// that list service and host names.
 	Fingerprint string `json:"fingerprint,omitempty"`
+	// Prior is what the rule looked like on the guardrail just before an apply
+	// turned it on, so a revert puts that back instead of dropping the rule
+	// whole. Nil until the recommendation is applied.
+	Prior *RecommendationRulePrior `json:"prior,omitempty"`
 
 	LiveChecked  int64     `json:"-"`
 	LiveViolated int64     `json:"-"`
 	LiveSince    time.Time `json:"-"`
 	LiveLast     time.Time `json:"-"`
+}
+
+// RecommendationRulePrior is one rule's guardrail state before an apply
+// overwrote it. A card's proposed list extends whatever the operator had
+// drafted, so without this a revert cannot tell the entries the card
+// contributed from the ones it inherited.
+type RecommendationRulePrior struct {
+	Items       []string `json:"items,omitempty"`
+	Mode        RuleMode `json:"mode,omitempty"`
+	Origin      string   `json:"origin,omitempty"`
+	Fingerprint string   `json:"fingerprint,omitempty"`
 }
 
 // Recommendation is one suggested guardrail change for one scope. Mining
