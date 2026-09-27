@@ -23,8 +23,8 @@ permissions:
 
 jobs:
   # Pure file-parsing check of the Go <-> SQL version contract: no database needed, so it runs as its own
-  # job rather than inside the migration round trip (which pins an older Go for goose than the connectors
-  # module requires).
+  # job rather than inside the migration round trip (which pins its own Go for goose, independent of the
+  # connectors module's go directive).
   verify-schema-contract:
     name: Verify schema-version contract
     runs-on: ubuntu-latest
@@ -67,10 +67,10 @@ jobs:
 
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.25"
+          go-version: "1.26.8"
 
       - name: Install goose
-        run: CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@v3.27.2
+        run: CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@v3.28.0
 
       - name: Validate migrations parse
         run: goose -dir "$MIGRATIONS_DIR" validate

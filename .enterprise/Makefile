@@ -215,11 +215,11 @@ build-connector-postgres:
 # a database, so it lives only in CI). Keep both pins in sync with that workflow.
 #
 # goose is pinned rather than @latest on purpose: @latest tracks a release whose minimum Go version moves
-# independently of this image, which silently breaks the target (v3.27.3 requires Go >= 1.25.7).
-GOOSE_VERSION ?= v3.27.2
+# independently of this image, which silently breaks the target (v3.28.x requires Go >= 1.26).
+GOOSE_VERSION ?= v3.28.0
 .PHONY: validate-db-migrations
 validate-db-migrations:
-	docker run --rm -v "$(CURDIR)/connector-postgres/migrations:/migrations" golang:1.25 \
+	docker run --rm -v "$(CURDIR)/connector-postgres/migrations:/migrations" golang:1.26.8 \
 		sh -c 'CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION) && goose -dir /migrations validate'
 
 .PHONY: build-connector-runtime-dev
