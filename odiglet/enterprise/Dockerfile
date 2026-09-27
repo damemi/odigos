@@ -1,4 +1,4 @@
-ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.20
+ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.21
 
 ######### dotnet builder #########
 FROM --platform=$BUILDPLATFORM busybox:1.36.1 AS dotnet-builder
@@ -225,9 +225,9 @@ USER 65532:65532
 CMD ["/root/odiglet"]
 
 ######### Default Odiglet #########
-# Uses the distroless nossl variant: nothing in this image links OpenSSL (rsync, odiglet and grpc_health_probe
-# are static; odigos-csi-driver and deviceplugin need only libc), so this keeps libssl3 CVEs out of the image.
-# Pinned by digest. An earlier base-debian12 hash once broke rsync; rsync is now copied in statically compiled.
+# Uses the distroless nossl variant: nothing here needs OpenSSL at runtime. rsync, odiglet and grpc_health_probe
+# are static (odiglet-base builds rsync without OpenSSL); odigos-csi-driver and deviceplugin need only libc.
+# Pinned by digest; an earlier base-debian12 digest once broke rsync.
 FROM gcr.io/distroless/base-nossl-debian12@sha256:e35893f8ca1cabfbd60394af94899c20930c4615355adf97c5da660a51b61bca
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
 COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odigos-csi-driver /root/odigos-csi-driver
