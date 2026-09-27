@@ -24,18 +24,24 @@ func (r *Repo) GetBaselineForTransaction(ctx context.Context, transactionID int6
 	return r.baselinesFor(ctx, []int64{transactionID})
 }
 
-// ListBaselinePromotion tallies promoted-vs-total classes per transaction in a
-// single aggregate query. promoted is max()-aggregated per (transaction, class),
-// so the inner group collapses replicas before the outer count. Cold path; backs
-// overview metrics without the per-transaction reads baselinesFor would need.
+// settledClassesSQL collapses baseline_meta to one row per (transaction, class)
+// with the class's settled flag: promoted or saturated (both max()-aggregated
+// across replicas). Every "finished learning" roll-up derives from it so a
+// saturated class counts as done, never as still learning. The aliases must
+// not shadow the source columns: ClickHouse resolves `max(saturated) AS
+// saturated` to the alias and rejects the nested aggregate.
+const settledClassesSQL = `SELECT transaction_id, class,
+			greatest(max(promoted), max(saturated)) AS is_settled, max(saturated) AS is_saturated
+		 FROM baseline_meta
+		 GROUP BY transaction_id, class`
+
+// ListBaselinePromotion tallies settled-vs-total classes per transaction in a
+// single aggregate query (see settledClassesSQL). Cold path; backs overview
+// metrics without the per-transaction reads baselinesFor would need.
 func (r *Repo) ListBaselinePromotion(ctx context.Context) ([]repo.BaselinePromotion, error) {
 	return queryRows(ctx, r.conn, "list baseline promotion",
-		`SELECT transaction_id, countIf(promoted = 1) AS promoted, count() AS total
-		 FROM (
-		   SELECT transaction_id, class, max(promoted) AS promoted
-		   FROM baseline_meta
-		   GROUP BY transaction_id, class
-		 )
+		`SELECT transaction_id, countIf(is_settled = 1) AS promoted, count() AS total
+		 FROM (`+settledClassesSQL+`)
 		 GROUP BY transaction_id`,
 		func(s rowScanner) (repo.BaselinePromotion, error) {
 			var (
@@ -73,7 +79,7 @@ func (r *Repo) ListUnpromotedBaselines(ctx context.Context, filter repo.Unpromot
 			max(last_changed_at), max(observation_count_at_last_change)
 		 FROM baseline_meta
 		 GROUP BY transaction_id, class
-		 HAVING max(promoted) = 0 AND (%s)
+		 HAVING max(promoted) = 0 AND max(saturated) = 0 AND (%s)
 		 ORDER BY transaction_id, class`, joinOr(timeConds))
 	if filter.Limit > 0 {
 		query += fmt.Sprintf(" LIMIT %d", filter.Limit)
@@ -130,7 +136,7 @@ func (r *Repo) baselinesFor(ctx context.Context, transactionIDs []int64) ([]repo
 
 	metaRows, err := r.conn.Query(ctx, fmt.Sprintf(
 		`SELECT transaction_id, class,
-			sum(observation_count), max(promoted), max(data_schema_version), min(learning_started_at),
+			sum(observation_count), max(promoted), max(saturated), max(data_schema_version), min(learning_started_at),
 			max(last_changed_at), max(observation_count_at_last_change)
 		 FROM baseline_meta WHERE transaction_id IN %s
 		 GROUP BY transaction_id, class
@@ -144,12 +150,13 @@ func (r *Repo) baselinesFor(ctx context.Context, transactionIDs []int64) ([]repo
 			class         string
 			count         int64
 			promo         uint8
+			saturated     uint8
 			version       int32
 			started       time.Time
 			lastChanged   time.Time
 			countAtChange int64
 		)
-		if err := metaRows.Scan(&txID, &class, &count, &promo, &version, &started, &lastChanged, &countAtChange); err != nil {
+		if err := metaRows.Scan(&txID, &class, &count, &promo, &saturated, &version, &started, &lastChanged, &countAtChange); err != nil {
 			metaRows.Close()
 			return nil, fmt.Errorf("scan baseline meta: %w", err)
 		}
@@ -159,6 +166,7 @@ func (r *Repo) baselinesFor(ctx context.Context, transactionIDs []int64) ([]repo
 			Class:                        repo.DeviationClass(class),
 			ObservationCount:             count,
 			Promoted:                     promo == 1,
+			Saturated:                    saturated == 1,
 			DataSchemaVersion:            int(version),
 			LearningStartedAt:            started,
 			LastChangedAt:                normalizeEpoch(lastChanged),
@@ -243,6 +251,7 @@ func (r *Repo) UpsertBaselineClass(ctx context.Context, bc repo.BaselineClass) e
 		Contribution:                 bc.Data,
 		CountDelta:                   bc.ObservationCount,
 		Promote:                      bc.Promoted,
+		Saturate:                     bc.Saturated,
 		DataSchemaVersion:            bc.DataSchemaVersion,
 		LearningStartedAt:            bc.LearningStartedAt,
 		LastChangedAt:                bc.LastChangedAt,
@@ -287,7 +296,7 @@ func (r *Repo) ApplyBaselineDeltas(ctx context.Context, deltas []repo.BaselineDe
 		return nil, fmt.Errorf("prepare counters: %w", err)
 	}
 	metaBatch, err := r.conn.PrepareBatch(ctx,
-		"INSERT INTO baseline_meta (transaction_id, class, observation_count, promoted, data_schema_version, learning_started_at, last_changed_at, observation_count_at_last_change)")
+		"INSERT INTO baseline_meta (transaction_id, class, observation_count, promoted, saturated, data_schema_version, learning_started_at, last_changed_at, observation_count_at_last_change)")
 	if err != nil {
 		_ = memberBatch.Abort()
 		_ = counterBatch.Abort()
@@ -325,9 +334,12 @@ func (r *Repo) ApplyBaselineDeltas(ctx context.Context, deltas []repo.BaselineDe
 		if started.IsZero() {
 			started = time.Now()
 		}
-		var promoted uint8
+		var promoted, saturated uint8
 		if d.Promote {
 			promoted = 1
+		}
+		if d.Saturate {
+			saturated = 1
 		}
 		// last_changed_at is max()-aggregated: send the epoch (not Go's zero
 		// year-1 time, which is out of DateTime64 range) when the baseline has
@@ -336,7 +348,7 @@ func (r *Repo) ApplyBaselineDeltas(ctx context.Context, deltas []repo.BaselineDe
 		if lastChanged.IsZero() {
 			lastChanged = time.Unix(0, 0)
 		}
-		if err := metaBatch.Append(d.TransactionID, string(d.Class), d.CountDelta, promoted, schema, started, lastChanged, d.ObservationCountAtLastChange); err != nil {
+		if err := metaBatch.Append(d.TransactionID, string(d.Class), d.CountDelta, promoted, saturated, schema, started, lastChanged, d.ObservationCountAtLastChange); err != nil {
 			abortAll(memberBatch, counterBatch, metaBatch)
 			return nil, fmt.Errorf("append meta: %w", err)
 		}

@@ -43,7 +43,7 @@ merges to do the cross-replica merge instead of locking and rewriting rows:
 | `transaction_activity` | AggregatingMergeTree | per-transaction volume (`sum`) + `last_seen` (`max`), written by the write-behind flusher in batches (never per trace). Keeps counting after promotion, so the UI can order transactions "most frequent first" and roll volume up per service. |
 | `baseline_set_members` | ReplacingMergeTree | one row per member of a **set** baseline (D1 edges, D2 peers, D5 libs, D6 accesses/shapes). The union across flushes and replicas is free, and duplicate inserts collapse (idempotent, no dedup key). |
 | `baseline_counters` | SummingMergeTree | one row per bucket of an **additive** baseline (the D7 payload-size histogram). Each flush appends a delta and ClickHouse sums. |
-| `baseline_meta` | AggregatingMergeTree | per-class scalars: `observation_count` (summed), `promoted` (OR'd via max), `learning_started_at` (anchored via min), `data_schema_version` (max). |
+| `baseline_meta` | AggregatingMergeTree | per-class scalars: `observation_count` (summed), `promoted` and `saturated` (OR'd via max), `learning_started_at` (anchored via min), `data_schema_version` (max). |
 | `trace_observations` | ReplacingMergeTree | sampled traces kept as UI/debug examples per transaction. Stores the original OTLP protobuf bytes for just this trace's spans (`raw_otlp String`), so the UI gets Jaeger-grade fidelity (events, links, status, typed attributes) without an external trace backend. **NOT every trace is stored**; the engine keeps a bounded set (`example`) plus the trace that fired each anomaly (`anomaly_evidence`). A 120-day `TTL` matches the findings lookback ceiling. |
 | `alert_policies` | ReplacingMergeTree(updated_at) | rules: which combinations of deviated classes fire. One policy per scope (`scope_type`/`scope_key`: global, service, or transaction); most-specific scope wins and fully replaces the broader one. Seeded with the global `default-any-1-of-8`. |
 | `anomalies` | ReplacingMergeTree(version) | one row per fired alert, with per-class evidence so the UI explains itself. Acknowledgement re-inserts the row with a higher `version`. |
@@ -268,6 +268,35 @@ The snapshot is **refreshed at runtime**: a background reloader
 swaps the snapshot atomically, so an edit takes effect within a tick **without a
 restart** and without moving the read onto the hot path. A failed reload keeps
 the previous snapshot.
+
+### Saturated classes (per-set member cap)
+
+A set class (D1 edges, D2 peers, D4 sites, D5 libraries, D6 tables) that grows
+past `max_baseline_set_members` (system setting, default 1000) is not learning
+a baseline, it is absorbing a per-request value that leaked into the
+transaction's structure (an id in a span name, a per-request peer). Left alone
+it would grow `baseline_set_members` without bound and, once the stability
+window elapsed, promote a truncated set that flags every unseen member.
+
+Instead the engine freezes the class as **saturated**:
+
+- the in-memory value is cut to the cap and the class stops merging, counting
+  and flushing members, so the store never receives the overflow;
+- it never promotes and is never scored, even if force-promoted;
+- it counts as **settled** for the transaction (`promoted` on the transaction,
+  auto guardrail, recommendation mining), so one leaking class does not hold
+  the rest of the transaction in learning forever;
+- it is surfaced as `saturated` on the class, `saturated_classes` on the
+  transaction, a `saturated` badge in the debug UI, and the
+  `insights_engine_baseline_classes_saturated_total` metric.
+
+The flag lives in `baseline_meta.saturated` as a `max()` aggregate, like
+`promoted`, so it is monotonic across replicas: whichever pod crosses the cap
+first raises it, every other pod adopts it on its next flush or reload and
+stops learning too. Rows that exceed the cap when loaded (written by an older
+build, or a replica with a larger cap) are capped and flagged on load. Only a
+class or transaction **reset** clears it - fix the identity leak first, or it
+saturates again.
 
 ### Sending traces locally
 

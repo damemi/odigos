@@ -17,7 +17,11 @@ const (
 	DefaultExampleSampleIntervalSeconds = 30
 	DefaultObservationRetentionDays     = 120
 	DefaultMaxResidentTransactions      = 50000
-	DefaultMaxBaselineSetMembers        = 5000
+	// DefaultMaxBaselineSetMembers bounds one baseline set (edges, peers,
+	// sites, libraries, tables). A class that crosses it is marked saturated:
+	// it stops learning, is never promoted or scored, and its overflow never
+	// reaches the store. Healthy transactions have tens to a few hundred.
+	DefaultMaxBaselineSetMembers = 1000
 	// DefaultMaxTransactionsPerService bounds how many distinct transactions
 	// one service may add to the inventory. Span names that carry request ids
 	// would otherwise mint a new transaction per request, and every one of

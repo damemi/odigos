@@ -1344,16 +1344,22 @@ func (f *fakeRepo) ListTransactionStats(_ context.Context, params repo.Transacti
 			}
 			hasBaseline = true
 			total++
-			if b.Promoted {
+			if b.Settled() {
 				promoted++
 			}
 		}
-		out = append(out, repo.TransactionStat{
+		stat := repo.TransactionStat{
 			Transaction: tx,
 			Volume:      f.activity[tx.ID],
 			HasBaseline: hasBaseline,
 			Promoted:    hasBaseline && total > 0 && promoted == total,
-		})
+		}
+		for _, b := range f.baselines {
+			if b.TransactionID == tx.ID && b.Saturated {
+				stat.SaturatedClasses = append(stat.SaturatedClasses, b.Class)
+			}
+		}
+		out = append(out, stat)
 	}
 	return out, nil
 }
@@ -1426,7 +1432,7 @@ func (f *fakeRepo) ListBaselinePromotion(_ context.Context) ([]repo.BaselineProm
 			order = append(order, b.TransactionID)
 		}
 		p.Total++
-		if b.Promoted {
+		if b.Settled() {
 			p.Promoted++
 		}
 	}
@@ -1442,7 +1448,7 @@ func (f *fakeRepo) ListUnpromotedBaselines(_ context.Context, filter repo.Unprom
 	defer f.mu.Unlock()
 	var out []repo.UnpromotedBaselineCandidate
 	for _, b := range f.baselines {
-		if b.Promoted {
+		if b.Settled() {
 			continue
 		}
 		timeMatch := false
@@ -1559,6 +1565,9 @@ func (f *fakeRepo) ApplyBaselineDeltas(_ context.Context, deltas []repo.Baseline
 			if d.Promote {
 				b.Promoted = true
 			}
+			if d.Saturate {
+				b.Saturated = true
+			}
 			if d.LastChangedAt.After(b.LastChangedAt) {
 				b.LastChangedAt = d.LastChangedAt
 			}
@@ -1588,6 +1597,7 @@ func (f *fakeRepo) ApplyBaselineDeltas(_ context.Context, deltas []repo.Baseline
 			DataSchemaVersion:            schema,
 			ObservationCount:             d.CountDelta,
 			Promoted:                     d.Promote,
+			Saturated:                    d.Saturate,
 			LearningStartedAt:            started,
 			LastChangedAt:                d.LastChangedAt,
 			ObservationCountAtLastChange: d.ObservationCountAtLastChange,

@@ -337,10 +337,11 @@ func (r *Repo) DeleteRecommendations(ctx context.Context, transactionID int64) e
 	return nil
 }
 
-// ListRecommendationMiningCandidates finds promoted transactions with relation
-// samples that still need mining. A transaction qualifies when it has no run,
-// its run saw fewer samples than are stored now, or its in-progress claim is
-// older than staleClaim (the claiming replica died).
+// ListRecommendationMiningCandidates finds finished-learning transactions
+// (every class promoted or saturated) with relation samples that still need
+// mining. A transaction qualifies when it has no run, its run saw fewer
+// samples than are stored now, or its in-progress claim is older than
+// staleClaim (the claiming replica died).
 func (r *Repo) ListRecommendationMiningCandidates(ctx context.Context, scoredClasses int, staleClaim time.Duration, limit int) ([]repo.RecommendationMiningCandidate, error) {
 	if limit <= 0 {
 		limit = 100
@@ -348,9 +349,9 @@ func (r *Repo) ListRecommendationMiningCandidates(ctx context.Context, scoredCla
 	rows, err := r.conn.Query(ctx, `
 		WITH promoted AS (
 			SELECT transaction_id
-			FROM (SELECT transaction_id, class, max(promoted) AS p FROM baseline_meta GROUP BY transaction_id, class)
+			FROM (`+settledClassesSQL+`)
 			GROUP BY transaction_id
-			HAVING min(p) = 1 AND count() >= ?
+			HAVING min(is_settled) = 1 AND count() >= ?
 		),
 		samples AS (
 			SELECT transaction_id, toInt32(uniqExact(trace_id)) AS n

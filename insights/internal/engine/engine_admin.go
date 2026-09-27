@@ -77,7 +77,7 @@ func (e *Engine) PromoteBaselineClass(ctx context.Context, transactionID int64, 
 	}
 	promoted := map[repo.DeviationClass]bool{}
 	for _, row := range rows {
-		promoted[row.Class] = row.Promoted
+		promoted[row.Class] = row.Settled()
 	}
 	// The class we just wrote may not be visible in ClickHouse yet.
 	promoted[class] = true

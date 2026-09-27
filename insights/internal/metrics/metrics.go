@@ -155,6 +155,17 @@ var (
 		Help:      "Classes promoted by the time-based promotion sweeper, by source (memory|db).",
 	}, []string{"source"})
 
+	// baselineClassesSaturated counts baseline classes this replica froze
+	// because their set crossed max_baseline_set_members. A non-zero rate
+	// means some transaction leaks identity into a learned set (ids in span
+	// names, per-request peers) and will never be enforced for that class.
+	baselineClassesSaturated = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "engine",
+		Name:      "baseline_classes_saturated_total",
+		Help:      "Baseline classes frozen as saturated after crossing the per-set member cap, by class.",
+	}, []string{"class"})
+
 	// anomalyDuplicatesSuppressed counts the repeat findings an operator never
 	// had to triage: a deviation a nested sub-transaction would have reported
 	// had an enclosing one in the same trace not already reported the same
@@ -217,7 +228,7 @@ func init() {
 	registry.MustRegister(
 		repoCalls, repoCallDuration, tracesProcessed, subtransactionsProcessed, transactionsDroppedOverCap,
 		transactionCache, policyCache, baselineCache, baselineEvictions, baselineDirty, baselineResident,
-		baselineFlush, baselineFlushDuration, promotionSweeperClasses,
+		baselineFlush, baselineFlushDuration, promotionSweeperClasses, baselineClassesSaturated,
 		anomalyDuplicatesSuppressed, samplesDropped,
 		recommendationMiningRuns, recommendationMiningDuration, recommendationMiningCandidates, recommendationShadow,
 	)
@@ -309,6 +320,11 @@ func ObserveBaselineFlush(result string, seconds float64) {
 	} else {
 		lastFlushErr.Store("flush failed")
 	}
+}
+
+// IncBaselineClassesSaturated records one class frozen at the per-set cap.
+func IncBaselineClassesSaturated(class string) {
+	baselineClassesSaturated.WithLabelValues(class).Inc()
 }
 
 // AddPromotionSweeperClasses records n classes promoted by the time-based sweeper.

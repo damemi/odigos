@@ -42,6 +42,14 @@ type BaselineClass struct {
 	ObservationCount  int64
 	Promoted          bool
 
+	// Saturated marks a set class whose baseline crossed the per-set member
+	// cap. The engine stops learning it, never promotes or scores it, and
+	// keeps only the capped subset in Data. Monotonic and max()-aggregated
+	// across replicas like Promoted, so once any replica saturates a class
+	// every replica adopts that on its next flush or reload. Cleared only by
+	// a reset (re-learn).
+	Saturated bool
+
 	// LearningStartedAt anchors time-based promotion: a class can graduate once
 	// (now - LearningStartedAt) crosses its minimum learning duration. Set at
 	// seed time and immutable afterwards (UpsertBaselineClass must not overwrite).
@@ -55,6 +63,12 @@ type BaselineClass struct {
 	LastChangedAt                time.Time
 	ObservationCountAtLastChange int64
 }
+
+// Settled reports whether this class has finished learning for good: either
+// it graduated (Promoted) or it saturated and will never graduate. Transaction-
+// level roll-ups ("has this transaction finished learning?") use this so one
+// runaway class cannot hold the rest of the transaction hostage.
+func (b BaselineClass) Settled() bool { return b.Promoted || b.Saturated }
 
 // BaselinePromotion is one transaction's promotion tally: graduated classes
 // (Promoted) out of the total learned (Total). Returned by
@@ -144,6 +158,9 @@ type BaselineDelta struct {
 
 	// Promote raises promoted to true; it never lowers it (monotonic).
 	Promote bool
+
+	// Saturate raises saturated to true; it never lowers it (monotonic).
+	Saturate bool
 
 	// Seeding fields, used only when the row does not exist yet. On an existing
 	// row the backend MUST NOT overwrite LearningStartedAt.

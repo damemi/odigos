@@ -45,6 +45,8 @@ func LearningOf(bc repo.BaselineClass, policy repo.LearningPolicy, now time.Time
 	quiet := quietMinutes(bc, now)
 	phase := "learning"
 	switch {
+	case bc.Saturated:
+		phase = "saturated"
 	case bc.Promoted:
 		phase = "promoted"
 	case !baselineGrewOnce(bc):
@@ -105,7 +107,7 @@ func durationProgress(bc repo.BaselineClass, policy repo.LearningPolicy, now tim
 
 func applyPhase(phase string, p *StabilityProgress) {
 	switch phase {
-	case "empty":
+	case "empty", "saturated":
 		p.Current = 0
 		p.Met = false
 	case "promoted":

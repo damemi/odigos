@@ -104,7 +104,19 @@ func FromTransactionStat(t repo.TransactionStat) apitypes.TransactionStat {
 		LastSeen:           t.LastSeen,
 		HasBaseline:        &t.HasBaseline,
 		Promoted:           &t.Promoted,
+		SaturatedClasses:   saturatedClasses(t.SaturatedClasses),
 	}
+}
+
+func saturatedClasses(in []repo.DeviationClass) []apitypes.DeviationClass {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]apitypes.DeviationClass, len(in))
+	for i, c := range in {
+		out[i] = apitypes.DeviationClass(c)
+	}
+	return out
 }
 
 func wireOperationIdentity(operation string) (name string, dims []apitypes.TransactionIdentityValue) {
@@ -145,6 +157,7 @@ func FromBaselineClass(b repo.BaselineClass, learning engine.BaselineLearning) a
 		DataSchemaVersion:            b.DataSchemaVersion,
 		ObservationCount:             b.ObservationCount,
 		Promoted:                     b.Promoted,
+		Saturated:                    b.Saturated,
 		LearningStartedAt:            b.LearningStartedAt,
 		LastChangedAt:                b.LastChangedAt,
 		ObservationCountAtLastChange: b.ObservationCountAtLastChange,

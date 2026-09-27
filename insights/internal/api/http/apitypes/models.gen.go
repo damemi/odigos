@@ -86,27 +86,6 @@ func (e BaselineHistogramUnit) Valid() bool {
 	}
 }
 
-// Defines values for BaselineLearningPhase.
-const (
-	Empty    BaselineLearningPhase = "empty"
-	Learning BaselineLearningPhase = "learning"
-	Promoted BaselineLearningPhase = "promoted"
-)
-
-// Valid indicates whether the value is a known member of the BaselineLearningPhase enum.
-func (e BaselineLearningPhase) Valid() bool {
-	switch e {
-	case Empty:
-		return true
-	case Learning:
-		return true
-	case Promoted:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for BulkResolution.
 const (
 	BulkResolutionAccept  BulkResolution = "accept"
@@ -723,7 +702,10 @@ type BaselineClass struct {
 	ObservationCount             int64            `json:"observation_count"`
 	ObservationCountAtLastChange int64            `json:"observation_count_at_last_change,omitempty"`
 	Promoted                     bool             `json:"promoted"`
-	TransactionId                int64            `json:"transaction_id"`
+
+	// Saturated True when this class's set crossed `max_baseline_set_members`. The class is frozen at a truncated set, will never promote and is never scored. `learning.phase` is `saturated`.
+	Saturated     bool  `json:"saturated,omitempty"`
+	TransactionId int64 `json:"transaction_id"`
 }
 
 // BaselineClassList defines model for BaselineClassList.
@@ -780,7 +762,7 @@ type BaselineLearning struct {
 	// ObservationsSinceLastChange ObservationCount minus ObservationCountAtLastChange, clamped at 0.
 	ObservationsSinceLastChange int64 `json:"observations_since_last_change"`
 
-	// Phase Coarse learning state for one class. `promoted` means the baseline is frozen. `empty` means it has never grown (no structure learned yet). `learning` means it has grown and is still in the learning phase.
+	// Phase Coarse learning state for one class. `promoted` means the baseline is frozen. `empty` means it has never grown (no structure learned yet). `learning` means it has grown and is still in the learning phase. `saturated` means the set crossed `max_baseline_set_members`; the class is frozen, will not promote and is not enforced. Open set: new phases may be added, so clients must fall back gracefully on unknown values.
 	Phase BaselineLearningPhase `json:"phase"`
 
 	// QuietMinutes Whole minutes since the baseline last grew (or since learning started if it never grew).
@@ -793,8 +775,8 @@ type BaselineLearning struct {
 	Stability BaselineLearningStability `json:"stability"`
 }
 
-// BaselineLearningPhase Coarse learning state for one class. `promoted` means the baseline is frozen. `empty` means it has never grown (no structure learned yet). `learning` means it has grown and is still in the learning phase.
-type BaselineLearningPhase string
+// BaselineLearningPhase Coarse learning state for one class. `promoted` means the baseline is frozen. `empty` means it has never grown (no structure learned yet). `learning` means it has grown and is still in the learning phase. `saturated` means the set crossed `max_baseline_set_members`; the class is frozen, will not promote and is not enforced. Open set: new phases may be added, so clients must fall back gracefully on unknown values.
+type BaselineLearningPhase = string
 
 // BaselineLearningStability Both stability signals, always present so the UI can show "X / Y observations" and "grew N minutes ago" together. A class may promote on observations, on quiet time, on both, or on neither (display-only observation window of 50). Under `all`, one dimension `met` does not mean the class promotes - use `ready_to_promote`.
 type BaselineLearningStability struct {
@@ -1672,7 +1654,7 @@ type StorageWriteback struct {
 
 // SystemCapacitySettings In-memory limits for learned baselines. Higher values use more RAM; lower values may evict cold transactions or truncate large sets.
 type SystemCapacitySettings struct {
-	// MaxBaselineSetMembers Max unique members remembered in one baseline set (e.g. call edges or paths for one class), so a noisy transaction cannot grow unbounded.
+	// MaxBaselineSetMembers Max unique members remembered in one baseline set (e.g. call edges or paths for one class). A class that crosses it is frozen as saturated: it stops learning, is never promoted or enforced, and is listed in the transaction's `saturated_classes`.
 	MaxBaselineSetMembers int `json:"max_baseline_set_members"`
 
 	// MaxResidentTransactions Max transactions whose baselines stay hot in process memory. Least-recently used entries are dropped when the cap is exceeded.
@@ -1804,10 +1786,13 @@ type TransactionStat struct {
 	// OperationName Entry-span operation without dimension suffixes.
 	OperationName string `json:"operation_name"`
 
-	// Promoted True when every learned baseline class has graduated.
-	Promoted *bool  `json:"promoted,omitempty"`
-	Service  string `json:"service"`
-	Volume   int64  `json:"volume"`
+	// Promoted True when every learned baseline class has finished learning: graduated, or saturated (see `saturated_classes`).
+	Promoted *bool `json:"promoted,omitempty"`
+
+	// SaturatedClasses Baseline classes whose learned set crossed `max_baseline_set_members`. They are frozen and never enforced, so this transaction is only protected by its other classes. Usually means the transaction's identity leaks per-request values (ids in span names, per-request peers); fix the instrumentation or identity settings and re-learn. Omitted when no class saturated.
+	SaturatedClasses []DeviationClass `json:"saturated_classes,omitempty"`
+	Service          string           `json:"service"`
+	Volume           int64            `json:"volume"`
 }
 
 // TransactionStatList defines model for TransactionStatList.

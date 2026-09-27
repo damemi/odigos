@@ -20,7 +20,9 @@ const DefaultMinObservations int64 = 50
 // and always blocks "all" - the safe direction (never promote on a criterion
 // this build can't evaluate).
 func shouldPromote(p repo.LearningPolicy, bc repo.BaselineClass, now time.Time) bool {
-	if bc.Promoted {
+	// A saturated class is frozen at a truncated set; promoting it would
+	// enforce a baseline that is known to be incomplete.
+	if bc.Settled() {
 		return false
 	}
 	if len(p.Conditions) == 0 {

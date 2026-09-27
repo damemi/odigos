@@ -37,7 +37,9 @@
   </p>
   <p class="hint">Per baseline set (e.g. unique call edges or paths for one class), remember at most
     <input class="inline" type="number" min="1" name="max_baseline_set_members" value="{{.Settings.MaxBaselineSetMembers}}" style="width:6em">
-    members so a noisy transaction cannot grow unbounded.
+    members. A class that crosses the cap is frozen as <strong>saturated</strong>: it stops learning, is never
+    promoted or enforced, and the transaction shows a saturated badge. That almost always means a per-request
+    value leaks into the transaction's structure - fix the identity and reset the class to re-learn.
   </p>
   <p class="hint">Per service, admit at most
     <input class="inline" type="number" min="1" name="max_transactions_per_service" value="{{.Settings.MaxTransactionsPerService}}" style="width:6em">

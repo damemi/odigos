@@ -51,6 +51,7 @@
           {{if not .HasBaseline}}<span class="hint">-</span>
           {{else if .Promoted}}<span class="badge badge-ok">&#10003; promoted</span>
           {{else}}<span class="badge badge-pending">learning</span>{{end}}
+          {{if .SaturatedClasses}}<span class="badge badge-warn tip" data-tip="{{len .SaturatedClasses}} class(es) hit the per-set member cap and are frozen without enforcement: {{range $i, $c := .SaturatedClasses}}{{if $i}}, {{end}}{{classBaselineLabel $c}}{{end}}. Usually a per-request id leaking into the transaction's structure.">saturated</span>{{end}}
         </td>
         <td>{{humanTime .LastSeen}}</td>
         <td><a href="/debug/transactions/{{.ID}}">baseline &rarr;</a></td>

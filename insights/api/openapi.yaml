@@ -1617,8 +1617,20 @@ components:
           x-go-type-skip-optional-pointer: false
         promoted:
           type: boolean
-          description: True when every learned baseline class has graduated.
+          description: >
+            True when every learned baseline class has finished learning:
+            graduated, or saturated (see `saturated_classes`).
           x-go-type-skip-optional-pointer: false
+        saturated_classes:
+          type: array
+          items: { $ref: "#/components/schemas/DeviationClass" }
+          description: >
+            Baseline classes whose learned set crossed `max_baseline_set_members`.
+            They are frozen and never enforced, so this transaction is only
+            protected by its other classes. Usually means the transaction's
+            identity leaks per-request values (ids in span names, per-request
+            peers); fix the instrumentation or identity settings and re-learn.
+            Omitted when no class saturated.
       required: [id, service, namespace, operation, operation_name, identity_dimensions, kind, volume, last_seen]
       examples:
         - id: 4211
@@ -1730,6 +1742,12 @@ components:
         data_schema_version: { type: integer }
         observation_count: { type: integer, format: int64 }
         promoted: { type: boolean }
+        saturated:
+          type: boolean
+          description: >
+            True when this class's set crossed `max_baseline_set_members`. The
+            class is frozen at a truncated set, will never promote and is never
+            scored. `learning.phase` is `saturated`.
         learning_started_at: { type: string, format: date-time }
         last_changed_at: { type: string, format: date-time }
         observation_count_at_last_change: { type: integer, format: int64 }
@@ -1847,7 +1865,10 @@ components:
         Coarse learning state for one class. `promoted` means the baseline is
         frozen. `empty` means it has never grown (no structure learned yet).
         `learning` means it has grown and is still in the learning phase.
-      enum: [promoted, empty, learning]
+        `saturated` means the set crossed `max_baseline_set_members`; the class
+        is frozen, will not promote and is not enforced. Open set: new phases
+        may be added, so clients must fall back gracefully on unknown values.
+      x-extensible-enum: [promoted, empty, learning, saturated]
 
     BaselineStabilityProgress:
       type: object
@@ -3281,9 +3302,12 @@ components:
         max_baseline_set_members:
           type: integer
           minimum: 1
+          default: 1000
           description: >
             Max unique members remembered in one baseline set (e.g. call edges
-            or paths for one class), so a noisy transaction cannot grow unbounded.
+            or paths for one class). A class that crosses it is frozen as
+            saturated: it stops learning, is never promoted or enforced, and is
+            listed in the transaction's `saturated_classes`.
         max_transactions_per_service:
           type: integer
           minimum: 1

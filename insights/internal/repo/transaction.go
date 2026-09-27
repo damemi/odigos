@@ -75,14 +75,17 @@ type TransactionRef struct {
 }
 
 // TransactionStat is a Transaction plus its observed activity and baseline
-// promotion state. Promoted is true only when every learned class has graduated;
-// HasBaseline distinguishes "still learning" from "no baseline yet".
+// promotion state. Promoted is true only when every learned class has settled
+// (graduated or saturated, see BaselineClass.Settled); HasBaseline
+// distinguishes "still learning" from "no baseline yet". SaturatedClasses lists
+// the classes that hit the per-set member cap and are not enforced.
 type TransactionStat struct {
 	Transaction
-	Volume      int64
-	LastSeen    time.Time
-	HasBaseline bool
-	Promoted    bool
+	Volume           int64
+	LastSeen         time.Time
+	HasBaseline      bool
+	Promoted         bool
+	SaturatedClasses []DeviationClass
 }
 
 // ServiceStat rolls transactions up to one (namespace, service): count, combined

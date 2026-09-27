@@ -595,6 +595,9 @@ const (
 // target gets a progress bar toward that exact target. Otherwise it gets a
 // coarse Growing → Settling → Stable verdict inferred from the default window.
 func learningStability(bc repo.BaselineClass, policy repo.LearningPolicy) stabilityView {
+	if bc.Saturated {
+		return stabilityView{State: "saturated", Label: "\u26A0 Saturated", Detail: "set cap reached", Help: stabilityHelp("saturated", false)}
+	}
 	if bc.Promoted {
 		return stabilityView{State: "frozen", Label: "\U0001F512 Promoted", Detail: "baseline locked", Help: stabilityHelp("frozen", false)}
 	}
@@ -670,6 +673,8 @@ func stabilityHelp(state string, policyBacked bool) string {
 	switch state {
 	case "frozen":
 		return "Promoted: this class has graduated from learning, so its baseline is frozen and no longer changes. Stability no longer applies."
+	case "saturated":
+		return "Saturated: this class's set crossed max_baseline_set_members, which means the transaction leaks a per-request value into its structure (an id in a span name, a per-request peer). It is frozen at a truncated set, will not promote and is not enforced. Fix the identity leak and reset the class to re-learn."
 	case "nodata":
 		return "Learning: this class hasn't recorded any baseline data yet (no calls, peers, libraries, DB access, or latency/size samples seen for it). Stability only starts counting once it learns something, so it stays in learning until then."
 	case "growing":
@@ -1096,6 +1101,9 @@ func transactionStatsFromWire(items []apitypes.TransactionStat) []repo.Transacti
 		}
 		if item.Promoted != nil {
 			out[i].Promoted = *item.Promoted
+		}
+		for _, c := range item.SaturatedClasses {
+			out[i].SaturatedClasses = append(out[i].SaturatedClasses, repo.DeviationClass(c))
 		}
 	}
 	return out

@@ -293,20 +293,28 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 	// promotes, the transaction stops writing baselines and only the activity
 	// counter (above) keeps flushing. Resolve scope once here; the promotion
 	// gate looks up the most specific policy per class below.
-	promotedThisTrace := false
+	settledThisTrace := false
 	for _, sc := range e.scorers {
 		cs := entry.classes[sc.Class()]
-		if cs.value.Promoted {
-			continue // frozen
+		if cs.value.Settled() {
+			continue // frozen: promoted, or saturated and never going to promote
 		}
 		updated, err := sc.Merge(t, cs.value.Data)
 		if err != nil {
 			e.warn(fmt.Sprintf("merge %s", sc.Class()), err)
 			continue
 		}
+		// A set that outgrows the cap is not a baseline, it is an identity leak
+		// (ids in span names, per-request hosts). Freeze it as saturated: keep
+		// the capped subset so the store never receives the overflow, and stop
+		// counting it as learning so it can neither promote nor block the
+		// transaction's other classes from finishing.
 		if capped, didCap := capClassData(sc.Class(), updated, e.store.perSetCap); didCap {
-			updated = capped
-			e.warn(fmt.Sprintf("baseline %s hit per-set cap", sc.Class()), errPerSetCap)
+			cs.saturate(capped)
+			settledThisTrace = true
+			metrics.IncBaselineClassesSaturated(string(sc.Class()))
+			e.warn(fmt.Sprintf("baseline %s saturated at per-set cap %d", sc.Class(), e.store.perSetCap), errPerSetCap)
+			continue
 		}
 		// Track convergence for the stability conditions: did this trace add
 		// something new (a new edge/peer/bucket) or just reinforce what we
@@ -326,14 +334,14 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 			}
 		}
 		if promoteClassIfReady(cs, e.learning.Resolve(sc.Class(), tx.ID, serviceKey), e.clock()) {
-			promotedThisTrace = true
+			settledThisTrace = true
 		}
 		cs.dirty = true
 	}
 
 	// Only when this observation newly finished learning for the transaction -
 	// not on every subsequent trace of an already-promoted service.
-	if promotedThisTrace && e.allClassesPromoted(entry) {
+	if settledThisTrace && e.allClassesPromoted(entry) {
 		e.maybeAutoEnableTransactionGuardrailAfterPromote(ctx, ident.Namespace, ident.Service, tx.ID)
 		// The relation samples kept below are complete now; mine them for
 		// guardrail recommendations in the background.
@@ -353,12 +361,12 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 }
 
 // allClassesPromoted reports whether every scored class for this transaction has
-// promoted (its baseline is frozen), i.e. the transaction has finished learning.
-// Caller holds entry.mu.
+// settled (promoted and frozen, or saturated and never going to promote), i.e.
+// the transaction has finished learning. Caller holds entry.mu.
 func (e *Engine) allClassesPromoted(entry *transactionEntry) bool {
 	for _, sc := range e.scorers {
 		cs := entry.classes[sc.Class()]
-		if cs == nil || !cs.value.Promoted {
+		if cs == nil || !cs.value.Settled() {
 			return false
 		}
 	}
@@ -372,7 +380,10 @@ func (e *Engine) scoreEntry(t *Trace, entry *transactionEntry, serviceKey string
 	evidence := map[string]json.RawMessage{}
 	for _, sc := range e.scorers {
 		cs := entry.classes[sc.Class()]
-		if cs == nil || !cs.value.Promoted {
+		// A saturated class is never enforced, even if an operator force-
+		// promoted it: its set is truncated, so every unseen member would
+		// read as a deviation.
+		if cs == nil || !cs.value.Promoted || cs.value.Saturated {
 			continue
 		}
 		// Score the decoded baseline when the scorer can take one: this class is
@@ -495,13 +506,16 @@ func (e *Engine) mergePersistedIntoEntry(entry *transactionEntry, fresh []repo.B
 		if fb.Promoted {
 			cs.value.Promoted = true
 		}
+		if fb.Saturated {
+			cs.value.Saturated = true
+		}
 		if cs.additive {
 			// Leave the in-memory histogram as-is; its unflushed observations
 			// are richer than (a superset of) the persisted view.
 			continue
 		}
-		if u, mErr := e.store.merger.MergeData(fb.Class, cs.value.Data, fb.Data); mErr == nil {
-			cs.setData(u)
+		if e.store.absorbSetData(cs, fb.Class, fb.Data, true) {
+			e.store.markDirty(entry.transactionID)
 		}
 	}
 }
@@ -589,7 +603,7 @@ func (e *Engine) seedEntryClasses(entry *transactionEntry) {
 }
 
 // errPerSetCap is a sentinel used only for the throttled per-set-cap warning.
-var errPerSetCap = errors.New("per-set cap reached; baseline growth truncated")
+var errPerSetCap = errors.New("per-set cap reached; class frozen as saturated and will not be enforced")
 
 // emptyOr returns d, or an empty JSON object when d is empty, so a scorer's
 // Merge always receives valid bytes when seeding the additive delta.

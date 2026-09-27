@@ -33,8 +33,9 @@ const (
 
 	// defaultPerSetCap caps a single class's set size. A healthy transaction has
 	// a handful to a few hundred edges/peers/libs/tables; this only guards
-	// against runaway growth (e.g. IDs in span names), not normal use.
-	defaultPerSetCap = 5000
+	// against runaway growth (e.g. IDs in span names), not normal use. Kept in
+	// step with repo.DefaultMaxBaselineSetMembers, which overrides it on load.
+	defaultPerSetCap = 1000
 )
 
 // baselineStore is the authoritative in-memory view of per-transaction
@@ -98,12 +99,51 @@ type classState struct {
 	decoded decodedBaseline
 
 	// Unflushed delta accumulators, drained by flush():
-	countDelta   int64           // observations merged since last flush
-	dataDelta    json.RawMessage // additive classes only (the histogram delta)
-	promoteDelta bool            // promoted locally, not yet persisted
-	dirty        bool
+	countDelta    int64           // observations merged since last flush
+	dataDelta     json.RawMessage // additive classes only (the histogram delta)
+	promoteDelta  bool            // promoted locally, not yet persisted
+	saturateDelta bool            // saturated locally, not yet persisted
+	dirty         bool
 
 	additive bool // true => Data accumulates (flush sends dataDelta, not value)
+}
+
+// saturate freezes this class at capped, the subset of its set that fits the
+// per-set cap, and schedules the flag for persistence. Idempotent: a class
+// already saturated (locally or adopted from another replica) only has its
+// data replaced. Caller holds entry.mu.
+func (cs *classState) saturate(capped json.RawMessage) {
+	cs.setData(capped)
+	cs.dataDelta = nil
+	if cs.value.Saturated {
+		return
+	}
+	cs.value.Saturated = true
+	cs.saturateDelta = true
+	cs.dirty = true
+	metrics.IncBaselineClassesSaturated(string(cs.value.Class))
+}
+
+// absorbSetData folds persisted set data into cs, unioning with what memory
+// holds when union is set, then re-applies the per-set cap. Another replica
+// (or a row written before saturation existed) may hold more members than
+// this replica allows; crossing the cap here saturates the class exactly as
+// the hot path would, so the overflow never leaves this process. Returns true
+// when the class newly saturated and needs a flush. Caller holds entry.mu.
+func (s *baselineStore) absorbSetData(cs *classState, class repo.DeviationClass, data json.RawMessage, union bool) bool {
+	merged := data
+	if union {
+		if u, err := s.merger.MergeData(class, cs.value.Data, data); err == nil {
+			merged = u
+		}
+	}
+	if capped, didCap := capClassData(class, merged, s.perSetCap); didCap {
+		wasSaturated := cs.value.Saturated
+		cs.saturate(capped)
+		return !wasSaturated
+	}
+	cs.setData(merged)
+	return false
 }
 
 // setData replaces this class's baseline bytes. Every in-place write to
@@ -193,11 +233,22 @@ func (s *baselineStore) ensureLoaded(ctx context.Context, e *transactionEntry) (
 		s.removeEntry(e.transactionID)
 		return nil, err
 	}
+	newlySaturated := false
 	for _, b := range rows {
-		e.classes[b.Class] = &classState{value: b, additive: isAdditiveClass(b.Class)}
+		cs := &classState{value: b, additive: isAdditiveClass(b.Class)}
+		e.classes[b.Class] = cs
+		// Rows written by an older replica (or before saturation existed) can
+		// exceed this replica's cap; cap them on the way in so memory and the
+		// flushed value never carry the overflow.
+		if !cs.additive && s.absorbSetData(cs, b.Class, b.Data, false) {
+			newlySaturated = true
+		}
 	}
 	e.loaded = true
 	e.mu.Unlock()
+	if newlySaturated {
+		s.markDirty(e.transactionID)
+	}
 	return e, nil
 }
 
@@ -311,6 +362,7 @@ type flushSnap struct {
 	contribution json.RawMessage
 	countDelta   int64
 	promote      bool
+	saturate     bool
 	additive     bool
 }
 
@@ -362,12 +414,16 @@ func (s *baselineStore) flush(ctx context.Context) error {
 				continue
 			}
 			var contribution json.RawMessage
-			if cs.additive {
+			switch {
+			case cs.additive:
 				contribution = cs.dataDelta
 				if len(contribution) == 0 {
 					contribution = json.RawMessage(`{}`)
 				}
-			} else {
+			case cs.value.Saturated && !cs.saturateDelta:
+				// Frozen and already persisted: the store has the capped subset,
+				// re-sending it every cycle would only churn member rows.
+			default:
 				contribution = cs.value.Data
 			}
 			deltas = append(deltas, repo.BaselineDelta{
@@ -376,6 +432,7 @@ func (s *baselineStore) flush(ctx context.Context) error {
 				Contribution:                 contribution,
 				CountDelta:                   cs.countDelta,
 				Promote:                      cs.promoteDelta,
+				Saturate:                     cs.saturateDelta,
 				DataSchemaVersion:            cs.value.DataSchemaVersion,
 				LearningStartedAt:            cs.value.LearningStartedAt,
 				LastChangedAt:                cs.value.LastChangedAt,
@@ -383,11 +440,12 @@ func (s *baselineStore) flush(ctx context.Context) error {
 			})
 			snaps = append(snaps, flushSnap{
 				entry: e, class: class, contribution: contribution,
-				countDelta: cs.countDelta, promote: cs.promoteDelta, additive: cs.additive,
+				countDelta: cs.countDelta, promote: cs.promoteDelta, saturate: cs.saturateDelta, additive: cs.additive,
 			})
 			cs.countDelta = 0
 			cs.dataDelta = nil
 			cs.promoteDelta = false
+			cs.saturateDelta = false
 			cs.dirty = false
 		}
 		e.mu.Unlock()
@@ -472,6 +530,9 @@ func (s *baselineStore) rollback(snaps []flushSnap) {
 			if sn.promote {
 				cs.promoteDelta = true
 			}
+			if sn.saturate {
+				cs.saturateDelta = true
+			}
 			if sn.additive {
 				base := cs.dataDelta
 				if len(base) == 0 {
@@ -496,9 +557,11 @@ func (s *baselineStore) rollback(snaps []flushSnap) {
 
 // adopt folds the post-merge authoritative rows back into memory so a replica
 // converges on what every replica has learned. Count and promoted are SET
-// (additive reconciliation happens via deltas, never re-added here); set data
-// is UNIONed so edges learned concurrently with the flush survive; additive
-// data is SET (its concurrent observations live in the fresh dataDelta).
+// (additive reconciliation happens via deltas, never re-added here); saturated
+// is OR'd (monotonic, so a flag raised here but not yet flushed survives); set
+// data is UNIONed then re-capped so edges learned concurrently with the flush
+// survive without letting another replica's overflow in; additive data is SET
+// (its concurrent observations live in the fresh dataDelta).
 func (s *baselineStore) adopt(merged []repo.BaselineClass) {
 	for _, m := range merged {
 		s.mu.Lock()
@@ -518,6 +581,9 @@ func (s *baselineStore) adopt(merged []repo.BaselineClass) {
 		cs.value.DataSchemaVersion = m.DataSchemaVersion
 		cs.value.ObservationCount = m.ObservationCount
 		cs.value.Promoted = m.Promoted
+		if m.Saturated {
+			cs.value.Saturated = true
+		}
 		if cs.value.LearningStartedAt.IsZero() {
 			cs.value.LearningStartedAt = m.LearningStartedAt
 		}
@@ -529,13 +595,15 @@ func (s *baselineStore) adopt(merged []repo.BaselineClass) {
 		if m.ObservationCountAtLastChange > cs.value.ObservationCountAtLastChange {
 			cs.value.ObservationCountAtLastChange = m.ObservationCountAtLastChange
 		}
+		newlySaturated := false
 		if cs.additive {
 			cs.setData(m.Data)
-		} else if u, uErr := s.merger.MergeData(m.Class, cs.value.Data, m.Data); uErr == nil {
-			cs.setData(u)
 		} else {
-			cs.setData(m.Data)
+			newlySaturated = s.absorbSetData(cs, m.Class, m.Data, true)
 		}
 		e.mu.Unlock()
+		if newlySaturated {
+			s.markDirty(m.TransactionID)
+		}
 	}
 }

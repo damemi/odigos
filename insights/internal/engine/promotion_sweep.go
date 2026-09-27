@@ -12,7 +12,7 @@ const promotionSweepBatchSize = 500
 
 // promoteClassIfReady marks a class promoted when its policy is met.
 func promoteClassIfReady(cs *classState, policy repo.LearningPolicy, now time.Time) bool {
-	if cs.value.Promoted {
+	if cs.value.Settled() {
 		return false
 	}
 	if !shouldPromote(policy, cs.value, now) {
@@ -140,7 +140,7 @@ func (e *Engine) transactionFullyPromoted(ctx context.Context, transactionID int
 	}
 	byClass := make(map[repo.DeviationClass]bool, len(baselines))
 	for _, b := range baselines {
-		byClass[b.Class] = b.Promoted
+		byClass[b.Class] = b.Settled()
 	}
 	for _, sc := range e.scorers {
 		if !byClass[sc.Class()] {

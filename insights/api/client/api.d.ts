@@ -1122,8 +1122,10 @@ export interface components {
             last_seen: string;
             /** @description False when no baseline class has been learned yet. */
             has_baseline?: boolean;
-            /** @description True when every learned baseline class has graduated. */
+            /** @description True when every learned baseline class has finished learning: graduated, or saturated (see `saturated_classes`). */
             promoted?: boolean;
+            /** @description Baseline classes whose learned set crossed `max_baseline_set_members`. They are frozen and never enforced, so this transaction is only protected by its other classes. Usually means the transaction's identity leaks per-request values (ids in span names, per-request peers); fix the instrumentation or identity settings and re-learn. Omitted when no class saturated. */
+            saturated_classes?: components["schemas"]["DeviationClass"][];
         };
         TransactionStatList: {
             count: number;
@@ -1226,6 +1228,8 @@ export interface components {
             /** Format: int64 */
             observation_count: number;
             promoted: boolean;
+            /** @description True when this class's set crossed `max_baseline_set_members`. The class is frozen at a truncated set, will never promote and is never scored. `learning.phase` is `saturated`. */
+            saturated?: boolean;
             /** Format: date-time */
             learning_started_at?: string;
             /** Format: date-time */
@@ -1309,11 +1313,8 @@ export interface components {
             layout_fingerprint?: string;
             series: components["schemas"]["BaselineHistogramSeries"][];
         };
-        /**
-         * @description Coarse learning state for one class. `promoted` means the baseline is frozen. `empty` means it has never grown (no structure learned yet). `learning` means it has grown and is still in the learning phase.
-         * @enum {string}
-         */
-        BaselineLearningPhase: "promoted" | "empty" | "learning";
+        /** @description Coarse learning state for one class. `promoted` means the baseline is frozen. `empty` means it has never grown (no structure learned yet). `learning` means it has grown and is still in the learning phase. `saturated` means the set crossed `max_baseline_set_members`; the class is frozen, will not promote and is not enforced. Open set: new phases may be added, so clients must fall back gracefully on unknown values. */
+        BaselineLearningPhase: string;
         /** @description One stability dimension. For observations, `current`/`target` is a count. For duration, both are minutes. `drives_promotion` is true when the resolved policy has this condition. `target` is 0 when there is no policy target and no display default - still render `current` as "grew N ago". `met` is this dimension only. */
         BaselineStabilityProgress: {
             /** Format: int64 */
@@ -2320,7 +2321,10 @@ export interface components {
         SystemCapacitySettings: {
             /** @description Max transactions whose baselines stay hot in process memory. Least-recently used entries are dropped when the cap is exceeded. */
             max_resident_transactions: number;
-            /** @description Max unique members remembered in one baseline set (e.g. call edges or paths for one class), so a noisy transaction cannot grow unbounded. */
+            /**
+             * @description Max unique members remembered in one baseline set (e.g. call edges or paths for one class). A class that crosses it is frozen as saturated: it stops learning, is never promoted or enforced, and is listed in the transaction's `saturated_classes`.
+             * @default 1000
+             */
             max_baseline_set_members: number;
             /**
              * @description Max distinct transactions one service may add to the inventory (default 200). Once reached, operations not seen before are dropped before anything is stored, so span names that carry request ids cannot grow the transactions and baseline tables without bound. Transactions already in the inventory keep being learned and scored, and raising the limit resumes admission. Services at the limit are reported with `transaction_limit_reached` on `GET /services`. Optional on PUT so clients built before it existed stay valid; when omitted the default applies.

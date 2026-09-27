@@ -202,19 +202,17 @@ func (r *Repo) ListTransactionStats(ctx context.Context, params repo.Transaction
 		`SELECT t.transaction_id, t.service, t.namespace, t.operation, t.kind,
 			a.volume, a.last_seen,
 			p.total > 0 AS has_baseline,
-			p.total > 0 AND p.promoted = p.total AS promoted
+			p.total > 0 AND p.settled = p.total AS promoted,
+			p.saturated_classes
 		 FROM transactions AS t FINAL
 		 LEFT JOIN (
 			SELECT transaction_id, sum(volume) AS volume, max(last_seen) AS last_seen
 			FROM transaction_activity GROUP BY transaction_id
 		 ) AS a ON a.transaction_id = t.transaction_id
 		 LEFT JOIN (
-			SELECT transaction_id, count() AS total, countIf(promoted = 1) AS promoted
-			FROM (
-				SELECT transaction_id, class, max(promoted) AS promoted
-				FROM baseline_meta
-				GROUP BY transaction_id, class
-			)
+			SELECT transaction_id, count() AS total, countIf(is_settled = 1) AS settled,
+				arraySort(groupArrayIf(class, is_saturated = 1)) AS saturated_classes
+			FROM (`+settledClassesSQL+`)
 			GROUP BY transaction_id
 		 ) AS p ON p.transaction_id = t.transaction_id
 		 %s
@@ -327,15 +325,19 @@ func scanTransactionStat(s rowScanner) (repo.TransactionStat, error) {
 		stat                  repo.TransactionStat
 		kind                  string
 		hasBaseline, promoted bool
+		saturated             []string
 	)
 	if err := s.Scan(
 		&stat.ID, &stat.Service, &stat.Namespace, &stat.Operation, &kind,
-		&stat.Volume, &stat.LastSeen, &hasBaseline, &promoted,
+		&stat.Volume, &stat.LastSeen, &hasBaseline, &promoted, &saturated,
 	); err != nil {
 		return repo.TransactionStat{}, err
 	}
 	stat.Kind = repo.TransactionKind(kind)
 	stat.HasBaseline = hasBaseline
 	stat.Promoted = promoted
+	for _, c := range saturated {
+		stat.SaturatedClasses = append(stat.SaturatedClasses, repo.DeviationClass(c))
+	}
 	return stat, nil
 }

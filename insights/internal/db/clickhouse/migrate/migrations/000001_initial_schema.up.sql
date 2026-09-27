@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS baseline_meta (
     class                            LowCardinality(String),
     observation_count                SimpleAggregateFunction(sum, Int64),
     promoted                         SimpleAggregateFunction(max, UInt8),
+    saturated                        SimpleAggregateFunction(max, UInt8),
     data_schema_version              SimpleAggregateFunction(max, Int32),
     learning_started_at              SimpleAggregateFunction(min, DateTime64(3)),
     last_changed_at                  SimpleAggregateFunction(max, DateTime64(3)),
@@ -302,7 +303,7 @@ INSERT INTO system_settings (
     1, now64(3),
     10, 30,
     120,
-    50000, 5000,
+    50000, 1000,
     15,
     1
 );
