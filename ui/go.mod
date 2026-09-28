@@ -5,10 +5,10 @@ go 1.26.4
 require (
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/api v1.38.0-pre5
-	github.com/odigos-io/odigos/common v1.38.0-pre5
-	github.com/odigos-io/odigos/frontend v1.38.0-pre5.0.20260924140437-ab65b465b4f8
-	github.com/odigos-io/odigos/profiles v1.38.0-pre5
+	github.com/odigos-io/odigos/api v1.38.0-pre6
+	github.com/odigos-io/odigos/common v1.38.0-pre6
+	github.com/odigos-io/odigos/frontend v1.38.0-pre6
+	github.com/odigos-io/odigos/profiles v1.38.0-pre6
 	k8s.io/klog/v2 v2.140.0
 	sigs.k8s.io/controller-runtime v0.24.1
 )
@@ -175,7 +175,7 @@ require (
 	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
-	github.com/klauspost/compress v1.19.2 // indirect
+	github.com/klauspost/compress v1.20.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/knadh/koanf/maps v0.1.3 // indirect
 	github.com/knadh/koanf/providers/confmap v1.0.1 // indirect
@@ -201,7 +201,7 @@ require (
 	github.com/odigos-io/odigos-enterprise/mcp v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/config v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos/destinations v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/distros v1.38.0-pre5
+	github.com/odigos-io/odigos/distros v1.38.0-pre6
 	github.com/odigos-io/odigos/k8sutils v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/odigosauth v0.0.0-00010101000000-000000000000 // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
@@ -222,7 +222,7 @@ require (
 	github.com/pb33f/ordered-map/v2 v2.3.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
-	github.com/pierrec/lz4/v4 v4.1.28 // indirect
+	github.com/pierrec/lz4/v4 v4.1.29 // indirect
 	github.com/pires/go-proxyproto v0.11.0 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -232,7 +232,7 @@ require (
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_golang/exp v0.0.0-20260325093428-d8591d0db856 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
-	github.com/prometheus/common v0.70.1 // indirect
+	github.com/prometheus/common v0.71.0 // indirect
 	github.com/prometheus/exporter-toolkit v0.15.1 // indirect
 	github.com/prometheus/otlptranslator v1.0.0 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
@@ -267,53 +267,53 @@ require (
 	go.etcd.io/etcd/client/v3 v3.6.15 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/collector v0.159.0 // indirect
-	go.opentelemetry.io/collector/client v1.65.0 // indirect
-	go.opentelemetry.io/collector/component v1.65.0 // indirect
-	go.opentelemetry.io/collector/component/componentstatus v0.159.0 // indirect
-	go.opentelemetry.io/collector/component/componenttest v0.159.0 // indirect
-	go.opentelemetry.io/collector/config/configauth v1.65.0 // indirect
-	go.opentelemetry.io/collector/config/configcompression v1.65.0 // indirect
-	go.opentelemetry.io/collector/config/configgrpc v1.65.0 // indirect
-	go.opentelemetry.io/collector/config/confighttp v0.159.0 // indirect
-	go.opentelemetry.io/collector/config/configmiddleware v1.65.0 // indirect
-	go.opentelemetry.io/collector/config/confignet v1.65.0 // indirect
-	go.opentelemetry.io/collector/config/configopaque v1.65.0 // indirect
-	go.opentelemetry.io/collector/config/configoptional v1.65.0 // indirect
-	go.opentelemetry.io/collector/config/configretry v1.65.0 // indirect
-	go.opentelemetry.io/collector/config/configtls v1.65.0 // indirect
-	go.opentelemetry.io/collector/confmap v1.65.0 // indirect
-	go.opentelemetry.io/collector/consumer v1.65.0 // indirect
-	go.opentelemetry.io/collector/consumer/consumererror v0.159.0 // indirect
-	go.opentelemetry.io/collector/consumer/consumererror/xconsumererror v0.159.0 // indirect
-	go.opentelemetry.io/collector/consumer/consumertest v0.159.0 // indirect
-	go.opentelemetry.io/collector/consumer/xconsumer v0.159.0 // indirect
-	go.opentelemetry.io/collector/exporter v1.65.0 // indirect
-	go.opentelemetry.io/collector/exporter/exporterhelper v0.159.0 // indirect
-	go.opentelemetry.io/collector/exporter/exporterhelper/xexporterhelper v0.159.0 // indirect
-	go.opentelemetry.io/collector/exporter/exportertest v0.159.0 // indirect
-	go.opentelemetry.io/collector/exporter/otlpexporter v0.159.0 // indirect
-	go.opentelemetry.io/collector/exporter/otlphttpexporter v0.159.0 // indirect
-	go.opentelemetry.io/collector/exporter/xexporter v0.159.0 // indirect
-	go.opentelemetry.io/collector/extension v1.65.0 // indirect
-	go.opentelemetry.io/collector/extension/extensionauth v1.65.0 // indirect
-	go.opentelemetry.io/collector/extension/extensionmiddleware v0.159.0 // indirect
-	go.opentelemetry.io/collector/extension/xextension v0.159.0 // indirect
-	go.opentelemetry.io/collector/featuregate v1.65.0 // indirect
-	go.opentelemetry.io/collector/internal/componentalias v0.159.0 // indirect
-	go.opentelemetry.io/collector/internal/sharedcomponent v0.159.0 // indirect
-	go.opentelemetry.io/collector/internal/telemetry v0.159.0 // indirect
-	go.opentelemetry.io/collector/pdata v1.65.0 // indirect
-	go.opentelemetry.io/collector/pdata/pprofile v0.159.0 // indirect
-	go.opentelemetry.io/collector/pdata/xpdata v0.159.0 // indirect
-	go.opentelemetry.io/collector/pipeline v1.65.0 // indirect
-	go.opentelemetry.io/collector/pipeline/xpipeline v0.159.0 // indirect
+	go.opentelemetry.io/collector v0.161.0 // indirect
+	go.opentelemetry.io/collector/client v1.67.0 // indirect
+	go.opentelemetry.io/collector/component v1.67.0 // indirect
+	go.opentelemetry.io/collector/component/componentstatus v0.161.0 // indirect
+	go.opentelemetry.io/collector/component/componenttest v0.161.0 // indirect
+	go.opentelemetry.io/collector/config/configauth v1.67.0 // indirect
+	go.opentelemetry.io/collector/config/configcompression v1.67.0 // indirect
+	go.opentelemetry.io/collector/config/configgrpc v1.67.0 // indirect
+	go.opentelemetry.io/collector/config/confighttp v0.161.0 // indirect
+	go.opentelemetry.io/collector/config/configmiddleware v1.67.0 // indirect
+	go.opentelemetry.io/collector/config/confignet v1.67.0 // indirect
+	go.opentelemetry.io/collector/config/configopaque v1.67.0 // indirect
+	go.opentelemetry.io/collector/config/configoptional v1.67.0 // indirect
+	go.opentelemetry.io/collector/config/configretry v1.67.0 // indirect
+	go.opentelemetry.io/collector/config/configtls v1.67.0 // indirect
+	go.opentelemetry.io/collector/confmap v1.67.0 // indirect
+	go.opentelemetry.io/collector/consumer v1.67.0 // indirect
+	go.opentelemetry.io/collector/consumer/consumererror v0.161.0 // indirect
+	go.opentelemetry.io/collector/consumer/consumererror/xconsumererror v0.161.0 // indirect
+	go.opentelemetry.io/collector/consumer/consumertest v0.161.0 // indirect
+	go.opentelemetry.io/collector/consumer/xconsumer v0.161.0 // indirect
+	go.opentelemetry.io/collector/exporter v1.67.0 // indirect
+	go.opentelemetry.io/collector/exporter/exporterhelper v0.161.0 // indirect
+	go.opentelemetry.io/collector/exporter/exporterhelper/xexporterhelper v0.161.0 // indirect
+	go.opentelemetry.io/collector/exporter/exportertest v0.161.0 // indirect
+	go.opentelemetry.io/collector/exporter/otlpexporter v0.161.0 // indirect
+	go.opentelemetry.io/collector/exporter/otlphttpexporter v0.161.0 // indirect
+	go.opentelemetry.io/collector/exporter/xexporter v0.161.0 // indirect
+	go.opentelemetry.io/collector/extension v1.67.0 // indirect
+	go.opentelemetry.io/collector/extension/extensionauth v1.67.0 // indirect
+	go.opentelemetry.io/collector/extension/extensionmiddleware v0.161.0 // indirect
+	go.opentelemetry.io/collector/extension/xextension v0.161.0 // indirect
+	go.opentelemetry.io/collector/featuregate v1.67.0 // indirect
+	go.opentelemetry.io/collector/internal/componentalias v0.161.0 // indirect
+	go.opentelemetry.io/collector/internal/sharedcomponent v0.161.0 // indirect
+	go.opentelemetry.io/collector/internal/telemetry v0.161.0 // indirect
+	go.opentelemetry.io/collector/pdata v1.67.0 // indirect
+	go.opentelemetry.io/collector/pdata/pprofile v0.161.0 // indirect
+	go.opentelemetry.io/collector/pdata/xpdata v0.161.0 // indirect
+	go.opentelemetry.io/collector/pipeline v1.67.0 // indirect
+	go.opentelemetry.io/collector/pipeline/xpipeline v0.161.0 // indirect
 	go.opentelemetry.io/collector/processor v1.65.0 // indirect
-	go.opentelemetry.io/collector/receiver v1.65.0 // indirect
-	go.opentelemetry.io/collector/receiver/otlpreceiver v0.159.0 // indirect
-	go.opentelemetry.io/collector/receiver/receiverhelper v0.159.0 // indirect
-	go.opentelemetry.io/collector/receiver/receivertest v0.159.0 // indirect
-	go.opentelemetry.io/collector/receiver/xreceiver v0.159.0 // indirect
+	go.opentelemetry.io/collector/receiver v1.67.0 // indirect
+	go.opentelemetry.io/collector/receiver/otlpreceiver v0.161.0 // indirect
+	go.opentelemetry.io/collector/receiver/receiverhelper v0.161.0 // indirect
+	go.opentelemetry.io/collector/receiver/receivertest v0.161.0 // indirect
+	go.opentelemetry.io/collector/receiver/xreceiver v0.161.0 // indirect
 	go.opentelemetry.io/contrib/bridges/prometheus v0.66.0 // indirect
 	go.opentelemetry.io/contrib/exporters/autoexport v0.66.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.70.0 // indirect
@@ -389,27 +389,27 @@ replace github.com/hashicorp/memberlist => github.com/grafana/memberlist v0.3.1-
 
 replace gopkg.in/yaml.v3 => github.com/colega/go-yaml-yaml v0.0.0-20220720105220-255a8d16d094
 
-replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v1.38.0-pre5
+replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v1.38.0-pre6
 
-replace github.com/odigos-io/odigos/instrumentationrules => github.com/odigos-io/odigos/instrumentationrules v1.38.0-pre5
+replace github.com/odigos-io/odigos/instrumentationrules => github.com/odigos-io/odigos/instrumentationrules v1.38.0-pre6
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.38.0-pre5
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.38.0-pre6
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.38.0-pre5
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.38.0-pre6
 
-replace github.com/odigos-io/odigos/config => github.com/odigos-io/odigos/config v1.38.0-pre5
+replace github.com/odigos-io/odigos/config => github.com/odigos-io/odigos/config v1.38.0-pre6
 
-replace github.com/odigos-io/odigos/destinations => github.com/odigos-io/odigos/destinations v1.38.0-pre5
+replace github.com/odigos-io/odigos/destinations => github.com/odigos-io/odigos/destinations v1.38.0-pre6
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.38.0-pre5
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.38.0-pre6
 
-replace github.com/odigos-io/odigos/recommendations => github.com/odigos-io/odigos/recommendations v1.38.0-pre5
+replace github.com/odigos-io/odigos/recommendations => github.com/odigos-io/odigos/recommendations v1.38.0-pre6
 
-replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.38.0-pre5
+replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.38.0-pre6
 
-replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v1.38.0-pre5
+replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v1.38.0-pre6
 
-replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v1.38.0-pre5
+replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v1.38.0-pre6
 
 replace github.com/odigos-io/odigos-enterprise/mcp => ../mcp
 
@@ -417,10 +417,10 @@ replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
 replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 
-replace github.com/odigos-io/odigos/frontend => github.com/odigos-io/odigos/frontend v1.38.0-pre5.0.20260924140437-ab65b465b4f8
+replace github.com/odigos-io/odigos/frontend => github.com/odigos-io/odigos/frontend v1.38.0-pre6
 
 replace k8s.io/cloud-provider => k8s.io/cloud-provider v0.35.0
 
 replace k8s.io/kubelet => k8s.io/kubelet v0.35.0
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.38.0-pre5
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.38.0-pre6
