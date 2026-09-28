@@ -144,19 +144,9 @@ jobs:
           cd ${{ matrix.module }}
           go test ./... -race
 
-  # Connector modules are tested by their OWN job, not by the unit-tests matrix above.
-  #
-  # unit-tests is gated on `skip-enterprise-k8s != true`, which is false exactly when every changed file
-  # lives under a connector directory — so a connector-only PR skips it. Putting these modules there
-  # would run their tests on every PR EXCEPT the ones that change them, which is backwards.
-  #
-  # Each connector carries its own go.mod, so `go test ./...` in one does not reach the others.
-  #
-  # For connectors/providers/aws this is also what enforces the aws-connector-artifacts version binding:
-  # TestArtifactVersions is what stops the Dockerfile's LAMBDA_AGENTS_IMAGE and
-  # config.DefaultFargateAgentsImage from drifting to different releases, and an unrun test guarantees
-  # nothing. A version bump touches only connector files, so this job must not be gated the way
-  # unit-tests is.
+  # Separate from unit-tests: that job skips when every change is under connectors/, so connector
+  # modules would never run on the PRs that touch them. Each path is its own go.mod (root
+  # `connectors` included — it holds spec/testconnection and does not nest into base/providers).
   connector-unit-tests:
     name: Connector Unit Tests (${{ matrix.module }})
     runs-on: depot-ubuntu-24.04-4
@@ -167,6 +157,7 @@ jobs:
       fail-fast: false
       matrix:
         module:
+          - connectors
           - connectors/base
           - connectors/providers/aws
           - connectors/providers/azure
