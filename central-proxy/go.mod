@@ -4,9 +4,9 @@ go 1.26.4
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/odigos-io/odigos/api v1.38.0-pre5
-	github.com/odigos-io/odigos/frontend v1.38.0-pre5
-	github.com/odigos-io/odigos/k8sutils v1.38.0-pre5
+	github.com/odigos-io/odigos/api v1.38.0-pre6
+	github.com/odigos-io/odigos/frontend v1.38.0-pre6
+	github.com/odigos-io/odigos/k8sutils v1.38.0-pre6
 	k8s.io/apimachinery v0.35.4
 	k8s.io/client-go v0.35.4
 )
@@ -54,7 +54,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/odigos-io/odigos/common v1.38.0-pre5
+	github.com/odigos-io/odigos/common v1.38.0-pre6
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/otel v1.46.0 // indirect
@@ -78,15 +78,15 @@ require (
 
 // k8sutils (required above) requires these via local-only replaces in the odigos-io/odigos repo, which
 // don't propagate across repos. Pinned to the same commit already used for api/k8sutils/common here.
-replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v1.38.0-pre5
+replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v1.38.0-pre6
 
 // frontend (required above) requires this the same way, via k8sutils.
-replace github.com/odigos-io/odigos/destinations => github.com/odigos-io/odigos/destinations v1.38.0-pre5
+replace github.com/odigos-io/odigos/destinations => github.com/odigos-io/odigos/destinations v1.38.0-pre6
 
 // Same as actions above, required transitively via k8sutils.
-replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.38.0-pre5
+replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.38.0-pre6
 
-replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v1.38.0-pre5
+replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v1.38.0-pre6
 
 // argo-rollouts@v1.9.1 requires this via its own internal-only replace, which doesn't propagate to us.
 replace k8s.io/kubelet => k8s.io/kubelet v0.34.1
