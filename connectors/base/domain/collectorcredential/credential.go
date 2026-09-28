@@ -58,25 +58,62 @@ func (s Secret) MarshalJSON() ([]byte, error) { return nil, ErrCredentialSeriali
 // MarshalText always fails, closing encoders that prefer it to MarshalJSON.
 func (s Secret) MarshalText() ([]byte, error) { return nil, ErrCredentialSerialized }
 
-// Hash is the SHA-256 hex digest — the only representation the connector persists.
-func (s Secret) Hash() string {
+// EmptyDigest is SHA-256 of the empty string. Named so it can be recognised rather than looked up: it
+// is a perfectly well-formed 64-character digest, so a row carrying it reads as a successfully issued
+// credential, every failed mint produces the SAME one, and it is the most widely published SHA-256
+// value in existence. Hash refuses to produce it and FingerprintOfHash renders it conspicuously.
+const EmptyDigest = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+// noFingerprint is what a fingerprint renders as when there is no credential behind it.
+const noFingerprint = "<none>"
+
+// ErrEmptyCredential is returned by Hash for a Secret carrying no value.
+var ErrEmptyCredential = errors.New("refusing to hash an empty credential: the digest of \"\" is a well-formed hash for a credential that does not exist, and persisting it would record a failed issuance as a successful one")
+
+// Hash is the SHA-256 hex digest — the only representation of the value the connector persists.
+//
+// It returns an error for an empty Secret rather than hashing it, for the same reason MarshalJSON
+// fails rather than emitting a placeholder: the danger is a plausible value reaching the store. A mint
+// that failed, a config field left unset, an error swallowed upstream — any of those reach here with an
+// empty Secret, and a digest that looks real is how that becomes an "issued" credential nothing can
+// authenticate and every other failed mint collides with.
+func (s Secret) Hash() (string, error) {
+	if s.v == "" {
+		return "", ErrEmptyCredential
+	}
 	sum := sha256.Sum256([]byte(s.v))
-	return hex.EncodeToString(sum[:])
+	return hex.EncodeToString(sum[:]), nil
 }
 
-// Fingerprint is the first 8 hex characters of the hash: enough to correlate across logs and rows,
-// not enough to brute-force. Safe to log.
-func (s Secret) Fingerprint() string { return FingerprintOfHash(s.Hash()) }
+// Fingerprint is the first 8 hex characters of the hash: enough to correlate across logs and rows, not
+// enough to brute-force. Safe to log.
+//
+// Unlike Hash this does not fail on an empty Secret — it renders "<none>". A fingerprint is only ever
+// shown to a human and never persisted or compared, so a placeholder is the right answer here and the
+// wrong one there.
+func (s Secret) Fingerprint() string {
+	h, err := s.Hash()
+	if err != nil {
+		return noFingerprint
+	}
+	return FingerprintOfHash(h)
+}
 
-// FingerprintOfHash renders a stored hash the same way as Fingerprint.
+// FingerprintOfHash renders a stored hash the same way as Fingerprint, so a row read back correlates
+// with what was logged at issue time. A hash that is EmptyDigest renders as "<none>": nothing should
+// ever have stored it, and showing its first eight characters would make a broken row look like a real
+// credential in exactly the place someone is trying to work out what went wrong.
 func FingerprintOfHash(hash string) string {
+	if hash == EmptyDigest {
+		return noFingerprint
+	}
 	if len(hash) < 8 {
 		return hash
 	}
 	return hash[:8]
 }
 
-// Binding is the immutable association a credential authenticates (OPAMP_ROUTING "Identity
+// Binding is the immutable association a credential authenticates ("Identity
 // provisioning"). Fixed at issue; never edited — a rewritable binding could be pointed at another
 // connector's Collector.
 type Binding struct {

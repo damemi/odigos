@@ -10,7 +10,7 @@ import (
 //
 // Identity tags + TagIaC identify ownership (written at create time).
 // TagManaged marks deployer-created objects and alone authorizes deletion.
-// Manual-mode artifacts may carry ownership tags for OpAMP without granting deletion.
+// Manual-mode artifacts carry the identity tags for OpAMP correlation, never TagManaged.
 //
 //	 ONE SPELLING ON EVERY CLOUD, and it is the narrowest rule of the three that has to accept it:
 //

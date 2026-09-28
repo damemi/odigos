@@ -14,6 +14,12 @@ const (
 	featureInstrumentation  = "instrumentation"
 	featureComputePlatforms = "computePlatforms"
 	featureGateway          = "gateway"
+	// The managed-Collector domain. Emitting these does NOT change any policy the UI renders today:
+	// ui-kit aggregates permissions only for feature keys listed in the selected access level's
+	// featureKeys allowlist, and these two are in none of them. That is deliberate — the key has to
+	// exist in this API before ui-kit can reference it, so this is the half that can land first.
+	featureCollectorManagement = "collectorManagement"
+	featureCollectorDeployment = "collectorDeployment"
 )
 
 // cloudConnectorProvidersFromSpecs maps the embedded provider specs to their GraphQL
@@ -85,13 +91,26 @@ func cloudConnectorAuthMethods(methods []spec.AuthMethod) []*model.CloudConnecto
 	return out
 }
 
-// cloudConnectorFeatures emits the UI-facing feature catalog from the spec's two
-// domains (workloads / computePlatforms) plus gateway, in a stable order.
+// cloudConnectorFeatures emits the UI-facing feature catalog from the spec's three
+// domains (workloads / computePlatforms / collectors) plus gateway, in a stable order.
+//
+// The list is explicit rather than reflected over the spec, so a domain added to the spec reaches no
+// client until it is named here. That is what kept the managed-Collector permissions out of every
+// customer's policy while the domain was being declared, and it is why forwarding them is a deliberate
+// step rather than a side effect.
+//
+// A managed Collector needs the customer to grant permissions Odigos cannot infer, so the two features
+// have to be reachable by the client that renders the policy. Rendering them is still ui-kit's call: it
+// aggregates only the feature keys in the selected access level's allowlist, and until it adds these
+// two, a customer enabling a Collector is shown a policy that omits every Collector permission and the
+// deployer fails authorization on its first write.
 func cloudConnectorFeatures(s spec.CloudConnectorSpec) []*model.CloudConnectorFeature {
 	return []*model.CloudConnectorFeature{
 		cloudConnectorFeatureFromSpec(featureDiscovery, s.Workloads.Discovery),
 		cloudConnectorFeatureFromSpec(featureInstrumentation, s.Workloads.Instrumentation),
 		cloudConnectorFeatureFromSpec(featureComputePlatforms, s.ComputePlatforms.Discovery),
+		cloudConnectorFeatureFromSpec(featureCollectorManagement, s.Collectors.Management),
+		cloudConnectorFeatureFromSpec(featureCollectorDeployment, s.Collectors.Deployment),
 		cloudConnectorFeatureFromSpec(featureGateway, s.Gateway),
 	}
 }

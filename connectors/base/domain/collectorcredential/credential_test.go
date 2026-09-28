@@ -1,6 +1,8 @@
 package collectorcredential
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -90,7 +92,10 @@ func TestRevealIsTheOnlyWayOut(t *testing.T) {
 // log line carries instead of the reflex to log the value.
 func TestHashAndFingerprint(t *testing.T) {
 	s := NewSecret(tokenValue)
-	h := s.Hash()
+	h, err := s.Hash()
+	if err != nil {
+		t.Fatalf("Hash of a populated secret failed: %v", err)
+	}
 	if len(h) != 64 {
 		t.Errorf("Hash length = %d, want a 64-character SHA-256 hex digest", len(h))
 	}
@@ -107,7 +112,11 @@ func TestHashAndFingerprint(t *testing.T) {
 	if got := FingerprintOfHash(""); got != "" {
 		t.Errorf("FingerprintOfHash(\"\") = %q", got)
 	}
-	if NewSecret("other").Hash() == h {
+	other, err := NewSecret("other").Hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other == h {
 		t.Error("two different values hash the same")
 	}
 }
@@ -123,7 +132,7 @@ func binding() Binding {
 	}
 }
 
-// TestBindingMatches is the verification. The row that carries the design is the recreated
+// TestBindingMatches is the connection-time identity verification. The row that carries the design is the recreated
 // connector: a credential presenting the right Collector id under a different connector UID must be
 // REFUSED, not re-bound, or a dead connector's Collector attaches itself to the replacement.
 func TestBindingMatches(t *testing.T) {
@@ -217,12 +226,72 @@ func TestSupersededStaysLive(t *testing.T) {
 // ever appears on Record it will reach the database, and the hash stops being the only thing the
 // connector holds that is worth stealing.
 func TestRecordKeepsNoValue(t *testing.T) {
-	r := Record{TokenSHA256: NewSecret(tokenValue).Hash()}
+	h, err := NewSecret(tokenValue).Hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := Record{TokenSHA256: h}
 	b, err := json.Marshal(r)
 	if err != nil {
 		t.Fatalf("a Record must be serializable — it is a database row: %v", err)
 	}
 	if strings.Contains(string(b), tokenValue) {
 		t.Errorf("a serialized Record carried the value: %s", b)
+	}
+}
+
+// TestHashRefusesAnEmptyCredential is the counterpart to TestSecretRefusesSerialization, and it exists
+// for the same reason: the danger is a plausible value reaching the store, not an ugly one.
+//
+// sha256("") is a well-formed 64-character digest. Persisted as token_sha256 it reads as a successfully
+// issued credential — Record.Live() returns true — every failed mint produces the identical value so
+// they collide with one another, and it is the most widely published SHA-256 in existence. A mint that
+// returned nothing, a config field left unset, an error swallowed upstream: each arrives here with an
+// empty Secret, and hashing it silently is what turns a failed issuance into a recorded one.
+func TestHashRefusesAnEmptyCredential(t *testing.T) {
+	for name, s := range map[string]Secret{
+		"explicitly empty": NewSecret(""),
+		"zero value":       {},
+	} {
+		got, err := s.Hash()
+		if !errors.Is(err, ErrEmptyCredential) {
+			t.Errorf("%s: Hash err = %v, want ErrEmptyCredential", name, err)
+		}
+		if got != "" {
+			t.Errorf("%s: Hash returned %q alongside its error; a caller ignoring err would persist it", name, got)
+		}
+		if got == EmptyDigest {
+			t.Errorf("%s: Hash produced the empty digest", name)
+		}
+	}
+
+	// The value it refuses to produce is exactly the one named, so the constant cannot drift from the
+	// thing it is guarding against.
+	sum := sha256.Sum256(nil)
+	if hex.EncodeToString(sum[:]) != EmptyDigest {
+		t.Errorf("EmptyDigest = %q, want sha256 of the empty string", EmptyDigest)
+	}
+}
+
+// TestFingerprintOfAnEmptyCredentialIsConspicuous: a fingerprint is only ever read by a human working
+// out what went wrong, so it must not render a broken row as eight plausible hex characters. Unlike
+// Hash it does not fail — it is never persisted or compared, so a placeholder is right here and wrong
+// there.
+func TestFingerprintOfAnEmptyCredentialIsConspicuous(t *testing.T) {
+	if got := NewSecret("").Fingerprint(); got != "<none>" {
+		t.Errorf("Fingerprint of an empty secret = %q, want a conspicuous placeholder", got)
+	}
+	// A row already carrying the empty digest — written before this guard, or by some other path that
+	// computed the hash itself — must read the same way rather than as a real credential.
+	if got := FingerprintOfHash(EmptyDigest); got != "<none>" {
+		t.Errorf("FingerprintOfHash(EmptyDigest) = %q, want a conspicuous placeholder", got)
+	}
+	// A real credential still fingerprints normally.
+	h, err := NewSecret(tokenValue).Hash()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := FingerprintOfHash(h); got != h[:8] || got == "<none>" {
+		t.Errorf("FingerprintOfHash(real) = %q, want %q", got, h[:8])
 	}
 }

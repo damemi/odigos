@@ -3,6 +3,7 @@ package graph
 import (
 	"testing"
 
+	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
@@ -84,4 +85,148 @@ func equalStrings(got, want []string) bool {
 		}
 	}
 	return true
+}
+
+// featureByKey finds an emitted feature, so a test can assert on one without depending on list order.
+func featureByKey(fs []*model.CloudConnectorFeature, key string) *model.CloudConnectorFeature {
+	for _, f := range fs {
+		if f != nil && f.Key == key {
+			return f
+		}
+	}
+	return nil
+}
+
+func hasPermission(f *model.CloudConnectorFeature, want string) bool {
+	if f == nil {
+		return false
+	}
+	for _, p := range f.Permissions {
+		if p == want {
+			return true
+		}
+	}
+	for _, t := range f.Types {
+		if t == nil {
+			continue
+		}
+		for _, p := range t.Permissions {
+			if p == want {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TestCollectorFeaturesReachTheCatalog: a managed Collector needs permissions the customer must grant and
+// Odigos cannot infer, so both halves of the domain have to be reachable by the client that renders the
+// policy. This mapper is the only thing joining the provider YAML to that client — the same boundary
+// TestCloudConnectorFieldsCarryShowInUi guards for fields.
+func TestCollectorFeaturesReachTheCatalog(t *testing.T) {
+	// AWS does not declare a Collector implementation until the later AWS stack. Keep this
+	// boundary test independent of that future provider work: its contract is that a provider
+	// declaration reaches the GraphQL catalog intact.
+	features := cloudConnectorFeatures(spec.CloudConnectorSpec{Collectors: spec.CollectorDomain{
+		Management: spec.Feature{
+			Enabled:     true,
+			Permissions: []string{"ecs:DescribeServices"},
+		},
+		Deployment: spec.Feature{
+			Enabled:     true,
+			Permissions: []string{"ecs:CreateService"},
+		},
+	}})
+
+	mgmt := featureByKey(features, featureCollectorManagement)
+	if mgmt == nil {
+		t.Fatalf("no %q feature emitted; a customer would never be told what a Collector needs to be observed", featureCollectorManagement)
+	}
+	dep := featureByKey(features, featureCollectorDeployment)
+	if dep == nil {
+		t.Fatalf("no %q feature emitted; a customer would apply a policy with no Collector write permissions and the deployer would fail on its first call", featureCollectorDeployment)
+	}
+
+	// The observe/mutate split has to survive the mapping, or manual mode stops being observe-only at
+	// exactly the point a customer reads the policy.
+	if !hasPermission(mgmt, "ecs:DescribeServices") {
+		t.Error("collector management carries no observation read")
+	}
+	if hasPermission(mgmt, "ecs:CreateService") {
+		t.Error("collector management carries a mutating permission; manual mode must stay observe-only")
+	}
+	if !hasPermission(dep, "ecs:CreateService") {
+		t.Error("collector deployment carries no mutating permission")
+	}
+}
+
+// TestCollectorFeaturesDoNotDisturbTheExistingCatalog is the safety half. ui-kit aggregates permissions
+// only for the feature keys named in the selected access level's allowlist, so adding a domain must
+// change nothing a current client sees: the four keys it knows must keep their exact identity and
+// permissions, and the two new keys must be genuinely new rather than colliding with one of them.
+func TestCollectorFeaturesDoNotDisturbTheExistingCatalog(t *testing.T) {
+	for _, provider := range spec.Providers() {
+		s := spec.MustGet(provider)
+		features := cloudConnectorFeatures(s)
+
+		for key, want := range map[string]spec.Feature{
+			featureDiscovery:        s.Workloads.Discovery,
+			featureInstrumentation:  s.Workloads.Instrumentation,
+			featureComputePlatforms: s.ComputePlatforms.Discovery,
+			featureGateway:          s.Gateway,
+		} {
+			got := featureByKey(features, key)
+			if got == nil {
+				t.Errorf("%s: pre-existing feature %q disappeared from the catalog", provider, key)
+				continue
+			}
+			if len(got.Permissions) != len(want.Permissions) || len(got.Types) != len(want.Types) {
+				t.Errorf("%s: feature %q changed shape: %d perms/%d types, want %d/%d",
+					provider, key, len(got.Permissions), len(got.Types), len(want.Permissions), len(want.Types))
+			}
+		}
+
+		// Distinct keys, or an existing access level would silently start aggregating Collector
+		// permissions into a policy the customer did not ask for.
+		seen := map[string]bool{}
+		for _, f := range features {
+			if f == nil {
+				continue
+			}
+			if seen[f.Key] {
+				t.Errorf("%s: duplicate feature key %q", provider, f.Key)
+			}
+			seen[f.Key] = true
+		}
+		for _, k := range []string{featureCollectorManagement, featureCollectorDeployment} {
+			for _, old := range []string{featureDiscovery, featureInstrumentation, featureComputePlatforms, featureGateway} {
+				if k == old {
+					t.Errorf("collector feature key %q collides with the pre-existing %q", k, old)
+				}
+			}
+		}
+	}
+}
+
+// TestProvidersWithoutCollectorsEmitAnEmptyFeature: Azure and GCP declare no collectors domain yet. They
+// must still emit the feature — disabled and empty — rather than nothing, so a client can render the
+// same shape for every provider instead of branching on which ones have the domain.
+func TestProvidersWithoutCollectorsEmitAnEmptyFeature(t *testing.T) {
+	for _, provider := range []string{"azure", "gcp"} {
+		s := spec.MustGet(provider)
+		if len(s.Collectors.Management.Types) != 0 {
+			continue // this provider has since declared the domain; nothing to assert here
+		}
+		f := featureByKey(cloudConnectorFeatures(s), featureCollectorManagement)
+		if f == nil {
+			t.Errorf("%s: no collector management feature emitted at all", provider)
+			continue
+		}
+		if f.Enabled {
+			t.Errorf("%s: collector management reports enabled with no types declared", provider)
+		}
+		if len(f.Types) != 0 {
+			t.Errorf("%s: collector management emitted %d types, want none", provider, len(f.Types))
+		}
+	}
 }

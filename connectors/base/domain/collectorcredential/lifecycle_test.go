@@ -118,7 +118,16 @@ func TestRenewalDue(t *testing.T) {
 
 func current() Record {
 	return Record{CredentialID: "cred-1", SecretRef: "arn:secret:collector", State: StateActive,
-		TokenSHA256: NewSecret("value").Hash(), Binding: binding()}
+		TokenSHA256: mustHash("value"), Binding: binding()}
+}
+
+// mustHash is the test's stand-in for the one call site that writes a credential to the secret store.
+func mustHash(v string) string {
+	h, err := NewSecret(v).Hash()
+	if err != nil {
+		panic(err)
+	}
+	return h
 }
 
 // TestRotationRevokesLast is the ordering that is easy to get backwards, and getting it backwards is a
@@ -268,7 +277,7 @@ func TestTeardownRevokesFirst(t *testing.T) {
 }
 
 // TestCapabilityRemovedRevokesButLeavesTheCollector: removing the capability stops Odigos configuring
-// the Collector, and says it does not delete. The credential still goes, so nothing keeps pulling
+// the Collector, and removing it does not delete. The credential still goes, so nothing keeps pulling
 // a configuration carrying the destination credential — and the customer is told the Collector is still
 // running on its last config.
 func TestCapabilityRemovedRevokesButLeavesTheCollector(t *testing.T) {

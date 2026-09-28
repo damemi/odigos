@@ -66,7 +66,12 @@ type CloudConnectorAuthMethod {
 }
 
 type CloudConnectorFeature {
-  # discovery | instrumentation | computePlatforms | gateway
+  # discovery | instrumentation | computePlatforms | collectorManagement | collectorDeployment | gateway
+  #
+  # A client aggregates permissions per access level from an allowlist of these keys, so a key it does
+  # not know contributes nothing. The two collector keys are new and are in no access level yet: until
+  # one lists them, a customer enabling a managed Collector is shown a policy that omits every
+  # permission it needs.
   key: String!
   enabled: Boolean!
   displayName: String!
@@ -80,7 +85,10 @@ type CloudConnectorType {
   displayName: String!
   description: String!
   permissions: [String!]!
-  # agent | sidecar | service (empty for discovery types)
+  # How this type is acted on. The vocabulary is per domain:
+  #   instrumentation      agent | sidecar | service
+  #   collectorDeployment  fargate-service | container-app | cloud-run-service
+  # Empty for the superset features (discovery, computePlatforms, collectorManagement).
   method: String!
   implemented: Boolean!
 }
