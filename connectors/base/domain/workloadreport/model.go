@@ -255,6 +255,15 @@ func ToModel(w api.DiscoveredWorkload) *model.WorkloadReport {
 		}
 	}
 
+	if w.RoutingNote != nil && w.RoutingNote.Message != "" {
+		issues = append(issues, &model.WorkloadIssue{
+			Code:      w.RoutingNote.Code,
+			Severity:  "unknown",
+			Message:   w.RoutingNote.Message,
+			Transient: boolPtr(w.RoutingNote.Transient),
+		})
+	}
+
 	// One normalization for every branch above, rather than prose at each assignment. The branches decide
 	// WHICH condition holds and say so in the vocabulary the rest of this file (and every issue Code) uses;
 	// this turns that one identifier into the sentence a person reads. Doing it here is what makes the

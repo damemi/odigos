@@ -59,7 +59,7 @@ type WorkloadContainer struct {
 	// OverrideLanguage/OverrideVersion mirror a per-container source override when one applies.
 	OverrideLanguage string
 	OverrideVersion  string
-	Instrumented bool
+	Instrumented     bool
 	// Eligible plus ExcludedReason are the pair that travels: whether Odigos can instrument this
 	// container, and — when it cannot — why. ExcludedReason is never left empty on an ineligible
 	// container, because it is the only explanation a client ever receives.
@@ -131,6 +131,10 @@ type DiscoveredWorkload struct {
 	// InstrumentationError is set when instrumentation or rollback last failed for this workload; empty
 	// when healthy or not yet attempted.
 	InstrumentationError string
+	// RoutingNote is a non-fatal explanation of the selected telemetry path. Regional routing uses it
+	// when a workload cannot reach the regional Collector and safely falls back to a global OTLP
+	// terminal. It does not change the workload's instrumentation state.
+	RoutingNote *WorkloadRoutingNote
 	// SourceMatched is true when a source intent row exists for this workload.
 	SourceMatched bool
 	// SourceEnabled mirrors the linked source's enabled flag when SourceMatched is true.
@@ -217,6 +221,14 @@ type DiscoveredWorkload struct {
 	LastSeenAt time.Time
 }
 
+// WorkloadRoutingNote is provider-neutral routing context surfaced as a WorkloadIssue. Code is the
+// stable routing reason; Message is the human explanation produced by the shared routing resolver.
+type WorkloadRoutingNote struct {
+	Code      string
+	Message   string
+	Transient bool
+}
+
 // Prerequisites a workload's instrumentation can be waiting on. These are values of
 // DiscoveredWorkload.WaitingFor and travel to the UI as WorkloadReport.progress.waitingFor.
 const (
@@ -298,7 +310,7 @@ type DiscoveredComputePlatform struct {
 	// OdigosVersion is the installed Odigos version, when known.
 	OdigosVersion string
 	// Metadata holds kind-specific attributes reported by the provider.
-	Metadata map[string]any
+	Metadata   map[string]any
 	LastSeenAt time.Time
 }
 

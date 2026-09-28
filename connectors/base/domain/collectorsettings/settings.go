@@ -261,7 +261,7 @@ func readNetwork(entry map[string]any, base Network) Network {
 		Hostname:       stringOf(tls, KeyTLSHostname, base.TLS.Hostname),
 		CertificateRef: stringOf(tls, KeyTLSCertificateRef, base.TLS.CertificateRef),
 		// The transport resolver reads the override's scheme, so it travels with the TLS config rather
-		// than being looked up separately — the endpoint and what protects it are one decision (§7.5).
+		// than being looked up separately — the endpoint and what protects it are one decision.
 		EndpointOverride: out.EndpointOverride,
 	}
 

@@ -14,6 +14,11 @@ import (
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/config"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorgateway"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorreport"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
@@ -809,8 +814,114 @@ func (c *Coordinator) RuntimeHealth(ctx context.Context) (api.Health, error) {
 	return h, nil
 }
 
-func (c *Coordinator) CollectorStatuses(_ context.Context) ([]api.CollectorStatus, error) {
-	return nil, nil // managed-otelcol integration is a later phase
+// CollectorStatuses reports one entry per managed Collector, for connectorCollectorStatuses.
+//
+// Served over the same executor as everything else, so it reaches Central and odictl with no agents-api
+// version bump, no central-backend change and no UI change.
+//
+// A read failure returns the error rather than an empty list: an empty list means "this connector has no
+// Collectors", which is a different and reassuring answer.
+func (c *Coordinator) CollectorStatuses(ctx context.Context) ([]api.CollectorStatus, error) {
+	inputs, err := c.collectorReportInputs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	reports := collectorreport.BuildAll(inputs)
+
+	out := make([]api.CollectorStatus, 0, len(reports))
+	for _, r := range reports {
+		out = append(out, api.CollectorStatus{Name: r.Name, Healthy: r.Healthy, Message: r.Message})
+	}
+	return out, nil
+}
+
+// collectorReportInputs projects the stored Collector rows into report inputs.
+func (c *Coordinator) collectorReportInputs(ctx context.Context) ([]collectorreport.Input, error) {
+	records, err := c.store.ListManagedCollectors(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(records) == 0 {
+		return nil, nil
+	}
+
+	settings := c.CollectorSettings()
+	heartbeat := c.cfgMgr.Settings().HeartbeatInterval
+	now := time.Now().UTC()
+
+	inputs := make([]collectorreport.Input, 0, len(records))
+	for _, rec := range records {
+		inputs = append(inputs, collectorreport.Input{
+			Region: rec.Key.Region,
+			// CollectorKey is region-only; NetworkID on the record is the
+			// physical host VPC retained for placement/reporting.
+			NetworkID: rec.NetworkID,
+			Mode:      rec.Mode,
+			Origin:    rec.Origin,
+			Adopted:   rec.AdoptedAt != nil,
+			Status:    rec.Status,
+
+			OpAMPLastSeenAt:   rec.OpAMPLastSeenAt,
+			OpAMPInstanceUID:  rec.OpAMPInstanceUID,
+			AgentHealth:       rec.AgentHealth,
+			HeartbeatInterval: heartbeat,
+
+			EndpointGRPC: rec.EndpointGRPC,
+			EndpointHTTP: rec.EndpointHTTP,
+			TLSMode:      collectoringress.TLSMode(rec.TLSMode),
+			IngressTier:  collectoringress.Tier(rec.IngressTier),
+			DesiredCount: derefInt(rec.DesiredCount),
+			RunningCount: derefInt(rec.RunningCount),
+
+			ConfigHash:     rec.ConfigHash,
+			ConfigPushedAt: rec.ConfigPushedAt,
+
+			// Re-derived every pass, never read from a one-time event: a standing posture reported once
+			// is invisible to everyone who looks afterwards.
+			Problems: c.collectorProblems(rec, settings),
+			Now:      now,
+		})
+	}
+	return inputs, nil
+}
+
+// collectorProblems re-derives the standing conditions for one Collector.
+//
+// Only the ones this package can establish from the row and the configuration. A provider observer adds
+// its own by recording them on the row's status, which StatusFor then folds in.
+func (c *Coordinator) collectorProblems(rec store.CollectorRecord, settings collectorsettings.Settings) []collectorstatus.Problem {
+	var problems []collectorstatus.Problem
+
+	if collectoringress.Tier(rec.IngressTier) == collectoringress.TierNetworkCIDR {
+		// Degraded on EVERY pass for as long as it applies, not once when it was applied.
+		problems = append(problems, collectorstatus.Problem{
+			Code:     "CollectorIngressNetworkCIDRFallback",
+			Severity: collectorstatus.SeverityDegraded,
+			Message: "this Collector admits telemetry from the whole network's address range because the " +
+				"routed workloads' own network identities could not be resolved; narrow it by listing the " +
+				"senders under ingress.additionalNetworkIdentityIds",
+		})
+	}
+	if rec.EndpointGRPC == "" && rec.EndpointHTTP == "" && rec.Mode != spec.ModeManual {
+		problems = append(problems, collectorstatus.Problem{
+			Code:     "CollectorHasNoEndpoint",
+			Severity: collectorstatus.SeverityPending,
+			Message:  "no endpoint has been published for this Collector yet, so no workload is pointed at it",
+		})
+	}
+	// The endpoint the installation publishes may have moved since this regional
+	// Collector was deployed. Endpoint overrides are regional settings; NetworkID
+	// on the row is only the physical host VPC.
+	problems = append(problems,
+		collectorgateway.CheckEndpointDrift(rec.EndpointGRPC, settings.Region(rec.Key.Region).EndpointOverride, rec.Mode)...)
+	return problems
+}
+
+func derefInt(v *int) int {
+	if v == nil {
+		return 0
+	}
+	return *v
 }
 
 func (c *Coordinator) TriggerRollback(_ context.Context, _ string) error { return errNotImplemented }

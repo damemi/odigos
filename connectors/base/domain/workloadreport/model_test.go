@@ -459,6 +459,25 @@ func TestToModelNoDetailsWhenProviderHasNone(t *testing.T) {
 	}
 }
 
+func TestToModelSurfacesRegionalCollectorFallbackWithoutChangingState(t *testing.T) {
+	w := api.DiscoveredWorkload{
+		ServiceName: "non-vpc-lambda", Kind: "aws.lambda", Region: "eu-west-1",
+		SourceMatched: true, SourceEnabled: true, Instrumented: true,
+		RoutingNote: &api.WorkloadRoutingNote{
+			Code:    "no-network",
+			Message: "Defaulting to the global OTLP destination: this workload is not attached to a VPC and cannot reach the Odigos Managed Regional Collector.",
+		},
+	}
+
+	got := ToModel(w)
+	if got.Current.State != api.WorkloadStateInstrumented {
+		t.Fatalf("state = %q, want instrumented", got.Current.State)
+	}
+	if len(got.Issues) != 1 || got.Issues[0].Code != "no-network" || got.Issues[0].Severity == "error" {
+		t.Fatalf("issues = %+v, want one non-error routing note", got.Issues)
+	}
+}
+
 func ptr(s *string) string {
 	if s == nil {
 		return ""
