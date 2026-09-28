@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -18,6 +19,7 @@ import (
 
 	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/opamp"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
@@ -139,6 +141,10 @@ type DeploymentParams struct {
 	// FargateAgentsImage optionally overrides the odigos-fargate-agents bundle for AWS connectors
 	// (stamped as ODIGOS_FARGATE_AGENTS_IMAGE); empty keeps the connector's compiled-in default.
 	FargateAgentsImage string
+	// OpAMPEndpoint is the public endpoint a managed Collector connects back to, per environment.
+	// Already resolved by the caller (see OpAMPEndpoint) — empty means unconfigured or unusable, and
+	// the connector deploys no Collector rather than one that can never be configured.
+	OpAMPEndpoint string
 }
 
 // BuildDeployment constructs the connector Deployment (strategy: Recreate) for a CR.
@@ -170,6 +176,13 @@ func BuildDeployment(cr *cloudconnectorsv1.OdigosCloudConnector, p DeploymentPar
 		// Shutdown timeout is DB-backed operational config (config.Manager), not env.
 		{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 		dsnEnv("DATABASE_URL", p.DBSecretName, p.DBSecretKey),
+	}
+
+	// The public OpAMP endpoint, stamped only when it resolved. Omitted rather than stamped empty so a
+	// connector that has one and a connector that does not differ by the presence of the variable, not
+	// by its value — and so turning the feature off does not leave a variable claiming otherwise.
+	if p.OpAMPEndpoint != "" {
+		env = append(env, corev1.EnvVar{Name: opamp.EnvEndpoint, Value: p.OpAMPEndpoint})
 	}
 
 	// Optional operator-level override of the Fargate agents bundle (AWS-only concern; the connector
@@ -278,6 +291,39 @@ func BuildService(cr *cloudconnectorsv1.OdigosCloudConnector, p DeploymentParams
 }
 
 func intStrPort() intstr.IntOrString { return intstr.FromInt32(GraphQLPort) }
+
+// OpAMPEndpoint resolves the public OpAMP endpoint to stamp onto this connector, and reports why it
+// could not when a managed Collector was actually asked for.
+//
+// The endpoint is per environment and comes from the odigos-central chart, so it is the same for every
+// connector in a cluster. The reporting is not: a connector with no managed-Collector capability has no
+// use for it, and warning about an unset endpoint on every connector in an installation that does not
+// use the feature is how an operator learns to ignore the warning that matters.
+//
+// Returning empty is always the safe direction. Without the endpoint the connector has nowhere to point
+// a Collector, so it deploys none — rather than deploying one that reaches nothing, holds a credential,
+// and reports as running.
+func OpAMPEndpoint(cr *cloudconnectorsv1.OdigosCloudConnector, configured string) (string, []string) {
+	endpoint, err := opamp.Resolve(configured)
+	if err == nil {
+		return endpoint, nil
+	}
+
+	collectors, _ := CollectorCapabilities(cr)
+	if len(collectors) == 0 {
+		return "", nil
+	}
+
+	if errors.Is(err, opamp.ErrNotConfigured) {
+		return "", []string{fmt.Sprintf(
+			"this connector is allowed to manage a Collector, but no public OpAMP endpoint is configured, "+
+				"so no Collector will be deployed. Set cloudConnectors.managedCollectors.externalEndpoint in "+
+				"the odigos-central chart to the address the Collectors reach Central on, normally "+
+				"wss://<central-host>%s", opamp.DefaultPath)}
+	}
+	return "", []string{fmt.Sprintf(
+		"the configured public OpAMP endpoint cannot be used, so no Collector will be deployed: %v", err)}
+}
 
 // AnnotationCollectorsCapability carries the managed-Collector allow-list on clusters whose
 // OdigosCloudConnector CRD predates spec.collectors[].

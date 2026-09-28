@@ -16,6 +16,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/base/config"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/coordinator"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorgateway"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/gql"
 	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
@@ -40,6 +41,16 @@ func Run(ctx context.Context, cfg config.Config, cfgMgr *config.Manager, st *sto
 	// permission check.
 	for _, w := range p.Spec().UnsupportedCapabilities(cfg.Capabilities) {
 		runLog.Warn("capability cannot be honored as declared", "detail", w)
+	}
+
+	// The public OpAMP endpoint is the one piece of managed-Collector configuration that comes from the
+	// Central installation rather than from the connector's own capability set, so a connector can be
+	// fully allowed to manage a Collector and still have nowhere to point one. Warned rather than fatal,
+	// and only when a Collector was actually asked for: the connector still instruments workloads, it
+	// simply deploys no Collector — which is the safe direction, since one that reaches nothing would
+	// hold a credential and report as running.
+	for _, problem := range collectorgateway.CheckEndpoint(cfg.OpAMPEndpoint, p.Spec().CollectorTypes(cfg.Capabilities)) {
+		runLog.Warn("managed Collector cannot be deployed", "code", problem.Code, "detail", problem.Message)
 	}
 
 	// Load the operational config (DB overrides over code defaults) before starting the loops so they use

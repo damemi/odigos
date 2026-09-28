@@ -84,7 +84,12 @@ func main() {
 		// Optional override for the Fargate agents bundle staged by the AWS connector's ECS instrumentor;
 		// empty keeps the connector's compiled-in default (registry.odigos.io/odigos-fargate-agents).
 		FargateAgentsImage: os.Getenv("CONNECTOR_AWS_FARGATE_AGENTS_IMAGE"),
-		RequeueInterval:    30 * time.Second,
+		// Per environment, from cloudConnectors.managedCollectors.externalEndpoint in the odigos-central
+		// chart. Deliberately not defaulted: there is no address that is right for an unknown Central
+		// installation, and a wrong default would point every Collector in a customer's cloud account at
+		// somebody else's endpoint. Empty disables managed-Collector deployment with a reported reason.
+		OpAMPEndpoint:   os.Getenv("CONNECTOR_OPAMP_ENDPOINT"),
+		RequeueInterval: 30 * time.Second,
 	}
 
 	if err := (&controller.Reconciler{

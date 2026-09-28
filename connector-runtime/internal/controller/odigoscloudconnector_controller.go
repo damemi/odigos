@@ -72,6 +72,10 @@ type Config struct {
 	FargateAgentsImage string
 	// CentralBackendURL is passed to connector pods so they dial Central for the agents-api WebSocket.
 	CentralBackendURL string
+	// OpAMPEndpoint is the public endpoint managed Collectors connect back to, from the odigos-central
+	// chart. Per environment, so it is the same for every connector in this installation. Empty
+	// disables managed-Collector deployment with a reported reason rather than silently.
+	OpAMPEndpoint string
 	// RequeueInterval controls how often status is refreshed from the heartbeat table.
 	RequeueInterval time.Duration
 	// CleanupTimeout is how long to wait for instrumentation rollback before removing the finalizer.
@@ -188,6 +192,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	}
 
+	// Reported on the CR, not just in the controller's log, because the fix is a chart value and the
+	// person who can change it is looking at the connector they just enabled — not at the controller's
+	// output. Only reported where a Collector was actually asked for; see resources.OpAMPEndpoint.
+	opampEndpoint, endpointProblems := resources.OpAMPEndpoint(&cr, r.Config.OpAMPEndpoint)
+	for _, problem := range endpointProblems {
+		logger.Info("no public OpAMP endpoint for a connector allowed to manage a Collector", "detail", problem)
+		r.event(&cr, corev1.EventTypeWarning, "OpAMPEndpointUnavailable", problem)
+	}
+
 	schemaName := "connector_" + cr.Spec.Provider
 	params := resources.DeploymentParams{
 		Namespace:          cr.Namespace,
@@ -199,6 +212,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		SchemaVersion:      cpg.ExpectedSchemaVersions[schemaName],
 		CentralBackendURL:  r.Config.CentralBackendURL,
 		FargateAgentsImage: r.Config.FargateAgentsImage,
+		OpAMPEndpoint:      opampEndpoint,
 	}
 
 	if err := r.ensureService(ctx, &cr, params); err != nil {

@@ -5,7 +5,7 @@ go 1.26.2
 require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/odigos-io/odigos-enterprise/connectors v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/api v1.38.0-pre6.0.20260928080535-a5d2d03ff170
+	github.com/odigos-io/odigos/api v1.38.0-pre6.0.20260928080535-cd5888855fd4
 	k8s.io/api v0.35.4
 	k8s.io/apimachinery v0.35.4
 	k8s.io/client-go v0.35.4

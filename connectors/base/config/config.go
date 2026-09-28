@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/opamp"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
@@ -54,6 +55,14 @@ type Config struct {
 	// CentralBackendURL is the central-backend base URL dialed for the reverse-WebSocket agents-api
 	// connection (http(s):// or ws(s)://, host[:port]). Empty runs local-only (no Central).
 	CentralBackendURL string
+	// OpAMPEndpoint is the PUBLIC endpoint a managed Collector in the customer's cloud account connects
+	// back to, stamped by connector-runtime from the Central installation's configuration. Distinct from
+	// CentralBackendURL, which is an in-cluster address this connector dials outward: this one is dialled
+	// inward, from outside the cluster, by a workload Odigos does not run on.
+	//
+	// Empty means managed-Collector deployment is off — collectorgateway.CheckEndpoint reports why, and
+	// only for a connector that was actually allowed to manage one.
+	OpAMPEndpoint string
 }
 
 // FromEnv builds the generic Config from environment variables, validating the universally-required
@@ -69,6 +78,7 @@ func FromEnv() (Config, error) {
 		PodName:           os.Getenv("POD_NAME"),
 		Version:           GetenvDefault("ODIGOS_RUNTIME_VERSION", "dev"),
 		CentralBackendURL: os.Getenv("ODIGOS_CENTRAL_BACKEND_URL"),
+		OpAMPEndpoint:     os.Getenv(opamp.EnvEndpoint),
 	}
 	// Operational tunables (discovery/heartbeat/reconcile intervals, shutdown timeout, discovery tags) are
 	// NOT read here — they are DB-backed and served live by config.Manager, tunable via the agents-api
