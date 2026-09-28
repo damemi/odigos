@@ -15,6 +15,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/base/central"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/config"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/coordinator"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/gql"
 	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
@@ -67,6 +68,31 @@ func Run(ctx context.Context, cfg config.Config, cfgMgr *config.Manager, st *sto
 		"version", cfg.Version,
 		"kinds", p.SupportedKinds(),
 	)
+
+	// A recreated connector CR has a new UID, and a managed Collector's credential is bound to the UID
+	// at issue — so unlike its infrastructure, which is adopted by tag, the credential is not inherited.
+	// Revoke the predecessor's here, where the connector first knows its
+	// own identity.
+	//
+	// This is about the authority rather than the access: the gateway already refuses a credential whose
+	// connector UID is not registered. But with the interim local mint the hash lives only in this
+	// database, so a credential left live while the connector can still see it is one nothing will ever
+	// be able to revoke.
+	//
+	// Gated on PlatformIDFromCR: under the ConnectorName fallback no live credential would match, and
+	// the sweep would read that as "every credential belongs to a predecessor".
+	if cfg.PlatformIDFromCR {
+		revoked, err := st.RevokeCollectorCredentialsForRecreatedConnector(ctx, cfg.PlatformID, collectorcredential.ActorConnector)
+		if err != nil {
+			// Warned, not fatal. A connector that cannot sweep must still instrument workloads, the
+			// access is already closed at the gateway, and the next startup retries.
+			runLog.Warn("could not revoke credentials issued under a previous connector UID",
+				"connector_uid", cfg.PlatformID, "revoked", len(revoked), "error", err)
+		} else if len(revoked) > 0 {
+			runLog.Info("revoked managed-Collector credentials from a previous connector incarnation",
+				"connector_uid", cfg.PlatformID, "count", len(revoked))
+		}
+	}
 
 	go coord.Start(ctx)
 

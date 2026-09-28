@@ -1,7 +1,10 @@
 // Package collectorcredential is the lifecycle of the bearer credential a managed Collector presents
 // to the OpAMP gateway: binding, persistence, expiry rules, rotation and revocation order.
 //
-// Pure — no I/O.
+// Pure, with one deliberate exception: Mint reads the CSPRNG, because the type that keeps a credential
+// out of logs and serialized structures should be the only thing that constructs one. Everything else
+// here is a computation over values the caller supplies — no database, no cloud API, no wall clock
+// except where a `now` argument is passed in.
 //
 // The credential is not "permission to send telemetry". An authenticated OpAMP connection receives
 // the Collector's desired configuration, which includes destination headers (the destination

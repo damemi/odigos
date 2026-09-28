@@ -22,6 +22,15 @@ type Config struct {
 	// back to ConnectorName when unset (local runs). Distinct from ConnectorName, which stays the display
 	// name and the Postgres row key.
 	PlatformID string
+	// PlatformIDFromCR reports whether PlatformID is the CR UID the controller stamped, rather than the
+	// ConnectorName fallback below.
+	//
+	// It exists because the fallback is safe for routing and dangerous for identity. A managed
+	// Collector's credential is bound to the CR UID at issue, and anything comparing a live credential
+	// against PlatformID to decide the connector was recreated would, under the fallback, find that no
+	// credential matches and conclude the whole fleet needs revoking. Callers making that comparison
+	// must require this flag.
+	PlatformIDFromCR bool
 	// Provider is the provider key; informational.
 	Provider string
 	// Schema is the provider's Postgres schema used for sources/destinations.
@@ -84,7 +93,9 @@ func FromEnv() (Config, error) {
 	}
 
 	c.PlatformID = os.Getenv("ODIGOS_CONNECTOR_ID")
+	c.PlatformIDFromCR = c.PlatformID != ""
 	if c.PlatformID == "" {
+		// Local runs and older controllers. Fine as a routing id; not an identity — see PlatformIDFromCR.
 		c.PlatformID = c.ConnectorName
 	}
 
