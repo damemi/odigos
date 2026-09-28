@@ -45,6 +45,7 @@ require (
 	github.com/odigos-io/agents-api/go/server v0.19.0 // indirect
 	github.com/odigos-io/odigos/common v1.29.0 // indirect
 	github.com/odigos-io/odigos/destinations v1.29.0 // indirect
+	github.com/open-telemetry/opamp-go v0.23.0 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/sosodev/duration v1.4.0 // indirect
 	github.com/vektah/gqlparser/v2 v2.5.34 // indirect
@@ -59,6 +60,7 @@ require (
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	sigs.k8s.io/controller-runtime v0.23.3 // indirect

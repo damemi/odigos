@@ -34,6 +34,10 @@ type Config struct {
 	PlatformIDFromCR bool
 	// Provider is the provider key; informational.
 	Provider string
+	// AccountID is the provider account boundary this connector owns (AWS account, GCP project, Azure
+	// subscription). Part of every managed-Collector credential binding, so the connector can check that
+	// a routed connection belongs to its own account.
+	AccountID string
 	// Schema is the provider's Postgres schema used for sources/destinations.
 	Schema string
 	// DatabaseURL is the Postgres DSN.
@@ -100,6 +104,17 @@ func FromEnv() (Config, error) {
 	c.RuntimeID = c.PodName
 	if c.RuntimeID == "" {
 		c.RuntimeID = c.ConnectorName
+	}
+
+	// The controller stamps the SAME account id into all three provider variables — a connector reads
+	// only its own and the others are harmless no-ops (connector-runtime resources.go). Reading the
+	// first non-empty therefore gives this connector's account without base needing to know which
+	// provider it is running as.
+	for _, key := range []string{"ODIGOS_AWS_ACCOUNT_ID", "ODIGOS_GCP_PROJECT_ID", "ODIGOS_AZURE_SUBSCRIPTION_ID"} {
+		if v := os.Getenv(key); v != "" {
+			c.AccountID = v
+			break
+		}
 	}
 
 	c.PlatformID = os.Getenv("ODIGOS_CONNECTOR_ID")

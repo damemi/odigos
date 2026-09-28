@@ -19,6 +19,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorgateway"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/gql"
 	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/opamp"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
 	cpg "github.com/odigos-io/odigos-enterprise/connectors/postgres"
 )
@@ -106,6 +107,8 @@ func Run(ctx context.Context, cfg config.Config, cfgMgr *config.Manager, st *sto
 	}
 
 	go coord.Start(ctx)
+
+	startCollectorOpAMPServer(ctx, cfg, st, p)
 
 	// One agents-api executor backs both transports: the reverse WebSocket to Central and the local
 	// odictl CLI endpoint.
@@ -206,4 +209,44 @@ func runShutdownDrain(cfgMgr *config.Manager, st *store.Store, coord *coordinato
 	}
 	runLog.Info("drain requested; rolling back instrumentation", "reason", drain.Reason)
 	return coord.Shutdown(shutdownCtx)
+}
+
+// startCollectorOpAMPServer starts the connector's OpAMP server, but only for a connector that actually
+// has a managed Collector to configure.
+//
+// Gated on CollectorTypes rather than on the deployment feature: a MANUAL-mode Collector is configured
+// over OpAMP too — the customer deployed it and Odigos still owns its configuration — so the config
+// plane runs in both modes and only the deployer is automatic-only.
+//
+// The desired configuration comes from the provider, as an optional capability. A provider that declares
+// a collectors type but cannot render one is a mismatch worth saying out loud rather than a listener that
+// accepts connections and has nothing to give them.
+func startCollectorOpAMPServer(ctx context.Context, cfg config.Config, st *store.Store, p api.Provider) {
+	types := p.Spec().CollectorTypes(cfg.Capabilities)
+	if len(types) == 0 {
+		return
+	}
+
+	desired, ok := p.(opamp.Desired)
+	if !ok {
+		runLog.Warn("a managed-Collector capability is enabled but this provider renders no Collector "+
+			"configuration, so no OpAMP server is started and no Collector will be configured",
+			"provider", cfg.Provider, "types", len(types))
+		return
+	}
+
+	srv := opamp.New(opamp.Self{
+		ConnectorUID: cfg.PlatformID,
+		Provider:     cfg.Provider,
+		AccountID:    cfg.AccountID,
+	}, st, desired)
+
+	go func() {
+		// Warned, not fatal. The OpAMP server is the Collectors' config plane; losing it must not take
+		// workload instrumentation down with it, and a Collector that is already running keeps exporting
+		// under its last configuration while this is fixed.
+		if err := srv.Start(ctx); err != nil {
+			runLog.Error("the managed-Collector OpAMP server stopped", "error", err)
+		}
+	}()
 }
