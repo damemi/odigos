@@ -27,6 +27,7 @@ jobs:
             "collector",
             "central-proxy",
             "central-backend",
+            "connector-opamp-gateway",
             "central-ui",
             "agents",
             "insights",
@@ -49,6 +50,9 @@ jobs:
           - service: central-proxy
             summary: "Central Proxy for Odigos"
             description: "Central Proxy is handle the communication between the cluster that Odigos is running in and the Odigos Central."
+          - service: connector-opamp-gateway
+            summary: "Managed Collector OpAMP Gateway for Odigos"
+            description: "Authenticates managed Collector OpAMP connections and routes each to the cloud connector its credential is bound to."
           - service: central-backend
             summary: "Central Backend for Odigos"
             description: "Central Backend is the core component of Odigos Central, responsible for managing the data flow from the cluster to the ui."

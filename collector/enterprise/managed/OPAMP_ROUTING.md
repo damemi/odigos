@@ -113,15 +113,61 @@ The gateway must route from authenticated credential state. It must not trust a 
 query parameter or the OpAMP Agent description. The Agent description arrives only after the
 WebSocket has been upgraded and is client-controlled, so it is suitable only as a consistency check.
 
-The gateway can watch `OdigosCloudConnector` resources and generated Services and maintain an
-in-memory lookup:
+The gateway watches `OdigosCloudConnector` resources and connector Services and maintains an in-memory
+lookup:
 
 ```text
 connector UID -> namespace -> connector Service -> OpAMP port
 ```
 
-Each gateway replica can hold its own active WebSocket connections. After a gateway restart, a
-Collector can reconnect through another replica and resolve the same persisted identity binding.
+Each gateway replica holds its own active WebSocket connections. After a gateway restart, a Collector
+reconnects through another replica and resolves the same persisted identity binding.
+
+**Implemented** in [`connector-opamp-gateway/`](../../connector-opamp-gateway). Five decisions the
+implementation settled, each because the alternative fails in a way worth writing down:
+
+**The credential table is `connector_platform.collector_credentials`, not a provider schema.** The
+lookup key is the token hash, and the gateway must resolve a credential *before* it knows which
+provider issued it — the provider is a column of the row it is looking for. A provider-schema table
+would make every handshake a UNION across every provider and would need editing each time one is added.
+
+**The credential stops at the gateway.** It is hashed on arrival and never forwarded. What crosses the
+second hop is an identity — collector id, credential id, connector UID, provider, account, region,
+network — on `X-Odigos-*` headers, defined once in
+[`connectors/base/domain/collectorgateway`](../../connectors/base/domain/collectorgateway) so the
+gateway and the connector's OpAMP server cannot hold different ideas of it. The credential id is there
+because a rotation has two live credentials and the connector needs to know which one connected to
+stamp `activated_at` on the right row.
+
+The connector may trust those headers because a NetworkPolicy admits only gateway pods to its OpAMP
+port. The gateway upholds the other half by stripping every inbound header in that namespace before
+setting its own — a Collector that names its own connector must not be able to pick one. If that
+boundary is ever weakened, the fix is to sign the assertion, not to re-send the credential: re-sending
+would put a value worth the customer's destination credential on a second hop for no gain.
+
+**Refusals are opaque; the reason goes to the log.** Every refused handshake is one status code and an
+empty body. Telling "unknown credential" apart from "revoked" confirms to whoever is probing that a
+token was once real, and a Collector cannot act on the difference. The one distinction made is `401`
+(the credential is not acceptable) against `503` (the credential is fine, there is nowhere to route
+it — connector deleted, terminating, or the store unreachable). Answering a store outage with `401`
+would tell an entire fleet its credentials were invalid over a database blip.
+
+**Revocation closes sessions that are already open.** Authenticating the handshake is not enough: an
+OpAMP session lives for days and keeps receiving configuration pushes, each carrying the destination's
+own credential, so refusing only the *next* handshake would leave a compromised holder connected for as
+long as it avoided reconnecting. Every replica re-authorizes its open sessions on a timer (30s by
+default) through the same decision function the handshake uses, and closes the ones that stopped being
+acceptable. The sweep costs one read per *credential*, not per connection — N replicas of one Collector
+share one credential, and that is normal, not a replay. A store outage during a sweep leaves sessions
+open on purpose: closing them would disconnect the whole fleet, and every one of them would fail to
+reconnect for the same reason.
+
+**Routes come from the Service, not from recomputing its name.** The gateway resolves a connector's
+OpAMP address from the Service labelled `odigos.io/connector-id=<CR UID>` exposing a port named
+`opamp`. The naming rule lives in `connector-runtime`; a copy of it in the gateway would be correct
+until the day it was not, and the failure would be a Collector routed at a name nothing answers on with
+every component reporting healthy. Until that label and port exist, an authenticated Collector is
+answered `503` and the reason is logged.
 
 ### Connector runtime
 
@@ -303,11 +349,15 @@ configuration.
 
 ## Implementation checklist
 
-1. Define the Collector identity and credential database contract.
-2. Implement credential issuance, hashing, validation, and revocation.
+1. ~~Define the Collector identity and credential database contract.~~ `collector_credentials`
+   (migration `0011`) and `connectors/base/domain/collectorcredential`.
+2. Implement credential **issuance** and revocation. The gateway validates and the schema is in place;
+   nothing writes the table yet, which is the blocking dependency for a real deployment.
 3. Add the shared OpAMP server to `connectors/base`.
-4. Add the OpAMP port and connector UID label to connector Deployments and Services.
-5. Implement `connector-opamp-gateway` authentication, CR/Service watching, and WebSocket proxying.
+4. Add the OpAMP port and connector UID label to connector Deployments and Services. Until this lands
+   the gateway resolves no route and says so.
+5. ~~Implement `connector-opamp-gateway` authentication, CR/Service watching, and WebSocket
+   proxying.~~
 6. Add gateway Deployment, Service, RBAC, NetworkPolicy, and values to the Central Helm chart.
 7. Add an optional Gateway API `HTTPRoute` plus an Ingress fallback.
 8. Add `/v1/opamp` to the bundled Traefik single-node edge configuration.

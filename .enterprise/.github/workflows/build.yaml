@@ -162,6 +162,11 @@ jobs:
           - connectors/providers/aws
           - connectors/providers/azure
           - connectors/providers/gcp
+          # Not under connectors/, but it belongs to this job rather than the central one because it
+          # depends on connectors/base through a local replace AND this job is ungated. In `unit-tests`
+          # it would be skipped whenever a change is confined to connectors/ — which is exactly when a
+          # change to the shared collectorgateway contract needs it to run.
+          - connector-opamp-gateway
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
@@ -208,6 +213,7 @@ jobs:
             collector,
             central-proxy,
             central-backend,
+            connector-opamp-gateway,
             agents,
             insights,
           ]
