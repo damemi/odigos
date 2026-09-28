@@ -279,16 +279,139 @@ func BuildService(cr *cloudconnectorsv1.OdigosCloudConnector, p DeploymentParams
 
 func intStrPort() intstr.IntOrString { return intstr.FromInt32(GraphQLPort) }
 
+// AnnotationCollectorsCapability carries the managed-Collector allow-list on clusters whose
+// OdigosCloudConnector CRD predates spec.collectors[].
+//
+// Temporary, and deliberately annotation-shaped: an annotation needs no CRD change, so a cluster can
+// enable a managed Collector before the CRD shipped by the odigos-central chart is upgraded. The value
+// is the same JSON as the field:
+//
+//	odigos.io/collectors-capability: '[{"type":"aws.fargate-collector","management":true}]'
+//
+// spec.collectors[] wins wherever it is set. Remove this once every cluster is on a CRD that has the
+// field — a shim that nothing needs is a second place for the allow-list to disagree with itself.
+const AnnotationCollectorsCapability = "odigos.io/collectors-capability"
+
+// CollectorCapabilities resolves the managed-Collector allow-list to hand the connector, and reports
+// anything it refused to pass on.
+//
+// Refusing is always the safe direction. Without the capability the connector runs with no Collector
+// deployer at all — spec.ActiveCollectorDeploymentTypes returns nothing — so nothing is created in the
+// customer's cloud account. Passing a contradictory list through instead would make the connector
+// refuse to start (config.FromEnv validates it), which takes workload instrumentation down with it
+// over a Collector the customer may not even have deployed yet.
+func CollectorCapabilities(cr *cloudconnectorsv1.OdigosCloudConnector) ([]spec.CollectorCapability, []string) {
+	entries, problems := collectorCapabilitySource(cr)
+	if len(entries) == 0 {
+		return nil, problems
+	}
+
+	// Validated through spec.Capabilities so the controller and the connector cannot disagree about what
+	// a legal allow-list is — the connector runs the same check on the JSON this produces.
+	if err := (spec.Capabilities{Collectors: entries}).Validate(); err != nil {
+		// The whole list goes, not the offending entry. A duplicate with conflicting flags or a
+		// deployment-without-management entry means the list was authored wrong, and honoring the rest of
+		// it would be guessing at intent — on the one capability that spends the customer's money.
+		return nil, append(problems, fmt.Sprintf(
+			"dropping the managed-Collector capability: %v. The connector was deployed without it, so no "+
+				"Collector infrastructure will be created", err))
+	}
+	return entries, problems
+}
+
+// collectorCapabilitySource picks between the field and the compatibility annotation.
+func collectorCapabilitySource(cr *cloudconnectorsv1.OdigosCloudConnector) ([]spec.CollectorCapability, []string) {
+	raw, annotated := cr.Annotations[AnnotationCollectorsCapability]
+	annotated = annotated && strings.TrimSpace(raw) != ""
+
+	if len(cr.Spec.Collectors) > 0 {
+		var problems []string
+		if annotated {
+			// Said out loud rather than ignored quietly: a shadowed annotation is exactly what somebody
+			// edits when they want the capability to change, and then wonders why nothing happened.
+			problems = append(problems, fmt.Sprintf(
+				"spec.collectors is set, so the %s annotation is ignored; remove the annotation",
+				AnnotationCollectorsCapability))
+		}
+		return collectorCapabilitiesFromCR(cr.Spec.Collectors), problems
+	}
+
+	if !annotated {
+		return nil, nil
+	}
+	entries, err := parseCollectorsAnnotation(raw)
+	if err != nil {
+		return nil, []string{fmt.Sprintf(
+			"ignoring the %s annotation: %v. The connector was deployed without the managed-Collector "+
+				"capability, so no Collector infrastructure will be created", AnnotationCollectorsCapability, err)}
+	}
+	return entries, nil
+}
+
+// collectorCapabilitiesFromCR converts the CR's entries to the type the connector parses.
+//
+// The two are the same JSON, which is why only this domain is converted: it is the one with a second
+// source and a validation step, and both need one canonical in-memory form to work on. Converting
+// rather than re-marshalling the CR types also means the bytes handed to the connector are produced
+// from the exact type it unmarshals into, so the shapes cannot drift apart.
+func collectorCapabilitiesFromCR(in []cloudconnectorsv1.CloudConnectorCollectorCapability) []spec.CollectorCapability {
+	out := make([]spec.CollectorCapability, 0, len(in))
+	for _, c := range in {
+		out = append(out, spec.CollectorCapability{
+			Type:       c.Type,
+			Management: c.Management,
+			Deployment: c.Deployment,
+		})
+	}
+	return out
+}
+
+// parseCollectorsAnnotation decodes the compatibility annotation.
+func parseCollectorsAnnotation(raw string) ([]spec.CollectorCapability, error) {
+	var entries []spec.CollectorCapability
+	dec := json.NewDecoder(strings.NewReader(raw))
+	// Strict, unlike the connector's own parse of ODIGOS_CAPABILITIES. The connector must tolerate keys
+	// from a newer controller; an annotation is hand-written, so an unknown key there is a typo, and
+	// silently ignoring it would enable something other than what was asked for.
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&entries); err != nil {
+		return nil, fmt.Errorf("not a JSON array of {type, management, deployment}: %w", err)
+	}
+
+	for i, e := range entries {
+		// The CRD marks type required, so the API server enforces this on the field. Nothing enforces it
+		// on an annotation, and an entry with no type matches no provider type — it would sit in the
+		// allow-list looking enabled and do nothing.
+		if strings.TrimSpace(e.Type) == "" {
+			return nil, fmt.Errorf("entry %d has no type", i)
+		}
+	}
+	return entries, nil
+}
+
 // capabilitiesJSON encodes the CR's per-type capabilities (the customer's per-domain allow-list) for the
 // connector to consume via ODIGOS_CAPABILITIES. The shape matches spec.Capabilities: an object with
-// `workloads` and `computePlatforms` lists.
+// one key per domain.
+//
+// `collectors` is omitted entirely when there is none, so this produces byte-identical output to
+// before the domain existed for every connector that does not use one. That matters because the value
+// is a container env var: a key that appeared unconditionally would roll every connector pod in the
+// fleet on upgrade.
+//
+// A connector image older than the collectors domain unmarshals this with encoding/json and no strict
+// mode, so it ignores the key and wires no Collector deployer — which is how an old image stays safe
+// in front of a new controller rather than needing to be version-gated here.
 func capabilitiesJSON(cr *cloudconnectorsv1.OdigosCloudConnector) string {
+	collectors, _ := CollectorCapabilities(cr)
+
 	b, err := json.Marshal(struct {
 		Workloads        []cloudconnectorsv1.CloudConnectorWorkloadCapability        `json:"workloads,omitempty"`
 		ComputePlatforms []cloudconnectorsv1.CloudConnectorComputePlatformCapability `json:"computePlatforms,omitempty"`
+		Collectors       []spec.CollectorCapability                                  `json:"collectors,omitempty"`
 	}{
 		Workloads:        cr.Spec.Workloads,
 		ComputePlatforms: cr.Spec.ComputePlatforms,
+		Collectors:       collectors,
 	})
 	if err != nil {
 		return "{}"

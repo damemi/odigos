@@ -20,6 +20,57 @@ state into the CRD status cache.
 It does **not** own provider inventory, the computed solution, or any provider DB writes — those belong
 to the connector runtime (`connector-aws`).
 
+## Capabilities (`ODIGOS_CAPABILITIES`)
+
+The customer's per-type allow-list is stamped onto the connector Deployment as `ODIGOS_CAPABILITIES`,
+a JSON object with one key per domain — `workloads`, `computePlatforms`, `collectors` — matching
+`spec.Capabilities` in `connectors/spec`. A domain with nothing enabled is **omitted**, not emitted
+empty: the value is a container env var, so a key that appeared unconditionally would roll every
+connector pod in the fleet on upgrade.
+
+### Managed Collectors and the annotation fallback
+
+`collectors` comes from `spec.collectors[]` on the CR. On a cluster whose `OdigosCloudConnector` CRD
+predates that field, the same list may be given as an annotation instead:
+
+```yaml
+metadata:
+  annotations:
+    odigos.io/collectors-capability: '[{"type":"aws.fargate-collector","management":true}]'
+```
+
+An annotation needs no CRD change, which is the point — a cluster can enable a managed Collector
+before the CRD shipped by the `odigos-central` chart is upgraded.
+
+- **`spec.collectors[]` wins wherever it is set.** A shadowed annotation is reported as an
+  `InvalidCollectorsCapability` Event rather than ignored quietly: it is exactly what somebody edits
+  when they want the capability to change, and then wonders why nothing happened. Remove it.
+- **The annotation is parsed strictly** — unknown keys, a missing `type`, or anything that is not a
+  JSON array is refused. It is hand-written, so a typo there is a typo, and guessing at it would
+  enable something other than what was asked for.
+- **The annotation is temporary.** Delete it once every cluster is on a CRD carrying the field; a shim
+  nothing needs is a second place for the allow-list to disagree with itself.
+
+A list the connector could not honor — a duplicate type with conflicting flags, or `deployment`
+without `management` — is **dropped in full** and reported as an Event. The connector is still
+deployed, still instruments workloads, and simply has no Collector deployer, so nothing is created in
+the customer's cloud account. The alternative is worse: `config.FromEnv` in the connector refuses to
+start on a contradictory allow-list, which would take workload instrumentation down over a Collector
+the customer may not have deployed yet.
+
+### Version skew
+
+Neither side needs to know the other's version.
+
+| | Old controller | New controller |
+| --- | --- | --- |
+| **Old connector image** | no `collectors` key, no Collector | key present; the image has no `Collectors` field and parses with non-strict `encoding/json`, so it ignores the key and wires no deployer |
+| **New connector image** | no `collectors` key, so no Collector is derived | the capability takes effect |
+
+Downgrading the CRD prunes `spec.collectors[]`, which drops the capability and stops Odigos converging
+the Collector. It does **not** delete the Collector — it keeps running on its last configuration until
+the customer removes it.
+
 ## Layout
 
 ```

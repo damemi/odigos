@@ -176,6 +176,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return r.finishStatus(ctx, &cr, before)
 	}
 
+	// A refusable part of the spec, refused on its own. A managed-Collector entry the connector could
+	// not honor costs that capability and nothing else: the connector still deploys and still
+	// instruments workloads, just without a Collector deployer — so nothing is created in the customer's
+	// cloud account. Reported as an Event rather than a condition because none of the conditions would
+	// honestly be False; the connector is fine, part of the request was not.
+	if _, problems := resources.CollectorCapabilities(&cr); len(problems) > 0 {
+		for _, problem := range problems {
+			logger.Info("managed-Collector capability not passed to the connector", "detail", problem)
+			r.event(&cr, corev1.EventTypeWarning, "InvalidCollectorsCapability", problem)
+		}
+	}
+
 	schemaName := "connector_" + cr.Spec.Provider
 	params := resources.DeploymentParams{
 		Namespace:          cr.Namespace,
