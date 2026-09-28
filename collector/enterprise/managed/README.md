@@ -17,7 +17,7 @@ The connector deployment must provide:
 - `ODIGOS_OPAMP_AUTHORIZATION`: the complete authorization header value, for example
   `Bearer <credential>`. **Long-lived and individually revocable, not short-lived**: this image sets
   `accepts_opamp_connection_settings: false`, so the header cannot be replaced over OpAMP and a new
-  credential only arrives with a new deployment. See `connectors/MANAGED-COLLECTOR.md`.
+  credential only arrives with a new deployment.
 - `ODIGOS_CLOUD_CONNECTOR_ID`: the stable connector identifier used to associate the agent with its
   Central resource.
 - `ODIGOS_CLOUD_PROVIDER`: `aws`, `gcp`, or `azure`.
@@ -62,8 +62,7 @@ AWS/GCP/Azure deployment mechanism.
 The image is published for `linux/amd64` and `linux/arm64` as one manifest list, to Artifact Registry,
 Docker Hub and GHCR from a single build, with every ref signed against the same digest. Deployments
 should reference it **by digest**, never by tag: the digest is the image's identity, and each cloud picks
-whichever registry it can pull from without changing the bytes. See
-`connectors/MANAGED-COLLECTOR.md`.
+whichever registry it can pull from without changing the bytes.
 
 Remote configuration is trusted control-plane input. The cloud deployment must still minimize its
 filesystem mounts, IAM permissions, Kubernetes RBAC, and network permissions because Collector
