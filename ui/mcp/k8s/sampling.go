@@ -63,7 +63,6 @@ func registerSamplingTools(s *server.MCPServer, deps Deps) {
 			mcp.WithDescription("STEP 1 of tail sampling: create an empty named Sampling group (a rule container). It samples nothing until you add rules with create_noisy/highly_relevant/cost_reduction_operation_rule. If a group already exists (see get_sampling), reuse its sampling_id instead of making another."),
 			mcp.WithString("name", mcp.Required(), mcp.Description("Human-readable group name.")),
 			mcp.WithString("notes", mcp.Description("Optional free-form notes.")),
-			mcp.WithBoolean("disabled", mcp.Description("Optional: create disabled (rules in this group will be ignored).")),
 			mcp.WithBoolean("dry_run", mcp.Description(dryRunDesc)),
 		),
 		createSamplingGroupHandler(),
@@ -223,13 +222,12 @@ func listSamplingGroupsHandler() server.ToolHandlerFunc {
 		}
 		type group struct {
 			ResourceName, Name             string
-			Disabled                       bool
 			NoisyCount, HROCount, CRRCount int
 		}
 		out := make([]group, 0, len(list.Items))
 		for _, s := range list.Items {
 			out = append(out, group{
-				ResourceName: s.Name, Name: s.Spec.Name, Disabled: s.Spec.Disabled,
+				ResourceName: s.Name, Name: s.Spec.Name,
 				NoisyCount: len(s.Spec.NoisyOperations),
 				HROCount:   len(s.Spec.HighlyRelevantOperations),
 				CRRCount:   len(s.Spec.CostReductionRules),
@@ -277,7 +275,7 @@ func createSamplingGroupHandler() server.ToolHandlerFunc {
 		cr := &odigosv1.Sampling{
 			ObjectMeta: metav1.ObjectMeta{GenerateName: "odigos-mcp-sampling-", Namespace: ns},
 			Spec: odigosv1.SamplingSpec{
-				Name: name, Notes: stringArg(req, "notes", ""), Disabled: boolArg(req, "disabled", false),
+				Name: name, Notes: stringArg(req, "notes", ""),
 			},
 		}
 		if dryRun {
