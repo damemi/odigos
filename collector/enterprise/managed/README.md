@@ -14,12 +14,21 @@ args: ["--config=/etc/odigos/managed-collector/supervisor.yaml"]
 The connector deployment must provide:
 
 - `ODIGOS_OPAMP_ENDPOINT`: the Central OpAMP WebSocket or HTTP endpoint, normally `wss://...`.
-- `ODIGOS_OPAMP_AUTHORIZATION`: the complete authorization header value (for example,
-  `Bearer <short-lived-credential>`).
+- `ODIGOS_OPAMP_AUTHORIZATION`: the complete authorization header value, for example
+  `Bearer <credential>`. **Long-lived and individually revocable, not short-lived**: this image sets
+  `accepts_opamp_connection_settings: false`, so the header cannot be replaced over OpAMP and a new
+  credential only arrives with a new deployment. See `connectors/MANAGED-COLLECTOR.md`.
 - `ODIGOS_CLOUD_CONNECTOR_ID`: the stable connector identifier used to associate the agent with its
   Central resource.
 - `ODIGOS_CLOUD_PROVIDER`: `aws`, `gcp`, or `azure`.
-- `ODIGOS_ONPREM_TOKEN`: the normal enterprise Collector authorization token.
+- `ODIGOS_ONPREM_TOKEN`: the normal enterprise Collector authorization token. It is a signed JWT with
+  an expiry, and `odigosenterpriseauthextension` refuses to start without a valid one and shuts the
+  Collector down if it expires while running — which on a container platform is a crash loop that no
+  configuration rollback can rescue. Renew the licence and redeploy before it expires.
+
+  `ODIGOS_OPAMP_AUTHORIZATION` and `ODIGOS_ONPREM_TOKEN` must both be delivered from the platform's
+  secret store as secret references, never as plain environment values, and from **two separate
+  secrets** — they have different issuers, lifetimes and revocation authorities.
 - A volume mounted at `/var/lib/odigos/collector-supervisor`, writable by UID/GID `65532`. Use
   persistent storage so the OpAMP instance identity, cached remote config, and last-known-good config
   survive rescheduling.
@@ -49,6 +58,12 @@ generated OpAMP extension keeps the Collector attached to the local Supervisor. 
 can change receivers, processors, exporters, connectors, pipelines, and Collector telemetry, but it
 cannot update the Collector or Supervisor binaries. Image upgrades remain the responsibility of the
 AWS/GCP/Azure deployment mechanism.
+
+The image is published for `linux/amd64` and `linux/arm64` as one manifest list, to Artifact Registry,
+Docker Hub and GHCR from a single build, with every ref signed against the same digest. Deployments
+should reference it **by digest**, never by tag: the digest is the image's identity, and each cloud picks
+whichever registry it can pull from without changing the bytes. See
+`connectors/MANAGED-COLLECTOR.md`.
 
 Remote configuration is trusted control-plane input. The cloud deployment must still minimize its
 filesystem mounts, IAM permissions, Kubernetes RBAC, and network permissions because Collector

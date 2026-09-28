@@ -119,6 +119,14 @@ build-agents:
 ############################################
 ODIGOS_CONTEXT ?= ../odigos
 
+# The tag/registry of the managed-Collector image connector-runtime pins to at build time (see
+# connectors/base/domain/collectorimage.Released). Independent of TAG/ORG, not aliases for them: Collector
+# and connector-runtime are normally released together so these default to this build's own TAG/ORG, but
+# connector-runtime should be pinnable to a different (e.g. already-released) Collector build without
+# retagging every other image in the build.
+COLLECTOR_TAG ?= $(TAG)
+COLLECTOR_REGISTRY ?= $(ORG)/odigos-enterprise-collector$(IMG_SUFFIX)
+
 .PHONY: build-connector-runtime
 build-connector-runtime:
 	@if [ -z "$(GITHUB_TOKEN)" ]; then \
@@ -131,6 +139,8 @@ build-connector-runtime:
 		--build-context odigos=$(ODIGOS_CONTEXT) \
 		--secret id=github_token,env=GITHUB_TOKEN \
 		--build-arg LD_FLAGS="$(LD_FLAGS)" \
+		--build-arg COLLECTOR_TAG="$(COLLECTOR_TAG)" \
+		--build-arg COLLECTOR_REGISTRY="$(COLLECTOR_REGISTRY)" \
 		. $(NO_CACHE)
 
 # The Lambda layer bundle and the Fargate agents bundle are no longer built here. Both are released by
@@ -264,6 +274,8 @@ push-connector-runtime:
 		--build-context odigos=$(ODIGOS_CONTEXT) \
 		--secret id=github_token,env=GITHUB_TOKEN \
 		--build-arg LD_FLAGS="$(LD_FLAGS)" \
+		--build-arg COLLECTOR_TAG="$(COLLECTOR_TAG)" \
+		--build-arg COLLECTOR_REGISTRY="$(COLLECTOR_REGISTRY)" \
 		--push \
 		. $(NO_CACHE)
 
