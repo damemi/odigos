@@ -136,6 +136,49 @@ Both environments are exercised the same way; the values differ, and staging's e
 appear on a production connector. The second command is the check for that — an empty column on a
 connector that has the managed-Collector capability means no Collector will be deployed.
 
+## Exposing the connector's OpAMP server
+
+A connector that manages a Collector runs an OpAMP server on `4320` (`connectors/base/opamp`), and the
+Collectors reach it through `connector-opamp-gateway`. Three things are generated for that, and **all
+three follow the capability** — the same condition `base.Run` starts the server on:
+
+- an `opamp` container port and an `opamp` Service port on `4320`;
+- `odigos.io/connector-id=<CR UID>` on the Deployment, its pod template and the Service — how the
+  gateway finds this connector's Service. By label, never by recomputing the workload name: that rule
+  lives here, and a copy of it in the gateway would be correct until the day it was not, with the failure
+  being a Collector routed at a name nothing answers on while every component reports healthy;
+- a NetworkPolicy admitting only gateway pods to `4320`.
+
+A connector with no Collector capability is generated exactly as it was before the feature existed — no
+extra port, no pod roll from a new template label, and no NetworkPolicy on a pod that never had one. The
+capability is read from `spec.collectors[]` or the compatibility annotation, so the plumbing appears
+identically for either; a list that was refused produces none of it.
+
+### The NetworkPolicy re-permits more than it restricts
+
+The OpAMP port carries **no authentication of its own**. The gateway authenticated the Collector's
+credential and the identity it asserts on `X-Odigos-*` headers is what the connector acts on — so the
+NetworkPolicy is what stands between that identity and anything on the pod network that could forge one.
+
+The non-obvious part is everything the policy has to allow back. A pod with no NetworkPolicy accepts
+everything; the moment one selects it, **every port not explicitly allowed is denied**. A policy
+mentioning only `4320` would take out the connector's GraphQL endpoint, its `odictl` endpoint and — on
+CNIs that police node-to-pod traffic — its own readiness and liveness probes, leaving the connector
+NotReady for a feature unrelated to either. So the policy allows `8080` and `23678` from anywhere, which
+is precisely what they already were: it narrows one port and changes nothing else.
+
+It is ingress-only. The connector dials out to Central, to Postgres and to the cloud provider, and an
+egress policy here would be a second thing to maintain and the first thing to break all of that.
+
+The gateway peer is selected by `odigos.io/component=connector-opamp-gateway`, with a namespace selector
+added **only** when `CONNECTOR_OPAMP_GATEWAY_NAMESPACE` names a different namespace: an empty
+`namespaceSelector` matches *every* namespace, which would admit any pod carrying the gateway's labels
+from anywhere in the cluster.
+
+The policy is owned by the CR and reconciled back if edited, and deleted when the connector stops
+managing a Collector — a policy describing a port nothing serves is a thing to explain the next time
+somebody debugs the connector's networking.
+
 ## Layout
 
 ```
@@ -157,6 +200,7 @@ internal/heartbeat/reader.go                  # best-effort pgx read of runtime_
 | `CONNECTOR_AZURE_IMAGE` | — | Image stamped onto Azure connector Deployments (overridable per-CR via `spec.runtime.image`) |
 | `CONNECTOR_AWS_FARGATE_AGENTS_IMAGE` | — | Optional override of the odigos-fargate-agents bundle, stamped as `ODIGOS_FARGATE_AGENTS_IMAGE` onto AWS connector Deployments (empty keeps the connector's compiled-in default) |
 | `CONNECTOR_OPAMP_ENDPOINT` | — | Public endpoint managed Collectors connect back to, stamped as `ODIGOS_OPAMP_ENDPOINT`. See below; empty disables managed-Collector deployment |
+| `CONNECTOR_OPAMP_GATEWAY_NAMESPACE` | *(the connector's own)* | Where `connector-opamp-gateway` pods run, for the NetworkPolicy that admits them. Set only when the gateway runs in another namespace |
 
 Flags: `--leader-elect`, `--metrics-bind-address` (`:8080`), `--health-probe-bind-address` (`:8081`).
 

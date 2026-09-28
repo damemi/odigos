@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos-enterprise/connectors/opamp"
 )
 
 // ForwardedHeaderPrefix is the namespace the gateway owns on a proxied request. Every header under it
@@ -273,18 +274,12 @@ func unavailable(r Refusal) Decision { return Decision{Outcome: OutcomeUnavailab
 
 // How connector-opamp-gateway finds a connector's OpAMP server.
 //
-// The gateway resolves the Service by LABEL rather than by recomputing the connector's workload name.
-// The naming rule lives in connector-runtime and is not this module's to know; a copy of it here would
-// be correct until the day it was not, and the failure would be a Collector routed to nothing with
-// every component reporting healthy.
+// Re-exported from connectors/opamp, which is where they are DEFINED: connector-runtime writes the label
+// and the port and must not depend on the base's whole surface to learn three strings. Named here too so
+// gateway code reads in one vocabulary rather than reaching across for a constant at a time.
 const (
-	// LabelConnectorID carries the connector CR UID on the generated Deployment and Service. Set by
-	// connector-runtime. Deliberately the same spelling as api.TagConnectorID on a Collector's cloud
-	// objects: both answer "which connector owns this", on either side of the account boundary.
-	LabelConnectorID = "odigos.io/connector-id"
-	// ServicePortName is the connector Service port the gateway proxies to.
-	ServicePortName = "opamp"
-	// DefaultServerPort is the connector's OpAMP listener (OPAMP_ROUTING, "Connector runtime"). Used
-	// when the Service declares no port by ServicePortName.
-	DefaultServerPort = 4320
+	LabelConnectorID = opamp.LabelConnectorID
+	ServicePortName  = opamp.ServicePortName
+	// DefaultServerPort is used when a Service declares no port by ServicePortName.
+	DefaultServerPort = opamp.ServerPort
 )

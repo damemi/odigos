@@ -129,3 +129,32 @@ func isLoopback(host string) bool {
 	h := strings.ToLower(strings.TrimSuffix(host, "."))
 	return h == "localhost" || strings.HasSuffix(h, ".localhost")
 }
+
+// How connector-opamp-gateway finds a connector's OpAMP server, and how that server is admitted to.
+//
+// These live in this module rather than in connectors/base because connector-runtime — which creates
+// the Service, the label and the NetworkPolicy — must not depend on the base's whole surface to learn
+// three strings. One definition, three consumers: the runtime that writes them, the gateway that reads
+// them, and the base that serves behind them.
+const (
+	// LabelConnectorID carries the connector CR UID on the generated Deployment and Service.
+	//
+	// The gateway resolves the Service by this LABEL rather than by recomputing the connector's workload
+	// name: the naming rule lives in connector-runtime, and a copy of it in the gateway would be correct
+	// until the day it was not — with the failure being a Collector routed to a name nothing answers on
+	// while every component reports healthy.
+	//
+	// Deliberately the same spelling as api.TagConnectorID on a Collector's cloud objects: both answer
+	// "which connector owns this", on either side of the account boundary.
+	LabelConnectorID = "odigos.io/connector-id"
+	// ServicePortName is the connector Service port the gateway proxies to. Matched by NAME, because a
+	// Service carries several ports and their order is not a contract.
+	ServicePortName = "opamp"
+	// ServerPort is the connector's OpAMP listener.
+	ServerPort = 4320
+
+	// LabelComponent / GatewayComponent select connector-opamp-gateway pods, which is what the
+	// connector's NetworkPolicy admits. The gateway's own chart sets them.
+	LabelComponent   = "odigos.io/component"
+	GatewayComponent = "connector-opamp-gateway"
+)

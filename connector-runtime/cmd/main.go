@@ -88,8 +88,12 @@ func main() {
 		// chart. Deliberately not defaulted: there is no address that is right for an unknown Central
 		// installation, and a wrong default would point every Collector in a customer's cloud account at
 		// somebody else's endpoint. Empty disables managed-Collector deployment with a reported reason.
-		OpAMPEndpoint:   os.Getenv("CONNECTOR_OPAMP_ENDPOINT"),
-		RequeueInterval: 30 * time.Second,
+		OpAMPEndpoint: os.Getenv("CONNECTOR_OPAMP_ENDPOINT"),
+		// Empty means the connector's own namespace. Set it only when the gateway runs elsewhere: an empty
+		// namespace selector in a NetworkPolicy means EVERY namespace, so BuildNetworkPolicy resolves this
+		// deliberately rather than leaving it to a default nobody would guess.
+		OpAMPGatewayNamespace: os.Getenv("CONNECTOR_OPAMP_GATEWAY_NAMESPACE"),
+		RequeueInterval:       30 * time.Second,
 	}
 
 	if err := (&controller.Reconciler{

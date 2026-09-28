@@ -10,6 +10,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -76,6 +77,10 @@ type Config struct {
 	// chart. Per environment, so it is the same for every connector in this installation. Empty
 	// disables managed-Collector deployment with a reported reason rather than silently.
 	OpAMPEndpoint string
+	// OpAMPGatewayNamespace is where connector-opamp-gateway pods run, for the NetworkPolicy that
+	// admits them to a connector's OpAMP port. Empty means the connector's own namespace, which is
+	// where the odigos-central chart puts both.
+	OpAMPGatewayNamespace string
 	// RequeueInterval controls how often status is refreshed from the heartbeat table.
 	RequeueInterval time.Duration
 	// CleanupTimeout is how long to wait for instrumentation rollback before removing the finalizer.
@@ -117,6 +122,10 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&cloudconnectorsv1.OdigosCloudConnector{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
+		// Owned so a hand-edited policy is reconciled back. This one is load-bearing: widening its
+		// gateway selector, or deleting it, opens an unauthenticated OpAMP port whose asserted identity
+		// anything on the pod network could then forge.
+		Owns(&networkingv1.NetworkPolicy{}).
 		Complete(r)
 }
 
@@ -216,6 +225,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	if err := r.ensureService(ctx, &cr, params); err != nil {
+		return ctrl.Result{}, err
+	}
+	if err := r.ensureNetworkPolicy(ctx, &cr, params); err != nil {
 		return ctrl.Result{}, err
 	}
 	deploymentReady, err := r.ensureDeployment(ctx, &cr, params)
@@ -413,6 +425,33 @@ func (r *Reconciler) ensureDeployment(ctx context.Context, cr *cloudconnectorsv1
 		return false, err
 	}
 	return dep.Status.ReadyReplicas >= 1, nil
+}
+
+// ensureNetworkPolicy converges the policy that admits only connector-opamp-gateway pods to the
+// connector's OpAMP port, and removes it when the connector no longer manages a Collector.
+//
+// Removed rather than left in place because a NetworkPolicy is not inert: it is what makes the pod
+// default-deny, and one describing a port nothing serves is a thing to explain the next time somebody
+// debugs the connector's networking.
+func (r *Reconciler) ensureNetworkPolicy(ctx context.Context, cr *cloudconnectorsv1.OdigosCloudConnector, params resources.DeploymentParams) error {
+	policy := resources.BuildNetworkPolicy(cr, params, r.Config.OpAMPGatewayNamespace)
+	if policy == nil {
+		existing := &networkingv1.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{Name: params.WorkloadName, Namespace: params.Namespace},
+		}
+		if err := r.Delete(ctx, existing); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("removing the OpAMP NetworkPolicy: %w", err)
+		}
+		return nil
+	}
+
+	if err := controllerutil.SetControllerReference(cr, policy, r.Scheme); err != nil {
+		return err
+	}
+	if err := r.Patch(ctx, policy, client.Apply, fieldOwner, client.ForceOwnership); err != nil {
+		return fmt.Errorf("applying the OpAMP NetworkPolicy: %w", err)
+	}
+	return nil
 }
 
 func (r *Reconciler) ensureService(ctx context.Context, cr *cloudconnectorsv1.OdigosCloudConnector, params resources.DeploymentParams) error {
