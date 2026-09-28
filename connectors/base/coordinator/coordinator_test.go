@@ -192,6 +192,20 @@ func TestDestinationCatalogDefaultsToOTLP(t *testing.T) {
 	}
 }
 
+func TestDestinationCatalogExposesManagedCollectorOnlyWhenCapabilityIsActive(t *testing.T) {
+	without := newCoord(collectorProvider{}, spec.Capabilities{})
+	if without.DestinationCatalog().IsSupported("odigos-managed-collector") {
+		t.Fatal("managed Collector marker exposed without an active Collector capability")
+	}
+
+	with := newCoord(collectorProvider{}, spec.Capabilities{Collectors: []spec.CollectorCapability{{
+		Type: collectorKind, Management: true,
+	}}})
+	if !with.DestinationCatalog().IsSupported("odigos-managed-collector") {
+		t.Fatal("managed Collector marker missing with an active Collector capability")
+	}
+}
+
 func TestEnrichWorkloads(t *testing.T) {
 	workloads := []api.DiscoveredWorkload{
 		{ServiceName: "svc-a", Kind: "cloud.workload-a", ExternalID: "ext:a"},

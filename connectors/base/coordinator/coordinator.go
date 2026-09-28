@@ -67,8 +67,10 @@ type Coordinator struct {
 	computePlatformDiscoveryTrigger chan struct{}
 	reconcileTrigger                chan struct{}
 	computePlatformTrigger          chan struct{}
-	observeTrigger                  chan struct{}
-	adoptTrigger                    chan struct{}
+	// collectorTrigger asks the managed-Collector loop for an out-of-band pass.
+	collectorTrigger chan struct{}
+	observeTrigger   chan struct{}
+	adoptTrigger     chan struct{}
 }
 
 func New(cfg config.Config, cfgMgr *config.Manager, st *store.Store, p api.Provider) *Coordinator {
@@ -89,6 +91,7 @@ func New(cfg config.Config, cfgMgr *config.Manager, st *store.Store, p api.Provi
 		computePlatformDiscoveryTrigger: make(chan struct{}, 1),
 		reconcileTrigger:                make(chan struct{}, 1),
 		computePlatformTrigger:          make(chan struct{}, 1),
+		collectorTrigger:                make(chan struct{}, 1),
 		observeTrigger:                  make(chan struct{}, 1),
 		adoptTrigger:                    make(chan struct{}, 1),
 	}
@@ -176,6 +179,9 @@ func (c *Coordinator) Start(ctx context.Context) {
 	go c.observeLoop(loopCtx)
 	go c.adoptLoop(loopCtx)
 	go c.computePlatformReconcileLoop(loopCtx)
+	// Beside the others, not inside either: a Collector is not discovered, is not instrumented, and is
+	// not gated on having a destination.
+	go c.collectorReconcileLoop(loopCtx)
 	// Workloads and compute platforms discover on independent loops over their own detector sets + stores.
 	go c.discoveryLoop(loopCtx, "computePlatform", c.activeComputePlatformDetectors, c.computePlatformDiscoveryTrigger)
 	c.discoveryLoop(loopCtx, "workload", c.activeWorkloadDetectors, c.workloadDiscoveryTrigger)

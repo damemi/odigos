@@ -98,3 +98,57 @@ type StartupVerifier interface {
 type Prerequisite interface {
 	EnsurePrerequisite(ctx context.Context) error
 }
+
+// Managed Collectors. Two interfaces, and the split IS the mutation gate.
+//
+// CollectorObserver reads and never writes; CollectorDeployer is the only thing that can change a
+// customer's infrastructure. The coordinator wires a deployer only for a type returned by
+// spec.ActiveCollectorDeploymentTypes — automatic mode — so a manual-mode Collector has no mutating
+// interface anywhere in the runtime, including during the shutdown drain. That is a stronger guarantee
+// than a mode check inside a deployer, because there is no code path to forget the check in.
+
+// CollectorNetwork describes a regional managed Collector and its host network.
+type CollectorNetwork struct {
+	// Region keys the managed_collectors row. NetworkID is the VPC/VNet hosting the regional Collector;
+	// it is metadata and remains part of the credential binding, but is not row identity.
+	Region    string
+	NetworkID string
+	// Kind is the collectors type (e.g. "aws.fargate-collector"), which decides the mode.
+	Kind string
+}
+
+// CollectorObserver reads back what is actually deployed for a collectors type, in BOTH modes.
+//
+// Optional. A provider that implements it is observed and configured; one that does not is absent from
+// the loop. Nothing here may mutate: in manual mode this is the only interface a Collector is reached
+// through, and Odigos never touches infrastructure the customer owns.
+type CollectorObserver interface {
+	// CollectorNetworks lists regional Collectors and their selected host networks, from discovery and
+	// placement. Called every pass because regional enablement or host placement can change live.
+	CollectorNetworks(ctx context.Context) ([]CollectorNetwork, error)
+	// ObserveCollector records one network's actual state. Read-only.
+	ObserveCollector(ctx context.Context, network CollectorNetwork) error
+}
+
+// CollectorDeployer converges a managed Collector's infrastructure. Wired ONLY for automatic mode.
+//
+// Per region rather than per pass, so one region's failure is isolated: a VPC with no egress route, or
+// a name conflict with an untagged Collector, must not stop every other region from
+// being converged.
+type CollectorDeployer interface {
+	// ConvergeCollector brings one regional Collector in its host network to the desired state.
+	ConvergeCollector(ctx context.Context, network CollectorNetwork) error
+	// TeardownCollector removes what Odigos created for one regional Collector. Gated per object by
+	// collectorownership.MayDelete, so an adopted or customer-named object survives it.
+	TeardownCollector(ctx context.Context, network CollectorNetwork) error
+}
+
+// CollectorProvider is the optional provider surface for managed Collectors: observers for every
+// declared type, and deployers only for the types that can be built.
+//
+// Keyed by type name, like Reconcilers, so the coordinator can intersect them with the customer's
+// capability instead of the provider deciding what is active.
+type CollectorProvider interface {
+	CollectorObservers() map[string]CollectorObserver
+	CollectorDeployers() map[string]CollectorDeployer
+}

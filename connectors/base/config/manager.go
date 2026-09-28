@@ -7,6 +7,8 @@ import (
 	"time"
 
 	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
 )
 
 var cfgLog = connlog.Subsystem("config")
@@ -36,6 +38,14 @@ func Defaults() map[string]any {
 		KeyReconcileInterval: "1m",
 		KeyShutdownTimeout:   "10m",
 		KeyDiscoveryTags:     map[string]any{},
+		// The managed-Collector tree. Declared here, provider-agnostically, so config.Manager
+		// accepts an updateConfig patch for it — the Manager rejects unknown top-level keys, and the
+		// per-region ids inside are discovered dynamically and cannot be declared in advance.
+		//
+		// Present on every connector, including one with no collectors capability: `enabled` is false,
+		// so it is inert, and making the defaults depend on capabilities would make the config surface
+		// differ between connectors for no gain.
+		collectorsettings.Key: collectorsettings.Defaults()[collectorsettings.Key],
 	}
 }
 
@@ -191,6 +201,14 @@ func validate(eff map[string]any) error {
 	if v, ok := eff[KeyDiscoveryTags]; ok {
 		if _, err := toStringMap(v); err != nil {
 			return fmt.Errorf("config %q: %w", KeyDiscoveryTags, err)
+		}
+	}
+	// Shape only. collectorsettings.Read is deliberately forgiving about individual fields — one
+	// mistyped value on one network must not stop a connector reconciling anything — so the gross
+	// error is caught here, at write time, where there is somebody to tell.
+	if v, ok := eff[collectorsettings.Key]; ok {
+		if _, isMap := v.(map[string]any); !isMap {
+			return fmt.Errorf("config %q must be an object with enabled/defaults/networks", collectorsettings.Key)
 		}
 	}
 	return nil
