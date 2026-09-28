@@ -32,6 +32,10 @@ type collectorTarget struct {
 func (c *Coordinator) collectorReconcileLoop(ctx context.Context) {
 	provider, ok := c.provider.(api.CollectorProvider)
 	if !ok {
+		// Not silent. A provider that declares a collectors type the customer then enabled, and
+		// implements no CollectorProvider, has a capability with nothing behind it — the same
+		// mismatch base.Run says out loud when the config plane is missing, and worth the same
+		// noise here rather than a loop that starts, finds no interface and returns.
 		if types := c.provider.Spec().CollectorTypes(c.cfg.Capabilities); len(types) > 0 {
 			coordLog.Warn("a managed-Collector capability is enabled but this provider implements "+
 				"no Collector observation or deployment, so no Collector is reconciled",
@@ -107,11 +111,24 @@ func (c *Coordinator) activeCollectorHandlers(provider api.CollectorProvider) (m
 	}
 
 	if _, configPlane := c.provider.(opamp.Desired); !configPlane && len(deployers) > 0 {
+		// Deployment without a config plane is the one combination that spends the customer's money
+		// for nothing: this loop would build Collectors in their account and, with no DesiredConfig
+		// to serve them, each would boot on the inert bootstrap fallback and stay there — running,
+		// billed, exporting nothing.
+		//
+		// This is the provider-level form of the contradiction Capabilities.Validate already refuses
+		// at the capability level ("Odigos would create a Collector it never configures, which serves
+		// an inert fallback for ever"). It has to be caught here as well, because a provider that
+		// implements half of this feature declares a perfectly valid capability: the spec check sees
+		// management enabled and cannot see that DesiredConfig is missing.
+		//
+		// Refused rather than degraded: there is no useful partial behaviour to fall back to.
 		coordLog.Error("refusing to deploy managed Collectors: this provider renders no Collector "+
 			"configuration, so anything deployed here would never be configured",
 			"deployable_types", len(deployers))
 		deployers = map[string]api.CollectorDeployer{}
 	}
+
 	return observers, deployers
 }
 
