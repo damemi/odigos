@@ -6,6 +6,8 @@
 // and customer intent that is meaningful across providers.
 package collectoringress
 
+import "github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
+
 const (
 	PortOTLPGRPC         = 4317
 	PortOTLPHTTP         = 4318
@@ -34,17 +36,11 @@ type Config struct {
 	MinFallbackPrefixLength      int
 }
 
-type Severity string
-
-type Problem struct {
-	Code     string
-	Severity Severity
-	Message  string
-}
+type Problem = collectorstatus.Problem
 
 const (
-	SeverityInfo     Severity = "Info"
-	SeverityPending  Severity = "Pending"
-	SeverityDegraded Severity = "Degraded"
-	SeverityError    Severity = "Error"
+	SeverityInfo     = collectorstatus.SeverityInfo
+	SeverityPending  = collectorstatus.SeverityPending
+	SeverityDegraded = collectorstatus.SeverityDegraded
+	SeverityError    = collectorstatus.SeverityError
 )
