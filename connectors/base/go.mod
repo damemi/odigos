@@ -15,6 +15,7 @@ require (
 	github.com/odigos-io/odigos/destinations v1.29.0
 	github.com/vektah/gqlparser/v2 v2.5.34
 	go.uber.org/zap v1.28.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -46,6 +47,5 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	sigs.k8s.io/controller-runtime v0.23.3 // indirect
 )

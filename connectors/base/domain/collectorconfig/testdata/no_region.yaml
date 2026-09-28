@@ -1,0 +1,60 @@
+receivers:
+    otlp:
+        protocols:
+            grpc:
+                endpoint: 0.0.0.0:4317
+            http:
+                endpoint: 0.0.0.0:4318
+processors:
+    batch:
+        send_batch_size: 8192
+        timeout: 200ms
+    memory_limiter:
+        check_interval: 1s
+        limit_mib: 1638
+        spike_limit_mib: 327
+    resourcedetection:
+        detectors:
+            - env
+            - ecs
+        override: false
+        timeout: 2s
+exporters:
+    otlp:
+        endpoint: otlp.vendor.example.com:4317
+        tls:
+            insecure: true
+extensions:
+    health_check:
+        endpoint: 0.0.0.0:13133
+service:
+    extensions:
+        - health_check
+    pipelines:
+        logs:
+            receivers:
+                - otlp
+            processors:
+                - memory_limiter
+                - resourcedetection
+                - batch
+            exporters:
+                - otlp
+        metrics:
+            receivers:
+                - otlp
+            processors:
+                - memory_limiter
+                - resourcedetection
+                - batch
+            exporters:
+                - otlp
+        traces:
+            receivers:
+                - otlp
+            processors:
+                - memory_limiter
+                - resourcedetection
+                - batch
+            exporters:
+                - otlp

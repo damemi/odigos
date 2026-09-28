@@ -1,0 +1,338 @@
+// Package collectorconfig renders the complete OpenTelemetry configuration a managed Collector runs,
+// and the hash that decides whether it needs pushing.
+//
+// Pure — no I/O, no provider SDK types, no clock. The same Input renders the same bytes, because the
+// hash of those bytes is what tells the connector a push is needed: a document that varied between
+// renders would push on every reconcile, and steady state is meant to be zero pushes.
+//
+// The Supervisor merges this document first and its own snippets after (collector/managed/supervisor.yaml):
+// `$REMOTE_CONFIG`, then own-telemetry, then the OpAMP extension, then guardrails.yaml. So nothing here
+// may write `service.telemetry` — the Supervisor normalizes and rewrites that whole subtree for its own
+// metrics — and nothing here can remove `odigos_enterprise_auth`, which guardrails.yaml puts back last.
+package collectorconfig
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+
+	"gopkg.in/yaml.v3"
+
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+)
+
+// Component names as they appear in the rendered document.
+const (
+	receiverOTLP          = "otlp"
+	processorMemoryLimit  = "memory_limiter"
+	processorResourceDet  = "resourcedetection"
+	processorResource     = "resource"
+	processorBatch        = "batch"
+	exporterOTLP          = "otlp"
+	exporterOTLPHTTP      = "otlphttp"
+	exporterNop           = "nop"
+	extensionHealthCheck  = "health_check"
+	defaultResourceDetect = "env"
+)
+
+// batch tuning. Larger than the per-workload Lambda values because this is a shared gateway rather than
+// one process's sidecar: it aggregates many workloads, so batches fill on size long before the timeout.
+const (
+	batchSendBatchSize = 8192
+	batchTimeout       = "200ms"
+)
+
+// resourceDetectionTimeout bounds the platform metadata lookup. Bounded because the detector runs at
+// startup and an unanswered metadata endpoint would otherwise hold the Collector short of ready, which
+// on a load balancer means a target that never passes its health check.
+const resourceDetectionTimeout = "2s"
+
+// Input is everything the rendered document depends on. Deliberately a plain value: two equal Inputs
+// must render identical bytes.
+//
+// There is no network id here because a Collector is identified by region. Its host network reaches this
+// function only through values that actually change the document — the regional TLS settings below
+// and the destination set — and a field that did not change the output would make the hash claim a
+// difference where the Collector has none.
+type Input struct {
+	// Destinations are the connector's export targets. Empty is legal and renders an export-less
+	// document rather than nothing: unlike workload instrumentation, a Collector is not gated on having
+	// a destination, and one that is running and reachable is what lets a destination be added
+	// later as a configuration push instead of a redeployment.
+	Destinations []destination.Destination
+	// Region the Collector runs in, inserted as cloud.region on telemetry that does not carry one.
+	// Empty omits the resource processor entirely.
+	Region string
+	// MemoryMiB is the memory its workload was allocated. memory_limiter is derived from it, which is
+	// why a size change is a configuration push as well as a workload change.
+	MemoryMiB int
+	// TLSMode decides whether the RECEIVERS terminate TLS. Only collectoringress.TLSCollector does;
+	// in every other mode something in front terminates and the receivers are plaintext.
+	TLSMode collectoringress.TLSMode
+	// CertificateFile / PrivateKeyFile are the mounted paths, required by TLSCollector and ignored
+	// otherwise.
+	CertificateFile string
+	PrivateKeyFile  string
+	// ResourceDetectors are the resourcedetection detectors for this platform (e.g. "ecs", "gcp",
+	// "azure"). Supplied by the caller because the detector names are provider knowledge and this
+	// package holds none. "env" is always included.
+	ResourceDetectors []string
+}
+
+// Document is a rendered configuration and its identity.
+type Document struct {
+	// YAML is the document to push. Empty when rendering was refused.
+	YAML string
+	// Hash is the SHA-256 of YAML. Stored per Collector; a push happens only when it differs, so
+	// steady state is zero pushes.
+	Hash string
+}
+
+// Render builds the Collector's desired configuration.
+//
+// A SeverityError problem means nothing was rendered and the returned Document is empty — refusing is
+// safe, because the Collector keeps running on its last good configuration and the Supervisor's
+// automatic_config_rollback never has to be exercised.
+func Render(in Input) (Document, []collectorstatus.Problem) {
+	memory, problems := DeriveMemoryLimits(in.MemoryMiB)
+	if collectorstatus.HasError(problems) {
+		return Document{}, problems
+	}
+
+	receivers, receiverProblems := renderReceivers(in)
+	problems = append(problems, receiverProblems...)
+	if collectorstatus.HasError(problems) {
+		return Document{}, problems
+	}
+
+	exporters, exporterNames, signals := renderExporters(in.Destinations)
+	pipelines := renderPipelines(signals, exporterNames, processorNames(in))
+	if len(pipelines) == 0 {
+		// Unreachable through ResolveOTLPTarget, which falls back to traces-only, and checked anyway:
+		// a Collector with no pipeline accepts telemetry on its receivers and drops it silently, which
+		// is indistinguishable from a healthy Collector whose destination is broken.
+		return Document{}, append(problems, collectorstatus.Problem{
+			Code:     "CollectorNoPipelines",
+			Severity: collectorstatus.SeverityError,
+			Message: "refusing to render a Collector configuration with no pipeline: it would accept telemetry " +
+				"on its receivers and drop all of it while reporting healthy",
+		})
+	}
+
+	doc := document{
+		Receivers:  receivers,
+		Processors: renderProcessors(in, memory),
+		Exporters:  exporters,
+		Extensions: map[string]any{
+			// The load balancer's target health check. Bound wide because the check arrives from
+			// the load balancer, not from inside the task.
+			extensionHealthCheck: map[string]any{
+				"endpoint": listenOn(collectoringress.PortHealth),
+			},
+		},
+		Service: service{
+			Extensions: []string{extensionHealthCheck},
+			Pipelines:  pipelines,
+		},
+	}
+
+	out, err := yaml.Marshal(doc)
+	if err != nil {
+		return Document{}, append(problems, collectorstatus.Problem{
+			Code:     "CollectorConfigUnrenderable",
+			Severity: collectorstatus.SeverityError,
+			Message:  fmt.Sprintf("could not render the Collector configuration: %v", err),
+		})
+	}
+
+	sum := sha256.Sum256(out)
+	return Document{YAML: string(out), Hash: hex.EncodeToString(sum[:])}, problems
+}
+
+// document is the rendered file. Struct order is the document's order; every nested collection is a map,
+// which gopkg.in/yaml.v3 emits with sorted keys — so the bytes depend on the input and nothing else.
+type document struct {
+	Receivers  map[string]any `yaml:"receivers"`
+	Processors map[string]any `yaml:"processors"`
+	Exporters  map[string]any `yaml:"exporters"`
+	Extensions map[string]any `yaml:"extensions"`
+	Service    service        `yaml:"service"`
+}
+
+// service deliberately has no telemetry field. The Supervisor rewrites service::telemetry for its own
+// metrics after merging this document, so anything written there is either overwritten or fought over.
+type service struct {
+	Extensions []string            `yaml:"extensions"`
+	Pipelines  map[string]pipeline `yaml:"pipelines"`
+}
+
+type pipeline struct {
+	Receivers  []string `yaml:"receivers"`
+	Processors []string `yaml:"processors"`
+	Exporters  []string `yaml:"exporters"`
+}
+
+func listenOn(port int) string { return fmt.Sprintf("0.0.0.0:%d", port) }
+
+// renderReceivers builds the OTLP receiver on both transports.
+//
+// Bound to 0.0.0.0, unlike the in-Lambda collector's localhost: this one exists to be reached from other
+// workloads on the network. What may reach it is the security group, which is the authorization boundary
+// in v1 — there is no receiver-side authentication to configure here.
+func renderReceivers(in Input) (map[string]any, []collectorstatus.Problem) {
+	grpc := map[string]any{"endpoint": listenOn(collectoringress.PortOTLPGRPC)}
+	http := map[string]any{"endpoint": listenOn(collectoringress.PortOTLPHTTP)}
+
+	if in.TLSMode == collectoringress.TLSCollector {
+		if in.CertificateFile == "" || in.PrivateKeyFile == "" {
+			return nil, []collectorstatus.Problem{{
+				Code:     "CollectorTLSMaterialMissing",
+				Severity: collectorstatus.SeverityError,
+				Message: "tls.mode is \"collector\", so the Collector terminates TLS itself, but no certificate " +
+					"and key paths were given. Rendering plaintext receivers instead would publish a TLS endpoint " +
+					"that answers in the clear",
+			}}
+		}
+		tls := map[string]any{"cert_file": in.CertificateFile, "key_file": in.PrivateKeyFile}
+		grpc["tls"] = tls
+		http["tls"] = tls
+	}
+
+	return map[string]any{
+		receiverOTLP: map[string]any{
+			"protocols": map[string]any{"grpc": grpc, "http": http},
+		},
+	}, nil
+}
+
+// renderProcessors builds the processor set. The pipeline ORDER is in processorNames; this only defines
+// them.
+func renderProcessors(in Input, memory MemoryLimits) map[string]any {
+	processors := map[string]any{
+		processorMemoryLimit: map[string]any{
+			"check_interval":  CheckInterval,
+			"limit_mib":       memory.LimitMiB,
+			"spike_limit_mib": memory.SpikeLimitMiB,
+		},
+		processorResourceDet: map[string]any{
+			"detectors": detectors(in.ResourceDetectors),
+			"timeout":   resourceDetectionTimeout,
+			// The single most important value in this document for a gateway Collector. It defaults to
+			// TRUE upstream, which would stamp this Collector's own region, host and task identity over
+			// the identity every workload sent — so telemetry from a hundred services would arrive
+			// describing one Collector. False keeps what the workload sent and fills only what is absent.
+			"override": false,
+		},
+		processorBatch: map[string]any{
+			"send_batch_size": batchSendBatchSize,
+			"timeout":         batchTimeout,
+		},
+	}
+
+	if in.Region != "" {
+		processors[processorResource] = map[string]any{
+			"attributes": []any{
+				// insert, never upsert: the same rule as resourcedetection's override above. Odigos knows
+				// the region it deployed into, and uses it only where the telemetry did not say.
+				map[string]any{"key": "cloud.region", "value": in.Region, "action": "insert"},
+			},
+		}
+	}
+	return processors
+}
+
+// processorNames is the pipeline order, and the order is the contract:
+//
+//   - memory_limiter FIRST, so an export backlog is shed at the door rather than after it has been
+//     charged to the same budget everything else allocates from.
+//   - resourcedetection and resource before batch, so attributes are attached to spans individually
+//     rather than to whatever batch they landed in.
+//   - batch LAST, immediately before the exporters, which is what it exists to feed.
+func processorNames(in Input) []string {
+	names := []string{processorMemoryLimit, processorResourceDet}
+	if in.Region != "" {
+		names = append(names, processorResource)
+	}
+	return append(names, processorBatch)
+}
+
+// detectors always includes env, so OTEL_RESOURCE_ATTRIBUTES on the Collector's workload is honored
+// whatever the platform offers, and dedupes so a caller passing "env" does not declare it twice.
+func detectors(configured []string) []string {
+	out := []string{defaultResourceDetect}
+	seen := map[string]bool{defaultResourceDetect: true}
+	for _, d := range configured {
+		if d == "" || seen[d] {
+			continue
+		}
+		seen[d] = true
+		out = append(out, d)
+	}
+	return out
+}
+
+// renderExporters builds the exporter set and reports which signals the destination accepts.
+//
+// Reuses domain/destination for both resolution and headers — the headers being exactly what a
+// rendered-per-workload configuration could not express, because a credential is a map and an
+// environment variable is a scalar.
+func renderExporters(dests []destination.Destination) (map[string]any, []string, destination.OTLPTarget) {
+	target, found := destination.ResolveOTLPTarget(dests)
+	if !found {
+		// No destination is not an error. The Collector runs, its receivers accept, its health check
+		// passes and its load balancer targets go healthy — so adding a destination later is a
+		// configuration push rather than a redeployment. nop is what the Supervisor's own first-boot
+		// fallback uses for the same reason.
+		return map[string]any{exporterNop: map[string]any{}}, []string{exporterNop},
+			destination.OTLPTarget{Traces: true, Metrics: true, Logs: true}
+	}
+
+	headers := destination.ResolveOTLPHeaders(dests)
+
+	// The transport the destination actually configured, not a formatting choice: otlp and otlphttp are
+	// different components with different endpoint grammars — host:port against a scheme-qualified URL.
+	if target.Endpoint != "" {
+		cfg := map[string]any{
+			"endpoint": target.Endpoint,
+			// tls.insecure is the gRPC exporter's, and applies to the hop from the Collector to the
+			// customer's destination — nothing to do with what the receivers terminate.
+			"tls": map[string]any{"insecure": target.Insecure},
+		}
+		if len(headers) > 0 {
+			cfg["headers"] = headers
+		}
+		return map[string]any{exporterOTLP: cfg}, []string{exporterOTLP}, target
+	}
+
+	cfg := map[string]any{"endpoint": target.HTTPEndpoint}
+	if len(headers) > 0 {
+		cfg["headers"] = headers
+	}
+	return map[string]any{exporterOTLPHTTP: cfg}, []string{exporterOTLPHTTP}, target
+}
+
+// renderPipelines builds one pipeline per signal the destination accepts, and none for a signal it does
+// not.
+//
+// Declaring all three unconditionally is the mistake the per-workload rendering documents: a signal the
+// destination cannot take is received, batched, and fails on export — repeatedly, at volume, against a
+// backend that will never accept it.
+func renderPipelines(signals destination.OTLPTarget, exporters, processors []string) map[string]pipeline {
+	pipelines := map[string]pipeline{}
+	build := func(name string, accepted bool) {
+		if !accepted {
+			return
+		}
+		pipelines[name] = pipeline{
+			Receivers:  []string{receiverOTLP},
+			Processors: processors,
+			Exporters:  exporters,
+		}
+	}
+	build("traces", signals.Traces)
+	build("metrics", signals.Metrics)
+	build("logs", signals.Logs)
+	return pipelines
+}
