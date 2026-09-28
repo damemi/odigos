@@ -17,6 +17,12 @@ func (c Catalog) ValidateWithCatalog(dest Destination) error {
 	if err := dest.Validate(); err != nil {
 		return err
 	}
+	if normalized == CatalogTypeManagedCollector {
+		return validateManagedCollector(dest)
+	}
+	if strings.TrimSpace(dest.Region) != "" {
+		return fmt.Errorf("destination type %q is global and cannot set region", dest.Type)
+	}
 	if err := destinations.Load(); err != nil {
 		return fmt.Errorf("load destination catalog: %w", err)
 	}
@@ -65,6 +71,41 @@ func (c Catalog) ValidateWithCatalog(dest Destination) error {
 	}
 	if len(unsupportedSignals) > 0 {
 		return fmt.Errorf("destination type %q does not support signals: %s", dest.Type, strings.Join(unsupportedSignals, ", "))
+	}
+	return nil
+}
+
+func validateManagedCollector(dest Destination) error {
+	region := strings.TrimSpace(dest.Region)
+	if region == "" {
+		return fmt.Errorf("destination type %q requires a region", dest.Type)
+	}
+	if region != dest.Region {
+		return fmt.Errorf("destination type %q region must not contain leading or trailing whitespace", dest.Type)
+	}
+	if len(dest.Config) != 0 {
+		return fmt.Errorf("destination type %q does not accept configuration fields", dest.Type)
+	}
+	return nil
+}
+
+// ValidateDestinations validates a complete destination set. Single-destination validation cannot
+// enforce the regional marker's uniqueness. A marker may be created before its global terminal is
+// configured; routing reports an error until an applicable terminal exists.
+func (c Catalog) ValidateDestinations(dests []Destination) error {
+	markers := make(map[string]string)
+	for _, dest := range dests {
+		if err := c.ValidateWithCatalog(dest); err != nil {
+			return err
+		}
+		if strings.EqualFold(strings.TrimSpace(dest.Type), CatalogTypeManagedCollector) {
+			region := strings.TrimSpace(dest.Region)
+			if previous, exists := markers[region]; exists {
+				return fmt.Errorf("managed Collector marker is already configured for region %q (destinations %q and %q)",
+					region, previous, dest.Name)
+			}
+			markers[region] = dest.Name
+		}
 	}
 	return nil
 }

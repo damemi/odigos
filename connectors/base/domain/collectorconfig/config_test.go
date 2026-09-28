@@ -412,6 +412,27 @@ func TestNoDestinationStillRuns(t *testing.T) {
 	}
 }
 
+func TestManagedCollectorMarkerIsNeverRenderedAsExporter(t *testing.T) {
+	doc := render(t, input(func(in *Input) {
+		in.Destinations = []destination.Destination{
+			{
+				Name: "regional-route", Type: destination.CatalogTypeManagedCollector, Region: "eu-west-1",
+				Signals: []string{"TRACES"},
+				// Validation normally rejects marker fields; the renderer remains defensive because it may
+				// receive rows loaded from an older database before validation was introduced.
+				Config: map[string]any{"OTLP_GRPC_ENDPOINT": "must-not-export"},
+			},
+			otlpDestination(nil),
+		}
+	})).YAML
+	if strings.Contains(doc, "must-not-export") {
+		t.Fatal("managed Collector marker leaked into the rendered exporter")
+	}
+	if !strings.Contains(doc, "otlp.vendor.example.com:4317") {
+		t.Fatal("global OTLP terminal was not rendered")
+	}
+}
+
 // TestProcessorOrderIsTheContract: memory_limiter first so a backlog is shed at the door, batch last
 // because it exists to feed the exporters, and attribute processors in between so attributes attach to
 // spans rather than to whatever batch they landed in.

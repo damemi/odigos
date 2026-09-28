@@ -135,17 +135,67 @@ func (s *Store) DeleteDestination(ctx context.Context, name string) error {
 // the destination accepts) from the configured destinations. Connector-wide and provider-agnostic:
 // workload instrumentation across providers uses it to export only the signals the destination implements.
 // Returns found=false when no usable OTLP destination exists.
+//
+// Equivalent to OTLPExportTargetForNetwork with no network, and implemented that way rather than
+// separately: a caller that does not know its workload's network must get the same answer the
+// network-aware path gives for a workload that has none.
 func (s *Store) OTLPExportTarget(ctx context.Context) (domaindest.OTLPTarget, bool, error) {
+	routing, err := s.OTLPRouting(ctx, "")
+	return routing.Target, routing.Found, err
+}
+
+// OTLPExportTargetForNetwork resolves where a workload on `network` exports: the Collector serving that
+// network when one is configured, otherwise the destination directly. Pass an empty network for a
+// workload that has none.
+func (s *Store) OTLPExportTargetForNetwork(ctx context.Context, network string) (domaindest.OTLPTarget, bool, error) {
+	routing, err := s.OTLPRouting(ctx, network)
+	return routing.Target, routing.Found, err
+}
+
+// OTLPRouting is the single resolution every plan, instrumentor and observer reads through.
+//
+// One function rather than one per consumer, because the endpoint Odigos APPLIES and the endpoint Odigos
+// COMPARES AGAINST have to be the same value: a report that resolved differently from the instrumentor
+// would call every correctly-routed workload drifted.
+//
+// It also carries the headers, so the endpoint and the credential are decided together — a workload
+// pointed at a Collector while still holding the destination's credential would hand that credential to
+// every instrumented workload in the account.
+func (s *Store) OTLPRouting(ctx context.Context, network string) (domaindest.Routing, error) {
+	dests, err := s.destinationsForResolution(ctx)
+	if err != nil {
+		return domaindest.Routing{}, err
+	}
+	collectors, err := s.CollectorTargets(ctx)
+	if err != nil {
+		return domaindest.Routing{}, err
+	}
+	return domaindest.ResolveRouting(dests, collectors, network), nil
+}
+
+// CollectorTargets returns one routing entry per network that has managed-Collector configuration.
+//
+// Empty today: the managed_collectors table does not exist yet, so every workload resolves to its
+// destination directly — exactly what happened before this seam existed. The accessor is here so that
+// landing the table is a change to this function and nothing else; every consumer already reads through
+// the resolution it feeds.
+//
+// It returns configuration only, never health. Selection must not change on whether a Collector is
+// currently answering, and domaindest.CollectorTarget has nowhere to put it.
+func (s *Store) CollectorTargets(_ context.Context) ([]domaindest.CollectorTarget, error) {
+	return nil, nil
+}
+
+func (s *Store) destinationsForResolution(ctx context.Context) ([]domaindest.Destination, error) {
 	recs, err := s.ListDestinations(ctx)
 	if err != nil {
-		return domaindest.OTLPTarget{}, false, err
+		return nil, err
 	}
 	dests := make([]domaindest.Destination, 0, len(recs))
 	for _, rec := range recs {
 		dests = append(dests, DestinationRecordToDomain(rec))
 	}
-	target, found := domaindest.ResolveOTLPTarget(dests)
-	return target, found, nil
+	return dests, nil
 }
 
 // OTLPExportHeaders returns the per-request headers the connector's OTLP destination requires — its
@@ -156,15 +206,17 @@ func (s *Store) OTLPExportTarget(ctx context.Context) (domaindest.OTLPTarget, bo
 // off the raw Destination.Config the generated model already carries through, converted in code by
 // domaindest.ResolveOTLPHeaders, which selects the same destination OTLPExportTarget resolves.
 func (s *Store) OTLPExportHeaders(ctx context.Context) (map[string]string, error) {
-	recs, err := s.ListDestinations(ctx)
-	if err != nil {
-		return nil, err
-	}
-	dests := make([]domaindest.Destination, 0, len(recs))
-	for _, rec := range recs {
-		dests = append(dests, DestinationRecordToDomain(rec))
-	}
-	return domaindest.ResolveOTLPHeaders(dests), nil
+	return s.OTLPExportHeadersForNetwork(ctx, "")
+}
+
+// OTLPExportHeadersForNetwork returns the headers a workload on `network` must send: the destination's
+// credential when it exports directly, and none when it routes through a Collector, which holds that
+// credential itself.
+//
+// Resolved through the same call as the endpoint so the two can never disagree.
+func (s *Store) OTLPExportHeadersForNetwork(ctx context.Context, network string) (map[string]string, error) {
+	routing, err := s.OTLPRouting(ctx, network)
+	return routing.Headers, err
 }
 
 func DestinationRecordToDomain(rec DestinationRecord) domaindest.Destination {

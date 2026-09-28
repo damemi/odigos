@@ -285,6 +285,18 @@ func (c *Coordinator) DestinationCatalog() domaindest.Catalog {
 // OTLPExportTarget resolves the connector's OTLP export target (endpoint + which signals the destination
 // accepts). Connector-wide: provider instrumentation exports only the supported signals so it never sends
 // a signal the destination doesn't implement (e.g. metrics/logs to a traces-only backend).
+//
+// Equivalent to OTLPRouting with no network. Prefer OTLPRouting where the workload's network is known.
 func (c *Coordinator) OTLPExportTarget(ctx context.Context) (domaindest.OTLPTarget, bool, error) {
 	return c.store.OTLPExportTarget(ctx)
+}
+
+// OTLPRouting resolves where a workload on `network` exports, and why.
+//
+// The one resolution plans, instrumentors and observers share. Reporting reads the same answer
+// applying reads, so a workload can never be described as being on a route it is not on. Pass an empty
+// network for a workload that has none — a Lambda without VpcConfig, which cannot reach an internal
+// endpoint at all.
+func (c *Coordinator) OTLPRouting(ctx context.Context, network string) (domaindest.Routing, error) {
+	return c.store.OTLPRouting(ctx, network)
 }

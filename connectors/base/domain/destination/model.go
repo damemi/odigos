@@ -9,6 +9,7 @@ func DestinationFromCreateInput(in model.CreateDestinationInput) Destination {
 	dest := Destination{
 		Name:    in.Name,
 		Type:    in.Type,
+		Region:  stringValue(in.Region),
 		Config:  copyStringAnyMap(in.Config),
 		Signals: signalsFromTelemetry(in.Signals),
 	}
@@ -25,6 +26,9 @@ func (d *Destination) ApplyUpdateInput(in model.UpdateDestinationInput) {
 	}
 	if in.Type != nil {
 		d.Type = *in.Type
+	}
+	if in.Region != nil {
+		d.Region = *in.Region
 	}
 	if in.Config != nil {
 		d.Config = copyStringAnyMap(in.Config)
@@ -46,9 +50,24 @@ func (d *Destination) ToDestinationModel() *model.Destination {
 	return &model.Destination{
 		Name:    d.Name,
 		Type:    d.Type,
+		Region:  stringPtrIfNotEmpty(d.Region),
 		Config:  cfg,
 		Signals: telemetryFromSignals(d.Signals),
 	}
+}
+
+func stringValue(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
+func stringPtrIfNotEmpty(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
 }
 
 // ToDeletePayload returns the GraphQL delete payload for a deleted destination.

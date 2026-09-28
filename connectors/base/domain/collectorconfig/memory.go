@@ -31,6 +31,7 @@ const (
 	// MinAllocationMiB is the smallest allocation that produces usable limits. Below it the derived
 	// numbers are small enough that the Collector refuses data as soon as it accepts a batch, which
 	// reads as a broken destination rather than as a Collector that was never given enough memory.
+	// smallest documented size is 1024.
 	MinAllocationMiB = 256
 )
 

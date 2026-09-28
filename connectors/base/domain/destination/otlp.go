@@ -45,6 +45,11 @@ type OTLPTarget struct {
 // backend implements, and it avoids exporting to an unimplemented service.
 func ResolveOTLPTarget(dests []Destination) (OTLPTarget, bool) {
 	for _, d := range dests {
+		// The managed-collector destination is routing intent, not an OTLP terminal. Keep this guard
+		// here (rather than relying on validation) so a malformed marker can never become an exporter.
+		if isManagedCollectorType(d.Type) {
+			continue
+		}
 		grpcEP := configString(d.Config, configOTLPGRPCEndpoint)
 		httpEP := configString(d.Config, configOTLPHTTPEndpoint)
 		if grpcEP == "" && httpEP == "" {

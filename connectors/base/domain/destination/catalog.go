@@ -12,11 +12,21 @@ import (
 // CatalogTypeOTLP is the default Odigos destination type when a provider does not override supported types.
 const CatalogTypeOTLP = "otlp"
 
+// CatalogTypeManagedCollector is a routing intent marker. It is not an exporter and never becomes
+// a Collector exporter configuration; its Region selects the managed Collector serving that region.
+const CatalogTypeManagedCollector = "odigos-managed-collector"
+
+const ManagedCollectorDisplayName = "Odigos Managed Regional Collector"
+
+// CatalogManagedCollectorDisplayName is the explicit catalog-prefixed alias for API consumers.
+const CatalogManagedCollectorDisplayName = ManagedCollectorDisplayName
+
 var defaultSupportedTypes = []string{CatalogTypeOTLP}
 
 // Catalog is the set of Odigos destination type keys a connector accepts.
 type Catalog struct {
-	supportedTypes []string
+	supportedTypes      []string
+	managedCollectorCap bool
 }
 
 // DefaultCatalog returns the base default catalog (OTLP only).
@@ -46,6 +56,21 @@ func NewCatalog(types []string) Catalog {
 	return Catalog{supportedTypes: normalized}
 }
 
+// NewCatalogWithManagedCollector enables the connector-owned regional routing marker in addition to
+// the provider's terminal destination types. Providers should opt in only when they implement managed
+// Collector management; ordinary connectors continue to expose their existing catalog unchanged.
+func NewCatalogWithManagedCollector(types []string) Catalog {
+	c := NewCatalog(types)
+	c.managedCollectorCap = true
+	return c
+}
+
+// WithManagedCollector returns a catalog that explicitly supports the regional routing marker.
+func (c Catalog) WithManagedCollector() Catalog {
+	c.managedCollectorCap = true
+	return c
+}
+
 // SupportedTypes returns a copy of the accepted Odigos catalog destination type keys.
 func (c Catalog) SupportedTypes() []string {
 	out := make([]string, len(c.supportedTypes))
@@ -56,6 +81,9 @@ func (c Catalog) SupportedTypes() []string {
 // IsSupported reports whether destType is accepted by this catalog (case-insensitive).
 func (c Catalog) IsSupported(destType string) bool {
 	key := strings.ToLower(strings.TrimSpace(destType))
+	if key == CatalogTypeManagedCollector && c.managedCollectorCap {
+		return true
+	}
 	for _, t := range c.supportedTypes {
 		if t == key {
 			return true
@@ -125,7 +153,27 @@ func (c Catalog) SupportedCatalogDestinationTypes() ([]*model.DestinationType, e
 		}
 		out = append(out, DestinationTypeFromCatalog(cfg))
 	}
+	// The marker is connector-owned routing intent, rather than an OSS destination catalog entry. It is
+	// offered only when the connector has an active managed-Collector capability.
+	if c.managedCollectorCap {
+		out = append(out, managedCollectorType())
+	}
 	return out, nil
+}
+
+func managedCollectorType() *model.DestinationType {
+	trueValue := true
+	return &model.DestinationType{
+		Type:        CatalogTypeManagedCollector,
+		DisplayName: ManagedCollectorDisplayName,
+		SupportedSignals: &model.DestinationSupportedSignals{
+			Traces:   trueValue,
+			Metrics:  trueValue,
+			Logs:     trueValue,
+			Profiles: trueValue,
+		},
+		Fields: []*model.DestinationField{},
+	}
 }
 
 func (c Catalog) supportedTypesLabel() string {
