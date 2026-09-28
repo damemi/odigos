@@ -282,6 +282,19 @@ func (s *Store) RevokeCollectorCredentialsForRecreatedConnector(ctx context.Cont
 			return revoked, fmt.Errorf("revoking credential %s from a previous connector UID: %w", victim.CredentialID, err)
 		}
 		revoked = append(revoked, victim)
+
+		// Drop the Collector row's pointer to the credential just revoked. Leaving it would report the
+		// Collector as configured when nothing can authenticate it, and would let a later rotation read a
+		// revoked id as the credential to supersede. Best-effort: the revocation is what closes the
+		// access, and failing the sweep over a stale pointer would leave the REST of the predecessor's
+		// credentials live.
+		if cleared, err := s.ClearCollectorCredential(ctx, victim.Binding.CollectorID); err != nil {
+			credentialLog.Warn("could not clear a revoked credential from its Collector record",
+				"connector", s.connectorName, "collector_id", victim.Binding.CollectorID, "error", err)
+		} else if cleared > 0 {
+			credentialLog.Info("cleared a revoked credential from its Collector record",
+				"connector", s.connectorName, "collector_id", victim.Binding.CollectorID, "rows", cleared)
+		}
 	}
 	return revoked, nil
 }

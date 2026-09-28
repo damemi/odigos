@@ -34,7 +34,7 @@ type Coordinator struct {
 	workloadKinds []string
 	// computePlatformKinds: compute-platform assignment kinds (createSource for agent install on managed environments).
 	computePlatformKinds []string
-	destCatalog  domaindest.Catalog
+	destCatalog          domaindest.Catalog
 
 	discoveryReady atomic.Bool
 	authenticated  atomic.Bool
@@ -63,30 +63,34 @@ type Coordinator struct {
 	// a manual RequestCleanup from mutating provider resources concurrently with a loop tick.
 	reconcileMu sync.Mutex
 
-	workloadDiscoveryTrigger chan struct{}
-	computePlatformDiscoveryTrigger  chan struct{}
-	reconcileTrigger         chan struct{}
-	computePlatformTrigger           chan struct{}
-	observeTrigger           chan struct{}
-	adoptTrigger             chan struct{}
+	workloadDiscoveryTrigger        chan struct{}
+	computePlatformDiscoveryTrigger chan struct{}
+	reconcileTrigger                chan struct{}
+	computePlatformTrigger          chan struct{}
+	observeTrigger                  chan struct{}
+	adoptTrigger                    chan struct{}
 }
 
 func New(cfg config.Config, cfgMgr *config.Manager, st *store.Store, p api.Provider) *Coordinator {
+	destCatalog := domaindest.NewCatalog(api.SupportedDestinationTypes(p))
+	if len(p.Spec().CollectorTypes(cfg.Capabilities)) > 0 {
+		destCatalog = destCatalog.WithManagedCollector()
+	}
 	return &Coordinator{
-		cfg:           cfg,
-		cfgMgr:        cfgMgr,
-		store:         st,
-		provider:      p,
-		workloadKinds: p.SupportedWorkloadKinds(),
-		computePlatformKinds:  p.SupportedComputePlatformKinds(),
-		destCatalog:   domaindest.NewCatalog(api.SupportedDestinationTypes(p)),
+		cfg:                  cfg,
+		cfgMgr:               cfgMgr,
+		store:                st,
+		provider:             p,
+		workloadKinds:        p.SupportedWorkloadKinds(),
+		computePlatformKinds: p.SupportedComputePlatformKinds(),
+		destCatalog:          destCatalog,
 		// buffered + coalescing: a burst queues at most one extra pass per loop.
-		workloadDiscoveryTrigger: make(chan struct{}, 1),
-		computePlatformDiscoveryTrigger:  make(chan struct{}, 1),
-		reconcileTrigger:         make(chan struct{}, 1),
-		computePlatformTrigger:           make(chan struct{}, 1),
-		observeTrigger:           make(chan struct{}, 1),
-		adoptTrigger:             make(chan struct{}, 1),
+		workloadDiscoveryTrigger:        make(chan struct{}, 1),
+		computePlatformDiscoveryTrigger: make(chan struct{}, 1),
+		reconcileTrigger:                make(chan struct{}, 1),
+		computePlatformTrigger:          make(chan struct{}, 1),
+		observeTrigger:                  make(chan struct{}, 1),
+		adoptTrigger:                    make(chan struct{}, 1),
 	}
 }
 

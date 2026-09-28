@@ -18,7 +18,7 @@ const (
 // never runs migrations itself (see the cloud-connectors design, schema migrations).
 var ExpectedSchemaVersions = map[string]string{
 	SchemaPlatform: "3",
-	SchemaAWS:      "3",
+	SchemaAWS:      "4",
 	SchemaGCP:      "2",
 	SchemaAzure:    "2",
 }

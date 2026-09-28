@@ -19,6 +19,7 @@ func isNoRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 type DestinationRecord struct {
 	Name    string
 	Type    string
+	Region  string
 	Config  map[string]any
 	Signals []string
 }
@@ -26,7 +27,7 @@ type DestinationRecord struct {
 func (s *Store) ListDestinations(ctx context.Context) ([]DestinationRecord, error) {
 	destinationsLog.Debug("list destinations", "connector", s.connectorName, "schema", s.schema)
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
-		SELECT name, dest_type, config, signals
+		SELECT name, dest_type, COALESCE(region, ''), config, signals
 		FROM %s.destinations
 		WHERE connector_name = $1
 		ORDER BY name
@@ -41,7 +42,7 @@ func (s *Store) ListDestinations(ctx context.Context) ([]DestinationRecord, erro
 	for rows.Next() {
 		var rec DestinationRecord
 		var configJSON, signalsJSON []byte
-		if err := rows.Scan(&rec.Name, &rec.Type, &configJSON, &signalsJSON); err != nil {
+		if err := rows.Scan(&rec.Name, &rec.Type, &rec.Region, &configJSON, &signalsJSON); err != nil {
 			destinationsLog.Error("scan destination row failed", "error", err)
 			return nil, err
 		}
@@ -62,10 +63,10 @@ func (s *Store) GetDestination(ctx context.Context, name string) (*DestinationRe
 	var rec DestinationRecord
 	var configJSON, signalsJSON []byte
 	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
-		SELECT name, dest_type, config, signals
+		SELECT name, dest_type, COALESCE(region, ''), config, signals
 		FROM %s.destinations
 		WHERE connector_name = $1 AND name = $2
-	`, s.schema), s.connectorName, name).Scan(&rec.Name, &rec.Type, &configJSON, &signalsJSON)
+	`, s.schema), s.connectorName, name).Scan(&rec.Name, &rec.Type, &rec.Region, &configJSON, &signalsJSON)
 	if err != nil {
 		if isNoRows(err) {
 			return nil, nil
@@ -95,6 +96,7 @@ func (s *Store) UpsertDestination(ctx context.Context, dest domaindest.Destinati
 		"connector", s.connectorName,
 		"name", dest.Name,
 		"type", dest.Type,
+		"region", dest.Region,
 	)
 	configJSON, err := json.Marshal(dest.Config)
 	if err != nil {
@@ -106,14 +108,15 @@ func (s *Store) UpsertDestination(ctx context.Context, dest domaindest.Destinati
 	}
 	_, err = s.pool.Exec(ctx, fmt.Sprintf(`
 		INSERT INTO %s.destinations
-			(connector_name, name, dest_type, config, signals, created_at, updated_at)
-		VALUES ($1,$2,$3,$4::jsonb,$5::jsonb, now(), now())
+			(connector_name, name, dest_type, region, config, signals, created_at, updated_at)
+		VALUES ($1,$2,$3,NULLIF($4,''),$5::jsonb,$6::jsonb, now(), now())
 		ON CONFLICT (connector_name, name) DO UPDATE SET
 			dest_type = EXCLUDED.dest_type,
+			region = EXCLUDED.region,
 			config = EXCLUDED.config,
 			signals = EXCLUDED.signals,
 			updated_at = now()
-	`, s.schema), s.connectorName, dest.Name, dest.Type, string(configJSON), string(signalsJSON))
+	`, s.schema), s.connectorName, dest.Name, dest.Type, dest.Region, string(configJSON), string(signalsJSON))
 	if err != nil {
 		destinationsLog.Error("upsert destination failed", "connector", s.connectorName, "name", dest.Name, "error", err)
 	}
@@ -166,24 +169,52 @@ func (s *Store) OTLPRouting(ctx context.Context, network string) (domaindest.Rou
 	if err != nil {
 		return domaindest.Routing{}, err
 	}
+	// A caller without region context cannot safely select a regional Collector. It also must not read
+	// managed_collectors: providers that do not implement this feature have no such provider table.
+	return domaindest.ResolveRouting(dests, nil, network), nil
+}
+
+// OTLPRoutingForRegion resolves the route for a regional workload. The managed-Collector destination
+// marker is applicable only to its own region; global OTLP terminals remain available everywhere. A
+// workload in the Collector's host network is reachable by construction. A different workload network
+// requires explicit provider reachability evidence (for AWS, validated direct VPC peering and routes).
+func (s *Store) OTLPRoutingForRegion(ctx context.Context, region, network string, reachability domaindest.Reachability) (domaindest.Routing, error) {
+	dests, err := s.destinationsForResolution(ctx)
+	if err != nil {
+		return domaindest.Routing{}, err
+	}
 	collectors, err := s.CollectorTargets(ctx)
 	if err != nil {
 		return domaindest.Routing{}, err
 	}
-	return domaindest.ResolveRouting(dests, collectors, network), nil
+	return domaindest.ResolveRoutingForRegion(dests, collectors, region, network, reachability), nil
 }
 
-// CollectorTargets returns one routing entry per network that has managed-Collector configuration.
-//
-// Empty today: the managed_collectors table does not exist yet, so every workload resolves to its
-// destination directly — exactly what happened before this seam existed. The accessor is here so that
-// landing the table is a change to this function and nothing else; every consumer already reads through
-// the resolution it feeds.
+// CollectorTargets returns one routing entry per regional managed Collector. Network is the host VPC,
+// not the Collector identity and not an assertion that other VPCs can reach it.
 //
 // It returns configuration only, never health. Selection must not change on whether a Collector is
 // currently answering, and domaindest.CollectorTarget has nowhere to put it.
-func (s *Store) CollectorTargets(_ context.Context) ([]domaindest.CollectorTarget, error) {
-	return nil, nil
+func (s *Store) CollectorTargets(ctx context.Context) ([]domaindest.CollectorTarget, error) {
+	records, err := s.ListManagedCollectors(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return collectorTargets(records), nil
+}
+
+func collectorTargets(records []CollectorRecord) []domaindest.CollectorTarget {
+	targets := make([]domaindest.CollectorTarget, 0, len(records))
+	for _, rec := range records {
+		targets = append(targets, domaindest.CollectorTarget{
+			Region:       rec.Key.Region,
+			Network:      rec.NetworkID,
+			Endpoint:     rec.EndpointGRPC,
+			HTTPEndpoint: rec.EndpointHTTP,
+			Insecure:     rec.TLSMode == "off",
+		})
+	}
+	return targets
 }
 
 func (s *Store) destinationsForResolution(ctx context.Context) ([]domaindest.Destination, error) {
@@ -227,6 +258,7 @@ func DestinationRecordToDomain(rec DestinationRecord) domaindest.Destination {
 	return domaindest.Destination{
 		Name:    rec.Name,
 		Type:    rec.Type,
+		Region:  rec.Region,
 		Config:  cfg,
 		Signals: rec.Signals,
 	}

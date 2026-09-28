@@ -239,7 +239,7 @@ func (c *Coordinator) GetDestination(ctx context.Context, name string) (*domaind
 
 func (c *Coordinator) CreateDestination(ctx context.Context, dest domaindest.Destination) error {
 	apiLog.Info("create destination", "name", dest.Name, "type", dest.Type)
-	if err := c.destCatalog.ValidateWithCatalog(dest); err != nil {
+	if err := c.validateDestinationSet(ctx, dest); err != nil {
 		apiLog.Error("create destination validation failed", "name", dest.Name, "error", err)
 		return fmt.Errorf("createDestination: %w", err)
 	}
@@ -254,7 +254,7 @@ func (c *Coordinator) CreateDestination(ctx context.Context, dest domaindest.Des
 
 func (c *Coordinator) UpdateDestination(ctx context.Context, dest domaindest.Destination) error {
 	apiLog.Info("update destination", "name", dest.Name)
-	if err := c.destCatalog.ValidateWithCatalog(dest); err != nil {
+	if err := c.validateDestinationSet(ctx, dest); err != nil {
 		apiLog.Error("update destination validation failed", "name", dest.Name, "error", err)
 		return fmt.Errorf("updateDestination: %w", err)
 	}
@@ -265,6 +265,24 @@ func (c *Coordinator) UpdateDestination(ctx context.Context, dest domaindest.Des
 	apiLog.Info("update destination complete", "name", dest.Name)
 	c.triggerReconcile()
 	return nil
+}
+
+// validateDestinationSet validates the prospective complete set, replacing any existing row with the
+// same name. Marker uniqueness is a set invariant and cannot be enforced by validating only the row
+// being written. The database also has a partial unique index as the concurrent-write backstop.
+func (c *Coordinator) validateDestinationSet(ctx context.Context, desired domaindest.Destination) error {
+	rows, err := c.store.ListDestinations(ctx)
+	if err != nil {
+		return fmt.Errorf("list destinations for validation: %w", err)
+	}
+	dests := make([]domaindest.Destination, 0, len(rows)+1)
+	for _, row := range rows {
+		if row.Name != desired.Name {
+			dests = append(dests, store.DestinationRecordToDomain(row))
+		}
+	}
+	dests = append(dests, desired)
+	return c.destCatalog.ValidateDestinations(dests)
 }
 
 func (c *Coordinator) DeleteDestination(ctx context.Context, name string) error {
@@ -299,4 +317,10 @@ func (c *Coordinator) OTLPExportTarget(ctx context.Context) (domaindest.OTLPTarg
 // endpoint at all.
 func (c *Coordinator) OTLPRouting(ctx context.Context, network string) (domaindest.Routing, error) {
 	return c.store.OTLPRouting(ctx, network)
+}
+
+// OTLPRoutingForRegion is the routing contract for regional workload reconcilers. Cross-VPC callers
+// must pass explicit provider reachability evidence; region equality alone is never sufficient.
+func (c *Coordinator) OTLPRoutingForRegion(ctx context.Context, region, network string, reachability domaindest.Reachability) (domaindest.Routing, error) {
+	return c.store.OTLPRoutingForRegion(ctx, region, network, reachability)
 }
