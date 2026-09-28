@@ -377,7 +377,6 @@ jobs:
         with:
           path: |
             /tmp/odigos-autoscaler.tar
-            /tmp/odigos-scheduler.tar
             /tmp/odigos-cli
             /tmp/odigos-cli.tar
           key: ${{ github.run_id }}-odigos-oss-components
@@ -404,9 +403,9 @@ jobs:
         if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
           cd odigos
-          # Autoscaler + scheduler only. Collector is built enterprise-side
+          # Autoscaler only. Collector is built enterprise-side
           # (odigos-io/odigos#5446 — helm with onprem token always resolves enterprise collector).
-          TAG=${{ env.IMAGE_TAG }} TAG=e2e-test ORG=registry.odigos.io make -j 2 build-autoscaler build-scheduler
+          TAG=${{ env.IMAGE_TAG }} TAG=e2e-test ORG=registry.odigos.io make build-autoscaler
 
       - uses: ko-build/setup-ko@v0.9
         if: steps.should-run.outputs.skip != 'true'
@@ -420,7 +419,6 @@ jobs:
         if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
           docker save registry.odigos.io/odigos-autoscaler:${{ env.IMAGE_TAG }} -o /tmp/odigos-autoscaler.tar
-          docker save registry.odigos.io/odigos-scheduler:${{ env.IMAGE_TAG }} -o /tmp/odigos-scheduler.tar
           docker save registry.odigos.io/odigos-cli:${{ env.IMAGE_TAG }} -o /tmp/odigos-cli.tar
 
       - name: Scan autoscaler image for vulnerabilities
@@ -443,27 +441,6 @@ jobs:
             exit 1
           fi
           jq --arg img "odigos-autoscaler" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-autoscaler.json
-
-      - name: Scan scheduler image for vulnerabilities
-        if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
-        id: scan-scheduler
-        uses: odigos-io/ci-core/vulnerabilities-scanner@main
-        with:
-          image: registry.odigos.io/odigos-scheduler:${{ env.IMAGE_TAG }}
-          severity-cutoff: "CRITICAL"
-        continue-on-error: true
-
-      - name: Save scheduler scan JSON
-        if: always() && steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
-        env:
-          RESULTS_FILE: ${{ steps.scan-scheduler.outputs.results-file }}
-        run: |
-          mkdir -p /tmp/scan-results
-          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
-            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
-            exit 1
-          fi
-          jq --arg img "odigos-scheduler" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-scheduler.json
 
       - name: Scan cli image for vulnerabilities
         if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
@@ -791,7 +768,6 @@ jobs:
         with:
           path: |
             /tmp/odigos-autoscaler.tar
-            /tmp/odigos-scheduler.tar
             /tmp/odigos-cli
             /tmp/odigos-cli.tar
           fail-on-cache-miss: true
@@ -861,7 +837,6 @@ jobs:
           kind load image-archive /tmp/agents-enterprise.tar
           kind load image-archive /tmp/agents-enterprise-extended.tar
           kind load image-archive /tmp/odigos-autoscaler.tar
-          kind load image-archive /tmp/odigos-scheduler.tar
           kind load image-archive /tmp/odigos-cli.tar
           kind load image-archive /tmp/ui-enterprise.tar
           kind load image-archive /tmp/collector-enterprise.tar
