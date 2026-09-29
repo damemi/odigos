@@ -273,8 +273,8 @@ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=
-github.com/odigos-io/ebpf-core v0.27.0 h1:qXGgp4K3vcvJ+v6TO6HSYEq4GJmSXENV3wkBKYi1tKA=
-github.com/odigos-io/ebpf-core v0.27.0/go.mod h1:6THrjBAsdBVHU/j3lEW9L+/AvjWvVnBFWIj/JUy9h+Y=
+github.com/odigos-io/ebpf-core v0.30.0 h1:SfSwPNj9DNrITTO4B8FrNsqPi1lfw48H0E7Joi7xuO0=
+github.com/odigos-io/ebpf-core v0.30.0/go.mod h1:6THrjBAsdBVHU/j3lEW9L+/AvjWvVnBFWIj/JUy9h+Y=
 github.com/odigos-io/ebpf-generic-instrumentation v0.0.14 h1:PttoQoEXWnBR6R4qMO5MjIfqFrtafW7OLKc6c78Ff4Q=
 github.com/odigos-io/ebpf-generic-instrumentation v0.0.14/go.mod h1:rieG2n9qdJLLsgDh1gaC/0XaYJrnxtnPx79zOW3ujqE=
 github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.56.0 h1:4gVFaqQ2Xj/pvX3GO6uMJJennGrNByFwybzRXSfMFME=
@@ -283,8 +283,8 @@ github.com/odigos-io/ebpf-java-instrumentation/v2 v2.56.0 h1:VSJQEo1RGPTKs0KHay9
 github.com/odigos-io/ebpf-java-instrumentation/v2 v2.56.0/go.mod h1:DehUSmN8hts5Uw7gSOWRuZPSNdbBZHGO6Jorp3Sy7Qk=
 github.com/odigos-io/ebpf-nodejs-instrumentation v0.15.0 h1:TaJmw7U1RAugGZGoG/E+t3SlVR9kC97VMKWAz2KuYFk=
 github.com/odigos-io/ebpf-nodejs-instrumentation v0.15.0/go.mod h1:pXCGQ5GpWuu6Rhvyye1qLpXS+loKe5aO4djbr3h7VM0=
-github.com/odigos-io/enterprise-go-instrumentation v1.28.0 h1:MAxptgbzzOpegLOmgan/te6McasQFfjoxs4UWSDXzXs=
-github.com/odigos-io/enterprise-go-instrumentation v1.28.0/go.mod h1:XwO7d64INuCZNy7ehcaLyJwCUQ+YvbmRHE+X2RuF2W0=
+github.com/odigos-io/enterprise-go-instrumentation v1.29.0 h1:vp7XGYvpF3oNJhTE63UWcudxGlTG7B3wYsItwKWyk1k=
+github.com/odigos-io/enterprise-go-instrumentation v1.29.0/go.mod h1:9E16J29/yWoQqcEn/1fR1VdNEYM4gIx+RvU3Ah7TBGA=
 github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752 h1:Fv18bWsleIZzGy+SWOuwva3IYlcoEOclDxRy/WnypB8=
 github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752/go.mod h1:J5jQgrjFpdwSS2N924u5suppg1rSDkm536Fb3ZHDFwU=
 github.com/odigos-io/odigos-device-plugin v1.19.8 h1:YsNALk+mZeMVvgvn7FYGUKEPuZizODyJnP17a0ZMgaY=
