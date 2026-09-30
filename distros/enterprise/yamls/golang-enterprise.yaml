@@ -28,7 +28,7 @@ spec:
     noRestartRequired: true
   logs:
     ebpfLogCapture:
-      supported: true
+      traceCorrelation: true
   traces:
     codeAttributes:
       supported: true

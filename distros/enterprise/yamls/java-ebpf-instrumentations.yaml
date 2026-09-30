@@ -34,7 +34,7 @@ spec:
       supported: true
   logs:
     ebpfLogCapture:
-      supported: true
+      traceCorrelation: true
   traces:
     customInstrumentations:
       supported: true
