@@ -497,7 +497,7 @@ push-collector:
 
 .PHONY: push-agents
 push-agents:
-	$(MAKE) push-image/agents DOCKERFILE=odiglet/$(DOCKERFILE) TARGET=agents SUMMARY="Odigos Enterprise Agents" DESCRIPTION="The Odigos Agents used to copy Odigos agent relevant files into the user workloads." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	$(MAKE) push-image/agents DOCKERFILE=odiglet/$(DOCKERFILE) TARGET=$(if $(filter true,$(RHEL)),agents-rhel,agents) SUMMARY="Odigos Enterprise Agents" DESCRIPTION="The Odigos Agents used to copy Odigos agent relevant files into the user workloads." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: push-insights
 push-insights:

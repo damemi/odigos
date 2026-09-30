@@ -192,6 +192,7 @@ LABEL "summary"=$SUMMARY
 LABEL "description"=$DESCRIPTION
 WORKDIR /instrumentations/
 COPY --from=agents-builder /instrumentations/ .
+COPY odiglet/licenses /licenses
 
 # make sure we run as non root user
 # this is required when this container is added to a pod that has runAsNonRoot: true
