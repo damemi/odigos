@@ -158,6 +158,27 @@ type CreateUserResult struct {
 	GeneratedPassword *string `json:"generatedPassword,omitempty"`
 }
 
+type DiagnoseInput struct {
+	IncludeProfiles          *bool    `json:"includeProfiles,omitempty"`
+	IncludeMetrics           *bool    `json:"includeMetrics,omitempty"`
+	IncludeSourceWorkloads   *bool    `json:"includeSourceWorkloads,omitempty"`
+	SourceWorkloadNamespaces []string `json:"sourceWorkloadNamespaces,omitempty"`
+}
+
+type DiagnoseResponse struct {
+	Stats                    *DiagnoseStats `json:"stats"`
+	IncludeProfiles          bool           `json:"includeProfiles"`
+	IncludeMetrics           bool           `json:"includeMetrics"`
+	IncludeSourceWorkloads   bool           `json:"includeSourceWorkloads"`
+	SourceWorkloadNamespaces []string       `json:"sourceWorkloadNamespaces"`
+}
+
+type DiagnoseStats struct {
+	FileCount      int32  `json:"fileCount"`
+	TotalSizeBytes int32  `json:"totalSizeBytes"`
+	TotalSizeHuman string `json:"totalSizeHuman"`
+}
+
 type GeneralResult struct {
 	Success bool    `json:"success"`
 	Error   *string `json:"error,omitempty"`
@@ -353,7 +374,7 @@ func (e *AuthProviderID) UnmarshalGQL(v any) error {
 }
 
 func (e AuthProviderID) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *AuthProviderID) UnmarshalJSON(b []byte) error {
@@ -410,7 +431,7 @@ func (e *HealthStatus) UnmarshalGQL(v any) error {
 }
 
 func (e HealthStatus) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *HealthStatus) UnmarshalJSON(b []byte) error {
@@ -471,7 +492,7 @@ func (e *Role) UnmarshalGQL(v any) error {
 }
 
 func (e Role) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *Role) UnmarshalJSON(b []byte) error {
@@ -528,7 +549,7 @@ func (e *SignInStatus) UnmarshalGQL(v any) error {
 }
 
 func (e SignInStatus) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
 func (e *SignInStatus) UnmarshalJSON(b []byte) error {

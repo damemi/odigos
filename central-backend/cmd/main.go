@@ -221,6 +221,14 @@ func newRouter(gqlHandler *handler.Server, wsServer *websocketserver.WebSocketSe
 	router.GET("/ws/proxy", func(c *gin.Context) { wsServer.HandleConnection(c.Writer, c.Request) })
 	router.GET("/sse/events", func(c *gin.Context) { sseHub.SSEHandler(c.Writer, c.Request) })
 	router.POST("/graphql", authContextMiddleware(adminService), func(c *gin.Context) { gqlHandler.ServeHTTP(c.Writer, c.Request) })
+	// Diagnose download — paired with GraphQL `diagnose` (OSS frontend pattern).
+	router.GET("/diagnose/download", authContextMiddleware(adminService), func(c *gin.Context) {
+		if err := utils.RequireAuth(c.Request.Context()); err != nil {
+			c.JSON(401, gin.H{"error": "authentication required"})
+			return
+		}
+		services.DiagnoseDownload(c)
+	})
 
 	// Reverse proxy to Keycloak for browser-facing auth endpoints.
 	// This keeps Keycloak fully internal — the browser only talks to the central-backend.

@@ -140,6 +140,8 @@ import {
   type DeleteInstrumentationRuleResult,
   type DeleteInstrumentationRuleVars,
   type DeleteNoisyOperationRuleResult,
+  type DiagnoseResult,
+  type DiagnoseVars,
   type DescribeOdigosData,
   type DescribeSourceData,
   type GetActionsData,
@@ -245,6 +247,7 @@ import {
   GET_CLUSTER_SNAPSHOT,
   GET_HEALTH,
   GET_SYSTEM_CONFIG,
+  DOWNLOAD_DIAGNOSE,
   // versioned (REMOTE_FETCH-wrapped) operations
   GET_ACTIONS,
   GET_ACTION_TYPES,
@@ -1324,6 +1327,19 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
     // describe
     GET_DESCRIBE_ODIGOS: wrapVersioned<DescribeOdigosData, undefined>(GET_DESCRIBE_ODIGOS),
     GET_DESCRIBE_SOURCE: wrapVersioned<DescribeSourceData, WorkloadId>(GET_DESCRIBE_SOURCE),
+    // VM diagnose via Central Backend GraphQL `diagnose` (server-side remoteFetch +
+    // cache). Kit then GETs /diagnose/download (rewritten to central-backend).
+    // K8s through Central is not wired yet.
+    GET_DIAGNOSE: {
+      document: DOWNLOAD_DIAGNOSE as DocumentNode,
+      canRun: (ctx) => ctx.platformType === PlatformType.Vm && !!resolveProxyID(ctx),
+      transformVariables: (vars, ctx) => ({
+        proxyID: resolveProxyID(ctx),
+        input: vars?.input ?? {},
+        dryRun: vars?.dryRun ?? false,
+      }),
+      transformResult: (raw) => (raw as { diagnose?: DiagnoseResult } | null | undefined)?.diagnose,
+    },
 
     // tokens — wire returns `{ computePlatform: { apiTokens: [...] } }`;
     // accept the legacy `tokens` name too for older backends.

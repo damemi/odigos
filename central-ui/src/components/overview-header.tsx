@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useMemo, useState } from 'react';
 import { AccountMenu } from './account-menu';
 import { StatusType } from '@odigos/ui-kit/types';
@@ -7,6 +9,7 @@ import { Tooltip } from '@odigos/ui-kit/components';
 import { StatusKeys, useStatusStore } from '../store';
 import { FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { SystemDrawer } from '@odigos/ui-kit/containers';
+import { VmDiagnoseDrawer } from '@/components/vm-diagnose-drawer';
 import { useConfig, useHealth, useProxy } from '@/hooks';
 import { OdigosLogoTextByTier } from '@odigos/ui-kit/snippets';
 import { IconButton, Badge as V2Badge, Header as V2Header } from '@odigos/ui-kit/components';
@@ -66,18 +69,22 @@ export const OverviewHeader = () => {
         </Tooltip>,
       );
     }
-    if (!isVm && proxyID) {
+    if (proxyID) {
       arr.push(<IconButton key='system-drawer' icon={TerminalIcon} onClick={toggleSystemDrawer} />);
     }
     arr.push(<AccountMenu key='account-menu' />);
 
     return arr;
-  }, [isVm, proxyID, tokenStatus]);
+  }, [proxyID, tokenStatus]);
 
   return (
     <>
       <V2Header left={left} right={right} />
-      <SystemDrawer key='system-overview' isOpen={isSystemDrawerOpen} onClose={toggleSystemDrawer} />
+      {isVm ? (
+        <VmDiagnoseDrawer isOpen={isSystemDrawerOpen} onClose={toggleSystemDrawer} />
+      ) : (
+        <SystemDrawer key='system-overview' isOpen={isSystemDrawerOpen} onClose={toggleSystemDrawer} />
+      )}
     </>
   );
 };
