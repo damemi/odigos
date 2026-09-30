@@ -1,9 +1,17 @@
 import type { VersionedRemoteFetch } from '@/types';
 import { PlatformType } from '@odigos/ui-kit/types';
 
-export const GET_DESTINATIONS: VersionedRemoteFetch = {
-  [PlatformType.K8s]: {
-    'v1.11': `
+// `profiles` joined `ExportedSignals` / `SupportedSignals` in odigos v1.26.
+// Older proxies reject the selection, so it is only requested from that bucket
+// on. Without it the kit treats every destination as not supporting profiles:
+// OTLP hides the Profiles checkbox, a profiles-only type (Pyroscope) reports no
+// supported signals at all, and an edit re-saves `profiles: false`.
+const EXPORTED_SIGNALS_V111 = `logs metrics traces`;
+const EXPORTED_SIGNALS_V126 = `${EXPORTED_SIGNALS_V111} profiles`;
+const SUPPORTED_SIGNALS_V111 = `logs { supported } metrics { supported } traces { supported }`;
+const SUPPORTED_SIGNALS_V126 = `${SUPPORTED_SIGNALS_V111} profiles { supported }`;
+
+const getDestinationsQuery = (exportedSignals: string, supportedSignals: string) => `
   query GetDestinations {
     computePlatform {
       destinations {
@@ -12,26 +20,12 @@ export const GET_DESTINATIONS: VersionedRemoteFetch = {
         disabled
         dataStreamNames
         fields
-        exportedSignals {
-          logs
-          metrics
-          traces
-        }
+        exportedSignals { ${exportedSignals} }
         destinationType {
           type
           imageUrl
           displayName
-          supportedSignals {
-            logs {
-              supported
-            }
-            metrics {
-              supported
-            }
-            traces {
-              supported
-            }
-          }
+          supportedSignals { ${supportedSignals} }
         }
         conditions {
           status
@@ -42,15 +36,18 @@ export const GET_DESTINATIONS: VersionedRemoteFetch = {
         }
       }
     }
-  }`,
+  }`;
+
+export const GET_DESTINATIONS: VersionedRemoteFetch = {
+  [PlatformType.K8s]: {
+    'v1.11': getDestinationsQuery(EXPORTED_SIGNALS_V111, SUPPORTED_SIGNALS_V111),
+    'v1.26': getDestinationsQuery(EXPORTED_SIGNALS_V126, SUPPORTED_SIGNALS_V126),
   },
   // VM proxies resolve destinations from the versioned vmagent dialect registry
   // (see the VmSpec on GET_DESTINATIONS in odigos-api-adapter).
 };
 
-export const GET_DESTINATION_CATEGORIES: VersionedRemoteFetch = {
-  [PlatformType.K8s]: {
-    'v1.11': `
+const getDestinationCategoriesQuery = (supportedSignals: string) => `
   query GetDestinationCategories {
     destinationCategories {
       categories {
@@ -61,17 +58,7 @@ export const GET_DESTINATION_CATEGORIES: VersionedRemoteFetch = {
           testConnectionSupported
           displayName
           imageUrl
-          supportedSignals {
-            logs {
-              supported
-            }
-            metrics {
-              supported
-            }
-            traces {
-              supported
-            }
-          }
+          supportedSignals { ${supportedSignals} }
           fields {
             name
             displayName
@@ -90,7 +77,12 @@ export const GET_DESTINATION_CATEGORIES: VersionedRemoteFetch = {
         }
       }
     }
-  }`,
+  }`;
+
+export const GET_DESTINATION_CATEGORIES: VersionedRemoteFetch = {
+  [PlatformType.K8s]: {
+    'v1.11': getDestinationCategoriesQuery(SUPPORTED_SIGNALS_V111),
+    'v1.26': getDestinationCategoriesQuery(SUPPORTED_SIGNALS_V126),
   },
   // VM proxies resolve the destination catalog from the versioned vmagent
   // `destinationTypes` dialect document (see the VmSpec on

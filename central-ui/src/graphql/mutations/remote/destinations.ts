@@ -1,9 +1,15 @@
 import type { VersionedRemoteFetch } from '@/types';
 import { PlatformType } from '@odigos/ui-kit/types';
 
-export const CREATE_DESTINATION: VersionedRemoteFetch = {
-  [PlatformType.K8s]: {
-    'v1.11': `
+// `profiles` joined `ExportedSignals` / `SupportedSignals` in odigos v1.26
+// (see GET_DESTINATIONS). The created destination lands in the kit's entity
+// store as-is, so it must carry `profiles` or a later edit re-saves it as false.
+const EXPORTED_SIGNALS_V111 = `logs metrics traces`;
+const EXPORTED_SIGNALS_V126 = `${EXPORTED_SIGNALS_V111} profiles`;
+const SUPPORTED_SIGNALS_V111 = `logs { supported } metrics { supported } traces { supported }`;
+const SUPPORTED_SIGNALS_V126 = `${SUPPORTED_SIGNALS_V111} profiles { supported }`;
+
+const getCreateDestinationMutation = (exportedSignals: string, supportedSignals: string) => `
   mutation CreateNewDestination($destination: DestinationInput!) {
     createNewDestination(destination: $destination) {
       id
@@ -11,26 +17,12 @@ export const CREATE_DESTINATION: VersionedRemoteFetch = {
       disabled
       dataStreamNames
       fields
-      exportedSignals {
-        logs
-        metrics
-        traces
-      }
+      exportedSignals { ${exportedSignals} }
       destinationType {
         type
         imageUrl
         displayName
-        supportedSignals {
-          logs {
-            supported
-          }
-          metrics {
-            supported
-          }
-          traces {
-            supported
-          }
-        }
+        supportedSignals { ${supportedSignals} }
       }
       conditions {
         status
@@ -40,7 +32,12 @@ export const CREATE_DESTINATION: VersionedRemoteFetch = {
 
       }
     }
-  }`,
+  }`;
+
+export const CREATE_DESTINATION: VersionedRemoteFetch = {
+  [PlatformType.K8s]: {
+    'v1.11': getCreateDestinationMutation(EXPORTED_SIGNALS_V111, SUPPORTED_SIGNALS_V111),
+    'v1.26': getCreateDestinationMutation(EXPORTED_SIGNALS_V126, SUPPORTED_SIGNALS_V126),
   },
   [PlatformType.Vm]: {
     'v0.1': `
