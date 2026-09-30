@@ -176,11 +176,11 @@ func main() {
 
 	instrumentationManagerOptions := ebpf.InstrumentationManagerOptions{
 		Factories: factories,
-		// eBPF log capture is a generic factory: it is offered every process regardless of distro,
-		// opts out of every distro except the Go and Java enterprise distros (the ones whose SDKs
-		// provision the log correlation maps), and is gated per-workload by the ebpfLogCapture
-		// config. It is run off the main path and never reports its status. (OBI's generic factories
-		// are wired centrally in odiglet.New.)
+		// eBPF log capture is a generic factory: it is offered every process regardless of distro and
+		// is gated per-workload by the ebpfLogCapture config. Only processes whose SDKs provision the
+		// log correlation maps (Go and Java) get trace context on their logs. It is run off the main
+		// path and never reports its status. (OBI's generic factories are wired centrally in
+		// odiglet.New.)
 		GenericFactories: map[string]commonInstrumentation.Factory{
 			logcapture.FactoryName: logcapture.NewFactory(),
 		},

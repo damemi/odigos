@@ -7,8 +7,9 @@ spec:
     This e2e test verifies eBPF log capture: log lines written by instrumented processes are
     delivered to the destination carrying the trace context of the request that produced them.
 
-    Only the Go and Java eBPF distros provision the correlation maps the capture depends on, so the
-    assertions target membership (Go) and frontend (Java).
+    Only the Go and Java eBPF distros provision the correlation maps the capture depends on, so correlation
+    is asserted for membership (Go) and frontend (Java); inventory (Python) and coupon (Node) are
+    only checked for arriving logs.
   skipDelete: true
   steps:
     - name: Prepare destination
@@ -233,6 +234,28 @@ spec:
             content: |
               bash ../../common/scripts/assert_log_trace_correlation.sh frontend "Buying product with id" "/buy"
       catch:
+        - podLogs:
+            name: odiglet
+            namespace: odigos-test
+
+    # Capture is language-agnostic; Python and Node logs arrive without trace context.
+    - name: Verify Logs Captured - Python And Node
+      try:
+        - script:
+            timeout: 2m
+            content: |
+              for svc in inventory coupon; do
+                until kubectl get --raw /api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/logs \
+                  | jq -e --arg s "$svc" 'any(.[]; .serviceName == $s and (.bodyText // "") != "")' >/dev/null; do
+                  sleep 2
+                done
+                echo "logs captured for $svc"
+              done
+      catch:
+        - script:
+            content: |
+              echo "Captured logs currently in the trace db:"
+              kubectl get --raw /api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/logs | jq -c '.[] | {serviceName, bodyText, traceId, spanId}'
         - podLogs:
             name: odiglet
             namespace: odigos-test

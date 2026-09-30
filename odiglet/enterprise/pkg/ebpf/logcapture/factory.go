@@ -16,35 +16,20 @@ import (
 // any distribution name.
 const FactoryName = "ebpf-log-capture"
 
-// supportedDistros is the set of otel distribution names whose eBPF SDKs provision the
-// span/goroutine correlation maps that log capture depends on. Only processes instrumented by one
-// of these distributions are offered log capture; any other distribution opts out with
-// instrumentation.ErrFactoryNotApplicable.
-//
-// These are hardcoded (rather than referencing the sdks package) to avoid an import cycle: the Go
-// and Java SDKs import this package to provision their correlation maps.
-var supportedDistros = map[string]struct{}{
-	"golang-enterprise":          {}, // sdks.GoEnterpriseDistroName
-	"java-ebpf-instrumentations": {},
-}
-
 // NewFactory returns the eBPF log capture generic factory. It is registered in the odiglet's
 // GenericFactories so it is offered every process regardless of its distribution, and is run off
 // the main instrumentation path: its lifecycle is never reported to the Reporter and a failure is
 // never retried.
 //
-// Log capture relies on the span/goroutine correlation maps that only certain eBPF SDKs provision,
-// so it is supported only for the distributions in supportedDistros (the Go and Java enterprise
-// distros). For any other distribution the factory opts out by returning
-// instrumentation.ErrFactoryNotApplicable. For a supported distribution it produces an
-// instrumentation; whether that process actually captures logs is then gated per-workload by the
-// ContainerAgentConfig.Logs.EbpfLogCapture config (see isEnabled), evaluated in Load and
+// Capture itself is language-agnostic (write/writev syscall tracepoints), so every process with a
+// ContainerAgentConfig gets an instrumentation; whether it actually captures logs is gated
+// per-workload by ContainerAgentConfig.Logs.EbpfLogCapture (see isEnabled), evaluated in Load and
 // re-evaluated in ApplyConfig.
 //
-// The correlation maps are provisioned by those SDKs directly on the log capture Manager, decoupled
-// from this factory's registration. The Manager supports attaching those maps either before or
-// after a process is registered, so the ordering between this generic factory and the distro
-// factory does not matter.
+// Trace correlation is best-effort: only SDKs that provision span/goroutine correlation maps on the
+// Manager (currently Go and Java) get trace context on their log records; other processes still have
+// their logs captured, without trace context. The Manager accepts those maps either before or after
+// a process is registered, so ordering between this factory and the distro factory does not matter.
 func NewFactory() instrumentation.Factory {
 	return &factory{}
 }
@@ -56,9 +41,6 @@ var _ instrumentation.Factory = (*factory)(nil)
 func (f *factory) CreateInstrumentation(_ context.Context, pid int, s instrumentation.Settings) (instrumentation.Instrumentation, error) {
 	cfg, ok := s.InitialConfig.(*odigosv1.ContainerAgentConfig)
 	if !ok || cfg == nil {
-		return nil, instrumentation.ErrFactoryNotApplicable
-	}
-	if _, supported := supportedDistros[cfg.OtelDistroName]; !supported {
 		return nil, instrumentation.ErrFactoryNotApplicable
 	}
 	return &logCaptureInstrumentation{
