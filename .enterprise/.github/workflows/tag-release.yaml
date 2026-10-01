@@ -124,9 +124,10 @@ jobs:
           fi
           [ -s release-notes.md ] || rm -f release-notes.md
 
-      # A sync lands the release in the pipeline's first started stage, PRE/RC.
-      # Only a stable vX.Y.Z is promoted out of it, so "Done on release" style
-      # automation never fires for a -pre or -rc build.
+      # A sync lands the release in the pipeline's first started stage, PRE, so a
+      # -pre build needs no promotion. Only Released is a completed stage, so
+      # "Done on release" style automation fires for stable builds alone — never
+      # for a -pre, an -rc, or a v0.0.0-feat.* scratch build.
       - name: Decide the release stage
         id: stage
         env:
@@ -135,6 +136,8 @@ jobs:
           set -euo pipefail
           if [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "name=Released" >> "$GITHUB_OUTPUT"
+          elif [[ "${VERSION}" =~ -rc\.?[0-9]+$ ]]; then
+            echo "name=RC" >> "$GITHUB_OUTPUT"
           else
             echo "name=" >> "$GITHUB_OUTPUT"
           fi
