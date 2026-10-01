@@ -62,13 +62,31 @@ jobs:
           GITHUB_EVENT_CLIENT_PAYLOAD_PR_CREATOR: ${{ github.event.client_payload.pr_creator }}
           GITHUB_EVENT_CLIENT_PAYLOAD_SOURCE_PR_URL: ${{github.event.client_payload.source_pr_url}}
         run: |
+          # The repo squashes with PR_TITLE, so this title becomes the commit subject
+          # on main — the only text Linear's release scan reads. Carry the source PR's
+          # key over, anchored at the start (`KEY-123 | ` or `[KEY-123] `, both
+          # enforced upstream) so a CVE-2024-xxxx in the title is not mistaken for one.
+          SUBJECT="chore: automatic dependencies syncer bot"
+          if [[ -n "${GITHUB_EVENT_CLIENT_PAYLOAD_SOURCE_PR_URL}" ]]; then
+            SRC_TITLE=$(gh pr view "${GITHUB_EVENT_CLIENT_PAYLOAD_SOURCE_PR_URL}" \
+              --json title --jq '.title' 2>/dev/null || true)
+            KEY=$(printf '%s' "${SRC_TITLE}" \
+              | grep -oE '^\[?[A-Z][A-Z0-9]*-[1-9][0-9]*' | tr -d '[')
+            case "${KEY}" in CVE-*) KEY="" ;; esac
+            if [[ -n "${KEY}" ]]; then
+              SUBJECT="${KEY} | ${SUBJECT}"
+            else
+              echo "::notice::no Linear key in the source PR title; syncing without one."
+            fi
+          fi
+
           git checkout -b ${STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME}
           git add .
-          git commit -m "update Odigos enterprise dependencies"
+          git commit -m "${SUBJECT}"
           git push origin ${STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME}
 
           PR_LINK=$(gh pr create \
-          --title "chore: automatic dependencies syncer bot" \
+          --title "${SUBJECT}" \
           --body "Automated PR to update Odigos enterprise components after a dependency module merge. PR created by: @${GITHUB_EVENT_CLIENT_PAYLOAD_PR_CREATOR}. link to PR in source repository: ${GITHUB_EVENT_CLIENT_PAYLOAD_SOURCE_PR_URL}"  \
           --base main \
           --head ${STEPS_GITHUB_PREPERATION_OUTPUTS_BRANCH_NAME})
