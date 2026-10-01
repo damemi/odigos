@@ -1,5 +1,5 @@
 issuer: https://token.actions.githubusercontent.com
-subject_pattern: '^repo:odigos-io/odigos-central-client:ref:.*$'
+subject_pattern: '^repo:odigos-io(@84347062)?/odigos-central-client(@1187259475)?:ref:.*$'
 
 permissions:
   contents: read
