@@ -56,6 +56,13 @@ RUN if [ "$EXTENDED" = "true" ]; then \
         rm opentelemetry-dotnet-instrumentation-linux-musl.zip; \
     fi
 
+# ruby-community-legacy is copied into agents-builder only when EXTENDED=true.
+# Use the build target platform. This image only holds arch-specific files, and
+# a cross-build's local tag is that target arch, not BUILDPLATFORM.
+# Digest is pinned after the first published ruby-community-legacy release:
+#   make -f agent-deps.mk upgrade-agent INSTRUMENTATION_AGENT=ruby-legacy AGENT_VERSION=vX.Y.Z
+FROM public.ecr.aws/odigos/agents/ruby-community-legacy:v0.0.2 AS ruby-legacy-src
+
 ######### agents builder #########
 # combine all agents into a single image
 FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS agents-builder
@@ -102,6 +109,13 @@ COPY --from=public.ecr.aws/odigos/agents/php-community:v0.8.0@sha256:0489f13aada
 
 # ruby-community
 COPY --from=public.ecr.aws/odigos/agents/ruby-community:v0.0.9@sha256:5177737aba83e507ee968223fbd821d76e2df4e74bd1711e2d49e8d59f671d8c /instrumentations/ruby /instrumentations/ruby
+
+# ruby-community-legacy (only included in extended builds)
+ARG EXTENDED=false
+RUN --mount=type=bind,from=ruby-legacy-src,source=/instrumentations/ruby-legacy,target=/ruby-legacy \
+    if [ "$EXTENDED" = "true" ]; then \
+        cp -r /ruby-legacy /instrumentations/ruby-legacy; \
+    fi
 
 # loader
 ARG TARGETARCH

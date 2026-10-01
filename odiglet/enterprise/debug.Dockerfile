@@ -129,6 +129,11 @@ COPY --from=public.ecr.aws/odigos/agents/php-community:v0.8.0@sha256:0489f13aada
 # ruby-community
 COPY --from=public.ecr.aws/odigos/agents/ruby-community:v0.0.9@sha256:5177737aba83e507ee968223fbd821d76e2df4e74bd1711e2d49e8d59f671d8c /instrumentations/ruby /instrumentations/ruby
 
+# ruby-community-legacy
+# Digest is pinned after the first published ruby-community-legacy release:
+#   make -f agent-deps.mk upgrade-agent INSTRUMENTATION_AGENT=ruby-legacy AGENT_VERSION=vX.Y.Z
+COPY --from=public.ecr.aws/odigos/agents/ruby-community-legacy:v0.0.1 /instrumentations/ruby-legacy /instrumentations/ruby-legacy
+
 # loader
 ARG ODIGOS_LOADER_VERSION=v0.0.8
 RUN wget --directory-prefix=loader https://storage.googleapis.com/odigos-loader/$ODIGOS_LOADER_VERSION/$TARGETARCH/loader.so

@@ -25,6 +25,8 @@ upgrade-agent:
 			$(MAKE) -f $(MK) upgrade-image-agent-version AGENT_DISTRO=php-community AGENT_VERSION=$(AGENT_VERSION) ;; \
 		ruby|ruby-community) \
 			$(MAKE) -f $(MK) upgrade-image-agent-version AGENT_DISTRO=ruby-community AGENT_VERSION=$(AGENT_VERSION) ;; \
+		ruby-legacy|ruby-community-legacy) \
+			$(MAKE) -f $(MK) upgrade-image-agent-version AGENT_DISTRO=ruby-community-legacy AGENT_VERSION=$(AGENT_VERSION) ;; \
 		java-ebpf|java-enterprise|java-ebpf-instrumentations) \
 			$(MAKE) -f $(MK) upgrade-java-ebpf-version AGENT_VERSION=$(AGENT_VERSION) ;; \
 		nodejs-enterprise|nodejs|nodejs-ebpf) \
