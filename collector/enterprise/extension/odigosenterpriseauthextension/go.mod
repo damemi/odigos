@@ -33,7 +33,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
-	github.com/odigos-io/odigos/common v1.38.0-pre9.0.20261001125007-c6a0a511143b // indirect
+	github.com/odigos-io/odigos/common v1.39.0-pre0.0.20261001200722-87427479f561 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/featuregate v1.67.0 // indirect
 	go.opentelemetry.io/collector/internal/componentalias v0.159.0 // indirect
