@@ -144,7 +144,7 @@ jobs:
 
       - uses: odigos-io/ci-core/linear-release@main
         with:
-          access-key: ${{ secrets.LINEAR_ACCESS_KEY }}
+          access-key: ${{ secrets.LINEAR_RELEASE_ACCESS_KEY }}
           version: ${{ needs.release-job.outputs.version }}
           base-ref: ${{ needs.release-job.outputs.start_sha }}
           release-notes: release-notes.md
