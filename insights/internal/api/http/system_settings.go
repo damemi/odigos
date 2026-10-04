@@ -42,7 +42,16 @@ func (a *API) ApplySystemSettings(ctx context.Context, body apitypes.SystemSetti
 	if err := s.Validate(); err != nil {
 		return systemSettingsValidationError{err}
 	}
-	prev, _ := a.Repo.GetSystemSettings(ctx)
+	// A failed read must not be mistaken for "nothing stored yet": prev would be
+	// the zero value, whose nil identity dimensions never compare equal to the
+	// incoming ones, so dimsChanged would be true and a reset request would wipe
+	// the whole inventory that the caller's dimensions did not actually change.
+	// The zero epoch would also be written back, rolling the generation counter
+	// backwards. A missing row is already reported as defaults with no error.
+	prev, err := a.Repo.GetSystemSettings(ctx)
+	if err != nil {
+		return fmt.Errorf("load current system settings: %w", err)
+	}
 	s.TransactionInventoryEpoch = prev.TransactionInventoryEpoch
 
 	dimsChanged := !repo.IdentityDimensionsEqual(prev.TransactionIdentityDimensions, s.TransactionIdentityDimensions)
