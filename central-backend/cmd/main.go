@@ -148,8 +148,6 @@ func main() {
 	snapshotPool := snapshotworker.NewWorkerPool(redisClient, 10, 500) // 10 workers, queue size 500
 	snapshotPool.Start()
 
-	go watchKeycloakHealth(ctx, shutdownCh, adminCredentials.Username, adminCredentials.Password)
-
 	go handleShutdown(shutdownCh, redisClient, snapshotPool, expirationChan)
 
 	wsServer := websocketserver.NewWebSocketServer(redisClient, centralSSEHub, snapshotPool)
@@ -160,6 +158,7 @@ func main() {
 	})
 
 	adminService := services.NewAdminService(adminCredentials)
+	go watchKeycloakHealth(ctx, shutdownCh, adminCredentials.Username, adminCredentials.Password, adminService.InvalidateAdminToken)
 	userService := services.NewUserService(adminService)
 	teamService := services.NewTeamService(adminService)
 	roleMappingService := services.NewRoleMappingService(adminService)
@@ -373,7 +372,7 @@ func ensureKeycloakState(username, password string) error {
 // Reachability is checked every healthCheckInterval. The heavier admin-token + client
 // existence probe runs on recovery, and otherwise at most once per clientCheckInterval
 // with a short-lived cached admin token to avoid password-grant spam in steady state.
-func watchKeycloakHealth(ctx context.Context, shutdownCh <-chan struct{}, username, password string) {
+func watchKeycloakHealth(ctx context.Context, shutdownCh <-chan struct{}, username, password string, invalidateAdminToken func()) {
 	const (
 		healthCheckInterval = 30 * time.Second
 		clientCheckInterval = 60 * time.Second
@@ -402,6 +401,15 @@ func watchKeycloakHealth(ctx context.Context, shutdownCh <-chan struct{}, userna
 		return token, nil
 	}
 
+	// AdminService caches a token the admin API rejects once the session is gone
+	// (Keycloak down, or an ephemeral H2 wipe). Drop it so the next signup grants a new one.
+	dropCachedAdminToken := func() {
+		cachedAdminToken = ""
+		if invalidateAdminToken != nil {
+			invalidateAdminToken()
+		}
+	}
+
 	for {
 		select {
 		case <-ticker.C:
@@ -409,6 +417,7 @@ func watchKeycloakHealth(ctx context.Context, shutdownCh <-chan struct{}, userna
 			if status.Status != model.HealthStatusHealthy {
 				if !wasDown {
 					logger.Log.Warn("Keycloak became unreachable")
+					dropCachedAdminToken()
 				}
 				wasDown = true
 				cachedAdminToken = ""
@@ -427,7 +436,7 @@ func watchKeycloakHealth(ctx context.Context, shutdownCh <-chan struct{}, userna
 				lastClientCheck = time.Now()
 				if err != nil {
 					// Token may have been revoked; force refresh on the next probe.
-					cachedAdminToken = ""
+					dropCachedAdminToken()
 					logger.Log.Warn("Failed to check odigos-central client", "error", err)
 					continue
 				}
@@ -438,6 +447,7 @@ func watchKeycloakHealth(ctx context.Context, shutdownCh <-chan struct{}, userna
 			}
 
 			if needsSetup {
+				dropCachedAdminToken()
 				if wasDown {
 					logger.Log.Info("Keycloak recovered, re-running setup")
 				}

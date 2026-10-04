@@ -199,8 +199,10 @@ func (kc *KeycloakAdminService) GetAdminToken(adminUsername string, adminPasswor
 	return token, err
 }
 
-// GetAdminTokenWithExpiry performs the master-realm password grant and also returns
-// the token lifetime reported by Keycloak (zero when absent).
+// GetAdminTokenWithExpiry performs the master-realm password grant and returns how long
+// the token stays usable for admin API calls (zero when Keycloak omits a lifetime).
+// The window is the shorter of expires_in (JWT) and refresh_expires_in (SSO session).
+// The admin API returns 401 after the session idles out, even while the JWT exp is still in the future.
 func (kc *KeycloakAdminService) GetAdminTokenWithExpiry(adminUsername string, adminPassword string) (string, time.Duration, error) {
 	url := fmt.Sprintf("%s/realms/master/protocol/openid-connect/token", kc.host)
 	payload := []byte("grant_type=password&client_id=admin-cli&username=" + adminUsername + "&password=" + adminPassword)
@@ -228,7 +230,21 @@ func (kc *KeycloakAdminService) GetAdminTokenWithExpiry(adminUsername string, ad
 		return "", 0, fmt.Errorf("failed to unmarshal admin token: %w", err)
 	}
 
-	return token.AccessToken, time.Duration(token.ExpiresIn) * time.Second, nil
+	return token.AccessToken, usableAdminTokenLifetime(token.ExpiresIn, token.RefreshExpiresIn), nil
+}
+
+// usableAdminTokenLifetime is how long the admin API will accept this access token.
+// A missing refresh lifetime means Keycloak omitted it, so the JWT expiry is used.
+// A missing JWT expiry with a refresh lifetime still has a live session.
+func usableAdminTokenLifetime(expiresIn, refreshExpiresIn int) time.Duration {
+	seconds := expiresIn
+	if refreshExpiresIn > 0 && (seconds <= 0 || refreshExpiresIn < seconds) {
+		seconds = refreshExpiresIn
+	}
+	if seconds <= 0 {
+		return 0
+	}
+	return time.Duration(seconds) * time.Second
 }
 
 func (kc *KeycloakAdminService) ListIdentityProviders(adminUsername string, adminPassword string) ([]IdentityProviderRepresentation, error) {

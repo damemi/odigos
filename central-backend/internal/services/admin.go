@@ -18,7 +18,9 @@ type AdminService struct {
 	kcAdmin          *keycloak.KeycloakAdminService
 
 	// The admin token comes from a password grant, which is CPU-heavy on Keycloak.
-	// It is cached for most of its lifetime and concurrent refreshes share one grant.
+	// It is cached for most of the time Keycloak will still accept it, and
+	// concurrent refreshes share one grant. The admin API rejects the JWT once
+	// the user session idles out, which is sooner than the access-token expiry.
 	tokenMu        sync.Mutex
 	token          string
 	tokenExpiresAt time.Time
@@ -60,7 +62,8 @@ func (svc *AdminService) GetAdminToken() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		// Refresh at 3/4 of the lifetime so callers never receive a token about to expire.
+		// Refresh at 3/4 of the usable lifetime so callers never receive a token about to
+		// expire. That lifetime is already capped by the Keycloak session, not just JWT exp.
 		// Without a reported lifetime, don't cache.
 		if expiresIn > 0 {
 			svc.tokenMu.Lock()
@@ -76,6 +79,42 @@ func (svc *AdminService) GetAdminToken() (string, error) {
 	return v.(string), nil
 }
 
+// InvalidateAdminToken drops the cached admin token so the next lookup performs
+// a new password grant. Used when Keycloak has rejected the token or restarted.
+func (svc *AdminService) InvalidateAdminToken() {
+	svc.tokenMu.Lock()
+	svc.token = ""
+	svc.tokenExpiresAt = time.Time{}
+	svc.tokenMu.Unlock()
+}
+
+// WithAdminToken runs fn with the cached admin token. A Keycloak 401 drops the
+// cache and retries fn once with a new grant. Other errors are returned as-is.
+func (svc *AdminService) WithAdminToken(fn func(token string) error) error {
+	token, err := svc.GetAdminToken()
+	if err != nil {
+		return err
+	}
+	err = fn(token)
+	if !isKeycloakUnauthorized(err) {
+		return err
+	}
+	svc.InvalidateAdminToken()
+	token, err = svc.GetAdminToken()
+	if err != nil {
+		return err
+	}
+	return fn(token)
+}
+
+func isKeycloakUnauthorized(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "http 401") || strings.Contains(msg, "status 401")
+}
+
 // GetAdminUsername returns the configured Keycloak admin username.
 func (svc *AdminService) GetAdminUsername() string {
 	return svc.adminCredentials.Username
@@ -84,26 +123,27 @@ func (svc *AdminService) GetAdminUsername() string {
 // DetermineSystemInitialized checks if the system has been initialized by querying Keycloak
 // for non-admin, non-service-account users.
 func (svc *AdminService) DetermineSystemInitialized() bool {
-	adminToken, err := svc.GetAdminToken()
-	if err != nil {
-		logger.Log.Error("Failed to get admin token to determine initialization state", "error", err)
-		return false
-	}
-
 	userService := keycloak.NewKeycloakUserService()
-	users, err := userService.ListUsers(adminToken)
+	initialized := false
+	err := svc.WithAdminToken(func(adminToken string) error {
+		users, err := userService.ListUsers(adminToken)
+		if err != nil {
+			return err
+		}
+		for _, u := range users {
+			if ShouldIgnoreKeycloakUser(u, svc.adminCredentials.Username) {
+				continue
+			}
+			initialized = true
+			return nil
+		}
+		return nil
+	})
 	if err != nil {
-		logger.Log.Error("Failed to list users from Keycloak to determine initialization state", "error", err)
+		logger.Log.Error("Failed to determine initialization state", "error", err)
 		return false
 	}
-
-	for _, u := range users {
-		if ShouldIgnoreKeycloakUser(u, svc.adminCredentials.Username) {
-			continue
-		}
-		return true
-	}
-	return false
+	return initialized
 }
 
 func (svc *AdminService) ValidateAdminPermissions(userToken string) (string, error) {
@@ -216,42 +256,44 @@ func convertSamlIdentityProviderInputToKeycloakConfig(input *model.SamlIdentityP
 }
 
 func (svc *AdminService) NeedToSetAdminUser() bool {
-
-	adminToken, err := svc.GetAdminToken()
-	if err != nil {
-		logger.Log.Error("Failed to get admin token to determine initialization state", "error", err)
-		return false
-	}
-
 	userService := keycloak.NewKeycloakUserService()
-	users, err := userService.ListUsers(adminToken)
+	need := true
+	err := svc.WithAdminToken(func(adminToken string) error {
+		users, err := userService.ListUsers(adminToken)
+		if err != nil {
+			return err
+		}
+		for _, u := range users {
+			if ShouldIgnoreKeycloakUser(u, svc.adminCredentials.Username) {
+				continue
+			}
+
+			userID, ok := u["id"].(string)
+			if !ok || userID == "" {
+				continue
+			}
+
+			role, err := userService.GetUserRole(adminToken, userID)
+			if err != nil {
+				if isKeycloakUnauthorized(err) {
+					return err
+				}
+				logger.Log.Error("Failed to get user role while determining if admin user is needed", "error", err, "userID", userID)
+				continue
+			}
+
+			// If there is already a real user with admin role, we do NOT need to set an admin user.
+			if role == keycloak.RoleAdmin {
+				need = false
+				return nil
+			}
+		}
+		need = true
+		return nil
+	})
 	if err != nil {
-		logger.Log.Error("Failed to list users from Keycloak to determine initialization state", "error", err)
+		logger.Log.Error("Failed to determine if an admin user is needed", "error", err)
 		return false
 	}
-
-	for _, u := range users {
-		if ShouldIgnoreKeycloakUser(u, svc.adminCredentials.Username) {
-			continue
-		}
-
-		userID, ok := u["id"].(string)
-		if !ok || userID == "" {
-			continue
-		}
-
-		role, err := userService.GetUserRole(adminToken, userID)
-		if err != nil {
-			logger.Log.Error("Failed to get user role while determining if admin user is needed", "error", err, "userID", userID)
-			continue
-		}
-
-		// If there is already a real user with admin role, we do NOT need to set an admin user.
-		if role == keycloak.RoleAdmin {
-			return false
-		}
-	}
-
-	// No real user with admin role found -> we need to set one.
-	return true
+	return need
 }

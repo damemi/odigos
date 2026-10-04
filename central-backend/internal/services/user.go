@@ -27,20 +27,19 @@ func NewUserService(adminService *AdminService) *UserService {
 }
 
 func (svc *UserService) CheckUserExists(email string) (bool, error) {
-	adminToken, err := svc.adminService.GetAdminToken()
+	exists := false
+	err := svc.adminService.WithAdminToken(func(adminToken string) error {
+		users, err := svc.kcUser.FindUsersByEmail(adminToken, email)
+		if err != nil {
+			return err
+		}
+		exists = len(users) > 0
+		return nil
+	})
 	if err != nil {
 		return false, err
 	}
-
-	users, err := svc.kcUser.FindUsersByEmail(adminToken, email)
-	if err != nil {
-		return false, err
-	}
-	if len(users) > 0 {
-		return true, nil
-	}
-
-	return false, nil
+	return exists, nil
 }
 
 func (svc *UserService) CreateUser(ctx context.Context, input *model.WriteUserInput) (*model.CreateUserResult, error) {
@@ -62,16 +61,19 @@ func (svc *UserService) CreateUser(ctx context.Context, input *model.WriteUserIn
 		return nil, fmt.Errorf("user with email '%s' already exists", *email)
 	}
 
+	tempPassword, generatedPassword := svc.preparePassword(input.Password)
+
+	// AddUserToRealm is the call that 401s when the cached admin token's session
+	// is gone. Retry once with a new grant, then reuse that token below.
+	err = svc.adminService.WithAdminToken(func(token string) error {
+		return svc.kcUser.AddUserToRealm(token, *email, *email, tempPassword)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user in Keycloak: %w", err)
+	}
 	adminToken, err := svc.adminService.GetAdminToken()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get admin token: %w", err)
-	}
-
-	tempPassword, generatedPassword := svc.preparePassword(input.Password)
-
-	err = svc.kcUser.AddUserToRealm(adminToken, *email, *email, tempPassword)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create user in Keycloak: %w", err)
 	}
 	err = svc.kcUser.SetUserPasswordRequirement(adminToken, *email, input.Password == nil)
 	if err != nil {

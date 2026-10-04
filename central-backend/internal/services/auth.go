@@ -188,12 +188,15 @@ func (r *AuthService) APITokens(ctx context.Context) ([]*model.APIToken, error) 
 }
 
 func (svc *AuthService) SignIn(ctx context.Context, email string, password string, code string) (*model.SignInResult, error) {
+	// Resolve initialization first. A cached admin token that Keycloak has rejected
+	// (session idle, or Keycloak restarted) is dropped and replaced there, so the
+	// token captured below is one the admin API will accept.
+	isFirstTimeSetup := svc.isFirstTimeSetup(ctx)
+
 	adminToken, err := svc.adminService.GetAdminToken()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get admin token: %w", err)
 	}
-
-	isFirstTimeSetup := svc.isFirstTimeSetup(ctx)
 
 	if code != "" {
 		authResult, err := svc.kcAuth.AuthenticateUser(adminToken, "", "", code)
@@ -202,7 +205,13 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 		}
 
 		roleAssigned := false
-		if svc.adminService.NeedToSetAdminUser() {
+		// NeedToSetAdminUser may replace a rejected admin token.
+		needAdmin := svc.adminService.NeedToSetAdminUser()
+		adminToken, err = svc.adminService.GetAdminToken()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get admin token: %w", err)
+		}
+		if needAdmin {
 			if err := svc.kcUser.AddRealmRoleToUser(adminToken, authResult.UserData.Email, keycloak.RoleAdmin); err != nil {
 				return nil, fmt.Errorf("failed to assign admin role to first SSO user: %w", err)
 			}
@@ -290,6 +299,12 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create first admin user: %w", err)
+		}
+
+		// CreateUser may replace a rejected admin token.
+		adminToken, err = svc.adminService.GetAdminToken()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get admin token: %w", err)
 		}
 
 		authResult, err := svc.kcAuth.AuthenticateUser(adminToken, email, password, "")
