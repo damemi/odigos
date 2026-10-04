@@ -35,7 +35,7 @@
 # passes this build arg, so a `make build-connector-aws` never uses the default below; the default exists
 # only so a bare `docker build -f connectors/providers/aws/Dockerfile .` still works. TestArtifactVersions
 # in pkg/config fails the build if the two drift.
-ARG LAMBDA_AGENTS_IMAGE=us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-lambda-agents:v0.0.15
+ARG LAMBDA_AGENTS_IMAGE=registry.odigos.io/odigos-lambda-agents:v0.0.15
 
 # --- Go build ------------------------------------------------------------------------------------
 FROM --platform=$BUILDPLATFORM golang:1.26.8 AS builder
