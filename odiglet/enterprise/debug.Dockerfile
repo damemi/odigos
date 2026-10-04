@@ -132,7 +132,7 @@ COPY --from=public.ecr.aws/odigos/agents/ruby-community:v0.0.9@sha256:5177737aba
 # ruby-community-legacy
 # Digest is pinned after the first published ruby-community-legacy release:
 #   make -f agent-deps.mk upgrade-agent INSTRUMENTATION_AGENT=ruby-legacy AGENT_VERSION=vX.Y.Z
-COPY --from=public.ecr.aws/odigos/agents/ruby-community-legacy:v0.0.1 /instrumentations/ruby-legacy /instrumentations/ruby-legacy
+COPY --from=public.ecr.aws/odigos/agents/ruby-community-legacy:v0.0.2@sha256:b94c04972292962b3147f835ad148bd3a4b79995f96ab68f8e43edbbb6d6c0b8 /instrumentations/ruby-legacy /instrumentations/ruby-legacy
 
 # loader
 ARG ODIGOS_LOADER_VERSION=v0.0.8
