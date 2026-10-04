@@ -163,7 +163,7 @@ build-connector-runtime:
 #
 # Bumping the artifacts version is: edit that file, run the test, open a PR.
 ARTIFACTS_VERSION := $(shell cat connectors/providers/aws/ARTIFACTS_VERSION)
-LAMBDA_AGENTS_REGISTRY ?= us-central1-docker.pkg.dev/odigos-cloud/components-private
+LAMBDA_AGENTS_REGISTRY ?= registry.odigos.io
 
 # Override to build against an unreleased layer bundle (the version check does not apply to an override,
 # which is the point of having one):
