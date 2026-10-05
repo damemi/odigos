@@ -16,6 +16,9 @@ func DestinationFromCreateInput(in model.CreateDestinationInput) Destination {
 	if dest.Config == nil {
 		dest.Config = map[string]any{}
 	}
+	if in.Disabled != nil {
+		dest.Disabled = *in.Disabled
+	}
 	return dest
 }
 
@@ -36,6 +39,9 @@ func (d *Destination) ApplyUpdateInput(in model.UpdateDestinationInput) {
 	if in.Signals != nil {
 		d.Signals = signalsFromTelemetry(in.Signals)
 	}
+	if in.Disabled != nil {
+		d.Disabled = *in.Disabled
+	}
 }
 
 // ToDestinationModel converts a domain Destination to the agents-api GraphQL model.
@@ -48,11 +54,12 @@ func (d *Destination) ToDestinationModel() *model.Destination {
 		cfg = map[string]any{}
 	}
 	return &model.Destination{
-		Name:    d.Name,
-		Type:    d.Type,
-		Region:  stringPtrIfNotEmpty(d.Region),
-		Config:  cfg,
-		Signals: telemetryFromSignals(d.Signals),
+		Name:     d.Name,
+		Type:     d.Type,
+		Region:   stringPtrIfNotEmpty(d.Region),
+		Config:   cfg,
+		Signals:  telemetryFromSignals(d.Signals),
+		Disabled: d.Disabled,
 	}
 }
 

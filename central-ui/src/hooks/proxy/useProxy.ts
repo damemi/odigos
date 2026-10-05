@@ -100,15 +100,40 @@ export const useProxy = (): UseProxy => {
     if (!opts?.skipRedirect) router.push(ROUTES.CONNECTIONS);
   };
 
-  // Reset proxyID if the connection is lost
+  // Reset proxyID if the connection is lost. Also refresh odigosVersion /
+  // graphqlSchemaVersion from the live connections list — sessionStorage keeps
+  // the values from selectProxy time, so an agent rebuilt/reconnected with a
+  // newer agents-api schema would otherwise keep driving dialects from the
+  // stale version (e.g. Destination.disabled gated on v0.23.1 after upgrade).
   useEffect(() => {
-    if (proxyID) {
-      const found = computePlatforms.find((cp) => cp.id === proxyID);
-      const connectionNotFound = computePlatforms.length && !found;
-      const connectionHasError = found?.status === StatusType.Error;
-      if (connectionNotFound || connectionHasError) clearProxy();
+    if (!proxyID) return;
+    const found = computePlatforms.find((cp) => cp.id === proxyID);
+    const connectionNotFound = computePlatforms.length && !found;
+    const connectionHasError = found?.status === StatusType.Error;
+    if (connectionNotFound || connectionHasError) {
+      clearProxy();
+      return;
     }
-  }, [proxyID, computePlatforms.length]);
+    if (!found) return;
+    const nextSchema = found.graphqlSchemaVersion ?? undefined;
+    const nextVersion = found.odigosVersion;
+    const nextName = found.name;
+    const nextType = found.type;
+    if (
+      nextSchema !== graphqlSchemaVersion ||
+      nextVersion !== odigosVersion ||
+      nextName !== proxyName ||
+      nextType !== platformType
+    ) {
+      setProxyStore({
+        proxyID,
+        proxyName: nextName,
+        odigosVersion: nextVersion,
+        graphqlSchemaVersion: nextSchema,
+        platformType: nextType,
+      });
+    }
+  }, [proxyID, computePlatforms, graphqlSchemaVersion, odigosVersion, proxyName, platformType]);
 
   // Clear the store when landing on out-of-proxy pages (cleanup after leaving
   // a proxy). Or redirect to connections when an in-proxy route has no proxy.

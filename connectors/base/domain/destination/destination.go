@@ -14,9 +14,10 @@ type Destination struct {
 	Type string `json:"type" validate:"required"`
 	// Region scopes the managed-collector routing marker. Ordinary OTLP destinations are
 	// connector-wide terminals and must leave this empty.
-	Region  string         `json:"region,omitempty"`
-	Config  map[string]any `json:"config,omitempty"`
-	Signals []string       `json:"signals" validate:"required,min=1,dive,oneof=TRACES METRICS LOGS PROFILES"`
+	Region   string         `json:"region,omitempty"`
+	Config   map[string]any `json:"config,omitempty"`
+	Signals  []string       `json:"signals" validate:"required,min=1,dive,oneof=TRACES METRICS LOGS PROFILES"`
+	Disabled bool           `json:"disabled,omitempty"`
 }
 
 func isManagedCollectorType(typ string) bool {

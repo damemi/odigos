@@ -17,17 +17,18 @@ func isNoRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 
 // DestinationRecord is a persisted destination row.
 type DestinationRecord struct {
-	Name    string
-	Type    string
-	Region  string
-	Config  map[string]any
-	Signals []string
+	Name     string
+	Type     string
+	Region   string
+	Config   map[string]any
+	Signals  []string
+	Disabled bool
 }
 
 func (s *Store) ListDestinations(ctx context.Context) ([]DestinationRecord, error) {
 	destinationsLog.Debug("list destinations", "connector", s.connectorName, "schema", s.schema)
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
-		SELECT name, dest_type, COALESCE(region, ''), config, signals
+		SELECT name, dest_type, COALESCE(region, ''), config, signals, disabled
 		FROM %s.destinations
 		WHERE connector_name = $1
 		ORDER BY name
@@ -42,7 +43,7 @@ func (s *Store) ListDestinations(ctx context.Context) ([]DestinationRecord, erro
 	for rows.Next() {
 		var rec DestinationRecord
 		var configJSON, signalsJSON []byte
-		if err := rows.Scan(&rec.Name, &rec.Type, &rec.Region, &configJSON, &signalsJSON); err != nil {
+		if err := rows.Scan(&rec.Name, &rec.Type, &rec.Region, &configJSON, &signalsJSON, &rec.Disabled); err != nil {
 			destinationsLog.Error("scan destination row failed", "error", err)
 			return nil, err
 		}
@@ -63,10 +64,10 @@ func (s *Store) GetDestination(ctx context.Context, name string) (*DestinationRe
 	var rec DestinationRecord
 	var configJSON, signalsJSON []byte
 	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
-		SELECT name, dest_type, COALESCE(region, ''), config, signals
+		SELECT name, dest_type, COALESCE(region, ''), config, signals, disabled
 		FROM %s.destinations
 		WHERE connector_name = $1 AND name = $2
-	`, s.schema), s.connectorName, name).Scan(&rec.Name, &rec.Type, &rec.Region, &configJSON, &signalsJSON)
+	`, s.schema), s.connectorName, name).Scan(&rec.Name, &rec.Type, &rec.Region, &configJSON, &signalsJSON, &rec.Disabled)
 	if err != nil {
 		if isNoRows(err) {
 			return nil, nil
@@ -97,6 +98,7 @@ func (s *Store) UpsertDestination(ctx context.Context, dest domaindest.Destinati
 		"name", dest.Name,
 		"type", dest.Type,
 		"region", dest.Region,
+		"disabled", dest.Disabled,
 	)
 	configJSON, err := json.Marshal(dest.Config)
 	if err != nil {
@@ -108,15 +110,16 @@ func (s *Store) UpsertDestination(ctx context.Context, dest domaindest.Destinati
 	}
 	_, err = s.pool.Exec(ctx, fmt.Sprintf(`
 		INSERT INTO %s.destinations
-			(connector_name, name, dest_type, region, config, signals, created_at, updated_at)
-		VALUES ($1,$2,$3,NULLIF($4,''),$5::jsonb,$6::jsonb, now(), now())
+			(connector_name, name, dest_type, region, config, signals, disabled, created_at, updated_at)
+		VALUES ($1,$2,$3,NULLIF($4,''),$5::jsonb,$6::jsonb,$7, now(), now())
 		ON CONFLICT (connector_name, name) DO UPDATE SET
 			dest_type = EXCLUDED.dest_type,
 			region = EXCLUDED.region,
 			config = EXCLUDED.config,
 			signals = EXCLUDED.signals,
+			disabled = EXCLUDED.disabled,
 			updated_at = now()
-	`, s.schema), s.connectorName, dest.Name, dest.Type, dest.Region, string(configJSON), string(signalsJSON))
+	`, s.schema), s.connectorName, dest.Name, dest.Type, dest.Region, string(configJSON), string(signalsJSON), dest.Disabled)
 	if err != nil {
 		destinationsLog.Error("upsert destination failed", "connector", s.connectorName, "name", dest.Name, "error", err)
 	}
@@ -256,10 +259,11 @@ func DestinationRecordToDomain(rec DestinationRecord) domaindest.Destination {
 		cfg = map[string]any{}
 	}
 	return domaindest.Destination{
-		Name:    rec.Name,
-		Type:    rec.Type,
-		Region:  rec.Region,
-		Config:  cfg,
-		Signals: rec.Signals,
+		Name:     rec.Name,
+		Type:     rec.Type,
+		Region:   rec.Region,
+		Config:   cfg,
+		Signals:  rec.Signals,
+		Disabled: rec.Disabled,
 	}
 }

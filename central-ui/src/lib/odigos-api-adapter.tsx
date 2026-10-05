@@ -75,6 +75,7 @@ import {
 import {
   mapVmDestinationTypesToCategories,
   mapVmDestinations,
+  patchVmDestinationsQuery,
   vmCreateDestinationResult,
   vmCreateDestinationVariables,
   vmDeleteDestinationResult,
@@ -1139,6 +1140,7 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
     // the versioned vmagent dialect registry and shape-mapped (see vm-destinations).
     GET_DESTINATIONS: wrapVersioned<GetDestinationsData, undefined>(GET_DESTINATIONS, undefined, undefined, {
       select: (d) => d.GetDestinationsDocument,
+      patchQuery: patchVmDestinationsQuery,
       transformResult: (data) => mapVmDestinations(data),
     }),
     // Kit slot types are `Operation<GetDestinationCategoriesResult, undefined>`
@@ -1154,12 +1156,14 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
     GET_POTENTIAL_DESTINATIONS: wrapVersioned<GetPotentialDestinationsResult, undefined>(GET_POTENTIAL_DESTINATIONS),
     CREATE_DESTINATION: wrapVersioned<CreateDestinationResult, CreateDestinationVars>(CREATE_DESTINATION, undefined, undefined, {
       select: (d) => d.CreateDestinationDocument,
-      transformVariables: (vars) => vmCreateDestinationVariables(vars),
+      patchQuery: patchVmDestinationsQuery,
+      transformVariables: (vars, ctx) => vmCreateDestinationVariables(vars, ctx),
       transformResult: (data) => vmCreateDestinationResult(data),
     }),
     UPDATE_DESTINATION: wrapVersioned<UpdateDestinationData, UpdateDestinationVars>(UPDATE_DESTINATION, undefined, undefined, {
       select: (d) => d.UpdateDestinationDocument,
-      transformVariables: (vars) => vmUpdateDestinationVariables(vars),
+      patchQuery: patchVmDestinationsQuery,
+      transformVariables: (vars, ctx) => vmUpdateDestinationVariables(vars, ctx),
       transformResult: (data) => vmUpdateDestinationResult(data),
     }),
     DELETE_DESTINATION: wrapVersioned<DeleteDestinationResult, DeleteDestinationVars>(DELETE_DESTINATION, undefined, undefined, {

@@ -19,6 +19,12 @@ const atLeastMinor = (schemaVersion: string, minor: number): boolean => {
   return Number(m[1]) > 0 || Number(m[2]) >= minor;
 };
 
+// Semver-shaped agents-api versions (`0.24.0`, `v0.19.0`). Local / replace
+// builds report `(devel)`, `UNKNOWN-VERSION`, or the vm-agent binary string
+// `development` — none of which parse here.
+export const isParseableAgentsApiVersion = (schemaVersion: string | undefined): boolean =>
+  !!schemaVersion && /^\d+\.\d+/.test(schemaVersion.replace(/^v/i, '').trim());
+
 // WorkloadReport.region landed in agents-api v0.16.0. Older schemas reject the
 // field, so only inject it when the connected platform reports >= that version.
 export const supportsWorkloadReportRegion = (schemaVersion: string): boolean => atLeastMinor(schemaVersion, 16);
@@ -33,6 +39,15 @@ export const supportsWorkloadReportRegion = (schemaVersion: string): boolean => 
 // only when the connected platform actually has them, since an older agent
 // rejects the whole query on one unknown field.
 export const supportsTypedContainerDetails = (schemaVersion: string): boolean => atLeastMinor(schemaVersion, 18);
+
+// Destination.disabled (pause export without delete) landed in agents-api v0.24.0.
+// Older schemas reject the field on reads and on create/update inputs.
+// Unparseable versions are treated as current: omitting the field on a local
+// OSX/`development` agent makes UpdateDestination succeed without changing
+// Disabled (the input is optional), which matches a success toast and no-op UI.
+// patchVmDestinationsQuery is a no-op once the floored dialect already selects it.
+export const supportsDestinationDisabled = (schemaVersion: string): boolean =>
+  !isParseableAgentsApiVersion(schemaVersion) || atLeastMinor(schemaVersion, 24);
 
 // Region side-channel.
 //

@@ -18,9 +18,9 @@ const (
 // never runs migrations itself (see the cloud-connectors design, schema migrations).
 var ExpectedSchemaVersions = map[string]string{
 	SchemaPlatform: "3",
-	SchemaAWS:      "4",
-	SchemaGCP:      "2",
-	SchemaAzure:    "2",
+	SchemaAWS:      "5",
+	SchemaGCP:      "3",
+	SchemaAzure:    "3",
 }
 
 // AWSExpectedVersion is the connector_aws schema version the AWS runtime is built against. It is the

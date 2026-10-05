@@ -39,6 +39,17 @@ func TestResolveOTLPTarget(t *testing.T) {
 	if _, ok := ResolveOTLPTarget(nil); ok {
 		t.Error("no destinations must not resolve")
 	}
+
+	// Disabled destinations are retained in the store but must not export.
+	disabled := Destination{
+		Type:     "otlp",
+		Disabled: true,
+		Signals:  []string{SignalTraces},
+		Config:   map[string]any{configOTLPGRPCEndpoint: "disabled:4317"},
+	}
+	if _, ok := ResolveOTLPTarget([]Destination{disabled}); ok {
+		t.Error("disabled destination must not resolve")
+	}
 }
 
 func TestResolveOTLPTargetHTTP(t *testing.T) {

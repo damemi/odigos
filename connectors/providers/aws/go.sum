@@ -111,8 +111,8 @@ github.com/madflojo/testcerts v1.5.0 h1:GhQllyAiGzXVZU+i8O/cQkPTHzN59RxMGtm3uETg
 github.com/madflojo/testcerts v1.5.0/go.mod h1:MW8sh39gLnkKh4K0Nc55AyHEDl9l/FBLDUsQhpmkuo0=
 github.com/michel-laterman/proxy-connect-dialer-go v0.1.0 h1:Q8asukpmyrEheocd+R+6YEI4jcm62sHHalgTMG+LoLw=
 github.com/michel-laterman/proxy-connect-dialer-go v0.1.0/go.mod h1:HTlVkRAqzTRPYbWxgAiwMT9HRZMOqP3Mx7+toa3yJjc=
-github.com/odigos-io/agents-api/go/server v0.19.0 h1:hbsDjkDiPdCENVCyqM4lsKoqSnOYcha9YscFYUyR6uU=
-github.com/odigos-io/agents-api/go/server v0.19.0/go.mod h1:0PNMYOY1wJ8Rw74mlVlCHtII5VahQxcL+bGH3DJ1UBw=
+github.com/odigos-io/agents-api/go/server v0.24.0 h1:a7epi6qRX+mSEZmao5vpyHgu6GBFo/hUlIhHP6BvP4g=
+github.com/odigos-io/agents-api/go/server v0.24.0/go.mod h1:0PNMYOY1wJ8Rw74mlVlCHtII5VahQxcL+bGH3DJ1UBw=
 github.com/odigos-io/odigos/common v1.29.0 h1:4dh8dEJcBs9HnDZYDP0FUFg3Dd23rXv0Jc1fY+8vTl8=
 github.com/odigos-io/odigos/common v1.29.0/go.mod h1:vFHVrElkdAJ6hX1arI4K2WwuYC7Qsg7CzsTdRaB220w=
 github.com/odigos-io/odigos/destinations v1.29.0 h1:u33+m2QnbPdhZ/n4DnLS5Uom7GaBgkb+UrON7bm1+M0=

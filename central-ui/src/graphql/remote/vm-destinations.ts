@@ -5,18 +5,22 @@ import type {
   DeleteDestinationResult,
   DeleteDestinationVars,
   GetDestinationsData,
+  OperationContext,
   TestDestinationConnectionVars,
   UpdateDestinationData,
   UpdateDestinationVars,
 } from '@odigos/ui-kit/contexts';
 import { type Destination, type DestinationTypes, type GetDestinationCategoriesResult, type TestConnectionResponse } from '@odigos/ui-kit/types';
+import { dialectVersion } from '@/graphql/remote/vm-dialect';
+import { supportsDestinationDisabled, withFragmentSelections } from '@/graphql/remote/utils';
 
 // The agents-api destination surface (v0.12.0+) differs from the odigos k8s
 // backend that central-ui was built against:
 //   - the catalog is a flat `destinationTypes` list (no `destinationCategories`
 //     grouping; `supportedSignals` are flat booleans).
-//   - a configured destination is `{ name, type, config(JSON), signals }`
-//     (no id / disabled / dataStreamNames / nested destinationType).
+//   - a configured destination is `{ name, type, config(JSON), signals, disabled }`
+//     (no id / dataStreamNames / nested destinationType). `disabled` was added in
+//     agents-api v0.24.0; older dialects omit it and we treat missing as false.
 //   - mutations are per-destination create/update/delete + testConnection with
 //     a `{ input }` argument and `TelemetrySignal` enum signals.
 // These helpers translate between that surface and the kit's slot shapes.
@@ -48,15 +52,23 @@ const fieldsToConfig = (fields?: { key: string; value: string }[]): Record<strin
   return cfg;
 };
 
+type VmDestinationEntity = {
+  name: string;
+  type: string;
+  config?: Record<string, unknown> | null;
+  signals?: string[] | null;
+  disabled?: boolean | null;
+};
+
 // agents-api `Destination` -> kit `Destination`. VM carries no catalog metadata
 // per configured destination, so `destinationType` is derived best-effort
 // (displayName = type, supported = currently-exported signals).
-const mapVmDestinationEntity = (d: { name: string; type: string; config?: Record<string, unknown> | null; signals?: string[] | null }): Destination => {
+const mapVmDestinationEntity = (d: VmDestinationEntity): Destination => {
   const exported = signalsToExported(d.signals);
   return {
     id: d.name,
     name: d.name,
-    disabled: false,
+    disabled: !!d.disabled,
     dataStreamNames: [VM_DATA_STREAM],
     exportedSignals: exported,
     fields: JSON.stringify(d.config ?? {}),
@@ -209,16 +221,41 @@ export const mapVmDestinations = (data: unknown): GetDestinationsData => {
   return { destinations: destinations.map((d) => mapVmDestinationEntity({ ...d, signals: d.signals as unknown as string[] })) };
 };
 
-// ----- mutation variable mappers (-> agents-api `{ input }`) -----
-
-export const vmCreateDestinationVariables = (vars: CreateDestinationVars): Record<string, unknown> => {
-  const d = vars.destination;
-  return { input: { name: d.name, type: d.type, config: fieldsToConfig(d.fields), signals: exportedToSignals(d.exportedSignals) } };
+// Inject `disabled` into DestinationFields when the connected schema has it but the
+// floored dialect snapshot does not select it yet (pre-v0.24.0). No-op on v0.24.0+.
+export const patchVmDestinationsQuery = (printedQuery: string, ctx: OperationContext): string => {
+  if (!supportsDestinationDisabled(dialectVersion(ctx))) return printedQuery;
+  return withFragmentSelections(printedQuery, 'Destination', 'disabled');
 };
 
-export const vmUpdateDestinationVariables = (vars: UpdateDestinationVars): Record<string, unknown> => {
+// ----- mutation variable mappers (-> agents-api `{ input }`) -----
+
+export const vmCreateDestinationVariables = (vars: CreateDestinationVars, ctx?: OperationContext): Record<string, unknown> => {
   const d = vars.destination;
-  return { input: { name: vars.id, type: d.type, config: fieldsToConfig(d.fields), signals: exportedToSignals(d.exportedSignals) } };
+  const input: Record<string, unknown> = {
+    name: d.name,
+    type: d.type,
+    config: fieldsToConfig(d.fields),
+    signals: exportedToSignals(d.exportedSignals),
+  };
+  if (!ctx || supportsDestinationDisabled(dialectVersion(ctx))) {
+    input.disabled = !!d.disabled;
+  }
+  return { input };
+};
+
+export const vmUpdateDestinationVariables = (vars: UpdateDestinationVars, ctx?: OperationContext): Record<string, unknown> => {
+  const d = vars.destination;
+  const input: Record<string, unknown> = {
+    name: vars.id,
+    type: d.type,
+    config: fieldsToConfig(d.fields),
+    signals: exportedToSignals(d.exportedSignals),
+  };
+  if (!ctx || supportsDestinationDisabled(dialectVersion(ctx))) {
+    input.disabled = !!d.disabled;
+  }
+  return { input };
 };
 
 export const vmDeleteDestinationVariables = (vars: DeleteDestinationVars): Record<string, unknown> => ({ input: { name: vars.id } });
@@ -231,7 +268,7 @@ export const vmTestConnectionVariables = (vars: TestDestinationConnectionVars): 
 // ----- mutation result mappers -----
 
 export const vmCreateDestinationResult = (data: unknown): CreateDestinationResult | undefined => {
-  const created = (data as { createDestination?: { name: string; type: string; config?: Record<string, unknown> | null; signals?: string[] | null } } | null | undefined)?.createDestination;
+  const created = (data as { createDestination?: VmDestinationEntity } | null | undefined)?.createDestination;
   if (!created) return undefined;
   return { createNewDestination: mapVmDestinationEntity(created) };
 };

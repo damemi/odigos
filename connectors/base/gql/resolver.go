@@ -35,6 +35,11 @@ type RootResolver struct {
 func (r *RootResolver) Query() generated.QueryResolver       { return &queryResolver{r} }
 func (r *RootResolver) Mutation() generated.MutationResolver { return &mutationResolver{r} }
 
+var (
+	_ generated.QueryResolver    = (*queryResolver)(nil)
+	_ generated.MutationResolver = (*mutationResolver)(nil)
+)
+
 type queryResolver struct{ *RootResolver }
 type mutationResolver struct{ *RootResolver }
 

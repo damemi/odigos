@@ -1,6 +1,7 @@
 import { print, type DocumentNode } from 'graphql';
-import { resolveDialect } from '@odigos/vmagent-api-apollo-client/registry';
+import { LATEST_DIALECT_VERSION, resolveDialect } from '@odigos/vmagent-api-apollo-client/registry';
 import type { OperationContext } from '@odigos/ui-kit/contexts';
+import { isParseableAgentsApiVersion } from '@/graphql/remote/utils';
 
 // VM dialect resolution for the central-ui REMOTE_FETCH path.
 //
@@ -18,7 +19,15 @@ import type { OperationContext } from '@odigos/ui-kit/contexts';
 // so prefer `schemaVersion` and fall back to `version` for older agents that
 // don't report a schema version. Mirrors the adapter's k8s `dialectVersion`.
 type ProxyOperationContext = OperationContext & { schemaVersion?: string };
-export const dialectVersion = (ctx: OperationContext): string => (ctx as ProxyOperationContext).schemaVersion ?? ctx.version;
+export const dialectVersion = (ctx: OperationContext): string => {
+  const reported = (ctx as ProxyOperationContext).schemaVersion ?? ctx.version;
+  // Local OSX / `go run` agents report `(devel)`, `UNKNOWN-VERSION`, or the
+  // binary string `development`. resolveDialect floors those to v0.6.0, which
+  // has no Destination.disabled — UpdateDestination then omits the field and
+  // the UI toasts success with no persist. Use the latest frozen dialect.
+  if (!isParseableAgentsApiVersion(reported)) return LATEST_DIALECT_VERSION;
+  return reported;
+};
 
 // A dialect is the union of every frozen snapshot's generated module, and the
 // surface diverged across versions (v0.12.0 dropped the legacy `*V2` / k8s /

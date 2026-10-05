@@ -31,7 +31,7 @@ const (
 // destination and exporting to another, which would leak a token to the wrong vendor.
 func ResolveOTLPHeaders(dests []Destination) map[string]string {
 	for _, d := range dests {
-		if isManagedCollectorType(d.Type) {
+		if d.Disabled || isManagedCollectorType(d.Type) {
 			continue
 		}
 		grpcEP := configString(d.Config, configOTLPGRPCEndpoint)
