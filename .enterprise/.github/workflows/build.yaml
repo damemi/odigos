@@ -189,7 +189,7 @@ jobs:
         env:
           GOFLAGS: -mod=mod
           GITHUB_TOKEN: ${{ steps.sts.outputs.token }}
-          GOPRIVATE: odigos-io/*
+          GOPRIVATE: github.com/odigos-io/*
         run: |
           cd ${{ matrix.module }}
           go test ./... -race
