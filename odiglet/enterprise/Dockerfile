@@ -69,7 +69,7 @@ FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS agents-builder
 WORKDIR /instrumentations
 
 # java-community
-ARG JAVA_OTEL_VERSION=v2.31.1
+ARG JAVA_OTEL_VERSION=v2.32.0
 ADD https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/$JAVA_OTEL_VERSION/opentelemetry-javaagent.jar /instrumentations/java/javaagent.jar
 RUN chmod 644 /instrumentations/java/javaagent.jar
 
