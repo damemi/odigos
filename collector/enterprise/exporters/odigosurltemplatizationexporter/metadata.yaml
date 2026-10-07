@@ -1,0 +1,12 @@
+type: odigos_url_templatization
+
+status:
+  class: exporter
+  stability:
+    beta: [traces]
+  distributions: [odigos]
+  codeowners:
+    active: [odigos]
+
+tests:
+  skip_lifecycle: true

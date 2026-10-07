@@ -31,6 +31,7 @@ exporters:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/azureblobstorageexporter v0.159.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/googlecloudstorageexporter v0.159.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/mockdestinationexporter v0.159.0
+  - gomod: github.com/odigos-io/odigos-enterprise/collector/exporters/odigosurltemplatizationexporter v0.0.0-00010101000000-000000000000
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awscloudwatchlogsexporter v0.159.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awsemfexporter v0.159.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awss3exporter v0.159.0
@@ -164,6 +165,7 @@ replaces:
   - github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor => ../processors/odigossymbolizeprocessor
   - github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver => ../receivers/odigosebpfreceiver
   - github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension => ../extension/odigosenterpriseauthextension
+  - github.com/odigos-io/odigos-enterprise/collector/exporters/odigosurltemplatizationexporter => ../exporters/odigosurltemplatizationexporter
   # odigosauth lives at the enterprise repo root, copied into the build context by the Dockerfile.
   - github.com/odigos-io/odigos-enterprise/odigosauth => ../../odigosauth
   # Not a component itself - the eBPF map exchange the receiver and the vm profile attrs

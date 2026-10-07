@@ -5,6 +5,7 @@ module odigos.io/opentelemetry-collector/cmd/odigosotelcol
 go 1.26.4
 
 require (
+	github.com/odigos-io/odigos-enterprise/collector/exporters/odigosurltemplatizationexporter v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor v0.0.0-00010101000000-000000000000
@@ -341,6 +342,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.7.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dennwc/varint v1.0.0 // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/digitalocean/go-metadata v0.0.0-20250129100319-e3650a3df44b // indirect
 	github.com/digitalocean/godo v1.196.0 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
@@ -589,6 +591,7 @@ require (
 	github.com/prometheus/prometheus v0.313.2 // indirect
 	github.com/prometheus/sigv4 v0.4.1 // indirect
 	github.com/puzpuzpuz/xsync/v4 v4.5.0 // indirect
+	github.com/redis/go-redis/v9 v9.8.0 // indirect
 	github.com/richardartoul/molecule v1.0.1-0.20240531184615-7ca0df43c0b3 // indirect
 	github.com/rs/cors v1.11.1 // indirect
 	github.com/samber/lo v1.52.0 // indirect
@@ -817,6 +820,8 @@ replace github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbol
 replace github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver => ../receivers/odigosebpfreceiver
 
 replace github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension => ../extension/odigosenterpriseauthextension
+
+replace github.com/odigos-io/odigos-enterprise/collector/exporters/odigosurltemplatizationexporter => ../exporters/odigosurltemplatizationexporter
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../../odigosauth
 
