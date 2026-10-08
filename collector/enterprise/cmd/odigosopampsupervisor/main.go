@@ -42,6 +42,11 @@ func run() error {
 		return fmt.Errorf("failed to create logger: %w", err)
 	}
 
+	// After Load and before NewSupervisor, which is the only window it fits in: it needs the resolved
+	// storage.directory and agent::config_files to know where to write and what to merge, and the
+	// Supervisor reads startup_fallback_configs when it starts. Never fatal — see installBootstrapConfig.
+	installBootstrapConfig(&cfg, logger)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

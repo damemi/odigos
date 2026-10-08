@@ -44,6 +44,12 @@ agent:
     - $OWN_TELEMETRY_CONFIG
     - $OPAMP_EXTENSION_CONFIG
     - /etc/odigos/managed-collector/guardrails.yaml
+  # What a cold start serves when Central is unreachable and no last-known-good config was cached.
+  # The bundled entry is inert by design. When the deployment supplies
+  # ODIGOS_COLLECTOR_BOOTSTRAP_CONFIG, odigosopampsupervisor REPLACES this list with the decoded
+  # document followed by the local files in config_files above — see collector/managed/README.md,
+  # "Cold-start configuration". It is replaced rather than prepended to because this list is MERGED in
+  # order, and an inert entry merged after a real one would put `nop` back in every pipeline.
   startup_fallback_configs:
     - /etc/odigos/managed-collector/fallback.yaml
 

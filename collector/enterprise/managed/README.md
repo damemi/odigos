@@ -29,9 +29,19 @@ The connector deployment must provide:
   `ODIGOS_OPAMP_AUTHORIZATION` and `ODIGOS_ONPREM_TOKEN` must both be delivered from the platform's
   secret store as secret references, never as plain environment values, and from **two separate
   secrets** — they have different issuers, lifetimes and revocation authorities.
+- `ODIGOS_COLLECTOR_BOOTSTRAP_CONFIG`: **optional.** A base64-encoded Collector configuration to serve on
+  a cold start that cannot reach the control plane. See "Cold-start configuration" below. It carries the
+  configuration's exporter credentials, so it is a **third** secret reference and never a plain
+  environment value, for the same reason as the two above.
 - A volume mounted at `/var/lib/odigos/collector-supervisor`, writable by UID/GID `65532`. Use
   persistent storage so the OpAMP instance identity, cached remote config, and last-known-good config
   survive rescheduling.
+
+  On ephemeral storage none of that survives, and the two consequences are worth stating. A replaced
+  task reports a **new OpAMP instance UID** — the identity that matters for routing is the credential,
+  so routing is unaffected, but a control plane that keyed reporting on the instance UID would show one
+  Collector as a stream of new ones. And a cold start has no cached last-known-good configuration, which
+  is what `ODIGOS_COLLECTOR_BOOTSTRAP_CONFIG` exists for.
 - Outbound TLS access to the OpAMP endpoint and to every destination configured in the remote
   pipeline. The image trusts the operating system CA bundle. For private CAs or mTLS, mount a custom
   Supervisor config and select it with `--config`.
@@ -47,6 +57,35 @@ it with `/odigosotelcol validate` before applying it. A successful change restar
 Collector; a startup failure automatically restores the persisted last-known-good remote config.
 On first boot without Central or cached state, `fallback.yaml` starts an inert no-op Collector that
 does not listen for or export customer telemetry.
+
+## Cold-start configuration
+
+`ODIGOS_COLLECTOR_BOOTSTRAP_CONFIG` closes the one gap the inert fallback leaves: a task replaced onto
+fresh storage while Central is unreachable comes up accepting nothing, for as long as the outage lasts.
+The control plane already generates the configuration it would push, so it can hand the same document
+over at deploy time and the Collector comes up serving the last configuration that was published.
+
+- The value is a **base64-encoded complete Collector configuration** — the same document Central would
+  push over OpAMP, not a fragment. Base64 because the value crosses several platforms' environment
+  plumbing on its way here, and a multi-line YAML document surviving all of them intact is an
+  assumption rather than a guarantee. Surrounding whitespace and line wrapping are tolerated.
+- The Supervisor writes it to `bootstrap-config.yaml` under `storage.directory`, mode `0600`, creating
+  that directory if this is a first boot.
+- `startup_fallback_configs` then becomes **the bootstrap document followed by the local files in
+  `agent.config_files`** — `guardrails.yaml`. The bundled `fallback.yaml` is *replaced*, not merged:
+  the Supervisor merges this list in order rather than trying its entries in turn, and collector confmap
+  replaces lists on merge, so an inert entry after the real document would replace the real pipeline with
+  `nop` and produce a Collector that starts, reports healthy and accepts nothing. Carrying the local
+  files across is what keeps the enterprise authorization extension loaded, because the fallback path
+  does not merge `agent.config_files`.
+- The document is **never** a local config file. It is a fallback only, so a Collector that reaches
+  Central runs the pushed configuration alone; one that merged the bootstrap into every push would serve
+  a mixture of the two for ever.
+- A document that cannot be decoded, written, or validated by `/odigosotelcol validate` is **ignored**
+  and the inert fallback stands. This is a mitigation for an outage, and a mitigation that can stop a
+  Collector from starting is worse than the outage. Every refusal is logged with the reason.
+- Withdrawing the variable removes any document an earlier deployment left under `storage.directory`,
+  so a persistent volume does not keep an exporter credential in a file nothing reads.
 
 This image implements the managed agent side of the contract. The cloud-connectors control plane
 must expose the authenticated OpAMP endpoint, associate the reported connector identity with the
