@@ -249,10 +249,10 @@ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=
-github.com/odigos-io/odigos/api v1.39.0-pre1.0.20261005144945-ff6cb8e12dde h1:tgDrgni5WG7r8DgciisC2DW5J1r2DJOwhKrftBht1Sg=
-github.com/odigos-io/odigos/api v1.39.0-pre1.0.20261005144945-ff6cb8e12dde/go.mod h1:Z3/Pmo5vZq4SNRoRHwhqqUdzOsox81z5WdEWecuarxw=
-github.com/odigos-io/odigos/common v1.39.0-pre1.0.20261005144945-ff6cb8e12dde h1:6/J7nYk42rxFsjRKmBdv8vBbw9dpqSWOHvzG/G23ewQ=
-github.com/odigos-io/odigos/common v1.39.0-pre1.0.20261005144945-ff6cb8e12dde/go.mod h1:0e23PSV0c4cAR13QAPG4pRa2AaREPkls0F2Zj9emwXI=
+github.com/odigos-io/odigos/api v1.39.0-pre1.0.20261008121527-6dcf4736c73d h1:rBR63MZfnxXhtoXza5w6QMKl3xembcnxIi3mAi+WUX8=
+github.com/odigos-io/odigos/api v1.39.0-pre1.0.20261008121527-6dcf4736c73d/go.mod h1:Z3/Pmo5vZq4SNRoRHwhqqUdzOsox81z5WdEWecuarxw=
+github.com/odigos-io/odigos/common v1.39.0-pre1.0.20261008121527-6dcf4736c73d h1:t6uemTMJXFUv8qnEmzJTcnTXlH9dDCJvEyNee6iI03c=
+github.com/odigos-io/odigos/common v1.39.0-pre1.0.20261008121527-6dcf4736c73d/go.mod h1:0e23PSV0c4cAR13QAPG4pRa2AaREPkls0F2Zj9emwXI=
 github.com/onsi/ginkgo v1.16.5 h1:8xi0RTUf59SOSfEtZMvwTvXYMzG4gV23XVHOZiXNtnE=
 github.com/onsi/ginkgo v1.16.5/go.mod h1:+E8gABHa3K6zRBolWtd+ROzc/U5bkGt0FwiG042wbpU=
 github.com/onsi/ginkgo/v2 v2.27.2 h1:LzwLj0b89qtIy6SSASkzlNvX6WktqurSHwkk2ipF/Ns=
