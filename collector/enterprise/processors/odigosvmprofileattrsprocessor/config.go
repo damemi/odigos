@@ -3,7 +3,7 @@ package odigosvmprofileattrsprocessor
 import (
 	"errors"
 
-	"github.com/odigos-io/odigos-enterprise/ebpfshare/unixfd"
+	"github.com/odigos-io/odigos-enterprise/common-enterprise/ebpf/unixfd"
 )
 
 // Config configures the VM profile resource attributes processor.

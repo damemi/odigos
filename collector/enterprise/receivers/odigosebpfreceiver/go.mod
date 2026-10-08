@@ -46,7 +46,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
-	github.com/odigos-io/odigos-enterprise/ebpfshare v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos-enterprise/common-enterprise v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/consumer/consumererror v0.159.0 // indirect
 	go.opentelemetry.io/collector/consumer/xconsumer v0.159.0 // indirect
@@ -66,4 +66,4 @@ require (
 	google.golang.org/grpc v1.83.2 // indirect
 )
 
-replace github.com/odigos-io/odigos-enterprise/ebpfshare => ../../../ebpfshare
+replace github.com/odigos-io/odigos-enterprise/common-enterprise => ../../../common-enterprise

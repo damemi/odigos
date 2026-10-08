@@ -5,15 +5,19 @@ go 1.26.4
 require (
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/common v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
-	github.com/odigos-io/odigos/instrumentor v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
+	github.com/odigos-io/odigos/api v1.39.0-pre1.0.20261007144257-bc8cd177debd
+	github.com/odigos-io/odigos/common v1.39.0-pre1.0.20261007144257-bc8cd177debd
+	github.com/odigos-io/odigos/instrumentor v1.39.0-pre1.0.20261007144257-bc8cd177debd
+	github.com/odigos-io/odigos/k8sutils v1.39.0-pre1.0.20261007144257-bc8cd177debd
+	github.com/redis/go-redis/v9 v9.8.0
+	k8s.io/apimachinery v0.35.4
 	k8s.io/client-go v0.35.4
 	sigs.k8s.io/controller-runtime v0.23.3
 )
 
 require (
 	github.com/argoproj/argo-rollouts v1.9.1 // indirect
-	github.com/odigos-io/odigos/actions v1.39.0-pre1.0.20261005144945-ff6cb8e12dde // indirect
+	github.com/odigos-io/odigos/actions v1.39.0-pre1.0.20261007144257-bc8cd177debd // indirect
 	github.com/openshift/api v3.9.0+incompatible // indirect
 	go.uber.org/zap/exp v0.3.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
@@ -23,6 +27,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
@@ -56,10 +61,9 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/odigos-io/odigos/api v1.39.0-pre1.0.20261005144945-ff6cb8e12dde // indirect
+	github.com/odigos-io/odigos-enterprise/common-enterprise v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/destinations v0.0.0-00010101000000-000000000000 // indirect
-	github.com/odigos-io/odigos/distros v1.39.0-pre1.0.20261005144945-ff6cb8e12dde // indirect
-	github.com/odigos-io/odigos/k8sutils v1.39.0-pre1.0.20261005144945-ff6cb8e12dde // indirect
+	github.com/odigos-io/odigos/distros v1.39.0-pre1.0.20261007144257-bc8cd177debd // indirect
 	github.com/odigos-io/odigos/profiles v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos/status v0.0.0-00010101000000-000000000000 // indirect
 	github.com/open-policy-agent/cert-controller v0.16.0 // indirect
@@ -93,7 +97,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.35.4 // indirect
 	k8s.io/apiextensions-apiserver v0.35.2 // indirect
-	k8s.io/apimachinery v0.35.4 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4 // indirect
@@ -107,27 +110,29 @@ replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
-replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
+replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v1.39.0-pre1.0.20261007144257-bc8cd177debd
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
+replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.39.0-pre1.0.20261007144257-bc8cd177debd
 
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
+replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.39.0-pre1.0.20261007144257-bc8cd177debd
 
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
+replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.39.0-pre1.0.20261007144257-bc8cd177debd
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.39.0-pre1.0.20261007144257-bc8cd177debd
 
-replace github.com/odigos-io/odigos/instrumentor => github.com/odigos-io/odigos/instrumentor v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
+replace github.com/odigos-io/odigos/instrumentor => github.com/odigos-io/odigos/instrumentor v1.39.0-pre1.0.20261007144257-bc8cd177debd
 
-replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
+replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v1.39.0-pre1.0.20261007144257-bc8cd177debd
 
 // instrumentor requires these via local-only replaces, which don't propagate across repos.
-replace github.com/odigos-io/odigos/destinations => github.com/odigos-io/odigos/destinations v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
+replace github.com/odigos-io/odigos/destinations => github.com/odigos-io/odigos/destinations v1.39.0-pre1.0.20261007144257-bc8cd177debd
 
-replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
+replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v1.39.0-pre1.0.20261007144257-bc8cd177debd
 
 // k8sutils requires this via its own local-only replace, which doesn't propagate across repos.
-replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
+replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.39.0-pre1.0.20261007144257-bc8cd177debd
 
 // argo-rollouts@v1.9.1 requires this via its own internal-only replace, which doesn't propagate to us.
 replace k8s.io/kubelet => k8s.io/kubelet v0.34.1
+
+replace github.com/odigos-io/odigos-enterprise/common-enterprise => ../common-enterprise

@@ -3,7 +3,7 @@ package odigosvmprofileattrsprocessor
 import (
 	"sync"
 
-	"github.com/odigos-io/odigos-enterprise/ebpfshare/unixfd"
+	"github.com/odigos-io/odigos-enterprise/common-enterprise/ebpf/unixfd"
 )
 
 // profileAttrCache maps process PID to packed resource attributes from the VM agent.

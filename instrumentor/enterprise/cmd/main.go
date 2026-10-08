@@ -5,16 +5,17 @@ import (
 	"os"
 
 	"github.com/odigos-io/odigos-enterprise/distros"
+	"github.com/odigos-io/odigos-enterprise/instrumentor/urltemplatization"
+	"github.com/odigos-io/odigos-enterprise/odigosauth"
 
+	"github.com/odigos-io/odigos/api/k8sconsts"
+	"github.com/odigos-io/odigos/instrumentor"
 	"github.com/odigos-io/odigos/instrumentor/controllers"
 
-	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
-
-	"github.com/odigos-io/odigos/instrumentor"
-
-	"github.com/odigos-io/odigos-enterprise/odigosauth"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
@@ -56,7 +57,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	i, err := instrumentor.New(managerOptions, dp)
+	var runnables []func(mgr manager.Manager) manager.Runnable
+	if os.Getenv(k8sconsts.UrlTemplatizationLiveTrafficLearningEnvVar) != "" {
+		runnables = append(runnables, func(mgr manager.Manager) manager.Runnable {
+			return &urltemplatization.LiveTrafficLearningJob{Client: mgr.GetClient()}
+		})
+	}
+
+	i, err := instrumentor.New(instrumentor.Options{
+		ManagerOptions:  managerOptions,
+		DistrosProvider: dp,
+		Runnables:       runnables,
+	})
 	if err != nil {
 		logger.Error("Failed to initialize instrumentor", "err", err)
 		os.Exit(1)

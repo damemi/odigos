@@ -168,9 +168,9 @@ replaces:
   - github.com/odigos-io/odigos-enterprise/collector/exporters/odigosurltemplatizationexporter => ../exporters/odigosurltemplatizationexporter
   # odigosauth lives at the enterprise repo root, copied into the build context by the Dockerfile.
   - github.com/odigos-io/odigos-enterprise/odigosauth => ../../odigosauth
-  # Not a component itself - the eBPF map exchange the receiver and the vm profile attrs
-  # processor share with odiglet, so the generated dist has to resolve it too.
-  - github.com/odigos-io/odigos-enterprise/ebpfshare => ../../ebpfshare
+  # Not a component itself - enterprise-only shared logic (the counterpart of OSS common, incl.
+  # the eBPF map exchange with odiglet) that components use, so the generated dist has to resolve it too.
+  - github.com/odigos-io/odigos-enterprise/common-enterprise => ../../common-enterprise
   - odigosk8scmprovider => github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
   - github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector => github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
   - github.com/odigos-io/odigos/collector/connectors/serviceioconnector => github.com/odigos-io/odigos/collector/connectors/serviceioconnector v1.39.0-pre1.0.20261005144945-ff6cb8e12dde

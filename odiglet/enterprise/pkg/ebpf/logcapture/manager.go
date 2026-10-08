@@ -12,7 +12,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/odigos-io/ebpf-core/pkg/instrumentors/logs"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
-	"github.com/odigos-io/odigos-enterprise/ebpfshare/unixfd"
+	"github.com/odigos-io/odigos-enterprise/common-enterprise/ebpf/unixfd"
 )
 
 var (

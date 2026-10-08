@@ -92,7 +92,7 @@ fmt/%: install-tools
 	cd $(shell dirname $(GO_MOD)) && $(TOOLS_BIN_DIR)/goimports -w -local github.com/odigos-io ./
 
 # tidies each owned component module so its (indirect) odigos-io deps track the local-replaced
-# siblings (odigosauth, ebpfshare) after an OSS dependency bump; without this, `generate`'s mdatagen
+# siblings (odigosauth, common-enterprise) after an OSS dependency bump; without this, `generate`'s mdatagen
 # `go list` fails with "updates to go.mod needed" once the sibling's odigos/common version changes
 .PHONY: tidy
 tidy: $(OWNED_GO_MODS:%=tidy/%)

@@ -5,6 +5,7 @@ ARG SERVICE_NAME
 WORKDIR /workspace
 COPY distros/ distros/
 COPY odigosauth/ odigosauth/
+COPY common-enterprise/ common-enterprise/
 COPY connectors/ connectors/
 
 WORKDIR /workspace/$SERVICE_NAME

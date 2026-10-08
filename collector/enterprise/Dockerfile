@@ -9,9 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends libcap2-bin
 # Copied first because it changes far less often than collector/, so the layer stays cached.
 COPY ./odigosauth/ /go/src/odigosauth
 COPY ./collector/ /go/src/collector
-# The ebpf receiver and the vm profile attrs processor replace it by relative path, so it has to
-# sit next to the collector tree rather than inside it.
-COPY ./ebpfshare/ /go/src/ebpfshare
+# Components replace common-enterprise by relative path, so it has to sit next to the collector
+# tree rather than inside it.
+COPY ./common-enterprise/ /go/src/common-enterprise
 WORKDIR /go/src/collector
 
 # download dependencies before branching out to cross-compile for better caching

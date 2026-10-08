@@ -12,7 +12,6 @@ require (
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.16.0
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos-enterprise/ebpfshare v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/api v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/common v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
@@ -153,6 +152,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/odigos-io/odigos-device-plugin v1.19.8 // indirect
+	github.com/odigos-io/odigos-enterprise/common-enterprise v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/odiglet v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
 	github.com/odigos-io/odigos/odiglet/pkg/ebpf/sdks/obi v1.39.0-pre1.0.20261005144945-ff6cb8e12dde // indirect
 	github.com/odigos-io/odigos/opampserver v1.39.0-pre1.0.20261005144945-ff6cb8e12dde // indirect
@@ -322,4 +322,4 @@ replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actio
 // Same as actions above, required transitively via k8sutils.
 replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
 
-replace github.com/odigos-io/odigos-enterprise/ebpfshare => ../ebpfshare
+replace github.com/odigos-io/odigos-enterprise/common-enterprise => ../common-enterprise

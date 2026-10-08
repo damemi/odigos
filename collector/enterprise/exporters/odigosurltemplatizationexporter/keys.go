@@ -1,14 +1,9 @@
 package odigosurltemplatizationexporter
 
 import (
-	"fmt"
-
 	"go.opentelemetry.io/collector/pdata/ptrace"
-)
 
-const (
-	redisKeyPrefixServer = "odigos:urltempl:unmatched:server"
-	redisKeyPrefixClient = "odigos:urltempl:unmatched:client"
+	"github.com/odigos-io/odigos-enterprise/common-enterprise/urltemplatization"
 )
 
 // unmatchedRedisKey is the Redis HASH for unmatched HTTP paths of one workload
@@ -16,9 +11,9 @@ const (
 func unmatchedRedisKey(workloadKey string, kind ptrace.SpanKind) string {
 	switch kind {
 	case ptrace.SpanKindServer:
-		return fmt.Sprintf("%s:%s", redisKeyPrefixServer, workloadKey)
+		return urltemplatization.UnmatchedPathsRedisKeyPrefixServer + workloadKey
 	case ptrace.SpanKindClient:
-		return fmt.Sprintf("%s:%s", redisKeyPrefixClient, workloadKey)
+		return urltemplatization.UnmatchedPathsRedisKeyPrefixClient + workloadKey
 	default:
 		return ""
 	}

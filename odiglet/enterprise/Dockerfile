@@ -129,7 +129,7 @@ WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
 # Copy local modules required by the build
 COPY odigosauth/ odigosauth/
 COPY distros/ distros/
-COPY ebpfshare/ ebpfshare/
+COPY common-enterprise/ common-enterprise/
 WORKDIR ./odiglet/
 # Copy rest of source code for odiglet
 COPY odiglet/ .

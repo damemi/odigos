@@ -14,7 +14,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver/internal/metadata"
-	"github.com/odigos-io/odigos-enterprise/ebpfshare/unixfd"
+	"github.com/odigos-io/odigos-enterprise/common-enterprise/ebpf/unixfd"
 )
 
 type ebpfReceiver struct {

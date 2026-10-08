@@ -506,7 +506,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
 	github.com/odigos-io/go-rtml v0.0.1 // indirect
-	github.com/odigos-io/odigos-enterprise/ebpfshare v0.0.0-00010101000000-000000000000 // indirect
+	github.com/odigos-io/odigos-enterprise/common-enterprise v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos/common v1.39.0-pre1.0.20261005144945-ff6cb8e12dde // indirect
 	github.com/oklog/ulid/v2 v2.1.2 // indirect
@@ -825,7 +825,7 @@ replace github.com/odigos-io/odigos-enterprise/collector/exporters/odigosurltemp
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../../odigosauth
 
-replace github.com/odigos-io/odigos-enterprise/ebpfshare => ../../ebpfshare
+replace github.com/odigos-io/odigos-enterprise/common-enterprise => ../../common-enterprise
 
 replace odigosk8scmprovider => github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v1.39.0-pre1.0.20261005144945-ff6cb8e12dde
 
