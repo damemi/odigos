@@ -119,6 +119,12 @@ func discoverLambda(ctx context.Context, cfg aws.Config, region string, tags map
 				Layers:           layerARNs(fn.Layers),
 				State:            string(fn.State),
 				LastUpdateStatus: string(fn.LastUpdateStatus),
+				// The VpcConfig ListFunctions already returned and this detector was discarding. All
+				// three stay empty for a function with no VpcConfig, which is the case rather than
+				// a gap: it runs in an AWS-managed VPC and keeps exporting straight to the destination.
+				VPCID:            vpcID(fn.VpcConfig),
+				SubnetIDs:        vpcSubnets(fn.VpcConfig),
+				SecurityGroupIDs: vpcSecurityGroups(fn.VpcConfig),
 				Metadata: map[string]any{
 					"handler":    aws.ToString(fn.Handler),
 					"memorySize": aws.ToInt32(fn.MemorySize),
@@ -165,6 +171,29 @@ func tagsMatchAll(have, required map[string]string) bool {
 		}
 	}
 	return true
+}
+
+// vpcID, vpcSubnets and vpcSecurityGroups read a function's VpcConfig, nil-safe. A nil VpcConfig is the
+// ordinary shape for a function that was never attached to a VPC, so it is emptiness and not an error.
+func vpcID(vc *lambdatypes.VpcConfigResponse) string {
+	if vc == nil {
+		return ""
+	}
+	return aws.ToString(vc.VpcId)
+}
+
+func vpcSubnets(vc *lambdatypes.VpcConfigResponse) []string {
+	if vc == nil {
+		return nil
+	}
+	return vc.SubnetIds
+}
+
+func vpcSecurityGroups(vc *lambdatypes.VpcConfigResponse) []string {
+	if vc == nil {
+		return nil
+	}
+	return vc.SecurityGroupIds
 }
 
 func architectures(arch []lambdatypes.Architecture) string {

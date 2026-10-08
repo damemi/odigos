@@ -202,6 +202,12 @@ func clusterFargateServices(ctx context.Context, client *ecs.Client, region, clu
 					Status:               aws.ToString(svc.Status),
 					DesiredCount:         svc.DesiredCount,
 					RunningCount:         svc.RunningCount,
+					// The awsvpc network configuration DescribeServices already returned and this
+					// detector was discarding. It is what tells managed-Collector placement which VPC
+					// this service runs on: awsvpcConfiguration names subnets and never the VPC, so the
+					// subnet is resolved to its network later.
+					SubnetIDs:        awsvpcSubnets(svc.NetworkConfiguration),
+					SecurityGroupIDs: awsvpcSecurityGroups(svc.NetworkConfiguration),
 					Metadata: map[string]any{
 						"platformVersion":    aws.ToString(svc.PlatformVersion),
 						"platformFamily":     aws.ToString(svc.PlatformFamily),
@@ -275,6 +281,25 @@ func clusterFargateTasks(ctx context.Context, client *ecs.Client, region, cluste
 		}
 	}
 	return out, nil
+}
+
+// awsvpcSubnets and awsvpcSecurityGroups read a service's awsvpc network configuration, nil-safe at
+// every level. Every service this detector stores runs on Fargate and therefore on awsvpc, so a nil
+// configuration means DescribeServices did not echo one back rather than that the service has none —
+// which is why an absent value is empty and never an error: placement reports a Fargate service it
+// cannot attribute to a network, and a discovery gap must not stop the rest of the scan.
+func awsvpcSubnets(nc *ecstypes.NetworkConfiguration) []string {
+	if nc == nil || nc.AwsvpcConfiguration == nil {
+		return nil
+	}
+	return nc.AwsvpcConfiguration.Subnets
+}
+
+func awsvpcSecurityGroups(nc *ecstypes.NetworkConfiguration) []string {
+	if nc == nil || nc.AwsvpcConfiguration == nil {
+		return nil
+	}
+	return nc.AwsvpcConfiguration.SecurityGroups
 }
 
 // isFargateService reports whether an ECS service runs its tasks on Fargate. Capacity-provider services

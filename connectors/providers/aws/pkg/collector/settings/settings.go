@@ -1,0 +1,122 @@
+// Package collectorsettings interprets the AWS-owned portion of the provider-neutral Collector
+// configuration.
+package collectorsettings
+
+import base "github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
+
+const (
+	Key              = base.Key
+	KeyEnabled       = base.KeyEnabled
+	KeyDefaults      = base.KeyDefaults
+	KeyRegions       = base.KeyRegions
+	KeyHostNetworkID = base.KeyHostNetworkID
+	KeyProvider      = base.KeyProvider
+
+	KeySubnetIDs        = "subnetIds"
+	KeySecurityGroupIDs = "securityGroupIds"
+	KeyClusterRef       = "clusterArn"
+	KeyExecutionRoleARN = "executionRoleArn"
+	KeyAssignPublicIP   = "assignPublicIp"
+	KeyUseFargateSpot   = "useFargateSpot"
+)
+
+type Network struct {
+	base.Network
+	SubnetIDs        []string
+	SecurityGroupIDs []string
+	ClusterRef       string
+	ExecutionRoleARN string
+	AssignPublicIP   bool
+	UseFargateSpot   bool
+}
+
+type Region struct {
+	Network
+	Region        string
+	HostNetworkID string
+}
+
+func (r Region) Deploys() bool { return r.Enabled }
+
+type Settings struct {
+	Enabled  bool
+	Defaults Network
+	Regions  map[string]Region
+}
+
+func Read(effective map[string]any) Settings { return FromBase(base.Read(effective)) }
+
+func FromBase(in base.Settings) Settings {
+	out := Settings{Enabled: in.Enabled, Defaults: network(in.Defaults), Regions: map[string]Region{}}
+	for id, region := range in.Regions {
+		out.Regions[id] = Region{Network: network(region.Network), Region: region.Region, HostNetworkID: region.HostNetworkID}
+	}
+	return out
+}
+
+func (s Settings) Base() base.Settings {
+	regions := make(map[string]base.Region, len(s.Regions))
+	for id, region := range s.Regions {
+		regions[id] = base.Region{Network: region.Network.Network, Region: region.Region, HostNetworkID: region.HostNetworkID}
+	}
+	return base.Settings{Enabled: s.Enabled, Defaults: s.Defaults.Network, Regions: regions}
+}
+
+func (s Settings) Region(id string) Region {
+	if region, ok := s.Regions[id]; ok {
+		return region
+	}
+	region := Region{Network: s.Defaults, Region: id}
+	region.Enabled = s.Enabled
+	return region
+}
+
+func (s Settings) DeployRegions() []string {
+	if !s.Enabled {
+		return nil
+	}
+	ids := make([]string, 0, len(s.Regions))
+	for id, region := range s.Regions {
+		if region.Deploys() {
+			ids = append(ids, id)
+		}
+	}
+	for i := 1; i < len(ids); i++ {
+		for j := i; j > 0 && ids[j] < ids[j-1]; j-- {
+			ids[j], ids[j-1] = ids[j-1], ids[j]
+		}
+	}
+	return ids
+}
+
+func network(in base.Network) Network {
+	provider := in.Provider
+	return Network{Network: in,
+		SubnetIDs: stringsOf(provider, KeySubnetIDs), SecurityGroupIDs: stringsOf(provider, KeySecurityGroupIDs),
+		ClusterRef: stringOf(provider, KeyClusterRef), ExecutionRoleARN: stringOf(provider, KeyExecutionRoleARN),
+		AssignPublicIP: boolOf(provider, KeyAssignPublicIP),
+		UseFargateSpot: boolOf(provider, KeyUseFargateSpot)}
+}
+
+func stringsOf(values map[string]any, key string) []string {
+	raw, ok := values[key].([]any)
+	if !ok {
+		if strings, ok := values[key].([]string); ok {
+			return strings
+		}
+		return nil
+	}
+	out := make([]string, 0, len(raw))
+	for _, value := range raw {
+		if text, ok := value.(string); ok && text != "" {
+			out = append(out, text)
+		}
+	}
+	return out
+}
+
+func stringOf(values map[string]any, key string) string {
+	value, _ := values[key].(string)
+	return value
+}
+func boolOf(values map[string]any, key string) bool { value, _ := values[key].(bool); return value }

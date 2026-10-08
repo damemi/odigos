@@ -154,7 +154,12 @@ workloads:
     types:
       - name: aws.lambda
         displayName: AWS Lambda
-        description: Attach an OpenTelemetry layer/extension and OTEL_* configuration to the function.
+        description: >-
+          Attach an OpenTelemetry layer/extension and OTEL_* configuration to the function. When an
+          Odigos managed regional Collector destination is selected, VPC-attached functions use its
+          ready same-region ingress only after VPC routing and security-group access are proven;
+          non-VPC and unreachable functions retain direct export. Odigos never attaches or moves a
+          function into a VPC.
         method: service
         permissions:
           - lambda:GetFunctionConfiguration
@@ -264,6 +269,182 @@ computePlatforms:
       for Kubernetes on EKS, the Odigos VM agent on EC2). Not supported yet.
     types: []
 
+# collectors: an Odigos-managed OpenTelemetry Collector running in the customer's account, one per
+# region. It is hosted in one explicit VPC and may serve same-region workloads over validated,
+# customer-owned connectivity such as direct VPC peering.
+#   management -> Odigos owns the Collector's configuration and pushes it over OpAMP (BOTH modes).
+#   deployment -> Odigos creates and converges the ECS/ELB/IAM objects that run it (automatic mode only).
+#
+# Unlike the other two domains there is no discovery feature: a managed Collector is not something Odigos
+# finds in the account, it is something one side or the other puts there. `management` is the superset and
+# `deployment` narrows it by name, so `management` alone is manual (IaC) mode — the customer applies the
+# published artifacts and Odigos still configures and observes the result.
+collectors:
+  management:
+    enabled: true
+    displayName: Managed Collector configuration
+    description: >-
+      Own the configuration of an Odigos Collector running in your account and push it over OpAMP, and
+      observe and report the Collector's health. Runs in both modes; needs read-only permissions only.
+    # Baseline permission, not tied to a type: enumerate the account's enabled regions, as both discovery
+    # features do. A customer who enables only this domain still needs it.
+    permissions:
+      - ec2:DescribeRegions
+    types:
+      # READ-ONLY, and that is the whole point of declaring the observation set here rather than on
+      # deployment: manual mode runs on management alone, so a customer who deploys the Collector
+      # themselves must still be able to have Odigos describe it, judge its health and report its
+      # endpoint. Automatic mode gets these too and wants them anyway — "is it actually serving?" is the
+      # same question in both modes.
+      - name: aws.fargate-collector
+        displayName: Odigos Collector (ECS Fargate)
+        description: >-
+          Configure and observe an Odigos Collector running as an ECS Fargate service behind an internal
+          network load balancer, one per region in an explicit host VPC.
+        permissions:
+          # The service, its tasks and the definition they run — running count, health, and the image and
+          # environment actually deployed, which is what a drift verdict compares against.
+          - ecs:DescribeServices
+          - ecs:ListTasks
+          - ecs:DescribeTasks
+          - ecs:DescribeTaskDefinition
+          # The published endpoint and whether anything is behind it.
+          - elasticloadbalancing:DescribeLoadBalancers
+          - elasticloadbalancing:DescribeListeners
+          - elasticloadbalancing:DescribeTargetGroups
+          - elasticloadbalancing:DescribeTargetHealth
+          # Placement and reachability facts that are reported in both modes: which VPC hosts a regional
+          # Collector, which subnets and groups it sits in, and — the one that is not obvious —
+          # DescribeRouteTables, because a subnet with no egress route produces a Collector that cannot
+          # reach the destination or the OpAMP endpoint, and refusing that is better than deploying it.
+          #
+          # ec2:DescribeVpcEndpoints is deliberately NOT here. An interface VPC endpoint can reach the
+          # destination from a subnet with no default route at all, so without this permission Odigos
+          # cannot tell such a subnet from an isolated one. That ambiguity is resolved by authority
+          # rather than by asking for more access: where Odigos chooses the subnets it takes only ones
+          # it can prove work, and where the customer named them a route Odigos cannot find is reported
+          # and deployed anyway. See MANAGED-COLLECTOR.md §5.1.
+          # Peering/NACL reads validate whether a workload VPC can reach the regional host VPC; they do
+          # not authorize creating or changing customer network topology.
+          - ec2:DescribeVpcs
+          - ec2:DescribeSubnets
+          - ec2:DescribeSecurityGroups
+          - ec2:DescribeRouteTables
+          - ec2:DescribeVpcPeeringConnections
+          - ec2:DescribeNetworkAcls
+
+  deployment:
+    enabled: true
+    displayName: Managed Collector deployment
+    description: >-
+      Create and converge the AWS resources that run an Odigos Collector in a customer-provisioned ECS
+      cluster: an ECS Fargate service, an internal network load balancer, a security group, a log group,
+      the credential secret and the autoscaling target. The cluster and task execution role must already
+      exist. Automatic mode only — omit this capability to deploy the Collector yourself.
+    types:
+      - name: aws.fargate-collector
+        displayName: Odigos Collector (ECS Fargate)
+        description: >-
+          Deploy the Collector as an ECS Fargate service behind an internal NLB, one per region in the
+          selected host VPC, using the existing cluster named by clusterArn and execution role named by
+          executionRoleArn. Odigos never creates, modifies or deletes either prerequisite. Every object
+          Odigos does create is tagged for ownership so only those objects are ever changed or removed.
+        method: fargate-service
+        permissions:
+          # ECS: clusterArn names a customer-provisioned cluster. DescribeClusters validates that it is
+          # active and supports the requested Fargate capacity provider; Odigos never mutates the
+          # cluster itself. The task-definition family and service are regional, and the service's
+          # awsvpc configuration places the Collector in the selected host VPC.
+          - ecs:DescribeClusters
+          - ecs:RegisterTaskDefinition
+          - ecs:CreateService
+          - ecs:UpdateService
+          - ecs:DeleteService
+          # Ownership tagging is what separates an Odigos-created object from the customer's, and it is
+          # the only licence teardown has to remove one — so tagging is required, not optional.
+          - ecs:TagResource
+          # ELBv2: the internal NLB, its listeners and target groups. Created with the security group
+          # attached, because an NLB created without one can never have one added.
+          - elasticloadbalancing:CreateLoadBalancer
+          - elasticloadbalancing:DeleteLoadBalancer
+          - elasticloadbalancing:CreateTargetGroup
+          - elasticloadbalancing:DeleteTargetGroup
+          - elasticloadbalancing:ModifyTargetGroupAttributes
+          - elasticloadbalancing:CreateListener
+          # ModifyListener rather than delete-and-recreate for a TLS mode change: two listeners cannot
+          # share a port, so recreating means a window in which the port refuses connections.
+          - elasticloadbalancing:ModifyListener
+          - elasticloadbalancing:SetSecurityGroups
+          - elasticloadbalancing:AddTags
+          # DescribeTags is the only way to read an ELBv2 object's tags — neither
+          # DescribeLoadBalancers nor DescribeTargetGroups returns them — and the tags are what decide
+          # whether an object with the name Odigos wants is Odigos's to write to.
+          - elasticloadbalancing:DescribeTags
+          # EC2: the Collector's own security group. Ingress includes the host VPC and only validated
+          # same-region consumer paths. The revoke is as important as the authorize — it removes access
+          # when a workload network ceases to be applicable or reachable.
+          - ec2:CreateSecurityGroup
+          - ec2:DeleteSecurityGroup
+          - ec2:AuthorizeSecurityGroupIngress
+          - ec2:RevokeSecurityGroupIngress
+          - ec2:AuthorizeSecurityGroupEgress
+          - ec2:CreateTags
+          # Logs: one group per region, with a retention policy so a Collector does not accumulate
+          # unbounded log cost in the customer's account.
+          - logs:CreateLogGroup
+          - logs:DeleteLogGroup
+          - logs:PutRetentionPolicy
+          - logs:TagResource
+          # ListTagsForResource is what makes DeleteLogGroup safe to hold. A log group is the one object
+          # Odigos writes into without an ownership check — it is append-only and holds nothing but the
+          # Collector's own stdout — so the group Odigos created and a customer's group under a plausible
+          # name are indistinguishable until its tags are read, and DescribeLogGroups does not return them.
+          - logs:ListTagsForResource
+          # Secrets Manager: one secret per Collector for the OpAMP credential and one for the licence
+          # token, so revocation is per Collector and the two lifetimes stay independent. The connector
+          # WRITES these and never reads them back, which is why there is no GetSecretValue here — that
+          # permission belongs to the task execution role the Collector runs with, not to the connector.
+          - secretsmanager:CreateSecret
+          - secretsmanager:PutSecretValue
+          - secretsmanager:DescribeSecret
+          - secretsmanager:DeleteSecret
+          - secretsmanager:TagResource
+          # RestoreSecret is the one that is not obvious. Deleting a secret only SCHEDULES it, and its
+          # name stays reserved for the recovery window — up to 30 days. Without this, tearing a
+          # Collector down and enabling it again is refused for a month, with an error about a secret
+          # that no longer appears in the console.
+          - secretsmanager:RestoreSecret
+          # IAM: ECS must be allowed to use the customer-provisioned executionRoleArn when the connector
+          # registers a task definition. Scope this action to that exact role ARN and condition it with
+          # iam:PassedToService=ecs-tasks.amazonaws.com; the Collector prerequisite artifact below shows
+          # the complete statement. Odigos never creates, edits, tags or deletes the role.
+          - iam:PassRole
+          # Application Auto Scaling: only used when a region opts into automatic scaling, but declared
+          # unconditionally because the permission set is per type, not per-region setting — and a
+          # deregistration left behind by a switch back to manual scaling needs the same grant.
+          - application-autoscaling:RegisterScalableTarget
+          - application-autoscaling:DeregisterScalableTarget
+          - application-autoscaling:PutScalingPolicy
+          - application-autoscaling:DescribeScalableTargets
+          - application-autoscaling:DescribeScalingPolicies
+          # ListTagsForResource is the one that is not obvious, and it is what makes the mode switch
+          # safe. A describe returns no tags, so this is the only way to tell a scalable target Odigos
+          # registered from one a customer's own template did — and switching back to manual scaling
+          # deregisters the former and must leave the latter alone. Without it Odigos can prove nothing
+          # and therefore removes nothing, which fails safe but never cleans up.
+          - application-autoscaling:ListTagsForResource
+          # Automatic scaling also requires the account-level
+          # AWSServiceRoleForApplicationAutoScaling_ECSService prerequisite. Odigos does not create it;
+          # the Collector prerequisite artifact below includes the one-time AWS CLI command.
+          # Target tracking's CloudWatch alarms. Application Auto Scaling creates and owns them through
+          # the service-linked role above, but these are the actions AWS's own documented policy for
+          # configuring target-tracking policies requires — and a PutScalingPolicy refused for a missing
+          # cloudwatch:PutMetricAlarm reports a CloudWatch failure rather than a scaling one, which is a
+          # long way from where the fix is.
+          - cloudwatch:PutMetricAlarm
+          - cloudwatch:DeleteAlarms
+          - cloudwatch:DescribeAlarms
+
 # setup: declarative onboarding artifacts rendered in the create-connector UI. The UI fills
 # {{permissions}} from the selected access level and scalar {{vars}} from form values, so the
 # preview always matches what test-connection validates. Provider-owned: AWS renders an IAM policy
@@ -303,6 +484,80 @@ setup:
             }
           ]
         }
+
+    - id: collector-execution-role-cloudformation
+      section: collector:aws.fargate-collector
+      variant: cloudformation
+      variantLabel: CloudFormation
+      title: Pre-create the Collector task execution role
+      description: >-
+        Create the role ECS uses to pull the Collector image, read only this connector's Collector
+        secrets and write only this connector's Collector logs. Odigos uses the ARN but never creates,
+        changes, tags or deletes the role.
+      format: yaml
+      steps:
+        - Save the template below as odigos-collector-execution-role.yaml.
+        - Deploy it with ConnectorName set to the exact connector name used in Odigos.
+        - Copy the ExecutionRoleArn output to collectors.defaults.provider.executionRoleArn (or the regional provider override).
+        - Set collectors.defaults.provider.clusterArn to the pre-existing ECS cluster name or ARN.
+        - >-
+          On the connector role, allow iam:PassRole only for the output ARN and add the condition
+          iam:PassedToService = ecs-tasks.amazonaws.com. Do not grant CreateRole, PutRolePolicy,
+          TagRole or DeleteRole.
+        - >-
+          If any Collector region uses automatic scaling, create the account prerequisite once with:
+          aws iam create-service-linked-role --aws-service-name ecs.application-autoscaling.amazonaws.com
+        - >-
+          If image.repositoryOverride points at private ECR, add ecr:GetAuthorizationToken plus
+          ecr:BatchCheckLayerAvailability, ecr:BatchGetImage and ecr:GetDownloadUrlForLayer for that
+          repository. The default public image needs no ECR permission.
+      template: |-
+        AWSTemplateFormatVersion: "2010-09-09"
+        Description: Customer-owned ECS task execution role for Odigos managed Collectors.
+
+        Parameters:
+          ConnectorName:
+            Type: String
+            MinLength: 1
+            Description: Exact name of this connector in Odigos.
+
+        Resources:
+          CollectorExecutionRole:
+            Type: AWS::IAM::Role
+            Properties:
+              Description: Customer-owned execution role for Odigos Collector Fargate tasks.
+              AssumeRolePolicyDocument:
+                Version: "2012-10-17"
+                Statement:
+                  - Sid: EcsTasksAssume
+                    Effect: Allow
+                    Principal:
+                      Service: ecs-tasks.amazonaws.com
+                    Action: sts:AssumeRole
+                    Condition:
+                      StringEquals:
+                        aws:SourceAccount: !Ref AWS::AccountId
+                      ArnLike:
+                        aws:SourceArn: !Sub arn:${AWS::Partition}:ecs:*:${AWS::AccountId}:*
+              Policies:
+                - PolicyName: odigos-collector-execution
+                  PolicyDocument:
+                    Version: "2012-10-17"
+                    Statement:
+                      - Sid: CollectorLogs
+                        Effect: Allow
+                        Action:
+                          - logs:CreateLogStream
+                          - logs:PutLogEvents
+                        Resource: !Sub arn:${AWS::Partition}:logs:*:${AWS::AccountId}:log-group:/odigos/collector/${ConnectorName}:*
+                      - Sid: CollectorSecrets
+                        Effect: Allow
+                        Action: secretsmanager:GetSecretValue
+                        Resource: !Sub arn:${AWS::Partition}:secretsmanager:*:${AWS::AccountId}:secret:odigos/collector/${ConnectorName}/*
+        Outputs:
+          ExecutionRoleArn:
+            Description: Set this as collectors.defaults.provider.executionRoleArn.
+            Value: !GetAtt CollectorExecutionRole.Arn
 
     # create-role variants drive step-2 "Choose setup method" + "Create IAM role". The selected
     # variant's steps + template are rendered; scalar tokens like {{externalId}} come from the form.
@@ -3075,10 +3330,17 @@ setup:
           ODIGOS_GEM_PATH             = /var/odigos/ruby/<RUNTIME_VERSION>/bundle
           OTEL_PROPAGATORS            = tracecontext,baggage
 
-# gateway: connector-wide collector wiring; not part of either domain. Implemented in a later phase.
+# gateway: connector-wide regional Collector wiring; not part of either domain. Fargate services and
+# VPC-attached Lambda functions are routed here when a same-region marker exists and the host/consumer
+# VPC path plus Collector ingress are proven. Non-VPC Lambda functions remain direct.
 gateway:
-  enabled: false
+  enabled: true
   displayName: Gateway / collector wiring
   description: >-
-    Wire instrumented workloads to managed-otelcol regional collectors. Implemented in a later phase.
+    Route eligible Fargate and VPC-attached Lambda workloads to the ready managed regional Collector
+    selected for their AWS region. Every routed workload requires proven Collector security-group
+    ingress; directly peered VPCs additionally require reciprocal subnet routes. Non-VPC Lambda
+    functions and workloads without a reachable regional path retain the global OTLP destination;
+    removing the regional destination restores direct export. This capability never creates or changes
+    a Lambda VpcConfig.
   types: []

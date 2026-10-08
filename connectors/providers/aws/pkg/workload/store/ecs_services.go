@@ -31,6 +31,14 @@ type ECSService struct {
 	Status               string
 	DesiredCount         int32
 	RunningCount         int32
+	// SubnetIDs and SecurityGroupIDs are the service's awsvpc network configuration, exactly as
+	// DescribeServices returns it. Persisted because they are the only route from a Fargate workload to
+	// the network it runs on: awsvpcConfiguration names SUBNETS and never the VPC, so managed-Collector
+	// placement has to resolve one of these to its VPC. The security groups
+	// are the same read and are what authorizes Collector ingress from, rather than widening to the
+	// VPC's CIDR. Discovery already had both in hand and was discarding them.
+	SubnetIDs        []string
+	SecurityGroupIDs []string
 	// Instrumented is whether Odigos instrumentation is currently applied. Written through by the instrumentor
 	// in automatic mode and by the observer in manual mode — see SetECSServiceInstrumented for why both, and
 	// why they cannot disagree. Discovery never derives it: that would cost a DescribeTaskDefinition per
@@ -98,6 +106,10 @@ const (
 	metaInstrumentationPhase = "instrumentation_phase"
 	metaOdigosTaskDefinition = "odigos_task_definition"
 	metaContainers           = "containers"
+	// The service's awsvpc network configuration, written by discovery on every scan — see
+	// ECSService.SubnetIDs.
+	metaSubnetIDs        = "subnet_ids"
+	metaSecurityGroupIDs = "security_group_ids"
 	// The read-only observation record. Written only by the observer; UpsertECSService already MERGES
 	// metadata rather than replacing it, so these survive a discovery refresh without a preserve-list —
 	// the trap the lambda_functions upsert fell into.
@@ -148,6 +160,14 @@ func (s *Store) SetECSServiceContainers(ctx context.Context, clusterARN, service
 // overlay with fresh values.
 func (s *Store) UpsertECSService(ctx context.Context, svc ECSService) error {
 	inventoryLog.Debug("upsert ecs service", "region", svc.Region, "cluster", svc.ClusterARN, "service", svc.ServiceName)
+	if svc.Metadata == nil {
+		svc.Metadata = map[string]any{}
+	}
+	// Always written, empty included: the merge below is an overlay, so a key left out would keep the
+	// PREVIOUS scan's value — a service moved to different subnets would keep placing its Collector on
+	// the network it used to run on.
+	svc.Metadata[metaSubnetIDs] = nonNilStrings(svc.SubnetIDs)
+	svc.Metadata[metaSecurityGroupIDs] = nonNilStrings(svc.SecurityGroupIDs)
 	meta, err := metaJSON(svc.Metadata)
 	if err != nil {
 		return err
@@ -187,6 +207,7 @@ func (s *Store) ListECSServices(ctx context.Context) ([]ECSService, error) {
 			COALESCE(metadata->>'instrumentation_error',''),
 			COALESCE(metadata->>'instrumentation_phase',''),
 			COALESCE(metadata->>'`+metaOwnershipCheckedRevision+`',''),
+			metadata->'`+metaSubnetIDs+`', metadata->'`+metaSecurityGroupIDs+`',
 			`+ecsObservationCols+`
 		FROM connector_aws.ecs_services WHERE connector_name = $1 AND deleted_at IS NULL
 	`, s.ConnectorName())
@@ -197,16 +218,19 @@ func (s *Store) ListECSServices(ctx context.Context) ([]ECSService, error) {
 	var out []ECSService
 	for rows.Next() {
 		var svc ECSService
-		var missingJSON []byte
+		var missingJSON, subnetsJSON, groupsJSON []byte
 		var since *string
 		if err := rows.Scan(&svc.Region, &svc.ClusterARN, &svc.ServiceName, &svc.ServiceARN, &svc.TaskDefinition,
 			&svc.LaunchType, &svc.DeploymentController, &svc.Status, &svc.DesiredCount, &svc.RunningCount,
 			&svc.Instrumented, &svc.RuntimeLanguage, &svc.RuntimeVersion,
 			&svc.InstrumentationError, &svc.InstrumentationPhase, &svc.OwnershipCheckedRevision,
+			&subnetsJSON, &groupsJSON,
 			&conformanceTarget{&svc.Observation.Conformance}, &missingJSON, &since,
 			&svc.Observation.Error, &svc.Observation.Settling); err != nil {
 			return nil, err
 		}
+		svc.SubnetIDs = decodeStringSlice(subnetsJSON, metaSubnetIDs)
+		svc.SecurityGroupIDs = decodeStringSlice(groupsJSON, metaSecurityGroupIDs)
 		svc.Observation.Missing = decodeStringSlice(missingJSON, metaConformanceMissing)
 		svc.Observation.Since = parseObservedAt(since)
 		out = append(out, svc)

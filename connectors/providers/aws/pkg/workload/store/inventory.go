@@ -165,6 +165,15 @@ type LambdaFunction struct {
 	// instrumentation. Captured so a settling change is reported as such instead of as drift.
 	State            string
 	LastUpdateStatus string
+	// VPCID, SubnetIDs and SecurityGroupIDs are the function's VpcConfig, as ListFunctions returns it.
+	// All three are EMPTY for a function with no VpcConfig: it runs in an
+	// AWS-managed VPC, cannot reach an internal endpoint, and keeps exporting straight to the
+	// destination. Persisted because this is what groups a Lambda onto a network for managed-Collector
+	// placement — and unlike Fargate, Lambda hands over the VPC id itself, so no subnet lookup is
+	// needed. The security groups are what authorizes Collector ingress from.
+	VPCID            string
+	SubnetIDs        []string
+	SecurityGroupIDs []string
 	// Observation is the read-only conformance verdict for this function, written by the observer rather than
 	// by discovery. Zero until a pass has run.
 	Observation LambdaObservation
@@ -256,7 +265,18 @@ func metaJSON(m map[string]any) (string, error) {
 // wrong in.
 var lambdaDiscoveryMetadataKeys = []string{
 	"instrumented", "handler", "memorySize", "timeout", "version", "state", "last_update_status",
+	// The VpcConfig keys have to be in this list, not merely written: detaching a function from its VPC
+	// removes VpcConfig entirely, and a stale vpc_id left behind by an overlay would keep grouping the
+	// function onto a network it no longer runs on — pointing it at a Collector it can no longer reach.
+	metaLambdaVPCID, metaLambdaSubnetIDs, metaLambdaSecurityGroupIDs,
 }
+
+// The function's VpcConfig, written by discovery on every scan — see LambdaFunction.VPCID.
+const (
+	metaLambdaVPCID            = "vpc_id"
+	metaLambdaSubnetIDs        = "subnet_ids"
+	metaLambdaSecurityGroupIDs = "security_group_ids"
+)
 
 // UpsertLambda inserts or refreshes a Lambda inventory row, clearing any soft-delete marker.
 func (s *Store) UpsertLambda(ctx context.Context, fn LambdaFunction) error {
@@ -267,6 +287,9 @@ func (s *Store) UpsertLambda(ctx context.Context, fn LambdaFunction) error {
 	fn.Metadata["instrumented"] = fn.Instrumented
 	fn.Metadata["state"] = fn.State
 	fn.Metadata["last_update_status"] = fn.LastUpdateStatus
+	fn.Metadata[metaLambdaVPCID] = fn.VPCID
+	fn.Metadata[metaLambdaSubnetIDs] = nonNilStrings(fn.SubnetIDs)
+	fn.Metadata[metaLambdaSecurityGroupIDs] = nonNilStrings(fn.SecurityGroupIDs)
 	meta, err := metaJSON(fn.Metadata)
 	if err != nil {
 		return err
@@ -336,19 +359,22 @@ const lambdaObservationCols = `COALESCE(env_hash, ''), COALESCE(config_hash, '')
 // column stays NULL for every non-Lambda kind.
 const noObservationCols = `'', NULL, NULL, '', false, NULL`
 
-const lambdaSelectCols = `region, function_arn, function_name, COALESCE(runtime, ''), COALESCE(architecture, ''), COALESCE(role_arn, ''), COALESCE(tracing_mode, ''), COALESCE(metadata->>'instrumented', 'false') = 'true', layers, COALESCE(metadata->>'state', ''), COALESCE(metadata->>'last_update_status', ''), ` + lambdaObservationCols
+const lambdaSelectCols = `region, function_arn, function_name, COALESCE(runtime, ''), COALESCE(architecture, ''), COALESCE(role_arn, ''), COALESCE(tracing_mode, ''), COALESCE(metadata->>'instrumented', 'false') = 'true', layers, COALESCE(metadata->>'state', ''), COALESCE(metadata->>'last_update_status', ''), COALESCE(metadata->>'` + metaLambdaVPCID + `', ''), metadata->'` + metaLambdaSubnetIDs + `', metadata->'` + metaLambdaSecurityGroupIDs + `', ` + lambdaObservationCols
 
 func scanLambda(row interface{ Scan(...any) error }) (LambdaFunction, error) {
 	var fn LambdaFunction
-	var layersJSON, missingJSON []byte
+	var layersJSON, missingJSON, subnetsJSON, groupsJSON []byte
 	var since *string
 	err := row.Scan(&fn.Region, &fn.FunctionARN, &fn.FunctionName, &fn.Runtime, &fn.Architecture, &fn.RoleARN, &fn.TracingMode,
 		&fn.Instrumented, &layersJSON, &fn.State, &fn.LastUpdateStatus,
+		&fn.VPCID, &subnetsJSON, &groupsJSON,
 		&fn.Observation.ObservedPrint, &fn.Observation.DesiredPrint, &conformanceTarget{&fn.Observation.Conformance}, &missingJSON, &since, &fn.Observation.Error)
 	if err != nil {
 		return fn, err
 	}
 	fn.Layers = decodeStringSlice(layersJSON, "layers")
+	fn.SubnetIDs = decodeStringSlice(subnetsJSON, metaLambdaSubnetIDs)
+	fn.SecurityGroupIDs = decodeStringSlice(groupsJSON, metaLambdaSecurityGroupIDs)
 	fn.Observation.Missing = decodeStringSlice(missingJSON, "conformance_missing")
 	fn.Observation.Since = parseObservedAt(since)
 	return fn, nil
