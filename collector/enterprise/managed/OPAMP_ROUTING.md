@@ -81,12 +81,14 @@ The application chart should not install an ingress controller. A customer may a
 Gateway, Traefik, an AWS load balancer controller, or another compatible implementation.
 
 The bundled single-node Central deployment already uses Traefik for `/ws`, `/graphql`, `/sse`, and
-the UI. Add `/v1/opamp` to that edge configuration and route it to the OpAMP gateway. Traefik supports
+the UI. Route `/v1/opamp` and `/v1/metrics` to the OpAMP gateway. The second route carries
+authenticated OTLP/HTTP own telemetry configured through OpAMP. Traefik supports
 WebSocket upgrades through ordinary HTTP routing without special upgrade annotations.
 
 Operational edge settings must:
 
 - Permit WebSocket upgrades and plain HTTP POSTs on `/v1/opamp`.
+- Permit HTTP POSTs on `/v1/metrics`.
 - Preserve the `Authorization` header.
 - Use TLS for all external traffic.
 - Set an idle timeout comfortably above the OpAMP heartbeat interval.

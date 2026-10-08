@@ -419,11 +419,12 @@ port-forward-connector-azure:
 # them into kind, and installs the odigos-central chart with central-ui + connector-runtime + Postgres
 # (cloudConnectors enabled). Requires GITHUB_TOKEN (central image builds) and ONPREM_TOKEN (enterprise).
 # Override CENTRAL_CHART to point at your odigos-central chart checkout.
+# Set MANAGED_COLLECTOR_ENDPOINT to the public tunnel URL (with or without /v1/opamp) to enable
+# managed Collectors and deploy the OpAMP gateway. Route /v1/opamp and /v1/metrics to its Service.
 CENTRAL_CHART ?= ../odigos/helm/odigos-central
 ODIGOS_CENTRAL_NS ?= odigos-central
 KIND_CLUSTER ?= kind
 ONPREM_TOKEN ?=
-
 # Managed Collectors stay OFF unless you give the OpAMP gateway a publicly reachable address. A
 # Collector runs in the customer's cloud account and dials Central, so a kind-local Service address is
 # not reachable from it and there is no default that is right for an unknown installation — the
@@ -432,7 +433,6 @@ ONPREM_TOKEN ?=
 #   make connector-dev-up TAG=dev ONPREM_TOKEN=$$ODIGOS_ONPREM_TOKEN \
 #     MANAGED_COLLECTOR_ENDPOINT=wss://abc123.ngrok.app/v1/opamp
 MANAGED_COLLECTOR_ENDPOINT ?=
-MANAGED_COLLECTOR_FLAGS = $(if $(MANAGED_COLLECTOR_ENDPOINT),--set cloudConnectors.managedCollectors.enabled=true --set cloudConnectors.managedCollectors.externalEndpoint=$(MANAGED_COLLECTOR_ENDPOINT),)
 
 .PHONY: ensure-kind
 ensure-kind:
@@ -443,10 +443,19 @@ connector-dev-up: ensure-kind
 	@test -n "$(ONPREM_TOKEN)" || { echo "❌ Set ONPREM_TOKEN=<your odigos enterprise token> (and GITHUB_TOKEN for central image builds)."; exit 1; }
 	make build-connector-stack TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 	make load-connector-stack-to-kind TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
-	helm upgrade --install odigos-central $(CENTRAL_CHART) -n $(ODIGOS_CENTRAL_NS) --create-namespace \
-		--set image.tag=$(TAG) --set onPremToken=$(ONPREM_TOKEN) --set cloudConnectors.enabled=true \
-		$(MANAGED_COLLECTOR_FLAGS)
-	@echo "✅ Stack up in namespace $(ODIGOS_CENTRAL_NS) (central-ui + central-backend + connector-runtime + postgres)."
+	@managed_endpoint="$(MANAGED_COLLECTOR_ENDPOINT)"; \
+		if [ -n "$$managed_endpoint" ]; then \
+			case "$$managed_endpoint" in \
+				*/v1/opamp) ;; \
+				*/) managed_endpoint="$${managed_endpoint}v1/opamp" ;; \
+				*) managed_endpoint="$$managed_endpoint/v1/opamp" ;; \
+			esac; \
+		fi; \
+		helm upgrade --install odigos-central $(CENTRAL_CHART) -n $(ODIGOS_CENTRAL_NS) --create-namespace \
+			--set image.tag=$(TAG) --set onPremToken=$(ONPREM_TOKEN) --set cloudConnectors.enabled=true \
+			--set cloudConnectors.managedCollectors.enabled=$(if $(strip $(MANAGED_COLLECTOR_ENDPOINT)),true,false) \
+			--set-literal cloudConnectors.managedCollectors.externalEndpoint="$$managed_endpoint"
+	@echo "✅ Stack up in namespace $(ODIGOS_CENTRAL_NS) (central-ui + central-backend + connector-runtime + postgres$(if $(strip $(MANAGED_COLLECTOR_ENDPOINT)), + OpAMP gateway,))."
 	@echo "   central-ui:        kubectl -n $(ODIGOS_CENTRAL_NS) port-forward svc/central-ui 3000:3000  # http://localhost:3000"
 	@echo "   apply a connector: kubectl apply -f <your-OdigosCloudConnector>.yaml -n $(ODIGOS_CENTRAL_NS)"
 	@echo "   discovered data:   kubectl -n $(ODIGOS_CENTRAL_NS) port-forward svc/<connector-workload> 9090:8080  # then POST /graphql"
