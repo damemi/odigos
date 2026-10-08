@@ -31,6 +31,23 @@ type collectorTarget struct {
 	mode     string
 }
 
+type collectorResourceStore interface {
+	GetCollectorResourceState(context.Context, string) (store.CollectorResourceState, bool, error)
+	ListCollectorResourceStates(context.Context) (map[string]store.CollectorResourceState, error)
+	SetCollectorResourceState(context.Context, string, store.CollectorResourceState, string) error
+	GetManagedCollector(context.Context, store.CollectorKey) (store.CollectorRecord, error)
+	ListManagedCollectors(context.Context) ([]store.CollectorRecord, error)
+	DeleteManagedCollector(context.Context, store.CollectorKey) error
+	DeleteCollectorDestinationsForRegion(context.Context, string) error
+}
+
+func (c *Coordinator) collectorResourceStore() collectorResourceStore {
+	if c.collectorResources != nil {
+		return c.collectorResources
+	}
+	return c.store
+}
+
 // collectorReconcileLoop converges and observes managed Collectors until ctx is done.
 func (c *Coordinator) collectorReconcileLoop(ctx context.Context) {
 	provider, ok := c.provider.(api.CollectorProvider)
@@ -140,6 +157,8 @@ func (c *Coordinator) runCollectorReconcile(ctx context.Context, observers map[s
 	if c.draining.Load() {
 		return
 	}
+	c.reconcileMu.Lock()
+	defer c.reconcileMu.Unlock()
 
 	settings := collectorsettings.Read(c.cfgMgr.Effective())
 	if !settings.Enabled {
@@ -153,9 +172,6 @@ func (c *Coordinator) runCollectorReconcile(ctx context.Context, observers map[s
 	if len(targets) == 0 {
 		return
 	}
-
-	c.reconcileMu.Lock()
-	defer c.reconcileMu.Unlock()
 
 	for _, target := range targets {
 		c.reconcileCollector(ctx, target, settings)
@@ -250,10 +266,58 @@ func (c *Coordinator) reconcileCollector(ctx context.Context, target collectorTa
 		return
 	}
 
-	if err := target.deployer.ConvergeCollector(ctx, target.network); err != nil {
+	state, known, err := c.collectorResourceStore().GetCollectorResourceState(ctx, target.network.Region)
+	if err != nil {
+		coordLog.Error("reading Collector cloud-resource state failed; skipping deployment", "region", target.network.Region, "error", err)
+		return
+	}
+	if !known || state == store.CollectorResourcesNotCreated {
+		if err := c.collectorResourceStore().SetCollectorResourceState(ctx, target.network.Region, store.CollectorResourcesProvisioning, "Cloud provisioning started"); err != nil {
+			coordLog.Error("recording Collector cloud-resource state failed; skipping deployment", "region", target.network.Region, "error", err)
+			return
+		}
+	}
+	convergeErr := target.deployer.ConvergeCollector(ctx, target.network)
+	rec, recordErr := c.collectorResourceStore().GetManagedCollector(ctx, store.CollectorKey{Region: target.network.Region})
+	nextState := store.CollectorResourcesOrphaned
+	switch {
+	case recordErr == nil && hasCloudResourceRefs(rec) && convergeErr == nil:
+		nextState = store.CollectorResourcesCreated
+	case recordErr == nil && !hasCloudResourceRefs(rec) && convergeErr == nil && regional.DeploymentRoleRef == "" && state != store.CollectorResourcesCreated:
+		// Legacy UI declarations lacking the required deployment identity cannot
+		// reach the provider's cloud creation path.
+		nextState = store.CollectorResourcesNotCreated
+	case errors.Is(recordErr, store.ErrCollectorNotFound) && convergeErr == nil && state == store.CollectorResourcesCreated:
+		// Retention teardown can run inside provider convergence and remove the
+		// row after successfully destroying its cloud resources.
+		nextState = store.CollectorResourcesDestroyed
+	case errors.Is(recordErr, store.ErrCollectorNotFound) && convergeErr == nil && state == store.CollectorResourcesDestroyed:
+		nextState = store.CollectorResourcesDestroyed
+	case errors.Is(recordErr, store.ErrCollectorNotFound) && convergeErr == nil && (!known || state == store.CollectorResourcesNotCreated || state == store.CollectorResourcesProvisioning):
+		// Placement can refuse before the provider creates anything.
+		nextState = store.CollectorResourcesNotCreated
+	}
+	if err := c.collectorResourceStore().SetCollectorResourceState(ctx, target.network.Region, nextState, collectorResourceStateDetail(nextState)); err != nil {
+		coordLog.Error("recording Collector cloud-resource state after deployment failed", "region", target.network.Region, "error", err)
+	}
+	if recordErr != nil && !errors.Is(recordErr, store.ErrCollectorNotFound) {
+		coordLog.Error("reading Collector infrastructure after deployment failed", "region", target.network.Region, "error", recordErr)
+	}
+	if convergeErr != nil {
 		coordLog.Error("converging a Collector failed",
 			"network", target.network.NetworkID, "region", target.network.Region,
-			"type", target.network.Kind, "error", err)
+			"type", target.network.Kind, "error", convergeErr)
+	}
+}
+
+func collectorResourceStateDetail(state store.CollectorResourceState) string {
+	switch state {
+	case store.CollectorResourcesNotCreated:
+		return "Provisioning completed without recorded cloud resources"
+	case store.CollectorResourcesCreated:
+		return "Cloud infrastructure is recorded"
+	default:
+		return "Provisioning may have left cloud resources; inspect the Collector record before teardown"
 	}
 }
 
@@ -361,6 +425,9 @@ func (c *Coordinator) drainCollectors(ctx context.Context) error {
 		return nil
 	}
 
+	c.reconcileMu.Lock()
+	defer c.reconcileMu.Unlock()
+
 	records, err := c.recordedCollectors().ListManagedCollectors(ctx)
 	if err != nil {
 		// Never treated as "nothing recorded". A read failure that returned success here would drop the
@@ -368,16 +435,53 @@ func (c *Coordinator) drainCollectors(ctx context.Context) error {
 		// to remove any of it.
 		return fmt.Errorf("listing the managed Collectors to tear down: %w", err)
 	}
-	if len(records) == 0 {
-		return nil
-	}
-
-	c.reconcileMu.Lock()
-	defer c.reconcileMu.Unlock()
-
 	coordLog.Info("tearing down managed Collectors", "collectors", len(records))
 	var errs []error
+	lifecycleStoreAvailable := c.store != nil || c.collectorResources != nil
+	if lifecycleStoreAvailable {
+		states, err := c.collectorResourceStore().ListCollectorResourceStates(ctx)
+		if err != nil {
+			return err
+		}
+		recorded := make(map[string]bool, len(records))
+		for _, rec := range records {
+			recorded[rec.Key.Region] = true
+		}
+		configured := make(map[string]bool)
+		for _, region := range collectorsettings.ConfiguredRegions(c.storedCollectorSettingsTree()) {
+			configured[region] = true
+			if recorded[region] {
+				continue
+			}
+			state, known := states[region]
+			if c.canDiscardCollectorState(region, nil, state, known) {
+				if _, err := c.removeUnprovisionedCollector(ctx, region, nil); err != nil {
+					errs = append(errs, err)
+				}
+			} else {
+				errs = append(errs, fmt.Errorf("Collector in %s has no infrastructure record but cloud state %q is unresolved", region, state))
+			}
+		}
+		for region, state := range states {
+			if !recorded[region] && !configured[region] && state != store.CollectorResourcesDestroyed && state != store.CollectorResourcesNotCreated {
+				errs = append(errs, fmt.Errorf("Collector in %s has unresolved cloud state %q without an infrastructure record", region, state))
+			}
+		}
+	}
 	for _, record := range records {
+		if lifecycleStoreAvailable {
+			state, known, err := c.collectorResourceStore().GetCollectorResourceState(ctx, record.Key.Region)
+			if err != nil {
+				errs = append(errs, err)
+				continue
+			}
+			if c.canDiscardCollectorState(record.Key.Region, &record, state, known) {
+				if _, err := c.removeUnprovisionedCollector(ctx, record.Key.Region, &record); err != nil {
+					errs = append(errs, err)
+				}
+				continue
+			}
+		}
 		deployer, ok := deployers[record.Kind]
 		if !ok {
 			// A row whose type is not one this connector may deploy — a manual-mode Collector it only
@@ -388,6 +492,28 @@ func (c *Coordinator) drainCollectors(ctx context.Context) error {
 			continue
 		}
 		if err := c.teardownCollector(ctx, deployer, record); err != nil {
+			if lifecycleStoreAvailable {
+				err = errors.Join(err, c.collectorResourceStore().SetCollectorResourceState(ctx, record.Key.Region, store.CollectorResourcesOrphaned, "Connector shutdown could not finish cloud teardown"))
+			}
+			errs = append(errs, err)
+			continue
+		}
+		if !lifecycleStoreAvailable {
+			continue
+		}
+		if _, err := c.collectorResourceStore().GetManagedCollector(ctx, record.Key); err == nil {
+			errs = append(errs, errors.Join(fmt.Errorf("Collector infrastructure remains recorded in %s after cloud teardown", record.Key.Region),
+				c.collectorResourceStore().SetCollectorResourceState(ctx, record.Key.Region, store.CollectorResourcesOrphaned, "Connector shutdown retained a cloud infrastructure record")))
+			continue
+		} else if !errors.Is(err, store.ErrCollectorNotFound) {
+			errs = append(errs, err)
+			continue
+		}
+		if err := c.collectorResourceStore().SetCollectorResourceState(ctx, record.Key.Region, store.CollectorResourcesDestroyed, "Connector shutdown completed cloud teardown"); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if err := c.removeCollectorLocalState(ctx, record.Key.Region, false); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -423,7 +549,7 @@ func (c *Coordinator) teardownCollector(ctx context.Context, deployer api.Collec
 		NetworkID: record.NetworkID,
 		Kind:      record.Kind,
 	}); err != nil {
-		coordLog.Error("tearing down a Collector failed; the delete will be retried",
+		coordLog.Error("tearing down a Collector failed; the recorded state permits a retry",
 			"network", record.NetworkID, "region", record.Key.Region, "error", err)
 		return fmt.Errorf("%s/%s: %w", record.Key.Region, record.NetworkID, err)
 	}

@@ -134,7 +134,9 @@ func collectorCoordinator(t *testing.T, caps spec.Capabilities, collectorCfg map
 	if collectorCfg != nil {
 		setCollectorConfig(t, mgr, collectorCfg)
 	}
-	return New(config.Config{Capabilities: caps}, mgr, nil, provider)
+	c := New(config.Config{Capabilities: caps}, mgr, nil, provider)
+	c.collectorResources = newMemoryCollectorResourceStore()
+	return c
 }
 
 // memoryConfigStore is the DB-backed operational config store, in memory. The tests drive overrides
@@ -398,6 +400,7 @@ func TestAListingFailureCostsOnlyThatType(t *testing.T) {
 	mgr := config.NewManager(&memoryConfigStore{}, config.Defaults())
 	setCollectorConfig(t, mgr, enabledConfig(nil))
 	c := New(config.Config{Capabilities: caps}, mgr, nil, provider)
+	c.collectorResources = newMemoryCollectorResourceStore()
 
 	observers, deployers := c.activeCollectorHandlers(provider)
 	c.runCollectorReconcile(context.Background(), observers, deployers)

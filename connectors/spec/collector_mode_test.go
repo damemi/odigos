@@ -113,7 +113,7 @@ func TestManualModeCollectorGrantsNoDeploymentPermissions(t *testing.T) {
 	manual := Capabilities{Collectors: []CollectorCapability{
 		{Type: "sample.fargate-collector", Management: true},
 	}}
-	perms := s.RequiredPermissions(manual)
+	perms := s.CollectorRolePermissions(manual)
 
 	// The observation reads must be there: manual mode still describes, health-checks and reports.
 	for _, want := range []string{"sample:DescribeRegions", "sample:DescribeService"} {
@@ -135,7 +135,7 @@ func TestManualModeCollectorGrantsNoDeploymentPermissions(t *testing.T) {
 	auto := Capabilities{Collectors: []CollectorCapability{
 		{Type: "sample.fargate-collector", Management: true, Deployment: true},
 	}}
-	autoPerms := s.RequiredPermissions(auto)
+	autoPerms := s.CollectorRolePermissions(auto)
 	if !containsStr(autoPerms, "sample:CreateService") {
 		t.Errorf("automatic mode does not grant sample:CreateService: %v", autoPerms)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -53,6 +54,20 @@ func (f *fakeClients) AutoScaling(context.Context, string) (AutoScalingClient, e
 }
 
 const testLicense = "eyJhbGciOiJSUzI1NiJ9.licence-token-payload.signature"
+
+func assertRegistryLicense(t *testing.T, encoded, token string) {
+	t.Helper()
+	var credentials struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.Unmarshal([]byte(encoded), &credentials); err != nil {
+		t.Fatalf("licence secret is not registry credentials JSON: %v", err)
+	}
+	if credentials.Username != "odigos" || credentials.Password != token {
+		t.Errorf("licence secret has username %q and the expected token: %t; want username odigos and the connector token", credentials.Username, credentials.Password == token)
+	}
+}
 
 func testProvisioner(clients *fakeClients, store *fakeStore, license string) *Provisioner {
 	return &Provisioner{
@@ -155,8 +170,10 @@ func TestProvisionEndToEnd(t *testing.T) {
 
 	// The licence value that reached the customer's account is the connector's own.
 	license := clients.secrets.secrets[LicenseSecretName(testConnector, testRegion)]
-	if len(license.values) != 1 || license.values[0] != testLicense {
+	if len(license.values) != 1 {
 		t.Errorf("the licence secret holds %d version(s); want this install's own token", len(license.values))
+	} else {
+		assertRegistryLicense(t, license.values[0], testLicense)
 	}
 	if license.tags[TagLicenseFingerprint] == "" {
 		t.Error("no licence fingerprint was recorded, so the next pass would rewrite the value")
@@ -226,9 +243,8 @@ func TestARenewedLicenceIsRewrittenOnce(t *testing.T) {
 	if len(license.values) != 2 {
 		t.Fatalf("the licence secret has %d versions, want 2: the original and one rewrite", len(license.values))
 	}
-	if license.values[1] != "renewed."+testLicense {
-		t.Errorf("the renewed licence did not reach the secret store")
-	}
+	assertRegistryLicense(t, license.values[0], testLicense)
+	assertRegistryLicense(t, license.values[1], "renewed."+testLicense)
 }
 
 // TestNoLicenceTokenRefusesRatherThanDeploying. The Collector's enterprise auth extension refuses to

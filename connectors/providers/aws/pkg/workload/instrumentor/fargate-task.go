@@ -120,14 +120,9 @@ func (i *ecsInspector) resolveFargateRoutes(ctx context.Context, services []stor
 	return out, nil
 }
 
-// EnsurePrerequisite implements base.Prerequisite: Fargate instrumentation ultimately needs a global OTLP
-// terminal, either directly or downstream of its regional Collector. This is not an error (the
-// coordinator skips the whole reconcile pass on a prerequisite error, which would also skip rollbacks) —
-// Reconcile enforces the same gate per-service while still allowing rollbacks to run.
-func (i *ECSFargateInstrumentor) EnsurePrerequisite(ctx context.Context) error {
-	if _, haveDest, _ := i.store.OTLPExportTarget(ctx); !haveDest {
-		log.Debug("fargate prerequisite waiting for an OTLP destination")
-	}
+// EnsurePrerequisite leaves destination selection to per-service routing. A service can use a regional
+// Collector without a global terminal, and a missing route must not skip rollback for other services.
+func (i *ECSFargateInstrumentor) EnsurePrerequisite(_ context.Context) error {
 	return nil
 }
 

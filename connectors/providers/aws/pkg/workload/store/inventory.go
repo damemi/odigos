@@ -81,16 +81,26 @@ const (
 // the mutating path: rollback resolves ownership separately (see the instrumentor's ownership()), where the
 // IaC marker does not qualify because it carries no snapshot of what to restore.
 func OdigosInstrumented(env map[string]string) bool {
+	return OdigosInstrumentationOrigin(env) != ""
+}
+
+// OdigosInstrumentationOrigin distinguishes an IaC marker from connector-owned instrumentation. The
+// report uses this to surface an untracked IaC-applied function without flagging connector rollback in
+// progress as a permanent source mismatch.
+func OdigosInstrumentationOrigin(env map[string]string) string {
 	if env == nil {
-		return false
+		return ""
 	}
 	if _, ok := env[EnvOdigosManaged]; ok {
-		return true
+		return "connector"
 	}
 	if _, ok := env[EnvOdigosIaC]; ok {
-		return true
+		return "external"
 	}
-	return env[envCollectorEndpoint] != "" || env[envCollectorInsecure] != ""
+	if env[envCollectorEndpoint] != "" || env[envCollectorInsecure] != "" {
+		return "connector"
+	}
+	return ""
 }
 
 // OdigosLayerNamePrefix is the name prefix of every Lambda layer this connector publishes. It is the
@@ -155,6 +165,8 @@ type LambdaFunction struct {
 	// answers only "is an Odigos ownership marker present" — see Observation for whether the instrumentation
 	// behind that marker is actually complete.
 	Instrumented bool
+	// InstrumentationOrigin is "external" for ODIGOS_IAC and "connector" for connector-owned markers.
+	InstrumentationOrigin string
 	// Layers is the function's attached layer-version ARN set, as ListFunctions returns it. Persisted in the
 	// (until now unused) layers column: it is what makes "the marker is there but the layer was detached"
 	// observable, and it fills the LayerArn a Lambda workload report has always declared and never carried.
@@ -269,7 +281,7 @@ func metaJSON(m map[string]any) (string, error) {
 // discovery owns keeps a new key by any other writer preserved by default, which is the safe direction to be
 // wrong in.
 var lambdaDiscoveryMetadataKeys = []string{
-	"instrumented", "handler", "memorySize", "timeout", "version", "state", "last_update_status",
+	"instrumented", "instrumentation_origin", "handler", "memorySize", "timeout", "version", "state", "last_update_status",
 	// The VpcConfig keys have to be in this list, not merely written: detaching a function from its VPC
 	// removes VpcConfig entirely, and a stale vpc_id left behind by an overlay would keep grouping the
 	// function onto a network it no longer runs on — pointing it at a Collector it can no longer reach.
@@ -290,6 +302,7 @@ func (s *Store) UpsertLambda(ctx context.Context, fn LambdaFunction) error {
 		fn.Metadata = map[string]any{}
 	}
 	fn.Metadata["instrumented"] = fn.Instrumented
+	fn.Metadata["instrumentation_origin"] = fn.InstrumentationOrigin
 	fn.Metadata["state"] = fn.State
 	fn.Metadata["last_update_status"] = fn.LastUpdateStatus
 	fn.Metadata[metaLambdaVPCID] = fn.VPCID
@@ -780,7 +793,7 @@ func workloadQueries() []workloadQuery {
 			COALESCE(metadata->>'conformance', ''), metadata->'conformance_missing', metadata->>'conformance_since',
 			COALESCE(metadata->>'observation_error', ''),
 			COALESCE(metadata->>'state','') = '` + lambdaStatePending + `' OR COALESCE(metadata->>'last_update_status','') = '` + lambdaUpdateInProgress + `',
-			layers, metadata->'` + metaRoutingNote + `'
+			layers, metadata->'` + metaRoutingNote + `', COALESCE(metadata->>'instrumentation_origin', '')
 			FROM connector_aws.lambda_functions WHERE connector_name = $1 AND deleted_at IS NULL`},
 		// Fargate SERVICES: one workload per (cluster, service) from the ecs_services inventory. The
 		// external id — a source's stable identity — is cluster_arn || '/' || service_name (NOT a task ARN,
@@ -793,7 +806,7 @@ func workloadQueries() []workloadQuery {
 			COALESCE(metadata->>'instrumentation_phase', ''),
 			COALESCE(launch_type, ''), COALESCE(task_definition, ''), COALESCE(deployment_controller, ''),
 			metadata->'containers',
-			` + ecsObservationCols + `, NULL, metadata->'` + metaRoutingNote + `'
+			` + ecsObservationCols + `, NULL, metadata->'` + metaRoutingNote + `', ''
 			FROM connector_aws.ecs_services WHERE connector_name = $1 AND deleted_at IS NULL`},
 		// STANDALONE Fargate tasks (no ECS service — RunTask/EventBridge): inherently ephemeral, so the task
 		// ARN is the identity. They stay discoverable/selectable, but instrumentation reports a terminal
@@ -802,7 +815,7 @@ func workloadQueries() []workloadQuery {
 			'', '', last_seen_at, false,
 			COALESCE(metadata->>'instrumentation_error', ''), '',
 			'', '', '', NULL,
-			` + noObservationCols + `, NULL
+			` + noObservationCols + `, NULL, ''
 			FROM connector_aws.ecs_tasks
 			WHERE connector_name = $1 AND deleted_at IS NULL AND COALESCE(service_name, '') = ''`},
 	}
@@ -814,7 +827,7 @@ func scanWorkloadRows(rows pgx.Rows, q workloadQuery, out *[]api.DiscoveredWorkl
 	defer rows.Close()
 	{
 		for rows.Next() {
-			var name, region, externalID, language, version, instrErr, instrPhase string
+			var name, region, externalID, language, version, instrErr, instrPhase, instrOrigin string
 			// The next four columns carry the kind-specific facts each query supplies and the others
 			// pad out: architecture/launch type, task definition, deployment controller, and the ECS
 			// container inventory. They feed DiscoveredWorkload.Details, which the report narrows to
@@ -834,7 +847,7 @@ func scanWorkloadRows(rows pgx.Rows, q workloadQuery, out *[]api.DiscoveredWorkl
 			if err := rows.Scan(&name, &region, &externalID, &language, &version, &lastSeen, &instrumented, &instrErr, &instrPhase,
 				&archOrLaunchType, &taskDefinition, &deploymentController, &containersJSON,
 				&conformanceTarget{&conformance}, &missingJSON, &conformanceSince, &observationErr, &settling, &layersJSON,
-				&routingNoteJSON); err != nil {
+				&routingNoteJSON, &instrOrigin); err != nil {
 				return err
 			}
 			runtime := language
@@ -842,22 +855,23 @@ func scanWorkloadRows(rows pgx.Rows, q workloadQuery, out *[]api.DiscoveredWorkl
 				language, version = splitRuntime(language)
 			}
 			*out = append(*out, api.DiscoveredWorkload{
-				ServiceName:          name,
-				Kind:                 q.kind,
-				Region:               region,
-				ExternalID:           externalID,
-				RuntimeLanguage:      language,
-				RuntimeVersion:       version,
-				Instrumented:         instrumented,
-				InstrumentationType:  q.kind,
-				InstrumentationError: instrErr,
-				InstrumentationPhase: instrPhase,
-				Conformance:          conformance,
-				MissingComponents:    decodeStringSlice(missingJSON, "conformance_missing"),
-				ConformanceSince:     parseObservedAt(conformanceSince),
-				Settling:             settling,
-				ObservationError:     observationErr,
-				RoutingNote:          decodeRoutingNote(routingNoteJSON),
+				ServiceName:           name,
+				Kind:                  q.kind,
+				Region:                region,
+				ExternalID:            externalID,
+				RuntimeLanguage:       language,
+				RuntimeVersion:        version,
+				Instrumented:          instrumented,
+				InstrumentationOrigin: instrOrigin,
+				InstrumentationType:   q.kind,
+				InstrumentationError:  instrErr,
+				InstrumentationPhase:  instrPhase,
+				Conformance:           conformance,
+				MissingComponents:     decodeStringSlice(missingJSON, "conformance_missing"),
+				ConformanceSince:      parseObservedAt(conformanceSince),
+				Settling:              settling,
+				ObservationError:      observationErr,
+				RoutingNote:           decodeRoutingNote(routingNoteJSON),
 				Details: workloadDetails(q.kind, externalID, runtime,
 					archOrLaunchType, taskDefinition, deploymentController, containersJSON,
 					decodeStringSlice(layersJSON, "layers")),

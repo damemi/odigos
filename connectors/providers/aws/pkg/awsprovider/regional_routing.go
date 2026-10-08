@@ -67,19 +67,13 @@ func (r regionalRouteResolver) resolveRoutes(ctx context.Context, workloads []ne
 	if err != nil {
 		return nil, err
 	}
-	if direct.Outcome == domaindest.RoutingError {
-		for _, w := range workloads {
-			out[w.Ref] = direct
-		}
-		return out, nil
-	}
 	destinations, err := p.bstore.ListDestinations(ctx)
 	if err != nil {
 		return nil, err
 	}
 	markedRegions := map[string]bool{}
 	for _, dest := range destinations {
-		if domaindest.IsManagedCollectorType(dest.Type) {
+		if !dest.Disabled && domaindest.IsManagedCollectorType(dest.Type) {
 			markedRegions[dest.Region] = true
 		}
 	}
@@ -157,6 +151,11 @@ func (r regionalRouteResolver) resolveRoutes(ctx context.Context, workloads []ne
 		if routeErr != nil {
 			return nil, fmt.Errorf("resolve route for %s: %w", w.Ref, routeErr)
 		}
+		if routing.Reason == domaindest.ReasonCollectorUnreachable {
+			if collector, exists := collectors[w.Region]; exists {
+				routing.Note = unreachableCollectorNote(routing, network, collector.network)
+			}
+		}
 		if kind == "Lambda" {
 			routing = lambdaRoutingNote(routing)
 		}
@@ -172,6 +171,19 @@ func (r regionalRouteResolver) resolveRoutes(ctx context.Context, workloads []ne
 		}
 	}
 	return selectCollectorRoutes(collectorRouteSelectionInput{Direct: direct, Desired: out, Candidates: candidates, BatchSizes: batchSizes}), nil
+}
+
+// unreachableCollectorNote gives the workload's network and the selected Collector host network to the
+// operator. ECS clusters can span VPCs, so a same-cluster workload still needs an actual network path.
+func unreachableCollectorNote(routing domaindest.Routing, workloadVPC, collectorVPC string) string {
+	if workloadVPC == "" || collectorVPC == "" {
+		return routing.Note
+	}
+	if workloadVPC != collectorVPC {
+		return fmt.Sprintf("Workload VPC %s cannot reach the regional Collector in VPC %s. Configure active same-region VPC peering and reciprocal routes for the workload and Collector subnets, or place the Collector in the workload VPC. %s",
+			workloadVPC, collectorVPC, routing.Note)
+	}
+	return fmt.Sprintf("Workload VPC %s shares the Collector VPC, but the Collector ingress security group does not admit this workload on every published OTLP port. %s", workloadVPC, routing.Note)
 }
 
 // lambdaRoutingNote adds the AWS-specific remediation to the provider-neutral route reason. It is kept
@@ -240,6 +252,12 @@ func selectCollectorRoutes(in collectorRouteSelectionInput) map[string]domaindes
 			continue
 		}
 		byRegion[candidate.Region] = append(byRegion[candidate.Region], candidate)
+	}
+	// Without a global terminal there is no safe direct route to hold a workload on
+	// while a batch rolls out. The Collector route is already readiness and
+	// reachability gated by ResolveRoutingForRegion, so apply every eligible route.
+	if !in.Direct.Found {
+		return out
 	}
 	for region, candidates := range byRegion {
 		facts := make([]collectorcutover.Workload, 0, len(candidates))

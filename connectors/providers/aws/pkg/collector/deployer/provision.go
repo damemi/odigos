@@ -2,6 +2,8 @@ package deployer
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorconfig"
@@ -307,13 +309,13 @@ func (p *Provisioner) ensureBootstrap(ctx context.Context, api SecretsClient, in
 	return state.ARN, problems, nil
 }
 
-// ensureLicense converges the region's licence secret and returns its ARN.
+// ensureLicense converges the region's licence and registry-credential secret and returns its ARN.
 //
-// The value is written when the secret holds none, and rewritten only when the connector's token has
-// actually changed — which is what TagLicenseFingerprint exists to answer, since the connector holds no
-// permission to read the secret back. Writing unconditionally would mint a new secret version on every
-// reconcile pass; never rewriting would mean a renewed licence never reaches the Collector, and
-// makes that a crash loop rather than a degradation.
+// The JSON value is written when the secret holds none, when the connector's token changes, or when an
+// existing installation still has the legacy raw-token representation. TagLicenseFingerprint answers
+// whether it changed, since the connector holds no permission to read the secret back. Writing
+// unconditionally would mint a new secret version on every reconcile pass; never rewriting would mean a
+// renewed licence never reaches the Collector, and makes that a crash loop rather than a degradation.
 //
 // Rewriting the secret does NOT get the new licence into a running task: like a credential rotation, a
 // running task holds what was injected at start, so the redeploy is what installs it. That redeploy is
@@ -348,11 +350,15 @@ func (p *Provisioner) ensureLicense(ctx context.Context, api SecretsClient, in N
 		}), nil
 	}
 
-	fingerprint := p.License.Fingerprint()
+	// The same customer-owned token is used both by the Collector at runtime and by ECS when it
+	// pulls the private image. The version marker changes the stored format from the older raw-token
+	// value so existing installations are migrated once during reconciliation.
+	fingerprintBytes := sha256.Sum256([]byte("ecs-registry-auth-v1\x00" + p.License.Fingerprint()))
+	fingerprint := hex.EncodeToString(fingerprintBytes[:])
 	if state.HasValue && state.Fingerprint == fingerprint {
 		return state.ARN, problems, nil
 	}
-	if _, err := PutSecretValue(ctx, api, state.ARN, p.License); err != nil {
+	if _, err := PutRegistryLicenseSecretValue(ctx, api, state.ARN, p.License); err != nil {
 		return "", problems, err
 	}
 	if err := RecordSecretFingerprint(ctx, api, state.ARN, TagLicenseFingerprint, fingerprint); err != nil {

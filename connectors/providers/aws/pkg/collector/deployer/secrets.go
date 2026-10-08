@@ -2,6 +2,7 @@ package deployer
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -182,15 +183,38 @@ func EnsureSecret(ctx context.Context, api SecretsClient, in SecretInput) (Secre
 // redeploy is the rotation — and on AWS the previous value stays retrievable as AWSPREVIOUS, so
 // what actually invalidates the old credential is revocation at the gateway, never this call.
 func PutSecretValue(ctx context.Context, api SecretsClient, secretARN string, value collectorcredential.Secret) (string, error) {
+	return putSecretValue(ctx, api, secretARN, value, false)
+}
+
+// PutRegistryLicenseSecretValue writes the existing Collector licence token in ECS's private-registry
+// credential format. ECS consumes the whole JSON object before a container starts; the task definition
+// separately selects the `password` field for ODIGOS_ONPREM_TOKEN, so the Collector still receives the
+// original token rather than the JSON document.
+func PutRegistryLicenseSecretValue(ctx context.Context, api SecretsClient, secretARN string, value collectorcredential.Secret) (string, error) {
+	return putSecretValue(ctx, api, secretARN, value, true)
+}
+
+func putSecretValue(ctx context.Context, api SecretsClient, secretARN string, value collectorcredential.Secret, registryCredentials bool) (string, error) {
 	if value.Empty() {
 		// Refused rather than written. An empty secret version is a Collector that starts, presents an
 		// empty Authorization header and is reported as "deployed but never connected" — the one failure
 		// that says the connector cannot diagnose, because it does not read the secret back.
 		return "", errors.New("refusing to write an empty value to a Collector secret: the Collector would start, authenticate with nothing, and be reported as deployed but never connected")
 	}
+	secretString := value.Reveal()
+	if registryCredentials {
+		encoded, err := json.Marshal(struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}{Username: "odigos", Password: secretString})
+		if err != nil {
+			return "", fmt.Errorf("encode Collector registry credentials: %w", err)
+		}
+		secretString = string(encoded)
+	}
 	out, err := api.PutSecretValue(ctx, &secretsmanager.PutSecretValueInput{
 		SecretId:     aws.String(secretARN),
-		SecretString: aws.String(value.Reveal()),
+		SecretString: aws.String(secretString),
 	})
 	if err != nil {
 		// The error is returned unwrapped of the value by construction — nothing here interpolates it,

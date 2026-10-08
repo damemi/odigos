@@ -38,14 +38,15 @@ const (
 	legacyKeyHostNetworkID = "hostNetworkId"
 	// KeyProvider holds provider-owned settings. The base layer preserves and merges this opaque map;
 	// the selected provider is solely responsible for interpreting it.
-	KeyProvider         = "provider"
-	KeyCPU              = "cpu"
-	KeyMemory           = "memory"
-	KeyLogRetentionDays = "logRetentionDays"
-	KeyArch             = "arch"
-	KeyImage            = "image"
-	KeyRepoOverride     = "repositoryOverride"
-	KeyEndpointOverride = "endpointOverride"
+	KeyProvider          = "provider"
+	KeyDeploymentRoleRef = "deploymentRoleRef"
+	KeyCPU               = "cpu"
+	KeyMemory            = "memory"
+	KeyLogRetentionDays  = "logRetentionDays"
+	KeyArch              = "arch"
+	KeyImage             = "image"
+	KeyRepoOverride      = "repositoryOverride"
+	KeyEndpointOverride  = "endpointOverride"
 
 	// KeyRolloutBatchSize bounds how many workloads a single pass may re-point at this region's
 	// Collector. Per network rather than global: the blast radius that matters is one network's
@@ -128,6 +129,7 @@ type Scaling struct {
 
 // Network holds portable operational settings shared by defaults and a regional override.
 type Network struct {
+	DeploymentRoleRef string
 	// Enabled is inherited by a Region. It is not a workload-network switch.
 	Enabled bool
 
@@ -258,6 +260,7 @@ func readNetwork(entry map[string]any, base Network) Network {
 	out := base
 	out.Enabled = boolOf(entry, KeyEnabled, base.Enabled)
 	out.Provider = mergeMaps(base.Provider, mapOf(entry, KeyProvider))
+	out.DeploymentRoleRef = stringOf(entry, KeyDeploymentRoleRef, base.DeploymentRoleRef)
 	out.CPU = stringOf(entry, KeyCPU, base.CPU)
 	out.Memory = stringOf(entry, KeyMemory, base.Memory)
 	out.LogRetentionDays = intOf(entry, KeyLogRetentionDays, base.LogRetentionDays)

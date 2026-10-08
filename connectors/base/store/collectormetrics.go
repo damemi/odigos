@@ -58,6 +58,11 @@ func (s *Store) CollectorMetrics(ctx context.Context, key CollectorKey) (collect
 		if isNoRows(err) {
 			return collectormetrics.Record{}, false, fmt.Errorf("%w: region %s", ErrCollectorNotFound, key.Region)
 		}
+		// A refresh poll can be canceled when its short wait window expires.
+		// The caller handles that as a cached result, so it is not a store failure.
+		if ctx.Err() != nil {
+			return collectormetrics.Record{}, false, ctx.Err()
+		}
 		collectorsLog.Error("read collector metrics failed",
 			"connector", s.connectorName, "region", key.Region, "error", err)
 		return collectormetrics.Record{}, false, fmt.Errorf("reading the metrics for the Collector in region %s: %w", key.Region, err)

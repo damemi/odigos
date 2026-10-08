@@ -89,11 +89,39 @@ func TestNonVPCLambdaFallbackNote(t *testing.T) {
 
 func TestNoGlobalTerminalIsAnError(t *testing.T) {
 	got := ResolveRoutingForRegion([]Destination{marker("eu-west-1")}, nil, "eu-west-1", "vpc-host", ReachabilityUnknown)
-	if got.Outcome != RoutingError || got.Found || got.Reason != ReasonNoDestination {
+	if got.Outcome != RoutingError || got.Found || got.Reason != ReasonNoCollectorForRegion {
 		t.Fatalf("routing = %+v, want no-applicable-destination error", got)
 	}
-	if !strings.Contains(got.Note, "No applicable destination") {
+	if !strings.Contains(got.Note, "no Collector is available") || !strings.Contains(got.Note, "no global OTLP destination") {
 		t.Fatalf("note = %q", got.Note)
+	}
+}
+
+func TestRegionalCollectorIsDestinationWithoutGlobalTerminal(t *testing.T) {
+	regional := marker("eu-west-1")
+	regional.Signals = []string{SignalTraces, SignalLogs}
+	collector := regionalCollector("eu-west-1", "vpc-host")
+	got := ResolveRoutingForRegion([]Destination{regional}, []CollectorTarget{collector}, "eu-west-1", "vpc-host", ReachabilityReachable)
+	if got.Outcome != RoutingCollector || !got.Found || got.Via != RouteCollector || got.Target.Endpoint != collector.Endpoint {
+		t.Fatalf("routing = %+v, want regional Collector", got)
+	}
+	if !got.Target.Traces || !got.Target.Logs || got.Target.Metrics || len(got.Headers) != 0 {
+		t.Fatalf("collector-only signals or headers = %+v, headers=%v", got.Target, got.Headers)
+	}
+	collector.EverReady = false
+	got = ResolveRoutingForRegion([]Destination{regional}, []CollectorTarget{collector}, "eu-west-1", "vpc-host", ReachabilityReachable)
+	if got.Outcome != RoutingError || got.Reason != ReasonCollectorNotReady || got.Found {
+		t.Fatalf("unready Collector routing = %+v, want error without fallback", got)
+	}
+	collector.EverReady = true
+	got = ResolveRoutingForRegion([]Destination{regional}, []CollectorTarget{collector}, "eu-west-1", "vpc-host", ReachabilityUnknown)
+	if got.Outcome != RoutingError || got.Reason != ReasonCollectorUnreachable || got.Found {
+		t.Fatalf("unreachable Collector routing = %+v, want error without fallback", got)
+	}
+	regional.Disabled = true
+	got = ResolveRoutingForRegion([]Destination{regional}, []CollectorTarget{collector}, "eu-west-1", "vpc-host", ReachabilityReachable)
+	if got.Outcome != RoutingError || got.Reason != ReasonNoDestination {
+		t.Fatalf("disabled marker routing = %+v, want no destination", got)
 	}
 }
 

@@ -41,6 +41,10 @@ type Coordinator struct {
 	// the property being tested — that a drain removes exactly what was RECORDED, including a network
 	// placement has forgotten — cannot be exercised through one.
 	collectorRows collectorRecords
+	// collectorResources persists cloud-resource lifecycle facts independently of
+	// provider rows. A seam also lets reconciliation exercise those transitions
+	// without a live database.
+	collectorResources collectorResourceStore
 	// workloadKinds: directly-instrumentable kinds (supportedSourceKinds + workload createSource).
 	workloadKinds []string
 	// computePlatformKinds: compute-platform assignment kinds (createSource for agent install on managed environments).
@@ -573,17 +577,15 @@ func (c *Coordinator) WorkloadReports(ctx context.Context) ([]api.DiscoveredWork
 	return out, nil
 }
 
-// markBlockedOnPrerequisites flags workloads the customer marked for instrumentation that the
-// reconcile is deliberately skipping because a connector-wide precondition is unmet.
+// markBlockedOnPrerequisites flags workloads the customer marked for instrumentation that have
+// no configured export destination in their region.
 //
-// Today that is the OTLP destination: every connector instrumentation exports directly to it, so
-// without one the instrumentors log a warning and skip. That skip was invisible to the customer —
-// the workload showed as enabled and not instrumented, with nothing saying why or that it will
-// resolve itself once a destination exists.
+// A workload needs either a global OTLP terminal or a regional managed Collector marker. A marker
+// makes the Collector the destination for its region; readiness and network reachability are checked
+// by the provider's route resolver and reported as routing issues, not as a missing destination.
 //
-// It is marked here rather than in each instrumentor because the condition is a property of the
-// connector, not of a workload: one check covers Lambda, Fargate and Cloud Run alike, needs no
-// per-workload persistence, and cannot go stale the way a written flag would.
+// It is marked here rather than persisted by each instrumentor so it clears as soon as a
+// destination is configured and cannot outlive the customer's intent.
 func (c *Coordinator) markBlockedOnPrerequisites(ctx context.Context, workloads []api.DiscoveredWorkload) {
 	if len(workloads) == 0 {
 		return
@@ -612,9 +614,26 @@ func (c *Coordinator) markBlockedOnPrerequisites(ctx context.Context, workloads 
 	if haveDest {
 		return
 	}
+	destinations, err := c.store.ListDestinations(ctx)
+	if err != nil {
+		coordLog.Warn("list regional destinations for workload reports failed; not reporting a blocked state", "error", err)
+		return
+	}
+	markWaitingForDestination(workloads, destinations)
+}
+
+func markWaitingForDestination(workloads []api.DiscoveredWorkload, destinations []store.DestinationRecord) {
+	markedRegions := make(map[string]bool)
+	for _, dest := range destinations {
+		if !dest.Disabled && domaindest.IsManagedCollectorType(dest.Type) {
+			markedRegions[dest.Region] = true
+		}
+	}
 	for i := range workloads {
 		if blockableForInstrumentation(workloads[i]) || unverifiableWithoutDestination(workloads[i]) {
-			workloads[i].WaitingFor = api.WaitingForDestination
+			if !markedRegions[workloads[i].Region] {
+				workloads[i].WaitingFor = api.WaitingForDestination
+			}
 		}
 	}
 }

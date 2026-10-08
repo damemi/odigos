@@ -162,6 +162,20 @@ func TestConformanceStateMatrix(t *testing.T) {
 			issueCodes:   []string{"SourceDisabledButInstrumented"},
 			wantSince:    true,
 		},
+		{
+			name: "automatic mode does not hide untracked IaC instrumentation",
+			mutate: func(w *api.DiscoveredWorkload) {
+				w.ManagementMode = spec.ModeAutomatic
+				w.SourceMatched = false
+				w.SourceEnabled = false
+				w.InstrumentationOrigin = "external"
+				w.Conformance = api.ConformanceUnknown
+			},
+			state:        "Error",
+			instrumented: true,
+			stage:        "No source but still instrumented",
+			issueCodes:   []string{"SourceMissingButInstrumented"},
+		},
 	}
 
 	for _, c := range cases {

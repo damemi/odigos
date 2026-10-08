@@ -841,14 +841,28 @@ func (s CloudConnectorSpec) RequiredPermissions(caps Capabilities) []string {
 		add(t.Permissions)
 	}
 
-	// Collectors: same asymmetry, but no discovery feature — read-only observation lives on
-	// MANAGEMENT types and is aggregated for CollectorTypes (either mode). DEPLOYMENT permissions
-	// are automatic-only (mutating create/role/secret set).
-	colls := s.CollectorTypes(caps)
-	if len(colls) > 0 {
+	// Collector permissions, including the management baseline, belong to its
+	// customer-provisioned role. They are never added to the connector's base identity.
+	return out
+}
+
+// CollectorRolePermissions lists the provider API actions carried by the customer-provisioned
+// Collector role. Management reads apply in both modes; deployment writes apply only in automatic mode.
+func (s CloudConnectorSpec) CollectorRolePermissions(caps Capabilities) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(perms []string) {
+		for _, p := range perms {
+			if !seen[p] {
+				seen[p] = true
+				out = append(out, p)
+			}
+		}
+	}
+	if len(s.CollectorTypes(caps)) > 0 {
 		add(s.Collectors.Management.Permissions)
 	}
-	for _, t := range colls {
+	for _, t := range s.CollectorTypes(caps) {
 		add(t.Permissions)
 	}
 	for _, t := range s.ActiveCollectorDeploymentTypes(caps) {

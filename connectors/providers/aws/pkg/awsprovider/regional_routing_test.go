@@ -39,6 +39,42 @@ func TestSelectCollectorRoutesAdmitsReadyRegionalCollector(t *testing.T) {
 	}
 }
 
+func TestSelectCollectorRoutesWithoutGlobalTerminal(t *testing.T) {
+	direct := domaindest.Routing{Outcome: domaindest.RoutingError, Reason: domaindest.ReasonNoDestination}
+	desired := map[string]domaindest.Routing{
+		"cluster/first":  testCollectorRouting("vpc-host"),
+		"cluster/second": testCollectorRouting("vpc-host"),
+	}
+	routes := selectCollectorRoutes(collectorRouteSelectionInput{
+		Direct: direct, Desired: desired,
+		Candidates: []collectorRouteCandidate{
+			{Region: "eu-west-1", Ref: "cluster/first", Instrumented: true},
+			{Region: "eu-west-1", Ref: "cluster/second", Instrumented: true},
+		},
+		BatchSizes: map[string]int{"eu-west-1": 1},
+	})
+	for ref, route := range routes {
+		if route.Outcome != domaindest.RoutingCollector {
+			t.Errorf("%s route = %+v, want Collector without an unusable direct fallback", ref, route)
+		}
+	}
+}
+
+func TestUnreachableCollectorNoteIdentifiesVpcMismatch(t *testing.T) {
+	route := domaindest.Routing{Outcome: domaindest.RoutingError, Reason: domaindest.ReasonCollectorUnreachable,
+		Note: "no global OTLP destination is configured for fallback"}
+	note := unreachableCollectorNote(route, "vpc-app", "vpc-collector")
+	for _, want := range []string{"vpc-app", "vpc-collector", "peering", "reciprocal routes", route.Note} {
+		if !strings.Contains(note, want) {
+			t.Errorf("note %q does not contain %q", note, want)
+		}
+	}
+	note = unreachableCollectorNote(route, "vpc-app", "vpc-app")
+	if !strings.Contains(note, "ingress security group") || strings.Contains(note, "peering") {
+		t.Errorf("same-VPC note = %q, want ingress diagnosis", note)
+	}
+}
+
 func TestSelectCollectorRoutesKeepsOtherRegionMarkerDirect(t *testing.T) {
 	ref := "cluster/service"
 	direct := testDirectRouting(domaindest.ReasonNoCollectorForRegion)

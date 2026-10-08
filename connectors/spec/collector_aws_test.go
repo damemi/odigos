@@ -18,8 +18,8 @@ func TestAWSCollectorsDomainLoads(t *testing.T) {
 	if !s.Collectors.Deployment.Enabled {
 		t.Error("collectors.deployment should be enabled for AWS")
 	}
-	if !containsStr(s.Collectors.Management.Permissions, "ec2:DescribeRegions") {
-		t.Errorf("collectors.management baseline should enumerate regions, got %v", s.Collectors.Management.Permissions)
+	if len(s.Collectors.Management.Permissions) != 0 {
+		t.Errorf("collectors.management should require no account-wide permission for configured regions, got %v", s.Collectors.Management.Permissions)
 	}
 	mgmt, ok := s.Collectors.Management.findType(awsCollectorType)
 	if !ok {
@@ -57,7 +57,7 @@ func TestAWSManualModeCollectorHasNoWriteVerb(t *testing.T) {
 		s := MustGet(provider)
 		for _, mt := range s.Collectors.Management.Types {
 			caps := Capabilities{Collectors: []CollectorCapability{{Type: mt.Name, Management: true}}}
-			for _, p := range s.RequiredPermissions(caps) {
+			for _, p := range s.CollectorRolePermissions(caps) {
 				for _, verb := range writeVerbs {
 					if strings.Contains(p, verb) {
 						t.Errorf("%s/%s manual mode aggregates write-capable permission %q (matched %q)",
@@ -74,10 +74,10 @@ func TestAWSManualModeCollectorHasNoWriteVerb(t *testing.T) {
 // management type, where manual mode would silently inherit it.
 func TestAWSAutomaticModeCollectorAddsOnlyDeploymentPermissions(t *testing.T) {
 	s := MustGet("aws")
-	manual := s.RequiredPermissions(Capabilities{Collectors: []CollectorCapability{
+	manual := s.CollectorRolePermissions(Capabilities{Collectors: []CollectorCapability{
 		{Type: awsCollectorType, Management: true},
 	}})
-	auto := s.RequiredPermissions(Capabilities{Collectors: []CollectorCapability{
+	auto := s.CollectorRolePermissions(Capabilities{Collectors: []CollectorCapability{
 		{Type: awsCollectorType, Management: true, Deployment: true},
 	}})
 
@@ -246,7 +246,7 @@ func TestAWSCollectorScalingIsFullyGranted(t *testing.T) {
 	// And none of it reaches manual mode: a customer who deploys their own Collector configures their own
 	// scaling, so being asked to grant an autoscaling write would be asking for access to something
 	// Odigos has no business touching.
-	manual := s.RequiredPermissions(Capabilities{Collectors: []CollectorCapability{
+	manual := s.CollectorRolePermissions(Capabilities{Collectors: []CollectorCapability{
 		{Type: awsCollectorType, Management: true},
 	}})
 	for _, p := range manual {
@@ -262,11 +262,26 @@ func TestAWSCollectorScalingIsFullyGranted(t *testing.T) {
 // Collector runs with, which the customer pre-creates, not to the connector's own credentials.
 func TestAWSCollectorManagementCannotReadItsOwnSecrets(t *testing.T) {
 	s := MustGet("aws")
-	auto := s.RequiredPermissions(Capabilities{Collectors: []CollectorCapability{
+	auto := s.CollectorRolePermissions(Capabilities{Collectors: []CollectorCapability{
 		{Type: awsCollectorType, Management: true, Deployment: true},
 	}})
 	if containsStr(auto, "secretsmanager:GetSecretValue") {
 		t.Errorf("the connector requires secretsmanager:GetSecretValue; it writes credentials and never reads them back: %v", auto)
+	}
+}
+
+func TestAWSCollectorInfrastructurePermissionsStayOffConnectorIdentity(t *testing.T) {
+	s := MustGet("aws")
+	for _, caps := range []Capabilities{
+		{Collectors: []CollectorCapability{{Type: awsCollectorType, Management: true}}},
+		{Collectors: []CollectorCapability{{Type: awsCollectorType, Management: true, Deployment: true}}},
+	} {
+		base := s.RequiredPermissions(caps)
+		for _, action := range []string{"ecs:CreateService", "ecs:DescribeServices", "secretsmanager:CreateSecret", "iam:PassRole", "ec2:DescribeVpcs"} {
+			if containsStr(base, action) {
+				t.Errorf("connector base identity was granted Collector action %s", action)
+			}
+		}
 	}
 }
 

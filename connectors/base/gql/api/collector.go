@@ -147,6 +147,7 @@ func patchFromCreateInput(in model.CreateManagedCollectorInput) collectorsetting
 	provider, providerIngress := providerOverridesPatch(in.ProviderOverrides)
 	return collectorsettings.Patch{
 		HostNetworkID:           in.NetworkID,
+		DeploymentRoleRef:       &in.DeploymentRoleRef,
 		Provider:                provider,
 		CPU:                     in.CPU,
 		Memory:                  in.Memory,
@@ -166,6 +167,7 @@ func patchFromUpdateInput(in model.UpdateManagedCollectorInput) collectorsetting
 	return collectorsettings.Patch{
 		Enabled:                 in.Enabled,
 		HostNetworkID:           in.NetworkID,
+		DeploymentRoleRef:       in.DeploymentRoleRef,
 		Provider:                provider,
 		CPU:                     in.CPU,
 		Memory:                  in.Memory,
@@ -225,6 +227,7 @@ func providerOverridesPatch(in *model.ManagedCollectorProviderOverridesInput) (m
 	setProviderStrings(provider, "subnetIds", aws.SubnetIds)
 	setProviderStrings(provider, "securityGroupIds", aws.SecurityGroupIds)
 	setProvider(provider, "clusterArn", aws.ClusterRef)
+	setProvider(provider, "executionRoleArn", aws.ExecutionRoleArn)
 	setProvider(provider, "assignPublicIp", aws.AssignPublicIP)
 	setProvider(provider, "useFargateSpot", aws.UseFargateSpot)
 	ingress := &collectorsettings.IngressPatch{

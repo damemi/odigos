@@ -18,10 +18,13 @@ func (c Catalog) ValidateWithCatalog(dest Destination) error {
 		return err
 	}
 	if normalized == CatalogTypeManagedCollector {
+		if err := validateManagedCollector(dest); err != nil {
+			return err
+		}
 		if !c.managedCollectorRegionInstalled(dest.Region) {
 			return fmt.Errorf("managed Collector is not installed in region %q", strings.TrimSpace(dest.Region))
 		}
-		return validateManagedCollector(dest)
+		return nil
 	}
 	if strings.TrimSpace(dest.Region) != "" {
 		return fmt.Errorf("destination type %q is global and cannot set region", dest.Type)
@@ -101,8 +104,8 @@ func validateManagedCollector(dest Destination) error {
 }
 
 // ValidateDestinations validates a complete destination set. Single-destination validation cannot
-// enforce the regional marker's uniqueness. A marker may be created before its global terminal is
-// configured; routing reports an error until an applicable terminal exists.
+// enforce the regional marker's uniqueness. A marker can be the only workload destination when its
+// Collector is ready and reachable; otherwise routing requires a global terminal for fallback.
 func (c Catalog) ValidateDestinations(dests []Destination) error {
 	markers := make(map[string]string)
 	for _, dest := range dests {

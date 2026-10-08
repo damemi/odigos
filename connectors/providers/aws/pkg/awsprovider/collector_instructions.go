@@ -70,12 +70,13 @@ func (p *Provider) ManagedCollectorInstructions(_ context.Context, region string
 	}
 
 	return &baseapi.ManagedCollectorInstructions{
-		Region: region, HostNetworkID: hostNetwork, Mode: mode, UpdatedAt: time.Now(),
+		Region: region, HostNetworkID: hostNetwork, DeploymentRoleRef: regional.DeploymentRoleRef, Mode: mode, UpdatedAt: time.Now(),
 		Documents: []baseapi.InstructionDocument{
-			awsCloudFormationDocument(region, hostNetwork, p.cfg.ConnectorName, p.cfg.PlatformID, p.cfg.OpAMPEndpoint, image.Ref, cpu, memory, arch, desired, scaling),
-			awsTerraformDocument(region, hostNetwork, p.cfg.ConnectorName, p.cfg.PlatformID, p.cfg.OpAMPEndpoint, image.Ref, cpu, memory, arch, desired, scaling),
+			awsCloudFormationDocument(region, hostNetwork, regional.DeploymentRoleRef, p.cfg.ConnectorName, p.cfg.PlatformID, p.cfg.OpAMPEndpoint, image.Ref, cpu, memory, arch, desired, scaling),
+			awsTerraformDocument(region, hostNetwork, regional.DeploymentRoleRef, p.cfg.ConnectorName, p.cfg.PlatformID, p.cfg.OpAMPEndpoint, image.Ref, cpu, memory, arch, desired, scaling),
 		},
 		Notes: []string{
+			"Use the customer-provisioned deployment role " + regional.DeploymentRoleRef + " for this Collector. In automatic mode the connector assumes it; in manual mode apply the infrastructure documents with credentials from that role.",
 			"These artifacts are customer-owned. They set odigos-iac for attribution and deliberately omit odigos-managed, so Odigos observes the Collector and never deletes or converges these resources.",
 			"Provide separate Secrets Manager values for ODIGOS_ONPREM_TOKEN and ODIGOS_OPAMP_AUTHORIZATION. The authorization value must include its scheme (for example, Bearer …); do not put either secret in task-definition environment values.",
 			"Allow TCP " + fmt.Sprintf("%d and %d", collectoringress.PortOTLPGRPC, collectoringress.PortOTLPHTTP) + " from the security groups or CIDRs of every workload that exports telemetry. Because the NLB and tasks share a security group, also allow TCP 13133 from that same group for target health checks. The task needs egress to the OpAMP endpoint and destination endpoints.",
@@ -126,7 +127,7 @@ func artifactInputs(content string) []baseapi.InstructionInput {
 	return unresolved
 }
 
-func awsCloudFormationDocument(region, network, connector, connectorID, opampEndpoint, image, cpu, memory, arch string, desired int, scaling collectorsettings.ResolvedScaling) baseapi.InstructionDocument {
+func awsCloudFormationDocument(region, network, deploymentRole, connector, connectorID, opampEndpoint, image, cpu, memory, arch string, desired int, scaling collectorsettings.ResolvedScaling) baseapi.InstructionDocument {
 	if connector == "" {
 		connector = "<ODIGOS_CONNECTOR_NAME>"
 	}
@@ -235,10 +236,10 @@ Outputs:
 `, scaling.MaxCount, scaling.MinCount, deployer.ServiceName(region), cpuPolicy, scaling.TargetCPUPercent, memoryPolicy, scaling.TargetMemoryPercent)
 		content = strings.Replace(content, "\nOutputs:", autoscaling+"\nOutputs:", 1)
 	}
-	return baseapi.InstructionDocument{ID: "aws-fargate-collector-cloudformation", Variant: "cloudformation", VariantLabel: "CloudFormation", Title: "Deploy the regional Collector", Description: "Deploy this customer-owned ECS Fargate service in " + region + ".", Steps: []string{"Supply the referenced credentials as Secrets Manager ARNs, and provide the existing cluster, log group, security group and subnets. Provide an application autoscaling role when scaling mode is auto.", "Point collector.regions." + region + ".endpointOverride at the published NLB endpoint."}, Format: "yaml", Content: content, Unresolved: artifactInputs(content)}
+	return baseapi.InstructionDocument{ID: "aws-fargate-collector-cloudformation", Variant: "cloudformation", VariantLabel: "CloudFormation", Title: "Deploy the regional Collector", Description: "Deploy this customer-owned ECS Fargate service in " + region + ".", Steps: []string{"Assume the customer-provisioned deployment role " + deploymentRole + " before applying the stack.", "Supply the referenced credentials as Secrets Manager ARNs, and provide the existing cluster, log group, security group and subnets. Provide an application autoscaling role when scaling mode is auto.", "Point collector.regions." + region + ".endpointOverride at the published NLB endpoint."}, Format: "yaml", Content: content, Unresolved: artifactInputs(content)}
 }
 
-func awsTerraformDocument(region, network, connector, connectorID, opampEndpoint, image, cpu, memory, arch string, desired int, scaling collectorsettings.ResolvedScaling) baseapi.InstructionDocument {
+func awsTerraformDocument(region, network, deploymentRole, connector, connectorID, opampEndpoint, image, cpu, memory, arch string, desired int, scaling collectorsettings.ResolvedScaling) baseapi.InstructionDocument {
 	if connector == "" {
 		connector = "<ODIGOS_CONNECTOR_NAME>"
 	}
@@ -414,5 +415,5 @@ resource "aws_appautoscaling_policy" "memory" {
 }
 `, scaling.MaxCount, scaling.MinCount, resourceID, cpuPolicy, scaling.TargetCPUPercent, memoryPolicy, scaling.TargetMemoryPercent)
 	}
-	return baseapi.InstructionDocument{ID: "aws-fargate-collector-terraform", Variant: "terraform", VariantLabel: "Terraform", Title: "Deploy the regional Collector", Description: "Apply this customer-owned ECS Fargate service in " + region + ".", Steps: []string{"Set each variable from resources your Terraform workspace owns.", "Keep odigos-iac and the identity tags; do not add odigos-managed.", "Use aws_appautoscaling_target and target tracking policies if collector.regions." + region + ".scaling.mode is auto; otherwise set desired_count to its configured manual value."}, Format: "hcl", Content: content, Unresolved: artifactInputs(content)}
+	return baseapi.InstructionDocument{ID: "aws-fargate-collector-terraform", Variant: "terraform", VariantLabel: "Terraform", Title: "Deploy the regional Collector", Description: "Apply this customer-owned ECS Fargate service in " + region + ".", Steps: []string{"Configure the AWS Terraform provider to assume the customer-provisioned deployment role " + deploymentRole + ".", "Set each variable from resources your Terraform workspace owns.", "Keep odigos-iac and the identity tags; do not add odigos-managed.", "Use aws_appautoscaling_target and target tracking policies if collector.regions." + region + ".scaling.mode is auto; otherwise set desired_count to its configured manual value."}, Format: "hcl", Content: content, Unresolved: artifactInputs(content)}
 }

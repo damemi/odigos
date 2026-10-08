@@ -7,11 +7,289 @@ import (
 	"testing"
 	"time"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/config"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorreport"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
+	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
+
+type memoryCollectorResourceStore struct {
+	mu      sync.Mutex
+	states  map[string]store.CollectorResourceState
+	records map[string]store.CollectorRecord
+}
+
+func newMemoryCollectorResourceStore() *memoryCollectorResourceStore {
+	return &memoryCollectorResourceStore{states: map[string]store.CollectorResourceState{}, records: map[string]store.CollectorRecord{}}
+}
+
+func (m *memoryCollectorResourceStore) GetCollectorResourceState(_ context.Context, region string) (store.CollectorResourceState, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	state, ok := m.states[region]
+	return state, ok, nil
+}
+
+func (m *memoryCollectorResourceStore) ListCollectorResourceStates(context.Context) (map[string]store.CollectorResourceState, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make(map[string]store.CollectorResourceState, len(m.states))
+	for region, state := range m.states {
+		out[region] = state
+	}
+	return out, nil
+}
+
+func (m *memoryCollectorResourceStore) SetCollectorResourceState(_ context.Context, region string, state store.CollectorResourceState, _ string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.states[region] = state
+	return nil
+}
+
+func (m *memoryCollectorResourceStore) GetManagedCollector(_ context.Context, key store.CollectorKey) (store.CollectorRecord, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	rec, ok := m.records[key.Region]
+	if !ok {
+		return store.CollectorRecord{}, store.ErrCollectorNotFound
+	}
+	return rec, nil
+}
+
+func (m *memoryCollectorResourceStore) ListManagedCollectors(context.Context) ([]store.CollectorRecord, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]store.CollectorRecord, 0, len(m.records))
+	for _, rec := range m.records {
+		out = append(out, rec)
+	}
+	return out, nil
+}
+
+func (m *memoryCollectorResourceStore) DeleteManagedCollector(_ context.Context, key store.CollectorKey) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.records, key.Region)
+	return nil
+}
+
+func (m *memoryCollectorResourceStore) DeleteCollectorDestinationsForRegion(context.Context, string) error {
+	return nil
+}
+
+func TestUnprovisionedCollectorTeardownRemovesDesiredAndRecordedState(t *testing.T) {
+	for _, recorded := range []bool{false, true} {
+		c := newTestCoordinator(t)
+		c.cfg.Capabilities = automaticCaps()
+		c.provider = collectorProvider{}
+		resources := newMemoryCollectorResourceStore()
+		c.collectorResources = resources
+		region := "us-east-1"
+		enabled := true
+		if err := c.mutateCollectorSettings(context.Background(), func(tree map[string]any) (map[string]any, error) {
+			return collectorsettings.WriteRegion(tree, region, collectorsettings.Patch{Enabled: &enabled})
+		}); err != nil {
+			t.Fatal(err)
+		}
+		resources.states[region] = store.CollectorResourcesNotCreated
+		if recorded {
+			resources.records[region] = store.CollectorRecord{Key: store.CollectorKey{Region: region}, Mode: spec.ModeAutomatic, Origin: "odigos"}
+		}
+		report, err := c.ManagedCollectorReport(context.Background(), region)
+		if err != nil || report == nil || !report.Deletable {
+			t.Fatalf("recorded=%v: unprovisioned report = %+v, %v", recorded, report, err)
+		}
+
+		result, err := c.TeardownManagedCollector(context.Background(), region)
+		if err != nil || !result.Deleted {
+			t.Fatalf("recorded=%v: teardown = %+v, %v", recorded, result, err)
+		}
+		if collectorsettings.HasRegion(c.storedCollectorSettingsTree(), region) {
+			t.Fatalf("recorded=%v: desired region survived teardown", recorded)
+		}
+		if _, ok := resources.records[region]; ok {
+			t.Fatalf("recorded=%v: Collector row survived teardown", recorded)
+		}
+		if resources.states[region] != store.CollectorResourcesDestroyed {
+			t.Fatalf("recorded=%v: resource state = %s", recorded, resources.states[region])
+		}
+	}
+}
+
+func TestLegacyCollectorWithoutCloudParametersCanBeDeleted(t *testing.T) {
+	c := newTestCoordinator(t)
+	c.cfg.Capabilities = automaticCaps()
+	c.provider = collectorProvider{}
+	resources := newMemoryCollectorResourceStore()
+	c.collectorResources = resources
+	region := "us-east-1"
+	resources.records[region] = store.CollectorRecord{Key: store.CollectorKey{Region: region}, Mode: spec.ModeAutomatic, Origin: "odigos"}
+	enabled := true
+	if err := c.mutateCollectorSettings(context.Background(), func(tree map[string]any) (map[string]any, error) {
+		return collectorsettings.WriteRegion(tree, region, collectorsettings.Patch{Enabled: &enabled})
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := c.ManagedCollectorReport(context.Background(), region)
+	if err != nil || report == nil || !report.Deletable {
+		t.Fatalf("legacy report = %+v, %v", report, err)
+	}
+	result, err := c.TeardownManagedCollector(context.Background(), region)
+	if err != nil || !result.Deleted {
+		t.Fatalf("legacy teardown = %+v, %v", result, err)
+	}
+	if collectorsettings.HasRegion(c.storedCollectorSettingsTree(), region) {
+		t.Fatal("legacy declaration survived teardown")
+	}
+	if _, ok := resources.records[region]; ok {
+		t.Fatal("legacy Collector row survived teardown")
+	}
+	if resources.states[region] != store.CollectorResourcesDestroyed {
+		t.Fatalf("legacy resource state = %s", resources.states[region])
+	}
+}
+
+func TestRecordedCloudReferencesCannotBeDiscardedLocally(t *testing.T) {
+	c := newTestCoordinator(t)
+	c.cfg.Capabilities = automaticCaps()
+	c.provider = collectorProvider{}
+	rec := store.CollectorRecord{Key: store.CollectorKey{Region: "us-east-1"}, Mode: spec.ModeAutomatic, Origin: "odigos", WorkloadRef: "service-arn"}
+	for _, state := range []store.CollectorResourceState{store.CollectorResourcesNotCreated, store.CollectorResourcesDestroyed} {
+		if c.canDiscardCollectorState(rec.Key.Region, &rec, state, true) {
+			t.Fatalf("recorded cloud infrastructure was eligible for local-only cleanup in state %s", state)
+		}
+	}
+}
+
+func TestTeardownRetainingInfrastructureRecordIsOrphaned(t *testing.T) {
+	c := newTestCoordinator(t)
+	c.cfg.Capabilities = automaticCaps()
+	deployer := newRecorder()
+	c.provider = collectorProvider{deployers: map[string]api.CollectorDeployer{collectorKind: deployer}}
+	resources := newMemoryCollectorResourceStore()
+	c.collectorResources = resources
+	region := "us-east-1"
+	resources.records[region] = store.CollectorRecord{
+		Key: store.CollectorKey{Region: region}, NetworkID: "vpc-1", Kind: collectorKind,
+		Mode: spec.ModeAutomatic, Origin: "odigos", WorkloadRef: "service-arn",
+	}
+	resources.states[region] = store.CollectorResourcesCreated
+
+	result, err := c.TeardownManagedCollector(context.Background(), region)
+	if err != nil || result.Deleted {
+		t.Fatalf("retained teardown = %+v, %v", result, err)
+	}
+	if resources.states[region] != store.CollectorResourcesOrphaned {
+		t.Fatalf("retained resource state = %s", resources.states[region])
+	}
+	if _, ok := resources.records[region]; !ok {
+		t.Fatal("incomplete teardown lost the infrastructure record")
+	}
+}
+
+func TestShutdownDrainRemovesUnprovisionedDeclaration(t *testing.T) {
+	c := newTestCoordinator(t)
+	c.cfg.Capabilities = automaticCaps()
+	c.provider = collectorProvider{deployers: map[string]api.CollectorDeployer{collectorKind: newRecorder()}}
+	c.collectorRows = fakeCollectorRows{}
+	resources := newMemoryCollectorResourceStore()
+	c.collectorResources = resources
+	region := "us-east-1"
+	resources.states[region] = store.CollectorResourcesNotCreated
+	enabled := true
+	if err := c.mutateCollectorSettings(context.Background(), func(tree map[string]any) (map[string]any, error) {
+		return collectorsettings.WriteRegion(tree, region, collectorsettings.Patch{Enabled: &enabled})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.drainCollectors(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if collectorsettings.HasRegion(c.storedCollectorSettingsTree(), region) {
+		t.Fatal("shutdown left an unprovisioned declaration behind")
+	}
+	if resources.states[region] != store.CollectorResourcesDestroyed {
+		t.Fatalf("shutdown state = %s", resources.states[region])
+	}
+}
+
+func TestShutdownDrainRetainsIncompleteInfrastructure(t *testing.T) {
+	c := newTestCoordinator(t)
+	c.cfg.Capabilities = automaticCaps()
+	c.provider = collectorProvider{deployers: map[string]api.CollectorDeployer{collectorKind: newRecorder()}}
+	resources := newMemoryCollectorResourceStore()
+	c.collectorResources = resources
+	region := "us-east-1"
+	rec := store.CollectorRecord{
+		Key: store.CollectorKey{Region: region}, NetworkID: "vpc-1", Kind: collectorKind,
+		Mode: spec.ModeAutomatic, Origin: "odigos", WorkloadRef: "service-arn",
+	}
+	resources.records[region] = rec
+	resources.states[region] = store.CollectorResourcesCreated
+	c.collectorRows = fakeCollectorRows{records: []store.CollectorRecord{rec}}
+	if err := c.drainCollectors(context.Background()); err == nil {
+		t.Fatal("shutdown reported complete while infrastructure remained recorded")
+	}
+	if resources.states[region] != store.CollectorResourcesOrphaned {
+		t.Fatalf("incomplete shutdown state = %s", resources.states[region])
+	}
+}
+
+func TestUnknownCloudResourcesCannotBeDiscardedAsLocalState(t *testing.T) {
+	c := newTestCoordinator(t)
+	c.cfg.Capabilities = automaticCaps()
+	c.provider = collectorProvider{}
+	resources := newMemoryCollectorResourceStore()
+	c.collectorResources = resources
+	resources.states["us-east-1"] = store.CollectorResourcesProvisioning
+	enabled := true
+	if err := c.mutateCollectorSettings(context.Background(), func(tree map[string]any) (map[string]any, error) {
+		return collectorsettings.WriteRegion(tree, "us-east-1", collectorsettings.Patch{Enabled: &enabled})
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := c.TeardownManagedCollector(context.Background(), "us-east-1")
+	if err != nil || result.Deleted {
+		t.Fatalf("uncertain cloud state was deleted: %+v, %v", result, err)
+	}
+	if !collectorsettings.HasRegion(c.storedCollectorSettingsTree(), "us-east-1") {
+		t.Fatal("uncertain cloud state lost its desired declaration")
+	}
+	report, err := c.ManagedCollectorReport(context.Background(), "us-east-1")
+	if err != nil || report == nil || report.Deletable {
+		t.Fatalf("uncertain cloud state report = %+v, %v", report, err)
+	}
+	if resources.states["us-east-1"] != store.CollectorResourcesOrphaned {
+		t.Fatalf("uncertain state was not retained as orphaned: %s", resources.states["us-east-1"])
+	}
+}
+
+func TestOrphanedCloudStateRemainsVisibleWithoutConfigurationOrProviderRow(t *testing.T) {
+	c := newTestCoordinator(t)
+	c.cfg.Capabilities = automaticCaps()
+	c.provider = collectorProvider{}
+	resources := newMemoryCollectorResourceStore()
+	resources.states["us-east-1"] = store.CollectorResourcesOrphaned
+	c.collectorResources = resources
+
+	reports, err := c.ManagedCollectorReports(context.Background())
+	if err != nil || len(reports) != 1 || reports[0].Region != "us-east-1" || reports[0].Deletable {
+		t.Fatalf("orphaned resource reports = %+v, %v", reports, err)
+	}
+	if len(reports[0].Problems) != 1 || reports[0].Problems[0].Code != "CollectorCloudResourcesOrphaned" {
+		t.Fatalf("orphaned resource diagnosis = %+v", reports[0].Problems)
+	}
+	result, err := c.TeardownManagedCollector(context.Background(), "us-east-1")
+	if err != nil || result.Deleted {
+		t.Fatalf("orphaned resource was reported deleted: %+v, %v", result, err)
+	}
+}
 
 // memConfigStore is the config persistence the Manager writes through, in memory.
 //

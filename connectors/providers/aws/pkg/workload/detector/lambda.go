@@ -103,15 +103,17 @@ func discoverLambda(ctx context.Context, cfg aws.Config, region string, tags map
 			return nil, err
 		}
 		for _, fn := range page.Functions {
+			env := envVariables(fn.Environment)
 			out = append(out, store.LambdaFunction{
-				Region:       region,
-				FunctionARN:  aws.ToString(fn.FunctionArn),
-				FunctionName: aws.ToString(fn.FunctionName),
-				Runtime:      string(fn.Runtime),
-				Architecture: architectures(fn.Architectures),
-				RoleARN:      aws.ToString(fn.Role),
-				TracingMode:  tracingMode(fn.TracingConfig),
-				Instrumented: store.OdigosInstrumented(envVariables(fn.Environment)),
+				Region:                region,
+				FunctionARN:           aws.ToString(fn.FunctionArn),
+				FunctionName:          aws.ToString(fn.FunctionName),
+				Runtime:               string(fn.Runtime),
+				Architecture:          architectures(fn.Architectures),
+				RoleARN:               aws.ToString(fn.Role),
+				TracingMode:           tracingMode(fn.TracingConfig),
+				Instrumented:          store.OdigosInstrumented(env),
+				InstrumentationOrigin: store.OdigosInstrumentationOrigin(env),
 				// ListFunctions already returns the attached layers and the function's lifecycle state, and
 				// all three were being discarded. They are what separate the three situations a marker alone
 				// cannot tell apart: instrumented, half-instrumented (marker kept, layer detached), and

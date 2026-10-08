@@ -142,11 +142,14 @@ type TaskDefinitionSpec struct {
 
 // ContainerSpec is one container's Odigos-decided fields.
 type ContainerSpec struct {
-	Name      string
-	Image     string
-	Essential bool
-	Command   []string
-	Ports     []int
+	Name  string
+	Image string
+	// RepositoryCredentialsRef is the Secrets Manager JSON object ECS uses to authenticate before
+	// starting the container. The task also selects its password field for ODIGOS_ONPREM_TOKEN.
+	RepositoryCredentialsRef string
+	Essential                bool
+	Command                  []string
+	Ports                    []int
 	// Environment is plain values. collectorimage.EnvProblems refuses every name in SecretEnvVars here —
 	// on ECS anyone holding ecs:DescribeTaskDefinition can read a plain value, which is a far wider set
 	// of people than those who can read a secret.
@@ -180,7 +183,8 @@ func (s TaskDefinitionSpec) Fingerprint() string {
 		write(c)
 	}
 	for _, c := range s.Containers {
-		write("container", c.Name, "image", c.Image, "essential", strconv.FormatBool(c.Essential))
+		write("container", c.Name, "image", c.Image, "repository-credentials", c.RepositoryCredentialsRef,
+			"essential", strconv.FormatBool(c.Essential))
 		write("command")
 		for _, part := range c.Command {
 			write(part)
@@ -281,11 +285,12 @@ func RenderTaskDefinition(in TaskDefinitionInput) (TaskDefinitionSpec, []collect
 		RequiresCompatibilities: []string{string(ecstypes.CompatibilityFargate)},
 		ExecutionRoleARN:        in.ExecutionRoleARN,
 		Containers: []ContainerSpec{{
-			Name:      CollectorContainerName,
-			Image:     image.Ref,
-			Essential: true,
-			Command:   []string{supervisorBinary, supervisorConfigFlag},
-			Ports:     collectorPorts(),
+			Name:                     CollectorContainerName,
+			Image:                    image.Ref,
+			RepositoryCredentialsRef: in.Delivery.LicenseSecretRef,
+			Essential:                true,
+			Command:                  []string{supervisorBinary, supervisorConfigFlag},
+			Ports:                    collectorPorts(),
 			// No readonlyRootFilesystem and no volume: the Supervisor writes its instance identity and
 			// cached config under /var/lib/odigos/collector-supervisor, and v1 runs that on the task's
 			// own ephemeral storage. EFS is the later opt-in for queue durability.
@@ -326,12 +331,21 @@ func ecsCPUArchitecture(arch collectorimage.Arch) (string, bool) {
 func collectorSecrets(delivery collectorimage.Delivery) map[string]string {
 	secrets := map[string]string{
 		collectorimage.EnvOpAMPAuthorization: delivery.CredentialSecretRef,
-		collectorimage.EnvOnPremToken:        delivery.LicenseSecretRef,
+		// ECS receives the full JSON object as repository credentials; the Collector still receives
+		// the original token from its password field.
+		collectorimage.EnvOnPremToken: secretJSONKey(delivery.LicenseSecretRef, "password"),
 	}
 	if delivery.BootstrapSecretRef != "" {
 		secrets[collectorimage.EnvBootstrapConfig] = delivery.BootstrapSecretRef
 	}
 	return secrets
+}
+
+func secretJSONKey(secretARN, key string) string {
+	if secretARN == "" {
+		return ""
+	}
+	return secretARN + ":" + key + "::"
 }
 
 // collectorPorts are the four ports lists. 13134 is included even though it is never exposed through
@@ -474,8 +488,14 @@ func registerInput(s TaskDefinitionSpec, tags map[string]string) *ecs.RegisterTa
 			secrets = append(secrets, ecstypes.Secret{Name: aws.String(k), ValueFrom: aws.String(c.Secrets[k])})
 		}
 		containers = append(containers, ecstypes.ContainerDefinition{
-			Name:         aws.String(c.Name),
-			Image:        aws.String(c.Image),
+			Name:  aws.String(c.Name),
+			Image: aws.String(c.Image),
+			RepositoryCredentials: func() *ecstypes.RepositoryCredentials {
+				if c.RepositoryCredentialsRef == "" {
+					return nil
+				}
+				return &ecstypes.RepositoryCredentials{CredentialsParameter: aws.String(c.RepositoryCredentialsRef)}
+			}(),
 			Essential:    aws.Bool(c.Essential),
 			Command:      c.Command,
 			PortMappings: ports,
@@ -539,6 +559,9 @@ func specFromDefinition(td *ecstypes.TaskDefinition) TaskDefinitionSpec {
 			Command:     c.Command,
 			Environment: map[string]string{},
 			Secrets:     map[string]string{},
+		}
+		if c.RepositoryCredentials != nil {
+			container.RepositoryCredentialsRef = aws.ToString(c.RepositoryCredentials.CredentialsParameter)
 		}
 		for _, p := range c.PortMappings {
 			container.Ports = append(container.Ports, int(aws.ToInt32(p.ContainerPort)))

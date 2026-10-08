@@ -17,10 +17,10 @@ import (
 // package. That is where the read-only guarantee is enforced — *ecs.Client can plainly delete a service,
 // and ECSReader cannot express it — so the narrowing here is the whole safety property and not a
 // convenience for tests.
-type cachedClients struct{ cache *awsclient.Cache }
+type cachedClients struct{ cache awsclient.ConfigSource }
 
 // NewClients returns the Clients implementation the runtime uses.
-func NewClients(cache *awsclient.Cache) Clients { return cachedClients{cache: cache} }
+func NewClients(cache awsclient.ConfigSource) Clients { return cachedClients{cache: cache} }
 
 func (c cachedClients) ECS(ctx context.Context, region string) (ECSReader, error) {
 	cfg, err := c.cache.Config(ctx, region)

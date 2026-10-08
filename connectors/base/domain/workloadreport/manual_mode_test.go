@@ -205,25 +205,42 @@ func TestDesiredModeReported(t *testing.T) {
 	}
 }
 
-// TestAutomaticModeUnaffectedBySourceGone is the regression guard for the pre-existing behavior: in automatic
-// mode a disabled source is a rollback the connector performs itself, so it must NOT be reported as an error.
-// Only manual mode, where Odigos cannot act, turns that situation into something the customer must resolve.
-func TestAutomaticModeUnaffectedBySourceGone(t *testing.T) {
+// An externally applied marker remains after an automatic connector's rollback, while a connector-owned
+// marker may briefly remain during rollback. Attribution keeps the two report states distinct.
+func TestAutomaticModeReportsExternalSourceGone(t *testing.T) {
 	for _, matched := range []bool{true, false} {
 		w := manualWorkload()
 		w.ManagementMode = spec.ModeAutomatic
 		w.Instrumented = true
+		w.InstrumentationOrigin = "external"
 		w.SourceMatched = matched
 		w.SourceEnabled = false
 
 		m := ToModel(w)
-		if m.Current.State != api.WorkloadStateInstrumented {
-			t.Errorf("sourceMatched=%v: state = %q, want %q (automatic mode rolls back on its own)",
-				matched, m.Current.State, api.WorkloadStateInstrumented)
+		if m.Current.State != "Error" || !m.Current.Instrumented {
+			t.Errorf("sourceMatched=%v: current = %+v, want error with observed instrumentation retained",
+				matched, m.Current)
 		}
-		if len(m.Issues) != 0 {
-			t.Errorf("sourceMatched=%v: issues = %d, want none", matched, len(m.Issues))
+		wantCode := "SourceMissingButInstrumented"
+		if matched {
+			wantCode = "SourceDisabledButInstrumented"
 		}
+		if len(m.Issues) != 1 || m.Issues[0].Code != wantCode {
+			t.Errorf("sourceMatched=%v: issues = %+v, want %s", matched, m.Issues, wantCode)
+		}
+	}
+}
+
+func TestAutomaticModeAllowsConnectorRollback(t *testing.T) {
+	w := manualWorkload()
+	w.ManagementMode = spec.ModeAutomatic
+	w.Instrumented = true
+	w.InstrumentationOrigin = "connector"
+	w.SourceMatched = false
+	w.SourceEnabled = false
+	m := ToModel(w)
+	if m.Current.State != api.WorkloadStateInstrumented || len(m.Issues) != 0 {
+		t.Fatalf("report during connector rollback = %+v, want observed instrumentation without source-gone error", m)
 	}
 }
 

@@ -2,8 +2,8 @@ provider: aws
 displayName: Amazon Web Services
 
 # Provider boundary and non-secret connector configuration (not authentication).
-# The connector scans every region enabled in the account (resolved at runtime via ec2:DescribeRegions),
-# so there is no region selection field.
+# Workload discovery scans enabled account regions. Managed Collectors use the regions explicitly
+# configured through their API, so their role needs no account-wide region-enumeration permission.
 connector:
   fields:
     - name: accountId
@@ -286,10 +286,9 @@ collectors:
     description: >-
       Own the configuration of an Odigos Collector running in your account and push it over OpAMP, and
       observe and report the Collector's health. Runs in both modes; needs read-only permissions only.
-    # Baseline permission, not tied to a type: enumerate the account's enabled regions, as both discovery
-    # features do. A customer who enables only this domain still needs it.
-    permissions:
-      - ec2:DescribeRegions
+    # Collector provider API permissions are carried by the customer-provisioned deployment role.
+    # The connector's base identity receives no additional Collector permissions.
+    permissions: []
     types:
       # READ-ONLY, and that is the whole point of declaring the observation set here rather than on
       # deployment: manual mode runs on management alone, so a customer who deploys the Collector
@@ -433,6 +432,8 @@ collectors:
           # deregisters the former and must leave the latter alone. Without it Odigos can prove nothing
           # and therefore removes nothing, which fails safe but never cleans up.
           - application-autoscaling:ListTagsForResource
+          # RegisterScalableTarget sends Tags on creation, which requires TagResource authorization.
+          - application-autoscaling:TagResource
           # Automatic scaling also requires the account-level
           # AWSServiceRoleForApplicationAutoScaling_ECSService prerequisite. Odigos does not create it;
           # the Collector prerequisite artifact below includes the one-time AWS CLI command.
@@ -485,10 +486,123 @@ setup:
           ]
         }
 
+    - id: collector-deployment-role-cloudformation
+      section: collector:aws.fargate-collector
+      variant: deployment-role-cloudformation
+      variantLabel: Deployment role (CloudFormation)
+      title: Create the Collector deployment role
+      description: >-
+        Create a customer-owned role for automatic Collector observation and deployment. Supply its
+        ARN as deploymentRoleRef when creating the Collector. The connector assumes this role for
+        Collector operations; its base IAM user does not receive infrastructure permissions. For
+        manual mode, use a read-only observation role as shown in MANAGED-COLLECTOR.md.
+      format: yaml
+      steps:
+        - Save this template as odigos-collector-deployment-role.yaml.
+        - Set ConnectorPrincipalArn to the exact IAM user or role used by the connector's base credentials.
+        - Set ExecutionRoleArn to the separately provisioned ECS task execution role ARN.
+        - Deploy the stack, then pass the DeploymentRoleArn output to createManagedCollector.deploymentRoleRef.
+        - For manual mode, use the separate read-only observation policy in MANAGED-COLLECTOR.md; the customer's IaC principal applies the infrastructure.
+      template: |-
+        AWSTemplateFormatVersion: "2010-09-09"
+        Description: Customer-owned AWS role for Odigos Collector operations.
+        Parameters:
+          ConnectorPrincipalArn:
+            Type: String
+          ExecutionRoleArn:
+            Type: String
+        Resources:
+          CollectorDeploymentRole:
+            Type: AWS::IAM::Role
+            Properties:
+              Description: Scoped identity for one account's Odigos Collector operations.
+              AssumeRolePolicyDocument:
+                Version: "2012-10-17"
+                Statement:
+                  - Effect: Allow
+                    Principal: { AWS: !Ref ConnectorPrincipalArn }
+                    Action: sts:AssumeRole
+              Policies:
+                - PolicyName: odigos-collector-infrastructure
+                  PolicyDocument:
+                    Version: "2012-10-17"
+                    Statement:
+                      - Sid: CollectorInfrastructure
+                        Effect: Allow
+                        Resource: "*"
+                        Action:
+                          - ec2:DescribeVpcs
+                          - ec2:DescribeSubnets
+                          - ec2:DescribeSecurityGroups
+                          - ec2:DescribeRouteTables
+                          - ec2:DescribeVpcPeeringConnections
+                          - ec2:DescribeNetworkAcls
+                          - ec2:CreateSecurityGroup
+                          - ec2:DeleteSecurityGroup
+                          - ec2:AuthorizeSecurityGroupIngress
+                          - ec2:RevokeSecurityGroupIngress
+                          - ec2:AuthorizeSecurityGroupEgress
+                          - ec2:CreateTags
+                          - ecs:DescribeClusters
+                          - ecs:DescribeServices
+                          - ecs:ListTasks
+                          - ecs:DescribeTasks
+                          - ecs:DescribeTaskDefinition
+                          - ecs:RegisterTaskDefinition
+                          - ecs:CreateService
+                          - ecs:UpdateService
+                          - ecs:DeleteService
+                          - ecs:TagResource
+                          - elasticloadbalancing:DescribeLoadBalancers
+                          - elasticloadbalancing:DescribeListeners
+                          - elasticloadbalancing:DescribeTargetGroups
+                          - elasticloadbalancing:DescribeTargetHealth
+                          - elasticloadbalancing:DescribeTags
+                          - elasticloadbalancing:CreateLoadBalancer
+                          - elasticloadbalancing:DeleteLoadBalancer
+                          - elasticloadbalancing:CreateTargetGroup
+                          - elasticloadbalancing:DeleteTargetGroup
+                          - elasticloadbalancing:ModifyTargetGroupAttributes
+                          - elasticloadbalancing:CreateListener
+                          - elasticloadbalancing:ModifyListener
+                          - elasticloadbalancing:SetSecurityGroups
+                          - elasticloadbalancing:AddTags
+                          - logs:CreateLogGroup
+                          - logs:DeleteLogGroup
+                          - logs:PutRetentionPolicy
+                          - logs:TagResource
+                          - logs:ListTagsForResource
+                          - secretsmanager:CreateSecret
+                          - secretsmanager:PutSecretValue
+                          - secretsmanager:DescribeSecret
+                          - secretsmanager:DeleteSecret
+                          - secretsmanager:TagResource
+                          - secretsmanager:RestoreSecret
+                          - application-autoscaling:RegisterScalableTarget
+                          - application-autoscaling:DeregisterScalableTarget
+                          - application-autoscaling:PutScalingPolicy
+                          - application-autoscaling:DescribeScalableTargets
+                          - application-autoscaling:DescribeScalingPolicies
+                          - application-autoscaling:ListTagsForResource
+                          - application-autoscaling:TagResource
+                          - cloudwatch:PutMetricAlarm
+                          - cloudwatch:DeleteAlarms
+                          - cloudwatch:DescribeAlarms
+                      - Sid: PassCollectorTaskExecutionRole
+                        Effect: Allow
+                        Action: iam:PassRole
+                        Resource: !Ref ExecutionRoleArn
+                        Condition:
+                          StringEquals:
+                            iam:PassedToService: ecs-tasks.amazonaws.com
+        Outputs:
+          DeploymentRoleArn:
+            Value: !GetAtt CollectorDeploymentRole.Arn
+
     - id: collector-execution-role-cloudformation
       section: collector:aws.fargate-collector
-      variant: cloudformation
-      variantLabel: CloudFormation
+      variant: execution-role-cloudformation
+      variantLabel: Task execution role (CloudFormation)
       title: Pre-create the Collector task execution role
       description: >-
         Create the role ECS uses to pull the Collector image, read only this connector's Collector
@@ -498,10 +612,10 @@ setup:
       steps:
         - Save the template below as odigos-collector-execution-role.yaml.
         - Deploy it with ConnectorName set to the exact connector name used in Odigos.
-        - Copy the ExecutionRoleArn output to collectors.defaults.provider.executionRoleArn (or the regional provider override).
-        - Set collectors.defaults.provider.clusterArn to the pre-existing ECS cluster name or ARN.
+        - Supply the ExecutionRoleArn output as providerOverrides.aws.executionRoleArn when creating the Collector.
+        - Supply the pre-existing ECS cluster name or ARN as providerOverrides.aws.clusterRef.
         - >-
-          On the connector role, allow iam:PassRole only for the output ARN and add the condition
+          On the Collector deployment role, allow iam:PassRole only for the output ARN and add the condition
           iam:PassedToService = ecs-tasks.amazonaws.com. Do not grant CreateRole, PutRolePolicy,
           TagRole or DeleteRole.
         - >-
@@ -556,7 +670,7 @@ setup:
                         Resource: !Sub arn:${AWS::Partition}:secretsmanager:*:${AWS::AccountId}:secret:odigos/collector/${ConnectorName}/*
         Outputs:
           ExecutionRoleArn:
-            Description: Set this as collectors.defaults.provider.executionRoleArn.
+            Description: Supply as providerOverrides.aws.executionRoleArn.
             Value: !GetAtt CollectorExecutionRole.Arn
 
     # create-role variants drive step-2 "Choose setup method" + "Create IAM role". The selected

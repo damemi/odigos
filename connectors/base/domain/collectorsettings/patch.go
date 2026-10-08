@@ -25,7 +25,8 @@ import (
 type Patch struct {
 	Enabled *bool
 
-	HostNetworkID *string
+	HostNetworkID     *string
+	DeploymentRoleRef *string
 	// Provider is a sparse, opaque patch merged into the region's provider map. The base layer never
 	// interprets these keys; the selected provider owns their names, validation and semantics.
 	Provider map[string]any
@@ -77,6 +78,9 @@ var validArches = []string{"amd64", "arm64"}
 // not check whether a subnet exists or a certificate is issuable — those need the provider, fail later
 // with a provider error, and are reported as issues on the Collector rather than as a refused mutation.
 func (p Patch) Validate() error {
+	if p.DeploymentRoleRef != nil && strings.TrimSpace(*p.DeploymentRoleRef) == "" {
+		return fmt.Errorf("deploymentRoleRef must name a customer-provisioned deployment identity")
+	}
 	if p.CPU != nil && *p.CPU != "" {
 		if _, err := strconv.Atoi(strings.TrimSpace(*p.CPU)); err != nil {
 			return fmt.Errorf("cpu must be a whole number of CPU units (e.g. \"1024\"), got %q", *p.CPU)
@@ -186,6 +190,7 @@ func (p Patch) MergeInto(entry map[string]any) map[string]any {
 
 	setBool(out, KeyEnabled, p.Enabled)
 	setString(out, KeyHostNetworkID, p.HostNetworkID)
+	setString(out, KeyDeploymentRoleRef, p.DeploymentRoleRef)
 	if len(p.Provider) > 0 {
 		provider := copyEntry(mapOf(out, KeyProvider))
 		for key, value := range p.Provider {

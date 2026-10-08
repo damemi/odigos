@@ -38,7 +38,7 @@ type Resolver struct {
 	// Kind is the collectors type these networks belong to (aws.fargate-collector).
 	Kind string
 	// Cache builds the per-region EC2 clients the topology scan uses.
-	Cache *awsclient.Cache
+	Cache awsclient.ConfigSource
 	// Workloads is the discovered inventory, and Sources the customer's instrumentation intent. Sources
 	// affect consumers and ingress only; Settings is the Collector lifecycle intent.
 	Workloads WorkloadReader
@@ -74,11 +74,13 @@ type CollectorReader interface {
 
 // CollectorPlan resolves the plan for a new pass.
 func (r *Resolver) CollectorPlan(ctx context.Context) (Plan, error) {
-	regions, err := r.Cache.EnabledRegions(ctx)
-	if err != nil {
-		return Plan{}, fmt.Errorf("resolving the account's enabled regions: %w", err)
+	configured := r.Settings()
+	selected := make([]string, 0, len(configured.Regions))
+	for region := range configured.Regions {
+		selected = append(selected, region)
 	}
-	topology, err := Discover(ctx, r.Cache, regions)
+	sort.Strings(selected)
+	topology, err := Discover(ctx, r.Cache, selected)
 	if err != nil {
 		return Plan{}, fmt.Errorf("discovering the account's network topology: %w", err)
 	}
@@ -100,7 +102,7 @@ func (r *Resolver) CollectorPlan(ctx context.Context) (Plan, error) {
 		Kind:      r.Kind,
 		Inventory: inventory,
 		Topology:  topology,
-		Settings:  r.Settings(),
+		Settings:  configured,
 	})
 	plan.Inventory = inventory
 	plan.Topology = topology

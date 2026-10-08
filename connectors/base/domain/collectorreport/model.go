@@ -186,6 +186,7 @@ func desiredModel(d collectorsettings.Region) *model.ManagedCollectorDesired {
 		ProviderOverrides: providerOverridesModel(d.Provider, d.Ingress),
 	}
 	out.NetworkID = nonEmpty(d.HostNetworkID)
+	out.DeploymentRoleRef = nonEmpty(d.DeploymentRoleRef)
 	out.ImageRepositoryOverride = nonEmpty(d.ImageRepositoryOverride)
 	out.EndpointOverride = nonEmpty(d.EndpointOverride)
 	return out
@@ -197,6 +198,7 @@ func providerOverridesModel(provider map[string]any, ingress collectoringress.Co
 		SubnetIds:                  providerStrings(provider, "subnetIds"),
 		SecurityGroupIds:           providerStrings(provider, "securityGroupIds"),
 		ClusterRef:                 nonEmpty(providerString(provider, "clusterArn")),
+		ExecutionRoleArn:           nonEmpty(providerString(provider, "executionRoleArn")),
 		AssignPublicIP:             providerBool(provider, "assignPublicIp"),
 		UseFargateSpot:             providerBool(provider, "useFargateSpot"),
 		AdditionalSecurityGroupIds: ingress.AdditionalNetworkIdentityIDs,

@@ -152,3 +152,9 @@ type CollectorProvider interface {
 	CollectorObservers() map[string]CollectorObserver
 	CollectorDeployers() map[string]CollectorDeployer
 }
+
+// CollectorDeploymentRoleValidator checks a customer-provisioned deployment identity
+// before its reference is persisted. Providers own the syntax and access check.
+type CollectorDeploymentRoleValidator interface {
+	ValidateCollectorDeploymentRole(context.Context, string, string) error
+}

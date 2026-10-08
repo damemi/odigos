@@ -102,16 +102,29 @@ func (i *LambdaInstrumentor) EnsurePrerequisite(ctx context.Context) error {
 	if len(enabled) == 0 {
 		return nil // nothing marked for instrumentation — trivially satisfied
 	}
-	// Don't publish/ensure a layer until there is somewhere to export to: wait for an OTLP destination.
-	// This keeps the connector from mutating the account (publishing a layer) before both a source and a
-	// destination exist — Reconcile likewise skips attaching until then.
-	if _, haveDest, _ := i.store.OTLPExportTarget(ctx); !haveDest {
-		log.Debug("lambda prerequisite waiting for an OTLP destination before ensuring a layer")
-		return nil
-	}
 	functions, err := i.store.ListLambdaFunctions(ctx)
 	if err != nil {
 		return err
+	}
+	_, haveGlobalDestination, err := i.store.OTLPExportTarget(ctx)
+	if err != nil {
+		return err
+	}
+	// Without a global terminal, only functions with a proven regional Collector route
+	// have somewhere to export. Do not publish layers for unrouteable functions.
+	var collectorRoutes map[string]domaindest.Routing
+	if !haveGlobalDestination {
+		enabledFunctions := make([]store.LambdaFunction, 0, len(functions))
+		for _, fn := range functions {
+			if _, want := enabled[fn.FunctionARN]; want {
+				enabledFunctions = append(enabledFunctions, fn)
+			}
+		}
+		collectorRoutes, err = i.resolveLambdaRoutes(ctx, enabledFunctions)
+		if err != nil {
+			log.Warn("lambda prerequisite could not resolve regional Collector routes", "error", err)
+			return nil
+		}
 	}
 	// A layer key is "in use" when some function is already instrumented with it; an existing Odigos layer
 	// for a key with no in-use function is an orphaned leftover (e.g. from a previous connector version or
@@ -125,6 +138,12 @@ func (i *LambdaInstrumentor) EnsurePrerequisite(ctx context.Context) error {
 	for _, fn := range functions {
 		if _, want := enabled[fn.FunctionARN]; !want {
 			continue
+		}
+		if !haveGlobalDestination {
+			route := collectorRoutes[fn.FunctionARN]
+			if !route.Found || route.Outcome == domaindest.RoutingError {
+				continue
+			}
 		}
 		needed++
 		if key := fnLayerKey(fn); canRefresh && key != "" && !inUse[key] && !refreshed[key] {

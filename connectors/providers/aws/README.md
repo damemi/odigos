@@ -7,6 +7,10 @@ account boundary. It speaks the shared **agents-api** GraphQL contract (like the
 > yourself via CloudFormation or CDK, publishing/consuming the Lambda layer through SAR, and building the
 > Fargate/ECS agent images locally instead of pulling the released ones — see [USAGE.md](USAGE.md).
 
+For an end-to-end automatic managed Collector installation through the connector GraphQL API, including
+the customer-owned IAM roles and ECS cluster selection, see
+[MANAGED-COLLECTOR.md](MANAGED-COLLECTOR.md).
+
 ## Architecture: workloads vs compute platforms
 
 The connector splits discovery and reconciliation into two domains:
@@ -17,7 +21,7 @@ The connector splits discovery and reconciliation into two domains:
 | **Compute platforms** | ECS-EC2 clusters, Fargate clusters (coverage), EKS, EC2 | No — agent install / coverage grouping | `pkg/computeplatform/store` | `computePlatformReports` |
 
 The base coordinator runs **four independent loops**: workload discovery, compute-platform discovery,
-workload reconcile (instrumentation, destination-gated), and compute-platform reconcile (agent deploy,
+workload reconcile (instrumentation, route-gated), and compute-platform reconcile (agent deploy,
 not destination-gated).
 
 ## What it does
@@ -63,8 +67,8 @@ the stable identity: external id `cluster_arn/service_name`). Enabling a source 
   distros module (`java-community`, `python-community`, `dotnet-community`, `php-community`,
   `ruby-community`; Node.js uses the upstream env-driven `@opentelemetry/auto-instrumentations-node`
   because the nodejs-community distro is OpAMP-driven) — plus the **OTLP export env**
-  (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, per-signal exporters) pointed **directly at the
-  connector's destination** (there is no node-local collector on Fargate);
+  (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, per-signal exporters) pointed at the global
+  destination or a ready, reachable regional Collector (there is no node-local collector on Fargate);
 - an **`ODIGOS_MANAGED` ownership marker** records the pre-Odigos env, so disabling the source registers
   a clean revision restoring the service exactly (rollback never touches task definitions without the
   marker — a customer's own OTel setup is never stripped);
@@ -127,8 +131,10 @@ equally-strong ones, reports Unsupported naming what each container resolved to 
   `registry.odigos.io/odigos-fargate-agents`). The task subnet needs egress to that registry (public IP
   or NAT). A failed pull blocks the app start (the SUCCESS dependency), surfacing as a stuck deployment —
   ECS deployment circuit breaker (if enabled) rolls it back.
-- **OTLP export**: instrumented tasks export **directly** to the destination endpoint — it must be
-  reachable from the task's VPC over its egress path.
+- **OTLP export**: instrumented tasks reach either the global destination or the regional Collector's
+  internal NLB. The latter requires a regional routing marker, a ready Collector, and a proven VPC route
+  and security-group path. Without a global destination, an unavailable Collector route blocks new
+  instrumentation instead of falling back.
 
 ### IAM
 

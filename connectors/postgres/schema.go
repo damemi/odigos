@@ -17,7 +17,7 @@ const (
 // migration that finalizes that schema. A runtime verifies these and fails fast on mismatch — it
 // never runs migrations itself (see the cloud-connectors design, schema migrations).
 var ExpectedSchemaVersions = map[string]string{
-	SchemaPlatform: "3",
+	SchemaPlatform: "4",
 	SchemaAWS:      "8",
 	SchemaGCP:      "3",
 	SchemaAzure:    "3",
@@ -44,7 +44,8 @@ const (
 	// connector-opamp-gateway. It is platform-wide rather than per provider because the gateway
 	// resolves a credential by token hash BEFORE it knows which provider issued it — the provider is a
 	// column of the row it is looking for. See MANAGED-COLLECTOR.md §6.3.
-	TableCollectorCredentials = "connector_platform.collector_credentials"
+	TableCollectorCredentials   = "connector_platform.collector_credentials"
+	TableCollectorResourceState = "connector_platform.collector_resource_state"
 )
 
 // HeartbeatStatus values written into connector_platform.runtime_heartbeat.status. These mirror the

@@ -195,14 +195,15 @@ func ToModel(w api.DiscoveredWorkload) *model.WorkloadReport {
 				MissingComponents: nonNilComponents(w.MissingComponents),
 			},
 		})
-	} else if w.ManagementMode == spec.ModeManual && w.Instrumented && !(w.SourceMatched && w.SourceEnabled) {
-		// Manual-mode instrumentation is live but the intent that asked for it is gone: the source was
-		// disabled, or deleted outright. Odigos cannot resolve this itself — it has no permission to change
-		// the workload in manual mode, and stripping instrumentation the customer applied is not its call —
-		// so this is a real error that stays until the customer acts, not a transient state.
+	} else if w.Instrumented && !(w.SourceMatched && w.SourceEnabled) &&
+		(w.ManagementMode == spec.ModeManual || w.InstrumentationOrigin == "external") {
+		// Customer-applied instrumentation without an enabled source will not be removed by an automatic
+		// connector's rollback. Report it even when this workload type is configured for automatic mode.
+		// Connector-owned instrumentation in automatic mode can remain briefly while rollback completes,
+		// so that case retains its observed state without a persistent source-gone error.
 		//
-		// current.instrumented stays true: instrumentation IS running and exporting telemetry. Reporting it as
-		// not-instrumented would hide live agents from the person who has to go remove them.
+		// Keep the observed flag true: the source controls intent, not whether instrumentation is still
+		// present on the workload. The issue tells the operator why the two disagree.
 		state = "Error"
 		code, msg := sourceGoneIssue(w.SourceMatched)
 		progress.Stage = code
@@ -596,17 +597,16 @@ func verificationBlockedSince(w api.DiscoveredWorkload) *string {
 	return sinceOrNil(w.SourceIntentAt)
 }
 
-// sourceGoneIssue names the manual-mode condition where instrumentation outlived the intent that asked for
-// it, split by whether the source is disabled or absent entirely. The two are separate codes because the
-// remedies differ: a disabled source can be re-enabled to adopt the instrumentation again, whereas a deleted
-// one leaves removal as the only way back to a consistent state.
+// sourceGoneIssue names instrumentation that outlived its source, split by whether the source is disabled
+// or absent entirely. IaC-applied instrumentation remains outside the automatic instrumentor's ownership,
+// so the same mismatch can occur even when the workload type is configured for automatic instrumentation.
 func sourceGoneIssue(sourceMatched bool) (code, message string) {
 	if sourceMatched {
 		return "SourceDisabledButInstrumented",
-			"instrumentation is still applied to this workload, but its source is disabled. Odigos does not remove manually-applied instrumentation, so either re-enable the source or remove the instrumentation from your deployment definition."
+			"instrumentation is still applied to this workload, but its source is disabled. Re-enable the source or remove the instrumentation. If your deployment definition applies it, remove it there."
 	}
 	return "SourceMissingButInstrumented",
-		"instrumentation is still applied to this workload, but it has no source. Odigos does not remove manually-applied instrumentation, so either create a source for this workload or remove the instrumentation from your deployment definition."
+		"instrumentation is still applied to this workload, but it has no source. Create a source to track it or remove the instrumentation. If your deployment definition applies it, remove it there."
 }
 
 // driftMessage explains a partially-applied manual-mode instrumentation. It names the components rather than

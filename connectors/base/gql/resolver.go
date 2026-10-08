@@ -235,8 +235,13 @@ func (r *queryResolver) ManagedCollectorInstructions(ctx context.Context, region
 			VariantLabel: document.VariantLabel, Title: document.Title, Description: document.Description,
 			Steps: document.Steps, Format: document.Format, Content: document.Content, Unresolved: unresolved})
 	}
+	var deploymentRoleRef *string
+	if result.DeploymentRoleRef != "" {
+		deploymentRoleRef = &result.DeploymentRoleRef
+	}
 	return &model.ManagedCollectorInstructions{Region: result.Region, NetworkID: result.HostNetworkID,
-		Mode: result.Mode, Documents: documents, Notes: result.Notes, UpdatedAt: result.UpdatedAt.UTC().Format(time.RFC3339)}, nil
+		DeploymentRoleRef: deploymentRoleRef,
+		Mode:              result.Mode, Documents: documents, Notes: result.Notes, UpdatedAt: result.UpdatedAt.UTC().Format(time.RFC3339)}, nil
 }
 
 // --- Unsupported queries ---

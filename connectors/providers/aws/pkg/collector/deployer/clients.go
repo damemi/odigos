@@ -16,10 +16,10 @@ import (
 
 // cachedClients builds AWS clients over the shared per-region config cache, which is where the
 // connector's credentials and its assume-role chain already live.
-type cachedClients struct{ cache *awsclient.Cache }
+type cachedClients struct{ cache awsclient.ConfigSource }
 
 // NewClients returns the Clients implementation the runtime uses.
-func NewClients(cache *awsclient.Cache) Clients { return cachedClients{cache: cache} }
+func NewClients(cache awsclient.ConfigSource) Clients { return cachedClients{cache: cache} }
 
 func (c cachedClients) Logs(ctx context.Context, region string) (LogsClient, error) {
 	cfg, err := c.cache.Config(ctx, region)
@@ -78,10 +78,10 @@ func (c cachedClients) AutoScaling(ctx context.Context, region string) (AutoScal
 // two interfaces name the same seven services, so one type cannot carry both — `ECS` would have to
 // return an ECSClient and an ECSTeardownClient at once. The compiler enforcing that is a better
 // guarantee than a comment asking nobody to add a delete to the converge path.
-type destructiveClients struct{ cache *awsclient.Cache }
+type destructiveClients struct{ cache awsclient.ConfigSource }
 
 // NewTeardownClients returns the TeardownClients implementation the runtime uses.
-func NewTeardownClients(cache *awsclient.Cache) TeardownClients {
+func NewTeardownClients(cache awsclient.ConfigSource) TeardownClients {
 	return destructiveClients{cache: cache}
 }
 

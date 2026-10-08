@@ -43,7 +43,7 @@ type EC2Reader interface {
 //
 // Narrowing regions to the ones that actually have enabled sources is the caller's call and the cheap
 // default; passing every enabled region is correct and costs three describes per region per pass.
-func Discover(ctx context.Context, cache *awsclient.Cache, regions []string) (Topology, error) {
+func Discover(ctx context.Context, cache awsclient.ConfigSource, regions []string) (Topology, error) {
 	topo := NewTopology(nil, nil, nil)
 	var errs []error
 	for _, region := range regions {

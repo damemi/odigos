@@ -9,9 +9,10 @@
 // Cloud Run only accepts Artifact Registry, public Docker Hub, and GHCR. Odigos already publishes to
 // Artifact Registry, so GCP uses that ref; ECS and Container Apps can pull from any registry.
 //
-// The image is public today (enterprise gating is at runtime via ODIGOS_ONPREM_TOKEN), but every
-// resolution still carries an optional pull-credential reference for private or mirrored registries.
-// This package only carries the reference, never the credential material.
+// Registry authentication and runtime enterprise authorization are separate steps. The same
+// ODIGOS_ONPREM_TOKEN may serve as the registry password, but a provider must supply it as image-pull
+// credentials before the container starts. This package carries an optional credential reference,
+// never the credential material.
 package collectorimage
 
 import (

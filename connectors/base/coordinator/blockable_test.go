@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
@@ -30,6 +31,24 @@ func TestBlockableForInstrumentation(t *testing.T) {
 		if blockableForInstrumentation(w) {
 			t.Errorf("%s: must not be reported as merely waiting", name)
 		}
+	}
+}
+
+func TestRegionalCollectorMarkerSatisfiesDestinationPrerequisite(t *testing.T) {
+	workloads := []api.DiscoveredWorkload{
+		{Kind: "aws.fargate-task", Region: "us-east-1", SourceMatched: true, SourceEnabled: true, InstrumentationAvailable: true, InstrumentationImplemented: true},
+		{Kind: "aws.lambda", Region: "us-east-1", InstrumentationAvailable: true, InstrumentationImplemented: true},
+		{Kind: "aws.fargate-task", Region: "eu-west-1", SourceMatched: true, SourceEnabled: true, InstrumentationAvailable: true, InstrumentationImplemented: true},
+	}
+	markWaitingForDestination(workloads, []store.DestinationRecord{{Type: "odigos-managed-collector", Region: "us-east-1"}})
+	if workloads[0].WaitingFor != "" {
+		t.Errorf("marked Fargate in Collector region is waiting for a destination: %q", workloads[0].WaitingFor)
+	}
+	if workloads[1].WaitingFor != "" {
+		t.Errorf("unmarked Lambda is waiting for a destination: %q", workloads[1].WaitingFor)
+	}
+	if workloads[2].WaitingFor != api.WaitingForDestination {
+		t.Errorf("Fargate outside Collector region is waiting for %q, want destination", workloads[2].WaitingFor)
 	}
 }
 

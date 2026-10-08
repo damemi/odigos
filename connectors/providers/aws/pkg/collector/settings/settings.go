@@ -49,6 +49,7 @@ const (
 
 type Network struct {
 	Enabled                 bool
+	DeploymentRoleRef       string
 	Provider                map[string]any
 	CPU                     string
 	Memory                  string
@@ -72,7 +73,7 @@ type Network struct {
 
 func (n Network) Base() base.Network {
 	return base.Network{
-		Enabled: n.Enabled, Provider: n.Provider, CPU: n.CPU, Memory: n.Memory,
+		Enabled: n.Enabled, DeploymentRoleRef: n.DeploymentRoleRef, Provider: n.Provider, CPU: n.CPU, Memory: n.Memory,
 		LogRetentionDays: n.LogRetentionDays, Scaling: n.Scaling,
 		RolloutBatchSize: n.RolloutBatchSize, Retention: n.Retention,
 		Arch: n.Arch, ImageRepositoryOverride: n.ImageRepositoryOverride,
@@ -154,6 +155,7 @@ func network(in base.Network) Network {
 	provider := in.Provider
 	return Network{
 		Enabled:                 in.Enabled,
+		DeploymentRoleRef:       in.DeploymentRoleRef,
 		Provider:                in.Provider,
 		CPU:                     in.CPU,
 		Memory:                  in.Memory,

@@ -132,6 +132,10 @@ type DiscoveredWorkload struct {
 	RuntimeVersion string
 	// Instrumented reports whether Odigos instrumentation is currently applied to the workload.
 	Instrumented bool
+	// InstrumentationOrigin identifies who applied the live instrumentation when the provider can prove
+	// it. "external" means a customer deployment definition applied it; "connector" means the connector
+	// owns it and can normally roll it back. Empty means the provider has no attribution evidence.
+	InstrumentationOrigin string
 	// InstrumentationError is set when instrumentation or rollback last failed for this workload; empty
 	// when healthy or not yet attempted.
 	InstrumentationError string
@@ -456,12 +460,13 @@ type ManualCollectorCredentialIssuer interface {
 // ManagedCollectorInstructions is the provider-neutral shape used by GraphQL. The documents remain
 // provider-owned because CloudFormation and Terraform are AWS syntax, not a base concern.
 type ManagedCollectorInstructions struct {
-	Region        string
-	HostNetworkID string
-	Mode          string
-	Documents     []InstructionDocument
-	Notes         []string
-	UpdatedAt     time.Time
+	Region            string
+	HostNetworkID     string
+	DeploymentRoleRef string
+	Mode              string
+	Documents         []InstructionDocument
+	Notes             []string
+	UpdatedAt         time.Time
 }
 
 // InstructionDocument is one copy-pasteable delivery variant.

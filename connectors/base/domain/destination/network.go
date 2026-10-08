@@ -77,9 +77,9 @@ const (
 	ReasonCollectorNotReady Reason = "collector-not-ready"
 )
 
-// Routing is the complete decision for one workload. Collector routes keep the global terminal's signal
-// selection but intentionally omit its headers: the regional Collector, rather than every workload,
-// holds the terminal credential.
+// Routing is the complete decision for one workload. Collector routes use the global terminal's signal
+// selection when one exists, or the regional marker's signals when the Collector is the only destination.
+// They intentionally omit terminal headers: the Collector, rather than every workload, holds credentials.
 type Routing struct {
 	Target  OTLPTarget
 	Headers map[string]string
@@ -101,14 +101,12 @@ func ResolveRouting(dests []Destination, _ []CollectorTarget, _ string) Routing 
 // all of these are true: a marker exists for the workload region, that region has one published
 // Collector ingress, and the provider explicitly proves that the workload can reach that ingress.
 // Requiring proof even in the host network matters because VPC locality does not imply that the
-// Collector security group admits the workload. Otherwise the global OTLP terminal is used with an
-// explanatory note.
+// Collector security group admits the workload. Otherwise the global OTLP terminal is used when available;
+// without one, the result is an error explaining why the Collector cannot be used.
 func ResolveRoutingForRegion(dests []Destination, collectors []CollectorTarget, region, network string, reachability Reachability) Routing {
 	direct := directRouting(dests)
-	if direct.Outcome == RoutingError {
-		return direct
-	}
-	if !hasManagedCollectorMarker(dests, region) {
+	marker, marked := managedCollectorMarker(dests, region)
+	if !marked {
 		return direct
 	}
 	if strings.TrimSpace(network) == "" {
@@ -127,14 +125,18 @@ func ResolveRoutingForRegion(dests []Destination, collectors []CollectorTarget, 
 		return direct.withReason(ReasonCollectorUnreachable)
 	}
 
+	signals := direct.Target
+	if !direct.Found {
+		signals = targetForSignals(marker.Signals)
+	}
 	return Routing{
 		Target: OTLPTarget{
 			Endpoint:     collector.Endpoint,
 			HTTPEndpoint: collector.HTTPEndpoint,
 			Insecure:     collector.Insecure,
-			Traces:       direct.Target.Traces,
-			Metrics:      direct.Target.Metrics,
-			Logs:         direct.Target.Logs,
+			Traces:       signals.Traces,
+			Metrics:      signals.Metrics,
+			Logs:         signals.Logs,
 		},
 		Found:   true,
 		Via:     RouteCollector,
@@ -165,17 +167,32 @@ func (r Routing) withReason(reason Reason) Routing {
 	return r
 }
 
-func hasManagedCollectorMarker(dests []Destination, region string) bool {
+func managedCollectorMarker(dests []Destination, region string) (Destination, bool) {
 	region = strings.TrimSpace(region)
 	if region == "" {
-		return false
+		return Destination{}, false
 	}
 	for _, d := range dests {
-		if isManagedCollectorType(d.Type) && strings.TrimSpace(d.Region) == region {
-			return true
+		if !d.Disabled && isManagedCollectorType(d.Type) && strings.TrimSpace(d.Region) == region {
+			return d, true
 		}
 	}
-	return false
+	return Destination{}, false
+}
+
+func targetForSignals(signals []string) OTLPTarget {
+	var target OTLPTarget
+	for _, signal := range signals {
+		switch strings.ToUpper(signal) {
+		case SignalTraces:
+			target.Traces = true
+		case SignalMetrics:
+			target.Metrics = true
+		case SignalLogs:
+			target.Logs = true
+		}
+	}
+	return target
 }
 
 func findRegionalCollector(collectors []CollectorTarget, region string) (CollectorTarget, bool) {
@@ -209,6 +226,22 @@ func ResolveOTLPHeadersForRegion(dests []Destination, collectors []CollectorTarg
 func (r Routing) Describe() string {
 	if r.Via == RouteCollector {
 		return "Exporting through the Odigos Managed Regional Collector hosted in network " + r.Network + "."
+	}
+	if r.Outcome == RoutingError && r.Reason != ReasonNoDestination {
+		cause := "the Collector route is unavailable"
+		switch r.Reason {
+		case ReasonNoNetwork:
+			cause = "the workload is not attached to a VPC"
+		case ReasonNoCollectorForRegion:
+			cause = "no Collector is available in this region"
+		case ReasonCollectorNotDeployed:
+			cause = "the Collector has no ingress endpoint"
+		case ReasonCollectorNotReady:
+			cause = "the Collector has not reported ready yet"
+		case ReasonCollectorUnreachable:
+			cause = "the Collector is not known to be reachable from this workload's network"
+		}
+		return "Cannot export telemetry through the Odigos Managed Regional Collector: " + cause + ", and no global OTLP destination is configured for fallback."
 	}
 	switch r.Reason {
 	case ReasonNoDestination:

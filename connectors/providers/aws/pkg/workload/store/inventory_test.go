@@ -36,6 +36,26 @@ func TestOdigosInstrumented(t *testing.T) {
 	}
 }
 
+func TestOdigosInstrumentationOrigin(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		env  map[string]string
+		want string
+	}{
+		{"unmarked", nil, ""},
+		{"iac", map[string]string{EnvOdigosIaC: "1"}, "external"},
+		{"managed", map[string]string{EnvOdigosManaged: "1"}, "connector"},
+		{"legacy", map[string]string{envCollectorEndpoint: "collector:4317"}, "connector"},
+		{"managed marker wins", map[string]string{EnvOdigosManaged: "1", EnvOdigosIaC: "1"}, "connector"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := OdigosInstrumentationOrigin(tc.env); got != tc.want {
+				t.Fatalf("origin = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestSplitRuntime(t *testing.T) {
 	cases := map[string][2]string{
 		"java17":       {"java", "17"},
