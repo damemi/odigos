@@ -50,9 +50,10 @@ type Provider struct {
 	cache  *awsclient.Cache
 	// collectorSurface is the observer, the deployer and the plan resolver they share, built once. See
 	// collectors.go.
-	collectorOnce    sync.Once
-	collectorSurface *collectorSurface
-	layers           workloadinstrumentor.LayerResolver
+	collectorOnce      sync.Once
+	collectorSurface   *collectorSurface
+	manualCredentialMu sync.Mutex
+	layers             workloadinstrumentor.LayerResolver
 	// ecrImages reads container image configs (via ECR auth or anonymously) for Fargate language
 	// detection. Optional layer: the task-definition heuristics and source overrides work without it.
 	ecrImages workloadinstrumentor.ImageInspector

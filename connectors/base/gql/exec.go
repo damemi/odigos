@@ -14,6 +14,11 @@ import (
 
 var execLog = connlog.Subsystem("gql")
 
+// credentialIssuerContextKey is set only after the Central/CLI operation path has checked admin
+// privileges. The plain in-cluster HTTP handler has no caller identity and must not reveal a
+// Collector's one-time OpAMP credential.
+type credentialIssuerContextKey struct{}
+
 // RunOperation executes a GraphQL operation against the agents-api executor and returns the payload to
 // embed in a transport frame's `data` field: on success the raw data object, on error a
 // {"errors":[...]} map, or nil for an empty/null data result. It is shared by the Central reverse-
@@ -45,6 +50,9 @@ func RunOperation(ctx context.Context, exec *executor.Executor, query string, va
 	if !isAdmin && opCtx.Operation != nil && opCtx.Operation.Operation == ast.Mutation {
 		execLog.Warn("rejecting non-admin mutation", "transport", transport, "operation", opName)
 		return gqlErrorPayload(gqlerror.List{gqlerror.Errorf("admin privileges are required to perform this operation")})
+	}
+	if isAdmin {
+		ctx = context.WithValue(ctx, credentialIssuerContextKey{}, true)
 	}
 	respHandler, runCtx := exec.DispatchOperation(ctx, opCtx)
 	resp := respHandler(runCtx)

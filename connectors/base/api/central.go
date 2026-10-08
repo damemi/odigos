@@ -11,6 +11,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectormetrics"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorreport"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
@@ -426,6 +427,27 @@ type CentralInterface interface {
 	// ManagedCollectorMetrics returns the Collector's counters. A refresh waits briefly for a new
 	// periodic own-metrics report; found=false means it has never reported any.
 	ManagedCollectorMetrics(ctx context.Context, region string, refresh bool) (collectormetrics.Record, bool, error)
+	IssueManagedCollectorCredential(ctx context.Context, input ManualCollectorCredentialInput) (ManualCollectorCredentialIssue, error)
+}
+
+// ManualCollectorCredentialInput names the immutable binding and the customer's secret location.
+// Rotate explicitly replaces an existing credential; retrying a lost one-time reveal requires it.
+type ManualCollectorCredentialInput struct {
+	Region, NetworkID, SecretRef string
+	Rotate                       bool
+}
+
+// ManualCollectorCredentialIssue is returned once by the authenticated mutation. The secret wrapper
+// prevents accidental logging or serialization; only the GraphQL adapter may reveal the header.
+type ManualCollectorCredentialIssue struct {
+	CollectorID, CredentialID, SecretRef string
+	AuthorizationHeader                  collectorcredential.Secret
+}
+
+// ManualCollectorCredentialIssuer is implemented only by providers that support manual Collector
+// credentials. It may write connector state, but must not mutate customer cloud infrastructure.
+type ManualCollectorCredentialIssuer interface {
+	IssueManualCollectorCredential(ctx context.Context, input ManualCollectorCredentialInput) (ManualCollectorCredentialIssue, error)
 }
 
 // CollectorTeardownResult is the outcome of a teardown request.

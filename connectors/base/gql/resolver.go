@@ -5,6 +5,7 @@ package gql
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/odigos-io/agents-api/go/server/graph/generated"
@@ -200,6 +201,23 @@ func (r *queryResolver) ManagedCollectorMetrics(ctx context.Context, region stri
 	return (&gqlapi.ManagedCollectorAPI{Central: r.Central}).ManagedCollectorMetrics(ctx, region, refresh)
 }
 
+func (r *mutationResolver) IssueManagedCollectorCredential(ctx context.Context, input model.IssueManagedCollectorCredentialInput) (*model.IssueManagedCollectorCredentialPayload, error) {
+	if ctx.Value(credentialIssuerContextKey{}) != true {
+		return nil, fmt.Errorf("manual Collector credential issuance requires an authenticated admin operation")
+	}
+	issued, err := r.Central.IssueManagedCollectorCredential(ctx, centralapi.ManualCollectorCredentialInput{
+		Region: input.Region, NetworkID: input.NetworkID, SecretRef: input.SecretRef,
+		Rotate: input.Rotate != nil && *input.Rotate,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &model.IssueManagedCollectorCredentialPayload{
+		CollectorID: issued.CollectorID, CredentialID: issued.CredentialID,
+		SecretRef: issued.SecretRef, AuthorizationHeader: issued.AuthorizationHeader.Reveal(),
+	}, nil
+}
+
 // ManagedCollectorInstructions has no data source yet: no provider publishes deployment artifacts for
 // its Collector type (aws.yaml declares none). Null is the schema's documented answer for exactly that,
 // so this returns null rather than rendering an empty document set that would read as "here is how, and
@@ -337,11 +355,6 @@ func (r *mutationResolver) UpdateManagedCollector(ctx context.Context, input mod
 
 func (r *mutationResolver) TeardownManagedCollector(ctx context.Context, input model.TeardownManagedCollectorInput) (*model.TeardownManagedCollectorPayload, error) {
 	return (&gqlapi.ManagedCollectorAPI{Central: r.Central}).TeardownManagedCollector(ctx, input)
-}
-
-func (r *mutationResolver) IssueManagedCollectorCredential(context.Context, model.IssueManagedCollectorCredentialInput) (*model.IssueManagedCollectorCredentialPayload, error) {
-	logUnsupported("issueManagedCollectorCredential")
-	return nil, nil
 }
 
 func (r *mutationResolver) CreateManagedCollectorDestination(ctx context.Context, input model.CreateManagedCollectorDestinationInput) (*model.Destination, error) {
