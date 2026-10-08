@@ -3,6 +3,7 @@ package deployer
 import (
 	"context"
 	"fmt"
+	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -339,4 +340,16 @@ func hasCode(problems []collectorstatus.Problem, code string) bool {
 		}
 	}
 	return false
+}
+
+// problemWith returns the problem carrying a code, failing the test when there is none.
+func problemWith(t *testing.T, problems []collectorstatus.Problem, code string) collectorstatus.Problem {
+	t.Helper()
+	for _, p := range problems {
+		if p.Code == code {
+			return p
+		}
+	}
+	t.Fatalf("no %s problem in %v", code, codes(problems))
+	return collectorstatus.Problem{}
 }

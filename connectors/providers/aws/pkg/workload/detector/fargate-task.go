@@ -167,9 +167,17 @@ func clusterFargateServices(ctx context.Context, client *ecs.Client, region, clu
 			return nil, err
 		}
 		for _, batch := range chunk(page.ServiceArns, describeServicesBatch) {
-			in := &ecs.DescribeServicesInput{Cluster: aws.String(clusterARN), Services: batch}
-			if len(tags) > 0 {
-				in.Include = []ecstypes.ServiceField{ecstypes.ServiceFieldTags}
+			// TAGS unconditionally, not just when a discovery filter is set. Tags are how a service is
+			// recognised as ODIGOS'S OWN managed Collector, and skipping that recognition is not a
+			// cosmetic gap: the Collector runs as a Fargate service, so it would be discovered as an
+			// instrumentable workload, and a customer who instrumented it would put the two halves of
+			// Odigos into a fight — the instrumentor adding its sidecar to the Collector's task
+			// definition and the Collector deployer re-registering the definition without it, for ever.
+			// DescribeServices returns tags inline, so this costs no extra call.
+			in := &ecs.DescribeServicesInput{
+				Cluster:  aws.String(clusterARN),
+				Services: batch,
+				Include:  []ecstypes.ServiceField{ecstypes.ServiceFieldTags},
 			}
 			desc, err := client.DescribeServices(ctx, in)
 			if err != nil {
@@ -187,6 +195,9 @@ func clusterFargateServices(ctx context.Context, client *ecs.Client, region, clu
 			for _, svc := range desc.Services {
 				if !isFargateService(svc) {
 					continue // EC2/EXTERNAL service — the cluster agent's job, not the sidecar's
+				}
+				if isManagedCollector(svc.Tags) {
+					continue // Odigos's own Collector — see isManagedCollector
 				}
 				if len(tags) > 0 && !ecsTagsMatchAll(svc.Tags, tags) {
 					continue // doesn't carry the required discovery tags
@@ -281,6 +292,27 @@ func clusterFargateTasks(ctx context.Context, client *ecs.Client, region, cluste
 		}
 	}
 	return out, nil
+}
+
+// isManagedCollector reports whether a service is a Collector Odigos manages — its own, a predecessor's,
+// or another connector's.
+//
+// Excluded from the workload inventory entirely, which is stronger than refusing to instrument it and is
+// the right strength: a Collector in the discovered-workloads list is an invitation to instrument it,
+// and instrumenting it means the instrumentor adds its sidecar to the Collector's task definition while
+// the Collector deployer re-registers that definition without it — two Odigos components each undoing
+// the other, registering a revision and rolling the service on every pass, for ever.
+//
+// Matched on the COMPONENT tag alone, deliberately: a Collector belonging to a different connector, or
+// one whose connector tags a customer stripped, is still not a workload to instrument. Attribution
+// decides what Odigos may WRITE to (collectorownership); this decides what Odigos treats as a customer's
+// application, and every managed Collector fails that test whoever owns it.
+func isManagedCollector(tags []ecstypes.Tag) bool {
+	have := make(map[string]string, len(tags))
+	for _, t := range tags {
+		have[aws.ToString(t.Key)] = aws.ToString(t.Value)
+	}
+	return baseapi.ParseCollectorTags(have).IsCollector()
 }
 
 // awsvpcSubnets and awsvpcSecurityGroups read a service's awsvpc network configuration, nil-safe at

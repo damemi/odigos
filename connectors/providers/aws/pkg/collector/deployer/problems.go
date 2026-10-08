@@ -42,6 +42,15 @@ const (
 	// ProblemTaskSizeInvalid: the cpu/memory pair is not one Fargate offers. Refused, because
 	// RegisterTaskDefinition would fail every pass with an error that names no field.
 	ProblemTaskSizeInvalid = "CollectorTaskSizeInvalid"
+	// ProblemServiceNotReady: the service has no cluster or no revision to run. Refused — a service is a
+	// permanent object and one created without either describes a Collector that never existed.
+	ProblemServiceNotReady = "CollectorServiceNotReady"
+	// ProblemServiceNameConflict: a service Odigos may not write to holds the name this network needs.
+	// Refused, and reported by object: the name is unique per cluster, so there is nowhere else to go.
+	ProblemServiceNameConflict = "CollectorServiceNameConflict"
+	// ProblemServiceAdopted: Odigos brought an existing service under convergence. Info — nothing is
+	// wrong — but never silent, because what it means at teardown depends on which kind of adoption it was.
+	ProblemServiceAdopted = "CollectorServiceAdopted"
 	// ProblemManualModeProvisioning: provisioning was asked for on a manual-mode Collector. A guard,
 	// not a customer-facing condition — the coordinator wires no deployer for a manual-mode type at all
 	// (api.CollectorDeployer), so reaching this means something bypassed that.

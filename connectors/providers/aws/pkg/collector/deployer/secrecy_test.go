@@ -307,3 +307,13 @@ func captureLogs(buf *bytes.Buffer) func() {
 	commonlogger.UpdateInstance(zap.New(core))
 	return func() { commonlogger.UpdateInstance(previous) }
 }
+
+// packageSourceFile reads one non-test source file of this package, for the guards that assert on what
+// the code does NOT contain.
+func packageSourceFile(name string) (string, error) {
+	b, err := os.ReadFile(name)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}

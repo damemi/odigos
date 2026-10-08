@@ -24,12 +24,13 @@ type Clients interface {
 	ECS(ctx context.Context, region string) (ECSClient, error)
 }
 
-// ECSClient is the cluster and task-definition surface together. One interface rather than two, because
-// one *ecs.Client satisfies both halves and splitting it would make the fake in the tests two objects
-// that have to agree about the same region.
+// ECSClient is the cluster, task-definition and service surface together. One interface rather than
+// three, because one *ecs.Client satisfies all of them and splitting it would make the fake in the tests
+// three objects that have to agree about the same cluster.
 type ECSClient interface {
 	ClusterClient
 	TaskDefinitionClient
+	ServiceClient
 }
 
 // Provisioner provisions Collector identity, logging and credentials for one connector.
@@ -479,7 +480,7 @@ type WorkloadInput struct {
 	// Prerequisites is the result of EnsureNetwork: the roles, the log group and the two secret refs.
 	// Passed in rather than re-derived so the identity half runs once per network per pass.
 	Prerequisites Prerequisites
-	// Settings is the resolved §5.2 tree for this network — size, architecture, image override, the
+	// Settings is the resolved tree for this network — size, architecture, image override, the
 	// cluster the customer pointed at, and the Fargate Spot opt-in.
 	Settings collectorsettings.Network
 	// OpAMPEndpoint is the public endpoint the Collector dials back to.
@@ -571,4 +572,105 @@ func (p *Provisioner) EnsureWorkload(ctx context.Context, in WorkloadInput) (Wor
 	out.TaskDefinition = definition
 	out.Problems = append(out.Problems, definition.Problems...)
 	return out, err
+}
+
+// ServiceStateInput is what the service converge needs beyond what the earlier halves produced.
+type ServiceStateInput struct {
+	Key           basestore.CollectorKey
+	HostNetworkID string
+	Mode          string
+	// Workload is the result of EnsureWorkload: the cluster and the revision to run.
+	Workload Workload
+	// Ingress is the result of EnsureIngress: the security group and the target groups.
+	Ingress Ingress
+	// Subnets are placement's chosen subnets — the same ones the load balancer answers in.
+	Subnets []string
+	// Settings is the resolved tree: the scaling policy, the Spot opt-in, `assignPublicIp`, and any
+	// security groups the customer supplied instead of relying on Odigos's.
+	Settings collectorsettings.Network
+	// Recorded is whether managed_collectors already names this service — half the deletion gate
+	// and what tells this connector's own service apart from one missing from its state.
+	Recorded bool
+}
+
+// EnsureCollectorService converges one regional ECS service, which is the step that makes a Collector
+// actually run.
+//
+// Last, and dependent on everything: it names the cluster, the revision, the subnets, the security group
+// and the target groups, so each of those has to exist and be Odigos's to use before a service can point
+// at it. Refusing early is what keeps a permanent object — a service describes a Collector for as long as
+// it exists — from being created around a transient failure.
+func (p *Provisioner) EnsureCollectorService(ctx context.Context, in ServiceStateInput) (Service, error) {
+	if problems := modeGuard(in.Mode); len(problems) > 0 {
+		return Service{Name: ServiceName(in.Key.Region), Problems: problems}, nil
+	}
+	if !in.Workload.Ready() || !in.Ingress.Ready() {
+		return Service{
+			Name: ServiceName(in.Key.Region),
+			Problems: []collectorstatus.Problem{{
+				Code:     ProblemServiceNotReady,
+				Severity: collectorstatus.SeverityError,
+				Message: fmt.Sprintf("no Collector service is created for %s in %s: its cluster, task "+
+					"definition or network ingress is not ready. The specific reason is reported against "+
+					"whichever of those it is", in.Key.Region, in.HostNetworkID),
+			}},
+		}, nil
+	}
+
+	api, err := p.Clients.ECS(ctx, in.Key.Region)
+	if err != nil {
+		return Service{}, fmt.Errorf("build an ECS client for %s: %w", in.Key.Region, err)
+	}
+
+	return EnsureService(ctx, api, ServiceInput{
+		HostNetworkID:       in.HostNetworkID,
+		Region:              in.Key.Region,
+		Connector:           p.Identity.ConnectorName,
+		ConnectorID:         p.Identity.ConnectorID,
+		Identity:            p.Identity,
+		Mode:                in.Mode,
+		ClusterARN:          in.Workload.Cluster.ARN,
+		ClusterSupportsSpot: in.Workload.Cluster.SupportsSpot(),
+		TaskDefinitionARN:   in.Workload.TaskDefinition.ARN,
+		Subnets:             in.Subnets,
+		SecurityGroupIDs:    serviceSecurityGroups(in),
+		AssignPublicIP:      in.Settings.AssignPublicIP,
+		TargetGroupARNs:     in.Ingress.TargetGroupARNs,
+		Scaling:             in.Settings.Scaling,
+		UseFargateSpot:      in.Settings.UseFargateSpot,
+		Recorded:            in.Recorded,
+	})
+}
+
+// serviceSecurityGroups are the groups the Collector's tasks run in.
+//
+// Odigos's own group unless the customer supplied their own, in which case theirs REPLACE it rather than
+// joining it — `collector.regions.<region>.securityGroupIds` is documented as "supply your own instead of
+// the created one", and a union would mean the rules Odigos converges still applied to a customer
+// who deliberately took that over. Odigos's group stays attached to the load balancer either way, which
+// is what keeps the health check working.
+func serviceSecurityGroups(in ServiceStateInput) []string {
+	if len(in.Settings.SecurityGroupIDs) > 0 {
+		return in.Settings.SecurityGroupIDs
+	}
+	return []string{in.Ingress.SecurityGroupID}
+}
+
+// InfrastructureRecord assembles the one CollectorRecord the reconcile pass writes through
+// basestore.RecordCollectorInfrastructure.
+//
+// One assembler because there is one writer: that accessor writes all seven refs together, so two
+// callers each filling in their own half would null the other's — and a ref that is not recorded is an
+// object teardown may never delete. Every converge half returns refs; this is where they meet.
+func InfrastructureRecord(key basestore.CollectorKey, workload Workload, ingress Ingress, service Service, subnets []string) basestore.CollectorRecord {
+	return basestore.CollectorRecord{
+		Key:           key,
+		WorkloadRef:   service.ARN,
+		RevisionRef:   workload.TaskDefinition.ARN,
+		RuntimeRef:    workload.Cluster.ARN,
+		FrontendRef:   ingress.LoadBalancerARN,
+		BackendRefs:   ingress.TargetGroupARNs,
+		IngressRef:    ingress.SecurityGroupID,
+		PlacementRefs: subnets,
+	}
 }

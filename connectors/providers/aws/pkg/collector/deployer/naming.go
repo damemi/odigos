@@ -167,3 +167,14 @@ func TaskDefinitionFamily(region string) string { return taskDefinitionPrefix + 
 // disagreeing produces a service that will not start with an error about a container that "does not
 // exist" in a definition where it plainly does.
 const CollectorContainerName = "collector"
+
+// servicePrefix names the ECS service. The spelling in full, like the task definition family: an ECS
+// service name has 255 characters to play with, unlike the two ELBv2 names.
+const servicePrefix = "odigos-collector-"
+
+// ServiceName is the ECS service running one region's Collector.
+//
+// Unique per cluster, and the cluster is per region — which is what makes an untagged service under this
+// name a hard conflict rather than something to deploy alongside. There is no second name to
+// fall back to that a customer's documentation would still recognise.
+func ServiceName(region string) string { return servicePrefix + region }
