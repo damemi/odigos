@@ -99,8 +99,10 @@ func ResolveRouting(dests []Destination, _ []CollectorTarget, _ string) Routing 
 
 // ResolveRoutingForRegion decides where a workload exports. A regional Collector is selected only when
 // all of these are true: a marker exists for the workload region, that region has one published
-// Collector ingress, and the workload is either in the host network or the provider explicitly proves
-// cross-network reachability. Otherwise the global OTLP terminal is used with an explanatory note.
+// Collector ingress, and the provider explicitly proves that the workload can reach that ingress.
+// Requiring proof even in the host network matters because VPC locality does not imply that the
+// Collector security group admits the workload. Otherwise the global OTLP terminal is used with an
+// explanatory note.
 func ResolveRoutingForRegion(dests []Destination, collectors []CollectorTarget, region, network string, reachability Reachability) Routing {
 	direct := directRouting(dests)
 	if direct.Outcome == RoutingError {
@@ -119,10 +121,10 @@ func ResolveRoutingForRegion(dests []Destination, collectors []CollectorTarget, 
 		return direct.withReason(ReasonNoCollectorForRegion)
 	case !collector.Routable():
 		return direct.withReason(ReasonCollectorNotDeployed)
-	case network != collector.Network && reachability != ReachabilityReachable:
-		return direct.withReason(ReasonCollectorUnreachable)
 	case !collector.EverReady:
 		return direct.withReason(ReasonCollectorNotReady)
+	case reachability != ReachabilityReachable:
+		return direct.withReason(ReasonCollectorUnreachable)
 	}
 
 	return Routing{

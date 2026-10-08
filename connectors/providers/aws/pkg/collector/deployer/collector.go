@@ -434,14 +434,14 @@ func (d *Deployer) record(ctx context.Context, key basestore.CollectorKey,
 // way that accessor may be called — three callers each filling their own half would null the others'.
 func (d *Deployer) recordScaling(ctx context.Context, key basestore.CollectorKey,
 	settings collectorsettings.Network, service Service, scaling ScalingState) {
-	d.writeScaling(ctx, key, ObservedScaling(settings.Network, service, scaling))
+	d.writeScaling(ctx, key, ObservedScaling(settings.Base(), service, scaling))
 }
 
 // recordParkedScaling records the policy retention put in force rather than the one configured. The row
 // says what is GOVERNING the Collector, and while it is parked that is a manual zero.
 func (d *Deployer) recordParkedScaling(ctx context.Context, key basestore.CollectorKey,
 	settings collectorsettings.Network, parked collectorsettings.ResolvedScaling, service Service, scaling ScalingState) {
-	d.writeScaling(ctx, key, ObservedScalingFor(parked, settings.Network, service, scaling))
+	d.writeScaling(ctx, key, ObservedScalingFor(parked, settings.Base(), service, scaling))
 }
 
 func (d *Deployer) writeScaling(ctx context.Context, key basestore.CollectorKey, observed ScalingObservation) {

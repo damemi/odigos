@@ -35,6 +35,13 @@ var ErrUnsupportedInstrumentation = errors.New(baseapi.ErrPrefixUnsupported)
 // operator can free a layer slot to resolve it), which is the reported behavior asked for.
 var ErrMaxLayersReached = errors.New("max amount of layers was reached already")
 
+// errLambdaSettling is internal control flow: Lambda accepted a previous configuration change, but its
+// lifecycle has not settled yet. Reconcile must defer both route-state publication and another AWS update
+// until the next pass; it is not an instrumentation failure.
+var errLambdaSettling = errors.New("lambda configuration is still settling")
+
+const lambdaRoutingErrorPrefix = "routing: "
+
 var log = connlog.Subsystem("aws-instrumentor")
 
 // maxConfigUpdateAttempts bounds read-modify-write retries when AWS reports a revision mismatch
@@ -48,14 +55,18 @@ const maxConfigUpdateAttempts = 3
 const maxLambdaLayers = 5
 
 // LambdaInstrumentor reconciles Lambda instrumentation against source intent. Each cycle it instruments
-// enabled Lambda sources (attach the OTel layer + OTEL_* env so the function exports OTLP directly to
-// the destination — no gateway needed) and rolls back functions that are instrumented but no longer
-// have an enabled source. It is idempotent: live AWS config is the source of truth, so re-running is a
-// no-op once converged.
+// enabled Lambda sources (attach the OTel layer + OTEL_* env so the function-local Collector exports to
+// either the applicable regional Collector or the global destination) and rolls back functions that are
+// instrumented but no longer have an enabled source. It is idempotent: live AWS config is the source of
+// truth, so re-running is a no-op once converged.
 type LambdaInstrumentor struct {
 	store  *store.Store
 	cache  *awsclient.Cache
 	layers LayerResolver
+	// routes resolves the effective destination for every enabled function in one pass. AWS supplies the
+	// regional implementation; nil preserves the connector-wide direct destination for tests and callers
+	// that do not expose managed Collectors.
+	routes LambdaRouteResolver
 	// debug returns the current debug-telemetry toggle (DB-backed live config): when true, instrumented
 	// functions get OTEL_LOG_LEVEL=debug. A getter so a config change applies without a restart.
 	debug func() bool
@@ -63,8 +74,19 @@ type LambdaInstrumentor struct {
 
 // NewLambda builds the Lambda instrumentor over the AWS store, config cache, layer resolver and a getter
 // for the live debug-telemetry toggle.
-func NewLambda(st *store.Store, cache *awsclient.Cache, layers LayerResolver, debug func() bool) *LambdaInstrumentor {
-	return &LambdaInstrumentor{store: st, cache: cache, layers: layers, debug: debug}
+// LambdaRouteResolver resolves a complete reconcile pass rather than one function at a time. The pass
+// boundary lets the provider apply one bounded regional cutover batch and keeps observer and mutator intent
+// identical. The returned map is keyed by function ARN; omitted functions are never mutated.
+type LambdaRouteResolver interface {
+	ResolveLambdaRoutes(context.Context, []store.LambdaFunction) (map[string]domaindest.Routing, error)
+}
+
+func NewLambda(st *store.Store, cache *awsclient.Cache, layers LayerResolver, debug func() bool, routes ...LambdaRouteResolver) *LambdaInstrumentor {
+	var routeResolver LambdaRouteResolver
+	if len(routes) > 0 {
+		routeResolver = routes[0]
+	}
+	return &LambdaInstrumentor{store: st, cache: cache, layers: layers, debug: debug, routes: routeResolver}
 }
 
 // EnsurePrerequisite implements base.Prerequisite: Lambda instrumentation needs an OTel layer, so this
@@ -137,21 +159,19 @@ func (i *LambdaInstrumentor) Reconcile(ctx context.Context) error {
 		return err
 	}
 
-	// The OTLP destination is required to instrument (it is the collector's export target). Without one,
-	// skip instrumenting but still allow rollback of anything previously instrumented. The target — and
-	// which signals it accepts — is resolved connector-wide by the base (store.OTLPExportTarget).
-	dest, haveDest, derr := i.store.OTLPExportTarget(ctx)
-	if derr != nil {
-		log.Error("resolve otlp export target failed", "error", derr)
-		haveDest = false
+	// Resolve all enabled functions together. A regional implementation selects the same-region managed
+	// Collector only when its marker, readiness, and network reachability gates pass; otherwise it returns
+	// the global target with a workload note. A routing error is recorded on that function and never blocks
+	// other functions in the account.
+	enabledFunctions := make([]store.LambdaFunction, 0, len(functions))
+	for _, fn := range functions {
+		if _, want := enabled[fn.FunctionARN]; want {
+			enabledFunctions = append(enabledFunctions, fn)
+		}
 	}
-	// The destination's credential, read off the raw generated config rather than off OTLPTarget (which
-	// mirrors the upstream odigos definitions and must not grow a field here). A failure is treated as
-	// "no headers" and logged: instrumenting with the endpoint but without the credential fails visibly at
-	// the destination, which is a better outcome than skipping the whole reconcile including rollbacks.
-	destHeaders, herr := i.store.OTLPExportHeaders(ctx)
-	if herr != nil {
-		log.Error("resolve otlp export headers failed", "error", herr)
+	routes, routeErr := i.resolveLambdaRoutes(ctx, enabledFunctions)
+	if routeErr != nil {
+		log.Error("resolve lambda OTLP routes failed", "error", routeErr)
 	}
 
 	// Accumulate per-function failures and return them joined. The steady-state reconcile loop only logs
@@ -161,16 +181,51 @@ func (i *LambdaInstrumentor) Reconcile(ctx context.Context) error {
 	for _, fn := range functions {
 		_, want := enabled[fn.FunctionARN]
 		if want {
-			if !haveDest {
-				log.Warn("skip lambda instrumentation: no OTLP destination configured", "function", fn.FunctionName)
+			routing, ok := routes[fn.FunctionARN]
+			if routeErr != nil || !ok {
+				err := routeErr
+				if err == nil {
+					err = fmt.Errorf("no routing decision was returned for %s", fn.FunctionARN)
+				}
+				if serr := i.store.SetLambdaRouting(ctx, fn.FunctionARN, fn.RoutingVia, &baseapi.WorkloadRoutingNote{
+					Code: "routing-error", Message: err.Error(), Transient: true,
+				}); serr != nil {
+					log.Warn("set lambda routing error note failed", "function", fn.FunctionName, "error", serr)
+				}
+				_ = i.store.SetLambdaInstrumentationError(ctx, fn.FunctionARN, lambdaRoutingErrorMessage(err.Error()))
+				errs = append(errs, fmt.Errorf("resolve route for %s: %w", fn.FunctionName, err))
 				continue
 			}
-			if err := i.instrument(ctx, fn, dest, destHeaders, enabled[fn.FunctionARN]); err != nil {
+			if routing.Outcome == domaindest.RoutingError || !routing.Found {
+				if serr := i.store.SetLambdaRouting(ctx, fn.FunctionARN, fn.RoutingVia, lambdaRoutingNote(routing)); serr != nil {
+					log.Warn("set lambda routing error note failed", "function", fn.FunctionName, "error", serr)
+				}
+				err := errors.New(routing.Note)
+				if err.Error() == "" {
+					err = errors.New(routing.Describe())
+				}
+				_ = i.store.SetLambdaInstrumentationError(ctx, fn.FunctionARN, lambdaRoutingErrorMessage(err.Error()))
+				errs = append(errs, fmt.Errorf("instrument %s: %w", fn.FunctionName, err))
+				continue
+			}
+			// Publish or clear the fallback explanation immediately, but retain the last applied Via until the
+			// configuration is confirmed or AWS accepts the update. A failed/deferred update must not claim a
+			// route that is not yet live.
+			if serr := i.store.SetLambdaRouting(ctx, fn.FunctionARN, fn.RoutingVia, workloadRoutingNote(routing)); serr != nil {
+				log.Warn("set lambda routing note failed", "function", fn.FunctionName, "error", serr)
+			}
+			if err := i.instrument(ctx, fn, routing.Target, routing.Headers, enabled[fn.FunctionARN]); err != nil {
+				if errors.Is(err, errLambdaSettling) {
+					continue
+				}
 				log.Error("instrument lambda failed", "function", fn.FunctionName, "region", fn.Region, "error", err)
 				_ = i.store.SetLambdaInstrumentationError(ctx, fn.FunctionARN, err.Error())
 				errs = append(errs, fmt.Errorf("instrument %s: %w", fn.FunctionName, err))
 			} else {
 				_ = i.store.ClearLambdaInstrumentationError(ctx, fn.FunctionARN)
+				if serr := i.store.SetLambdaRouting(ctx, fn.FunctionARN, string(routing.Via), workloadRoutingNote(routing)); serr != nil {
+					log.Warn("set lambda routing after converge failed", "function", fn.FunctionName, "error", serr)
+				}
 			}
 			continue
 		}
@@ -183,6 +238,9 @@ func (i *LambdaInstrumentor) Reconcile(ctx context.Context) error {
 			continue
 		}
 		if err := i.rollback(ctx, fn); err != nil {
+			if errors.Is(err, errLambdaSettling) {
+				continue
+			}
 			log.Error("rollback lambda failed", "function", fn.FunctionName, "region", fn.Region, "error", err)
 			_ = i.store.SetLambdaInstrumentationError(ctx, fn.FunctionARN, err.Error())
 			errs = append(errs, fmt.Errorf("rollback %s: %w", fn.FunctionName, err))
@@ -289,6 +347,43 @@ func (i *LambdaInstrumentor) enabledLambdaSources(ctx context.Context) (map[stri
 	return enabled, nil
 }
 
+func (i *LambdaInstrumentor) resolveLambdaRoutes(ctx context.Context, functions []store.LambdaFunction) (map[string]domaindest.Routing, error) {
+	if i.routes != nil {
+		return i.routes.ResolveLambdaRoutes(ctx, functions)
+	}
+	routing, err := i.store.OTLPRouting(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]domaindest.Routing, len(functions))
+	for _, fn := range functions {
+		out[fn.FunctionARN] = routing
+	}
+	return out, nil
+}
+
+func lambdaRoutingErrorMessage(message string) string {
+	return lambdaRoutingErrorPrefix + message
+}
+
+func isLambdaRoutingError(message string) bool {
+	return strings.HasPrefix(message, lambdaRoutingErrorPrefix)
+}
+
+func lambdaRoutingNote(routing domaindest.Routing) *baseapi.WorkloadRoutingNote {
+	if routing.Note == "" {
+		return &baseapi.WorkloadRoutingNote{Code: "routing-error", Message: routing.Describe(), Transient: true}
+	}
+	return &baseapi.WorkloadRoutingNote{Code: string(routing.Reason), Message: routing.Note, Transient: true}
+}
+
+func isLambdaRoutingFailureNote(note *baseapi.WorkloadRoutingNote) bool {
+	if note == nil {
+		return false
+	}
+	return note.Code == "routing-error" || note.Code == string(domaindest.ReasonNoDestination)
+}
+
 // enabledLambdaSource is the per-source intent the instrumentor and the observer both read. It mirrors
 // enabledFargateSource: one struct rather than parallel maps, so a new piece of intent cannot be threaded
 // into one caller and forgotten in the other.
@@ -367,7 +462,7 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 		// still settling returns ResourceConflictException (409). Defer to the next reconcile cycle.
 		if updateInProgress(cur) {
 			log.Debug("lambda update in progress; deferring instrumentation", "function", fn.FunctionName, "region", fn.Region)
-			return nil
+			return errLambdaSettling
 		}
 
 		env := currentEnv(cur.Environment)
@@ -441,19 +536,14 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 
 		i.setPhase(ctx, fn, store.PhaseInstrumenting)
 		log.Info("instrumenting lambda", "function", fn.FunctionName, "region", fn.Region, "layer", layerARN, "mode", instrumentMode(webServer))
-		if _, err = client.UpdateFunctionConfiguration(ctx, &lambda.UpdateFunctionConfigurationInput{
-			FunctionName: aws.String(fn.FunctionARN),
-			Layers:       layers,
-			Environment:  &lambdatypes.Environment{Variables: env},
-			RevisionId:   cur.RevisionId,
-		}); err != nil {
+		if _, err = client.UpdateFunctionConfiguration(ctx, lambdaConfigUpdateInput(fn.FunctionARN, layers, env, cur.RevisionId)); err != nil {
 			if revisionConflict(err) && attempt+1 < maxConfigUpdateAttempts {
 				log.Debug("lambda config changed since read; retrying instrumentation", "function", fn.FunctionName, "region", fn.Region, "attempt", attempt+1)
 				continue
 			}
 			if revisionConflict(err) {
 				log.Debug("lambda config changed since read; deferring instrumentation to next reconcile", "function", fn.FunctionName, "region", fn.Region)
-				return nil
+				return errLambdaSettling
 			}
 			return err
 		}
@@ -466,7 +556,7 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 		}
 		return nil
 	}
-	return nil
+	return errLambdaSettling
 }
 
 // setPhase records an in-flight instrumentation phase for live WorkloadReport progress. Best-effort: a
@@ -712,7 +802,7 @@ func (i *LambdaInstrumentor) rollback(ctx context.Context, fn store.LambdaFuncti
 		}
 		if updateInProgress(cur) {
 			log.Debug("lambda update in progress; deferring rollback", "function", fn.FunctionName, "region", fn.Region)
-			return nil
+			return errLambdaSettling
 		}
 
 		env := currentEnv(cur.Environment)
@@ -749,19 +839,14 @@ func (i *LambdaInstrumentor) rollback(ctx context.Context, fn store.LambdaFuncti
 		}
 
 		log.Info("rolling back lambda instrumentation", "function", fn.FunctionName, "region", fn.Region)
-		if _, err = client.UpdateFunctionConfiguration(ctx, &lambda.UpdateFunctionConfigurationInput{
-			FunctionName: aws.String(fn.FunctionARN),
-			Layers:       layers,
-			Environment:  &lambdatypes.Environment{Variables: env},
-			RevisionId:   cur.RevisionId,
-		}); err != nil {
+		if _, err = client.UpdateFunctionConfiguration(ctx, lambdaConfigUpdateInput(fn.FunctionARN, layers, env, cur.RevisionId)); err != nil {
 			if revisionConflict(err) && attempt+1 < maxConfigUpdateAttempts {
 				log.Debug("lambda config changed since read; retrying rollback", "function", fn.FunctionName, "region", fn.Region, "attempt", attempt+1)
 				continue
 			}
 			if revisionConflict(err) {
 				log.Debug("lambda config changed since read; deferring rollback to next reconcile", "function", fn.FunctionName, "region", fn.Region)
-				return nil
+				return errLambdaSettling
 			}
 			return err
 		}
@@ -769,6 +854,9 @@ func (i *LambdaInstrumentor) rollback(ctx context.Context, fn store.LambdaFuncti
 		// function as uninstrumented without waiting for the next discovery cycle.
 		if err := i.store.SetLambdaInstrumented(ctx, fn.FunctionARN, false); err != nil {
 			log.Warn("set lambda instrumented flag failed", "function", fn.FunctionName, "region", fn.Region, "error", err)
+		}
+		if err := i.store.SetLambdaRouting(ctx, fn.FunctionARN, "", nil); err != nil {
+			log.Warn("clear lambda routing state failed", "function", fn.FunctionName, "region", fn.Region, "error", err)
 		}
 		return nil
 	}
@@ -807,6 +895,18 @@ func (i *LambdaInstrumentor) lambdaClient(ctx context.Context, region string) (*
 		return nil, err
 	}
 	return lambda.NewFromConfig(cfg), nil
+}
+
+// lambdaConfigUpdateInput centralizes the only Lambda configuration mutation. VpcConfig is deliberately
+// absent: routing consumes the function's existing VpcConfig for reachability, but never attaches a function
+// to a VPC or changes its subnets/security groups as a side effect of instrumentation.
+func lambdaConfigUpdateInput(functionARN string, layers []string, env map[string]string, revisionID *string) *lambda.UpdateFunctionConfigurationInput {
+	return &lambda.UpdateFunctionConfigurationInput{
+		FunctionName: aws.String(functionARN),
+		Layers:       layers,
+		Environment:  &lambdatypes.Environment{Variables: env},
+		RevisionId:   revisionID,
+	}
 }
 
 func currentEnv(env *lambdatypes.EnvironmentResponse) map[string]string {

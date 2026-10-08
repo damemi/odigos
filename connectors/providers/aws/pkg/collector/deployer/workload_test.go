@@ -10,7 +10,6 @@ import (
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
-	basecollectorsettings "github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
@@ -18,17 +17,15 @@ import (
 
 func workloadSettings() collectorsettings.Network {
 	return collectorsettings.Network{
-		Network: basecollectorsettings.Network{
-			Enabled: true,
-			CPU:     basecollectorsettings.DefaultCPU,
-			Memory:  basecollectorsettings.DefaultMemory,
-			// The shipped default policy, spelled out rather than left zero: collectorsettings.Read always
-			// fills the mode in, and a fixture with an empty one would exercise the unrecognised-mode hold
-			// instead of the manual path every one of these tests is about.
-			Scaling: basecollectorsettings.Scaling{
-				Mode:         basecollectorsettings.ScalingManual,
-				DesiredCount: basecollectorsettings.DefaultDesiredCount,
-			},
+		Enabled: true,
+		CPU:     collectorsettings.DefaultCPU,
+		Memory:  collectorsettings.DefaultMemory,
+		// The shipped default policy, spelled out rather than left zero: collectorsettings.Read always
+		// fills the mode in, and a fixture with an empty one would exercise the unrecognised-mode hold
+		// instead of the manual path every one of these tests is about.
+		Scaling: collectorsettings.Scaling{
+			Mode:         collectorsettings.ScalingManual,
+			DesiredCount: collectorsettings.DefaultDesiredCount,
 		},
 		ClusterRef: ClusterName(),
 	}

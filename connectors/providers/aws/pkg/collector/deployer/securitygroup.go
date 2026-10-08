@@ -36,9 +36,7 @@ type SecurityGroupInput struct {
 	ConnectorID string
 	Identity    collectorownership.Identity
 	Mode        string
-	// Rules is the COMPLETE desired ingress set from collectoringress.Resolve. Not a delta, and not a
-	// set this package adds to: puts every authorization decision in that one function so a
-	// provider cannot quietly widen or narrow it.
+	// Rules is the COMPLETE desired set from the AWS ingress resolver, including its NLB health rule.
 	Rules []awsingress.Rule
 }
 
@@ -55,10 +53,10 @@ type SecurityGroup struct {
 // This group is the entire security boundary in front of the Collector in v1: the OTLP ports carry no
 // authentication, and anything that can write to them forwards telemetry under the customer's own
 // destination credential. So the interesting behaviour is not the authorize — it is the REVOKE.
-// `collectoringress.Resolve` returns the complete desired set precisely so that converging to it takes
-// a widened network-CIDR fallback back down the moment a workload's security group resolves, with no
+// The AWS ingress resolver returns the complete desired set precisely so that converging to it takes
+// a widened VPC-CIDR fallback back down the moment a workload security group resolves, with no
 // separate cleanup pass that could be forgotten or fail silently. A rule that is not in the desired set
-// is removed, including one added by hand: `ingress.additionalSecurityGroupIds` and
+// is removed, including one added by hand: `ingress.additionalNetworkIdentityIds` and
 // `additionalCidrs` are the sanctioned way to admit another sender, and they are inputs to the desired
 // set rather than exceptions to it.
 //
@@ -215,9 +213,8 @@ func describeRequiredSecurityGroup(ctx context.Context, api SecurityGroupClient,
 //
 // One permission per rule rather than grouping several sources under one port: EC2 accepts both, and
 // the ungrouped form is what makes the comparison below a set comparison over comparable values
-// instead of a merge. selfID is the Collector's own group, which a Self rule names — the load balancer
-// shares this group, so that is how the health check on 13133 is admitted and the only rule
-// this package resolves rather than passes through.
+// instead of a merge. The NLB shares the Collector's group, so AWS owns the self-referencing health
+// rule; it deliberately does not appear in the provider-neutral workload policy.
 func desiredPermissions(rules []awsingress.Rule, selfID string) []ec2types.IpPermission {
 	out := make([]ec2types.IpPermission, 0, len(rules))
 	for _, r := range rules {

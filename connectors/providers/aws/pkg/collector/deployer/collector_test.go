@@ -12,7 +12,6 @@ import (
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorplacement"
-	basecollectorsettings "github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
 	awsingress "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/ingress"
@@ -177,9 +176,7 @@ func idleDeployerOrdered(t *testing.T, retention collectorsettings.Retention, cl
 			return collectorsettings.Settings{
 				Enabled: true,
 				Defaults: collectorsettings.Network{
-					Network: basecollectorsettings.Network{
-						Enabled: true, CPU: "1024", Memory: "2048", Retention: retention,
-					},
+					Enabled: true, CPU: "1024", Memory: "2048", Retention: retention,
 					ClusterRef:       ClusterName(),
 					ExecutionRoleARN: "arn:aws:iam::" + testAccount + ":role/OdigosCollectorExecutionRole",
 				},

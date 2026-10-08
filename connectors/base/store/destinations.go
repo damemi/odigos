@@ -178,9 +178,10 @@ func (s *Store) OTLPRouting(ctx context.Context, network string) (domaindest.Rou
 }
 
 // OTLPRoutingForRegion resolves the route for a regional workload. The managed-Collector destination
-// marker is applicable only to its own region; global OTLP terminals remain available everywhere. A
-// workload in the Collector's host network is reachable by construction. A different workload network
-// requires explicit provider reachability evidence (for AWS, validated direct VPC peering and routes).
+// marker is applicable only to its own region; global OTLP terminals remain available everywhere. Every
+// workload requires explicit provider reachability evidence, including ingress admission in the host
+// network. A different workload network additionally requires its provider's validated cross-network path
+// (for AWS, direct VPC peering and reciprocal routes).
 func (s *Store) OTLPRoutingForRegion(ctx context.Context, region, network string, reachability domaindest.Reachability) (domaindest.Routing, error) {
 	dests, err := s.destinationsForResolution(ctx)
 	if err != nil {

@@ -174,6 +174,11 @@ type LambdaFunction struct {
 	VPCID            string
 	SubnetIDs        []string
 	SecurityGroupIDs []string
+	// RoutingVia records the currently selected export path (direct or collector). It is persisted so a
+	// reconcile can distinguish the route it last applied from a newly resolved route and roll back safely.
+	RoutingVia string
+	// RoutingNote is the last non-fatal reason the resolver selected (or retained) a route.
+	RoutingNote *api.WorkloadRoutingNote
 	// Observation is the read-only conformance verdict for this function, written by the observer rather than
 	// by discovery. Zero until a pass has run.
 	Observation LambdaObservation
@@ -359,15 +364,16 @@ const lambdaObservationCols = `COALESCE(env_hash, ''), COALESCE(config_hash, '')
 // column stays NULL for every non-Lambda kind.
 const noObservationCols = `'', NULL, NULL, '', false, NULL`
 
-const lambdaSelectCols = `region, function_arn, function_name, COALESCE(runtime, ''), COALESCE(architecture, ''), COALESCE(role_arn, ''), COALESCE(tracing_mode, ''), COALESCE(metadata->>'instrumented', 'false') = 'true', layers, COALESCE(metadata->>'state', ''), COALESCE(metadata->>'last_update_status', ''), COALESCE(metadata->>'` + metaLambdaVPCID + `', ''), metadata->'` + metaLambdaSubnetIDs + `', metadata->'` + metaLambdaSecurityGroupIDs + `', ` + lambdaObservationCols
+const lambdaSelectCols = `region, function_arn, function_name, COALESCE(runtime, ''), COALESCE(architecture, ''), COALESCE(role_arn, ''), COALESCE(tracing_mode, ''), COALESCE(metadata->>'instrumented', 'false') = 'true', layers, COALESCE(metadata->>'state', ''), COALESCE(metadata->>'last_update_status', ''), COALESCE(metadata->>'` + metaLambdaVPCID + `', ''), metadata->'` + metaLambdaSubnetIDs + `', metadata->'` + metaLambdaSecurityGroupIDs + `', COALESCE(metadata->>'` + metaRoutingVia + `',''), metadata->'` + metaRoutingNote + `', ` + lambdaObservationCols
 
 func scanLambda(row interface{ Scan(...any) error }) (LambdaFunction, error) {
 	var fn LambdaFunction
-	var layersJSON, missingJSON, subnetsJSON, groupsJSON []byte
+	var layersJSON, missingJSON, subnetsJSON, groupsJSON, routingNoteJSON []byte
 	var since *string
 	err := row.Scan(&fn.Region, &fn.FunctionARN, &fn.FunctionName, &fn.Runtime, &fn.Architecture, &fn.RoleARN, &fn.TracingMode,
 		&fn.Instrumented, &layersJSON, &fn.State, &fn.LastUpdateStatus,
 		&fn.VPCID, &subnetsJSON, &groupsJSON,
+		&fn.RoutingVia, &routingNoteJSON,
 		&fn.Observation.ObservedPrint, &fn.Observation.DesiredPrint, &conformanceTarget{&fn.Observation.Conformance}, &missingJSON, &since, &fn.Observation.Error)
 	if err != nil {
 		return fn, err
@@ -375,6 +381,7 @@ func scanLambda(row interface{ Scan(...any) error }) (LambdaFunction, error) {
 	fn.Layers = decodeStringSlice(layersJSON, "layers")
 	fn.SubnetIDs = decodeStringSlice(subnetsJSON, metaLambdaSubnetIDs)
 	fn.SecurityGroupIDs = decodeStringSlice(groupsJSON, metaLambdaSecurityGroupIDs)
+	fn.RoutingNote = decodeRoutingNote(routingNoteJSON)
 	fn.Observation.Missing = decodeStringSlice(missingJSON, "conformance_missing")
 	fn.Observation.Since = parseObservedAt(since)
 	return fn, nil
@@ -469,6 +476,38 @@ func (s *Store) GetLambdaFunction(ctx context.Context, functionARN string) (*Lam
 		return nil, false, err
 	}
 	return &fn, true, nil
+}
+
+// SetLambdaRouting records the selected export path and its optional explanatory note without replacing
+// metadata owned by discovery, observation, or instrumentation. Empty via and nil note clear their
+// respective keys, making route convergence and rollback idempotent.
+func (s *Store) SetLambdaRouting(ctx context.Context, functionARN, via string, note *api.WorkloadRoutingNote) error {
+	inventoryLog.Debug("set lambda routing", "arn", functionARN, "via", via)
+	patch := map[string]any{}
+	deleteKeys := make([]string, 0, 2)
+	if via == "" {
+		deleteKeys = append(deleteKeys, metaRoutingVia)
+	} else {
+		patch[metaRoutingVia] = via
+	}
+	if note == nil {
+		deleteKeys = append(deleteKeys, metaRoutingNote)
+	} else {
+		patch[metaRoutingNote] = storedRoutingNote{Code: note.Code, Message: note.Message, Transient: note.Transient}
+	}
+	b, err := json.Marshal(patch)
+	if err != nil {
+		return err
+	}
+	_, err = s.Pool().Exec(ctx, `
+		UPDATE connector_aws.lambda_functions
+		SET metadata = (COALESCE(metadata, '{}'::jsonb) || $3::jsonb) - $4::text[]
+		WHERE connector_name = $1 AND function_arn = $2 AND deleted_at IS NULL
+	`, s.ConnectorName(), functionARN, string(b), deleteKeys)
+	if err != nil {
+		inventoryLog.Error("set lambda routing failed", "arn", functionARN, "error", err)
+	}
+	return err
 }
 
 // SetLambdaInstrumented writes the live instrumentation flag through immediately after instrument/rollback
@@ -741,7 +780,7 @@ func workloadQueries() []workloadQuery {
 			COALESCE(metadata->>'conformance', ''), metadata->'conformance_missing', metadata->>'conformance_since',
 			COALESCE(metadata->>'observation_error', ''),
 			COALESCE(metadata->>'state','') = '` + lambdaStatePending + `' OR COALESCE(metadata->>'last_update_status','') = '` + lambdaUpdateInProgress + `',
-			layers, NULL
+			layers, metadata->'` + metaRoutingNote + `'
 			FROM connector_aws.lambda_functions WHERE connector_name = $1 AND deleted_at IS NULL`},
 		// Fargate SERVICES: one workload per (cluster, service) from the ecs_services inventory. The
 		// external id — a source's stable identity — is cluster_arn || '/' || service_name (NOT a task ARN,

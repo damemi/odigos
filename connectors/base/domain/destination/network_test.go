@@ -48,7 +48,8 @@ func TestRegionalRoutingContract(t *testing.T) {
 		wantReason   Reason
 		wantEndpoint string
 	}{
-		{"host VPC", dests, []CollectorTarget{collector}, region, "vpc-host", ReachabilityUnknown, RoutingCollector, ReasonRouted, collector.Endpoint},
+		{"host VPC", dests, []CollectorTarget{collector}, region, "vpc-host", ReachabilityReachable, RoutingCollector, ReasonRouted, collector.Endpoint},
+		{"host VPC without ingress proof", dests, []CollectorTarget{collector}, region, "vpc-host", ReachabilityUnknown, RoutingDirect, ReasonCollectorUnreachable, directGRPC},
 		{"peered VPC", dests, []CollectorTarget{collector}, region, "vpc-app", ReachabilityReachable, RoutingCollector, ReasonRouted, collector.Endpoint},
 		{"unproven VPC", dests, []CollectorTarget{collector}, region, "vpc-app", ReachabilityUnknown, RoutingDirect, ReasonCollectorUnreachable, directGRPC},
 		{"non-VPC Lambda", dests, []CollectorTarget{collector}, region, "", ReachabilityUnreachable, RoutingDirect, ReasonNoNetwork, directGRPC},
@@ -108,7 +109,7 @@ func TestCollectorRouteKeepsSignalsButNotTerminalCredentials(t *testing.T) {
 	got := ResolveRoutingForRegion(
 		[]Destination{vendorDestination("TRACES"), marker("eu-west-1")},
 		[]CollectorTarget{regionalCollector("eu-west-1", "vpc-host")},
-		"eu-west-1", "vpc-host", ReachabilityUnknown,
+		"eu-west-1", "vpc-host", ReachabilityReachable,
 	)
 	if !got.Target.Traces || got.Target.Metrics || got.Target.Logs {
 		t.Fatalf("signals = %+v", got.Target)
@@ -160,7 +161,7 @@ func TestAnUnreadyCollectorIsNotRoutedTo(t *testing.T) {
 	target := regionalCollector(region, "vpc-host")
 	target.EverReady = false
 
-	got := ResolveRoutingForRegion(dests, []CollectorTarget{target}, region, "vpc-host", ReachabilityUnknown)
+	got := ResolveRoutingForRegion(dests, []CollectorTarget{target}, region, "vpc-host", ReachabilityReachable)
 
 	if got.Via != RouteDirect {
 		t.Fatalf("Via = %q, want direct until the Collector has been ready once", got.Via)
@@ -209,13 +210,13 @@ func TestReadinessIsALatchNotAHealthCheck(t *testing.T) {
 	dests := []Destination{vendorDestination(), marker(region)}
 	target := regionalCollector(region, "vpc-host")
 
-	if got := ResolveRoutingForRegion(dests, []CollectorTarget{target}, region, "vpc-host", ReachabilityUnknown); got.Via != RouteCollector {
+	if got := ResolveRoutingForRegion(dests, []CollectorTarget{target}, region, "vpc-host", ReachabilityReachable); got.Via != RouteCollector {
 		t.Fatalf("Via = %q, want collector once it has been ready", got.Via)
 	}
 	// There is no field to set that would take it back. The field-coverage test above is what enforces
 	// that; this asserts the consequence, which is that resolution is a pure function of configuration
 	// plus one monotonic bit.
-	again := ResolveRoutingForRegion(dests, []CollectorTarget{target}, region, "vpc-host", ReachabilityUnknown)
+	again := ResolveRoutingForRegion(dests, []CollectorTarget{target}, region, "vpc-host", ReachabilityReachable)
 	if again.Via != RouteCollector || again.Target.Endpoint != target.Endpoint {
 		t.Errorf("a second resolution of the same state differed: %+v", again)
 	}

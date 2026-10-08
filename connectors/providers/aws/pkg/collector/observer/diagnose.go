@@ -10,11 +10,11 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorreport"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
 	"github.com/odigos-io/odigos-enterprise/connectors/opamp"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/deployer"
+	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 

@@ -11,7 +11,7 @@ import (
 	aastypes "github.com/aws/aws-sdk-go-v2/service/applicationautoscaling/types"
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
+	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
@@ -787,7 +787,7 @@ func TestObservedScalingRecordsWhatIsInForce(t *testing.T) {
 		Scaling: collectorsettings.Scaling{Mode: collectorsettings.ScalingAuto, MinCount: 2, MaxCount: 10},
 	}
 	service := Service{ARN: testServiceARN, DesiredCount: 3, RunningCount: 2}
-	got := ObservedScaling(settings, service, ScalingState{TargetRegistered: true, MinCount: 2, MaxCount: 10})
+	got := ObservedScaling(settings.Base(), service, ScalingState{TargetRegistered: true, MinCount: 2, MaxCount: 10})
 
 	if got.Mode != collectorsettings.ScalingAuto || got.CPU != "1024" || got.Memory != "2048" {
 		t.Errorf("observation = %+v", got)
@@ -802,20 +802,20 @@ func TestObservedScalingRecordsWhatIsInForce(t *testing.T) {
 	// A mode this connector does not implement records NO mode, rather than writing a typo into a column
 	// documented as manual | auto. Nothing is driving the count, and a null says exactly that.
 	settings.Scaling.Mode = "automatic"
-	if unknown := ObservedScaling(settings, service, ScalingState{}); unknown.Mode != "" {
+	if unknown := ObservedScaling(settings.Base(), service, ScalingState{}); unknown.Mode != "" {
 		t.Errorf("recorded an unimplemented mode as %q", unknown.Mode)
 	}
 
 	// Bounds only while a target exists, so a row carrying bounds is a row where something autoscales.
 	settings.Scaling.Mode = collectorsettings.ScalingManual
-	manual := ObservedScaling(settings, service, ScalingState{})
+	manual := ObservedScaling(settings.Base(), service, ScalingState{})
 	if manual.MinCount != nil || manual.MaxCount != nil {
 		t.Errorf("manual mode recorded bounds: %v/%v", manual.MinCount, manual.MaxCount)
 	}
 
 	// Counts only once there is a service. Nil is "no service yet"; a recorded zero is a service running
 	// no tasks, which is a different and much more interesting state.
-	none := ObservedScaling(settings, Service{}, ScalingState{})
+	none := ObservedScaling(settings.Base(), Service{}, ScalingState{})
 	if none.DesiredCount != nil || none.RunningCount != nil {
 		t.Errorf("recorded counts with no service: %v/%v", none.DesiredCount, none.RunningCount)
 	}

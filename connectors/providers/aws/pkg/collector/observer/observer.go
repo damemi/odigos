@@ -173,7 +173,7 @@ func (o *Observer) ObserveCollector(ctx context.Context, network baseapi.Collect
 		Network:       network,
 		Connector:     o.Identity.ConnectorName,
 		Mode:          o.Mode,
-		Settings:      settings.Network,
+		Settings:      settings,
 		Placement:     o.placementProblems(network),
 		Record:        record,
 		Observation:   observation,

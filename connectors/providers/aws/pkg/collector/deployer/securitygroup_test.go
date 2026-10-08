@@ -16,8 +16,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
-// workloadRules is the steady-state tier: the workloads' own security groups on the data ports, plus
-// the self-referencing health-check rule.
+// workloadRules is the AWS steady-state tier, including the self-referencing NLB health rule.
 func workloadRules(groups ...string) []awsingress.Rule {
 	var out []awsingress.Rule
 	for _, port := range collectoringress.DataPorts() {
@@ -218,7 +217,7 @@ func TestAWidenedFallbackIsNarrowedWhenAGroupResolves(t *testing.T) {
 	}
 }
 
-// TestARuleAddedByHandIsRevoked. The desired set is complete, so `additionalSecurityGroupIds` and
+// TestARuleAddedByHandIsRevoked. The desired set is complete, so `additionalNetworkIdentityIds` and
 // `additionalCidrs` are the sanctioned way to admit another sender — inputs to the set rather than
 // exceptions to it. A rule nobody can account for on the port that forwards under the customer's
 // destination credential is exactly what must not survive a converge.

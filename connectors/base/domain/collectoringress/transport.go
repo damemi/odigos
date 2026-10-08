@@ -134,7 +134,7 @@ func ResolveTransport(cfg TransportConfig, p Platform, host string) (Transport, 
 		if cfg.Hostname == "" {
 			return refuse("TLSHostnameRequired", fmt.Sprintf(
 				"collector.regions.<region>.tls.mode is %s but tls.hostname is empty. A certificate cannot be "+
-					"issued for the load balancer's own generated DNS name, so you must supply a hostname you "+
+					"usually be issued for the provider-generated endpoint name, so you must supply a hostname you "+
 					"control and point it at the Collector", mode))
 		}
 		if cfg.CertificateRef == "" {

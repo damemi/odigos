@@ -1,8 +1,10 @@
 // Package collectorsettings interprets the AWS-owned portion of the provider-neutral Collector
-// configuration.
+// configuration. The base package preserves provider values as opaque data; this package gives those
+// values AWS meaning.
 package collectorsettings
 
 import base "github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
+import "github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
 
 const (
 	Key              = base.Key
@@ -46,7 +48,20 @@ const (
 )
 
 type Network struct {
-	base.Network
+	Enabled                 bool
+	Provider                map[string]any
+	CPU                     string
+	Memory                  string
+	LogRetentionDays        int
+	Scaling                 Scaling
+	RolloutBatchSize        int
+	Retention               Retention
+	Arch                    string
+	ImageRepositoryOverride string
+	EndpointOverride        string
+	TLS                     collectoringress.TransportConfig
+	Ingress                 collectoringress.Config
+
 	SubnetIDs        []string
 	SecurityGroupIDs []string
 	ClusterRef       string
@@ -54,6 +69,18 @@ type Network struct {
 	AssignPublicIP   bool
 	UseFargateSpot   bool
 }
+
+func (n Network) Base() base.Network {
+	return base.Network{
+		Enabled: n.Enabled, Provider: n.Provider, CPU: n.CPU, Memory: n.Memory,
+		LogRetentionDays: n.LogRetentionDays, Scaling: n.Scaling,
+		RolloutBatchSize: n.RolloutBatchSize, Retention: n.Retention,
+		Arch: n.Arch, ImageRepositoryOverride: n.ImageRepositoryOverride,
+		EndpointOverride: n.EndpointOverride, TLS: n.TLS, Ingress: n.Ingress,
+	}
+}
+
+func (n Network) MemoryMiB() (int, error) { return n.Base().MemoryMiB() }
 
 type Region struct {
 	Network
@@ -74,17 +101,26 @@ func Read(effective map[string]any) Settings { return FromBase(base.Read(effecti
 func FromBase(in base.Settings) Settings {
 	out := Settings{Enabled: in.Enabled, Defaults: network(in.Defaults), Regions: map[string]Region{}}
 	for id, region := range in.Regions {
-		out.Regions[id] = Region{Network: network(region.Network), Region: region.Region, HostNetworkID: region.HostNetworkID}
+		out.Regions[id] = Region{
+			Network:       network(region.Network),
+			Region:        region.Region,
+			HostNetworkID: region.HostNetworkID,
+		}
 	}
 	return out
 }
 
+// Base projects AWS settings back to the provider-neutral lifecycle and placement contract.
 func (s Settings) Base() base.Settings {
 	regions := make(map[string]base.Region, len(s.Regions))
 	for id, region := range s.Regions {
-		regions[id] = base.Region{Network: region.Network.Network, Region: region.Region, HostNetworkID: region.HostNetworkID}
+		regions[id] = base.Region{
+			Network:       region.Network.Base(),
+			Region:        region.Region,
+			HostNetworkID: region.HostNetworkID,
+		}
 	}
-	return base.Settings{Enabled: s.Enabled, Defaults: s.Defaults.Network, Regions: regions}
+	return base.Settings{Enabled: s.Enabled, Defaults: s.Defaults.Base(), Regions: regions}
 }
 
 func (s Settings) Region(id string) Region {
@@ -116,11 +152,27 @@ func (s Settings) DeployRegions() []string {
 
 func network(in base.Network) Network {
 	provider := in.Provider
-	return Network{Network: in,
-		SubnetIDs: stringsOf(provider, KeySubnetIDs), SecurityGroupIDs: stringsOf(provider, KeySecurityGroupIDs),
-		ClusterRef: stringOf(provider, KeyClusterRef), ExecutionRoleARN: stringOf(provider, KeyExecutionRoleARN),
-		AssignPublicIP: boolOf(provider, KeyAssignPublicIP),
-		UseFargateSpot: boolOf(provider, KeyUseFargateSpot)}
+	return Network{
+		Enabled:                 in.Enabled,
+		Provider:                in.Provider,
+		CPU:                     in.CPU,
+		Memory:                  in.Memory,
+		LogRetentionDays:        in.LogRetentionDays,
+		Scaling:                 in.Scaling,
+		RolloutBatchSize:        in.RolloutBatchSize,
+		Retention:               in.Retention,
+		Arch:                    in.Arch,
+		ImageRepositoryOverride: in.ImageRepositoryOverride,
+		EndpointOverride:        in.EndpointOverride,
+		TLS:                     in.TLS,
+		Ingress:                 in.Ingress,
+		SubnetIDs:               stringsOf(provider, KeySubnetIDs),
+		SecurityGroupIDs:        stringsOf(provider, KeySecurityGroupIDs),
+		ClusterRef:              stringOf(provider, KeyClusterRef),
+		ExecutionRoleARN:        stringOf(provider, KeyExecutionRoleARN),
+		AssignPublicIP:          boolOf(provider, KeyAssignPublicIP),
+		UseFargateSpot:          boolOf(provider, KeyUseFargateSpot),
+	}
 }
 
 func stringsOf(values map[string]any, key string) []string {
@@ -141,7 +193,13 @@ func stringsOf(values map[string]any, key string) []string {
 }
 
 func stringOf(values map[string]any, key string) string {
-	value, _ := values[key].(string)
+	if value, ok := values[key].(string); ok {
+		return value
+	}
+	return ""
+}
+
+func boolOf(values map[string]any, key string) bool {
+	value, _ := values[key].(bool)
 	return value
 }
-func boolOf(values map[string]any, key string) bool { value, _ := values[key].(bool); return value }

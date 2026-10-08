@@ -161,12 +161,12 @@ func (r *Resolver) idleNetworks(ctx context.Context, plan Plan) []collectorplace
 // IngressSources are the workloads routed to one network's Collector, with the security groups their
 // telemetry originates from.
 //
-// The COMPLETE set for that network, because collectoringress.Resolve returns the complete desired rule
+// The COMPLETE set for that network, because the AWS ingress resolver returns the complete desired rule
 // set and the deployer converges to it: a source omitted here has its rule revoked rather than left
 // alone, so a partial list silently stops a workload's telemetry being admitted.
 //
 // A workload whose security groups are empty arrives with an empty slice and is NOT dropped, which is
-// the distinction collectoringress.Source exists to carry: "this sender has no group Odigos could
+// the distinction ingress.Source exists to carry: "this sender has no group Odigos could
 // resolve" is what holds the network-CIDR fallback back, and dropping it would read as "every sender
 // resolved" and narrow the rules onto the ones that did.
 func (p Plan) IngressSources(region, networkID string) []awsingress.Source {
@@ -197,8 +197,21 @@ func (p Plan) IngressSources(region, networkID string) []awsingress.Source {
 		out = append(out, awsingress.Source{Name: ref, SecurityGroupIDs: svc.SecurityGroupIDs})
 	}
 	for _, fn := range p.Inventory.Lambdas {
-		if fn.Region != region || fn.VPCID != networkID || !enabled[awsstore.KindLambda][fn.FunctionARN] {
+		if fn.Region != region || fn.VPCID == "" || !enabled[awsstore.KindLambda][fn.FunctionARN] {
 			continue
+		}
+		if fn.VPCID != networkID {
+			// Lambda functions may use the same regional host through an explicitly validated
+			// peering path, just like Fargate services. The ingress tier must not admit a
+			// function merely because a marker exists; both placement ownership and the
+			// selected subnet route proof are required.
+			if p.Networks.ServedBy(region, fn.VPCID) != networkID {
+				continue
+			}
+			host, hostOK := p.Placement(region, networkID)
+			if !hostOK || !p.Topology.CanReach(region, networkID, fn.Region, fn.VPCID, host.SubnetIDs, fn.SubnetIDs) {
+				continue
+			}
 		}
 		out = append(out, awsingress.Source{Name: fn.FunctionARN, SecurityGroupIDs: fn.SecurityGroupIDs})
 	}

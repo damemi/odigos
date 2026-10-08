@@ -43,7 +43,10 @@ var observeLog = connlog.Subsystem("aws-observer")
 type LambdaObserver struct {
 	store *store.Store
 	cache *awsclient.Cache
-	debug func() bool
+	// routes is the same complete-pass resolver used by the mutating Lambda instrumentor. A nil resolver
+	// keeps the observer's legacy direct-destination behavior for callers without managed Collectors.
+	routes LambdaRouteResolver
+	debug  func() bool
 	// now is the clock for the drift since-stamp, injectable so a test can assert the stamp is CARRIED
 	// FORWARD across passes rather than refreshed — the property that makes "drifted for 3 days" true.
 	now func() time.Time
@@ -51,13 +54,17 @@ type LambdaObserver struct {
 
 // NewLambdaObserver builds the read-only Lambda observer over the same store, config cache and live debug
 // toggle the instrumentor uses, so both judge conformance against identical desired inputs.
-func NewLambdaObserver(st *store.Store, cache *awsclient.Cache, debug func() bool) *LambdaObserver {
-	return &LambdaObserver{store: st, cache: cache, debug: debug, now: time.Now}
+func NewLambdaObserver(st *store.Store, cache *awsclient.Cache, debug func() bool, routes ...LambdaRouteResolver) *LambdaObserver {
+	var routeResolver LambdaRouteResolver
+	if len(routes) > 0 {
+		routeResolver = routes[0]
+	}
+	return &LambdaObserver{store: st, cache: cache, routes: routeResolver, debug: debug, now: time.Now}
 }
 
 // Observe implements baseapi.InstrumentationObserver. One pass:
 //
-//  1. read intent (which functions the customer marked) and the OTLP destination;
+//  1. read intent (which functions the customer marked) and resolve each function's effective route;
 //  2. list the functions in each region that has marked functions — one ListFunctions per region, the same
 //     call discovery makes, which returns env, layers, State and LastUpdateStatus together;
 //  3. diff each against the desired instrumentation and persist the verdict.
@@ -74,26 +81,19 @@ func (o *LambdaObserver) Observe(ctx context.Context) error {
 	if len(enabled) == 0 {
 		return nil // nothing marked — nothing to be conformant with
 	}
-	dest, haveDest, err := o.store.OTLPExportTarget(ctx)
-	if err != nil {
-		return fmt.Errorf("resolve otlp export target: %w", err)
-	}
-	// Read alongside the target so the observer judges a function against the same configuration the
-	// instrumentor would write — including the credential, which is part of the rendered config.
-	destHeaders, err := o.store.OTLPExportHeaders(ctx)
-	if err != nil {
-		return fmt.Errorf("resolve otlp export headers: %w", err)
-	}
-	if !haveDest {
-		// Without a destination there is no desired instrumentation to compare against — the endpoint is part
-		// of it — and the report already says so (WaitingForDestination). Recording an observation error on top
-		// would blame the read for a configuration gap the customer has already been told about.
-		observeLog.Debug("skipping lambda observation: no OTLP destination configured")
-		return nil
-	}
 	functions, err := o.store.ListLambdaFunctions(ctx)
 	if err != nil {
 		return err
+	}
+	enabledFunctions := make([]store.LambdaFunction, 0, len(functions))
+	for _, fn := range functions {
+		if _, want := enabled[fn.FunctionARN]; want {
+			enabledFunctions = append(enabledFunctions, fn)
+		}
+	}
+	routes, routeErr := o.resolveLambdaRoutes(ctx, enabledFunctions)
+	if routeErr != nil {
+		return fmt.Errorf("resolve lambda OTLP routes: %w", routeErr)
 	}
 
 	byRegion := map[string][]store.LambdaFunction{}
@@ -126,6 +126,36 @@ func (o *LambdaObserver) Observe(ctx context.Context) error {
 			continue
 		}
 		for _, fn := range fns {
+			routing, haveRoute := routes[fn.FunctionARN]
+			if !haveRoute {
+				err := fmt.Errorf("no routing decision was returned for %s", fn.FunctionARN)
+				if serr := o.store.SetLambdaRouting(ctx, fn.FunctionARN, fn.RoutingVia, &baseapi.WorkloadRoutingNote{
+					Code: "routing-error", Message: err.Error(), Transient: true,
+				}); serr != nil {
+					observeLog.Warn("set lambda routing error note failed", "function", fn.FunctionName, "error", serr)
+				}
+				_ = o.store.SetLambdaInstrumentationError(ctx, fn.FunctionARN, lambdaRoutingErrorMessage(err.Error()))
+				errs = append(errs, fmt.Errorf("resolve route for %s: %w", fn.FunctionName, err))
+				continue
+			}
+			if routing.Outcome == domaindest.RoutingError || !routing.Found {
+				note := routing.Note
+				if note == "" {
+					note = routing.Describe()
+				}
+				if serr := o.store.SetLambdaRouting(ctx, fn.FunctionARN, fn.RoutingVia, lambdaRoutingNote(routing)); serr != nil {
+					observeLog.Warn("set lambda routing error note failed", "function", fn.FunctionName, "error", serr)
+				}
+				if serr := o.store.SetLambdaInstrumentationError(ctx, fn.FunctionARN, lambdaRoutingErrorMessage(note)); serr != nil {
+					observeLog.Warn("set lambda routing error failed", "function", fn.FunctionName, "error", serr)
+				}
+				continue
+			}
+			// Publish or clear the fallback explanation while keeping the last applied route. The route is
+			// advanced only after a settled live configuration conforms to the desired target below.
+			if serr := o.store.SetLambdaRouting(ctx, fn.FunctionARN, fn.RoutingVia, workloadRoutingNote(routing)); serr != nil {
+				observeLog.Warn("set lambda routing note failed", "function", fn.FunctionName, "error", serr)
+			}
 			cur, ok := live[fn.FunctionARN]
 			if !ok {
 				// Listed by a previous discovery cycle but gone from this listing: deleted, or moved out of the
@@ -133,8 +163,18 @@ func (o *LambdaObserver) Observe(ctx context.Context) error {
 				// disappearance into a drift verdict.
 				continue
 			}
-			if obs, ok := o.observation(ctx, fn, cur, dest, destHeaders, enabled[fn.FunctionARN]); ok {
+			if obs, ok := o.observation(ctx, fn, cur, routing.Target, routing.Headers, enabled[fn.FunctionARN]); ok {
 				o.persist(ctx, fn, obs)
+				if isLambdaRoutingFailureNote(fn.RoutingNote) {
+					if serr := o.store.ClearLambdaInstrumentationError(ctx, fn.FunctionARN); serr != nil {
+						observeLog.Warn("clear recovered lambda routing error failed", "function", fn.FunctionName, "error", serr)
+					}
+				}
+				if obs.Conformance == baseapi.ConformanceConformant {
+					if serr := o.store.SetLambdaRouting(ctx, fn.FunctionARN, string(routing.Via), workloadRoutingNote(routing)); serr != nil {
+						observeLog.Warn("set lambda routing after conformance failed", "function", fn.FunctionName, "error", serr)
+					}
+				}
 			}
 		}
 	}
@@ -292,6 +332,21 @@ func (o *LambdaObserver) enabledLambdaSources(ctx context.Context) (map[string]e
 		}
 	}
 	return enabled, nil
+}
+
+func (o *LambdaObserver) resolveLambdaRoutes(ctx context.Context, functions []store.LambdaFunction) (map[string]domaindest.Routing, error) {
+	if o.routes != nil {
+		return o.routes.ResolveLambdaRoutes(ctx, functions)
+	}
+	routing, err := o.store.OTLPRouting(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]domaindest.Routing, len(functions))
+	for _, fn := range functions {
+		out[fn.FunctionARN] = routing
+	}
+	return out, nil
 }
 
 // observedPrint / desiredPrint fingerprint the live and wanted instrumentation.

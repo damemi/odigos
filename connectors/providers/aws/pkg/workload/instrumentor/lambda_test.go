@@ -3,14 +3,120 @@ package instrumentor
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 
+	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
+
+type lambdaRouteResolverFunc func(context.Context, []store.LambdaFunction) (map[string]domaindest.Routing, error)
+
+func (f lambdaRouteResolverFunc) ResolveLambdaRoutes(ctx context.Context, functions []store.LambdaFunction) (map[string]domaindest.Routing, error) {
+	return f(ctx, functions)
+}
+
+func TestLambdaConsumersUseTheSameCompletePassRouteResolver(t *testing.T) {
+	fn := store.LambdaFunction{FunctionARN: "arn:aws:lambda:us-east-1:1:function:checkout"}
+	want := domaindest.Routing{
+		Found:   true,
+		Via:     domaindest.RouteCollector,
+		Outcome: domaindest.RoutingCollector,
+		Target:  domaindest.OTLPTarget{Endpoint: "regional:4317", Traces: true},
+	}
+	resolver := lambdaRouteResolverFunc(func(_ context.Context, got []store.LambdaFunction) (map[string]domaindest.Routing, error) {
+		if len(got) != 1 || got[0].FunctionARN != fn.FunctionARN {
+			t.Fatalf("resolver received %+v, want the enabled function", got)
+		}
+		return map[string]domaindest.Routing{fn.FunctionARN: want}, nil
+	})
+
+	inst := NewLambda(nil, nil, nil, nil, resolver)
+	got, err := inst.resolveLambdaRoutes(context.Background(), []store.LambdaFunction{fn})
+	if err != nil {
+		t.Fatalf("instrumentor route resolution: %v", err)
+	}
+	if !reflect.DeepEqual(got[fn.FunctionARN], want) {
+		t.Fatalf("instrumentor route = %+v, want %+v", got[fn.FunctionARN], want)
+	}
+
+	obs := NewLambdaObserver(nil, nil, nil, resolver)
+	got, err = obs.resolveLambdaRoutes(context.Background(), []store.LambdaFunction{fn})
+	if err != nil {
+		t.Fatalf("observer route resolution: %v", err)
+	}
+	if !reflect.DeepEqual(got[fn.FunctionARN], want) {
+		t.Fatalf("observer route = %+v, want %+v", got[fn.FunctionARN], want)
+	}
+}
+
+func TestLambdaRoutingErrorIsMarkedAndRecognizedSeparately(t *testing.T) {
+	message := lambdaRoutingErrorMessage("no global OTLP destination")
+	if !isLambdaRoutingError(message) {
+		t.Fatalf("routing error %q was not recognized", message)
+	}
+	if isLambdaRoutingError("instrumentation layer could not be resolved") {
+		t.Fatal("ordinary instrumentation failures must not be classified as routing errors")
+	}
+	if !isLambdaRoutingFailureNote(&baseapi.WorkloadRoutingNote{Code: "routing-error"}) {
+		t.Fatal("routing-error notes must be recognized for stale-error recovery")
+	}
+	if !isLambdaRoutingFailureNote(&baseapi.WorkloadRoutingNote{Code: "no-destination"}) {
+		t.Fatal("no-destination notes must be recognized for stale-error recovery")
+	}
+	if isLambdaRoutingFailureNote(&baseapi.WorkloadRoutingNote{Code: "collector-not-ready"}) {
+		t.Fatal("nonfatal readiness notes must not be treated as routing errors")
+	}
+}
+
+func TestLambdaRoutingErrorNoteDescribesMissingGlobalFallback(t *testing.T) {
+	routing := domaindest.Routing{
+		Via:     domaindest.RouteDirect,
+		Outcome: domaindest.RoutingError,
+		Reason:  domaindest.ReasonNoDestination,
+		Note:    "No applicable destination: no global OTLP destination is configured, so this workload cannot export telemetry.",
+	}
+	note := lambdaRoutingNote(routing)
+	if note == nil || note.Code != string(domaindest.ReasonNoDestination) || note.Message != routing.Note {
+		t.Fatalf("routing note = %+v, want the resolver's no-destination explanation", note)
+	}
+}
+
+func TestLambdaCollectorConfigOwnsDownstreamHeaders(t *testing.T) {
+	direct := domaindest.OTLPTarget{Endpoint: "global:4317", Insecure: true, Traces: true}
+	collector := domaindest.OTLPTarget{Endpoint: "regional:4317", Insecure: true, Traces: true}
+	headers := map[string]string{"authorization": "Bearer secret"}
+
+	directCfg, err := renderCollectorConfig(direct, headers)
+	if err != nil {
+		t.Fatalf("render direct config: %v", err)
+	}
+	if !strings.Contains(directCfg, "authorization") || !strings.Contains(directCfg, "Bearer secret") {
+		t.Fatalf("direct config lost destination headers: %s", directCfg)
+	}
+	collectorCfg, err := renderCollectorConfig(collector, nil)
+	if err != nil {
+		t.Fatalf("render Collector config: %v", err)
+	}
+	if strings.Contains(collectorCfg, "authorization") || strings.Contains(collectorCfg, "Bearer secret") {
+		t.Fatalf("Collector config must not carry terminal destination headers: %s", collectorCfg)
+	}
+}
+
+func TestLambdaConfigUpdateNeverAttachesVpc(t *testing.T) {
+	input := lambdaConfigUpdateInput("arn:aws:lambda:us-east-1:1:function:checkout", []string{"layer"}, map[string]string{"key": "value"}, aws.String("revision"))
+	if input.VpcConfig != nil {
+		t.Fatal("Lambda instrumentation must never set VpcConfig")
+	}
+	if aws.ToString(input.FunctionName) == "" || input.Environment == nil || len(input.Layers) != 1 {
+		t.Fatalf("update input lost instrumentation fields: %+v", input)
+	}
+}
 
 // TestBuildManifestSnapshotsCustomerConfig is the core safety guarantee for issue 1: rollback must be
 // able to restore a customer's pre-existing values and never delete config it did not add. The manifest

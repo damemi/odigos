@@ -119,6 +119,29 @@ func TestSetLambdaObservationTouchesOnlyObservationState(t *testing.T) {
 	}
 }
 
+// TestSetLambdaRoutingMergesAndClears ensures route state is an independent metadata writer. It must
+// preserve instrumentation and observation state while making both route fields idempotently removable
+// when direct export is restored.
+func TestSetLambdaRoutingMergesAndClears(t *testing.T) {
+	src := readInventorySource(t)
+	stmt := funcBody(t, src, "func (s *Store) SetLambdaRouting")
+	for _, want := range []string{"COALESCE(metadata", "|| $3::jsonb", "- $4::text[]", "metaRoutingVia", "metaRoutingNote", "storedRoutingNote"} {
+		if !strings.Contains(stmt, want) {
+			t.Errorf("SetLambdaRouting is missing %s; route updates must preserve unrelated metadata and clear stale route state", want)
+		}
+	}
+}
+
+// TestLambdaRoutingIsReported verifies Lambda workload reports read the persisted explanatory note. The
+// route itself is consumed by the instrumentor from lambdaSelectCols; the report only needs the note so a
+// fallback or an incompatible network is visible to the user.
+func TestLambdaRoutingIsReported(t *testing.T) {
+	sql := workloadQueries()[0].sql
+	if !strings.Contains(sql, "metadata->'"+metaRoutingNote+"'") {
+		t.Fatalf("Lambda workload query does not select %s", metaRoutingNote)
+	}
+}
+
 // TestSettlingDerivedInTheReportQuery covers the fact discovery newly captures, at the place the REPORT reads it.
 // A configuration change still being applied looks identical to a half-applied instrumentation, so this
 // derivation is what stops every customer deploy from flashing a drift error while it lands.

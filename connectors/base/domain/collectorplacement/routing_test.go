@@ -51,12 +51,12 @@ func TestRoutingTargetsContainOneRegionalCollector(t *testing.T) {
 	}
 }
 
-func TestRegionalRoutingUsesHostNetworkWithoutExtraEvidence(t *testing.T) {
+func TestRegionalRoutingUsesHostNetworkWithIngressEvidence(t *testing.T) {
 	plan := Resolve(Input{
 		Networks: refs("vpc-host"), Sources: []Source{source("svc", "vpc-host")}, Settings: regionalSettings("vpc-host"),
 	})
 	routing := destination.ResolveRoutingForRegion(
-		routingDestinations(), RoutingTargets(plan, endpointsFor(plan)), region, "vpc-host", destination.ReachabilityUnknown,
+		routingDestinations(), RoutingTargets(plan, endpointsFor(plan)), region, "vpc-host", destination.ReachabilityReachable,
 	)
 	if routing.Outcome != destination.RoutingCollector || routing.Network != "vpc-host" {
 		t.Fatalf("routing = %+v, want the regional Collector", routing)

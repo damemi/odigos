@@ -234,7 +234,7 @@ func TestResolverSelectedEndpointDrivesAlreadyInstrumented(t *testing.T) {
 	direct := domaindest.ResolveRoutingForRegion(dests, nil, region, "vpc-app", domaindest.ReachabilityUnknown)
 	collector := domaindest.ResolveRoutingForRegion(dests, []domaindest.CollectorTarget{{
 		Region: region, Network: "vpc-app", Endpoint: "regional.example:4317", Insecure: true, EverReady: true,
-	}}, region, "vpc-app", domaindest.ReachabilityUnknown)
+	}}, region, "vpc-app", domaindest.ReachabilityReachable)
 	if direct.Via != domaindest.RouteDirect || collector.Via != domaindest.RouteCollector {
 		t.Fatalf("resolver routes = direct:%q collector:%q", direct.Via, collector.Via)
 	}

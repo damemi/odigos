@@ -17,12 +17,11 @@ import (
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorownership"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/deployer"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/placement"
-	awscollectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
+	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
 )
 
 const (
@@ -504,7 +503,7 @@ func testObserver(clients *fakeClients, store *fakeStore, mode string) *Observer
 		OpAMPEndpoint:     testEndpoint,
 		Pin:               testPin(),
 		HeartbeatInterval: 30 * time.Second,
-		Settings:          func() awscollectorsettings.Settings { return awscollectorsettings.FromBase(testSettings()) },
+		Settings:          func() collectorsettings.Settings { return testSettings() },
 		Planner:           &fakePlanner{},
 		Store:             store,
 		Clients:           clients,
@@ -517,10 +516,10 @@ func testSettings() collectorsettings.Settings {
 	return collectorsettings.Settings{
 		Enabled: true,
 		Defaults: collectorsettings.Network{
-			Enabled:  true,
-			CPU:      collectorsettings.DefaultCPU,
-			Memory:   collectorsettings.DefaultMemory,
-			Provider: map[string]any{awscollectorsettings.KeyClusterRef: deployer.ClusterName()},
+			Enabled:    true,
+			CPU:        collectorsettings.DefaultCPU,
+			Memory:     collectorsettings.DefaultMemory,
+			ClusterRef: deployer.ClusterName(),
 			Scaling: collectorsettings.Scaling{
 				Mode: collectorsettings.ScalingManual, DesiredCount: collectorsettings.DefaultDesiredCount,
 			},
