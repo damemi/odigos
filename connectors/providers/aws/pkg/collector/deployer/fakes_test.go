@@ -91,6 +91,7 @@ func (f *fakeLogs) TagResource(_ context.Context, in *cloudwatchlogs.TagResource
 
 type fakeSecret struct {
 	arn         string
+	description string
 	tags        map[string]string
 	versions    map[string][]string
 	deletedDate *time.Time
@@ -167,9 +168,10 @@ func (f *fakeSecrets) CreateSecret(_ context.Context, in *secretsmanager.CreateS
 		tags[aws.ToString(t.Key)] = aws.ToString(t.Value)
 	}
 	s := &fakeSecret{
-		arn:      "arn:aws:secretsmanager:" + testRegion + ":" + testAccount + ":secret:" + name + "-AbCdEf",
-		tags:     tags,
-		versions: map[string][]string{},
+		arn:         "arn:aws:secretsmanager:" + testRegion + ":" + testAccount + ":secret:" + name + "-AbCdEf",
+		description: aws.ToString(in.Description),
+		tags:        tags,
+		versions:    map[string][]string{},
 	}
 	f.secrets[name] = s
 	return &secretsmanager.CreateSecretOutput{ARN: aws.String(s.arn), Name: in.Name}, nil

@@ -38,6 +38,12 @@ const (
 	// licenseSecretLeaf names the licence secret within a region. Not a network id, and it cannot
 	// collide with one: every VPC id begins "vpc-".
 	licenseSecretLeaf = "license"
+	// bootstrapSecretLeaf names the cold-start configuration secret, one level BELOW the credential
+	// secret's own name. Secrets Manager names are flat strings, so `…/credential` and
+	// `…/credential/bootstrap`
+	// are two unrelated secrets that happen to read as a hierarchy — which is what the execution role's
+	// prefix grant already covers and what makes this need no policy change.
+	bootstrapSecretLeaf = "bootstrap"
 )
 
 // LogGroupName is the region's shared log group for this connector's Collectors.
@@ -65,12 +71,26 @@ func LicenseSecretName(connector, region string) string {
 	return secretPrefix + connector + "/" + region + "/" + licenseSecretLeaf
 }
 
+// BootstrapSecretName is the per-Collector secret holding the configuration a cold start serves when the
+// OpAMP endpoint is unreachable.
+//
+// A secret rather than a plain environment value because a Collector configuration carries its
+// exporters' credentials: on ECS every holder of ecs:DescribeTaskDefinition can read a plain value,
+// which is a far wider set of people than those who can read a secret.
+//
+// Its own secret rather than a second version of the credential's, because the two have different
+// lifetimes — this one is rewritten whenever a destination changes, and the credential is rotated on
+// demand — and sharing would make a configuration change overwrite an Authorization header.
+func BootstrapSecretName(connector, region string) string {
+	return CredentialSecretName(connector, region) + "/" + bootstrapSecretLeaf
+}
+
 // Partition returns the ARN partition a region belongs to.
 //
 // Not hardcoded to "aws" even though the connector only reaches the commercial partition today
 // (EnabledRegions calls ec2:DescribeRegions in us-east-1). A hardcoded partition does not fail — it
-// produces a syntactically valid policy whose resource ARNs match nothing, so the role is created, the
-// task starts, and the secret fetch is denied with a message about the secret rather than the policy.
+// produces a syntactically valid ARN that matches nothing, so the task starts and the secret fetch is
+// denied with a message about the secret rather than the configured role.
 func Partition(region string) string {
 	switch {
 	case strings.HasPrefix(region, "us-gov-"):

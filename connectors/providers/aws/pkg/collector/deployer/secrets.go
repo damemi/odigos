@@ -15,19 +15,29 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 )
 
-// TagLicenseFingerprint records WHICH licence value a secret currently holds.
+// Tags recording WHICH value a secret currently holds.
 //
-// It exists because the connector cannot read its own secrets back — it holds no
-// secretsmanager:GetSecretValue at all, by design — so without it there is no way to tell an
-// unchanged licence token from a renewed one, and the only safe assumption would be "renewed", which
-// writes a new secret version on every reconcile pass for ever.
+// They exist because the connector cannot read its own secrets back — it holds no
+// secretsmanager:GetSecretValue at all, by design — so without them there is no way to tell an
+// unchanged value from a replaced one, and the only safe assumption would be "replaced", which writes a
+// new secret version on every reconcile pass for ever.
 //
-// Eight hex characters of a SHA-256 digest: enough to tell two tokens apart, useless for recovering
-// either. The same value collectorcredential.Secret.Fingerprint documents as safe to log.
+// The value is a digest, never a prefix of the secret: enough to tell two values apart and useless for
+// recovering either. The same thing collectorcredential.Secret.Fingerprint documents as safe to log.
 //
-// Not part of the ownership tag set — it authorizes nothing and joins nothing — but it obeys the
-// same one-spelling-on-every-cloud rule, so the Azure and GCP deployers can use it unchanged.
-const TagLicenseFingerprint = "odigos-license-fingerprint"
+// One tag per CONCERN rather than one shared "fingerprint" tag, because the two live on different
+// secrets with different lifetimes and a shared spelling would invite the mistake of comparing one
+// against the other. Neither is part of the ownership tag set — they authorize nothing and join
+// nothing — but both obey the same one-spelling-on-every-cloud rule, so the Azure and GCP deployers can
+// use them unchanged.
+const (
+	// TagLicenseFingerprint marks the licence token a secret holds.
+	TagLicenseFingerprint = "odigos-license-fingerprint"
+	// TagBootstrapFingerprint marks the Collector configuration a bootstrap secret holds. It is the
+	// configuration's own hash — the same value managed_collectors.config_hash records — so a reader can
+	// see at a glance whether the document a cold start would serve is the one Odigos last pushed.
+	TagBootstrapFingerprint = "odigos-bootstrap-fingerprint"
+)
 
 // SecretsClient is the slice of Secrets Manager this package uses.
 //
@@ -57,6 +67,10 @@ type SecretInput struct {
 	NetworkID string
 	Identity  collectorownership.Identity
 	Mode      string
+	// FingerprintTag is which of the fingerprint tags above to read back into SecretState.Fingerprint.
+	// Empty for a secret whose value nothing compares — the OpAMP credential, whose replacement is
+	// decided by the credential row rather than by what the secret holds.
+	FingerprintTag string
 }
 
 // SecretState is what an existing secret is holding.
@@ -66,8 +80,9 @@ type SecretState struct {
 	// HasValue reports whether any version exists. A secret is created EMPTY — see EnsureSecret — so
 	// false means nothing has been written to it yet.
 	HasValue bool
-	// LicenseFingerprint is the TagLicenseFingerprint value, empty when nothing recorded one.
-	LicenseFingerprint string
+	// Fingerprint is the value of SecretInput.FingerprintTag, empty when nothing recorded one or when no
+	// tag was asked for.
+	Fingerprint string
 	// Restored reports whether this pass brought the secret back from scheduled deletion.
 	Restored bool
 }
@@ -130,9 +145,9 @@ func EnsureSecret(ctx context.Context, api SecretsClient, in SecretInput) (Secre
 	}
 
 	state := SecretState{
-		ARN:                arn,
-		HasValue:           len(described.VersionIdsToStages) > 0,
-		LicenseFingerprint: describedTags(described)[TagLicenseFingerprint],
+		ARN:         arn,
+		HasValue:    len(described.VersionIdsToStages) > 0,
+		Fingerprint: fingerprintOf(described, in.FingerprintTag),
 	}
 
 	if described.DeletedDate != nil {
@@ -185,16 +200,24 @@ func PutSecretValue(ctx context.Context, api SecretsClient, secretARN string, va
 	return aws.ToString(out.VersionId), nil
 }
 
-// RecordLicenseFingerprint stamps which licence value a secret now holds, so the next pass can tell an
-// unchanged token from a renewed one. See TagLicenseFingerprint.
-func RecordLicenseFingerprint(ctx context.Context, api SecretsClient, secretARN, fingerprint string) error {
+// RecordSecretFingerprint stamps which value a secret now holds, so the next pass can tell an unchanged
+// value from a replaced one. See the fingerprint tags above.
+func RecordSecretFingerprint(ctx context.Context, api SecretsClient, secretARN, tag, fingerprint string) error {
 	if _, err := api.TagResource(ctx, &secretsmanager.TagResourceInput{
 		SecretId: aws.String(secretARN),
-		Tags:     secretTags(map[string]string{TagLicenseFingerprint: fingerprint}),
+		Tags:     secretTags(map[string]string{tag: fingerprint}),
 	}); err != nil {
-		return fmt.Errorf("record the licence fingerprint on secret %s: %w", secretARN, err)
+		return fmt.Errorf("record the %s on secret %s: %w", tag, secretARN, err)
 	}
 	return nil
+}
+
+// fingerprintOf reads one fingerprint tag off a described secret.
+func fingerprintOf(described *secretsmanager.DescribeSecretOutput, tag string) string {
+	if tag == "" {
+		return ""
+	}
+	return describedTags(described)[tag]
 }
 
 func describedTags(out *secretsmanager.DescribeSecretOutput) map[string]string {

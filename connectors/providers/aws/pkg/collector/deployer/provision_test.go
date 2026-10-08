@@ -2,9 +2,12 @@ package deployer
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 	"testing"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorconfig"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
@@ -64,12 +67,21 @@ func testProvisioner(clients *fakeClients, store *fakeStore, license string) *Pr
 
 func provisionOnce(t *testing.T, p *Provisioner, in SharedInput) (Shared, Prerequisites) {
 	t.Helper()
+	return provisionOnceWith(t, p, in, testConfigDocument())
+}
+
+// provisionOnceWith is the same pass with a chosen rendered configuration, which is what decides
+// whether a cold-start bootstrap secret is installed at all.
+func provisionOnceWith(t *testing.T, p *Provisioner, in SharedInput, config collectorconfig.Document) (
+	Shared, Prerequisites) {
+	t.Helper()
 	shared, err := p.EnsureShared(context.Background(), in)
 	if err != nil {
 		t.Fatalf("EnsureShared: %v", err)
 	}
 	prereq, err := p.EnsureNetwork(context.Background(), NetworkInput{
-		Key: testKey(), HostNetworkID: testNetwork, Kind: testKind, Mode: in.Mode, Shared: shared, RetentionDays: 7,
+		Key: testKey(), HostNetworkID: testNetwork, Kind: testKind, Mode: in.Mode,
+		Shared: shared, RetentionDays: 7, Config: config,
 		ExecutionRoleARN: "arn:aws:iam::" + testAccount + ":role/OdigosCollectorExecutionRole",
 	})
 	if err != nil {
@@ -77,6 +89,33 @@ func provisionOnce(t *testing.T, p *Provisioner, in SharedInput) (Shared, Prereq
 	}
 	return shared, prereq
 }
+
+// testConfigDocument is a rendered configuration with a destination credential in it, which is the fact
+// that decides how the bootstrap document has to travel.
+func testConfigDocument() collectorconfig.Document {
+	const yaml = `receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+exporters:
+  otlphttp/dest:
+    endpoint: https://ingest.example.test
+    headers:
+      x-api-key: ` + testDestinationCredential + `
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [otlphttp/dest]
+`
+	sum := sha256.Sum256([]byte(yaml))
+	return collectorconfig.Document{YAML: yaml, Hash: hex.EncodeToString(sum[:])}
+}
+
+// testDestinationCredential is what a rendered configuration carries and what must never appear in a
+// task definition, a log line or a status message.
+const testDestinationCredential = "dest-api-key-3f9a2b"
 
 func sharedInput() SharedInput {
 	return SharedInput{Regions: []string{testRegion}, Mode: spec.ModeAutomatic}
@@ -121,6 +160,16 @@ func TestProvisionEndToEnd(t *testing.T) {
 	}
 	if license.tags[TagLicenseFingerprint] == "" {
 		t.Error("no licence fingerprint was recorded, so the next pass would rewrite the value")
+	}
+	for name, secret := range clients.secrets.secrets {
+		if secret.description == "" {
+			t.Errorf("secret %q has no description", name)
+		}
+		for _, r := range secret.description {
+			if r < 0x20 || r > 0x7e {
+				t.Errorf("secret %q description contains an AWS-invalid character %U", name, r)
+			}
+		}
 	}
 }
 

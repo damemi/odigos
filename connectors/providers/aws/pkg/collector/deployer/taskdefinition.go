@@ -86,9 +86,9 @@ type TaskDefinitionInput struct {
 	// OpAMPEndpoint is the PUBLIC endpoint the Collector dials back to, from config.
 	OpAMPEndpoint string
 	// Pin is the image this connector build deploys. Compiled in rather than configured, so a customer
-	// applying a published artifact and a Collector Odigos deployed get identical bytes (§6.5).
+	// applying a published artifact and a Collector Odigos deployed get identical bytes.
 	Pin collectorimage.Pin
-	// Arch, CPU, Memory and ImageRepositoryOverride come from `collector.regions.<region>` (§5.2).
+	// Arch, CPU, Memory and ImageRepositoryOverride come from `collector.regions.<region>`.
 	Arch                    string
 	CPU                     string
 	Memory                  string
@@ -147,9 +147,9 @@ type ContainerSpec struct {
 	Essential bool
 	Command   []string
 	Ports     []int
-	// Environment is plain values. collectorimage.EnvProblems refuses the two secret names here — on
-	// ECS anyone holding ecs:DescribeTaskDefinition can read a plain value, which is a far wider set of
-	// people than those who can read a secret (§6.5).
+	// Environment is plain values. collectorimage.EnvProblems refuses every name in SecretEnvVars here —
+	// on ECS anyone holding ecs:DescribeTaskDefinition can read a plain value, which is a far wider set
+	// of people than those who can read a secret.
 	Environment map[string]string
 	// Secrets maps an environment variable name to the secret ref it is populated from.
 	Secrets map[string]string
@@ -258,7 +258,7 @@ func RenderTaskDefinition(in TaskDefinitionInput) (TaskDefinitionSpec, []collect
 		envCloudConnectorID: in.ConnectorID,
 		envCloudProvider:    string(collectorimage.CloudAWS),
 	}
-	// The shared check §6.5 names: the deployer against the definition it is about to register, the
+	// The shared check names: the deployer against the definition it is about to register, the
 	// artifact guard against every published variant. It refuses the two secret names as plain values.
 	problems = append(problems, collectorimage.EnvProblems(environment)...)
 	problems = append(problems, collectorimage.DeliveryProblems(in.Delivery)...)
@@ -276,7 +276,7 @@ func RenderTaskDefinition(in TaskDefinitionInput) (TaskDefinitionSpec, []collect
 		// nowhere; ECS defaults this, and a default that changes is a default worth not relying on.
 		OperatingSystemFamily: operatingSystemFam,
 		// awsvpc, which is not a choice: a Fargate task has no other network mode, and it is what gives
-		// the task its own ENI — the thing the §7.7 security-group rules are written against.
+		// the task its own ENI — the thing the security-group rules are written against.
 		NetworkMode:             string(ecstypes.NetworkModeAwsvpc),
 		RequiresCompatibilities: []string{string(ecstypes.CompatibilityFargate)},
 		ExecutionRoleARN:        in.ExecutionRoleARN,
@@ -288,13 +288,10 @@ func RenderTaskDefinition(in TaskDefinitionInput) (TaskDefinitionSpec, []collect
 			Ports:     collectorPorts(),
 			// No readonlyRootFilesystem and no volume: the Supervisor writes its instance identity and
 			// cached config under /var/lib/odigos/collector-supervisor, and v1 runs that on the task's
-			// own ephemeral storage (§5.3). EFS is the later opt-in for queue durability.
+			// own ephemeral storage. EFS is the later opt-in for queue durability.
 			Environment: environment,
-			Secrets: map[string]string{
-				collectorimage.EnvOpAMPAuthorization: in.Delivery.CredentialSecretRef,
-				collectorimage.EnvOnPremToken:        in.Delivery.LicenseSecretRef,
-			},
-			LogDriver: logDriverAWSLogs,
+			Secrets:     collectorSecrets(in.Delivery),
+			LogDriver:   logDriverAWSLogs,
 			LogOptions: map[string]string{
 				logOptionGroup:  in.LogGroup,
 				logOptionRegion: in.Region,
@@ -317,7 +314,27 @@ func ecsCPUArchitecture(arch collectorimage.Arch) (string, bool) {
 	}
 }
 
-// collectorPorts are the four ports §5 lists. 13134 is included even though it is never exposed through
+// collectorSecrets maps the environment variables a Collector's secret material arrives in to the refs
+// it comes from.
+//
+// The bootstrap document is included ONLY when a secret actually holds one, and that condition is the
+// whole reason this is a function. ECS resolves every `secrets` entry when a task starts and fails the
+// task if one cannot be read, so a reference to a secret with no version produces a
+// ResourceInitializationError — a Collector that will not start at all, caused by the optional mitigation
+// that exists to keep one running. The licence follows the same rule one level up: EnsureNetwork
+// withholds its ref when the connector holds no token.
+func collectorSecrets(delivery collectorimage.Delivery) map[string]string {
+	secrets := map[string]string{
+		collectorimage.EnvOpAMPAuthorization: delivery.CredentialSecretRef,
+		collectorimage.EnvOnPremToken:        delivery.LicenseSecretRef,
+	}
+	if delivery.BootstrapSecretRef != "" {
+		secrets[collectorimage.EnvBootstrapConfig] = delivery.BootstrapSecretRef
+	}
+	return secrets
+}
+
+// collectorPorts are the four ports lists. 13134 is included even though it is never exposed through
 // the load balancer: the container listens on it, and a task definition that did not declare it would
 // leave the Supervisor's own health endpoint undocumented in the one place an operator looks.
 func collectorPorts() []int {
@@ -349,7 +366,7 @@ func imagePin(in TaskDefinitionInput) collectorimage.Pin {
 // It registers a revision only when the rendered definition differs from the family's ACTIVE one, and
 // that restraint is the acceptance criterion because of what a revision costs downstream: the service
 // rolls onto it, every task is replaced, and a Collector on ephemeral storage loses its queue when it
-// restarts (§5.3). A comparison that was wrong in the churning direction would replace every Collector
+// restarts. A comparison that was wrong in the churning direction would replace every Collector
 // in the fleet on every reconcile pass, for ever, and nothing in the resulting behaviour would look
 // like a bug — just a Collector that is always mid-deployment.
 func EnsureTaskDefinition(ctx context.Context, api TaskDefinitionClient, in TaskDefinitionInput) (TaskDefinition, error) {
@@ -592,7 +609,7 @@ func checkFargateSize(region, cpu, memory string) []collectorstatus.Problem {
 			return nil
 		}
 		return refuse(fmt.Sprintf("Fargate does not offer %d MiB of memory with %d CPU units; with that CPU "+
-			"it offers %s. Set collector.regions.%s.cpu and .memory to a pair Fargate supports — §8.1 lists "+
+			"it offers %s. Set collector.regions.%s.cpu and .memory to a pair Fargate supports — lists "+
 			"the three sizes Odigos suggests", memoryValue, cpuValue, size.describe(), region))
 	}
 	return refuse(fmt.Sprintf("%d is not a Fargate CPU size; Fargate takes %s. Set "+

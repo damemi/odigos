@@ -7,8 +7,9 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 )
 
-// Environment variables that carry secret material into a managed Collector. Both must arrive as a
-// secret-store reference, never a plain environment value.
+// Environment variables that carry secret material into a managed Collector. Every one of them must
+// arrive as a secret-store reference, never a plain environment value — see SecretEnvVars, which is the
+// list the deployer and the artifact guard both check against.
 const (
 	// EnvOnPremToken is the enterprise licence token. odigosenterpriseauthextension refuses to start
 	// without a valid one and shuts the Collector down if it later expires.
@@ -19,7 +20,14 @@ const (
 
 // SecretEnvVars are the variables that may only be populated from the secret store. Deployer and
 // artifact guard both check against this list so they cannot disagree.
-func SecretEnvVars() []string { return []string{EnvOnPremToken, EnvOpAMPAuthorization} }
+//
+// EnvBootstrapConfig is here for a reason that is easy to miss: it is a CONFIGURATION rather than a
+// token, and a configuration carries its exporters' credentials. A published artifact that set it inline
+// would put a customer's destination API key in a workload definition every holder of
+// ecs:DescribeTaskDefinition can read.
+func SecretEnvVars() []string {
+	return []string{EnvOnPremToken, EnvOpAMPAuthorization, EnvBootstrapConfig}
+}
 
 // LicenseRenewBefore is how far ahead of licence expiry a redeploy must be scheduled.
 // Longer than the OpAMP credential lead time: Odigos can mint a replacement OpAMP credential on
@@ -38,6 +46,16 @@ type Delivery struct {
 	// One shared secret would mean every credential rotation rewrites the licence and every licence
 	// renewal rewrites the credential.
 	CredentialSecretRef string
+	// BootstrapSecretRef holds ODIGOS_COLLECTOR_BOOTSTRAP_CONFIG, and is OPTIONAL — it is the only ref
+	// here that is. Without it a cold start during a control-plane outage serves the inert bundled
+	// configuration, which is v1's documented behaviour and not a fault; with it, that cold start
+	// serves the last configuration Odigos published.
+	//
+	// Its own secret, and the argument is the same one that separates the other two: this one's lifetime
+	// is the CONFIGURATION's — it is rewritten whenever a destination changes — while the licence is
+	// renewed yearly and the credential is rotated on demand. Sharing would make a destination change
+	// rewrite the licence.
+	BootstrapSecretRef string
 }
 
 // DeliveryProblems reports a delivery that cannot work.
@@ -68,13 +86,28 @@ func DeliveryProblems(d Delivery) []collectorstatus.Problem {
 				"credential rotation rewrites the licence and every licence renewal rewrites the credential",
 		})
 	}
+	// The bootstrap ref is optional, so its absence is not a problem. Sharing a secret with either of the
+	// others is, and for a sharper reason than theirs: the bootstrap document is rewritten whenever a
+	// destination changes, so a shared secret would replace a licence or a credential with a YAML
+	// document — and the Collector would then start with an Authorization header that is a config file.
+	if d.BootstrapSecretRef != "" &&
+		(d.BootstrapSecretRef == d.LicenseSecretRef || d.BootstrapSecretRef == d.CredentialSecretRef) {
+		problems = append(problems, collectorstatus.Problem{
+			Code:     "BootstrapSharesASecret",
+			Severity: collectorstatus.SeverityError,
+			Message: "the cold-start bootstrap configuration is stored in the same secret as the licence " +
+				"token or the OpAMP credential. The bootstrap document is rewritten whenever a destination " +
+				"changes, so sharing means a configuration change overwrites a credential and the Collector " +
+				"starts presenting a YAML document as its Authorization header",
+		})
+	}
 	return problems
 }
 
 // EnvProblems reports a rendered container environment that carries secret material as a plain value.
 // Deployer and artifact guard both run this: on ECS anyone with ecs:DescribeTaskDefinition
-// can read a plain env value — a wider set than secret readers. Checks two specific names are absent;
-// it does not try to find secrets by shape.
+// can read a plain env value — a wider set than secret readers. Checks that the SecretEnvVars names are
+// absent; it does not try to find secrets by shape.
 func EnvProblems(env map[string]string) []collectorstatus.Problem {
 	var problems []collectorstatus.Problem
 	for _, name := range SecretEnvVars() {

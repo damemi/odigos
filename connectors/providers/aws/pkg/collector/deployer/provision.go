@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorconfig"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
@@ -103,6 +104,15 @@ type NetworkInput struct {
 	Shared Shared
 	// RetentionDays is the resolved `logRetentionDays`.
 	RetentionDays int
+	// Config is the configuration this Collector would be pushed over OpAMP, for the cold-start
+	// bootstrap secret.
+	//
+	// Passed in rather than rendered here, and that is the whole point: the bootstrap document has to be
+	// the SAME bytes the OpAMP server serves, or a cold start comes up on a configuration that was never
+	// published and the drift is invisible. An empty Document means there is nothing to install — no
+	// destinations resolved yet, or rendering was refused — and a cold start then serves the inert
+	// bundled configuration, which is v1's documented behaviour rather than a fault.
+	Config collectorconfig.Document
 }
 
 // Prerequisites is everything one Collector needs before its ECS service can be created.
@@ -184,7 +194,7 @@ func (p *Provisioner) EnsureNetwork(ctx context.Context, in NetworkInput) (Prere
 
 	credentialSecret, secretProblems, err := EnsureSecret(ctx, secretsAPI, SecretInput{
 		Name:        CredentialSecretName(p.Identity.ConnectorName, in.Key.Region),
-		Description: "Odigos managed Collector — OpAMP credential for " + in.Key.Region + " (host " + in.HostNetworkID + ")",
+		Description: "Odigos managed Collector - OpAMP credential for " + in.Key.Region + " (host " + in.HostNetworkID + ")",
 		Connector:   p.Identity.ConnectorName,
 		ConnectorID: p.Identity.ConnectorID,
 		Region:      in.Key.Region,
@@ -219,11 +229,82 @@ func (p *Provisioner) EnsureNetwork(ctx context.Context, in NetworkInput) (Prere
 		return out, err
 	}
 
+	// Last, and deliberately after the credential: the bootstrap document is the only OPTIONAL half of a
+	// Collector's delivery, so a failure here must not cost the Collector the two secrets it cannot run
+	// without. Its own problems are reported and the rest of the delivery stands.
+	bootstrapRef, bootstrapProblems, err := p.ensureBootstrap(ctx, secretsAPI, in)
+	out.Problems = append(out.Problems, bootstrapProblems...)
+	if err != nil {
+		return out, err
+	}
+	out.Delivery.BootstrapSecretRef = bootstrapRef
+
 	// The shared check both paths run: the deployer against the delivery it is about to build a task
 	// definition from, the artifact guard against every published variant. Reported last so a specific
 	// cause above it reads first.
 	out.Problems = append(out.Problems, collectorimage.DeliveryProblems(out.Delivery)...)
 	return out, nil
+}
+
+// ensureBootstrap converges the cold-start configuration secret and returns its ARN, or empty.
+//
+// Empty is a normal answer and not a failure. Without a bootstrap document a cold start during an outage
+// of the connector or the gateway serves the inert bundled configuration — v1's documented behaviour
+// — so nothing here refuses a deploy, and the ref is WITHHELD rather than returned pointing at an
+// empty secret: a task definition that referenced one would fail to start with a
+// ResourceInitializationError, which is the mitigation breaking the thing it exists to protect.
+//
+// The value is written only when the configuration has actually changed, which TagBootstrapFingerprint
+// is what answers — the connector holds no permission to read the secret back. Writing
+// unconditionally would mint a secret version on every reconcile pass; never rewriting would leave a
+// cold start serving a configuration from before the customer's last destination change.
+//
+// Rewriting does not reach a RUNNING task. ECS resolves a `secrets` entry when a task starts, so a task
+// holds whatever the document was then — which is exactly the semantics a startup fallback wants: the
+// document a cold start serves is the one that was current when that task began.
+func (p *Provisioner) ensureBootstrap(ctx context.Context, api SecretsClient, in NetworkInput) (
+	string, []collectorstatus.Problem, error) {
+	encoded := collectorimage.EncodeBootstrapConfig(in.Config.YAML)
+	if encoded.Empty() {
+		// Nothing rendered for this network yet. No secret is created either: an empty secret is an
+		// object in a customer's account that describes a mitigation nobody can use, and the next pass
+		// makes it the moment there is something to put in it.
+		return "", nil, nil
+	}
+
+	state, problems, err := EnsureSecret(ctx, api, SecretInput{
+		Name:           BootstrapSecretName(p.Identity.ConnectorName, in.Key.Region),
+		Description:    "Odigos managed Collector - cold-start configuration for " + in.Key.Region + " (host " + in.HostNetworkID + ")",
+		Connector:      p.Identity.ConnectorName,
+		ConnectorID:    p.Identity.ConnectorID,
+		Region:         in.Key.Region,
+		NetworkID:      in.HostNetworkID,
+		Identity:       p.Identity,
+		Mode:           in.Mode,
+		FingerprintTag: TagBootstrapFingerprint,
+	})
+	if err != nil || state.ARN == "" {
+		return "", problems, err
+	}
+
+	// The CONFIGURATION's hash, not the encoded value's: it is the same identity the OpAMP push compares
+	// and the same one managed_collectors.config_hash records, so a reader can tell whether the document
+	// a cold start would serve is the one Odigos last published.
+	if state.HasValue && state.Fingerprint == in.Config.Hash {
+		return state.ARN, problems, nil
+	}
+	if _, err := PutSecretValue(ctx, api, state.ARN, encoded); err != nil {
+		return "", problems, err
+	}
+	if err := RecordSecretFingerprint(ctx, api, state.ARN, TagBootstrapFingerprint, in.Config.Hash); err != nil {
+		// The value landed and the marker did not, so the next pass rewrites it: one wasted secret
+		// version per pass until the tag write succeeds. Not fatal, and not silent.
+		log.Warn("wrote the collector cold-start configuration but could not record its fingerprint",
+			"region", in.Key.Region, "network", in.HostNetworkID, "secret", state.ARN, "error", err)
+	}
+	log.Info("installed the collector cold-start configuration",
+		"region", in.Key.Region, "network", in.HostNetworkID, "secret", state.ARN, "config", in.Config.Hash)
+	return state.ARN, problems, nil
 }
 
 // ensureLicense converges the region's licence secret and returns its ARN.
@@ -240,13 +321,14 @@ func (p *Provisioner) EnsureNetwork(ctx context.Context, in NetworkInput) (Prere
 func (p *Provisioner) ensureLicense(ctx context.Context, api SecretsClient, in NetworkInput) (string, []collectorstatus.Problem, error) {
 	state, problems, err := EnsureSecret(ctx, api, SecretInput{
 		Name:        LicenseSecretName(p.Identity.ConnectorName, in.Key.Region),
-		Description: "Odigos managed Collector — enterprise licence token for " + in.Key.Region,
+		Description: "Odigos managed Collector - enterprise licence token for " + in.Key.Region,
 		Connector:   p.Identity.ConnectorName,
 		ConnectorID: p.Identity.ConnectorID,
 		Region:      in.Key.Region,
 		// No network: one licence secret serves every Collector in the region.
-		Identity: p.Identity,
-		Mode:     in.Mode,
+		Identity:       p.Identity,
+		Mode:           in.Mode,
+		FingerprintTag: TagLicenseFingerprint,
 	})
 	if err != nil || state.ARN == "" {
 		return "", problems, err
@@ -267,13 +349,13 @@ func (p *Provisioner) ensureLicense(ctx context.Context, api SecretsClient, in N
 	}
 
 	fingerprint := p.License.Fingerprint()
-	if state.HasValue && state.LicenseFingerprint == fingerprint {
+	if state.HasValue && state.Fingerprint == fingerprint {
 		return state.ARN, problems, nil
 	}
 	if _, err := PutSecretValue(ctx, api, state.ARN, p.License); err != nil {
 		return "", problems, err
 	}
-	if err := RecordLicenseFingerprint(ctx, api, state.ARN, fingerprint); err != nil {
+	if err := RecordSecretFingerprint(ctx, api, state.ARN, TagLicenseFingerprint, fingerprint); err != nil {
 		// The value landed and the marker did not, so the next pass rewrites the value: one wasted
 		// secret version per pass until the tag write succeeds. Not fatal, and not silent.
 		log.Warn("wrote the collector licence secret but could not record its fingerprint",
