@@ -6,6 +6,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	elb "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 
@@ -49,4 +50,12 @@ func (c cachedClients) LoadBalancers(ctx context.Context, region string) (LoadBa
 		return nil, fmt.Errorf("resolve aws config for %s: %w", region, err)
 	}
 	return elb.NewFromConfig(cfg), nil
+}
+
+func (c cachedClients) ECS(ctx context.Context, region string) (ECSClient, error) {
+	cfg, err := c.cache.Config(ctx, region)
+	if err != nil {
+		return nil, fmt.Errorf("resolve aws config for %s: %w", region, err)
+	}
+	return ecs.NewFromConfig(cfg), nil
 }

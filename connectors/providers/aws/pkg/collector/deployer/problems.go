@@ -28,6 +28,20 @@ const (
 	// ProblemLoadBalancerSubnetDrift: the load balancer is not in the subnets placement chose. Degraded:
 	// it works in the zones it has, and moving it would re-point every workload on the network.
 	ProblemLoadBalancerSubnetDrift = "CollectorLoadBalancerSubnetDrift"
+	// ProblemClusterRequired: AWS Collector deployment requires a customer-provisioned ECS cluster.
+	ProblemClusterRequired = "CollectorClusterRequired"
+	// ProblemClusterMissing: `clusterArn` names a cluster Odigos cannot find. Refused — Odigos never
+	// creates a cluster.
+	ProblemClusterMissing = "CollectorClusterMissing"
+	// ProblemSpotUnavailable: useFargateSpot is set but the cluster has no FARGATE_SPOT association.
+	// Degraded: the Collector runs on on-demand capacity, so what is lost is the saving.
+	ProblemSpotUnavailable = "CollectorFargateSpotUnavailable"
+	// ProblemImageUnavailable: no image can be resolved for this network — no pin in the build, or an
+	// architecture the pinned manifest list does not carry. Refused before any write.
+	ProblemImageUnavailable = "CollectorImageUnavailable"
+	// ProblemTaskSizeInvalid: the cpu/memory pair is not one Fargate offers. Refused, because
+	// RegisterTaskDefinition would fail every pass with an error that names no field.
+	ProblemTaskSizeInvalid = "CollectorTaskSizeInvalid"
 	// ProblemManualModeProvisioning: provisioning was asked for on a manual-mode Collector. A guard,
 	// not a customer-facing condition — the coordinator wires no deployer for a manual-mode type at all
 	// (api.CollectorDeployer), so reaching this means something bypassed that.

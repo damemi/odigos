@@ -144,3 +144,26 @@ func CheckDataPlaneNames(networkID, region string) []collectorstatus.Problem {
 	}
 	return problems
 }
+
+// The workload object names. The task definition family and the shared regional cluster.
+const (
+	// clusterName is the ECS cluster every Collector in a region runs in. One per region rather than one
+	// per network: a cluster is a namespace and a capacity-provider association, not an isolation
+	// boundary, so a cluster per VPC would multiply objects without separating anything.
+	clusterName = "odigos-collector"
+	// taskDefinitionPrefix names the family. A family holds the revisions of one regional Collector, so
+	// it is per region. Host VPCs are placement metadata and must not create additional regional identity.
+	taskDefinitionPrefix = "odigos-collector-"
+)
+
+// ClusterName is the shared regional cluster's name.
+func ClusterName() string { return clusterName }
+
+// TaskDefinitionFamily is the family holding one region's Collector revisions.
+func TaskDefinitionFamily(region string) string { return taskDefinitionPrefix + region }
+
+// CollectorContainerName is the single container in the task definition. Named rather than inlined
+// because the ECS service's load balancer attachment has to name the same container, and the two
+// disagreeing produces a service that will not start with an error about a container that "does not
+// exist" in a definition where it plainly does.
+const CollectorContainerName = "collector"

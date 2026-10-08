@@ -49,11 +49,12 @@ func TestEnsureCredentialIssuesInstallsAndActivates(t *testing.T) {
 	if strings.Join(store.calls, "|") != strings.Join(want, "|") {
 		t.Errorf("store calls =\n  %v\nwant\n  %v", store.calls, want)
 	}
-
-	// The value reached the secret store, and the row records only its hash.
+	// What reached the secret store is the COMPLETE Authorization header, because the Supervisor copies
+	// ODIGOS_OPAMP_AUTHORIZATION into the header verbatim — a bare token arrives with no scheme and the
+	// gateway refuses it.
 	stored := secrets.secrets[CredentialSecretName(testConnector, testRegion)].values
-	if len(stored) != 1 || !strings.HasPrefix(stored[0], collectorcredential.TokenPrefix) {
-		t.Fatalf("what reached the secret store is not an Odigos Collector credential: %d version(s)", len(stored))
+	if len(stored) != 1 || !strings.HasPrefix(stored[0], "Bearer "+collectorcredential.TokenPrefix) {
+		t.Fatalf("what reached the secret store is not a Bearer header carrying an Odigos Collector credential: %d version(s)", len(stored))
 	}
 	record, err := store.CollectorCredential(context.Background(), cred.CollectorID, cred.CredentialID)
 	if err != nil {

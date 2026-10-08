@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorgateway"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorownership"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
@@ -123,7 +124,12 @@ func EnsureCredential(ctx context.Context, store CredentialStore, secrets Secret
 	// The row is pending until the value reaches the secret store, and the gateway refuses a pending
 	// credential — so a value that never left the issuer cannot authenticate anything. These are two
 	// failures that happen independently, which is exactly why they are two steps.
-	version, err := PutSecretValue(ctx, secrets, in.SecretARN, issued.Minted.Secret)
+	// The COMPLETE Authorization header, not the bare token. The Supervisor copies
+	// ODIGOS_OPAMP_AUTHORIZATION into the header verbatim, so a secret holding the bare value produces a
+	// header with no scheme, which the gateway refuses — reported as "deployed but never connected", the
+	// one failure the connector cannot diagnose because it does not read the secret back. The verifier
+	// stays the hash of the bare token; this adds a transport scheme, not a second secret.
+	version, err := PutSecretValue(ctx, secrets, in.SecretARN, collectorgateway.AuthorizationHeader(issued.Minted.Secret))
 	if err != nil {
 		// The credential stays pending and unusable. Left rather than cleaned up: the next pass sees a
 		// non-live credential and issues a fresh one, and deleting a row whose value may or may not have

@@ -203,8 +203,9 @@ func TestPutSecretValueWritesTheValueAndReturnsItsVersion(t *testing.T) {
 	if len(stored) != 1 || stored[0] != minted.Secret.Reveal() {
 		t.Fatal("the value that reached the secret store is not the one that was minted")
 	}
-	// The credential in the store must be the one whose hash was persisted, or the gateway can never
-	// authenticate it — reported as "deployed but never connected", with nothing to diagnose it.
+	// PutSecretValue writes exactly what it is handed, byte for byte, and nothing in between transforms
+	// it. That is what lets EnsureCredential hand it the complete Authorization header while the
+	// verifier stays the hash of the bare token — see installedCredential.
 	rehashed := collectorcredential.NewSecret(stored[0])
 	hash, err := rehashed.Hash()
 	if err != nil || hash != minted.Hash {

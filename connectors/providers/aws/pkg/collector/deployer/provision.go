@@ -11,6 +11,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
 	awsingress "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/ingress"
+	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
 )
 
 // Clients supplies the AWS clients this package needs, per region where that matters.
@@ -19,6 +20,16 @@ type Clients interface {
 	Secrets(ctx context.Context, region string) (SecretsClient, error)
 	EC2(ctx context.Context, region string) (SecurityGroupClient, error)
 	LoadBalancers(ctx context.Context, region string) (LoadBalancerClient, error)
+	// ECS serves both the cluster and the task definition, because they are one API and one client.
+	ECS(ctx context.Context, region string) (ECSClient, error)
+}
+
+// ECSClient is the cluster and task-definition surface together. One interface rather than two, because
+// one *ecs.Client satisfies both halves and splitting it would make the fake in the tests two objects
+// that have to agree about the same region.
+type ECSClient interface {
+	ClusterClient
+	TaskDefinitionClient
 }
 
 // Provisioner provisions Collector identity, logging and credentials for one connector.
@@ -457,4 +468,107 @@ func listenerCertificate(cfg collectoringress.TransportConfig) string {
 		return cfg.CertificateRef
 	}
 	return ""
+}
+
+// WorkloadInput is what converging one regional Collector's runnable definition depends on. The host VPC
+// is placement metadata and is kept separate from the region-only Collector key.
+type WorkloadInput struct {
+	Key           basestore.CollectorKey
+	HostNetworkID string
+	Mode          string
+	// Prerequisites is the result of EnsureNetwork: the roles, the log group and the two secret refs.
+	// Passed in rather than re-derived so the identity half runs once per network per pass.
+	Prerequisites Prerequisites
+	// Settings is the resolved §5.2 tree for this network — size, architecture, image override, the
+	// cluster the customer pointed at, and the Fargate Spot opt-in.
+	Settings collectorsettings.Network
+	// OpAMPEndpoint is the public endpoint the Collector dials back to.
+	OpAMPEndpoint string
+	// Pin is the image this connector build deploys. Supplied rather than read from the package so a
+	// test can pin a digest without the compiled-in one being resolvable.
+	Pin collectorimage.Pin
+}
+
+// Workload is the cluster and the revision a Collector service will run.
+type Workload struct {
+	Cluster        Cluster
+	TaskDefinition TaskDefinition
+	Problems       []collectorstatus.Problem
+}
+
+// Ready reports whether a service could now be created. What the service converge gates on.
+func (w Workload) Ready() bool {
+	return w.Cluster.ARN != "" && w.TaskDefinition.Ready() && !collectorstatus.HasError(w.Problems)
+}
+
+// EnsureWorkload converges the regional cluster and this network's task definition.
+//
+// The cluster first, because a revision is useless without somewhere to run it and creating the cluster
+// is the cheaper of the two to repeat. Both are idempotent, and the steady state performs zero AWS
+// writes: the cluster is described and left alone, and the task definition is registered only when the
+// rendered definition differs from the family's ACTIVE one.
+//
+// Nothing here creates or updates a service. That is deliberate — the revision and the cluster are what
+// a service is built FROM, and separating them keeps "the definition changed" from meaning "the fleet is
+// rolling" until something decides to roll it.
+func (p *Provisioner) EnsureWorkload(ctx context.Context, in WorkloadInput) (Workload, error) {
+	var out Workload
+	if problems := modeGuard(in.Mode); len(problems) > 0 {
+		out.Problems = problems
+		return out, nil
+	}
+	if !in.Prerequisites.Ready() {
+		// The roles, the log group and the two secrets are all named BY the task definition, so a
+		// definition registered without them would be a revision that cannot start — and a revision is
+		// permanent, unlike the failure that produced it.
+		out.Problems = []collectorstatus.Problem{{
+			Code:     ProblemObjectNotOurs,
+			Severity: collectorstatus.SeverityError,
+			Message: fmt.Sprintf("no Collector task definition is registered for %s in %s: its identity, log "+
+				"group or secrets are not ready, and a revision naming any of them before they exist could "+
+				"never start a task", in.HostNetworkID, in.Key.Region),
+		}}
+		return out, nil
+	}
+
+	api, err := p.Clients.ECS(ctx, in.Key.Region)
+	if err != nil {
+		return out, fmt.Errorf("build an ECS client for %s: %w", in.Key.Region, err)
+	}
+
+	cluster, clusterProblems, err := EnsureCluster(ctx, api, ClusterInput{
+		Region:     in.Key.Region,
+		Mode:       in.Mode,
+		Ref:        in.Settings.ClusterRef,
+		SpotWanted: in.Settings.UseFargateSpot,
+	})
+	out.Cluster = cluster
+	out.Problems = append(out.Problems, clusterProblems...)
+	if err != nil {
+		return out, err
+	}
+	if cluster.ARN == "" {
+		return out, nil
+	}
+
+	definition, err := EnsureTaskDefinition(ctx, api, TaskDefinitionInput{
+		HostNetworkID:           in.HostNetworkID,
+		Region:                  in.Key.Region,
+		Connector:               p.Identity.ConnectorName,
+		ConnectorID:             p.Identity.ConnectorID,
+		Identity:                p.Identity,
+		Mode:                    in.Mode,
+		ExecutionRoleARN:        in.Prerequisites.ExecutionRoleARN,
+		LogGroup:                in.Prerequisites.LogGroup,
+		Delivery:                in.Prerequisites.Delivery,
+		OpAMPEndpoint:           in.OpAMPEndpoint,
+		Pin:                     in.Pin,
+		Arch:                    in.Settings.Arch,
+		CPU:                     in.Settings.CPU,
+		Memory:                  in.Settings.Memory,
+		ImageRepositoryOverride: in.Settings.ImageRepositoryOverride,
+	})
+	out.TaskDefinition = definition
+	out.Problems = append(out.Problems, definition.Problems...)
+	return out, err
 }

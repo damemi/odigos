@@ -26,6 +26,26 @@ import (
 // customer's destination credential one step away, in the one place that gets copied into support
 // tickets.
 
+// installedCredential returns what reached the secret store for one Collector, and the bare token
+// inside it.
+//
+// The two differ on purpose: the secret holds the COMPLETE Authorization header, because the Supervisor
+// copies ODIGOS_OPAMP_AUTHORIZATION into the header verbatim — while the verifier the connector
+// persists is the hash of the bare token, which is what the gateway hashes after stripping the scheme.
+func installedCredential(t *testing.T, secrets *fakeSecrets) (header, token string) {
+	t.Helper()
+	s := secrets.secrets[CredentialSecretName(testConnector, testRegion)]
+	if s == nil || len(s.values) != 1 {
+		t.Fatalf("expected exactly one credential version, got %v", s)
+	}
+	header = s.values[0]
+	scheme, value, found := strings.Cut(header, " ")
+	if !found || !strings.EqualFold(scheme, "Bearer") {
+		t.Fatalf("the installed credential is not a complete Authorization header: a bare token arrives with no scheme and the gateway refuses it")
+	}
+	return header, value
+}
+
 // packageSource returns every non-test .go file in this package.
 func packageSource(t *testing.T) map[string]string {
 	t.Helper()
@@ -175,23 +195,21 @@ func TestAFullProvisionLogsNoSecret(t *testing.T) {
 
 	// The credential is minted inside the flow, so it is read back out of the secret store to check the
 	// exact value that exists in this run.
-	credential := clients.secrets.secrets[CredentialSecretName(testConnector, testRegion)]
-	if len(credential.values) != 1 {
-		t.Fatalf("expected exactly one credential version, got %d", len(credential.values))
-	}
-	value := credential.values[0]
-	if strings.Contains(logged, value) {
-		t.Error("the OpAMP credential was logged")
-	}
-	// Not even a prefix long enough to be useful. A token is high-entropy, so any substantial run of it
-	// in a log line means the whole thing is there.
-	if len(value) > 24 && strings.Contains(logged, value[:24]) {
-		t.Error("a usable prefix of the OpAMP credential was logged")
+	header, token := installedCredential(t, clients.secrets)
+	for name, value := range map[string]string{"header": header, "token": token} {
+		if strings.Contains(logged, value) {
+			t.Errorf("the OpAMP credential's %s was logged", name)
+		}
+		// Not even a prefix long enough to be useful. A token is high-entropy, so any substantial run of
+		// it in a log line means the whole thing is there.
+		if len(value) > 24 && strings.Contains(logged, value[:24]) {
+			t.Errorf("a usable prefix of the OpAMP credential's %s was logged", name)
+		}
 	}
 
 	// The fingerprint IS expected — it is what correlates a log line with the credential row and the
 	// audit event, and eight hex characters of a SHA-256 are useless for anything else.
-	fingerprint := collectorcredential.NewSecret(value).Fingerprint()
+	fingerprint := collectorcredential.NewSecret(token).Fingerprint()
 	if !strings.Contains(logged, fingerprint) {
 		t.Errorf("the credential's fingerprint was not logged, so nothing correlates this installation with its row: %s", logged)
 	}
@@ -203,26 +221,29 @@ func TestNoSecretReachesTheStore(t *testing.T) {
 	clients, store := newFakeClients(), newFakeStore()
 	p := testProvisioner(clients, store, testLicense)
 	provisionOnce(t, p, sharedInput())
-
-	credential := clients.secrets.secrets[CredentialSecretName(testConnector, testRegion)]
-	value := credential.values[0]
+	header, token := installedCredential(t, clients.secrets)
 
 	for _, call := range store.calls {
-		if strings.Contains(call, value) || strings.Contains(call, testLicense) {
-			t.Errorf("a secret value reached the database: %s", call)
+		for _, value := range []string{header, token, testLicense} {
+			if strings.Contains(call, value) {
+				t.Errorf("a secret value reached the database: %s", call)
+			}
 		}
 	}
 	for _, record := range store.credentials {
-		if record.TokenSHA256 == value {
+		if record.TokenSHA256 == token || record.TokenSHA256 == header {
 			t.Error("the credential VALUE was persisted where its hash belongs")
 		}
-		hash, err := collectorcredential.NewSecret(value).Hash()
+		// The verifier is the hash of the BARE token, because that is what the gateway hashes after
+		// stripping the scheme. Hashing the header instead would produce a credential that authenticates
+		// nothing and a Collector reported as deployed but never connected.
+		hash, err := collectorcredential.NewSecret(token).Hash()
 		if err != nil || record.TokenSHA256 != hash {
-			t.Errorf("token_sha256 does not verify the value that was installed: %v", err)
+			t.Errorf("token_sha256 does not verify the token inside the installed header: %v", err)
 		}
 	}
 	for _, row := range store.rows {
-		if strings.Contains(row.CredentialRef, value) {
+		if strings.Contains(row.CredentialRef, token) {
 			t.Error("credential_ref carries the value rather than the secret it lives in")
 		}
 	}

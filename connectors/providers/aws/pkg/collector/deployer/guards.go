@@ -13,7 +13,7 @@ import (
 //
 // Belt over braces, and the braces are stronger: the coordinator wires api.CollectorDeployer only for
 // a type in spec.ActiveCollectorDeploymentTypes, so a manual-mode Collector reaches no mutating
-// interface anywhere in the runtime. This check exists because THIS package creates IAM roles and
+// interface anywhere in the runtime. This check exists because THIS package creates AWS resources and
 // secrets, and "the caller could not have been reached" is a worse guarantee to rely on than "the
 // function refuses".
 func modeGuard(mode string) []collectorstatus.Problem {
@@ -23,7 +23,7 @@ func modeGuard(mode string) []collectorstatus.Problem {
 	return []collectorstatus.Problem{{
 		Code:     ProblemManualModeProvisioning,
 		Severity: collectorstatus.SeverityError,
-		Message: fmt.Sprintf("refusing to provision Collector identity in %q mode: Odigos creates no roles, "+
+		Message: fmt.Sprintf("refusing to provision Collector identity in %q mode: Odigos creates no "+
 			"log groups or secrets for a Collector the customer owns", mode),
 	}}
 }

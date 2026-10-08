@@ -17,12 +17,15 @@ type fakeClients struct {
 	secrets *fakeSecrets
 	ec2     *fakeEC2SG
 	elb     *fakeELB
+	ecs     *fakeECS
 }
 
 func newFakeClients() *fakeClients {
 	return &fakeClients{
 		logs: newFakeLogs(), secrets: newFakeSecrets(),
 		ec2: newFakeEC2SG(), elb: newFakeELB(),
+		ecs: newFakeECS().withCluster(ClusterName(), map[string]string{"owner": "customer"},
+			[]string{"FARGATE", "FARGATE_SPOT"}),
 	}
 }
 
@@ -37,6 +40,9 @@ func (f *fakeClients) EC2(context.Context, string) (SecurityGroupClient, error) 
 }
 func (f *fakeClients) LoadBalancers(context.Context, string) (LoadBalancerClient, error) {
 	return f.elb, nil
+}
+func (f *fakeClients) ECS(context.Context, string) (ECSClient, error) {
+	return f.ecs, nil
 }
 
 const testLicense = "eyJhbGciOiJSUzI1NiJ9.licence-token-payload.signature"
