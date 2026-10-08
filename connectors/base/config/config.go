@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
 	"github.com/odigos-io/odigos-enterprise/connectors/opamp"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
@@ -67,6 +69,20 @@ type Config struct {
 	// Empty means managed-Collector deployment is off — collectorgateway.CheckEndpoint reports why, and
 	// only for a connector that was actually allowed to manage one.
 	OpAMPEndpoint string
+	// OnPremToken is this install's enterprise licence token — the same odigos-pro value every other
+	// enterprise component here uses. A managed Collector needs one to start at all
+	// (odigosenterpriseauthextension refuses without it), and settles whose
+	// it is: the connector copies THIS value into the customer's own secret store, so no Odigos-vendor
+	// licence material ever enters a customer account and no token crosses between installs.
+	//
+	// Held as a collectorcredential.Secret rather than a string. It is signed, it expires, and it is
+	// worth an enterprise licence to whoever takes it, so the type that closes every implicit path out
+	// — fmt renders "<redacted>", JSON and text marshalling fail — is the right one for it as much as
+	// for an OpAMP credential.
+	//
+	// Empty on a community install and on a connector whose Deployment was not stamped with it. That is
+	// reported per Collector rather than refused at startup: every other domain works without it.
+	OnPremToken collectorcredential.Secret
 }
 
 // FromEnv builds the generic Config from environment variables, validating the universally-required
@@ -83,6 +99,8 @@ func FromEnv() (Config, error) {
 		Version:           GetenvDefault("ODIGOS_RUNTIME_VERSION", "dev"),
 		CentralBackendURL: os.Getenv("ODIGOS_CENTRAL_BACKEND_URL"),
 		OpAMPEndpoint:     os.Getenv(opamp.EnvEndpoint),
+		// Wrapped at the boundary, which is the only place it is ever a bare string.
+		OnPremToken: collectorcredential.NewSecret(os.Getenv(collectorimage.EnvOnPremToken)),
 	}
 	// Operational tunables (discovery/heartbeat/reconcile intervals, shutdown timeout, discovery tags) are
 	// NOT read here — they are DB-backed and served live by config.Manager, tunable via the agents-api

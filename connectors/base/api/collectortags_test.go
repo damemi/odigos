@@ -306,3 +306,43 @@ func TestTheTwoMarkersMatchOnOppositeThings(t *testing.T) {
 		t.Errorf("%s with an empty value disqualifies; absent and empty must read alike", TagIaC)
 	}
 }
+
+// TestCollectorManagedTagsGrantDeletion. The deployer's tag set is the FIRST half of the deletion gate,
+// so an object created without TagManaged is one Odigos can never remove — a leak that only
+// shows up at teardown, when a Collector stays running in the customer's account.
+func TestCollectorManagedTagsGrantDeletion(t *testing.T) {
+	tags := CollectorManagedTags("aws", "uid-1", "us-east-1", "vpc-0abc")
+	if tags[TagManaged] != TagManagedTrue {
+		t.Fatalf("%s = %q, want %q: without it nothing Odigos creates may ever be deleted", TagManaged, tags[TagManaged], TagManagedTrue)
+	}
+	if _, present := tags[TagIaC]; present {
+		t.Errorf("the deployer writes %s, which is the marker that DISQUALIFIES deletion", TagIaC)
+	}
+	for _, k := range CollectorIdentityTagKeys() {
+		if tags[k] == "" {
+			t.Errorf("%s is empty; an object missing an identity tag cannot be attributed to this connector", k)
+		}
+	}
+	if err := ValidateCollectorTags(tags); err != nil {
+		t.Errorf("the deployer's own tag set is not portable: %v", err)
+	}
+}
+
+// TestConnectorWideObjectsCarryNoNetworkTag. The IAM roles and the log group are shared by every
+// network, so TagNetwork — which is what joins an object to one managed_collectors row — must be absent
+// rather than blank. A blank value reads as absent to every consumer, so writing one only obscures
+// whether the deployer meant it.
+func TestConnectorWideObjectsCarryNoNetworkTag(t *testing.T) {
+	tags := CollectorManagedTags("aws", "uid-1", "", "")
+	if _, present := tags[TagNetwork]; present {
+		t.Fatalf("%s is written for a connector-wide object: %v", TagNetwork, tags)
+	}
+	// Still attributable and still deletable: only the join is missing.
+	parsed := ParseCollectorTags(tags)
+	if !parsed.IsCollector() || !parsed.HasOwnershipMarker() || parsed.HasIaCMarker() {
+		t.Errorf("a connector-wide object is not attributable: %+v", parsed)
+	}
+	if err := ValidateCollectorTags(tags); err != nil {
+		t.Errorf("not portable: %v", err)
+	}
+}

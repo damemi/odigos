@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -173,5 +174,58 @@ func TestBuildDeploymentCredentialEnvFromSpec(t *testing.T) {
 	}
 	if _, ok := plain["ODIGOS_PERMISSION_MODE"]; ok {
 		t.Error("ODIGOS_PERMISSION_MODE should no longer be set (replaced by capabilities)")
+	}
+}
+
+// TestConnectorGetsTheOnPremToken pins how the install's enterprise licence token reaches a connector,
+// because a managed Collector cannot start without one: has the connector
+// copy THIS install's odigos-central value into the customer's own secret store, so no Odigos-vendor
+// licence material enters a customer account and no token crosses between installs.
+//
+// Three properties, and each has a distinct failure:
+//
+//   - the env var name, which must match collectorimage.EnvOnPremToken (a different module, so the
+//     compiler cannot check it) and the name the Collector's auth extension reads;
+//   - the source, which must be the odigos-central Secret every other enterprise component reads, not a
+//     value inlined into the pod spec where anyone with pod read access could see it;
+//   - Optional, because a community install has no odigos-central token and a connector that
+//     cannot manage a Collector must still start and run its other two domains — a required keyRef
+//     would leave the pod stuck in CreateContainerConfigError with nothing to explain it.
+func TestConnectorGetsTheOnPremToken(t *testing.T) {
+	cr := &cloudconnectorsv1.OdigosCloudConnector{
+		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "odigos-central"},
+		Spec: cloudconnectorsv1.OdigosCloudConnectorSpec{
+			Provider:             "aws",
+			Account:              cloudconnectorsv1.CloudConnectorAccount{ID: "123456789012"},
+			CredentialsSecretRef: cloudconnectorsv1.CloudConnectorCredentialsSecretRef{Name: "prod-creds"},
+		},
+	}
+	dep := BuildDeployment(cr, DeploymentParams{
+		Namespace: "odigos-central", WorkloadName: "w", Image: "img",
+		DBSecretName: "db", DBSecretKey: "dsn", SchemaName: "connector_aws",
+	})
+
+	var found *corev1.EnvVar
+	for i, e := range dep.Spec.Template.Spec.Containers[0].Env {
+		if e.Name == "ODIGOS_ONPREM_TOKEN" {
+			found = &dep.Spec.Template.Spec.Containers[0].Env[i]
+		}
+	}
+	if found == nil {
+		t.Fatal("the connector Deployment carries no ODIGOS_ONPREM_TOKEN; a managed Collector would have no licence to copy into the customer's account and would refuse to start")
+	}
+	if found.Value != "" {
+		t.Errorf("ODIGOS_ONPREM_TOKEN is stamped as a literal value; it must be a Secret keyRef — a plain value is readable by anyone who can read the pod spec")
+	}
+	if found.ValueFrom == nil || found.ValueFrom.SecretKeyRef == nil {
+		t.Fatalf("ODIGOS_ONPREM_TOKEN does not come from a Secret: %+v", found.ValueFrom)
+	}
+	ref := found.ValueFrom.SecretKeyRef
+	if ref.Name != centralSecretName || ref.Key != centralSecretOnPremTokenKey {
+		t.Errorf("ODIGOS_ONPREM_TOKEN reads %s/%s, want %s/%s (the secret every other enterprise component uses)",
+			ref.Name, ref.Key, centralSecretName, centralSecretOnPremTokenKey)
+	}
+	if ref.Optional == nil || !*ref.Optional {
+		t.Error("ODIGOS_ONPREM_TOKEN is a required keyRef; a community install has no odigos-central token and the connector pod would never start")
 	}
 }

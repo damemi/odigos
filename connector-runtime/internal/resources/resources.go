@@ -66,6 +66,20 @@ const (
 	ComponentValue    = "connector-runtime"
 	PlatformTypeValue = "connector"
 
+	// The enterprise licence secret this install already has: the same Secret and the same key every
+	// other enterprise component reads its ODIGOS_ONPREM_TOKEN from. Named here rather than inlined so
+	// a rename of either has one place to change, and so the connector reads the install's own token
+	// rather than anything issued for it separately.
+	centralSecretName           = "odigos-central"
+	centralSecretOnPremTokenKey = "ODIGOS_ONPREM_TOKEN"
+	// envOnPremToken must equal collectorimage.EnvOnPremToken, which the connector reads and which the
+	// enterprise Collector's auth extension requires. Spelled here rather than imported: it lives in
+	// connectors/base, a module this one does not depend on and should not start depending on for one
+	// string — base pulls the database driver and the whole domain layer. It is a stable, externally
+	// documented name (the same variable every enterprise Odigos component takes), and
+	// TestConnectorGetsTheOnPremToken pins the spelling.
+	envOnPremToken = "ODIGOS_ONPREM_TOKEN"
+
 	// MaxReplicas caps connector runtime replicas. The runtime is NOT leader-elected and a single
 	// connector shares one heartbeat row and one reconcile loop, so more than one replica would race
 	// provider mutations. Until locking/leader election exists, the controller clamps to this.
@@ -215,6 +229,17 @@ func BuildDeployment(cr *cloudconnectorsv1.OdigosCloudConnector, p DeploymentPar
 	if p.OpAMPEndpoint != "" {
 		env = append(env, corev1.EnvVar{Name: opamp.EnvEndpoint, Value: p.OpAMPEndpoint})
 	}
+
+	// The install's enterprise licence token, from the same odigos-central secret every other enterprise
+	// component reads. A connector needs it for ONE thing: a managed Collector refuses to start without
+	// a valid ODIGOS_ONPREM_TOKEN, and has the connector copy this install's
+	// own value into the customer's secret store — so no Odigos-vendor licence material enters a
+	// customer account and no token crosses between installs.
+	//
+	// Optional, like every other secret env here: a community install has no odigos-central token, and a
+	// connector that cannot manage a Collector must still start and run its other two domains. The
+	// connector reports the absence per Collector instead.
+	env = append(env, secretEnv(envOnPremToken, centralSecretName, centralSecretOnPremTokenKey))
 
 	// Optional operator-level override of the Fargate agents bundle (AWS-only concern; the connector
 	// falls back to its compiled-in default when unset, so this env is stamped only when configured).

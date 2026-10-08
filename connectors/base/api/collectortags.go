@@ -135,6 +135,36 @@ func CollectorIdentityTags(connector, connectorID, region, network string) map[s
 	}
 }
 
+// CollectorManagedTags renders what a DEPLOYER writes when it creates an object: the identity set plus
+// TagManaged, which is the tag that authorizes deletion later.
+//
+// Separate from CollectorIdentityTags because the asymmetry is the whole of. An object created
+// by the deployer carries TagManaged and may be deleted; one a customer's artifact created carries
+// TagIaC instead and may not. Rendering them in one place is what stops a deployer forgetting
+// TagManaged — an object Odigos created and can never remove — or writing it onto something it
+// adopted.
+//
+// An EMPTY region or host network omits that metadata rather than writing it blank. Connector-wide
+// objects (the IAM roles) belong to no region; regional objects (the log group) have a region but no
+// host VPC; only a Collector-specific object (the credential secret) has both. TagNetwork is host
+// metadata, not identity, so a shared object writing an empty one would claim a join it does not have,
+// and a blank tag value is indistinguishable from an absent tag to every reader anyway.
+func CollectorManagedTags(connector, connectorID, region, network string) map[string]string {
+	tags := map[string]string{
+		TagComponent:   ComponentCollector,
+		TagConnector:   connector,
+		TagConnectorID: connectorID,
+		TagManaged:     TagManagedTrue,
+	}
+	if region != "" {
+		tags[TagRegion] = region
+	}
+	if network != "" {
+		tags[TagNetwork] = network
+	}
+	return tags
+}
+
 // CollectorTagKeys are every key this package defines, in a fixed order.
 func CollectorTagKeys() []string {
 	return append(CollectorArtifactTagKeys(), TagManaged)
