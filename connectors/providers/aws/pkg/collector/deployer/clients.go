@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	aas "github.com/aws/aws-sdk-go-v2/service/applicationautoscaling"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
@@ -58,4 +59,15 @@ func (c cachedClients) ECS(ctx context.Context, region string) (ECSClient, error
 		return nil, fmt.Errorf("resolve aws config for %s: %w", region, err)
 	}
 	return ecs.NewFromConfig(cfg), nil
+}
+
+// AutoScaling is regional, like the ECS service it governs: a scalable target is registered in the
+// region its resource id names, and one built for the wrong region reports the target as absent rather
+// than failing — which would read as "nothing registered" and register a second one.
+func (c cachedClients) AutoScaling(ctx context.Context, region string) (AutoScalingClient, error) {
+	cfg, err := c.cache.Config(ctx, region)
+	if err != nil {
+		return nil, fmt.Errorf("resolve aws config for %s: %w", region, err)
+	}
+	return aas.NewFromConfig(cfg), nil
 }

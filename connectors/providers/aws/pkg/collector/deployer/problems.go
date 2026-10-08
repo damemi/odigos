@@ -51,6 +51,29 @@ const (
 	// ProblemServiceAdopted: Odigos brought an existing service under convergence. Info — nothing is
 	// wrong — but never silent, because what it means at teardown depends on which kind of adoption it was.
 	ProblemServiceAdopted = "CollectorServiceAdopted"
+	// ProblemScalingModeUnknown: `scaling.mode` is neither "manual" nor "auto". A refusal, and the one
+	// place refusing is safer than guessing: "automatic" is the obvious typo for "auto", and treating an
+	// unknown mode as manual would deregister the scalable target the customer had working.
+	ProblemScalingModeUnknown = "CollectorScalingModeUnknown"
+	// ProblemScalingBoundsCorrected: a configured replica bound or utilisation target could not be used
+	// and a default was applied. Degraded, and reported on every pass for as long as it applies — the
+	// Collector scales, but not the way its own configuration reads.
+	ProblemScalingBoundsCorrected = "CollectorScalingBoundsCorrected"
+	// ProblemScalingSingleTask: the policy in force allows the Collector to run on one task, so every
+	// deployment, task replacement and Spot interruption is a gap in a data path with no local queue.
+	// Info: a legitimate choice on a network whose telemetry is not precious.
+	ProblemScalingSingleTask = "CollectorScalingSingleTask"
+	// ProblemScalingTargetNotOurs: an Application Auto Scaling target on this service was not registered
+	// by Odigos. Degraded, and the consequence differs by scaling mode — in `auto` the configured bounds
+	// are not in force, in `manual` something other than Odigos is still moving the replica count.
+	ProblemScalingTargetNotOurs = "CollectorScalingTargetNotOwnedByOdigos"
+	// ProblemScalingSuspended: scaling is suspended on the target, so the policies are configured and
+	// inert. Degraded rather than repaired: a suspension is a deliberate act, usually mid-incident.
+	ProblemScalingSuspended = "CollectorScalingSuspended"
+	// ProblemScalingPolicyForeign: a scaling policy Odigos did not write shares this Collector's
+	// scalable target, or holds one of Odigos's two policy names as a type that cannot be converged.
+	// Degraded: two controls on one replica count, and only the customer can remove theirs.
+	ProblemScalingPolicyForeign = "CollectorScalingPolicyForeign"
 	// ProblemManualModeProvisioning: provisioning was asked for on a manual-mode Collector. A guard,
 	// not a customer-facing condition — the coordinator wires no deployer for a manual-mode type at all
 	// (api.CollectorDeployer), so reaching this means something bypassed that.

@@ -39,7 +39,7 @@ const (
 // ServiceClient is the slice of ECS this file uses.
 //
 // Deliberately absent: DeleteService. Nothing in a converge path may destroy a service — a mode change
-// never deletes (§10.5) and teardown is #14, which gates every delete on MayDelete. A converge that
+// never deletes and teardown is #14, which gates every delete on MayDelete. A converge that
 // could delete is one bug away from doing it on a describe that came back empty.
 type ServiceClient interface {
 	DescribeServices(ctx context.Context, in *ecs.DescribeServicesInput, opts ...func(*ecs.Options)) (*ecs.DescribeServicesOutput, error)
@@ -66,7 +66,7 @@ type ServiceInput struct {
 	// TaskDefinitionARN is the revision to run, from EnsureTaskDefinition.
 	TaskDefinitionARN string
 
-	// Subnets and SecurityGroupIDs are the awsvpc configuration: placement's chosen subnets (§5.1) and
+	// Subnets and SecurityGroupIDs are the awsvpc configuration: placement's chosen subnets and
 	// the Collector's own security group plus anything the customer supplied.
 	Subnets          []string
 	SecurityGroupIDs []string
@@ -77,15 +77,18 @@ type ServiceInput struct {
 	// the customer's own front reaches the tasks directly.
 	TargetGroupARNs []string
 
-	// Scaling is the resolved §5.2 policy. In `auto` mode the desired count belongs to Application Auto
-	// Scaling and this converge must not touch it — see desiredCountChange.
-	Scaling collectorsettings.Scaling
+	// Scaling is the policy, resolved by the caller. Resolved rather than read here so that this
+	// converge and EnsureScaling cannot disagree about which control is live — two readings of the mode
+	// is how a Collector ends up with a fixed count and an autoscaler at once. In `auto` mode the desired
+	// count belongs to Application Auto Scaling and this converge must not touch it, and in a mode
+	// neither of them recognises it belongs to nobody: see desiredCountChange.
+	Scaling collectorsettings.ResolvedScaling
 
 	// UseFargateSpot is the per-regional-Collector opt-in.
 	UseFargateSpot bool
 
 	// Recorded is whether this connector's managed_collectors row already names this service. It is the
-	// SECOND half of the deletion gate (§10.4) and the thing that tells "this connector's own service"
+	// SECOND half of the deletion gate and the thing that tells "this connector's own service"
 	// apart from "a service missing from its state", which is what adoption is for.
 	Recorded bool
 }
@@ -99,8 +102,8 @@ type Service struct {
 	Created bool
 	Updated bool
 
-	// Adopted, AdoptionReason and InheritsDeleteAuthority record an adoption, which is never silent
-	// (§10.4): "Odigos took its own stack back" and "Odigos now converges a stack it will never remove"
+	// Adopted, AdoptionReason and InheritsDeleteAuthority record an adoption, which is never silent:
+	// "Odigos took its own stack back" and "Odigos now converges a stack it will never remove"
 	// look identical in the infrastructure and differ completely at teardown.
 	Adopted                 bool
 	AdoptionReason          string
@@ -125,7 +128,7 @@ func (s Service) Ready() bool { return s.ARN != "" && !collectorstatus.HasError(
 // The three things this function must never do, each of which the ownership package is what stops:
 //
 //   - adopt an untagged or unattributed service holding the name Odigos needs. There is no second name
-//     to fall back to, so that network's deploy is skipped and the conflict reported by object (§10.4).
+//     to fall back to, so that network's deploy is skipped and the conflict reported by object.
 //   - write TagManaged onto anything it did not create. Adoption converges; it never acquires deletion
 //     authority, which is what makes flipping manual → automatic over a customer's own stack safe.
 //   - delete. Not a mode change, not a name conflict, not a describe that came back empty. DeleteService
@@ -226,9 +229,12 @@ func EnsureService(ctx context.Context, api ServiceClient, in ServiceInput) (Ser
 // disagree about it.
 type serviceSpec struct {
 	taskDefinition string
-	desiredCount   int32
+	// desiredCount is the count a CREATE carries — and, in manual mode only, the count a converge
+	// writes. In automatic mode it is the scalable target's lower bound, which a converge never writes
+	// because manualCount is false.
+	desiredCount int32
 	// manualCount is whether the desired count is Odigos's to set at all. In `auto` scaling mode it is
-	// Application Auto Scaling's — see desiredCountChange.
+	// Application Auto Scaling's, and in an unrecognised mode it is nobody's — see desiredCountChange.
 	manualCount      bool
 	subnets          []string
 	securityGroups   []string
@@ -248,8 +254,8 @@ func desiredService(in ServiceInput) serviceSpec {
 
 	spec := serviceSpec{
 		taskDefinition: in.TaskDefinitionARN,
-		desiredCount:   int32(in.Scaling.DesiredCount),
-		manualCount:    in.Scaling.Mode != collectorsettings.ScalingAuto,
+		desiredCount:   int32(in.Scaling.StartingCount()),
+		manualCount:    in.Scaling.Manual(),
 		subnets:        sortedCopy(in.Subnets),
 		securityGroups: sortedCopy(in.SecurityGroupIDs),
 		assignPublicIP: assign,
@@ -351,7 +357,7 @@ func createInput(in ServiceInput, spec serviceSpec, tags map[string]string) *ecs
 // A field-by-field diff rather than an unconditional update, because an UpdateService that changes
 // nothing is still a service event and, when it touches the task definition or the network
 // configuration, a new deployment: every task replaced, and a Collector on ephemeral storage losing its
-// queue (§5.3). Steady state has to be zero writes, not one harmless-looking write.
+// queue. Steady state has to be zero writes, not one harmless-looking write.
 func updateFor(in ServiceInput, spec serviceSpec, existing *ecstypes.Service) (*ecs.UpdateServiceInput, []string) {
 	update := &ecs.UpdateServiceInput{
 		Cluster: aws.String(in.ClusterARN),
@@ -391,9 +397,15 @@ func updateFor(in ServiceInput, spec serviceSpec, existing *ecstypes.Service) (*
 // desiredCountChange decides whether the replica count is Odigos's to set on this pass.
 //
 // In `auto` scaling mode it is NOT: Application Auto Scaling owns desiredCount and moves it in response
-// to load (§8.3), so a converge that set it back would fight the autoscaler on every pass — scaling out
+// to load, so a converge that set it back would fight the autoscaler on every pass — scaling out
 // under load and being scaled straight back in, which is the one moment the extra capacity was needed.
-// #13 registers the scalable target; this loop stays out of its way.
+// EnsureScaling registers the scalable target; this stays out of its way.
+//
+// In a mode NEITHER of them recognises the count is nobody's, and holding is what makes that safe.
+// `manual` is the only value that writes, rather than "anything that is not auto": the obvious typo for
+// `auto` is `automatic`, and a converge that read an unrecognised mode as manual would pin the Collector
+// to the fixed count while the customer's working autoscaler pulled the other way. It is also what stops
+// a Scaling nobody filled in from scaling a running Collector down to its zero value.
 func desiredCountChange(spec serviceSpec, existing *ecstypes.Service) (int32, bool) {
 	if !spec.manualCount {
 		return 0, false
@@ -492,7 +504,7 @@ const serviceStatusActive = "ACTIVE"
 //
 // Skipped and reported by object rather than worked around: `odigos-collector-<region>` is unique per
 // cluster and there is no second name a customer's documentation would still recognise, so deploying
-// alongside is not possible (§10.4). The message names the class it fell into, because an untagged
+// alongside is not possible. The message names the class it fell into, because an untagged
 // service and one tagged for another connector have different fixes.
 func nameConflict(in ServiceInput, object collectorownership.Object) collectorstatus.Problem {
 	class := collectorownership.Classify(object, in.Identity, in.Mode)

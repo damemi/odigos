@@ -178,3 +178,34 @@ const servicePrefix = "odigos-collector-"
 // name a hard conflict rather than something to deploy alongside. There is no second name to
 // fall back to that a customer's documentation would still recognise.
 func ServiceName(region string) string { return servicePrefix + region }
+
+// The scaling names. Application Auto Scaling names no object of its own here: a scalable target
+// IS the ECS service, addressed by a composed resource id, and the only names Odigos chooses are the two
+// target-tracking policies on it.
+
+// ScalableTargetResourceID is Application Auto Scaling's address for one Collector's ECS service.
+//
+// The cluster's NAME, not its ARN, and that is the trap worth naming: every other call in this package
+// passes a cluster ARN, and an ARN here is refused with a ValidationException that quotes the resource
+// id back without saying which half of it is wrong. Composed in one place so no caller has to remember.
+func ScalableTargetResourceID(clusterName, region string) string {
+	return "service/" + clusterName + "/" + ServiceName(region)
+}
+
+// The two policy suffixes. Derived from the service name rather than given a prefix of their own, so a
+// console listing shows them next to the service they govern — and so the pair cannot outlive a rename
+// of the service without the rename being obvious.
+const (
+	cpuPolicySuffix    = "-cpu"
+	memoryPolicySuffix = "-memory"
+)
+
+// ScalingPolicyNames are the two target-tracking policies on one regional Collector's scalable target.
+//
+// Two rather than one, which is supported pattern rather than a compromise: Application Auto
+// Scaling takes the LARGEST capacity either policy asks for, so the Collector scales out on whichever
+// resource saturates first and scales in only when both agree.
+func ScalingPolicyNames(region string) (cpu, memory string) {
+	service := ServiceName(region)
+	return service + cpuPolicySuffix, service + memoryPolicySuffix
+}

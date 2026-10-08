@@ -8,6 +8,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorownership"
+	basecollectorsettings "github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
 	awsingress "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/ingress"
@@ -22,6 +23,9 @@ type Clients interface {
 	LoadBalancers(ctx context.Context, region string) (LoadBalancerClient, error)
 	// ECS serves both the cluster and the task definition, because they are one API and one client.
 	ECS(ctx context.Context, region string) (ECSClient, error)
+	// AutoScaling is Application Auto Scaling, which is its own API rather than part of ECS — a scalable
+	// target lives in the autoscaling service and only points at the ECS service by a composed id.
+	AutoScaling(ctx context.Context, region string) (AutoScalingClient, error)
 }
 
 // ECSClient is the cluster, task-definition and service surface together. One interface rather than
@@ -636,7 +640,7 @@ func (p *Provisioner) EnsureCollectorService(ctx context.Context, in ServiceStat
 		SecurityGroupIDs:    serviceSecurityGroups(in),
 		AssignPublicIP:      in.Settings.AssignPublicIP,
 		TargetGroupARNs:     in.Ingress.TargetGroupARNs,
-		Scaling:             in.Settings.Scaling,
+		Scaling:             in.Settings.Scaling.Resolve(),
 		UseFargateSpot:      in.Settings.UseFargateSpot,
 		Recorded:            in.Recorded,
 	})
@@ -654,6 +658,62 @@ func serviceSecurityGroups(in ServiceStateInput) []string {
 		return in.Settings.SecurityGroupIDs
 	}
 	return []string{in.Ingress.SecurityGroupID}
+}
+
+// ScalingStateInput is what converging one regional Collector's replica policy needs beyond what the earlier
+// halves produced.
+type ScalingStateInput struct {
+	Key           basestore.CollectorKey
+	HostNetworkID string
+	Mode          string
+	// Workload is the result of EnsureWorkload. Only the cluster is read, and specifically its NAME:
+	// Application Auto Scaling addresses an ECS service by `service/<cluster name>/<service name>` and
+	// refuses the ARN every other call in this package passes around.
+	Workload Workload
+	// Service is the result of EnsureCollectorService. Its ARN is how this knows there is a service to
+	// govern at all.
+	Service Service
+	// Settings is the resolved tree; only the scaling policy is read.
+	Settings collectorsettings.Network
+	// Recorded is whether managed_collectors names this Collector — half the deletion gate, and
+	// a deregistration is a delete.
+	Recorded bool
+}
+
+// EnsureCollectorScaling converges one regional Collector's replica policy: a fixed count with no autoscaling
+// resource, or a scalable target and the two target-tracking policies specifies.
+//
+// Runs AFTER the service converge, and that ordering is a constraint rather than a preference:
+// RegisterScalableTarget on a service Application Auto Scaling cannot find is refused, so a pass that
+// registered first would fail on every fresh network. Nothing forces the ordering the other way — a
+// describe of a target that was never registered comes back empty rather than failing — which is why
+// this can safely run on the very first pass, before anything exists.
+func (p *Provisioner) EnsureCollectorScaling(ctx context.Context, in ScalingStateInput) (ScalingState, error) {
+	// Resolved here, once, and handed to EnsureScaling. The service converge resolves the same policy
+	// from the same settings, which is safe because Resolve is pure — what would not be safe is two
+	// places each deciding for themselves what an unrecognised mode means.
+	resolved := in.Settings.Scaling.Resolve()
+	if problems := modeGuard(in.Mode); len(problems) > 0 {
+		return ScalingState{Mode: resolved.Mode, Problems: problems}, nil
+	}
+
+	api, err := p.Clients.AutoScaling(ctx, in.Key.Region)
+	if err != nil {
+		return ScalingState{}, fmt.Errorf("build an Application Auto Scaling client for %s: %w", in.Key.Region, err)
+	}
+
+	return EnsureScaling(ctx, api, ScalingInput{
+		HostNetworkID: in.HostNetworkID,
+		Region:        in.Key.Region,
+		Connector:     p.Identity.ConnectorName,
+		ConnectorID:   p.Identity.ConnectorID,
+		Identity:      p.Identity,
+		Mode:          in.Mode,
+		ClusterName:   in.Workload.Cluster.Name,
+		ServiceARN:    in.Service.ARN,
+		Scaling:       resolved,
+		Recorded:      in.Recorded,
+	})
 }
 
 // InfrastructureRecord assembles the one CollectorRecord the reconcile pass writes through
@@ -674,3 +734,51 @@ func InfrastructureRecord(key basestore.CollectorKey, workload Workload, ingress
 		PlacementRefs: subnets,
 	}
 }
+
+// ScalingObservation is the one set of scaling facts a reconcile pass records through
+// basestore.RecordCollectorScaling.
+//
+// One assembler for the same reason InfrastructureRecord is one: that accessor writes the mode, both
+// counts, both bounds and the task size TOGETHER, so a caller filling in only the half it knows would
+// null the other half. Here the halves come from three different places — the resolved configuration,
+// the service converge, and the workload's size — which is exactly the shape that goes wrong.
+type ScalingObservation struct {
+	Mode         string
+	DesiredCount *int
+	RunningCount *int
+	MinCount     *int
+	MaxCount     *int
+	CPU          string
+	Memory       string
+}
+
+// ObservedScaling assembles what is governing and running this Collector.
+//
+// What is IN FORCE rather than what was configured, which is the distinction that makes the row worth
+// reading:
+//
+//   - a mode this connector does not implement records NO mode, rather than writing a typo into a column
+//     documented as manual | auto. Nothing is driving the count, and a null says that.
+//   - the bounds are recorded only while a scalable target exists, so a row carrying bounds is a row
+//     where something is autoscaling — whoever registered it.
+//   - the counts are recorded only once there is a service. Nil is "no service yet"; a recorded zero is
+//     a service running no tasks, which is a different and much more interesting state.
+func ObservedScaling(settings basecollectorsettings.Network, service Service, scaling ScalingState) ScalingObservation {
+	resolved := settings.Scaling.Resolve()
+	out := ScalingObservation{CPU: settings.CPU, Memory: settings.Memory}
+	if resolved.Known() {
+		out.Mode = resolved.Mode
+	}
+	if service.ARN != "" {
+		out.DesiredCount = countRef(int(service.DesiredCount))
+		out.RunningCount = countRef(int(service.RunningCount))
+	}
+	if scaling.TargetRegistered {
+		out.MinCount = countRef(scaling.MinCount)
+		out.MaxCount = countRef(scaling.MaxCount)
+	}
+	return out
+}
+
+// countRef takes the address of a copy, so a caller cannot alias the observation's fields together.
+func countRef(n int) *int { return &n }

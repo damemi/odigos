@@ -22,6 +22,13 @@ func workloadSettings() collectorsettings.Network {
 			Enabled: true,
 			CPU:     basecollectorsettings.DefaultCPU,
 			Memory:  basecollectorsettings.DefaultMemory,
+			// The shipped default policy, spelled out rather than left zero: collectorsettings.Read always
+			// fills the mode in, and a fixture with an empty one would exercise the unrecognised-mode hold
+			// instead of the manual path every one of these tests is about.
+			Scaling: basecollectorsettings.Scaling{
+				Mode:         basecollectorsettings.ScalingManual,
+				DesiredCount: basecollectorsettings.DefaultDesiredCount,
+			},
 		},
 		ClusterRef: ClusterName(),
 	}

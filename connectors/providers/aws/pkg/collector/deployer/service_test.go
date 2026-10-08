@@ -41,7 +41,7 @@ func serviceInput() ServiceInput {
 		Subnets:             testSubnets,
 		SecurityGroupIDs:    []string{"sg-collector"},
 		TargetGroupARNs:     testTargetGroups,
-		Scaling:             collectorsettings.Scaling{Mode: collectorsettings.ScalingManual, DesiredCount: 2},
+		Scaling:             collectorsettings.Scaling{Mode: collectorsettings.ScalingManual, DesiredCount: 2}.Resolve(),
 	}
 }
 
@@ -305,7 +305,7 @@ func TestEveryConvergedFieldIsUpdatedAndNamed(t *testing.T) {
 func TestTheAutoscalerOwnsTheReplicaCount(t *testing.T) {
 	api := newFakeECS()
 	in := serviceInput()
-	in.Scaling = collectorsettings.Scaling{Mode: collectorsettings.ScalingAuto, MinCount: 2, MaxCount: 10, DesiredCount: 2}
+	in.Scaling = collectorsettings.Scaling{Mode: collectorsettings.ScalingAuto, MinCount: 2, MaxCount: 10, DesiredCount: 2}.Resolve()
 	if _, err := EnsureService(context.Background(), api, in); err != nil {
 		t.Fatal(err)
 	}
