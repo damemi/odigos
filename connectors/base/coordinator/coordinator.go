@@ -67,6 +67,12 @@ type Coordinator struct {
 	awaitingManualRetained  int
 	awaitingManualWorkloads []string
 
+	// collectorSettingsMu serializes the read-modify-write of the `collector` config subtree that the
+	// managed-Collector mutations perform. A patch replaces that whole subtree, so two concurrent
+	// creates would otherwise each write a tree built before the other's change and silently drop a
+	// region. Separate from reconcileMu because these writes must not wait behind a provider converge.
+	collectorSettingsMu sync.Mutex
+
 	// reconcileMu serializes every reconcile pass (workload loop, compute-platform loop, shutdown drain and manual
 	// cleanup) so at most one runs at a time. The runtime is not leader-elected; serializing passes keeps
 	// a manual RequestCleanup from mutating provider resources concurrently with a loop tick.

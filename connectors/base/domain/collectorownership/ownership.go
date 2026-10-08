@@ -114,6 +114,33 @@ func Classify(o Object, self Identity, mode string) Class {
 	}
 }
 
+// ClassifyRecorded computes standing from what a managed_collectors ROW persists, rather than from an
+// object's live tags.
+//
+// The two are for different moments. Classify answers "may I touch this cloud object I just found",
+// which needs the tags in front of it. This answers "what may Odigos do to the Collector I have a
+// record of", which is what a report is asked and what a teardown request has to decide — and at that
+// point the observer has already read the tags and written its conclusion into mode and origin.
+// Re-deriving from tags here would need a provider call on every report.
+//
+// Attribution is AttributionMine by construction: rows are read back by connector_name, so a row
+// reaching this function is this connector's own. Adoption is visible separately (origin stays
+// customer, and adopted_at is set), which is what keeps an adopted stack from being reported as
+// Odigos-created and deleted at teardown.
+//
+// The gates themselves are the same ones MayMutate/MayDelete apply, deliberately spelled out in the
+// same order so the two cannot drift apart silently.
+func ClassifyRecorded(mode, origin string, recordedRefs bool) Class {
+	mutable := mode == spec.ModeAutomatic
+	return Class{
+		Attribution: AttributionMine,
+		Origin:      Origin(origin),
+		Mode:        mode,
+		Mutable:     mutable,
+		Deletable:   mutable && Origin(origin) == OriginOdigos && recordedRefs,
+	}
+}
+
 // Partition splits teardown candidates into deletable and retained.
 func Partition(objs []Object, self Identity, mode string) (deletable, retained []Object) {
 	for _, o := range objs {

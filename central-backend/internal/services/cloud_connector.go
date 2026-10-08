@@ -25,10 +25,11 @@ type CloudConnectorService struct {
 type CreateConnectorParams struct {
 	Provider           string
 	DisplayName        string
-	AccountID            string
-	AccountDisplayName   string
-	Workloads            []cloudconnectorsv1.CloudConnectorWorkloadCapability
-	ComputePlatforms     []cloudconnectorsv1.CloudConnectorComputePlatformCapability
+	AccountID          string
+	AccountDisplayName string
+	Workloads          []cloudconnectorsv1.CloudConnectorWorkloadCapability
+	ComputePlatforms   []cloudconnectorsv1.CloudConnectorComputePlatformCapability
+	Collectors         []cloudconnectorsv1.CloudConnectorCollectorCapability
 	// SecretData holds the credential values keyed by the provider spec's auth
 	// field names (the keys the connector runtime references via Secret keyRefs).
 	SecretData map[string]string
@@ -75,6 +76,7 @@ func (svc *CloudConnectorService) CreateConnector(ctx context.Context, params Cr
 			},
 			Workloads:        params.Workloads,
 			ComputePlatforms: params.ComputePlatforms,
+			Collectors:       params.Collectors,
 		},
 	}
 

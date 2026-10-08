@@ -53,6 +53,17 @@ func otlpDestination(mutate func(*destination.Destination)) destination.Destinat
 	return d
 }
 
+// honeycombDestination carries a secret field, which the configurer references as ${HONEYCOMB_API_KEY}
+// and the renderer resolves to this destination's value.
+func honeycombDestination(name, key string) destination.Destination {
+	return destination.Destination{
+		Name:    name,
+		Type:    "honeycomb",
+		Config:  map[string]any{"HONEYCOMB_API_KEY": key, "HONEYCOMB_ENDPOINT": "api.honeycomb.io"},
+		Signals: []string{"TRACES"},
+	}
+}
+
 func input(mutate func(*Input)) Input {
 	in := Input{
 		Destinations:      []destination.Destination{otlpDestination(nil)},
@@ -75,11 +86,10 @@ func render(t *testing.T, in Input) Document {
 	return doc
 }
 
-// TestGolden pins the rendered document for the shapes that matter. The three destination cases are the
-// ones the per-workload rendering documents as what environment-variable indirection got wrong: an
-// authenticated destination (a credential is a map, not a scalar), an OTLP/HTTP-only destination (a
-// different exporter with a different endpoint grammar), and a traces-only destination (a pipeline for
-// a signal the backend does not implement fails on every batch).
+// TestGolden pins the rendered document for the shapes that matter: an authenticated destination (a
+// credential in headers, and a secret field the configurer references by name), an OTLP/HTTP destination
+// (a different exporter with a different endpoint grammar), a traces-only destination (a pipeline for a
+// signal the backend does not implement fails on every batch), and two destinations side by side.
 func TestGolden(t *testing.T) {
 	cases := map[string]Input{
 		"default": input(nil),
@@ -89,6 +99,16 @@ func TestGolden(t *testing.T) {
 				d.Config["OTLP_GRPC_HEADERS"] = `[{"key":"authorization","value":"Bearer vendor-token"},` +
 					`{"key":"x-tenant","value":"acme"}]`
 			})}
+		}),
+
+		"secret_field_destination": input(func(in *Input) {
+			in.Destinations = []destination.Destination{honeycombDestination("honeycomb", "hc-api-key")}
+		}),
+
+		"two_destinations": input(func(in *Input) {
+			in.Destinations = []destination.Destination{
+				otlpDestination(nil), honeycombDestination("honeycomb", "hc-api-key"),
+			}
 		}),
 
 		"http_only_destination": input(func(in *Input) {
@@ -162,9 +182,9 @@ func TestNoUnsupportedPipelines(t *testing.T) {
 		{name: "logs only", signals: []string{"LOGS"}, want: []string{"logs"}},
 		{name: "traces and logs", signals: []string{"TRACES", "LOGS"}, want: []string{"logs", "traces"}},
 		{
-			// ResolveOTLPTarget falls back to traces-only for a destination that records no signals:
-			// traces are the one signal every OTLP backend implements.
-			name: "no signals recorded", signals: []string{}, want: []string{"traces"},
+			// A managed Collector receives no profiles, so a PROFILES signal on a stored row declares no
+			// pipeline rather than one nothing feeds.
+			name: "profiles are dropped", signals: []string{"TRACES", "PROFILES"}, want: []string{"traces"},
 		},
 	}
 
@@ -175,7 +195,10 @@ func TestNoUnsupportedPipelines(t *testing.T) {
 					d.Signals = tc.signals
 				})}
 			})
-			got := pipelineNames(t, render(t, in).YAML)
+			var got []string
+			for _, name := range pipelineNames(t, render(t, in).YAML) {
+				got = append(got, strings.SplitN(name, "/", 2)[0])
+			}
 			if strings.Join(got, ",") != strings.Join(tc.want, ",") {
 				t.Errorf("pipelines = %v, want %v", got, tc.want)
 			}
@@ -363,11 +386,15 @@ func TestHashTracksTheDocument(t *testing.T) {
 		})
 	}
 
-	// And a change that does not reach the document must not move the hash. A destination's display
-	// name is the customer's label for it, not part of what the Collector runs.
-	renamed := render(t, input(func(in *Input) { in.Destinations[0].Name = "renamed-in-the-ui" }))
-	if renamed.Hash != base.Hash {
-		t.Error("renaming a destination pushed a new configuration")
+	// And a change that does not reach the document must not move the hash: the store's row order is not
+	// part of what the Collector runs.
+	two := []destination.Destination{otlpDestination(nil), honeycombDestination("honeycomb", "k")}
+	forward := render(t, input(func(in *Input) { in.Destinations = two }))
+	reversed := render(t, input(func(in *Input) {
+		in.Destinations = []destination.Destination{two[1], two[0]}
+	}))
+	if forward.Hash != reversed.Hash {
+		t.Error("the order destinations were listed in pushed a new configuration")
 	}
 }
 
@@ -387,6 +414,96 @@ func TestCredentialAppearsOnlyWhenConfigured(t *testing.T) {
 	})).YAML
 	if !strings.Contains(authenticated, "Bearer vendor-token") {
 		t.Error("an authenticated destination lost its credential, so every export would be rejected")
+	}
+}
+
+// TestSecretFieldsAreResolvedPerDestination: a configurer references a secret field as ${FIELD_NAME}, an
+// environment variable in Kubernetes. The managed Collector has none, so the renderer resolves it — and
+// resolves it from the destination the exporter belongs to. Two destinations of one type share the
+// field name; resolving by name alone would send one's telemetry with the other's key.
+func TestSecretFieldsAreResolvedPerDestination(t *testing.T) {
+	doc := render(t, input(func(in *Input) {
+		in.Destinations = []destination.Destination{
+			honeycombDestination("team-a", "key-a"), honeycombDestination("team-b", "key-b"),
+		}
+	})).YAML
+	if strings.Contains(doc, "${HONEYCOMB_API_KEY}") {
+		t.Fatal("a secret reference was left for the Collector to resolve from its environment")
+	}
+
+	exporters := parse(t, doc)["exporters"].(map[string]any)
+	for name, want := range map[string]string{"team-a": "key-a", "team-b": "key-b"} {
+		var found bool
+		for id, raw := range exporters {
+			if !strings.HasSuffix(id, "-"+name) {
+				continue
+			}
+			found = true
+			headers := raw.(map[string]any)["headers"].(map[string]any)
+			if got := headers["x-honeycomb-team"]; got != want {
+				t.Errorf("exporter %s sends key %v, want %s", id, got, want)
+			}
+		}
+		if !found {
+			t.Errorf("no exporter rendered for destination %s", name)
+		}
+	}
+}
+
+// TestValuesCannotExpandTheCollectorsEnvironment: the Collector expands every ${...} in its configuration,
+// and its task environment holds the OpAMP credential. A value that could name a variable would have the
+// Collector send it wherever the destination points, so every value the customer gave is escaped.
+func TestValuesCannotExpandTheCollectorsEnvironment(t *testing.T) {
+	const probe = "${env:ODIGOS_OPAMP_AUTHORIZATION}"
+	doc := render(t, input(func(in *Input) {
+		in.Destinations = []destination.Destination{
+			honeycombDestination("secret", probe),
+			otlpDestination(func(d *destination.Destination) {
+				d.Config["OTLP_GRPC_HEADERS"] = `[{"key":"x-probe","value":"` + probe + `"}]`
+			}),
+		}
+	})).YAML
+	if strings.Count(doc, "$"+probe) != 2 {
+		t.Errorf("customer values were not escaped; the document is:\n%s", doc)
+	}
+
+	// An optional secret left unset is resolved to empty, not to whatever the task's environment holds.
+	unset := render(t, input(func(in *Input) {
+		in.Destinations = []destination.Destination{{
+			Name: "http", Type: "otlphttp", Signals: []string{"TRACES"},
+			Config: map[string]any{
+				"OTLP_HTTP_ENDPOINT": "https://otlp.vendor.example.com", "OTLP_HTTP_BASIC_AUTH_USERNAME": "u",
+			},
+		}}
+	})).YAML
+	if strings.Contains(unset, "${OTLP_HTTP_BASIC_AUTH_PASSWORD}") {
+		t.Error("an unset secret field was left as an environment reference")
+	}
+}
+
+// TestAnUnrenderableDestinationIsLeftOut: one broken destination must not take the Collector's others
+// down with it. It is dropped with a problem that names it, and the rest render.
+func TestAnUnrenderableDestinationIsLeftOut(t *testing.T) {
+	doc, problems := Render(input(func(in *Input) {
+		in.Destinations = []destination.Destination{
+			otlpDestination(nil),
+			{Name: "broken", Type: "otlp", Config: map[string]any{}, Signals: []string{"TRACES"}},
+		}
+	}))
+	if collectorstatus.HasError(problems) {
+		t.Fatalf("one unrenderable destination refused the whole document: %v", problems)
+	}
+	var named bool
+	for _, p := range problems {
+		if p.Code == "CollectorDestinationUnrenderable" && strings.Contains(p.Message, `"broken"`) {
+			named = true
+		}
+	}
+	if !named {
+		t.Errorf("problems = %v, want one naming the broken destination", problems)
+	}
+	if !strings.Contains(doc.YAML, "otlp.vendor.example.com:4317") {
+		t.Error("the working destination was not rendered")
 	}
 }
 
@@ -429,7 +546,7 @@ func TestManagedCollectorMarkerIsNeverRenderedAsExporter(t *testing.T) {
 		t.Fatal("managed Collector marker leaked into the rendered exporter")
 	}
 	if !strings.Contains(doc, "otlp.vendor.example.com:4317") {
-		t.Fatal("global OTLP terminal was not rendered")
+		t.Fatal("the Collector's own destination was not rendered")
 	}
 }
 

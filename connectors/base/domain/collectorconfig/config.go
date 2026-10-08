@@ -30,8 +30,6 @@ const (
 	processorResourceDet  = "resourcedetection"
 	processorResource     = "resource"
 	processorBatch        = "batch"
-	exporterOTLP          = "otlp"
-	exporterOTLPHTTP      = "otlphttp"
 	exporterNop           = "nop"
 	extensionHealthCheck  = "health_check"
 	defaultResourceDetect = "env"
@@ -57,10 +55,11 @@ const resourceDetectionTimeout = "2s"
 // and the destination set — and a field that did not change the output would make the hash claim a
 // difference where the Collector has none.
 type Input struct {
-	// Destinations are the connector's export targets. Empty is legal and renders an export-less
-	// document rather than nothing: unlike workload instrumentation, a Collector is not gated on having
-	// a destination, and one that is running and reachable is what lets a destination be added
-	// later as a configuration push instead of a redeployment.
+	// Destinations are the ones this Collector owns (domain/collectordestination) — not the connector's
+	// workload destinations, which say where workloads send and are configured independently. Empty is
+	// legal and renders an export-less document rather than nothing: unlike workload instrumentation, a
+	// Collector is not gated on having a destination, and one that is running and reachable is
+	// what lets a destination be added later as a configuration push instead of a redeployment.
 	Destinations []destination.Destination
 	// Region the Collector runs in, inserted as cloud.region on telemetry that does not carry one.
 	// Empty omits the resource processor entirely.
@@ -107,10 +106,15 @@ func Render(in Input) (Document, []collectorstatus.Problem) {
 		return Document{}, problems
 	}
 
-	exporters, exporterNames, signals := renderExporters(in.Destinations)
-	pipelines := renderPipelines(signals, exporterNames, processorNames(in))
+	dests, destProblems := renderDestinations(in.Destinations)
+	problems = append(problems, destProblems...)
+	if collectorstatus.HasError(problems) {
+		return Document{}, problems
+	}
+
+	pipelines := renderPipelines(in, dests)
 	if len(pipelines) == 0 {
-		// Unreachable through ResolveOTLPTarget, which falls back to traces-only, and checked anyway:
+		// Unreachable — no rendered destination falls back to nop on every signal — and checked anyway:
 		// a Collector with no pipeline accepts telemetry on its receivers and drops it silently, which
 		// is indistinguishable from a healthy Collector whose destination is broken.
 		return Document{}, append(problems, collectorstatus.Problem{
@@ -122,18 +126,19 @@ func Render(in Input) (Document, []collectorstatus.Problem) {
 	}
 
 	doc := document{
-		Receivers:  receivers,
-		Processors: renderProcessors(in, memory),
-		Exporters:  exporters,
-		Extensions: map[string]any{
+		Receivers:  mergeComponents(receivers, dests.receivers),
+		Processors: mergeComponents(renderProcessors(in, memory), dests.processors),
+		Exporters:  renderExporters(dests),
+		Extensions: mergeComponents(map[string]any{
 			// The load balancer's target health check. Bound wide because the check arrives from
 			// the load balancer, not from inside the task.
 			extensionHealthCheck: map[string]any{
 				"endpoint": listenOn(collectoringress.PortHealth),
 			},
-		},
+		}, dests.extensions),
+		Connectors: dests.connectors,
 		Service: service{
-			Extensions: []string{extensionHealthCheck},
+			Extensions: append([]string{extensionHealthCheck}, dests.serviceExtensions...),
 			Pipelines:  pipelines,
 		},
 	}
@@ -157,6 +162,7 @@ type document struct {
 	Receivers  map[string]any `yaml:"receivers"`
 	Processors map[string]any `yaml:"processors"`
 	Exporters  map[string]any `yaml:"exporters"`
+	Connectors map[string]any `yaml:"connectors,omitempty"`
 	Extensions map[string]any `yaml:"extensions"`
 	Service    service        `yaml:"service"`
 }
@@ -273,66 +279,76 @@ func detectors(configured []string) []string {
 	return out
 }
 
-// renderExporters builds the exporter set and reports which signals the destination accepts.
-//
-// Reuses domain/destination for both resolution and headers — the headers being exactly what a
-// rendered-per-workload configuration could not express, because a credential is a map and an
-// environment variable is a scalar.
-func renderExporters(dests []destination.Destination) (map[string]any, []string, destination.OTLPTarget) {
-	target, found := destination.ResolveOTLPTarget(dests)
-	if !found {
-		// No destination is not an error. The Collector runs, its receivers accept, its health check
-		// passes and its load balancer targets go healthy — so adding a destination later is a
-		// configuration push rather than a redeployment. nop is what the Supervisor's own first-boot
-		// fallback uses for the same reason.
-		return map[string]any{exporterNop: map[string]any{}}, []string{exporterNop},
-			destination.OTLPTarget{Traces: true, Metrics: true, Logs: true}
+// renderExporters is the destinations' exporters, or nop when there are none. No destination is not an
+// error: the Collector runs, its receivers accept, its health check passes and its load balancer targets
+// go healthy — so adding a destination later is a configuration push rather than a redeployment. nop is
+// what the Supervisor's own first-boot fallback uses for the same reason.
+func renderExporters(dests renderedDestinations) map[string]any {
+	if len(dests.entry) == 0 {
+		return map[string]any{exporterNop: map[string]any{}}
 	}
-
-	headers := destination.ResolveOTLPHeaders(dests)
-
-	// The transport the destination actually configured, not a formatting choice: otlp and otlphttp are
-	// different components with different endpoint grammars — host:port against a scheme-qualified URL.
-	if target.Endpoint != "" {
-		cfg := map[string]any{
-			"endpoint": target.Endpoint,
-			// tls.insecure is the gRPC exporter's, and applies to the hop from the Collector to the
-			// customer's destination — nothing to do with what the receivers terminate.
-			"tls": map[string]any{"insecure": target.Insecure},
-		}
-		if len(headers) > 0 {
-			cfg["headers"] = headers
-		}
-		return map[string]any{exporterOTLP: cfg}, []string{exporterOTLP}, target
-	}
-
-	cfg := map[string]any{"endpoint": target.HTTPEndpoint}
-	if len(headers) > 0 {
-		cfg["headers"] = headers
-	}
-	return map[string]any{exporterOTLPHTTP: cfg}, []string{exporterOTLPHTTP}, target
+	return dests.exporters
 }
 
-// renderPipelines builds one pipeline per signal the destination accepts, and none for a signal it does
-// not.
+// renderPipelines builds the service pipelines: every entry pipeline a destination's configurer returned,
+// fed by the OTLP receiver and run through the Collector's own processors; every internal one exactly as
+// its configurer wrote it; and, with no destination at all, one nop pipeline per signal.
 //
-// Declaring all three unconditionally is the mistake the per-workload rendering documents: a signal the
-// destination cannot take is received, batched, and fails on export — repeatedly, at volume, against a
-// backend that will never accept it.
-func renderPipelines(signals destination.OTLPTarget, exporters, processors []string) map[string]pipeline {
+// A configurer declares a pipeline only for a signal its destination takes, and that is the point: a
+// signal a destination cannot take would be received, batched, and fail on export — repeatedly, at
+// volume, against a backend that will never accept it.
+func renderPipelines(in Input, dests renderedDestinations) map[string]pipeline {
+	own := processorNames(in)
 	pipelines := map[string]pipeline{}
-	build := func(name string, accepted bool) {
-		if !accepted {
-			return
+	if len(dests.entry) == 0 {
+		for _, signal := range []string{"traces", "metrics", "logs"} {
+			pipelines[signal] = pipeline{
+				Receivers:  []string{receiverOTLP},
+				Processors: own,
+				Exporters:  []string{exporterNop},
+			}
+		}
+		return pipelines
+	}
+
+	for name, p := range dests.entry {
+		receivers := []string{receiverOTLP}
+		for _, r := range p.Receivers {
+			if r != receiverOTLP {
+				receivers = append(receivers, r)
+			}
 		}
 		pipelines[name] = pipeline{
-			Receivers:  []string{receiverOTLP},
-			Processors: processors,
-			Exporters:  exporters,
+			Receivers:  receivers,
+			Processors: withDestinationProcessors(own, p.Processors),
+			Exporters:  p.Exporters,
 		}
 	}
-	build("traces", signals.Traces)
-	build("metrics", signals.Metrics)
-	build("logs", signals.Logs)
+	for name, p := range dests.internal {
+		pipelines[name] = pipeline{Receivers: p.Receivers, Processors: p.Processors, Exporters: p.Exporters}
+	}
 	return pipelines
+}
+
+// withDestinationProcessors places a destination's own processors after the Collector's and before
+// batch, which stays last (see processorNames).
+func withDestinationProcessors(own, destination []string) []string {
+	if len(destination) == 0 {
+		return own
+	}
+	out := make([]string, 0, len(own)+len(destination))
+	out = append(out, own[:len(own)-1]...)
+	out = append(out, destination...)
+	return append(out, own[len(own)-1])
+}
+
+// mergeComponents adds destination-declared components to the Collector's own. The Collector's win a
+// name clash: they are what its receivers, health check and pipeline order depend on.
+func mergeComponents(own, fromDestinations map[string]any) map[string]any {
+	for k, v := range fromDestinations {
+		if _, taken := own[k]; !taken {
+			own[k] = v
+		}
+	}
+	return own
 }

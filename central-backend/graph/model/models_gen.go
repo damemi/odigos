@@ -43,6 +43,12 @@ type CloudConnectorCapabilityInput struct {
 	ComputePlatforms bool   `json:"computePlatforms"`
 }
 
+type CloudConnectorCollectorCapabilityInput struct {
+	Type       string `json:"type"`
+	Management bool   `json:"management"`
+	Deployment bool   `json:"deployment"`
+}
+
 type CloudConnectorFeature struct {
 	Key         string                `json:"key"`
 	Enabled     bool                  `json:"enabled"`
@@ -139,11 +145,12 @@ type ComputePlatform struct {
 }
 
 type CreateCloudConnectorInput struct {
-	Provider          string                           `json:"provider"`
-	DisplayName       string                           `json:"displayName"`
-	Credentials       map[string]any                   `json:"credentials"`
-	ExpectedAccountID string                           `json:"expectedAccountId"`
-	Capabilities      []*CloudConnectorCapabilityInput `json:"capabilities"`
+	Provider          string                                    `json:"provider"`
+	DisplayName       string                                    `json:"displayName"`
+	Credentials       map[string]any                            `json:"credentials"`
+	ExpectedAccountID string                                    `json:"expectedAccountId"`
+	Capabilities      []*CloudConnectorCapabilityInput          `json:"capabilities"`
+	Collectors        []*CloudConnectorCollectorCapabilityInput `json:"collectors,omitempty"`
 }
 
 type CreateCloudConnectorResult struct {
@@ -272,10 +279,11 @@ type Team struct {
 }
 
 type TestCloudConnectorConnectionInput struct {
-	Provider          string                           `json:"provider"`
-	Credentials       map[string]any                   `json:"credentials"`
-	ExpectedAccountID string                           `json:"expectedAccountId"`
-	Capabilities      []*CloudConnectorCapabilityInput `json:"capabilities"`
+	Provider          string                                    `json:"provider"`
+	Credentials       map[string]any                            `json:"credentials"`
+	ExpectedAccountID string                                    `json:"expectedAccountId"`
+	Capabilities      []*CloudConnectorCapabilityInput          `json:"capabilities"`
+	Collectors        []*CloudConnectorCollectorCapabilityInput `json:"collectors,omitempty"`
 }
 
 type User struct {

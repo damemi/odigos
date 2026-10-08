@@ -1653,6 +1653,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	ec := newExecutionContext(opCtx, e, make(chan graphql.DeferredResult))
 	inputUnmarshalMap := graphql.BuildUnmarshalerMap(
 		ec.unmarshalInputCloudConnectorCapabilityInput,
+		ec.unmarshalInputCloudConnectorCollectorCapabilityInput,
 		ec.unmarshalInputCreateCloudConnectorInput,
 		ec.unmarshalInputDiagnoseInput,
 		ec.unmarshalInputOidcIdentityProviderInput,
@@ -9145,6 +9146,50 @@ func (ec *executionContext) unmarshalInputCloudConnectorCapabilityInput(ctx cont
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputCloudConnectorCollectorCapabilityInput(ctx context.Context, obj any) (model.CloudConnectorCollectorCapabilityInput, error) {
+	var it model.CloudConnectorCollectorCapabilityInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"type", "management", "deployment"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "type":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("type"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Type = data
+		case "management":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("management"))
+			data, err := ec.unmarshalNBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Management = data
+		case "deployment":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("deployment"))
+			data, err := ec.unmarshalNBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Deployment = data
+		}
+	}
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputCreateCloudConnectorInput(ctx context.Context, obj any) (model.CreateCloudConnectorInput, error) {
 	var it model.CreateCloudConnectorInput
 	if obj == nil {
@@ -9156,7 +9201,7 @@ func (ec *executionContext) unmarshalInputCreateCloudConnectorInput(ctx context.
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"provider", "displayName", "credentials", "expectedAccountId", "capabilities"}
+	fieldsInOrder := [...]string{"provider", "displayName", "credentials", "expectedAccountId", "capabilities", "collectors"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -9198,6 +9243,13 @@ func (ec *executionContext) unmarshalInputCreateCloudConnectorInput(ctx context.
 				return it, err
 			}
 			it.Capabilities = data
+		case "collectors":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("collectors"))
+			data, err := ec.unmarshalOCloudConnectorCollectorCapabilityInput2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCollectorCapabilityInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Collectors = data
 		}
 	}
 	return it, nil
@@ -9374,7 +9426,7 @@ func (ec *executionContext) unmarshalInputTestCloudConnectorConnectionInput(ctx 
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"provider", "credentials", "expectedAccountId", "capabilities"}
+	fieldsInOrder := [...]string{"provider", "credentials", "expectedAccountId", "capabilities", "collectors"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -9409,6 +9461,13 @@ func (ec *executionContext) unmarshalInputTestCloudConnectorConnectionInput(ctx 
 				return it, err
 			}
 			it.Capabilities = data
+		case "collectors":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("collectors"))
+			data, err := ec.unmarshalOCloudConnectorCollectorCapabilityInput2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCollectorCapabilityInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Collectors = data
 		}
 	}
 	return it, nil
@@ -12551,6 +12610,11 @@ func (ec *executionContext) unmarshalNCloudConnectorCapabilityInput2ᚖgithubᚗ
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalNCloudConnectorCollectorCapabilityInput2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCollectorCapabilityInput(ctx context.Context, v any) (*model.CloudConnectorCollectorCapabilityInput, error) {
+	res, err := ec.unmarshalInputCloudConnectorCollectorCapabilityInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNCloudConnectorFeature2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorFeatureᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.CloudConnectorFeature) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -13382,6 +13446,23 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	_ = ctx
 	res := graphql.MarshalBoolean(*v)
 	return res
+}
+
+func (ec *executionContext) unmarshalOCloudConnectorCollectorCapabilityInput2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCollectorCapabilityInputᚄ(ctx context.Context, v any) ([]*model.CloudConnectorCollectorCapabilityInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]*model.CloudConnectorCollectorCapabilityInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNCloudConnectorCollectorCapabilityInput2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCollectorCapabilityInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
 }
 
 func (ec *executionContext) marshalOClusterSnapshot2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐClusterSnapshot(ctx context.Context, sel ast.SelectionSet, v *model.ClusterSnapshot) graphql.Marshaler {

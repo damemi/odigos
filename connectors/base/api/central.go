@@ -11,6 +11,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectormetrics"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorreport"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
 	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 	domainsrc "github.com/odigos-io/odigos-enterprise/connectors/base/domain/source"
 )
@@ -381,4 +384,58 @@ type CentralInterface interface {
 	DeleteDestination(ctx context.Context, name string) error
 	// DestinationCatalog returns the Odigos destination types this connector accepts.
 	DestinationCatalog() domaindest.Catalog
+
+	// --- Managed Collectors ---
+	//
+	// Every operation is keyed by REGION, because that is a Collector's identity (§5.1). The host
+	// network it runs in is placement metadata and is never how one is addressed.
+	//
+	// Create and Update write CONFIGURATION and return; they do not build infrastructure synchronously.
+	// The reconcile loop converges it on its next pass, which is why both return the report — normally
+	// still Pending — rather than a success boolean. A caller that wants to know when it is running
+	// watches the report's status.
+
+	// CollectorSettings returns the resolved managed-Collector configuration, read live. It is what
+	// renders a Collector that is configured but not yet built — after a create, before the reconcile
+	// loop has produced a row — so that mutation can answer with the settings it just wrote rather than
+	// with nothing.
+	CollectorSettings() collectorsettings.Settings
+	// ManagedCollectorReports returns one report input per recorded Collector, for every mode.
+	ManagedCollectorReports(ctx context.Context) ([]collectorreport.ModelInput, error)
+	// ManagedCollectorReport returns one region's report input, or nil when none is recorded there.
+	ManagedCollectorReport(ctx context.Context, region string) (*collectorreport.ModelInput, error)
+	// CreateManagedCollector declares that a region should have a Collector. It refuses a region that
+	// already has one — changing an existing Collector is UpdateManagedCollector, and letting create
+	// overwrite would turn a mistaken create into a silent reconfiguration of a running Collector.
+	CreateManagedCollector(ctx context.Context, region string, patch collectorsettings.Patch) error
+	// UpdateManagedCollector merges settings into a region that already has a Collector.
+	UpdateManagedCollector(ctx context.Context, region string, patch collectorsettings.Patch) error
+	// TeardownManagedCollector removes one region's Collector. A refusal (authority did not permit it)
+	// is reported in the result, not as an error: silently leaked infrastructure is the failure mode
+	// worth avoiding, so a declined teardown must still be visible to whoever asked.
+	TeardownManagedCollector(ctx context.Context, region string) (CollectorTeardownResult, error)
+	// Destinations one region's Collector owns and exports to — not the workload destinations above,
+	// which are configured independently. Identity is (region, name); a destination's Region is its
+	// Collector. The same rows are what the configuration renderer reads, so what a reader sees here and
+	// what the Collector actually forwards to cannot drift apart.
+	ManagedCollectorDestinations(ctx context.Context, region string) ([]domaindest.Destination, error)
+	ManagedCollectorDestination(ctx context.Context, region, name string) (*domaindest.Destination, error)
+	CreateManagedCollectorDestination(ctx context.Context, dest domaindest.Destination) error
+	UpdateManagedCollectorDestination(ctx context.Context, dest domaindest.Destination) error
+	DeleteManagedCollectorDestination(ctx context.Context, region, name string) (bool, error)
+	// ManagedCollectorMetrics returns the Collector's counters, and whether they came from a live round
+	// trip. found=false means it has never reported any — which is not a snapshot of zeroes.
+	ManagedCollectorMetrics(ctx context.Context, region string, refresh bool) (collectormetrics.Record, bool, error)
+}
+
+// CollectorTeardownResult is the outcome of a teardown request.
+//
+// Deleted=false is a refusal rather than a failure: the Collector is manual-mode, or customer-created,
+// or its objects are not recorded as Odigos-created, and Message names which. Retained lists what was
+// deliberately left standing so a customer is never told a teardown completed while their own load
+// balancer is still there.
+type CollectorTeardownResult struct {
+	Deleted  bool
+	Message  string
+	Retained []string
 }

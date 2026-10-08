@@ -174,6 +174,41 @@ func (r *queryResolver) DestinationTypes(ctx context.Context) ([]*model.Destinat
 	return (&gqlapi.DestinationTypeAPI{Central: r.Central}).DestinationTypes(ctx)
 }
 
+// --- Managed Collectors ---
+
+func (r *queryResolver) ManagedCollectorReports(ctx context.Context) ([]*model.ManagedCollectorReport, error) {
+	return (&gqlapi.ManagedCollectorAPI{Central: r.Central}).ManagedCollectorReports(ctx)
+}
+
+func (r *queryResolver) ManagedCollectorReport(ctx context.Context, region string) (*model.ManagedCollectorReport, error) {
+	return (&gqlapi.ManagedCollectorAPI{Central: r.Central}).ManagedCollectorReport(ctx, region)
+}
+
+func (r *queryResolver) GetManagedCollectorDestinationTypes(ctx context.Context) ([]*model.DestinationType, error) {
+	return (&gqlapi.ManagedCollectorDestinationAPI{Central: r.Central}).GetManagedCollectorDestinationTypes(ctx)
+}
+
+func (r *queryResolver) ListManagedCollectorDestinations(ctx context.Context, region string) ([]*model.Destination, error) {
+	return (&gqlapi.ManagedCollectorDestinationAPI{Central: r.Central}).ListManagedCollectorDestinations(ctx, region)
+}
+
+func (r *queryResolver) GetManagedCollectorDestination(ctx context.Context, region string, name string) (*model.Destination, error) {
+	return (&gqlapi.ManagedCollectorDestinationAPI{Central: r.Central}).GetManagedCollectorDestination(ctx, region, name)
+}
+
+func (r *queryResolver) ManagedCollectorMetrics(ctx context.Context, region string, refresh *bool) (*model.ManagedCollectorMetrics, error) {
+	return (&gqlapi.ManagedCollectorAPI{Central: r.Central}).ManagedCollectorMetrics(ctx, region, refresh)
+}
+
+// ManagedCollectorInstructions has no data source yet: no provider publishes deployment artifacts for
+// its Collector type (aws.yaml declares none). Null is the schema's documented answer for exactly that,
+// so this returns null rather than rendering an empty document set that would read as "here is how, and
+// it is nothing".
+func (r *queryResolver) ManagedCollectorInstructions(_ context.Context, _ string) (*model.ManagedCollectorInstructions, error) {
+	logUnsupported("managedCollectorInstructions")
+	return nil, nil
+}
+
 // --- Unsupported queries ---
 
 func (r *queryResolver) ActionTypes(context.Context) ([]*model.ActionTypeOption, error) {
@@ -290,7 +325,46 @@ func (r *mutationResolver) TestConnectionForDestination(ctx context.Context, inp
 	return (&gqlapi.DestinationAPI{Central: r.Central}).TestConnectionForDestination(ctx, input)
 }
 
+// --- Managed Collectors ---
+
+func (r *mutationResolver) CreateManagedCollector(ctx context.Context, input model.CreateManagedCollectorInput) (*model.ManagedCollectorReport, error) {
+	return (&gqlapi.ManagedCollectorAPI{Central: r.Central}).CreateManagedCollector(ctx, input)
+}
+
+func (r *mutationResolver) UpdateManagedCollector(ctx context.Context, input model.UpdateManagedCollectorInput) (*model.ManagedCollectorReport, error) {
+	return (&gqlapi.ManagedCollectorAPI{Central: r.Central}).UpdateManagedCollector(ctx, input)
+}
+
+func (r *mutationResolver) TeardownManagedCollector(ctx context.Context, input model.TeardownManagedCollectorInput) (*model.TeardownManagedCollectorPayload, error) {
+	return (&gqlapi.ManagedCollectorAPI{Central: r.Central}).TeardownManagedCollector(ctx, input)
+}
+
+func (r *mutationResolver) CreateManagedCollectorDestination(ctx context.Context, input model.CreateManagedCollectorDestinationInput) (*model.Destination, error) {
+	return (&gqlapi.ManagedCollectorDestinationAPI{Central: r.Central}).CreateManagedCollectorDestination(ctx, input)
+}
+
+func (r *mutationResolver) UpdateManagedCollectorDestination(ctx context.Context, input model.UpdateManagedCollectorDestinationInput) (*model.Destination, error) {
+	return (&gqlapi.ManagedCollectorDestinationAPI{Central: r.Central}).UpdateManagedCollectorDestination(ctx, input)
+}
+
+func (r *mutationResolver) DestroyManagedCollectorDestination(ctx context.Context, input model.DestroyManagedCollectorDestinationInput) (*model.DestroyManagedCollectorDestinationPayload, error) {
+	return (&gqlapi.ManagedCollectorDestinationAPI{Central: r.Central}).DestroyManagedCollectorDestination(ctx, input)
+}
+
 // --- Unsupported mutations ---
+
+// GenerateDiagnoseBundle and UpdateOnPremLicense arrived in the shared schema for the agent runtimes
+// and have no connector equivalent: a connector collects no local diagnostic bundle, and its licence is
+// installed with the connector rather than pushed to it. Null, like every other operation this runtime
+// does not implement.
+func (r *mutationResolver) GenerateDiagnoseBundle(context.Context, *bool) (*model.DiagnoseBundle, error) {
+	logUnsupported("generateDiagnoseBundle")
+	return nil, nil
+}
+func (r *mutationResolver) UpdateOnPremLicense(context.Context, string) (bool, error) {
+	logUnsupported("updateOnPremLicense")
+	return false, nil
+}
 
 func (r *mutationResolver) CreateAction(context.Context, model.CreateActionInput) (model.Action, error) {
 	logUnsupported("createAction")

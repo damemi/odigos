@@ -234,6 +234,35 @@ func capabilitiesFromInput(provider string, in []*model.CloudConnectorCapability
 	return out
 }
 
+func collectorCapabilitiesFromInput(in []*model.CloudConnectorCollectorCapabilityInput) []spec.CollectorCapability {
+	if in == nil {
+		return nil
+	}
+	out := make([]spec.CollectorCapability, 0, len(in))
+	for _, c := range in {
+		if c == nil {
+			continue
+		}
+		out = append(out, spec.CollectorCapability{
+			Type: c.Type, Management: c.Management, Deployment: c.Deployment,
+		})
+	}
+	return out
+}
+
+func crdCollectorCapabilities(in []spec.CollectorCapability) []cloudconnectorsv1.CloudConnectorCollectorCapability {
+	if in == nil {
+		return nil
+	}
+	out := make([]cloudconnectorsv1.CloudConnectorCollectorCapability, 0, len(in))
+	for _, c := range in {
+		out = append(out, cloudconnectorsv1.CloudConnectorCollectorCapability{
+			Type: c.Type, Management: c.Management, Deployment: c.Deployment,
+		})
+	}
+	return out
+}
+
 // crdCapabilitiesFromInput maps GraphQL capability inputs to the CRD's split
 // workload / compute-platform allow-lists, using the provider spec to decide
 // which domain each type belongs to.

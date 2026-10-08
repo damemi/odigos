@@ -133,6 +133,19 @@ func (m *Manager) Effective() map[string]any {
 // Defaults returns a copy of the code defaults for the GraphQL configDefaults query.
 func (m *Manager) Defaults() map[string]any { return copyMap(m.defaults) }
 
+// StoredValue returns the explicit override stored for one top-level key, or nil when nobody has
+// overridden it.
+//
+// The distinction Effective cannot make, and it matters to anything that writes a subtree BACK. A
+// patch replaces a top-level key wholesale, so building one from the effective value persists the code
+// defaults alongside the change — freezing them, so a later release's new default never reaches this
+// connector. Starting from the stored value instead writes only what was actually configured.
+func (m *Manager) StoredValue(key string) any {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.stored[key]
+}
+
 // Update merges patch into the stored overrides (a nil value deletes an override, reverting to default),
 // validates the result, persists it, and refreshes so the change applies live. Only known keys are
 // accepted so a typo can't silently do nothing.

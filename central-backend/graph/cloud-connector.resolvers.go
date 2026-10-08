@@ -27,11 +27,16 @@ func (r *mutationResolver) TestCloudConnectorConnection(ctx context.Context, inp
 		return nil, err
 	}
 
+	capabilities := capabilitiesFromInput(input.Provider, input.Capabilities)
+	capabilities.Collectors = collectorCapabilitiesFromInput(input.Collectors)
+	if err := capabilities.Validate(); err != nil {
+		return nil, err
+	}
 	res, err := testconnection.Run(ctx, testconnection.Input{
 		Provider:          input.Provider,
 		Credentials:       credentialsFromMap(input.Credentials),
 		ExpectedAccountID: input.ExpectedAccountID,
-		Capabilities:      capabilitiesFromInput(input.Provider, input.Capabilities),
+		Capabilities:      capabilities,
 	})
 	if err != nil {
 		return nil, err
@@ -50,11 +55,16 @@ func (r *mutationResolver) CreateCloudConnector(ctx context.Context, input model
 	}
 
 	creds := credentialsFromMap(input.Credentials)
+	capabilities := capabilitiesFromInput(input.Provider, input.Capabilities)
+	capabilities.Collectors = collectorCapabilitiesFromInput(input.Collectors)
+	if err := capabilities.Validate(); err != nil {
+		return nil, err
+	}
 	res, err := testconnection.Run(ctx, testconnection.Input{
 		Provider:          input.Provider,
 		Credentials:       creds,
 		ExpectedAccountID: input.ExpectedAccountID,
-		Capabilities:      capabilitiesFromInput(input.Provider, input.Capabilities),
+		Capabilities:      capabilities,
 	})
 	if err != nil {
 		return nil, err
@@ -86,6 +96,7 @@ func (r *mutationResolver) CreateCloudConnector(ctx context.Context, input model
 		AccountDisplayName: input.DisplayName,
 		Workloads:          workloads,
 		ComputePlatforms:   computePlatforms,
+		Collectors:         crdCollectorCapabilities(capabilities.Collectors),
 		SecretData:         secretDataForProvider(input.Provider, creds),
 	})
 	if err != nil {

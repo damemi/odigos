@@ -26,6 +26,14 @@ func (c Catalog) ValidateWithCatalog(dest Destination) error {
 	if strings.TrimSpace(dest.Region) != "" {
 		return fmt.Errorf("destination type %q is global and cannot set region", dest.Type)
 	}
+	return ValidateOdigosCatalogFields(dest)
+}
+
+// ValidateOdigosCatalogFields checks a destination against its Odigos destination catalog entry: the type
+// exists, every required field is set, and every signal is one the type supports. It knows nothing about
+// which types a particular connector accepts or where the destination is scoped; callers decide that.
+func ValidateOdigosCatalogFields(dest Destination) error {
+	normalized := strings.ToLower(strings.TrimSpace(dest.Type))
 	if err := destinations.Load(); err != nil {
 		return fmt.Errorf("load destination catalog: %w", err)
 	}

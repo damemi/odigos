@@ -3,7 +3,7 @@
 # Everything provider-specific is declared in the connector spec (connectors/spec/data/aws.yaml),
 # not in this CR — the CR only references it:
 #   spec.account.id              -> the connector.field "accountId"
-#   spec.workloads / spec.computePlatforms -> per-type discovery/instrumentation allow-lists (see below)
+#   spec.workloads / spec.computePlatforms / spec.collectors -> per-type allow-lists (see below)
 #   the credentials Secret keys  -> auth.methods[].fields[].name (see below)
 # The connector scans every region enabled in the account; there is no region selection.
 #
@@ -86,6 +86,14 @@ spec:
       discovery: true
     - type: aws.ecs-cluster
       discovery: true
+
+# Collectors — enable management for discovery/configuration of Collector installations.
+# Enable deployment as well to let Odigos install the Collector. For a customer-managed
+# installation, set deployment: false. Uncomment only after configuring the desired mode.
+  # collectors:
+  #   - type: aws.fargate-collector
+  #     management: true
+  #     deployment: true
 
   discovery:
     refreshInterval: 10m

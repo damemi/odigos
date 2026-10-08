@@ -58,6 +58,11 @@ func (c *Client) UpsertCloudConnector(ctx context.Context, cc *cloudconnectorsv1
 		if getErr := c.Ctrl.Get(ctx, ctrlclient.ObjectKey{Namespace: cc.Namespace, Name: cc.Name}, &existing); getErr != nil {
 			return fmt.Errorf("failed to get existing OdigosCloudConnector %s/%s: %w", cc.Namespace, cc.Name, getErr)
 		}
+		// Older clients omit collectors. Keep an explicit allow-list already set
+		// on the CR instead of silently clearing it during credential updates.
+		if cc.Spec.Collectors == nil {
+			cc.Spec.Collectors = existing.Spec.Collectors
+		}
 		existing.Spec = cc.Spec
 		if updErr := c.Ctrl.Update(ctx, &existing); updErr != nil {
 			return fmt.Errorf("failed to update OdigosCloudConnector %s/%s: %w", cc.Namespace, cc.Name, updErr)

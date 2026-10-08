@@ -20,7 +20,7 @@ processors:
         override: false
         timeout: 2s
 exporters:
-    otlp:
+    otlp_grpc/generic-customer-backend:
         endpoint: otlp.vendor.example.com:4317
         tls:
             insecure: true
@@ -31,7 +31,7 @@ service:
     extensions:
         - health_check
     pipelines:
-        logs:
+        logs/generic-customer-backend:
             receivers:
                 - otlp
             processors:
@@ -39,8 +39,8 @@ service:
                 - resourcedetection
                 - batch
             exporters:
-                - otlp
-        metrics:
+                - otlp_grpc/generic-customer-backend
+        metrics/generic-customer-backend:
             receivers:
                 - otlp
             processors:
@@ -48,8 +48,8 @@ service:
                 - resourcedetection
                 - batch
             exporters:
-                - otlp
-        traces:
+                - otlp_grpc/generic-customer-backend
+        traces/generic-customer-backend:
             receivers:
                 - otlp
             processors:
@@ -57,4 +57,4 @@ service:
                 - resourcedetection
                 - batch
             exporters:
-                - otlp
+                - otlp_grpc/generic-customer-backend

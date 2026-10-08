@@ -126,6 +126,14 @@ input CloudConnectorCapabilityInput {
   computePlatforms: Boolean!
 }
 
+# Per-Collector allow-list entry. Management observes and configures a Collector;
+# deployment additionally lets Odigos install it.
+input CloudConnectorCollectorCapabilityInput {
+  type: String!
+  management: Boolean!
+  deployment: Boolean!
+}
+
 input TestCloudConnectorConnectionInput {
   # Provider key, e.g. "aws".
   provider: String!
@@ -135,6 +143,7 @@ input TestCloudConnectorConnectionInput {
   # Account boundary id validated against the resolved identity ("" to skip).
   expectedAccountId: String!
   capabilities: [CloudConnectorCapabilityInput!]!
+  collectors: [CloudConnectorCollectorCapabilityInput!]
 }
 
 type CloudConnectorTestCheck {
@@ -182,6 +191,7 @@ input CreateCloudConnectorInput {
   # Account boundary id; "" -> use the identity resolved during verification.
   expectedAccountId: String!
   capabilities: [CloudConnectorCapabilityInput!]!
+  collectors: [CloudConnectorCollectorCapabilityInput!]
 }
 
 type CreateCloudConnectorResult {

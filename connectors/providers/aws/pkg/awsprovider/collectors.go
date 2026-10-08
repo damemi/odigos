@@ -9,7 +9,6 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorownership"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/opamp"
 	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/deployer"
@@ -66,7 +65,7 @@ func (p *Provider) CollectorDeployers() map[string]baseapi.CollectorDeployer {
 
 // DesiredConfig implements opamp.Desired: what this Collector should be running.
 //
-// Rendered from the connector's destinations and this network's settings, and rendered HERE rather
+// Rendered from this Collector's own destinations and this network's settings, and rendered HERE rather
 // than in the deployer so there is exactly one renderer. The OpAMP server pushes what this returns and
 // the deployer writes what this returns into the cold-start bootstrap secret; two renderers would
 // mean a Collector that comes up during an outage serving a configuration that was never published, and
@@ -82,14 +81,12 @@ func (p *Provider) DesiredConfig(ctx context.Context, key basestore.CollectorKey
 		return collectorconfig.Document{}, fmt.Errorf("sizing the Collector in %s: %w", key.Region, err)
 	}
 
-	records, err := p.bstore.ListDestinations(ctx)
+	// The Collector's own destinations, not the workload destinations: those say where workloads send
+	// (possibly to this Collector), and are configured independently of where it sends on.
+	destinations, err := p.bstore.ListCollectorDestinations(ctx, key.Region)
 	if err != nil {
 		return collectorconfig.Document{}, fmt.Errorf("listing destinations for the Collector in %s: %w",
 			key.Region, err)
-	}
-	destinations := make([]domaindest.Destination, 0, len(records))
-	for _, rec := range records {
-		destinations = append(destinations, basestore.DestinationRecordToDomain(rec))
 	}
 
 	document, problems := collectorconfig.Render(collectorconfig.Input{
@@ -107,6 +104,12 @@ func (p *Provider) DesiredConfig(ctx context.Context, key basestore.CollectorKey
 	if collectorstatus.HasError(problems) {
 		return collectorconfig.Document{}, fmt.Errorf("rendering the Collector configuration for %s: %s",
 			key.Region, problems[0].Message)
+	}
+	// Rendered anyway, and said out loud: a destination left out of the document (one that stopped
+	// rendering after an upgrade) is otherwise indistinguishable from one that exports and is ignored.
+	for _, problem := range problems {
+		awslog.Warn("Collector configuration rendered with a problem",
+			"region", key.Region, "code", problem.Code, "message", problem.Message)
 	}
 	return document, nil
 }

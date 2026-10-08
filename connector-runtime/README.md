@@ -28,28 +28,27 @@ a JSON object with one key per domain — `workloads`, `computePlatforms`, `coll
 empty: the value is a container env var, so a key that appeared unconditionally would roll every
 connector pod in the fleet on upgrade.
 
-### Managed Collectors and the annotation fallback
+### Managed Collectors
 
-`collectors` comes from `spec.collectors[]` on the CR. On a cluster whose `OdigosCloudConnector` CRD
-predates that field, the same list may be given as an annotation instead:
+Declare each Collector in `spec.collectors[]`, alongside `spec.workloads[]` and
+`spec.computePlatforms[]`:
 
 ```yaml
-metadata:
-  annotations:
-    odigos.io/collectors-capability: '[{"type":"aws.fargate-collector","management":true}]'
+spec:
+  collectors:
+    - type: aws.fargate-collector
+      management: true
+      deployment: true
 ```
 
-An annotation needs no CRD change, which is the point — a cluster can enable a managed Collector
-before the CRD shipped by the `odigos-central` chart is upgraded.
+Set `deployment: false` for a Collector installed by the customer. The connector
+will discover and configure it when `management: true`.
 
-- **`spec.collectors[]` wins wherever it is set.** A shadowed annotation is reported as an
+- **`spec.collectors[]` wins wherever it is set.** A legacy annotation is reported as an
   `InvalidCollectorsCapability` Event rather than ignored quietly: it is exactly what somebody edits
   when they want the capability to change, and then wonders why nothing happened. Remove it.
-- **The annotation is parsed strictly** — unknown keys, a missing `type`, or anything that is not a
-  JSON array is refused. It is hand-written, so a typo there is a typo, and guessing at it would
-  enable something other than what was asked for.
-- **The annotation is temporary.** Delete it once every cluster is on a CRD carrying the field; a shim
-  nothing needs is a second place for the allow-list to disagree with itself.
+- The legacy `odigos.io/collectors-capability` annotation remains readable for clusters
+  with an older CRD. New connectors should use the spec field.
 
 A list the connector could not honor — a duplicate type with conflicting flags, or `deployment`
 without `management` — is **dropped in full** and reported as an Event. The connector is still
