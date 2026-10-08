@@ -108,7 +108,7 @@ func Run(ctx context.Context, cfg config.Config, cfgMgr *config.Manager, st *sto
 
 	go coord.Start(ctx)
 
-	startCollectorOpAMPServer(ctx, cfg, st, p)
+	startCollectorOpAMPServer(ctx, cfg, st, p, coord)
 
 	// One agents-api executor backs both transports: the reverse WebSocket to Central and the local
 	// odictl CLI endpoint.
@@ -221,7 +221,7 @@ func runShutdownDrain(cfgMgr *config.Manager, st *store.Store, coord *coordinato
 // The desired configuration comes from the provider, as an optional capability. A provider that declares
 // a collectors type but cannot render one is a mismatch worth saying out loud rather than a listener that
 // accepts connections and has nothing to give them.
-func startCollectorOpAMPServer(ctx context.Context, cfg config.Config, st *store.Store, p api.Provider) {
+func startCollectorOpAMPServer(ctx context.Context, cfg config.Config, st *store.Store, p api.Provider, coord *coordinator.Coordinator) {
 	types := p.Spec().CollectorTypes(cfg.Capabilities)
 	if len(types) == 0 {
 		return
@@ -240,6 +240,8 @@ func startCollectorOpAMPServer(ctx context.Context, cfg config.Config, st *store
 		Provider:     cfg.Provider,
 		AccountID:    cfg.AccountID,
 	}, st, desired)
+	srv.PublicEndpoint = cfg.OpAMPEndpoint
+	srv.Metrics = coord.MetricsCache()
 
 	go func() {
 		// Warned, not fatal. The OpAMP server is the Collectors' config plane; losing it must not take

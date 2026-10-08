@@ -63,7 +63,7 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
-	github.com/odigos-io/agents-api/go/server v0.24.0 // indirect
+	github.com/odigos-io/agents-api/go/server v0.25.0 // indirect
 	github.com/odigos-io/odigos/destinations v1.29.0 // indirect
 	github.com/open-telemetry/opamp-go v0.23.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
@@ -74,6 +74,7 @@ require (
 	github.com/vektah/gqlparser/v2 v2.5.34 // indirect
 	go.opentelemetry.io/otel v1.44.0 // indirect
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
+	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap/exp v0.3.0 // indirect
 	golang.org/x/crypto v0.56.0 // indirect

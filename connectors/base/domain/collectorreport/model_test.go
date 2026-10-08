@@ -35,8 +35,8 @@ func TestToModelCarriesIdentityAndDesired(t *testing.T) {
 	in.Desired.HostNetworkID = "vpc-1"
 	got := ToModel(in)
 
-	if got.Region != "eu-west-1" || got.HostNetworkID != "vpc-1" {
-		t.Errorf("identity = (%q, %q)", got.Region, got.HostNetworkID)
+	if got.Region != "eu-west-1" || got.NetworkID != "vpc-1" {
+		t.Errorf("identity = (%q, %q)", got.Region, got.NetworkID)
 	}
 	if got.Kind != "aws.fargate-collector" {
 		t.Errorf("kind = %q", got.Kind)
@@ -44,8 +44,8 @@ func TestToModelCarriesIdentityAndDesired(t *testing.T) {
 	if !got.Desired.Enabled || got.Desired.CPU != "1024" || got.Desired.Memory != "2048" {
 		t.Errorf("desired = %+v", got.Desired)
 	}
-	if got.Desired.HostNetworkID == nil || *got.Desired.HostNetworkID != "vpc-1" {
-		t.Errorf("desired hostNetworkId = %v", got.Desired.HostNetworkID)
+	if got.Desired.NetworkID == nil || *got.Desired.NetworkID != "vpc-1" {
+		t.Errorf("desired networkId = %v", got.Desired.NetworkID)
 	}
 }
 
@@ -197,7 +197,7 @@ func TestPendingIssuesAreTransient(t *testing.T) {
 func TestExtraIssuesCarryTypedDetails(t *testing.T) {
 	in := baseInput()
 	in.ExtraIssues = []*model.ManagedCollectorIssue{
-		ConfigurationIssue("AmbiguousHostNetwork", "eu-west-1", "hostNetworkId",
+		ConfigurationIssue("AmbiguousHostNetwork", "eu-west-1", "networkId",
 			"several networks are eligible", []string{"vpc-1", "vpc-2"}, collectorstatus.SeverityError),
 	}
 	issues := ToModel(in).Issues

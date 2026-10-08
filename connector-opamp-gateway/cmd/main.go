@@ -107,7 +107,7 @@ func run(log *slog.Logger) error {
 
 	var ready atomic.Bool
 	mux := http.NewServeMux()
-	mux.Handle(cfg.OpAMPPath, handler)
+	gateway.RegisterCollectorRoutes(mux, cfg.OpAMPPath, handler)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		// Readiness is "can this replica authenticate", not "is the process up". A gateway that cannot

@@ -144,9 +144,10 @@ func (a *ManagedCollectorAPI) ManagedCollectorMetrics(ctx context.Context, regio
 // field out fails to compile when one is renamed, where a reflective one would silently drop it.
 
 func patchFromCreateInput(in model.CreateManagedCollectorInput) collectorsettings.Patch {
+	provider, providerIngress := providerOverridesPatch(in.ProviderOverrides)
 	return collectorsettings.Patch{
-		HostNetworkID:           in.HostNetworkID,
-		Provider:                awsProviderPatch(in.SubnetIds, in.SecurityGroupIds, in.ClusterRef, in.AssignPublicIP, in.UseFargateSpot),
+		HostNetworkID:           in.NetworkID,
+		Provider:                provider,
 		CPU:                     in.CPU,
 		Memory:                  in.Memory,
 		LogRetentionDays:        in.LogRetentionDays,
@@ -156,15 +157,16 @@ func patchFromCreateInput(in model.CreateManagedCollectorInput) collectorsetting
 		RolloutBatchSize:        in.RolloutBatchSize,
 		Scaling:                 scalingPatch(in.Scaling),
 		TLS:                     transportPatch(in.Transport),
-		Ingress:                 ingressPatch(in.Ingress),
+		Ingress:                 mergeIngressPatch(ingressPatch(in.Ingress), providerIngress),
 	}
 }
 
 func patchFromUpdateInput(in model.UpdateManagedCollectorInput) collectorsettings.Patch {
+	provider, providerIngress := providerOverridesPatch(in.ProviderOverrides)
 	return collectorsettings.Patch{
 		Enabled:                 in.Enabled,
-		HostNetworkID:           in.HostNetworkID,
-		Provider:                awsProviderPatch(in.SubnetIds, in.SecurityGroupIds, in.ClusterRef, in.AssignPublicIP, in.UseFargateSpot),
+		HostNetworkID:           in.NetworkID,
+		Provider:                provider,
 		CPU:                     in.CPU,
 		Memory:                  in.Memory,
 		LogRetentionDays:        in.LogRetentionDays,
@@ -174,7 +176,7 @@ func patchFromUpdateInput(in model.UpdateManagedCollectorInput) collectorsetting
 		RolloutBatchSize:        in.RolloutBatchSize,
 		Scaling:                 scalingPatch(in.Scaling),
 		TLS:                     transportPatch(in.Transport),
-		Ingress:                 ingressPatch(in.Ingress),
+		Ingress:                 mergeIngressPatch(ingressPatch(in.Ingress), providerIngress),
 	}
 }
 
@@ -208,23 +210,48 @@ func ingressPatch(in *model.ManagedCollectorIngressInput) *collectorsettings.Ing
 		return nil
 	}
 	return &collectorsettings.IngressPatch{
-		AdditionalNetworkIdentityIDs: slicePtr(in.AdditionalSecurityGroupIds),
-		AdditionalCIDRs:              slicePtr(in.AdditionalCidrs),
-		AllowNetworkCIDRFallback:     in.AllowNetworkCidrFallback,
-		MinFallbackPrefixLength:      in.MinFallbackPrefixLength,
+		AdditionalCIDRs: slicePtr(in.AdditionalCidrs),
 	}
 }
 
-// awsProviderPatch adapts the AWS-shaped fields in the shared agents-api schema into the opaque
-// provider map. The settings domain only merges this map; AWS's settings package interprets it.
-func awsProviderPatch(subnetIDs, securityGroupIDs []string, clusterRef *string, assignPublicIP, useFargateSpot *bool) map[string]any {
+// providerOverridesPatch maps the generated provider-specific API branch to the opaque settings map.
+// The settings domain only merges this map; the selected provider interprets it.
+func providerOverridesPatch(in *model.ManagedCollectorProviderOverridesInput) (map[string]any, *collectorsettings.IngressPatch) {
+	if in == nil || in.AWS == nil {
+		return nil, nil
+	}
+	aws := in.AWS
 	provider := map[string]any{}
-	setProviderStrings(provider, "subnetIds", subnetIDs)
-	setProviderStrings(provider, "securityGroupIds", securityGroupIDs)
-	setProvider(provider, "clusterArn", clusterRef)
-	setProvider(provider, "assignPublicIp", assignPublicIP)
-	setProvider(provider, "useFargateSpot", useFargateSpot)
-	return provider
+	setProviderStrings(provider, "subnetIds", aws.SubnetIds)
+	setProviderStrings(provider, "securityGroupIds", aws.SecurityGroupIds)
+	setProvider(provider, "clusterArn", aws.ClusterRef)
+	setProvider(provider, "assignPublicIp", aws.AssignPublicIP)
+	setProvider(provider, "useFargateSpot", aws.UseFargateSpot)
+	ingress := &collectorsettings.IngressPatch{
+		AdditionalNetworkIdentityIDs: slicePtr(aws.AdditionalSecurityGroupIds),
+		AllowNetworkCIDRFallback:     aws.AllowNetworkCidrFallback,
+		MinFallbackPrefixLength:      aws.MinFallbackPrefixLength,
+	}
+	return provider, ingress
+}
+
+func mergeIngressPatch(base, overrides *collectorsettings.IngressPatch) *collectorsettings.IngressPatch {
+	if base == nil {
+		return overrides
+	}
+	if overrides == nil {
+		return base
+	}
+	if overrides.AdditionalNetworkIdentityIDs != nil {
+		base.AdditionalNetworkIdentityIDs = overrides.AdditionalNetworkIdentityIDs
+	}
+	if overrides.AllowNetworkCIDRFallback != nil {
+		base.AllowNetworkCIDRFallback = overrides.AllowNetworkCIDRFallback
+	}
+	if overrides.MinFallbackPrefixLength != nil {
+		base.MinFallbackPrefixLength = overrides.MinFallbackPrefixLength
+	}
+	return base
 }
 
 func setProvider[T any](provider map[string]any, key string, value *T) {

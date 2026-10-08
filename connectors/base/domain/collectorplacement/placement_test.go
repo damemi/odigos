@@ -138,7 +138,7 @@ func TestMultipleSourceNetworksRequireExplicitRegionalHost(t *testing.T) {
 	if !reflect.DeepEqual(problemCodes(plan), []string{"CollectorHostNetworkRequired"}) {
 		t.Fatalf("problems = %v", problemCodes(plan))
 	}
-	if !strings.Contains(plan.Problems[0].Message, collectorsettings.KeyHostNetworkID) {
+	if !strings.Contains(plan.Problems[0].Message, "networkId") {
 		t.Fatalf("problem does not name remediation: %s", plan.Problems[0].Message)
 	}
 }

@@ -32,7 +32,10 @@ const (
 	// KeyRegions contains the logical regional Collector settings. A region is the deployment unit.
 	KeyRegions = "regions"
 
-	KeyHostNetworkID = "hostNetworkId"
+	// KeyHostNetworkID keeps the internal name used by placement code; its public config spelling is
+	// provider-neutral, matching agents-api. The legacy spelling remains readable below.
+	KeyHostNetworkID       = "networkId"
+	legacyKeyHostNetworkID = "hostNetworkId"
 	// KeyProvider holds provider-owned settings. The base layer preserves and merges this opaque map;
 	// the selected provider is solely responsible for interpreting it.
 	KeyProvider         = "provider"
@@ -245,7 +248,8 @@ func Read(effective map[string]any) Settings {
 
 func readRegion(entry map[string]any, id string, base Network) Region {
 	n := readNetwork(entry, base)
-	return Region{Network: n, Region: id, HostNetworkID: stringOf(entry, KeyHostNetworkID, "")}
+	networkID := stringOf(entry, KeyHostNetworkID, stringOf(entry, legacyKeyHostNetworkID, ""))
+	return Region{Network: n, Region: id, HostNetworkID: networkID}
 }
 
 // readNetwork applies one entry's overrides over a base. Every field falls through to the base when the

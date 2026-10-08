@@ -17,6 +17,7 @@ import (
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorconfig"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorgateway"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectormetrics"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
 )
@@ -37,6 +38,7 @@ type fakeCollectors struct {
 	pushes   []pushWrite
 	applied  []string
 	statuses []statusWrite
+	metrics  []collectormetrics.Record
 	// firstReady records every latch write, so a test can assert both that becoming ready opens the
 	// cutover gate and that nothing else does.
 	firstReady []time.Time
@@ -110,6 +112,13 @@ func (f *fakeCollectors) RecordCollectorConfigApplied(_ context.Context, _ store
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.applied = append(f.applied, configHash)
+	return nil
+}
+
+func (f *fakeCollectors) RecordCollectorMetrics(_ context.Context, _ store.CollectorKey, snapshot collectormetrics.Snapshot, observedAt time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.metrics = append(f.metrics, collectormetrics.Record{Snapshot: snapshot, ObservedAt: observedAt})
 	return nil
 }
 

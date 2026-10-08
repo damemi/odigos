@@ -131,18 +131,18 @@ func ToModel(in ModelInput) *model.ManagedCollectorReport {
 	prose := Build(statusInput)
 
 	out := &model.ManagedCollectorReport{
-		Region:        in.Region,
-		HostNetworkID: in.HostNetworkID,
-		Kind:          in.Kind,
-		Status:        string(prose.Status),
-		Message:       prose.Message,
-		Liveness:      string(liveness),
-		Desired:       desiredModel(in.Desired),
-		Current:       currentModel(in),
-		Authority:     authorityModel(in),
-		Issues:        issueModels(in),
-		Details:       detailsModel(in),
-		UpdatedAt:     rfc3339(&in.UpdatedAt),
+		Region:    in.Region,
+		NetworkID: in.HostNetworkID,
+		Kind:      in.Kind,
+		Status:    string(prose.Status),
+		Message:   prose.Message,
+		Liveness:  string(liveness),
+		Desired:   desiredModel(in.Desired),
+		Current:   currentModel(in),
+		Authority: authorityModel(in),
+		Issues:    issueModels(in),
+		Details:   detailsModel(in),
+		UpdatedAt: rfc3339(&in.UpdatedAt),
 	}
 	if in.OpAMPInstanceUID != "" {
 		out.InstanceUID = &in.OpAMPInstanceUID
@@ -163,9 +163,6 @@ func ToModels(inputs []ModelInput) []*model.ManagedCollectorReport {
 func desiredModel(d collectorsettings.Region) *model.ManagedCollectorDesired {
 	out := &model.ManagedCollectorDesired{
 		Enabled:          d.Enabled,
-		SubnetIds:        providerStrings(d.Provider, "subnetIds"),
-		SecurityGroupIds: providerStrings(d.Provider, "securityGroupIds"),
-		AssignPublicIP:   providerBool(d.Provider, "assignPublicIp"),
 		CPU:              d.CPU,
 		Memory:           d.Memory,
 		LogRetentionDays: d.LogRetentionDays,
@@ -184,21 +181,32 @@ func desiredModel(d collectorsettings.Region) *model.ManagedCollectorDesired {
 			CertificateRef: nonEmpty(d.TLS.CertificateRef),
 		},
 		Ingress: &model.ManagedCollectorIngress{
-			AdditionalSecurityGroupIds: d.Ingress.AdditionalNetworkIdentityIDs,
-			AdditionalCidrs:            d.Ingress.AdditionalCIDRs,
-			AllowNetworkCidrFallback:   d.Ingress.AllowNetworkCIDRFallback,
-			MinFallbackPrefixLength:    nonZeroInt(d.Ingress.MinFallbackPrefixLength),
+			AdditionalCidrs: d.Ingress.AdditionalCIDRs,
 		},
+		ProviderOverrides: providerOverridesModel(d.Provider, d.Ingress),
 	}
-	out.HostNetworkID = nonEmpty(d.HostNetworkID)
-	out.ClusterRef = nonEmpty(providerString(d.Provider, "clusterArn"))
+	out.NetworkID = nonEmpty(d.HostNetworkID)
 	out.ImageRepositoryOverride = nonEmpty(d.ImageRepositoryOverride)
 	out.EndpointOverride = nonEmpty(d.EndpointOverride)
 	return out
 }
 
-// The agents-api Collector shape currently exposes AWS-named fields. The shared settings model keeps
-// provider configuration opaque, so this wire adapter is the only place that projects those values.
+func providerOverridesModel(provider map[string]any, ingress collectoringress.Config) model.ManagedCollectorProviderOverrides {
+	return &model.AWSManagedCollectorProviderOverrides{
+		Provider:                   ProviderAWS,
+		SubnetIds:                  providerStrings(provider, "subnetIds"),
+		SecurityGroupIds:           providerStrings(provider, "securityGroupIds"),
+		ClusterRef:                 nonEmpty(providerString(provider, "clusterArn")),
+		AssignPublicIP:             providerBool(provider, "assignPublicIp"),
+		UseFargateSpot:             providerBool(provider, "useFargateSpot"),
+		AdditionalSecurityGroupIds: ingress.AdditionalNetworkIdentityIDs,
+		AllowNetworkCidrFallback:   ingress.AllowNetworkCIDRFallback,
+		MinFallbackPrefixLength:    nonZeroInt(ingress.MinFallbackPrefixLength),
+	}
+}
+
+// The shared settings model keeps provider configuration opaque, so this wire adapter is the only
+// place that projects the AWS values into the agents-api provider override branch.
 func providerString(provider map[string]any, key string) string {
 	value, _ := provider[key].(string)
 	return value

@@ -97,13 +97,34 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokenHash, refusal := collectorgateway.PresentedCredential(r.Header)
-	if refusal != collectorgateway.RefusalNone {
-		h.deny(w, r, http.StatusUnauthorized, refusal, nil, "")
-		return
+	metrics := r.URL.Path == collectorgateway.MetricsPath
+	var tokenHash string
+	var rec *collectorcredential.Record
+	var err error
+	if metrics {
+		collectorID, credentialID, ok := collectorgateway.ParseMetricsAuthorization(r.Header.Get("Authorization"))
+		if !ok {
+			h.deny(w, r, http.StatusUnauthorized, collectorgateway.RefusalNoCredential, nil, "")
+			return
+		}
+		rec, err = h.Credentials.ByID(r.Context(), collectorID, credentialID)
+		if err == nil && rec != nil {
+			id := collectorgateway.Identity{Binding: rec.Binding, CredentialID: rec.CredentialID}
+			if !collectorgateway.VerifyMetricsAuthorization(r.Header.Get("Authorization"), id, rec.TokenSHA256) {
+				h.deny(w, r, http.StatusUnauthorized, collectorgateway.RefusalHashMismatch, nil, "")
+				return
+			}
+			tokenHash = rec.TokenSHA256
+		}
+	} else {
+		var refusal collectorgateway.Refusal
+		tokenHash, refusal = collectorgateway.PresentedCredential(r.Header)
+		if refusal != collectorgateway.RefusalNone {
+			h.deny(w, r, http.StatusUnauthorized, refusal, nil, "")
+			return
+		}
+		rec, err = h.Credentials.ByTokenHash(r.Context(), tokenHash)
 	}
-
-	rec, err := h.Credentials.ByTokenHash(r.Context(), tokenHash)
 	switch {
 	case errors.Is(err, ErrCredentialNotFound):
 		rec = nil
@@ -133,11 +154,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.proxy(w, r, decision.Identity, conn)
+	h.proxy(w, r, decision.Identity, conn, tokenHash)
 }
 
 // proxy forwards an authenticated connection to its connector and holds it open.
-func (h *Handler) proxy(w http.ResponseWriter, r *http.Request, id collectorgateway.Identity, conn *collectorgateway.Connector) {
+func (h *Handler) proxy(w http.ResponseWriter, r *http.Request, id collectorgateway.Identity, conn *collectorgateway.Connector, tokenHash string) {
 	target, err := h.Upstream(conn)
 	if err != nil {
 		h.log().Error("cannot resolve a connector's OpAMP address",
@@ -180,6 +201,9 @@ func (h *Handler) proxy(w http.ResponseWriter, r *http.Request, id collectorgate
 			// Apply is the whole trust boundary in one call: drop anything the client sent in the
 			// gateway's header namespace, drop the credential, then assert the authenticated identity.
 			id.Apply(pr.Out.Header)
+			if r.URL.Path != collectorgateway.MetricsPath {
+				pr.Out.Header.Set(collectorgateway.HeaderMetricsAuthorization, collectorgateway.MetricsAuthorization(id, tokenHash))
+			}
 		},
 		// Streaming, not buffering: OpAMP over WebSocket is a long-lived bidirectional connection, and
 		// the plain-HTTP transport is request/response with pushes that must not sit in a buffer.

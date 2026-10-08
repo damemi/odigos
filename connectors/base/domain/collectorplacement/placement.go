@@ -220,7 +220,7 @@ func Resolve(in Input) Plan {
 		candidates := byRegion[region]
 		// Before sources are marked there is no workload VPC from which to infer placement. In that
 		// case every discovered network in the configured region is eligible: one can be selected
-		// safely, several require hostNetworkId, and none produce a reportable refusal.
+		// safely, several require networkId, and none produce a reportable refusal.
 		if len(candidates) == 0 {
 			candidates = knownNetworksInRegion(known, region)
 		}
@@ -288,10 +288,10 @@ func chooseHost(region string, candidates []NetworkRef, configured string, known
 	sortStrings(ids)
 	if len(ids) == 0 {
 		return NetworkRef{}, &collectorstatus.Problem{Code: "CollectorHostNetworkRequired", Severity: collectorstatus.SeverityError,
-			Message: fmt.Sprintf("region %s has no discovered network in which to place its Collector; configure collector.regions.%s.%s after a network is available", region, region, collectorsettings.KeyHostNetworkID)}
+			Message: fmt.Sprintf("region %s has no discovered network in which to place its Collector; configure collector.regions.%s.networkId after a network is available", region, region)}
 	}
 	return NetworkRef{}, &collectorstatus.Problem{Code: "CollectorHostNetworkRequired", Severity: collectorstatus.SeverityError,
-		Message: fmt.Sprintf("region %s has multiple eligible host networks (%s); configure collector.regions.%s.%s to select the host network", region, stringsJoin(ids), region, collectorsettings.KeyHostNetworkID)}
+		Message: fmt.Sprintf("region %s has multiple eligible networks (%s); configure collector.regions.%s.networkId to select the network", region, stringsJoin(ids), region)}
 }
 
 func knownNetworksInRegion(known map[string]NetworkRef, region string) []NetworkRef {

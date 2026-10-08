@@ -60,9 +60,8 @@ type Record struct {
 	// lets a reader judge whether a cached answer is current, which is the only reason a cached answer is
 	// safe to serve at all.
 	ObservedAt time.Time
-	// Live says this came from a round trip to the running Collector rather than from the stored
-	// snapshot. Reported rather than inferred from ObservedAt: a Collector reporting every few seconds
-	// produces a cached snapshot that looks live, and the client asked which one it got.
+	// Live says a new own-metrics report arrived while the query waited, rather than being read from
+	// the stored snapshot. It is not inferred from ObservedAt, which may be recent for a cached answer.
 	Live bool
 }
 

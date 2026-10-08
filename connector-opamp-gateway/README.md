@@ -8,6 +8,13 @@ One endpoint serves the whole fleet across AWS, Azure and GCP:
 wss://<central-host>/v1/opamp
 ```
 
+The same gateway receives Collector own metrics at `https://<central-host>/v1/metrics` as
+OTLP/HTTP protobuf. The base connector offers this URL over OpAMP after verifying the Collector's
+description. The edge must route both paths to this gateway and preserve `Authorization` on each.
+The metrics route accepts POST only, checks a metrics-only credential derived from the Collector's
+OpAMP credential, and cannot be used to open an OpAMP session. The gateway strips that credential
+before forwarding the authenticated Collector identity to the connector.
+
 Each connection is authenticated by the credential the Collector presents and reverse-proxied to the
 connector that owns that Collector's cloud account. Design: [`collector/managed/OPAMP_ROUTING.md`](../collector/managed/OPAMP_ROUTING.md).
 Credential lifecycle: [`connectors/MANAGED-COLLECTOR.md`](../connectors/MANAGED-COLLECTOR.md) §6.3–6.4.
@@ -101,8 +108,8 @@ Issuance is the other open dependency: nothing writes `collector_platform.collec
 go -C connector-opamp-gateway test ./... -race
 ```
 
-The image builds from the repository root through the shared `Dockerfile`:
+The image builds from the repository root through the gateway Dockerfile:
 
 ```bash
-docker build --build-arg SERVICE_NAME=connector-opamp-gateway -t connector-opamp-gateway:dev .
+docker build -f connector-opamp-gateway/Dockerfile -t connector-opamp-gateway:dev .
 ```

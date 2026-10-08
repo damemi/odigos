@@ -2,9 +2,12 @@ package opamp
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +17,7 @@ import (
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorconfig"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorgateway"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectormetrics"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
@@ -34,6 +38,7 @@ type Collectors interface {
 	RecordCollectorLiveness(ctx context.Context, key store.CollectorKey, instanceUID string, connectedAt, lastSeenAt *time.Time, agentHealth string) error
 	RecordCollectorConfigPush(ctx context.Context, key store.CollectorKey, configHash string, pushedAt time.Time) error
 	RecordCollectorConfigApplied(ctx context.Context, key store.CollectorKey, configHash string) error
+	RecordCollectorMetrics(ctx context.Context, key store.CollectorKey, snapshot collectormetrics.Snapshot, observedAt time.Time) error
 	SetCollectorStatus(ctx context.Context, key store.CollectorKey, status collectorstatus.Status, message string) error
 	// RecordCollectorFirstReady latches the first time this Collector worked, which is the gate the
 	// workload cutover runs on. This server is the only party that can know it: readiness is a
@@ -53,12 +58,19 @@ type Server struct {
 	Self       Self
 	Collectors Collectors
 	Desired    Desired
+	Metrics    *collectormetrics.Cache
+	// PublicEndpoint is the configured public OpAMP URL; own telemetry is offered at its
+	// sibling OTLP/HTTP route, through the same authenticating gateway.
+	PublicEndpoint string
 	// Addr defaults to DefaultAddr, Path to the OpAMP default the gateway proxies to.
 	Addr string
 	Path string
 
 	opamp server.OpAMPServer
 	http  *http.Server
+	// A metrics POST updates the in-memory regional aggregate and persists that aggregate.
+	// Keep those two steps ordered so an older concurrent POST cannot overwrite a newer snapshot.
+	metricsMu sync.Mutex
 
 	mu       sync.Mutex
 	sessions map[types.Connection]*session
@@ -91,6 +103,9 @@ type session struct {
 	// recordedAppliedConfigHash keeps the acknowledgement writer at zero writes in steady state. It is
 	// seeded from durable state and advanced only after the store accepts a new applied hash.
 	recordedAppliedConfigHash string
+	metricsAuthorization      string
+	metricsOfferSent          bool
+	metricsCapable            bool
 }
 
 // New builds a server. Start it with Start.
@@ -137,6 +152,9 @@ func (s *Server) Start(ctx context.Context) error {
 
 	mux := http.NewServeMux()
 	mux.Handle(path, handler)
+	if s.Metrics != nil {
+		mux.Handle(collectorgateway.MetricsPath, s.metricsHandler())
+	}
 	s.http = &http.Server{
 		Addr:    addr,
 		Handler: mux,
@@ -218,6 +236,7 @@ func (s *Server) onConnecting(r *http.Request) types.ConnectionResponse {
 		connectedAt:               time.Now().UTC(),
 		descriptionVerified:       rec.FirstReadyAt != nil,
 		recordedAppliedConfigHash: rec.AppliedConfigHash,
+		metricsAuthorization:      r.Header.Get(collectorgateway.HeaderMetricsAuthorization),
 	}
 	if rec.FirstReadyAt != nil && rec.AppliedConfigHash != "" {
 		// RemoteConfigStatus is delta state too. Restore only a positively acknowledged hash—not the
@@ -276,6 +295,9 @@ func (s *Server) onMessage(ctx context.Context, conn types.Connection, msg *prot
 	}
 
 	report := ExtractReport(msg)
+	if msg.GetCapabilities()&uint64(protobufs.AgentCapabilities_AgentCapabilities_ReportsOwnMetrics) != 0 {
+		sess.metricsCapable = true
+	}
 	if report.RemoteConfigStatus == nil {
 		// OpAMP reports are deltas. An omitted RemoteConfigStatus means "unchanged", not "unknown".
 		// Retaining it also preserves a rejection until the agent reports a different status, so a
@@ -323,7 +345,39 @@ func (s *Server) onMessage(ctx context.Context, conn types.Connection, msg *prot
 		return &protobufs.ServerToAgent{InstanceUid: msg.GetInstanceUid()}
 	}
 
-	return s.respondWithConfig(ctx, sess, msg, report)
+	out := s.respondWithConfig(ctx, sess, msg, report)
+	if s.Metrics != nil && sess.metricsCapable && !sess.metricsOfferSent {
+		if endpoint := ownMetricsEndpoint(s.PublicEndpoint); endpoint != "" && sess.metricsAuthorization != "" {
+			hash := sha256.Sum256([]byte(endpoint + "\x00" + sess.metricsAuthorization))
+			out.ConnectionSettings = &protobufs.ConnectionSettingsOffers{
+				Hash: hash[:],
+				OwnMetrics: &protobufs.TelemetryConnectionSettings{
+					DestinationEndpoint: endpoint,
+					Headers:             &protobufs.Headers{Headers: []*protobufs.Header{{Key: "Authorization", Value: sess.metricsAuthorization}}},
+				},
+			}
+			sess.metricsOfferSent = true
+		}
+	}
+	return out
+}
+
+func ownMetricsEndpoint(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "wss", "https":
+		u.Scheme = "https"
+	case "ws", "http":
+		u.Scheme = "http"
+	default:
+		return ""
+	}
+	u.Path = collectorgateway.MetricsPath
+	u.RawPath, u.RawQuery, u.Fragment = "", "", ""
+	return u.String()
 }
 
 // respondWithConfig sends the desired configuration when, and only when, it differs from what the agent

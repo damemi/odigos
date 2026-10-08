@@ -339,6 +339,11 @@ func (r *mutationResolver) TeardownManagedCollector(ctx context.Context, input m
 	return (&gqlapi.ManagedCollectorAPI{Central: r.Central}).TeardownManagedCollector(ctx, input)
 }
 
+func (r *mutationResolver) IssueManagedCollectorCredential(context.Context, model.IssueManagedCollectorCredentialInput) (*model.IssueManagedCollectorCredentialPayload, error) {
+	logUnsupported("issueManagedCollectorCredential")
+	return nil, nil
+}
+
 func (r *mutationResolver) CreateManagedCollectorDestination(ctx context.Context, input model.CreateManagedCollectorDestinationInput) (*model.Destination, error) {
 	return (&gqlapi.ManagedCollectorDestinationAPI{Central: r.Central}).CreateManagedCollectorDestination(ctx, input)
 }

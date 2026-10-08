@@ -423,8 +423,8 @@ type CentralInterface interface {
 	CreateManagedCollectorDestination(ctx context.Context, dest domaindest.Destination) error
 	UpdateManagedCollectorDestination(ctx context.Context, dest domaindest.Destination) error
 	DeleteManagedCollectorDestination(ctx context.Context, region, name string) (bool, error)
-	// ManagedCollectorMetrics returns the Collector's counters, and whether they came from a live round
-	// trip. found=false means it has never reported any — which is not a snapshot of zeroes.
+	// ManagedCollectorMetrics returns the Collector's counters. A refresh waits briefly for a new
+	// periodic own-metrics report; found=false means it has never reported any.
 	ManagedCollectorMetrics(ctx context.Context, region string, refresh bool) (collectormetrics.Record, bool, error)
 }
 

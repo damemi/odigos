@@ -15,6 +15,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/config"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectormetrics"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorreport"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
@@ -34,6 +35,7 @@ type Coordinator struct {
 	cfgMgr   *config.Manager
 	store    *store.Store
 	provider api.Provider
+	metrics  *collectormetrics.Cache
 	// collectorRows lists the managed Collectors the shutdown drain has to tear down. It is a seam over
 	// c.store rather than a second store, because *store.Store is a concrete type over a live pool and
 	// the property being tested — that a drain removes exactly what was RECORDED, including a network
@@ -98,6 +100,7 @@ func New(cfg config.Config, cfgMgr *config.Manager, st *store.Store, p api.Provi
 		cfgMgr:               cfgMgr,
 		store:                st,
 		provider:             p,
+		metrics:              collectormetrics.NewCache(),
 		workloadKinds:        p.SupportedWorkloadKinds(),
 		computePlatformKinds: p.SupportedComputePlatformKinds(),
 		destCatalog:          destCatalog,
@@ -111,6 +114,9 @@ func New(cfg config.Config, cfgMgr *config.Manager, st *store.Store, p api.Provi
 		adoptTrigger:                    make(chan struct{}, 1),
 	}
 }
+
+// MetricsCache is the shared own-telemetry snapshot store used by the base OpAMP receiver.
+func (c *Coordinator) MetricsCache() *collectormetrics.Cache { return c.metrics }
 
 // SupportedKinds returns all workload + assignable compute-platform kinds (registration / internal use).
 func (c *Coordinator) SupportedKinds() []string {

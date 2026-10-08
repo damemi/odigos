@@ -495,24 +495,63 @@ func (c *Coordinator) DeleteManagedCollectorDestination(ctx context.Context, reg
 	return deleted, nil
 }
 
-// ManagedCollectorMetrics returns the Collector's last reported counters.
-//
-// refresh asks for a live round trip to the running Collector. The OpAMP session carries no
-// request/response channel for that yet, so the cached snapshot is served and reported honestly as
-// Live=false rather than being relabelled live to satisfy the argument. The alternative — failing the
-// query — would make a client that always passes refresh unable to read metrics at all.
+// ManagedCollectorMetrics returns the Collector's last reported counters. With refresh it waits briefly
+// for the next authenticated own-metrics report. OpAMP offers a telemetry destination, but does not
+// have a synchronous metrics request, so a fresh periodic report is the only live answer available.
+// If none arrives promptly, the last stored snapshot remains available with Live=false.
 func (c *Coordinator) ManagedCollectorMetrics(ctx context.Context, region string, refresh bool) (collectormetrics.Record, bool, error) {
-	if refresh {
-		apiLog.Debug("live Collector metrics were requested; serving the cached snapshot", "region", region)
-	}
-	rec, found, err := c.store.CollectorMetrics(ctx, store.CollectorKey{Region: region})
+	key := store.CollectorKey{Region: region}
+	rec, found, err := c.store.CollectorMetrics(ctx, key)
 	if err != nil {
 		if errors.Is(err, store.ErrCollectorNotFound) {
 			return collectormetrics.Record{}, false, nil
 		}
 		return collectormetrics.Record{}, false, err
 	}
-	return rec, found, nil
+	if !refresh {
+		return rec, found, nil
+	}
+	return waitForNextCollectorMetrics(ctx, rec, found, 5*time.Second, 200*time.Millisecond,
+		func(readCtx context.Context) (collectormetrics.Record, bool, error) {
+			return c.store.CollectorMetrics(readCtx, key)
+		})
+}
+
+// A newer persisted timestamp proves that a metrics POST completed during this query. A timeout is a
+// normal cached result, including when the Collector is disconnected or has never reported.
+func waitForNextCollectorMetrics(ctx context.Context, rec collectormetrics.Record, found bool,
+	maxWait, pollInterval time.Duration,
+	read func(context.Context) (collectormetrics.Record, bool, error),
+) (collectormetrics.Record, bool, error) {
+	baseline := rec.ObservedAt
+	waitCtx, cancel := context.WithTimeout(ctx, maxWait)
+	defer cancel()
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-waitCtx.Done():
+			if ctx.Err() != nil {
+				return collectormetrics.Record{}, false, ctx.Err()
+			}
+			return rec, found, nil
+		case <-ticker.C:
+			latest, latestFound, readErr := read(waitCtx)
+			if readErr != nil {
+				if errors.Is(readErr, store.ErrCollectorNotFound) {
+					return collectormetrics.Record{}, false, nil
+				}
+				return collectormetrics.Record{}, false, readErr
+			}
+			if latestFound {
+				rec, found = latest, true
+				if latest.ObservedAt.After(baseline) {
+					rec.Live = true
+					return rec, true, nil
+				}
+			}
+		}
+	}
 }
 
 // requireCollector refuses a per-region operation for a region that has no Collector configured.
