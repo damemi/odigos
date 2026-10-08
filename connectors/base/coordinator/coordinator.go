@@ -14,7 +14,6 @@ import (
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/config"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorgateway"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorreport"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
@@ -860,6 +859,10 @@ func (c *Coordinator) collectorReportInputs(ctx context.Context) ([]collectorrep
 			Origin:    rec.Origin,
 			Adopted:   rec.AdoptedAt != nil,
 			Status:    rec.Status,
+			// The sentence recorded beside that status. A provider observer's diagnosis — the ECS reason
+			// a task will not start, the target-health reason behind an unhealthy Collector — reaches a
+			// reader through here and nowhere else.
+			RecordedMessage: rec.Message,
 
 			OpAMPLastSeenAt:   rec.OpAMPLastSeenAt,
 			OpAMPInstanceUID:  rec.OpAMPInstanceUID,
@@ -909,11 +912,13 @@ func (c *Coordinator) collectorProblems(rec store.CollectorRecord, settings coll
 			Message:  "no endpoint has been published for this Collector yet, so no workload is pointed at it",
 		})
 	}
-	// The endpoint the installation publishes may have moved since this regional
-	// Collector was deployed. Endpoint overrides are regional settings; NetworkID
-	// on the row is only the physical host VPC.
-	problems = append(problems,
-		collectorgateway.CheckEndpointDrift(rec.EndpointGRPC, settings.Region(rec.Key.Region).EndpointOverride, rec.Mode)...)
+	// OpAMP endpoint drift is deliberately NOT checked here, and the reason is that this package cannot
+	// see either half of it. collectorgateway.CheckEndpointDrift compares the endpoint a Collector was
+	// DEPLOYED against with the one the installation now publishes; the deployed value lives in the
+	// Collector's own workload definition — the ECS task definition's ODIGOS_OPAMP_ENDPOINT — and no
+	// column here holds it. A provider observer reads it and makes the call. (This used to be invoked
+	// with endpoint_grpc and endpointOverride, which are the data-plane endpoint and a config override:
+	// opamp.Resolve rejects a bare host:port, so the check silently answered "no drift" every time.)
 	return problems
 }
 

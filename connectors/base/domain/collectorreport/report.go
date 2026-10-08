@@ -27,6 +27,14 @@ type Input struct {
 
 	// Status is what the reconcile pass last recorded. Problems can only make it worse.
 	Status collectorstatus.Status
+	// RecordedMessage is managed_collectors.message: the sentence whoever last judged this Collector
+	// wrote beside that status.
+	//
+	// Carried into the report because it is the ONLY channel for a diagnosis the reader cannot
+	// reconstruct from the row's other columns — the Collector's verbatim rejection of a configuration,
+	// or the ECS reason a task will not start. Composed problems cover the standing conditions this
+	// package can re-derive; this covers the ones only the writer saw.
+	RecordedMessage string
 
 	// OpAMPLastSeenAt drives liveness. OpAMPInstanceUID is carried for a caller that wants it and is
 	// deliberately absent from the name and the message: a replaced task gets a new one, and a
@@ -196,6 +204,13 @@ func message(in Input, liveness Liveness) string {
 
 	if in.AgentHealth != "" {
 		parts = append(parts, in.AgentHealth)
+	}
+	// The recorded sentence, unless it only repeats what the agent already said. Two writers reach this
+	// column — the OpAMP session for the configuration plane and a provider observer for the
+	// infrastructure — and neither can reconstruct the other's finding, so whichever looked last is
+	// what a reader gets.
+	if in.RecordedMessage != "" && in.RecordedMessage != in.AgentHealth {
+		parts = append(parts, in.RecordedMessage)
 	}
 	// The problems last, verbatim. This is how a Degraded reason is visible at all — the plaintext
 	// default rides here and never in the status, and the network-CIDR fallback says so on every pass

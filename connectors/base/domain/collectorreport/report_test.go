@@ -430,3 +430,38 @@ func TestAZeroInputDoesNotPanicOrLie(t *testing.T) {
 		t.Errorf("Liveness = %q", got.Liveness)
 	}
 }
+
+// TestTheRecordedDiagnosisReachesTheReader. managed_collectors.message is the only channel for a
+// finding this package cannot re-derive from the row — the Collector's verbatim rejection of a
+// configuration, or the ECS reason a task will not start. A report that composed everything except that
+// column would leave the most specific sentence anyone wrote about a Collector visible only in the
+// database.
+func TestTheRecordedDiagnosisReachesTheReader(t *testing.T) {
+	verbatim := `the Collector rejected this configuration and is still running the last one that ` +
+		`applied cleanly. It reported: error decoding 'processors': unknown type: "batchh"`
+	got := Build(running(func(in *Input) {
+		in.Status = collectorstatus.StatusDegraded
+		in.RecordedMessage = verbatim
+	}))
+	if !strings.Contains(got.Message, verbatim) {
+		t.Fatalf("the recorded diagnosis is not in the report: %q", got.Message)
+	}
+
+	// Not repeated when it only says what the agent already said. Two writers reach that column and one
+	// of them writes the agent's own health into it, so the guard is against a sentence twice rather
+	// than against a missing one.
+	echo := Build(running(func(in *Input) {
+		in.AgentHealth = "Unhealthy: exporter otlp failed"
+		in.RecordedMessage = "Unhealthy: exporter otlp failed"
+	}))
+	if strings.Count(echo.Message, "Unhealthy: exporter otlp failed") != 1 {
+		t.Errorf("the agent health is repeated: %q", echo.Message)
+	}
+
+	// And an empty column adds nothing — no stray separator, and the message a Collector nobody has
+	// judged yet gets is unchanged.
+	plain := Build(running(nil))
+	if strings.Contains(plain.Message, " ·  · ") || strings.HasSuffix(plain.Message, " · ") {
+		t.Errorf("an empty recorded message left a gap: %q", plain.Message)
+	}
+}

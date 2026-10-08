@@ -284,7 +284,11 @@ func (p *Provisioner) ensureLicense(ctx context.Context, api SecretsClient, in N
 	return state.ARN, problems, nil
 }
 
-// awsPlatform is what AWS's ingress can terminate, for collectoringress.ResolveTransport.
+// AWSPlatform is what AWS's ingress can terminate, for collectoringress.ResolveTransport.
+//
+// Exported because the OBSERVER resolves the same endpoint from the same load balancer: two values here
+// would let the endpoint Odigos publishes and the endpoint Odigos reports back differ, which reads as
+// drift on a Collector that has none.
 //
 // ManagedTLS is false and that is not an omission: a Network Load Balancer's generated DNS name is in
 // a domain Odigos does not control, so no certificate can be issued for it and there is nothing for
