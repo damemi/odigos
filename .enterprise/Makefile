@@ -143,6 +143,17 @@ build-connector-runtime:
 		--build-arg COLLECTOR_REGISTRY="$(COLLECTOR_REGISTRY)" \
 		. $(NO_CACHE)
 
+# connector-opamp-gateway is the public OpAMP endpoint the managed-Collector fleet connects back to.
+# It needs no --build-context odigos: its go.mod replaces only ../connectors and ../connectors/base,
+# and odigos/api resolves from the module proxy.
+.PHONY: build-connector-opamp-gateway
+build-connector-opamp-gateway:
+	$(MAKE) build-image/connector-opamp-gateway DOCKERFILE=connector-opamp-gateway/Dockerfile SUMMARY="OpAMP gateway for Odigos" DESCRIPTION="Public OpAMP endpoint that authenticates managed Collectors and proxies each session to the connector owning its cloud account." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
+.PHONY: push-connector-opamp-gateway
+push-connector-opamp-gateway:
+	$(MAKE) push-image/connector-opamp-gateway DOCKERFILE=connector-opamp-gateway/Dockerfile SUMMARY="OpAMP gateway for Odigos" DESCRIPTION="Public OpAMP endpoint that authenticates managed Collectors and proxies each session to the connector owning its cloud account." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
 # The Lambda layer bundle and the Fargate agents bundle are no longer built here. Both are released by
 # odigos-io/aws-connector-artifacts, which also publishes the SAME layer zips as public Lambda layer
 # versions and as Serverless Application Repository applications — a customer deploying the layer
@@ -163,7 +174,7 @@ build-connector-runtime:
 #
 # Bumping the artifacts version is: edit that file, run the test, open a PR.
 ARTIFACTS_VERSION := $(shell cat connectors/providers/aws/ARTIFACTS_VERSION)
-LAMBDA_AGENTS_REGISTRY ?= registry.odigos.io
+LAMBDA_AGENTS_REGISTRY ?= enterprise-registry.odigos.io
 
 # Override to build against an unreleased layer bundle (the version check does not apply to an override,
 # which is the point of having one):
@@ -235,6 +246,9 @@ validate-db-migrations:
 .PHONY: build-connector-runtime-dev
 build-connector-runtime-dev: build-connector-runtime
 
+.PHONY: build-connector-opamp-gateway-dev
+build-connector-opamp-gateway-dev: build-connector-opamp-gateway
+
 .PHONY: build-connector-aws-dev
 build-connector-aws-dev: build-connector-aws
 
@@ -249,7 +263,7 @@ build-connector-azure-dev: build-connector-azure
 # build ordering; ORG/TAG/IMG_SUFFIX are in scope for every prerequisite, so no explicit pass-through is
 # needed. Tip: add -O (output-sync) to keep concurrent docker build logs grouped per target.
 .PHONY: build-connector-images
-build-connector-images: build-connector-postgres build-connector-runtime build-connector-aws build-connector-gcp build-connector-azure
+build-connector-images: build-connector-postgres build-connector-runtime build-connector-opamp-gateway build-connector-aws build-connector-gcp build-connector-azure
 
 # Build every image the cloud-connectors dev stack needs: the central images plus postgres and the
 # connector services (all built inside Docker). Parallel-safe like build-connector-images.
@@ -259,7 +273,7 @@ build-connector-stack: build-central-backend build-central-ui build-connector-im
 
 .PHONY: load-connector-stack-to-kind
 load-connector-stack-to-kind:
-	make load-to-kind-central-backend load-to-kind-central-ui load-to-kind-connector-postgres load-to-kind-connector-runtime load-to-kind-connector-aws load-to-kind-connector-gcp load-to-kind-connector-azure ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
+	make load-to-kind-central-backend load-to-kind-central-ui load-to-kind-connector-postgres load-to-kind-connector-runtime load-to-kind-connector-opamp-gateway load-to-kind-connector-aws load-to-kind-connector-gcp load-to-kind-connector-azure ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: push-connector-runtime
 push-connector-runtime:
@@ -410,6 +424,16 @@ ODIGOS_CENTRAL_NS ?= odigos-central
 KIND_CLUSTER ?= kind
 ONPREM_TOKEN ?=
 
+# Managed Collectors stay OFF unless you give the OpAMP gateway a publicly reachable address. A
+# Collector runs in the customer's cloud account and dials Central, so a kind-local Service address is
+# not reachable from it and there is no default that is right for an unknown installation — the
+# connector refuses to deploy a Collector rather than point one at somebody else's endpoint.
+# In a dev loop this is an ngrok/tailscale/cloudflared URL in front of the gateway Service:
+#   make connector-dev-up TAG=dev ONPREM_TOKEN=$$ODIGOS_ONPREM_TOKEN \
+#     MANAGED_COLLECTOR_ENDPOINT=wss://abc123.ngrok.app/v1/opamp
+MANAGED_COLLECTOR_ENDPOINT ?=
+MANAGED_COLLECTOR_FLAGS = $(if $(MANAGED_COLLECTOR_ENDPOINT),--set cloudConnectors.managedCollectors.enabled=true --set cloudConnectors.managedCollectors.externalEndpoint=$(MANAGED_COLLECTOR_ENDPOINT),)
+
 .PHONY: ensure-kind
 ensure-kind:
 	@kind get clusters 2>/dev/null | grep -qx "$(KIND_CLUSTER)" || { echo "creating kind cluster '$(KIND_CLUSTER)'..."; kind create cluster --name $(KIND_CLUSTER); }
@@ -420,11 +444,20 @@ connector-dev-up: ensure-kind
 	make build-connector-stack TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 	make load-connector-stack-to-kind TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 	helm upgrade --install odigos-central $(CENTRAL_CHART) -n $(ODIGOS_CENTRAL_NS) --create-namespace \
-		--set image.tag=$(TAG) --set onPremToken=$(ONPREM_TOKEN) --set cloudConnectors.enabled=true
+		--set image.tag=$(TAG) --set onPremToken=$(ONPREM_TOKEN) --set cloudConnectors.enabled=true \
+		$(MANAGED_COLLECTOR_FLAGS)
 	@echo "✅ Stack up in namespace $(ODIGOS_CENTRAL_NS) (central-ui + central-backend + connector-runtime + postgres)."
 	@echo "   central-ui:        kubectl -n $(ODIGOS_CENTRAL_NS) port-forward svc/central-ui 3000:3000  # http://localhost:3000"
 	@echo "   apply a connector: kubectl apply -f <your-OdigosCloudConnector>.yaml -n $(ODIGOS_CENTRAL_NS)"
 	@echo "   discovered data:   kubectl -n $(ODIGOS_CENTRAL_NS) port-forward svc/<connector-workload> 9090:8080  # then POST /graphql"
+ifeq ($(strip $(MANAGED_COLLECTOR_ENDPOINT)),)
+	@echo "   managed Collectors: OFF (no MANAGED_COLLECTOR_ENDPOINT). Re-run with a publicly reachable"
+	@echo "                       wss:// address in front of the gateway to enable them."
+else
+	@echo "   opamp gateway:     $(MANAGED_COLLECTOR_ENDPOINT) -> svc/connector-opamp-gateway:8080"
+	@echo "   grant a connector: kubectl patch odigoscloudconnector <name> -n $(ODIGOS_CENTRAL_NS) --type=merge \\"
+	@echo "                        -p '{\"spec\":{\"collectors\":[{\"type\":\"aws.fargate-collector\",\"management\":true,\"deployment\":true}]}}'"
+endif
 
 .PHONY: connector-dev-down
 connector-dev-down:
@@ -700,4 +733,3 @@ debug-odiglet:
 	kubectl delete pod -n odigos-system -l app.kubernetes.io/name=odiglet
 	kubectl wait --for=condition=ready pod -n odigos-system -l app.kubernetes.io/name=odiglet
 	kubectl port-forward -n odigos-system daemonset/odiglet 2345:2345
-
