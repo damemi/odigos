@@ -74,6 +74,47 @@ const (
 	// scalable target, or holds one of Odigos's two policy names as a type that cannot be converged.
 	// Degraded: two controls on one replica count, and only the customer can remove theirs.
 	ProblemScalingPolicyForeign = "CollectorScalingPolicyForeign"
+	// ProblemBootstrapUnavailable: the Collector's configuration could not be rendered for its cold-start
+	// secret. Degraded, never a refusal: the Collector deploys and is configured over OpAMP as usual, and
+	// what it loses is the mitigation for a restart during a control-plane outage.
+	ProblemBootstrapUnavailable = "CollectorBootstrapConfigUnavailable"
+	// ProblemConvergenceFailed: a provider or persistence call failed before its ensure step could
+	// produce a more specific standing condition. Error: the requested infrastructure was not fully
+	// converged, and the original provider error is retained as the actionable message.
+	ProblemConvergenceFailed = "CollectorConvergenceFailed"
+	// ProblemTeardownRetained: teardown left an object standing because the deletion gate refused it.
+	// Severity depends on WHY (see keepReason): Info for an object Odigos never created, Degraded for one
+	// that looks like Odigos's and whose two records disagree — the state that leaks.
+	ProblemTeardownRetained = "CollectorTeardownObjectRetained"
+	// ProblemTeardownSharedRetained: a shared object — the region's cluster or log group, the connector's
+	// roles, the region's licence secret — is still needed by another network. Info: it is removed with
+	// the last Collector that uses it, which is the steady state of tearing one network down.
+	ProblemTeardownSharedRetained = "CollectorTeardownSharedObjectRetained"
+	// ProblemTeardownUnrecorded: teardown was asked for a network this connector records nothing about,
+	// so nothing passes the deletion gate. Degraded, because anything running on that network is now
+	// infrastructure Odigos cannot remove.
+	ProblemTeardownUnrecorded = "CollectorTeardownNoRecord"
+	// ProblemTeardownManualMode: teardown ran on a manual-mode Collector and deleted nothing. Info —
+	// that is the contract, not a fault.
+	ProblemTeardownManualMode = "CollectorTeardownManualMode"
+	// ProblemTeardownCapabilityRemoved: the credentials were revoked and the Collector deliberately left
+	// running. Degraded: it is still exporting under a configuration nothing updates.
+	ProblemTeardownCapabilityRemoved = "CollectorTeardownCapabilityRemoved"
+	// ProblemTeardownIncomplete: a delete call failed, so the record is kept and the next pass finishes.
+	// Error, and expected once per teardown: a load balancer takes minutes to release the network
+	// interfaces its security group is attached to.
+	ProblemTeardownIncomplete = "CollectorTeardownIncomplete"
+	// ProblemTeardownRevocationFailed: the credentials could not be revoked, so NOTHING was deleted. The
+	// ordering is the safety property and this is what it looks like when it holds.
+	ProblemTeardownRevocationFailed = "CollectorTeardownRevocationFailed"
+	// ProblemRetentionParked: an idle network's Collector was scaled to zero by the retention policy.
+	// Info, and reported for as long as it applies — a Collector at zero tasks that nobody
+	// explained reads as a broken deployment.
+	ProblemRetentionParked = "CollectorScaledToZeroWhileIdle"
+	// ProblemRetentionPolicy: a retention value could not be used and the Collector is kept instead.
+	// Degraded: the configuration reads as though something happens when it does not.
+	ProblemRetentionPolicy = "CollectorRetentionPolicyCorrected"
+
 	// ProblemManualModeProvisioning: provisioning was asked for on a manual-mode Collector. A guard,
 	// not a customer-facing condition — the coordinator wires no deployer for a manual-mode type at all
 	// (api.CollectorDeployer), so reaching this means something bypassed that.

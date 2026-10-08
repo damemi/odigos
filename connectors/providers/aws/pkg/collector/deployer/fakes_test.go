@@ -54,6 +54,12 @@ type fakeLogs struct {
 	calls         []string
 	retentionErr  error
 	tagResourceEr error
+	// groupTags is keyed by ARN rather than by name, because teardown reads a log group's tags through
+	// ListTagsForResource, which takes an ARN — the same asymmetry EnsureLogGroup already works around.
+	groupTags map[string]map[string]string
+	// tagged is what TagResource wrote, keyed by ARN.
+	tagged    map[string]map[string]string
+	deleteErr error
 }
 
 func newFakeLogs() *fakeLogs {
@@ -84,6 +90,18 @@ func (f *fakeLogs) TagResource(_ context.Context, in *cloudwatchlogs.TagResource
 	if f.tagResourceEr != nil {
 		return nil, f.tagResourceEr
 	}
+	// Recorded, because WHICH tags this writes is the whole difference between an attributable log group
+	// and one Odigos may delete: the create path writes the ownership marker and this path must not.
+	if f.tagged == nil {
+		f.tagged = map[string]map[string]string{}
+	}
+	arn := aws.ToString(in.ResourceArn)
+	if f.tagged[arn] == nil {
+		f.tagged[arn] = map[string]string{}
+	}
+	for k, v := range in.Tags {
+		f.tagged[arn][k] = v
+	}
 	return &cloudwatchlogs.TagResourceOutput{}, nil
 }
 
@@ -105,6 +123,7 @@ type fakeSecrets struct {
 	calls     []string
 	createErr error
 	putErr    error
+	deleteErr error
 }
 
 func newFakeSecrets() *fakeSecrets {

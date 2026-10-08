@@ -28,6 +28,8 @@ type fakeAutoScaling struct {
 	deregisterErr error
 	putPolicyErr  error
 	tagsErr       error
+	// order, when set, is a call log shared with the other fakes. See sink.
+	order *sink
 	// omitTargetARN drops ScalableTargetARN from every described target, which is how an API version
 	// that does not populate it looks from here.
 	omitTargetARN bool
@@ -144,6 +146,7 @@ func (f *fakeAutoScaling) RegisterScalableTarget(_ context.Context, in *aas.Regi
 func (f *fakeAutoScaling) DeregisterScalableTarget(_ context.Context, in *aas.DeregisterScalableTargetInput, _ ...func(*aas.Options)) (*aas.DeregisterScalableTargetOutput, error) {
 	id := aws.ToString(in.ResourceId)
 	f.calls = append(f.calls, "DeregisterScalableTarget:"+id)
+	f.order.record("DeregisterScalableTarget:" + id)
 	if f.deregisterErr != nil {
 		return nil, f.deregisterErr
 	}

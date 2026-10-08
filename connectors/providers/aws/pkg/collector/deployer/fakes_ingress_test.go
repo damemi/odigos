@@ -35,6 +35,7 @@ type fakeEC2SG struct {
 	raceWinner map[string]string
 	raced      bool
 	createErr  error
+	deleteErr  error
 }
 
 func newFakeEC2SG() *fakeEC2SG {
@@ -43,10 +44,14 @@ func newFakeEC2SG() *fakeEC2SG {
 
 // withGroup seeds an existing group. openEgress mirrors what EC2 does on create.
 func (f *fakeEC2SG) withGroup(name string, tags map[string]string, ingress []ec2types.IpPermission) *fakeEC2SG {
-	f.groups[testVPC+"/"+name] = &ec2types.SecurityGroup{
+	return f.withGroupInWithIngress(testVPC, name, tags, ingress)
+}
+
+func (f *fakeEC2SG) withGroupInWithIngress(vpc, name string, tags map[string]string, ingress []ec2types.IpPermission) *fakeEC2SG {
+	f.groups[vpc+"/"+name] = &ec2types.SecurityGroup{
 		GroupId:             aws.String("sg-" + fmt.Sprint(len(f.groups)+1)),
 		GroupName:           aws.String(name),
-		VpcId:               aws.String(testVPC),
+		VpcId:               aws.String(vpc),
 		Tags:                ec2Tags(tags),
 		IpPermissions:       ingress,
 		IpPermissionsEgress: []ec2types.IpPermission{{IpProtocol: aws.String("-1"), IpRanges: []ec2types.IpRange{{CidrIp: aws.String("0.0.0.0/0")}}}},
@@ -83,7 +88,7 @@ func (f *fakeEC2SG) CreateSecurityGroup(_ context.Context, in *ec2.CreateSecurit
 	f.descriptions = append(f.descriptions, aws.ToString(in.Description))
 	if f.raceWinner != nil && !f.raced {
 		f.raced = true
-		f.withGroup(name, f.raceWinner, nil)
+		f.withGroupInWithIngress(vpc, name, f.raceWinner, nil)
 		return nil, duplicateGroupError{}
 	}
 	if f.createErr != nil {
@@ -95,7 +100,7 @@ func (f *fakeEC2SG) CreateSecurityGroup(_ context.Context, in *ec2.CreateSecurit
 			tags[aws.ToString(t.Key)] = aws.ToString(t.Value)
 		}
 	}
-	f.withGroup(name, tags, nil)
+	f.withGroupInWithIngress(vpc, name, tags, nil)
 	return &ec2.CreateSecurityGroupOutput{GroupId: f.groups[vpc+"/"+name].GroupId}, nil
 }
 
@@ -187,6 +192,8 @@ type fakeELB struct {
 	attributes   map[string]map[string]string      // target group ARN -> attributes
 	calls        []string
 	createLBErr  error
+	deleteLBErr  error
+	deleteTGErr  error
 	nextID       int
 }
 

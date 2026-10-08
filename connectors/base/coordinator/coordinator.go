@@ -34,6 +34,11 @@ type Coordinator struct {
 	cfgMgr   *config.Manager
 	store    *store.Store
 	provider api.Provider
+	// collectorRows lists the managed Collectors the shutdown drain has to tear down. It is a seam over
+	// c.store rather than a second store, because *store.Store is a concrete type over a live pool and
+	// the property being tested — that a drain removes exactly what was RECORDED, including a network
+	// placement has forgotten — cannot be exercised through one.
+	collectorRows collectorRecords
 	// workloadKinds: directly-instrumentable kinds (supportedSourceKinds + workload createSource).
 	workloadKinds []string
 	// computePlatformKinds: compute-platform assignment kinds (createSource for agent install on managed environments).

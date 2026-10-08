@@ -20,6 +20,31 @@ const (
 	KeyUseFargateSpot   = "useFargateSpot"
 )
 
+const (
+	ScalingManual       = base.ScalingManual
+	ScalingAuto         = base.ScalingAuto
+	DefaultCPU          = base.DefaultCPU
+	DefaultMemory       = base.DefaultMemory
+	DefaultDesiredCount = base.DefaultDesiredCount
+	DefaultMinCount     = base.DefaultMinCount
+	DefaultMaxCount     = base.DefaultMaxCount
+	ReplicaFloor        = base.ReplicaFloor
+)
+
+type (
+	Scaling           = base.Scaling
+	ResolvedScaling   = base.ResolvedScaling
+	Retention         = base.Retention
+	ResolvedRetention = base.ResolvedRetention
+	RetentionAction   = base.RetentionAction
+)
+
+const (
+	RetentionKeep        = base.RetentionKeep
+	RetentionScaleToZero = base.RetentionScaleToZero
+	RetentionDelete      = base.RetentionDelete
+)
+
 type Network struct {
 	base.Network
 	SubnetIDs        []string

@@ -15,8 +15,8 @@ import (
 	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
 	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/awsprovider"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/config"
 	computeplatformstore "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/computeplatform/store"
+	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/config"
 	workloadstore "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
 
@@ -51,7 +51,10 @@ func main() {
 	// config (credentials, account, provider, DSN, capabilities) stays on the command line above.
 	cfgMgr := baseconfig.NewManager(bstore, baseconfig.MergeDefaults(baseconfig.Defaults(), config.Defaults()))
 
-	provider := awsprovider.New(cfg, cfgMgr, workloadstore.New(bstore), computeplatformstore.New(bstore))
+	// The base store goes in as well as the two domain stores: managed Collectors, their credentials and
+	// the destinations they export to are provider-neutral rows that live in base/store, not in either
+	// domain store.
+	provider := awsprovider.New(cfg, cfgMgr, bstore, workloadstore.New(bstore), computeplatformstore.New(bstore))
 
 	if err := base.Run(ctx, cfg.Config, cfgMgr, bstore, provider); err != nil {
 		log.Error("connector stopped with error", "error", err)

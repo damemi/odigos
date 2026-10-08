@@ -276,3 +276,34 @@ func functionBody(t *testing.T, src, name string) string {
 	}
 	return rest
 }
+
+// TestTeardownRevokesEveryLiveCredential pins the teardown rule at the one place it is implemented.
+//
+// EVERY live credential, not the active one. A teardown that lands during a rotation finds an active
+// credential and a superseded one, and the superseded one is still accepted for the length of the old
+// tasks' drain — so leaving it would mean the one credential still able to open an authenticated OpAMP
+// session, and be handed the destination's own credential, is the one nobody was tracking.
+//
+// A source guard rather than a behaviour test because this file has no database: what it pins is that
+// the filter is Live(), which is active OR superseded, rather than a comparison against one state.
+func TestTeardownRevokesEveryLiveCredential(t *testing.T) {
+	src := sourceText(t)
+
+	start := strings.Index(src, "func (s *Store) RevokeCollectorCredentials(")
+	if start < 0 {
+		t.Fatal("could not find RevokeCollectorCredentials")
+	}
+	body := src[start:]
+	if end := strings.Index(body, "\n}\n"); end > 0 {
+		body = body[:end]
+	}
+
+	if !strings.Contains(body, "if !r.Live() {") {
+		t.Errorf("RevokeCollectorCredentials does not filter on Live(). A teardown during a rotation has "+
+			"TWO live credentials and both must go; a comparison against a single state leaves the "+
+			"superseded one accepted:\n%s", body)
+	}
+	if !strings.Contains(body, "s.CollectorCredentials(ctx, collectorID)") {
+		t.Errorf("RevokeCollectorCredentials does not read every issuance for the Collector:\n%s", body)
+	}
+}

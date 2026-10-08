@@ -476,7 +476,7 @@ func strategyChanged(spec serviceSpec, existing *ecstypes.Service) bool {
 // A service ECS cannot find is a FAILURE rather than an error, and one that was deleted lingers as
 // INACTIVE or DRAINING — both treated as absent, because converging a service that is going away would
 // mean updating something ECS is in the middle of removing.
-func describeService(ctx context.Context, api ServiceClient, cluster, name string) (*ecstypes.Service, error) {
+func describeService(ctx context.Context, api serviceReader, cluster, name string) (*ecstypes.Service, error) {
 	out, err := api.DescribeServices(ctx, &ecs.DescribeServicesInput{
 		Cluster:  aws.String(cluster),
 		Services: []string{name},
@@ -554,4 +554,111 @@ func sameStrings(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// ParkInput is what scaling one idle Collector to zero depends on.
+type ParkInput struct {
+	Region        string
+	HostNetworkID string
+	Identity      collectorownership.Identity
+	Mode          string
+	ClusterARN    string
+	// Recorded is whether managed_collectors names this service. Half the mutation record, and read for
+	// the same reason the converge reads it: a service this connector has no record of is not one it
+	// should be moving the replica count of.
+	Recorded bool
+}
+
+// ParkService sets an idle Collector's desired count to zero, and CREATES NOTHING.
+//
+// The retention policy's reversible halfde: a network whose last enabled source was removed keeps
+// its cluster, its load balancer, its target groups, its security group, its secrets and its task
+// definition, and stops paying for tasks. Bringing it back is a scale-up rather than a redeployment,
+// which is the whole reason this exists instead of tearing down at the first grace period — a
+// redeployment moves the load balancer's DNS name, and every instrumented workload on the network is
+// pointed at it.
+//
+// # Why this is not EnsureService with a zero count
+//
+// EnsureService creates a service it cannot find. An idle network has no placement decision behind it —
+// no subnets, no ingress, no resolved image — so there is nothing to create one FROM, and a service
+// created here would be a Collector nobody asked for, running no tasks, in subnets nobody chose. This
+// finds or does nothing.
+//
+// # Why zero is allowed here and nowhere else
+//
+// collectorsettings.ReplicaFloor refuses a configured count below one, because a Collector at zero
+// replicas still has a load balancer answering: every workload pointed at it keeps opening connections
+// to an endpoint with nothing behind it and drops its telemetry with no failure anybody is watching.
+// That hazard is precisely absent here — idle MEANS no enabled sources on the network, so nothing is
+// pointed at this endpoint and there is nothing to drop. The cost is paid on the way back: a source
+// enabled on a parked network is exporting before the Collector's tasks are running again, so the first
+// telemetry after a network wakes up may be lost. That is why parking is opt-in and why keeping is what
+// an unconfigured network does.
+func ParkService(ctx context.Context, api ServiceClient, in ParkInput) (Service, []collectorstatus.Problem, error) {
+	out := Service{Name: ServiceName(in.Region)}
+	if problems := modeGuard(in.Mode); len(problems) > 0 {
+		return out, problems, nil
+	}
+	if in.ClusterARN == "" {
+		return out, nil, nil
+	}
+
+	existing, err := describeService(ctx, api, in.ClusterARN, out.Name)
+	if err != nil {
+		return out, nil, err
+	}
+	if existing == nil {
+		// Already gone, or never built. Both are "nothing to park", and neither is a fault: a retention
+		// policy that reported a missing service would put a standing finding on every network whose
+		// Collector somebody removed by hand.
+		return out, nil, nil
+	}
+
+	object := collectorownership.Object{
+		Ref:      aws.ToString(existing.ServiceArn),
+		Tags:     baseapi.ParseCollectorTags(ecsTagMap(existing.Tags)),
+		Recorded: in.Recorded,
+	}
+	if !collectorownership.MayMutate(object, in.Identity, in.Mode) {
+		// The same gate the converge uses, and the same refusal. Scaling a service Odigos may not write
+		// to would be moving the replica count of a customer's own workload — which is a more surprising
+		// thing to do to somebody than declining to save them money.
+		return out, []collectorstatus.Problem{nameConflictForPark(in, object)}, nil
+	}
+
+	out.ARN = aws.ToString(existing.ServiceArn)
+	out.DesiredCount = existing.DesiredCount
+	out.RunningCount = existing.RunningCount
+	if existing.DesiredCount == 0 {
+		// Already parked. Returned without a write, which is what makes the steady state of an idle
+		// network zero AWS writes per pass rather than one — the same property the converge path has.
+		return out, nil, nil
+	}
+
+	if _, err := api.UpdateService(ctx, &ecs.UpdateServiceInput{
+		Cluster: aws.String(in.ClusterARN),
+		// The ARN rather than the name. Both are accepted, and the ARN is what the converge path passes:
+		// one spelling means a test that exercises one exercises the other.
+		Service:      aws.String(out.ARN),
+		DesiredCount: aws.Int32(0),
+	}); err != nil {
+		return out, nil, fmt.Errorf("scale the idle ECS service %s to zero: %w", out.Name, err)
+	}
+	out.Updated = true
+	out.DesiredCount = 0
+	log.Info("scaled an idle collector service to zero",
+		"region", in.Region, "network", in.HostNetworkID, "service", out.Name, "was", existing.DesiredCount)
+	return out, nil, nil
+}
+
+// nameConflictForPark is the refusal for a service the retention policy may not touch.
+func nameConflictForPark(in ParkInput, object collectorownership.Object) collectorstatus.Problem {
+	return collectorstatus.Problem{
+		Code:     ProblemServiceNameConflict,
+		Severity: collectorstatus.SeverityDegraded,
+		Message: fmt.Sprintf("the Collector service %q in region %s (host network %s) has no enabled sources left, and Odigos "+
+			"will not scale it down: it is not a service this connector may write to. Scale or remove it "+
+			"yourself if it is no longer needed", ServiceName(in.Region), in.Region, in.HostNetworkID),
+	}
 }

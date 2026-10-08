@@ -400,7 +400,7 @@ func ensureScalingPolicies(ctx context.Context, api AutoScalingClient, in Scalin
 // A resource id nobody has registered comes back as an EMPTY list rather than an error, which is why
 // there is no not-found to match on here — and why a describe of a service that does not exist yet is
 // harmless.
-func describeScalableTarget(ctx context.Context, api AutoScalingClient, resourceID string) (*aastypes.ScalableTarget, error) {
+func describeScalableTarget(ctx context.Context, api scalableTargetReader, resourceID string) (*aastypes.ScalableTarget, error) {
 	out, err := api.DescribeScalableTargets(ctx, &aas.DescribeScalableTargetsInput{
 		ServiceNamespace:  aastypes.ServiceNamespaceEcs,
 		ResourceIds:       []string{resourceID},
@@ -423,7 +423,7 @@ func describeScalableTarget(ctx context.Context, api AutoScalingClient, resource
 // here: Odigos owning the service does not mean Odigos registered the target. Application Auto Scaling
 // returns no tags on a describe, so this is a second call — the same shape as the ELBv2 objects, whose
 // tags DescribeLoadBalancers does not return either.
-func scalableTargetObject(ctx context.Context, api AutoScalingClient, target *aastypes.ScalableTarget, recorded bool) (
+func scalableTargetObject(ctx context.Context, api scalableTargetReader, target *aastypes.ScalableTarget, recorded bool) (
 	collectorownership.Object, error) {
 	if target == nil {
 		return collectorownership.Object{}, nil

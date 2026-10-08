@@ -182,7 +182,7 @@ func findOrCreateSecurityGroup(ctx context.Context, api SecurityGroupClient, in 
 // Filtered on both, because a security group NAME is unique only within its VPC: a filter on the name
 // alone would return this connector's groups from every VPC in the region, and acting on the first
 // would converge the wrong network's rules.
-func describeSecurityGroup(ctx context.Context, api SecurityGroupClient, name, vpcID string) (*ec2types.SecurityGroup, error) {
+func describeSecurityGroup(ctx context.Context, api securityGroupReader, name, vpcID string) (*ec2types.SecurityGroup, error) {
 	out, err := api.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{
 		Filters: []ec2types.Filter{
 			{Name: aws.String("group-name"), Values: []string{name}},

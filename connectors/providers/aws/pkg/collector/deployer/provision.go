@@ -761,6 +761,14 @@ type ScalingStateInput struct {
 	Service Service
 	// Settings is the resolved tree; only the scaling policy is read.
 	Settings collectorsettings.Network
+	// Resolved overrides the policy Settings would resolve to, and the retention policy's parked count
+	// is the only thing that sets it.
+	//
+	// A RESOLVED value rather than a Scaling, because a parked policy cannot survive being expressed as
+	// configuration: `desiredCount: 0` is read as unset and lifted back to the default, and reported as
+	// a correction on top. Resolve is the function that decides what a count means, so anything that has
+	// to mean something Resolve would not produce has to arrive already resolved.
+	Resolved *collectorsettings.ResolvedScaling
 	// Recorded is whether managed_collectors names this Collector — half the deletion gate, and
 	// a deregistration is a delete.
 	Recorded bool
@@ -779,6 +787,9 @@ func (p *Provisioner) EnsureCollectorScaling(ctx context.Context, in ScalingStat
 	// from the same settings, which is safe because Resolve is pure — what would not be safe is two
 	// places each deciding for themselves what an unrecognised mode means.
 	resolved := in.Settings.Scaling.Resolve()
+	if in.Resolved != nil {
+		resolved = *in.Resolved
+	}
 	if problems := modeGuard(in.Mode); len(problems) > 0 {
 		return ScalingState{Mode: resolved.Mode, Problems: problems}, nil
 	}
@@ -850,7 +861,13 @@ type ScalingObservation struct {
 //   - the counts are recorded only once there is a service. Nil is "no service yet"; a recorded zero is
 //     a service running no tasks, which is a different and much more interesting state.
 func ObservedScaling(settings basecollectorsettings.Network, service Service, scaling ScalingState) ScalingObservation {
-	resolved := settings.Scaling.Resolve()
+	return ObservedScalingFor(settings.Scaling.Resolve(), settings, service, scaling)
+}
+
+// ObservedScalingFor is the same assembler over a policy resolved elsewhere, for the one caller whose
+// policy is not the configured one: retention, whose parked manual zero is not a value Resolve produces.
+func ObservedScalingFor(resolved basecollectorsettings.ResolvedScaling, settings basecollectorsettings.Network,
+	service Service, scaling ScalingState) ScalingObservation {
 	out := ScalingObservation{CPU: settings.CPU, Memory: settings.Memory}
 	if resolved.Known() {
 		out.Mode = resolved.Mode

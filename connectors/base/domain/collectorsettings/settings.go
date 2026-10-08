@@ -44,6 +44,10 @@ const (
 	KeyRepoOverride     = "repositoryOverride"
 	KeyEndpointOverride = "endpointOverride"
 
+	KeyRetention                 = "retention"
+	KeyIdleScaleToZeroAfterHours = "idleScaleToZeroAfterHours"
+	KeyIdleDeleteAfterHours      = "idleDeleteAfterHours"
+
 	KeyScaling             = "scaling"
 	KeyScalingMode         = "mode"
 	KeyDesiredCount        = "desiredCount"
@@ -130,6 +134,9 @@ type Network struct {
 	LogRetentionDays int
 
 	Scaling Scaling
+	// Retention is what happens to this Collector when its network has no enabled sources left.
+	// Both halves default to keeping it, which is why nothing about it appears in Defaults().
+	Retention Retention
 
 	// Arch and ImageRepositoryOverride select the image. The digest is unaffected by either.
 	Arch                    string
@@ -253,6 +260,12 @@ func readNetwork(entry map[string]any, base Network) Network {
 		MaxCount:            intOf(scaling, KeyMaxCount, base.Scaling.MaxCount),
 		TargetCPUPercent:    intOf(scaling, KeyTargetCPUPercent, base.Scaling.TargetCPUPercent),
 		TargetMemoryPercent: intOf(scaling, KeyTargetMemoryPercent, base.Scaling.TargetMemoryPercent),
+	}
+
+	retention := mapOf(entry, KeyRetention)
+	out.Retention = Retention{
+		IdleScaleToZeroAfterHours: intOf(retention, KeyIdleScaleToZeroAfterHours, base.Retention.IdleScaleToZeroAfterHours),
+		IdleDeleteAfterHours:      intOf(retention, KeyIdleDeleteAfterHours, base.Retention.IdleDeleteAfterHours),
 	}
 
 	tls := mapOf(entry, KeyTLS)

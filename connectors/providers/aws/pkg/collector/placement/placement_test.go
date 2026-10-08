@@ -14,7 +14,7 @@ import (
 
 const collectorKind = "aws.fargate-collector"
 
-// settings builds the §5.2 tree through the real reader rather than by struct literal, so these tests
+// settings builds the tree through the real reader rather than by struct literal, so these tests
 // exercise the same precedence a customer's `updateConfig` patch goes through.
 func settings(enabled bool, regions map[string]any) collectorsettings.Settings {
 	if regions == nil {
@@ -135,7 +135,7 @@ func TestConfiguredCollectorDoesNotNeedMarkedSource(t *testing.T) {
 	}
 }
 
-// TestTheFeatureSwitchProducesNothing. Turning managed Collectors on is a rollout (§7.4), so off is the
+// TestTheFeatureSwitchProducesNothing. Turning managed Collectors on is a rollout, so off is the
 // default and off means nothing anywhere, whatever a network says.
 func TestTheFeatureSwitchProducesNothing(t *testing.T) {
 	topo := NewTopology([]string{"eu-west-1"}, []VPC{{Region: "eu-west-1", ID: "vpc-a"}}, subnetsIn("eu-west-1", "vpc-a"))
@@ -275,7 +275,7 @@ func TestEveryServedNetworkIsServedBySomethingPlaceable(t *testing.T) {
 	}
 }
 
-// TestConfiguredSubnetsReachPlacement pins the §5.2 override actually being read: a customer who names
+// TestConfiguredSubnetsReachPlacement pins the override actually being read: a customer who names
 // subnets gets those subnets, not Odigos's choice.
 func TestConfiguredSubnetsReachPlacement(t *testing.T) {
 	subnets := append(subnetsIn("eu-west-1", "vpc-a"), Subnet{

@@ -2,11 +2,14 @@ package coordinator
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/opamp"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
 )
 
 // The managed-Collector reconcile loop.
@@ -324,4 +327,131 @@ func sortedKeys[V any](m map[string]V) []string {
 		}
 	}
 	return keys
+}
+
+// drainCollectors tears down every managed Collector this connector recorded, on CR delete.
+//
+// Called from the shutdown drain and nothing else. Notably NOT from RequestCleanup, which rolls
+// instrumentation back while the pod keeps running: disabling every source is not a decision to destroy
+// the egress tier, and a customer who re-enables a source a minute later would otherwise have paid for a
+// full redeployment of every workload on the network. Sources coming off leaves each network IDLE, and
+// the retention policy is what decides how long its Collector is kept — which defaults to
+// keeping it.
+//
+// It enumerates the RECORDED rows rather than the placement plan, and that is the difference between a
+// teardown and a converge pass. Placement answers "which networks should have a Collector", which during
+// a drain is nobody and which depends on a topology scan that may not even succeed; the rows answer
+// "which Collectors did this connector actually build", which is the only question teardown has. A
+// network the plan forgot — a VPC deleted, a region that failed to scan — still has a row, and it is
+// exactly the one that would otherwise be leaked.
+//
+// A failure here propagates. The caller withholds shutdownComplete on it, so connector-runtime keeps the
+// finalizer and the delete is retried, because dropping it while a Collector is still running in the
+// customer's account is precisely the silently-leaked infrastructure exists to prevent.
+func (c *Coordinator) drainCollectors(ctx context.Context) error {
+	provider, ok := c.provider.(api.CollectorProvider)
+	if !ok {
+		return nil
+	}
+	deployers := c.collectorTeardownHandlers(provider)
+	if len(deployers) == 0 {
+		// Every enabled Collector type is manual-mode, or this provider deploys none. Nothing Odigos
+		// created, nothing to remove — "in manual mode teardown deletes nothing, whatever the
+		// tags say", enforced by there being no deployer to call rather than by a check inside one.
+		return nil
+	}
+
+	records, err := c.recordedCollectors().ListManagedCollectors(ctx)
+	if err != nil {
+		// Never treated as "nothing recorded". A read failure that returned success here would drop the
+		// finalizer with the whole fleet still running, and the refs in those rows are half the authority
+		// to remove any of it.
+		return fmt.Errorf("listing the managed Collectors to tear down: %w", err)
+	}
+	if len(records) == 0 {
+		return nil
+	}
+
+	c.reconcileMu.Lock()
+	defer c.reconcileMu.Unlock()
+
+	coordLog.Info("tearing down managed Collectors", "collectors", len(records))
+	var errs []error
+	for _, record := range records {
+		deployer, ok := deployers[record.Kind]
+		if !ok {
+			// A row whose type is not one this connector may deploy — a manual-mode Collector it only
+			// observes and configures. Left exactly as it is, which is the whole of the manual-mode
+			// rule, and reported so a drain does not look like it removed something it did not.
+			coordLog.Info("leaving a Collector standing: its type has no deployer, so Odigos did not create it",
+				"network", record.NetworkID, "region", record.Key.Region, "type", record.Kind)
+			continue
+		}
+		if err := c.teardownCollector(ctx, deployer, record); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// collectorRecords is the row listing a drain reads. See Coordinator.collectorRows.
+type collectorRecords interface {
+	ListManagedCollectors(ctx context.Context) ([]store.CollectorRecord, error)
+}
+
+func (c *Coordinator) recordedCollectors() collectorRecords {
+	if c.collectorRows != nil {
+		return c.collectorRows
+	}
+	return c.store
+}
+
+// teardownCollector removes one network's Collector, containing a provider panic the way the reconcile
+// loop does: one network's failure must not abandon the rest of the fleet mid-drain, which would leave
+// the remaining Collectors both running and unreported.
+func (c *Coordinator) teardownCollector(ctx context.Context, deployer api.CollectorDeployer, record store.CollectorRecord) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			coordLog.Error("tearing down a Collector panicked",
+				"network", record.NetworkID, "region", record.Key.Region, "panic", r)
+			err = fmt.Errorf("tearing down the Collector on %s panicked: %v", record.NetworkID, r)
+		}
+	}()
+
+	if err := deployer.TeardownCollector(ctx, api.CollectorNetwork{
+		Region:    record.Key.Region,
+		NetworkID: record.NetworkID,
+		Kind:      record.Kind,
+	}); err != nil {
+		coordLog.Error("tearing down a Collector failed; the delete will be retried",
+			"network", record.NetworkID, "region", record.Key.Region, "error", err)
+		return fmt.Errorf("%s/%s: %w", record.Key.Region, record.NetworkID, err)
+	}
+	return nil
+}
+
+// collectorTeardownHandlers are the deployers a drain may call, and the ONE gate it does not apply.
+//
+// activeCollectorHandlers refuses to hand out deployers when the provider renders no Collector
+// configuration, because building a Collector nothing will ever configure spends the customer's money on
+// something that boots inert and stays there. That refusal must not extend to teardown, and the reason
+// is that the two fail in opposite directions:
+//
+//   - refusing to CREATE costs a feature, and is recoverable by fixing the connector;
+//   - refusing to DESTROY leaks a running Collector into a customer's account, holding their destination
+//     credential, after the connector that owned it is gone.
+//
+// A build whose config plane was removed — a downgrade to an image that renders nothing — would
+// otherwise delete its CR and leave the entire fleet standing, silently, with the rows that authorized
+// removing it deleted alongside. So the mode gate applies here (automatic types only) and the
+// config-plane gate does not.
+func (c *Coordinator) collectorTeardownHandlers(provider api.CollectorProvider) map[string]api.CollectorDeployer {
+	declared := provider.CollectorDeployers()
+	deployers := map[string]api.CollectorDeployer{}
+	for _, t := range c.provider.Spec().ActiveCollectorDeploymentTypes(c.cfg.Capabilities) {
+		if d, ok := declared[t.Name]; ok {
+			deployers[t.Name] = d
+		}
+	}
+	return deployers
 }

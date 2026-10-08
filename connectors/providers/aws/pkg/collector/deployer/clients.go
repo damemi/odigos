@@ -71,3 +71,64 @@ func (c cachedClients) AutoScaling(ctx context.Context, region string) (AutoScal
 	}
 	return aas.NewFromConfig(cfg), nil
 }
+
+// destructiveClients builds the AWS clients teardown uses.
+//
+// A SECOND type over the same cache rather than more methods on cachedClients, and it has to be: the
+// two interfaces name the same seven services, so one type cannot carry both — `ECS` would have to
+// return an ECSClient and an ECSTeardownClient at once. The compiler enforcing that is a better
+// guarantee than a comment asking nobody to add a delete to the converge path.
+type destructiveClients struct{ cache *awsclient.Cache }
+
+// NewTeardownClients returns the TeardownClients implementation the runtime uses.
+func NewTeardownClients(cache *awsclient.Cache) TeardownClients {
+	return destructiveClients{cache: cache}
+}
+
+func (c destructiveClients) Logs(ctx context.Context, region string) (LogGroupTeardownClient, error) {
+	cfg, err := c.cache.Config(ctx, region)
+	if err != nil {
+		return nil, fmt.Errorf("resolve aws config for %s: %w", region, err)
+	}
+	return cloudwatchlogs.NewFromConfig(cfg), nil
+}
+
+func (c destructiveClients) Secrets(ctx context.Context, region string) (SecretTeardownClient, error) {
+	cfg, err := c.cache.Config(ctx, region)
+	if err != nil {
+		return nil, fmt.Errorf("resolve aws config for %s: %w", region, err)
+	}
+	return secretsmanager.NewFromConfig(cfg), nil
+}
+
+func (c destructiveClients) EC2(ctx context.Context, region string) (SecurityGroupTeardownClient, error) {
+	cfg, err := c.cache.Config(ctx, region)
+	if err != nil {
+		return nil, fmt.Errorf("resolve aws config for %s: %w", region, err)
+	}
+	return ec2.NewFromConfig(cfg), nil
+}
+
+func (c destructiveClients) LoadBalancers(ctx context.Context, region string) (LoadBalancerTeardownClient, error) {
+	cfg, err := c.cache.Config(ctx, region)
+	if err != nil {
+		return nil, fmt.Errorf("resolve aws config for %s: %w", region, err)
+	}
+	return elb.NewFromConfig(cfg), nil
+}
+
+func (c destructiveClients) ECS(ctx context.Context, region string) (ECSTeardownClient, error) {
+	cfg, err := c.cache.Config(ctx, region)
+	if err != nil {
+		return nil, fmt.Errorf("resolve aws config for %s: %w", region, err)
+	}
+	return ecs.NewFromConfig(cfg), nil
+}
+
+func (c destructiveClients) AutoScaling(ctx context.Context, region string) (ScalingTeardownClient, error) {
+	cfg, err := c.cache.Config(ctx, region)
+	if err != nil {
+		return nil, fmt.Errorf("resolve aws config for %s: %w", region, err)
+	}
+	return aas.NewFromConfig(cfg), nil
+}

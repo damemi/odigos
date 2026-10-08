@@ -39,8 +39,11 @@ type fakeECS struct {
 
 	createServiceErr error
 	updateServiceErr error
+	deleteServiceErr error
 	registerErr      error
 	nextRevision     int32
+	// order, when set, is a call log shared with the other fakes. See sink.
+	order *sink
 }
 
 func newFakeECS() *fakeECS {
@@ -270,6 +273,7 @@ func (f *fakeECS) CreateService(_ context.Context, in *ecs.CreateServiceInput, _
 
 func (f *fakeECS) UpdateService(_ context.Context, in *ecs.UpdateServiceInput, _ ...func(*ecs.Options)) (*ecs.UpdateServiceOutput, error) {
 	f.calls = append(f.calls, "UpdateService:"+describeUpdate(in))
+	f.order.record("UpdateService:" + describeUpdate(in))
 	if f.updateServiceErr != nil {
 		return nil, f.updateServiceErr
 	}

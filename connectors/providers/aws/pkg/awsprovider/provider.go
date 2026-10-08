@@ -7,10 +7,12 @@ package awsprovider
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	baseconfig "github.com/odigos-io/odigos-enterprise/connectors/base/config"
 	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
 	cpg "github.com/odigos-io/odigos-enterprise/connectors/postgres"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/awsclient"
 	computeplatformdetector "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/computeplatform/detector"
@@ -41,8 +43,16 @@ type Provider struct {
 	cfgMgr              *baseconfig.Manager
 	workloadStdb        *workloadstore.Store
 	computePlatformStdb *computeplatformstore.Store
-	cache               *awsclient.Cache
-	layers              workloadinstrumentor.LayerResolver
+	// bstore is the shared base store, which the managed-Collector surface needs and no other part of
+	// this provider does: the Collector rows, the credentials and the destinations all live there rather
+	// than in a domain store, because they are provider-neutral (base/store/collectors.go).
+	bstore *basestore.Store
+	cache  *awsclient.Cache
+	// collectorSurface is the observer, the deployer and the plan resolver they share, built once. See
+	// collectors.go.
+	collectorOnce    sync.Once
+	collectorSurface *collectorSurface
+	layers           workloadinstrumentor.LayerResolver
 	// ecrImages reads container image configs (via ECR auth or anonymously) for Fargate language
 	// detection. Optional layer: the task-definition heuristics and source overrides work without it.
 	ecrImages workloadinstrumentor.ImageInspector
@@ -51,14 +61,15 @@ type Provider struct {
 // New builds the AWS provider over the two domain stores and the live config Manager. By default Lambda
 // instrumentation is self-sufficient (discover-or-publish a managed OTel layer); an explicit ARN table
 // overrides it.
-func New(cfg config.Config, cfgMgr *baseconfig.Manager, workloadStore *workloadstore.Store, computePlatformStore *computeplatformstore.Store) *Provider {
+func New(cfg config.Config, cfgMgr *baseconfig.Manager, base *basestore.Store, workloadStore *workloadstore.Store, computePlatformStore *computeplatformstore.Store) *Provider {
 	cache := awsclient.NewCache(cfg.Credentials)
 	var layers workloadinstrumentor.LayerResolver = workloadinstrumentor.NewManagedLayerResolver(cache, cfg.LambdaLayerDir)
 	if len(cfg.LambdaLayerARNs) > 0 {
 		layers = workloadinstrumentor.NewPublicLayerResolver(cfg.LambdaLayerARNs)
 	}
 	return &Provider{
-		cfg: cfg, cfgMgr: cfgMgr, workloadStdb: workloadStore, computePlatformStdb: computePlatformStore,
+		cfg: cfg, cfgMgr: cfgMgr, bstore: base,
+		workloadStdb: workloadStore, computePlatformStdb: computePlatformStore,
 		cache: cache, layers: layers,
 		ecrImages: workloadinstrumentor.NewECRImageInspector(cache),
 	}

@@ -43,6 +43,10 @@ type CollectorRecord struct {
 	Mode      string
 	Origin    string
 	AdoptedAt *time.Time
+	// IdleSince is when this recorded Collector was first observed without enabled regional lifecycle
+	// intent, and the clock the retention policy runs on. Nil means it is still configured, or
+	// that no pass has seen it idle.
+	IdleSince *time.Time
 
 	CollectorID        string
 	CredentialRef      string
@@ -114,7 +118,7 @@ func (r CollectorRecord) Recorded(ref string) bool {
 // table reaches all of them at once; collectors_test.go checks it against the migration.
 const collectorColumns = `
 	connector_name, region, network_id, kind,
-	mode, origin, adopted_at,
+	mode, origin, adopted_at, idle_since,
 	collector_id, credential_ref, active_credential_id,
 	workload_ref, revision_ref, runtime_ref, frontend_ref, backend_refs, ingress_ref, placement_refs,
 	endpoint_grpc, endpoint_http, endpoint_source,
@@ -296,8 +300,27 @@ func (s *Store) RecordCollectorLiveness(ctx context.Context, key CollectorKey, i
 		instanceUID, connectedAt, lastSeenAt, agentHealth)
 }
 
-// SetCollectorStatus records the coarse state and its message. One writer for both, so a status can
-// never disagree with the sentence explaining it.
+// RecordCollectorIdle starts or clears the retention clock for one regional Collector.
+//
+// Owns idle_since alone, which is what makes it safe to call from the same pass that converges the
+// Collector: the clock is a fact about the network's SOURCES, and every other column on the row is a
+// fact about its infrastructure or its session.
+//
+// A nil idleSince clears it, and clearing rather than pausing is deliberate. A network that gets a
+// source back has not been idle for the interval it was idle before — the retention graces are about
+// how long a Collector has been unused continuously, and resuming a half-elapsed clock would let a
+// network that is used every day accumulate its way to a deletion.
+//
+// Writing an idleSince that is already set is a no-op the caller is expected to make: only the FIRST
+// observation may set the clock, or every pass would push the deadline out by one interval and nothing
+// would ever be deleted. Enforced here rather than left to the caller — COALESCE keeps the earliest
+// observation, so a second writer cannot restart the wait.
+func (s *Store) RecordCollectorIdle(ctx context.Context, key CollectorKey, idleSince *time.Time) error {
+	return s.update(ctx, key, "idle", `
+		idle_since = CASE WHEN $3::timestamptz IS NULL THEN NULL ELSE COALESCE(idle_since, $3) END`,
+		idleSince)
+}
+
 func (s *Store) SetCollectorStatus(ctx context.Context, key CollectorKey, status collectorstatus.Status, message string) error {
 	return s.update(ctx, key, "status", `
 		status = $3,
@@ -416,7 +439,7 @@ func scanCollectorRow(row pgx.Row) (CollectorRecord, error) {
 
 	if err := row.Scan(
 		&connectorName, &rec.Key.Region, &rec.NetworkID, &rec.Kind,
-		&rec.Mode, &rec.Origin, &rec.AdoptedAt,
+		&rec.Mode, &rec.Origin, &rec.AdoptedAt, &rec.IdleSince,
 		&collectorID, &credentialRef, &activeCredentialID,
 		&workloadRef, &revisionRef, &runtimeRef, &frontendRef, &backendsRaw, &ingressRef, &placementsRaw,
 		&endpointGRPC, &endpointHTTP, &endpointSource,

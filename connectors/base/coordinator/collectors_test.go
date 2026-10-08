@@ -107,7 +107,12 @@ func (r *recorder) TeardownCollector(_ context.Context, n api.CollectorNetwork) 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.tornDown = append(r.tornDown, n.NetworkID)
-	return nil
+	// Honours failOn and panicOn like the other two. A teardown that could not fail would make "one
+	// network's failure does not abandon the rest" untestable on the path where it matters most.
+	if r.panicOn[n.NetworkID] {
+		panic("deployer exploded tearing down " + n.NetworkID)
+	}
+	return r.failOn[n.NetworkID]
 }
 
 func (r *recorder) calls() (observed, converged, tornDown []string) {

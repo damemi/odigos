@@ -8,6 +8,7 @@ CREATE TABLE provider.managed_collectors (
   mode TEXT,
   origin TEXT,
   adopted_at TIMESTAMPTZ,
+  idle_since TIMESTAMPTZ,
   collector_id TEXT,
   credential_ref TEXT,
   active_credential_id TEXT,

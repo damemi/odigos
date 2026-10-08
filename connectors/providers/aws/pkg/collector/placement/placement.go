@@ -69,6 +69,29 @@ type Plan struct {
 	// with no network, and any workload whose VPC could not be resolved. Per-host conditions live on the
 	// Placement, and provider-neutral host-selection conditions live on Networks.
 	Problems []collectorstatus.Problem
+
+	// Inventory and Topology are what the decision was made FROM, carried on the plan so a caller that
+	// needs more than the decision does not have to re-read either.
+	//
+	// The deployer is that caller: converging one network's ingress needs the security groups of every
+	// workload routed to it and the network's own CIDR blocks (the fallback's only legal
+	// width), and both come out of exactly this inventory and this topology. Re-reading them would mean
+	// the rules a pass converges to could be derived from a different reading than the placement they
+	// were converged for. Populated by Resolver; empty on a Plan built directly by Resolve, whose
+	// callers only want the decision.
+	Inventory Inventory
+	Topology  Topology
+
+	// Idle are networks with a RECORDED Collector that this plan no longer places one on because its
+	// regional lifecycle configuration was disabled or removed. Source count is deliberately irrelevant:
+	// a newly created Collector has no marked sources until the customer applies its route destination.
+	//
+	// They are in the plan for the same reason a network whose placement was refused is: their Collector
+	// is still RUNNING. A network dropped from the plan is a network no pass visits, which means nothing
+	// observes it, nothing reports it, and the retention policy that would eventually park or remove it
+	// never runs — so disabling a configured region would leak its Collector for ever, quietly.
+	// Populated by Resolver, which is the only thing here that can read what is recorded.
+	Idle []collectorplacement.NetworkRef
 }
 
 // Resolve decides which VPCs get a Collector and where each one is placed.
@@ -133,11 +156,30 @@ func place(ref collectorplacement.NetworkRef, in Input) Placement {
 // Whether a regional Collector is actually built is Placement.Deployable, checked by the deployer.
 func (p Plan) CollectorNetworks() []baseapi.CollectorNetwork {
 	refs := p.Networks.CollectorNetworks()
-	out := make([]baseapi.CollectorNetwork, 0, len(refs))
+	out := make([]baseapi.CollectorNetwork, 0, len(refs)+len(p.Idle))
 	for _, ref := range refs {
 		out = append(out, baseapi.CollectorNetwork{Region: ref.Region, NetworkID: ref.NetworkID, Kind: p.Kind})
 	}
+	// Then the idle ones, which placement does not build for and something still has to visit. Appended
+	// rather than merged into Placements: an idle network has no placement decision, and inventing an
+	// empty one would make it read as a network whose subnets could not be resolved.
+	for _, ref := range p.Idle {
+		out = append(out, baseapi.CollectorNetwork{Region: ref.Region, NetworkID: ref.NetworkID, Kind: p.Kind})
+	}
 	return out
+}
+
+// IsIdle reports whether this host network has a recorded regional Collector the plan no longer places.
+//
+// What separates "converge this Collector towards its configuration" from "decide how long to keep it".
+// A regional Collector cannot be both idle and placed — Resolver only ever adds what placement left out.
+func (p Plan) IsIdle(region, networkID string) bool {
+	for _, ref := range p.Idle {
+		if ref.Region == region && ref.NetworkID == networkID {
+			return true
+		}
+	}
+	return false
 }
 
 // DeployableNetworks lists only the regional host networks placement could actually resolve subnets for.

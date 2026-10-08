@@ -252,7 +252,7 @@ func reconcileLoadBalancer(ctx context.Context, api LoadBalancerClient, in LoadB
 	return nil, nil
 }
 
-func describeLoadBalancer(ctx context.Context, api LoadBalancerClient, name string) (*elbtypes.LoadBalancer, error) {
+func describeLoadBalancer(ctx context.Context, api loadBalancerReader, name string) (*elbtypes.LoadBalancer, error) {
 	out, err := api.DescribeLoadBalancers(ctx, &elb.DescribeLoadBalancersInput{Names: []string{name}})
 	if err != nil {
 		var notFound *elbtypes.LoadBalancerNotFoundException
@@ -273,7 +273,7 @@ func describeLoadBalancer(ctx context.Context, api LoadBalancerClient, name stri
 //
 // A separate call, because neither DescribeLoadBalancers nor DescribeTargetGroups returns tags — which
 // is the whole reason elasticloadbalancing:DescribeTags is in the permission set.
-func taggedObject(ctx context.Context, api LoadBalancerClient, arn string) (collectorownership.Object, error) {
+func taggedObject(ctx context.Context, api elbTagReader, arn string) (collectorownership.Object, error) {
 	out, err := api.DescribeTags(ctx, &elb.DescribeTagsInput{ResourceArns: []string{arn}})
 	if err != nil {
 		return collectorownership.Object{}, fmt.Errorf("describe tags of %s: %w", arn, err)
@@ -362,7 +362,7 @@ func ensureTargetGroups(ctx context.Context, api LoadBalancerClient, in LoadBala
 }
 
 // describeTargetGroup finds a target group by name, or nil.
-func describeTargetGroup(ctx context.Context, api LoadBalancerClient, name string) (*elbtypes.TargetGroup, error) {
+func describeTargetGroup(ctx context.Context, api targetGroupReader, name string) (*elbtypes.TargetGroup, error) {
 	found, err := api.DescribeTargetGroups(ctx, &elb.DescribeTargetGroupsInput{Names: []string{name}})
 	if err != nil {
 		var notFound *elbtypes.TargetGroupNotFoundException

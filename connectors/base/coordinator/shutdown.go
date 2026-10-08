@@ -44,6 +44,14 @@ func (c *Coordinator) Shutdown(ctx context.Context) error {
 		coordLog.Error("shutdown reconcile incomplete; not marking shutdown complete", "error", err)
 		return fmt.Errorf("shutdown reconcile failed: %w", err)
 	}
+	// After the workloads and before completion. The ordering is not arbitrary: instrumentation is
+	// rolled back first so nothing is still exporting into a Collector while it is being removed, and
+	// completion is withheld until this succeeds so the finalizer is never dropped over a Collector that
+	// is still running in the customer's account.
+	if err := c.drainCollectors(ctx); err != nil {
+		coordLog.Error("managed Collector teardown incomplete; not marking shutdown complete", "error", err)
+		return fmt.Errorf("collector teardown failed: %w", err)
+	}
 	c.automaticDrainDone.Store(true)
 
 	retained, names, err := c.countRetainedWithTimeout(ctx)
@@ -93,6 +101,15 @@ func (c *Coordinator) observeDrain(ctx context.Context, cancelLoops context.Canc
 		coordLog.Info("drain requested; rolling back automatic-mode instrumentation", "reason", drain.Reason)
 		if err := c.drainInstrumentation(ctx); err != nil {
 			coordLog.Error("drain reconcile incomplete; will retry on next tick", "error", err)
+			return false
+		}
+		if err := c.drainCollectors(ctx); err != nil {
+			// Retried on the next tick rather than failed, and a teardown is built to be resumed: every
+			// step treats what a previous pass removed as success, and the row survives until nothing
+			// deletable is left. A load balancer takes minutes to release the network interfaces its
+			// security group holds, so at least one tick reporting this is the expected path rather than
+			// an error condition.
+			coordLog.Error("managed Collector teardown incomplete; will retry on next tick", "error", err)
 			return false
 		}
 		c.automaticDrainDone.Store(true)

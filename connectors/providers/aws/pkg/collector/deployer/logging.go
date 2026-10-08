@@ -49,6 +49,10 @@ type LogGroupInput struct {
 // ours in one place, whereas the worst case of refusing is no Collector because a group with a
 // plausible name was already there. Tagging is attempted anyway, and a failure to tag is not fatal for
 // the same reason.
+//
+// That permissiveness is exactly why the ownership marker is written only on the CREATE. Writing into a
+// group Odigos did not create is a cost the paragraph above accepts; acquiring the right to DELETE one
+// is not, and teardown reads that tag.
 func EnsureLogGroup(ctx context.Context, api LogsClient, in LogGroupInput) (string, []collectorstatus.Problem, error) {
 	if problems := modeGuard(in.Mode); len(problems) > 0 {
 		return "", problems, nil
@@ -59,7 +63,8 @@ func EnsureLogGroup(ctx context.Context, api LogsClient, in LogGroupInput) (stri
 
 	_, err := api.CreateLogGroup(ctx, &cloudwatchlogs.CreateLogGroupInput{
 		LogGroupName: aws.String(name),
-		Tags:         tags,
+		// The ownership marker goes on the CREATE and only on the create. See the already-exists branch.
+		Tags: tags,
 	})
 	switch {
 	case err == nil:
@@ -68,9 +73,17 @@ func EnsureLogGroup(ctx context.Context, api LogsClient, in LogGroupInput) (stri
 		// Tag an existing group so one Odigos created before this code did — or one whose tags a
 		// customer removed — is attributable. Best-effort: a tagging failure must not stop a Collector
 		// from being provisioned over a log group that already works.
+		//
+		// The IDENTITY tags only, never CollectorManagedTags, and this is the one place the difference
+		// bites. This branch is reached both by a group Odigos created and by a customer's own group
+		// under a plausible name — the whole reason the write above is not ownership-checked — so
+		// stamping `odigos-managed` here would hand Odigos deletion authority over a log group it did
+		// not create, and teardown would take the customer's logs with it (the deployer writes
+		// the ownership marker only on an object it created itself). Adopting is not creating, and
+		// neither is writing into.
 		if _, err := api.TagResource(ctx, &cloudwatchlogs.TagResourceInput{
 			ResourceArn: aws.String(logGroupARN(in.Partition, in.Region, in.AccountID, name)),
-			Tags:        tags,
+			Tags:        baseapi.CollectorIdentityTags(in.Connector, in.ConnectorID, in.Region, ""),
 		}); err != nil {
 			log.Warn("could not tag the existing collector log group", "region", in.Region, "group", name, "error", err)
 		}
