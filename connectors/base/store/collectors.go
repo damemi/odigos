@@ -47,6 +47,9 @@ type CollectorRecord struct {
 	// intent, and the clock the retention policy runs on. Nil means it is still configured, or
 	// that no pass has seen it idle.
 	IdleSince *time.Time
+	// FirstReadyAt is when this Collector first reported ready, and the gate the workload cutover runs
+	// on. Nil means it has never been ready, and nothing on its network has been re-pointed.
+	FirstReadyAt *time.Time
 
 	CollectorID        string
 	CredentialRef      string
@@ -76,8 +79,9 @@ type CollectorRecord struct {
 	LicenseSecretRef string
 	LicenseExpiresAt *time.Time
 
-	ConfigHash     string
-	ConfigPushedAt *time.Time
+	ConfigHash        string
+	AppliedConfigHash string
+	ConfigPushedAt    *time.Time
 
 	ScalingMode  string
 	DesiredCount *int
@@ -118,13 +122,13 @@ func (r CollectorRecord) Recorded(ref string) bool {
 // table reaches all of them at once; collectors_test.go checks it against the migration.
 const collectorColumns = `
 	connector_name, region, network_id, kind,
-	mode, origin, adopted_at, idle_since,
+	mode, origin, adopted_at, idle_since, first_ready_at,
 	collector_id, credential_ref, active_credential_id,
 	workload_ref, revision_ref, runtime_ref, frontend_ref, backend_refs, ingress_ref, placement_refs,
 	endpoint_grpc, endpoint_http, endpoint_source,
 	tls_mode, tls_termination, ingress_tier,
 	image_digest, image_tag, image_arch, license_secret_ref, license_expires_at,
-	config_hash, config_pushed_at,
+	config_hash, applied_config_hash, config_pushed_at,
 	scaling_mode, desired_count, running_count, min_count, max_count, cpu, memory,
 	opamp_instance_uid, opamp_connected_at, opamp_last_seen_at, agent_health,
 	status, message, created_at, updated_at`
@@ -274,6 +278,15 @@ func (s *Store) RecordCollectorConfigPush(ctx context.Context, key CollectorKey,
 		configHash, pushedAt)
 }
 
+// RecordCollectorConfigApplied records the last document the Supervisor positively acknowledged.
+// Kept separate from ConfigHash, which is written when a document is sent: a connector can restart in
+// the interval between those two events and must not turn an unacknowledged push into applied state.
+func (s *Store) RecordCollectorConfigApplied(ctx context.Context, key CollectorKey, configHash string) error {
+	return s.update(ctx, key, "applied", `
+		applied_config_hash = NULLIF($3, '')`,
+		configHash)
+}
+
 // RecordCollectorScaling records the scaling configuration and what is actually running.
 func (s *Store) RecordCollectorScaling(ctx context.Context, key CollectorKey, mode string, desired, running, min, max *int, cpu, memory string) error {
 	return s.update(ctx, key, "scaling", `
@@ -319,6 +332,22 @@ func (s *Store) RecordCollectorIdle(ctx context.Context, key CollectorKey, idleS
 	return s.update(ctx, key, "idle", `
 		idle_since = CASE WHEN $3::timestamptz IS NULL THEN NULL ELSE COALESCE(idle_since, $3) END`,
 		idleSince)
+}
+
+// RecordCollectorFirstReady latches the moment this Collector first reported ready.
+//
+// Its own accessor and its own column rather than a flag folded into SetCollectorStatus, even though the
+// OpAMP session is the only caller of both. The status column has three writers and moves in both
+// directions; this one has one writer and moves once. Folding the latch into a shared accessor would
+// mean any future writer of a Ready status also opened the cutover gate for a whole network — which is
+// the kind of coupling that is invisible until the day somebody adds a fourth writer.
+//
+// COALESCE, so the FIRST ready is what is kept. A later pass must not move it: the value is used to
+// decide whether the announcement has already been made, and a timestamp that advanced every pass would
+// re-announce a rollout for ever and never start it.
+func (s *Store) RecordCollectorFirstReady(ctx context.Context, key CollectorKey, readyAt time.Time) error {
+	return s.update(ctx, key, "readiness", `
+		first_ready_at = COALESCE(first_ready_at, $3)`, readyAt)
 }
 
 func (s *Store) SetCollectorStatus(ctx context.Context, key CollectorKey, status collectorstatus.Status, message string) error {
@@ -428,24 +457,24 @@ func scanCollectorRow(row pgx.Row) (CollectorRecord, error) {
 	// Nullable text columns scan through pointers so an absent value stays distinguishable from an empty
 	// one at the database boundary, then collapses to "" in the record — the shape every caller wants.
 	var (
-		collectorID, credentialRef, activeCredentialID     *string
-		workloadRef, revisionRef, runtimeRef, frontendRef  *string
-		ingressRef, endpointGRPC, endpointHTTP             *string
-		endpointSource, tlsTermination                     *string
-		imageDigest, imageTag, imageArch, licenseSecretRef *string
-		configHash, scalingMode, cpu, memory               *string
-		opampInstanceUID, agentHealth, message             *string
+		collectorID, credentialRef, activeCredentialID          *string
+		workloadRef, revisionRef, runtimeRef, frontendRef       *string
+		ingressRef, endpointGRPC, endpointHTTP                  *string
+		endpointSource, tlsTermination                          *string
+		imageDigest, imageTag, imageArch, licenseSecretRef      *string
+		configHash, appliedConfigHash, scalingMode, cpu, memory *string
+		opampInstanceUID, agentHealth, message                  *string
 	)
 
 	if err := row.Scan(
 		&connectorName, &rec.Key.Region, &rec.NetworkID, &rec.Kind,
-		&rec.Mode, &rec.Origin, &rec.AdoptedAt, &rec.IdleSince,
+		&rec.Mode, &rec.Origin, &rec.AdoptedAt, &rec.IdleSince, &rec.FirstReadyAt,
 		&collectorID, &credentialRef, &activeCredentialID,
 		&workloadRef, &revisionRef, &runtimeRef, &frontendRef, &backendsRaw, &ingressRef, &placementsRaw,
 		&endpointGRPC, &endpointHTTP, &endpointSource,
 		&rec.TLSMode, &tlsTermination, &rec.IngressTier,
 		&imageDigest, &imageTag, &imageArch, &licenseSecretRef, &rec.LicenseExpiresAt,
-		&configHash, &rec.ConfigPushedAt,
+		&configHash, &appliedConfigHash, &rec.ConfigPushedAt,
 		&scalingMode, &rec.DesiredCount, &rec.RunningCount, &rec.MinCount, &rec.MaxCount, &cpu, &memory,
 		&opampInstanceUID, &rec.OpAMPConnectedAt, &rec.OpAMPLastSeenAt, &agentHealth,
 		&status, &message, &rec.CreatedAt, &rec.UpdatedAt,
@@ -471,6 +500,7 @@ func scanCollectorRow(row pgx.Row) (CollectorRecord, error) {
 	rec.ImageArch = derefString(imageArch)
 	rec.LicenseSecretRef = derefString(licenseSecretRef)
 	rec.ConfigHash = derefString(configHash)
+	rec.AppliedConfigHash = derefString(appliedConfigHash)
 	rec.ScalingMode = derefString(scalingMode)
 	rec.CPU = derefString(cpu)
 	rec.Memory = derefString(memory)

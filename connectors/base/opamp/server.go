@@ -33,7 +33,13 @@ type Collectors interface {
 	GetManagedCollector(ctx context.Context, key store.CollectorKey) (store.CollectorRecord, error)
 	RecordCollectorLiveness(ctx context.Context, key store.CollectorKey, instanceUID string, connectedAt, lastSeenAt *time.Time, agentHealth string) error
 	RecordCollectorConfigPush(ctx context.Context, key store.CollectorKey, configHash string, pushedAt time.Time) error
+	RecordCollectorConfigApplied(ctx context.Context, key store.CollectorKey, configHash string) error
 	SetCollectorStatus(ctx context.Context, key store.CollectorKey, status collectorstatus.Status, message string) error
+	// RecordCollectorFirstReady latches the first time this Collector worked, which is the gate the
+	// workload cutover runs on. This server is the only party that can know it: readiness is a
+	// property of the config plane — the Collector connected, identified itself, and accepted its
+	// configuration — and nothing reading the infrastructure can see any of that.
+	RecordCollectorFirstReady(ctx context.Context, key store.CollectorKey, readyAt time.Time) error
 }
 
 // Desired renders what a Collector should be running. Supplied by the reconcile loop, which owns the
@@ -82,6 +88,9 @@ type session struct {
 	// fresh delivery, while a connected agent that missed the first response cannot turn its own
 	// heartbeat into a config-push loop.
 	lastSentConfigHash string
+	// recordedAppliedConfigHash keeps the acknowledgement writer at zero writes in steady state. It is
+	// seeded from durable state and advanced only after the store accepts a new applied hash.
+	recordedAppliedConfigHash string
 }
 
 // New builds a server. Start it with Start.
@@ -197,7 +206,28 @@ func (s *Server) onConnecting(r *http.Request) types.ConnectionResponse {
 		return types.ConnectionResponse{Accept: false, HTTPStatusCode: http.StatusUnauthorized}
 	}
 
-	sess := &session{identity: identity, key: key, connectedAt: time.Now().UTC()}
+	// AgentDescription is delta state in OpAMP. A Supervisor process that already identified itself may
+	// reconnect after this connector (or the gateway's upstream) restarts without repeating it. A
+	// Collector that reached FirstReady has already passed this exact description gate at least once;
+	// the authenticated gateway identity and its binding were re-verified above for this handshake, so
+	// requiring the unchanged description again would strand a healthy Collector behind the gate.
+	// Never-ready Collectors still start false and must identify themselves before receiving config.
+	sess := &session{
+		identity:                  identity,
+		key:                       key,
+		connectedAt:               time.Now().UTC(),
+		descriptionVerified:       rec.FirstReadyAt != nil,
+		recordedAppliedConfigHash: rec.AppliedConfigHash,
+	}
+	if rec.FirstReadyAt != nil && rec.AppliedConfigHash != "" {
+		// RemoteConfigStatus is delta state too. Restore only a positively acknowledged hash—not the
+		// last hash sent—so a connector restart neither strands steady state nor treats an interrupted
+		// configuration push as successful.
+		sess.lastReport.RemoteConfigStatus = &protobufs.RemoteConfigStatus{
+			LastRemoteConfigHash: []byte(rec.AppliedConfigHash),
+			Status:               protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLIED,
+		}
+	}
 	return types.ConnectionResponse{
 		Accept: true,
 		ConnectionCallbacks: types.ConnectionCallbacks{
@@ -324,6 +354,14 @@ func (s *Server) respondWithConfig(ctx context.Context, sess *session, msg *prot
 
 	push := DecidePush(doc.Hash, report.RemoteConfigStatus)
 	if !push.Send {
+		if push.Reason == HoldApplied && push.Hash != sess.recordedAppliedConfigHash {
+			if err := s.Collectors.RecordCollectorConfigApplied(ctx, sess.key, push.Hash); err != nil {
+				opampLog.Warn("could not record an applied Collector configuration",
+					"region", sess.key.Region, "hash", push.Hash, "error", err)
+			} else {
+				sess.recordedAppliedConfigHash = push.Hash
+			}
+		}
 		s.setStatus(ctx, sess, holdStatus(push, report), holdMessage(push, report))
 		return out
 	}
@@ -383,6 +421,23 @@ func (s *Server) persistReport(ctx context.Context, sess *session, report Report
 func (s *Server) setStatus(ctx context.Context, sess *session, status collectorstatus.Status, message string) {
 	if err := s.Collectors.SetCollectorStatus(ctx, sess.key, status, message); err != nil {
 		opampLog.Warn("could not record Collector status", "region", sess.key.Region, "error", err)
+	}
+	if status != collectorstatus.StatusReady {
+		return
+	}
+	// The cutover latch, written here because this is the only line in the connector that knows a
+	// Collector has actually worked: it connected, identified itself against its binding, and is running
+	// the configuration Odigos wants. Until this lands, the workloads on its network keep exporting
+	// straight to the destination.
+	//
+	// Best-effort, like every other write on this path. A latch that could not be written costs the
+	// network a rollout for one pass — the next Ready writes it — whereas failing the message exchange
+	// over it would cost the Collector its configuration plane, which is a far worse trade for a fact
+	// that is about to be true again.
+	if err := s.Collectors.RecordCollectorFirstReady(ctx, sess.key, time.Now().UTC()); err != nil {
+		opampLog.Warn("could not record that a Collector became ready; the workloads in its region stay "+
+			"on direct export until a later pass records it",
+			"region", sess.key.Region, "error", err)
 	}
 }
 

@@ -35,7 +35,28 @@ type fakeCollectors struct {
 	getErr   error
 	liveness []livenessWrite
 	pushes   []pushWrite
+	applied  []string
 	statuses []statusWrite
+	// firstReady records every latch write, so a test can assert both that becoming ready opens the
+	// cutover gate and that nothing else does.
+	firstReady []time.Time
+	readyErr   error
+}
+
+func (f *fakeCollectors) RecordCollectorFirstReady(_ context.Context, _ store.CollectorKey, readyAt time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.readyErr != nil {
+		return f.readyErr
+	}
+	f.firstReady = append(f.firstReady, readyAt)
+	return nil
+}
+
+func (f *fakeCollectors) readyLatches() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.firstReady)
 }
 
 type livenessWrite struct {
@@ -85,6 +106,13 @@ func (f *fakeCollectors) RecordCollectorConfigPush(_ context.Context, _ store.Co
 	return nil
 }
 
+func (f *fakeCollectors) RecordCollectorConfigApplied(_ context.Context, _ store.CollectorKey, configHash string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.applied = append(f.applied, configHash)
+	return nil
+}
+
 func (f *fakeCollectors) SetCollectorStatus(_ context.Context, _ store.CollectorKey, status collectorstatus.Status, message string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -98,6 +126,12 @@ func (f *fakeCollectors) snapshot() ([]livenessWrite, []pushWrite, []statusWrite
 	return append([]livenessWrite{}, f.liveness...),
 		append([]pushWrite{}, f.pushes...),
 		append([]statusWrite{}, f.statuses...)
+}
+
+func (f *fakeCollectors) appliedHashes() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string{}, f.applied...)
 }
 
 // fakeDesired stands in for the reconcile loop's configuration source.
@@ -317,6 +351,9 @@ func TestSteadyStateSendsNothing(t *testing.T) {
 	if _, pushes, _ := collectors.snapshot(); len(pushes) != 0 {
 		t.Errorf("a push was recorded for a Collector that needed none: %+v", pushes)
 	}
+	if applied := collectors.appliedHashes(); len(applied) == 0 || applied[len(applied)-1] != desired.doc.Hash {
+		t.Errorf("the applied configuration was not persisted: %+v", applied)
+	}
 	_, _, statuses := collectors.snapshot()
 	if last := statuses[len(statuses)-1]; last.status != collectorstatus.StatusReady {
 		t.Errorf("status = %q, want %q", last.status, collectorstatus.StatusReady)
@@ -482,6 +519,32 @@ func TestNoConfigurationBeforeTheDescriptionIsVerified(t *testing.T) {
 	}
 }
 
+// TestAReadyCollectorReconnectsWithoutRepeatingItsDescription covers OpAMP delta state across a
+// connector restart. The same Supervisor process reconnects through the gateway, but does not repeat a
+// description that did not change. FirstReady proves that this Collector already passed the gate; the
+// handshake still re-verifies its credential binding before the session is admitted.
+func TestAReadyCollectorReconnectsWithoutRepeatingItsDescription(t *testing.T) {
+	collectors, desired := newFakeCollectors(), newFakeDesired()
+	readyAt := time.Now().Add(-time.Minute)
+	collectors.record.FirstReadyAt = &readyAt
+	collectors.record.AppliedConfigHash = desired.doc.Hash
+	s := New(self(), collectors, desired)
+	uid := testInstanceUID()
+
+	answers := exchange(t, s, headersFor(identity(nil)), &protobufs.AgentToServer{
+		InstanceUid: uid[:],
+		Health:      &protobufs.ComponentHealth{Healthy: true, Status: "StatusOK"},
+	})
+
+	if answers[0].GetRemoteConfig() != nil {
+		t.Fatal("an already-applied configuration was unnecessarily sent again after reconnect")
+	}
+	_, _, statuses := collectors.snapshot()
+	if len(statuses) == 0 || statuses[len(statuses)-1].status != collectorstatus.StatusReady {
+		t.Fatalf("statuses = %+v, want the reconnected Collector Ready after acknowledging config", statuses)
+	}
+}
+
 // TestMissingRemoteConfigStatusDoesNotPushOnEveryHeartbeat covers older Supervisor builds that
 // advertise ReportsRemoteConfig but omit the status from their periodic reports. They still need a
 // delivery on each new connection, but sending the same document per heartbeat keeps the Collector
@@ -619,5 +682,64 @@ func TestRejectedConfigurationIsNotResent(t *testing.T) {
 	after := exchange(t, s, headersFor(identity(nil)), rejection)
 	if after[0].GetRemoteConfig() == nil {
 		t.Error("a corrected configuration was withheld because an older one had been rejected")
+	}
+}
+
+// TestBecomingReadyOpensTheCutoverGate.
+//
+// This server is the only party that can know a Collector has actually worked — it connected, identified
+// itself against its binding, and is running the configuration Odigos wants — and nothing reading the
+// infrastructure can see any of that. Until the latch lands, every workload on the network keeps
+// exporting straight to the destination.
+func TestBecomingReadyOpensTheCutoverGate(t *testing.T) {
+	collectors := newFakeCollectors()
+	srv := New(self(), collectors, newFakeDesired())
+
+	srv.setStatus(context.Background(), &session{key: testKey()}, collectorstatus.StatusReady, "ready")
+
+	if got := collectors.readyLatches(); got != 1 {
+		t.Fatalf("latched %d times on Ready, want once", got)
+	}
+}
+
+// TestOnlyReadyOpensIt. Every other status is a Collector that has not worked yet, and opening the gate
+// on one would re-point a fleet at something that is deploying, degraded or being refused.
+func TestOnlyReadyOpensIt(t *testing.T) {
+	for _, status := range []collectorstatus.Status{
+		collectorstatus.StatusPending,
+		collectorstatus.StatusDeploying,
+		collectorstatus.StatusDegraded,
+		collectorstatus.StatusError,
+		collectorstatus.StatusAwaitingCustomer,
+	} {
+		t.Run(string(status), func(t *testing.T) {
+			collectors := newFakeCollectors()
+			srv := New(self(), collectors, newFakeDesired())
+
+			srv.setStatus(context.Background(), &session{key: testKey()}, status, "not ready")
+
+			if got := collectors.readyLatches(); got != 0 {
+				t.Errorf("status %q latched the cutover gate %d time(s)", status, got)
+			}
+		})
+	}
+}
+
+// TestAFailedLatchDoesNotFailTheExchange. A latch that could not be written costs the network a rollout
+// for one pass — the next Ready writes it. Failing the message exchange over it would cost the Collector
+// its configuration plane, which is a far worse trade for a fact that is about to be true again.
+func TestAFailedLatchDoesNotFailTheExchange(t *testing.T) {
+	collectors := newFakeCollectors()
+	collectors.readyErr = errors.New("the database is unreachable")
+	srv := New(self(), collectors, newFakeDesired())
+
+	// setStatus returns nothing and must not panic; the status write still happened.
+	srv.setStatus(context.Background(), &session{key: testKey()}, collectorstatus.StatusReady, "ready")
+
+	collectors.mu.Lock()
+	wrote := len(collectors.statuses)
+	collectors.mu.Unlock()
+	if wrote == 0 {
+		t.Error("the status was not recorded when the latch failed")
 	}
 }

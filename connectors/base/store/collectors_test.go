@@ -311,3 +311,41 @@ func TestPlaceholdersAreContiguous(t *testing.T) {
 		}
 	}
 }
+
+// TestTheLatchColumnsOnlyEverTakeTheirFirstValue.
+//
+// Two columns on this row are LATCHES rather than fields — `idle_since` and `first_ready_at` — and both
+// record when something FIRST happened. A writer that assigned unconditionally would move them on every
+// pass, which is not a cosmetic difference in either case:
+//
+//   - idle_since is a deadline. A value that advanced every pass would push the retention grace out by
+//     one reconcile interval per pass, so a Collector configured to be deleted after 48 hours idle would
+//     never be deleted at all, and the policy would silently never apply.
+//   - first_ready_at is when a Collector first worked, which is what the cutover announcement and any
+//     "ready since" reporting rest on. A moving value makes the row say a Collector became ready a
+//     moment ago, for ever.
+//
+// A source guard rather than a behaviour test because this package has no database: what it pins is that
+// the SET clause keeps the existing value, which is the only place the rule can be expressed.
+func TestTheLatchColumnsOnlyEverTakeTheirFirstValue(t *testing.T) {
+	src := collectorsSourceText(t)
+
+	for _, latch := range []struct{ writer, column string }{
+		{"RecordCollectorIdle", "idle_since"},
+		{"RecordCollectorFirstReady", "first_ready_at"},
+	} {
+		start := strings.Index(src, "func (s *Store) "+latch.writer+"(")
+		if start < 0 {
+			t.Errorf("could not find %s", latch.writer)
+			continue
+		}
+		body := src[start:]
+		if end := strings.Index(body, "\n}\n"); end > 0 {
+			body = body[:end]
+		}
+		if !strings.Contains(body, "COALESCE("+latch.column) {
+			t.Errorf("%s assigns %s without COALESCE, so it moves on every pass rather than latching:\n%s",
+				latch.writer, latch.column, body)
+		}
+	}
+}

@@ -33,6 +33,16 @@ CREATE TABLE connector_aws.managed_collectors (
   -- lifecycle intent comes back, so the wait starts again rather than resuming.
   idle_since            TIMESTAMPTZ,
 
+  -- When this Collector FIRST reported ready, and the gate the workload cutover runs on.
+  --
+  -- A latch: set once, never cleared while the row lives. It is not a health field and must never be
+  -- used as one — where a workload exports never follows Collector health, because re-pointing a fleet
+  -- on a transient failure would rewrite every task definition on the network and again on recovery.
+  -- What it gates is the FIRST cutover only: until a Collector has worked once, its network's workloads
+  -- keep exporting straight to the destination, so a Collector that never becomes ready takes nothing
+  -- with it.
+  first_ready_at        TIMESTAMPTZ,
+
   -- Identity. Refs only.
   collector_id          TEXT,
   credential_ref        TEXT,                   -- secret ARN / Key Vault id / Secret Manager name

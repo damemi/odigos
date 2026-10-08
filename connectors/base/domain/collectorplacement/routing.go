@@ -9,6 +9,11 @@ type Endpoint struct {
 	GRPC     string
 	HTTP     string
 	Insecure bool
+	// Ready is the cutover latch: has this Collector reported ready at least once. It travels
+	// with the endpoint because the two are recorded on the same row and read on the same pass, and
+	// because a caller that had to fetch it separately could forget to — which is a fleet re-pointed
+	// before anything was ready.
+	Ready bool
 }
 
 // RoutingTargets projects a placement plan into exactly one routing target per deployable region. The
@@ -31,6 +36,7 @@ func RoutingTargets(plan Plan, endpoints map[string]Endpoint) []destination.Coll
 			Endpoint:     ep.GRPC,
 			HTTPEndpoint: ep.HTTP,
 			Insecure:     ep.Insecure,
+			EverReady:    ep.Ready,
 		})
 	}
 	return out

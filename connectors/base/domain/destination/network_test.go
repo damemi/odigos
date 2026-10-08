@@ -28,7 +28,7 @@ func marker(region string) Destination {
 func regionalCollector(region, hostNetwork string) CollectorTarget {
 	return CollectorTarget{
 		Region: region, Network: hostNetwork,
-		Endpoint: "collector." + region + ".internal:4317", Insecure: true,
+		Endpoint: "collector." + region + ".internal:4317", Insecure: true, EverReady: true,
 	}
 }
 
@@ -133,13 +133,90 @@ func TestNonRegionalCompatibilityPathUsesOnlyGlobalTerminal(t *testing.T) {
 func TestCollectorTargetCannotExpressHealthOrSharedGraph(t *testing.T) {
 	want := map[string]bool{
 		"Region": true, "Network": true, "Endpoint": true,
-		"HTTPEndpoint": true, "Insecure": true,
+		"HTTPEndpoint": true, "Insecure": true, "EverReady": true,
 	}
 	typ := reflect.TypeOf(CollectorTarget{})
 	for i := 0; i < typ.NumField(); i++ {
-		delete(want, typ.Field(i).Name)
+		name := typ.Field(i).Name
+		if !want[name] {
+			t.Errorf("CollectorTarget gained field %q. Selection may depend on configuration and on "+
+				"LATCHED facts only; a field that can express whether a Collector is currently "+
+				"answering will flap every workload on the network on a blip", name)
+		}
+		delete(want, name)
 	}
-	if len(want) != 0 || typ.NumField() != 5 {
+	if len(want) != 0 || typ.NumField() != 6 {
 		t.Fatalf("CollectorTarget fields changed; missing=%v fieldCount=%d", want, typ.NumField())
+	}
+}
+
+// TestAnUnreadyCollectorIsNotRoutedTo is the cutover gate, and it lives in the resolver rather
+// than in each instrumentor for the reason the design gives: every instrumentor, observer and planner
+// resolves through this function, so a gate here cannot be forgotten by one of them — and one of them
+// forgetting it is a fleet pointed at a hole.
+func TestAnUnreadyCollectorIsNotRoutedTo(t *testing.T) {
+	const region = "eu-west-1"
+	dests := []Destination{vendorDestination(), marker(region)}
+	target := regionalCollector(region, "vpc-host")
+	target.EverReady = false
+
+	got := ResolveRoutingForRegion(dests, []CollectorTarget{target}, region, "vpc-host", ReachabilityUnknown)
+
+	if got.Via != RouteDirect {
+		t.Fatalf("Via = %q, want direct until the Collector has been ready once", got.Via)
+	}
+	if got.Reason != ReasonCollectorNotReady {
+		t.Errorf("Reason = %q, want %q", got.Reason, ReasonCollectorNotReady)
+	}
+	// The telemetry still goes somewhere, and it goes where it went before any Collector existed.
+	direct, _ := ResolveOTLPTarget(dests)
+	if got.Target.Endpoint != direct.Endpoint {
+		t.Errorf("endpoint = %q, want the destination's own %q", got.Target.Endpoint, direct.Endpoint)
+	}
+	// And it carries the destination's credential, because it is exporting directly.
+	if len(got.Headers) == 0 {
+		t.Error("a gated workload got no headers, so it would export to the destination unauthenticated")
+	}
+}
+
+// TestNotDeployedAndNotReadyAreDistinct. "It was never built" and "it was built and has never worked"
+// send whoever reads the report to different places — a placement or quota problem versus a Collector
+// that is running and failing.
+func TestNotDeployedAndNotReadyAreDistinct(t *testing.T) {
+	const region = "eu-west-1"
+	dests := []Destination{vendorDestination(), marker(region)}
+
+	notDeployed := regionalCollector(region, "vpc-host")
+	notDeployed.Endpoint, notDeployed.HTTPEndpoint, notDeployed.EverReady = "", "", false
+	notDeployedRouting := ResolveRoutingForRegion(dests, []CollectorTarget{notDeployed}, region, "vpc-host", ReachabilityUnknown)
+	if notDeployedRouting.Reason != ReasonCollectorNotDeployed {
+		t.Errorf("Reason = %q, want %q", notDeployedRouting.Reason, ReasonCollectorNotDeployed)
+	}
+
+	notReady := regionalCollector(region, "vpc-host")
+	notReady.EverReady = false
+	notReadyRouting := ResolveRoutingForRegion(dests, []CollectorTarget{notReady}, region, "vpc-host", ReachabilityUnknown)
+	if notReadyRouting.Reason != ReasonCollectorNotReady {
+		t.Errorf("Reason = %q, want %q", notReadyRouting.Reason, ReasonCollectorNotReady)
+	}
+}
+
+// TestReadinessIsALatchNotAHealthCheck. Once it is true the workload is routed and stays routed; nothing
+// in this package can express "currently unhealthy", which is what stops a health flap from rewriting
+// every task definition on a network twice.
+func TestReadinessIsALatchNotAHealthCheck(t *testing.T) {
+	const region = "eu-west-1"
+	dests := []Destination{vendorDestination(), marker(region)}
+	target := regionalCollector(region, "vpc-host")
+
+	if got := ResolveRoutingForRegion(dests, []CollectorTarget{target}, region, "vpc-host", ReachabilityUnknown); got.Via != RouteCollector {
+		t.Fatalf("Via = %q, want collector once it has been ready", got.Via)
+	}
+	// There is no field to set that would take it back. The field-coverage test above is what enforces
+	// that; this asserts the consequence, which is that resolution is a pure function of configuration
+	// plus one monotonic bit.
+	again := ResolveRoutingForRegion(dests, []CollectorTarget{target}, region, "vpc-host", ReachabilityUnknown)
+	if again.Via != RouteCollector || again.Target.Endpoint != target.Endpoint {
+		t.Errorf("a second resolution of the same state differed: %+v", again)
 	}
 }

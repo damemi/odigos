@@ -3,14 +3,29 @@ package destination
 import "strings"
 
 // CollectorTarget is one regional managed-Collector routing entry. Region is its identity; Network is
-// only the VPC/VNet hosting its ingress. It intentionally carries no health: routing changes when
-// configuration changes, not during a transient Collector failure.
+// only the VPC/VNet hosting its ingress. It intentionally carries no current-health bit: routing changes
+// when configuration changes and when the one-way readiness latch first opens, not during a transient
+// Collector failure.
 type CollectorTarget struct {
 	Region       string
 	Network      string
 	Endpoint     string
 	HTTPEndpoint string
-	Insecure     bool
+	// Insecure is whether the hop to this Collector is plaintext — the AWS default (decision 12).
+	Insecure bool
+	// EverReady is the cutover gate: has this Collector reported ready at least ONCE.
+	//
+	// A latch, not a health check, and the distinction is the whole of . Selection never follows
+	// health — re-pointing a fleet when a Collector goes unhealthy would rewrite every task definition on
+	// the network on a transient failure and again on recovery, and the Collector's own queue and the
+	// load balancer's target health are the right tools for a blip. But nothing walks a rollout back on
+	// its own either, so the FIRST cutover has to be gated: a Collector that never becomes ready would
+	// otherwise take a whole network's telemetry into a hole reached by configuration, which no health
+	// check anywhere would ever undo.
+	//
+	// False therefore means "not yet", never "not right now". Once it is true it stays true for the life
+	// of the Collector, and health changes nothing.
+	EverReady bool
 }
 
 // Routable reports whether the regional Collector has a published ingress point.
@@ -56,6 +71,9 @@ const (
 	ReasonNoCollectorForRegion Reason = "no-collector-for-region"
 	ReasonCollectorNotDeployed Reason = "collector-not-deployed"
 	ReasonCollectorUnreachable Reason = "collector-unreachable"
+	// ReasonCollectorNotReady: deployed, reachable in configuration, and it has never reported ready. The
+	// cutover gate — workloads keep exporting directly until it has been ready once.
+	ReasonCollectorNotReady Reason = "collector-not-ready"
 )
 
 // Routing is the complete decision for one workload. Collector routes keep the global terminal's signal
@@ -102,6 +120,8 @@ func ResolveRoutingForRegion(dests []Destination, collectors []CollectorTarget, 
 		return direct.withReason(ReasonCollectorNotDeployed)
 	case network != collector.Network && reachability != ReachabilityReachable:
 		return direct.withReason(ReasonCollectorUnreachable)
+	case !collector.EverReady:
+		return direct.withReason(ReasonCollectorNotReady)
 	}
 
 	return Routing{
@@ -196,6 +216,8 @@ func (r Routing) Describe() string {
 		return "Defaulting to the global OTLP destination: no Odigos Managed Regional Collector is set up in this region."
 	case ReasonCollectorNotDeployed:
 		return "Defaulting to the global OTLP destination: the Odigos Managed Regional Collector has no ingress endpoint yet."
+	case ReasonCollectorNotReady:
+		return "Defaulting to the global OTLP destination: the Odigos Managed Regional Collector has not reported ready yet."
 	case ReasonCollectorUnreachable:
 		return "Defaulting to the global OTLP destination: the Odigos Managed Regional Collector is not known to be reachable from this workload's network."
 	default:

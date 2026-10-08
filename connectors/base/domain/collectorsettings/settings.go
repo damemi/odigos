@@ -44,6 +44,11 @@ const (
 	KeyRepoOverride     = "repositoryOverride"
 	KeyEndpointOverride = "endpointOverride"
 
+	// KeyRolloutBatchSize bounds how many workloads a single pass may re-point at this region's
+	// Collector. Per network rather than global: the blast radius that matters is one network's
+	// fleet, and a customer with one large VPC and several small ones wants different answers.
+	KeyRolloutBatchSize = "rolloutBatchSize"
+
 	KeyRetention                 = "retention"
 	KeyIdleScaleToZeroAfterHours = "idleScaleToZeroAfterHours"
 	KeyIdleDeleteAfterHours      = "idleDeleteAfterHours"
@@ -134,6 +139,10 @@ type Network struct {
 	LogRetentionDays int
 
 	Scaling Scaling
+	// RolloutBatchSize is how many workloads one pass may re-point at this Collector. Zero uses
+	// collectorcutover.DefaultBatchSize; it is deliberately not in Defaults(), because a batch size
+	// written into the effective config would read as a rollout somebody configured.
+	RolloutBatchSize int
 	// Retention is what happens to this Collector when its network has no enabled sources left.
 	// Both halves default to keeping it, which is why nothing about it appears in Defaults().
 	Retention Retention
@@ -261,6 +270,8 @@ func readNetwork(entry map[string]any, base Network) Network {
 		TargetCPUPercent:    intOf(scaling, KeyTargetCPUPercent, base.Scaling.TargetCPUPercent),
 		TargetMemoryPercent: intOf(scaling, KeyTargetMemoryPercent, base.Scaling.TargetMemoryPercent),
 	}
+
+	out.RolloutBatchSize = intOf(entry, KeyRolloutBatchSize, base.RolloutBatchSize)
 
 	retention := mapOf(entry, KeyRetention)
 	out.Retention = Retention{
