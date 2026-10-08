@@ -15,7 +15,11 @@
 package deployer
 
 import (
+	"fmt"
 	"strings"
+
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 )
 
 // Object names. Each is derived from the connector name, so a customer reading their log groups or
@@ -80,4 +84,63 @@ func Partition(region string) string {
 	default:
 		return "aws"
 	}
+}
+
+// The data-plane object names identify physical AWS resources in a host VPC. The logical
+// Collector is regional, but an NLB, target group, and security group cannot span VPCs, so their names
+// remain host-network-derived and their tags carry both region and host network metadata.
+const (
+	securityGroupPrefix = "odigos-collector-"
+	// loadBalancerPrefix is the internal NLB. "col" rather than "collector" to fit the 32-character
+	// budget alongside a 17-hex network id.
+	loadBalancerPrefix = "odigos-col-"
+	// targetGroupPrefix is followed by the port, then the network id: `odigos-4317-<netid>`.
+	targetGroupPrefix = "odigos-"
+	// vpcIDPrefix is stripped from a network id before it goes into an ELBv2 name.
+	vpcIDPrefix = "vpc-"
+)
+
+// elbNameMaxLen is the ELBv2 limit on a load balancer or target group name.
+const elbNameMaxLen = 32
+
+// SecurityGroupName is the Collector's own security group in the host VPC.
+func SecurityGroupName(networkID string) string { return securityGroupPrefix + networkID }
+
+// LoadBalancerName is the internal NLB in the host VPC.
+func LoadBalancerName(networkID string) string {
+	return loadBalancerPrefix + strings.TrimPrefix(networkID, vpcIDPrefix)
+}
+
+// TargetGroupName is the target group for one data port in the host VPC.
+func TargetGroupName(networkID string, port int) string {
+	return fmt.Sprintf("%s%d-%s", targetGroupPrefix, port, strings.TrimPrefix(networkID, vpcIDPrefix))
+}
+
+// CheckDataPlaneNames reports whether one host VPC's ELBv2 names fit, before anything is created.
+//
+// Checked up front rather than discovered at the CreateLoadBalancer call, because the two objects are
+// created in sequence: a load balancer whose name fits followed by a target group whose name does not
+// leaves a load balancer with no listeners in the customer's account, which is a chargeable object
+// serving nothing. AWS VPC ids always fit; a provider whose network ids are customer-chosen NAMES —
+// an Azure VNet, a GCP VPC network — will not always, which is why this is a check and not an assertion.
+func CheckDataPlaneNames(networkID, region string) []collectorstatus.Problem {
+	var problems []collectorstatus.Problem
+	names := []string{LoadBalancerName(networkID)}
+	for _, port := range collectoringress.DataPorts() {
+		names = append(names, TargetGroupName(networkID, port))
+	}
+	for _, name := range names {
+		if len(name) > elbNameMaxLen {
+			problems = append(problems, collectorstatus.Problem{
+				Code:     ProblemNameTooLong,
+				Severity: collectorstatus.SeverityError,
+				Message: fmt.Sprintf("the load balancer object name %q is %d characters, over the %d that "+
+					"Elastic Load Balancing allows, so no Collector is deployed for host network %s. Its name is "+
+					"derived from the host network id and cannot be shortened here; set "+
+					"collector.regions.%s.endpointOverride to put your own front in front of the Collector instead",
+					name, len(name), elbNameMaxLen, networkID, region),
+			})
+		}
+	}
+	return problems
 }

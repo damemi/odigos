@@ -14,6 +14,7 @@ import (
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorownership"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
@@ -315,6 +316,25 @@ func (f *fakeStore) withLiveCredential(key basestore.CollectorKey, state collect
 func (f *fakeStore) called(prefix string) bool {
 	for _, c := range f.calls {
 		if len(c) >= len(prefix) && c[:len(prefix)] == prefix {
+			return true
+		}
+	}
+	return false
+}
+
+// codes renders a problem list as its codes, which is what a test asserts on: callers branch on the
+// code and never on the message.
+func codes(problems []collectorstatus.Problem) []string {
+	out := make([]string, 0, len(problems))
+	for _, p := range problems {
+		out = append(out, p.Code)
+	}
+	return out
+}
+
+func hasCode(problems []collectorstatus.Problem, code string) bool {
+	for _, p := range problems {
+		if p.Code == code {
 			return true
 		}
 	}

@@ -15,10 +15,15 @@ import (
 type fakeClients struct {
 	logs    *fakeLogs
 	secrets *fakeSecrets
+	ec2     *fakeEC2SG
+	elb     *fakeELB
 }
 
 func newFakeClients() *fakeClients {
-	return &fakeClients{logs: newFakeLogs(), secrets: newFakeSecrets()}
+	return &fakeClients{
+		logs: newFakeLogs(), secrets: newFakeSecrets(),
+		ec2: newFakeEC2SG(), elb: newFakeELB(),
+	}
 }
 
 func (f *fakeClients) Logs(context.Context, string) (LogsClient, error) {
@@ -26,6 +31,12 @@ func (f *fakeClients) Logs(context.Context, string) (LogsClient, error) {
 }
 func (f *fakeClients) Secrets(context.Context, string) (SecretsClient, error) {
 	return f.secrets, nil
+}
+func (f *fakeClients) EC2(context.Context, string) (SecurityGroupClient, error) {
+	return f.ec2, nil
+}
+func (f *fakeClients) LoadBalancers(context.Context, string) (LoadBalancerClient, error) {
+	return f.elb, nil
 }
 
 const testLicense = "eyJhbGciOiJSUzI1NiJ9.licence-token-payload.signature"

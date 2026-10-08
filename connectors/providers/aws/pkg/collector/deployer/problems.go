@@ -22,6 +22,12 @@ const (
 	// Degraded, not an error: logs are kept under the group's existing policy, which costs storage
 	// rather than telemetry.
 	ProblemLogRetentionUnset = "CollectorLogRetentionUnset"
+	// ProblemLoadBalancerUnprotected: the Collector's load balancer has no security group, and one
+	// cannot be added to an existing NLB. Refused — the OTLP ports carry no authentication.
+	ProblemLoadBalancerUnprotected = "CollectorLoadBalancerUnprotected"
+	// ProblemLoadBalancerSubnetDrift: the load balancer is not in the subnets placement chose. Degraded:
+	// it works in the zones it has, and moving it would re-point every workload on the network.
+	ProblemLoadBalancerSubnetDrift = "CollectorLoadBalancerSubnetDrift"
 	// ProblemManualModeProvisioning: provisioning was asked for on a manual-mode Collector. A guard,
 	// not a customer-facing condition — the coordinator wires no deployer for a manual-mode type at all
 	// (api.CollectorDeployer), so reaching this means something bypassed that.

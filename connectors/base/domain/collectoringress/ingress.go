@@ -17,7 +17,6 @@ const (
 
 func DataPorts() []int { return []int{PortOTLPGRPC, PortOTLPHTTP} }
 
-// Tier describes the portable security posture, not a provider firewall primitive.
 type Tier string
 
 const (

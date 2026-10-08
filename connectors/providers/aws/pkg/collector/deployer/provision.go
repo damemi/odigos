@@ -6,15 +6,19 @@ import (
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorownership"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
+	awsingress "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/ingress"
 )
 
 // Clients supplies the AWS clients this package needs, per region where that matters.
 type Clients interface {
 	Logs(ctx context.Context, region string) (LogsClient, error)
 	Secrets(ctx context.Context, region string) (SecretsClient, error)
+	EC2(ctx context.Context, region string) (SecurityGroupClient, error)
+	LoadBalancers(ctx context.Context, region string) (LoadBalancerClient, error)
 }
 
 // Provisioner provisions Collector identity, logging and credentials for one connector.
@@ -262,4 +266,195 @@ func (p *Provisioner) ensureLicense(ctx context.Context, api SecretsClient, in N
 	log.Info("installed collector licence secret",
 		"region", in.Key.Region, "secret", state.ARN, "fingerprint", fingerprint)
 	return state.ARN, problems, nil
+}
+
+// awsPlatform is what AWS's ingress can terminate, for collectoringress.ResolveTransport.
+//
+// ManagedTLS is false and that is not an omission: a Network Load Balancer's generated DNS name is in
+// a domain Odigos does not control, so no certificate can be issued for it and there is nothing for
+// AWS to terminate TLS with by default. LoadBalancerTLS is true because a customer who owns a hostname
+// can put their own ACM certificate on the listeners.
+var AWSPlatform = collectoringress.Platform{Name: "AWS", ManagedTLS: false, LoadBalancerTLS: true}
+
+// Endpoint sources, as managed_collectors.endpoint_source records them.
+const (
+	// EndpointSourceLoadBalancer: the NLB Odigos created.
+	EndpointSourceLoadBalancer = "lb"
+	// EndpointSourceOverride: the customer's own front, via endpointOverride.
+	EndpointSourceOverride = "override"
+)
+
+// IngressInput is what converging one regional Collector's data plane depends on.
+type IngressInput struct {
+	Key  basestore.CollectorKey
+	Mode string
+	// Shared is the result of EnsureShared, for the ARN partition.
+	Shared Shared
+	// VPCID and Subnets come from placement. Subnets are what the load balancer answers in.
+	VPCID   string
+	Subnets []string
+	// NetworkBlocks are the VPC's own CIDR associations — the ONLY thing the fallback may name.
+	// Never a peered range, a gateway route, or a block Odigos synthesised.
+	NetworkBlocks []string
+	// Sources are the enabled workloads routed to this Collector, with the security groups they send
+	// from. A workload with no resolved group is not "no group" — see awsingress.Source.
+	Sources []awsingress.Source
+	// UnresolvedCycles is how many consecutive discovery cycles have resolved zero security groups. It
+	// is what holds the network-CIDR fallback back while discovery is merely incomplete.
+	UnresolvedCycles int
+	// Config and Transport are the resolved `ingress` and `tls` + `endpointOverride` trees.
+	Config    collectoringress.Config
+	Transport collectoringress.TransportConfig
+}
+
+// Ingress is one network's converged data plane.
+//
+// Every ref here has to reach managed_collectors, because a recorded ref is HALF the deletion gate
+// : an object whose tag says Odigos created it and whose ref is not recorded cannot be deleted
+// at teardown. This package does not write the row itself — the load balancer refs and the ECS service
+// refs live in one column group that one accessor writes whole, so a write from here would null the
+// refs #12 puts there and quietly strip delete authority from the ECS service. The reconcile pass
+// records both at once.
+type Ingress struct {
+	// SecurityGroupID is attached to the load balancer AND to the Collector's tasks, which is what
+	// makes the health check on 13133 admissible from the Collector's own group.
+	SecurityGroupID string
+	LoadBalancerARN string
+	// TargetGroupARNs are in data-port order — 4317 then 4318 — which is the order #12's ECS service
+	// registers its container ports into.
+	TargetGroupARNs []string
+	// Transport is the endpoint workloads are pointed at, and what that hop costs.
+	Transport collectoringress.Transport
+	// EndpointSource is what managed_collectors.endpoint_source records.
+	EndpointSource string
+	// Tier is which class of ingress rule the decision landed on, for managed_collectors.ingress_tier.
+	Tier collectoringress.Tier
+	// Authorized and Revoked are what this pass changed. Both zero is the steady state, and a non-zero
+	// Revoked is what narrowing back down from a widened fallback looks like.
+	Authorized int
+	Revoked    int
+	Problems   []collectorstatus.Problem
+}
+
+// Ready reports whether workloads can be pointed at this Collector.
+func (i Ingress) Ready() bool {
+	return i.SecurityGroupID != "" && i.Transport.GRPCEndpoint != "" &&
+		!collectorstatus.HasError(i.Problems)
+}
+
+// EnsureIngress converges the network rules and the load balancer in front of one Collector.
+//
+// The order is forced, not chosen. Authorization is decided FIRST, by collectoringress.Resolve, because
+// a decision not to deploy has to stop everything: the fallback refusals exist so that a network
+// whose senders Odigos cannot identify gets no Collector rather than a Collector the whole network can
+// write to. Then the security group, because an NLB must be created with one attached and can never
+// have one added afterwards. Then the load balancer, its target groups and its listeners.
+//
+// `endpointOverride` skips the load balancer entirely and keeps everything else: the customer's own
+// front still sends to the Collector's tasks, so the tasks still need a security group admitting it.
+func (p *Provisioner) EnsureIngress(ctx context.Context, in IngressInput) (Ingress, error) {
+	var out Ingress
+	if problems := modeGuard(in.Mode); len(problems) > 0 {
+		out.Problems = problems
+		return out, nil
+	}
+
+	// The transport configuration is validated before anything is written, with no host yet: a
+	// contradictory `tls` tree (loadBalancer mode with no hostname, a TLS listener alongside an
+	// endpointOverride) is a configuration error, and creating a load balancer and then refusing to
+	// point anything at it would leave a chargeable object serving nothing.
+	if _, problems := collectoringress.ResolveTransport(in.Transport, AWSPlatform, ""); collectorstatus.HasError(problems) {
+		out.Problems = problems
+		return out, nil
+	}
+
+	decision := awsingress.Resolve(awsingress.Input{
+		Sources:          in.Sources,
+		Config:           in.Config,
+		NetworkBlocks:    in.NetworkBlocks,
+		UnresolvedCycles: in.UnresolvedCycles,
+	})
+	out.Tier, out.Problems = decision.Tier, decision.Problems
+	if !decision.Deploy {
+		// Nothing is written, and an existing group is left exactly as it is. Narrowing it to nothing on
+		// a refusal would take a working Collector offline, which is the opposite of what the refusal is
+		// protecting against.
+		return out, nil
+	}
+
+	sgAPI, err := p.Clients.EC2(ctx, in.Key.Region)
+	if err != nil {
+		return out, fmt.Errorf("build an EC2 client for %s: %w", in.Key.Region, err)
+	}
+	group, sgProblems, err := EnsureSecurityGroup(ctx, sgAPI, SecurityGroupInput{
+		Region:      in.Key.Region,
+		NetworkID:   in.VPCID,
+		VPCID:       in.VPCID,
+		Connector:   p.Identity.ConnectorName,
+		ConnectorID: p.Identity.ConnectorID,
+		Identity:    p.Identity,
+		Mode:        in.Mode,
+		Rules:       decision.Rules,
+	})
+	out.Problems = append(out.Problems, sgProblems...)
+	if err != nil {
+		return out, err
+	}
+	if group.ID == "" {
+		return out, nil
+	}
+	out.SecurityGroupID, out.Authorized, out.Revoked = group.ID, group.Authorized, group.Revoked
+
+	host := ""
+	out.EndpointSource = EndpointSourceOverride
+	if in.Transport.EndpointOverride == "" {
+		out.EndpointSource = EndpointSourceLoadBalancer
+
+		elbAPI, err := p.Clients.LoadBalancers(ctx, in.Key.Region)
+		if err != nil {
+			return out, fmt.Errorf("build an Elastic Load Balancing client for %s: %w", in.Key.Region, err)
+		}
+		lb, lbProblems, err := EnsureLoadBalancer(ctx, elbAPI, LoadBalancerInput{
+			Region:      in.Key.Region,
+			NetworkID:   in.VPCID,
+			VPCID:       in.VPCID,
+			Connector:   p.Identity.ConnectorName,
+			ConnectorID: p.Identity.ConnectorID,
+			Identity:    p.Identity,
+			Mode:        in.Mode,
+			Subnets:     in.Subnets,
+			// The group has to exist before this call, and this is the reason the two steps are ordered
+			// rather than concurrent.
+			SecurityGroupID:   group.ID,
+			TLSCertificateARN: listenerCertificate(in.Transport),
+		})
+		out.Problems = append(out.Problems, lbProblems...)
+		if err != nil {
+			return out, err
+		}
+		out.LoadBalancerARN, out.TargetGroupARNs = lb.ARN, lb.TargetGroupARNs
+		host = lb.DNSName
+	}
+
+	// Resolved again, now with the address that exists. An empty host is not an error here — it is the
+	// first pass, before the load balancer has a DNS name — and ResolveTransport reports it as Pending
+	// so nothing is pointed at an endpoint that does not resolve yet.
+	transport, transportProblems := collectoringress.ResolveTransport(in.Transport, AWSPlatform, host)
+	out.Transport = transport
+	out.Problems = append(out.Problems, transportProblems...)
+	return out, nil
+}
+
+// listenerCertificate is the ACM certificate the data listeners carry, and only for the one mode that
+// puts a certificate on them.
+//
+// `tls.mode: collector` deliberately returns nothing: there the Collector terminates TLS itself from a
+// certificate in the secret store, so the listeners stay TCP and pass the encrypted stream through. A
+// TLS listener there would terminate the customer's own session at the load balancer and re-open a
+// plaintext one behind it — the opposite of what the mode asks for.
+func listenerCertificate(cfg collectoringress.TransportConfig) string {
+	if cfg.Mode == collectoringress.TLSLoadBalancer {
+		return cfg.CertificateRef
+	}
+	return ""
 }
