@@ -39,8 +39,8 @@ type ECSFargateObserver struct {
 
 // NewECSFargateObserver builds the read-only Fargate observer over the same store, cache, agents image, debug
 // toggle and image inspector the instrumentor uses, so both judge conformance against identical desired inputs.
-func NewECSFargateObserver(st *store.Store, cache *awsclient.Cache, image string, debug func() bool, images ImageInspector) *ECSFargateObserver {
-	return &ECSFargateObserver{ecsInspector: newECSInspector(st, cache, image, debug, images), now: time.Now}
+func NewECSFargateObserver(st *store.Store, cache *awsclient.Cache, image string, debug func() bool, images ImageInspector, routes ...FargateRouteResolver) *ECSFargateObserver {
+	return &ECSFargateObserver{ecsInspector: newECSInspector(st, cache, image, debug, images, routes...), now: time.Now}
 }
 
 // Observe implements baseapi.InstrumentationObserver.
@@ -68,9 +68,15 @@ func (o *ECSFargateObserver) Observe(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	dest, haveDest, err := o.store.OTLPExportTarget(ctx)
-	if err != nil {
-		return fmt.Errorf("resolve otlp export target: %w", err)
+	enabledServices := make([]store.ECSService, 0, len(services))
+	for _, svc := range services {
+		if _, ok := enabled[fargateServiceRef(svc)]; ok {
+			enabledServices = append(enabledServices, svc)
+		}
+	}
+	routes, routeErr := o.resolveFargateRoutes(ctx, enabledServices)
+	if routeErr != nil {
+		return fmt.Errorf("resolve fargate OTLP routes: %w", routeErr)
 	}
 
 	byRegion := map[string][]store.ECSService{}
@@ -94,11 +100,24 @@ func (o *ECSFargateObserver) Observe(ctx context.Context) error {
 			continue
 		}
 		for _, svc := range svcs {
-			src, want := enabled[svc.ClusterARN+"/"+svc.ServiceName]
+			ref := fargateServiceRef(svc)
+			src, want := enabled[ref]
+			routing, haveRoute := routes[ref]
 			var err error
 			switch {
-			case want && haveDest:
-				err = o.observeService(ctx, client, svc, src, dest)
+			case want && haveRoute && routing.Outcome != domaindest.RoutingError && routing.Found:
+				if serr := o.store.SetECSServiceRouting(ctx, svc.ClusterARN, svc.ServiceName, svc.RoutingVia, workloadRoutingNote(routing)); serr != nil {
+					observeLog.Warn("set fargate routing note failed", "service", svc.ServiceName, "error", serr)
+				}
+				err = o.observeService(ctx, client, svc, src, routing)
+			case want && haveRoute:
+				if serr := o.store.SetECSServiceRouting(ctx, svc.ClusterARN, svc.ServiceName, svc.RoutingVia, workloadRoutingNote(routing)); serr != nil {
+					observeLog.Warn("set fargate routing issue failed", "service", svc.ServiceName, "error", serr)
+				}
+				if serr := o.store.SetECSServiceInstrumentationError(ctx, svc.ClusterARN, svc.ServiceName, routing.Note); serr != nil {
+					observeLog.Warn("set fargate routing error failed", "service", svc.ServiceName, "error", serr)
+				}
+				err = o.refreshOwnership(ctx, client, svc)
 			default:
 				// Either no intent, or intent with no destination yet. In both cases there is no desired
 				// instrumentation to compare against — the destination endpoint is part of it — so all that can
@@ -165,7 +184,7 @@ func (o *ECSFargateObserver) refreshOwnership(ctx context.Context, client *ecs.C
 }
 
 // observeService observes one marked service and persists what it found.
-func (o *ECSFargateObserver) observeService(ctx context.Context, client *ecs.Client, svc store.ECSService, src enabledFargateSource, dest domaindest.OTLPTarget) error {
+func (o *ECSFargateObserver) observeService(ctx context.Context, client *ecs.Client, svc store.ECSService, src enabledFargateSource, routing domaindest.Routing) error {
 	live, err := describeService(ctx, client, svc.ClusterARN, svc.ServiceName)
 	if err != nil {
 		return err
@@ -195,7 +214,10 @@ func (o *ECSFargateObserver) observeService(ctx context.Context, client *ecs.Cli
 	if err != nil {
 		return err
 	}
-	targets, excluded, selectErr := o.selectTargets(ctx, td, src, svc, dest)
+	targets, excluded, selectErr := o.selectTargets(ctx, td, src, svc, routing.Target)
+	for idx := range targets {
+		targets[idx].export.headers = routing.Headers
+	}
 	// Record the container inventory even when nothing could be targeted: that is exactly when an operator
 	// needs to see each container and why it was skipped. In manual mode this is the whole container layer of
 	// the report, which nothing populated before — the instrumentor recorded it, and the instrumentor never runs.
@@ -213,6 +235,11 @@ func (o *ECSFargateObserver) observeService(ctx context.Context, client *ecs.Cli
 		o.setTerminal(ctx, svc, ev.terminal)
 	} else {
 		o.clearTerminal(ctx, svc)
+	}
+	if ev.obs.Conformance == baseapi.ConformanceConformant {
+		if err := o.store.SetECSServiceRouting(ctx, svc.ClusterARN, svc.ServiceName, string(routing.Via), workloadRoutingNote(routing)); err != nil {
+			observeLog.Warn("set observed fargate route failed", "service", svc.ServiceName, "error", err)
+		}
 	}
 	// An incomplete check preserves the last confirmed verdict rather than downgrading it, so the record the
 	// evaluation asks for is completed from what was already stored.

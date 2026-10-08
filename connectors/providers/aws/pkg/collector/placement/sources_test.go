@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorplacement"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
 	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
 	awsstore "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
@@ -251,6 +252,47 @@ func TestSourcesAreSortedByRegionThenRef(t *testing.T) {
 	want := []string{"arn:fn:b@eu-west-1/vpc-1", "arn:fn:a@us-east-1/vpc-9", "arn:fn:z@us-east-1/vpc-9"}
 	if !reflect.DeepEqual(refsOf(sources), want) {
 		t.Fatalf("sources = %v, want %v", refsOf(sources), want)
+	}
+}
+
+func TestIngressSourcesIncludesOnlyReachableFargateConsumers(t *testing.T) {
+	host := VPC{Region: "eu-west-1", ID: "vpc-host", CIDRBlocks: []string{"10.0.0.0/16"}}
+	consumer := VPC{Region: "eu-west-1", ID: "vpc-consumer", CIDRBlocks: []string{"10.1.0.0/16"}}
+	topo := NewTopologyWithPeerings(
+		[]string{"eu-west-1"},
+		[]VPC{host, consumer},
+		[]Subnet{
+			{Region: "eu-west-1", ID: "host-a", VPCID: host.ID, AvailabilityZone: "eu-west-1a", AvailableIPs: 10, Egress: EgressNAT, Routes: []Route{{DestinationCIDR: "10.1.0.0/16", PeeringID: "pcx-1"}}},
+			{Region: "eu-west-1", ID: "host-b", VPCID: host.ID, AvailabilityZone: "eu-west-1b", AvailableIPs: 10, Egress: EgressNAT, Routes: []Route{{DestinationCIDR: "10.1.0.0/16", PeeringID: "pcx-1"}}},
+			{Region: "eu-west-1", ID: "consumer-a", VPCID: consumer.ID, AvailabilityZone: "eu-west-1a", AvailableIPs: 10, Egress: EgressNAT, Routes: []Route{{DestinationCIDR: "10.0.0.0/16", PeeringID: "pcx-1"}}},
+		},
+		[]Peering{{ID: "pcx-1", VPC1: host.ID, VPC2: consumer.ID, Region1: "eu-west-1", Region2: "eu-west-1"}},
+	)
+	ref := clusterARN + "/api"
+	plan := Resolve(Input{
+		Kind:     collectorKind,
+		Topology: topo,
+		Settings: settings(true, map[string]any{"eu-west-1": map[string]any{collectorsettings.KeyHostNetworkID: host.ID}}),
+		Inventory: Inventory{
+			ECSServices: []awsstore.ECSService{{Region: "eu-west-1", ClusterARN: clusterARN, ServiceName: "api", SubnetIDs: []string{"consumer-a"}, SecurityGroupIDs: []string{"sg-api"}}},
+			Sources:     []basestore.SourceRecord{enabledSource(awsstore.KindECSTask, ref)},
+		},
+	})
+	plan.Inventory = Inventory{
+		ECSServices: []awsstore.ECSService{{Region: "eu-west-1", ClusterARN: clusterARN, ServiceName: "api", SubnetIDs: []string{"consumer-a"}, SecurityGroupIDs: []string{"sg-api"}}},
+		Sources:     []basestore.SourceRecord{enabledSource(awsstore.KindECSTask, ref)},
+	}
+	plan.Topology = topo
+	sources := plan.IngressSources("eu-west-1", host.ID)
+	if len(sources) != 1 || sources[0].Name != ref {
+		t.Fatalf("ingress sources = %+v, want reachable consumer service", sources)
+	}
+
+	noRoute := topo
+	noRoute.subnets["consumer-a"] = Subnet{Region: "eu-west-1", ID: "consumer-a", VPCID: consumer.ID, Routes: nil}
+	plan.Topology = noRoute
+	if got := plan.IngressSources("eu-west-1", host.ID); len(got) != 0 {
+		t.Fatalf("ingress sources with missing reciprocal route = %+v, want none", got)
 	}
 }
 

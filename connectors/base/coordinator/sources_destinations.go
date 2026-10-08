@@ -282,6 +282,16 @@ func (c *Coordinator) validateDestinationSet(ctx context.Context, desired domain
 		}
 	}
 	dests = append(dests, desired)
+	catalog, err := c.destinationCatalog(ctx)
+	if err != nil {
+		return err
+	}
+	// Live installation state applies to the row being created or updated. An older marker is allowed
+	// to remain after its Collector is removed so routing can perform the required direct-export rollback;
+	// it must not prevent an unrelated terminal destination from being repaired meanwhile.
+	if err := catalog.ValidateWithCatalog(desired); err != nil {
+		return err
+	}
 	return c.destCatalog.ValidateDestinations(dests)
 }
 
@@ -298,6 +308,28 @@ func (c *Coordinator) DeleteDestination(ctx context.Context, name string) error 
 
 func (c *Coordinator) DestinationCatalog() domaindest.Catalog {
 	return c.destCatalog
+}
+
+// DestinationCatalogFor applies live Collector applicability to the synthetic regional marker.
+func (c *Coordinator) DestinationCatalogFor(ctx context.Context) (domaindest.Catalog, error) {
+	return c.destinationCatalog(ctx)
+}
+
+func (c *Coordinator) destinationCatalog(ctx context.Context) (domaindest.Catalog, error) {
+	if !c.destCatalog.IsSupported(domaindest.CatalogTypeManagedCollector) {
+		return c.destCatalog, nil
+	}
+	records, err := c.store.ListManagedCollectors(ctx)
+	if err != nil {
+		return c.destCatalog, fmt.Errorf("list managed Collectors for destination applicability: %w", err)
+	}
+	regions := make([]string, 0, len(records))
+	for _, rec := range records {
+		if rec.CollectorID != "" && (rec.EndpointGRPC != "" || rec.EndpointHTTP != "") {
+			regions = append(regions, rec.Key.Region)
+		}
+	}
+	return c.destCatalog.WithInstalledManagedCollectorRegions(regions), nil
 }
 
 // OTLPExportTarget resolves the connector's OTLP export target (endpoint + which signals the destination

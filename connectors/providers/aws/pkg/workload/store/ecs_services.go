@@ -57,6 +57,11 @@ type ECSService struct {
 	InstrumentationError string
 	// InstrumentationPhase is the last in-flight instrumentation progress phase; empty when converged.
 	InstrumentationPhase string
+	// RoutingVia records the currently selected export path (direct or collector). It is persisted so a
+	// reconcile can distinguish the route it last applied from a newly resolved route and roll back safely.
+	RoutingVia string
+	// RoutingNote is the last non-fatal reason the resolver selected (or retained) a route.
+	RoutingNote *api.WorkloadRoutingNote
 	// Observation is the read-only conformance verdict, written by the observer rather than by discovery or
 	// the instrumentor. Zero until a pass has run.
 	Observation ECSObservation
@@ -104,6 +109,8 @@ const (
 	metaRuntimeVersion       = "runtime_version"
 	metaInstrumentationError = "instrumentation_error"
 	metaInstrumentationPhase = "instrumentation_phase"
+	metaRoutingVia           = "routing_via"
+	metaRoutingNote          = "routing_note"
 	metaOdigosTaskDefinition = "odigos_task_definition"
 	metaContainers           = "containers"
 	// The service's awsvpc network configuration, written by discovery on every scan — see
@@ -122,6 +129,27 @@ const (
 	// by discovery or the instrumentor — see ECSService.OwnershipCheckedRevision.
 	metaOwnershipCheckedRevision = "ownership_checked_revision"
 )
+
+type storedRoutingNote struct {
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	Transient bool   `json:"transient"`
+}
+
+func decodeRoutingNote(raw []byte) *api.WorkloadRoutingNote {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	var stored storedRoutingNote
+	if err := json.Unmarshal(raw, &stored); err != nil {
+		inventoryLog.Warn("ignoring unreadable ECS routing note", "error", err)
+		return nil
+	}
+	if stored.Code == "" && stored.Message == "" {
+		return nil
+	}
+	return &api.WorkloadRoutingNote{Code: stored.Code, Message: stored.Message, Transient: stored.Transient}
+}
 
 // ECSContainer is one container of a service's task definition as the instrumentor resolved it.
 //
@@ -206,6 +234,7 @@ func (s *Store) ListECSServices(ctx context.Context) ([]ECSService, error) {
 			COALESCE(metadata->>'runtime_version',''),
 			COALESCE(metadata->>'instrumentation_error',''),
 			COALESCE(metadata->>'instrumentation_phase',''),
+			COALESCE(metadata->>'`+metaRoutingVia+`',''), metadata->'`+metaRoutingNote+`',
 			COALESCE(metadata->>'`+metaOwnershipCheckedRevision+`',''),
 			metadata->'`+metaSubnetIDs+`', metadata->'`+metaSecurityGroupIDs+`',
 			`+ecsObservationCols+`
@@ -218,12 +247,13 @@ func (s *Store) ListECSServices(ctx context.Context) ([]ECSService, error) {
 	var out []ECSService
 	for rows.Next() {
 		var svc ECSService
-		var missingJSON, subnetsJSON, groupsJSON []byte
+		var missingJSON, subnetsJSON, groupsJSON, routingNoteJSON []byte
 		var since *string
 		if err := rows.Scan(&svc.Region, &svc.ClusterARN, &svc.ServiceName, &svc.ServiceARN, &svc.TaskDefinition,
 			&svc.LaunchType, &svc.DeploymentController, &svc.Status, &svc.DesiredCount, &svc.RunningCount,
 			&svc.Instrumented, &svc.RuntimeLanguage, &svc.RuntimeVersion,
-			&svc.InstrumentationError, &svc.InstrumentationPhase, &svc.OwnershipCheckedRevision,
+			&svc.InstrumentationError, &svc.InstrumentationPhase, &svc.RoutingVia, &routingNoteJSON,
+			&svc.OwnershipCheckedRevision,
 			&subnetsJSON, &groupsJSON,
 			&conformanceTarget{&svc.Observation.Conformance}, &missingJSON, &since,
 			&svc.Observation.Error, &svc.Observation.Settling); err != nil {
@@ -233,6 +263,7 @@ func (s *Store) ListECSServices(ctx context.Context) ([]ECSService, error) {
 		svc.SecurityGroupIDs = decodeStringSlice(groupsJSON, metaSecurityGroupIDs)
 		svc.Observation.Missing = decodeStringSlice(missingJSON, metaConformanceMissing)
 		svc.Observation.Since = parseObservedAt(since)
+		svc.RoutingNote = decodeRoutingNote(routingNoteJSON)
 		out = append(out, svc)
 	}
 	if err := rows.Err(); err != nil {
@@ -253,6 +284,34 @@ func (s *Store) mergeECSServiceMetadata(ctx context.Context, clusterARN, service
 		UPDATE connector_aws.ecs_services SET metadata = metadata || $4::jsonb
 		WHERE connector_name = $1 AND cluster_arn = $2 AND service_name = $3
 	`, s.ConnectorName(), clusterARN, serviceName, string(b))
+	return err
+}
+
+// SetECSServiceRouting records the selected export path and its optional explanatory note without
+// replacing metadata owned by discovery, observation, or instrumentation. Empty via and nil note clear
+// their respective keys, making route convergence and rollback idempotent.
+func (s *Store) SetECSServiceRouting(ctx context.Context, clusterARN, serviceName, via string, note *api.WorkloadRoutingNote) error {
+	patch := map[string]any{}
+	deleteKeys := make([]string, 0, 2)
+	if via == "" {
+		deleteKeys = append(deleteKeys, metaRoutingVia)
+	} else {
+		patch[metaRoutingVia] = via
+	}
+	if note == nil {
+		deleteKeys = append(deleteKeys, metaRoutingNote)
+	} else {
+		patch[metaRoutingNote] = storedRoutingNote{Code: note.Code, Message: note.Message, Transient: note.Transient}
+	}
+	b, err := json.Marshal(patch)
+	if err != nil {
+		return err
+	}
+	_, err = s.Pool().Exec(ctx, `
+		UPDATE connector_aws.ecs_services
+		SET metadata = (COALESCE(metadata, '{}'::jsonb) || $4::jsonb) - $5::text[]
+		WHERE connector_name = $1 AND cluster_arn = $2 AND service_name = $3
+	`, s.ConnectorName(), clusterARN, serviceName, string(b), deleteKeys)
 	return err
 }
 

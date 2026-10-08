@@ -166,9 +166,10 @@ func (p *Provider) ComputePlatformDetectors() map[string]baseapi.Detector {
 // instrumented task-definition revision (agent sidecar + shared volume + activation/OTLP env) and rolls
 // the service to it.
 func (p *Provider) Reconcilers() map[string]baseapi.Reconciler {
+	fargateRoutes := fargateRouteResolver{provider: p}
 	return map[string]baseapi.Reconciler{
 		types.Lambda:      workloadinstrumentor.NewLambda(p.workloadStdb, p.cache, p.layers, p.debugTelemetry),
-		types.FargateTask: workloadinstrumentor.NewECSFargate(p.workloadStdb, p.cache, p.cfg.FargateAgentsImage, p.debugEcsTelemetry, p.ecrImages),
+		types.FargateTask: workloadinstrumentor.NewECSFargate(p.workloadStdb, p.cache, p.cfg.FargateAgentsImage, p.debugEcsTelemetry, p.ecrImages, fargateRoutes),
 	}
 }
 
@@ -181,10 +182,11 @@ func (p *Provider) Reconcilers() map[string]baseapi.Reconciler {
 // conformance until their own observers land (plan waves 4.2-4.3); the base warns for a manual-mode type with
 // no observer rather than letting an unobserved type look observed.
 func (p *Provider) WorkloadObservers() map[string]baseapi.InstrumentationObserver {
+	fargateRoutes := fargateRouteResolver{provider: p}
 	return map[string]baseapi.InstrumentationObserver{
 		types.Lambda: workloadinstrumentor.NewLambdaObserver(p.workloadStdb, p.cache, p.debugTelemetry),
 		types.FargateTask: workloadinstrumentor.NewECSFargateObserver(
-			p.workloadStdb, p.cache, p.cfg.FargateAgentsImage, p.debugEcsTelemetry, p.ecrImages),
+			p.workloadStdb, p.cache, p.cfg.FargateAgentsImage, p.debugEcsTelemetry, p.ecrImages, fargateRoutes),
 	}
 }
 

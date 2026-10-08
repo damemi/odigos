@@ -2,9 +2,29 @@ package store
 
 import (
 	"testing"
+	"time"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 )
+
+func TestCollectorTargetsProjectFirstReadyLatch(t *testing.T) {
+	readyAt := time.Date(2026, time.January, 2, 3, 4, 5, 0, time.UTC)
+	records := []CollectorRecord{
+		{Key: CollectorKey{Region: "us-east-1"}, FirstReadyAt: nil},
+		{Key: CollectorKey{Region: "eu-west-1"}, FirstReadyAt: &readyAt},
+	}
+
+	targets := collectorTargets(records)
+	if len(targets) != len(records) {
+		t.Fatalf("targets = %d, want %d", len(targets), len(records))
+	}
+	if targets[0].EverReady {
+		t.Error("Collector without FirstReadyAt was marked EverReady")
+	}
+	if !targets[1].EverReady {
+		t.Error("Collector with FirstReadyAt was not marked EverReady")
+	}
+}
 
 func TestCollectorTargetsAreRegionalAndKeepHostNetworkAsMetadata(t *testing.T) {
 	records := []CollectorRecord{

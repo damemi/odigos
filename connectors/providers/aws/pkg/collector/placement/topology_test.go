@@ -80,3 +80,84 @@ func TestUsableRequiresBothAnAddressAndAWayOut(t *testing.T) {
 		}
 	}
 }
+
+func TestCollectorIngressReachabilityAcceptsSameAndPeeredVPCSecurityGroupReferences(t *testing.T) {
+	groups := []SecurityGroup{
+		{Region: "eu-west-1", ID: "sg-collector", VPCID: "vpc-host", Ingress: []SecurityGroupRule{{
+			Protocol: "tcp", FromPort: 4317, ToPort: 4318, PortsKnown: true, SourceSecurityGroupIDs: []string{"sg-app", "sg-peer"},
+		}}},
+		{Region: "eu-west-1", ID: "sg-app", VPCID: "vpc-host"},
+		{Region: "eu-west-1", ID: "sg-peer", VPCID: "vpc-consumer"},
+	}
+	topo := NewTopologyWithSecurityGroups(
+		[]string{"eu-west-1"},
+		[]VPC{
+			{Region: "eu-west-1", ID: "vpc-host"},
+			{Region: "eu-west-1", ID: "vpc-consumer"},
+		}, nil,
+		[]Peering{{ID: "pcx-1", VPC1: "vpc-host", VPC2: "vpc-consumer", Region1: "eu-west-1", Region2: "eu-west-1"}},
+		groups,
+	)
+	if got := topo.CollectorIngressReachability("eu-west-1", "vpc-host", "sg-collector", "vpc-host", []string{"sg-app"}); got != ReachabilityReachable {
+		t.Fatalf("same-VPC SG admission = %q, want reachable", got)
+	}
+	if got := topo.CollectorIngressReachability("eu-west-1", "vpc-host", "sg-collector", "vpc-consumer", []string{"sg-peer"}); got != ReachabilityReachable {
+		t.Fatalf("peered-VPC SG admission = %q, want reachable", got)
+	}
+}
+
+func TestCollectorIngressReachabilityIsConservativeForUnknownOrPartialRules(t *testing.T) {
+	topo := NewTopologyWithSecurityGroups(
+		[]string{"eu-west-1"},
+		[]VPC{{Region: "eu-west-1", ID: "vpc-host"}}, nil, nil,
+		[]SecurityGroup{
+			{Region: "eu-west-1", ID: "sg-collector", VPCID: "vpc-host", Ingress: []SecurityGroupRule{{
+				Protocol: "tcp", SourceSecurityGroupIDs: []string{"sg-app"}, Incomplete: true,
+			}}},
+			{Region: "eu-west-1", ID: "sg-app", VPCID: "vpc-host"},
+		},
+	)
+	for name, sourceGroups := range map[string][]string{
+		"missing source group": {"sg-missing"},
+		"partial permission":   {"sg-app"},
+		"no source groups":     nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := topo.CollectorIngressReachability("eu-west-1", "vpc-host", "sg-collector", "vpc-host", sourceGroups)
+			if got != ReachabilityUnknown {
+				t.Errorf("admission = %q, want unknown for conservative fallback", got)
+			}
+		})
+	}
+
+	// A known, complete rule on a non-OTLP port is a definitive refusal rather than an unknown snapshot.
+	topo = NewTopologyWithSecurityGroups([]string{"eu-west-1"}, []VPC{{Region: "eu-west-1", ID: "vpc-host"}}, nil, nil,
+		[]SecurityGroup{
+			{Region: "eu-west-1", ID: "sg-collector", VPCID: "vpc-host", Ingress: []SecurityGroupRule{{
+				Protocol: "tcp", FromPort: 8080, ToPort: 8080, PortsKnown: true, SourceSecurityGroupIDs: []string{"sg-app"},
+			}}},
+			{Region: "eu-west-1", ID: "sg-app", VPCID: "vpc-host"},
+		})
+	if got := topo.CollectorIngressReachability("eu-west-1", "vpc-host", "sg-collector", "vpc-host", []string{"sg-app"}); got != ReachabilityUnreachable {
+		t.Fatalf("non-OTLP SG rule = %q, want unreachable", got)
+	}
+}
+
+func TestCollectorIngressReachabilityRequiresEveryPublishedOTLPPort(t *testing.T) {
+	topo := NewTopologyWithSecurityGroups(
+		[]string{"eu-west-1"},
+		[]VPC{{Region: "eu-west-1", ID: "vpc-host"}}, nil, nil,
+		[]SecurityGroup{
+			{Region: "eu-west-1", ID: "sg-collector", VPCID: "vpc-host", Ingress: []SecurityGroupRule{{
+				Protocol: "tcp", FromPort: 4317, ToPort: 4317, PortsKnown: true, SourceSecurityGroupIDs: []string{"sg-app"},
+			}}},
+			{Region: "eu-west-1", ID: "sg-app", VPCID: "vpc-host"},
+		},
+	)
+	if got := topo.CollectorIngressReachabilityForPorts("eu-west-1", "vpc-host", "sg-collector", "vpc-host", []string{"sg-app"}, []int32{4317}); got != ReachabilityReachable {
+		t.Fatalf("gRPC-only admission = %q, want reachable", got)
+	}
+	if got := topo.CollectorIngressReachabilityForPorts("eu-west-1", "vpc-host", "sg-collector", "vpc-host", []string{"sg-app"}, []int32{4317, 4318}); got != ReachabilityUnreachable {
+		t.Fatalf("dual-protocol admission missing HTTP = %q, want unreachable", got)
+	}
+}

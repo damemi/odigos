@@ -5,8 +5,17 @@ import (
 	"strings"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
 )
+
+// workloadRoutingResolver is an optional provider seam for plans whose export target depends on the
+// workload's own network. Providers that do not implement it retain the connector-wide destination path.
+// It is deliberately local to the coordinator: this is a read-path enhancement, not a requirement every
+// provider must add to the base Provider contract.
+type workloadRoutingResolver interface {
+	ResolveWorkloadRouting(context.Context, api.DiscoveredWorkload) (domaindest.Routing, bool, error)
+}
 
 // InstrumentationPlan returns what a customer must apply to instrument one workload, or nil when there is
 // nothing to publish (unsupported type, no planner, uninstrumentable language — the report already explains).
@@ -123,21 +132,58 @@ func (c *Coordinator) resolvePlaceholders(ctx context.Context, w api.DiscoveredW
 		out[plan.PlaceholderRegion] = w.Region
 	}
 
+	// A provider may resolve a workload-specific regional Collector route. The bool distinguishes an
+	// unsupported workload kind from a supported kind whose route currently falls back to the global
+	// destination; only the former skips this path. A successfully resolved provider route returns early so
+	// the plan does not overwrite its Collector endpoint with the connector-wide endpoint.
+	if router, ok := c.provider.(workloadRoutingResolver); ok {
+		routing, handled, err := router.ResolveWorkloadRouting(ctx, w)
+		if err != nil {
+			coordLog.Warn("resolving workload-specific OTLP route for instrumentation plan failed", "error", err,
+				"service", w.ServiceName, "kind", w.Kind, "region", w.Region)
+			// The provider accepted responsibility for this workload's route but could not prove one.
+			// Leave the placeholder unresolved; falling through to the global target would publish a plan
+			// that disagrees with the automatic instrumentor's no-write decision.
+			if handled {
+				return out
+			}
+		} else if handled {
+			if endpoint := routingEndpoint(routing.Target); routing.Found && endpoint != "" {
+				out[plan.PlaceholderOTLPEndpoint] = endpoint
+				out[plan.PlaceholderOTLPEndpointURL] = otlpEndpointURL(endpoint, routing.Target.Insecure)
+				out[plan.PlaceholderOTLPInsecure] = boolString(routing.Target.Insecure)
+				return out
+			}
+			return out
+		}
+	}
+
 	target, ok, err := c.OTLPExportTarget(ctx)
 	if err != nil {
 		coordLog.Warn("resolving the OTLP endpoint for an instrumentation plan failed", "error", err)
 		return out
 	}
-	if !ok || target.Endpoint == "" {
+	if !ok || routingEndpoint(target) == "" {
 		// No destination configured yet. Leaving both endpoint placeholders unresolved is correct and
 		// self-explanatory: there is nothing to export to, which is the same reason the report says the
 		// workload is waiting for a destination rather than for the customer.
 		return out
 	}
-	out[plan.PlaceholderOTLPEndpoint] = target.Endpoint
-	out[plan.PlaceholderOTLPEndpointURL] = otlpEndpointURL(target.Endpoint, target.Insecure)
+	endpoint := routingEndpoint(target)
+	if endpoint == "" {
+		return out
+	}
+	out[plan.PlaceholderOTLPEndpoint] = endpoint
+	out[plan.PlaceholderOTLPEndpointURL] = otlpEndpointURL(endpoint, target.Insecure)
 	out[plan.PlaceholderOTLPInsecure] = boolString(target.Insecure)
 	return out
+}
+
+func routingEndpoint(target domaindest.OTLPTarget) string {
+	if target.Endpoint != "" {
+		return target.Endpoint
+	}
+	return target.HTTPEndpoint
 }
 
 // reportedServiceName is the name the workload reports as its OTel service.name: a source override when one

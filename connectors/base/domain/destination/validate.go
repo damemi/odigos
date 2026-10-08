@@ -18,6 +18,9 @@ func (c Catalog) ValidateWithCatalog(dest Destination) error {
 		return err
 	}
 	if normalized == CatalogTypeManagedCollector {
+		if !c.managedCollectorRegionInstalled(dest.Region) {
+			return fmt.Errorf("managed Collector is not installed in region %q", strings.TrimSpace(dest.Region))
+		}
 		return validateManagedCollector(dest)
 	}
 	if strings.TrimSpace(dest.Region) != "" {

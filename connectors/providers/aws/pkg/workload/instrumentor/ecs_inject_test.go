@@ -179,6 +179,87 @@ func TestApplyWiresSidecarVolumeAndDependency(t *testing.T) {
 	}
 }
 
+func TestFargateDirectRoutingRendersHeadersDeterministically(t *testing.T) {
+	rec := testRecipe(t, LangJava, "")
+	export := ecsExportTarget{
+		endpoint: "http://global.example:4317", protocol: otlpProtocolGRPC, traces: true,
+		headers: map[string]string{"z-tenant": "a,b", "a-token": "x=y"},
+	}
+	in, err := applyInstrumentation(sampleTaskDef(), oneTarget(0, rec, export), nil, testAgentsImage, "svc", "us-east-1", false)
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	env := containerEnvMap(findECSContainer(tdFromRegisterInput(in), "app"))
+	if got, want := env[envOTLPHeaders], "a-token=x%3Dy,z-tenant=a%2Cb"; got != want {
+		t.Errorf("%s = %q, want deterministic sorted encoding %q", envOTLPHeaders, got, want)
+	}
+}
+
+func TestFargateCollectorRoutingRemovesAndRollsBackPriorHeaders(t *testing.T) {
+	rec := testRecipe(t, LangJava, "")
+	original := sampleTaskDef()
+	const customerHeaders = "authorization=Bearer+customer"
+	setContainerEnv(&original.ContainerDefinitions[0], envOTLPHeaders, customerHeaders)
+
+	// A regional Collector owns the credential hop, so no terminal destination headers may be carried into
+	// the task. The connector's manifest must nevertheless restore the customer's prior value on rollback.
+	collectorExport := ecsExportTarget{endpoint: "http://regional.internal:4317", protocol: otlpProtocolGRPC, traces: true}
+	in, err := applyInstrumentation(original, oneTarget(0, rec, collectorExport), nil, testAgentsImage, "svc", "us-east-1", false)
+	if err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	instrumented := tdFromRegisterInput(in)
+	app := findECSContainer(instrumented, "app")
+	if _, present := containerEnvMap(app)[envOTLPHeaders]; present {
+		t.Fatalf("Collector route retained prior %s=%q", envOTLPHeaders, containerEnvMap(app)[envOTLPHeaders])
+	}
+
+	clean, owned := rollbackInstrumentation(instrumented, nil)
+	if !owned {
+		t.Fatal("Collector-routed task definition must retain an Odigos ownership marker for rollback")
+	}
+	rolledBack := findECSContainer(tdFromRegisterInput(clean), "app")
+	if got := containerEnvMap(rolledBack)[envOTLPHeaders]; got != customerHeaders {
+		t.Errorf("rollback %s = %q, want customer's prior value %q", envOTLPHeaders, got, customerHeaders)
+	}
+}
+
+func TestResolverSelectedEndpointDrivesAlreadyInstrumented(t *testing.T) {
+	rec := testRecipe(t, LangJava, "")
+	const region = "us-east-1"
+	dests := []domaindest.Destination{
+		{Name: "global", Type: "otlp", Signals: []string{"TRACES"}, Config: map[string]any{"OTLP_GRPC_ENDPOINT": "global.example:4317"}},
+		{Name: "regional", Type: domaindest.CatalogTypeManagedCollector, Region: region, Signals: []string{"TRACES"}},
+	}
+	direct := domaindest.ResolveRoutingForRegion(dests, nil, region, "vpc-app", domaindest.ReachabilityUnknown)
+	collector := domaindest.ResolveRoutingForRegion(dests, []domaindest.CollectorTarget{{
+		Region: region, Network: "vpc-app", Endpoint: "regional.example:4317", Insecure: true, EverReady: true,
+	}}, region, "vpc-app", domaindest.ReachabilityUnknown)
+	if direct.Via != domaindest.RouteDirect || collector.Via != domaindest.RouteCollector {
+		t.Fatalf("resolver routes = direct:%q collector:%q", direct.Via, collector.Via)
+	}
+	directExport, err := exportTargetFor(rec, direct.Target)
+	if err != nil {
+		t.Fatalf("direct export target: %v", err)
+	}
+	in, err := applyInstrumentation(sampleTaskDef(), oneTarget(0, rec, directExport), nil, testAgentsImage, "svc", region, false)
+	if err != nil {
+		t.Fatalf("apply direct route: %v", err)
+	}
+	td := tdFromRegisterInput(in)
+	if !alreadyInstrumented(td, oneTarget(0, rec, directExport), testAgentsImage, "svc", region, false) {
+		t.Fatal("task definition must converge for the direct route it was rendered with")
+	}
+	collectorExport, err := exportTargetFor(rec, collector.Target)
+	if err != nil {
+		t.Fatalf("Collector export target: %v", err)
+	}
+	collectorExport.headers = collector.Headers
+	if alreadyInstrumented(td, oneTarget(0, rec, collectorExport), testAgentsImage, "svc", region, false) {
+		t.Fatal("a resolver-selected Collector endpoint must make the prior direct task definition non-converged")
+	}
+}
+
 // TestRollbackRestoresOriginal: rollback of an instrumented revision restores the exact pre-Odigos
 // container (env, mounts, dependencies) and drops the sidecar + volume.
 func TestRollbackRestoresOriginal(t *testing.T) {

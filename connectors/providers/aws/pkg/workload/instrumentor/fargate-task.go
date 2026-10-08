@@ -3,8 +3,8 @@
 // Run adaptation): an agent-copier sidecar (from the busybox-based odigos-fargate-agents image, which
 // bundles every language's env-driven agent under /instrumentations) stages the language agent into a
 // shared task volume, and the app container is given the agent-activation env vars — sourced from the
-// OSS Odigos distros module — resolved against /var/odigos, plus the OTLP export env pointed directly at
-// the connector's destination (Fargate has no node-local collector).
+// OSS Odigos distros module — resolved against /var/odigos, plus OTLP export env pointed at either the
+// global destination or the eligible same-region managed Collector (Fargate has no node-local collector).
 //
 // ECS specifics vs the Cloud Run flavor:
 //   - Task definitions are immutable: converging means DescribeTaskDefinition → mutate →
@@ -48,11 +48,15 @@ import (
 // Both ECSFargateInstrumentor and ECSFargateObserver embed it, and that is what makes §7.2 structural rather
 // than aspirational. Fargate's notion of "correctly instrumented" is the most elaborate of the four platforms
 // (per-container language detection with relative confidence ranking, per-language agent recipes, per-language
-// export transports), so two independent implementations of it would not merely risk drifting — they would
+// export transports and regional routing), so two independent implementations of it would not merely risk drifting — they would
 // start out disagreeing. The mode that mutates and the mode that only reports ask exactly one question.
 type ecsInspector struct {
 	store *store.Store
 	cache *awsclient.Cache
+	// routes resolves the effective target for every service in one pass. AWS supplies the regional
+	// implementation; nil preserves the connector-wide direct target for tests and providers that have
+	// no managed-Collector surface.
+	routes FargateRouteResolver
 	// image is the odigos-fargate-agents image the sidecar stages the language agents from.
 	image string
 	// debug returns the live debug-telemetry toggle: when true, instrumented services get OTEL_LOG_LEVEL=debug.
@@ -65,11 +69,22 @@ type ecsInspector struct {
 	recipes recipes
 }
 
-func newECSInspector(st *store.Store, cache *awsclient.Cache, image string, debug func() bool, images ImageInspector) *ecsInspector {
+// FargateRouteResolver resolves a complete pass rather than one service at a time so regional cutover can
+// admit one bounded batch across the fleet. The returned map is keyed by cluster ARN + "/" + service name.
+// A service omitted from the map is treated as a resolver failure and is never mutated.
+type FargateRouteResolver interface {
+	ResolveFargateRoutes(context.Context, []store.ECSService) (map[string]domaindest.Routing, error)
+}
+
+func newECSInspector(st *store.Store, cache *awsclient.Cache, image string, debug func() bool, images ImageInspector, routes ...FargateRouteResolver) *ecsInspector {
 	if debug == nil {
 		debug = func() bool { return false }
 	}
-	return &ecsInspector{store: st, cache: cache, image: image, debug: debug, images: images}
+	var routeResolver FargateRouteResolver
+	if len(routes) > 0 {
+		routeResolver = routes[0]
+	}
+	return &ecsInspector{store: st, cache: cache, routes: routeResolver, image: image, debug: debug, images: images}
 }
 
 // ECSFargateInstrumentor reconciles Fargate service instrumentation against source intent. Each cycle it
@@ -84,12 +99,29 @@ type ECSFargateInstrumentor struct {
 // NewECSFargate builds the Fargate instrumentor over the workload store, shared config cache, the
 // odigos-fargate-agents image, a getter for the live debug-telemetry toggle, and an optional image
 // inspector used to read language metadata from the app container's image.
-func NewECSFargate(st *store.Store, cache *awsclient.Cache, image string, debug func() bool, images ImageInspector) *ECSFargateInstrumentor {
-	return &ECSFargateInstrumentor{ecsInspector: newECSInspector(st, cache, image, debug, images)}
+func NewECSFargate(st *store.Store, cache *awsclient.Cache, image string, debug func() bool, images ImageInspector, routes ...FargateRouteResolver) *ECSFargateInstrumentor {
+	return &ECSFargateInstrumentor{ecsInspector: newECSInspector(st, cache, image, debug, images, routes...)}
 }
 
-// EnsurePrerequisite implements base.Prerequisite: Fargate instrumentation exports OTLP directly to the
-// connector's destination, so it waits for one to exist before instrumenting. This is not an error (the
+func fargateServiceRef(svc store.ECSService) string { return svc.ClusterARN + "/" + svc.ServiceName }
+
+func (i *ecsInspector) resolveFargateRoutes(ctx context.Context, services []store.ECSService) (map[string]domaindest.Routing, error) {
+	if i.routes != nil {
+		return i.routes.ResolveFargateRoutes(ctx, services)
+	}
+	routing, err := i.store.OTLPRouting(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]domaindest.Routing, len(services))
+	for _, svc := range services {
+		out[fargateServiceRef(svc)] = routing
+	}
+	return out, nil
+}
+
+// EnsurePrerequisite implements base.Prerequisite: Fargate instrumentation ultimately needs a global OTLP
+// terminal, either directly or downstream of its regional Collector. This is not an error (the
 // coordinator skips the whole reconcile pass on a prerequisite error, which would also skip rollbacks) —
 // Reconcile enforces the same gate per-service while still allowing rollbacks to run.
 func (i *ECSFargateInstrumentor) EnsurePrerequisite(ctx context.Context) error {
@@ -182,12 +214,17 @@ func (i *ECSFargateInstrumentor) Reconcile(ctx context.Context) error {
 		return err
 	}
 
-	// The OTLP destination is required to instrument (the agent's export target). Without one, skip
-	// instrumenting but still roll back anything previously instrumented.
-	dest, haveDest, derr := i.store.OTLPExportTarget(ctx)
-	if derr != nil {
-		log.Error("resolve otlp export target failed", "error", derr)
-		haveDest = false
+	// Resolve the whole fleet together. Regional routing uses this pass boundary to admit a bounded
+	// cutover batch; resolving independently here would allow every service in a region to roll at once.
+	enabledServices := make([]store.ECSService, 0, len(services))
+	for _, svc := range services {
+		if _, ok := enabled[fargateServiceRef(svc)]; ok {
+			enabledServices = append(enabledServices, svc)
+		}
+	}
+	routes, routeErr := i.resolveFargateRoutes(ctx, enabledServices)
+	if routeErr != nil {
+		log.Error("resolve fargate OTLP routes failed", "error", routeErr)
 	}
 
 	// Accumulate per-service failures and return them joined. The steady-state reconcile loop only logs
@@ -196,15 +233,37 @@ func (i *ECSFargateInstrumentor) Reconcile(ctx context.Context) error {
 	var errs []error
 	matched := make(map[string]bool, len(enabled))
 	for _, svc := range services {
-		extID := svc.ClusterARN + "/" + svc.ServiceName
+		extID := fargateServiceRef(svc)
 		src, want := enabled[extID]
 		if want {
 			matched[extID] = true
-			if !haveDest {
-				log.Warn("skip fargate instrumentation: no OTLP destination configured", "cluster", svc.ClusterARN, "service", svc.ServiceName)
+			routing, ok := routes[extID]
+			if routeErr != nil || !ok {
+				err := routeErr
+				if err == nil {
+					err = fmt.Errorf("no routing decision was returned for %s", extID)
+				}
+				if serr := i.store.SetECSServiceInstrumentationError(ctx, svc.ClusterARN, svc.ServiceName, err.Error()); serr != nil {
+					log.Warn("set fargate routing error failed", "service", svc.ServiceName, "error", serr)
+				}
+				errs = append(errs, fmt.Errorf("resolve route for %s: %w", svc.ServiceName, err))
 				continue
 			}
-			if err := i.instrument(ctx, svc, src, dest); err != nil {
+			note := workloadRoutingNote(routing)
+			// Publish reachability/readiness/fallback information even if ECS is currently settling and the
+			// mutation is deferred. Keep the deployed route unchanged until convergence is confirmed below.
+			if serr := i.store.SetECSServiceRouting(ctx, svc.ClusterARN, svc.ServiceName, svc.RoutingVia, note); serr != nil {
+				log.Warn("set fargate routing note failed", "service", svc.ServiceName, "error", serr)
+			}
+			if routing.Outcome == domaindest.RoutingError || !routing.Found {
+				err := errors.New(routing.Note)
+				if serr := i.store.SetECSServiceInstrumentationError(ctx, svc.ClusterARN, svc.ServiceName, err.Error()); serr != nil {
+					log.Warn("set fargate instrumentation error failed", "service", svc.ServiceName, "error", serr)
+				}
+				errs = append(errs, fmt.Errorf("instrument %s: %w", svc.ServiceName, err))
+				continue
+			}
+			if err := i.instrument(ctx, svc, src, routing); err != nil {
 				log.Error("instrument fargate service failed", "cluster", svc.ClusterARN, "service", svc.ServiceName, "region", svc.Region, "error", err)
 				if serr := i.store.SetECSServiceInstrumentationError(ctx, svc.ClusterARN, svc.ServiceName, err.Error()); serr != nil {
 					log.Warn("set fargate instrumentation error failed", "service", svc.ServiceName, "error", serr)
@@ -245,7 +304,14 @@ func (i *ECSFargateInstrumentor) Reconcile(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-func (i *ECSFargateInstrumentor) instrument(ctx context.Context, svc store.ECSService, src enabledFargateSource, dest domaindest.OTLPTarget) error {
+func workloadRoutingNote(routing domaindest.Routing) *baseapi.WorkloadRoutingNote {
+	if routing.Outcome == domaindest.RoutingError || routing.Reason == domaindest.ReasonRouted || routing.Note == "" {
+		return nil
+	}
+	return &baseapi.WorkloadRoutingNote{Code: string(routing.Reason), Message: routing.Note, Transient: true}
+}
+
+func (i *ECSFargateInstrumentor) instrument(ctx context.Context, svc store.ECSService, src enabledFargateSource, routing domaindest.Routing) error {
 	// The ECS service name is the DEFAULT reported service.name, not a last resort — see enabledSources for
 	// why the source's own "<cluster>-<service>" name is not it. Same resolution as the observer's
 	// ecsOwnedDiff, so what this writes is exactly what that judges.
@@ -288,7 +354,10 @@ func (i *ECSFargateInstrumentor) instrument(ctx context.Context, svc store.ECSSe
 	if os := taskDefOSFamily(td); os != "" && os != string(ecstypes.OSFamilyLinux) {
 		return fmt.Errorf("%w: task definition targets OS family %s; the Odigos Fargate agents bundle is Linux-only", ErrUnsupportedInstrumentation, os)
 	}
-	targets, excluded, err := i.selectTargets(ctx, td, src, svc, dest)
+	targets, excluded, err := i.selectTargets(ctx, td, src, svc, routing.Target)
+	for idx := range targets {
+		targets[idx].export.headers = routing.Headers
+	}
 	// Record the container inventory even when nothing could be targeted: that is precisely when an
 	// operator needs to see each container and why it was skipped, and returning early would leave the
 	// report showing nothing.
@@ -318,6 +387,9 @@ func (i *ECSFargateInstrumentor) instrument(ctx context.Context, svc store.ECSSe
 			log.Warn("set fargate instrumented flag failed", "service", svc.ServiceName, "error", err)
 		}
 		i.clearECSPhase(ctx, svc)
+		if err := i.store.SetECSServiceRouting(ctx, svc.ClusterARN, svc.ServiceName, string(routing.Via), workloadRoutingNote(routing)); err != nil {
+			log.Warn("set converged fargate route failed", "service", svc.ServiceName, "error", err)
+		}
 		return nil
 	}
 
@@ -369,6 +441,9 @@ func (i *ECSFargateInstrumentor) instrument(ctx context.Context, svc store.ECSSe
 	if err := i.store.SetECSServiceOdigosTaskDefinition(ctx, svc.ClusterARN, svc.ServiceName, newARN); err != nil {
 		log.Warn("set fargate odigos task definition failed", "service", svc.ServiceName, "error", err)
 	}
+	if err := i.store.SetECSServiceRouting(ctx, svc.ClusterARN, svc.ServiceName, string(routing.Via), workloadRoutingNote(routing)); err != nil {
+		log.Warn("set fargate route failed", "service", svc.ServiceName, "error", err)
+	}
 	return nil
 }
 
@@ -387,6 +462,7 @@ func (i *ECSFargateInstrumentor) rollback(ctx context.Context, svc store.ECSServ
 			log.Warn("set fargate instrumented flag failed", "service", svc.ServiceName, "error", err)
 		}
 		i.clearECSPhase(ctx, svc)
+		i.clearECSRouting(ctx, svc)
 		return nil
 	}
 	tdOut, err := client.DescribeTaskDefinition(ctx, &ecs.DescribeTaskDefinitionInput{
@@ -405,6 +481,7 @@ func (i *ECSFargateInstrumentor) rollback(ctx context.Context, svc store.ECSServ
 			log.Warn("set fargate instrumented flag failed", "service", svc.ServiceName, "error", err)
 		}
 		i.clearECSPhase(ctx, svc)
+		i.clearECSRouting(ctx, svc)
 		return nil
 	}
 	if rolloutInProgress(live) {
@@ -428,7 +505,14 @@ func (i *ECSFargateInstrumentor) rollback(ctx context.Context, svc store.ECSServ
 		log.Warn("set fargate instrumented flag failed", "service", svc.ServiceName, "error", err)
 	}
 	i.clearECSPhase(ctx, svc)
+	i.clearECSRouting(ctx, svc)
 	return nil
+}
+
+func (i *ecsInspector) clearECSRouting(ctx context.Context, svc store.ECSService) {
+	if err := i.store.SetECSServiceRouting(ctx, svc.ClusterARN, svc.ServiceName, "", nil); err != nil {
+		log.Warn("clear fargate routing state failed", "service", svc.ServiceName, "error", err)
+	}
 }
 
 // selectTargets resolves which containers of a task definition to instrument, and how.

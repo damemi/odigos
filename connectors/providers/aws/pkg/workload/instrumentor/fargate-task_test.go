@@ -92,6 +92,32 @@ func TestPortProtocolMismatch(t *testing.T) {
 	}
 }
 
+func TestWorkloadRoutingNoteMapsFallbackReasonsOnly(t *testing.T) {
+	for _, reason := range []domaindest.Reason{
+		domaindest.ReasonNoNetwork,
+		domaindest.ReasonNoCollectorForRegion,
+		domaindest.ReasonCollectorNotDeployed,
+		domaindest.ReasonCollectorNotReady,
+		domaindest.ReasonCollectorUnreachable,
+		domaindest.ReasonCollectorRolloutPending,
+	} {
+		t.Run(string(reason), func(t *testing.T) {
+			note := workloadRoutingNote(domaindest.Routing{Reason: reason, Note: "fallback explanation"})
+			if note == nil || note.Code != string(reason) || note.Message != "fallback explanation" || !note.Transient {
+				t.Fatalf("note = %+v, want fallback reason/message and transient=true", note)
+			}
+		})
+	}
+
+	for _, route := range []domaindest.Route{domaindest.RouteDirect, domaindest.RouteCollector} {
+		t.Run(string(route)+" normal", func(t *testing.T) {
+			if note := workloadRoutingNote(domaindest.Routing{Via: route, Reason: domaindest.ReasonRouted}); note != nil {
+				t.Fatalf("normal %s route produced a routing note: %+v", route, note)
+			}
+		})
+	}
+}
+
 func TestEndpointPort(t *testing.T) {
 	cases := map[string]string{
 		"http://h:4318":       "4318",

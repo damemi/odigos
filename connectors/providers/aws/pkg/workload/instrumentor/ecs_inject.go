@@ -2,6 +2,7 @@ package instrumentor
 
 import (
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -15,10 +16,11 @@ import (
 
 // OTLP export + identity env the ECS instrumentor sets on the app container. Unlike Lambda (which
 // exports to an in-Lambda collector on localhost), a Fargate task has no node-local collector, so the
-// SDK/agent exports OTLP directly to the connector's destination. OTEL_EXPORTER_OTLP_ENDPOINT is the
+// SDK/agent exports OTLP to its resolved global or regional target. OTEL_EXPORTER_OTLP_ENDPOINT is the
 // same var Lambda strips as legacy (envLegacyOTLPEndpoint) — here it is the primary export target.
 const (
 	envOTLPEndpoint       = "OTEL_EXPORTER_OTLP_ENDPOINT"
+	envOTLPHeaders        = "OTEL_EXPORTER_OTLP_HEADERS"
 	envResourceAttributes = "OTEL_RESOURCE_ATTRIBUTES"
 )
 
@@ -42,6 +44,7 @@ const (
 type ecsExportTarget struct {
 	endpoint string // scheme://host:port
 	protocol string // "grpc" | "http/protobuf"
+	headers  map[string]string
 	traces   bool
 	metrics  bool
 	logs     bool
@@ -133,6 +136,11 @@ func instrumentContainer(app *ecstypes.ContainerDefinition, t containerTarget, s
 	setContainerEnv(app, EnvServiceName, serviceName)
 	setContainerEnv(app, envResourceAttributes, ecsResourceAttributes(region))
 	setContainerEnv(app, envOTLPEndpoint, t.export.endpoint)
+	if headers := otlpHeadersEnv(t.export.headers); headers != "" {
+		setContainerEnv(app, envOTLPHeaders, headers)
+	} else {
+		deleteContainerEnv(app, envOTLPHeaders)
+	}
 	setContainerEnv(app, EnvOtlpProtocol, t.export.protocol)
 	setContainerEnv(app, EnvTracesExporter, exporterFor(t.export.traces))
 	setContainerEnv(app, EnvMetricsExporter, exporterFor(t.export.metrics))
@@ -349,6 +357,7 @@ func containerDiff(app *ecstypes.ContainerDefinition, t containerTarget, service
 		diff = append(diff, componentResourceAttributes)
 	}
 	if env[envOTLPEndpoint] != t.export.endpoint ||
+		env[envOTLPHeaders] != otlpHeadersEnv(t.export.headers) ||
 		env[EnvOtlpProtocol] != t.export.protocol ||
 		env[EnvTracesExporter] != exporterFor(t.export.traces) ||
 		env[EnvMetricsExporter] != exporterFor(t.export.metrics) ||
@@ -389,6 +398,24 @@ func containerDiff(app *ecstypes.ContainerDefinition, t containerTarget, service
 		diff = append(diff, componentAgentStartupDependency)
 	}
 	return diff
+}
+
+// otlpHeadersEnv renders the OpenTelemetry SDK header-list syntax deterministically. Values are URL encoded
+// per the SDK specification so commas, equals signs and credentials cannot change the list's structure.
+func otlpHeadersEnv(headers map[string]string) string {
+	if len(headers) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(headers))
+	for key := range headers {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, url.QueryEscape(key)+"="+url.QueryEscape(headers[key]))
+	}
+	return strings.Join(parts, ",")
 }
 
 // loaderActivated reports whether the container's loader variable loads our agent.

@@ -215,6 +215,9 @@ func collectorTargets(records []CollectorRecord) []domaindest.CollectorTarget {
 			Endpoint:     rec.EndpointGRPC,
 			HTTPEndpoint: rec.EndpointHTTP,
 			Insecure:     rec.TLSMode == "off",
+			// FirstReadyAt is a one-way latch. A transient status regression must not
+			// make already-cut-over workloads fall back to the direct destination.
+			EverReady: rec.FirstReadyAt != nil,
 		})
 	}
 	return targets

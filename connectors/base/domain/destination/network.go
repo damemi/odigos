@@ -65,12 +65,13 @@ const (
 type Reason string
 
 const (
-	ReasonRouted               Reason = ""
-	ReasonNoDestination        Reason = "no-destination"
-	ReasonNoNetwork            Reason = "no-network"
-	ReasonNoCollectorForRegion Reason = "no-collector-for-region"
-	ReasonCollectorNotDeployed Reason = "collector-not-deployed"
-	ReasonCollectorUnreachable Reason = "collector-unreachable"
+	ReasonRouted                  Reason = ""
+	ReasonNoDestination           Reason = "no-destination"
+	ReasonNoNetwork               Reason = "no-network"
+	ReasonNoCollectorForRegion    Reason = "no-collector-for-region"
+	ReasonCollectorNotDeployed    Reason = "collector-not-deployed"
+	ReasonCollectorUnreachable    Reason = "collector-unreachable"
+	ReasonCollectorRolloutPending Reason = "collector-rollout-pending"
 	// ReasonCollectorNotReady: deployed, reachable in configuration, and it has never reported ready. The
 	// cutover gate — workloads keep exporting directly until it has been ready once.
 	ReasonCollectorNotReady Reason = "collector-not-ready"
@@ -220,6 +221,8 @@ func (r Routing) Describe() string {
 		return "Defaulting to the global OTLP destination: the Odigos Managed Regional Collector has not reported ready yet."
 	case ReasonCollectorUnreachable:
 		return "Defaulting to the global OTLP destination: the Odigos Managed Regional Collector is not known to be reachable from this workload's network."
+	case ReasonCollectorRolloutPending:
+		return "Continuing to use the global OTLP destination until this workload is admitted to the regional Collector rollout."
 	default:
 		return "Exporting directly to the global OTLP destination."
 	}

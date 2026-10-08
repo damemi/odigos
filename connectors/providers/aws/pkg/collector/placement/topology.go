@@ -13,6 +13,7 @@
 package placement
 
 import (
+	"net/netip"
 	"sort"
 	"strings"
 )
@@ -72,6 +73,24 @@ type VPC struct {
 	IsDefault  bool
 }
 
+// Peering is an active, direct VPC peering connection. Regions are retained because a peering
+// connection can be visible from both sides of the EC2 API, while only same-region connections are
+// eligible for the managed Collector ingress path.
+type Peering struct {
+	ID      string
+	VPC1    string
+	VPC2    string
+	Region1 string
+	Region2 string
+}
+
+// Route is the effective, active route from a subnet. Only the destination and peering target are
+// needed by the placement reachability proof; other route targets remain represented by Egress.
+type Route struct {
+	DestinationCIDR string
+	PeeringID       string
+}
+
 // Subnet is one subnet, with the two facts that decide whether a Collector can run in it.
 type Subnet struct {
 	Region           string
@@ -86,6 +105,32 @@ type Subnet struct {
 	// never from MapPublicIpOnLaunch: that attribute governs EC2 instance launches and has no effect on
 	// a Fargate awsvpc ENI, whose address comes from the service's own assignPublicIp setting.
 	Egress Egress
+	// Routes are the effective active routes for this subnet, including direct peering routes.
+	Routes []Route
+}
+
+// SecurityGroup is the regional ingress snapshot for one security group. Only inbound rules are retained:
+// a Collector route is safe to select only when the Collector's group actually admits a workload group on
+// an OTLP port. Group IDs are account-unique, but VPC and region stay attached so a missing or cross-region
+// reference cannot accidentally be treated as proof.
+type SecurityGroup struct {
+	Region  string
+	ID      string
+	VPCID   string
+	Ingress []SecurityGroupRule
+}
+
+// SecurityGroupRule is one inbound EC2 security-group permission. PortsKnown distinguishes a malformed or
+// partial AWS permission from an intentional all-protocol rule; SourceSecurityGroupIDs are the references
+// that can prove a Fargate workload is admitted through the same VPC or an active same-region peering.
+type SecurityGroupRule struct {
+	Protocol               string
+	FromPort               int32
+	ToPort                 int32
+	PortsKnown             bool
+	SourceSecurityGroupIDs []string
+	SourceCIDRs            []string
+	Incomplete             bool
 }
 
 // Usable reports whether a Collector task could run in this subnet, given whether it will be given a
@@ -117,18 +162,37 @@ type Topology struct {
 	// the second reports every source in that region as running on a network Odigos could not find,
 	// which is a loud, wrong problem on a healthy account. A region that is absent here is skipped
 	// instead, so a listing failure costs that region and nothing else.
-	regions map[string]bool
-	vpcs    map[string]VPC
-	subnets map[string]Subnet
+	regions        map[string]bool
+	vpcs           map[string]VPC
+	subnets        map[string]Subnet
+	peerings       map[string]Peering
+	securityGroups map[string]SecurityGroup
 }
 
 // NewTopology builds a topology for the regions it describes. Exported so tests and the discovery half
 // build the same value the same way.
 func NewTopology(regions []string, vpcs []VPC, subnets []Subnet) Topology {
+	return newTopology(regions, vpcs, subnets, nil, nil)
+}
+
+// NewTopologyWithPeerings builds a topology with the active direct peerings discovered for it.
+func NewTopologyWithPeerings(regions []string, vpcs []VPC, subnets []Subnet, peerings []Peering) Topology {
+	return newTopology(regions, vpcs, subnets, peerings, nil)
+}
+
+// NewTopologyWithSecurityGroups builds a topology with the inbound security-group snapshot used by
+// Collector ingress reachability checks.
+func NewTopologyWithSecurityGroups(regions []string, vpcs []VPC, subnets []Subnet, peerings []Peering, securityGroups []SecurityGroup) Topology {
+	return newTopology(regions, vpcs, subnets, peerings, securityGroups)
+}
+
+func newTopology(regions []string, vpcs []VPC, subnets []Subnet, peerings []Peering, securityGroups []SecurityGroup) Topology {
 	t := Topology{
-		regions: make(map[string]bool, len(regions)),
-		vpcs:    make(map[string]VPC, len(vpcs)),
-		subnets: make(map[string]Subnet, len(subnets)),
+		regions:        make(map[string]bool, len(regions)),
+		vpcs:           make(map[string]VPC, len(vpcs)),
+		subnets:        make(map[string]Subnet, len(subnets)),
+		peerings:       make(map[string]Peering, len(peerings)),
+		securityGroups: make(map[string]SecurityGroup, len(securityGroups)),
 	}
 	for _, r := range regions {
 		if r != "" {
@@ -145,6 +209,16 @@ func NewTopology(regions []string, vpcs []VPC, subnets []Subnet) Topology {
 			t.subnets[s.ID] = s
 		}
 	}
+	for _, p := range peerings {
+		if p.ID != "" {
+			t.peerings[p.ID] = p
+		}
+	}
+	for _, g := range securityGroups {
+		if g.ID != "" {
+			t.securityGroups[g.ID] = g
+		}
+	}
 	return t
 }
 
@@ -153,9 +227,11 @@ func NewTopology(regions []string, vpcs []VPC, subnets []Subnet) Topology {
 // object was described twice and either copy is correct.
 func (t Topology) Merge(other Topology) Topology {
 	out := Topology{
-		regions: make(map[string]bool, len(t.regions)+len(other.regions)),
-		vpcs:    make(map[string]VPC, len(t.vpcs)+len(other.vpcs)),
-		subnets: make(map[string]Subnet, len(t.subnets)+len(other.subnets)),
+		regions:        make(map[string]bool, len(t.regions)+len(other.regions)),
+		vpcs:           make(map[string]VPC, len(t.vpcs)+len(other.vpcs)),
+		subnets:        make(map[string]Subnet, len(t.subnets)+len(other.subnets)),
+		peerings:       make(map[string]Peering, len(t.peerings)+len(other.peerings)),
+		securityGroups: make(map[string]SecurityGroup, len(t.securityGroups)+len(other.securityGroups)),
 	}
 	for r := range t.regions {
 		out.regions[r] = true
@@ -174,6 +250,18 @@ func (t Topology) Merge(other Topology) Topology {
 	}
 	for id, s := range other.subnets {
 		out.subnets[id] = s
+	}
+	for id, p := range t.peerings {
+		out.peerings[id] = p
+	}
+	for id, p := range other.peerings {
+		out.peerings[id] = p
+	}
+	for id, g := range t.securityGroups {
+		out.securityGroups[id] = g
+	}
+	for id, g := range other.securityGroups {
+		out.securityGroups[id] = g
 	}
 	return out
 }
@@ -243,6 +331,285 @@ func (t Topology) VPCs() []VPC {
 		return out[i].ID < out[j].ID
 	})
 	return out
+}
+
+// Peerings returns active direct peerings, sorted by id.
+func (t Topology) Peerings() []Peering {
+	out := make([]Peering, 0, len(t.peerings))
+	for _, p := range t.peerings {
+		out = append(out, p)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// SecurityGroup looks up one regional ingress snapshot.
+func (t Topology) SecurityGroup(id string) (SecurityGroup, bool) {
+	g, ok := t.securityGroups[id]
+	return g, ok
+}
+
+// SecurityGroups returns every known security-group snapshot, sorted by region then id.
+func (t Topology) SecurityGroups() []SecurityGroup {
+	out := make([]SecurityGroup, 0, len(t.securityGroups))
+	for _, g := range t.securityGroups {
+		out = append(out, g)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Region != out[j].Region {
+			return out[i].Region < out[j].Region
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+// Reachability is the result of the placement-level path proof.
+type Reachability string
+
+const (
+	ReachabilityUnknown     Reachability = "unknown"
+	ReachabilityUnreachable Reachability = "unreachable"
+	ReachabilityReachable   Reachability = "reachable"
+)
+
+// Reachability proves whether selected subnets in two VPCs can communicate through an active,
+// same-region direct peering. It intentionally does not inspect security groups or network ACLs: those
+// are converged separately, and this proof is only the AWS topology facts Odigos can observe.
+func (t Topology) Reachability(hostRegion, hostVPC, consumerRegion, consumerVPC string, hostSubnetIDs, consumerSubnetIDs []string) Reachability {
+	host, hostOK := t.vpcs[hostVPC]
+	consumer, consumerOK := t.vpcs[consumerVPC]
+	if !hostOK || !consumerOK {
+		return ReachabilityUnknown
+	}
+	if hostRegion == "" {
+		hostRegion = host.Region
+	}
+	if consumerRegion == "" {
+		consumerRegion = consumer.Region
+	}
+	if hostRegion == "" || consumerRegion == "" || host.Region != hostRegion || consumer.Region != consumerRegion {
+		return ReachabilityUnknown
+	}
+	if hostVPC == consumerVPC {
+		return ReachabilityReachable
+	}
+	if hostRegion != consumerRegion {
+		return ReachabilityUnreachable
+	}
+	if len(host.CIDRBlocks) == 0 || len(consumer.CIDRBlocks) == 0 {
+		return ReachabilityUnknown
+	}
+
+	if cidrSetsOverlap(host.CIDRBlocks, consumer.CIDRBlocks) {
+		return ReachabilityUnreachable
+	}
+
+	var peering Peering
+	found := false
+	for _, p := range t.peerings {
+		if !peeringConnects(p, hostVPC, consumerVPC, hostRegion) {
+			continue
+		}
+		peering, found = p, true
+		break
+	}
+	if !found {
+		return ReachabilityUnreachable
+	}
+
+	hostSubnets, hostState := t.selectedSubnets(hostVPC, hostSubnetIDs)
+	consumerSubnets, consumerState := t.selectedSubnets(consumerVPC, consumerSubnetIDs)
+	if hostState != ReachabilityReachable || consumerState != ReachabilityReachable {
+		if hostState == ReachabilityUnknown || consumerState == ReachabilityUnknown {
+			return ReachabilityUnknown
+		}
+		return ReachabilityUnreachable
+	}
+	if !routesCover(hostSubnets, peering.ID, consumer.CIDRBlocks) || !routesCover(consumerSubnets, peering.ID, host.CIDRBlocks) {
+		return ReachabilityUnreachable
+	}
+	return ReachabilityReachable
+}
+
+// CanReach is the boolean form used by callers that only need the safe routing decision.
+func (t Topology) CanReach(hostRegion, hostVPC, consumerRegion, consumerVPC string, hostSubnetIDs, consumerSubnetIDs []string) bool {
+	return t.Reachability(hostRegion, hostVPC, consumerRegion, consumerVPC, hostSubnetIDs, consumerSubnetIDs) == ReachabilityReachable
+}
+
+// CollectorIngressReachability proves whether a Collector security group admits traffic from any of the
+// workload's source security groups on either OTLP port. Security-group references are valid within one
+// VPC and across an active same-region VPC peering; route reachability is still a separate required proof.
+// Missing groups, malformed port ranges, unknown VPCs, or incomplete source rules return Unknown rather
+// than claiming that a workload can reach the Collector.
+func (t Topology) CollectorIngressReachability(region, collectorVPC, collectorSecurityGroup, sourceVPC string, sourceSecurityGroups []string) Reachability {
+	return t.CollectorIngressReachabilityForPorts(region, collectorVPC, collectorSecurityGroup, sourceVPC, sourceSecurityGroups, []int32{4317, 4318})
+}
+
+// CollectorIngressReachabilityForPorts is the protocol-specific form. Every requested receiver port must
+// be admitted because different Fargate language agents may select different OTLP transports.
+func (t Topology) CollectorIngressReachabilityForPorts(region, collectorVPC, collectorSecurityGroup, sourceVPC string,
+	sourceSecurityGroups []string, ports []int32) Reachability {
+	host, hostOK := t.vpcs[collectorVPC]
+	consumer, consumerOK := t.vpcs[sourceVPC]
+	if !hostOK || !consumerOK || host.Region != region || consumer.Region != region || region == "" {
+		return ReachabilityUnknown
+	}
+	collector, collectorOK := t.securityGroups[collectorSecurityGroup]
+	if !collectorOK || collector.ID == "" || collector.VPCID != collectorVPC || collector.Region != region {
+		return ReachabilityUnknown
+	}
+	if len(sourceSecurityGroups) == 0 {
+		return ReachabilityUnknown
+	}
+	if collectorVPC != sourceVPC {
+		if !hasSameRegionPeering(t.peerings, collectorVPC, sourceVPC, region) {
+			return ReachabilityUnreachable
+		}
+	}
+	for _, id := range sourceSecurityGroups {
+		group, ok := t.securityGroups[id]
+		if !ok || group.ID == "" || group.VPCID != sourceVPC || group.Region != region {
+			return ReachabilityUnknown
+		}
+	}
+
+	unknown := false
+	for _, port := range ports {
+		admitted := false
+		for _, rule := range collector.Ingress {
+			if rule.Incomplete {
+				unknown = true
+			}
+			if !securityGroupRuleAllowsPort(rule, port) {
+				continue
+			}
+			for _, sourceID := range sourceSecurityGroups {
+				for _, allowedID := range rule.SourceSecurityGroupIDs {
+					if sourceID == allowedID {
+						admitted = true
+						break
+					}
+				}
+			}
+			if admitted {
+				break
+			}
+		}
+		if !admitted {
+			if unknown {
+				return ReachabilityUnknown
+			}
+			return ReachabilityUnreachable
+		}
+	}
+	return ReachabilityReachable
+}
+
+// CollectorSecurityGroupAllowsOTLP is the boolean form for callers that need a safe admission gate.
+func (t Topology) CollectorSecurityGroupAllowsOTLP(region, collectorVPC, collectorSecurityGroup, sourceVPC string, sourceSecurityGroups []string) bool {
+	return t.CollectorIngressReachability(region, collectorVPC, collectorSecurityGroup, sourceVPC, sourceSecurityGroups) == ReachabilityReachable
+}
+
+func securityGroupRuleAllowsPort(rule SecurityGroupRule, port int32) bool {
+	if rule.Protocol == "-1" {
+		return true
+	}
+	if rule.Protocol != "tcp" || !rule.PortsKnown || rule.FromPort > rule.ToPort {
+		return false
+	}
+	return rule.FromPort <= port && port <= rule.ToPort
+}
+
+func hasSameRegionPeering(peerings map[string]Peering, vpc1, vpc2, region string) bool {
+	for _, p := range peerings {
+		if peeringConnects(p, vpc1, vpc2, region) {
+			return true
+		}
+	}
+	return false
+}
+
+func (t Topology) selectedSubnets(vpcID string, ids []string) ([]Subnet, Reachability) {
+	if len(ids) == 0 {
+		out := t.SubnetsIn(vpcID)
+		if len(out) == 0 {
+			return nil, ReachabilityUnknown
+		}
+		return out, ReachabilityReachable
+	}
+	out := make([]Subnet, 0, len(ids))
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		s, ok := t.subnets[id]
+		if !ok || s.VPCID != vpcID {
+			return nil, ReachabilityUnknown
+		}
+		out = append(out, s)
+	}
+	if len(out) == 0 {
+		return nil, ReachabilityUnknown
+	}
+	return out, ReachabilityReachable
+}
+
+func peeringConnects(p Peering, vpc1, vpc2, region string) bool {
+	if !((p.VPC1 == vpc1 && p.VPC2 == vpc2) || (p.VPC1 == vpc2 && p.VPC2 == vpc1)) {
+		return false
+	}
+	return (p.Region1 == "" || p.Region1 == region) && (p.Region2 == "" || p.Region2 == region)
+}
+
+func cidrSetsOverlap(a, b []string) bool {
+	for _, left := range a {
+		lp, err := netip.ParsePrefix(left)
+		if err != nil {
+			return true
+		}
+		for _, right := range b {
+			rp, err := netip.ParsePrefix(right)
+			if err != nil {
+				return true
+			}
+			if lp.Overlaps(rp) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func routesCover(subnets []Subnet, peeringID string, targets []string) bool {
+	// ECS may place a task in any selected subnet. Every selected subnet therefore needs a route for
+	// every CIDR association on the opposite VPC; one good AZ cannot prove the service-wide path.
+	for _, subnet := range subnets {
+		for _, target := range targets {
+			targetPrefix, err := netip.ParsePrefix(target)
+			if err != nil {
+				return false
+			}
+			covered := false
+			for _, route := range subnet.Routes {
+				if route.PeeringID != peeringID {
+					continue
+				}
+				prefix, err := netip.ParsePrefix(route.DestinationCIDR)
+				if err == nil && prefix.Bits() <= targetPrefix.Bits() && prefix.Contains(targetPrefix.Addr()) {
+					covered = true
+					break
+				}
+			}
+			if covered {
+				continue
+			}
+			return false
+		}
+	}
+	return true
 }
 
 // zonesOf lists the distinct availability zones of a subnet set, sorted.

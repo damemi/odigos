@@ -55,7 +55,7 @@ func ecsManagedEnvKeys(recipe agentRecipe) []string {
 	keys := []string{
 		store.EnvOdigosManaged,
 		EnvServiceName, envResourceAttributes,
-		envOTLPEndpoint, EnvOtlpProtocol,
+		envOTLPEndpoint, envOTLPHeaders, EnvOtlpProtocol,
 		EnvTracesExporter, EnvMetricsExporter, EnvLogsExporter,
 		EnvOtelLogLevel,
 	}

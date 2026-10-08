@@ -741,7 +741,7 @@ func workloadQueries() []workloadQuery {
 			COALESCE(metadata->>'conformance', ''), metadata->'conformance_missing', metadata->>'conformance_since',
 			COALESCE(metadata->>'observation_error', ''),
 			COALESCE(metadata->>'state','') = '` + lambdaStatePending + `' OR COALESCE(metadata->>'last_update_status','') = '` + lambdaUpdateInProgress + `',
-			layers
+			layers, NULL
 			FROM connector_aws.lambda_functions WHERE connector_name = $1 AND deleted_at IS NULL`},
 		// Fargate SERVICES: one workload per (cluster, service) from the ecs_services inventory. The
 		// external id — a source's stable identity — is cluster_arn || '/' || service_name (NOT a task ARN,
@@ -754,7 +754,7 @@ func workloadQueries() []workloadQuery {
 			COALESCE(metadata->>'instrumentation_phase', ''),
 			COALESCE(launch_type, ''), COALESCE(task_definition, ''), COALESCE(deployment_controller, ''),
 			metadata->'containers',
-			` + ecsObservationCols + `, NULL
+			` + ecsObservationCols + `, NULL, metadata->'` + metaRoutingNote + `'
 			FROM connector_aws.ecs_services WHERE connector_name = $1 AND deleted_at IS NULL`},
 		// STANDALONE Fargate tasks (no ECS service — RunTask/EventBridge): inherently ephemeral, so the task
 		// ARN is the identity. They stay discoverable/selectable, but instrumentation reports a terminal
@@ -763,7 +763,7 @@ func workloadQueries() []workloadQuery {
 			'', '', last_seen_at, false,
 			COALESCE(metadata->>'instrumentation_error', ''), '',
 			'', '', '', NULL,
-			` + noObservationCols + `
+			` + noObservationCols + `, NULL
 			FROM connector_aws.ecs_tasks
 			WHERE connector_name = $1 AND deleted_at IS NULL AND COALESCE(service_name, '') = ''`},
 	}
@@ -786,7 +786,7 @@ func scanWorkloadRows(rows pgx.Rows, q workloadQuery, out *[]api.DiscoveredWorkl
 			// so the other queries select noObservationCols and report an Unknown verdict — which is the
 			// truth for a type nothing has observed, and is distinct from "observed and found conformant".
 			var conformance api.Conformance
-			var missingJSON, layersJSON []byte
+			var missingJSON, layersJSON, routingNoteJSON []byte
 			var conformanceSince *string
 			var observationErr string
 			var settling bool
@@ -794,7 +794,8 @@ func scanWorkloadRows(rows pgx.Rows, q workloadQuery, out *[]api.DiscoveredWorkl
 			var instrumented bool
 			if err := rows.Scan(&name, &region, &externalID, &language, &version, &lastSeen, &instrumented, &instrErr, &instrPhase,
 				&archOrLaunchType, &taskDefinition, &deploymentController, &containersJSON,
-				&conformanceTarget{&conformance}, &missingJSON, &conformanceSince, &observationErr, &settling, &layersJSON); err != nil {
+				&conformanceTarget{&conformance}, &missingJSON, &conformanceSince, &observationErr, &settling, &layersJSON,
+				&routingNoteJSON); err != nil {
 				return err
 			}
 			runtime := language
@@ -817,6 +818,7 @@ func scanWorkloadRows(rows pgx.Rows, q workloadQuery, out *[]api.DiscoveredWorkl
 				ConformanceSince:     parseObservedAt(conformanceSince),
 				Settling:             settling,
 				ObservationError:     observationErr,
+				RoutingNote:          decodeRoutingNote(routingNoteJSON),
 				Details: workloadDetails(q.kind, externalID, runtime,
 					archOrLaunchType, taskDefinition, deploymentController, containersJSON,
 					decodeStringSlice(layersJSON, "layers")),

@@ -81,10 +81,33 @@ func TestECSObservationColsAndScanAgree(t *testing.T) {
 	if got := topLevelCommas(ecsObservationCols); got != wantCols {
 		t.Errorf("ecsObservationCols selects %d columns, the scans read %d", got, wantCols)
 	}
-	// ListWorkloads pads it to the shared shape with one trailing NULL for the Lambda-only layers column; the
+	// ListWorkloads pads it to the shared shape with trailing NULLs for the Lambda-only layers and routing-note columns; the
 	// full-shape assertion lives in TestListWorkloadsQueriesShareColumnShape.
 	src := readInventorySource(t)
 	if !strings.Contains(src, "ecsObservationCols+`, NULL") && !strings.Contains(src, "ecsObservationCols + `, NULL") {
 		t.Error("the ecs_services report query no longer pads ecsObservationCols with the layers column")
+	}
+}
+
+func TestECSRoutingNoteDecode(t *testing.T) {
+	got := decodeRoutingNote([]byte(`{"code":"collector-unreachable","message":"falling back","transient":true}`))
+	if got == nil || got.Code != "collector-unreachable" || got.Message != "falling back" || !got.Transient {
+		t.Fatalf("decoded routing note = %+v", got)
+	}
+	if decodeRoutingNote(nil) != nil || decodeRoutingNote([]byte(`null`)) != nil {
+		t.Fatal("empty routing note must decode as nil")
+	}
+	if decodeRoutingNote([]byte(`not-json`)) != nil {
+		t.Fatal("malformed routing note must degrade to nil")
+	}
+}
+
+func TestSetECSServiceRoutingMergesAndClears(t *testing.T) {
+	src := readECSSource(t)
+	body := funcBody(t, src, "func (s *Store) SetECSServiceRouting")
+	for _, want := range []string{"COALESCE(metadata", "|| $4::jsonb", "- $5::text[]", "metaRoutingVia", "metaRoutingNote"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("SetECSServiceRouting is missing %s; route updates must preserve unrelated metadata and clear stale route state", want)
+		}
 	}
 }

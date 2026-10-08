@@ -27,6 +27,10 @@ var defaultSupportedTypes = []string{CatalogTypeOTLP}
 type Catalog struct {
 	supportedTypes      []string
 	managedCollectorCap bool
+	// managedCollectorRegions is the set of regions with an installed Collector. A nil
+	// map means capability-only (the legacy/static catalog); an empty non-nil map hides
+	// the synthetic marker and rejects marker writes.
+	managedCollectorRegions map[string]bool
 }
 
 // DefaultCatalog returns the base default catalog (OTLP only).
@@ -68,6 +72,20 @@ func NewCatalogWithManagedCollector(types []string) Catalog {
 // WithManagedCollector returns a catalog that explicitly supports the regional routing marker.
 func (c Catalog) WithManagedCollector() Catalog {
 	c.managedCollectorCap = true
+	return c
+}
+
+// WithInstalledManagedCollectorRegions limits the managed-Collector marker to regions
+// with a concrete deployed identity and ingress. Readiness is intentionally not part of
+// this applicability check; readiness only gates workload cutover.
+func (c Catalog) WithInstalledManagedCollectorRegions(regions []string) Catalog {
+	c.managedCollectorCap = true
+	c.managedCollectorRegions = make(map[string]bool, len(regions))
+	for _, region := range regions {
+		if strings.TrimSpace(region) != "" {
+			c.managedCollectorRegions[strings.TrimSpace(region)] = true
+		}
+	}
 	return c
 }
 
@@ -155,10 +173,20 @@ func (c Catalog) SupportedCatalogDestinationTypes() ([]*model.DestinationType, e
 	}
 	// The marker is connector-owned routing intent, rather than an OSS destination catalog entry. It is
 	// offered only when the connector has an active managed-Collector capability.
-	if c.managedCollectorCap {
+	if c.managedCollectorCap && (c.managedCollectorRegions == nil || len(c.managedCollectorRegions) > 0) {
 		out = append(out, managedCollectorType())
 	}
 	return out, nil
+}
+
+func (c Catalog) managedCollectorRegionInstalled(region string) bool {
+	if !c.managedCollectorCap || strings.TrimSpace(region) == "" {
+		return false
+	}
+	if c.managedCollectorRegions == nil {
+		return true
+	}
+	return c.managedCollectorRegions[strings.TrimSpace(region)]
 }
 
 func managedCollectorType() *model.DestinationType {

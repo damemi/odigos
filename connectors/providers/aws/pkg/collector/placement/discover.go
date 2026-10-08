@@ -15,7 +15,7 @@ import (
 
 var log = connlog.Subsystem("aws-collector-placement")
 
-// EC2Reader is the read-only slice of EC2 this package needs, and the whole of it: the three calls
+// EC2Reader is the read-only slice of EC2 this package needs, and the whole of it: the five calls
 // declared for aws.fargate-collector under the MANAGEMENT capability, so placement runs in manual
 // mode too — a customer who deploys the Collector themselves still gets told which network it serves and
 // whether its subnets can reach anything.
@@ -28,6 +28,8 @@ type EC2Reader interface {
 	DescribeVpcs(ctx context.Context, in *ec2.DescribeVpcsInput, opts ...func(*ec2.Options)) (*ec2.DescribeVpcsOutput, error)
 	DescribeSubnets(ctx context.Context, in *ec2.DescribeSubnetsInput, opts ...func(*ec2.Options)) (*ec2.DescribeSubnetsOutput, error)
 	DescribeRouteTables(ctx context.Context, in *ec2.DescribeRouteTablesInput, opts ...func(*ec2.Options)) (*ec2.DescribeRouteTablesOutput, error)
+	DescribeVpcPeeringConnections(ctx context.Context, in *ec2.DescribeVpcPeeringConnectionsInput, opts ...func(*ec2.Options)) (*ec2.DescribeVpcPeeringConnectionsOutput, error)
+	DescribeSecurityGroups(ctx context.Context, in *ec2.DescribeSecurityGroupsInput, opts ...func(*ec2.Options)) (*ec2.DescribeSecurityGroupsOutput, error)
 }
 
 // Discover builds the topology for a set of regions through the shared config cache.
@@ -61,10 +63,10 @@ func Discover(ctx context.Context, cache *awsclient.Cache, regions []string) (To
 	return topo, errors.Join(errs...)
 }
 
-// DiscoverRegion describes one region's VPCs, subnets and route tables and classifies each subnet's
-// egress.
+// DiscoverRegion describes one region's VPCs, subnets, route tables and active direct peerings, and
+// classifies each subnet's egress.
 //
-// All three listings must succeed. A partial one would classify subnets whose route tables were not read
+// All five listings must succeed. A partial one would classify subnets whose route tables were not read
 // as having no egress, which reads as a refusal — Odigos declining to deploy a Collector into a
 // perfectly reachable subnet, with a message telling the customer to add a NAT gateway they already
 // have. Failing the region instead leaves it out and says why.
@@ -81,8 +83,16 @@ func DiscoverRegion(ctx context.Context, api EC2Reader, region string) (Topology
 	if err != nil {
 		return Topology{}, fmt.Errorf("describe subnets: %w", err)
 	}
-	log.Info("collector placement topology scanned", "region", region, "vpcs", len(vpcs), "subnets", len(subnets))
-	return NewTopology([]string{region}, vpcs, subnets), nil
+	peerings, err := describePeerings(ctx, api, region)
+	if err != nil {
+		return Topology{}, fmt.Errorf("describe vpc peerings: %w", err)
+	}
+	securityGroups, err := describeSecurityGroups(ctx, api, region)
+	if err != nil {
+		return Topology{}, fmt.Errorf("describe security groups: %w", err)
+	}
+	log.Info("collector placement topology scanned", "region", region, "vpcs", len(vpcs), "subnets", len(subnets), "peerings", len(peerings), "security_groups", len(securityGroups))
+	return NewTopologyWithSecurityGroups([]string{region}, vpcs, subnets, peerings, securityGroups), nil
 }
 
 func describeVPCs(ctx context.Context, api EC2Reader, region string) ([]VPC, error) {
@@ -135,10 +145,121 @@ func describeSubnets(ctx context.Context, api EC2Reader, region string, tables [
 				AvailabilityZone: aws.ToString(s.AvailabilityZone),
 				AvailableIPs:     aws.ToInt32(s.AvailableIpAddressCount),
 				Egress:           subnetEgress(id, vpcID, tables),
+				Routes:           subnetRoutes(id, vpcID, tables),
 			})
 		}
 	}
 	return out, nil
+}
+
+func describePeerings(ctx context.Context, api EC2Reader, region string) ([]Peering, error) {
+	var out []Peering
+	paginator := ec2.NewDescribeVpcPeeringConnectionsPaginator(api, &ec2.DescribeVpcPeeringConnectionsInput{
+		Filters: []ec2types.Filter{{
+			Name:   aws.String("status-code"),
+			Values: []string{string(ec2types.VpcPeeringConnectionStateReasonCodeActive)},
+		}},
+	})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range page.VpcPeeringConnections {
+			if p.Status == nil || p.Status.Code != ec2types.VpcPeeringConnectionStateReasonCodeActive {
+				continue
+			}
+			requester, accepter := p.RequesterVpcInfo, p.AccepterVpcInfo
+			if requester == nil || accepter == nil {
+				continue
+			}
+			vpc1, vpc2 := aws.ToString(requester.VpcId), aws.ToString(accepter.VpcId)
+			if vpc1 == "" || vpc2 == "" {
+				continue
+			}
+			region1, region2 := aws.ToString(requester.Region), aws.ToString(accepter.Region)
+			if region1 == "" {
+				region1 = region
+			}
+			if region2 == "" {
+				region2 = region
+			}
+			// The regional API can expose inter-region peerings from either side. They are not eligible
+			// for this direct same-region proof, so retain only peerings wholly in the scanned region.
+			if region1 != region || region2 != region {
+				continue
+			}
+			if id := aws.ToString(p.VpcPeeringConnectionId); id != "" {
+				out = append(out, Peering{ID: id, VPC1: vpc1, VPC2: vpc2, Region1: region1, Region2: region2})
+			}
+		}
+	}
+	return out, nil
+}
+
+func describeSecurityGroups(ctx context.Context, api EC2Reader, region string) ([]SecurityGroup, error) {
+	var out []SecurityGroup
+	paginator := ec2.NewDescribeSecurityGroupsPaginator(api, &ec2.DescribeSecurityGroupsInput{})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, group := range page.SecurityGroups {
+			id, vpcID := aws.ToString(group.GroupId), aws.ToString(group.VpcId)
+			if id == "" || vpcID == "" {
+				continue
+			}
+			out = append(out, SecurityGroup{Region: region, ID: id, VPCID: vpcID, Ingress: securityGroupIngress(group.IpPermissions)})
+		}
+	}
+	return out, nil
+}
+
+func securityGroupIngress(permissions []ec2types.IpPermission) []SecurityGroupRule {
+	out := make([]SecurityGroupRule, 0, len(permissions))
+	for _, permission := range permissions {
+		rule := SecurityGroupRule{
+			Protocol:   aws.ToString(permission.IpProtocol),
+			FromPort:   aws.ToInt32(permission.FromPort),
+			ToPort:     aws.ToInt32(permission.ToPort),
+			PortsKnown: permission.FromPort != nil && permission.ToPort != nil,
+		}
+		if rule.Protocol == "-1" {
+			rule.PortsKnown = true
+		}
+		for _, pair := range permission.UserIdGroupPairs {
+			if id := aws.ToString(pair.GroupId); id != "" {
+				rule.SourceSecurityGroupIDs = append(rule.SourceSecurityGroupIDs, id)
+			} else {
+				rule.Incomplete = true
+			}
+		}
+		for _, cidr := range permission.IpRanges {
+			if value := aws.ToString(cidr.CidrIp); value != "" {
+				rule.SourceCIDRs = append(rule.SourceCIDRs, value)
+			} else {
+				rule.Incomplete = true
+			}
+		}
+		for _, cidr := range permission.Ipv6Ranges {
+			if value := aws.ToString(cidr.CidrIpv6); value != "" {
+				rule.SourceCIDRs = append(rule.SourceCIDRs, value)
+			} else {
+				rule.Incomplete = true
+			}
+		}
+		for _, prefix := range permission.PrefixListIds {
+			if aws.ToString(prefix.PrefixListId) == "" {
+				rule.Incomplete = true
+			}
+		}
+		if rule.Protocol == "" || (!rule.PortsKnown && rule.Protocol != "-1") {
+			rule.Incomplete = true
+		}
+		out = append(out, rule)
+	}
+	return out
 }
 
 // vpcCIDRs returns a VPC's IPv4 blocks, the primary first.

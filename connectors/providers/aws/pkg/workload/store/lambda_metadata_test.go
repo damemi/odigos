@@ -209,7 +209,7 @@ func TestListWorkloadsQueriesShareColumnShape(t *testing.T) {
 		return m[1]
 	}
 	want := topLevelCommas(selectList(queries[0].sql))
-	// Sanity floor: the scan reads 19 columns. If a refactor drops the shared shape to something trivially
+	// Sanity floor: the scan reads 20 columns. If a refactor drops the shared shape to something trivially
 	// small, the comparison below would still pass while checking nothing.
 	if want < 10 {
 		t.Fatalf("query 0 selects only %d columns; this test has stopped checking anything", want)

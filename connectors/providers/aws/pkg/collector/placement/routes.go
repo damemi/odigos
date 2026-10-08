@@ -29,6 +29,17 @@ const routeStateBlackhole = "blackhole"
 // fallback wrong is the difference between "this account has no usable subnets" and a correct plan, and
 // it is the common case: most subnets are never explicitly associated with anything.
 func subnetEgress(subnetID, vpcID string, tables []ec2types.RouteTable) Egress {
+	return routesEgress(effectiveRoutes(subnetID, vpcID, tables))
+}
+
+// subnetRoutes returns the effective active routes for a subnet, applying the same explicit-then-main
+// association rule as subnetEgress. Keeping this projection beside egress prevents the reachability
+// proof from accidentally inspecting a different route table than placement used for the host.
+func subnetRoutes(subnetID, vpcID string, tables []ec2types.RouteTable) []Route {
+	return activeRoutes(effectiveRoutes(subnetID, vpcID, tables))
+}
+
+func effectiveRoutes(subnetID, vpcID string, tables []ec2types.RouteTable) []ec2types.Route {
 	var main *ec2types.RouteTable
 	for i := range tables {
 		t := &tables[i]
@@ -40,7 +51,7 @@ func subnetEgress(subnetID, vpcID string, tables []ec2types.RouteTable) Egress {
 				continue
 			}
 			if aws.ToString(a.SubnetId) == subnetID {
-				return routesEgress(t.Routes)
+				return t.Routes
 			}
 			if aws.ToBool(a.Main) {
 				main = t
@@ -48,12 +59,30 @@ func subnetEgress(subnetID, vpcID string, tables []ec2types.RouteTable) Egress {
 		}
 	}
 	if main != nil {
-		return routesEgress(main.Routes)
+		return main.Routes
 	}
 	// No table at all, explicit or main. Either the listing was incomplete or Odigos cannot read the
 	// VPC's tables; both mean the same thing here — nothing asserts a way out, so nothing is deployed on
 	// the strength of a guess.
-	return EgressNone
+	return nil
+}
+
+func activeRoutes(routes []ec2types.Route) []Route {
+	out := make([]Route, 0, len(routes))
+	for _, r := range routes {
+		if string(r.State) == routeStateBlackhole {
+			continue
+		}
+		destination := aws.ToString(r.DestinationCidrBlock)
+		if destination == "" {
+			continue
+		}
+		out = append(out, Route{
+			DestinationCIDR: destination,
+			PeeringID:       aws.ToString(r.VpcPeeringConnectionId),
+		})
+	}
+	return out
 }
 
 // associated reports whether an association is in force.

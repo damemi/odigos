@@ -48,6 +48,31 @@ func TestManagedCollectorCatalogEntryIsSyntheticAndExplicit(t *testing.T) {
 	}
 }
 
+func TestManagedCollectorCatalogRequiresInstalledRegion(t *testing.T) {
+	catalog := NewCatalogWithManagedCollector(nil).WithInstalledManagedCollectorRegions([]string{"eu-west-1"})
+	if catalog.IsSupported(CatalogTypeManagedCollector) == false {
+		t.Fatal("regional applicability must not remove marker validation support")
+	}
+	types, err := catalog.SupportedCatalogDestinationTypes()
+	if err != nil || len(types) != 2 || types[1].Type != CatalogTypeManagedCollector {
+		t.Fatalf("catalog types with installed region = %v, %v; marker should be offered when at least one region has an installed Collector", types, err)
+	}
+	if err := catalog.ValidateWithCatalog(Destination{Name: "bad", Type: CatalogTypeManagedCollector, Region: "us-east-1", Signals: []string{"TRACES"}}); err == nil {
+		t.Fatal("marker in a region without an installed Collector was accepted")
+	}
+	if err := catalog.ValidateWithCatalog(Destination{Name: "ok", Type: CatalogTypeManagedCollector, Region: "eu-west-1", Signals: []string{"TRACES"}}); err != nil {
+		t.Fatalf("marker in installed region rejected: %v", err)
+	}
+}
+
+func TestManagedCollectorCatalogHiddenWithoutInstalledCollectors(t *testing.T) {
+	catalog := NewCatalogWithManagedCollector(nil).WithInstalledManagedCollectorRegions(nil)
+	types, err := catalog.SupportedCatalogDestinationTypes()
+	if err != nil || len(types) != 1 {
+		t.Fatalf("catalog types without installed Collectors = %v, %v; want only terminal destinations", types, err)
+	}
+}
+
 func TestValidateWithCatalog_RejectsNonOTLP(t *testing.T) {
 	err := DefaultCatalog().ValidateWithCatalog(Destination{
 		Name:    "x",

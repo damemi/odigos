@@ -178,8 +178,21 @@ func (p Plan) IngressSources(region, networkID string) []awsingress.Source {
 		if svc.Region != region || !enabled[awsstore.KindECSTask][ref] {
 			continue
 		}
-		if vpc, ok := networkOfService(svc, p.Topology); !ok || vpc != networkID {
+		vpc, ok := networkOfService(svc, p.Topology)
+		if !ok {
 			continue
+		}
+		if vpc != networkID {
+			// The provider-neutral plan chooses one regional host VPC for every consumer VPC. A
+			// consumer is admitted only when the AWS topology proves a direct same-region peering
+			// path in both directions; otherwise it must keep its direct export target.
+			if p.Networks.ServedBy(region, vpc) != networkID {
+				continue
+			}
+			host, hostOK := p.Placement(region, networkID)
+			if !hostOK || !p.Topology.CanReach(region, networkID, svc.Region, vpc, host.SubnetIDs, svc.SubnetIDs) {
+				continue
+			}
 		}
 		out = append(out, awsingress.Source{Name: ref, SecurityGroupIDs: svc.SecurityGroupIDs})
 	}

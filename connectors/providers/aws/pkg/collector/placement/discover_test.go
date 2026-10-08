@@ -16,13 +16,15 @@ import (
 // more than one — which is what proves the paginators are actually being drained rather than the first
 // page being taken for the whole account.
 type fakeEC2 struct {
-	vpcPages    [][]ec2types.Vpc
-	subnetPages [][]ec2types.Subnet
-	tablePages  [][]ec2types.RouteTable
+	vpcPages           [][]ec2types.Vpc
+	subnetPages        [][]ec2types.Subnet
+	tablePages         [][]ec2types.RouteTable
+	peeringPages       [][]ec2types.VpcPeeringConnection
+	securityGroupPages [][]ec2types.SecurityGroup
 
-	vpcErr, subnetErr, tableErr error
+	vpcErr, subnetErr, tableErr, peeringErr, securityGroupErr error
 
-	vpcCalls, subnetCalls, tableCalls int
+	vpcCalls, subnetCalls, tableCalls, peeringCalls, securityGroupCalls int
 }
 
 func page[T any](pages [][]T, token *string) ([]T, *string) {
@@ -67,12 +69,71 @@ func (f *fakeEC2) DescribeRouteTables(_ context.Context, in *ec2.DescribeRouteTa
 	return &ec2.DescribeRouteTablesOutput{RouteTables: tables, NextToken: next}, nil
 }
 
+func (f *fakeEC2) DescribeVpcPeeringConnections(_ context.Context, in *ec2.DescribeVpcPeeringConnectionsInput, _ ...func(*ec2.Options)) (*ec2.DescribeVpcPeeringConnectionsOutput, error) {
+	f.peeringCalls++
+	if f.peeringErr != nil {
+		return nil, f.peeringErr
+	}
+	peerings, next := page(f.peeringPages, in.NextToken)
+	return &ec2.DescribeVpcPeeringConnectionsOutput{VpcPeeringConnections: peerings, NextToken: next}, nil
+}
+
+func (f *fakeEC2) DescribeSecurityGroups(_ context.Context, in *ec2.DescribeSecurityGroupsInput, _ ...func(*ec2.Options)) (*ec2.DescribeSecurityGroupsOutput, error) {
+	f.securityGroupCalls++
+	if f.securityGroupErr != nil {
+		return nil, f.securityGroupErr
+	}
+	groups, next := page(f.securityGroupPages, in.NextToken)
+	return &ec2.DescribeSecurityGroupsOutput{SecurityGroups: groups, NextToken: next}, nil
+}
+
 func awsSubnet(id, vpcID, zone string, freeIPs int32) ec2types.Subnet {
 	return ec2types.Subnet{
 		SubnetId:                aws.String(id),
 		VpcId:                   aws.String(vpcID),
 		AvailabilityZone:        aws.String(zone),
 		AvailableIpAddressCount: aws.Int32(freeIPs),
+	}
+}
+
+func awsPeering(id, vpc1, vpc2, region1, region2 string, state ec2types.VpcPeeringConnectionStateReasonCode) ec2types.VpcPeeringConnection {
+	return ec2types.VpcPeeringConnection{
+		VpcPeeringConnectionId: aws.String(id),
+		RequesterVpcInfo:       &ec2types.VpcPeeringConnectionVpcInfo{VpcId: aws.String(vpc1), Region: aws.String(region1)},
+		AccepterVpcInfo:        &ec2types.VpcPeeringConnectionVpcInfo{VpcId: aws.String(vpc2), Region: aws.String(region2)},
+		Status:                 &ec2types.VpcPeeringConnectionStateReason{Code: state},
+	}
+}
+
+func TestDiscoverRegionRetainsOnlyActiveSameRegionPeeringsAndEffectiveRoutes(t *testing.T) {
+	api := &fakeEC2{
+		vpcPages:    [][]ec2types.Vpc{{{VpcId: aws.String("vpc-1"), CidrBlock: aws.String("10.0.0.0/16")}, {VpcId: aws.String("vpc-2"), CidrBlock: aws.String("10.1.0.0/16")}}},
+		subnetPages: [][]ec2types.Subnet{{awsSubnet("subnet-1", "vpc-1", "eu-west-1a", 10)}},
+		tablePages:  [][]ec2types.RouteTable{{table("rtb-1", "vpc-1", []ec2types.Route{route("10.1.0.0/16", func(r *ec2types.Route) { r.VpcPeeringConnectionId = aws.String("pcx-active") })}, assocMain())}},
+		peeringPages: [][]ec2types.VpcPeeringConnection{
+			{awsPeering("pcx-active", "vpc-1", "vpc-2", "eu-west-1", "eu-west-1", ec2types.VpcPeeringConnectionStateReasonCodeActive), awsPeering("pcx-pending", "vpc-1", "vpc-2", "eu-west-1", "eu-west-1", ec2types.VpcPeeringConnectionStateReasonCodePendingAcceptance)},
+			{awsPeering("pcx-cross-region", "vpc-1", "vpc-2", "eu-west-1", "us-east-1", ec2types.VpcPeeringConnectionStateReasonCodeActive)},
+		},
+		securityGroupPages: [][]ec2types.SecurityGroup{{{
+			GroupId: aws.String("sg-collector"), VpcId: aws.String("vpc-1"),
+			IpPermissions: []ec2types.IpPermission{{IpProtocol: aws.String("tcp"), FromPort: aws.Int32(4317), ToPort: aws.Int32(4318), UserIdGroupPairs: []ec2types.UserIdGroupPair{{GroupId: aws.String("sg-app")}}}},
+		}}},
+	}
+	topo, err := DiscoverRegion(context.Background(), api, "eu-west-1")
+	if err != nil {
+		t.Fatalf("DiscoverRegion: %v", err)
+	}
+	peerings := topo.Peerings()
+	if len(peerings) != 1 || peerings[0].ID != "pcx-active" {
+		t.Fatalf("peerings = %+v, want only active same-region peering", peerings)
+	}
+	subnet, ok := topo.Subnet("subnet-1")
+	if !ok || len(subnet.Routes) != 1 || subnet.Routes[0].PeeringID != "pcx-active" {
+		t.Fatalf("effective subnet routes = %+v, want the main table's peering route", subnet.Routes)
+	}
+	group, ok := topo.SecurityGroup("sg-collector")
+	if !ok || len(group.Ingress) != 1 || len(group.Ingress[0].SourceSecurityGroupIDs) != 1 || group.Ingress[0].SourceSecurityGroupIDs[0] != "sg-app" {
+		t.Fatalf("security group ingress = %+v, want retained OTLP SG permission", group)
 	}
 }
 
@@ -146,6 +207,8 @@ func TestDiscoverRegionFailsWholeRatherThanPartial(t *testing.T) {
 		{"vpcs", &fakeEC2{vpcErr: boom}, "describe vpcs"},
 		{"route tables", &fakeEC2{tableErr: boom}, "describe route tables"},
 		{"subnets", &fakeEC2{subnetErr: boom}, "describe subnets"},
+		{"vpc peerings", &fakeEC2{peeringErr: boom}, "describe vpc peerings"},
+		{"security groups", &fakeEC2{securityGroupErr: boom}, "describe security groups"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			topo, err := DiscoverRegion(context.Background(), tc.api, "eu-west-1")
