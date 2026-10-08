@@ -428,6 +428,9 @@ type CentralInterface interface {
 	// periodic own-metrics report; found=false means it has never reported any.
 	ManagedCollectorMetrics(ctx context.Context, region string, refresh bool) (collectormetrics.Record, bool, error)
 	IssueManagedCollectorCredential(ctx context.Context, input ManualCollectorCredentialInput) (ManualCollectorCredentialIssue, error)
+	// ManagedCollectorInstructions renders provider-owned deployment documents for one region. A nil
+	// result means this provider has no collector artifact for the requested region.
+	ManagedCollectorInstructions(ctx context.Context, region string) (*ManagedCollectorInstructions, error)
 }
 
 // ManualCollectorCredentialInput names the immutable binding and the customer's secret location.
@@ -448,6 +451,34 @@ type ManualCollectorCredentialIssue struct {
 // credentials. It may write connector state, but must not mutate customer cloud infrastructure.
 type ManualCollectorCredentialIssuer interface {
 	IssueManualCollectorCredential(ctx context.Context, input ManualCollectorCredentialInput) (ManualCollectorCredentialIssue, error)
+}
+
+// ManagedCollectorInstructions is the provider-neutral shape used by GraphQL. The documents remain
+// provider-owned because CloudFormation and Terraform are AWS syntax, not a base concern.
+type ManagedCollectorInstructions struct {
+	Region        string
+	HostNetworkID string
+	Mode          string
+	Documents     []InstructionDocument
+	Notes         []string
+	UpdatedAt     time.Time
+}
+
+// InstructionDocument is one copy-pasteable delivery variant.
+type InstructionDocument struct {
+	ID, Variant, VariantLabel, Title, Description, Format, Content string
+	Steps                                                          []string
+	Unresolved                                                     []InstructionInput
+}
+
+// InstructionInput describes a value the customer must still provide.
+type InstructionInput struct{ Placeholder, Description string }
+
+// ManagedCollectorInstructionProvider is implemented by a cloud provider that can render its own
+// collector artifacts. It is optional so providers without a collector implementation continue to
+// return the schema's normal null result.
+type ManagedCollectorInstructionProvider interface {
+	ManagedCollectorInstructions(ctx context.Context, region string) (*ManagedCollectorInstructions, error)
 }
 
 // CollectorTeardownResult is the outcome of a teardown request.

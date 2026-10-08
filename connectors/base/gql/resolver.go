@@ -218,13 +218,25 @@ func (r *mutationResolver) IssueManagedCollectorCredential(ctx context.Context, 
 	}, nil
 }
 
-// ManagedCollectorInstructions has no data source yet: no provider publishes deployment artifacts for
-// its Collector type (aws.yaml declares none). Null is the schema's documented answer for exactly that,
-// so this returns null rather than rendering an empty document set that would read as "here is how, and
-// it is nothing".
-func (r *queryResolver) ManagedCollectorInstructions(_ context.Context, _ string) (*model.ManagedCollectorInstructions, error) {
-	logUnsupported("managedCollectorInstructions")
-	return nil, nil
+// ManagedCollectorInstructions converts provider-rendered deployment artifacts to the shared schema.
+// Providers without instructions return null.
+func (r *queryResolver) ManagedCollectorInstructions(ctx context.Context, region string) (*model.ManagedCollectorInstructions, error) {
+	result, err := r.Central.ManagedCollectorInstructions(ctx, region)
+	if err != nil || result == nil {
+		return nil, err
+	}
+	documents := make([]*model.InstructionDocument, 0, len(result.Documents))
+	for _, document := range result.Documents {
+		unresolved := make([]*model.InstructionInput, 0, len(document.Unresolved))
+		for _, input := range document.Unresolved {
+			unresolved = append(unresolved, &model.InstructionInput{Placeholder: input.Placeholder, Description: input.Description})
+		}
+		documents = append(documents, &model.InstructionDocument{ID: document.ID, Variant: document.Variant,
+			VariantLabel: document.VariantLabel, Title: document.Title, Description: document.Description,
+			Steps: document.Steps, Format: document.Format, Content: document.Content, Unresolved: unresolved})
+	}
+	return &model.ManagedCollectorInstructions{Region: result.Region, NetworkID: result.HostNetworkID,
+		Mode: result.Mode, Documents: documents, Notes: result.Notes, UpdatedAt: result.UpdatedAt.UTC().Format(time.RFC3339)}, nil
 }
 
 // --- Unsupported queries ---

@@ -109,6 +109,17 @@ func (c *Coordinator) ManagedCollectorReport(ctx context.Context, region string)
 	return &in, nil
 }
 
+// ManagedCollectorInstructions delegates syntax-specific artifacts to the selected provider. The
+// coordinator owns configuration and lifecycle, while the provider owns the ECS, Terraform and
+// CloudFormation contract that the artifacts describe.
+func (c *Coordinator) ManagedCollectorInstructions(ctx context.Context, region string) (*api.ManagedCollectorInstructions, error) {
+	renderer, ok := c.provider.(api.ManagedCollectorInstructionProvider)
+	if !ok {
+		return nil, nil
+	}
+	return renderer.ManagedCollectorInstructions(ctx, region)
+}
+
 func pendingCollectorModelInput(region string, settings collectorsettings.Settings, now time.Time) collectorreport.ModelInput {
 	desired := settings.Region(region)
 	return collectorreport.ModelInput{
