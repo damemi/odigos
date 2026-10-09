@@ -122,8 +122,9 @@ export const mapVmSourceResult = (data: unknown): { source?: Workload } => {
 // workloads (`workloadReports`), not already-configured sources. VM has no
 // namespaces; the kit relabels the left column "Kinds", so we group the flat
 // report list by `kind` (one synthetic namespace per kind, e.g. docker/systemd/
-// process). A report is "selected" when a matching source already exists
-// (`desired.sourceMatched`). Persist then keys `createSource`/`deleteSource`
+// process). A report is "selected" only when its matching source is enabled;
+// a disabled source remains discoverable but is not marked for instrumentation.
+// Persist then keys `createSource`/`deleteSource`
 // off `name` (= the report's `serviceName`) + `kind` (+ `region` for cloud
 // connectors, where the same name can exist in multiple regions).
 export const mapVmWorkloadReportsToNamespaces = (data: unknown): GetNamespacesWithWorkloadsData => {
@@ -152,7 +153,7 @@ export const mapVmWorkloadReportsToNamespaces = (data: unknown): GetNamespacesWi
           kind: (kind as K8sResourceKind) ?? '',
           ...(report.region ? { region: report.region } : {}),
         },
-        markedForInstrumentation: { markedForInstrumentation: !!report.desired?.sourceMatched },
+        markedForInstrumentation: { markedForInstrumentation: !!(report.desired?.sourceEnabled ?? report.desired?.enabled) },
         dataStreamNames: [VM_DATA_STREAM],
         numberOfInstances: null,
       })),

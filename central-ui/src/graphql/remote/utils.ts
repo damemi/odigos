@@ -29,6 +29,10 @@ export const isParseableAgentsApiVersion = (schemaVersion: string | undefined): 
 // field, so only inject it when the connected platform reports >= that version.
 export const supportsWorkloadReportRegion = (schemaVersion: string): boolean => atLeastMinor(schemaVersion, 16);
 
+// Destination.region was added in the same schema release. Older agents reject
+// it on reads, so the destination adapter only selects it from v0.16.0 onward.
+export const supportsDestinationRegion = (schemaVersion: string): boolean => atLeastMinor(schemaVersion, 16);
+
 // agents-api v0.18.0 typed the kind-specific blocks that used to have nowhere to
 // live: `WorkloadReport.details` (an ECS task's container layer, replacing the
 // deprecated untyped `metadata: JSON`) and `Source.config.ecs` / `.docker`

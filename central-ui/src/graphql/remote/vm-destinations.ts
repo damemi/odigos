@@ -12,7 +12,7 @@ import type {
 } from '@odigos/ui-kit/contexts';
 import { type Destination, type DestinationTypes, type GetDestinationCategoriesResult, type TestConnectionResponse } from '@odigos/ui-kit/types';
 import { dialectVersion } from '@/graphql/remote/vm-dialect';
-import { supportsDestinationDisabled, withFragmentSelections } from '@/graphql/remote/utils';
+import { supportsDestinationDisabled, supportsDestinationRegion, withFragmentSelections } from '@/graphql/remote/utils';
 
 // The agents-api destination surface (v0.12.0+) differs from the odigos k8s
 // backend that central-ui was built against:
@@ -26,6 +26,8 @@ import { supportsDestinationDisabled, withFragmentSelections } from '@/graphql/r
 // These helpers translate between that surface and the kit's slot shapes.
 
 const VM_DATA_STREAM = 'default';
+const MANAGED_COLLECTOR_TYPE = 'odigos-managed-collector';
+const MANAGED_COLLECTOR_REGION_FIELD = 'REGION';
 
 // `TelemetrySignal[]` (TRACES|METRICS|LOGS|PROFILES) -> kit `exportedSignals`.
 const signalsToExported = (signals: string[] | null | undefined): Destination['exportedSignals'] => ({
@@ -55,6 +57,7 @@ const fieldsToConfig = (fields?: { key: string; value: string }[]): Record<strin
 type VmDestinationEntity = {
   name: string;
   type: string;
+  region?: string | null;
   config?: Record<string, unknown> | null;
   signals?: string[] | null;
   disabled?: boolean | null;
@@ -65,13 +68,17 @@ type VmDestinationEntity = {
 // (displayName = type, supported = currently-exported signals).
 const mapVmDestinationEntity = (d: VmDestinationEntity): Destination => {
   const exported = signalsToExported(d.signals);
+  // The kit models every editable value as a field. Region is a top-level
+  // agents-api property, so expose it as a form field only for this marker.
+  const fields = { ...(d.config ?? {}) };
+  if (d.type === MANAGED_COLLECTOR_TYPE && d.region) fields[MANAGED_COLLECTOR_REGION_FIELD] = d.region;
   return {
     id: d.name,
     name: d.name,
     disabled: !!d.disabled,
     dataStreamNames: [VM_DATA_STREAM],
     exportedSignals: exported,
-    fields: JSON.stringify(d.config ?? {}),
+    fields: JSON.stringify(fields),
     conditions: null,
     destinationType: {
       type: d.type as DestinationTypes,
@@ -139,6 +146,7 @@ const DESTINATION_CATEGORY: Record<string, string> = {
   middleware: MANAGED,
   newrelic: MANAGED,
   observe: MANAGED,
+  'odigos-managed-collector': MANAGED,
   oneuptime: MANAGED,
   openobserve: MANAGED,
   oracle: MANAGED,
@@ -171,24 +179,43 @@ const toCatalogItem = (t: VmDestinationTypeItem) => ({
   type: t.type,
   displayName: t.displayName,
   imageUrl: t.imageUrl,
-  testConnectionSupported: true,
+  testConnectionSupported: t.type !== MANAGED_COLLECTOR_TYPE,
   supportedSignals: {
     logs: { supported: t.supportedSignals.logs },
     metrics: { supported: t.supportedSignals.metrics },
     traces: { supported: t.supportedSignals.traces },
     profiles: { supported: t.supportedSignals.profiles },
   },
-  fields: t.fields.map((f) => ({
-    name: f.name,
-    displayName: f.displayName,
-    componentType: f.componentType,
-    componentProperties: f.componentProperties,
-    secret: f.secret,
-    initialValue: f.initialValue ?? '',
-    renderCondition: f.renderCondition ?? '',
-    hideFromReadData: f.hideFromReadData,
-    customReadDataLabels: f.customReadDataLabels,
-  })),
+  fields: [
+    ...t.fields.map((f) => ({
+      name: f.name,
+      displayName: f.displayName,
+      componentType: f.componentType,
+      componentProperties: f.componentProperties,
+      secret: f.secret,
+      initialValue: f.initialValue ?? '',
+      renderCondition: f.renderCondition ?? '',
+      hideFromReadData: f.hideFromReadData,
+      customReadDataLabels: f.customReadDataLabels,
+    })),
+    ...(t.type === MANAGED_COLLECTOR_TYPE
+      ? [{
+          name: MANAGED_COLLECTOR_REGION_FIELD,
+          displayName: 'Region',
+          componentType: 'input',
+          componentProperties: JSON.stringify({
+            required: true,
+            placeholder: 'us-east-1',
+            tooltip: 'The region served by this Collector. Add a global OTLP destination if workloads outside its reachable VPCs need a fallback.',
+          }),
+          secret: false,
+          initialValue: '',
+          renderCondition: '',
+          hideFromReadData: false,
+          customReadDataLabels: [],
+        }]
+      : []),
+  ],
 });
 
 // `GetDestinationTypes` -> the kit's category catalog. The flat agents-api list
@@ -221,11 +248,22 @@ export const mapVmDestinations = (data: unknown): GetDestinationsData => {
   return { destinations: destinations.map((d) => mapVmDestinationEntity({ ...d, signals: d.signals as unknown as string[] })) };
 };
 
-// Inject `disabled` into DestinationFields when the connected schema has it but the
-// floored dialect snapshot does not select it yet (pre-v0.24.0). No-op on v0.24.0+.
+// Inject fields supported by the connected schema when the floored dialect
+// snapshot does not select them yet. Existing selections are left unchanged.
 export const patchVmDestinationsQuery = (printedQuery: string, ctx: OperationContext): string => {
-  if (!supportsDestinationDisabled(dialectVersion(ctx))) return printedQuery;
-  return withFragmentSelections(printedQuery, 'Destination', 'disabled');
+  const version = dialectVersion(ctx);
+  let query = printedQuery;
+  if (supportsDestinationRegion(version)) query = withFragmentSelections(query, 'Destination', 'region');
+  if (supportsDestinationDisabled(version)) query = withFragmentSelections(query, 'Destination', 'disabled');
+  return query;
+};
+
+const destinationConfigAndRegion = (type: string, fields?: { key: string; value: string }[]) => {
+  const config = fieldsToConfig(fields);
+  if (type !== MANAGED_COLLECTOR_TYPE) return { config };
+  const region = config[MANAGED_COLLECTOR_REGION_FIELD]?.trim();
+  delete config[MANAGED_COLLECTOR_REGION_FIELD];
+  return { config, region };
 };
 
 // ----- mutation variable mappers (-> agents-api `{ input }`) -----
@@ -235,7 +273,7 @@ export const vmCreateDestinationVariables = (vars: CreateDestinationVars, ctx?: 
   const input: Record<string, unknown> = {
     name: d.name,
     type: d.type,
-    config: fieldsToConfig(d.fields),
+    ...destinationConfigAndRegion(d.type, d.fields),
     signals: exportedToSignals(d.exportedSignals),
   };
   if (!ctx || supportsDestinationDisabled(dialectVersion(ctx))) {
@@ -249,7 +287,7 @@ export const vmUpdateDestinationVariables = (vars: UpdateDestinationVars, ctx?: 
   const input: Record<string, unknown> = {
     name: vars.id,
     type: d.type,
-    config: fieldsToConfig(d.fields),
+    ...destinationConfigAndRegion(d.type, d.fields),
     signals: exportedToSignals(d.exportedSignals),
   };
   if (!ctx || supportsDestinationDisabled(dialectVersion(ctx))) {

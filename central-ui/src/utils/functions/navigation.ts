@@ -1,5 +1,5 @@
 import { ROUTES } from '../constants';
-import { SVG } from '@odigos/ui-kit/types';
+import { PlatformType, SVG } from '@odigos/ui-kit/types';
 import { NavbarProps } from '@odigos/ui-kit/components';
 import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import { ConnectionsIcon, OverviewIcon, PipelineCollectorIcon, SamplingIcon, ServiceMapIcon, SettingsIcon, UserSettingsIcon } from '@odigos/ui-kit/icons';
@@ -14,11 +14,10 @@ const getPayloadForIcon = (router: AppRouterInstance, currentPath: string, targe
   };
 };
 
-// `minimalNav` restricts the in-proxy nav to Overview only (no service-map /
-// collectors / sampling / settings). It's true for platforms that speak the
-// agents-api and don't expose those k8s features today: VM agents and cloud
-// connectors (the connector overview is a read-only sources + destinations view).
-export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, proxyID?: string, minimalNav?: boolean) => {
+// Kubernetes keeps the full in-proxy nav. Cloud connectors add Collectors only —
+// the page renders managed collectors there, and the Kubernetes pipeline view otherwise.
+// VM agents stay on Overview.
+export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, proxyID?: string, platformType?: PlatformType) => {
   const navIcons: NavbarProps['icons'] = [];
 
   navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.CONNECTIONS, 'Connections', ConnectionsIcon));
@@ -26,11 +25,13 @@ export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, p
   if (proxyID) {
     navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.OVERVIEW, 'Overview', OverviewIcon));
 
-    if (!minimalNav) {
+    if (platformType === PlatformType.K8s) {
       navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SERVICE_MAP, 'Service Map', ServiceMapIcon));
-      navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.PIPELINE_COLLECTORS, 'Collectors Pipeline', PipelineCollectorIcon));
+      navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.COLLECTORS, 'Collectors', PipelineCollectorIcon));
       navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SAMPLING, 'Sampling Rules', SamplingIcon));
       navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.SETTINGS, 'Settings', SettingsIcon));
+    } else if (platformType === PlatformType.Connector) {
+      navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.COLLECTORS, 'Collectors', PipelineCollectorIcon));
     }
   } else {
     navIcons.push(getPayloadForIcon(router, currentPath, ROUTES.ACCESS_MANAGEMENT, 'Access Management', UserSettingsIcon));

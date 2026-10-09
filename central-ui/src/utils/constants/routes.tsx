@@ -9,7 +9,7 @@ export const ROUTES = {
   // In-proxy pages
   OVERVIEW: '/overview',
   SERVICE_MAP: '/service-map',
-  PIPELINE_COLLECTORS: '/pipeline-collectors',
+  COLLECTORS: '/collectors',
   SAMPLING: '/sampling',
   SETTINGS: '/settings',
 };

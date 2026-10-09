@@ -47,6 +47,7 @@ import { useConfig } from '@/hooks/config/useConfig';
 import { ErrorLink } from '@apollo/client/link/error';
 import { useUserStore, useProxyStore } from '@/store';
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
+import { mapManagedCollectorInstructions, mapManagedCollectorReport } from '@/graphql/remote/managed-collector';
 import { vmQuery, type VmSelect } from '@/graphql/remote/vm-dialect';
 import { safeJsonParse, trimVersion } from '@odigos/ui-kit/functions';
 import { supportsWorkloadReportRegion } from '@/graphql/remote/utils';
@@ -97,12 +98,24 @@ import {
 import type {
   CreateActionMutation,
   CreateInstrumentationRuleMutation,
+  CreateManagedCollectorDestinationMutation,
+  CreateManagedCollectorMutation,
   DeleteActionMutation,
   DeleteInstrumentationRuleMutation,
+  DestroyManagedCollectorDestinationMutation,
   GetActionsQuery,
   GetInstrumentationRulesQuery,
+  GetManagedCollectorDestinationTypesQuery,
+  GetManagedCollectorInstructionsQuery,
+  GetManagedCollectorMetricsQuery,
+  GetManagedCollectorReportQuery,
+  GetManagedCollectorReportsQuery,
+  ListManagedCollectorDestinationsQuery,
+  TeardownManagedCollectorMutation,
   UpdateActionMutation,
   UpdateInstrumentationRuleMutation,
+  UpdateManagedCollectorDestinationMutation,
+  UpdateManagedCollectorMutation,
 } from '@odigos/vmagent-api-apollo-client';
 import {
   API,
@@ -161,6 +174,21 @@ import {
   type GetSourceLibrariesVars,
   type GetInstrumentationInstructionsData,
   type GetInstrumentationInstructionsVars,
+  type CreateManagedCollectorVars,
+  type DeleteManagedCollectorDestinationResult,
+  type DeleteManagedCollectorDestinationVars,
+  type DeleteManagedCollectorResult,
+  type DeleteManagedCollectorVars,
+  type ManagedCollectorDestination,
+  type ManagedCollectorDestinationInput,
+  type ManagedCollectorDestinationType,
+  type ManagedCollectorInstructions,
+  type ManagedCollectorListVars,
+  type ManagedCollectorMetrics,
+  type ManagedCollectorMetricsVars,
+  type ManagedCollectorRegionVars,
+  type ManagedCollectorReport,
+  type UpdateManagedCollectorVars,
   type GetWorkloadsByIdsData,
   type GetWorkloadsByIdsVars,
   type GetWorkloadsData,
@@ -1427,6 +1455,60 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
     GET_COLLECTOR_POD_INFO: wrapVersioned<ExtendedPodInfo, GetCollectorPodInfoVars>(GET_COLLECTOR_POD_INFO, (d) => {
       const env = d as { collectorPod?: ExtendedPodInfo; extendedPodInfo?: ExtendedPodInfo } | null | undefined;
       return env?.collectorPod ?? env?.extendedPodInfo;
+    }),
+
+    // Managed collectors (agents-api v0.25.0+): deploymentRoleRef / executionRoleArn are
+    // in the frozen dialect, so documents resolve via the normal versioned registry.
+    // Mutation variables are the form payload unchanged.
+    GET_MANAGED_COLLECTOR_REPORTS: wrapVersioned<ManagedCollectorReport[], ManagedCollectorListVars>({}, undefined, undefined, {
+      select: (d) => d.GetManagedCollectorReportsDocument,
+      transformResult: (data) =>
+        (data as GetManagedCollectorReportsQuery | null)?.managedCollectorReports?.map(mapManagedCollectorReport).filter((report): report is ManagedCollectorReport => !!report),
+    }),
+    GET_MANAGED_COLLECTOR_REPORT: wrapVersioned<ManagedCollectorReport | null, ManagedCollectorRegionVars>({}, undefined, undefined, {
+      select: (d) => d.GetManagedCollectorReportDocument,
+      transformResult: (data) => mapManagedCollectorReport((data as GetManagedCollectorReportQuery | null)?.managedCollectorReport) ?? null,
+    }),
+    GET_MANAGED_COLLECTOR_INSTRUCTIONS: wrapVersioned<ManagedCollectorInstructions | null, ManagedCollectorRegionVars>({}, undefined, undefined, {
+      select: (d) => d.GetManagedCollectorInstructionsDocument,
+      transformResult: (data) => mapManagedCollectorInstructions((data as GetManagedCollectorInstructionsQuery | null)?.managedCollectorInstructions),
+    }),
+    GET_MANAGED_COLLECTOR_METRICS: wrapVersioned<ManagedCollectorMetrics | null, ManagedCollectorMetricsVars>({}, undefined, undefined, {
+      select: (d) => d.GetManagedCollectorMetricsDocument,
+      transformResult: (data) => (data as GetManagedCollectorMetricsQuery | null)?.managedCollectorMetrics ?? null,
+    }),
+    GET_MANAGED_COLLECTOR_DESTINATION_TYPES: wrapVersioned<ManagedCollectorDestinationType[], ManagedCollectorListVars>({}, undefined, undefined, {
+      select: (d) => d.GetManagedCollectorDestinationTypesDocument,
+      transformResult: (data) => (data as GetManagedCollectorDestinationTypesQuery | null)?.getManagedCollectorDestinationTypes,
+    }),
+    GET_MANAGED_COLLECTOR_DESTINATIONS: wrapVersioned<ManagedCollectorDestination[], ManagedCollectorRegionVars>({}, undefined, undefined, {
+      select: (d) => d.ListManagedCollectorDestinationsDocument,
+      // The wire values match the kit: TelemetrySignal and SignalType share the same strings, and the JSON config is an object map. The cast is nominal only.
+      transformResult: (data) => (data as ListManagedCollectorDestinationsQuery | null)?.listManagedCollectorDestinations as ManagedCollectorDestination[] | undefined,
+    }),
+    CREATE_MANAGED_COLLECTOR: wrapVersioned<ManagedCollectorReport, CreateManagedCollectorVars>({}, undefined, undefined, {
+      select: (d) => d.CreateManagedCollectorDocument,
+      transformResult: (data) => mapManagedCollectorReport((data as CreateManagedCollectorMutation | null)?.createManagedCollector),
+    }),
+    UPDATE_MANAGED_COLLECTOR: wrapVersioned<ManagedCollectorReport, UpdateManagedCollectorVars>({}, undefined, undefined, {
+      select: (d) => d.UpdateManagedCollectorDocument,
+      transformResult: (data) => mapManagedCollectorReport((data as UpdateManagedCollectorMutation | null)?.updateManagedCollector),
+    }),
+    DELETE_MANAGED_COLLECTOR: wrapVersioned<DeleteManagedCollectorResult, DeleteManagedCollectorVars>({}, undefined, undefined, {
+      select: (d) => d.TeardownManagedCollectorDocument,
+      transformResult: (data) => (data as TeardownManagedCollectorMutation | null)?.teardownManagedCollector,
+    }),
+    CREATE_MANAGED_COLLECTOR_DESTINATION: wrapVersioned<ManagedCollectorDestination, ManagedCollectorDestinationInput>({}, undefined, undefined, {
+      select: (d) => d.CreateManagedCollectorDestinationDocument,
+      transformResult: (data) => (data as CreateManagedCollectorDestinationMutation | null)?.createManagedCollectorDestination as ManagedCollectorDestination | undefined,
+    }),
+    UPDATE_MANAGED_COLLECTOR_DESTINATION: wrapVersioned<ManagedCollectorDestination, ManagedCollectorDestinationInput>({}, undefined, undefined, {
+      select: (d) => d.UpdateManagedCollectorDestinationDocument,
+      transformResult: (data) => (data as UpdateManagedCollectorDestinationMutation | null)?.updateManagedCollectorDestination as ManagedCollectorDestination | undefined,
+    }),
+    DELETE_MANAGED_COLLECTOR_DESTINATION: wrapVersioned<DeleteManagedCollectorDestinationResult, DeleteManagedCollectorDestinationVars>({}, undefined, undefined, {
+      select: (d) => d.DestroyManagedCollectorDestinationDocument,
+      transformResult: (data) => (data as DestroyManagedCollectorDestinationMutation | null)?.destroyManagedCollectorDestination,
     }),
 
     // sampling
