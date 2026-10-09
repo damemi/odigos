@@ -376,7 +376,6 @@ jobs:
         uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
           path: |
-            /tmp/odigos-autoscaler.tar
             /tmp/odigos-cli
             /tmp/odigos-cli.tar
           key: ${{ github.run_id }}-odigos-oss-components
@@ -399,14 +398,6 @@ jobs:
             -ldflags "-X github.com/odigos-io/odigos/cli/pkg/helm.OdigosChartVersion=${TAG#v}" \
             -o /tmp/odigos-cli
 
-      - name: Build OSS Odigos Components Used in e2e Tests
-        if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
-        run: |
-          cd odigos
-          # Autoscaler only. Collector is built enterprise-side
-          # (odigos-io/odigos#5446 — helm with onprem token always resolves enterprise collector).
-          TAG=${{ env.IMAGE_TAG }} TAG=e2e-test ORG=registry.odigos.io make build-autoscaler
-
       - uses: ko-build/setup-ko@v0.9
         if: steps.should-run.outputs.skip != 'true'
       - name: Build Odigos CLI Image
@@ -418,29 +409,7 @@ jobs:
       - name: Save Docker images as tar files
         if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
         run: |
-          docker save registry.odigos.io/odigos-autoscaler:${{ env.IMAGE_TAG }} -o /tmp/odigos-autoscaler.tar
           docker save registry.odigos.io/odigos-cli:${{ env.IMAGE_TAG }} -o /tmp/odigos-cli.tar
-
-      - name: Scan autoscaler image for vulnerabilities
-        if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
-        id: scan-autoscaler
-        uses: odigos-io/ci-core/vulnerabilities-scanner@main
-        with:
-          image: registry.odigos.io/odigos-autoscaler:${{ env.IMAGE_TAG }}
-          severity-cutoff: "CRITICAL"
-        continue-on-error: true
-
-      - name: Save autoscaler scan JSON
-        if: always() && steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
-        env:
-          RESULTS_FILE: ${{ steps.scan-autoscaler.outputs.results-file }}
-        run: |
-          mkdir -p /tmp/scan-results
-          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
-            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
-            exit 1
-          fi
-          jq --arg img "odigos-autoscaler" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-autoscaler.json
 
       - name: Scan cli image for vulnerabilities
         if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
@@ -767,7 +736,6 @@ jobs:
         uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
           path: |
-            /tmp/odigos-autoscaler.tar
             /tmp/odigos-cli
             /tmp/odigos-cli.tar
           fail-on-cache-miss: true
@@ -836,7 +804,6 @@ jobs:
           kind load image-archive /tmp/instrumentor-enterprise.tar
           kind load image-archive /tmp/agents-enterprise.tar
           kind load image-archive /tmp/agents-enterprise-extended.tar
-          kind load image-archive /tmp/odigos-autoscaler.tar
           kind load image-archive /tmp/odigos-cli.tar
           kind load image-archive /tmp/ui-enterprise.tar
           kind load image-archive /tmp/collector-enterprise.tar

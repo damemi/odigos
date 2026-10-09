@@ -6,20 +6,6 @@ metadata:
   labels:
     odigos.io/system-object: "true"
 ---
-apiVersion: v1
-kind: Pod
-metadata:
-  labels:
-    app.kubernetes.io/name: odigos-autoscaler
-  namespace: odigos-test
-status:
-  containerStatuses:
-    - name: manager
-      ready: true
-      restartCount: 0
-      started: true
-  phase: Running
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:

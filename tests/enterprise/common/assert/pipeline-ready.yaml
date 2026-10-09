@@ -103,5 +103,5 @@ metadata:
       blockOwnerDeletion: true
       controller: true
       kind: Deployment
-      name: odigos-autoscaler
+      name: odigos-instrumentor
 (data != null): true
