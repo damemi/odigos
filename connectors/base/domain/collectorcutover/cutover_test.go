@@ -1,8 +1,10 @@
 package collectorcutover
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 )
@@ -278,6 +280,15 @@ func TestOneFailedWorkloadDoesNotStopTheOthers(t *testing.T) {
 		t.Fatalf("admitted %d, want a full batch — a failure must not consume another workload's place",
 			len(got.Admit))
 	}
+	// The size alone held when failures could fill the whole batch; what is IN it is the property.
+	if got.Admit[0] != workloads[7].Ref {
+		t.Errorf("admitted %v, want the failed workload retried first", got.Admit)
+	}
+	for _, admitted := range got.Admit[1:] {
+		if admitted == workloads[7].Ref {
+			t.Errorf("the failed workload was admitted twice: %v", got.Admit)
+		}
+	}
 	if got.Failed != 1 {
 		t.Errorf("failed = %d, want 1", got.Failed)
 	}
@@ -327,6 +338,168 @@ func TestAWholeNetworkOfFailuresStillConverges(t *testing.T) {
 	}
 	if got.Phase != PhaseRollingOut {
 		t.Errorf("phase = %q", got.Phase)
+	}
+}
+
+// failing builds n workloads whose last attempt failed, named so they sort AHEAD of fleet's refs — the
+// arrangement that starved the rest when failures could fill the batch. Each failed a second apart, the
+// first longest ago.
+func failing(n int) []Workload {
+	start := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	out := make([]Workload, 0, n)
+	for i := 0; i < n; i++ {
+		out = append(out, Workload{Ref: fmt.Sprintf("aaa-%02d", i), Failed: "AccessDenied",
+			FailedAt: start.Add(time.Duration(i) * time.Second)})
+	}
+	return out
+}
+
+func admittedFrom(admit []string, workloads []Workload) int {
+	in := map[string]bool{}
+	for _, w := range workloads {
+		in[w.Ref] = true
+	}
+	n := 0
+	for _, ref := range admit {
+		if in[ref] {
+			n++
+		}
+	}
+	return n
+}
+
+// TestFailuresCannotStarveTheRest. When failures went first and the batch was cut after them, a region
+// with BatchSize failures that never cleared re-admitted the same failures on every pass and never
+// reached anything else — a rollout that read as in progress for ever. Failures get at most half.
+func TestFailuresCannotStarveTheRest(t *testing.T) {
+	stuck := failing(12)
+	fresh := fleet(5, 0)
+
+	got := Decide(ready(append(append([]Workload{}, stuck...), fresh...)))
+
+	if len(got.Admit) != DefaultBatchSize {
+		t.Fatalf("admitted %d, want a full batch of %d", len(got.Admit), DefaultBatchSize)
+	}
+	if n := admittedFrom(got.Admit, fresh); n != 5 {
+		t.Errorf("admitted %d of 5 never-attempted workloads, want all of them: %v", n, got.Admit)
+	}
+	if n := admittedFrom(got.Admit, stuck); n != DefaultBatchSize/2 {
+		t.Errorf("admitted %d failures, want half the batch: %v", n, got.Admit)
+	}
+	if got.Admit[0] != stuck[0].Ref {
+		t.Errorf("admitted %v, want failures still retried first", got.Admit)
+	}
+}
+
+// TestARolloutStuckOnFailuresStillFinishesTheRest runs it to the end: failures that never clear, more of
+// them than the batch, and a network behind them that must still all be moved.
+func TestARolloutStuckOnFailuresStillFinishesTheRest(t *testing.T) {
+	stuck := failing(15)
+	fresh := fleet(40, 0)
+	workloads := append(append([]Workload{}, stuck...), fresh...)
+	now := stuck[len(stuck)-1].FailedAt
+
+	for pass := 1; ; pass++ {
+		if pass > len(fresh) {
+			t.Fatal("the never-attempted workloads were never all moved")
+		}
+		got := Decide(ready(workloads))
+		if len(got.Admit) > DefaultBatchSize {
+			t.Fatalf("pass %d admitted %d, over the batch of %d", pass, len(got.Admit), DefaultBatchSize)
+		}
+		if got.Pending == 0 {
+			break
+		}
+		if admittedFrom(got.Admit, fresh) == 0 {
+			t.Fatalf("pass %d admitted no never-attempted workload while %d were waiting", pass, got.Pending)
+		}
+		now = now.Add(time.Minute)
+		admitted := map[string]bool{}
+		for _, ref := range got.Admit {
+			admitted[ref] = true
+		}
+		for i := range workloads {
+			switch {
+			case !admitted[workloads[i].Ref]:
+			case workloads[i].Failed != "":
+				workloads[i].FailedAt = now // failed again
+			default:
+				workloads[i].Routed = true
+			}
+		}
+	}
+}
+
+// TestAShareTheRestCannotUseGoesToFailures. The cap protects never-attempted workloads; when there are too
+// few of them to fill their half, holding the slots empty would only slow the retries down.
+func TestAShareTheRestCannotUseGoesToFailures(t *testing.T) {
+	stuck := failing(12)
+	fresh := fleet(2, 0)
+
+	got := Decide(ready(append(append([]Workload{}, stuck...), fresh...)))
+
+	if len(got.Admit) != DefaultBatchSize {
+		t.Fatalf("admitted %d, want a full batch", len(got.Admit))
+	}
+	if n := admittedFrom(got.Admit, fresh); n != 2 {
+		t.Errorf("admitted %d of 2 never-attempted workloads", n)
+	}
+}
+
+// TestFailuresTakeTurns. With more failures than a pass retries, retrying the same ones by name every time
+// would leave the rest — some of which would now succeed — exporting directly for as long as the first
+// ones keep failing. Oldest failure first means the ones not retried this pass go next.
+func TestFailuresTakeTurns(t *testing.T) {
+	workloads := failing(12)
+	// Listed newest first, so the order comes from FailedAt rather than from the input.
+	for i, j := 0, len(workloads)-1; i < j; i, j = i+1, j-1 {
+		workloads[i], workloads[j] = workloads[j], workloads[i]
+	}
+
+	first := Decide(ready(workloads))
+	if strings.Join(first.Admit, ",") != strings.Join(refsOf(failing(10)), ",") {
+		t.Fatalf("admitted %v, want the ten oldest failures, oldest first", first.Admit)
+	}
+
+	retried := map[string]bool{}
+	for _, ref := range first.Admit {
+		retried[ref] = true
+	}
+	for i := range workloads {
+		if retried[workloads[i].Ref] {
+			workloads[i].FailedAt = workloads[i].FailedAt.Add(time.Hour)
+		}
+	}
+	second := Decide(ready(workloads))
+	if len(second.Admit) < 2 || second.Admit[0] != "aaa-10" || second.Admit[1] != "aaa-11" {
+		t.Errorf("admitted %v, want the two failures the last pass did not retry to go first", second.Admit)
+	}
+}
+
+func refsOf(workloads []Workload) []string {
+	out := make([]string, 0, len(workloads))
+	for _, w := range workloads {
+		out = append(out, w.Ref)
+	}
+	return out
+}
+
+// TestABatchOfOneStillReachesTheRest. A single slot cannot be shared, and giving it to a failure that
+// never clears would stall the network exactly as before, so the never-attempted go first.
+func TestABatchOfOneStillReachesTheRest(t *testing.T) {
+	in := ready(append(failing(3), fleet(2, 0)...))
+	in.BatchSize = 1
+
+	got := Decide(in)
+	if len(got.Admit) != 1 || got.Admit[0] != ref(0) {
+		t.Fatalf("admitted %v, want the first never-attempted workload", got.Admit)
+	}
+
+	// Once everything has been attempted the slot goes back to the failures.
+	in = ready(failing(3))
+	in.BatchSize = 1
+	if got := Decide(in); len(got.Admit) != 1 || got.Admit[0] != "aaa-00" {
+		t.Errorf("admitted %v, want the oldest failure", got.Admit)
 	}
 }
 

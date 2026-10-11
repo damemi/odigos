@@ -116,7 +116,7 @@ func failedProblem(region string, workloads []Workload) collectorstatus.Problem 
 		Code:     ProblemRolloutWorkloadFailed,
 		Severity: collectorstatus.SeverityDegraded,
 		Message: fmt.Sprintf("%d workload(s) in %s could not be re-pointed at the Collector (%s) and are "+
-			"still exporting directly: %s. They are retried on the next pass and do not hold up the rest "+
-			"of the region", len(named), region, reason, strings.Join(shown, ", ")),
+			"still exporting directly: %s. They keep being retried, oldest failure first, and do not hold up "+
+			"the rest of the region", len(named), region, reason, strings.Join(shown, ", ")),
 	}
 }

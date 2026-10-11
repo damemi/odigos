@@ -240,11 +240,13 @@ func (i *LambdaInstrumentor) Reconcile(ctx context.Context) error {
 				log.Error("instrument lambda failed", "function", fn.FunctionName, "region", fn.Region, "error", err)
 				_ = i.store.SetLambdaInstrumentationError(ctx, fn.FunctionARN, err.Error())
 				errs = append(errs, fmt.Errorf("instrument %s: %w", fn.FunctionName, err))
+				i.recordCutover(ctx, fn, routing, err)
 			} else {
 				_ = i.store.ClearLambdaInstrumentationError(ctx, fn.FunctionARN)
 				if serr := i.store.SetLambdaRouting(ctx, fn.FunctionARN, string(routing.Via), workloadRoutingNote(routing)); serr != nil {
 					log.Warn("set lambda routing after converge failed", "function", fn.FunctionName, "error", serr)
 				}
+				i.recordCutover(ctx, fn, routing, nil)
 			}
 			continue
 		}

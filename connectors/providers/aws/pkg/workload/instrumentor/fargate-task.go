@@ -258,7 +258,8 @@ func (i *ECSFargateInstrumentor) Reconcile(ctx context.Context) error {
 				errs = append(errs, fmt.Errorf("instrument %s: %w", svc.ServiceName, err))
 				continue
 			}
-			if err := i.instrument(ctx, svc, src, routing); err != nil {
+			err := i.instrument(ctx, svc, src, routing)
+			if err != nil {
 				log.Error("instrument fargate service failed", "cluster", svc.ClusterARN, "service", svc.ServiceName, "region", svc.Region, "error", err)
 				if serr := i.store.SetECSServiceInstrumentationError(ctx, svc.ClusterARN, svc.ServiceName, err.Error()); serr != nil {
 					log.Warn("set fargate instrumentation error failed", "service", svc.ServiceName, "error", serr)
@@ -267,6 +268,7 @@ func (i *ECSFargateInstrumentor) Reconcile(ctx context.Context) error {
 			} else if serr := i.store.ClearECSServiceInstrumentationError(ctx, svc.ClusterARN, svc.ServiceName); serr != nil {
 				log.Warn("clear fargate instrumentation error failed", "service", svc.ServiceName, "error", serr)
 			}
+			i.recordCutover(ctx, svc, routing, err)
 			continue
 		}
 		// Not enabled: only services the inventory flags as instrumented can need rollback (skipping the

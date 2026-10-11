@@ -62,6 +62,9 @@ type ECSService struct {
 	RoutingVia string
 	// RoutingNote is the last non-fatal reason the resolver selected (or retained) a route.
 	RoutingNote *api.WorkloadRoutingNote
+	// CutoverFailure is why the last attempt to move this service onto its regional Collector did not
+	// take. Zero when there is none.
+	CutoverFailure CutoverFailure
 	// Observation is the read-only conformance verdict, written by the observer rather than by discovery or
 	// the instrumentor. Zero until a pass has run.
 	Observation ECSObservation
@@ -128,6 +131,9 @@ const (
 	// metaOwnershipCheckedRevision is written only by the observer's no-source path (refreshOwnership), never
 	// by discovery or the instrumentor — see ECSService.OwnershipCheckedRevision.
 	metaOwnershipCheckedRevision = "ownership_checked_revision"
+	// metaCutoverFailure is written only by the instrumentor — see CutoverFailure. Shared with
+	// lambda_functions, like metaRoutingVia and metaRoutingNote.
+	metaCutoverFailure = "cutover_failure"
 )
 
 type storedRoutingNote struct {
@@ -149,6 +155,45 @@ func decodeRoutingNote(raw []byte) *api.WorkloadRoutingNote {
 		return nil
 	}
 	return &api.WorkloadRoutingNote{Code: stored.Code, Message: stored.Message, Transient: stored.Transient}
+}
+
+// CutoverFailure is why the last attempt to move a workload onto its regional Collector did not take, and
+// when. It is what the rollout reads as a failed workload (collectorcutover.Workload.Failed).
+//
+// It is kept apart from the instrumentation error because the two are cleared by different things. The
+// instrumentation error goes as soon as any pass succeeds, including a pass that holds the workload on direct
+// export while it waits for a batch slot — and a cutover failure forgotten that way hands the workload back
+// to the rollout as never attempted, where enough of them stall the region. This one is cleared only once
+// the workload's route no longer waits on the rollout. It also holds only cutover failures: an
+// instrumentation error that has nothing to do with the Collector is not a reason to retry a re-point.
+type CutoverFailure struct {
+	Reason string
+	At     time.Time
+}
+
+type storedCutoverFailure struct {
+	Reason string `json:"reason"`
+	At     string `json:"at"`
+}
+
+func storeCutoverFailure(f CutoverFailure) storedCutoverFailure {
+	return storedCutoverFailure{Reason: f.Reason, At: f.At.UTC().Format(time.RFC3339)}
+}
+
+// decodeCutoverFailure reads the stored record. An unreadable one degrades to none — the workload is then
+// retried as if never attempted — rather than failing the whole listing. An unreadable time reads as the
+// zero time, which only moves the workload to the front of the retry order.
+func decodeCutoverFailure(raw []byte) CutoverFailure {
+	if len(raw) == 0 || string(raw) == "null" {
+		return CutoverFailure{}
+	}
+	var stored storedCutoverFailure
+	if err := json.Unmarshal(raw, &stored); err != nil {
+		inventoryLog.Warn("ignoring unreadable cutover failure", "error", err)
+		return CutoverFailure{}
+	}
+	at, _ := time.Parse(time.RFC3339, stored.At)
+	return CutoverFailure{Reason: stored.Reason, At: at}
 }
 
 // ECSContainer is one container of a service's task definition as the instrumentor resolved it.
@@ -235,6 +280,7 @@ func (s *Store) ListECSServices(ctx context.Context) ([]ECSService, error) {
 			COALESCE(metadata->>'instrumentation_error',''),
 			COALESCE(metadata->>'instrumentation_phase',''),
 			COALESCE(metadata->>'`+metaRoutingVia+`',''), metadata->'`+metaRoutingNote+`',
+			metadata->'`+metaCutoverFailure+`',
 			COALESCE(metadata->>'`+metaOwnershipCheckedRevision+`',''),
 			metadata->'`+metaSubnetIDs+`', metadata->'`+metaSecurityGroupIDs+`',
 			`+ecsObservationCols+`
@@ -247,12 +293,13 @@ func (s *Store) ListECSServices(ctx context.Context) ([]ECSService, error) {
 	var out []ECSService
 	for rows.Next() {
 		var svc ECSService
-		var missingJSON, subnetsJSON, groupsJSON, routingNoteJSON []byte
+		var missingJSON, subnetsJSON, groupsJSON, routingNoteJSON, cutoverJSON []byte
 		var since *string
 		if err := rows.Scan(&svc.Region, &svc.ClusterARN, &svc.ServiceName, &svc.ServiceARN, &svc.TaskDefinition,
 			&svc.LaunchType, &svc.DeploymentController, &svc.Status, &svc.DesiredCount, &svc.RunningCount,
 			&svc.Instrumented, &svc.RuntimeLanguage, &svc.RuntimeVersion,
 			&svc.InstrumentationError, &svc.InstrumentationPhase, &svc.RoutingVia, &routingNoteJSON,
+			&cutoverJSON,
 			&svc.OwnershipCheckedRevision,
 			&subnetsJSON, &groupsJSON,
 			&conformanceTarget{&svc.Observation.Conformance}, &missingJSON, &since,
@@ -264,6 +311,7 @@ func (s *Store) ListECSServices(ctx context.Context) ([]ECSService, error) {
 		svc.Observation.Missing = decodeStringSlice(missingJSON, metaConformanceMissing)
 		svc.Observation.Since = parseObservedAt(since)
 		svc.RoutingNote = decodeRoutingNote(routingNoteJSON)
+		svc.CutoverFailure = decodeCutoverFailure(cutoverJSON)
 		out = append(out, svc)
 	}
 	if err := rows.Err(); err != nil {
@@ -396,6 +444,17 @@ func (s *Store) SetECSServiceInstrumentationError(ctx context.Context, clusterAR
 // ClearECSServiceInstrumentationError clears the recorded instrumentation error for a service.
 func (s *Store) ClearECSServiceInstrumentationError(ctx context.Context, clusterARN, serviceName string) error {
 	return s.deleteECSServiceMetadataKey(ctx, clusterARN, serviceName, metaInstrumentationError)
+}
+
+// SetECSServiceCutoverFailure records why the last attempt to move a service onto its regional Collector did
+// not take — see CutoverFailure.
+func (s *Store) SetECSServiceCutoverFailure(ctx context.Context, clusterARN, serviceName string, f CutoverFailure) error {
+	return s.mergeECSServiceMetadata(ctx, clusterARN, serviceName, map[string]any{metaCutoverFailure: storeCutoverFailure(f)})
+}
+
+// ClearECSServiceCutoverFailure forgets a service's recorded cutover failure.
+func (s *Store) ClearECSServiceCutoverFailure(ctx context.Context, clusterARN, serviceName string) error {
+	return s.deleteECSServiceMetadataKey(ctx, clusterARN, serviceName, metaCutoverFailure)
 }
 
 // SetECSServiceInstrumentationPhase records the in-flight instrumentation progress phase for a service.

@@ -191,6 +191,9 @@ type LambdaFunction struct {
 	RoutingVia string
 	// RoutingNote is the last non-fatal reason the resolver selected (or retained) a route.
 	RoutingNote *api.WorkloadRoutingNote
+	// CutoverFailure is why the last attempt to move this function onto its regional Collector did not
+	// take. Zero when there is none.
+	CutoverFailure CutoverFailure
 	// Observation is the read-only conformance verdict for this function, written by the observer rather than
 	// by discovery. Zero until a pass has run.
 	Observation LambdaObservation
@@ -377,16 +380,16 @@ const lambdaObservationCols = `COALESCE(env_hash, ''), COALESCE(config_hash, '')
 // column stays NULL for every non-Lambda kind.
 const noObservationCols = `'', NULL, NULL, '', false, NULL`
 
-const lambdaSelectCols = `region, function_arn, function_name, COALESCE(runtime, ''), COALESCE(architecture, ''), COALESCE(role_arn, ''), COALESCE(tracing_mode, ''), COALESCE(metadata->>'instrumented', 'false') = 'true', layers, COALESCE(metadata->>'state', ''), COALESCE(metadata->>'last_update_status', ''), COALESCE(metadata->>'` + metaLambdaVPCID + `', ''), metadata->'` + metaLambdaSubnetIDs + `', metadata->'` + metaLambdaSecurityGroupIDs + `', COALESCE(metadata->>'` + metaRoutingVia + `',''), metadata->'` + metaRoutingNote + `', ` + lambdaObservationCols
+const lambdaSelectCols = `region, function_arn, function_name, COALESCE(runtime, ''), COALESCE(architecture, ''), COALESCE(role_arn, ''), COALESCE(tracing_mode, ''), COALESCE(metadata->>'instrumented', 'false') = 'true', layers, COALESCE(metadata->>'state', ''), COALESCE(metadata->>'last_update_status', ''), COALESCE(metadata->>'` + metaLambdaVPCID + `', ''), metadata->'` + metaLambdaSubnetIDs + `', metadata->'` + metaLambdaSecurityGroupIDs + `', COALESCE(metadata->>'` + metaRoutingVia + `',''), metadata->'` + metaRoutingNote + `', metadata->'` + metaCutoverFailure + `', ` + lambdaObservationCols
 
 func scanLambda(row interface{ Scan(...any) error }) (LambdaFunction, error) {
 	var fn LambdaFunction
-	var layersJSON, missingJSON, subnetsJSON, groupsJSON, routingNoteJSON []byte
+	var layersJSON, missingJSON, subnetsJSON, groupsJSON, routingNoteJSON, cutoverJSON []byte
 	var since *string
 	err := row.Scan(&fn.Region, &fn.FunctionARN, &fn.FunctionName, &fn.Runtime, &fn.Architecture, &fn.RoleARN, &fn.TracingMode,
 		&fn.Instrumented, &layersJSON, &fn.State, &fn.LastUpdateStatus,
 		&fn.VPCID, &subnetsJSON, &groupsJSON,
-		&fn.RoutingVia, &routingNoteJSON,
+		&fn.RoutingVia, &routingNoteJSON, &cutoverJSON,
 		&fn.Observation.ObservedPrint, &fn.Observation.DesiredPrint, &conformanceTarget{&fn.Observation.Conformance}, &missingJSON, &since, &fn.Observation.Error)
 	if err != nil {
 		return fn, err
@@ -395,6 +398,7 @@ func scanLambda(row interface{ Scan(...any) error }) (LambdaFunction, error) {
 	fn.SubnetIDs = decodeStringSlice(subnetsJSON, metaLambdaSubnetIDs)
 	fn.SecurityGroupIDs = decodeStringSlice(groupsJSON, metaLambdaSecurityGroupIDs)
 	fn.RoutingNote = decodeRoutingNote(routingNoteJSON)
+	fn.CutoverFailure = decodeCutoverFailure(cutoverJSON)
 	fn.Observation.Missing = decodeStringSlice(missingJSON, "conformance_missing")
 	fn.Observation.Since = parseObservedAt(since)
 	return fn, nil
@@ -620,6 +624,32 @@ func (s *Store) ClearLambdaInstrumentationError(ctx context.Context, functionARN
 		    last_seen_at = now()
 		WHERE connector_name = $1 AND function_arn = $2 AND deleted_at IS NULL
 	`, s.ConnectorName(), functionARN)
+	return err
+}
+
+// SetLambdaCutoverFailure records why the last attempt to move a function onto its regional Collector did not
+// take — see CutoverFailure. Like SetLambdaRouting it leaves last_seen_at alone: that is discovery's liveness
+// signal.
+func (s *Store) SetLambdaCutoverFailure(ctx context.Context, functionARN string, f CutoverFailure) error {
+	b, err := json.Marshal(map[string]any{metaCutoverFailure: storeCutoverFailure(f)})
+	if err != nil {
+		return err
+	}
+	_, err = s.Pool().Exec(ctx, `
+		UPDATE connector_aws.lambda_functions
+		SET metadata = COALESCE(metadata, '{}'::jsonb) || $3::jsonb
+		WHERE connector_name = $1 AND function_arn = $2 AND deleted_at IS NULL
+	`, s.ConnectorName(), functionARN, string(b))
+	return err
+}
+
+// ClearLambdaCutoverFailure forgets a function's recorded cutover failure.
+func (s *Store) ClearLambdaCutoverFailure(ctx context.Context, functionARN string) error {
+	_, err := s.Pool().Exec(ctx, `
+		UPDATE connector_aws.lambda_functions
+		SET metadata = COALESCE(metadata, '{}'::jsonb) - $3::text
+		WHERE connector_name = $1 AND function_arn = $2 AND deleted_at IS NULL
+	`, s.ConnectorName(), functionARN, metaCutoverFailure)
 	return err
 }
 

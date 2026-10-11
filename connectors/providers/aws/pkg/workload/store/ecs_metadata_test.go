@@ -1,9 +1,11 @@
 package store
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func readECSSource(t *testing.T) string {
@@ -99,6 +101,27 @@ func TestECSRoutingNoteDecode(t *testing.T) {
 	}
 	if decodeRoutingNote([]byte(`not-json`)) != nil {
 		t.Fatal("malformed routing note must degrade to nil")
+	}
+}
+
+// TestCutoverFailureRoundTrips: the rollout orders retries by the recorded time, so it has to come back as
+// written, and a garbled record must cost a log line rather than the whole service listing.
+func TestCutoverFailureRoundTrips(t *testing.T) {
+	want := CutoverFailure{Reason: "register task definition: AccessDenied", At: time.Date(2026, 10, 11, 9, 30, 0, 0, time.UTC)}
+	raw, err := json.Marshal(storeCutoverFailure(want))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := decodeCutoverFailure(raw); got.Reason != want.Reason || !got.At.Equal(want.At) {
+		t.Fatalf("round trip = %+v, want %+v", got, want)
+	}
+	for _, raw := range []string{"", "null", "not-json"} {
+		if got := decodeCutoverFailure([]byte(raw)); got != (CutoverFailure{}) {
+			t.Errorf("decode(%q) = %+v, want none", raw, got)
+		}
+	}
+	if got := decodeCutoverFailure([]byte(`{"reason":"throttled","at":"yesterday"}`)); got.Reason != "throttled" || !got.At.IsZero() {
+		t.Errorf("an unreadable time = %+v, want the reason kept and a zero time", got)
 	}
 }
 

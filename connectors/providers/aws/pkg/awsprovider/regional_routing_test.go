@@ -4,10 +4,12 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 	awstypes "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/types"
+	workloadstore "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
 
 func testDirectRouting(reason domaindest.Reason) domaindest.Routing {
@@ -156,6 +158,57 @@ func TestSelectCollectorRoutesDoesNotConsultCurrentCollectorHealth(t *testing.T)
 	})
 	if got := routes[ref]; got.Via != domaindest.RouteCollector {
 		t.Fatalf("route = %+v, want existing Collector route retained despite transient health", got)
+	}
+}
+
+// TestSelectCollectorRoutesDoesNotLetFailuresStarveTheRest. Failures used to go first and the batch was cut
+// after them, so a region with a batch's worth of failures that never cleared re-admitted only those on
+// every pass and never moved anything else.
+func TestSelectCollectorRoutesDoesNotLetFailuresStarveTheRest(t *testing.T) {
+	failedAt := time.Date(2026, 10, 11, 9, 0, 0, 0, time.UTC)
+	desired := map[string]domaindest.Routing{}
+	var candidates []collectorRouteCandidate
+	for _, ref := range []string{"cluster/a-denied", "cluster/b-denied", "cluster/c-fresh"} {
+		desired[ref] = testCollectorRouting("vpc-host")
+		candidate := collectorRouteCandidate{Region: "eu-west-1", Ref: ref, Instrumented: true}
+		if strings.HasSuffix(ref, "denied") {
+			candidate.Failed, candidate.FailedAt = "AccessDenied", failedAt
+		}
+		candidates = append(candidates, candidate)
+	}
+	routes := selectCollectorRoutes(collectorRouteSelectionInput{
+		Direct: testDirectRouting(""), Desired: desired, Candidates: candidates,
+		BatchSizes: map[string]int{"eu-west-1": 2},
+	})
+	if routes["cluster/c-fresh"].Via != domaindest.RouteCollector {
+		t.Fatalf("never-attempted service = %+v, want it admitted alongside the failures", routes["cluster/c-fresh"])
+	}
+	if routes["cluster/a-denied"].Via != domaindest.RouteCollector {
+		t.Errorf("oldest failure = %+v, want it retried", routes["cluster/a-denied"])
+	}
+	if got := routes["cluster/b-denied"]; got.Via != domaindest.RouteDirect || got.Reason != domaindest.ReasonCollectorRolloutPending {
+		t.Errorf("second failure = %+v, want it held back for a later pass", got)
+	}
+}
+
+// TestRouteResolverReadsTheCutoverFailure. Fargate used to hand the rollout its instrumentation error, which a
+// held-back pass clears and which carries errors unrelated to the Collector; Lambda handed it nothing, so a
+// function that kept failing was retried as never attempted.
+func TestRouteResolverReadsTheCutoverFailure(t *testing.T) {
+	failure := workloadstore.CutoverFailure{Reason: "AccessDenied", At: time.Date(2026, 10, 11, 9, 0, 0, 0, time.UTC)}
+
+	svc := workloadstore.ECSService{ClusterARN: "cluster", ServiceName: "svc", InstrumentationError: "unrelated", CutoverFailure: failure}
+	if got := fargateNetworkedWorkload(svc); got.Failed != failure.Reason || !got.FailedAt.Equal(failure.At) {
+		t.Errorf("Fargate failure = %q at %v, want the cutover failure", got.Failed, got.FailedAt)
+	}
+	svc.CutoverFailure = workloadstore.CutoverFailure{}
+	if got := fargateNetworkedWorkload(svc); got.Failed != "" {
+		t.Errorf("Fargate failure = %q, want none: an instrumentation error is not a cutover failure", got.Failed)
+	}
+
+	fn := workloadstore.LambdaFunction{FunctionARN: "arn:aws:lambda:eu-west-1:1:function:f", CutoverFailure: failure}
+	if got := lambdaNetworkedWorkload(fn); got.Failed != failure.Reason || !got.FailedAt.Equal(failure.At) {
+		t.Errorf("Lambda failure = %q at %v, want the cutover failure", got.Failed, got.FailedAt)
 	}
 }
 

@@ -25,6 +25,7 @@ package collectorcutover
 import (
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 )
@@ -73,8 +74,15 @@ type Workload struct {
 	// the platform is not routed, and a rollout that believed its own record would skip it for ever.
 	Routed bool
 	// Failed is why the last attempt to re-point it did not take, or empty. A failure does not stop the
-	// others and does not consume the batch — see Decide.
+	// others: failures share the batch with the never-attempted rather than going ahead of them — see Decide.
+	//
+	// It must survive a pass on which the workload was NOT admitted. A caller whose marker cleared when a
+	// held-back workload was re-applied on its direct route would hand it back as never attempted, where
+	// it competes with the workloads that really have not been tried, and enough of them starve those.
 	Failed string
+	// FailedAt is when that attempt failed. Failures are retried oldest first, so when there are more
+	// of them than a pass retries they take turns rather than the same few being retried for ever.
+	FailedAt time.Time
 }
 
 // Input is everything the decision depends on.
@@ -165,9 +173,17 @@ func (d Decision) Moves() bool { return len(d.Admit) > 0 || len(d.Restore) > 0 }
 // # Failure isolation
 //
 // A workload whose last attempt failed is counted, reported and RETRIED — it is admitted again — but it
-// never blocks the others and never consumes another workload's place in the batch. A rollout stuck on
-// one unwritable service still finishes for the rest of the network, and the failure is reported against
-// that workload rather than as a failed network.
+// never blocks the others. Failures and never-attempted workloads SHARE the batch: failures go first and
+// take at most half of it, rounded down, never-attempted workloads take the rest, and a share one side
+// cannot use goes to the other. So while any workload has never been attempted, every pass admits at least
+// one of them, and a rollout stuck on unwritable services — however many — still reaches the rest of the
+// network. The failures are reported against those workloads rather than as a failed network.
+//
+// Without the cap, BatchSize failures that never clear would fill every batch and nothing else would ever
+// move. Admitting every failure on top of the batch instead would break the bound above, which is the
+// promise that matters — it is what limits how much of a customer's estate is in deployment at once — and
+// on a large network of failures it would retry hundreds of writes a pass into whatever is refusing them.
+// A batch of one has no half to give, so its failures wait until everything has been attempted once.
 //
 // # Rollback is not batched
 //
@@ -177,20 +193,27 @@ func (d Decision) Moves() bool { return len(d.Admit) > 0 || len(d.Restore) > 0 }
 // The asymmetry is deliberate: the two directions have opposite risk.
 func Decide(in Input) Decision {
 	out := Decision{}
-	var pending, routed, failed []string
+	var pending, routed []string
+	var failed []Workload
 	for _, w := range in.Workloads {
 		switch {
 		case w.Routed:
 			routed = append(routed, w.Ref)
 		case w.Failed != "":
-			failed = append(failed, w.Ref)
+			failed = append(failed, w)
 		default:
 			pending = append(pending, w.Ref)
 		}
 	}
 	sort.Strings(pending)
 	sort.Strings(routed)
-	sort.Strings(failed)
+	// Oldest failure first, so failures take turns; the ref breaks ties so the order stays stable.
+	sort.Slice(failed, func(a, b int) bool {
+		if !failed[a].FailedAt.Equal(failed[b].FailedAt) {
+			return failed[a].FailedAt.Before(failed[b].FailedAt)
+		}
+		return failed[a].Ref < failed[b].Ref
+	})
 	out.Routed, out.Pending, out.Failed = len(routed), len(pending), len(failed)
 
 	// Rollback first, because it is the only branch that can apply while the Collector is gone. A
@@ -239,16 +262,22 @@ func Decide(in Input) Decision {
 
 	// Failures are retried FIRST, ahead of workloads never attempted. A rollout that put them last would
 	// report a failure once and then not touch it again until every other workload on the network was
-	// done — which on a large network is a workload silently exporting directly for a very long time.
-	admit := append(append([]string{}, failed...), pending...)
-	if n := batchSize(in.BatchSize); len(admit) > n {
-		admit = admit[:n]
+	// done — which on a large network is a workload silently exporting directly for a very long time. But
+	// they get at most half the batch: see "Failure isolation" above.
+	n := batchSize(in.BatchSize)
+	takeFailed := min(len(failed), n/2)
+	takePending := min(len(pending), n-takeFailed)
+	takeFailed = min(len(failed), n-takePending) // the share never-attempted workloads cannot use
+	admit := make([]string, 0, takeFailed+takePending)
+	for _, w := range failed[:takeFailed] {
+		admit = append(admit, w.Ref)
 	}
+	admit = append(admit, pending[:takePending]...)
 	out.Phase = PhaseRollingOut
 	out.Admit = admit
 	out.Problems = append(out.Problems, rollingOutProblem(in.Region, out))
 	if len(failed) > 0 {
-		out.Problems = append(out.Problems, failedProblem(in.Region, in.Workloads))
+		out.Problems = append(out.Problems, failedProblem(in.Region, failed))
 	}
 	return out
 }

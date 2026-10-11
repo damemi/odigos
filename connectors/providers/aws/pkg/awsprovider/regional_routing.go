@@ -3,6 +3,7 @@ package awsprovider
 import (
 	"context"
 	"fmt"
+	"time"
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcutover"
@@ -21,11 +22,18 @@ type regionalRouteResolver struct{ provider *Provider }
 func (r regionalRouteResolver) ResolveFargateRoutes(ctx context.Context, services []workloadstore.ECSService) (map[string]domaindest.Routing, error) {
 	workloads := make([]networkedWorkload, 0, len(services))
 	for _, svc := range services {
-		workloads = append(workloads, networkedWorkload{Region: svc.Region, Ref: fargateRouteRef(svc),
-			Subnets: svc.SubnetIDs, SecurityGroups: svc.SecurityGroupIDs, Instrumented: svc.Instrumented,
-			RoutingVia: svc.RoutingVia, Failed: svc.InstrumentationError})
+		workloads = append(workloads, fargateNetworkedWorkload(svc))
 	}
 	return r.resolveRoutes(ctx, workloads, "Fargate")
+}
+
+// fargateNetworkedWorkload is the service as the route resolver sees it. Its failure is the CUTOVER failure,
+// not the instrumentation error: that one is cleared by a pass that held the service back from the rollout,
+// and it also carries errors that have nothing to do with the Collector — see workloadstore.CutoverFailure.
+func fargateNetworkedWorkload(svc workloadstore.ECSService) networkedWorkload {
+	return networkedWorkload{Region: svc.Region, Ref: fargateRouteRef(svc),
+		Subnets: svc.SubnetIDs, SecurityGroups: svc.SecurityGroupIDs, Instrumented: svc.Instrumented,
+		RoutingVia: svc.RoutingVia, Failed: svc.CutoverFailure.Reason, FailedAt: svc.CutoverFailure.At}
 }
 
 // ResolveLambdaRoutes resolves all discovered Lambda functions using the same regional Collector route
@@ -34,11 +42,17 @@ func (r regionalRouteResolver) ResolveFargateRoutes(ctx context.Context, service
 func (r regionalRouteResolver) ResolveLambdaRoutes(ctx context.Context, functions []workloadstore.LambdaFunction) (map[string]domaindest.Routing, error) {
 	workloads := make([]networkedWorkload, 0, len(functions))
 	for _, fn := range functions {
-		workloads = append(workloads, networkedWorkload{Region: fn.Region, Ref: fn.FunctionARN, Network: fn.VPCID,
-			Subnets: fn.SubnetIDs, SecurityGroups: fn.SecurityGroupIDs, Instrumented: fn.Instrumented,
-			RoutingVia: fn.RoutingVia})
+		workloads = append(workloads, lambdaNetworkedWorkload(fn))
 	}
 	return r.resolveRoutes(ctx, workloads, "Lambda")
+}
+
+// lambdaNetworkedWorkload is the function as the route resolver sees it, cutover failure included — without
+// it a function that keeps failing is retried as never attempted, ahead of every function that sorts after it.
+func lambdaNetworkedWorkload(fn workloadstore.LambdaFunction) networkedWorkload {
+	return networkedWorkload{Region: fn.Region, Ref: fn.FunctionARN, Network: fn.VPCID,
+		Subnets: fn.SubnetIDs, SecurityGroups: fn.SecurityGroupIDs, Instrumented: fn.Instrumented,
+		RoutingVia: fn.RoutingVia, Failed: fn.CutoverFailure.Reason, FailedAt: fn.CutoverFailure.At}
 }
 
 type networkedWorkload struct {
@@ -46,6 +60,7 @@ type networkedWorkload struct {
 	Subnets, SecurityGroups []string
 	Instrumented            bool
 	RoutingVia, Failed      string
+	FailedAt                time.Time
 }
 
 type collectorRouteTarget struct {
@@ -161,7 +176,8 @@ func (r regionalRouteResolver) resolveRoutes(ctx context.Context, workloads []ne
 		}
 		out[w.Ref] = routing
 		if routing.Via == domaindest.RouteCollector {
-			candidates = append(candidates, collectorRouteCandidate{Region: w.Region, Ref: w.Ref, Instrumented: w.Instrumented, RoutingVia: w.RoutingVia, Failed: w.Failed})
+			candidates = append(candidates, collectorRouteCandidate{Region: w.Region, Ref: w.Ref, Instrumented: w.Instrumented,
+				RoutingVia: w.RoutingVia, Failed: w.Failed, FailedAt: w.FailedAt})
 		}
 	}
 	batchSizes := make(map[string]int, len(candidates))
@@ -228,6 +244,7 @@ type collectorRouteCandidate struct {
 	Instrumented bool
 	RoutingVia   string
 	Failed       string
+	FailedAt     time.Time
 }
 
 type collectorRouteSelectionInput struct {
@@ -264,6 +281,7 @@ func selectCollectorRoutes(in collectorRouteSelectionInput) map[string]domaindes
 		for _, candidate := range candidates {
 			facts = append(facts, collectorcutover.Workload{
 				Ref: candidate.Ref, Routed: candidate.RoutingVia == string(domaindest.RouteCollector), Failed: candidate.Failed,
+				FailedAt: candidate.FailedAt,
 			})
 		}
 		decision := collectorcutover.Decide(collectorcutover.Input{
