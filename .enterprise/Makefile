@@ -50,6 +50,7 @@ build-image/%:
 	--build-arg LD_FLAGS="$(LD_FLAGS)" \
 	--build-arg RHEL="$(RHEL)" \
 	$(BUILD_CONTEXT) \
+	$(BUILD_ARGS) \
 	$(NO_CACHE)
 
 .PHONY: build-odiglet
@@ -73,14 +74,16 @@ build-instrumentor:
 #   make build-ui ODIGOS_OSS_SRC=../odigos
 #   make build-ui-local
 ODIGOS_OSS_SRC ?=
+ODIGOS_OSS_WEBAPP_OUT ?=
+ODIGOS_OSS_WEBAPP_IMAGE ?=
 
 .PHONY: build-ui
 build-ui:
-	$(MAKE) build-image/ui DOCKERFILE=ui/Dockerfile SUMMARY="Enterprise UI for Odigos" DESCRIPTION="Enterprise build of the Odigos web frontend." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) BUILD_CONTEXT="$(if $(ODIGOS_OSS_SRC),--build-context oss-src=$(ODIGOS_OSS_SRC),)"
+	$(MAKE) build-image/ui DOCKERFILE=ui/Dockerfile SUMMARY="Enterprise UI for Odigos" DESCRIPTION="Enterprise build of the Odigos web frontend." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) BUILD_CONTEXT="$(if $(ODIGOS_OSS_SRC),--build-context oss-src=$(ODIGOS_OSS_SRC),) $(if $(ODIGOS_OSS_WEBAPP_OUT),--build-context oss-webapp=$(ODIGOS_OSS_WEBAPP_OUT),)" BUILD_ARGS="$(if $(ODIGOS_OSS_WEBAPP_IMAGE),--build-arg ODIGOS_OSS_WEBAPP_IMAGE=$(ODIGOS_OSS_WEBAPP_IMAGE),)"
 
 .PHONY: build-ui-local
 build-ui-local:
-	$(MAKE) build-ui ODIGOS_OSS_SRC=../odigos
+	$(MAKE) build-ui ODIGOS_OSS_SRC=$(if $(ODIGOS_OSS_SRC),$(ODIGOS_OSS_SRC),../odigos)
 
 .PHONY: build-collector
 build-collector:

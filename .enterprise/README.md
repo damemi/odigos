@@ -22,6 +22,42 @@ replace github.com/odigos-io/odigos/odiglet => github.com/<YOUR-USERNAME>/odigos
 
 When you run `odigos install` it applies a manifest file for the odiglet daemonset. the docker image built from code should use the same image tag so it will be pulled by k8s and used in your cluster.
 
+## Enterprise UI
+
+The UI image compiles the Enterprise Go server with the OSS frontend and embeds
+its static webapp. By default it clones the OSS commit pinned in `ui/go.mod`.
+To use a local checkout, including local UI-kit links:
+
+```sh
+make build-ui-local TAG=dev
+# Or select another checkout:
+make build-ui TAG=dev ODIGOS_OSS_SRC=/path/to/odigos
+```
+
+To reuse a webapp already built with `yarn build` in the OSS checkout, skip the
+Node.js build by passing the output directory as an additional build context:
+
+```sh
+make build-ui TAG=dev ODIGOS_OSS_SRC=../odigos \
+  ODIGOS_OSS_WEBAPP_OUT=../odigos/frontend/webapp/out
+```
+
+You can also reuse the OSS Dockerfile's `builder` stage as a local image:
+
+```sh
+# From the OSS repository:
+docker build --target builder -f frontend/Dockerfile -t odigos-ui-webapp:dev .
+# From the Enterprise repository:
+make build-ui TAG=dev ODIGOS_OSS_SRC=../odigos \
+  ODIGOS_OSS_WEBAPP_IMAGE=odigos-ui-webapp:dev
+```
+
+The image must contain `/webapp/out`; the final OSS UI runtime image contains
+only a compiled Go binary and cannot supply these assets. Use Docker's default
+builder to access images in the local Docker image store. Keep the checkout and
+webapp output/image from the same OSS revision. `GITHUB_TOKEN` is required for
+private Enterprise Go dependencies. The same variables work with `deploy-ui`.
+
 ## eBPF SDKs
 
 When testing change made to one of our eBPF SDKs, the following steps could be made:

@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 # Enterprise UI image.
 #
 # Built differently from the other enterprise binaries because it bundles a
@@ -12,6 +14,8 @@
 #
 # Image: registry.odigos.io/odigos-enterprise-ui:$TAG (matches helm chart's
 #        enterprise-ui Component name, swapped in by odigos.secretExists).
+
+ARG ODIGOS_OSS_WEBAPP_IMAGE=webapp-build
 
 ############################################################
 # 1) Clone OSS from GitHub at the go.mod-pinned frontend ref
@@ -45,49 +49,69 @@ FROM scratch AS oss-src
 COPY --from=oss-clone /src/oss /
 
 ############################################################
-# 3) Webapp stage — yarn-build the Next.js frontend from oss-src
+# 3) Build the webapp, or reuse an OSS frontend Dockerfile's builder image.
+#    An image override must contain /webapp/out.
 ############################################################
-FROM --platform=$BUILDPLATFORM node:24-alpine AS webapp
-WORKDIR /src/oss/frontend
-COPY --from=oss-src /frontend .
-WORKDIR /src/oss/frontend/webapp
-RUN yarn install --frozen-lockfile && yarn build
-# /src/oss/frontend/webapp/out/ now contains the React/Next.js bundle.
+FROM --platform=$BUILDPLATFORM node:24 AS webapp-build
+WORKDIR /webapp
+COPY --from=oss-src --exclude=**/node_modules --exclude=**/.next --exclude=**/out /frontend/webapp .
+RUN --mount=type=cache,target=/usr/local/share/.cache/yarn \
+    if [ -d .yalc ] && [ "$(ls -A .yalc 2>/dev/null)" ]; then \
+      npm install -g yalc && yarn install; \
+    else \
+      yarn install --frozen-lockfile; \
+    fi && yarn build
+
+FROM ${ODIGOS_OSS_WEBAPP_IMAGE} AS webapp
+
+# Override with --build-context oss-webapp=/path/to/frontend/webapp/out
+# to embed an existing local bundle without running Node.js.
+FROM scratch AS oss-webapp
+COPY --from=webapp /webapp/out /
 
 ############################################################
-# 4) Go builder — needs the OSS source tree for the replace
-#    directive (github.com/odigos-io/odigos/frontend => /workspace/oss/frontend).
-#    The webapp bundle + /workloads page embed inside the OSS frontend module
-#    itself (webapp + graph packages), so compiling those packages from the
-#    yarn-built clone is all that's needed — this image embeds nothing of its own.
+# 4) Build Go against the same OSS checkout as the webapp.
+#    Dependency modules' replace directives are not inherited by Go.
 ############################################################
 FROM --platform=$BUILDPLATFORM golang:1.26.8 AS builder
 ARG SERVICE_NAME=ui
 ARG TARGETARCH
 ARG LD_FLAGS
 
-# Copy enterprise sibling modules required by the build (mirrors the shared
-# Dockerfile pattern — see odigos-enterprise/Dockerfile lines 6-7).
 WORKDIR /workspace
 COPY distros/ distros/
 COPY odigosauth/ odigosauth/
 COPY mcp/ mcp/
 
-# Pull OSS into /workspace/oss (full source so go's replace directive can
-# point a path-based replace at /workspace/oss/<module>). We use the yarn-built
-# tree from the webapp stage so //go:embed picks up webapp/out/.
-COPY --from=webapp /src/oss /workspace/oss
+COPY --from=oss-src /actions /workspace/oss/actions
+COPY --from=oss-src /api /workspace/oss/api
+COPY --from=oss-src /common /workspace/oss/common
+COPY --from=oss-src /config /workspace/oss/config
+COPY --from=oss-src /destinations /workspace/oss/destinations
+COPY --from=oss-src /distros /workspace/oss/distros
+COPY --from=oss-src /instrumentationrules /workspace/oss/instrumentationrules
+COPY --from=oss-src /k8sutils /workspace/oss/k8sutils
+COPY --from=oss-src /odigosauth /workspace/oss/odigosauth
+COPY --from=oss-src /profiles /workspace/oss/profiles
+COPY --from=oss-src /recommendations /workspace/oss/recommendations
+COPY --from=oss-src /status /workspace/oss/status
+COPY --from=oss-src --exclude=**/webapp /frontend /workspace/oss/frontend
+COPY --from=oss-src /frontend/webapp/embed.go /workspace/oss/frontend/webapp/embed.go
+COPY --from=oss-webapp / /workspace/oss/frontend/webapp/out/
+RUN test -s /workspace/oss/frontend/webapp/out/index.html
 
-# Enterprise UI source.
 WORKDIR /workspace/$SERVICE_NAME
 COPY $SERVICE_NAME/ .
-RUN go mod edit \
-        -replace=github.com/odigos-io/odigos/frontend=/workspace/oss/frontend && \
-    go mod tidy && \
-    go mod download && go mod verify
+RUN --mount=type=secret,id=github_token \
+    --mount=type=cache,target=/go/pkg/mod \
+    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
+    for module in /workspace/oss/*; do \
+      go mod edit -replace=github.com/odigos-io/odigos/$(basename "$module")="$module"; \
+    done && \
+    go mod tidy && go mod download && go mod verify
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    --mount=type=cache,target=/go/pkg \
+    --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOARCH=$TARGETARCH \
     go build -ldflags="${LD_FLAGS}" -a -o /workspace/build/$SERVICE_NAME ./cmd
 
