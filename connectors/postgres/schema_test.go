@@ -149,3 +149,119 @@ func downSection(sql string) string {
 	}
 	return sql[i+len("-- +goose Down"):]
 }
+
+// releasedManagedCollectorDrift is what migration 0012 gained after it had already shipped, when it was
+// edited in place rather than followed by a new migration. Each entry is a substring a later migration
+// must contain to reconcile a database that applied the released form.
+//
+// Goose records a migration by version and never re-runs it, so an edit to an applied migration reaches
+// fresh databases only. Nothing else detects that: the SQL is valid, the version markers line up, and
+// TestExpectedSchemaVersionsMatchMigrations passes — the failure appears on a customer's upgrade, where
+// the migration Job aborts, the Helm post-upgrade hook fails with it, and every connector runtime then
+// refuses to start because the schema is behind ExpectedSchemaVersions.
+var releasedManagedCollectorDrift = []struct{ what, reconciliation string }{
+	{"the idle_since column", "ADD COLUMN IF NOT EXISTS idle_since"},
+	{"the first_ready_at column", "ADD COLUMN IF NOT EXISTS first_ready_at"},
+	{"the (connector_name, region) primary key", "ADD CONSTRAINT managed_collectors_pkey PRIMARY KEY (connector_name, region)"},
+	{"the network-identities ingress tier", "CHECK (ingress_tier IN ('network-identities'"},
+	{"the regional marker index", "CREATE UNIQUE INDEX IF NOT EXISTS destinations_managed_collector_region_uidx"},
+}
+
+// TestReleasedManagedCollectorShapeIsReconciled asserts that every in-place edit to the already-released
+// migration 0012 is also applied, idempotently, by a later migration — and, for the columns, that it
+// happens before anything reads them.
+func TestReleasedManagedCollectorShapeIsReconciled(t *testing.T) {
+	const editedInPlace = "0012_connector_aws_managed_collectors.sql"
+
+	names := migrationFilenames(t)
+	var later []string
+	for _, name := range names {
+		if name > editedInPlace {
+			later = append(later, name)
+		}
+	}
+	if len(later) == 0 {
+		t.Fatalf("no migration follows %s; this test has stopped checking anything", editedInPlace)
+	}
+
+	ups := make(map[string]string, len(later))
+	for _, name := range later {
+		raw, err := os.ReadFile(filepath.Join(migrationsDir, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		ups[name] = withoutLineComments(upSection(string(raw)))
+	}
+
+	for _, drift := range releasedManagedCollectorDrift {
+		reconciledIn := ""
+		for _, name := range later {
+			if strings.Contains(ups[name], drift.reconciliation) {
+				reconciledIn = name
+				break
+			}
+		}
+		if reconciledIn == "" {
+			t.Errorf("%s was added to the already-released %s, but no later migration reconciles it (%q): "+
+				"an upgraded database never gets it, so the migration Job fails there and every connector "+
+				"refuses to start on the resulting schema-version mismatch", drift.what, editedInPlace, drift.reconciliation)
+			continue
+		}
+		// A column has to arrive before the first statement that reads it, or the migration that adds it
+		// aborts on the database it exists for.
+		column, isColumn := strings.CutPrefix(drift.reconciliation, "ADD COLUMN IF NOT EXISTS ")
+		if !isColumn {
+			continue
+		}
+		for _, name := range later {
+			if name > reconciledIn {
+				break
+			}
+			up := ups[name]
+			first := strings.Index(up, column)
+			if first < 0 {
+				continue
+			}
+			add := strings.Index(up, drift.reconciliation)
+			if name < reconciledIn || add < 0 || add > first {
+				t.Errorf("%s reads %s before any migration adds it to a database upgraded from the released "+
+					"%s", name, column, editedInPlace)
+				break
+			}
+		}
+	}
+}
+
+// withoutLineComments drops `--` comments so a column named in prose does not read as a statement that
+// uses it. These migrations contain no string literal with a `--` in it.
+func withoutLineComments(sql string) string {
+	var b strings.Builder
+	for _, line := range strings.Split(sql, "\n") {
+		if i := strings.Index(line, "--"); i >= 0 {
+			line = line[:i]
+		}
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func migrationFilenames(t *testing.T) []string {
+	t.Helper()
+
+	entries, err := os.ReadDir(migrationsDir)
+	if err != nil {
+		t.Fatalf("read %s: %v", migrationsDir, err)
+	}
+	var names []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".sql") {
+			names = append(names, e.Name())
+		}
+	}
+	if len(names) == 0 {
+		t.Fatalf("no .sql migrations found in %s", migrationsDir)
+	}
+	sort.Strings(names)
+	return names
+}

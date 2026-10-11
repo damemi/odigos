@@ -21,6 +21,45 @@ UPDATE connector_platform.schema_versions
 SET version = '3', applied_at = now()
 WHERE schema_name IN ('connector_gcp', 'connector_azure');
 
+-- A database migrated by a release that shipped the FIRST form of migration 0012 (v1.38.0 onwards) has
+-- managed_collectors without idle_since and first_ready_at, keyed (connector_name, region, network_id),
+-- carrying the older ingress_tier vocabulary and missing the regional marker index. 0012 was later
+-- rewritten in place, and goose records it as applied and never re-runs it, so that rewrite reaches a
+-- fresh database only. Reconcile the released shape here, before the statements below read
+-- first_ready_at: without this the whole migration Job fails on every upgraded installation, the Helm
+-- post-upgrade hook fails with it, and the schema stays behind ExpectedSchemaVersions — which every
+-- connector runtime verifies at startup, so all of them refuse to start.
+--
+-- Each statement is a no-op on a database that received 0012 in its current form. These columns and
+-- constraints belong to 0012, so Down leaves them in place, exactly like the destinations bridge above.
+ALTER TABLE connector_aws.managed_collectors
+  ADD COLUMN IF NOT EXISTS idle_since     TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS first_ready_at TIMESTAMPTZ;
+
+-- The host network is placement metadata, not row identity. UpsertManagedCollector names
+-- ON CONFLICT (connector_name, region), and Postgres infers an arbiter only from a unique index over
+-- exactly the named columns — so against the three-column key every upsert fails to plan (SQLSTATE
+-- 42P10) and no Collector can ever be recorded. That is also why re-keying cannot lose a row: the
+-- upsert is the only statement that inserts one, so the table is empty wherever the old key survived.
+ALTER TABLE connector_aws.managed_collectors
+  DROP CONSTRAINT IF EXISTS managed_collectors_pkey;
+ALTER TABLE connector_aws.managed_collectors
+  ADD CONSTRAINT managed_collectors_pkey PRIMARY KEY (connector_name, region);
+
+UPDATE connector_aws.managed_collectors
+SET ingress_tier = 'network-identities'
+WHERE ingress_tier = 'security-groups';
+
+ALTER TABLE connector_aws.managed_collectors
+  DROP CONSTRAINT IF EXISTS managed_collectors_ingress_tier_check;
+ALTER TABLE connector_aws.managed_collectors
+  ADD CONSTRAINT managed_collectors_ingress_tier_check
+    CHECK (ingress_tier IN ('network-identities', 'configured-cidrs', 'network-cidr', 'none'));
+
+CREATE UNIQUE INDEX IF NOT EXISTS destinations_managed_collector_region_uidx
+  ON connector_aws.destinations (connector_name, region)
+  WHERE lower(dest_type) = 'odigos-managed-collector';
+
 ALTER TABLE connector_aws.managed_collectors
   ADD COLUMN IF NOT EXISTS applied_config_hash TEXT;
 
