@@ -363,7 +363,52 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "Resolved release tag: ${TAG}"
 
+      # promote-rc-to-stable already dispatches release_cli for a first stable.
+      # After that, this job would trigger a second run that 422s on already-uploaded
+      # CLI archives. Skip the dispatch when those assets are already on the release.
+      - name: Skip CLI dispatch if GitHub release already has CLI assets
+        id: skip-cli
+        env:
+          TAG: ${{ steps.release-tag.outputs.tag }}
+        run: |
+          VERSION="${TAG#v}"
+          EXPECTED=(
+            "cli_${VERSION}_darwin_amd64.tar.gz"
+            "cli_${VERSION}_darwin_arm64.tar.gz"
+            "cli_${VERSION}_linux_amd64.tar.gz"
+            "cli_${VERSION}_linux_arm64.tar.gz"
+            "cli_${VERSION}_windows_amd64.tar.gz"
+            "cli_${VERSION}_windows_arm64.tar.gz"
+            "checksums.txt"
+          )
+
+          HTTP_STATUS=$(curl -sS -o /tmp/odigos-release.json -w "%{http_code}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/odigos-io/odigos/releases/tags/${TAG}")
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "No GitHub release for $TAG (HTTP $HTTP_STATUS) — will trigger CLI release"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          missing=()
+          for name in "${EXPECTED[@]}"; do
+            if ! jq -e --arg n "$name" 'any(.assets[].name; . == $n)' /tmp/odigos-release.json >/dev/null; then
+              missing+=("$name")
+            fi
+          done
+
+          if [ ${#missing[@]} -eq 0 ]; then
+            echo "CLI archives already on $TAG — skipping duplicate CLI trigger"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Missing CLI assets on $TAG: ${missing[*]} — will trigger CLI release"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Oss Release Sts Token
+        if: steps.skip-cli.outputs.skip != 'true'
         id: sts-oss-release
         uses: odigos-io/ci-core/sts@main
         with:
@@ -371,6 +416,7 @@ jobs:
           identity: trigger-release
 
       - name: Trigger OSS Release Workflow
+        if: steps.skip-cli.outputs.skip != 'true'
         uses: peter-evans/repository-dispatch@v4
         with:
           token: ${{ steps.sts-oss-release.outputs.GH_TOKEN }}
@@ -383,7 +429,7 @@ jobs:
         uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
         with:
           webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-          success-description: "All odigos enterprise components published to registry. Triggered CLI release in Odigos Main Repo"
+          success-description: ${{ steps.skip-cli.outputs.skip == 'true' && 'All odigos enterprise components published to registry. CLI GitHub release already has assets; skipped duplicate CLI trigger' || 'All odigos enterprise components published to registry. Triggered CLI release in Odigos Main Repo' }}
           failure-description: "ERROR: failed to trigger CLI release in Odigos Main Repo"
           tag: ${{ steps.release-tag.outputs.tag }}
 
