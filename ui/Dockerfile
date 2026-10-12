@@ -73,7 +73,7 @@ COPY --from=webapp /webapp/out /
 # 4) Build Go against the same OSS checkout as the webapp.
 #    Dependency modules' replace directives are not inherited by Go.
 ############################################################
-FROM --platform=$BUILDPLATFORM golang:1.26.8 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.9 AS builder
 ARG SERVICE_NAME=ui
 ARG TARGETARCH
 ARG LD_FLAGS
