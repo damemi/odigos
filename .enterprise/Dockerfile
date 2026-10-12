@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.26.8 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.9 AS builder
 ARG SERVICE_NAME
 
 # Copy local modules required by the build
