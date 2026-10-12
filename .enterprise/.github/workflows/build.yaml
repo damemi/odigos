@@ -23,6 +23,8 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
           DEFAULT_BASE: ${{ github.base_ref }}
           IS_FEATURE: ${{ contains(github.event.pull_request.labels.*.name, 'feature-branch-release') }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           BRANCH="$DEFAULT_BASE"
           if [ "$IS_FEATURE" = "true" ]; then
@@ -33,11 +35,21 @@ jobs:
             fi
             BRANCH="$PARSED"
             echo "Feature PR: using base OSS branch from PR body: $BRANCH"
-          elif [ "$BRANCH" != "main" ] && [[ "$BRANCH" != releases/* ]]; then
-            echo "PR base '$BRANCH' is not an OSS branch (main or releases/*); falling back to main"
-            BRANCH="main"
           else
-            echo "Using PR base ref: $BRANCH"
+            # A stacked PR targets the branch of the PR below it. Follow the open PRs down to the stack's base.
+            for _ in $(seq 1 20); do
+              if [ "$BRANCH" = "main" ] || [[ "$BRANCH" == releases/* ]]; then break; fi
+              NEXT=$(gh api -X GET "repos/$REPO/pulls" -f state=open -f head="${REPO%%/*}:$BRANCH" --jq '.[0].base.ref // empty')
+              [ -n "$NEXT" ] || break
+              echo "PR base '$BRANCH' is stacked on '$NEXT'"
+              BRANCH="$NEXT"
+            done
+            if [ "$BRANCH" != "main" ] && [[ "$BRANCH" != releases/* ]]; then
+              echo "PR base '$BRANCH' is not an OSS branch (main or releases/*); falling back to main"
+              BRANCH="main"
+            else
+              echo "Using OSS base branch: $BRANCH"
+            fi
           fi
           echo "base_branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
