@@ -132,7 +132,6 @@ connectors:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector v0.159.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/spanmetricsconnector v0.159.0
   - gomod: github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v0.159.0
-  - gomod: github.com/odigos-io/odigos/collector/connectors/serviceioconnector v0.159.0
 
 providers:
   - gomod: go.opentelemetry.io/collector/confmap/provider/envprovider v1.65.0
@@ -173,7 +172,6 @@ replaces:
   - github.com/odigos-io/odigos-enterprise/common-enterprise => ../../common-enterprise
   - odigosk8scmprovider => github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v1.39.0-pre1.0.20261011131048-1f26c2c03b33
   - github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector => github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v1.39.0-pre1.0.20261011131048-1f26c2c03b33
-  - github.com/odigos-io/odigos/collector/connectors/serviceioconnector => github.com/odigos-io/odigos/collector/connectors/serviceioconnector v1.39.0-pre1.0.20261011131048-1f26c2c03b33
   - github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector => github.com/odigos-io/odigos/collector/connectors/servicegraphconnector v1.39.0-pre1.0.20261011131048-1f26c2c03b33
   # Past the tag: odigoscapabilitiesextension needs common/capabilities, added after v1.34.0-pre3.
   - github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.39.0-pre1.0.20261011131048-1f26c2c03b33

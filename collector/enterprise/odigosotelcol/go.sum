@@ -1001,8 +1001,6 @@ github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v1.39.0-p
 github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v1.39.0-pre1.0.20261011131048-1f26c2c03b33/go.mod h1:vn5dtVrD1mNPI9Q8zJP9eybD/8MPUVgNoTt9JvRPHc8=
 github.com/odigos-io/odigos/collector/connectors/servicegraphconnector v1.39.0-pre1.0.20261011131048-1f26c2c03b33 h1:ATd8I68TbAJlF3oNA9aYVNTjirQyR4BSAOZXyfM7rz8=
 github.com/odigos-io/odigos/collector/connectors/servicegraphconnector v1.39.0-pre1.0.20261011131048-1f26c2c03b33/go.mod h1:rDK7CQg2xaeso00SUvb5UtpS99ouOgji5uKrl6g+688=
-github.com/odigos-io/odigos/collector/connectors/serviceioconnector v1.39.0-pre1.0.20261011131048-1f26c2c03b33 h1:tokFlWfyvL2OUKkoR4yy7mNZ9LnL28GfI6vpln9Xe4g=
-github.com/odigos-io/odigos/collector/connectors/serviceioconnector v1.39.0-pre1.0.20261011131048-1f26c2c03b33/go.mod h1:6WS3IrFadxfQXTfg1UGBdGSIwnzNnx7cHx4bBbzhRDM=
 github.com/odigos-io/odigos/collector/exporters/azureblobstorageexporter v1.39.0-pre1.0.20261011131048-1f26c2c03b33 h1:WzdcnBSytDwfTiato1VgB+1BxI1T+oCFJHVDVR5Wu/I=
 github.com/odigos-io/odigos/collector/exporters/azureblobstorageexporter v1.39.0-pre1.0.20261011131048-1f26c2c03b33/go.mod h1:thQr+/BWTQIVXvSqjMkPn8mEU73ADlLEbaE+l2UYakc=
 github.com/odigos-io/odigos/collector/exporters/googlecloudstorageexporter v1.39.0-pre1.0.20261011131048-1f26c2c03b33 h1:r4HtpJ8mabbo588wxJ4B8Rj8IxOemUcoYxMqnDb5iOA=

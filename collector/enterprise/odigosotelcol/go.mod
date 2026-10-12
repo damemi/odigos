@@ -12,7 +12,6 @@ require (
 	github.com/odigos-io/odigos-enterprise/collector/processors/odigosvmprofileattrsprocessor v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v0.159.0
-	github.com/odigos-io/odigos/collector/connectors/serviceioconnector v0.159.0
 	github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v0.159.0
 	github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v0.159.0
 	github.com/odigos-io/odigos/collector/processor/odigosextractattributeprocessor v0.159.0
@@ -830,8 +829,6 @@ replace github.com/odigos-io/odigos-enterprise/common-enterprise => ../../common
 replace odigosk8scmprovider => github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v1.39.0-pre1.0.20261011131048-1f26c2c03b33
 
 replace github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector => github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v1.39.0-pre1.0.20261011131048-1f26c2c03b33
-
-replace github.com/odigos-io/odigos/collector/connectors/serviceioconnector => github.com/odigos-io/odigos/collector/connectors/serviceioconnector v1.39.0-pre1.0.20261011131048-1f26c2c03b33
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector => github.com/odigos-io/odigos/collector/connectors/servicegraphconnector v1.39.0-pre1.0.20261011131048-1f26c2c03b33
 
