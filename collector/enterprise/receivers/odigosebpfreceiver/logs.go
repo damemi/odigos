@@ -205,8 +205,6 @@ func logEventToPdata(event *logEvent) plog.Logs {
 	lr.SetTimestamp(now)
 	lr.SetObservedTimestamp(now)
 	lr.Body().SetStr(event.logData())
-	lr.SetSeverityNumber(plog.SeverityNumberInfo)
-	lr.SetSeverityText("INFO")
 
 	attrs := lr.Attributes()
 	attrs.PutStr(string(semconv.LogIostreamKey), event.streamString())
