@@ -153,10 +153,21 @@ type ComplexityRoot struct {
 		LastSeenAt           func(childComplexity int) int
 		Name                 func(childComplexity int) int
 		OdigosVersion        func(childComplexity int) int
+		Stats                func(childComplexity int) int
 		Status               func(childComplexity int) int
 		Teams                func(childComplexity int) int
 		Type                 func(childComplexity int) int
 		Users                func(childComplexity int) int
+	}
+
+	ComputePlatformStats struct {
+		AutoInstrumentedNamespaces func(childComplexity int) int
+		InstrumentedWorkloads      func(childComplexity int) int
+		Namespaces                 func(childComplexity int) int
+		UpdatedAt                  func(childComplexity int) int
+		Workloads                  func(childComplexity int) int
+		WorkloadsInProgress        func(childComplexity int) int
+		WorkloadsWithIssues        func(childComplexity int) int
 	}
 
 	CreateCloudConnectorResult struct {
@@ -851,6 +862,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ComputePlatform.OdigosVersion(childComplexity), true
+	case "ComputePlatform.stats":
+		if e.ComplexityRoot.ComputePlatform.Stats == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ComputePlatform.Stats(childComplexity), true
 	case "ComputePlatform.status":
 		if e.ComplexityRoot.ComputePlatform.Status == nil {
 			break
@@ -875,6 +892,49 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ComputePlatform.Users(childComplexity), true
+
+	case "ComputePlatformStats.autoInstrumentedNamespaces":
+		if e.ComplexityRoot.ComputePlatformStats.AutoInstrumentedNamespaces == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ComputePlatformStats.AutoInstrumentedNamespaces(childComplexity), true
+	case "ComputePlatformStats.instrumentedWorkloads":
+		if e.ComplexityRoot.ComputePlatformStats.InstrumentedWorkloads == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ComputePlatformStats.InstrumentedWorkloads(childComplexity), true
+	case "ComputePlatformStats.namespaces":
+		if e.ComplexityRoot.ComputePlatformStats.Namespaces == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ComputePlatformStats.Namespaces(childComplexity), true
+	case "ComputePlatformStats.updatedAt":
+		if e.ComplexityRoot.ComputePlatformStats.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ComputePlatformStats.UpdatedAt(childComplexity), true
+	case "ComputePlatformStats.workloads":
+		if e.ComplexityRoot.ComputePlatformStats.Workloads == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ComputePlatformStats.Workloads(childComplexity), true
+	case "ComputePlatformStats.workloadsInProgress":
+		if e.ComplexityRoot.ComputePlatformStats.WorkloadsInProgress == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ComputePlatformStats.WorkloadsInProgress(childComplexity), true
+	case "ComputePlatformStats.workloadsWithIssues":
+		if e.ComplexityRoot.ComputePlatformStats.WorkloadsWithIssues == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ComputePlatformStats.WorkloadsWithIssues(childComplexity), true
 
 	case "CreateCloudConnectorResult.connectorId":
 		if e.ComplexityRoot.CreateCloudConnectorResult.ConnectorID == nil {
@@ -2000,8 +2060,30 @@ func (ec *executionContext) childFields_ComputePlatform(ctx context.Context, fie
 		return ec.fieldContext_ComputePlatform_users(ctx, field)
 	case "teams":
 		return ec.fieldContext_ComputePlatform_teams(ctx, field)
+	case "stats":
+		return ec.fieldContext_ComputePlatform_stats(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ComputePlatform", field.Name)
+}
+
+func (ec *executionContext) childFields_ComputePlatformStats(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "workloads":
+		return ec.fieldContext_ComputePlatformStats_workloads(ctx, field)
+	case "instrumentedWorkloads":
+		return ec.fieldContext_ComputePlatformStats_instrumentedWorkloads(ctx, field)
+	case "workloadsWithIssues":
+		return ec.fieldContext_ComputePlatformStats_workloadsWithIssues(ctx, field)
+	case "workloadsInProgress":
+		return ec.fieldContext_ComputePlatformStats_workloadsInProgress(ctx, field)
+	case "namespaces":
+		return ec.fieldContext_ComputePlatformStats_namespaces(ctx, field)
+	case "autoInstrumentedNamespaces":
+		return ec.fieldContext_ComputePlatformStats_autoInstrumentedNamespaces(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_ComputePlatformStats_updatedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ComputePlatformStats", field.Name)
 }
 
 func (ec *executionContext) childFields_CreateCloudConnectorResult(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -4881,6 +4963,199 @@ func (ec *executionContext) fieldContext_ComputePlatform_teams(_ context.Context
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _ComputePlatform_stats(ctx context.Context, field graphql.CollectedField, obj *model.ComputePlatform) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ComputePlatform_stats(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Stats, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.ComputePlatformStats) graphql.Marshaler {
+			return ec.marshalOComputePlatformStats2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐComputePlatformStats(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ComputePlatform_stats(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ComputePlatform",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ComputePlatformStats(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ComputePlatformStats_workloads(ctx context.Context, field graphql.CollectedField, obj *model.ComputePlatformStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ComputePlatformStats_workloads(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Workloads, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ComputePlatformStats_workloads(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ComputePlatformStats", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ComputePlatformStats_instrumentedWorkloads(ctx context.Context, field graphql.CollectedField, obj *model.ComputePlatformStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ComputePlatformStats_instrumentedWorkloads(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.InstrumentedWorkloads, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ComputePlatformStats_instrumentedWorkloads(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ComputePlatformStats", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ComputePlatformStats_workloadsWithIssues(ctx context.Context, field graphql.CollectedField, obj *model.ComputePlatformStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ComputePlatformStats_workloadsWithIssues(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.WorkloadsWithIssues, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ComputePlatformStats_workloadsWithIssues(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ComputePlatformStats", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ComputePlatformStats_workloadsInProgress(ctx context.Context, field graphql.CollectedField, obj *model.ComputePlatformStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ComputePlatformStats_workloadsInProgress(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.WorkloadsInProgress, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ComputePlatformStats_workloadsInProgress(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ComputePlatformStats", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ComputePlatformStats_namespaces(ctx context.Context, field graphql.CollectedField, obj *model.ComputePlatformStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ComputePlatformStats_namespaces(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Namespaces, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ComputePlatformStats_namespaces(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ComputePlatformStats", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ComputePlatformStats_autoInstrumentedNamespaces(ctx context.Context, field graphql.CollectedField, obj *model.ComputePlatformStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ComputePlatformStats_autoInstrumentedNamespaces(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AutoInstrumentedNamespaces, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int32) graphql.Marshaler {
+			return ec.marshalNInt2int32(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ComputePlatformStats_autoInstrumentedNamespaces(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ComputePlatformStats", field, false, false, errors.New("field of type Int does not have child fields"))
+}
+
+func (ec *executionContext) _ComputePlatformStats_updatedAt(ctx context.Context, field graphql.CollectedField, obj *model.ComputePlatformStats) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ComputePlatformStats_updatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt642int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ComputePlatformStats_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ComputePlatformStats", field, false, false, errors.New("field of type Int64 does not have child fields"))
 }
 
 func (ec *executionContext) _CreateCloudConnectorResult_created(ctx context.Context, field graphql.CollectedField, obj *model.CreateCloudConnectorResult) (ret graphql.Marshaler) {
@@ -10568,6 +10843,79 @@ func (ec *executionContext) _ComputePlatform(ctx context.Context, sel ast.Select
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "stats":
+			out.Values[i] = ec._ComputePlatform_stats(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
+var computePlatformStatsImplementors = []string{"ComputePlatformStats"}
+
+func (ec *executionContext) _ComputePlatformStats(ctx context.Context, sel ast.SelectionSet, obj *model.ComputePlatformStats) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, computePlatformStatsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ComputePlatformStats")
+		case "workloads":
+			out.Values[i] = ec._ComputePlatformStats_workloads(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "instrumentedWorkloads":
+			out.Values[i] = ec._ComputePlatformStats_instrumentedWorkloads(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "workloadsWithIssues":
+			out.Values[i] = ec._ComputePlatformStats_workloadsWithIssues(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "workloadsInProgress":
+			out.Values[i] = ec._ComputePlatformStats_workloadsInProgress(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "namespaces":
+			out.Values[i] = ec._ComputePlatformStats_namespaces(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "autoInstrumentedNamespaces":
+			out.Values[i] = ec._ComputePlatformStats_autoInstrumentedNamespaces(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._ComputePlatformStats_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -13470,6 +13818,13 @@ func (ec *executionContext) marshalOClusterSnapshot2ᚖgithubᚗcomᚋodigosᚑi
 		return graphql.Null
 	}
 	return ec._ClusterSnapshot(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOComputePlatformStats2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐComputePlatformStats(ctx context.Context, sel ast.SelectionSet, v *model.ComputePlatformStats) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ComputePlatformStats(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalODiagnoseInput2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐDiagnoseInput(ctx context.Context, v any) (*model.DiagnoseInput, error) {

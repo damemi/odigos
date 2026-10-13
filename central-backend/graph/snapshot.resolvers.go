@@ -10,10 +10,15 @@ import (
 
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/logger"
+	"github.com/odigos-io/central-backend/internal/utils"
 )
 
 // ClusterSnapshot is the resolver for the clusterSnapshot field.
 func (r *queryResolver) ClusterSnapshot(ctx context.Context, clusterID string) (*model.ClusterSnapshot, error) {
+	if err := utils.RequireAuth(ctx); err != nil {
+		return nil, err
+	}
+
 	snapshot, err := r.RedisClient.GetClusterSnapshot(ctx, clusterID)
 	if err != nil {
 		logger.Log.Error("Failed to get cluster snapshot", "clusterID", clusterID, "error", err)
@@ -28,6 +33,10 @@ func (r *queryResolver) ClusterSnapshot(ctx context.Context, clusterID string) (
 
 // AllClusterSnapshots is the resolver for the allClusterSnapshots field.
 func (r *queryResolver) AllClusterSnapshots(ctx context.Context) (*model.MultiClusterWorkloadsView, error) {
+	if err := utils.RequireAuth(ctx); err != nil {
+		return nil, err
+	}
+
 	snapshots, err := r.RedisClient.GetAllClusterSnapshots(ctx)
 	if err != nil {
 		logger.Log.Error("Failed to get all cluster snapshots", "error", err)

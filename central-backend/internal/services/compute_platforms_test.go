@@ -2,11 +2,15 @@ package services
 
 import (
 	"context"
+	"errors"
+	"sort"
 	"testing"
 
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/consts"
+	"github.com/odigos-io/central-backend/internal/logger"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
+	"github.com/odigos-io/central-backend/internal/snapshotsummary"
 )
 
 type fakeProxyMetaReader struct {
@@ -227,5 +231,92 @@ func TestApplyProxyMetaToComputePlatform_PreservesKnownValuesAndSkipsZeroTimesta
 	}
 	if cp.LastSeenAt != nil {
 		t.Errorf("expected lastSeenAt to remain nil for zero timestamp, got %+v", cp.LastSeenAt)
+	}
+}
+
+type fakeSnapshotSummaryReader struct {
+	summaries map[string]*snapshotsummary.Summary
+	err       error
+	gotIDs    []string
+}
+
+func (f *fakeSnapshotSummaryReader) GetClusterSnapshotSummaries(_ context.Context, clusterIDs []string) (map[string]*snapshotsummary.Summary, error) {
+	f.gotIDs = clusterIDs
+	return f.summaries, f.err
+}
+
+func TestAppendSnapshotStats_AttachesStatsToPlatformsWithSnapshots(t *testing.T) {
+	cpMap := map[string]*model.ComputePlatform{
+		"k8s-1": {ID: "k8s-1"},
+		"vm-1":  {ID: "vm-1"},
+	}
+	reader := &fakeSnapshotSummaryReader{summaries: map[string]*snapshotsummary.Summary{
+		"k8s-1": {
+			Workloads:                  10,
+			InstrumentedWorkloads:      6,
+			WorkloadsByHealth:          map[string]int{"Success": 2, "Error": 1, "Failure": 1, "Pending": 1, "Waiting": 1},
+			Namespaces:                 4,
+			AutoInstrumentedNamespaces: 1,
+			SnapshotTimestamp:          100,
+		},
+		"deleted": {Workloads: 1},
+	}}
+
+	appendSnapshotStats(context.Background(), cpMap, reader)
+
+	sort.Strings(reader.gotIDs)
+	if len(reader.gotIDs) != 2 || reader.gotIDs[0] != "k8s-1" || reader.gotIDs[1] != "vm-1" {
+		t.Fatalf("expected summaries to be requested for every platform, got %v", reader.gotIDs)
+	}
+	want := &model.ComputePlatformStats{
+		Workloads:                  10,
+		InstrumentedWorkloads:      6,
+		WorkloadsWithIssues:        2,
+		WorkloadsInProgress:        2,
+		Namespaces:                 4,
+		AutoInstrumentedNamespaces: 1,
+		UpdatedAt:                  100000,
+	}
+	if got := cpMap["k8s-1"].Stats; got == nil || *got != *want {
+		t.Fatalf("unexpected stats:\n got: %+v\nwant: %+v", got, want)
+	}
+	if cpMap["vm-1"].Stats != nil {
+		t.Fatalf("expected no stats for a platform without a snapshot, got %+v", cpMap["vm-1"].Stats)
+	}
+	if _, ok := cpMap["deleted"]; ok {
+		t.Fatal("a summary without a matching platform must not add one")
+	}
+}
+
+func TestAppendSnapshotStats_ReadErrorLeavesStatsEmpty(t *testing.T) {
+	logger.InitLogger()
+	cpMap := map[string]*model.ComputePlatform{"k8s-1": {ID: "k8s-1"}}
+	reader := &fakeSnapshotSummaryReader{err: errors.New("redis down")}
+
+	appendSnapshotStats(context.Background(), cpMap, reader)
+
+	if cpMap["k8s-1"].Stats != nil {
+		t.Fatalf("expected no stats after a failed read, got %+v", cpMap["k8s-1"].Stats)
+	}
+}
+
+func TestAppendSnapshotStats_MixedPlatforms(t *testing.T) {
+	cpMap := map[string]*model.ComputePlatform{
+		"k8s":   {ID: "k8s", Type: "k8s"},
+		"vm":    {ID: "vm", Type: "vm"},
+		"other": {ID: "other", Type: "aws-ecs"},
+	}
+	reader := &fakeSnapshotSummaryReader{summaries: map[string]*snapshotsummary.Summary{
+		"k8s":   {Workloads: 10, InstrumentedWorkloads: 6, Namespaces: 2, SnapshotTimestamp: 100},
+		"vm":    {Workloads: 5, InstrumentedWorkloads: 3, WorkloadsByHealth: map[string]int{"Error": 1, "Waiting": 1}, SnapshotTimestamp: 200},
+		"other": {Workloads: 2, InstrumentedWorkloads: 1, SnapshotTimestamp: 300},
+	}}
+	appendSnapshotStats(context.Background(), cpMap, reader)
+	vm := cpMap["vm"].Stats
+	if vm == nil || vm.Workloads != 5 || vm.InstrumentedWorkloads != 3 || vm.WorkloadsWithIssues != 1 || vm.WorkloadsInProgress != 1 || vm.Namespaces != 0 || vm.UpdatedAt != 200000 {
+		t.Fatalf("unexpected VM statistics: %+v", vm)
+	}
+	if cpMap["k8s"].Stats == nil || cpMap["other"].Stats == nil || len(reader.gotIDs) != 3 {
+		t.Fatal("expected one batched read covering all platform types")
 	}
 }

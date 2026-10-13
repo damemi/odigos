@@ -50,6 +50,22 @@ type ComputePlatform {
   lastSeenAt: Int64
   users: [User!]!
   teams: [Team!]!
+  # Workload statistics from the latest snapshot or compact agent summary.
+  # Null until the platform reports statistics.
+  stats: ComputePlatformStats
+}
+
+type ComputePlatformStats {
+  workloads: Int!
+  instrumentedWorkloads: Int!
+  # Instrumented workloads whose health is Error or Failure.
+  workloadsWithIssues: Int!
+  # Instrumented workloads whose instrumentation is still rolling out (Pending or Waiting).
+  workloadsInProgress: Int!
+  namespaces: Int!
+  autoInstrumentedNamespaces: Int!
+  # When the proxy generated the snapshot these statistics come from (ms since epoch).
+  updatedAt: Int64!
 }
 
 input WriteComputePlatformInput {

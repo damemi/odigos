@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback } from 'react';
-import { useProxy } from '@/hooks';
+import { useAuth, useProxy } from '@/hooks';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { CentralConnections } from '@odigos/ui-kit/containers';
 import { StatusType, type Connection } from '@odigos/ui-kit/types';
@@ -21,6 +21,7 @@ import { StatusType, type Connection } from '@odigos/ui-kit/types';
 // `proxyID`/`platformType`/`version` in the operation context.
 export default function Page() {
   const { selectProxy } = useProxy();
+  const { systemConfig } = useAuth();
   const { addNotification } = useNotificationStore();
 
   const onClickConnection = useCallback(
@@ -36,5 +37,5 @@ export default function Page() {
     [selectProxy, addNotification],
   );
 
-  return <CentralConnections onClickConnection={onClickConnection} configMinSupportedVersion='1.16' snapshotMinSupportedVersion='1.20' />;
+  return <CentralConnections onClickConnection={onClickConnection} configMinSupportedVersion='1.16' snapshotMinSupportedVersion='1.21' centralVersion={systemConfig?.version} />;
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/logger"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
+	"github.com/odigos-io/central-backend/internal/snapshotsummary"
 	websocketserver "github.com/odigos-io/central-backend/internal/websocket"
 	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 )
@@ -19,13 +20,18 @@ type proxyMetaReader interface {
 	GetProxyMetaKeyValues(ctx context.Context) (redisclient.RedisHashFieldValuesByKey, error)
 }
 
+type snapshotSummaryReader interface {
+	GetClusterSnapshotSummaries(ctx context.Context, clusterIDs []string) (map[string]*snapshotsummary.Summary, error)
+}
+
 // ComputePlatformService provides helpers around compute platform state derived from proxy connection & metadata stored in Redis.
 type ComputePlatformService struct {
-	redis proxyMetaReader
+	redis     proxyMetaReader
+	summaries snapshotSummaryReader
 }
 
 func NewComputePlatformService(redis *redisclient.RedisClient) *ComputePlatformService {
-	return &ComputePlatformService{redis: redis}
+	return &ComputePlatformService{redis: redis, summaries: redis}
 }
 
 func (svc *ComputePlatformService) ComputePlatforms(
@@ -62,7 +68,44 @@ func (svc *ComputePlatformService) ComputePlatforms(
 		}
 	}
 
+	appendSnapshotStats(ctx, cpMap, svc.summaries)
+
 	return toComputePlatformsSlice(cpMap), nil
+}
+
+// appendSnapshotStats attaches each platform's statistics from its latest
+// cluster snapshot; platforms without one keep null stats. A failed read is
+// logged and leaves every platform without stats rather than failing the
+// connection list.
+func appendSnapshotStats(ctx context.Context, cpMap map[string]*model.ComputePlatform, reader snapshotSummaryReader) {
+	ids := make([]string, 0, len(cpMap))
+	for id := range cpMap {
+		ids = append(ids, id)
+	}
+
+	summaries, err := reader.GetClusterSnapshotSummaries(ctx, ids)
+	if err != nil {
+		logger.Log.Warn("Failed to read cluster snapshot summaries", "error", err)
+		return
+	}
+
+	for id, summary := range summaries {
+		if cp := cpMap[id]; cp != nil {
+			cp.Stats = toComputePlatformStats(summary)
+		}
+	}
+}
+
+func toComputePlatformStats(summary *snapshotsummary.Summary) *model.ComputePlatformStats {
+	return &model.ComputePlatformStats{
+		Workloads:                  int32(summary.Workloads),
+		InstrumentedWorkloads:      int32(summary.InstrumentedWorkloads),
+		WorkloadsWithIssues:        int32(summary.WorkloadsWithIssues()),
+		WorkloadsInProgress:        int32(summary.WorkloadsInProgress()),
+		Namespaces:                 int32(summary.Namespaces),
+		AutoInstrumentedNamespaces: int32(summary.AutoInstrumentedNamespaces),
+		UpdatedAt:                  int(summary.SnapshotTimestamp * 1000),
+	}
 }
 
 // appendCloudConnectors lists OdigosCloudConnector CRs and folds them into the

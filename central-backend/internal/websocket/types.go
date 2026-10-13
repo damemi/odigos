@@ -46,4 +46,5 @@ const (
 	MessageTypeGraphQLQuery    WebSocketMessageType = "graphql_query"
 	MessageTypeSSEEvent        WebSocketMessageType = "sse_event"
 	MessageTypeClusterSnapshot WebSocketMessageType = "cluster_snapshot"
+	MessageTypeWorkloadSummary WebSocketMessageType = "workload_summary"
 )

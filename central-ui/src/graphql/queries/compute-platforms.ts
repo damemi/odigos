@@ -11,6 +11,15 @@ export const GET_COMPUTE_PLATFORMS = gql`
       status
       connectedAt
       lastSeenAt
+      stats {
+        workloads
+        instrumentedWorkloads
+        workloadsWithIssues
+        workloadsInProgress
+        namespaces
+        autoInstrumentedNamespaces
+        updatedAt
+      }
       users {
         id
         email

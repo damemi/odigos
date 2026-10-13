@@ -46,4 +46,7 @@ const (
 	SnapshotFieldData        = "data"
 	SnapshotFieldTimestamp   = "timestamp"
 	SnapshotFieldClusterName = "cluster_name"
+	// The field name carries the summary format version: bumping it makes every
+	// stored summary read as missing, so the startup backfill rebuilds them all.
+	SnapshotFieldSummary = "summary_v1"
 )

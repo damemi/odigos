@@ -16,6 +16,7 @@ import (
 	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/logger"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
+	"github.com/odigos-io/central-backend/internal/snapshotsummary"
 	"github.com/odigos-io/central-backend/internal/snapshotworker"
 	"github.com/odigos-io/central-backend/internal/ssehub"
 	"github.com/odigos-io/central-backend/internal/types"
@@ -159,8 +160,10 @@ func (ws *WebSocketServer) listenForMessages(ctx context.Context, proxyID string
 		}
 
 		// Update last-seen timestamp on any message
-		if err := ws.redisClient.UpdateProxyLastSeen(ctx, proxyID, time.Now().Unix()); err != nil {
-			logger.Log.Warn("Failed to update proxy lastSeenAt", "proxyID", proxyID, "error", err)
+		if parsedMessage.Type != MessageTypeWorkloadSummary {
+			if err := ws.redisClient.UpdateProxyLastSeen(ctx, proxyID, time.Now().Unix()); err != nil {
+				logger.Log.Warn("Failed to update proxy lastSeenAt", "proxyID", proxyID, "error", err)
+			}
 		}
 
 		switch parsedMessage.Type {
@@ -179,6 +182,21 @@ func (ws *WebSocketServer) listenForMessages(ctx context.Context, proxyID string
 			}
 		case MessageTypeClusterSnapshot:
 			ws.handleClusterSnapshot(proxyID, parsedMessage.Data)
+		case MessageTypeWorkloadSummary:
+			var summary snapshotsummary.Summary
+			if err := json.Unmarshal(parsedMessage.Data, &summary); err != nil {
+				logger.Log.Warn("Failed to parse workload summary", "proxyID", proxyID, "error", err)
+				continue
+			}
+			if err := redisclient.ValidateWorkloadSummary(&summary); err != nil {
+				logger.Log.Warn("Invalid workload summary", "proxyID", proxyID, "error", err)
+				continue
+			}
+			if err := ws.redisClient.SetWorkloadSummary(ctx, proxyID, &summary); err != nil {
+				logger.Log.Warn("Failed to store workload summary", "proxyID", proxyID, "error", err)
+				continue
+			}
+			continue
 		default:
 			// fall through to existing publishing behavior
 		}

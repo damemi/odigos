@@ -13,6 +13,7 @@ import (
 	"github.com/odigos-io/central-backend/internal/config"
 	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/logger"
+	"github.com/odigos-io/central-backend/internal/snapshotsummary"
 	"github.com/odigos-io/central-backend/internal/types"
 )
 
@@ -100,8 +101,11 @@ func (r *RedisClient) SetOnReconnect(fn OnReconnectFunc) {
 
 func (r *RedisClient) DeleteProxyConnection(ctx context.Context, proxyID string) error {
 	metaKey := consts.GetProxyMetadataKey(proxyID) // proxy-meta:{backendID}:{proxyID}
+	// The snapshot (and its summary) goes with the connection, so a deleted
+	// cluster doesn't leave stale workloads behind for the snapshot queries.
+	snapshotKey := consts.GetClusterSnapshotKey(proxyID)
 
-	result := r.client.Del(ctx, metaKey)
+	result := r.client.Del(ctx, metaKey, snapshotKey)
 	if result.Err() != nil {
 		return result.Err()
 	}
@@ -376,16 +380,142 @@ type ClusterSnapshotData struct {
 }
 
 // SetClusterSnapshot stores a cluster snapshot in Redis.
-// The snapshot is stored as a hash with data, timestamp, and cluster name fields.
-func (r *RedisClient) SetClusterSnapshot(ctx context.Context, clusterID string, clusterName string, data []byte, timestamp int64) error {
+// The snapshot is stored as a hash with data, timestamp, cluster name and summary fields.
+// A nil summary clears the stored one, so it never describes an older snapshot.
+func (r *RedisClient) SetClusterSnapshot(ctx context.Context, clusterID string, clusterName string, data []byte, timestamp int64, summary *snapshotsummary.Summary) error {
 	key := consts.GetClusterSnapshotKey(clusterID)
-	return r.client.HSet(
-		ctx,
-		key,
+	values := []interface{}{
 		consts.SnapshotFieldData, string(data),
 		consts.SnapshotFieldTimestamp, strconv.FormatInt(timestamp, 10),
 		consts.SnapshotFieldClusterName, clusterName,
-	).Err()
+	}
+	if summary != nil {
+		summaryJSON, err := json.Marshal(summary)
+		if err != nil {
+			return fmt.Errorf("failed to marshal snapshot summary: %w", err)
+		}
+		values = append(values, consts.SnapshotFieldSummary, string(summaryJSON))
+	}
+
+	// One transaction, so a reader never pairs new data with the previous summary.
+	_, err := r.client.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.HSet(ctx, key, values...)
+		if summary == nil {
+			pipe.HDel(ctx, key, consts.SnapshotFieldSummary)
+		}
+		return nil
+	})
+	return err
+}
+
+// SetWorkloadSummary stores compact agent statistics without inventing a
+// Kubernetes snapshot. The connection list uses the same batched summary read.
+func (r *RedisClient) SetWorkloadSummary(ctx context.Context, proxyID string, summary *snapshotsummary.Summary) error {
+	if err := ValidateWorkloadSummary(summary); err != nil {
+		return err
+	}
+	summaryJSON, err := json.Marshal(summary)
+	if err != nil {
+		return fmt.Errorf("failed to marshal workload summary: %w", err)
+	}
+	_, err = r.client.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
+		pipe.HSet(ctx, consts.GetClusterSnapshotKey(proxyID), consts.SnapshotFieldSummary, summaryJSON)
+		pipe.HSet(ctx, consts.GetProxyMetadataKey(proxyID), consts.ProxyMetaFieldLastSeenAt, time.Now().Unix())
+		return nil
+	})
+	return err
+}
+
+func ValidateWorkloadSummary(summary *snapshotsummary.Summary) error {
+	if summary == nil || summary.Workloads < 0 || summary.InstrumentedWorkloads < 0 || summary.InstrumentedWorkloads > summary.Workloads || summary.SnapshotTimestamp <= 0 {
+		return fmt.Errorf("invalid workload summary")
+	}
+	healthTotal := 0
+	for _, count := range summary.WorkloadsByHealth {
+		if count < 0 || count > summary.InstrumentedWorkloads-healthTotal {
+			return fmt.Errorf("invalid workload health count")
+		}
+		healthTotal += count
+	}
+	return nil
+}
+
+// setSummaryIfMissingScript writes the summary only while the snapshot still
+// exists and has none. A snapshot stored in the meantime carries its own
+// summary, and a deleted one must not be recreated as a summary-only hash.
+var setSummaryIfMissingScript = redis.NewScript(`
+if redis.call('HEXISTS', KEYS[1], ARGV[1]) == 0 then
+	return 0
+end
+return redis.call('HSETNX', KEYS[1], ARGV[2], ARGV[3])
+`)
+
+// SetClusterSnapshotSummaryIfMissing stores a summary built from an already
+// stored snapshot. It reports whether the summary was written.
+func (r *RedisClient) SetClusterSnapshotSummaryIfMissing(ctx context.Context, clusterID string, summary *snapshotsummary.Summary) (bool, error) {
+	summaryJSON, err := json.Marshal(summary)
+	if err != nil {
+		return false, fmt.Errorf("failed to marshal snapshot summary: %w", err)
+	}
+	key := consts.GetClusterSnapshotKey(clusterID)
+	written, err := setSummaryIfMissingScript.Run(ctx, r.client, []string{key},
+		consts.SnapshotFieldData, consts.SnapshotFieldSummary, string(summaryJSON)).Int()
+	if err != nil {
+		return false, err
+	}
+	return written == 1, nil
+}
+
+// GetClusterSnapshotSummaries returns the stored summary of each given cluster
+// in one round trip. Clusters without a snapshot, or whose snapshot has no
+// summary yet, are left out of the result.
+func (r *RedisClient) GetClusterSnapshotSummaries(ctx context.Context, clusterIDs []string) (map[string]*snapshotsummary.Summary, error) {
+	result := make(map[string]*snapshotsummary.Summary, len(clusterIDs))
+	if len(clusterIDs) == 0 {
+		return result, nil
+	}
+
+	pipe := r.client.Pipeline()
+	cmds := make([]*redis.StringCmd, len(clusterIDs))
+	for i, clusterID := range clusterIDs {
+		cmds[i] = pipe.HGet(ctx, consts.GetClusterSnapshotKey(clusterID), consts.SnapshotFieldSummary)
+	}
+	// Exec reports redis.Nil when any field is missing; each command is checked below.
+	if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
+		return nil, err
+	}
+
+	for i, cmd := range cmds {
+		raw, err := cmd.Result()
+		if err == redis.Nil {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		var summary snapshotsummary.Summary
+		if err := json.Unmarshal([]byte(raw), &summary); err != nil {
+			logger.Log.Warn("Failed to parse cluster snapshot summary", "clusterID", clusterIDs[i], "error", err)
+			continue
+		}
+		result[clusterIDs[i]] = &summary
+	}
+	return result, nil
+}
+
+// GetClusterSnapshotIDs lists the ids of all clusters that have a stored snapshot.
+func (r *RedisClient) GetClusterSnapshotIDs(ctx context.Context) ([]string, error) {
+	var clusterIDs []string
+	iter := r.client.Scan(ctx, 0, consts.GetClusterSnapshotsPattern(), scanCount).Iterator()
+	for iter.Next(ctx) {
+		if clusterID := consts.ExtractClusterIDFromSnapshotKey(iter.Val()); clusterID != "" {
+			clusterIDs = append(clusterIDs, clusterID)
+		}
+	}
+	if err := iter.Err(); err != nil {
+		return nil, err
+	}
+	return clusterIDs, nil
 }
 
 // GetClusterSnapshot retrieves a cluster snapshot from Redis.
@@ -396,7 +526,7 @@ func (r *RedisClient) GetClusterSnapshot(ctx context.Context, clusterID string) 
 	if err != nil {
 		return nil, err
 	}
-	if len(m) == 0 {
+	if _, hasData := m[consts.SnapshotFieldData]; !hasData {
 		return nil, nil // No snapshot exists
 	}
 
