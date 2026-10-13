@@ -400,6 +400,82 @@ func TestForcePromoteServiceAutoEnablesGuardrail(t *testing.T) {
 	}
 }
 
+func TestPromoteTransactionsBaselinesDedupesAutoEnablePerService(t *testing.T) {
+	// Build the same fixture twice: ten transactions spread over two services,
+	// all with unpromoted baselines so the auto-enable check has work to do.
+	build := func() (*fakeRepo, *Engine, []int64) {
+		r := newFakeRepo()
+		eng := New(r, nil, nil, nil)
+		eng.SetGuardrailConfig(guardrailConfigFrom())
+		eng.SetSystemConfig(newSystemConfig(repo.SystemSettings{AutoTransactionGuardrail: true}))
+		var ids []int64
+		for _, service := range []string{"geolocation", "checkout"} {
+			for i := 0; i < 5; i++ {
+				op := "GET /" + service + "/" + string(rune('a'+i))
+				tx, err := r.UpsertTransaction(context.Background(), service, "default", op, repo.KindHTTP)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, class := range ScoredClasses() {
+					if err := r.UpsertBaselineClass(context.Background(), repo.BaselineClass{
+						TransactionID: tx.ID, Class: class, Data: json.RawMessage(`{}`), Promoted: false,
+					}); err != nil {
+						t.Fatal(err)
+					}
+				}
+				ids = append(ids, tx.ID)
+			}
+		}
+		return r, eng, ids
+	}
+
+	countCalls := func(f *fakeRepo) int {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		return f.listStatsCalls
+	}
+
+	// Per-transaction promote: the auto-enable check runs on every transaction.
+	rOld, engOld, idsOld := build()
+	for _, id := range idsOld {
+		if err := engOld.PromoteTransactionBaselines(context.Background(), id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldCalls := countCalls(rOld)
+
+	// Bulk promote: the auto-enable check runs once per service.
+	rNew, engNew, idsNew := build()
+	done, failed, err := engNew.PromoteTransactionsBaselines(context.Background(), idsNew)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if done != len(idsNew) || failed != 0 {
+		t.Fatalf("done=%d failed=%d, want done=%d failed=0", done, failed, len(idsNew))
+	}
+	newCalls := countCalls(rNew)
+
+	// Two services, each checked once (readiness read + allowlist-seed read =
+	// two reads per service) regardless of transaction count.
+	if newCalls != 4 {
+		t.Fatalf("bulk promote made %d ListTransactionStats calls, want 4 (2 per service)", newCalls)
+	}
+	if oldCalls <= newCalls {
+		t.Fatalf("per-transaction path made %d calls vs deduped %d; dedupe must reduce the call count", oldCalls, newCalls)
+	}
+
+	// Behavior parity: both services still end up auto-protected.
+	for _, service := range []string{"geolocation", "checkout"} {
+		g, err := engNew.loadOrInitServiceGuardrail(context.Background(), repo.ServiceScopeKey("default", service))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !InventoryProtected(g) {
+			t.Fatalf("service default/%s should be auto-protected after bulk promote", service)
+		}
+	}
+}
+
 func TestForcePromoteServiceAutoEnablesDespiteStalePromotedFlag(t *testing.T) {
 	r := newFakeRepo()
 	eng := New(r, nil, nil, nil)

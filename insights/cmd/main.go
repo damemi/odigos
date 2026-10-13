@@ -5,12 +5,15 @@ package main
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	stdhttp "net/http"
 
 	// Registers the /debug/pprof/* handlers.
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -23,7 +26,10 @@ import (
 	"github.com/odigos-io/odigos-enterprise/insights/internal/db/clickhouse/migrate"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/debugui"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/engine"
+	"github.com/odigos-io/odigos-enterprise/insights/internal/leader"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/metrics"
+	"github.com/odigos-io/odigos-enterprise/insights/internal/notify"
+	"github.com/odigos-io/odigos-enterprise/insights/internal/notify/sinks"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/otlp"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
@@ -44,6 +50,10 @@ const (
 	// (clickhouse://user:pass@host:9000/db). The Helm chart builds it from the
 	// bundled ClickHouse Secret.
 	envClickHouseDSN = "CLICKHOUSE_DSN"
+
+	// leaderLease elects the one replica that runs the singleton jobs (findings
+	// notifier, recommendation sweeps). The chart grants leases get/create/update.
+	leaderLease = "odigos-insights-leader"
 )
 
 // getLogLevel reads ODIGOS_LOG_LEVEL, defaulting to "info" when unset.
@@ -102,6 +112,12 @@ func main() {
 	// is up, and /readyz (readiness) is 503 until the DB is reachable and the
 	// schema is initialized.
 	router, apiHandle := apihttp.NewRouter(r, log)
+
+	// Findings integrations: the backend catalog serves the API/debug UI on
+	// every replica; the dispatcher that actually sends runs on the leader only
+	// (see runNotifier below, after the schema is ready).
+	integrationRegistry := sinks.NewRegistry(notify.DefaultDeps())
+	apiHandle.SetIntegrationRegistry(integrationRegistry)
 
 	// TODO(insights-skeleton): REMOVE BEFORE FIRST REAL CUSTOMER RELEASE.
 	// The /debug/* inspector ships unconditionally for now so the team can hit
@@ -194,11 +210,11 @@ func main() {
 		eng.RunSampleWriter(flusherCtx)
 		close(sampleWriterDone)
 	}()
-	// The recommendation miner reads stored relation samples of promoted
-	// transactions and suggests guardrail rules; it is fully off the ingest path
-	// and stops with the root context (no final drain needed - the mining-run
-	// table lets any replica pick up where it left off).
-	go eng.RunRecommendationMiner(rootCtx)
+	// Singleton jobs run only on the replica holding the Lease: the findings
+	// notifier (delivering a finding twice is wrong) and the recommendation
+	// miner (one miner serves the queued requests and the periodic sweeps;
+	// requests handled on a follower are picked up by the leader's next sweep).
+	go runLeaderJobs(rootCtx, log, r, integrationRegistry, eng)
 
 	otlpSrv := otlp.NewServer(otlpAddr, eng, log)
 	otlpErrCh, err := otlpSrv.Start()
@@ -451,6 +467,39 @@ func runSystemSettingsReloader(
 				log.Warn("failed to reload system settings; keeping previous snapshot", "error", err)
 			}
 		}
+	}
+}
+
+// runLeaderJobs runs the singleton jobs on the replica holding the leader
+// Lease, each in its own goroutine so a long mining sweep never delays a
+// notifier tick. Losing the lease cancels them all. Outside a cluster (no
+// in-cluster credentials) they run unconditionally, which is the local
+// single-process case.
+func runLeaderJobs(ctx context.Context, log *commonlogger.OdigosLogger, r repo.Repository, reg *notify.Registry, eng *engine.Engine) {
+	dispatcher := notify.NewDispatcher(r, reg, slog.New(commonlogger.NewSlogHandler("notifier")), leader.Identity(), notify.PollInterval, notify.DefaultOverlap)
+	jobs := []func(context.Context){dispatcher.Run, eng.RunRecommendationMiner}
+	run := func(ctx context.Context) {
+		var wg sync.WaitGroup
+		for _, job := range jobs {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				job(ctx)
+			}()
+		}
+		wg.Wait()
+	}
+
+	elector, err := leader.New(leader.Config{LeaseName: leaderLease}, slog.New(commonlogger.NewSlogHandler("leader")))
+	switch {
+	case err == nil:
+		elector.Run(ctx, run, metrics.SetLeader)
+	case errors.Is(err, leader.ErrNotInCluster):
+		log.Info("leader jobs running without leader election (not in a cluster)")
+		metrics.SetLeader(true)
+		run(ctx)
+	default:
+		log.Error("leader jobs disabled: leader election unavailable", "error", err)
 	}
 }
 

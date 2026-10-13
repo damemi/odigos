@@ -122,6 +122,69 @@ func (e CorrelationSpecRelation) Valid() bool {
 	}
 }
 
+// Defines values for DeliveryAction.
+const (
+	Firing   DeliveryAction = "firing"
+	Resolved DeliveryAction = "resolved"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryAction enum.
+func (e DeliveryAction) Valid() bool {
+	switch e {
+	case Firing:
+		return true
+	case Resolved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryAttemptOutcome.
+const (
+	DeliveryAttemptOutcomeDead  DeliveryAttemptOutcome = "dead"
+	DeliveryAttemptOutcomeError DeliveryAttemptOutcome = "error"
+	DeliveryAttemptOutcomeOk    DeliveryAttemptOutcome = "ok"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryAttemptOutcome enum.
+func (e DeliveryAttemptOutcome) Valid() bool {
+	switch e {
+	case DeliveryAttemptOutcomeDead:
+		return true
+	case DeliveryAttemptOutcomeError:
+		return true
+	case DeliveryAttemptOutcomeOk:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryState.
+const (
+	DeliveryStateDead    DeliveryState = "dead"
+	DeliveryStateFailed  DeliveryState = "failed"
+	DeliveryStatePending DeliveryState = "pending"
+	DeliveryStateSent    DeliveryState = "sent"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryState enum.
+func (e DeliveryState) Valid() bool {
+	switch e {
+	case DeliveryStateDead:
+		return true
+	case DeliveryStateFailed:
+		return true
+	case DeliveryStatePending:
+		return true
+	case DeliveryStateSent:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DeviationClass.
 const (
 	D1CallEdges   DeviationClass = "D1_call_edges"
@@ -197,6 +260,36 @@ func (e FindingKind) Valid() bool {
 	case Anomaly:
 		return true
 	case Violation:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationFieldType.
+const (
+	Bool   IntegrationFieldType = "bool"
+	Number IntegrationFieldType = "number"
+	Secret IntegrationFieldType = "secret"
+	Select IntegrationFieldType = "select"
+	String IntegrationFieldType = "string"
+	Url    IntegrationFieldType = "url"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationFieldType enum.
+func (e IntegrationFieldType) Valid() bool {
+	switch e {
+	case Bool:
+		return true
+	case Number:
+		return true
+	case Secret:
+		return true
+	case Select:
+		return true
+	case String:
+		return true
+	case Url:
 		return true
 	default:
 		return false
@@ -958,6 +1051,71 @@ type CorrelationSpec struct {
 // CorrelationSpecRelation Required relation between the two extracted values.
 type CorrelationSpecRelation string
 
+// Delivery Ledger row for one (integration, finding) pair.
+type Delivery struct {
+	// Attempts Consecutive failed attempts for the current action.
+	Attempts int `json:"attempts"`
+
+	// ExternalId Backend-side id when the backend returns one.
+	ExternalId        string         `json:"external_id,omitempty"`
+	FindingKey        string         `json:"finding_key"`
+	IntegrationId     string         `json:"integration_id"`
+	LastAction        DeliveryAction `json:"last_action"`
+	LastError         string         `json:"last_error,omitempty"`
+	NextAttemptAt     time.Time      `json:"next_attempt_at,omitempty"`
+	OccurrencesAtSend int64          `json:"occurrences_at_send,omitempty"`
+	SentAt            time.Time      `json:"sent_at,omitempty"`
+	SeverityAtSend    string         `json:"severity_at_send,omitempty"`
+
+	// State `sent`: last action delivered. `failed`: last attempt failed with a retryable error; `next_attempt_at` says when it retries. `dead`: retries exhausted or a permanent error (bad credentials, rejected payload); needs a manual retry. `pending`: re-armed, sends next tick.
+	State        DeliveryState `json:"state"`
+	StatusAtSend string        `json:"status_at_send,omitempty"`
+	UpdatedAt    time.Time     `json:"updated_at"`
+}
+
+// DeliveryAction defines model for DeliveryAction.
+type DeliveryAction string
+
+// DeliveryAttempt One send to a backend for one finding.
+type DeliveryAttempt struct {
+	Action      DeliveryAction `json:"action"`
+	Attempt     int            `json:"attempt"`
+	AttemptedAt time.Time      `json:"attempted_at"`
+	DurationMs  int            `json:"duration_ms"`
+	Error       string         `json:"error,omitempty"`
+
+	// EventCount Findings carried by the same request (batched backends).
+	EventCount    int                    `json:"event_count"`
+	FindingKey    string                 `json:"finding_key"`
+	HttpStatus    int                    `json:"http_status,omitempty"`
+	IntegrationId string                 `json:"integration_id"`
+	Outcome       DeliveryAttemptOutcome `json:"outcome"`
+}
+
+// DeliveryAttemptList defines model for DeliveryAttemptList.
+type DeliveryAttemptList struct {
+	Count int               `json:"count"`
+	Items []DeliveryAttempt `json:"items"`
+}
+
+// DeliveryAttemptOutcome defines model for DeliveryAttemptOutcome.
+type DeliveryAttemptOutcome string
+
+// DeliveryList defines model for DeliveryList.
+type DeliveryList struct {
+	Count int        `json:"count"`
+	Items []Delivery `json:"items"`
+}
+
+// DeliveryRetryRequest defines model for DeliveryRetryRequest.
+type DeliveryRetryRequest struct {
+	// FindingKeys Findings to re-arm. Empty or omitted = every failed and dead delivery.
+	FindingKeys []string `json:"finding_keys,omitempty"`
+}
+
+// DeliveryState `sent`: last action delivered. `failed`: last attempt failed with a retryable error; `next_attempt_at` says when it retries. `dead`: retries exhausted or a permanent error (bad credentials, rejected payload); needs a manual retry. `pending`: re-armed, sends next tick.
+type DeliveryState string
+
 // DeviationClass One baseline dimension; the scoring engine is the source of truth.
 type DeviationClass string
 
@@ -1127,6 +1285,122 @@ type HealthStatus struct {
 	Status string `json:"status"`
 }
 
+// Integration Examples: {"config":{"password":"••••••••","url":"http://alertmanager.monitoring:9093","username":"insights"},"created_at":"2026-10-01T08:00:00Z","enabled":true,"filters":{"min_severity":"medium"},"health":{"consecutive_failures":0,"dead":0,"failed":0,"last_success_at":"2026-10-11T09:30:15Z","pending":0},"id":"9c1f0c4e-2a7b-4f3b-9a1e-6b1f0c0d2e11","name":"platform-alertmanager","type":"alertmanager","updated_at":"2026-10-01T08:00:00Z"}
+type Integration struct {
+	// Config Stored config with secret fields redacted.
+	Config    json.RawMessage `json:"config"`
+	CreatedAt time.Time       `json:"created_at"`
+	Enabled   bool            `json:"enabled"`
+
+	// Filters Per-integration gate applied after routing.
+	Filters IntegrationFilters `json:"filters"`
+
+	// Health Derived from the attempt audit (last 24h) and the delivery ledger. `consecutive_failures` is the trailing run of failed attempts since the last success.
+	Health    IntegrationHealth `json:"health"`
+	Id        string            `json:"id"`
+	Name      string            `json:"name"`
+	Type      string            `json:"type"`
+	UpdatedAt time.Time         `json:"updated_at"`
+}
+
+// IntegrationCapabilities How the backend models alerts; informs what the notifier sends. `needs_heartbeat`: active findings are re-asserted every poll so the backend does not expire them. `supports_resolve`: the backend tracks open/closed per finding, so accepted/dismissed findings are always sent as resolved (other backends only get resolve events when the integration opts in via `filters.notify_on_resolve`).
+type IntegrationCapabilities struct {
+	// MaxBatch Most findings one request to the backend carries.
+	MaxBatch          int  `json:"max_batch"`
+	NeedsHeartbeat    bool `json:"needs_heartbeat"`
+	ReturnsExternalId bool `json:"returns_external_id"`
+	SupportsResolve   bool `json:"supports_resolve"`
+}
+
+// IntegrationCatalog defines model for IntegrationCatalog.
+type IntegrationCatalog struct {
+	Count int                     `json:"count"`
+	Items []IntegrationDescriptor `json:"items"`
+}
+
+// IntegrationDescriptor A supported backend and how to configure it.
+type IntegrationDescriptor struct {
+	// Capabilities How the backend models alerts; informs what the notifier sends. `needs_heartbeat`: active findings are re-asserted every poll so the backend does not expire them. `supports_resolve`: the backend tracks open/closed per finding, so accepted/dismissed findings are always sent as resolved (other backends only get resolve events when the integration opts in via `filters.notify_on_resolve`).
+	Capabilities IntegrationCapabilities `json:"capabilities"`
+	Description  string                  `json:"description"`
+	DocsUrl      string                  `json:"docs_url,omitempty"`
+	Fields       []IntegrationFieldSpec  `json:"fields"`
+	Name         string                  `json:"name"`
+
+	// Type Stable backend id used as `Integration.type`.
+	Type string `json:"type"`
+}
+
+// IntegrationFieldSpec One key of a backend's config, as rendered in its editor.
+type IntegrationFieldSpec struct {
+	Default string `json:"default,omitempty"`
+	Help    string `json:"help,omitempty"`
+	Key     string `json:"key"`
+	Label   string `json:"label"`
+
+	// Options Allowed values for `select` fields.
+	Options     []string `json:"options,omitempty"`
+	Placeholder string   `json:"placeholder,omitempty"`
+	Required    bool     `json:"required"`
+
+	// Type Drives the form control and validation for one config key. `secret` values are write-only and read back as a redacted placeholder.
+	Type IntegrationFieldType `json:"type"`
+}
+
+// IntegrationFieldType Drives the form control and validation for one config key. `secret` values are write-only and read back as a redacted placeholder.
+type IntegrationFieldType string
+
+// IntegrationFilters Per-integration gate applied after routing.
+type IntegrationFilters struct {
+	// Kinds Only deliver these kinds. Omitted/empty = both.
+	Kinds []FindingKind `json:"kinds,omitempty"`
+
+	// MinSeverity Drop findings below this tier. Omitted = deliver all.
+	MinSeverity Severity `json:"min_severity,omitempty"`
+
+	// NotifyOnResolve Also send a resolved event when a finding is accepted or dismissed, for backends without native resolve (Slack, webhook). Backends with `supports_resolve` always receive resolves.
+	NotifyOnResolve bool `json:"notify_on_resolve,omitempty"`
+}
+
+// IntegrationHealth Derived from the attempt audit (last 24h) and the delivery ledger. `consecutive_failures` is the trailing run of failed attempts since the last success.
+type IntegrationHealth struct {
+	ConsecutiveFailures int `json:"consecutive_failures"`
+
+	// Dead Deliveries that exhausted retries or hit a permanent error.
+	Dead int `json:"dead"`
+
+	// Failed Deliveries awaiting a backoff retry.
+	Failed        int       `json:"failed"`
+	LastError     string    `json:"last_error,omitempty"`
+	LastFailureAt time.Time `json:"last_failure_at,omitempty"`
+	LastSuccessAt time.Time `json:"last_success_at,omitempty"`
+
+	// Pending Deliveries awaiting the next tick.
+	Pending int `json:"pending"`
+}
+
+// IntegrationList defines model for IntegrationList.
+type IntegrationList struct {
+	Count int           `json:"count"`
+	Items []Integration `json:"items"`
+}
+
+// IntegrationWrite Create/update body. `config` keys come from the catalog descriptor's `fields`.
+type IntegrationWrite struct {
+	// Config Backend config keyed by field; values typed per field type.
+	Config json.RawMessage `json:"config"`
+
+	// Enabled Disabled integrations keep their config but receive nothing. Defaults to true.
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// Filters Per-integration gate applied after routing.
+	Filters IntegrationFilters `json:"filters,omitempty"`
+	Name    string             `json:"name"`
+
+	// Type Backend id from the catalog. Ignored on update.
+	Type string `json:"type"`
+}
+
 // LearningCondition defines model for LearningCondition.
 type LearningCondition struct {
 	MinDurationMinutes int64                 `json:"minDurationMinutes,omitempty"`
@@ -1202,11 +1476,14 @@ type Policy struct {
 	EnricherLists map[string][]string `json:"enricher_lists,omitempty"`
 
 	// FireAtScore Risk-score threshold (0-100) at or above which the policy fires.
-	FireAtScore int         `json:"fire_at_score"`
-	Id          int64       `json:"id"`
-	Name        string      `json:"name"`
-	Scope       PolicyScope `json:"scope"`
-	ScopeKey    string      `json:"scope_key"`
+	FireAtScore int   `json:"fire_at_score"`
+	Id          int64 `json:"id"`
+
+	// IntegrationIds Integrations that receive anomalies fired under this policy. Empty on an override falls back to the global policy's list; empty on the global policy means anomalies are not delivered anywhere.
+	IntegrationIds []string    `json:"integration_ids,omitempty"`
+	Name           string      `json:"name"`
+	Scope          PolicyScope `json:"scope"`
+	ScopeKey       string      `json:"scope_key"`
 
 	// SignalWeights Per-signal weight overrides (deviation class or enricher id).
 	SignalWeights map[string]int `json:"signal_weights,omitempty"`
@@ -1476,9 +1753,11 @@ type SampleReason = string
 
 // ServiceGuardrail Examples: {"rules":[{"allowlist":["default/gateway"],"key":"allowed_callers","label":"Allowed callers","mode":"enforce"},{"allowlist":["checkout.stripe.com:443"],"key":"allowed_egress","label":"Allowed egress destinations","mode":"suggest"}],"scope":"service","scope_key":"default/frontend"}
 type ServiceGuardrail struct {
-	Rules    []GuardrailRuleConfig `json:"rules"`
-	Scope    PolicyScope           `json:"scope"`
-	ScopeKey string                `json:"scope_key"`
+	// IntegrationIds Integrations that receive this guardrail's violations. Empty falls back to the global alert policy's list.
+	IntegrationIds []string              `json:"integration_ids,omitempty"`
+	Rules          []GuardrailRuleConfig `json:"rules"`
+	Scope          PolicyScope           `json:"scope"`
+	ScopeKey       string                `json:"scope_key"`
 }
 
 // ServiceGuardrailList defines model for ServiceGuardrailList.
@@ -1814,6 +2093,9 @@ type ViolationStatus string
 // FromTime defines model for FromTime.
 type FromTime = string
 
+// IntegrationId defines model for IntegrationId.
+type IntegrationId = string
+
 // NamespaceFilter defines model for NamespaceFilter.
 type NamespaceFilter = string
 
@@ -1886,6 +2168,11 @@ type ListFindingsParams struct {
 	Kind FindingKind `form:"kind,omitempty" json:"kind,omitempty"`
 }
 
+// GetFindingDeliveriesParams defines parameters for GetFindingDeliveries.
+type GetFindingDeliveriesParams struct {
+	FindingKey string `form:"finding_key" json:"finding_key"`
+}
+
 // DeleteGuardrailParams defines parameters for DeleteGuardrail.
 type DeleteGuardrailParams struct {
 	// ScopeKey The guardrail's namespace/service scope key.
@@ -1923,6 +2210,19 @@ type GetGuardrailViolationParams struct {
 
 	// Offending The forbidden caller, callee, or egress destination.
 	Offending string `form:"offending" json:"offending"`
+}
+
+// ListIntegrationAttemptsParams defines parameters for ListIntegrationAttempts.
+type ListIntegrationAttemptsParams struct {
+	// WindowHours Lookback in hours (default 24).
+	WindowHours int `form:"window_hours,omitempty" json:"window_hours,omitempty"`
+	Limit       int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListIntegrationDeliveriesParams defines parameters for ListIntegrationDeliveries.
+type ListIntegrationDeliveriesParams struct {
+	State DeliveryState `form:"state,omitempty" json:"state,omitempty"`
+	Limit int           `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // DeleteLearningPolicyParams defines parameters for DeleteLearningPolicy.
@@ -2047,6 +2347,15 @@ type DismissViolationJSONRequestBody = ViolationActionRequest
 
 // ReopenViolationJSONRequestBody defines body for ReopenViolation for application/json ContentType.
 type ReopenViolationJSONRequestBody = ViolationActionRequest
+
+// CreateIntegrationJSONRequestBody defines body for CreateIntegration for application/json ContentType.
+type CreateIntegrationJSONRequestBody = IntegrationWrite
+
+// UpdateIntegrationJSONRequestBody defines body for UpdateIntegration for application/json ContentType.
+type UpdateIntegrationJSONRequestBody = IntegrationWrite
+
+// RetryIntegrationDeliveriesJSONRequestBody defines body for RetryIntegrationDeliveries for application/json ContentType.
+type RetryIntegrationDeliveriesJSONRequestBody = DeliveryRetryRequest
 
 // UpsertLearningPolicyJSONRequestBody defines body for UpsertLearningPolicy for application/json ContentType.
 type UpsertLearningPolicyJSONRequestBody = LearningPolicy

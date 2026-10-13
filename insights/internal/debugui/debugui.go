@@ -32,6 +32,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/insights/internal/api/http/apimap"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/api/http/apitypes"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/engine"
+	"github.com/odigos-io/odigos-enterprise/insights/internal/notify"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
 )
@@ -111,6 +112,20 @@ type ProductAPI interface {
 	RevertRecommendations(ctx context.Context, ids []string) (apitypes.RecommendationBulkResult, error)
 	PreviewRecommendation(ctx context.Context, req apitypes.RecommendationPreviewRequest) (apitypes.RecommendationPreview, error)
 	RecomputeRecommendations(ctx context.Context, req apitypes.RecommendationRecomputeRequest) error
+
+	// Findings integrations: same code paths as /integrations/* and
+	// GET /findings/deliveries.
+	IntegrationCatalog() ([]notify.Descriptor, error)
+	ListIntegrations(ctx context.Context) ([]apitypes.Integration, error)
+	GetIntegration(ctx context.Context, id string) (apitypes.Integration, error)
+	CreateIntegration(ctx context.Context, body apitypes.IntegrationWrite) (apitypes.Integration, error)
+	UpdateIntegration(ctx context.Context, id string, body apitypes.IntegrationWrite) (apitypes.Integration, error)
+	DeleteIntegration(ctx context.Context, id string) error
+	TestIntegration(ctx context.Context, id string) error
+	ListIntegrationDeliveries(ctx context.Context, id string, state string, limit int) ([]repo.NotificationDispatch, error)
+	RetryIntegrationDeliveries(ctx context.Context, id string, findingKeys []string) error
+	ListIntegrationAttempts(ctx context.Context, id string, windowHours, limit int) ([]repo.NotificationAttempt, error)
+	FindingDeliveries(ctx context.Context, findingKey string) ([]repo.NotificationDispatch, error)
 }
 
 // Handle is returned by Register so the caller can attach dependencies once
@@ -183,6 +198,14 @@ func Register(engine *gin.Engine, r repo.Repository) *Handle {
 	g.GET("/settings/system", ui.settingsSystem)
 	g.POST("/settings/system", ui.saveSystemSettings)
 	g.GET("/settings/storage", ui.settingsStorage)
+	// Findings integrations: catalog-driven editor, connectivity test, and the
+	// per-integration delivery ledger / attempt audit.
+	g.GET("/settings/integrations", ui.listIntegrations)
+	g.POST("/settings/integrations/save", ui.saveIntegration)
+	g.POST("/settings/integrations/delete", ui.deleteIntegration)
+	g.POST("/settings/integrations/test", ui.testIntegration)
+	g.GET("/settings/integrations/:id/deliveries", ui.integrationDeliveries)
+	g.POST("/settings/integrations/:id/retry", ui.retryIntegrationDeliveries)
 	g.POST("/services/transaction-guardrail/enable", ui.enableTransactionGuardrail)
 	g.POST("/services/transaction-guardrail/disable", ui.disableTransactionGuardrail)
 	g.POST("/services/transaction-guardrail/force-promote", ui.forcePromoteServiceTransactions)
@@ -231,6 +254,8 @@ func parseTemplates() map[string]*template.Template {
 		"guardrails",
 		"guardrail_evidence",
 		"recommendations",
+		"settings_integrations",
+		"integration_deliveries",
 	}
 	funcs := template.FuncMap{
 		"prettyJSON":         prettyJSON,
@@ -269,6 +294,9 @@ func parseTemplates() map[string]*template.Template {
 		"mul100":             func(f float64) float64 { return f * 100 },
 		"list":               func(items ...string) []string { return items },
 		"hasString":          slices.Contains[[]string, string],
+		"configValue":        configValue,
+		"dispatchBadge":      dispatchBadge,
+		"hasKind":            hasKind,
 		// Transaction identities are kind\toperation; the tab reads as a space.
 		"identityDisplay": func(s string) string { return strings.ReplaceAll(s, "\t", " ") },
 	}
@@ -1926,6 +1954,7 @@ func (u *ui) compareAnomalyIssue(c *gin.Context) {
 		"RiskFireAt":           riskFireAt,
 		"RiskCorrelated":       riskCorrelated,
 		"RiskCorrelationBonus": riskBonus,
+		"Deliveries":           u.findingDeliveries(ctx, repo.AnomalyFindingKey(issue.TransactionID, issue.Signature)),
 	})
 }
 
@@ -2104,10 +2133,11 @@ func (u *ui) listAnomalyPolicies(c *gin.Context) {
 	}
 	global, overrides := groupAnomalyPolicies(policies)
 	u.render(c, "anomaly_policies", "settings", c.Query("flash"), map[string]any{
-		"SettingsTab": "detection",
-		"Global":      global,
-		"Overrides":   overrides,
-		"Classes":     repo.AllDeviationClasses,
+		"SettingsTab":  "detection",
+		"Global":       global,
+		"Overrides":    overrides,
+		"Classes":      repo.AllDeviationClasses,
+		"Integrations": u.integrationOptions(c.Request.Context(), api),
 	})
 }
 
@@ -2292,13 +2322,14 @@ func parseAnomalyPolicyForm(c *gin.Context, scope repo.PolicyScope, scopeKey str
 		name = defaultAnomalyPolicyName(scope, scopeKey)
 	}
 	return repo.Policy{
-		Name:          name,
-		FireAtScore:   fireAt,
-		SignalWeights: signalWeights,
-		EnricherLists: enricherLists,
-		Enabled:       c.PostForm("enabled") == "on",
-		Scope:         scope,
-		ScopeKey:      scopeKey,
+		Name:           name,
+		FireAtScore:    fireAt,
+		SignalWeights:  signalWeights,
+		EnricherLists:  enricherLists,
+		Enabled:        c.PostForm("enabled") == "on",
+		Scope:          scope,
+		ScopeKey:       scopeKey,
+		IntegrationIDs: c.PostFormArray("integration_ids"),
 	}
 }
 
@@ -2674,6 +2705,7 @@ type guardrailView struct {
 	Rules           []guardrailRuleView
 	Correlations    []repo.CorrelationSpec
 	CorrelationMode repo.RuleMode
+	IntegrationIDs  []string
 }
 
 // buildGuardrailViews turns stored guardrails into editor rows, one per catalog
@@ -2683,7 +2715,7 @@ func buildGuardrailViews(guardrails []repo.ServiceGuardrail) []guardrailView {
 	for _, g := range guardrails {
 		scope := repo.NormalizePolicyScope(g.Scope)
 		ns, svc := splitScopeKey(g.ScopeKey)
-		view := guardrailView{ScopeKey: g.ScopeKey, Title: g.ScopeKey, Scope: scope, Namespace: ns, Service: svc}
+		view := guardrailView{ScopeKey: g.ScopeKey, Title: g.ScopeKey, Scope: scope, Namespace: ns, Service: svc, IntegrationIDs: g.IntegrationIDs}
 		for _, rule := range risk.GuardrailRules {
 			// The attribute_correlation rule has no allowlist; it is rendered from
 			// Correlations below, not as an allowlist row.
@@ -2761,6 +2793,7 @@ func (u *ui) listGuardrails(c *gin.Context) {
 		"Namespaces":       namespaces,
 		"ServicesJSON":     template.JS(servicesJSON),
 		"TransactionsJSON": template.JS(transactionsJSON),
+		"Integrations":     u.integrationOptions(ctx, api),
 	}
 	ns := strings.TrimSpace(c.Query("namespace"))
 	svc := strings.TrimSpace(c.Query("service"))
@@ -2835,11 +2868,12 @@ func (u *ui) saveGuardrail(c *gin.Context) {
 		}
 	}
 	guardrail := repo.ServiceGuardrail{
-		Scope:       repo.ScopeService,
-		ScopeKey:    scopeKey,
-		RuleLists:   map[repo.RuleKey][]string{},
-		RuleModes:   map[repo.RuleKey]repo.RuleMode{},
-		RuleOrigins: existingOrigins,
+		Scope:          repo.ScopeService,
+		ScopeKey:       scopeKey,
+		RuleLists:      map[repo.RuleKey][]string{},
+		RuleModes:      map[repo.RuleKey]repo.RuleMode{},
+		RuleOrigins:    existingOrigins,
+		IntegrationIDs: c.PostFormArray("integration_ids"),
 	}
 	for _, rule := range risk.GuardrailRules {
 		// attribute_correlation is transaction-scoped and has no allowlist row.
@@ -2881,6 +2915,7 @@ func (u *ui) saveTransactionGuardrail(c *gin.Context, api ProductAPI, redirect s
 		ScopeKey:         scopeKey,
 		RuleModes:        map[repo.RuleKey]repo.RuleMode{risk.RuleAttributeCorrelation: repo.NormalizeRuleMode(repo.RuleMode(c.PostForm("mode_attribute_correlation")))},
 		RuleCorrelations: map[repo.RuleKey][]repo.CorrelationSpec{risk.RuleAttributeCorrelation: specs},
+		IntegrationIDs:   c.PostFormArray("integration_ids"),
 	}
 	if err := api.UpsertServiceGuardrail(c.Request.Context(), guardrail); err != nil {
 		c.Redirect(http.StatusSeeOther, redirect+"?error="+url.QueryEscape("save failed: "+err.Error()))

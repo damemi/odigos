@@ -14,11 +14,13 @@ import (
 // and a fully-learned service's profile into a guardrail card. It runs in its
 // own goroutine: the ingest path only drops a transaction id (and its service)
 // into the queues when learning finishes, and periodic sweeps pick up whatever
-// the queues missed (a replica restart, a transaction promoted by another
-// replica, samples that landed late, a guardrail the operator edited). Every
-// replica runs a miner; the mining-run table acts as a soft claim so they do
-// not all mine the same transaction, and mining is deterministic so if two do,
-// they write the same rows.
+// the queues missed (a transaction promoted on another replica, samples that
+// landed late, a guardrail the operator edited, a restart). The miner is a
+// singleton on the leader, so a request handled on a follower is not mined
+// until the leader's next sweep (up to minerSweepInterval for a transaction,
+// minerServiceSweepInterval for a service card). The mining-run table records
+// each completed run so the sweep knows what still needs work; mining is
+// deterministic so re-mining a transaction writes the same rows.
 type recommendationMiner struct {
 	e        *Engine
 	queue    chan int64
@@ -43,9 +45,6 @@ const (
 	minerServiceSweepInterval = 5 * time.Minute
 	// minerSweepBatch bounds how many transactions one sweep mines.
 	minerSweepBatch = 20
-	// minerClaimStale is how long another replica's in-progress claim is
-	// respected before the transaction is considered up for grabs again.
-	minerClaimStale = 10 * time.Minute
 	// minerSettleDelay lets the sample writer land the last queued relation
 	// samples before a just-promoted transaction is mined.
 	minerSettleDelay = 3 * sampleFlushInterval
@@ -88,7 +87,9 @@ func (m *recommendationMiner) requestSweep() {
 	}
 }
 
-// run services the queues and the sweep tickers until ctx is cancelled.
+// run services the queues and the sweep tickers until ctx is cancelled. A
+// single goroutine on the leader, so requests and sweeps are serialized and
+// never mine the same transaction concurrently - no claim needed.
 func (m *recommendationMiner) run(ctx context.Context) {
 	ticker := time.NewTicker(minerSweepInterval)
 	defer ticker.Stop()
@@ -181,7 +182,7 @@ func (m *recommendationMiner) mineService(ctx context.Context, ref serviceRef) {
 
 // sweep mines every promoted transaction that still has unmined samples.
 func (m *recommendationMiner) sweep(ctx context.Context) {
-	candidates, err := m.e.repo.ListRecommendationMiningCandidates(ctx, len(m.e.scorers), minerClaimStale, minerSweepBatch)
+	candidates, err := m.e.repo.ListRecommendationMiningCandidates(ctx, len(m.e.scorers), minerSweepBatch)
 	if err != nil {
 		m.e.warn("list recommendation mining candidates", err)
 		return
@@ -194,26 +195,19 @@ func (m *recommendationMiner) sweep(ctx context.Context) {
 	}
 }
 
-// mine runs one transaction end to end: claim, load samples, mine, merge with
-// the previous run's rows so operator decisions survive, write, release the
-// claim, and refresh the guardrail snapshot so shadow evaluation of the new
-// open recommendations starts on this replica right away.
+// mine runs one transaction end to end: load samples, mine, merge with the
+// previous run's rows so operator decisions survive, write, record the run, and
+// refresh the guardrail snapshot so shadow evaluation of the new open
+// recommendations starts right away.
 func (m *recommendationMiner) mine(ctx context.Context, transactionID int64) {
 	ctx, cancel := context.WithTimeout(ctx, minerRunTimeout)
 	defer cancel()
 	start := time.Now()
 	now := m.e.clock()
-	if err := m.e.repo.RecordRecommendationMiningRun(ctx, repo.RecommendationMiningRun{TransactionID: transactionID, ClaimedAt: now}); err != nil {
-		m.e.warn("claim recommendation mining run", err)
-		metrics.ObserveRecommendationMining("error", time.Since(start).Seconds(), 0)
-		return
-	}
 	recs, sampleCount, err := m.e.mineTransaction(ctx, transactionID)
 	if err != nil {
 		m.e.warn(fmt.Sprintf("mine recommendations for transaction %d", transactionID), err)
 		metrics.ObserveRecommendationMining("error", time.Since(start).Seconds(), 0)
-		// Release the claim so the sweep retries instead of waiting it out.
-		_ = m.e.repo.RecordRecommendationMiningRun(ctx, repo.RecommendationMiningRun{TransactionID: transactionID, ClaimedAt: now, MinedAt: now})
 		return
 	}
 	if err := m.e.storeMinedRecommendations(ctx, transactionID, recs); err != nil {

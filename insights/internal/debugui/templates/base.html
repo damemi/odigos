@@ -339,6 +339,11 @@
      sub-navigation for the settings area (learning / detection / risk model /
      system); the top nav's single "settings" entry stays highlighted throughout. */
   .settings-layout { display: flex; gap: 24px; align-items: flex-start; }
+  .int-pick { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13px; margin: 8px 0; padding: 8px 12px; background: #f6f8fa; border-radius: 4px; }
+  .int-pick-lbl { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .int-pick label { display: inline-flex; align-items: center; gap: 5px; font-weight: normal; text-transform: none; letter-spacing: 0; color: var(--fg); font-size: 13px; }
+  .int-pick-type { font-size: 11px; color: var(--muted); }
+  .int-pick-hint { font-size: 11px; color: var(--muted); }
   .settings-nav { width: 210px; flex: 0 0 210px; display: flex; flex-direction: column; gap: 2px; position: sticky; top: 20px; }
   .settings-nav a { display: block; padding: 8px 10px; border-radius: 6px; text-decoration: none; color: var(--fg); border-left: 3px solid transparent; }
   .settings-nav a:hover { background: var(--row); }
@@ -534,6 +539,48 @@
 {{/* Settings left rail, grouped into sub-categories. Each settings page renders
      this at the top of its content and highlights the active tab via
      .SettingsTab (learning | detection | guardrails | risk-model | system | storage). */}}
+{{/* integrationPicker renders integration_ids checkboxes for a policy or
+     guardrail editor. Dot: dict Integrations ([]integrationOption), Selected ([]string). */}}
+{{define "integrationPicker"}}
+{{if .Integrations}}
+<div class="int-pick">
+  <span class="int-pick-lbl">Deliver to</span>
+  {{$sel := .Selected}}
+  {{range .Integrations}}
+  <label><input type="checkbox" name="integration_ids" value="{{.ID}}" {{if hasString $sel .ID}}checked{{end}}> {{.Name}} <span class="int-pick-type">{{.Type}}</span></label>
+  {{end}}
+  <span class="int-pick-hint">none selected = inherit the global detection policy's route</span>
+</div>
+{{else}}
+<div class="int-pick"><span class="int-pick-lbl">Deliver to</span><span class="int-pick-hint">no integrations configured - <a href="/debug/settings/integrations">add one</a></span></div>
+{{end}}
+{{end}}
+
+{{/* findingDeliveries renders the per-integration ledger for one finding on
+     the investigate pages. Dot: []repo.NotificationDispatch. */}}
+{{define "findingDeliveries"}}
+<h3>Deliveries</h3>
+{{if .}}
+<table>
+  <thead><tr><th>integration</th><th>last action</th><th>state</th><th>attempts</th><th>sent</th><th>last error</th></tr></thead>
+  <tbody>
+  {{range .}}
+  <tr>
+    <td><a href="/debug/settings/integrations/{{.IntegrationID}}/deliveries">{{.IntegrationID}}</a></td>
+    <td>{{.LastAction}}</td>
+    <td><span class="badge {{dispatchBadge .State}}">{{.State}}</span></td>
+    <td>{{.Attempts}}</td>
+    <td>{{if .SentAt.IsZero}}-{{else}}{{humanTime .SentAt}}{{end}}</td>
+    <td>{{.LastError}}</td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p class="hint">Not delivered to any integration yet. Findings are routed by the <a href="/debug/settings/detection">detection policy</a> / <a href="/debug/settings/guardrails">guardrail</a> they came from; see <a href="/debug/settings/integrations">integrations</a>.</p>
+{{end}}
+{{end}}
+
 {{define "settingsNav"}}
 <nav class="settings-nav">
   <div class="sn-group">Threat detection</div>
@@ -544,6 +591,10 @@
   <a href="/debug/settings/guardrails" {{if eq .SettingsTab "guardrails"}}class="active"{{end}}>
     <div class="sn-title">Guardrails</div>
     <div class="sn-desc">L7 allowlist rules (enforce / suggest)</div>
+  </a>
+  <a href="/debug/settings/integrations" {{if eq .SettingsTab "integrations"}}class="active"{{end}}>
+    <div class="sn-title">Integrations</div>
+    <div class="sn-desc">deliver findings to Slack, Alertmanager, webhooks</div>
   </a>
   <div class="sn-group">Learning</div>
   <a href="/debug/settings/learning" {{if eq .SettingsTab "learning"}}class="active"{{end}}>

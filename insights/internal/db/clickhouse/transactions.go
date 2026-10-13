@@ -163,8 +163,20 @@ func scanServiceStat(s rowScanner) (repo.ServiceStat, error) {
 // Promotion is aggregated in the same query, avoiding one baseline read per txn.
 func (r *Repo) ListTransactionStats(ctx context.Context, params repo.TransactionListParams) ([]repo.TransactionStat, error) {
 	params = params.WithDefaults()
-	where := ""
+	// Scope the per-transaction aggregates to the requested service. The outer
+	// namespace/service predicate filters only the final join output, so without
+	// this the volume (transaction_activity) and promotion (baseline_meta)
+	// subqueries aggregate every transaction in the database even for a
+	// single-service lookup. The promote-all flow issues one scoped lookup per
+	// transaction, so that full aggregation is what exhausted ClickHouse's memory.
+	scope := ""
 	args := []any{}
+	if params.Namespace != "" && params.Service != "" {
+		scope = "WHERE transaction_id IN (SELECT transaction_id FROM transactions WHERE namespace = ? AND service = ?)"
+		args = append(args, params.Namespace, params.Service, params.Namespace, params.Service)
+	}
+
+	where := ""
 	if params.Namespace != "" && params.Service != "" {
 		where = "WHERE t.namespace = ? AND t.service = ?"
 		args = append(args, params.Namespace, params.Service)
@@ -207,17 +219,20 @@ func (r *Repo) ListTransactionStats(ctx context.Context, params repo.Transaction
 		 FROM transactions AS t FINAL
 		 LEFT JOIN (
 			SELECT transaction_id, sum(volume) AS volume, max(last_seen) AS last_seen
-			FROM transaction_activity GROUP BY transaction_id
+			FROM transaction_activity
+			%[1]s
+			GROUP BY transaction_id
 		 ) AS a ON a.transaction_id = t.transaction_id
 		 LEFT JOIN (
 			SELECT transaction_id, count() AS total, countIf(is_settled = 1) AS settled,
 				arraySort(groupArrayIf(class, is_saturated = 1)) AS saturated_classes
 			FROM (`+settledClassesSQL+`)
+			%[1]s
 			GROUP BY transaction_id
 		 ) AS p ON p.transaction_id = t.transaction_id
-		 %s
-		 ORDER BY %s, t.transaction_id ASC
-		 LIMIT ?`, where, orderBy), scanTransactionStat, args...)
+		 %[2]s
+		 ORDER BY %[3]s, t.transaction_id ASC
+		 LIMIT ?`, scope, where, orderBy), scanTransactionStat, args...)
 }
 
 // transactionStatsOrderBy maps whitelist sort fields to SQL expressions.

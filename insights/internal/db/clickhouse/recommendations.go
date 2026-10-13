@@ -342,7 +342,7 @@ func (r *Repo) DeleteRecommendations(ctx context.Context, transactionID int64) e
 // mining. A transaction qualifies when it has no run, its run saw fewer
 // samples than are stored now, or its in-progress claim is older than
 // staleClaim (the claiming replica died).
-func (r *Repo) ListRecommendationMiningCandidates(ctx context.Context, scoredClasses int, staleClaim time.Duration, limit int) ([]repo.RecommendationMiningCandidate, error) {
+func (r *Repo) ListRecommendationMiningCandidates(ctx context.Context, scoredClasses int, limit int) ([]repo.RecommendationMiningCandidate, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -360,17 +360,16 @@ func (r *Repo) ListRecommendationMiningCandidates(ctx context.Context, scoredCla
 			GROUP BY transaction_id
 		),
 		runs AS (
-			SELECT transaction_id, sample_count, mined_at, claimed_at FROM recommendation_mining_runs FINAL
+			SELECT transaction_id, sample_count FROM recommendation_mining_runs FINAL
 		)
 		SELECT s.transaction_id, s.n
 		FROM samples AS s
 		LEFT JOIN runs AS m ON m.transaction_id = s.transaction_id
 		WHERE m.transaction_id = 0
-		   OR (toUnixTimestamp64Milli(m.mined_at) != 0 AND m.sample_count < s.n)
-		   OR (toUnixTimestamp64Milli(m.mined_at) = 0 AND m.claimed_at < now64(3) - INTERVAL ? SECOND)
+		   OR m.sample_count < s.n
 		ORDER BY s.transaction_id
 		LIMIT ?`,
-		uint64(scoredClasses), repo.RelationSampleReason, uint64(staleClaim/time.Second), uint64(limit))
+		uint64(scoredClasses), repo.RelationSampleReason, uint64(limit))
 	if err != nil {
 		return nil, fmt.Errorf("list recommendation mining candidates: %w", err)
 	}

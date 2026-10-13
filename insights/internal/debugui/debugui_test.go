@@ -2,6 +2,7 @@ package debugui
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/odigos-io/odigos-enterprise/insights/internal/api/http/apitypes"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/engine"
+	"github.com/odigos-io/odigos-enterprise/insights/internal/notify"
+	"github.com/odigos-io/odigos-enterprise/insights/internal/notify/sinks"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
 )
@@ -228,7 +231,40 @@ func TestRenderSettingsPages(t *testing.T) {
 		}},
 		{"guardrails", map[string]any{
 			"Active": "settings", "SettingsTab": "guardrails", "Flash": "", "Error": "",
-			"Guardrails": []guardrailView{}, "Namespaces": []string{}, "ServicesJSON": "{}",
+			"Guardrails": []guardrailView{{ScopeKey: "shop/payments", Scope: repo.ScopeService, IntegrationIDs: []string{"int-1"}}},
+			"Namespaces": []string{}, "ServicesJSON": "{}",
+			"Integrations": []integrationOption{{ID: "int-1", Name: "ops slack", Type: "slack"}},
+		}},
+		{"settings_integrations", map[string]any{
+			"Active": "settings", "SettingsTab": "integrations", "Flash": "", "Error": "",
+			"Catalog": sinks.NewRegistry(notify.DefaultDeps()).Descriptors(),
+			"Integrations": []struct {
+				apitypes.Integration
+				Descriptor notify.Descriptor
+			}{{
+				Integration: apitypes.Integration{
+					Id: "int-1", Name: "ops slack", Type: "slack", Enabled: true,
+					Config:  json.RawMessage(`{"webhook_url":"` + notify.RedactedSecret + `","mention":"@here"}`),
+					Filters: apitypes.IntegrationFilters{MinSeverity: "high", Kinds: []apitypes.FindingKind{"anomaly"}},
+					Health:  apitypes.IntegrationHealth{LastSuccessAt: time.Now().UTC(), Failed: 1, Dead: 2, ConsecutiveFailures: 3, LastError: "http 500"},
+				},
+				Descriptor: sinks.NewRegistry(notify.DefaultDeps()).Descriptors()[2],
+			}},
+			"EmptyIntegration": apitypes.Integration{Config: json.RawMessage("{}")},
+			"Severities":       []string{"", "info", "low", "medium", "high", "critical"},
+		}},
+		{"integration_deliveries", map[string]any{
+			"Active": "settings", "SettingsTab": "integrations", "Flash": "", "Error": "",
+			"Integration": apitypes.Integration{Id: "int-1", Name: "ops slack", Type: "slack"},
+			"State":       "", "States": []string{"", "sent", "failed", "dead", "pending"},
+			"Deliveries": []repo.NotificationDispatch{
+				{IntegrationID: "int-1", FindingKey: "anomaly:1:sig", LastAction: repo.DispatchFiring, State: repo.DispatchSent, Attempts: 1, SentAt: time.Now().UTC(), SeverityAtSend: "high", StatusAtSend: "open", OccurrencesAtSend: 3},
+				{IntegrationID: "int-1", FindingKey: "violation:shop/payments:allowed_callers:frontend", LastAction: repo.DispatchFiring, State: repo.DispatchDead, Attempts: 10, NextAttemptAt: time.Now().UTC(), LastError: "http 401"},
+			},
+			"Attempts": []repo.NotificationAttempt{{
+				IntegrationID: "int-1", FindingKey: "anomaly:1:sig", Action: repo.DispatchFiring, Attempt: 1,
+				Outcome: repo.AttemptOK, HTTPStatus: 200, Duration: 120 * time.Millisecond, EventCount: 1, AttemptedAt: time.Now().UTC(),
+			}},
 		}},
 	}
 	for _, tc := range cases {

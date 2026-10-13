@@ -222,6 +222,29 @@ var (
 		Name:      "recommendation_shadow_evaluations_total",
 		Help:      "Live traces evaluated against open recommendations, by outcome (held|broken).",
 	}, []string{"outcome"})
+
+	// notifierDeliveries counts finding deliveries to integrations by backend
+	// type and outcome. Type rather than integration id keeps cardinality
+	// bounded; per-integration health lives in the attempts table.
+	notifierDeliveries = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "notifier",
+		Name:      "deliveries_total",
+		Help:      "Finding deliveries to integrations, by backend type and outcome (ok|error|dead).",
+	}, []string{"type", "outcome"})
+	notifierTickDuration = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: namespace,
+		Subsystem: "notifier",
+		Name:      "tick_duration_seconds",
+		Help:      "Wall-clock duration of one notifier poll tick across all integrations.",
+		Buckets:   prometheus.ExponentialBuckets(0.01, 2, 12),
+	})
+	// leader is 1 on the replica currently holding the leader lease.
+	leader = prometheus.NewGauge(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Name:      "leader",
+		Help:      "1 when this replica holds the leader lease and runs the singleton jobs, else 0.",
+	})
 )
 
 func init() {
@@ -231,7 +254,25 @@ func init() {
 		baselineFlush, baselineFlushDuration, promotionSweeperClasses, baselineClassesSaturated,
 		anomalyDuplicatesSuppressed, samplesDropped,
 		recommendationMiningRuns, recommendationMiningDuration, recommendationMiningCandidates, recommendationShadow,
+		notifierDeliveries, notifierTickDuration, leader,
 	)
+}
+
+// IncNotifierDelivery records one finding delivery outcome ("ok"|"error"|"dead").
+func IncNotifierDelivery(backendType, outcome string) {
+	notifierDeliveries.WithLabelValues(backendType, outcome).Inc()
+}
+
+// ObserveNotifierTick records one notifier poll tick's duration.
+func ObserveNotifierTick(seconds float64) { notifierTickDuration.Observe(seconds) }
+
+// SetLeader publishes whether this replica holds the leader lease.
+func SetLeader(isLeader bool) {
+	if isLeader {
+		leader.Set(1)
+	} else {
+		leader.Set(0)
+	}
 }
 
 // IncSamplesDropped records one sample trace dropped by the background writer.

@@ -464,13 +464,14 @@ func (u *ui) violationEvidence(c *gin.Context) {
 	}
 
 	data := map[string]any{
-		"ScopeKey":  detail.ScopeKey,
-		"Namespace": detail.Namespace,
-		"Service":   detail.Service,
-		"RuleKey":   detail.RuleKey,
-		"RuleLabel": detail.RuleLabel,
-		"Offending": detail.Offending,
-		"Summary":   detail.Summary,
+		"ScopeKey":   detail.ScopeKey,
+		"Namespace":  detail.Namespace,
+		"Service":    detail.Service,
+		"RuleKey":    detail.RuleKey,
+		"RuleLabel":  detail.RuleLabel,
+		"Offending":  detail.Offending,
+		"Summary":    detail.Summary,
+		"Deliveries": u.findingDeliveries(c.Request.Context(), repo.ViolationFindingKey(scopeKey, ruleKey, offending)),
 	}
 
 	if detail.EvidenceTrace != nil && len(detail.EvidenceTrace.RawOtlp) > 0 {

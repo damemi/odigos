@@ -254,14 +254,15 @@ func FromPolicy(p repo.Policy) apitypes.Policy {
 		}
 	}
 	return apitypes.Policy{
-		Id:            p.ID,
-		Name:          p.Name,
-		Enabled:       p.Enabled,
-		FireAtScore:   p.FireAtScore,
-		SignalWeights: weights,
-		EnricherLists: lists,
-		Scope:         apitypes.PolicyScope(repo.NormalizePolicyScope(p.Scope)),
-		ScopeKey:      p.ScopeKey,
+		Id:             p.ID,
+		Name:           p.Name,
+		Enabled:        p.Enabled,
+		FireAtScore:    p.FireAtScore,
+		SignalWeights:  weights,
+		EnricherLists:  lists,
+		Scope:          apitypes.PolicyScope(repo.NormalizePolicyScope(p.Scope)),
+		ScopeKey:       p.ScopeKey,
+		IntegrationIds: p.IntegrationIDs,
 	}
 }
 

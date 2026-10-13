@@ -588,20 +588,11 @@ func (a *API) PromoteTransactionBaselines(ctx context.Context, transactionID int
 // Returns how many transactions were fully promoted. On partial failure returns
 // that count plus a bulkPartialError.
 func (a *API) PromoteTransactions(ctx context.Context, transactionIDs []int64) (int, error) {
-	var done, failed int
-	var lastErr error
-	for _, id := range transactionIDs {
-		if id <= 0 {
-			failed++
-			continue
-		}
-		if err := a.PromoteTransactionBaselines(ctx, id); err != nil {
-			failed++
-			lastErr = err
-			continue
-		}
-		done++
+	admin, err := a.adminOrErr()
+	if err != nil {
+		return 0, err
 	}
+	done, failed, lastErr := admin.PromoteTransactionsBaselines(ctx, transactionIDs)
 	if failed > 0 {
 		return done, &bulkPartialError{verb: "promoted", done: done, failed: failed, last: lastErr}
 	}

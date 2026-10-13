@@ -1,9 +1,6 @@
 package apimap
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/odigos-io/odigos-enterprise/insights/internal/api/http/apitypes"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
@@ -144,47 +141,15 @@ func FromGuardrailViolationDetail(g repo.GuardrailViolationGroup) apitypes.Guard
 }
 
 // ViolationSummary is the render-ready investigate/list sentence for a guardrail
-// violation. It deliberately omits the service: the finding row already shows
-// service and title, so the sentence only adds what broke the rule. The UI
-// should display it as-is.
+// violation. The UI should display it as-is. Shared with the notifier via risk.
 func ViolationSummary(ruleLabel, offending string) string {
-	return fmt.Sprintf("%s broken by %s.", ruleLabel, offending)
+	return risk.ViolationSummary(ruleLabel, offending)
 }
 
-// AnomalySummary is the render-ready list sentence for an anomaly finding: the
-// human labels of the triggered classes (deduped, catalog order preserved). It
-// deliberately omits the service and operation, which the finding row already
-// shows as service and title. Kept free of per-instance values so it is cheap
-// to build on the list feed with no trace load.
+// AnomalySummary is the render-ready list sentence for an anomaly finding.
+// Shared with the notifier via risk.
 func AnomalySummary(classes []repo.DeviationClass) string {
-	labels := make([]string, 0, len(classes))
-	seen := make(map[string]bool, len(classes))
-	for _, c := range classes {
-		l := risk.ClassLabel(c)
-		if l == "" || seen[l] {
-			continue
-		}
-		seen[l] = true
-		labels = append(labels, l)
-	}
-	if len(labels) == 0 {
-		return "Transaction deviated from its baseline."
-	}
-	return fmt.Sprintf("Transaction deviated from its baseline: %s.", joinHuman(labels))
-}
-
-// joinHuman joins labels for prose: "a", "a and b", "a, b and c".
-func joinHuman(parts []string) string {
-	switch len(parts) {
-	case 0:
-		return ""
-	case 1:
-		return parts[0]
-	case 2:
-		return parts[0] + " and " + parts[1]
-	default:
-		return strings.Join(parts[:len(parts)-1], ", ") + " and " + parts[len(parts)-1]
-	}
+	return risk.AnomalySummary(classes)
 }
 
 // FromServiceGuardrail maps one repo.ServiceGuardrail to its wire type, walking
@@ -207,9 +172,10 @@ func FromServiceGuardrail(g repo.ServiceGuardrail) apitypes.ServiceGuardrail {
 		})
 	}
 	return apitypes.ServiceGuardrail{
-		Scope:    apitypes.PolicyScope(repo.NormalizePolicyScope(g.Scope)),
-		ScopeKey: g.ScopeKey,
-		Rules:    rules,
+		Scope:          apitypes.PolicyScope(repo.NormalizePolicyScope(g.Scope)),
+		ScopeKey:       g.ScopeKey,
+		Rules:          rules,
+		IntegrationIds: g.IntegrationIDs,
 	}
 }
 

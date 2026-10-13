@@ -893,6 +893,190 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/integrations/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List supported integration backends
+         * @description Every backend this build can deliver to, with the config form (`fields`) and delivery capabilities. Render create/edit forms from `fields`; secret fields are write-only (read back redacted).
+         */
+        get: operations["getIntegrationCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List integrations
+         * @description Configured integrations with derived delivery health. Secret config fields are redacted.
+         */
+        get: operations["listIntegrations"];
+        put?: never;
+        /**
+         * Create an integration
+         * @description Validates `config` against the backend's catalog fields. The id is server-assigned. A new integration only receives findings once an alert policy or guardrail lists its id in `integration_ids`.
+         */
+        post: operations["createIntegration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/{integration_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The integration's server-assigned id. */
+                integration_id: components["parameters"]["IntegrationId"];
+            };
+            cookie?: never;
+        };
+        /** Get an integration */
+        get: operations["getIntegration"];
+        /**
+         * Update an integration
+         * @description Full-document update. Secret fields left empty or set to the redacted placeholder keep their stored value, so a form can round-trip a GET. `type` cannot change.
+         */
+        put: operations["updateIntegration"];
+        post?: never;
+        /**
+         * Delete an integration
+         * @description Removes the integration, its delivery ledger and attempt history. References in `integration_ids` are ignored afterwards.
+         */
+        delete: operations["deleteIntegration"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/{integration_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The integration's server-assigned id. */
+                integration_id: components["parameters"]["IntegrationId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test an integration
+         * @description Builds the backend client from the stored config and performs its connectivity check (a ping message or an empty alert post). Returns the backend's error verbatim on failure.
+         */
+        post: operations["testIntegration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/{integration_id}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The integration's server-assigned id. */
+                integration_id: components["parameters"]["IntegrationId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List per-finding delivery state
+         * @description The delivery ledger for one integration: the last action sent per finding, its state (`sent`, `failed` awaiting retry, `dead` after exhausting retries, `pending` re-armed), and the last error.
+         */
+        get: operations["listIntegrationDeliveries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/{integration_id}/deliveries/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The integration's server-assigned id. */
+                integration_id: components["parameters"]["IntegrationId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-arm failed or dead deliveries
+         * @description Resets the listed findings (or, with an empty list, every failed and dead delivery of this integration) to `pending`; the notifier resends them on its next tick with the finding's current state.
+         */
+        post: operations["retryIntegrationDeliveries"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/integrations/{integration_id}/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The integration's server-assigned id. */
+                integration_id: components["parameters"]["IntegrationId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List delivery attempts
+         * @description Append-only audit of every send to this integration, newest first, with outcome, HTTP status, error, and duration. Retained 30 days.
+         */
+        get: operations["listIntegrationAttempts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/findings/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Delivery state of one finding across integrations
+         * @description Where a single finding was (or failed to be) delivered. Identify the finding by `finding_key` (`anomaly:<transaction_id>:<signature>` or `violation:<scope_key>:<rule_key>:<offending>`). Backs the deliveries block on the investigate views.
+         */
+        get: operations["getFindingDeliveries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1441,6 +1625,8 @@ export interface components {
             };
             scope: components["schemas"]["PolicyScope"];
             scope_key: string;
+            /** @description Integrations that receive anomalies fired under this policy. Empty on an override falls back to the global policy's list; empty on the global policy means anomalies are not delivered anywhere. */
+            integration_ids?: string[];
         };
         PolicyList: {
             count: number;
@@ -2002,6 +2188,8 @@ export interface components {
             scope: components["schemas"]["PolicyScope"];
             scope_key: string;
             rules: components["schemas"]["GuardrailRuleConfig"][];
+            /** @description Integrations that receive this guardrail's violations. Empty falls back to the global alert policy's list. */
+            integration_ids?: string[];
         };
         ServiceGuardrailList: {
             count: number;
@@ -2478,6 +2666,185 @@ export interface components {
             write_pressure: components["schemas"]["StorageWritePressure"];
             writeback: components["schemas"]["StorageWriteback"];
         };
+        /**
+         * @description Drives the form control and validation for one config key. `secret` values are write-only and read back as a redacted placeholder.
+         * @enum {string}
+         */
+        IntegrationFieldType: "string" | "secret" | "url" | "number" | "bool" | "select";
+        /** @description One key of a backend's config, as rendered in its editor. */
+        IntegrationFieldSpec: {
+            key: string;
+            label: string;
+            type: components["schemas"]["IntegrationFieldType"];
+            required: boolean;
+            help?: string;
+            placeholder?: string;
+            default?: string;
+            /** @description Allowed values for `select` fields. */
+            options?: string[];
+        };
+        /** @description How the backend models alerts; informs what the notifier sends. `needs_heartbeat`: active findings are re-asserted every poll so the backend does not expire them. `supports_resolve`: the backend tracks open/closed per finding, so accepted/dismissed findings are always sent as resolved (other backends only get resolve events when the integration opts in via `filters.notify_on_resolve`). */
+        IntegrationCapabilities: {
+            needs_heartbeat: boolean;
+            supports_resolve: boolean;
+            returns_external_id: boolean;
+            /** @description Most findings one request to the backend carries. */
+            max_batch: number;
+        };
+        /** @description A supported backend and how to configure it. */
+        IntegrationDescriptor: {
+            /** @description Stable backend id used as `Integration.type`. */
+            type: string;
+            name: string;
+            description: string;
+            docs_url?: string;
+            fields: components["schemas"]["IntegrationFieldSpec"][];
+            capabilities: components["schemas"]["IntegrationCapabilities"];
+        };
+        IntegrationCatalog: {
+            count: number;
+            items: components["schemas"]["IntegrationDescriptor"][];
+        };
+        /** @description Per-integration gate applied after routing. */
+        IntegrationFilters: {
+            /** @description Drop findings below this tier. Omitted = deliver all. */
+            min_severity?: components["schemas"]["Severity"];
+            /** @description Only deliver these kinds. Omitted/empty = both. */
+            kinds?: components["schemas"]["FindingKind"][];
+            /** @description Also send a resolved event when a finding is accepted or dismissed, for backends without native resolve (Slack, webhook). Backends with `supports_resolve` always receive resolves. */
+            notify_on_resolve?: boolean;
+        };
+        /** @description Derived from the attempt audit (last 24h) and the delivery ledger. `consecutive_failures` is the trailing run of failed attempts since the last success. */
+        IntegrationHealth: {
+            /** Format: date-time */
+            last_success_at?: string;
+            /** Format: date-time */
+            last_failure_at?: string;
+            last_error?: string;
+            consecutive_failures: number;
+            /** @description Deliveries awaiting the next tick. */
+            pending: number;
+            /** @description Deliveries awaiting a backoff retry. */
+            failed: number;
+            /** @description Deliveries that exhausted retries or hit a permanent error. */
+            dead: number;
+        };
+        /** @description Create/update body. `config` keys come from the catalog descriptor's `fields`. */
+        IntegrationWrite: {
+            name: string;
+            /** @description Backend id from the catalog. Ignored on update. */
+            type: string;
+            /** @description Disabled integrations keep their config but receive nothing. Defaults to true. */
+            enabled?: boolean;
+            /** @description Backend config keyed by field; values typed per field type. */
+            config: {
+                [key: string]: unknown;
+            };
+            filters?: components["schemas"]["IntegrationFilters"];
+        };
+        /**
+         * @example {
+         *       "id": "9c1f0c4e-2a7b-4f3b-9a1e-6b1f0c0d2e11",
+         *       "name": "platform-alertmanager",
+         *       "type": "alertmanager",
+         *       "enabled": true,
+         *       "config": {
+         *         "url": "http://alertmanager.monitoring:9093",
+         *         "username": "insights",
+         *         "password": "••••••••"
+         *       },
+         *       "filters": {
+         *         "min_severity": "medium"
+         *       },
+         *       "health": {
+         *         "last_success_at": "2026-10-11T09:30:15Z",
+         *         "consecutive_failures": 0,
+         *         "pending": 0,
+         *         "failed": 0,
+         *         "dead": 0
+         *       },
+         *       "created_at": "2026-10-01T08:00:00Z",
+         *       "updated_at": "2026-10-01T08:00:00Z"
+         *     }
+         */
+        Integration: {
+            id: string;
+            name: string;
+            type: string;
+            enabled: boolean;
+            /** @description Stored config with secret fields redacted. */
+            config: {
+                [key: string]: unknown;
+            };
+            filters: components["schemas"]["IntegrationFilters"];
+            health: components["schemas"]["IntegrationHealth"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        IntegrationList: {
+            count: number;
+            items: components["schemas"]["Integration"][];
+        };
+        /** @enum {string} */
+        DeliveryAction: "firing" | "resolved";
+        /**
+         * @description `sent`: last action delivered. `failed`: last attempt failed with a retryable error; `next_attempt_at` says when it retries. `dead`: retries exhausted or a permanent error (bad credentials, rejected payload); needs a manual retry. `pending`: re-armed, sends next tick.
+         * @enum {string}
+         */
+        DeliveryState: "pending" | "sent" | "failed" | "dead";
+        /** @description Ledger row for one (integration, finding) pair. */
+        Delivery: {
+            integration_id: string;
+            finding_key: string;
+            last_action: components["schemas"]["DeliveryAction"];
+            state: components["schemas"]["DeliveryState"];
+            /** @description Consecutive failed attempts for the current action. */
+            attempts: number;
+            /** Format: date-time */
+            next_attempt_at?: string;
+            last_error?: string;
+            /** Format: date-time */
+            sent_at?: string;
+            /** Format: int64 */
+            occurrences_at_send?: number;
+            severity_at_send?: string;
+            status_at_send?: string;
+            /** @description Backend-side id when the backend returns one. */
+            external_id?: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        DeliveryList: {
+            count: number;
+            items: components["schemas"]["Delivery"][];
+        };
+        DeliveryRetryRequest: {
+            /** @description Findings to re-arm. Empty or omitted = every failed and dead delivery. */
+            finding_keys?: string[];
+        };
+        /** @enum {string} */
+        DeliveryAttemptOutcome: "ok" | "error" | "dead";
+        /** @description One send to a backend for one finding. */
+        DeliveryAttempt: {
+            integration_id: string;
+            finding_key: string;
+            action: components["schemas"]["DeliveryAction"];
+            attempt: number;
+            outcome: components["schemas"]["DeliveryAttemptOutcome"];
+            http_status?: number;
+            error?: string;
+            duration_ms: number;
+            /** @description Findings carried by the same request (batched backends). */
+            event_count: number;
+            /** Format: date-time */
+            attempted_at: string;
+        };
+        DeliveryAttemptList: {
+            count: number;
+            items: components["schemas"]["DeliveryAttempt"][];
+        };
     };
     responses: {
         /** @description Error envelope. */
@@ -2525,6 +2892,8 @@ export interface components {
         NamespaceFilter: string;
         /** @description Filter to one lifecycle status (open, dismissed, ...). */
         StatusFilter: string;
+        /** @description The integration's server-assigned id. */
+        IntegrationId: string;
     };
     requestBodies: never;
     headers: never;
@@ -3807,6 +4176,268 @@ export interface operations {
                     "application/json": components["schemas"]["StorageHealth"];
                 };
             };
+            500: components["responses"]["Error"];
+        };
+    };
+    getIntegrationCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Backend catalog. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationCatalog"];
+                };
+            };
+        };
+    };
+    listIntegrations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Integrations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationList"];
+                };
+            };
+            500: components["responses"]["Error"];
+        };
+    };
+    createIntegration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntegrationWrite"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Integration"];
+                };
+            };
+            400: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    getIntegration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The integration's server-assigned id. */
+                integration_id: components["parameters"]["IntegrationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Integration. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Integration"];
+                };
+            };
+            404: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    updateIntegration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The integration's server-assigned id. */
+                integration_id: components["parameters"]["IntegrationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntegrationWrite"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Integration"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    deleteIntegration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The integration's server-assigned id. */
+                integration_id: components["parameters"]["IntegrationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            404: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    testIntegration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The integration's server-assigned id. */
+                integration_id: components["parameters"]["IntegrationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: components["responses"]["NoContent"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    listIntegrationDeliveries: {
+        parameters: {
+            query?: {
+                state?: components["schemas"]["DeliveryState"];
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description The integration's server-assigned id. */
+                integration_id: components["parameters"]["IntegrationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deliveries. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryList"];
+                };
+            };
+            404: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    retryIntegrationDeliveries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The integration's server-assigned id. */
+                integration_id: components["parameters"]["IntegrationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DeliveryRetryRequest"];
+            };
+        };
+        responses: {
+            204: components["responses"]["NoContent"];
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    listIntegrationAttempts: {
+        parameters: {
+            query?: {
+                /** @description Lookback in hours (default 24). */
+                window_hours?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description The integration's server-assigned id. */
+                integration_id: components["parameters"]["IntegrationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attempts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryAttemptList"];
+                };
+            };
+            404: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    getFindingDeliveries: {
+        parameters: {
+            query: {
+                finding_key: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deliveries for the finding. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryList"];
+                };
+            };
+            400: components["responses"]["Error"];
             500: components["responses"]["Error"];
         };
     };

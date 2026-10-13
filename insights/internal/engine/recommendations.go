@@ -328,8 +328,9 @@ func (e *Engine) RecomputeRecommendations(ctx context.Context, transactionID int
 	} else if !ok {
 		return fmt.Errorf("transaction %d not found", transactionID)
 	}
-	// Reset the run record so the sweep also picks the transaction up if the
-	// direct request is dropped.
+	// Lower the recorded sample_count so the leader's sweep re-mines this
+	// transaction even when the direct request was handled on a follower (where
+	// nothing drains the queue).
 	if err := e.repo.RecordRecommendationMiningRun(ctx, repo.RecommendationMiningRun{TransactionID: transactionID, ClaimedAt: e.clock(), MinedAt: e.clock(), SampleCount: 0}); err != nil {
 		return err
 	}

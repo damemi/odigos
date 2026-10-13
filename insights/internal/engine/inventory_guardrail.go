@@ -114,6 +114,66 @@ func (e *Engine) PromoteTransactionBaselines(ctx context.Context, transactionID 
 	return err
 }
 
+// PromoteTransactionsBaselines force-promotes every scored class on each listed
+// transaction, then runs the auto-enable check once per distinct service rather
+// than once per transaction. Every transaction of a service produces the same
+// service-scoped check (and its ListTransactionStats read), so deduping it keeps
+// a bulk promote to one check per service. Returns the number of fully promoted
+// transactions, the number that failed, and the last error.
+func (e *Engine) PromoteTransactionsBaselines(ctx context.Context, transactionIDs []int64) (int, int, error) {
+	var done, failed int
+	var lastErr error
+	type svcKey struct{ namespace, service string }
+	promotedBy := map[svcKey][]int64{}
+	var order []svcKey
+	for _, id := range transactionIDs {
+		if id <= 0 {
+			failed++
+			lastErr = fmt.Errorf("invalid transaction id %d", id)
+			continue
+		}
+		tx, ok, err := e.repo.GetTransactionByID(ctx, id)
+		if err != nil {
+			failed++
+			lastErr = err
+			continue
+		}
+		if !ok {
+			failed++
+			lastErr = fmt.Errorf("transaction %d not found", id)
+			continue
+		}
+		promoteErr := func() error {
+			for _, class := range ScoredClasses() {
+				if err := e.repo.PromoteBaselineClass(ctx, id, class); err != nil {
+					return fmt.Errorf("promote %s on txn %d: %w", class, id, err)
+				}
+			}
+			return nil
+		}()
+		if promoteErr != nil {
+			failed++
+			lastErr = promoteErr
+			continue
+		}
+		e.store.removeEntry(id)
+		e.recommendations.requestMine(id)
+		key := svcKey{tx.Namespace, tx.Service}
+		if _, seen := promotedBy[key]; !seen {
+			order = append(order, key)
+		}
+		promotedBy[key] = append(promotedBy[key], id)
+		done++
+	}
+	for _, key := range order {
+		if err := e.maybeAutoEnableTransactionGuardrail(ctx, key.namespace, key.service, promotedBy[key]...); err != nil {
+			lastErr = err
+		}
+		e.recommendations.requestMineService(key.namespace, key.service)
+	}
+	return done, failed, lastErr
+}
+
 // ForcePromoteService promotes every scored class on every transaction of the
 // service. Afterward, maybeAutoEnableTransactionGuardrail may create the
 // transaction guardrail if the global auto setting is on and the service is

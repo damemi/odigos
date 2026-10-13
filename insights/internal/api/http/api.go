@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/odigos-io/odigos-enterprise/insights/internal/api/http/apitypes"
+	"github.com/odigos-io/odigos-enterprise/insights/internal/notify"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
 )
 
@@ -24,6 +25,9 @@ const findingsListLimit = 1000
 type API struct {
 	Repo  repo.Repository
 	admin atomic.Pointer[Admin]
+	// registry is the integrations backend catalog (SetIntegrationRegistry);
+	// integration endpoints return 503 until it is wired.
+	registry atomic.Pointer[notify.Registry]
 }
 
 // parseTransactionID reads `:transaction_id` from the URL. On a parse error it

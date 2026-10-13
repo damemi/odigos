@@ -46,4 +46,10 @@ type Policy struct {
 	// for global, ServiceScopeKey for a service, the transaction_id text otherwise.
 	Scope    PolicyScope
 	ScopeKey string
+
+	// IntegrationIDs routes anomalies fired under this policy to those
+	// backends. Empty on an override falls back to the global policy's list,
+	// which is the default route; empty on the global policy means anomalies
+	// are not delivered anywhere.
+	IntegrationIDs []string
 }

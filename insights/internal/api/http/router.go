@@ -123,6 +123,20 @@ func NewRouter(r repo.Repository, log *commonlogger.OdigosLogger) (*gin.Engine, 
 		v1.PUT("/system-settings", api.putSystemSettings)
 
 		v1.GET("/storage-health", api.getStorageHealth)
+
+		// Findings integrations: backend catalog, CRUD, connectivity test,
+		// per-finding delivery ledger, attempt audit, manual retry.
+		v1.GET("/integrations/catalog", api.getIntegrationCatalog)
+		v1.GET("/integrations", api.listIntegrations)
+		v1.POST("/integrations", api.createIntegration)
+		v1.GET("/integrations/:integration_id", api.getIntegration)
+		v1.PUT("/integrations/:integration_id", api.updateIntegration)
+		v1.DELETE("/integrations/:integration_id", api.deleteIntegration)
+		v1.POST("/integrations/:integration_id/test", api.testIntegration)
+		v1.GET("/integrations/:integration_id/deliveries", api.listIntegrationDeliveries)
+		v1.POST("/integrations/:integration_id/deliveries/retry", api.retryIntegrationDeliveries)
+		v1.GET("/integrations/:integration_id/attempts", api.listIntegrationAttempts)
+		v1.GET("/findings/deliveries", api.getFindingDeliveries)
 	}
 
 	return engine, api

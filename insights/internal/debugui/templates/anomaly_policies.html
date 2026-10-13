@@ -50,6 +50,8 @@
 
     <div class="pol-preview">Will <span class="preview-text">-</span></div>
 
+    {{template "integrationPicker" (dict "Integrations" .Integrations "Selected" .Policy.IntegrationIDs)}}
+
     <details class="adv">
       <summary>Customize signal weights (advanced)</summary>
       <div class="adv-body">
@@ -193,10 +195,10 @@
 </p>
 
 <section class="class-group">
-  {{template "polCard" (dict "Policy" .Global "Scope" "global" "ScopeKey" "" "Deletable" false "Classes" .Classes)}}
+  {{template "polCard" (dict "Policy" .Global "Scope" "global" "ScopeKey" "" "Deletable" false "Classes" .Classes "Integrations" .Integrations)}}
 
   {{range .Overrides}}
-  {{template "polCard" (dict "Policy" .Policy "Scope" .Scope "ScopeKey" .Policy.ScopeKey "Deletable" true "Label" .Label "Link" .Link "Classes" $.Classes)}}
+  {{template "polCard" (dict "Policy" .Policy "Scope" .Scope "ScopeKey" .Policy.ScopeKey "Deletable" true "Label" .Label "Link" .Link "Classes" $.Classes "Integrations" $.Integrations)}}
   {{end}}
 
   <form class="add-override" method="POST" action="/debug/settings/detection/override">

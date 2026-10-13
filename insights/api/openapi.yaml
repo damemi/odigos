@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Odigos Insights Service API
-  version: 9.1.0
+  version: 9.2.0
   description: >
     HTTP API for the Odigos Insights (security) service. This spec is the source
     of truth for the contract: the Go server wire types (internal/api/http/apitypes)
@@ -74,6 +74,15 @@ tags:
     description: Risk-model reference data.
   - name: system
     description: Engine-wide operational settings and storage health.
+  - name: integrations
+    description: >
+      Delivery of findings to external backends (Alertmanager, Slack, webhooks).
+      `GET /integrations/catalog` describes every supported backend and the
+      form to configure it, so clients render integration editors generically.
+      Findings route to integrations through `integration_ids` on alert
+      policies (anomalies) and guardrails (violations); the global alert
+      policy's list is the default route. Delivery state per finding and the
+      attempt audit are exposed per integration.
 
 paths:
   /healthz:
@@ -1272,6 +1281,227 @@ paths:
               schema: { $ref: "#/components/schemas/StorageHealth" }
         "500": { $ref: "#/components/responses/Error" }
 
+  /api/v1/integrations/catalog:
+    get:
+      tags: [integrations]
+      summary: List supported integration backends
+      description: >
+        Every backend this build can deliver to, with the config form
+        (`fields`) and delivery capabilities. Render create/edit forms from
+        `fields`; secret fields are write-only (read back redacted).
+      operationId: getIntegrationCatalog
+      responses:
+        "200":
+          description: Backend catalog.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IntegrationCatalog" }
+
+  /api/v1/integrations:
+    get:
+      tags: [integrations]
+      summary: List integrations
+      description: >
+        Configured integrations with derived delivery health. Secret config
+        fields are redacted.
+      operationId: listIntegrations
+      responses:
+        "200":
+          description: Integrations.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IntegrationList" }
+        "500": { $ref: "#/components/responses/Error" }
+    post:
+      tags: [integrations]
+      summary: Create an integration
+      description: >
+        Validates `config` against the backend's catalog fields. The id is
+        server-assigned. A new integration only receives findings once an
+        alert policy or guardrail lists its id in `integration_ids`.
+      operationId: createIntegration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IntegrationWrite" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Integration" }
+        "400": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/integrations/{integration_id}:
+    parameters:
+      - $ref: "#/components/parameters/IntegrationId"
+    get:
+      tags: [integrations]
+      summary: Get an integration
+      operationId: getIntegration
+      responses:
+        "200":
+          description: Integration.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Integration" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    put:
+      tags: [integrations]
+      summary: Update an integration
+      description: >
+        Full-document update. Secret fields left empty or set to the redacted
+        placeholder keep their stored value, so a form can round-trip a GET.
+        `type` cannot change.
+      operationId: updateIntegration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IntegrationWrite" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Integration" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [integrations]
+      summary: Delete an integration
+      description: >
+        Removes the integration, its delivery ledger and attempt history.
+        References in `integration_ids` are ignored afterwards.
+      operationId: deleteIntegration
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/integrations/{integration_id}/test:
+    parameters:
+      - $ref: "#/components/parameters/IntegrationId"
+    post:
+      tags: [integrations]
+      summary: Test an integration
+      description: >
+        Builds the backend client from the stored config and performs its
+        connectivity check (a ping message or an empty alert post). Returns
+        the backend's error verbatim on failure.
+      operationId: testIntegration
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/integrations/{integration_id}/deliveries:
+    parameters:
+      - $ref: "#/components/parameters/IntegrationId"
+    get:
+      tags: [integrations]
+      summary: List per-finding delivery state
+      description: >
+        The delivery ledger for one integration: the last action sent per
+        finding, its state (`sent`, `failed` awaiting retry, `dead` after
+        exhausting retries, `pending` re-armed), and the last error.
+      operationId: listIntegrationDeliveries
+      parameters:
+        - name: state
+          in: query
+          schema: { $ref: "#/components/schemas/DeliveryState" }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000 }
+      responses:
+        "200":
+          description: Deliveries.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeliveryList" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/integrations/{integration_id}/deliveries/retry:
+    parameters:
+      - $ref: "#/components/parameters/IntegrationId"
+    post:
+      tags: [integrations]
+      summary: Re-arm failed or dead deliveries
+      description: >
+        Resets the listed findings (or, with an empty list, every failed and
+        dead delivery of this integration) to `pending`; the notifier resends
+        them on its next tick with the finding's current state.
+      operationId: retryIntegrationDeliveries
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeliveryRetryRequest" }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/integrations/{integration_id}/attempts:
+    parameters:
+      - $ref: "#/components/parameters/IntegrationId"
+    get:
+      tags: [integrations]
+      summary: List delivery attempts
+      description: >
+        Append-only audit of every send to this integration, newest first,
+        with outcome, HTTP status, error, and duration. Retained 30 days.
+      operationId: listIntegrationAttempts
+      parameters:
+        - name: window_hours
+          in: query
+          description: Lookback in hours (default 24).
+          schema: { type: integer, minimum: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000 }
+      responses:
+        "200":
+          description: Attempts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeliveryAttemptList" }
+        "404": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/v1/findings/deliveries:
+    get:
+      tags: [integrations]
+      summary: Delivery state of one finding across integrations
+      description: >
+        Where a single finding was (or failed to be) delivered. Identify the
+        finding by `finding_key` (`anomaly:<transaction_id>:<signature>` or
+        `violation:<scope_key>:<rule_key>:<offending>`). Backs the deliveries
+        block on the investigate views.
+      operationId: getFindingDeliveries
+      parameters:
+        - name: finding_key
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deliveries for the finding.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeliveryList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
 components:
   parameters:
     TransactionId:
@@ -1339,6 +1569,13 @@ components:
       name: status
       in: query
       description: Filter to one lifecycle status (open, dismissed, ...).
+      schema: { type: string }
+
+    IntegrationId:
+      name: integration_id
+      in: path
+      required: true
+      description: The integration's server-assigned id.
       schema: { type: string }
 
   responses:
@@ -2007,6 +2244,13 @@ components:
           description: Per-scope overrides of enricher keyword lists.
         scope: { $ref: "#/components/schemas/PolicyScope" }
         scope_key: { type: string }
+        integration_ids:
+          type: array
+          items: { type: string }
+          description: >
+            Integrations that receive anomalies fired under this policy. Empty
+            on an override falls back to the global policy's list; empty on the
+            global policy means anomalies are not delivered anywhere.
       required: [id, name, enabled, fire_at_score, scope, scope_key]
       examples:
         - id: 1
@@ -2735,6 +2979,12 @@ components:
         rules:
           type: array
           items: { $ref: "#/components/schemas/GuardrailRuleConfig" }
+        integration_ids:
+          type: array
+          items: { type: string }
+          description: >
+            Integrations that receive this guardrail's violations. Empty falls
+            back to the global alert policy's list.
       required: [scope, scope_key, rules]
       examples:
         - scope: service
@@ -3573,3 +3823,256 @@ components:
         - tables
         - write_pressure
         - writeback
+
+    IntegrationFieldType:
+      type: string
+      description: >
+        Drives the form control and validation for one config key. `secret`
+        values are write-only and read back as a redacted placeholder.
+      enum: [string, secret, url, number, bool, select]
+
+    IntegrationFieldSpec:
+      type: object
+      description: One key of a backend's config, as rendered in its editor.
+      properties:
+        key: { type: string }
+        label: { type: string }
+        type: { $ref: "#/components/schemas/IntegrationFieldType" }
+        required: { type: boolean }
+        help: { type: string }
+        placeholder: { type: string }
+        default: { type: string }
+        options:
+          type: array
+          items: { type: string }
+          description: Allowed values for `select` fields.
+      required: [key, label, type, required]
+
+    IntegrationCapabilities:
+      type: object
+      description: >
+        How the backend models alerts; informs what the notifier sends.
+        `needs_heartbeat`: active findings are re-asserted every poll so the
+        backend does not expire them. `supports_resolve`: the backend tracks
+        open/closed per finding, so accepted/dismissed findings are always
+        sent as resolved (other backends only get resolve events when the
+        integration opts in via `filters.notify_on_resolve`).
+      properties:
+        needs_heartbeat: { type: boolean }
+        supports_resolve: { type: boolean }
+        returns_external_id: { type: boolean }
+        max_batch:
+          type: integer
+          description: Most findings one request to the backend carries.
+      required: [needs_heartbeat, supports_resolve, returns_external_id, max_batch]
+
+    IntegrationDescriptor:
+      type: object
+      description: A supported backend and how to configure it.
+      properties:
+        type:
+          type: string
+          description: Stable backend id used as `Integration.type`.
+        name: { type: string }
+        description: { type: string }
+        docs_url: { type: string }
+        fields:
+          type: array
+          items: { $ref: "#/components/schemas/IntegrationFieldSpec" }
+        capabilities: { $ref: "#/components/schemas/IntegrationCapabilities" }
+      required: [type, name, description, fields, capabilities]
+
+    IntegrationCatalog:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/IntegrationDescriptor" }
+      required: [count, items]
+
+    IntegrationFilters:
+      type: object
+      description: Per-integration gate applied after routing.
+      properties:
+        min_severity:
+          allOf: [{ $ref: "#/components/schemas/Severity" }]
+          description: Drop findings below this tier. Omitted = deliver all.
+        kinds:
+          type: array
+          items: { $ref: "#/components/schemas/FindingKind" }
+          description: Only deliver these kinds. Omitted/empty = both.
+        notify_on_resolve:
+          type: boolean
+          description: >
+            Also send a resolved event when a finding is accepted or dismissed,
+            for backends without native resolve (Slack, webhook). Backends with
+            `supports_resolve` always receive resolves.
+
+    IntegrationHealth:
+      type: object
+      description: >
+        Derived from the attempt audit (last 24h) and the delivery ledger.
+        `consecutive_failures` is the trailing run of failed attempts since the
+        last success.
+      properties:
+        last_success_at: { type: string, format: date-time }
+        last_failure_at: { type: string, format: date-time }
+        last_error: { type: string }
+        consecutive_failures: { type: integer }
+        pending: { type: integer, description: Deliveries awaiting the next tick. }
+        failed: { type: integer, description: Deliveries awaiting a backoff retry. }
+        dead: { type: integer, description: Deliveries that exhausted retries or hit a permanent error. }
+      required: [consecutive_failures, pending, failed, dead]
+
+    IntegrationWrite:
+      type: object
+      description: Create/update body. `config` keys come from the catalog descriptor's `fields`.
+      properties:
+        name: { type: string }
+        type:
+          type: string
+          description: Backend id from the catalog. Ignored on update.
+        enabled:
+          type: boolean
+          description: Disabled integrations keep their config but receive nothing. Defaults to true.
+          x-go-type-skip-optional-pointer: false
+        config:
+          type: object
+          additionalProperties: true
+          description: Backend config keyed by field; values typed per field type.
+          x-go-type: json.RawMessage
+          x-go-type-skip-optional-pointer: true
+        filters: { $ref: "#/components/schemas/IntegrationFilters" }
+      required: [name, type, config]
+
+    Integration:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        type: { type: string }
+        enabled: { type: boolean }
+        config:
+          type: object
+          additionalProperties: true
+          description: Stored config with secret fields redacted.
+          x-go-type: json.RawMessage
+          x-go-type-skip-optional-pointer: true
+        filters: { $ref: "#/components/schemas/IntegrationFilters" }
+        health: { $ref: "#/components/schemas/IntegrationHealth" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+      required: [id, name, type, enabled, config, filters, health, created_at, updated_at]
+      examples:
+        - id: "9c1f0c4e-2a7b-4f3b-9a1e-6b1f0c0d2e11"
+          name: platform-alertmanager
+          type: alertmanager
+          enabled: true
+          config:
+            url: http://alertmanager.monitoring:9093
+            username: insights
+            password: "••••••••"
+          filters:
+            min_severity: medium
+          health:
+            last_success_at: "2026-10-11T09:30:15Z"
+            consecutive_failures: 0
+            pending: 0
+            failed: 0
+            dead: 0
+          created_at: "2026-10-01T08:00:00Z"
+          updated_at: "2026-10-01T08:00:00Z"
+
+    IntegrationList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Integration" }
+      required: [count, items]
+
+    DeliveryAction:
+      type: string
+      enum: [firing, resolved]
+
+    DeliveryState:
+      type: string
+      description: >
+        `sent`: last action delivered. `failed`: last attempt failed with a
+        retryable error; `next_attempt_at` says when it retries. `dead`:
+        retries exhausted or a permanent error (bad credentials, rejected
+        payload); needs a manual retry. `pending`: re-armed, sends next tick.
+      enum: [pending, sent, failed, dead]
+
+    Delivery:
+      type: object
+      description: Ledger row for one (integration, finding) pair.
+      properties:
+        integration_id: { type: string }
+        finding_key: { type: string }
+        last_action: { $ref: "#/components/schemas/DeliveryAction" }
+        state: { $ref: "#/components/schemas/DeliveryState" }
+        attempts:
+          type: integer
+          description: Consecutive failed attempts for the current action.
+        next_attempt_at: { type: string, format: date-time }
+        last_error: { type: string }
+        sent_at: { type: string, format: date-time }
+        occurrences_at_send: { type: integer, format: int64 }
+        severity_at_send: { type: string }
+        status_at_send: { type: string }
+        external_id:
+          type: string
+          description: Backend-side id when the backend returns one.
+        updated_at: { type: string, format: date-time }
+      required: [integration_id, finding_key, last_action, state, attempts, updated_at]
+
+    DeliveryList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Delivery" }
+      required: [count, items]
+
+    DeliveryRetryRequest:
+      type: object
+      properties:
+        finding_keys:
+          type: array
+          items: { type: string }
+          description: Findings to re-arm. Empty or omitted = every failed and dead delivery.
+
+    DeliveryAttemptOutcome:
+      type: string
+      enum: [ok, error, dead]
+
+    DeliveryAttempt:
+      type: object
+      description: One send to a backend for one finding.
+      properties:
+        integration_id: { type: string }
+        finding_key: { type: string }
+        action: { $ref: "#/components/schemas/DeliveryAction" }
+        attempt: { type: integer }
+        outcome: { $ref: "#/components/schemas/DeliveryAttemptOutcome" }
+        http_status: { type: integer }
+        error: { type: string }
+        duration_ms: { type: integer }
+        event_count:
+          type: integer
+          description: Findings carried by the same request (batched backends).
+        attempted_at: { type: string, format: date-time }
+      required: [integration_id, finding_key, action, attempt, outcome, duration_ms, event_count, attempted_at]
+
+    DeliveryAttemptList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DeliveryAttempt" }
+      required: [count, items]

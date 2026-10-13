@@ -1,0 +1,93 @@
+{{define "title"}}Deliveries · {{.Integration.Name}}{{end}}
+
+{{define "content"}}
+<style>
+  .dl-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .dl-head form { margin:0; }
+  .dl-err { color:var(--warn); font-size:12px; max-width:420px; word-break:break-word; }
+  .dl-key { font-family:ui-monospace, Menlo, monospace; font-size:12px; word-break:break-all; }
+  .dl-when { color:var(--muted); font-size:12px; white-space:nowrap; }
+</style>
+
+<div class="settings-layout">
+{{template "settingsNav" .}}
+<div class="settings-main">
+
+<div class="page-head">
+  <h2>{{.Integration.Name}} <span class="badge badge-kind">{{.Integration.Type}}</span></h2>
+  <span class="page-head-right hint"><a href="/debug/settings/integrations#int-{{.Integration.Id}}">&larr; integrations</a></span>
+</div>
+<p class="hint" style="max-width:900px;">
+  The delivery ledger is one row per finding: the last action sent and whether it landed. <b>failed</b> rows retry
+  on their own with backoff; <b>dead</b> rows exhausted retries (or hit a permanent error such as bad credentials)
+  and wait for a manual retry. Same data as <code>GET /integrations/{id}/deliveries</code> and <code>/attempts</code>.
+</p>
+
+<div class="dl-head">
+  <div class="tabs" style="margin:0;">
+    {{range .States}}
+    <a class="tab {{if eq . $.State}}active{{end}}" href="/debug/settings/integrations/{{$.Integration.Id}}/deliveries{{if .}}?state={{.}}{{end}}">{{if .}}{{.}}{{else}}all{{end}}</a>
+    {{end}}
+  </div>
+  <form method="POST" action="/debug/settings/integrations/{{.Integration.Id}}/retry" style="margin-left:auto;" onsubmit="return confirm('Re-arm every failed and dead delivery for this integration?');">
+    <button type="submit" class="btn">retry all failed &amp; dead</button>
+  </form>
+</div>
+
+<h3>Deliveries</h3>
+{{if .Deliveries}}
+<table>
+  <thead><tr><th>finding</th><th>last action</th><th>state</th><th>attempts</th><th>sent</th><th>next attempt</th><th>last error</th><th></th></tr></thead>
+  <tbody>
+  {{range .Deliveries}}
+  <tr>
+    <td><span class="dl-key">{{.FindingKey}}</span><div class="hint" style="margin:2px 0 0;">{{.SeverityAtSend}} · {{.StatusAtSend}} · {{.OccurrencesAtSend}} occurrences{{if .ExternalID}} · ext {{.ExternalID}}{{end}}</div></td>
+    <td>{{.LastAction}}</td>
+    <td><span class="badge {{dispatchBadge .State}}">{{.State}}</span></td>
+    <td>{{.Attempts}}</td>
+    <td class="dl-when">{{if .SentAt.IsZero}}-{{else}}{{humanTime .SentAt}}{{end}}</td>
+    <td class="dl-when">{{if .NextAttemptAt.IsZero}}-{{else}}{{humanTime .NextAttemptAt}}{{end}}</td>
+    <td><span class="dl-err">{{.LastError}}</span></td>
+    <td>
+      {{if or (eq (printf "%s" .State) "failed") (eq (printf "%s" .State) "dead")}}
+      <form method="POST" action="/debug/settings/integrations/{{$.Integration.Id}}/retry" style="margin:0;">
+        <input type="hidden" name="finding_key" value="{{.FindingKey}}">
+        <button type="submit" class="btn">retry</button>
+      </form>
+      {{end}}
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<div class="empty">No deliveries{{if .State}} in state {{.State}}{{end}} yet.</div>
+{{end}}
+
+<h3>Attempts (last 24h, newest first)</h3>
+{{if .Attempts}}
+<table>
+  <thead><tr><th>when</th><th>finding</th><th>action</th><th>#</th><th>outcome</th><th>http</th><th>duration</th><th>batch</th><th>error</th></tr></thead>
+  <tbody>
+  {{range .Attempts}}
+  <tr>
+    <td class="dl-when">{{humanTime .AttemptedAt}}</td>
+    <td><span class="dl-key">{{.FindingKey}}</span></td>
+    <td>{{.Action}}</td>
+    <td>{{.Attempt}}</td>
+    <td>{{if eq (printf "%s" .Outcome) "ok"}}<span class="badge badge-ok">ok</span>{{else if eq (printf "%s" .Outcome) "dead"}}<span class="badge badge-warn">dead</span>{{else}}<span class="badge badge-pending">error</span>{{end}}</td>
+    <td>{{if .HTTPStatus}}{{.HTTPStatus}}{{else}}-{{end}}</td>
+    <td>{{.Duration}}</td>
+    <td>{{.EventCount}}</td>
+    <td><span class="dl-err">{{.Error}}</span></td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<div class="empty">No attempts in the last 24 hours.</div>
+{{end}}
+
+</div>
+</div>
+{{end}}

@@ -28,14 +28,15 @@ func ToPolicy(p apitypes.Policy) repo.Policy {
 		}
 	}
 	return repo.Policy{
-		ID:            p.Id,
-		Name:          p.Name,
-		Enabled:       p.Enabled,
-		FireAtScore:   p.FireAtScore,
-		SignalWeights: weights,
-		EnricherLists: lists,
-		Scope:         repo.NormalizePolicyScope(repo.PolicyScope(p.Scope)),
-		ScopeKey:      p.ScopeKey,
+		ID:             p.Id,
+		Name:           p.Name,
+		Enabled:        p.Enabled,
+		FireAtScore:    p.FireAtScore,
+		SignalWeights:  weights,
+		EnricherLists:  lists,
+		Scope:          repo.NormalizePolicyScope(repo.PolicyScope(p.Scope)),
+		ScopeKey:       p.ScopeKey,
+		IntegrationIDs: p.IntegrationIds,
 	}
 }
 
@@ -76,6 +77,7 @@ func ToServiceGuardrail(g apitypes.ServiceGuardrail) repo.ServiceGuardrail {
 		RuleModes:        map[repo.RuleKey]repo.RuleMode{},
 		RuleOrigins:      map[repo.RuleKey]string{},
 		RuleCorrelations: map[repo.RuleKey][]repo.CorrelationSpec{},
+		IntegrationIDs:   g.IntegrationIds,
 	}
 	for _, r := range g.Rules {
 		key := repo.RuleKey(r.Key)

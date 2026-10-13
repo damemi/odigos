@@ -32,6 +32,8 @@
   {{.Summary}}
 </div>
 
+{{template "findingDeliveries" .Deliveries}}
+
 <div class="ev-actions">
   <form method="POST" action="/debug/guardrails/violations/accept"
         onsubmit="return confirm('Accept {{.Offending}} on {{.Service}}? It is added to the guardrail allowlist, so this edge becomes normal and stops alerting.')">

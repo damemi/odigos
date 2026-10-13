@@ -111,8 +111,9 @@ func (e *Engine) RunSampleWriter(ctx context.Context) {
 }
 
 // RunRecommendationMiner mines promoted transactions for guardrail
-// recommendations until ctx is cancelled. Run in its own goroutine; it never
-// touches the ingest path.
+// recommendations until ctx is cancelled. It is a singleton job: run only on
+// the replica holding the leader Lease, so one miner serves the queued requests
+// and the periodic sweeps. It never touches the ingest path.
 func (e *Engine) RunRecommendationMiner(ctx context.Context) {
 	e.recommendations.run(ctx)
 }

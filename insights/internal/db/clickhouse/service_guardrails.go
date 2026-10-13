@@ -16,7 +16,7 @@ import (
 // ListServiceGuardrails returns every declared guardrail across all scopes.
 func (r *Repo) ListServiceGuardrails(ctx context.Context) ([]repo.ServiceGuardrail, error) {
 	return queryRows(ctx, r.conn, "list service guardrails",
-		`SELECT scope_type, scope_key, rule_lists, rule_modes, rule_origins, rule_fingerprints, rule_correlations
+		`SELECT scope_type, scope_key, rule_lists, rule_modes, rule_origins, rule_fingerprints, rule_correlations, integration_ids
 		 FROM service_guardrails FINAL
 		 ORDER BY scope_type ASC, scope_key ASC`,
 		scanServiceGuardrail)
@@ -31,13 +31,17 @@ func scanServiceGuardrail(s rowScanner) (repo.ServiceGuardrail, error) {
 		ruleOrigins      map[string]string
 		ruleFingerprints map[string]string
 		ruleCorrelations map[string]string // rule_key -> JSON([]CorrelationSpec)
+		integrations     []string
 	)
-	if err := s.Scan(&scopeType, &scopeKey, &ruleLists, &ruleModes, &ruleOrigins, &ruleFingerprints, &ruleCorrelations); err != nil {
+	if err := s.Scan(&scopeType, &scopeKey, &ruleLists, &ruleModes, &ruleOrigins, &ruleFingerprints, &ruleCorrelations, &integrations); err != nil {
 		return repo.ServiceGuardrail{}, err
 	}
 	guardrail := repo.ServiceGuardrail{
 		Scope:    repo.NormalizePolicyScope(repo.PolicyScope(scopeType)),
 		ScopeKey: scopeKey,
+	}
+	if len(integrations) > 0 {
+		guardrail.IntegrationIDs = integrations
 	}
 	// Retype the column's string keys to the domain's RuleKey; leave the maps nil
 	// (not empty) when unset so an unconfigured guardrail stays sparse.
@@ -122,9 +126,9 @@ func (r *Repo) UpsertServiceGuardrail(ctx context.Context, guardrail repo.Servic
 	}
 	scope := repo.NormalizePolicyScope(guardrail.Scope)
 	err := r.insert(ctx,
-		"INSERT INTO service_guardrails (scope_type, scope_key, rule_lists, rule_modes, rule_origins, rule_fingerprints, rule_correlations, updated_at)",
+		"INSERT INTO service_guardrails (scope_type, scope_key, rule_lists, rule_modes, rule_origins, rule_fingerprints, rule_correlations, integration_ids, updated_at)",
 		func(batch driver.Batch) error {
-			return batch.Append(string(scope), guardrail.ScopeKey, ruleLists, ruleModes, ruleOrigins, ruleFingerprints, ruleCorrelations, time.Now())
+			return batch.Append(string(scope), guardrail.ScopeKey, ruleLists, ruleModes, ruleOrigins, ruleFingerprints, ruleCorrelations, nonNilStrings(guardrail.IntegrationIDs), time.Now())
 		})
 	if err != nil {
 		return fmt.Errorf("upsert service guardrail: %w", err)
@@ -239,7 +243,8 @@ const guardrailViolationAgg = `SELECT
 		max(last_seen)                       AS newest_seen,
 		max(accepted_at)                      AS latest_accepted,
 		max(dismissed_at)                    AS latest_dismissed,
-		max(reopened_at)                     AS latest_reopened
+		max(reopened_at)                     AS latest_reopened,
+		argMax(last_trace_id, last_seen)     AS last_trace_id
 	FROM guardrail_violations`
 
 // ListGuardrailViolations returns findings over the window with their derived
@@ -261,7 +266,7 @@ func (r *Repo) ListGuardrailViolations(ctx context.Context, f repo.FindingListFi
 	args := append(sinceArgs(f.Since), whereArgs...)
 	args = append(args, uint64(limit))
 
-	q := fmt.Sprintf(`SELECT g.scope_key, g.rule_key, g.offending, g.occurrences, g.max_score, g.first_seen, g.newest_seen, g.latest_accepted, g.latest_dismissed, g.latest_reopened
+	q := fmt.Sprintf(`SELECT g.scope_key, g.rule_key, g.offending, g.occurrences, g.max_score, g.first_seen, g.newest_seen, g.latest_accepted, g.latest_dismissed, g.latest_reopened, g.last_trace_id
 		 FROM (%s) AS g
 		 %s
 		 ORDER BY g.max_score DESC, g.newest_seen DESC
@@ -276,7 +281,7 @@ func (r *Repo) GetGuardrailViolation(ctx context.Context, scopeKey string, rule 
 		WHERE scope_type = ? AND scope_key = ? AND rule_key = ? AND offending = ?
 		GROUP BY scope_type, scope_key, rule_key, offending`
 	return queryRow(ctx, r.conn, "get guardrail violation",
-		`SELECT g.scope_key, g.rule_key, g.offending, g.occurrences, g.max_score, g.first_seen, g.newest_seen, g.latest_accepted, g.latest_dismissed, g.latest_reopened
+		`SELECT g.scope_key, g.rule_key, g.offending, g.occurrences, g.max_score, g.first_seen, g.newest_seen, g.latest_accepted, g.latest_dismissed, g.latest_reopened, g.last_trace_id
 		 FROM (`+inner+`) AS g
 		 LIMIT 1`,
 		scanGuardrailViolationGroup,
@@ -285,12 +290,12 @@ func (r *Repo) GetGuardrailViolation(ctx context.Context, scopeKey string, rule 
 
 func scanGuardrailViolationGroup(s rowScanner) (repo.GuardrailViolationGroup, error) {
 	var (
-		scopeKey, ruleKey, offending                             string
+		scopeKey, ruleKey, offending, lastTraceID                string
 		occ                                                      uint64
 		maxScore                                                 int32
 		firstSeen, lastSeen, acceptedAt, dismissedAt, reopenedAt time.Time
 	)
-	if err := s.Scan(&scopeKey, &ruleKey, &offending, &occ, &maxScore, &firstSeen, &lastSeen, &acceptedAt, &dismissedAt, &reopenedAt); err != nil {
+	if err := s.Scan(&scopeKey, &ruleKey, &offending, &occ, &maxScore, &firstSeen, &lastSeen, &acceptedAt, &dismissedAt, &reopenedAt, &lastTraceID); err != nil {
 		return repo.GuardrailViolationGroup{}, err
 	}
 	namespace, service := splitServiceScopeKey(scopeKey)
@@ -304,6 +309,7 @@ func scanGuardrailViolationGroup(s rowScanner) (repo.GuardrailViolationGroup, er
 		MaxScore:    int(maxScore),
 		FirstSeen:   firstSeen,
 		LastSeen:    lastSeen,
+		LastTraceID: lastTraceID,
 		Status:      guardrailStatus(acceptedAt, dismissedAt, reopenedAt),
 	}, nil
 }

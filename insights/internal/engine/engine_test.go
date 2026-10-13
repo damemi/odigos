@@ -1174,6 +1174,7 @@ type fakeRepo struct {
 
 	insertObservationErr  error // when set, InsertObservations fails without storing
 	countObservationCalls int   // number of CountObservationsByReason invocations
+	listStatsCalls        int   // number of ListTransactionStats invocations
 
 	recommendations map[string]repo.Recommendation
 	liveDeltas      []repo.RecommendationLiveDelta
@@ -1328,6 +1329,7 @@ func (f *fakeRepo) ListServiceNames(_ context.Context) ([]string, error) {
 func (f *fakeRepo) ListTransactionStats(_ context.Context, params repo.TransactionListParams) ([]repo.TransactionStat, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.listStatsCalls++
 	var out []repo.TransactionStat
 	for _, tx := range f.transactions {
 		if params.Namespace != "" && params.Service != "" && (tx.Namespace != params.Namespace || tx.Service != params.Service) {
@@ -1782,7 +1784,7 @@ func (f *fakeRepo) DeleteRecommendations(_ context.Context, transactionID int64)
 	return nil
 }
 
-func (f *fakeRepo) ListRecommendationMiningCandidates(_ context.Context, _ int, _ time.Duration, _ int) ([]repo.RecommendationMiningCandidate, error) {
+func (f *fakeRepo) ListRecommendationMiningCandidates(_ context.Context, _ int, _ int) ([]repo.RecommendationMiningCandidate, error) {
 	return nil, nil
 }
 
@@ -2163,6 +2165,37 @@ func (f *fakeRepo) UpsertServiceGraphEdges(_ context.Context, edges []repo.Servi
 
 func (f *fakeRepo) QueryBlastRadius(_ context.Context, namespace, service string, _ int) (repo.BlastRadiusSubgraph, error) {
 	return repo.BlastRadiusSubgraph{Root: repo.BlastRadiusNode{Namespace: namespace, Service: service}}, nil
+}
+
+func (f *fakeRepo) ListIntegrations(_ context.Context) ([]repo.Integration, error) { return nil, nil }
+func (f *fakeRepo) GetIntegration(_ context.Context, _ string) (repo.Integration, bool, error) {
+	return repo.Integration{}, false, nil
+}
+func (f *fakeRepo) UpsertIntegration(_ context.Context, _ repo.Integration) error { return nil }
+func (f *fakeRepo) DeleteIntegration(_ context.Context, _ string) error           { return nil }
+func (f *fakeRepo) ListNotificationDispatch(_ context.Context, _ repo.DispatchListFilter) ([]repo.NotificationDispatch, error) {
+	return nil, nil
+}
+func (f *fakeRepo) UpsertNotificationDispatch(_ context.Context, _ []repo.NotificationDispatch) error {
+	return nil
+}
+func (f *fakeRepo) ResetNotificationDispatch(_ context.Context, _ string, _ []string) error {
+	return nil
+}
+func (f *fakeRepo) RecordNotificationAttempts(_ context.Context, _ []repo.NotificationAttempt) error {
+	return nil
+}
+func (f *fakeRepo) ListNotificationAttempts(_ context.Context, _ string, _ time.Time, _ int) ([]repo.NotificationAttempt, error) {
+	return nil, nil
+}
+func (f *fakeRepo) ListIntegrationHealth(_ context.Context) (map[string]repo.IntegrationHealth, error) {
+	return nil, nil
+}
+func (f *fakeRepo) GetNotificationCursor(_ context.Context, _ string) (repo.NotificationCursor, bool, error) {
+	return repo.NotificationCursor{}, false, nil
+}
+func (f *fakeRepo) SetNotificationCursor(_ context.Context, _ repo.NotificationCursor) error {
+	return nil
 }
 
 func (f *fakeRepo) Ping(_ context.Context) error { return nil }

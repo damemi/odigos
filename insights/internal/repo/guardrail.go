@@ -94,6 +94,9 @@ type ServiceGuardrail struct {
 	// absent rule has no correlations. Unlike RuleLists, these carry span
 	// selectors, a relation, and a per-rule severity rather than plain strings.
 	RuleCorrelations map[RuleKey][]CorrelationSpec
+	// IntegrationIDs routes this guardrail's violations to those backends.
+	// Empty falls back to the global alert policy's list (the default route).
+	IntegrationIDs []string
 }
 
 // CorrelationSelector locates one attribute on one span within a trace. Span
@@ -227,6 +230,7 @@ type GuardrailViolationGroup struct {
 	MaxScore    int
 	FirstSeen   time.Time
 	LastSeen    time.Time
+	LastTraceID string
 	Status      GuardrailViolationStatus
 }
 

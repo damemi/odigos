@@ -325,11 +325,11 @@ func (m *instrumentedRepo) DeleteRecommendations(ctx context.Context, transactio
 	})
 }
 
-func (m *instrumentedRepo) ListRecommendationMiningCandidates(ctx context.Context, scoredClasses int, staleClaim time.Duration, limit int) ([]repo.RecommendationMiningCandidate, error) {
+func (m *instrumentedRepo) ListRecommendationMiningCandidates(ctx context.Context, scoredClasses int, limit int) ([]repo.RecommendationMiningCandidate, error) {
 	var out []repo.RecommendationMiningCandidate
 	err := observe("ListRecommendationMiningCandidates", func() error {
 		var e error
-		out, e = m.inner.ListRecommendationMiningCandidates(ctx, scoredClasses, staleClaim, limit)
+		out, e = m.inner.ListRecommendationMiningCandidates(ctx, scoredClasses, limit)
 		return e
 	})
 	return out, err
@@ -533,6 +533,108 @@ func (m *instrumentedRepo) QueryBlastRadius(ctx context.Context, namespace, serv
 		return e
 	})
 	return out, err
+}
+
+func (m *instrumentedRepo) ListIntegrations(ctx context.Context) ([]repo.Integration, error) {
+	var out []repo.Integration
+	err := observe("ListIntegrations", func() error {
+		var e error
+		out, e = m.inner.ListIntegrations(ctx)
+		return e
+	})
+	return out, err
+}
+
+func (m *instrumentedRepo) GetIntegration(ctx context.Context, id string) (repo.Integration, bool, error) {
+	var (
+		out repo.Integration
+		ok  bool
+	)
+	err := observe("GetIntegration", func() error {
+		var e error
+		out, ok, e = m.inner.GetIntegration(ctx, id)
+		return e
+	})
+	return out, ok, err
+}
+
+func (m *instrumentedRepo) UpsertIntegration(ctx context.Context, in repo.Integration) error {
+	return observe("UpsertIntegration", func() error {
+		return m.inner.UpsertIntegration(ctx, in)
+	})
+}
+
+func (m *instrumentedRepo) DeleteIntegration(ctx context.Context, id string) error {
+	return observe("DeleteIntegration", func() error {
+		return m.inner.DeleteIntegration(ctx, id)
+	})
+}
+
+func (m *instrumentedRepo) ListNotificationDispatch(ctx context.Context, filter repo.DispatchListFilter) ([]repo.NotificationDispatch, error) {
+	var out []repo.NotificationDispatch
+	err := observe("ListNotificationDispatch", func() error {
+		var e error
+		out, e = m.inner.ListNotificationDispatch(ctx, filter)
+		return e
+	})
+	return out, err
+}
+
+func (m *instrumentedRepo) UpsertNotificationDispatch(ctx context.Context, rows []repo.NotificationDispatch) error {
+	return observe("UpsertNotificationDispatch", func() error {
+		return m.inner.UpsertNotificationDispatch(ctx, rows)
+	})
+}
+
+func (m *instrumentedRepo) ResetNotificationDispatch(ctx context.Context, integrationID string, findingKeys []string) error {
+	return observe("ResetNotificationDispatch", func() error {
+		return m.inner.ResetNotificationDispatch(ctx, integrationID, findingKeys)
+	})
+}
+
+func (m *instrumentedRepo) RecordNotificationAttempts(ctx context.Context, attempts []repo.NotificationAttempt) error {
+	return observe("RecordNotificationAttempts", func() error {
+		return m.inner.RecordNotificationAttempts(ctx, attempts)
+	})
+}
+
+func (m *instrumentedRepo) ListNotificationAttempts(ctx context.Context, integrationID string, since time.Time, limit int) ([]repo.NotificationAttempt, error) {
+	var out []repo.NotificationAttempt
+	err := observe("ListNotificationAttempts", func() error {
+		var e error
+		out, e = m.inner.ListNotificationAttempts(ctx, integrationID, since, limit)
+		return e
+	})
+	return out, err
+}
+
+func (m *instrumentedRepo) ListIntegrationHealth(ctx context.Context) (map[string]repo.IntegrationHealth, error) {
+	var out map[string]repo.IntegrationHealth
+	err := observe("ListIntegrationHealth", func() error {
+		var e error
+		out, e = m.inner.ListIntegrationHealth(ctx)
+		return e
+	})
+	return out, err
+}
+
+func (m *instrumentedRepo) GetNotificationCursor(ctx context.Context, integrationID string) (repo.NotificationCursor, bool, error) {
+	var (
+		out repo.NotificationCursor
+		ok  bool
+	)
+	err := observe("GetNotificationCursor", func() error {
+		var e error
+		out, ok, e = m.inner.GetNotificationCursor(ctx, integrationID)
+		return e
+	})
+	return out, ok, err
+}
+
+func (m *instrumentedRepo) SetNotificationCursor(ctx context.Context, cursor repo.NotificationCursor) error {
+	return observe("SetNotificationCursor", func() error {
+		return m.inner.SetNotificationCursor(ctx, cursor)
+	})
 }
 
 func (m *instrumentedRepo) GetStorageHealth(ctx context.Context) (repo.StorageHealth, error) {

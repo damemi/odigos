@@ -239,9 +239,9 @@ type RecommendationLiveDelta struct {
 	LastAt        time.Time
 }
 
-// RecommendationMiningRun records the outcome of mining one transaction, and
-// doubles as the soft claim that keeps replicas from mining the same
-// transaction at once. A run with a zero MinedAt is in progress.
+// RecommendationMiningRun records the outcome of mining one transaction. The
+// sweep reads SampleCount to know when new evidence means a transaction needs
+// re-mining. ClaimedAt/MinedAt are the run's start and finish timestamps.
 type RecommendationMiningRun struct {
 	TransactionID int64
 	ClaimedAt     time.Time

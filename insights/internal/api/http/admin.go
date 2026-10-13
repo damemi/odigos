@@ -34,6 +34,7 @@ type Admin interface {
 	SystemSettings() repo.SystemSettings
 	PromoteBaselineClass(ctx context.Context, transactionID int64, class repo.DeviationClass) error
 	PromoteTransactionBaselines(ctx context.Context, transactionID int64) error
+	PromoteTransactionsBaselines(ctx context.Context, transactionIDs []int64) (int, int, error)
 	EnableTransactionGuardrail(ctx context.Context, namespace, service string) error
 	DisableTransactionGuardrail(ctx context.Context, namespace, service string) error
 	ForcePromoteService(ctx context.Context, namespace, service string) error

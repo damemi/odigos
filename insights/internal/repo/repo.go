@@ -202,7 +202,7 @@ type Repository interface {
 	// relation samples are not yet mined, gained samples since the last run, or
 	// whose in-progress claim is older than staleClaim. scoredClasses is how
 	// many baseline classes must be promoted for a transaction to count.
-	ListRecommendationMiningCandidates(ctx context.Context, scoredClasses int, staleClaim time.Duration, limit int) ([]RecommendationMiningCandidate, error)
+	ListRecommendationMiningCandidates(ctx context.Context, scoredClasses int, limit int) ([]RecommendationMiningCandidate, error)
 
 	// RecordRecommendationMiningRun writes the claim (zero MinedAt) or the
 	// outcome of mining one transaction.
@@ -324,6 +324,56 @@ type Repository interface {
 	// both directions (callers and callees). depth <= 0 defaults to 1. Backs the
 	// UI's per-anomaly Blast Radius panel.
 	QueryBlastRadius(ctx context.Context, namespace, service string, depth int) (BlastRadiusSubgraph, error)
+
+	// ---------- integrations (findings delivery) ----------
+
+	// ListIntegrations returns every configured backend, enabled or not, sorted
+	// by name. Read by the notifier on each tick and by the UI editor.
+	ListIntegrations(ctx context.Context) ([]Integration, error)
+
+	// GetIntegration returns one backend by id; ok=false when unknown.
+	GetIntegration(ctx context.Context, id string) (Integration, bool, error)
+
+	// UpsertIntegration inserts or replaces one backend, keyed by ID. The
+	// caller assigns the id and has already validated Config against the
+	// catalog. CreatedAt is preserved by the caller on update.
+	UpsertIntegration(ctx context.Context, in Integration) error
+
+	// DeleteIntegration removes one backend and its delivery ledger. Cold path.
+	DeleteIntegration(ctx context.Context, id string) error
+
+	// ListNotificationDispatch returns ledger rows matching filter. Used by the
+	// notifier (rows for the findings in a tick, due retries) and by the UI
+	// (an integration's deliveries, a finding's deliveries across backends).
+	ListNotificationDispatch(ctx context.Context, filter DispatchListFilter) ([]NotificationDispatch, error)
+
+	// UpsertNotificationDispatch writes ledger rows, keyed by (integration,
+	// finding). Called once per tick by the notifier, never per trace.
+	UpsertNotificationDispatch(ctx context.Context, rows []NotificationDispatch) error
+
+	// ResetNotificationDispatch puts the given findings of one integration (or
+	// every failed/dead one when findingKeys is empty) back to pending with a
+	// cleared retry schedule so the next tick resends. Operator action.
+	ResetNotificationDispatch(ctx context.Context, integrationID string, findingKeys []string) error
+
+	// RecordNotificationAttempts appends audit rows. One per send, including
+	// the test endpoint.
+	RecordNotificationAttempts(ctx context.Context, attempts []NotificationAttempt) error
+
+	// ListNotificationAttempts returns one integration's audit rows newest
+	// first, bounded by since (zero = no bound) and limit.
+	ListNotificationAttempts(ctx context.Context, integrationID string, since time.Time, limit int) ([]NotificationAttempt, error)
+
+	// ListIntegrationHealth derives every integration's delivery health from
+	// the audit and ledger tables in two aggregate queries, keyed by id.
+	ListIntegrationHealth(ctx context.Context) (map[string]IntegrationHealth, error)
+
+	// GetNotificationCursor returns the notifier's progress for one
+	// integration; ok=false when it has never run.
+	GetNotificationCursor(ctx context.Context, integrationID string) (NotificationCursor, bool, error)
+
+	// SetNotificationCursor records the notifier's progress. Leader only.
+	SetNotificationCursor(ctx context.Context, cursor NotificationCursor) error
 
 	// ---------- storage health ----------
 
