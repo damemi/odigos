@@ -10,12 +10,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/odigos-io/ebpf-core/pkg/collection"
 	"github.com/odigos-io/ebpf-core/pkg/wasp"
 	"github.com/odigos-io/ebpf-java-instrumentation/v2/jvmmetrics"
 	javaconfig "github.com/odigos-io/ebpf-java-instrumentation/v2/pkg/config"
 	"github.com/odigos-io/ebpf-java-instrumentation/v2/pkg/dynamic"
-	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/logcapture"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common"
@@ -38,7 +36,6 @@ type JavaOtelEbpfSdkEnterprise struct {
 	config   instrumentation.Config
 	logger   *slog.Logger
 	waspMaps *wasp.Maps
-	pid      int
 }
 
 type JavaInstrumentationFactoryEnterprise struct {
@@ -160,7 +157,6 @@ func (g *JavaInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context
 		config:   settings.InitialConfig,
 		logger:   g.logger,
 		waspMaps: waspMaps,
-		pid:      pid,
 	}
 
 	return javaInstWrapper, nil
@@ -196,8 +192,6 @@ func (g *JavaOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.S
 		return status, err
 	}
 
-	g.prepareLogCapture()
-
 	return status, nil
 }
 
@@ -212,23 +206,6 @@ func (g *JavaOtelEbpfSdkEnterprise) Close(ctx context.Context) error {
 	}
 	err = errors.Join(err, g.inst.Close())
 	return err
-}
-
-// prepareLogCapture attaches the global Linux TID span map so logs emitted from this Java process
-// can be correlated with their originating span. It is invoked at the end of Load, once the probes
-// (and their shared maps) are loaded. This is done regardless of whether log capture is currently
-// enabled for the workload: the log capture generic factory registers/unregisters the process
-// based on config, and the Manager supports attaching this map before or after registration.
-func (g *JavaOtelEbpfSdkEnterprise) prepareLogCapture() {
-	spanMap, err := collection.LookupSharedMap(auto.ActiveSpanByLinuxTidMapName, collection.WithGlobalScope())
-	if err != nil {
-		// Not loaded yet (no Java probe attached) is expected; only surface real errors.
-		if !errors.Is(err, collection.ErrSharedMapNotFound) {
-			g.logger.Info("failed to look up span map for log correlation", "pid", g.pid, "error", err)
-		}
-		return
-	}
-	logcapture.GetInstance().AddSpanMap(uint32(g.pid), spanMap)
 }
 
 func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instrumentation.Config) error {

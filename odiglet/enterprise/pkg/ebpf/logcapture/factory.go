@@ -26,10 +26,10 @@ const FactoryName = "ebpf-log-capture"
 // per-workload by ContainerAgentConfig.Logs.EbpfLogCapture (see isEnabled), evaluated in Load and
 // re-evaluated in ApplyConfig.
 //
-// Trace correlation is best-effort: only SDKs that provision span/goroutine correlation maps on the
-// Manager (currently Go and Java) get trace context on their log records; other processes still have
-// their logs captured, without trace context. The Manager accepts those maps either before or after
-// a process is registered, so ordering between this factory and the distro factory does not matter.
+// Trace correlation is best-effort: only processes whose instrumentation publishes its span maps
+// (currently Go and Java) get trace context on their log records; other processes still have their
+// logs captured, without trace context. Publishing works before or after a process is registered, so
+// ordering between this factory and the distro factory does not matter.
 func NewFactory() instrumentation.Factory {
 	return &factory{}
 }
@@ -101,9 +101,6 @@ func (i *logCaptureInstrumentation) Close(_ context.Context) error {
 		GetInstance().UnregisterProcess(i.pid)
 		i.registered = false
 	}
-	// The SDK-provisioned correlation maps are retained across enable/disable toggles for the life
-	// of the process (see Manager.UnregisterProcess); now that the process is gone, drop them.
-	GetInstance().ClearProcessOpts(i.pid)
 	return nil
 }
 

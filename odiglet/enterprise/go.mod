@@ -5,10 +5,10 @@ go 1.26.4
 require (
 	github.com/cilium/ebpf v0.22.0
 	github.com/container-storage-interface/spec v1.10.0
-	github.com/odigos-io/ebpf-core v0.32.0
+	github.com/odigos-io/ebpf-core v0.34.0
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.14
-	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.57.0
-	github.com/odigos-io/ebpf-java-instrumentation/v2 v2.57.0
+	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.58.0
+	github.com/odigos-io/ebpf-java-instrumentation/v2 v2.58.0
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.16.0
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0-00010101000000-000000000000
@@ -290,7 +290,7 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v1.32.0
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v1.33.0
 
 replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.39.0-pre1.0.20261013134118-35d9ca36cc5c
 

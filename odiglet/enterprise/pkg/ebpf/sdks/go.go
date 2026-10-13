@@ -20,9 +20,7 @@ import (
 	goAutoConfig "go.opentelemetry.io/auto/config"
 	"go.opentelemetry.io/collector/consumer"
 
-	"github.com/odigos-io/ebpf-core/pkg/collection"
 	"github.com/odigos-io/ebpf-core/pkg/wasp"
-	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/logcapture"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common/api/instrumentationrules"
 	commonapisampling "github.com/odigos-io/odigos/common/api/sampling"
@@ -54,10 +52,9 @@ const goOffsetsWatchInterval = 30 * time.Second
 const GoEnterpriseDistroName = "golang-enterprise"
 
 type GoOtelEbpfSdkEnterprise struct {
-	inst             *auto.Instrumentation
-	cp               *configprovider.ConfigProvider[goAutoConfig.InstrumentationConfig]
-	waspMaps         *wasp.Maps
-	pid              int
+	inst     *auto.Instrumentation
+	cp       *configprovider.ConfigProvider[goAutoConfig.InstrumentationConfig]
+	waspMaps *wasp.Maps
 }
 
 type GoInstrumentationFactoryEnterprise struct {
@@ -246,10 +243,9 @@ func (g *GoInstrumentationFactoryEnterprise) CreateInstrumentation(ctx context.C
 	}
 
 	goInstWrapper := &GoOtelEbpfSdkEnterprise{
-		inst:             inst,
-		cp:               cp,
-		waspMaps:         waspMaps,
-		pid:              pid,
+		inst:     inst,
+		cp:       cp,
+		waspMaps: waspMaps,
 	}
 
 	return goInstWrapper, nil
@@ -271,31 +267,7 @@ func (g *GoOtelEbpfSdkEnterprise) Load(ctx context.Context) (instrumentation.Sta
 		return status, err
 	}
 
-	g.prepareLogCapture()
-
 	return status, nil
-}
-
-// prepareLogCapture attaches the Go goroutine-id map and runtime offsets to the log capture
-// manager so logs emitted from this process can be correlated with their originating span. It is
-// invoked at the end of Load, once the probes (and their shared maps) are loaded. This is done
-// regardless of whether log capture is currently enabled for the workload: the log capture generic
-// factory registers/unregisters the process based on config, and the Manager supports attaching
-// this map before or after registration.
-func (g *GoOtelEbpfSdkEnterprise) prepareLogCapture() {
-	scMap, err := collection.LookupSharedMap(auto.GoroutineIdToScMapName, collection.WithProcessScope(g.pid))
-	if err != nil {
-		if !errors.Is(err, collection.ErrSharedMapNotFound) {
-			commonlogger.LoggerCompat().With("subsystem", "ebpfgosdk").Info("failed to look up goroutine sc map for log correlation", "pid", g.pid, "error", err)
-		}
-		return
-	}
-	goidPos, ancestorsPos, err := g.inst.GetGoRuntimeOffsets()
-	if err != nil {
-		commonlogger.LoggerCompat().With("subsystem", "ebpfgosdk").Info("failed to get Go runtime offsets for log correlation", "pid", g.pid, "error", err)
-		return
-	}
-	logcapture.GetInstance().AddGoroutineMap(uint32(g.pid), scMap, goidPos, ancestorsPos)
 }
 
 func (g *GoOtelEbpfSdkEnterprise) Run(ctx context.Context) error {

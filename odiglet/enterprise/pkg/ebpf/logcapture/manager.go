@@ -35,7 +35,6 @@ type Manager struct {
 	mu              sync.Mutex
 	logCapture      *logs.LogCapture
 	externalLogsMap *ebpf.Map
-	processOpts     map[uint32]logs.ProcessOpts // per-PID options (span maps, goroutine maps, Go config)
 	started         bool
 
 	currentAttrs map[uint32]string // pid → packed attrs
@@ -50,55 +49,10 @@ func (m *Manager) SetExternalLogsMap(logsMap *ebpf.Map) {
 	m.externalLogsMap = logsMap
 }
 
-func (m *Manager) AddSpanMap(tgid uint32, spanMap *ebpf.Map) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.processOpts == nil {
-		m.processOpts = make(map[uint32]logs.ProcessOpts)
-	}
-	opts := m.processOpts[tgid]
-	opts.SpanMap = spanMap
-	m.processOpts[tgid] = opts
-	if m.started && m.logCapture != nil {
-		if err := m.logCapture.AddSpanMap(tgid, spanMap); err != nil {
-			commonlogger.LoggerCompat().With("subsystem", "ebpflogcapture").Error("failed to add late span map", "error", err)
-		}
-	}
-}
-
-func (m *Manager) AddGoroutineMap(tgid uint32, scMap *ebpf.Map, goidPos, ancestorsPos uint64) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.processOpts == nil {
-		m.processOpts = make(map[uint32]logs.ProcessOpts)
-	}
-	goCfg := &logs.GoProcessConfig{
-		GoidPos:            goidPos,
-		AncestorsPos:       ancestorsPos,
-		AncestorSize:       logs.DefaultAncestorSize,
-		AncestorGoidOffset: logs.DefaultAncestorGoidOffset,
-	}
-	opts := m.processOpts[tgid]
-	opts.GoroutineScMap = scMap
-	opts.GoConfig = goCfg
-	m.processOpts[tgid] = opts
-	if m.started && m.logCapture != nil {
-		if err := m.logCapture.AddGoroutineScMap(tgid, scMap); err != nil {
-			commonlogger.LoggerCompat().With("subsystem", "ebpflogcapture").Error("failed to add goroutine sc map", "error", err)
-		}
-		if err := m.logCapture.AddGoProcessConfig(tgid, *goCfg); err != nil {
-			commonlogger.LoggerCompat().With("subsystem", "ebpflogcapture").Error("failed to add go process config", "error", err)
-		}
-	}
-}
-
 func (m *Manager) start(ctx context.Context) error {
 	logger := slog.With("subsystem", "ebpflogcapture")
 
 	captureOpts := []logs.Option{logs.WithLogger(logger)}
-	for tgid, opts := range m.processOpts {
-		captureOpts = append(captureOpts, logs.WithProcess(tgid, opts))
-	}
 	if m.externalLogsMap != nil {
 		captureOpts = append(captureOpts, logs.WithExternalReader(m.externalLogsMap))
 	}
@@ -141,8 +95,7 @@ func (m *Manager) RegisterProcess(ctx context.Context, pid int, packedAttrs stri
 		m.notifyAttr(unixfd.EncodeAttrRegister(uint32(pid), packedAttrs))
 	}
 
-	opts := m.processOpts[uint32(pid)]
-	if err := m.logCapture.AddProcess(uint32(pid), opts); err != nil {
+	if err := m.logCapture.AddProcess(uint32(pid)); err != nil {
 		return fmt.Errorf("register process %d: %w", pid, err)
 	}
 
@@ -150,10 +103,7 @@ func (m *Manager) RegisterProcess(ctx context.Context, pid int, packedAttrs stri
 }
 
 // UnregisterProcess removes a PID from active log capture, e.g. when a workload dynamically
-// disables ebpfLogCapture. It intentionally retains the process's correlation maps in processOpts:
-// the SDKs provision those maps once (when the process is instrumented), so keeping them lets
-// capture be re-enabled later - RegisterProcess re-applies them via AddProcess - without the SDK
-// re-provisioning. The maps are dropped only when the process exits, via ClearProcessOpts.
+// disables ebpfLogCapture.
 func (m *Manager) UnregisterProcess(pid int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -168,16 +118,6 @@ func (m *Manager) UnregisterProcess(pid int) {
 
 	delete(m.currentAttrs, uint32(pid))
 	m.notifyAttr(unixfd.EncodeAttrUnregister(uint32(pid)))
-}
-
-// ClearProcessOpts drops a process's correlation maps from processOpts without touching the running
-// BPF program. The maps are provisioned once by the eBPF SDKs and retained across ebpfLogCapture
-// enable/disable toggles (see UnregisterProcess); this releases them when the process exits (or was
-// never registered because log capture is disabled) so they don't leak.
-func (m *Manager) ClearProcessOpts(pid int) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.processOpts, uint32(pid))
 }
 
 // pidNSInode reads our PID namespace inode so the BPF CO-RE walk can translate
