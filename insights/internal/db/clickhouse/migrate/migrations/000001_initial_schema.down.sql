@@ -1,3 +1,7 @@
+DROP TABLE IF EXISTS notification_attempts;
+DROP TABLE IF EXISTS notification_cursors;
+DROP TABLE IF EXISTS notification_dispatch;
+DROP TABLE IF EXISTS integrations;
 DROP TABLE IF EXISTS system_settings;
 DROP TABLE IF EXISTS service_graph_edges;
 DROP TABLE IF EXISTS guardrail_violations;

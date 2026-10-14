@@ -231,7 +231,7 @@ func TestRenderSettingsPages(t *testing.T) {
 		}},
 		{"guardrails", map[string]any{
 			"Active": "settings", "SettingsTab": "guardrails", "Flash": "", "Error": "",
-			"Guardrails": []guardrailView{{ScopeKey: "shop/payments", Scope: repo.ScopeService, IntegrationIDs: []string{"int-1"}}},
+			"Guardrails": []guardrailView{{ScopeKey: "shop/payments", Scope: repo.ScopeService, Delivery: repo.Delivery{ExcludedIntegrationIDs: []string{"int-1"}}}},
 			"Namespaces": []string{}, "ServicesJSON": "{}",
 			"Integrations": []integrationOption{{ID: "int-1", Name: "ops slack", Type: "slack"}},
 		}},

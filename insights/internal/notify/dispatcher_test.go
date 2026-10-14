@@ -165,7 +165,7 @@ func newFixture(t *testing.T, caps Capabilities, filters repo.IntegrationFilters
 	reg.Register(Descriptor{Type: "fake", Name: "Fake", Capabilities: caps}, func(Config, Deps) (Sink, error) { return sink, nil })
 	r := newMemRepo()
 	r.integrations = []repo.Integration{{ID: "int-1", Name: "Fake", Type: "fake", Enabled: true, Config: json.RawMessage(`{}`), Filters: filters}}
-	r.policies = []repo.Policy{{ID: 1, Scope: repo.ScopeGlobal, IntegrationIDs: []string{"int-1"}}}
+	r.policies = []repo.Policy{{ID: 1, Scope: repo.ScopeGlobal}}
 	r.anomalies = []repo.AnomalyIssue{{
 		TransactionID: 42, Signature: "s", Service: "svc", Namespace: "ns", Operation: "GET /x",
 		PolicyID: 1, Occurrences: 2, MaxScore: 60, Status: repo.AnomalyIssueOpen,
@@ -325,7 +325,7 @@ func TestDispatcher_PermanentFailureIsDeadImmediately(t *testing.T) {
 	}
 }
 
-func TestDispatcher_RoutingAndFilters(t *testing.T) {
+func TestDispatcher_IntegrationFilters(t *testing.T) {
 	f := newFixture(t, Capabilities{}, repo.IntegrationFilters{MinSeverity: "critical"})
 	f.tick(t)
 	if sent := f.sink.sent(); len(sent) != 0 {
@@ -337,35 +337,87 @@ func TestDispatcher_RoutingAndFilters(t *testing.T) {
 	if sent := g.sink.sent(); len(sent) != 0 {
 		t.Fatalf("anomaly passed a violation-only filter: %+v", sent)
 	}
+}
 
-	h := newFixture(t, Capabilities{}, repo.IntegrationFilters{})
-	h.repo.policies = []repo.Policy{
-		{ID: 1, Scope: repo.ScopeGlobal, IntegrationIDs: []string{"int-1"}},
-		{ID: 7, Scope: repo.ScopeService, ScopeKey: "ns/svc", IntegrationIDs: []string{"other"}},
-	}
-	h.repo.anomalies[0].PolicyID = 7
-	h.tick(t)
-	if sent := h.sink.sent(); len(sent) != 0 {
-		t.Fatalf("anomaly under a policy routed elsewhere was delivered: %+v", sent)
-	}
-
-	// Violations route by guardrail scope, falling back to the global policy.
-	v := newFixture(t, Capabilities{}, repo.IntegrationFilters{})
-	v.repo.anomalies = nil
-	v.repo.violations = []repo.GuardrailViolationGroup{{
+// violationFixture is a fixture whose only finding is one violation in ns/svc.
+func violationFixture(t *testing.T) *fixture {
+	t.Helper()
+	f := newFixture(t, Capabilities{}, repo.IntegrationFilters{})
+	f.repo.anomalies = nil
+	f.repo.violations = []repo.GuardrailViolationGroup{{
 		Service: "svc", Namespace: "ns", ScopeKey: "ns/svc", RuleKey: "allowed_callers", Offending: "ns/bad",
 		Occurrences: 1, MaxScore: 50, Status: repo.GuardrailViolationOpen, LastSeen: time.Now(),
 	}}
-	v.tick(t)
-	if sent := v.sink.sent(); len(sent) != 1 || sent[0].Kind != KindViolation {
-		t.Fatalf("violation not delivered via global route: %+v", sent)
+	return f
+}
+
+func TestDispatcher_DeliverySettings(t *testing.T) {
+	cases := []struct {
+		name  string
+		setup func(f *fixture)
+		want  int
+	}{
+		{"anomaly from a policy with default delivery", func(f *fixture) {}, 1},
+		{"anomaly from a deleted policy keeps the default", func(f *fixture) { f.repo.policies = nil }, 1},
+		{"anomaly from a muted policy", func(f *fixture) {
+			f.repo.policies[0].Delivery = repo.Delivery{Muted: true}
+		}, 0},
+		{"anomaly from a policy excluding this integration", func(f *fixture) {
+			f.repo.policies[0].Delivery = repo.Delivery{ExcludedIntegrationIDs: []string{"int-1"}}
+		}, 0},
+		{"anomaly from a policy excluding another integration", func(f *fixture) {
+			f.repo.policies[0].Delivery = repo.Delivery{ExcludedIntegrationIDs: []string{"other"}}
+		}, 1},
 	}
-	v.repo.guardrails = []repo.ServiceGuardrail{{Scope: repo.ScopeService, ScopeKey: "ns/svc", IntegrationIDs: []string{"other"}}}
-	v.repo.violations[0].Offending = "ns/bad2"
-	v.sink.reset()
-	v.tick(t)
-	if sent := v.sink.sent(); len(sent) != 0 {
-		t.Fatalf("violation routed to another integration was delivered: %+v", sent)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t, Capabilities{}, repo.IntegrationFilters{})
+			tc.setup(f)
+			f.tick(t)
+			if sent := f.sink.sent(); len(sent) != tc.want {
+				t.Fatalf("delivered %d, want %d: %+v", len(sent), tc.want, sent)
+			}
+		})
+	}
+
+	violationCases := []struct {
+		name       string
+		guardrails []repo.ServiceGuardrail
+		want       int
+	}{
+		{"violation with no guardrail row (auto-created)", nil, 1},
+		{"violation from a guardrail with default delivery", []repo.ServiceGuardrail{{Scope: repo.ScopeService, ScopeKey: "ns/svc"}}, 1},
+		{"violation from a muted guardrail", []repo.ServiceGuardrail{{Scope: repo.ScopeService, ScopeKey: "ns/svc", Delivery: repo.Delivery{Muted: true}}}, 0},
+		{"violation from a guardrail excluding this integration", []repo.ServiceGuardrail{{Scope: repo.ScopeService, ScopeKey: "ns/svc", Delivery: repo.Delivery{ExcludedIntegrationIDs: []string{"int-1"}}}}, 0},
+		{"violation muted on another guardrail", []repo.ServiceGuardrail{{Scope: repo.ScopeService, ScopeKey: "ns/other", Delivery: repo.Delivery{Muted: true}}}, 1},
+	}
+	for _, tc := range violationCases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := violationFixture(t)
+			f.repo.guardrails = tc.guardrails
+			f.tick(t)
+			if sent := f.sink.sent(); len(sent) != tc.want {
+				t.Fatalf("delivered %d, want %d: %+v", len(sent), tc.want, sent)
+			}
+		})
+	}
+}
+
+// A muted source's parked retry is dropped instead of re-sent.
+func TestDispatcher_MutingDropsParkedRetry(t *testing.T) {
+	f := newFixture(t, Capabilities{}, repo.IntegrationFilters{})
+	f.sink.err = Retryable("backend down")
+	f.tick(t)
+	if row := f.repo.row("int-1", anomalyKey); row.State != repo.DispatchFailed {
+		t.Fatalf("want a parked retry, got state %q", row.State)
+	}
+	f.sink.reset()
+	f.sink.err = nil
+	f.repo.policies[0].Delivery = repo.Delivery{Muted: true}
+	f.now = f.now.Add(time.Hour)
+	f.tick(t)
+	if sent := f.sink.sent(); len(sent) != 0 {
+		t.Fatalf("muted source's retry was re-sent: %+v", sent)
 	}
 }
 

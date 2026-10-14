@@ -539,17 +539,19 @@
 {{/* Settings left rail, grouped into sub-categories. Each settings page renders
      this at the top of its content and highlights the active tab via
      .SettingsTab (learning | detection | guardrails | risk-model | system | storage). */}}
-{{/* integrationPicker renders integration_ids checkboxes for a policy or
-     guardrail editor. Dot: dict Integrations ([]integrationOption), Selected ([]string). */}}
+{{/* integrationPicker renders the delivery settings for a policy or guardrail
+     editor. Dot: dict Integrations ([]integrationOption), Delivery (repo.Delivery). */}}
 {{define "integrationPicker"}}
 {{if .Integrations}}
 <div class="int-pick">
-  <span class="int-pick-lbl">Deliver to</span>
-  {{$sel := .Selected}}
+  <span class="int-pick-lbl">Delivery</span>
+  <label><input type="checkbox" name="notify_muted" {{if .Delivery.Muted}}checked{{end}}> mute (send to no integration)</label>
+  <span class="int-pick-lbl">Skip</span>
+  {{$excluded := .Delivery.ExcludedIntegrationIDs}}
   {{range .Integrations}}
-  <label><input type="checkbox" name="integration_ids" value="{{.ID}}" {{if hasString $sel .ID}}checked{{end}}> {{.Name}} <span class="int-pick-type">{{.Type}}</span></label>
+  <label><input type="checkbox" name="excluded_integration_ids" value="{{.ID}}" {{if hasString $excluded .ID}}checked{{end}}> {{.Name}} <span class="int-pick-type">{{.Type}}</span></label>
   {{end}}
-  <span class="int-pick-hint">none selected = inherit the global detection policy's route</span>
+  <span class="int-pick-hint">by default findings go to every integration whose filters accept them</span>
 </div>
 {{else}}
 <div class="int-pick"><span class="int-pick-lbl">Deliver to</span><span class="int-pick-hint">no integrations configured - <a href="/debug/settings/integrations">add one</a></span></div>

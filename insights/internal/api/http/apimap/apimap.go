@@ -262,7 +262,7 @@ func FromPolicy(p repo.Policy) apitypes.Policy {
 		EnricherLists:  lists,
 		Scope:          apitypes.PolicyScope(repo.NormalizePolicyScope(p.Scope)),
 		ScopeKey:       p.ScopeKey,
-		IntegrationIds: p.IntegrationIDs,
+		Delivery:       FromDeliverySettings(p.Delivery),
 	}
 }
 

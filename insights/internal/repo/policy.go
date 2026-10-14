@@ -1,5 +1,7 @@
 package repo
 
+import "slices"
+
 // SignalSource identifies a risk signal in a policy's weight map and the risk
 // catalog. It is either a deviation-class id (e.g. "D6_db_access") or an
 // enricher-signal id (e.g. "d6_destructive_op"); the risk catalog is the source
@@ -47,9 +49,24 @@ type Policy struct {
 	Scope    PolicyScope
 	ScopeKey string
 
-	// IntegrationIDs routes anomalies fired under this policy to those
-	// backends. Empty on an override falls back to the global policy's list,
-	// which is the default route; empty on the global policy means anomalies
-	// are not delivered anywhere.
-	IntegrationIDs []string
+	// Delivery controls which integrations receive anomalies fired under this
+	// policy.
+	Delivery Delivery
+}
+
+// Delivery controls where a policy's or guardrail's findings are sent. The
+// zero value sends to every integration whose filters accept the finding, so a
+// source created anywhere (API, debug UI, engine auto-guardrails) delivers by
+// default.
+type Delivery struct {
+	// Muted sends this source's findings to no integration.
+	Muted bool
+	// ExcludedIntegrationIDs skips only these integrations.
+	ExcludedIntegrationIDs []string
+}
+
+// Delivers reports whether a finding from this source should be sent to
+// integrationID.
+func (d Delivery) Delivers(integrationID string) bool {
+	return !d.Muted && !slices.Contains(d.ExcludedIntegrationIDs, integrationID)
 }

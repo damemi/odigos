@@ -546,13 +546,13 @@
           <label style="font-weight:normal;"><input type="radio" name="mode_attribute_correlation" value="enforce" {{if eq (printf "%s" .CorrelationMode) "enforce"}}checked{{end}}> enforce (alert on violation)</label>
           <label style="font-weight:normal;"><input type="radio" name="mode_attribute_correlation" value="suggest" {{if eq (printf "%s" .CorrelationMode) "suggest"}}checked{{end}}> suggest (observe only)</label>
         </div>
-        {{template "integrationPicker" (dict "Integrations" $.Integrations "Selected" .IntegrationIDs)}}
+        {{template "integrationPicker" (dict "Integrations" $.Integrations "Delivery" .Delivery)}}
         <div class="gr-actions"><button type="submit" class="btn btn-primary">save</button></div>
       </form>
       {{else}}
       <form method="POST" action="/debug/settings/guardrails/save">
         <input type="hidden" name="scope_key" value="{{.ScopeKey}}">
-        {{template "integrationPicker" (dict "Integrations" $.Integrations "Selected" .IntegrationIDs)}}
+        {{template "integrationPicker" (dict "Integrations" $.Integrations "Delivery" .Delivery)}}
         {{range .Rules}}
         <div class="gr-rule">
           <label>{{.Rule.Label}}{{if .Auto}} <span class="badge badge-kind" title="Created automatically when the service's transactions promoted">auto txn guardrail</span>{{end}}</label>

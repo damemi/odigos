@@ -36,7 +36,7 @@ func ToPolicy(p apitypes.Policy) repo.Policy {
 		EnricherLists:  lists,
 		Scope:          repo.NormalizePolicyScope(repo.PolicyScope(p.Scope)),
 		ScopeKey:       p.ScopeKey,
-		IntegrationIDs: p.IntegrationIds,
+		Delivery:       ToDeliverySettings(p.Delivery),
 	}
 }
 
@@ -77,7 +77,7 @@ func ToServiceGuardrail(g apitypes.ServiceGuardrail) repo.ServiceGuardrail {
 		RuleModes:        map[repo.RuleKey]repo.RuleMode{},
 		RuleOrigins:      map[repo.RuleKey]string{},
 		RuleCorrelations: map[repo.RuleKey][]repo.CorrelationSpec{},
-		IntegrationIDs:   g.IntegrationIds,
+		Delivery:         ToDeliverySettings(g.Delivery),
 	}
 	for _, r := range g.Rules {
 		key := repo.RuleKey(r.Key)

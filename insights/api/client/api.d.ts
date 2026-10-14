@@ -928,7 +928,7 @@ export interface paths {
         put?: never;
         /**
          * Create an integration
-         * @description Validates `config` against the backend's catalog fields. The id is server-assigned. A new integration only receives findings once an alert policy or guardrail lists its id in `integration_ids`.
+         * @description Validates `config` against the backend's catalog fields. The id is server-assigned. A new integration immediately receives every finding that passes its filters, except from sources whose `delivery` mutes or excludes it.
          */
         post: operations["createIntegration"];
         delete?: never;
@@ -957,7 +957,7 @@ export interface paths {
         post?: never;
         /**
          * Delete an integration
-         * @description Removes the integration, its delivery ledger and attempt history. References in `integration_ids` are ignored afterwards.
+         * @description Removes the integration, its delivery ledger and attempt history. References in `excluded_integration_ids` are ignored afterwards.
          */
         delete: operations["deleteIntegration"];
         options?: never;
@@ -1588,6 +1588,21 @@ export interface components {
             promoted: boolean;
         };
         /**
+         * @description Where an alert policy's anomalies or a guardrail's violations are sent. Omitted or empty means every integration whose filters accept the finding.
+         * @example {
+         *       "muted": false,
+         *       "excluded_integration_ids": [
+         *         "3f2c9a10-5b7e-4d21-9c8a-1e6f0b2d4a77"
+         *       ]
+         *     }
+         */
+        DeliverySettings: {
+            /** @description Send this source's findings to no integration. */
+            muted?: boolean;
+            /** @description Integrations that skip this source's findings. */
+            excluded_integration_ids?: string[];
+        };
+        /**
          * @example {
          *       "id": 1,
          *       "name": "default",
@@ -1625,8 +1640,7 @@ export interface components {
             };
             scope: components["schemas"]["PolicyScope"];
             scope_key: string;
-            /** @description Integrations that receive anomalies fired under this policy. Empty on an override falls back to the global policy's list; empty on the global policy means anomalies are not delivered anywhere. */
-            integration_ids?: string[];
+            delivery?: components["schemas"]["DeliverySettings"];
         };
         PolicyList: {
             count: number;
@@ -2188,8 +2202,7 @@ export interface components {
             scope: components["schemas"]["PolicyScope"];
             scope_key: string;
             rules: components["schemas"]["GuardrailRuleConfig"][];
-            /** @description Integrations that receive this guardrail's violations. Empty falls back to the global alert policy's list. */
-            integration_ids?: string[];
+            delivery?: components["schemas"]["DeliverySettings"];
         };
         ServiceGuardrailList: {
             count: number;

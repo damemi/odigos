@@ -2329,7 +2329,16 @@ func parseAnomalyPolicyForm(c *gin.Context, scope repo.PolicyScope, scopeKey str
 		Enabled:        c.PostForm("enabled") == "on",
 		Scope:          scope,
 		ScopeKey:       scopeKey,
-		IntegrationIDs: c.PostFormArray("integration_ids"),
+		Delivery:       parseDeliveryForm(c),
+	}
+}
+
+// parseDeliveryForm reads the integrationPicker fields into a source's delivery
+// settings.
+func parseDeliveryForm(c *gin.Context) repo.Delivery {
+	return repo.Delivery{
+		Muted:                  c.PostForm("notify_muted") == "on",
+		ExcludedIntegrationIDs: c.PostFormArray("excluded_integration_ids"),
 	}
 }
 
@@ -2705,7 +2714,7 @@ type guardrailView struct {
 	Rules           []guardrailRuleView
 	Correlations    []repo.CorrelationSpec
 	CorrelationMode repo.RuleMode
-	IntegrationIDs  []string
+	Delivery        repo.Delivery
 }
 
 // buildGuardrailViews turns stored guardrails into editor rows, one per catalog
@@ -2715,7 +2724,7 @@ func buildGuardrailViews(guardrails []repo.ServiceGuardrail) []guardrailView {
 	for _, g := range guardrails {
 		scope := repo.NormalizePolicyScope(g.Scope)
 		ns, svc := splitScopeKey(g.ScopeKey)
-		view := guardrailView{ScopeKey: g.ScopeKey, Title: g.ScopeKey, Scope: scope, Namespace: ns, Service: svc, IntegrationIDs: g.IntegrationIDs}
+		view := guardrailView{ScopeKey: g.ScopeKey, Title: g.ScopeKey, Scope: scope, Namespace: ns, Service: svc, Delivery: g.Delivery}
 		for _, rule := range risk.GuardrailRules {
 			// The attribute_correlation rule has no allowlist; it is rendered from
 			// Correlations below, not as an allowlist row.
@@ -2873,7 +2882,7 @@ func (u *ui) saveGuardrail(c *gin.Context) {
 		RuleLists:      map[repo.RuleKey][]string{},
 		RuleModes:      map[repo.RuleKey]repo.RuleMode{},
 		RuleOrigins:    existingOrigins,
-		IntegrationIDs: c.PostFormArray("integration_ids"),
+		Delivery:       parseDeliveryForm(c),
 	}
 	for _, rule := range risk.GuardrailRules {
 		// attribute_correlation is transaction-scoped and has no allowlist row.
@@ -2915,7 +2924,7 @@ func (u *ui) saveTransactionGuardrail(c *gin.Context, api ProductAPI, redirect s
 		ScopeKey:         scopeKey,
 		RuleModes:        map[repo.RuleKey]repo.RuleMode{risk.RuleAttributeCorrelation: repo.NormalizeRuleMode(repo.RuleMode(c.PostForm("mode_attribute_correlation")))},
 		RuleCorrelations: map[repo.RuleKey][]repo.CorrelationSpec{risk.RuleAttributeCorrelation: specs},
-		IntegrationIDs:   c.PostFormArray("integration_ids"),
+		Delivery:         parseDeliveryForm(c),
 	}
 	if err := api.UpsertServiceGuardrail(c.Request.Context(), guardrail); err != nil {
 		c.Redirect(http.StatusSeeOther, redirect+"?error="+url.QueryEscape("save failed: "+err.Error()))

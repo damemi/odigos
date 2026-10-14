@@ -23,7 +23,7 @@ func (r *Repo) ListAlertPolicies(ctx context.Context) ([]repo.Policy, error) {
 }
 
 func (r *Repo) queryPolicies(ctx context.Context, enabledOnly bool) ([]repo.Policy, error) {
-	query := `SELECT scope_type, scope_key, policy_id, name, fire_at_score, signal_weights, enricher_lists, enabled, integration_ids
+	query := `SELECT scope_type, scope_key, policy_id, name, fire_at_score, signal_weights, enricher_lists, enabled, notify_muted, excluded_integration_ids
 	      FROM alert_policies FINAL`
 	if enabledOnly {
 		query += " WHERE enabled = 1"
@@ -40,17 +40,16 @@ func scanPolicy(s rowScanner) (repo.Policy, error) {
 		signalWeights map[string]int32 // native Map(String, Int32) column
 		enricherLists map[string][]string
 		enabled       uint8
-		integrations  []string
+		muted         uint8
+		excluded      []string
 	)
-	if err := s.Scan(&scopeType, &policy.ScopeKey, &policy.ID, &policy.Name, &fireAtScore, &signalWeights, &enricherLists, &enabled, &integrations); err != nil {
+	if err := s.Scan(&scopeType, &policy.ScopeKey, &policy.ID, &policy.Name, &fireAtScore, &signalWeights, &enricherLists, &enabled, &muted, &excluded); err != nil {
 		return repo.Policy{}, err
 	}
 	policy.Scope = repo.NormalizePolicyScope(repo.PolicyScope(scopeType))
 	policy.FireAtScore = int(fireAtScore)
 	policy.Enabled = enabled == 1
-	if len(integrations) > 0 {
-		policy.IntegrationIDs = integrations
-	}
+	policy.Delivery = scanDelivery(muted, excluded)
 	// Retype the column's keys/elements to the domain types; leave the maps nil
 	// (not empty) when unset so a policy without overrides stays sparse.
 	if len(signalWeights) > 0 {
@@ -93,8 +92,9 @@ func (r *Repo) UpsertAlertPolicy(ctx context.Context, policy repo.Policy) error 
 	if policy.Enabled {
 		enabled = 1
 	}
+	muted, excluded := deliveryColumns(policy.Delivery)
 	err := r.insert(ctx,
-		"INSERT INTO alert_policies (scope_type, scope_key, policy_id, name, fire_at_score, signal_weights, enricher_lists, enabled, integration_ids, updated_at)",
+		"INSERT INTO alert_policies (scope_type, scope_key, policy_id, name, fire_at_score, signal_weights, enricher_lists, enabled, notify_muted, excluded_integration_ids, updated_at)",
 		func(batch driver.Batch) error {
 			return batch.Append(
 				string(scope),
@@ -105,7 +105,8 @@ func (r *Repo) UpsertAlertPolicy(ctx context.Context, policy repo.Policy) error 
 				signalWeights,
 				enricherLists,
 				enabled,
-				nonNilStrings(policy.IntegrationIDs),
+				muted,
+				excluded,
 				time.Now(),
 			)
 		})
@@ -133,6 +134,25 @@ func nonNilStrings(s []string) []string {
 		return []string{}
 	}
 	return s
+}
+
+// deliveryColumns maps a source's Delivery to its notify_muted and
+// excluded_integration_ids column values.
+func deliveryColumns(d repo.Delivery) (uint8, []string) {
+	muted := uint8(0)
+	if d.Muted {
+		muted = 1
+	}
+	return muted, nonNilStrings(d.ExcludedIntegrationIDs)
+}
+
+// scanDelivery is the inverse of deliveryColumns.
+func scanDelivery(muted uint8, excluded []string) repo.Delivery {
+	d := repo.Delivery{Muted: muted == 1}
+	if len(excluded) > 0 {
+		d.ExcludedIntegrationIDs = excluded
+	}
+	return d
 }
 
 // scopedPolicyID gives each scope a stable policy_id: 1 for the global default,

@@ -175,7 +175,7 @@ func FromServiceGuardrail(g repo.ServiceGuardrail) apitypes.ServiceGuardrail {
 		Scope:          apitypes.PolicyScope(repo.NormalizePolicyScope(g.Scope)),
 		ScopeKey:       g.ScopeKey,
 		Rules:          rules,
-		IntegrationIds: g.IntegrationIDs,
+		Delivery:       FromDeliverySettings(g.Delivery),
 	}
 }
 

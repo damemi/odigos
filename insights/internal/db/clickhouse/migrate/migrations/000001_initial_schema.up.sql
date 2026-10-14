@@ -75,6 +75,10 @@ CREATE TABLE IF NOT EXISTS alert_policies (
     signal_weights Map(String, Int32),
     enricher_lists Map(String, Array(String)),
     enabled        UInt8,
+    -- Delivery to integrations: on by default. notify_muted sends this
+    -- policy's anomalies nowhere, excluded_integration_ids skips only those.
+    notify_muted             UInt8 DEFAULT 0,
+    excluded_integration_ids Array(String) DEFAULT [],
     updated_at     DateTime64(3)
 ) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (scope_type, scope_key);
@@ -121,6 +125,9 @@ CREATE TABLE IF NOT EXISTS service_guardrails (
     -- Per-rule structured payloads keyed by rule_key, JSON-encoded. Used by the
     -- attribute_correlation rule to store its cross-span correlation specs.
     rule_correlations Map(String, String),
+    -- Delivery to integrations, same semantics as alert_policies.
+    notify_muted             UInt8 DEFAULT 0,
+    excluded_integration_ids Array(String) DEFAULT [],
     updated_at DateTime64(3)
 ) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY (scope_type, scope_key);
@@ -270,6 +277,73 @@ CREATE TABLE IF NOT EXISTS system_settings (
     max_transactions_per_service UInt32 DEFAULT 200
 ) ENGINE = ReplacingMergeTree(updated_at)
 ORDER BY id;
+
+-- Findings integrations: third-party backends that receive findings. type
+-- names a catalog descriptor in the notify package. config is JSON keyed by
+-- that descriptor's fields (secret fields are stored as-is and redacted on
+-- read). filters is JSON with the delivery filters (min_severity, kinds,
+-- notify_on_resolve).
+CREATE TABLE IF NOT EXISTS integrations (
+    integration_id String,
+    name           String,
+    type           LowCardinality(String),
+    enabled        UInt8 DEFAULT 1,
+    config         String DEFAULT '{}',
+    filters        String DEFAULT '{}',
+    created_at     DateTime64(3),
+    updated_at     DateTime64(3)
+) ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY integration_id;
+
+-- Delivery ledger: one row per (integration, finding) with the last action
+-- sent, the retry schedule, and the external id a backend returned. This is
+-- what makes "new vs repeat" and "resolve once" decidable without engine
+-- state, and what the retry loop drives from.
+CREATE TABLE IF NOT EXISTS notification_dispatch (
+    integration_id      String,
+    finding_key         String,
+    last_action         LowCardinality(String),
+    state               LowCardinality(String),
+    attempts            UInt16 DEFAULT 0,
+    next_attempt_at     DateTime64(3),
+    last_error          String DEFAULT '',
+    sent_at             DateTime64(3),
+    occurrences_at_send UInt64 DEFAULT 0,
+    severity_at_send    LowCardinality(String) DEFAULT '',
+    status_at_send      LowCardinality(String) DEFAULT '',
+    external_id         String DEFAULT '',
+    updated_at          DateTime64(3)
+) ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY (integration_id, finding_key);
+
+-- Notifier progress per integration: the newest finding activity timestamp it
+-- has processed. Written only by the elected leader. leader is informational.
+CREATE TABLE IF NOT EXISTS notification_cursors (
+    integration_id String,
+    cursor         DateTime64(3),
+    last_run_at    DateTime64(3),
+    leader         String DEFAULT '',
+    updated_at     DateTime64(3)
+) ENGINE = ReplacingMergeTree(updated_at)
+ORDER BY integration_id;
+
+-- Audit trail: one append per delivery attempt (success or failure, including
+-- the test endpoint). finding_key is empty for a batch-level failure. Bounded
+-- by TTL so it cannot grow with traffic.
+CREATE TABLE IF NOT EXISTS notification_attempts (
+    integration_id String,
+    finding_key    String DEFAULT '',
+    action         LowCardinality(String),
+    attempt        UInt16 DEFAULT 1,
+    outcome        LowCardinality(String),
+    http_status    Int32 DEFAULT 0,
+    error          String DEFAULT '',
+    duration_ms    UInt32 DEFAULT 0,
+    event_count    UInt32 DEFAULT 1,
+    attempted_at   DateTime64(3)
+) ENGINE = MergeTree
+ORDER BY (integration_id, attempted_at)
+TTL toDateTime(attempted_at) + toIntervalDay(30);
 
 -- Global default alert policy: fire when risk score >= 20, no weight/list overrides.
 INSERT INTO alert_policies

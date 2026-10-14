@@ -178,11 +178,8 @@ func (d *Dispatcher) collectCandidates(ctx context.Context, in repo.Integration,
 		return nil, fmt.Errorf("list anomalies: %w", err)
 	}
 	for _, a := range anomalies {
-		if !Routes(router.ForAnomaly(a), in.ID) {
-			continue
-		}
 		ev := EventFromAnomaly(a, repo.DispatchFiring)
-		if PassesFilters(in.Filters, ev) {
+		if router.Delivers(ev, in.ID) && PassesFilters(in.Filters, ev) {
 			out[ev.Key] = &candidate{event: ev}
 		}
 	}
@@ -191,11 +188,8 @@ func (d *Dispatcher) collectCandidates(ctx context.Context, in repo.Integration,
 		return nil, fmt.Errorf("list violations: %w", err)
 	}
 	for _, g := range violations {
-		if !Routes(router.ForViolation(g), in.ID) {
-			continue
-		}
 		ev := EventFromViolation(g, repo.DispatchFiring)
-		if PassesFilters(in.Filters, ev) {
+		if router.Delivers(ev, in.ID) && PassesFilters(in.Filters, ev) {
 			out[ev.Key] = &candidate{event: ev}
 		}
 	}
@@ -234,7 +228,7 @@ func (d *Dispatcher) collectDue(ctx context.Context, in repo.Integration, router
 			continue
 		}
 		// A retry for a finding that no longer routes here is dropped quietly.
-		if !d.routes(router, ev, in.ID) || !PassesFilters(in.Filters, ev) {
+		if !router.Delivers(ev, in.ID) || !PassesFilters(in.Filters, ev) {
 			continue
 		}
 		r := row
@@ -244,16 +238,6 @@ func (d *Dispatcher) collectDue(ctx context.Context, in repo.Integration, router
 		return d.repo.UpsertNotificationDispatch(ctx, gone)
 	}
 	return nil
-}
-
-func (d *Dispatcher) routes(router *Router, ev Event, integrationID string) bool {
-	switch ev.Kind {
-	case KindAnomaly:
-		return Routes(router.ForAnomaly(repo.AnomalyIssue{PolicyID: ev.PolicyID}), integrationID)
-	case KindViolation:
-		return Routes(router.ForViolation(repo.GuardrailViolationGroup{ScopeKey: ev.ScopeKey}), integrationID)
-	}
-	return false
 }
 
 // loadFinding rebuilds the event for a ledger key from the current finding.

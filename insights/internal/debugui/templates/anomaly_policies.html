@@ -50,7 +50,7 @@
 
     <div class="pol-preview">Will <span class="preview-text">-</span></div>
 
-    {{template "integrationPicker" (dict "Integrations" .Integrations "Selected" .Policy.IntegrationIDs)}}
+    {{template "integrationPicker" (dict "Integrations" .Integrations "Delivery" .Policy.Delivery)}}
 
     <details class="adv">
       <summary>Customize signal weights (advanced)</summary>

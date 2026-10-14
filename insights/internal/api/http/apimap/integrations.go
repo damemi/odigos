@@ -6,6 +6,16 @@ import (
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
 )
 
+// ToDeliverySettings maps a policy's or guardrail's wire delivery settings to the repo type.
+func ToDeliverySettings(d apitypes.DeliverySettings) repo.Delivery {
+	return repo.Delivery{Muted: d.Muted, ExcludedIntegrationIDs: d.ExcludedIntegrationIds}
+}
+
+// FromDeliverySettings maps a source's delivery settings to the wire type.
+func FromDeliverySettings(d repo.Delivery) apitypes.DeliverySettings {
+	return apitypes.DeliverySettings{Muted: d.Muted, ExcludedIntegrationIds: d.ExcludedIntegrationIDs}
+}
+
 // FromDescriptor maps a backend catalog entry to its wire type.
 func FromDescriptor(d notify.Descriptor) apitypes.IntegrationDescriptor {
 	fields := make([]apitypes.IntegrationFieldSpec, len(d.Fields))

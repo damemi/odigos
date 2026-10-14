@@ -1113,6 +1113,17 @@ type DeliveryRetryRequest struct {
 	FindingKeys []string `json:"finding_keys,omitempty"`
 }
 
+// DeliverySettings Where an alert policy's anomalies or a guardrail's violations are sent. Omitted or empty means every integration whose filters accept the finding.
+//
+// Examples: {"excluded_integration_ids":["3f2c9a10-5b7e-4d21-9c8a-1e6f0b2d4a77"],"muted":false}
+type DeliverySettings struct {
+	// ExcludedIntegrationIds Integrations that skip this source's findings.
+	ExcludedIntegrationIds []string `json:"excluded_integration_ids,omitempty"`
+
+	// Muted Send this source's findings to no integration.
+	Muted bool `json:"muted,omitempty"`
+}
+
 // DeliveryState `sent`: last action delivered. `failed`: last attempt failed with a retryable error; `next_attempt_at` says when it retries. `dead`: retries exhausted or a permanent error (bad credentials, rejected payload); needs a manual retry. `pending`: re-armed, sends next tick.
 type DeliveryState string
 
@@ -1470,20 +1481,22 @@ type ObservationSummary struct {
 
 // Policy Examples: {"enabled":true,"enricher_lists":{"sensitive_tables":["users","secrets","api_keys"]},"fire_at_score":60,"id":1,"name":"default","scope":"global","scope_key":"","signal_weights":{"D6_db_access":30,"d6_sensitive_table":30}}
 type Policy struct {
-	Enabled bool `json:"enabled"`
+	// Delivery Where an alert policy's anomalies or a guardrail's violations are sent. Omitted or empty means every integration whose filters accept the finding.
+	//
+	//
+	// Examples: {"excluded_integration_ids":["3f2c9a10-5b7e-4d21-9c8a-1e6f0b2d4a77"],"muted":false}
+	Delivery DeliverySettings `json:"delivery,omitempty"`
+	Enabled  bool             `json:"enabled"`
 
 	// EnricherLists Per-scope overrides of enricher keyword lists.
 	EnricherLists map[string][]string `json:"enricher_lists,omitempty"`
 
 	// FireAtScore Risk-score threshold (0-100) at or above which the policy fires.
-	FireAtScore int   `json:"fire_at_score"`
-	Id          int64 `json:"id"`
-
-	// IntegrationIds Integrations that receive anomalies fired under this policy. Empty on an override falls back to the global policy's list; empty on the global policy means anomalies are not delivered anywhere.
-	IntegrationIds []string    `json:"integration_ids,omitempty"`
-	Name           string      `json:"name"`
-	Scope          PolicyScope `json:"scope"`
-	ScopeKey       string      `json:"scope_key"`
+	FireAtScore int         `json:"fire_at_score"`
+	Id          int64       `json:"id"`
+	Name        string      `json:"name"`
+	Scope       PolicyScope `json:"scope"`
+	ScopeKey    string      `json:"scope_key"`
 
 	// SignalWeights Per-signal weight overrides (deviation class or enricher id).
 	SignalWeights map[string]int `json:"signal_weights,omitempty"`
@@ -1753,11 +1766,14 @@ type SampleReason = string
 
 // ServiceGuardrail Examples: {"rules":[{"allowlist":["default/gateway"],"key":"allowed_callers","label":"Allowed callers","mode":"enforce"},{"allowlist":["checkout.stripe.com:443"],"key":"allowed_egress","label":"Allowed egress destinations","mode":"suggest"}],"scope":"service","scope_key":"default/frontend"}
 type ServiceGuardrail struct {
-	// IntegrationIds Integrations that receive this guardrail's violations. Empty falls back to the global alert policy's list.
-	IntegrationIds []string              `json:"integration_ids,omitempty"`
-	Rules          []GuardrailRuleConfig `json:"rules"`
-	Scope          PolicyScope           `json:"scope"`
-	ScopeKey       string                `json:"scope_key"`
+	// Delivery Where an alert policy's anomalies or a guardrail's violations are sent. Omitted or empty means every integration whose filters accept the finding.
+	//
+	//
+	// Examples: {"excluded_integration_ids":["3f2c9a10-5b7e-4d21-9c8a-1e6f0b2d4a77"],"muted":false}
+	Delivery DeliverySettings      `json:"delivery,omitempty"`
+	Rules    []GuardrailRuleConfig `json:"rules"`
+	Scope    PolicyScope           `json:"scope"`
+	ScopeKey string                `json:"scope_key"`
 }
 
 // ServiceGuardrailList defines model for ServiceGuardrailList.

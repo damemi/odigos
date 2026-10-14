@@ -16,7 +16,7 @@ import (
 // ListServiceGuardrails returns every declared guardrail across all scopes.
 func (r *Repo) ListServiceGuardrails(ctx context.Context) ([]repo.ServiceGuardrail, error) {
 	return queryRows(ctx, r.conn, "list service guardrails",
-		`SELECT scope_type, scope_key, rule_lists, rule_modes, rule_origins, rule_fingerprints, rule_correlations, integration_ids
+		`SELECT scope_type, scope_key, rule_lists, rule_modes, rule_origins, rule_fingerprints, rule_correlations, notify_muted, excluded_integration_ids
 		 FROM service_guardrails FINAL
 		 ORDER BY scope_type ASC, scope_key ASC`,
 		scanServiceGuardrail)
@@ -31,17 +31,16 @@ func scanServiceGuardrail(s rowScanner) (repo.ServiceGuardrail, error) {
 		ruleOrigins      map[string]string
 		ruleFingerprints map[string]string
 		ruleCorrelations map[string]string // rule_key -> JSON([]CorrelationSpec)
-		integrations     []string
+		muted            uint8
+		excluded         []string
 	)
-	if err := s.Scan(&scopeType, &scopeKey, &ruleLists, &ruleModes, &ruleOrigins, &ruleFingerprints, &ruleCorrelations, &integrations); err != nil {
+	if err := s.Scan(&scopeType, &scopeKey, &ruleLists, &ruleModes, &ruleOrigins, &ruleFingerprints, &ruleCorrelations, &muted, &excluded); err != nil {
 		return repo.ServiceGuardrail{}, err
 	}
 	guardrail := repo.ServiceGuardrail{
 		Scope:    repo.NormalizePolicyScope(repo.PolicyScope(scopeType)),
 		ScopeKey: scopeKey,
-	}
-	if len(integrations) > 0 {
-		guardrail.IntegrationIDs = integrations
+		Delivery: scanDelivery(muted, excluded),
 	}
 	// Retype the column's string keys to the domain's RuleKey; leave the maps nil
 	// (not empty) when unset so an unconfigured guardrail stays sparse.
@@ -125,10 +124,11 @@ func (r *Repo) UpsertServiceGuardrail(ctx context.Context, guardrail repo.Servic
 		ruleCorrelations[string(key)] = string(encoded)
 	}
 	scope := repo.NormalizePolicyScope(guardrail.Scope)
+	muted, excluded := deliveryColumns(guardrail.Delivery)
 	err := r.insert(ctx,
-		"INSERT INTO service_guardrails (scope_type, scope_key, rule_lists, rule_modes, rule_origins, rule_fingerprints, rule_correlations, integration_ids, updated_at)",
+		"INSERT INTO service_guardrails (scope_type, scope_key, rule_lists, rule_modes, rule_origins, rule_fingerprints, rule_correlations, notify_muted, excluded_integration_ids, updated_at)",
 		func(batch driver.Batch) error {
-			return batch.Append(string(scope), guardrail.ScopeKey, ruleLists, ruleModes, ruleOrigins, ruleFingerprints, ruleCorrelations, nonNilStrings(guardrail.IntegrationIDs), time.Now())
+			return batch.Append(string(scope), guardrail.ScopeKey, ruleLists, ruleModes, ruleOrigins, ruleFingerprints, ruleCorrelations, muted, excluded, time.Now())
 		})
 	if err != nil {
 		return fmt.Errorf("upsert service guardrail: %w", err)
