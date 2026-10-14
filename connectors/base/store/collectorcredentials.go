@@ -223,6 +223,44 @@ func (s *Store) MarkCollectorCredentialActive(ctx context.Context, collectorID, 
 	return nil
 }
 
+// RecordCollectorCredentialConnected latches the first successful OpAMP
+// connection for this issuance. Store activation only means the secret was
+// written; it does not prove the replacement task has started using it.
+func (s *Store) RecordCollectorCredentialConnected(ctx context.Context, collectorID, credentialID string, at time.Time) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE `+credentialsTable+`
+		SET activated_at = COALESCE(activated_at, $3)
+		WHERE collector_id = $1 AND credential_id = $2 AND state IN ($4, $5)
+	`, collectorID, credentialID, at, string(collectorcredential.StateActive), string(collectorcredential.StateSuperseded))
+	return err
+}
+
+// RevokeSupersededCollectorCredentials closes rotation windows after the new
+// issuance has connected and a grace period has allowed old tasks to drain.
+func (s *Store) RevokeSupersededCollectorCredentials(ctx context.Context, collectorID string, now time.Time, grace time.Duration) error {
+	records, err := s.CollectorCredentials(ctx, collectorID)
+	if err != nil {
+		return err
+	}
+	byID := make(map[string]collectorcredential.Record, len(records))
+	for _, record := range records {
+		byID[record.CredentialID] = record
+	}
+	for _, record := range records {
+		if record.State != collectorcredential.StateSuperseded || record.SupersededBy == "" {
+			continue
+		}
+		replacement, found := byID[record.SupersededBy]
+		if !found || !collectorcredential.SupersededCanRevoke(record, replacement, now, grace) {
+			continue
+		}
+		if err := s.RevokeCollectorCredential(ctx, collectorID, record.CredentialID, collectorcredential.ReasonRotation, collectorcredential.ActorConnector); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // RevokeCollectorCredential revokes one credential and records why.
 //
 // Terminal. There is no un-revoke, here or anywhere: the tempting case is real — a compromise took a

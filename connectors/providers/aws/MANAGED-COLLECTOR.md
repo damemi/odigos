@@ -1,55 +1,46 @@
-# Create an AWS managed Collector through the connector GraphQL API
+# AWS managed Collector setup
 
-This guide deploys one AWS Fargate Collector in a selected region using the connector GraphQL API. Steps 1–10 cover automatic mode, where the connector creates and manages Collector infrastructure. Section 11 describes the current manual-mode limitations; its generated CloudFormation and Terraform artifacts are not yet a working end-to-end installation path. The commands assume the connector uses IAM access keys; the principal-discovery step must be adapted for IRSA/workload identity or assume-role authentication.
+The installation steps shown in Central come from [`connectors/spec/data/aws.yaml`](../../spec/data/aws.yaml). That spec is the source for the overview, AWS CLI, and CloudFormation variants. Manual mode contains the complete customer deployment flow. Automatic mode contains the prerequisites; the connector then creates and maintains the Collector infrastructure.
 
-Run the snippets in order from a shell with AWS CLI v2, `kubectl`, `jq`, and `curl`. The shell's AWS identity must be able to inspect IAM, ECS, and VPC resources and provision the roles described below. It is separate from the connector's AWS identity. The connector assumes a customer-owned role for Collector deployment/observation; an ECS task execution role is assumed by the Collector task to read its secrets and write logs. You need an existing VPC with at least one subnet that has outbound access to the Collector image registry, Odigos OpAMP endpoint, and telemetry destinations. Two or more Availability Zones improve availability. Use organization-approved networking/IaC to create a VPC and subnets if none exist; this guide does not guess CIDRs or alter network routing.
+## IAM identities and mode permissions
 
-The API field `deploymentRoleRef` is provider-neutral. AWS requires an IAM role ARN there. Other providers must implement their own identity format and use that identity for their Collector operations.
+An operator can run the AWS CLI or deploy CloudFormation with any AWS identity authorized to provision the required resources. That identity is not part of the Collector configuration and does not need to be trusted by the connector.
 
-The direct connector HTTP `/graphql` endpoint used by these snippets does not authenticate its caller. Use the localhost URL only through a trusted development port-forward; do not publish that endpoint for customer self-service. Production writes should go through the authenticated Central or CLI operation path with admin authorization. The manual credential-issuance mutation specifically requires that authenticated admin path and cannot be called through this HTTP URL.
+The connector uses **its existing AWS authentication** for Collector operations, exactly as it does for workload discovery and instrumentation. No separate Collector observation or deployment role is required. Its permissions depend on the selected Collector mode:
 
-The commands below do not change your shell's error handling. Check each displayed result before continuing. The connector creates the Collector's security group, internal network load balancer, ECS service, log group, and Secrets Manager entries in automatic mode. It does not create or modify your VPC, subnets, ECS cluster, or ECS task execution role.
+| Mode | Connector permissions | AWS infrastructure actions |
+| --- | --- | --- |
+| Off | No Collector permissions | None |
+| Manual | Collector management permissions from `aws.yaml` | Read ECS, ELB, and VPC state; discover and report tagged regional Collectors; push configuration over OpAMP. The connector does not change Collector infrastructure. |
+| Automatic | Collector management and deployment permissions from `aws.yaml` | Read, create, converge, and tear down connector-owned Collector resources. |
 
-## 1. Find the connector and verify the AWS account
+The **ECS task execution role** is still required in both manual and automatic mode. ECS tasks use it to pull the Collector image, read the Collector secrets, and write logs. The setup instructions create this role with an `ecs-tasks.amazonaws.com` trust policy and a policy scoped to the connector's Collector secrets and log group. Supply its ARN as `providerOverrides.aws.executionRoleArn`. You can use an equivalent existing role with the same access.
 
-```sh
-export AWS_REGION=us-east-1
-export GRAPHQL_URL=http://localhost:18080/graphql
-export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+The legacy GraphQL field `deploymentRoleRef` may still appear in older clients and reports. It is ignored by the AWS Collector runtime and is not an installation requirement. Until all generated GraphQL clients use the optional schema, older clients may send an empty string for compatibility.
 
-export CONNECTOR_ROW=$(kubectl get odigoscloudconnectors -A -o json |
-  jq -er --arg account "$AWS_ACCOUNT_ID" '
-    [.items[] | select(.spec.provider == "aws" and .spec.account.id == $account)
-      | "\(.metadata.namespace) \(.metadata.name)"]
-    | if length == 1 then .[0] else error("expected exactly one AWS connector for account " + $account) end
-  ')
-export CONNECTOR_NAMESPACE=${CONNECTOR_ROW%% *}
-export CONNECTOR_NAME=${CONNECTOR_ROW#* }
-printf 'Account: %s\nConnector: %s/%s\n' "$AWS_ACCOUNT_ID" "$CONNECTOR_NAMESPACE" "$CONNECTOR_NAME"
+## Prerequisites shared by both modes
 
-curl -fsS -H 'Content-Type: application/json' --data '{"query":"query { connectorRuntimeHealth { isAuthenticated message } }"}' "$GRAPHQL_URL" | jq -e 'if .errors then error(.errors | tostring) else .data.connectorRuntimeHealth | select(.isAuthenticated == true) end'
-```
+Choose an AWS region, an existing ECS cluster that can run Fargate tasks, and a VPC with subnets that can reach the image registry, Secrets Manager, the Odigos OpAMP endpoint, and telemetry destinations. The Collector's network load balancer is internal. Workload VPCs need network reachability to the Collector VPC, including reciprocal routes and suitable security group rules. Choose task public IP assignment according to the subnets' egress path.
 
-The last command must show `"isAuthenticated": true`. The account in the first output must be the account where the Collector will run.
+Create or select the ECS task execution role using one of the generated setup variants. Automatic mode stops its installation instructions after these prerequisites; the connector provisions the remaining infrastructure when the Collector is created.
 
-## 2. Identify the connector's exact IAM principal
+## Manual installation
 
-The credentials Secret stores `accessKeyId`, not `roleArn`, when the connector uses access keys. Never print or copy `secretAccessKey` for this step.
+Select **Manual** and follow one complete variant in the Collector setup wizard:
 
-```sh
-export CONNECTOR_SECRET_NAME=$(kubectl -n "$CONNECTOR_NAMESPACE" get odigoscloudconnector "$CONNECTOR_NAME" -o jsonpath='{.spec.credentialsSecretRef.name}')
-export CONNECTOR_ACCESS_KEY_ID=$(kubectl -n "$CONNECTOR_NAMESPACE" get secret "$CONNECTOR_SECRET_NAME" -o json |
-  jq -er '.data.accessKeyId | @base64d')
-export CONNECTOR_IAM_USER_NAME=$(aws iam get-access-key-last-used \
-  --access-key-id "$CONNECTOR_ACCESS_KEY_ID" --query UserName --output text)
-export CONNECTOR_PRINCIPAL_ARN=$(aws iam get-user \
-  --user-name "$CONNECTOR_IAM_USER_NAME" --query User.Arn --output text)
-printf 'Connector IAM principal: %s\n' "$CONNECTOR_PRINCIPAL_ARN"
-```
+1. **Overview** explains the resources and the values the operator must supply.
+2. **AWS CLI** creates the execution role and customer-owned Collector resources with shell commands.
+3. **CloudFormation** creates the execution role and customer-owned Collector resources with templates and deployment commands.
 
-The output must be an `arn:aws:iam::<account>:user/...` ARN in the account from step 1. This exact user goes into the deployment role trust policy. Do not substitute the account root ARN, your administrator ARN, or a sample account number. [AWS allows a same-account principal named directly in a role trust policy to assume the role without an additional identity policy](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies.html); an explicit deny or permissions boundary can still prevent it.
+The CLI and CloudFormation variants lead to the same deployed layout. The operator can use any appropriate provisioning credentials. The Connector IAM identity needs only the manual mode read permissions shown during connector setup. The steps in `aws.yaml` are rendered with the selected region, account, connector, cluster, VPC, and execution role values; the generated commands and templates are the installation artifacts to apply.
 
-There is no `ODIGOS_EXTERNAL_ID` to invent for this same-account Collector role. That variable belongs to the connector's optional cross-account authentication method, not to `deploymentRoleRef`.
+Manual infrastructure must include the Odigos Collector identity tags from the generated instructions. The connector scans enabled regions and ECS clusters for an active service named `odigos-collector-<region>` with matching connector tags. It discovers that service and records its health and endpoint even before that region has been saved in the UI. An undeclared discovery is observed only; it is not used to route workloads until a host network is configured. If multiple matching services exist in one region, configure the intended cluster explicitly.
+
+After applying the resources, review the Collector report for the image, ECS task, target group, OpAMP, and destination state. The connector observes customer-owned infrastructure but never repairs or deletes it in manual mode. Apply any infrastructure changes through your chosen AWS provisioning process.
+
+## Automatic installation
+
+Select **Automatic**, complete the shared prerequisites, and provide the ECS cluster, Collector VPC, and task execution role ARN. The connector uses its existing AWS credentials with the deployment permissions from `aws.yaml` to create and maintain its tagged ECS service, internal load balancer, security group, log group, secrets, and scaling resources. It does not create or modify the chosen VPC, subnets, ECS cluster, or task execution role.
 
 ## 3. Find or create an ECS cluster and choose the VPC
 
@@ -204,13 +195,13 @@ jq -n --arg executionRoleArn "$TASK_EXECUTION_ROLE_ARN" --arg region "$AWS_REGIO
     {Sid:"CollectorInfrastructure",Effect:"Allow",Resource:"*",
      Condition:{StringEquals:{"aws:RequestedRegion":$region}},Action:[
       "ec2:DescribeVpcs","ec2:DescribeSubnets","ec2:DescribeSecurityGroups",
-      "ec2:DescribeRouteTables","ec2:DescribeVpcPeeringConnections","ec2:DescribeNetworkAcls",
+      "ec2:DescribeRouteTables","ec2:DescribeVpcPeeringConnections",
       "ec2:CreateSecurityGroup","ec2:DeleteSecurityGroup",
       "ec2:AuthorizeSecurityGroupIngress","ec2:RevokeSecurityGroupIngress",
       "ec2:AuthorizeSecurityGroupEgress","ec2:CreateTags",
       "ecs:DescribeClusters","ecs:DescribeServices","ecs:ListTasks","ecs:DescribeTasks",
       "ecs:DescribeTaskDefinition","ecs:RegisterTaskDefinition","ecs:CreateService",
-      "ecs:UpdateService","ecs:DeleteService","ecs:TagResource",
+      "ecs:UpdateService","ecs:DeleteService","ecs:StopTask","ecs:TagResource",
       "elasticloadbalancing:DescribeLoadBalancers","elasticloadbalancing:DescribeListeners",
       "elasticloadbalancing:DescribeTargetGroups","elasticloadbalancing:DescribeTargetHealth",
       "elasticloadbalancing:DescribeTags","elasticloadbalancing:CreateLoadBalancer",
@@ -314,8 +305,7 @@ jq -n --rawfile query create-managed-collector.graphql \
     providerOverrides:{aws:{clusterRef:$cluster,executionRoleArn:$execution,
       assignPublicIp:$publicIp}}}}}' > create-managed-collector.json
 
-curl -fsS -H 'Content-Type: application/json' \
-  --data-binary @create-managed-collector.json "$GRAPHQL_URL" |
+collector_mutation create-managed-collector.json |
   jq -e 'if .errors then error(.errors | tostring) else .data.createManagedCollector end'
 ```
 
@@ -353,12 +343,11 @@ jq -n --arg region "$AWS_REGION" '{
   query:"mutation UpdateManagedCollector($input: UpdateManagedCollectorInput!) { updateManagedCollector(input: $input) { region status message desired { providerOverrides { ... on AwsManagedCollectorProviderOverrides { assignPublicIp subnetIds } } } } }",
   variables:{input:{region:$region,providerOverrides:{aws:{assignPublicIp:true}}}}
 }' > update-managed-collector-public-ip.json
-curl -fsS -H 'Content-Type: application/json' \
-  --data-binary @update-managed-collector-public-ip.json "$GRAPHQL_URL" |
+collector_mutation update-managed-collector-public-ip.json |
   jq -e 'if .errors then error(.errors | tostring) else .data.updateManagedCollector end'
 ```
 
-This retains the existing subnet IDs and changes the ECS task network configuration on reconciliation. The typed update mutation currently cannot clear previously saved subnet IDs to switch an existing Collector to automatic subnet selection. Omit `subnetIds` when creating a new Collector to use automatic selection.
+This retains the existing subnet IDs and changes the ECS task network configuration on reconciliation. Set `subnetIds: []` in an update to clear pinned subnet IDs and return to automatic subnet selection.
 
 ## 8. Watch the Collector and inspect errors
 
@@ -374,6 +363,8 @@ curl -fsS -H 'Content-Type: application/json' \
 ```
 
 Repeat the query until the status is `Ready`, liveness is `live`, and the endpoint fields are populated. ECS `runningCount` only says tasks started; it does not prove the Collector connected over OpAMP or accepted configuration. `configHash` and `configPushedAt` show whether a configuration was accepted over OpAMP; `firstReadyAt` shows whether the first ready transition occurred. Check `issues` and `message` if it stalls. The role assumption check at create time proves trust and `sts:AssumeRole`; subsequent AWS service denials appear in the report.
+
+To move an automatically deployed Collector to another VPC, update only `networkId` in one mutation. The connector records the target VPC, removes the old stack and its network-bound credential, then provisions in the new VPC. The report shows `CollectorCloudResourcesMoving` until the old stack is gone. AWS interface cleanup may take several reconcile passes. Make any other setting changes in a separate update after the move. Customer-owned or adopted infrastructure is not deleted by a network move.
 
 `managedCollectorMetrics.live` has a different meaning from the report's `liveness`: with `refresh:false` it is always `false` because the query returns the stored metrics snapshot. Use `refresh:true` to wait up to five seconds for a new periodic snapshot; `live:true` means one arrived during that query. A `null` counter means that metric was absent from the Collector's own telemetry, not that its value was zero. CPU, memory, and uptime can be present while receiver/exporter counters are absent, for example before any traffic reaches a pipeline. If they stay absent after traffic is sent, inspect the applied Collector configuration and the workload-to-NLB path.
 
@@ -402,8 +393,7 @@ jq -n --arg region "$AWS_REGION" --arg endpoint "$COLLECTOR_EXPORT_OTLP_ENDPOINT
   variables:{input:{region:$region,name:"primary",type:"otlp",
     config:{OTLP_GRPC_ENDPOINT:$endpoint},signals:["TRACES","METRICS","LOGS"]}}
 }' > create-collector-export.json
-curl -fsS -H 'Content-Type: application/json' \
-  --data-binary @create-collector-export.json "$GRAPHQL_URL" |
+collector_mutation create-collector-export.json |
   jq -e 'if .errors then error(.errors | tostring) else .data.createManagedCollectorDestination end'
 ~~~
 
@@ -420,14 +410,15 @@ jq -n --arg region "$AWS_REGION" '{
   variables:{input:{name:("regional-collector-" + $region),type:"odigos-managed-collector",
     region:$region,signals:["TRACES","METRICS","LOGS"],config:{}}}
 }' > create-collector-route.json
-curl -fsS -H 'Content-Type: application/json' \
-  --data-binary @create-collector-route.json "$GRAPHQL_URL" |
+collector_mutation create-collector-route.json |
   jq -e 'if .errors then error(.errors | tostring) else .data.createDestination end'
 ~~~
 
 The marker is a workload routing choice, not a Collector exporter. Its signals are used when there is no global OTLP destination; otherwise the global destination's signal selection is used. The connector allows one marker per region. Enable instrumentation sources through the normal source flow after configuring the marker. Enabled Fargate services and VPC-attached Lambda functions contribute their source security groups to Collector ingress. The connector routes them only after the Collector has been ready once and AWS discovery proves subnet routes and security-group access to every published OTLP port. Another VPC needs non-overlapping CIDRs, active same-region peering, and reciprocal routes in the selected workload and Collector subnets. The connector does not create those network connections. For an external sender outside connector discovery, configure providerOverrides.aws.additionalSecurityGroupIds or ingress.additionalCidrs through updateManagedCollector; these grant ingress but do not configure that sender or qualify it for automatic workload routing. Do not edit the managed security group directly, because reconciliation removes rules outside its desired set.
 
-A global OTLP destination is optional when the regional Collector route is ready and reachable. If one exists, it is the fallback while the Collector route is unavailable and allows a batched cutover. Without one, an unavailable Collector route blocks new instrumentation and there is no direct-export fallback. A Lambda without a VPC configuration cannot use this internal NLB. Current Collector health changes after the first ready transition do not automatically move workloads back to direct export.
+A ready, reachable regional Collector takes precedence over a global direct OTLP destination. A global destination provides fallback when the Collector route is unavailable and a direct route during staged cutover. Without one, eligible workloads route to the Collector immediately after it first reports Ready; workloads that cannot reach it have no export route. When a global destination exists, the first eligible instrumented workload starts a one-minute warning window after the Collector first reports Ready and a managed-Collector destination selects its region. The report shows the announcement, the count currently routed through the Collector, and any failed cutovers; the connector retries failures without holding back untouched workloads. The configured regional batch is shared between Fargate and Lambda when both are enabled; the spare slot in an odd-sized batch alternates between them on successive passes. A Lambda without a VPC configuration cannot use this internal NLB. Disabling the regional destination restores direct export when a global destination exists; later Collector health changes alone do not automatically move workloads back.
+
+`updateManagedCollector(enabled:false)` stops provisioning. The default retention policy keeps the existing Collector running. An admin may set `retention.idleScaleToZeroAfterHours` and/or `retention.idleDeleteAfterHours` in create or update; the connector starts the idle clock when the region is disabled or has no enabled sources, then parks or removes connector-owned infrastructure after the configured grace. Zero keeps that action disabled. Manual customer-owned infrastructure is never removed by this policy.
 
 Inspect workload reports after enabling sources; their issues explain missing destinations or unreachable Collector routes:
 
@@ -454,9 +445,9 @@ curl -fsS -H 'Content-Type: application/json' \
 
 The connector records a regional cloud-resource state separately from the Collector report row. A Collector that was declared but never reached cloud provisioning can be removed by the same teardown mutation: it deletes the regional desired configuration and local records without making AWS delete calls. This also removes the region from `managedCollectorReports` and prevents a later reconcile from creating it. The persisted state becomes `destroyed` with a detail saying no cloud resources were created.
 
-Once provisioning has started, the connector records `provisioning`, then `created` when cloud resources are recorded. An incomplete provisioning or teardown is recorded as `orphaned`; the report carries an issue rather than claiming the Collector was deleted. An old record with no saved infrastructure references is treated as uncertain unless it also has no cloud identity and no deployment parameters. Inspect possible cloud resources before recovering an uncertain state. Connector shutdown uses the same state distinction and waits for incomplete cloud teardown.
+Once provisioning has started, the connector records `provisioning`, then `created` when cloud resources are recorded. A retryable AWS teardown is recorded as `tearing-down`; an uncertain incomplete teardown is recorded as `orphaned`. A transient provisioning error keeps the state at `provisioning` or `created` and appears as an issue. An old record with no saved infrastructure references is treated as uncertain unless it also has no cloud identity and no deployment parameters. Inspect possible cloud resources before recovering an uncertain state. Connector shutdown uses the same state distinction and waits for incomplete cloud teardown.
 
-Teardown deletes the Collector's ECS service and internal NLB before deleting its security group. AWS can take several minutes to release the network interfaces those resources used. If the first request returns `DeleteSecurityGroup` with `DependencyViolation`, the Collector is disabled and its record is retained so the same mutation can safely finish the cleanup. The GraphQL path does not currently schedule an automatic retry for that disabled region. Wait briefly and retry the mutation; do not delete the security group or Collector record by hand while teardown is in progress. The resulting GraphQL error and stack traces are error logs, not a process panic.
+Teardown deletes the Collector's ECS service, stops any service tasks still running while it is `DRAINING`, and deletes the internal NLB before deleting its security group. AWS can take several minutes to release the network interfaces those resources used. The connector keeps the Collector record and retries until the ECS service is inactive and the security group is gone. The mutation returns `deleted:false` while cleanup is in progress. The report shows `Deleting` during the first 30 minutes, then `Error` with `CollectorTeardownTimedOut` if AWS still blocks cleanup. Retries continue after that timeout; the record and its refs remain until deletion succeeds. Check the report again until cleanup completes; do not delete the security group or Collector record by hand while teardown is in progress.
 
 ```sh
 jq -n --arg region "$AWS_REGION" '{
@@ -464,8 +455,7 @@ jq -n --arg region "$AWS_REGION" '{
   variables:{input:{region:$region}}
 }' > teardown-managed-collector.json
 
-curl -fsS -H 'Content-Type: application/json' \
-  --data-binary @teardown-managed-collector.json "$GRAPHQL_URL" |
+collector_mutation teardown-managed-collector.json |
   jq -e 'if .errors then error(.errors | tostring) else .data.teardownManagedCollector end'
 ```
 
@@ -481,11 +471,9 @@ aws ec2 describe-network-interfaces --region "$AWS_REGION" \
 
 An ECS or NLB interface that is still deleting is usually transient. If no interface appears but deletion is still refused, check for another security group referencing this one or another customer-owned dependency, and investigate that reference before retrying.
 
-## 11. Manual mode: current limitations
+## 11. Manual mode: customer-owned infrastructure
 
-The current generated manual-mode CloudFormation and Terraform artifacts do not include ECS private-registry credentials, while the Collector image requires them. They also read the licence secret as a raw token, although automatic mode stores it as registry JSON, and they hard-code `assignPublicIp` off. Do not apply those artifacts as a production installation without correcting and validating them. The generated instructions currently tell you to apply with the observation role and to set `endpointOverride`; neither instruction matches the intended manual-mode contract. Apply customer-owned infrastructure with your own IaC principal, and let the connector discover its endpoint. Manual teardown of an already observed customer-owned Collector is also refused; remove its declaration and infrastructure only through a reviewed customer procedure until that lifecycle is implemented.
-
-For customer-installed infrastructure, complete steps 1–4, then create a separate read-only observation role with these commands. Set `deployment:false` while keeping `management:true`, and supply this role as the **same required `deploymentRoleRef` field** to `createManagedCollector`. The connector assumes it for placement and observation only. The customer's own IaC principal must have the permissions needed to apply the CloudFormation or Terraform infrastructure. The instructions are an advanced path: you must also provision a log group, security group, and Secrets Manager entries and provide their references in the generated artifact.
+Complete steps 1–4, then create a separate read-only observation role with these commands. Set `deployment:false` while keeping `management:true`, and supply this role as the **same required `deploymentRoleRef` field** to `createManagedCollector`. The connector assumes it for placement and observation only. Apply the generated CloudFormation or Terraform with your own IaC principal. The connector discovers the internal NLB endpoint and never creates or deletes customer-owned infrastructure.
 
 ```sh
 export COLLECTOR_DEPLOYMENT_ROLE_NAME=OdigosCollectorObservationRole
@@ -503,11 +491,11 @@ fi
 
 jq -n --arg region "$AWS_REGION" '{Version:"2012-10-17",Statement:[{
   Effect:"Allow",Resource:"*",Condition:{StringEquals:{"aws:RequestedRegion":$region}},Action:[
-    "ecs:DescribeServices","ecs:ListTasks","ecs:DescribeTasks","ecs:DescribeTaskDefinition",
+    "ecs:DescribeClusters","ecs:DescribeServices","ecs:ListTasks","ecs:DescribeTasks","ecs:DescribeTaskDefinition",
     "elasticloadbalancing:DescribeLoadBalancers","elasticloadbalancing:DescribeListeners",
     "elasticloadbalancing:DescribeTargetGroups","elasticloadbalancing:DescribeTargetHealth",
     "ec2:DescribeVpcs","ec2:DescribeSubnets","ec2:DescribeSecurityGroups",
-    "ec2:DescribeRouteTables","ec2:DescribeVpcPeeringConnections","ec2:DescribeNetworkAcls"
+    "ec2:DescribeRouteTables","ec2:DescribeVpcPeeringConnections"
   ]
 }]}' > odigos-collector-observation-policy.json
 aws iam put-role-policy --role-name "$COLLECTOR_DEPLOYMENT_ROLE_NAME" \
@@ -526,6 +514,40 @@ kubectl -n "$CONNECTOR_NAMESPACE" patch odigoscloudconnector "$CONNECTOR_NAME" \
 
 Run the step 7 mutation with the customer-provisioned manual observation role ARN in `COLLECTOR_DEPLOYMENT_ROLE_ARN`, then fetch the exact regional installation artifacts:
 
+Create the log group `/odigos/collector/$CONNECTOR_NAME` with retention, and a security group in `COLLECTOR_VPC_ID`. Allow TCP 4317 and 4318 from the workloads that will send telemetry, TCP 13133 from the same security group for target health checks, and outbound access to the image registry, Secrets Manager, the OpAMP endpoint, and export destinations. Choose subnets with NAT egress or set `assignPublicIp:true` when using internet-gateway-only subnets. The execution role from step 4 is scoped to this log group and secrets under `odigos/collector/$CONNECTOR_NAME/`.
+
+Create the credential secret first to obtain its complete AWS ARN. The issuer binds the one-time credential to the selected region, VPC and secret ARN; it does not populate the secret.
+
+```sh
+export CREDENTIAL_SECRET_ARN=$(aws secretsmanager create-secret --region "$AWS_REGION" \
+  --name "odigos/collector/$CONNECTOR_NAME/$AWS_REGION/credential" --query ARN --output text)
+jq -n --arg region "$AWS_REGION" --arg network "$COLLECTOR_VPC_ID" \
+  --arg secret "$CREDENTIAL_SECRET_ARN" '{
+  query:"mutation Issue($input: IssueManagedCollectorCredentialInput!) { issueManagedCollectorCredential(input: $input) { credentialId authorizationHeader secretRef } }",
+  variables:{input:{region:$region,networkId:$network,secretRef:$secret}}
+}' > issue-collector-credential.json
+export COLLECTOR_AUTH_HEADER=$(collector_mutation issue-collector-credential.json |
+  jq -er 'if .errors then error(.errors | tostring) else .data.issueManagedCollectorCredential.authorizationHeader end')
+aws secretsmanager put-secret-value --region "$AWS_REGION" \
+  --secret-id "$CREDENTIAL_SECRET_ARN" --secret-string "$COLLECTOR_AUTH_HEADER" >/dev/null
+unset COLLECTOR_AUTH_HEADER
+```
+
+Create the licence secret as registry JSON. ECS uses the JSON object for the image pull, and the Collector reads its `password` field as `ODIGOS_ONPREM_TOKEN`. Do not put the token on a command line that your shell records in history.
+
+```sh
+read -rs ODIGOS_ONPREM_TOKEN
+printf '\n'
+export ODIGOS_ONPREM_TOKEN
+export LICENSE_SECRET_ARN=$(jq -n '{username:"odigos",password:env.ODIGOS_ONPREM_TOKEN}' |
+  aws secretsmanager create-secret --region "$AWS_REGION" \
+    --name "odigos/collector/$CONNECTOR_NAME/$AWS_REGION/license" \
+    --secret-string file:///dev/stdin --query ARN --output text)
+unset ODIGOS_ONPREM_TOKEN
+```
+
+The AWS CLI may not accept `file:///dev/stdin` for `--secret-string` on every platform. If it does not, use your approved secret manager workflow to create the same JSON value without exposing the token in a process argument.
+
 ```sh
 jq -n --arg region "$AWS_REGION" '{
   query:"query GetManagedCollectorInstructions($region: String!) { managedCollectorInstructions(region: $region) { region deploymentRoleRef mode notes documents { id variant title steps content unresolved { placeholder description } } } }",
@@ -536,7 +558,13 @@ curl -fsS -H 'Content-Type: application/json' \
   jq -e 'if .errors then error(.errors | tostring) else .data.managedCollectorInstructions end'
 ```
 
-The returned CloudFormation and Terraform documents show the current generated infrastructure definition, but are not ready to apply unchanged for the reasons above. Manual mode does not create or delete customer infrastructure. Its observation role must trust the connector principal from step 2; the customer's own IaC principal applies the infrastructure.
+Choose one returned document, fill its parameters or variables with the cluster, selected subnets, security group, execution role, log group and both secret ARNs, then apply it with your own IaC principal. The generated task definition includes repository credentials, the licence JSON selector, a 120-second health grace period, public-IP placement, ownership tags and optional bootstrap secret. Do not set `endpointOverride` for the generated internal NLB. Watch `managedCollectorReport` until it reports Ready and an endpoint; use its issues to diagnose image pull, secret access, OpAMP egress or unhealthy targets.
+
+The document templates, steps and notes returned by `managedCollectorInstructions` are authored under `collectors.instructions` in `connectors/spec/data/aws.yaml`. The connector fills in the selected region, image, resource names, placement and scaling values when it serves the instructions.
+
+To rotate, issue a new credential with `rotate:true`, update the credential secret, and force a new ECS service deployment. After the replacement connects, revoke the old credential with the admin mutation `revokeManagedCollectorCredential(input:{region,credentialId})`. To remove manual mode, call `teardownManagedCollector`; it revokes connector credentials and removes the declaration while returning retained customer resource references. Then remove the CloudFormation stack or Terraform resources with your own IaC workflow.
+
+To change the manual Collector's `networkId`, update the declaration, move the customer-owned IaC to the new VPC, issue a new credential bound to that VPC and redeploy the ECS service after writing the new header to its secret. The connector revokes the old network-bound credential when the declaration changes; it does not delete or move the customer-owned stack.
 
 ## API behavior for every provider
 

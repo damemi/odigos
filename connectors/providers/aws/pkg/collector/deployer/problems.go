@@ -25,6 +25,9 @@ const (
 	// ProblemLoadBalancerUnprotected: the Collector's load balancer has no security group, and one
 	// cannot be added to an existing NLB. Refused — the OTLP ports carry no authentication.
 	ProblemLoadBalancerUnprotected = "CollectorLoadBalancerUnprotected"
+	// AWS has rejected NLB creation for this account. The connector retains a retry
+	// deadline and keeps checking for an NLB that was created in the meantime.
+	ProblemLoadBalancerAccountRestricted = "CollectorLoadBalancerAccountRestricted"
 	// ProblemLoadBalancerSubnetDrift: the load balancer is not in the subnets placement chose. Degraded:
 	// it works in the zones it has, and moving it would re-point every workload on the network.
 	ProblemLoadBalancerSubnetDrift = "CollectorLoadBalancerSubnetDrift"
@@ -100,9 +103,8 @@ const (
 	// ProblemTeardownCapabilityRemoved: the credentials were revoked and the Collector deliberately left
 	// running. Degraded: it is still exporting under a configuration nothing updates.
 	ProblemTeardownCapabilityRemoved = "CollectorTeardownCapabilityRemoved"
-	// ProblemTeardownIncomplete: a delete call failed, so the record is kept and the next pass finishes.
-	// Error, and expected once per teardown: a load balancer takes minutes to release the network
-	// interfaces its security group is attached to.
+	// ProblemTeardownIncomplete: a delete call failed, so the record is kept. Pending when AWS is
+	// releasing dependencies and automatic retries continue; Error for other failures.
 	ProblemTeardownIncomplete = "CollectorTeardownIncomplete"
 	// ProblemTeardownRevocationFailed: the credentials could not be revoked, so NOTHING was deleted. The
 	// ordering is the safety property and this is what it looks like when it holds.

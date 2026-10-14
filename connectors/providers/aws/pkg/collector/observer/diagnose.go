@@ -94,6 +94,7 @@ func Diagnose(in DiagnosisInput) Diagnosis {
 	out.Transport, out.EndpointSource, problems = transport(in, problems)
 
 	problems = append(problems, workloadProblems(in)...)
+	problems = append(problems, manualTaskDefinitionProblems(in)...)
 	problems = append(problems, dataPathProblems(in)...)
 	problems = append(problems, configPlaneProblems(in)...)
 	problems = append(problems, driftProblems(in)...)
@@ -101,6 +102,34 @@ func Diagnose(in DiagnosisInput) Diagnosis {
 	out.Problems = worstFirst(problems)
 	out.Status, out.Message = verdict(in, out.Problems)
 	return out
+}
+
+// Manual infrastructure is customer-owned, so report invalid task wiring
+// directly instead of waiting for a task pull or secret fetch to fail.
+func manualTaskDefinitionProblems(in DiagnosisInput) []collectorstatus.Problem {
+	if in.Mode != spec.ModeManual || !in.Observation.ServiceFound || in.Observation.Revision.ARN == "" {
+		return nil
+	}
+	revision := in.Observation.Revision
+	var problems []collectorstatus.Problem
+	add := func(message string) {
+		problems = append(problems, collectorstatus.Problem{Code: ProblemTaskDefinitionInvalid,
+			Severity: collectorstatus.SeverityError, Message: message})
+	}
+	if revision.RepositoryCredentialsRef == "" {
+		add("the customer-owned Collector task definition must set repositoryCredentials to the licence secret ARN so ECS can pull the private image")
+	}
+	if got := revision.Secrets[collectorimage.EnvOnPremToken]; got == "" ||
+		!strings.HasPrefix(got, revision.RepositoryCredentialsRef+":password::") {
+		add("the customer-owned Collector task definition must read ODIGOS_ONPREM_TOKEN from the licence secret's password JSON key")
+	}
+	if got := revision.Secrets[collectorimage.EnvOpAMPAuthorization]; got == "" {
+		add("the customer-owned Collector task definition must read ODIGOS_OPAMP_AUTHORIZATION from the issued credential secret")
+	}
+	if want := deployer.LogGroupName(in.Connector); revision.LogGroup != want {
+		add(fmt.Sprintf("the customer-owned Collector task definition must send logs to %s, the execution role's log-group scope", want))
+	}
+	return problems
 }
 
 // transport resolves the endpoint workloads are pointed at, from the load balancer that was discovered.
@@ -114,6 +143,36 @@ func transport(in DiagnosisInput, problems []collectorstatus.Problem) (
 	host := ""
 	if in.Settings.EndpointOverride == "" {
 		source = deployer.EndpointSourceLoadBalancer
+		if targets := in.Observation.LoadBalancer.ListenerTargets; targets != nil {
+			for _, group := range in.Observation.TargetGroups {
+				if group.Port != 4317 && group.Port != 4318 {
+					continue
+				}
+				if targets[group.Port] != group.ARN {
+					problems = append(problems, collectorstatus.Problem{
+						Code: ProblemLoadBalancerShapeInvalid, Severity: collectorstatus.SeverityError,
+						Message: fmt.Sprintf("Collector NLB listener %d must forward to target group %s", group.Port, group.ARN),
+					})
+					return collectoringress.Transport{}, source, problems
+				}
+			}
+		}
+		for _, group := range in.Observation.TargetGroups {
+			if group.HealthCheckPort != "" && group.HealthCheckPort != "13133" {
+				problems = append(problems, collectorstatus.Problem{
+					Code: ProblemLoadBalancerShapeInvalid, Severity: collectorstatus.SeverityError,
+					Message: fmt.Sprintf("Collector target group %s must health-check port 13133, got %s", group.ARN, group.HealthCheckPort),
+				})
+				return collectoringress.Transport{}, source, problems
+			}
+		}
+		if lb := in.Observation.LoadBalancer; lb.ARN != "" && lb.Scheme != "" && lb.Scheme != "internal" {
+			problems = append(problems, collectorstatus.Problem{
+				Code: ProblemLoadBalancerShapeInvalid, Severity: collectorstatus.SeverityError,
+				Message: "the Collector load balancer must use the internal scheme; correct the customer-owned NLB before routing telemetry through it",
+			})
+			return collectoringress.Transport{}, source, problems
+		}
 		host = in.Observation.LoadBalancer.DNSName
 	}
 	resolved, transportProblems := collectoringress.ResolveTransport(in.Settings.TLS, deployer.AWSPlatform, host)

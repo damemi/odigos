@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
@@ -53,6 +54,27 @@ type Provider interface {
 	// LookupComputePlatform finds a single discovered compute platform by name + kind + region (nil if absent). Used to
 	// validate a prospective Source for compute-platform assignment.
 	LookupComputePlatform(ctx context.Context, name, kind, region string) (*DiscoveredComputePlatform, error)
+}
+
+// CollectorRoutingProgressReporter is an optional, read-only provider view of deployed workload
+// routes. The Collector report uses it to show rollout progress without treating desired routing
+// as an applied workload update.
+type CollectorRoutingProgressReporter interface {
+	CollectorRoutingProgress(context.Context) (map[string]CollectorRoutingProgress, error)
+}
+
+type CollectorRoutingProgress struct {
+	Instrumented int
+	Routed       int
+	Failed       int
+	FailureRefs  []string
+}
+
+// ReconcilePassContextProvider optionally adds provider-owned pass state to the context shared
+// by every workload reconciler in one serialized pass. Prerequisites and observers use the
+// original context because they do not apply workload changes.
+type ReconcilePassContextProvider interface {
+	ReconcilePassContext(context.Context) context.Context
 }
 
 // Detector enumerates, persists and prunes ONE resource type across the provider's scope (e.g. regions)
@@ -113,6 +135,9 @@ type CollectorNetwork struct {
 	// it is metadata and remains part of the credential binding, but is not row identity.
 	Region    string
 	NetworkID string
+	// ClusterRef is set when an existing ECS service was discovered before its host region was
+	// configured. Observers use it to read that service; placement never uses it to deploy.
+	ClusterRef string
 	// Kind is the collectors type (e.g. "aws.fargate-collector"), which decides the mode.
 	Kind string
 }
@@ -153,8 +178,15 @@ type CollectorProvider interface {
 	CollectorDeployers() map[string]CollectorDeployer
 }
 
-// CollectorDeploymentRoleValidator checks a customer-provisioned deployment identity
-// before its reference is persisted. Providers own the syntax and access check.
-type CollectorDeploymentRoleValidator interface {
-	ValidateCollectorDeploymentRole(context.Context, string, string) error
+// CollectorRegionalSettingsValidator checks provider resources before a regional
+// declaration is persisted. The patch is sparse on update; providers combine it
+// with current settings before validating.
+type CollectorRegionalSettingsValidator interface {
+	ValidateCollectorRegionalSettings(context.Context, string, collectorsettings.Patch, bool) error
+}
+
+// CollectorDisabledRetirer applies a configured retention policy to a region
+// that remains declared but has deployment disabled.
+type CollectorDisabledRetirer interface {
+	RetireDisabledCollector(ctx context.Context, network CollectorNetwork) error
 }

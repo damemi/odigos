@@ -51,6 +51,8 @@ const (
 	StatusReady Status = "Ready"
 	// StatusDegraded: working, in a posture worth telling the customer about.
 	StatusDegraded Status = "Degraded"
+	// StatusDeleting: cloud teardown is still running and will be retried.
+	StatusDeleting Status = "Deleting"
 	// StatusError: refused or broken.
 	StatusError Status = "Error"
 	// StatusAwaitingCustomer: manual mode, waiting on something only the customer can do — deploy the

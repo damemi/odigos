@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorconfig"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
@@ -57,6 +59,23 @@ type Provisioner struct {
 
 	Store   CredentialStore
 	Clients Clients
+	// Retry persists AWS account-level NLB creation refusals across reconciles and
+	// connector restarts. Nil is useful only for isolated ensure-step tests.
+	Retry LoadBalancerRetryStore
+	Now   func() time.Time
+}
+
+type LoadBalancerRetryStore interface {
+	GetCollectorLoadBalancerRetry(ctx context.Context, key basestore.CollectorKey) (basestore.CollectorLoadBalancerRetry, error)
+	RecordCollectorLoadBalancerRetry(ctx context.Context, key basestore.CollectorKey, retry basestore.CollectorLoadBalancerRetry) error
+	ClearCollectorLoadBalancerRetry(ctx context.Context, key basestore.CollectorKey) error
+}
+
+func (p *Provisioner) now() time.Time {
+	if p.Now != nil {
+		return p.Now()
+	}
+	return time.Now()
 }
 
 // SharedInput is what the connector-wide objects depend on.
@@ -162,6 +181,17 @@ func (p *Provisioner) EnsureNetwork(ctx context.Context, in NetworkInput) (Prere
 	if role == "" {
 		return out, nil
 	}
+	// The row is the durable half of the deletion gate. Create it before the first
+	// cloud write, including the log group, so a failed first pass still has a
+	// recoverable identity and teardown can inspect what was created.
+	if _, err := p.Store.GetManagedCollector(ctx, in.Key); err != nil {
+		if !errors.Is(err, basestore.ErrCollectorNotFound) {
+			return out, fmt.Errorf("read Collector row before provisioning: %w", err)
+		}
+		if err := p.Store.UpsertManagedCollector(ctx, in.Key, in.HostNetworkID, in.Kind, in.Mode, string(collectorownership.OriginOdigos), nil); err != nil {
+			return out, fmt.Errorf("record Collector row before provisioning: %w", err)
+		}
+	}
 
 	logsAPI, err := p.Clients.Logs(ctx, in.Key.Region)
 	if err != nil {
@@ -193,6 +223,11 @@ func (p *Provisioner) EnsureNetwork(ctx context.Context, in NetworkInput) (Prere
 		return out, err
 	}
 	out.Delivery.LicenseSecretRef = licenseRef
+	if licenseRef != "" {
+		if err := p.Store.RecordCollectorLicenseSecret(ctx, in.Key, licenseRef); err != nil {
+			return out, fmt.Errorf("record Collector license secret before provisioning continues: %w", err)
+		}
+	}
 
 	credentialSecret, secretProblems, err := EnsureSecret(ctx, secretsAPI, SecretInput{
 		Name:        CredentialSecretName(p.Identity.ConnectorName, in.Key.Region),
@@ -216,6 +251,9 @@ func (p *Provisioner) EnsureNetwork(ctx context.Context, in NetworkInput) (Prere
 		return out, nil
 	}
 	out.Delivery.CredentialSecretRef = credentialSecret.ARN
+	if err := p.Store.RecordCollectorCredentialSecret(ctx, in.Key, credentialSecret.ARN); err != nil {
+		return out, fmt.Errorf("record Collector credential secret before issuing: %w", err)
+	}
 
 	credential, credProblems, err := EnsureCredential(ctx, p.Store, secretsAPI, CredentialInput{
 		Key:            in.Key,
@@ -505,18 +543,22 @@ func (p *Provisioner) EnsureIngress(ctx context.Context, in IngressInput) (Ingre
 		Rules:       decision.Rules,
 	})
 	out.Problems = append(out.Problems, sgProblems...)
-	if err != nil {
+	out.SecurityGroupID, out.Authorized, out.Revoked = group.ID, group.Authorized, group.Revoked
+	if err != nil || group.ID == "" {
 		return out, err
 	}
-	if group.ID == "" {
-		return out, nil
-	}
-	out.SecurityGroupID, out.Authorized, out.Revoked = group.ID, group.Authorized, group.Revoked
 
 	host := ""
 	out.EndpointSource = EndpointSourceOverride
 	if in.Transport.EndpointOverride == "" {
 		out.EndpointSource = EndpointSourceLoadBalancer
+		retry := basestore.CollectorLoadBalancerRetry{}
+		if p.Retry != nil {
+			retry, err = p.Retry.GetCollectorLoadBalancerRetry(ctx, in.Key)
+			if err != nil {
+				return out, err
+			}
+		}
 
 		elbAPI, err := p.Clients.LoadBalancers(ctx, in.Key.Region)
 		if err != nil {
@@ -535,12 +577,30 @@ func (p *Provisioner) EnsureIngress(ctx context.Context, in IngressInput) (Ingre
 			// rather than concurrent.
 			SecurityGroupID:   group.ID,
 			TLSCertificateARN: listenerCertificate(in.Transport),
+			Retry:             retry,
+			Now:               p.now(),
 		})
 		out.Problems = append(out.Problems, lbProblems...)
+		out.LoadBalancerARN, out.TargetGroupARNs = lb.ARN, lb.TargetGroupARNs
+		var restricted *LoadBalancerAccountRestriction
+		if errors.As(err, &restricted) {
+			newRetry := nextLoadBalancerRetry(p.now(), retry, restricted.RequestID)
+			if p.Retry != nil {
+				if saveErr := p.Retry.RecordCollectorLoadBalancerRetry(ctx, in.Key, newRetry); saveErr != nil {
+					return out, errors.Join(err, saveErr)
+				}
+			}
+			out.Problems = append(out.Problems, loadBalancerRestrictionProblem(in.Key.Region, newRetry))
+			return out, nil
+		}
+		if lb.ARN != "" && retry.Attempts > 0 && p.Retry != nil {
+			if clearErr := p.Retry.ClearCollectorLoadBalancerRetry(ctx, in.Key); clearErr != nil {
+				return out, clearErr
+			}
+		}
 		if err != nil {
 			return out, err
 		}
-		out.LoadBalancerARN, out.TargetGroupARNs = lb.ARN, lb.TargetGroupARNs
 		host = lb.DNSName
 	}
 

@@ -2,8 +2,10 @@ package deployer
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -44,6 +46,90 @@ func ingressProvisioner(clients *fakeClients) *Provisioner {
 	return &Provisioner{Identity: testIdentity(), Provider: "aws", AccountID: testAccount, Clients: clients}
 }
 
+type fakeLoadBalancerRetryStore struct {
+	retry basestore.CollectorLoadBalancerRetry
+}
+
+func (f *fakeLoadBalancerRetryStore) GetCollectorLoadBalancerRetry(context.Context, basestore.CollectorKey) (basestore.CollectorLoadBalancerRetry, error) {
+	return f.retry, nil
+}
+func (f *fakeLoadBalancerRetryStore) RecordCollectorLoadBalancerRetry(_ context.Context, _ basestore.CollectorKey, retry basestore.CollectorLoadBalancerRetry) error {
+	f.retry = retry
+	return nil
+}
+func (f *fakeLoadBalancerRetryStore) ClearCollectorLoadBalancerRetry(context.Context, basestore.CollectorKey) error {
+	f.retry = basestore.CollectorLoadBalancerRetry{}
+	return nil
+}
+
+func TestAccountRestrictionBacksOffButDiscoversAnExistingLoadBalancer(t *testing.T) {
+	clients := newFakeClients()
+	clients.elb.createLBErr = &elbtypes.OperationNotPermittedException{
+		Message: aws.String("This AWS account currently does not support creating load balancers. For more information, please contact AWS Support."),
+	}
+	retryStore := &fakeLoadBalancerRetryStore{}
+	now := time.Date(2026, 10, 13, 13, 0, 0, 0, time.UTC)
+	p := ingressProvisioner(clients)
+	p.Retry = retryStore
+	p.Now = func() time.Time { return now }
+
+	first, err := p.EnsureIngress(context.Background(), ingressInput())
+	if err != nil || !hasCode(first.Problems, ProblemLoadBalancerAccountRestricted) {
+		t.Fatalf("first refusal: ingress=%+v err=%v", first, err)
+	}
+	if retryStore.retry.Attempts != 1 || !retryStore.retry.RetryAfter.Equal(now.Add(5*time.Minute)) {
+		t.Fatalf("retry = %+v", retryStore.retry)
+	}
+	creates := countCallsWithPrefix(clients.elb.calls, "CreateLoadBalancer:")
+	second, err := p.EnsureIngress(context.Background(), ingressInput())
+	if err != nil || !hasCode(second.Problems, ProblemLoadBalancerAccountRestricted) {
+		t.Fatalf("cooldown: ingress=%+v err=%v", second, err)
+	}
+	if got := countCallsWithPrefix(clients.elb.calls, "CreateLoadBalancer:"); got != creates {
+		t.Fatalf("CreateLoadBalancer called during cooldown: %d -> %d", creates, got)
+	}
+	now = now.Add(5 * time.Minute)
+	_, err = p.EnsureIngress(context.Background(), ingressInput())
+	if err != nil || retryStore.retry.Attempts != 2 || !retryStore.retry.RetryAfter.Equal(now.Add(10*time.Minute)) {
+		t.Fatalf("second restriction: retry=%+v err=%v", retryStore.retry, err)
+	}
+	if got := countCallsWithPrefix(clients.elb.calls, "CreateLoadBalancer:"); got != creates+1 {
+		t.Fatalf("CreateLoadBalancer after cooldown = %d, want %d", got, creates+1)
+	}
+
+	// Another actor (or an AWS response lost after creation) may have provided
+	// the NLB. Discovery must win over the persisted cooldown.
+	clients.elb.withLoadBalancer(LoadBalancerName(testVPC), ourTags(testVPC), []string{first.SecurityGroupID}, testSubnets)
+	third, err := p.EnsureIngress(context.Background(), ingressInput())
+	if err != nil || !third.Ready() {
+		t.Fatalf("existing load balancer: ingress=%+v err=%v", third, err)
+	}
+	if retryStore.retry.Attempts != 0 {
+		t.Fatalf("restriction was not cleared: %+v", retryStore.retry)
+	}
+}
+
+func countCallsWithPrefix(calls []string, prefix string) int {
+	n := 0
+	for _, call := range calls {
+		if strings.HasPrefix(call, prefix) {
+			n++
+		}
+	}
+	return n
+}
+
+func TestOtherOperationNotPermittedDoesNotEnterAccountRestrictionRetry(t *testing.T) {
+	clients := newFakeClients()
+	clients.elb.createLBErr = &elbtypes.OperationNotPermittedException{Message: aws.String("Security group not supported")}
+	p := ingressProvisioner(clients)
+	p.Retry = &fakeLoadBalancerRetryStore{}
+	_, err := p.EnsureIngress(context.Background(), ingressInput())
+	if err == nil {
+		t.Fatal("unrelated OperationNotPermitted was swallowed")
+	}
+}
+
 func TestEnsureIngressBuildsTheWholeDataPlane(t *testing.T) {
 	clients := newFakeClients()
 	p := ingressProvisioner(clients)
@@ -75,6 +161,15 @@ func TestEnsureIngressBuildsTheWholeDataPlane(t *testing.T) {
 	}
 	if !hasCode(got.Problems, "PlaintextTelemetry") {
 		t.Errorf("problems = %v, want the plaintext posture reported", codes(got.Problems))
+	}
+}
+
+func TestIngressFailureReturnsTheSecurityGroupForCheckpointing(t *testing.T) {
+	clients := newFakeClients()
+	clients.elb.createLBErr = errors.New("load balancer creation denied")
+	got, err := ingressProvisioner(clients).EnsureIngress(context.Background(), ingressInput())
+	if err == nil || got.SecurityGroupID == "" || got.LoadBalancerARN != "" {
+		t.Fatalf("partial ingress lost its created security group: %+v, %v", got, err)
 	}
 }
 

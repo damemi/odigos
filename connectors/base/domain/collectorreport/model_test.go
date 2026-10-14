@@ -49,6 +49,15 @@ func TestToModelCarriesIdentityAndDesired(t *testing.T) {
 	}
 }
 
+func TestToModelCarriesRetentionPolicy(t *testing.T) {
+	in := baseInput()
+	in.Desired.Retention = collectorsettings.Retention{IdleScaleToZeroAfterHours: 6, IdleDeleteAfterHours: 48}
+	got := ToModel(in).Desired.Retention
+	if got == nil || got.IdleScaleToZeroAfterHours != 6 || got.IdleDeleteAfterHours != 48 {
+		t.Fatalf("retention = %+v", got)
+	}
+}
+
 // The prose message and the structured status must come from the same state machine, or a client
 // branching on one and a human reading the other would see different Collectors.
 func TestStatusAgreesWithTheProseReport(t *testing.T) {

@@ -108,7 +108,11 @@ func awsPeering(id, vpc1, vpc2, region1, region2 string, state ec2types.VpcPeeri
 func TestDiscoverRegionRetainsOnlyActiveSameRegionPeeringsAndEffectiveRoutes(t *testing.T) {
 	api := &fakeEC2{
 		vpcPages:    [][]ec2types.Vpc{{{VpcId: aws.String("vpc-1"), CidrBlock: aws.String("10.0.0.0/16")}, {VpcId: aws.String("vpc-2"), CidrBlock: aws.String("10.1.0.0/16")}}},
-		subnetPages: [][]ec2types.Subnet{{awsSubnet("subnet-1", "vpc-1", "eu-west-1a", 10)}},
+		subnetPages: [][]ec2types.Subnet{{func() ec2types.Subnet {
+			subnet := awsSubnet("subnet-1", "vpc-1", "eu-west-1a", 10)
+			subnet.CidrBlock = aws.String("10.0.1.0/24")
+			return subnet
+		}()}},
 		tablePages:  [][]ec2types.RouteTable{{table("rtb-1", "vpc-1", []ec2types.Route{route("10.1.0.0/16", func(r *ec2types.Route) { r.VpcPeeringConnectionId = aws.String("pcx-active") })}, assocMain())}},
 		peeringPages: [][]ec2types.VpcPeeringConnection{
 			{awsPeering("pcx-active", "vpc-1", "vpc-2", "eu-west-1", "eu-west-1", ec2types.VpcPeeringConnectionStateReasonCodeActive), awsPeering("pcx-pending", "vpc-1", "vpc-2", "eu-west-1", "eu-west-1", ec2types.VpcPeeringConnectionStateReasonCodePendingAcceptance)},
@@ -128,7 +132,7 @@ func TestDiscoverRegionRetainsOnlyActiveSameRegionPeeringsAndEffectiveRoutes(t *
 		t.Fatalf("peerings = %+v, want only active same-region peering", peerings)
 	}
 	subnet, ok := topo.Subnet("subnet-1")
-	if !ok || len(subnet.Routes) != 1 || subnet.Routes[0].PeeringID != "pcx-active" {
+	if !ok || len(subnet.Routes) != 1 || subnet.Routes[0].PeeringID != "pcx-active" || subnet.CIDRBlock != "10.0.1.0/24" {
 		t.Fatalf("effective subnet routes = %+v, want the main table's peering route", subnet.Routes)
 	}
 	group, ok := topo.SecurityGroup("sg-collector")

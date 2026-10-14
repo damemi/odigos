@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/jackc/pgx/v5/pgxpool"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -44,6 +45,10 @@ const shutdownGrace = 15 * time.Second
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(log)
+	// The connector watch runs on a controller-runtime cache, whose client-go reflector logs through
+	// controller-runtime's logger. Left unset, it dumps a stack trace each time the reflector logs and
+	// drops the message. Route it through the same JSON handler as everything else.
+	ctrl.SetLogger(logr.FromSlogHandler(log.Handler()))
 
 	if err := run(log); err != nil {
 		log.Error("connector-opamp-gateway exited", "error", err)

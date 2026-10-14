@@ -189,6 +189,17 @@ func (s *Store) RecordCollectorIdentity(ctx context.Context, key CollectorKey, c
 		collectorID, credentialRef, activeCredentialID)
 }
 
+// RecordCollectorLicenseSecret and RecordCollectorCredentialSecret checkpoint the
+// first cloud resources before credential issuance or the ECS stack can proceed.
+// Keeping these writes separate preserves whichever ref a previous pass recorded.
+func (s *Store) RecordCollectorLicenseSecret(ctx context.Context, key CollectorKey, ref string) error {
+	return s.update(ctx, key, "license secret", `license_secret_ref = NULLIF($3, '')`, ref)
+}
+
+func (s *Store) RecordCollectorCredentialSecret(ctx context.Context, key CollectorKey, ref string) error {
+	return s.update(ctx, key, "credential secret", `credential_ref = NULLIF($3, '')`, ref)
+}
+
 // ClearCollectorCredential drops the pointer to a credential that is no longer in force, for every
 // Collector under a Collector identity.
 //

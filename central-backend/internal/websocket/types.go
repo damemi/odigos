@@ -23,11 +23,12 @@ func init() {
 }
 
 type WebSocketMessageToProxy struct {
-	Type      WebSocketMessageType `json:"type"`
-	Query     string               `json:"query,omitempty"`
-	Variables GraphQLVariables     `json:"variables,omitempty"`
-	RequestId string               `json:"request_id,omitempty"`
-	IsAdmin   bool                 `json:"is_admin,omitempty"`
+	Type         WebSocketMessageType `json:"type"`
+	Query        string               `json:"query,omitempty"`
+	Variables    GraphQLVariables     `json:"variables,omitempty"`
+	RequestId    string               `json:"request_id,omitempty"`
+	IsAdmin      bool                 `json:"is_admin,omitempty"`
+	IsOwnerAdmin bool                 `json:"is_owner_admin,omitempty"`
 }
 
 type WebsocketMessageFromProxy struct {

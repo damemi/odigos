@@ -31,8 +31,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ecs"
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
@@ -42,6 +47,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
 	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
+	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/deployer"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/placement"
 	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
@@ -103,6 +109,8 @@ type Observer struct {
 	// Settings reads the live tree. A function rather than a value because an updateConfig patch
 	// has to land on the next pass with no restart.
 	Settings func() collectorsettings.Settings
+	// Regions lists enabled AWS regions for discovering customer-created services in manual mode.
+	Regions func(context.Context) ([]string, error)
 
 	Planner Planner
 	Store   Store
@@ -135,7 +143,75 @@ func (o *Observer) CollectorNetworks(ctx context.Context) ([]baseapi.CollectorNe
 	o.mu.Lock()
 	o.plan = &plan
 	o.mu.Unlock()
-	return plan.CollectorNetworks(), nil
+	networks := plan.CollectorNetworks()
+	if o.Mode != spec.ModeManual || o.Regions == nil {
+		return networks, nil
+	}
+	return o.discoverExistingCollectors(ctx, networks), nil
+}
+
+// discoverExistingCollectors finds services created from the manual instructions before their region
+// has been declared in the UI. It does not add them to placement, so discovery cannot deploy or route
+// workloads into an unconfigured network. The service name and ownership tags must both match.
+func (o *Observer) discoverExistingCollectors(ctx context.Context, planned []baseapi.CollectorNetwork) []baseapi.CollectorNetwork {
+	regions, err := o.Regions(ctx)
+	if err != nil {
+		log.Warn("could not list regions while discovering customer Collectors", "error", err)
+		return planned
+	}
+	known := make(map[string]bool, len(planned))
+	for _, network := range planned {
+		known[network.Region] = true
+	}
+	for _, region := range regions {
+		if known[region] {
+			continue
+		}
+		api, err := o.Clients.ECS(ctx, region)
+		if err != nil {
+			log.Warn("could not create ECS client while discovering customer Collectors", "region", region, "error", err)
+			continue
+		}
+		var found []baseapi.CollectorNetwork
+		var next *string
+		for {
+			page, err := api.ListClusters(ctx, &ecs.ListClustersInput{NextToken: next})
+			if err != nil {
+				log.Warn("could not list ECS clusters while discovering customer Collectors", "region", region, "error", err)
+				found = nil
+				break
+			}
+			for _, cluster := range page.ClusterArns {
+				service, err := describeService(ctx, api, cluster, deployer.ServiceName(region))
+				if err != nil {
+					log.Warn("could not inspect a potential customer Collector", "region", region, "cluster", cluster, "error", err)
+					continue
+				}
+				if service == nil || aws.ToString(service.Status) != "ACTIVE" {
+					continue
+				}
+				tags := baseapi.ParseCollectorTags(ecsTagMap(service.Tags))
+				if tags.Region != region || !strings.HasPrefix(tags.Network, "vpc-") ||
+					!collectorownership.AttributionOf(tags, o.Identity).Mine() {
+					continue
+				}
+				found = append(found, baseapi.CollectorNetwork{
+					Region: region, NetworkID: tags.Network, ClusterRef: cluster, Kind: o.Kind,
+				})
+			}
+			if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
+				break
+			}
+			next = page.NextToken
+		}
+		if len(found) == 1 {
+			planned = append(planned, found[0])
+		} else if len(found) > 1 {
+			log.Warn("multiple customer Collectors found in one region; configure the intended cluster explicitly", "region", region)
+		}
+	}
+	sort.Slice(planned, func(i, j int) bool { return planned[i].Region < planned[j].Region })
+	return planned
 }
 
 // ObserveCollector reads one network's Collector and records what it found.
@@ -146,7 +222,8 @@ func (o *Observer) CollectorNetworks(ctx context.Context) ([]baseapi.CollectorNe
 // channels and the row is the one a customer sees.
 func (o *Observer) ObserveCollector(ctx context.Context, network baseapi.CollectorNetwork) error {
 	key := basestore.CollectorKey{Region: network.Region}
-	settings := o.settings().Region(network.Region).Network
+	configured := o.settings()
+	settings := configured.Region(network.Region).Network
 
 	record, err := o.Store.GetManagedCollector(ctx, key)
 	if err != nil && !errors.Is(err, basestore.ErrCollectorNotFound) {
@@ -163,10 +240,17 @@ func (o *Observer) ObserveCollector(ctx context.Context, network baseapi.Collect
 		return fmt.Errorf("build an Elastic Load Balancing client for %s: %w", network.Region, err)
 	}
 
+	clusterRef := settings.ClusterRef
+	if _, declared := configured.Regions[network.Region]; !declared && recorded && record.RuntimeRef != "" {
+		clusterRef = record.RuntimeRef
+	}
+	if network.ClusterRef != "" {
+		clusterRef = network.ClusterRef
+	}
 	observation := Observe(ctx, ecsAPI, elbAPI, ObserveInput{
 		Region:     network.Region,
 		NetworkID:  network.NetworkID,
-		ClusterRef: settings.ClusterRef,
+		ClusterRef: clusterRef,
 	})
 
 	diagnosis := Diagnose(DiagnosisInput{
@@ -174,7 +258,7 @@ func (o *Observer) ObserveCollector(ctx context.Context, network baseapi.Collect
 		Connector:     o.Identity.ConnectorName,
 		Mode:          o.Mode,
 		Settings:      settings,
-		Placement:     o.placementProblems(network),
+		Placement:     append(o.placementProblems(network), o.manualSecurityGroupProblems(network, observation)...),
 		Record:        record,
 		Observation:   observation,
 		Liveness:      collectorreport.LivenessOf(record.OpAMPLastSeenAt, o.HeartbeatInterval, o.now()),
@@ -192,6 +276,34 @@ func (o *Observer) ObserveCollector(ctx context.Context, network baseapi.Collect
 		"desired", observation.DesiredCount, "problems", len(diagnosis.Problems),
 		"status", string(diagnosis.Status))
 	return nil
+}
+
+func (o *Observer) manualSecurityGroupProblems(network baseapi.CollectorNetwork, observation Observation) []collectorstatus.Problem {
+	if o.Mode != spec.ModeManual || !observation.ServiceFound || len(observation.TargetGroups) == 0 {
+		return nil
+	}
+	o.mu.Lock()
+	plan := o.plan
+	o.mu.Unlock()
+	if plan == nil {
+		return nil
+	}
+	unknown := false
+	for _, groupID := range observation.SecurityGroups {
+		switch plan.Topology.CollectorSecurityGroupAllowsSelfHealth(network.Region, network.NetworkID, groupID) {
+		case placement.ReachabilityReachable:
+			return nil
+		case placement.ReachabilityUnknown:
+			unknown = true
+		}
+	}
+	if unknown || len(observation.SecurityGroups) == 0 {
+		return nil
+	}
+	return []collectorstatus.Problem{{
+		Code: ProblemSecurityGroupInvalid, Severity: collectorstatus.SeverityError,
+		Message: "The customer-owned Collector security group must allow TCP 13133 from itself so the internal NLB can health-check ECS tasks.",
+	}}
 }
 
 // record writes what this pass established.

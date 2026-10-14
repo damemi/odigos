@@ -432,6 +432,7 @@ type CentralInterface interface {
 	// periodic own-metrics report; found=false means it has never reported any.
 	ManagedCollectorMetrics(ctx context.Context, region string, refresh bool) (collectormetrics.Record, bool, error)
 	IssueManagedCollectorCredential(ctx context.Context, input ManualCollectorCredentialInput) (ManualCollectorCredentialIssue, error)
+	RevokeManagedCollectorCredential(ctx context.Context, region, credentialID string) error
 	// ManagedCollectorInstructions renders provider-owned deployment documents for one region. A nil
 	// result means this provider has no collector artifact for the requested region.
 	ManagedCollectorInstructions(ctx context.Context, region string) (*ManagedCollectorInstructions, error)

@@ -32,6 +32,8 @@ type fakeECS struct {
 
 	// services is keyed by cluster ARN + "/" + service name.
 	services map[string]*ecstypes.Service
+	// serviceTasks models tasks that can outlive DeleteService while ECS drains the service.
+	serviceTasks map[string][]string
 	// serviceTags is keyed by service ARN, so a re-stamp can be seen for what it wrote.
 	serviceTags map[string]map[string]string
 
@@ -40,6 +42,7 @@ type fakeECS struct {
 	createServiceErr error
 	updateServiceErr error
 	deleteServiceErr error
+	stopTaskErr      error
 	registerErr      error
 	nextRevision     int32
 	// order, when set, is a call log shared with the other fakes. See sink.
@@ -48,11 +51,12 @@ type fakeECS struct {
 
 func newFakeECS() *fakeECS {
 	return &fakeECS{
-		clusters:    map[string]*ecstypes.Cluster{},
-		families:    map[string][]ecstypes.TaskDefinition{},
-		tags:        map[string]map[string]string{},
-		services:    map[string]*ecstypes.Service{},
-		serviceTags: map[string]map[string]string{},
+		clusters:     map[string]*ecstypes.Cluster{},
+		families:     map[string][]ecstypes.TaskDefinition{},
+		tags:         map[string]map[string]string{},
+		services:     map[string]*ecstypes.Service{},
+		serviceTasks: map[string][]string{},
+		serviceTags:  map[string]map[string]string{},
 	}
 }
 

@@ -210,11 +210,23 @@ func (r *mutationResolver) IssueManagedCollectorCredential(ctx context.Context, 
 		Rotate: input.Rotate != nil && *input.Rotate,
 	})
 	if err != nil {
-		return nil, err
+		return nil, gqlapi.TypedManagedCollectorError(err)
 	}
 	return &model.IssueManagedCollectorCredentialPayload{
 		CollectorID: issued.CollectorID, CredentialID: issued.CredentialID,
 		SecretRef: issued.SecretRef, AuthorizationHeader: issued.AuthorizationHeader.Reveal(),
+	}, nil
+}
+
+func (r *mutationResolver) RevokeManagedCollectorCredential(ctx context.Context, input model.RevokeManagedCollectorCredentialInput) (*model.RevokeManagedCollectorCredentialPayload, error) {
+	if ctx.Value(credentialIssuerContextKey{}) != true {
+		return nil, fmt.Errorf("manual Collector credential revocation requires an authenticated admin operation")
+	}
+	if err := r.Central.RevokeManagedCollectorCredential(ctx, input.Region, input.CredentialID); err != nil {
+		return nil, gqlapi.TypedManagedCollectorError(err)
+	}
+	return &model.RevokeManagedCollectorCredentialPayload{
+		Region: input.Region, CredentialID: input.CredentialID, Revoked: true,
 	}, nil
 }
 

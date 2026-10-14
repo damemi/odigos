@@ -9,6 +9,7 @@
 
 # --- Go build ------------------------------------------------------------------------------------
 FROM --platform=$BUILDPLATFORM golang:1.26.9 AS builder
+ENV GOWORK=off
 ARG TARGETARCH
 ARG LD_FLAGS
 WORKDIR /workspace
@@ -16,12 +17,12 @@ COPY connectors/ connectors/
 WORKDIR /workspace/connectors/providers/gcp
 RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/go/pkg \
-    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
+    if [ -s /run/secrets/github_token ]; then git config --global url."https://$(cat /run/secrets/github_token):x-oauth-basic@github.com/".insteadOf "https://github.com/"; fi && \
     go mod download && go mod verify
 RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
-    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
+    if [ -s /run/secrets/github_token ]; then git config --global url."https://$(cat /run/secrets/github_token):x-oauth-basic@github.com/".insteadOf "https://github.com/"; fi && \
     CGO_ENABLED=0 GOARCH=$TARGETARCH \
     go build -ldflags="${LD_FLAGS}" -a -o /workspace/connector-gcp ./cmd
 

@@ -217,7 +217,7 @@ func BuildDeployment(cr *cloudconnectorsv1.OdigosCloudConnector, p DeploymentPar
 		{Name: "ODIGOS_AZURE_SUBSCRIPTION_ID", Value: cr.Spec.Account.ID},
 		{Name: "ODIGOS_CENTRAL_BACKEND_URL", Value: p.CentralBackendURL},
 		{Name: "ODIGOS_GQL_ADDR", Value: fmt.Sprintf(":%d", GraphQLPort)},
-		{Name: "ODIGOS_CLI_ADDR", Value: fmt.Sprintf(":%d", CLIPort)},
+		{Name: "ODIGOS_CLI_ADDR", Value: fmt.Sprintf("127.0.0.1:%d", CLIPort)},
 		// Shutdown timeout is DB-backed operational config (config.Manager), not env.
 		{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 		dsnEnv("DATABASE_URL", p.DBSecretName, p.DBSecretKey),
@@ -364,10 +364,10 @@ func servicePorts(cr *cloudconnectorsv1.OdigosCloudConnector) []corev1.ServicePo
 //
 // The non-obvious part is everything the policy has to RE-PERMIT. A pod with no NetworkPolicy accepts
 // everything; the moment one selects it, every port not explicitly allowed is denied. A policy that
-// mentioned only 4320 would therefore take out the connector's GraphQL endpoint, its odictl endpoint and
+// mentioned only 4320 would therefore take out the connector's GraphQL endpoint and
 // — on CNIs that police node-to-pod traffic — its own readiness and liveness probes. So the other ports
-// are allowed from anywhere, which is exactly what they already were: this policy narrows one port and
-// changes nothing else.
+// are allowed from anywhere only for query-only HTTP GraphQL. The admin CLI
+// binds to loopback and is reached by an authorized port-forward.
 //
 // gatewayNamespace scopes where gateway pods are looked for. Empty means this connector's own namespace,
 // which is where the odigos-central chart puts both.
@@ -392,7 +392,6 @@ func BuildNetworkPolicy(cr *cloudconnectorsv1.OdigosCloudConnector, p Deployment
 
 	opampPort := intstr.FromInt32(OpAMPPort)
 	graphQL := intstr.FromInt32(GraphQLPort)
-	cli := intstr.FromInt32(CLIPort)
 	tcp := corev1.ProtocolTCP
 
 	return &networkingv1.NetworkPolicy{
@@ -418,10 +417,10 @@ func BuildNetworkPolicy(cr *cloudconnectorsv1.OdigosCloudConnector, p Deployment
 					From:  []networkingv1.NetworkPolicyPeer{gatewayPeer},
 				},
 				{
-					// Re-permitting what was already open. No From: from anywhere, unchanged.
+					// HTTP GraphQL is query-only. The admin CLI binds to pod loopback
+					// and is reached through an authorized kubectl port-forward.
 					Ports: []networkingv1.NetworkPolicyPort{
 						{Protocol: &tcp, Port: &graphQL},
-						{Protocol: &tcp, Port: &cli},
 					},
 				},
 			},

@@ -8,6 +8,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/executor"
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/odigos-io/agents-api/go/server/graph/generated"
+	"github.com/vektah/gqlparser/v2/ast"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
@@ -22,8 +23,8 @@ func NewExecutor(central api.CentralInterface) *executor.Executor {
 	return executor.New(es)
 }
 
-// NewHandler builds the connector's HTTP handler: the agent-api GraphQL endpoint at /graphql plus a
-// /healthz liveness probe. Central reaches /graphql directly over the in-cluster Service.
+// NewHandler builds the connector's read-only HTTP GraphQL endpoint and health probe. Central
+// executes operations over the authenticated reverse WebSocket, not this in-cluster Service.
 func NewHandler(central api.CentralInterface) http.Handler {
 	es := generated.NewExecutableSchema(generated.Config{
 		Resolvers: &RootResolver{Central: central},
@@ -31,6 +32,9 @@ func NewHandler(central api.CentralInterface) http.Handler {
 	srv := handler.NewDefaultServer(es)
 	srv.AroundOperations(func(ctx context.Context, next graphql.OperationHandler) graphql.ResponseHandler {
 		oc := graphql.GetOperationContext(ctx)
+		if oc.Operation != nil && oc.Operation.Operation == ast.Mutation {
+			return graphql.OneShot(graphql.ErrorResponse(ctx, "HTTP GraphQL mutations are disabled; use an authenticated Central or odictl operation"))
+		}
 		opName := oc.OperationName
 		opType := ""
 		if oc.Operation != nil {

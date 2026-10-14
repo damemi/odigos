@@ -94,7 +94,7 @@ func FromEnv() (Config, error) {
 		Schema:            os.Getenv("ODIGOS_DB_SCHEMA"),
 		DatabaseURL:       os.Getenv("DATABASE_URL"),
 		GraphQLAddr:       GetenvDefault("ODIGOS_GQL_ADDR", ":8080"),
-		CLIAddr:           GetenvDefault("ODIGOS_CLI_ADDR", ":23678"),
+		CLIAddr:           GetenvDefault("ODIGOS_CLI_ADDR", "127.0.0.1:23678"),
 		PodName:           os.Getenv("POD_NAME"),
 		Version:           GetenvDefault("ODIGOS_RUNTIME_VERSION", "dev"),
 		CentralBackendURL: os.Getenv("ODIGOS_CENTRAL_BACKEND_URL"),

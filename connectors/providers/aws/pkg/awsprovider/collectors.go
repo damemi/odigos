@@ -11,7 +11,6 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/opamp"
 	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/awsclient"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/deployer"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/observer"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/placement"
@@ -62,14 +61,6 @@ func (p *Provider) CollectorDeployers() map[string]baseapi.CollectorDeployer {
 		return nil
 	}
 	return map[string]baseapi.CollectorDeployer{collectorType: c.deployer}
-}
-
-// ValidateCollectorDeploymentRole proves that the customer-provisioned role is
-// assumable before a create or role change is recorded as desired state.
-func (p *Provider) ValidateCollectorDeploymentRole(ctx context.Context, region, roleRef string) error {
-	cache := awsclient.NewCollectorRoleCache(p.cache, p.cfg.AccountID, func(string) string { return roleRef })
-	_, err := cache.Config(ctx, region)
-	return err
 }
 
 // DesiredConfig implements opamp.Desired: what this Collector should be running.
@@ -157,13 +148,9 @@ func (p *Provider) collectors() *collectorSurface {
 		settings := func() collectorsettings.Settings {
 			return collectorsettings.Read(p.cfgMgr.Effective())
 		}
-		collectorCache := awsclient.NewCollectorRoleCache(p.cache, p.cfg.AccountID, func(region string) string {
-			return settings().Region(region).DeploymentRoleRef
-		})
-
 		resolver := &placement.Resolver{
 			Kind:       collectorType,
-			Cache:      collectorCache,
+			Cache:      p.cache,
 			Workloads:  p.workloadStdb,
 			Sources:    p.bstore,
 			Collectors: p.bstore,
@@ -176,7 +163,8 @@ func (p *Provider) collectors() *collectorSurface {
 			AccountID: p.cfg.AccountID,
 			License:   p.cfg.OnPremToken,
 			Store:     p.bstore,
-			Clients:   deployer.NewClients(collectorCache),
+			Clients:   deployer.NewClients(p.cache),
+			Retry:     p.bstore,
 		}
 
 		p.collectorSurface = &collectorSurface{
@@ -189,13 +177,14 @@ func (p *Provider) collectors() *collectorSurface {
 				Pin:               collectorimage.Released,
 				HeartbeatInterval: p.cfgMgr.Settings().HeartbeatInterval,
 				Settings:          settings,
+				Regions:           p.cache.EnabledRegions,
 				Planner:           resolver,
 				Store:             p.bstore,
-				Clients:           observer.NewClients(collectorCache),
+				Clients:           observer.NewClients(p.cache),
 			},
 			deployer: &deployer.Deployer{
 				Provisioner:   provisioner,
-				Teardown:      deployer.NewTeardownClients(collectorCache),
+				Teardown:      deployer.NewTeardownClients(p.cache),
 				Store:         p.bstore,
 				Plans:         resolver,
 				Kind:          collectorType,

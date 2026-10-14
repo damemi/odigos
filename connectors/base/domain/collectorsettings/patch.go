@@ -40,9 +40,10 @@ type Patch struct {
 	EndpointOverride        *string
 	RolloutBatchSize        *int
 
-	Scaling *ScalingPatch
-	TLS     *TransportPatch
-	Ingress *IngressPatch
+	Scaling   *ScalingPatch
+	Retention *RetentionPatch
+	TLS       *TransportPatch
+	Ingress   *IngressPatch
 }
 
 // ScalingPatch is the replica policy. Mode is required when a scaling block is supplied at all: the
@@ -54,6 +55,11 @@ type ScalingPatch struct {
 	MaxCount            *int
 	TargetCPUPercent    *int
 	TargetMemoryPercent *int
+}
+
+type RetentionPatch struct {
+	IdleScaleToZeroAfterHours *int
+	IdleDeleteAfterHours      *int
 }
 
 type TransportPatch struct {
@@ -78,9 +84,6 @@ var validArches = []string{"amd64", "arm64"}
 // not check whether a subnet exists or a certificate is issuable — those need the provider, fail later
 // with a provider error, and are reported as issues on the Collector rather than as a refused mutation.
 func (p Patch) Validate() error {
-	if p.DeploymentRoleRef != nil && strings.TrimSpace(*p.DeploymentRoleRef) == "" {
-		return fmt.Errorf("deploymentRoleRef must name a customer-provisioned deployment identity")
-	}
 	if p.CPU != nil && *p.CPU != "" {
 		if _, err := strconv.Atoi(strings.TrimSpace(*p.CPU)); err != nil {
 			return fmt.Errorf("cpu must be a whole number of CPU units (e.g. \"1024\"), got %q", *p.CPU)
@@ -99,6 +102,14 @@ func (p Patch) Validate() error {
 	}
 	if p.RolloutBatchSize != nil && *p.RolloutBatchSize < 0 {
 		return fmt.Errorf("rolloutBatchSize cannot be negative")
+	}
+	if p.Retention != nil {
+		if p.Retention.IdleScaleToZeroAfterHours != nil && *p.Retention.IdleScaleToZeroAfterHours < 0 {
+			return fmt.Errorf("retention.idleScaleToZeroAfterHours cannot be negative")
+		}
+		if p.Retention.IdleDeleteAfterHours != nil && *p.Retention.IdleDeleteAfterHours < 0 {
+			return fmt.Errorf("retention.idleDeleteAfterHours cannot be negative")
+		}
 	}
 	if p.Arch != nil && *p.Arch != "" && !contains(validArches, *p.Arch) {
 		return fmt.Errorf("arch must be one of %s, got %q", strings.Join(validArches, ", "), *p.Arch)
@@ -219,6 +230,12 @@ func (p Patch) MergeInto(entry map[string]any) map[string]any {
 		setInt(scaling, KeyTargetCPUPercent, s.TargetCPUPercent)
 		setInt(scaling, KeyTargetMemoryPercent, s.TargetMemoryPercent)
 		out[KeyScaling] = scaling
+	}
+	if r := p.Retention; r != nil {
+		retention := copyEntry(mapOf(out, KeyRetention))
+		setInt(retention, KeyIdleScaleToZeroAfterHours, r.IdleScaleToZeroAfterHours)
+		setInt(retention, KeyIdleDeleteAfterHours, r.IdleDeleteAfterHours)
+		out[KeyRetention] = retention
 	}
 	if t := p.TLS; t != nil {
 		tls := copyEntry(mapOf(out, KeyTLS))

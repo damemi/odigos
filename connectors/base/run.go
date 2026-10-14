@@ -9,8 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	agentsapiversion "github.com/odigos-io/agents-api/go/server/graph/version"
-
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/central"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/config"
@@ -25,6 +23,14 @@ import (
 )
 
 var runLog = connlog.Subsystem("runtime")
+
+// The connector is built against the agents-api schema frozen at v0.25.0.
+// The Go dependency currently has a pseudo-version rooted at v0.23.1, and
+// agents-api/version.Version() strips its commit suffix. Reporting that base
+// version makes Central select the v0.23 dialect, which has no Managed
+// Collector setup operations even though this runtime serves them. Advance
+// this value with the agents-api schema snapshot used by this connector.
+const connectorGraphQLSchemaVersion = "v0.25.0"
 
 // Run boots a connector runtime around the given provider and blocks until ctx is cancelled (or the
 // GraphQL server errors). The caller owns the store's lifecycle (opens it, defers Close). It fails fast
@@ -117,13 +123,12 @@ func Run(ctx context.Context, cfg config.Config, cfgMgr *config.Manager, st *sto
 	// Connect to Central over the reverse WebSocket and serve the agents-api there (same as the VM
 	// agent). Central reaches the connector through this socket, not via the in-cluster Service.
 	if cfg.CentralBackendURL != "" {
-		schemaVersion, _ := agentsapiversion.Version()
 		centralClient := central.New(central.Config{
 			BackendURL:    cfg.CentralBackendURL,
 			ProxyID:       cfg.PlatformID,
 			PlatformName:  cfg.ConnectorName,
 			Version:       cfg.Version,
-			SchemaVersion: schemaVersion,
+			SchemaVersion: connectorGraphQLSchemaVersion,
 		}, exec)
 		go centralClient.Run(ctx)
 		runLog.Info("central reverse websocket starting", "url", cfg.CentralBackendURL)

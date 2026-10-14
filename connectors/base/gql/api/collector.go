@@ -53,7 +53,7 @@ func (a *ManagedCollectorAPI) CreateManagedCollector(ctx context.Context, input 
 	collectorAPILog.Info("create managed collector", "region", input.Region)
 	if err := a.Central.CreateManagedCollector(ctx, input.Region, patchFromCreateInput(input)); err != nil {
 		collectorAPILog.Error("create managed collector failed", "region", input.Region, "error", err)
-		return nil, err
+		return nil, TypedManagedCollectorError(err)
 	}
 	return a.reportAfterWrite(ctx, input.Region, "createManagedCollector")
 }
@@ -62,7 +62,7 @@ func (a *ManagedCollectorAPI) UpdateManagedCollector(ctx context.Context, input 
 	collectorAPILog.Info("update managed collector", "region", input.Region)
 	if err := a.Central.UpdateManagedCollector(ctx, input.Region, patchFromUpdateInput(input)); err != nil {
 		collectorAPILog.Error("update managed collector failed", "region", input.Region, "error", err)
-		return nil, err
+		return nil, TypedManagedCollectorError(err)
 	}
 	return a.reportAfterWrite(ctx, input.Region, "updateManagedCollector")
 }
@@ -147,7 +147,6 @@ func patchFromCreateInput(in model.CreateManagedCollectorInput) collectorsetting
 	provider, providerIngress := providerOverridesPatch(in.ProviderOverrides)
 	return collectorsettings.Patch{
 		HostNetworkID:           in.NetworkID,
-		DeploymentRoleRef:       &in.DeploymentRoleRef,
 		Provider:                provider,
 		CPU:                     in.CPU,
 		Memory:                  in.Memory,
@@ -157,6 +156,7 @@ func patchFromCreateInput(in model.CreateManagedCollectorInput) collectorsetting
 		EndpointOverride:        in.EndpointOverride,
 		RolloutBatchSize:        in.RolloutBatchSize,
 		Scaling:                 scalingPatch(in.Scaling),
+		Retention:               retentionPatch(in.Retention),
 		TLS:                     transportPatch(in.Transport),
 		Ingress:                 mergeIngressPatch(ingressPatch(in.Ingress), providerIngress),
 	}
@@ -167,7 +167,6 @@ func patchFromUpdateInput(in model.UpdateManagedCollectorInput) collectorsetting
 	return collectorsettings.Patch{
 		Enabled:                 in.Enabled,
 		HostNetworkID:           in.NetworkID,
-		DeploymentRoleRef:       in.DeploymentRoleRef,
 		Provider:                provider,
 		CPU:                     in.CPU,
 		Memory:                  in.Memory,
@@ -177,6 +176,7 @@ func patchFromUpdateInput(in model.UpdateManagedCollectorInput) collectorsetting
 		EndpointOverride:        in.EndpointOverride,
 		RolloutBatchSize:        in.RolloutBatchSize,
 		Scaling:                 scalingPatch(in.Scaling),
+		Retention:               retentionPatch(in.Retention),
 		TLS:                     transportPatch(in.Transport),
 		Ingress:                 mergeIngressPatch(ingressPatch(in.Ingress), providerIngress),
 	}
@@ -193,6 +193,16 @@ func scalingPatch(in *model.ManagedCollectorScalingInput) *collectorsettings.Sca
 		MaxCount:            in.MaxCount,
 		TargetCPUPercent:    in.TargetCPUPercent,
 		TargetMemoryPercent: in.TargetMemoryPercent,
+	}
+}
+
+func retentionPatch(in *model.ManagedCollectorRetentionInput) *collectorsettings.RetentionPatch {
+	if in == nil {
+		return nil
+	}
+	return &collectorsettings.RetentionPatch{
+		IdleScaleToZeroAfterHours: in.IdleScaleToZeroAfterHours,
+		IdleDeleteAfterHours:      in.IdleDeleteAfterHours,
 	}
 }
 
@@ -276,11 +286,8 @@ func setProviderStrings(provider map[string]any, key string, values []string) {
 
 // slicePtr distinguishes "field omitted" from "field set to the empty list".
 //
-// gqlgen decodes both an absent list and an explicitly empty one to a nil slice, so the distinction the
-// settings layer needs — inherit the default, versus clear it — cannot survive this boundary. A nil
-// slice is therefore read as "omitted", which is the safe direction: the caller keeps whatever they had
-// rather than silently losing a configured list to a field they never mentioned. Clearing a list is
-// done by setting it to a value that means none, not by sending [].
+// gqlgen decodes an omitted list to nil and an explicit [] to a non-nil
+// zero-length slice. Preserve that distinction so [] clears a pinned list.
 func slicePtr(v []string) *[]string {
 	if v == nil {
 		return nil

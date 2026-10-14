@@ -39,15 +39,14 @@ ARG LAMBDA_AGENTS_IMAGE=registry.odigos.io/odigos-lambda-agents:v0.0.15
 
 # --- Go build ------------------------------------------------------------------------------------
 FROM --platform=$BUILDPLATFORM golang:1.26.9 AS builder
+ENV GOWORK=off
 ARG TARGETARCH
 ARG LD_FLAGS
 WORKDIR /workspace
 COPY connectors/ connectors/
 WORKDIR /workspace/connectors/providers/aws
-# The odigos-io dependencies (agents-api, odigos/*) are public, so a token is OPTIONAL: when a non-empty
-# github_token secret is mounted we rewrite github.com fetches to authenticate (private-repo/rate-limit
-# support, matching .devcontainer's :x-oauth-basic form); otherwise we fetch anonymously (module proxy +
-# direct git). Injecting an empty/invalid token would make GitHub reject even public fetches, so guard it.
+# The agents-api branch is private. The Makefile passes github_token as a BuildKit secret;
+# avoid writing an empty credential when running the Dockerfile directly without one.
 RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/go/pkg \
     if [ -s /run/secrets/github_token ]; then git config --global url."https://$(cat /run/secrets/github_token):x-oauth-basic@github.com/".insteadOf "https://github.com/"; fi && \

@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	baseconfig "github.com/odigos-io/odigos-enterprise/connectors/base/config"
@@ -53,6 +54,7 @@ type Provider struct {
 	collectorOnce      sync.Once
 	collectorSurface   *collectorSurface
 	manualCredentialMu sync.Mutex
+	cutoverPass        atomic.Uint64
 	layers             workloadinstrumentor.LayerResolver
 	// ecrImages reads container image configs (via ECR auth or anonymously) for Fargate language
 	// detection. Optional layer: the task-definition heuristics and source overrides work without it.

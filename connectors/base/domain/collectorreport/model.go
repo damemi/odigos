@@ -37,6 +37,7 @@ type ModelInput struct {
 	// Status inputs, as report.go's Input takes them — the two renderings must agree on the state
 	// machine, so both go through statusFor.
 	Status            collectorstatus.Status
+	Teardown          bool
 	RecordedMessage   string
 	Mode              string
 	Origin            string
@@ -90,9 +91,9 @@ type ModelInput struct {
 	SecurityGroupID string
 	SubnetIDs       []string
 
-	// ExtraIssues are conditions the caller assembled itself because they carry typed details this
-	// package cannot reconstruct from a Problem — a placement refusal and the candidates it was choosing
-	// between, for instance. Merged with the problems and sorted with them.
+	// ExtraIssues are report-only conditions that do not describe Collector health, such as workload
+	// routing progress, or conditions with typed details this package cannot reconstruct from a Problem.
+	// Merged with the Collector's problems and sorted with them, but never used to derive its status.
 	ExtraIssues []*model.ManagedCollectorIssue
 
 	UpdatedAt time.Time
@@ -112,6 +113,7 @@ func ToModel(in ModelInput) *model.ManagedCollectorReport {
 		Origin:            in.Origin,
 		Adopted:           in.Adopted,
 		Status:            in.Status,
+		Teardown:          in.Teardown,
 		RecordedMessage:   in.RecordedMessage,
 		OpAMPLastSeenAt:   in.OpAMPLastSeenAt,
 		OpAMPInstanceUID:  in.OpAMPInstanceUID,
@@ -175,6 +177,10 @@ func desiredModel(d collectorsettings.Region) *model.ManagedCollectorDesired {
 			TargetCPUPercent:    nonZeroInt(d.Scaling.TargetCPUPercent),
 			TargetMemoryPercent: nonZeroInt(d.Scaling.TargetMemoryPercent),
 		},
+		Retention: &model.ManagedCollectorRetention{
+			IdleScaleToZeroAfterHours: d.Retention.IdleScaleToZeroAfterHours,
+			IdleDeleteAfterHours:      d.Retention.IdleDeleteAfterHours,
+		},
 		Transport: &model.ManagedCollectorTransport{
 			Mode:           nonEmpty(string(d.TLS.Mode)),
 			Hostname:       nonEmpty(d.TLS.Hostname),
@@ -186,7 +192,6 @@ func desiredModel(d collectorsettings.Region) *model.ManagedCollectorDesired {
 		ProviderOverrides: providerOverridesModel(d.Provider, d.Ingress),
 	}
 	out.NetworkID = nonEmpty(d.HostNetworkID)
-	out.DeploymentRoleRef = nonEmpty(d.DeploymentRoleRef)
 	out.ImageRepositoryOverride = nonEmpty(d.ImageRepositoryOverride)
 	out.EndpointOverride = nonEmpty(d.EndpointOverride)
 	return out
@@ -306,14 +311,7 @@ var severityRank = map[string]int{"error": 0, "warning": 1, "info": 2}
 func issueModels(in ModelInput) []*model.ManagedCollectorIssue {
 	out := make([]*model.ManagedCollectorIssue, 0, len(in.Problems)+len(in.ExtraIssues))
 	for _, p := range in.Problems {
-		out = append(out, &model.ManagedCollectorIssue{
-			Code:     p.Code,
-			Severity: issueSeverity(p.Severity),
-			Message:  p.Message,
-			// A pending condition is the one kind that clears without anyone doing anything: it says the
-			// convergence has not finished, not that it went wrong.
-			Transient: p.Severity == collectorstatus.SeverityPending,
-		})
+		out = append(out, IssueFromProblem(p))
 	}
 	out = append(out, in.ExtraIssues...)
 
@@ -321,6 +319,18 @@ func issueModels(in ModelInput) []*model.ManagedCollectorIssue {
 		return severityRank[out[i].Severity] < severityRank[out[j].Severity]
 	})
 	return out
+}
+
+// IssueFromProblem keeps a problem's wire severity when it is shown for context without changing
+// Collector health. Workload routing conditions belong in ExtraIssues, not ModelInput.Problems.
+func IssueFromProblem(p collectorstatus.Problem) *model.ManagedCollectorIssue {
+	return &model.ManagedCollectorIssue{
+		Code:     p.Code,
+		Severity: issueSeverity(p.Severity),
+		Message:  p.Message,
+		// A pending condition clears as convergence finishes; a failure needs another attempt.
+		Transient: p.Severity == collectorstatus.SeverityPending,
+	}
 }
 
 func detailsModel(in ModelInput) model.ManagedCollectorDetails {

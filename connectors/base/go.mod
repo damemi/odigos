@@ -9,7 +9,7 @@ require (
 	github.com/coder/websocket v1.8.15
 	github.com/go-playground/validator/v10 v10.30.3
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/odigos-io/agents-api/go/server v0.25.0
+	github.com/odigos-io/agents-api/go/server v0.26.0
 	github.com/odigos-io/odigos-enterprise/connectors v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/common v1.29.0
 	github.com/odigos-io/odigos/destinations v1.29.0
@@ -32,7 +32,6 @@ require (
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
-	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
@@ -45,7 +44,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/sosodev/duration v1.4.0 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
-	github.com/urfave/cli/v3 v3.9.0 // indirect
 	go.opentelemetry.io/otel v1.44.0 // indirect
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect

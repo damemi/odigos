@@ -82,7 +82,7 @@ func handleCLIMessage(ctx context.Context, conn *websocket.Conn, exec *executor.
 		cliLog.Debug("cli graphql query", "request_id", msg.RequestID, "operation", op)
 		// The odictl CLI endpoint is reachable only by a local operator (kubectl port-forward into the
 		// pod), so it is treated as an admin caller and may run mutations.
-		resp := RunOperation(ctx, exec, msg.Query, msg.Variables, "cli", true)
+		resp := RunOperation(ctx, exec, msg.Query, msg.Variables, "cli", true, true)
 		writeCLIMessage(ctx, conn, cliMessageToClient{Type: cliMsgGraphQLResponse, RequestID: msg.RequestID, Data: resp})
 	case cliMsgDiagnoseRequest:
 		cliLog.Debug("cli diagnose bundle rejected", "request_id", msg.RequestID)

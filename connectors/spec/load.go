@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io/fs"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
+	"text/template"
 
 	"gopkg.in/yaml.v3"
 )
@@ -72,7 +74,46 @@ func Parse(data []byte) (CloudConnectorSpec, error) {
 	if err := validateSetupArtifacts(s); err != nil {
 		return CloudConnectorSpec{}, err
 	}
+	if err := validateCollectorInstructions(s.Collectors.Instructions); err != nil {
+		return CloudConnectorSpec{}, err
+	}
 	return s, nil
+}
+
+func validateCollectorInstructions(instructions CollectorInstructions) error {
+	variants := map[string]bool{}
+	ids := map[string]bool{}
+	checkTemplate := func(label, source string) error {
+		if _, err := template.New(label).Funcs(template.FuncMap{"quote": strconv.Quote}).Parse(source); err != nil {
+			return fmt.Errorf("connector spec: Collector %s template: %w", label, err)
+		}
+		return nil
+	}
+	for i, note := range instructions.Notes {
+		if err := checkTemplate(fmt.Sprintf("note %d", i), note); err != nil {
+			return err
+		}
+	}
+	for _, document := range instructions.Documents {
+		if document.ID == "" || document.Variant == "" || document.Template == "" {
+			return fmt.Errorf("connector spec: Collector instruction document requires id, variant and template")
+		}
+		if ids[document.ID] || variants[document.Variant] {
+			return fmt.Errorf("connector spec: duplicate Collector instruction document %q (%q)", document.ID, document.Variant)
+		}
+		ids[document.ID], variants[document.Variant] = true, true
+		for label, source := range map[string]string{"title": document.Title, "description": document.Description, "content": document.Template} {
+			if err := checkTemplate(document.ID+" "+label, source); err != nil {
+				return err
+			}
+		}
+		for i, step := range document.Steps {
+			if err := checkTemplate(fmt.Sprintf("%s step %d", document.ID, i), step); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // validateSetupArtifacts enforces invariants consumers of the artifact list assume:

@@ -127,6 +127,7 @@ func TestFailureMappingsAreStable(t *testing.T) {
 		{collectorstatus.StatusDegraded, LivenessLive, spec.ModeAutomatic, collectorstatus.StatusDegraded, false},
 		{collectorstatus.StatusError, LivenessLive, spec.ModeAutomatic, collectorstatus.StatusError, false},
 		{collectorstatus.StatusPending, LivenessLive, spec.ModeAutomatic, collectorstatus.StatusPending, false},
+		{collectorstatus.StatusDeleting, LivenessLive, spec.ModeAutomatic, collectorstatus.StatusDeleting, false},
 
 		// Silent after having connected: Odigos can no longer configure it, which is Degraded — working,
 		// in a posture the customer must be told about.
@@ -136,11 +137,13 @@ func TestFailureMappingsAreStable(t *testing.T) {
 		// Except mid-deploy, where silence is expected: the tasks are being replaced.
 		{collectorstatus.StatusDeploying, LivenessStale, spec.ModeAutomatic, collectorstatus.StatusDeploying, false},
 		{collectorstatus.StatusPending, LivenessStale, spec.ModeAutomatic, collectorstatus.StatusPending, false},
+		{collectorstatus.StatusDeleting, LivenessStale, spec.ModeAutomatic, collectorstatus.StatusDeleting, false},
 
 		// Never connected, automatic: Odigos is still building it, so the reconciler's word stands.
 		// Reporting Degraded here would call every Collector broken for the minute it takes to create.
 		{collectorstatus.StatusDeploying, LivenessNeverConnected, spec.ModeAutomatic, collectorstatus.StatusDeploying, false},
 		{collectorstatus.StatusPending, LivenessNeverConnected, spec.ModeAutomatic, collectorstatus.StatusPending, false},
+		{collectorstatus.StatusDeleting, LivenessNeverConnected, spec.ModeAutomatic, collectorstatus.StatusDeleting, false},
 		{collectorstatus.StatusError, LivenessNeverConnected, spec.ModeAutomatic, collectorstatus.StatusError, false},
 
 		// Never connected, manual: only the customer can act.
@@ -153,6 +156,7 @@ func TestFailureMappingsAreStable(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			in := running(func(in *Input) {
 				in.Status = tc.recorded
+				in.Teardown = tc.recorded == collectorstatus.StatusDeleting
 				in.Mode = tc.mode
 				switch tc.liveness {
 				case LivenessNeverConnected:

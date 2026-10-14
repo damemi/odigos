@@ -437,6 +437,30 @@ func TestAProviderErrorIsRecorded(t *testing.T) {
 	}
 }
 
+func TestPartialCheckpointPreservesEarlierDeleteAuthority(t *testing.T) {
+	records := newDeployerStore()
+	records.withRecord(basestore.CollectorRecord{
+		Key: testKey(), NetworkID: testNetwork, Mode: spec.ModeAutomatic, Origin: "odigos",
+		WorkloadRef: "service-existing", RuntimeRef: "cluster-existing",
+		FrontendRef: "load-balancer-existing", BackendRefs: []string{"target-existing"},
+		IngressRef: "sg-existing",
+	})
+	d := &Deployer{Store: records}
+	state := convergedState{ingress: Ingress{SecurityGroupID: "sg-new", TargetGroupARNs: []string{"target-new"}}}
+	if err := d.checkpointInfrastructure(context.Background(), testKey(), state); err != nil {
+		t.Fatal(err)
+	}
+	row, err := records.GetManagedCollector(context.Background(), testKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row.WorkloadRef != "service-existing" || row.RuntimeRef != "cluster-existing" ||
+		row.FrontendRef != "load-balancer-existing" || row.IngressRef != "sg-new" ||
+		!row.Recorded("target-existing") || !row.Recorded("target-new") {
+		t.Fatalf("partial checkpoint erased an earlier resource ref: %+v", row)
+	}
+}
+
 // TestTheFallbackGateCountsConsecutivePasses. Every routed workload HAS a security group, so zero
 // resolved means the inventory is incomplete rather than that the senders have none — and widening a
 // Collector's ingress to a whole VPC on an incomplete read cannot be walked back, because the telemetry

@@ -14,8 +14,10 @@ import (
 	opampclient "github.com/open-telemetry/opamp-go/client"
 	clienttypes "github.com/open-telemetry/opamp-go/client/types"
 	"github.com/open-telemetry/opamp-go/protobufs"
+	servertypes "github.com/open-telemetry/opamp-go/server/types"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorconfig"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorgateway"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectormetrics"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
@@ -42,7 +44,26 @@ type fakeCollectors struct {
 	// firstReady records every latch write, so a test can assert both that becoming ready opens the
 	// cutover gate and that nothing else does.
 	firstReady []time.Time
+	activated  []string
 	readyErr   error
+}
+
+func (f *fakeCollectors) RecordCollectorCredentialConnected(_ context.Context, collectorID, credentialID string, _ time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.activated = append(f.activated, collectorID+"/"+credentialID)
+	return nil
+}
+
+func TestConnectedSessionRecordsCredentialActivation(t *testing.T) {
+	f := &fakeCollectors{}
+	s := &Server{Collectors: f, sessions: make(map[servertypes.Connection]*session)}
+	s.track(context.Background(), nil, &session{identity: collectorgateway.Identity{
+		Binding: collectorcredential.Binding{CollectorID: "collector-1"}, CredentialID: "credential-2",
+	}})
+	if len(f.activated) != 1 || f.activated[0] != "collector-1/credential-2" {
+		t.Fatalf("credential activation = %v", f.activated)
+	}
 }
 
 func (f *fakeCollectors) RecordCollectorFirstReady(_ context.Context, _ store.CollectorKey, readyAt time.Time) error {

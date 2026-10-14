@@ -86,6 +86,13 @@ func TestParseRequiresProvider(t *testing.T) {
 	}
 }
 
+func TestParseRejectsBrokenCollectorDocumentTemplate(t *testing.T) {
+	_, err := Parse([]byte("provider: sample\ncollectors:\n  instructions:\n    documents:\n      - id: terraform\n        variant: terraform\n        template: '{{if .ScalingAutomatic}}'\n"))
+	if err == nil {
+		t.Fatal("unclosed Collector document template was accepted")
+	}
+}
+
 // TestParseRejectsUnknownFields locks in strict decoding. Without it a mistyped key is silently dropped and
 // the connector runs with the default the author thought they had overridden — e.g. `permission:` instead of
 // `permissions:` yields a type that requests no permissions at all, which only shows up as a denied API call

@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcutover"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectordestination"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectormetrics"
@@ -89,7 +92,9 @@ func (c *Coordinator) ManagedCollectorReports(ctx context.Context) ([]collectorr
 	for _, rec := range records {
 		in := c.collectorModelInput(rec, settings, now)
 		in.Deletable = in.Deletable || c.canDiscardCollectorState(rec.Key.Region, &rec, states[rec.Key.Region], states[rec.Key.Region] != "")
-		addCollectorResourceStateProblem(&in, states[rec.Key.Region])
+		if err := c.addCollectorResourceStateProblem(ctx, &in, states[rec.Key.Region]); err != nil {
+			return nil, err
+		}
 		out = append(out, in)
 	}
 	out = includeConfiguredCollectorReports(out, collectorsettings.ConfiguredRegions(c.storedCollectorSettingsTree()), settings, now)
@@ -99,7 +104,9 @@ func (c *Coordinator) ManagedCollectorReports(ctx context.Context) ([]collectorr
 		}
 		if _, recorded := findCollectorRecord(records, out[i].Region); !recorded {
 			out[i].Deletable = c.canDiscardCollectorState(out[i].Region, nil, states[out[i].Region], states[out[i].Region] != "")
-			addCollectorResourceStateProblem(&out[i], states[out[i].Region])
+			if err := c.addCollectorResourceStateProblem(ctx, &out[i], states[out[i].Region]); err != nil {
+				return nil, err
+			}
 		}
 	}
 	seen := make(map[string]bool, len(out))
@@ -111,8 +118,14 @@ func (c *Coordinator) ManagedCollectorReports(ctx context.Context) ([]collectorr
 			continue
 		}
 		in := pendingCollectorModelInput(region, settings, now)
-		addCollectorResourceStateProblem(&in, state)
+		if err := c.addCollectorResourceStateProblem(ctx, &in, state); err != nil {
+			return nil, err
+		}
 		out = append(out, in)
+	}
+	routing := c.collectorRoutingReportContext(ctx)
+	for i := range out {
+		routing.annotate(&out[i])
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Region < out[j].Region })
 	return out, nil
@@ -124,6 +137,7 @@ func (c *Coordinator) ManagedCollectorReports(ctx context.Context) ([]collectorr
 // because "this connector has none there" is a normal answer a client renders, not a failure.
 func (c *Coordinator) ManagedCollectorReport(ctx context.Context, region string) (*collectorreport.ModelInput, error) {
 	apiLog.Debug("get managed collector", "region", region)
+	routing := c.collectorRoutingReportContext(ctx)
 	state, known, err := c.collectorResourceStore().GetCollectorResourceState(ctx, region)
 	if err != nil {
 		return nil, err
@@ -134,12 +148,18 @@ func (c *Coordinator) ManagedCollectorReport(ctx context.Context, region string)
 			if collectorsettings.HasRegion(c.storedCollectorSettingsTree(), region) {
 				in := pendingCollectorModelInput(region, c.CollectorSettings(), time.Now())
 				in.Deletable = c.canDiscardCollectorState(region, nil, state, known)
-				addCollectorResourceStateProblem(&in, state)
+				if err := c.addCollectorResourceStateProblem(ctx, &in, state); err != nil {
+					return nil, err
+				}
+				routing.annotate(&in)
 				return &in, nil
 			}
 			if known && state != store.CollectorResourcesDestroyed && state != store.CollectorResourcesNotCreated {
 				in := pendingCollectorModelInput(region, c.CollectorSettings(), time.Now())
-				addCollectorResourceStateProblem(&in, state)
+				if err := c.addCollectorResourceStateProblem(ctx, &in, state); err != nil {
+					return nil, err
+				}
+				routing.annotate(&in)
 				return &in, nil
 			}
 			return nil, nil
@@ -149,23 +169,158 @@ func (c *Coordinator) ManagedCollectorReport(ctx context.Context, region string)
 	}
 	in := c.collectorModelInput(rec, c.CollectorSettings(), time.Now())
 	in.Deletable = in.Deletable || c.canDiscardCollectorState(region, &rec, state, known)
-	addCollectorResourceStateProblem(&in, state)
+	if err := c.addCollectorResourceStateProblem(ctx, &in, state); err != nil {
+		return nil, err
+	}
+	routing.annotate(&in)
 	return &in, nil
 }
 
-func addCollectorResourceStateProblem(in *collectorreport.ModelInput, state store.CollectorResourceState) {
+type collectorRoutingReportContext struct {
+	markedRegions   map[string]bool
+	markerUpdatedAt map[string]time.Time
+	announcements   map[string]*store.CutoverAnnouncement
+	directFound     bool
+	progress        map[string]api.CollectorRoutingProgress
+}
+
+func (c *Coordinator) collectorRoutingReportContext(ctx context.Context) collectorRoutingReportContext {
+	out := collectorRoutingReportContext{}
+	if c.store == nil {
+		return out
+	}
+	destinations, err := c.store.ListDestinations(ctx)
+	if err != nil {
+		apiLog.Warn("cannot read Collector routing markers for report", "error", err)
+		return out
+	}
+	out.markedRegions = make(map[string]bool)
+	out.markerUpdatedAt = make(map[string]time.Time)
+	for _, destination := range destinations {
+		if !destination.Disabled && domaindest.IsManagedCollectorType(destination.Type) {
+			out.markedRegions[destination.Region] = true
+			out.markerUpdatedAt[destination.Region] = destination.UpdatedAt
+		}
+	}
+	if len(out.markedRegions) == 0 {
+		return out
+	}
+	direct, err := c.store.OTLPRouting(ctx, "")
+	if err != nil {
+		apiLog.Warn("cannot read global direct OTLP route for Collector report", "error", err)
+		out.markedRegions = nil
+		return out
+	}
+	out.directFound = direct.Found
+	out.announcements = make(map[string]*store.CutoverAnnouncement, len(out.markedRegions))
+	for region := range out.markedRegions {
+		announcement, readErr := c.store.GetCollectorCutoverAnnouncement(ctx, region)
+		if readErr != nil {
+			apiLog.Warn("cannot read Collector cutover announcement for report", "region", region, "error", readErr)
+			continue
+		}
+		out.announcements[region] = announcement
+	}
+	if reporter, ok := c.provider.(api.CollectorRoutingProgressReporter); ok {
+		out.progress, err = reporter.CollectorRoutingProgress(ctx)
+		if err != nil {
+			apiLog.Warn("cannot read Collector workload routing progress for report", "error", err)
+			out.progress = nil
+		}
+	}
+	return out
+}
+
+func (r collectorRoutingReportContext) annotate(in *collectorreport.ModelInput) {
+	if in.Teardown {
+		return
+	}
+	if !r.markedRegions[in.Region] {
+		return
+	}
+	if in.FirstReadyAt == nil {
+		addCollectorRoutingIssue(in, collectorstatus.Problem{
+			Code: "CollectorCutoverAwaitingReadiness", Severity: collectorstatus.SeverityInfo,
+			Message: "No workload routes to this Collector yet. The first cutover waits until it has reported Ready.",
+		})
+	} else if announcement := r.announcements[in.Region]; r.directFound && (announcement == nil || !announcement.Matches(r.markerUpdatedAt[in.Region], *in.FirstReadyAt)) {
+		addCollectorRoutingIssue(in, collectorstatus.Problem{
+			Code: "CollectorCutoverAwaitingWorkload", Severity: collectorstatus.SeverityInfo,
+			Message: "The Collector is ready. The first eligible instrumented workload will start an announced one-minute warning window before cutover begins.",
+		})
+	} else if r.directFound && r.announcements[in.Region].Announcing {
+		addCollectorRoutingIssue(in, collectorstatus.Problem{
+			Code: collectorcutover.ProblemRolloutStarting, Severity: collectorstatus.SeverityInfo,
+			Message: "The regional Collector is ready. New workload cutovers are announced and will begin after the one-minute warning window, in bounded batches.",
+		})
+	} else if progress := r.progress[in.Region]; progress.Instrumented > 0 {
+		code := collectorcutover.ProblemRolloutInProgress
+		if progress.Routed == progress.Instrumented {
+			code = collectorcutover.ProblemRolloutComplete
+		}
+		message := fmt.Sprintf("%d of %d instrumented workload(s) in %s currently export through the regional Collector.",
+			progress.Routed, progress.Instrumented, in.Region)
+		if r.directFound {
+			message += " Others still use direct export while rollout or network eligibility is evaluated."
+		} else if progress.Routed < progress.Instrumented {
+			message += " Workloads without a Collector route have no global export fallback."
+		}
+		addCollectorRoutingIssue(in, collectorstatus.Problem{
+			Code: code, Severity: collectorstatus.SeverityInfo,
+			Message: message,
+		})
+		if progress.Failed > 0 {
+			addCollectorRoutingIssue(in, collectorstatus.Problem{
+				Code: collectorcutover.ProblemRolloutWorkloadFailed, Severity: collectorstatus.SeverityDegraded,
+				Message: fmt.Sprintf("%d workload cutover(s) in %s failed and will be retried. Examples: %s.",
+					progress.Failed, in.Region, strings.Join(progress.FailureRefs, ", ")),
+			})
+		}
+	}
+}
+
+// Routing describes workload rollout, not Collector health. Keep its issues visible on the
+// Collector report without escalating an otherwise Ready Collector or appending routing text to
+// the Collector's health message.
+func addCollectorRoutingIssue(in *collectorreport.ModelInput, problem collectorstatus.Problem) {
+	in.ExtraIssues = append(in.ExtraIssues, collectorreport.IssueFromProblem(problem))
+}
+
+// AWS may keep load-balancer network interfaces for several minutes. Keep retrying for as long as
+// the recorded refs exist, but distinguish routine release lag from a teardown that needs attention.
+const collectorTeardownGracePeriod = 30 * time.Minute
+
+func (c *Coordinator) addCollectorResourceStateProblem(ctx context.Context, in *collectorreport.ModelInput, state store.CollectorResourceState) error {
 	switch state {
 	case store.CollectorResourcesNotCreated:
 		in.Problems = append(in.Problems, collectorstatus.Problem{Code: "CollectorCloudResourcesNotCreated", Severity: collectorstatus.SeverityInfo, Message: "No cloud resources have been created for this Collector."})
 	case store.CollectorResourcesCreated:
 		in.Problems = append(in.Problems, collectorstatus.Problem{Code: "CollectorCloudResourcesCreated", Severity: collectorstatus.SeverityInfo, Message: "Cloud resources have been recorded for this Collector."})
+	case store.CollectorResourcesTearingDown:
+		startedAt, err := c.collectorResourceStore().CollectorResourceStateUpdatedAt(ctx, in.Region)
+		if err != nil {
+			return err
+		}
+		in.Teardown = true
+		in.RecordedMessage = ""
+		in.Problems = nil // Old provider status describes a partially removed stack, not current health.
+		if in.Now.Sub(startedAt) < collectorTeardownGracePeriod {
+			in.Status = collectorstatus.StatusDeleting
+			in.Problems = append(in.Problems, collectorstatus.Problem{Code: "CollectorTeardownInProgress", Severity: collectorstatus.SeverityPending, Message: "Cloud teardown is in progress; the connector is retrying resources still being released by AWS."})
+		} else {
+			in.Status = collectorstatus.StatusError
+			in.Problems = append(in.Problems, collectorstatus.Problem{Code: "CollectorTeardownTimedOut", Severity: collectorstatus.SeverityError, Message: "Cloud teardown has been blocked for over 30 minutes. The connector will keep retrying; inspect the remaining AWS dependencies."})
+		}
 	case store.CollectorResourcesProvisioning:
 		in.Problems = append(in.Problems, collectorstatus.Problem{Code: "CollectorCloudResourcesProvisioning", Severity: collectorstatus.SeverityPending, Message: "Cloud provisioning started; its outcome has not been recorded yet."})
+	case store.CollectorResourcesMoving:
+		in.Problems = append(in.Problems, collectorstatus.Problem{Code: "CollectorCloudResourcesMoving", Severity: collectorstatus.SeverityPending, Message: "The old VPC stack is being removed. The Collector will be provisioned in the selected VPC after teardown completes."})
 	case store.CollectorResourcesOrphaned:
 		in.Problems = append(in.Problems, collectorstatus.Problem{Code: "CollectorCloudResourcesOrphaned", Severity: collectorstatus.SeverityError, Message: "Cloud provisioning or teardown did not complete. Resources may remain and need investigation."})
 	case store.CollectorResourcesDestroyed:
 		in.Problems = append(in.Problems, collectorstatus.Problem{Code: "CollectorCloudResourcesDestroyed", Severity: collectorstatus.SeverityInfo, Message: "Cloud resources were destroyed; local Collector cleanup is finishing."})
 	}
+	return nil
 }
 
 func findCollectorRecord(records []store.CollectorRecord, region string) (store.CollectorRecord, bool) {
@@ -182,14 +337,31 @@ func findCollectorRecord(records []store.CollectorRecord, region string) (store.
 // cloud deployment parameters. Ambiguous records fail closed.
 func (c *Coordinator) canDiscardCollectorState(region string, rec *store.CollectorRecord, state store.CollectorResourceState, known bool) bool {
 	if rec != nil {
+		if rec.Mode == spec.ModeManual {
+			return true // manual infrastructure is never a connector deletion candidate
+		}
 		if rec.Mode != spec.ModeAutomatic || rec.Origin != string(collectorownership.OriginOdigos) || hasCloudResourceRefs(*rec) {
 			return false
 		}
 	} else if len(c.provider.Spec().ActiveCollectorDeploymentTypes(c.cfg.Capabilities)) == 0 {
+		// A manual declaration cannot have started a deployer. A legacy automatic
+		// provisioning state is still ambiguous and must fail closed.
+		if !known || state == store.CollectorResourcesNotCreated || state == store.CollectorResourcesDestroyed {
+			for _, collectorType := range c.provider.Spec().CollectorTypes(c.cfg.Capabilities) {
+				if c.cfg.Capabilities.CollectorMode(collectorType.Name) == spec.ModeManual {
+					return true
+				}
+			}
+		}
 		return false
 	}
 	if state == store.CollectorResourcesDestroyed {
 		return true
+	}
+	if rec != nil && rec.Mode == spec.ModeAutomatic && rec.NetworkID != "" {
+		// A row written before the first cloud call records the derived-name
+		// log group even when no opaque infrastructure ref exists yet.
+		return false
 	}
 	if state == store.CollectorResourcesNotCreated {
 		return true
@@ -198,7 +370,7 @@ func (c *Coordinator) canDiscardCollectorState(region string, rec *store.Collect
 		return false
 	}
 	desired := c.CollectorSettings().Region(region)
-	return desired.DeploymentRoleRef == "" && desired.HostNetworkID == "" && len(desired.Provider) == 0
+	return desired.HostNetworkID == "" && len(desired.Provider) == 0
 }
 
 func hasCloudResourceRefs(rec store.CollectorRecord) bool {
@@ -249,8 +421,16 @@ func includeConfiguredCollectorReports(recorded []collectorreport.ModelInput, co
 // from live cloud tags: the observer has already read those and written its conclusion here, and
 // re-reading them would put a provider call behind every report.
 func (c *Coordinator) collectorModelInput(rec store.CollectorRecord, settings collectorsettings.Settings, now time.Time) collectorreport.ModelInput {
-	class := collectorownership.ClassifyRecorded(rec.Mode, rec.Origin, hasRecordedRefs(rec))
+	class := collectorownership.ClassifyRecorded(rec.Mode, rec.Origin,
+		hasCloudResourceRefs(rec) || (rec.Mode == spec.ModeAutomatic && rec.NetworkID != ""))
 	recordedMessage, problems := recordedCollectorProblems(rec.Status, rec.Message)
+	if selected := c.cfg.Capabilities.CollectorMode(rec.Kind); rec.Kind != "" && selected != rec.Mode {
+		transition := collectorownership.TransitionFor(rec.Mode, selected)
+		problems = append(problems, collectorstatus.Problem{
+			Code: "CollectorCapabilityTransition", Severity: collectorstatus.SeverityInfo,
+			Message: transition.Note,
+		})
+	}
 
 	return collectorreport.ModelInput{
 		Region:        rec.Key.Region,
@@ -348,15 +528,10 @@ func (c *Coordinator) CreateManagedCollector(ctx context.Context, region string,
 	if !c.collectorsCapable() {
 		return fmt.Errorf("createManagedCollector: this connector has no managed-Collector capability enabled")
 	}
-	if patch.DeploymentRoleRef == nil || strings.TrimSpace(*patch.DeploymentRoleRef) == "" {
-		return fmt.Errorf("createManagedCollector: deploymentRoleRef is required")
-	}
-	validator, ok := c.provider.(api.CollectorDeploymentRoleValidator)
-	if !ok {
-		return fmt.Errorf("createManagedCollector: this provider cannot validate a customer-provisioned Collector deployment identity")
-	}
-	if err := validator.ValidateCollectorDeploymentRole(ctx, region, *patch.DeploymentRoleRef); err != nil {
-		return fmt.Errorf("createManagedCollector: %w", err)
+	if regionalValidator, ok := c.provider.(api.CollectorRegionalSettingsValidator); ok {
+		if err := regionalValidator.ValidateCollectorRegionalSettings(ctx, region, patch, true); err != nil {
+			return fmt.Errorf("createManagedCollector: %w", err)
+		}
 	}
 
 	// Both sources, because either one alone misses a real Collector. Configuration misses one that was
@@ -416,17 +591,68 @@ func (c *Coordinator) CreateManagedCollector(ctx context.Context, region string,
 // UpdateManagedCollector merges settings into a region that already has a Collector.
 func (c *Coordinator) UpdateManagedCollector(ctx context.Context, region string, patch collectorsettings.Patch) error {
 	apiLog.Info("update managed collector", "region", region)
-	if patch.DeploymentRoleRef != nil {
-		validator, ok := c.provider.(api.CollectorDeploymentRoleValidator)
-		if !ok {
-			return fmt.Errorf("updateManagedCollector: this provider cannot validate a customer-provisioned Collector deployment identity")
-		}
-		if err := validator.ValidateCollectorDeploymentRole(ctx, region, *patch.DeploymentRoleRef); err != nil {
+	if regionalValidator, ok := c.provider.(api.CollectorRegionalSettingsValidator); ok {
+		if err := regionalValidator.ValidateCollectorRegionalSettings(ctx, region, patch, false); err != nil {
 			return fmt.Errorf("updateManagedCollector: %w", err)
 		}
 	}
 	c.reconcileMu.Lock()
 	defer c.reconcileMu.Unlock()
+	var manualOriginal *store.CollectorRecord
+	if patch.HostNetworkID != nil && *patch.HostNetworkID != c.CollectorSettings().Region(region).HostNetworkID {
+		if !collectorsettings.HasRegion(c.storedCollectorSettingsTree(), region) {
+			return fmt.Errorf("updateManagedCollector: region %s has no Collector configured; create one first", region)
+		}
+		state, known, err := c.collectorResourceStore().GetCollectorResourceState(ctx, region)
+		if err != nil {
+			return fmt.Errorf("updateManagedCollector: reading cloud-resource state: %w", err)
+		}
+		if state == store.CollectorResourcesMoving || state == store.CollectorResourcesTearingDown {
+			return fmt.Errorf("updateManagedCollector: region %s teardown is in progress", region)
+		}
+		rec, err := c.collectorResourceStore().GetManagedCollector(ctx, store.CollectorKey{Region: region})
+		if err != nil && !errors.Is(err, store.ErrCollectorNotFound) {
+			return fmt.Errorf("updateManagedCollector: reading existing infrastructure: %w", err)
+		}
+		if errors.Is(err, store.ErrCollectorNotFound) && known && state != store.CollectorResourcesNotCreated && state != store.CollectorResourcesDestroyed {
+			return fmt.Errorf("updateManagedCollector: networkId cannot change while unrecorded cloud resources may exist")
+		}
+		if err == nil {
+			if rec.Mode == spec.ModeManual {
+				if rec.CollectorID != "" {
+					if c.store == nil {
+						return fmt.Errorf("updateManagedCollector: credential store unavailable for manual network change")
+					}
+					if _, err := c.store.RevokeCollectorCredentials(ctx, rec.CollectorID, collectorcredential.ReasonNetworkChanged, collectorcredential.ActorCentral); err != nil {
+						return fmt.Errorf("updateManagedCollector: revoking network-bound credential: %w", err)
+					}
+					if _, err := c.store.ClearCollectorCredential(ctx, rec.CollectorID); err != nil {
+						return fmt.Errorf("updateManagedCollector: clearing network-bound credential: %w", err)
+					}
+				}
+				if err := c.collectorResourceStore().UpsertManagedCollector(ctx, rec.Key, *patch.HostNetworkID, rec.Kind, rec.Mode, rec.Origin, rec.AdoptedAt); err != nil {
+					return fmt.Errorf("updateManagedCollector: rebinding manual Collector to target network: %w", err)
+				}
+				manualOriginal = &rec
+			} else if rec.Mode == spec.ModeAutomatic && rec.NetworkID != "" &&
+				!hasCloudResourceRefs(rec) && state == store.CollectorResourcesProvisioning {
+				return fmt.Errorf("updateManagedCollector: networkId cannot change while the first cloud provisioning pass may have created resources")
+			} else if hasCloudResourceRefs(rec) && rec.Mode == spec.ModeAutomatic && rec.Origin == string(collectorownership.OriginOdigos) {
+				other := patch
+				other.HostNetworkID = nil
+				if !reflect.DeepEqual(other, collectorsettings.Patch{}) {
+					return fmt.Errorf("updateManagedCollector: change networkId separately from other settings so the migration can resume after a restart")
+				}
+				if err := c.collectorResourceStore().SetCollectorResourceState(ctx, region, store.CollectorResourcesMoving, *patch.HostNetworkID); err != nil {
+					return fmt.Errorf("updateManagedCollector: recording target network: %w", err)
+				}
+				c.TriggerCollectorReconcile()
+				return nil
+			} else if hasCloudResourceRefs(rec) {
+				return fmt.Errorf("updateManagedCollector: networkId cannot change because the existing Collector infrastructure is customer-owned")
+			}
+		}
+	}
 
 	if err := c.mutateCollectorSettings(ctx, func(tree map[string]any) (map[string]any, error) {
 		if !collectorsettings.HasRegion(tree, region) {
@@ -434,8 +660,19 @@ func (c *Coordinator) UpdateManagedCollector(ctx context.Context, region string,
 		}
 		return collectorsettings.WriteRegion(tree, region, patch)
 	}); err != nil {
+		if manualOriginal != nil {
+			rollbackErr := c.collectorResourceStore().UpsertManagedCollector(ctx, manualOriginal.Key, manualOriginal.NetworkID,
+				manualOriginal.Kind, manualOriginal.Mode, manualOriginal.Origin, manualOriginal.AdoptedAt)
+			err = errors.Join(err, rollbackErr)
+		}
 		apiLog.Error("update managed collector failed", "region", region, "error", err)
 		return fmt.Errorf("updateManagedCollector: %w", err)
+	}
+	if manualOriginal != nil && c.store != nil {
+		if err := c.store.SetCollectorStatus(ctx, manualOriginal.Key, collectorstatus.StatusAwaitingCustomer,
+			"Host VPC changed. Update the customer-owned IaC, issue a new network-bound OpAMP credential, write it to the secret and redeploy the ECS service."); err != nil {
+			apiLog.Warn("recording manual Collector network-change guidance failed", "region", region, "error", err)
+		}
 	}
 
 	apiLog.Info("update managed collector complete", "region", region)
@@ -462,6 +699,9 @@ func (c *Coordinator) TeardownManagedCollector(ctx context.Context, region strin
 	if err != nil {
 		return api.CollectorTeardownResult{}, err
 	}
+	if state == store.CollectorResourcesTearingDown || state == store.CollectorResourcesMoving {
+		return api.CollectorTeardownResult{Deleted: false, Message: "Collector teardown is in progress and will be retried automatically"}, nil
+	}
 
 	rec, err := c.collectorResourceStore().GetManagedCollector(ctx, key)
 	if err != nil {
@@ -483,16 +723,20 @@ func (c *Coordinator) TeardownManagedCollector(ctx context.Context, region strin
 		return api.CollectorTeardownResult{}, err
 	}
 	if c.canDiscardCollectorState(region, &rec, state, known) {
+		if rec.Mode == spec.ModeManual {
+			return c.removeManualCollector(ctx, region, rec)
+		}
 		return c.removeUnprovisionedCollector(ctx, region, &rec)
 	}
-	if !hasRecordedRefs(rec) {
+	if !hasCloudResourceRefs(rec) && rec.NetworkID == "" {
 		if err := c.collectorResourceStore().SetCollectorResourceState(ctx, region, store.CollectorResourcesOrphaned, "Collector row has no infrastructure references; cloud state is uncertain"); err != nil {
 			return api.CollectorTeardownResult{}, err
 		}
 		return api.CollectorTeardownResult{Deleted: false, Message: "cloud resources may be orphaned; the Collector has no recorded infrastructure references, so Odigos cannot safely destroy them", Retained: recordedRefs(rec)}, nil
 	}
 
-	class := collectorownership.ClassifyRecorded(rec.Mode, rec.Origin, hasRecordedRefs(rec))
+	class := collectorownership.ClassifyRecorded(rec.Mode, rec.Origin,
+		hasCloudResourceRefs(rec) || (rec.Mode == spec.ModeAutomatic && rec.NetworkID != ""))
 	retained := recordedRefs(rec)
 	if !class.Deletable {
 		msg := teardownRefusal(class, rec)
@@ -528,6 +772,13 @@ func (c *Coordinator) TeardownManagedCollector(ctx context.Context, region strin
 	}
 
 	if err := c.teardownCollector(ctx, deployer, rec); err != nil {
+		if errors.Is(err, api.ErrCollectorTeardownRetry) {
+			if stateErr := c.collectorResourceStore().SetCollectorResourceState(ctx, region, store.CollectorResourcesTearingDown, err.Error()); stateErr != nil {
+				return api.CollectorTeardownResult{}, errors.Join(err, stateErr)
+			}
+			c.TriggerCollectorReconcile()
+			return api.CollectorTeardownResult{Deleted: false, Message: "AWS is releasing Collector network interfaces; teardown will finish automatically", Retained: retained}, nil
+		}
 		if stateErr := c.collectorResourceStore().SetCollectorResourceState(ctx, region, store.CollectorResourcesOrphaned, "Cloud teardown did not complete; retry with the recorded references"); stateErr != nil {
 			return api.CollectorTeardownResult{}, errors.Join(err, stateErr)
 		}
@@ -571,6 +822,33 @@ func (c *Coordinator) removeUnprovisionedCollector(ctx context.Context, region s
 		return api.CollectorTeardownResult{}, err
 	}
 	return api.CollectorTeardownResult{Deleted: true, Message: "Collector declaration removed; no cloud resources required deletion"}, nil
+}
+
+// removeManualCollector removes only connector state. Customer-owned ECS, ELB,
+// security group, secrets and logs remain for the customer's IaC to remove.
+func (c *Coordinator) removeManualCollector(ctx context.Context, region string, rec store.CollectorRecord) (api.CollectorTeardownResult, error) {
+	retained := recordedRefs(rec)
+	disabled := false
+	if err := c.mutateCollectorSettings(ctx, func(tree map[string]any) (map[string]any, error) {
+		return collectorsettings.WriteRegion(tree, region, collectorsettings.Patch{Enabled: &disabled})
+	}); err != nil {
+		return api.CollectorTeardownResult{}, err
+	}
+	if rec.CollectorID != "" {
+		if c.store == nil {
+			return api.CollectorTeardownResult{}, fmt.Errorf("credential store unavailable for manual Collector teardown")
+		}
+		if _, err := c.store.RevokeCollectorCredentials(ctx, rec.CollectorID, collectorcredential.ReasonTeardown, collectorcredential.ActorCentral); err != nil {
+			return api.CollectorTeardownResult{}, fmt.Errorf("revoking manual Collector credentials: %w", err)
+		}
+	}
+	if err := c.collectorResourceStore().SetCollectorResourceState(ctx, region, store.CollectorResourcesDestroyed, "Manual declaration removed; customer infrastructure retained"); err != nil {
+		return api.CollectorTeardownResult{}, err
+	}
+	if err := c.removeCollectorLocalState(ctx, region, true); err != nil {
+		return api.CollectorTeardownResult{}, err
+	}
+	return api.CollectorTeardownResult{Deleted: true, Retained: retained, Message: "Collector declaration removed and credentials revoked; customer infrastructure retained"}, nil
 }
 
 func (c *Coordinator) removeCollectorLocalState(ctx context.Context, region string, recorded bool) error {

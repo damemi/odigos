@@ -26,6 +26,11 @@ var log = connlog.Subsystem("aws-client")
 // commercial partition.
 const DefaultRegion = "us-east-1"
 
+// ConfigSource is the small AWS configuration surface used by Collector clients.
+type ConfigSource interface {
+	Config(context.Context, string) (aws.Config, error)
+}
+
 // BuildConfig resolves an aws.Config for a region from the runtime credentials. Static keys, an
 // assumable role (with optional external id), or the ambient default chain are supported.
 func BuildConfig(ctx context.Context, region string, creds config.Credentials) (aws.Config, error) {

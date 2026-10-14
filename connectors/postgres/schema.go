@@ -17,8 +17,8 @@ const (
 // migration that finalizes that schema. A runtime verifies these and fails fast on mismatch — it
 // never runs migrations itself (see the cloud-connectors design, schema migrations).
 var ExpectedSchemaVersions = map[string]string{
-	SchemaPlatform: "4",
-	SchemaAWS:      "8",
+	SchemaPlatform: "5",
+	SchemaAWS:      "10",
 	SchemaGCP:      "3",
 	SchemaAzure:    "3",
 }

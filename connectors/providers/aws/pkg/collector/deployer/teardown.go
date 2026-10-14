@@ -60,8 +60,8 @@ type TeardownClients interface {
 	AutoScaling(ctx context.Context, region string) (ScalingTeardownClient, error)
 }
 
-// Each interface below is a describe plus a delete, and never more. The describe is not optional: an
-// object's TAGS are half the deletion gate and none of these refs carries them.
+// Each interface below contains only the reads and mutations teardown needs. The describe is not
+// optional: an object's TAGS are half the deletion gate and none of these refs carries them.
 type (
 	// ECSTeardownClient covers only the service installed in the customer-owned cluster.
 	//
@@ -74,6 +74,8 @@ type (
 	ECSTeardownClient interface {
 		DescribeServices(ctx context.Context, in *ecs.DescribeServicesInput, opts ...func(*ecs.Options)) (*ecs.DescribeServicesOutput, error)
 		DeleteService(ctx context.Context, in *ecs.DeleteServiceInput, opts ...func(*ecs.Options)) (*ecs.DeleteServiceOutput, error)
+		ListTasks(ctx context.Context, in *ecs.ListTasksInput, opts ...func(*ecs.Options)) (*ecs.ListTasksOutput, error)
+		StopTask(ctx context.Context, in *ecs.StopTaskInput, opts ...func(*ecs.Options)) (*ecs.StopTaskOutput, error)
 	}
 
 	// LoadBalancerTeardownClient covers the NLB and its target groups. Its listeners are not listed
@@ -310,15 +312,29 @@ func Teardown(ctx context.Context, clients TeardownClients, store TeardownStore,
 	}
 
 	if len(failures) > 0 {
+		retryOnly := true
+		for _, failure := range failures {
+			if !errors.Is(failure, baseapi.ErrCollectorTeardownRetry) {
+				retryOnly = false
+				break
+			}
+		}
+		joined := errors.Join(failures...)
+		if retryOnly {
+			out.Problems = append(out.Problems, collectorstatus.Problem{
+				Code: ProblemTeardownIncomplete, Severity: collectorstatus.SeverityPending,
+				Message: "Cloud teardown is waiting for AWS to release dependent network interfaces; the connector will retry.",
+			})
+			return out, joined
+		}
 		out.Problems = append(out.Problems, collectorstatus.Problem{
 			Code:     ProblemTeardownIncomplete,
 			Severity: collectorstatus.SeverityError,
-			Message: fmt.Sprintf("the Collector on %s is not fully removed yet and its record is kept so the "+
-				"next pass can finish: %v. A load balancer takes minutes to release the network interfaces "+
-				"its security group is attached to, so one pass reporting this is expected",
-				in.NetworkID, errors.Join(failures...)),
+			Message: fmt.Sprintf("the Collector on %s is not fully removed yet and its record is kept: %v",
+				in.NetworkID, joined),
 		})
-		return out, errors.Join(failures...)
+		// A mixed failure must not inherit the retry marker from one AWS dependency error.
+		return out, fmt.Errorf("Collector teardown failed: %v", joined)
 	}
 
 	// The row survives an object Odigos created and could not remove, and this is the one case where
@@ -573,7 +589,7 @@ func teardownScalableTarget(ctx context.Context, clients TeardownClients, scope 
 	return nil
 }
 
-// teardownService deletes the ECS service, which is what stops the Collector running.
+// teardownService deletes the ECS service and stops any of its tasks ECS leaves running.
 //
 // Looked up by NAME rather than only by the recorded ARN, and it is the one object treated that way. A
 // service under this name with no recorded ref is a Collector that is still RUNNING — still holding the
@@ -581,10 +597,10 @@ func teardownScalableTarget(ctx context.Context, clients TeardownClients, scope 
 // different kind of leak from an unrecorded security group, and the one thing a teardown must not leave
 // unsaid. The gate still refuses to delete it; what the lookup buys is that it is reported.
 //
-// Force, because a service with running tasks cannot be deleted otherwise. Draining it first and
-// deleting afterwards would be gentler and is not what this wants: the credentials are already revoked,
-// so a draining task holds no session worth preserving, and a two-phase delete gives a teardown two
-// places to be interrupted instead of one.
+// Force, because a service with running tasks cannot be deleted otherwise. DeleteService changes it to
+// DRAINING, which the converge lookup intentionally hides. Teardown must still find that service on
+// every retry: ECS can leave its tasks RUNNING with desiredCount=0, and their ENIs hold the Collector
+// security group indefinitely. StopTask is safe only after the service passed the ownership gate.
 func teardownService(ctx context.Context, clients TeardownClients, scope teardownScope, out *TeardownResult) error {
 	if scope.record.RuntimeRef == "" {
 		return nil
@@ -595,7 +611,7 @@ func teardownService(ctx context.Context, clients TeardownClients, scope teardow
 	}
 
 	name := ServiceName(scope.in.Key.Region)
-	found, err := describeService(ctx, api, scope.record.RuntimeRef, name)
+	found, err := describeTeardownService(ctx, api, scope.record.RuntimeRef, name)
 	if err != nil {
 		return err
 	}
@@ -609,15 +625,68 @@ func teardownService(ctx context.Context, clients TeardownClients, scope teardow
 		return nil
 	}
 
-	if _, err := api.DeleteService(ctx, &ecs.DeleteServiceInput{
-		Cluster: aws.String(scope.record.RuntimeRef),
-		Service: aws.String(name),
-		Force:   aws.Bool(true),
-	}); err != nil && !isServiceNotFound(err) {
-		return fmt.Errorf("delete the ECS service %s: %w", name, err)
+	if aws.ToString(found.Status) == serviceStatusActive {
+		if _, err := api.DeleteService(ctx, &ecs.DeleteServiceInput{
+			Cluster: aws.String(scope.record.RuntimeRef),
+			Service: aws.String(name),
+			Force:   aws.Bool(true),
+		}); err != nil && !isServiceNotFound(err) {
+			return fmt.Errorf("delete the ECS service %s: %w", name, err)
+		}
+	}
+	if err := stopCollectorServiceTasks(ctx, api, scope.record.RuntimeRef, name); err != nil {
+		return err
+	}
+	remaining, err := describeTeardownService(ctx, api, scope.record.RuntimeRef, name)
+	if err != nil {
+		return err
+	}
+	if remaining != nil {
+		return fmt.Errorf("%w: ECS service %s is %s; waiting for its tasks and network interfaces to drain", baseapi.ErrCollectorTeardownRetry, name, aws.ToString(remaining.Status))
 	}
 	out.removed("ECS service", arn)
 	return nil
+}
+
+// describeTeardownService also returns DRAINING services. The ordinary describeService deliberately
+// returns ACTIVE only because a draining service cannot be converged back into service.
+func describeTeardownService(ctx context.Context, api ECSTeardownClient, cluster, name string) (*ecstypes.Service, error) {
+	result, err := api.DescribeServices(ctx, &ecs.DescribeServicesInput{
+		Cluster: aws.String(cluster), Services: []string{name}, Include: []ecstypes.ServiceField{ecstypes.ServiceFieldTags},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("describe ECS service %s for teardown: %w", name, err)
+	}
+	for i := range result.Services {
+		service := &result.Services[i]
+		if aws.ToString(service.ServiceName) == name && aws.ToString(service.Status) != "INACTIVE" {
+			return service, nil
+		}
+	}
+	return nil, nil
+}
+
+func stopCollectorServiceTasks(ctx context.Context, api ECSTeardownClient, cluster, name string) error {
+	paginator := ecs.NewListTasksPaginator(api, &ecs.ListTasksInput{
+		Cluster: aws.String(cluster), ServiceName: aws.String(name), DesiredStatus: ecstypes.DesiredStatusRunning,
+	})
+	var tasks []string
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("list running tasks of Collector service %s: %w", name, err)
+		}
+		tasks = append(tasks, page.TaskArns...)
+	}
+	var failures []error
+	for _, task := range tasks {
+		if _, err := api.StopTask(ctx, &ecs.StopTaskInput{
+			Cluster: aws.String(cluster), Task: aws.String(task), Reason: aws.String("Odigos managed Collector teardown"),
+		}); err != nil {
+			failures = append(failures, fmt.Errorf("stop Collector task %s: %w", task, err))
+		}
+	}
+	return errors.Join(failures...)
 }
 
 // teardownLoadBalancer deletes the network load balancer, and with it its listeners.
@@ -744,6 +813,10 @@ func teardownSecurityGroup(ctx context.Context, clients TeardownClients, scope t
 	if _, err := api.DeleteSecurityGroup(ctx, &ec2.DeleteSecurityGroupInput{
 		GroupId: aws.String(id),
 	}); err != nil && !isSecurityGroupNotFound(err) {
+		var awsErr smithy.APIError
+		if errors.As(err, &awsErr) && awsErr.ErrorCode() == "DependencyViolation" {
+			return fmt.Errorf("%w: delete security group %s: %v", baseapi.ErrCollectorTeardownRetry, id, err)
+		}
 		return fmt.Errorf("delete the security group %s: %w", id, err)
 	}
 	out.removed("security group", id)
@@ -762,11 +835,6 @@ func teardownSecurityGroup(ctx context.Context, clients TeardownClients, scope t
 // re-rendered from the destinations on the next pass. Neither is worth 30 days of recoverability, and
 // both hold material nobody should be able to restore.
 func teardownNetworkSecrets(ctx context.Context, clients TeardownClients, scope teardownScope, out *TeardownResult) error {
-	if scope.record.CredentialRef == "" {
-		// Nothing provisioned secrets for this Collector, so there is nothing this connector recorded
-		// creating — see secretRecorded.
-		return nil
-	}
 	api, err := clients.Secrets(ctx, scope.in.Key.Region)
 	if err != nil {
 		return fmt.Errorf("build a Secrets Manager client for %s: %w", scope.in.Key.Region, err)
@@ -788,9 +856,6 @@ func teardownNetworkSecrets(ctx context.Context, clients TeardownClients, scope 
 
 // teardownSharedSecret deletes the region's licence secret, which every Collector in the region shares.
 func teardownSharedSecret(ctx context.Context, clients TeardownClients, scope teardownScope, out *TeardownResult) error {
-	if scope.record.CredentialRef == "" {
-		return nil
-	}
 	name := LicenseSecretName(scope.in.Identity.ConnectorName, scope.in.Key.Region)
 	if users := scope.usersInRegion(); len(users) > 0 {
 		out.keptShared("Secrets Manager secret", name, users)
@@ -821,7 +886,7 @@ func deleteSecret(ctx context.Context, api SecretTeardownClient, scope teardownS
 
 	arn := aws.ToString(described.ARN)
 	if !scope.gate("Secrets Manager secret", name,
-		baseapi.ParseCollectorTags(describedTags(described)), false, scope.secretRecorded(), out) {
+		baseapi.ParseCollectorTags(describedTags(described)), false, scope.secretRecorded(name), out) {
 		return nil
 	}
 	if _, err := api.DeleteSecret(ctx, &secretsmanager.DeleteSecretInput{
@@ -958,19 +1023,18 @@ func (s teardownScope) allUsers() []string {
 // a load balancer ARN, a security group id. `CollectorRecord.Recorded` matches those, and a ref that is
 // not in the row grants no delete authority.
 //
-// Six objects have no ref column and do not need one, because nothing ever looks them up by ref: the
-// two secrets whose names are derived from the row's own primary key, the region's licence secret and
-// log group, the two connector-wide roles, and the scalable target whose resource id is composed from
-// the cluster and service names. For those, what records the creation is the row itself — this
-// connector has a Collector on this network, under a name only this connector derives.
+// Bootstrap, the log group, and the scalable target have derived names and no dedicated ref column.
+// The credential and licence secrets have refs, checkpointed as soon as each exists. Teardown still
+// probes their names when a ref is missing so a crash between AWS creation and the database write
+// leaves a visible retained row rather than a silent leak.
 //
-// That is a weaker second record than an opaque ref, and the residual is worth being explicit about: a
-// customer would have to name their own object exactly what this connector derives — `odigos/collector/
-// <connector>/<region>/<vpc>`, `odigos-collector-exec-<connector>` — AND tag it `odigos-managed=true`
-// AND not tag it `odigos-iac`. At that point their object is indistinguishable from one Odigos created,
-// and no amount of extra state would tell them apart. The alternative was a ref column per object,
-// which buys nothing against that case and adds six columns two writers could null.
-func (s teardownScope) secretRecorded() bool { return s.record.CredentialRef != "" }
+// The row is the second record for derived names. Opaque refs still require an exact database match.
+func (s teardownScope) secretRecorded(name string) bool {
+	if name == LicenseSecretName(s.in.Identity.ConnectorName, s.in.Key.Region) {
+		return s.record.LicenseSecretRef != ""
+	}
+	return s.record.CredentialRef != ""
+}
 
 func (s teardownScope) derivedNameRecorded() bool { return true }
 

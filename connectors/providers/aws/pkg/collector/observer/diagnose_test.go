@@ -10,6 +10,8 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorreport"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
+	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/deployer"
+	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/placement"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
@@ -54,13 +56,19 @@ func healthyObservation() Observation {
 		RunningCount: 2,
 		Rollout:      "COMPLETED",
 		Revision: Revision{
-			ARN:          revisionARN(1),
-			Image:        "ghcr.io/odigos-io/odigos-enterprise-collector@" + testDigest,
-			Digest:       testDigest,
-			Architecture: "X86_64",
-			CPU:          "1024",
-			Memory:       "2048",
-			Environment:  map[string]string{"ODIGOS_OPAMP_ENDPOINT": testEndpoint},
+			ARN:                      revisionARN(1),
+			Image:                    "ghcr.io/odigos-io/odigos-enterprise-collector@" + testDigest,
+			Digest:                   testDigest,
+			Architecture:             "X86_64",
+			CPU:                      "1024",
+			Memory:                   "2048",
+			Environment:              map[string]string{"ODIGOS_OPAMP_ENDPOINT": testEndpoint},
+			RepositoryCredentialsRef: "arn:aws:secretsmanager:eu-west-1:123456789012:secret:odigos/collector/prod/eu-west-1/license-AbCdEf",
+			Secrets: map[string]string{
+				"ODIGOS_ONPREM_TOKEN":        "arn:aws:secretsmanager:eu-west-1:123456789012:secret:odigos/collector/prod/eu-west-1/license-AbCdEf:password::",
+				"ODIGOS_OPAMP_AUTHORIZATION": "arn:aws:secretsmanager:eu-west-1:123456789012:secret:odigos/collector/prod/eu-west-1/credential-AbCdEf",
+			},
+			LogGroup: deployer.LogGroupName(testConnector),
 		},
 		TargetGroups: []TargetGroup{
 			{ARN: targetGroupARN(4317), Port: 4317, Targets: []Target{{State: targetHealthy}, {State: targetHealthy}}},
@@ -425,6 +433,67 @@ func TestALoadBalancerStillProvisioningIsPending(t *testing.T) {
 		in.Observation.LoadBalancer.State = lbActiveImpaired
 	})); hasProblem(got.Problems, ProblemLoadBalancerUnavailable) {
 		t.Error("an impaired but serving load balancer was reported as unavailable")
+	}
+}
+
+func TestPublicLoadBalancerIsNotPublishedAsCollectorEndpoint(t *testing.T) {
+	got := Diagnose(healthy(func(in *DiagnosisInput) {
+		in.Observation.LoadBalancer.Scheme = "internet-facing"
+	}))
+	if !hasProblem(got.Problems, ProblemLoadBalancerShapeInvalid) {
+		t.Fatalf("public load balancer was accepted: %v", codes(got.Problems))
+	}
+	if got.Transport.GRPCEndpoint != "" {
+		t.Fatalf("public endpoint was published: %+v", got.Transport)
+	}
+}
+
+func TestWrongTargetHealthPortIsNotPublishedAsCollectorEndpoint(t *testing.T) {
+	got := Diagnose(healthy(func(in *DiagnosisInput) {
+		in.Observation.TargetGroups[0].HealthCheckPort = "traffic-port"
+	}))
+	if !hasProblem(got.Problems, ProblemLoadBalancerShapeInvalid) || got.Transport.GRPCEndpoint != "" {
+		t.Fatalf("wrong target health port was accepted: %+v", got)
+	}
+}
+
+func TestWrongListenerTargetIsNotPublishedAsCollectorEndpoint(t *testing.T) {
+	got := Diagnose(healthy(func(in *DiagnosisInput) {
+		in.Observation.LoadBalancer.ListenerTargets = map[int]string{4317: targetGroupARN(4317), 4318: targetGroupARN(4317)}
+	}))
+	if !hasProblem(got.Problems, ProblemLoadBalancerShapeInvalid) || got.Transport.GRPCEndpoint != "" {
+		t.Fatalf("wrong listener target was accepted: %+v", got)
+	}
+}
+
+func TestManualTaskDefinitionRequiresPrivateImageAndSecretWiring(t *testing.T) {
+	got := Diagnose(healthy(func(in *DiagnosisInput) {
+		in.Mode = spec.ModeManual
+		in.Observation.Revision.RepositoryCredentialsRef = ""
+		in.Observation.Revision.Secrets = nil
+		in.Observation.Revision.LogGroup = "/wrong"
+	}))
+	count := 0
+	for _, problem := range got.Problems {
+		if problem.Code == ProblemTaskDefinitionInvalid {
+			count++
+		}
+	}
+	if count != 4 {
+		t.Fatalf("got %d task definition problems, want 4: %v", count, got.Problems)
+	}
+}
+
+func TestManualSecurityGroupRequiresSelfHealthIngress(t *testing.T) {
+	observer := &Observer{Mode: spec.ModeManual, plan: &placement.Plan{Topology: placement.NewTopologyWithSecurityGroups(
+		[]string{testRegion}, []placement.VPC{{Region: testRegion, ID: testVPC}}, nil, nil,
+		[]placement.SecurityGroup{{Region: testRegion, ID: "sg-collector", VPCID: testVPC}},
+	)}}
+	observation := healthyObservation()
+	observation.SecurityGroups = []string{"sg-collector"}
+	problems := observer.manualSecurityGroupProblems(testNetwork(), observation)
+	if len(problems) != 1 || problems[0].Code != ProblemSecurityGroupInvalid {
+		t.Fatalf("missing manual security-group issue: %+v", problems)
 	}
 }
 

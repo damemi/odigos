@@ -260,11 +260,12 @@ func (ws *WebSocketServer) SendGraphQLRequest(ctx context.Context, proxyID strin
 	conn := proxyConn.Conn
 
 	msg := WebSocketMessageToProxy{
-		Type:      MessageTypeGraphQLQuery,
-		Query:     request.Query,
-		Variables: request.Variables,
-		RequestId: request.RequestId,
-		IsAdmin:   request.IsAdmin,
+		Type:         MessageTypeGraphQLQuery,
+		Query:        request.Query,
+		Variables:    request.Variables,
+		RequestId:    request.RequestId,
+		IsAdmin:      request.IsAdmin,
+		IsOwnerAdmin: request.IsOwnerAdmin,
 	}
 
 	jsonMsg, err := json.Marshal(msg)
@@ -346,10 +347,11 @@ func (ws *WebSocketServer) sendSourcesInBatches(ctx context.Context, conn *webso
 		batchRequestID := fmt.Sprintf("%s-batch-%d", request.RequestId, i/batchSize)
 
 		batchRequest := types.GqlRequestPayload{
-			Query:     request.Query,
-			Variables: batchVariables,
-			RequestId: batchRequestID,
-			IsAdmin:   request.IsAdmin,
+			Query:        request.Query,
+			Variables:    batchVariables,
+			RequestId:    batchRequestID,
+			IsAdmin:      request.IsAdmin,
+			IsOwnerAdmin: request.IsOwnerAdmin,
 		}
 
 		if err := ws.sendSingleMessage(ctx, conn, batchRequest); err != nil {
@@ -390,11 +392,12 @@ func (ws *WebSocketServer) calculateBatchSize(request types.GqlRequestPayload, s
 	}
 
 	testMsg := WebSocketMessageToProxy{
-		Type:      MessageTypeGraphQLQuery,
-		Query:     request.Query,
-		Variables: testVariables,
-		RequestId: uuid.New().String(), // Use a UUID to estimate typical request ID size
-		IsAdmin:   request.IsAdmin,
+		Type:         MessageTypeGraphQLQuery,
+		Query:        request.Query,
+		Variables:    testVariables,
+		RequestId:    uuid.New().String(), // Use a UUID to estimate typical request ID size
+		IsAdmin:      request.IsAdmin,
+		IsOwnerAdmin: request.IsOwnerAdmin,
 	}
 
 	overheadJSON, _ := json.Marshal(testMsg)
@@ -429,11 +432,12 @@ func (ws *WebSocketServer) calculateBatchSize(request types.GqlRequestPayload, s
 // sendSingleMessage sends a single GraphQL request message
 func (ws *WebSocketServer) sendSingleMessage(ctx context.Context, conn *websocket.Conn, request types.GqlRequestPayload) error {
 	msg := WebSocketMessageToProxy{
-		Type:      MessageTypeGraphQLQuery,
-		Query:     request.Query,
-		Variables: request.Variables,
-		RequestId: request.RequestId,
-		IsAdmin:   request.IsAdmin,
+		Type:         MessageTypeGraphQLQuery,
+		Query:        request.Query,
+		Variables:    request.Variables,
+		RequestId:    request.RequestId,
+		IsAdmin:      request.IsAdmin,
+		IsOwnerAdmin: request.IsOwnerAdmin,
 	}
 
 	jsonMsg, err := json.Marshal(msg)

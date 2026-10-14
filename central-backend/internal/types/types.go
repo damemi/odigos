@@ -5,6 +5,8 @@ type GqlRequestPayload struct {
 	RequestId string                 `json:"request_id"`
 	Variables map[string]interface{} `json:"variables"`
 	IsAdmin   bool                   `json:"is_admin"`
+	// IsOwnerAdmin is reserved for operations that reveal or revoke credentials.
+	IsOwnerAdmin bool `json:"is_owner_admin"`
 }
 
 type ResponsePayload struct {

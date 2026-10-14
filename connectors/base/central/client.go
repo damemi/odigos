@@ -54,9 +54,10 @@ type messageFromCentral struct {
 	Query     string         `json:"query,omitempty"`
 	Variables map[string]any `json:"variables,omitempty"`
 	RequestID string         `json:"request_id,omitempty"`
-	// IsAdmin is the calling user's admin flag, forwarded by Central per frame (same as for k8s/VM
-	// proxies). The executor requires it for mutations; a non-admin may read but not mutate.
-	IsAdmin bool `json:"is_admin,omitempty"`
+	// IsAdmin is Central's edit permission for ordinary mutations. IsOwnerAdmin is the
+	// narrower OWNER/ADMIN permission for credential issuance and revocation.
+	IsAdmin      bool `json:"is_admin,omitempty"`
+	IsOwnerAdmin bool `json:"is_owner_admin,omitempty"`
 }
 
 // messageToCentral is a frame the connector sends back (the GraphQL response).
@@ -230,7 +231,7 @@ func (c *Client) handleMessage(ctx context.Context, conn *websocket.Conn, data [
 	}
 	op := gql.ExtractOperationName(msg.Query)
 	centralLog.Debug("central graphql query", "request_id", msg.RequestID, "operation", op)
-	resp := gql.RunOperation(ctx, c.exec, msg.Query, msg.Variables, "central", msg.IsAdmin)
+	resp := gql.RunOperation(ctx, c.exec, msg.Query, msg.Variables, "central", msg.IsAdmin, msg.IsOwnerAdmin)
 	out, err := json.Marshal(messageToCentral{Type: msgTypeGraphQLResponse, RequestID: msg.RequestID, Data: resp})
 	if err != nil {
 		centralLog.Error("marshal central response failed", "request_id", msg.RequestID, "error", err)

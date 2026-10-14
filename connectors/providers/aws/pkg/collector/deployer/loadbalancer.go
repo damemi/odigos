@@ -5,8 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	elb "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	elbtypes "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 
@@ -14,6 +17,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorownership"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
+	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
 )
 
 // Target group attributes, and the first of them is the one this whole design rests on.
@@ -73,6 +77,61 @@ type LoadBalancerInput struct {
 	// TLSCertificateARN is set when tls.mode is loadBalancer, and turns the data listeners from TCP
 	// into TLS.
 	TLSCertificateARN string
+	// The retry gate is checked only after DescribeLoadBalancers finds no NLB.
+	Retry basestore.CollectorLoadBalancerRetry
+	Now   time.Time
+}
+
+// LoadBalancerAccountRestriction is the AWS account-level CreateLoadBalancer
+// refusal. It is deliberately narrower than OperationNotPermitted: other causes
+// should continue through normal error reporting.
+type LoadBalancerAccountRestriction struct {
+	RequestID string
+	Cause     error
+}
+
+func (e *LoadBalancerAccountRestriction) Error() string { return e.Cause.Error() }
+func (e *LoadBalancerAccountRestriction) Unwrap() error { return e.Cause }
+
+func accountLoadBalancerRestriction(err error) *LoadBalancerAccountRestriction {
+	var denied *elbtypes.OperationNotPermittedException
+	if !errors.As(err, &denied) || !strings.Contains(strings.ToLower(aws.ToString(denied.Message)),
+		"this aws account currently does not support creating load balancers") {
+		return nil
+	}
+	var response *awshttp.ResponseError
+	requestID := ""
+	if errors.As(err, &response) {
+		requestID = response.ServiceRequestID()
+	}
+	return &LoadBalancerAccountRestriction{RequestID: requestID, Cause: err}
+}
+
+func loadBalancerRestrictionProblem(region string, retry basestore.CollectorLoadBalancerRetry) collectorstatus.Problem {
+	message := fmt.Sprintf("AWS is currently rejecting new load balancers in region %s for this account. "+
+		"The Collector cannot finish provisioning. Odigos will check for an existing load balancer on each pass "+
+		"and retry creation after %s. If the restriction persists, contact AWS Support", region,
+		retry.RetryAfter.UTC().Format(time.RFC3339))
+	if retry.RequestID != "" {
+		message += fmt.Sprintf(" with AWS request ID %s", retry.RequestID)
+	}
+	return collectorstatus.Problem{Code: ProblemLoadBalancerAccountRestricted,
+		Severity: collectorstatus.SeverityError, Message: message + "."}
+}
+
+func nextLoadBalancerRetry(now time.Time, previous basestore.CollectorLoadBalancerRetry, requestID string) basestore.CollectorLoadBalancerRetry {
+	if requestID == "" {
+		requestID = previous.RequestID
+	}
+	attempts := previous.Attempts + 1
+	delay := 5 * time.Minute
+	for i := 1; i < attempts && delay < 30*time.Minute; i++ {
+		delay *= 2
+	}
+	if delay > 30*time.Minute {
+		delay = 30 * time.Minute
+	}
+	return basestore.CollectorLoadBalancerRetry{Attempts: attempts, RetryAfter: now.Add(delay), RequestID: requestID}
 }
 
 // LoadBalancer is the converged data plane in front of one network's Collector.
@@ -130,10 +189,10 @@ func EnsureLoadBalancer(ctx context.Context, api LoadBalancerClient, in LoadBala
 
 	groups, groupProblems, err := ensureTargetGroups(ctx, api, in, tags)
 	problems = append(problems, groupProblems...)
+	out.TargetGroupARNs = groups
 	if err != nil || len(groupProblems) > 0 {
 		return out, problems, err
 	}
-	out.TargetGroupARNs = groups
 
 	if err := ensureListeners(ctx, api, in, out.ARN, groups, tags); err != nil {
 		return out, problems, err
@@ -144,6 +203,9 @@ func EnsureLoadBalancer(ctx context.Context, api LoadBalancerClient, in LoadBala
 // findOrCreateLoadBalancer resolves the NLB by name, creating it if absent.
 func findOrCreateLoadBalancer(ctx context.Context, api LoadBalancerClient, in LoadBalancerInput, tags map[string]string) (*elbtypes.LoadBalancer, []collectorstatus.Problem, error) {
 	name := LoadBalancerName(in.NetworkID)
+	if in.Now.IsZero() {
+		in.Now = time.Now()
+	}
 
 	found, err := describeLoadBalancer(ctx, api, name)
 	if err != nil {
@@ -162,6 +224,9 @@ func findOrCreateLoadBalancer(ctx context.Context, api LoadBalancerClient, in Lo
 			return nil, problems, err
 		}
 		return found, nil, nil
+	}
+	if !in.Retry.RetryAfter.IsZero() && in.Now.Before(in.Retry.RetryAfter) {
+		return nil, []collectorstatus.Problem{loadBalancerRestrictionProblem(in.Region, in.Retry)}, nil
 	}
 
 	created, err := api.CreateLoadBalancer(ctx, &elb.CreateLoadBalancerInput{
@@ -183,6 +248,9 @@ func findOrCreateLoadBalancer(ctx context.Context, api LoadBalancerClient, in Lo
 		return &created.LoadBalancers[0], nil, nil
 	}
 	if !isDuplicateLoadBalancerName(err) {
+		if restricted := accountLoadBalancerRestriction(err); restricted != nil {
+			return nil, nil, restricted
+		}
 		return nil, nil, fmt.Errorf("create load balancer %s: %w", name, err)
 	}
 	// Lost a race, or the name is a customer's. Re-read: only one of those may be used.
@@ -306,7 +374,7 @@ func ensureTargetGroups(ctx context.Context, api LoadBalancerClient, in LoadBala
 
 		tg, err := describeTargetGroup(ctx, api, name)
 		if err != nil {
-			return nil, nil, err
+			return out, nil, err
 		}
 		if tg == nil {
 			created, err := api.CreateTargetGroup(ctx, &elb.CreateTargetGroupInput{
@@ -326,23 +394,24 @@ func ensureTargetGroups(ctx context.Context, api LoadBalancerClient, in LoadBala
 				Tags:                elbTags(tags),
 			})
 			if err != nil {
-				return nil, nil, fmt.Errorf("create target group %s: %w", name, err)
+				return out, nil, fmt.Errorf("create target group %s: %w", name, err)
 			}
 			if len(created.TargetGroups) == 0 {
-				return nil, nil, fmt.Errorf("create target group %s returned no target group", name)
+				return out, nil, fmt.Errorf("create target group %s returned no target group", name)
 			}
 			tg = &created.TargetGroups[0]
 			log.Info("created collector target group", "network", in.NetworkID, "name", name, "port", port)
 		} else {
 			object, err := taggedObject(ctx, api, aws.ToString(tg.TargetGroupArn))
 			if err != nil {
-				return nil, nil, err
+				return out, nil, err
 			}
 			if !collectorownership.MayMutate(object, in.Identity, in.Mode) {
-				return nil, []collectorstatus.Problem{notOurs("target group", name, object, in.Identity)}, nil
+				return out, []collectorstatus.Problem{notOurs("target group", name, object, in.Identity)}, nil
 			}
 		}
 		arn := aws.ToString(tg.TargetGroupArn)
+		out = append(out, arn)
 
 		// Written every pass rather than only at creation. Both attributes default the wrong way for
 		// this design, so a group created by an older version of this code — or edited by hand — is
@@ -354,9 +423,8 @@ func ensureTargetGroups(ctx context.Context, api LoadBalancerClient, in LoadBala
 				{Key: aws.String(attrCrossZone), Value: aws.String("true")},
 			},
 		}); err != nil {
-			return nil, nil, fmt.Errorf("set attributes on target group %s: %w", name, err)
+			return out, nil, fmt.Errorf("set attributes on target group %s: %w", name, err)
 		}
-		out = append(out, arn)
 	}
 	return out, nil, nil
 }

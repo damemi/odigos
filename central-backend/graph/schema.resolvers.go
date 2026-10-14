@@ -287,10 +287,11 @@ func (r *queryResolver) RemoteFetch(ctx context.Context, proxyID string, query s
 
 	// NOW publish the request (subscription is guaranteed to be ready)
 	err = redisclient.PublishJSON(ctx, r.RedisClient, requestsChannel, types.GqlRequestPayload{
-		Query:     query,
-		RequestId: requestId,
-		Variables: variables,
-		IsAdmin:   utils.IsUserEditor(ctx),
+		Query:        query,
+		RequestId:    requestId,
+		Variables:    variables,
+		IsAdmin:      utils.IsUserEditor(ctx),
+		IsOwnerAdmin: utils.IsUserAdmin(ctx),
 	})
 	if err != nil {
 		return "", err

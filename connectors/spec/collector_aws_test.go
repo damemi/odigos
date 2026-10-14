@@ -1,11 +1,120 @@
 package spec
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
 
+// Every AWS SDK Input used by Collector runtime code requires its matching IAM
+// action in automatic mode. This catches permission drift when a new Describe
+// or write call is added without changing the setup policy.
+func TestAWSCollectorSDKCallsHaveIAMActions(t *testing.T) {
+	root := filepath.Join("..", "providers", "aws", "pkg", "collector")
+	used := map[string]bool{}
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil || entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return walkErr
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			return err
+		}
+		services := map[string]string{}
+		for _, imp := range file.Imports {
+			path, err := strconv.Unquote(imp.Path.Value)
+			if err != nil || !strings.Contains(path, "github.com/aws/aws-sdk-go-v2/service/") || strings.HasSuffix(path, "/types") {
+				continue
+			}
+			name := filepath.Base(path)
+			if imp.Name != nil {
+				name = imp.Name.Name
+			}
+			switch nameFromSDKPath := filepath.Base(path); nameFromSDKPath {
+			case "applicationautoscaling":
+				services[name] = "application-autoscaling"
+			case "elasticloadbalancingv2":
+				services[name] = "elasticloadbalancing"
+			case "cloudwatchlogs":
+				services[name] = "logs"
+			default:
+				services[name] = nameFromSDKPath
+			}
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			literal, ok := node.(*ast.CompositeLit)
+			if !ok {
+				return true
+			}
+			selector, ok := literal.Type.(*ast.SelectorExpr)
+			if !ok || !strings.HasSuffix(selector.Sel.Name, "Input") {
+				return true
+			}
+			ident, ok := selector.X.(*ast.Ident)
+			if ok && services[ident.Name] != "" {
+				used[services[ident.Name]+":"+strings.TrimSuffix(selector.Sel.Name, "Input")] = true
+			}
+			return true
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	permissions := MustGet("aws").CollectorRolePermissions(Capabilities{Collectors: []CollectorCapability{{
+		Type: awsCollectorType, Management: true, Deployment: true,
+	}}})
+	for action := range used {
+		if !containsStr(permissions, action) {
+			t.Errorf("Collector AWS SDK call needs undeclared IAM action %s", action)
+		}
+	}
+}
+
 const awsCollectorType = "aws.fargate-collector"
+
+func TestAWSCollectorUninstallGuidanceIsSeparateFromInstall(t *testing.T) {
+	s := MustGet("aws")
+	for _, mode := range []string{ModeManual, ModeAutomatic} {
+		section := "collector-uninstall:" + awsCollectorType + ":" + mode
+		guidance := s.SetupArtifactsForSection(section)
+		if len(guidance) == 0 {
+			t.Errorf("%s uninstall guidance is missing", mode)
+		}
+		inventoryID := "collector-uninstall-" + mode + "-inventory"
+		var inventory string
+		for _, artifact := range guidance {
+			if artifact.ID == inventoryID {
+				inventory = strings.Join(artifact.Steps, " ")
+			}
+		}
+		if inventory == "" {
+			t.Errorf("%s uninstall is missing a visible resource inventory", mode)
+		}
+		required := []string{"task definition", "execution role", "ECS cluster", "VPC", "subnets", "peering"}
+		if mode == ModeManual {
+			required = append(required, "ECS", "Load Balancer", "target groups", "security group", "credential", "bootstrap", "license", "log group", "scalable target")
+		} else {
+			required = append(required, "service-linked", "adopted", "retained objects")
+		}
+		for _, resource := range required {
+			if !strings.Contains(strings.ToLower(inventory), strings.ToLower(resource)) {
+				t.Errorf("%s uninstall inventory does not name %s", mode, resource)
+			}
+		}
+		for _, artifact := range s.CollectorArtifactsForMode(awsCollectorType, mode) {
+			if strings.HasPrefix(artifact.ID, "collector-uninstall-") {
+				t.Errorf("%s uninstall step %s appeared in installation", mode, artifact.ID)
+			}
+		}
+	}
+}
 
 // TestAWSCollectorsDomainLoads pins the AWS declaration: both features enabled, the type declared on
 // both, and the deployment method that tells a provider deployer which kind of workload to create.
@@ -32,7 +141,6 @@ func TestAWSCollectorsDomainLoads(t *testing.T) {
 		"ec2:DescribeVpcs",
 		"ec2:DescribeRouteTables",
 		"ec2:DescribeVpcPeeringConnections",
-		"ec2:DescribeNetworkAcls",
 		"ec2:DescribeSecurityGroups",
 	} {
 		if !containsStr(mgmt.Permissions, permission) {
@@ -212,6 +320,191 @@ func TestAWSCollectorExecutionRoleInstructionsArePublished(t *testing.T) {
 	}
 }
 
+// TestAWSCollectorSetupCopyMarksCodeWithPairedBackticks pins the inline-code convention of the Collector
+// setup guide. The UI renders `backticked` spans in a description or step as code chips, so an unpaired
+// backtick means a span was left open and would print as a stray character.
+func TestAWSCollectorSetupCopyMarksCodeWithPairedBackticks(t *testing.T) {
+	s := MustGet("aws")
+	for _, artifact := range s.SetupArtifacts() {
+		if !strings.HasPrefix(artifact.Section, CollectorSection(awsCollectorType)+":") {
+			continue
+		}
+		for _, text := range append([]string{artifact.Description}, artifact.Steps...) {
+			if strings.Count(text, "`")%2 != 0 {
+				t.Errorf("%s has an unpaired backtick in %q", artifact.ID, text)
+			}
+		}
+	}
+}
+
+func TestAWSRegionalCollectorDocumentsAreSpecAuthored(t *testing.T) {
+	instructions := MustGet("aws").Collectors.Instructions
+	if len(instructions.Notes) == 0 {
+		t.Fatal("regional Collector guidance is missing from aws.yaml")
+	}
+	if len(instructions.Documents) != 3 {
+		t.Fatalf("regional Collector documents = %d, want CloudFormation, AWS CLI and Terraform", len(instructions.Documents))
+	}
+	variants := map[string]bool{}
+	for _, document := range instructions.Documents {
+		variants[document.Variant] = true
+		if document.Title == "" || len(document.Steps) == 0 || document.Format == "" {
+			t.Errorf("%s has incomplete document metadata", document.Variant)
+		}
+		for _, required := range []string{".Region", ".ConnectorName", "{{if .ScalingAutomatic}}"} {
+			if !strings.Contains(document.Template, required) {
+				t.Errorf("%s template does not render %s from the spec", document.Variant, required)
+			}
+		}
+	}
+	for _, variant := range []string{"cloudformation", "aws-cli", "terraform"} {
+		if !variants[variant] {
+			t.Errorf("regional Collector document %q is missing", variant)
+		}
+	}
+}
+
+func TestAWSCollectorSetupStepsAreSplitByMode(t *testing.T) {
+	s := MustGet("aws")
+	for _, tc := range []struct {
+		mode string
+		ids  []string
+	}{
+		{ModeAutomatic, []string{
+			"collector-auto-execution-role",
+			"collector-auto-region", "collector-auto-cluster", "collector-auto-network", "collector-auto-egress",
+			"collector-auto-size", "collector-auto-scaling-linked-role", "collector-auto-install-values",
+		}},
+		{ModeManual, []string{
+			"collector-manual-execution-role",
+			"collector-manual-region", "collector-manual-cluster", "collector-manual-network", "collector-manual-subnets",
+			"collector-manual-egress", "collector-manual-size", "collector-manual-security-group", "collector-manual-log-group", "collector-manual-security-group-id",
+			"collector-manual-declare", "collector-manual-credential-secret", "collector-manual-issue-credential",
+			"collector-manual-store-credential", "collector-manual-license-secret", "collector-manual-apply",
+			"collector-manual-verify",
+		}},
+	} {
+		steps := s.CollectorArtifactsForMode(awsCollectorType, tc.mode)
+		if len(steps) != len(tc.ids) {
+			t.Fatalf("%s has %d steps, want %d", tc.mode, len(steps), len(tc.ids))
+		}
+		for i, step := range steps {
+			if step.ID != tc.ids[i] || step.Variant != "" {
+				t.Errorf("%s step %d = %q variant %q, want %q without a variant", tc.mode, i, step.ID, step.Variant, tc.ids[i])
+			}
+		}
+	}
+	manual := s.CollectorArtifactsForMode(awsCollectorType, ModeManual)
+	if manual[0].Template != s.CollectorArtifactsForMode(awsCollectorType, ModeAutomatic)[0].Template {
+		t.Fatal("manual and automatic task execution roles drifted")
+	}
+}
+
+func TestAWSCollectorSetupMethodsAreSpecAuthored(t *testing.T) {
+	s := MustGet("aws")
+	management, _ := s.Collectors.Management.findType(awsCollectorType)
+	deployment, _ := s.Collectors.Deployment.findType(awsCollectorType)
+	for _, mode := range []string{ModeAutomatic, ModeManual} {
+		permissions := append([]string{}, management.Permissions...)
+		if mode == ModeAutomatic {
+			for _, permission := range deployment.Permissions {
+				if permission != "iam:PassRole" {
+					permissions = append(permissions, permission)
+				}
+			}
+		}
+		for _, method := range []string{"aws-cli", "cloudformation"} {
+			section := CollectorModeSection(awsCollectorType, mode) + ":" + method
+			artifacts := s.SetupArtifactsForSection(section)
+			if len(artifacts) == 0 || artifacts[0].VariantLabel == "" {
+				t.Fatalf("%s has no labeled %s Collector prerequisite flow", mode, method)
+			}
+			if !strings.HasSuffix(artifacts[0].ID, "-execution-role") {
+				t.Errorf("%s %s flow should start with the ECS task execution role", mode, method)
+			}
+			for _, artifact := range artifacts {
+				if strings.Contains(artifact.Template, "CONNECTOR_PRINCIPAL_ARN") || strings.Contains(artifact.Template, "ConnectorPrincipalArn") || strings.Contains(artifact.ID, "observation-role") || strings.Contains(artifact.ID, "deployment-role") {
+					t.Errorf("%s %s still requires a second Collector role", mode, artifact.ID)
+				}
+			}
+			for _, artifact := range artifacts {
+				if mode == ModeAutomatic && (strings.Contains(artifact.ID, "declare") || strings.Contains(artifact.ID, "credential") || strings.Contains(artifact.ID, "deploy-service")) {
+					t.Errorf("automatic %s flow includes deployment step %s", method, artifact.ID)
+				}
+				if artifact.Format != "shell" {
+					continue
+				}
+				rendered := renderSetupArtifact(artifact, permissions, map[string]string{"region": "us-east-1", "networkId": "vpc-123", "connectorName": "connector"})
+				cmd := exec.Command("bash", "-n")
+				cmd.Stdin = strings.NewReader(rendered)
+				if output, err := cmd.CombinedOutput(); err != nil {
+					t.Errorf("%s has invalid shell syntax: %v\n%s", artifact.ID, err, output)
+				}
+			}
+		}
+	}
+}
+
+func TestAWSCollectorPlacementGuideUsesSelectedValuesInBothModes(t *testing.T) {
+	s := MustGet("aws")
+	for _, mode := range []string{ModeManual, ModeAutomatic} {
+		prefix := "collector-manual-"
+		if mode == ModeAutomatic {
+			prefix = "collector-auto-"
+		}
+		artifacts := s.CollectorArtifactsForMode(awsCollectorType, mode)
+		byID := make(map[string]SetupArtifact, len(artifacts))
+		for _, artifact := range artifacts {
+			byID[artifact.ID] = artifact
+		}
+		role := byID[prefix+"execution-role"]
+		if !strings.Contains(role.Description, "once") || !strings.Contains(role.Description, "region") {
+			t.Errorf("%s role does not explain account-wide reuse", mode)
+		}
+		cluster := byID[prefix+"cluster"]
+		if !strings.Contains(cluster.Description, "ACTIVE") || !strings.Contains(cluster.Template, "{{clusterRef}}") || !strings.Contains(cluster.Template, "list-clusters") {
+			t.Errorf("%s cluster step must explain selection and use the entered ARN", mode)
+		}
+		network := byID[prefix+"network"]
+		wants := []string{"describe-vpcs"}
+		if mode == ModeAutomatic {
+			wants = []string{"describe-vpcs", "describe-subnets", "describe-route-tables", "{{networkId}}", "Subnet IDs are optional", "VPC ID is required"}
+		}
+		for _, want := range wants {
+			if !strings.Contains(network.Template+network.Description, want) {
+				t.Errorf("%s network step omits %q", mode, want)
+			}
+		}
+		if mode == ModeManual {
+			subnets := byID["collector-manual-subnets"]
+			for _, want := range []string{"describe-subnets", "describe-route-tables", "{{networkId}}", "exact subnet IDs"} {
+				if !strings.Contains(subnets.Template+subnets.Description, want) {
+					t.Errorf("manual subnets step omits %q", want)
+				}
+			}
+		}
+		egress := byID[prefix+"egress"]
+		for _, want := range []string{"Private", "Public", "public IP", "internal"} {
+			if !strings.Contains(egress.Description, want) {
+				t.Errorf("%s outbound path step omits %q", mode, want)
+			}
+		}
+		for _, artifact := range []SetupArtifact{cluster, network} {
+			rendered := renderSetupArtifact(artifact, nil, map[string]string{
+				"region": "us-east-1", "clusterRef": "arn:aws:ecs:us-east-1:123456789012:cluster/example", "networkId": "vpc-123",
+			})
+			if strings.Contains(rendered, "{{") || strings.Contains(rendered, "<CLUSTER_") || strings.Contains(rendered, "<VPC_") {
+				t.Errorf("%s rendered discovery command has an unresolved form value: %s", artifact.ID, rendered)
+			}
+			cmd := exec.Command("bash", "-n")
+			cmd.Stdin = strings.NewReader(rendered)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Errorf("%s has invalid shell syntax: %v\n%s", artifact.ID, err, output)
+			}
+		}
+	}
+}
+
 // TestAWSCollectorScalingIsFullyGranted: automatic scaling is a whole second API, and every one of these
 // is reached on a path a customer will actually take.
 //
@@ -270,17 +563,19 @@ func TestAWSCollectorManagementCannotReadItsOwnSecrets(t *testing.T) {
 	}
 }
 
-func TestAWSCollectorInfrastructurePermissionsStayOffConnectorIdentity(t *testing.T) {
+func TestAWSCollectorModePermissionsBelongToConnectorIdentity(t *testing.T) {
 	s := MustGet("aws")
-	for _, caps := range []Capabilities{
-		{Collectors: []CollectorCapability{{Type: awsCollectorType, Management: true}}},
-		{Collectors: []CollectorCapability{{Type: awsCollectorType, Management: true, Deployment: true}}},
-	} {
-		base := s.RequiredPermissions(caps)
-		for _, action := range []string{"ecs:CreateService", "ecs:DescribeServices", "secretsmanager:CreateSecret", "iam:PassRole", "ec2:DescribeVpcs"} {
-			if containsStr(base, action) {
-				t.Errorf("connector base identity was granted Collector action %s", action)
-			}
+	manual := s.RequiredPermissions(Capabilities{Collectors: []CollectorCapability{{Type: awsCollectorType, Management: true}}})
+	auto := s.RequiredPermissions(Capabilities{Collectors: []CollectorCapability{{Type: awsCollectorType, Management: true, Deployment: true}}})
+	off := s.RequiredPermissions(Capabilities{})
+	for _, action := range []string{"ecs:ListClusters", "ecs:DescribeServices", "ec2:DescribeRegions", "ec2:DescribeVpcs", "elasticloadbalancing:DescribeTargetHealth"} {
+		if !containsStr(manual, action) || !containsStr(auto, action) || containsStr(off, action) {
+			t.Errorf("%s must be present in manual/automatic and absent when off", action)
+		}
+	}
+	for _, action := range []string{"ecs:CreateService", "secretsmanager:CreateSecret", "iam:PassRole"} {
+		if containsStr(manual, action) || !containsStr(auto, action) || containsStr(off, action) {
+			t.Errorf("%s must be present only in automatic mode", action)
 		}
 	}
 }

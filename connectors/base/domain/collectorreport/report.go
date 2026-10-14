@@ -27,6 +27,8 @@ type Input struct {
 
 	// Status is what the reconcile pass last recorded. Problems can only make it worse.
 	Status collectorstatus.Status
+	// Teardown takes precedence over stale OpAMP data and old recorded health.
+	Teardown bool
 	// RecordedMessage is managed_collectors.message: the sentence whoever last judged this Collector
 	// wrote beside that status.
 	//
@@ -108,6 +110,9 @@ func Name(region string) string { return region }
 // The table is exhaustive on purpose — every (recorded status, liveness) pair has one defined answer, so
 // a new state cannot fall through to whatever the last branch happened to be.
 func statusFor(in Input, liveness Liveness) collectorstatus.Status {
+	if in.Teardown {
+		return in.Status
+	}
 	base := in.Status
 	if base == "" {
 		base = collectorstatus.StatusPending
@@ -177,6 +182,12 @@ func message(in Input, liveness Liveness) string {
 	// customer actually asks: will Odigos remove this?
 	if note := ownershipNote(in); note != "" {
 		parts = append(parts, note)
+	}
+	if in.Teardown {
+		for _, p := range in.Problems {
+			parts = append(parts, p.Message)
+		}
+		return strings.Join(parts, " · ")
 	}
 
 	if liveness == LivenessNeverConnected && in.Mode == spec.ModeManual {

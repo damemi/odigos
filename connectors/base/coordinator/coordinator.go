@@ -179,6 +179,13 @@ func (c *Coordinator) UpdateConfig(ctx context.Context, patch map[string]any) (m
 	if err := c.cfgMgr.Update(ctx, patch); err != nil {
 		return nil, err
 	}
+	// Wizard progress is UI metadata in the same durable config store. Saving a step must
+	// not restart discovery or convergence for the running connector.
+	if len(patch) == 1 {
+		if _, draftOnly := patch[config.KeyCollectorSetupDrafts]; draftOnly {
+			return c.cfgMgr.Effective(), nil
+		}
+	}
 	// Discovery tags / intervals may have changed — converge now rather than waiting for the next tick.
 	c.triggerReconcile()
 	_ = c.RefreshDiscovery(ctx)
@@ -493,12 +500,16 @@ func (c *Coordinator) runReconcile(ctx context.Context, recs []namedReconciler) 
 	}
 	c.reconcileMu.Lock()
 	defer c.reconcileMu.Unlock()
+	passCtx := ctx
+	if provider, ok := c.provider.(api.ReconcilePassContextProvider); ok {
+		passCtx = provider.ReconcilePassContext(ctx)
+	}
 	for _, nr := range recs {
 		if err := ensurePrerequisite(ctx, nr.rec); err != nil {
 			coordLog.Warn("instrumentation prerequisite not met; skipping reconcile", "type", nr.name, "error", err)
 			continue
 		}
-		if err := nr.rec.Reconcile(ctx); err != nil {
+		if err := nr.rec.Reconcile(passCtx); err != nil {
 			coordLog.Error("reconcile failed", "type", nr.name, "error", err)
 		}
 	}

@@ -44,9 +44,9 @@ const (
 //
 // GetSecretValue is deliberately absent, and its absence is a designed property rather than an
 // oversight: the connector keeps only a credential's hash and never reads the value back, so no code
-// path here can be made to return one. RestoreSecret is present because a deleted secret's NAME stays
-// reserved for its recovery window — up to 30 days — and without it, tearing a Collector down and
-// enabling it again would be refused for a month.
+// path here can be made to return one. Current teardown force-deletes secrets, but a secret scheduled
+// for deletion by an older deployment or an operator reserves its name. RestoreSecret lets a new
+// converge write a fresh value instead of waiting for that recovery window to expire.
 type SecretsClient interface {
 	DescribeSecret(ctx context.Context, in *secretsmanager.DescribeSecretInput, opts ...func(*secretsmanager.Options)) (*secretsmanager.DescribeSecretOutput, error)
 	CreateSecret(ctx context.Context, in *secretsmanager.CreateSecretInput, opts ...func(*secretsmanager.Options)) (*secretsmanager.CreateSecretOutput, error)

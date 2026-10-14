@@ -22,6 +22,8 @@ const (
 	KeyReconcileInterval = "reconcileInterval"
 	KeyShutdownTimeout   = "shutdownTimeout"
 	KeyDiscoveryTags     = "discoveryTags"
+	// Wizard placement and step metadata only. Never store an OpAMP Bearer value here.
+	KeyCollectorSetupDrafts = "collectorSetupDrafts"
 )
 
 // durationKeys are the config keys whose values are Go duration strings (e.g. "5m"); used for validation
@@ -33,11 +35,12 @@ var durationKeys = []string{KeyDiscoveryInterval, KeyHeartbeatInterval, KeyRecon
 // connector has never been configured.
 func Defaults() map[string]any {
 	return map[string]any{
-		KeyDiscoveryInterval: "5m",
-		KeyHeartbeatInterval: "30s",
-		KeyReconcileInterval: "1m",
-		KeyShutdownTimeout:   "10m",
-		KeyDiscoveryTags:     map[string]any{},
+		KeyDiscoveryInterval:    "5m",
+		KeyHeartbeatInterval:    "30s",
+		KeyReconcileInterval:    "1m",
+		KeyShutdownTimeout:      "10m",
+		KeyDiscoveryTags:        map[string]any{},
+		KeyCollectorSetupDrafts: map[string]any{},
 		// The managed-Collector tree. Declared here, provider-agnostically, so config.Manager
 		// accepts an updateConfig patch for it — the Manager rejects unknown top-level keys, and the
 		// per-region ids inside are discovered dynamically and cannot be declared in advance.
@@ -216,12 +219,61 @@ func validate(eff map[string]any) error {
 			return fmt.Errorf("config %q: %w", KeyDiscoveryTags, err)
 		}
 	}
+	if v, ok := eff[KeyCollectorSetupDrafts]; ok {
+		if err := validateCollectorSetupDrafts(v); err != nil {
+			return err
+		}
+	}
 	// Shape only. collectorsettings.Read is deliberately forgiving about individual fields — one
 	// mistyped value on one network must not stop a connector reconciling anything — so the gross
 	// error is caught here, at write time, where there is somebody to tell.
 	if v, ok := eff[collectorsettings.Key]; ok {
 		if _, isMap := v.(map[string]any); !isMap {
 			return fmt.Errorf("config %q must be an object with enabled/defaults/networks", collectorsettings.Key)
+		}
+	}
+	return nil
+}
+
+// Drafts are ordinary placement metadata. Explicit field allow-lists keep a one-time
+// OpAMP Bearer header out of the persistent config even if a client sends one by mistake.
+func validateCollectorSetupDrafts(value any) error {
+	drafts, ok := value.(map[string]any)
+	if !ok || len(drafts) > 1 {
+		return fmt.Errorf("config %q must contain at most one draft", KeyCollectorSetupDrafts)
+	}
+	for key, raw := range drafts {
+		if key != "active" {
+			return fmt.Errorf("config %q has an unknown draft key", KeyCollectorSetupDrafts)
+		}
+		draft, ok := raw.(map[string]any)
+		if !ok {
+			return fmt.Errorf("config %q.active must be an object", KeyCollectorSetupDrafts)
+		}
+		for field, value := range draft {
+			switch field {
+			case "form":
+				form, ok := value.(map[string]any)
+				if !ok {
+					return fmt.Errorf("config %q.active.form must be an object", KeyCollectorSetupDrafts)
+				}
+				for name, fieldValue := range form {
+					switch name {
+					case "region", "networkId", "subnetIds", "securityGroupId", "clusterRef", "executionRoleArn", "egress", "sizeId":
+						if s, ok := fieldValue.(string); !ok || len(s) > 1024 {
+							return fmt.Errorf("config %q.active.form.%s must be a short string", KeyCollectorSetupDrafts, name)
+						}
+					default:
+						return fmt.Errorf("config %q.active.form has an unknown field %q", KeyCollectorSetupDrafts, name)
+					}
+				}
+			case "mode", "method", "stageId", "declaredRegion", "credentialSecretArn", "updatedAt":
+				if s, ok := value.(string); !ok || len(s) > 1024 {
+					return fmt.Errorf("config %q.active.%s must be a short string", KeyCollectorSetupDrafts, field)
+				}
+			default:
+				return fmt.Errorf("config %q.active has an unknown field %q", KeyCollectorSetupDrafts, field)
+			}
 		}
 	}
 	return nil

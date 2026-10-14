@@ -7,9 +7,12 @@ import (
 	"time"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorownership"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/opamp"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
+	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
 // The managed-Collector reconcile loop.
@@ -33,9 +36,12 @@ type collectorTarget struct {
 
 type collectorResourceStore interface {
 	GetCollectorResourceState(context.Context, string) (store.CollectorResourceState, bool, error)
+	CollectorResourceStateDetail(context.Context, string) (string, error)
+	CollectorResourceStateUpdatedAt(context.Context, string) (time.Time, error)
 	ListCollectorResourceStates(context.Context) (map[string]store.CollectorResourceState, error)
 	SetCollectorResourceState(context.Context, string, store.CollectorResourceState, string) error
 	GetManagedCollector(context.Context, store.CollectorKey) (store.CollectorRecord, error)
+	UpsertManagedCollector(context.Context, store.CollectorKey, string, string, string, string, *time.Time) error
 	ListManagedCollectors(context.Context) ([]store.CollectorRecord, error)
 	DeleteManagedCollector(context.Context, store.CollectorKey) error
 	DeleteCollectorDestinationsForRegion(context.Context, string) error
@@ -64,11 +70,8 @@ func (c *Coordinator) collectorReconcileLoop(ctx context.Context) {
 		return
 	}
 	observers, deployers := c.activeCollectorHandlers(provider)
-	if len(observers) == 0 {
-		// No declared type the customer enabled. Nothing to observe and, by construction, nothing to
-		// deploy — a deployer without an observer of the same type is unreachable from here.
-		return
-	}
+	// Keep the loop running with no active observers: a teardown already in
+	// progress still needs retries after a capability change or restart.
 
 	coordLog.Info("managed-Collector reconcile loop starting",
 		"observed_types", len(observers), "deployed_types", len(deployers))
@@ -160,6 +163,10 @@ func (c *Coordinator) runCollectorReconcile(ctx context.Context, observers map[s
 	c.reconcileMu.Lock()
 	defer c.reconcileMu.Unlock()
 
+	c.retryCollectorTeardowns(ctx)
+	c.revokeSupersededCollectorCredentials(ctx)
+	c.revokeRemovedCapabilityCredentials(ctx)
+
 	settings := collectorsettings.Read(c.cfgMgr.Effective())
 	if !settings.Enabled {
 		// The feature switch, read live: flipping it off stops convergence on the next pass with no
@@ -176,6 +183,135 @@ func (c *Coordinator) runCollectorReconcile(ctx context.Context, observers map[s
 	for _, target := range targets {
 		c.reconcileCollector(ctx, target, settings)
 	}
+}
+
+func (c *Coordinator) revokeRemovedCapabilityCredentials(ctx context.Context) {
+	if c.store == nil {
+		return
+	}
+	records, err := c.collectorResourceStore().ListManagedCollectors(ctx)
+	if err != nil {
+		coordLog.Error("listing Collector capabilities for credential cleanup failed", "error", err)
+		return
+	}
+	for _, rec := range records {
+		if rec.CollectorID == "" || c.cfg.Capabilities.CollectorMode(rec.Kind) != "" {
+			continue
+		}
+		if _, err := c.store.RevokeCollectorCredentials(ctx, rec.CollectorID, collectorcredential.ReasonCapabilityRemoved, collectorcredential.ActorConnector); err != nil {
+			coordLog.Error("revoking Collector credentials after capability removal failed", "region", rec.Key.Region, "error", err)
+			continue
+		}
+		if _, err := c.store.ClearCollectorCredential(ctx, rec.CollectorID); err != nil {
+			coordLog.Error("clearing Collector credential pointer after capability removal failed", "region", rec.Key.Region, "error", err)
+		}
+	}
+}
+
+func (c *Coordinator) revokeSupersededCollectorCredentials(ctx context.Context) {
+	if c.store == nil {
+		return
+	}
+	records, err := c.collectorResourceStore().ListManagedCollectors(ctx)
+	if err != nil {
+		coordLog.Error("listing Collector credentials for rotation cleanup failed", "error", err)
+		return
+	}
+	const rotationGrace = 5 * time.Minute
+	for _, rec := range records {
+		if rec.CollectorID == "" {
+			continue
+		}
+		if err := c.store.RevokeSupersededCollectorCredentials(ctx, rec.CollectorID, time.Now().UTC(), rotationGrace); err != nil {
+			coordLog.Error("revoking superseded Collector credentials failed", "region", rec.Key.Region, "error", err)
+		}
+	}
+}
+
+// retryCollectorTeardowns resumes a request that encountered AWS release lag.
+// It runs before placement because disabled declarations no longer produce
+// deployment targets, while their recorded refs remain the authority to delete.
+func (c *Coordinator) retryCollectorTeardowns(ctx context.Context) {
+	states, err := c.collectorResourceStore().ListCollectorResourceStates(ctx)
+	if err != nil {
+		coordLog.Error("listing pending Collector teardowns failed", "error", err)
+		return
+	}
+	provider, ok := c.provider.(api.CollectorProvider)
+	if !ok {
+		return
+	}
+	deployers := provider.CollectorDeployers()
+	for region, state := range states {
+		if state != store.CollectorResourcesTearingDown && state != store.CollectorResourcesMoving {
+			continue
+		}
+		migrationTarget := ""
+		if state == store.CollectorResourcesMoving {
+			migrationTarget, err = c.collectorResourceStore().CollectorResourceStateDetail(ctx, region)
+			if err != nil || migrationTarget == "" {
+				coordLog.Error("reading Collector migration target failed", "region", region, "error", err)
+				continue
+			}
+		}
+		rec, err := c.collectorResourceStore().GetManagedCollector(ctx, store.CollectorKey{Region: region})
+		if err != nil {
+			if errors.Is(err, store.ErrCollectorNotFound) {
+				if state == store.CollectorResourcesMoving {
+					c.finishCollectorMigration(ctx, region, migrationTarget)
+					continue
+				}
+				if err := c.collectorResourceStore().SetCollectorResourceState(ctx, region, store.CollectorResourcesDestroyed, "Cloud teardown completed"); err == nil {
+					_ = c.removeCollectorLocalState(ctx, region, false)
+				}
+				continue
+			}
+			coordLog.Error("reading pending Collector teardown failed", "region", region, "error", err)
+			continue
+		}
+		deployer, ok := deployers[rec.Kind]
+		if !ok || rec.Mode != spec.ModeAutomatic || rec.Origin != string(collectorownership.OriginOdigos) {
+			coordLog.Error("pending Collector teardown has no automatic deployer", "region", region, "kind", rec.Kind)
+			continue
+		}
+		if err := c.teardownCollector(ctx, deployer, rec); err != nil {
+			if state != store.CollectorResourcesMoving && !errors.Is(err, api.ErrCollectorTeardownRetry) {
+				_ = c.collectorResourceStore().SetCollectorResourceState(ctx, region, store.CollectorResourcesOrphaned, err.Error())
+			}
+			continue
+		}
+		if _, err := c.collectorResourceStore().GetManagedCollector(ctx, rec.Key); !errors.Is(err, store.ErrCollectorNotFound) {
+			if err == nil && state != store.CollectorResourcesMoving {
+				_ = c.collectorResourceStore().SetCollectorResourceState(ctx, region, store.CollectorResourcesOrphaned, "Cloud teardown retained its infrastructure record")
+			}
+			continue
+		}
+		if state == store.CollectorResourcesMoving {
+			c.finishCollectorMigration(ctx, region, migrationTarget)
+			continue
+		}
+		if err := c.collectorResourceStore().SetCollectorResourceState(ctx, region, store.CollectorResourcesDestroyed, "Cloud teardown completed"); err != nil {
+			coordLog.Error("recording completed Collector teardown failed", "region", region, "error", err)
+			continue
+		}
+		if err := c.removeCollectorLocalState(ctx, region, false); err != nil {
+			coordLog.Error("removing completed Collector declaration failed", "region", region, "error", err)
+		}
+	}
+}
+
+func (c *Coordinator) finishCollectorMigration(ctx context.Context, region, networkID string) {
+	if err := c.mutateCollectorSettings(ctx, func(tree map[string]any) (map[string]any, error) {
+		return collectorsettings.WriteRegion(tree, region, collectorsettings.Patch{HostNetworkID: &networkID})
+	}); err != nil {
+		coordLog.Error("writing target VPC after Collector teardown failed", "region", region, "network", networkID, "error", err)
+		return
+	}
+	if err := c.collectorResourceStore().SetCollectorResourceState(ctx, region, store.CollectorResourcesNotCreated, "Old VPC stack removed; target VPC is ready for provisioning"); err != nil {
+		coordLog.Error("recording completed Collector migration failed", "region", region, "error", err)
+		return
+	}
+	c.TriggerCollectorReconcile()
 }
 
 // collectorTargets asks every observer which networks it has, collapses duplicate
@@ -232,6 +368,13 @@ func (c *Coordinator) collectorTargets(ctx context.Context, observers map[string
 // not hold the whole fleet un-converged.
 func (c *Coordinator) reconcileCollector(ctx context.Context, target collectorTarget, settings collectorsettings.Settings) {
 	regional := settings.Region(target.network.Region)
+	if state, _, err := c.collectorResourceStore().GetCollectorResourceState(ctx, target.network.Region); err != nil ||
+		state == store.CollectorResourcesMoving || state == store.CollectorResourcesTearingDown {
+		if err != nil {
+			coordLog.Error("reading Collector resource state before reconciliation failed", "region", target.network.Region, "error", err)
+		}
+		return
+	}
 
 	defer func() {
 		// A provider panic is one network's failure too. Without this a nil map in one deployer takes
@@ -258,11 +401,16 @@ func (c *Coordinator) reconcileCollector(ctx context.Context, target collectorTa
 		return
 	}
 	if !regional.Deploys() {
-		// Disabled for this region. Nothing is deleted: turning a region off keeps whatever is running
-		// until somebody explicitly removes it.
-		coordLog.Debug("skipping a regional Collector deploy",
-			"network", target.network.NetworkID, "region", target.network.Region,
-			"enabled", regional.Enabled)
+		// The default retention policy keeps a disabled Collector running. A
+		// configured idle policy may scale it to zero or retire its owned stack;
+		// this path never enters provisioning.
+		if retirer, ok := target.deployer.(api.CollectorDisabledRetirer); ok {
+			if err := retirer.RetireDisabledCollector(ctx, target.network); err != nil {
+				coordLog.Error("applying disabled Collector retention failed", "region", target.network.Region, "error", err)
+			} else if _, err := c.collectorResourceStore().GetManagedCollector(ctx, store.CollectorKey{Region: target.network.Region}); errors.Is(err, store.ErrCollectorNotFound) {
+				_ = c.collectorResourceStore().SetCollectorResourceState(ctx, target.network.Region, store.CollectorResourcesDestroyed, "Disabled Collector retired by retention policy")
+			}
+		}
 		return
 	}
 
@@ -279,14 +427,25 @@ func (c *Coordinator) reconcileCollector(ctx context.Context, target collectorTa
 	}
 	convergeErr := target.deployer.ConvergeCollector(ctx, target.network)
 	rec, recordErr := c.collectorResourceStore().GetManagedCollector(ctx, store.CollectorKey{Region: target.network.Region})
-	nextState := store.CollectorResourcesOrphaned
+	nextState := store.CollectorResourcesProvisioning
 	switch {
+	case convergeErr != nil && recordErr == nil && hasCloudResourceRefs(rec) && state == store.CollectorResourcesCreated:
+		// A transient AWS failure does not turn an existing deployment into an orphan.
+		nextState = store.CollectorResourcesCreated
+	case convergeErr != nil && errors.Is(recordErr, store.ErrCollectorNotFound) && state == store.CollectorResourcesCreated:
+		// Resources were previously recorded, but their row has vanished.
+		nextState = store.CollectorResourcesOrphaned
+	case convergeErr != nil:
+		// The next reconcile may succeed after throttling or an IAM correction.
+		// Neither a first failure nor partially recorded refs proves an orphan.
+		nextState = store.CollectorResourcesProvisioning
 	case recordErr == nil && hasCloudResourceRefs(rec) && convergeErr == nil:
 		nextState = store.CollectorResourcesCreated
-	case recordErr == nil && !hasCloudResourceRefs(rec) && convergeErr == nil && regional.DeploymentRoleRef == "" && state != store.CollectorResourcesCreated:
-		// Legacy UI declarations lacking the required deployment identity cannot
-		// reach the provider's cloud creation path.
-		nextState = store.CollectorResourcesNotCreated
+	case recordErr == nil && !hasCloudResourceRefs(rec) && convergeErr == nil:
+		// The provider may have created the derived-name log group before it
+		// reached a resource-ref column. Keep the provisioning history so
+		// teardown uses its ownership gate instead of discarding the row.
+		nextState = store.CollectorResourcesProvisioning
 	case errors.Is(recordErr, store.ErrCollectorNotFound) && convergeErr == nil && state == store.CollectorResourcesCreated:
 		// Retention teardown can run inside provider convergence and remove the
 		// row after successfully destroying its cloud resources.
@@ -296,6 +455,8 @@ func (c *Coordinator) reconcileCollector(ctx context.Context, target collectorTa
 	case errors.Is(recordErr, store.ErrCollectorNotFound) && convergeErr == nil && (!known || state == store.CollectorResourcesNotCreated || state == store.CollectorResourcesProvisioning):
 		// Placement can refuse before the provider creates anything.
 		nextState = store.CollectorResourcesNotCreated
+	case recordErr != nil && known:
+		nextState = state
 	}
 	if err := c.collectorResourceStore().SetCollectorResourceState(ctx, target.network.Region, nextState, collectorResourceStateDetail(nextState)); err != nil {
 		coordLog.Error("recording Collector cloud-resource state after deployment failed", "region", target.network.Region, "error", err)
@@ -549,8 +710,13 @@ func (c *Coordinator) teardownCollector(ctx context.Context, deployer api.Collec
 		NetworkID: record.NetworkID,
 		Kind:      record.Kind,
 	}); err != nil {
-		coordLog.Error("tearing down a Collector failed; the recorded state permits a retry",
-			"network", record.NetworkID, "region", record.Key.Region, "error", err)
+		if errors.Is(err, api.ErrCollectorTeardownRetry) {
+			coordLog.Info("Collector teardown is waiting for AWS dependencies; reconciliation will retry",
+				"network", record.NetworkID, "region", record.Key.Region, "error", err)
+		} else {
+			coordLog.Error("tearing down a Collector failed; the recorded state permits a retry",
+				"network", record.NetworkID, "region", record.Key.Region, "error", err)
+		}
 		return fmt.Errorf("%s/%s: %w", record.Key.Region, record.NetworkID, err)
 	}
 	return nil

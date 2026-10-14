@@ -182,10 +182,8 @@ func convergenceProblem(err error) collectorstatus.Problem {
 
 // convergedState is what one pass produced, gathered so the recording happens in one place.
 //
-// One structure rather than recording as it goes, because the row is written by column GROUP: the seven
-// infrastructure refs go together and the scaling row goes together, so a half-written group nulls the
-// other half. Gathering also means a pass that failed at the service still records the ingress and the
-// secrets it did create — which is what makes the next pass a continuation rather than a retry.
+// One structure carries cumulative refs across the stages. Infrastructure is checkpointed after
+// each stage; those writes replace one column group and must include every earlier ref.
 type convergedState struct {
 	prerequisites Prerequisites
 	ingress       Ingress
@@ -251,6 +249,9 @@ func (d *Deployer) convergeNetwork(
 		Transport:        settings.TLS,
 	})
 	state.problems = append(state.problems, state.ingress.Problems...)
+	if recordErr := d.checkpointInfrastructure(ctx, key, state); recordErr != nil {
+		return state, errors.Join(err, recordErr)
+	}
 	if err != nil || !state.ingress.Ready() {
 		return state, err
 	}
@@ -265,6 +266,9 @@ func (d *Deployer) convergeNetwork(
 		Pin:           d.Pin,
 	})
 	state.problems = append(state.problems, state.workload.Problems...)
+	if recordErr := d.checkpointInfrastructure(ctx, key, state); recordErr != nil {
+		return state, errors.Join(err, recordErr)
+	}
 	if err != nil || !state.workload.Ready() {
 		return state, err
 	}
@@ -292,6 +296,9 @@ func (d *Deployer) convergeNetwork(
 		Recorded:      serviceRecorded,
 	})
 	state.problems = append(state.problems, state.service.Problems...)
+	if recordErr := d.checkpointInfrastructure(ctx, key, state); recordErr != nil {
+		return state, errors.Join(err, recordErr)
+	}
 	if err != nil {
 		return state, err
 	}
@@ -307,6 +314,51 @@ func (d *Deployer) convergeNetwork(
 	})
 	state.problems = append(state.problems, state.scaling.Problems...)
 	return state, err
+}
+
+// Checkpoint each completed stage before another AWS write can create more
+// resources. Every call supplies the cumulative refs, since the store updates
+// the infrastructure columns as one group.
+func (d *Deployer) checkpointInfrastructure(ctx context.Context, key basestore.CollectorKey, state convergedState) error {
+	if state.workload.Cluster.ARN == "" && state.ingress.SecurityGroupID == "" &&
+		state.ingress.LoadBalancerARN == "" && state.service.ARN == "" {
+		return nil
+	}
+	previous, err := d.recordedRefs(ctx, key)
+	if err != nil {
+		return err
+	}
+	current := InfrastructureRecord(key, state.workload, state.ingress, state.service, state.subnets)
+	// A stage may stop before it observes a service or load balancer that was
+	// recorded on an earlier pass. An empty result cannot revoke deletion
+	// authority over that still-running object.
+	if current.WorkloadRef == "" {
+		current.WorkloadRef = previous.WorkloadRef
+	}
+	if current.RevisionRef == "" {
+		current.RevisionRef = previous.RevisionRef
+	}
+	if current.RuntimeRef == "" {
+		current.RuntimeRef = previous.RuntimeRef
+	}
+	if current.FrontendRef == "" {
+		current.FrontendRef = previous.FrontendRef
+	}
+	for _, ref := range previous.BackendRefs {
+		if !containsStringValue(current.BackendRefs, ref) {
+			current.BackendRefs = append(current.BackendRefs, ref)
+		}
+	}
+	if current.IngressRef == "" {
+		current.IngressRef = previous.IngressRef
+	}
+	if len(current.PlacementRefs) == 0 {
+		current.PlacementRefs = previous.PlacementRefs
+	}
+	if err := d.Store.RecordCollectorInfrastructure(ctx, key, current); err != nil {
+		return fmt.Errorf("checkpoint Collector infrastructure in %s: %w", key.Region, err)
+	}
+	return nil
 }
 
 // desiredConfig renders the document the cold-start secret carries, or nothing.
@@ -397,24 +449,10 @@ func (d *Deployer) countUnresolved(networkID string, sources []awsingress.Source
 
 // record writes what the pass produced, by column group.
 //
-// Best-effort by design: a converge that got as far as creating a load balancer and then failed has to
-// record that load balancer, because the ref is half the authority to delete it later and a pass
-// that recorded nothing would leave it un-owned. So every write is attempted and a failure is logged
-// rather than returned — the alternative is losing the refs of everything that succeeded because one
-// column group did not.
-//
-// A row that does not exist yet swallows all of them, and that is the right outcome rather than a
-// missing case: the row is created while the credential is installed, so if it is absent then
-// EnsureNetwork refused before anything was built and there are no refs to record.
+// Infrastructure was checkpointed during convergence. These remaining status,
+// endpoint and scaling writes are observational and do not grant delete authority.
 func (d *Deployer) record(ctx context.Context, key basestore.CollectorKey,
 	settings collectorsettings.Network, state convergedState) {
-	if state.workload.Cluster.ARN != "" || state.ingress.SecurityGroupID != "" {
-		if err := d.Store.RecordCollectorInfrastructure(ctx, key,
-			InfrastructureRecord(key, state.workload, state.ingress, state.service, state.subnets)); err != nil {
-			log.Warn("could not record the Collector's infrastructure refs",
-				"region", key.Region, "error", err)
-		}
-	}
 	if state.ingress.Transport.GRPCEndpoint != "" {
 		if err := d.Store.RecordCollectorEndpoint(ctx, key,
 			state.ingress.Transport.GRPCEndpoint, state.ingress.Transport.HTTPEndpoint,
@@ -541,6 +579,12 @@ func (d *Deployer) retire(ctx context.Context, key basestore.CollectorKey, netwo
 		d.reportIdle(ctx, key, retention, record.IdleSince)
 		return nil
 	}
+}
+
+// RetireDisabledCollector reaches the same retention policy when a regional
+// declaration is disabled. No provisioning path is entered.
+func (d *Deployer) RetireDisabledCollector(ctx context.Context, network baseapi.CollectorNetwork) error {
+	return d.retire(ctx, basestore.CollectorKey{Region: network.Region}, network)
 }
 
 // clearIdle stops the retention clock for a network that has sources again.
@@ -691,7 +735,7 @@ func (d *Deployer) TeardownCollector(ctx context.Context, network baseapi.Collec
 	// Only while the row is still there. A completed teardown deleted it, and every row writer refuses a
 	// row that does not exist rather than inventing one — which is what keeps a teardown's own report
 	// from resurrecting the Collector it just removed.
-	if !result.RecordRemoved {
+	if !result.RecordRemoved && !errors.Is(err, baseapi.ErrCollectorTeardownRetry) {
 		d.escalate(ctx, key, result.Problems)
 	}
 	return err

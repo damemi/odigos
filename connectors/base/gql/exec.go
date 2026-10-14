@@ -24,11 +24,9 @@ type credentialIssuerContextKey struct{}
 // {"errors":[...]} map, or nil for an empty/null data result. It is shared by the Central reverse-
 // WebSocket client and the odictl /ws CLI endpoint so both speak the identical wire format.
 //
-// isAdmin authorizes mutations: Central forwards the calling user's admin flag with every frame (as it
-// does for k8s/VM proxies), and a non-admin caller (VIEWER/MAINTAINER) may read but not mutate. Without
-// this the connector executed every forwarded operation ungated — a viewer could instrument or roll back
-// customer Lambdas via remoteFetch. Read (query) operations are always allowed.
-func RunOperation(ctx context.Context, exec *executor.Executor, query string, variables map[string]any, transport string, isAdmin bool) any {
+// canEdit authorizes ordinary mutations. ownerAdmin is required for credential issuance/revocation;
+// Central forwards both permissions separately so a maintainer cannot reveal a Collector credential.
+func RunOperation(ctx context.Context, exec *executor.Executor, query string, variables map[string]any, transport string, canEdit, ownerAdmin bool) any {
 	opName := ExtractOperationName(query)
 	execLog.Debug("graphql operation start", "transport", transport, "operation", opName)
 
@@ -47,11 +45,11 @@ func RunOperation(ctx context.Context, exec *executor.Executor, query string, va
 		)
 		return gqlErrorPayload(listErr)
 	}
-	if !isAdmin && opCtx.Operation != nil && opCtx.Operation.Operation == ast.Mutation {
-		execLog.Warn("rejecting non-admin mutation", "transport", transport, "operation", opName)
-		return gqlErrorPayload(gqlerror.List{gqlerror.Errorf("admin privileges are required to perform this operation")})
+	if !canEdit && opCtx.Operation != nil && opCtx.Operation.Operation == ast.Mutation {
+		execLog.Warn("rejecting mutation without edit permission", "transport", transport, "operation", opName)
+		return gqlErrorPayload(gqlerror.List{gqlerror.Errorf("edit privileges are required to perform this operation")})
 	}
-	if isAdmin {
+	if ownerAdmin {
 		ctx = context.WithValue(ctx, credentialIssuerContextKey{}, true)
 	}
 	respHandler, runCtx := exec.DispatchOperation(ctx, opCtx)
@@ -93,6 +91,9 @@ func gqlErrorPayload(list gqlerror.List) map[string]any {
 		m := map[string]any{"message": e.Message}
 		if len(e.Path) > 0 {
 			m["path"] = e.Path
+		}
+		if len(e.Extensions) > 0 {
+			m["extensions"] = e.Extensions
 		}
 		errs = append(errs, m)
 	}

@@ -35,9 +35,9 @@ client-controlled, so it is a consistency check for the connector to make, never
 
 ## What it does not do
 
-- **Issue, rotate or revoke credentials.** Those belong to Central's issuance API (§13). The one write
-  here is `activated_at`, which records that a credential was seen working — only the gateway is in a
-  position to know that, and a rotation reads it to decide the outgoing credential can be revoked.
+- **Issue, rotate or revoke credentials.** Those belong to the connector's managed Collector API.
+  After gateway authentication, the connector records `activated_at` when it accepts the OpAMP
+  session; rotation cleanup uses that connection proof and a grace period.
 - **Terminate OpAMP.** The connector owns desired configuration and runs the OpAMP server. The gateway
   is a byte pipe once the handshake is authenticated.
 - **Hold a credential value.** It hashes what was presented and forwards an identity. Nothing
@@ -89,18 +89,20 @@ fleet, and every one of them would fail to reconnect for the same reason.
 synced and credential store reachable — so a replica that can only answer `503` leaves the edge's
 rotation instead of absorbing connections it will refuse.
 
-## Dependencies not yet met
+## Connector integration
 
 The gateway resolves a connector's OpAMP address from the **Service** labelled
-`odigos.io/connector-id=<CR UID>` that exposes a port named `opamp` (or port 4320). Until
-`connector-runtime` sets that label and exposes the port, and until the connector runs an OpAMP server
-on it, an authenticated Collector is answered `503` with `upstream-unresolvable` in the log.
+`odigos.io/connector-id=<CR UID>` that exposes a port named `opamp` (or port 4320).
+`connector-runtime` sets that label and port when Collector management is enabled, and the
+connector runs the OpAMP server. If the upstream is absent, an authenticated Collector is answered
+`503` with `upstream-unresolvable` in the log.
 
 That is deliberate. Recomputing the connector's workload name here would be a copy of a rule that lives
 in `connector-runtime`, correct until the day it was not — and the failure would be a Collector routed
 at a name nothing answers on, with every component reporting healthy.
 
-Issuance is the other open dependency: nothing writes `collector_platform.collector_credentials` yet.
+Automatic provisioning and the manual admin mutation write to
+`connector_platform.collector_credentials`.
 
 ## Build and test
 

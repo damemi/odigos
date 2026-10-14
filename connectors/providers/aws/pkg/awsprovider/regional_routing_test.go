@@ -41,24 +41,56 @@ func TestSelectCollectorRoutesAdmitsReadyRegionalCollector(t *testing.T) {
 	}
 }
 
-func TestSelectCollectorRoutesWithoutGlobalTerminal(t *testing.T) {
+func TestSelectCollectorRoutesAnnouncesBeforeFirstWrite(t *testing.T) {
+	const region, ref = "eu-west-1", "cluster/service"
+	input := collectorRouteSelectionInput{
+		Direct: testDirectRouting(""), Desired: map[string]domaindest.Routing{ref: testCollectorRouting("vpc-host")},
+		Candidates: []collectorRouteCandidate{{Region: region, Ref: ref, Instrumented: true}},
+		BatchSizes: map[string]int{region: 1}, Announcing: map[string]bool{region: true},
+	}
+	if got := selectCollectorRoutes(input)[ref]; got.Via != domaindest.RouteDirect || got.Reason != domaindest.ReasonCollectorRolloutPending {
+		t.Fatalf("announcement pass changed workload route: %+v", got)
+	}
+	input.Announcing[region] = false
+	if got := selectCollectorRoutes(input)[ref]; got.Via != domaindest.RouteCollector {
+		t.Fatalf("post-announcement pass did not admit workload: %+v", got)
+	}
+}
+
+func TestSelectCollectorRoutesDefersKindWithNoRegionalBatchSlot(t *testing.T) {
+	const region, ref = "eu-west-1", "cluster/service"
+	routes := selectCollectorRoutes(collectorRouteSelectionInput{
+		Direct: testDirectRouting(""), Desired: map[string]domaindest.Routing{ref: testCollectorRouting("vpc-host")},
+		Candidates:   []collectorRouteCandidate{{Region: region, Ref: ref, Instrumented: true}},
+		BatchBlocked: map[string]bool{region: true},
+	})
+	if got := routes[ref]; got.Via != domaindest.RouteDirect || got.Reason != domaindest.ReasonCollectorRolloutPending {
+		t.Fatalf("kind without a batch slot changed route: %+v", got)
+	}
+}
+
+func TestSelectCollectorRoutesWithoutGlobalTerminalUsesReachableCollector(t *testing.T) {
 	direct := domaindest.Routing{Outcome: domaindest.RoutingError, Reason: domaindest.ReasonNoDestination}
 	desired := map[string]domaindest.Routing{
-		"cluster/first":  testCollectorRouting("vpc-host"),
-		"cluster/second": testCollectorRouting("vpc-host"),
+		"cluster/first":       testCollectorRouting("vpc-host"),
+		"cluster/second":      testCollectorRouting("vpc-host"),
+		"cluster/unreachable": direct,
 	}
 	routes := selectCollectorRoutes(collectorRouteSelectionInput{
 		Direct: direct, Desired: desired,
 		Candidates: []collectorRouteCandidate{
 			{Region: "eu-west-1", Ref: "cluster/first", Instrumented: true},
-			{Region: "eu-west-1", Ref: "cluster/second", Instrumented: true},
+			{Region: "eu-west-1", Ref: "cluster/second"},
 		},
 		BatchSizes: map[string]int{"eu-west-1": 1},
 	})
-	for ref, route := range routes {
-		if route.Outcome != domaindest.RoutingCollector {
-			t.Errorf("%s route = %+v, want Collector without an unusable direct fallback", ref, route)
+	for _, ref := range []string{"cluster/first", "cluster/second"} {
+		if route := routes[ref]; route.Via != domaindest.RouteCollector || route.Outcome != domaindest.RoutingCollector {
+			t.Errorf("%s route = %+v, want reachable Collector without a global terminal", ref, route)
 		}
+	}
+	if route := routes["cluster/unreachable"]; route.Outcome != domaindest.RoutingError {
+		t.Errorf("unreachable route = %+v, want routing error without a global fallback", route)
 	}
 }
 

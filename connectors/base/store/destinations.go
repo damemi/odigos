@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
@@ -17,18 +18,19 @@ func isNoRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
 
 // DestinationRecord is a persisted destination row.
 type DestinationRecord struct {
-	Name     string
-	Type     string
-	Region   string
-	Config   map[string]any
-	Signals  []string
-	Disabled bool
+	Name      string
+	Type      string
+	Region    string
+	Config    map[string]any
+	Signals   []string
+	Disabled  bool
+	UpdatedAt time.Time
 }
 
 func (s *Store) ListDestinations(ctx context.Context) ([]DestinationRecord, error) {
 	destinationsLog.Debug("list destinations", "connector", s.connectorName, "schema", s.schema)
 	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
-		SELECT name, dest_type, COALESCE(region, ''), config, signals, disabled
+		SELECT name, dest_type, COALESCE(region, ''), config, signals, disabled, updated_at
 		FROM %s.destinations
 		WHERE connector_name = $1
 		ORDER BY name
@@ -43,7 +45,7 @@ func (s *Store) ListDestinations(ctx context.Context) ([]DestinationRecord, erro
 	for rows.Next() {
 		var rec DestinationRecord
 		var configJSON, signalsJSON []byte
-		if err := rows.Scan(&rec.Name, &rec.Type, &rec.Region, &configJSON, &signalsJSON, &rec.Disabled); err != nil {
+		if err := rows.Scan(&rec.Name, &rec.Type, &rec.Region, &configJSON, &signalsJSON, &rec.Disabled, &rec.UpdatedAt); err != nil {
 			destinationsLog.Error("scan destination row failed", "error", err)
 			return nil, err
 		}
@@ -64,10 +66,10 @@ func (s *Store) GetDestination(ctx context.Context, name string) (*DestinationRe
 	var rec DestinationRecord
 	var configJSON, signalsJSON []byte
 	err := s.pool.QueryRow(ctx, fmt.Sprintf(`
-		SELECT name, dest_type, COALESCE(region, ''), config, signals, disabled
+		SELECT name, dest_type, COALESCE(region, ''), config, signals, disabled, updated_at
 		FROM %s.destinations
 		WHERE connector_name = $1 AND name = $2
-	`, s.schema), s.connectorName, name).Scan(&rec.Name, &rec.Type, &rec.Region, &configJSON, &signalsJSON, &rec.Disabled)
+	`, s.schema), s.connectorName, name).Scan(&rec.Name, &rec.Type, &rec.Region, &configJSON, &signalsJSON, &rec.Disabled, &rec.UpdatedAt)
 	if err != nil {
 		if isNoRows(err) {
 			return nil, nil

@@ -23,6 +23,8 @@ type CredentialStore interface {
 	GetManagedCollector(ctx context.Context, key basestore.CollectorKey) (basestore.CollectorRecord, error)
 	// UpsertManagedCollector creates the row a credential is recorded against.
 	UpsertManagedCollector(ctx context.Context, key basestore.CollectorKey, networkID, kind, mode, origin string, adoptedAt *time.Time) error
+	RecordCollectorLicenseSecret(ctx context.Context, key basestore.CollectorKey, ref string) error
+	RecordCollectorCredentialSecret(ctx context.Context, key basestore.CollectorKey, ref string) error
 	// CollectorCredential reads one issuance.
 	CollectorCredential(ctx context.Context, collectorID, credentialID string) (collectorcredential.Record, error)
 	// IssueCollectorCredential mints, persists the verifier and binding, and audits — all or nothing.

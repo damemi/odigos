@@ -268,6 +268,24 @@ func (f *fakeStore) UpsertManagedCollector(_ context.Context, key basestore.Coll
 	return nil
 }
 
+func (f *fakeStore) RecordCollectorLicenseSecret(_ context.Context, key basestore.CollectorKey, ref string) error {
+	row, ok := f.rows[key]
+	if !ok {
+		return basestore.ErrCollectorNotFound
+	}
+	row.LicenseSecretRef = ref
+	return nil
+}
+
+func (f *fakeStore) RecordCollectorCredentialSecret(_ context.Context, key basestore.CollectorKey, ref string) error {
+	row, ok := f.rows[key]
+	if !ok {
+		return basestore.ErrCollectorNotFound
+	}
+	row.CredentialRef = ref
+	return nil
+}
+
 func (f *fakeStore) CollectorCredential(_ context.Context, collectorID, credentialID string) (collectorcredential.Record, error) {
 	rec, ok := f.credentials[collectorID+"/"+credentialID]
 	if !ok {

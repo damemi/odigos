@@ -96,6 +96,7 @@ type Subnet struct {
 	Region           string
 	ID               string
 	VPCID            string
+	CIDRBlock        string
 	AvailabilityZone string
 	// AvailableIPs is the subnet's free private IPv4 address count. Zero means ECS cannot attach an
 	// awsvpc ENI here at all: the service would be created and never place a task, failing with a
@@ -437,11 +438,8 @@ func (t Topology) CanReach(hostRegion, hostVPC, consumerRegion, consumerVPC stri
 	return t.Reachability(hostRegion, hostVPC, consumerRegion, consumerVPC, hostSubnetIDs, consumerSubnetIDs) == ReachabilityReachable
 }
 
-// CollectorIngressReachability proves whether a Collector security group admits traffic from any of the
-// workload's source security groups on either OTLP port. Security-group references are valid within one
-// VPC and across an active same-region VPC peering; route reachability is still a separate required proof.
-// Missing groups, malformed port ranges, unknown VPCs, or incomplete source rules return Unknown rather
-// than claiming that a workload can reach the Collector.
+// CollectorIngressReachability proves security-group-reference admission for callers without workload
+// subnet IDs. The workload-aware form also proves CIDR admission from every selected subnet.
 func (t Topology) CollectorIngressReachability(region, collectorVPC, collectorSecurityGroup, sourceVPC string, sourceSecurityGroups []string) Reachability {
 	return t.CollectorIngressReachabilityForPorts(region, collectorVPC, collectorSecurityGroup, sourceVPC, sourceSecurityGroups, []int32{4317, 4318})
 }
@@ -450,6 +448,14 @@ func (t Topology) CollectorIngressReachability(region, collectorVPC, collectorSe
 // be admitted because different Fargate language agents may select different OTLP transports.
 func (t Topology) CollectorIngressReachabilityForPorts(region, collectorVPC, collectorSecurityGroup, sourceVPC string,
 	sourceSecurityGroups []string, ports []int32) Reachability {
+	return t.CollectorIngressReachabilityForWorkload(region, collectorVPC, collectorSecurityGroup, sourceVPC, nil, sourceSecurityGroups, ports)
+}
+
+// CollectorIngressReachabilityForWorkload proves that every published OTLP port admits the workload.
+// A source security-group reference admits any of its ENIs; CIDR rules must cover every subnet ECS or
+// Lambda may select. Direct same-region peering and reciprocal routes are checked separately.
+func (t Topology) CollectorIngressReachabilityForWorkload(region, collectorVPC, collectorSecurityGroup, sourceVPC string,
+	sourceSubnetIDs, sourceSecurityGroups []string, ports []int32) Reachability {
 	host, hostOK := t.vpcs[collectorVPC]
 	consumer, consumerOK := t.vpcs[sourceVPC]
 	if !hostOK || !consumerOK || host.Region != region || consumer.Region != region || region == "" {
@@ -459,24 +465,27 @@ func (t Topology) CollectorIngressReachabilityForPorts(region, collectorVPC, col
 	if !collectorOK || collector.ID == "" || collector.VPCID != collectorVPC || collector.Region != region {
 		return ReachabilityUnknown
 	}
-	if len(sourceSecurityGroups) == 0 {
-		return ReachabilityUnknown
-	}
 	if collectorVPC != sourceVPC {
 		if !hasSameRegionPeering(t.peerings, collectorVPC, sourceVPC, region) {
 			return ReachabilityUnreachable
 		}
 	}
+	verifiedSourceGroups := make(map[string]bool, len(sourceSecurityGroups))
+	sourceGroupsUnknown := len(sourceSecurityGroups) == 0
 	for _, id := range sourceSecurityGroups {
 		group, ok := t.securityGroups[id]
 		if !ok || group.ID == "" || group.VPCID != sourceVPC || group.Region != region {
-			return ReachabilityUnknown
+			sourceGroupsUnknown = true
+			continue
 		}
+		verifiedSourceGroups[id] = true
 	}
 
-	unknown := false
+	unknown := sourceGroupsUnknown
 	for _, port := range ports {
 		admitted := false
+		cidrCovered := make(map[string]bool, len(sourceSubnetIDs))
+		cidrUnknown := false
 		for _, rule := range collector.Ingress {
 			if rule.Incomplete {
 				unknown = true
@@ -484,7 +493,7 @@ func (t Topology) CollectorIngressReachabilityForPorts(region, collectorVPC, col
 			if !securityGroupRuleAllowsPort(rule, port) {
 				continue
 			}
-			for _, sourceID := range sourceSecurityGroups {
+			for sourceID := range verifiedSourceGroups {
 				for _, allowedID := range rule.SourceSecurityGroupIDs {
 					if sourceID == allowedID {
 						admitted = true
@@ -495,9 +504,38 @@ func (t Topology) CollectorIngressReachabilityForPorts(region, collectorVPC, col
 			if admitted {
 				break
 			}
+			if len(rule.SourceCIDRs) == 0 {
+				continue
+			}
+			if len(sourceSubnetIDs) == 0 {
+				cidrUnknown = true
+				continue
+			}
+			for _, subnetID := range sourceSubnetIDs {
+				subnet, ok := t.subnets[subnetID]
+				if !ok || subnet.Region != region || subnet.VPCID != sourceVPC || subnet.CIDRBlock == "" {
+					cidrUnknown = true
+					continue
+				}
+				for _, allowed := range rule.SourceCIDRs {
+					if cidrContains(allowed, subnet.CIDRBlock) {
+						cidrCovered[subnetID] = true
+						break
+					}
+				}
+			}
+		}
+		if !admitted && len(sourceSubnetIDs) > 0 {
+			admitted = true
+			for _, subnetID := range sourceSubnetIDs {
+				if !cidrCovered[subnetID] {
+					admitted = false
+					break
+				}
+			}
 		}
 		if !admitted {
-			if unknown {
+			if unknown || cidrUnknown {
 				return ReachabilityUnknown
 			}
 			return ReachabilityUnreachable
@@ -506,9 +544,48 @@ func (t Topology) CollectorIngressReachabilityForPorts(region, collectorVPC, col
 	return ReachabilityReachable
 }
 
+func cidrContains(allowed, source string) bool {
+	a, err := netip.ParsePrefix(allowed)
+	if err != nil {
+		return false
+	}
+	s, err := netip.ParsePrefix(source)
+	if err != nil || a.Addr().Is4() != s.Addr().Is4() {
+		return false
+	}
+	return a.Bits() <= s.Bits() && a.Contains(s.Masked().Addr())
+}
+
 // CollectorSecurityGroupAllowsOTLP is the boolean form for callers that need a safe admission gate.
 func (t Topology) CollectorSecurityGroupAllowsOTLP(region, collectorVPC, collectorSecurityGroup, sourceVPC string, sourceSecurityGroups []string) bool {
 	return t.CollectorIngressReachability(region, collectorVPC, collectorSecurityGroup, sourceVPC, sourceSecurityGroups) == ReachabilityReachable
+}
+
+// CollectorSecurityGroupAllowsSelfHealth checks the manual artifact's NLB/task
+// shared security-group contract for the Collector health endpoint.
+func (t Topology) CollectorSecurityGroupAllowsSelfHealth(region, vpcID, securityGroupID string) Reachability {
+	group, ok := t.securityGroups[securityGroupID]
+	if !ok || group.Region != region || group.VPCID != vpcID {
+		return ReachabilityUnknown
+	}
+	unknown := false
+	for _, rule := range group.Ingress {
+		if rule.Incomplete {
+			unknown = true
+		}
+		if !securityGroupRuleAllowsPort(rule, 13133) {
+			continue
+		}
+		for _, source := range rule.SourceSecurityGroupIDs {
+			if source == securityGroupID {
+				return ReachabilityReachable
+			}
+		}
+	}
+	if unknown {
+		return ReachabilityUnknown
+	}
+	return ReachabilityUnreachable
 }
 
 func securityGroupRuleAllowsPort(rule SecurityGroupRule, port int32) bool {

@@ -115,13 +115,18 @@ type Revision struct {
 	// ODIGOS_OPAMP_ENDPOINT, the endpoint this Collector was DEPLOYED against, which is the only way to
 	// tell that the installation has moved since.
 	Environment map[string]string
+	// Secret references and log scope are checked for customer-owned task definitions.
+	RepositoryCredentialsRef string
+	Secrets                  map[string]string
+	LogGroup                 string
 }
 
 // TargetGroup is one data port's target group and the load balancer's verdict on its targets.
 type TargetGroup struct {
-	ARN  string
-	Name string
-	Port int
+	ARN             string
+	Name            string
+	Port            int
+	HealthCheckPort string
 	// Targets is every registered target. An EMPTY slice on an existing group is a finding of its own —
 	// the tasks were never registered — and not the same fault as a target failing its health check.
 	Targets []Target
@@ -212,6 +217,10 @@ func (g TargetGroup) Settling() bool {
 type LoadBalancer struct {
 	ARN     string
 	DNSName string
+	// ListenerTargets maps OTLP listener ports to their default target-group ARN.
+	// Nil means the listener read was not available; an empty non-nil map means
+	// no listener exists.
+	ListenerTargets map[int]string
 	// State is provisioning, active, active_impaired or failed.
 	State  string
 	Scheme string

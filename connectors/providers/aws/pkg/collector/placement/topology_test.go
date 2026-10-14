@@ -23,6 +23,21 @@ func TestVPCOfSubnetRefusesWhatItCannotResolve(t *testing.T) {
 	}
 }
 
+func TestCollectorSecurityGroupSelfHealth(t *testing.T) {
+	topology := NewTopologyWithSecurityGroups([]string{"eu-west-1"},
+		[]VPC{{Region: "eu-west-1", ID: "vpc-host"}}, nil, nil,
+		[]SecurityGroup{{Region: "eu-west-1", ID: "sg-collector", VPCID: "vpc-host", Ingress: []SecurityGroupRule{{
+			Protocol: "tcp", FromPort: 13133, ToPort: 13133, PortsKnown: true,
+			SourceSecurityGroupIDs: []string{"sg-collector"},
+		}}}})
+	if got := topology.CollectorSecurityGroupAllowsSelfHealth("eu-west-1", "vpc-host", "sg-collector"); got != ReachabilityReachable {
+		t.Fatalf("self health ingress = %q", got)
+	}
+	if got := topology.CollectorSecurityGroupAllowsSelfHealth("eu-west-1", "vpc-host", "sg-other"); got != ReachabilityUnknown {
+		t.Fatalf("unknown security group = %q", got)
+	}
+}
+
 func TestSubnetsInIsScopedAndSorted(t *testing.T) {
 	other := sn("subnet-z", "eu-west-1a", EgressNAT, 10)
 	other.VPCID = "vpc-2"
@@ -160,4 +175,39 @@ func TestCollectorIngressReachabilityRequiresEveryPublishedOTLPPort(t *testing.T
 	if got := topo.CollectorIngressReachabilityForPorts("eu-west-1", "vpc-host", "sg-collector", "vpc-host", []string{"sg-app"}, []int32{4317, 4318}); got != ReachabilityUnreachable {
 		t.Fatalf("dual-protocol admission missing HTTP = %q, want unreachable", got)
 	}
+}
+
+func TestCollectorIngressCIDRRequiresEveryWorkloadSubnetAndPort(t *testing.T) {
+	subnets := []Subnet{
+		{Region: "eu-west-1", ID: "subnet-a", VPCID: "vpc-workload", CIDRBlock: "10.70.1.0/24"},
+		{Region: "eu-west-1", ID: "subnet-b", VPCID: "vpc-workload", CIDRBlock: "10.70.2.0/24"},
+	}
+	collector := SecurityGroup{Region: "eu-west-1", ID: "sg-collector", VPCID: "vpc-host", Ingress: []SecurityGroupRule{
+		{Protocol: "tcp", FromPort: 4317, ToPort: 4317, PortsKnown: true, SourceCIDRs: []string{"10.70.0.0/16"}},
+		{Protocol: "tcp", FromPort: 4318, ToPort: 4318, PortsKnown: true, SourceCIDRs: []string{"10.70.0.0/16"}},
+	}}
+	build := func() Topology {
+		return NewTopologyWithSecurityGroups([]string{"eu-west-1"}, []VPC{{Region: "eu-west-1", ID: "vpc-host"}, {Region: "eu-west-1", ID: "vpc-workload"}}, subnets,
+			[]Peering{{ID: "pcx-1", VPC1: "vpc-host", VPC2: "vpc-workload", Region1: "eu-west-1", Region2: "eu-west-1"}},
+			[]SecurityGroup{collector, {Region: "eu-west-1", ID: "sg-app", VPCID: "vpc-workload"}})
+	}
+	check := func(want Reachability) {
+		t.Helper()
+		got := build().CollectorIngressReachabilityForWorkload("eu-west-1", "vpc-host", "sg-collector", "vpc-workload", []string{"subnet-a", "subnet-b"}, []string{"sg-app"}, []int32{4317, 4318})
+		if got != want {
+			t.Fatalf("CIDR admission = %q, want %q", got, want)
+		}
+	}
+	check(ReachabilityReachable)
+	if got := build().CollectorIngressReachabilityForWorkload("eu-west-1", "vpc-host", "sg-collector", "vpc-workload", []string{"subnet-a", "subnet-b"}, nil, []int32{4317, 4318}); got != ReachabilityReachable {
+		t.Fatalf("CIDR admission without workload SG IDs = %q, want reachable", got)
+	}
+	if got := build().CollectorIngressReachabilityForWorkload("eu-west-1", "vpc-host", "sg-collector", "vpc-workload", []string{"subnet-a", "subnet-b"}, []string{"sg-unresolved"}, []int32{4317, 4318}); got != ReachabilityReachable {
+		t.Fatalf("CIDR admission with unresolved workload SG = %q, want reachable", got)
+	}
+	collector.Ingress[1].SourceCIDRs = []string{"10.70.1.0/24"}
+	check(ReachabilityUnreachable)
+	collector.Ingress[1].SourceCIDRs = []string{"10.70.0.0/16"}
+	subnets[1].CIDRBlock = ""
+	check(ReachabilityUnknown)
 }

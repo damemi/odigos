@@ -25,6 +25,8 @@ const (
 	ProblemNoTargetsRegistered = "CollectorNoTargetsRegistered"
 	// Load balancer not active (provisioning or failed).
 	ProblemLoadBalancerUnavailable = "CollectorLoadBalancerUnavailable"
+	// The discovered load balancer is public or otherwise violates the internal front contract.
+	ProblemLoadBalancerShapeInvalid = "CollectorLoadBalancerShapeInvalid"
 
 	// Infra looks fine but the Collector has never opened an OpAMP session.
 	ProblemNeverConnected = "CollectorNeverConnected"
@@ -38,7 +40,9 @@ const (
 	// Running task-definition revision differs from connector state.
 	ProblemRevisionDrift = "CollectorRevisionDrift"
 	// Running image digest differs from the expected build.
-	ProblemImageDrift = "CollectorImageDrift"
+	ProblemImageDrift            = "CollectorImageDrift"
+	ProblemTaskDefinitionInvalid = "CollectorTaskDefinitionInvalid"
+	ProblemSecurityGroupInvalid  = "CollectorSecurityGroupInvalid"
 
 	// An AWS read failed; report is partial. Not an Error — distinguish "could not look" from "broken".
 	ProblemObservationFailed = "CollectorObservationFailed"

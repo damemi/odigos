@@ -14,6 +14,7 @@ import (
 	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/deployer"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/placement"
+	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
@@ -112,6 +113,9 @@ func TestManualModeIsWhatPublishesACustomersCollector(t *testing.T) {
 	if store.image == nil || store.image[0] != testDigest {
 		t.Errorf("image = %v, want the running digest", store.image)
 	}
+	if store.image != nil && store.image[2] != "amd64" {
+		t.Errorf("stored image architecture = %q, want amd64 for ECS X86_64", store.image[2])
+	}
 	// The licence ref is carried through rather than nulled: this accessor writes it alongside the image
 	// and the observer does not know it.
 	if store.image[3] == "" {
@@ -128,6 +132,31 @@ func TestManualModeIsWhatPublishesACustomersCollector(t *testing.T) {
 	}
 	if store.scaling.minC == nil || *store.scaling.minC != 2 || store.scaling.maxC == nil || *store.scaling.maxC != 9 {
 		t.Errorf("the bounds were not carried through: min=%v max=%v", store.scaling.minC, store.scaling.maxC)
+	}
+}
+
+func TestObservedECSArchitectureUsesStoredImageArchitecture(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		ecs  ecstypes.CPUArchitecture
+		want string
+	}{
+		{"x86", ecstypes.CPUArchitectureX8664, "amd64"},
+		{"arm", ecstypes.CPUArchitectureArm64, "arm64"},
+		{"unknown", ecstypes.CPUArchitecture("FUTURE_ARCH"), ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := newFakeECS().withRevision(revisionARN(1), func(td *ecstypes.TaskDefinition) {
+				td.RuntimePlatform.CpuArchitecture = tc.ecs
+			})
+			revision, err := describeRevision(context.Background(), api, revisionARN(1))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if revision.Architecture != tc.want {
+				t.Errorf("architecture = %q, want %q", revision.Architecture, tc.want)
+			}
+		})
 	}
 }
 
@@ -418,6 +447,82 @@ func TestTheListingIsPlacementsAnswerUnfiltered(t *testing.T) {
 	observer.Planner = &fakePlanner{err: errThrottled}
 	if _, err := observer.CollectorNetworks(context.Background()); err == nil {
 		t.Fatal("a failed placement resolution returned no error")
+	}
+}
+
+func TestManualModeDiscoversCustomerCollectorWithoutConfiguredRegion(t *testing.T) {
+	clients := newFakeClients()
+	clients.ecs.withService(func(service *ecstypes.Service) {
+		tags := baseapi.CollectorIdentityTags(testConnector, testUID, testRegion, testVPC)
+		tags[baseapi.TagIaC] = "customer"
+		service.Tags = ecsTags(tags)
+	})
+	clients.elb.withHealthyIngress()
+	store := newFakeStore()
+	store.missing = true
+	observer := testObserver(clients, store, spec.ModeManual)
+	observer.Regions = func(context.Context) ([]string, error) { return []string{testRegion}, nil }
+	observer.Settings = func() collectorsettings.Settings {
+		settings := testSettings()
+		settings.Defaults.ClusterRef = ""
+		return settings
+	}
+
+	networks, err := observer.CollectorNetworks(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(networks) != 1 || networks[0].NetworkID != testVPC || networks[0].ClusterRef == "" {
+		t.Fatalf("discovered networks = %+v", networks)
+	}
+	if err := observer.ObserveCollector(context.Background(), networks[0]); err != nil {
+		t.Fatal(err)
+	}
+	if store.infrastructure == nil || store.infrastructure.WorkloadRef != serviceARN() {
+		t.Fatalf("customer service was not recorded: %+v", store.infrastructure)
+	}
+	if len(store.writes) == 0 || !strings.Contains(store.writes[0], "/customer") {
+		t.Fatalf("customer ownership was not retained: %v", store.writes)
+	}
+	if len(store.endpoint) == 0 || store.endpoint[0] == "" {
+		t.Fatalf("customer endpoint was not recorded: %+v", store.endpoint)
+	}
+}
+
+func TestManualDiscoveryIgnoresForeignCollector(t *testing.T) {
+	clients := newFakeClients()
+	clients.ecs.withService(func(service *ecstypes.Service) {
+		service.Tags = ecsTags(baseapi.CollectorManagedTags("someone-else", "other-id", testRegion, testVPC))
+	})
+	observer := testObserver(clients, newFakeStore(), spec.ModeManual)
+	observer.Regions = func(context.Context) ([]string, error) { return []string{testRegion}, nil }
+	networks, err := observer.CollectorNetworks(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(networks) != 0 {
+		t.Fatalf("foreign Collector was discovered: %+v", networks)
+	}
+}
+
+func TestManualDiscoveryKeepsUsingRecordedCluster(t *testing.T) {
+	clients := newFakeClients()
+	clients.ecs.withService(nil)
+	cluster := "arn:aws:ecs:" + testRegion + ":" + testAccount + ":cluster/customer-cluster"
+	service := clients.ecs.services[serviceKey(deployer.ClusterName(), deployer.ServiceName(testRegion))]
+	service.ClusterArn = aws.String(cluster)
+	clients.ecs.services = map[string]*ecstypes.Service{serviceKey(cluster, deployer.ServiceName(testRegion)): service}
+	clients.elb.withHealthyIngress()
+	store := newFakeStore().withRecord(func(rec *basestore.CollectorRecord) {
+		rec.RuntimeRef = cluster
+		rec.Mode = spec.ModeManual
+	})
+	observer := testObserver(clients, store, spec.ModeManual)
+	if err := observer.ObserveCollector(context.Background(), testNetwork()); err != nil {
+		t.Fatal(err)
+	}
+	if store.infrastructure == nil || store.infrastructure.RuntimeRef != cluster {
+		t.Fatalf("recorded cluster was not reused: %+v", store.infrastructure)
 	}
 }
 

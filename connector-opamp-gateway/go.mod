@@ -8,6 +8,7 @@ replace github.com/odigos-io/odigos-enterprise/connectors/base => ../connectors/
 
 require (
 	github.com/coder/websocket v1.8.15
+	github.com/go-logr/logr v1.4.4
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/odigos-io/odigos-enterprise/connectors v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos-enterprise/connectors/base v0.0.0-00010101000000-000000000000
@@ -26,7 +27,6 @@ require (
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.1 // indirect
-	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-openapi/jsonpointer v1.0.0 // indirect
 	github.com/go-openapi/jsonreference v1.0.0 // indirect
 	github.com/go-openapi/swag v0.27.1 // indirect

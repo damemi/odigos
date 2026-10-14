@@ -3,6 +3,7 @@ package coordinator
 import (
 	"context"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -19,11 +20,254 @@ import (
 type memoryCollectorResourceStore struct {
 	mu      sync.Mutex
 	states  map[string]store.CollectorResourceState
+	details map[string]string
+	updated map[string]time.Time
 	records map[string]store.CollectorRecord
 }
 
+func TestCollectorRoutingReportWithoutDirectFallback(t *testing.T) {
+	routing := collectorRoutingReportContext{markedRegions: map[string]bool{"eu-west-1": true}}
+	ready := time.Now()
+	in := collectorreport.ModelInput{
+		Region: "eu-west-1", Status: collectorstatus.StatusReady, Mode: spec.ModeAutomatic,
+		OpAMPLastSeenAt: &ready, HeartbeatInterval: time.Minute, Now: ready, FirstReadyAt: &ready,
+	}
+	routing.annotate(&in)
+	if len(in.ExtraIssues) != 0 {
+		t.Fatalf("optional global fallback reported as a problem: %+v", in.ExtraIssues)
+	}
+	if report := collectorreport.ToModel(in); report.Status != string(collectorstatus.StatusReady) || len(in.Problems) != 0 ||
+		strings.Contains(report.Message, "global direct OTLP destination") {
+		t.Fatalf("workload fallback changed Collector health: status=%s message=%q problems=%+v", report.Status, report.Message, in.Problems)
+	}
+	routing.progress = map[string]api.CollectorRoutingProgress{"eu-west-1": {Instrumented: 1, Routed: 1}}
+	in.ExtraIssues = nil
+	routing.annotate(&in)
+	if len(in.ExtraIssues) != 1 || in.ExtraIssues[0].Code != "CollectorRolloutComplete" {
+		t.Fatalf("Collector-only routing progress = %+v", in.ExtraIssues)
+	}
+	routing.progress = nil
+	routing.directFound = true
+	in.ExtraIssues, in.FirstReadyAt = nil, nil
+	routing.annotate(&in)
+	if len(in.ExtraIssues) != 1 || in.ExtraIssues[0].Code != "CollectorCutoverAwaitingReadiness" {
+		t.Fatalf("missing first-ready issue: %+v", in.ExtraIssues)
+	}
+	in.FirstReadyAt, in.ExtraIssues, in.Now = &ready, nil, ready
+	routing.annotate(&in)
+	if len(in.ExtraIssues) != 1 || in.ExtraIssues[0].Code != "CollectorCutoverAwaitingWorkload" {
+		t.Fatalf("ready Collector without eligible pass has wrong issue: %+v", in.ExtraIssues)
+	}
+	routing.announcements = map[string]*store.CutoverAnnouncement{"eu-west-1": {
+		FirstReadyAt: ready, AnnouncedAt: ready, Announcing: true,
+	}}
+	in.ExtraIssues = nil
+	routing.annotate(&in)
+	if len(in.ExtraIssues) != 1 || in.ExtraIssues[0].Code != "CollectorRolloutStarting" {
+		t.Fatalf("ready Collector has no announcement: %+v", in.ExtraIssues)
+	}
+	in.ExtraIssues, in.Now = nil, ready.Add(time.Minute)
+	routing.announcements["eu-west-1"].Announcing = false
+	routing.annotate(&in)
+	if len(in.ExtraIssues) != 0 {
+		t.Fatalf("announcement did not expire: %+v", in.ExtraIssues)
+	}
+	routing.progress = map[string]api.CollectorRoutingProgress{"eu-west-1": {
+		Instrumented: 3, Routed: 1, Failed: 1, FailureRefs: []string{"cluster/failing"},
+	}}
+	routing.annotate(&in)
+	if len(in.ExtraIssues) != 2 || in.ExtraIssues[0].Code != "CollectorRolloutInProgress" || in.ExtraIssues[1].Code != "CollectorRolloutWorkloadFailed" || in.ExtraIssues[1].Severity != "warning" {
+		t.Fatalf("rollout progress and failure were not reported: %+v", in.ExtraIssues)
+	}
+	if report := collectorreport.ToModel(in); report.Status != string(collectorstatus.StatusReady) || len(in.Problems) != 0 {
+		t.Fatalf("workload cutover failure changed Collector health: status=%s problems=%+v", report.Status, in.Problems)
+	}
+}
+
+func TestCollectorTeardownReportHasGracePeriodAndKeepsRetrying(t *testing.T) {
+	const region = "us-east-1"
+	const kind = "aws.fargate-collector"
+	ctx := context.Background()
+	c := newTestCoordinator(t)
+	resources := newMemoryCollectorResourceStore()
+	c.collectorResources = resources
+	startedAt := time.Now().Add(-10 * time.Minute)
+	resources.states[region] = store.CollectorResourcesTearingDown
+	resources.updated[region] = startedAt
+	resources.records[region] = store.CollectorRecord{
+		Key: store.CollectorKey{Region: region}, Kind: kind, Mode: spec.ModeAutomatic,
+		Origin: "odigos", NetworkID: "vpc-old", WorkloadRef: "service-old",
+	}
+	deployer := &alwaysRetryTeardownDeployer{recorder: newRecorder()}
+	c.provider = collectorProvider{deployers: map[string]api.CollectorDeployer{kind: deployer}}
+	oldHeartbeat := startedAt.Add(-time.Minute)
+	input := collectorreport.ModelInput{
+		Region: region, Mode: spec.ModeAutomatic, Origin: "odigos", Status: collectorstatus.StatusError,
+		RecordedMessage: "old AWS DependencyViolation", OpAMPLastSeenAt: &oldHeartbeat,
+		HeartbeatInterval: time.Minute, Now: time.Now(),
+	}
+	if err := c.addCollectorResourceStateProblem(ctx, &input, store.CollectorResourcesTearingDown); err != nil {
+		t.Fatal(err)
+	}
+	if report := collectorreport.ToModel(input); report.Status != string(collectorstatus.StatusDeleting) ||
+		strings.Contains(report.Message, "old AWS") || strings.Contains(report.Message, "OpAMP") ||
+		len(report.Issues) != 1 || report.Issues[0].Code != "CollectorTeardownInProgress" {
+		t.Fatalf("retryable teardown should show only Deleting: %+v", report)
+	}
+
+	resources.updated[region] = time.Now().Add(-collectorTeardownGracePeriod - time.Minute)
+	input.Now = time.Now()
+	if err := c.addCollectorResourceStateProblem(ctx, &input, store.CollectorResourcesTearingDown); err != nil {
+		t.Fatal(err)
+	}
+	if report := collectorreport.ToModel(input); report.Status != string(collectorstatus.StatusError) ||
+		len(report.Issues) != 1 || report.Issues[0].Code != "CollectorTeardownTimedOut" ||
+		strings.Contains(report.Message, "old AWS") {
+		t.Fatalf("stalled teardown should show its timeout: %+v", report)
+	}
+	c.retryCollectorTeardowns(ctx)
+	if deployer.attempts != 1 || resources.states[region] != store.CollectorResourcesTearingDown {
+		t.Fatalf("timeout stopped retry: attempts=%d state=%s", deployer.attempts, resources.states[region])
+	}
+}
+
+type alwaysRetryTeardownDeployer struct {
+	*recorder
+	attempts int
+}
+
+func (d *alwaysRetryTeardownDeployer) TeardownCollector(context.Context, api.CollectorNetwork) error {
+	d.attempts++
+	return api.ErrCollectorTeardownRetry
+}
+
+func TestAutomaticNetworkMovePersistsIntentBeforeRemovingOldStack(t *testing.T) {
+	const region = "eu-west-1"
+	c := collectorCoordinator(t, automaticCaps(), map[string]any{
+		collectorsettings.KeyRegions: map[string]any{region: map[string]any{
+			collectorsettings.KeyEnabled: true, collectorsettings.KeyHostNetworkID: "vpc-old",
+		}},
+	}, newRecorder())
+	resources := c.collectorResources.(*memoryCollectorResourceStore)
+	resources.states[region] = store.CollectorResourcesCreated
+	resources.records[region] = store.CollectorRecord{
+		Key: store.CollectorKey{Region: region}, Mode: spec.ModeAutomatic, Origin: "odigos",
+		NetworkID: "vpc-old", WorkloadRef: "service-old",
+	}
+	network := "vpc-new"
+	if err := c.UpdateManagedCollector(context.Background(), region, collectorsettings.Patch{HostNetworkID: &network}); err != nil {
+		t.Fatal(err)
+	}
+	if got := resources.states[region]; got != store.CollectorResourcesMoving || resources.details[region] != network {
+		t.Fatalf("migration intent was not persisted: state=%s detail=%q", got, resources.details[region])
+	}
+	if got := c.CollectorSettings().Region(region).HostNetworkID; got != "vpc-old" {
+		t.Fatalf("changed desired VPC before old stack teardown: %s", got)
+	}
+	delete(resources.records, region) // provider teardown removed the old row
+	c.finishCollectorMigration(context.Background(), region, network)
+	if got := c.CollectorSettings().Region(region).HostNetworkID; got != network {
+		t.Fatalf("target VPC was not installed after teardown: %s", got)
+	}
+	if got := resources.states[region]; got != store.CollectorResourcesNotCreated {
+		t.Fatalf("new stack cannot provision: state=%s", got)
+	}
+}
+
+type retryingMigrationDeployer struct {
+	*recorder
+	resources *memoryCollectorResourceStore
+	attempts  int
+}
+
+type firstPassTeardownDeployer struct {
+	*recorder
+	resources *memoryCollectorResourceStore
+}
+
+func (d *firstPassTeardownDeployer) TeardownCollector(_ context.Context, network api.CollectorNetwork) error {
+	d.tornDown = append(d.tornDown, network.NetworkID)
+	return d.resources.DeleteManagedCollector(context.Background(), store.CollectorKey{Region: network.Region})
+}
+
+func TestAutomaticFirstPassRowUsesProviderTeardownWithoutOpaqueRefs(t *testing.T) {
+	const region = "us-east-1"
+	c := newTestCoordinator(t)
+	c.cfg.Capabilities = automaticCaps()
+	resources := newMemoryCollectorResourceStore()
+	c.collectorResources = resources
+	deployer := &firstPassTeardownDeployer{recorder: newRecorder(), resources: resources}
+	c.provider = collectorProvider{deployers: map[string]api.CollectorDeployer{collectorKind: deployer}}
+	enabled := true
+	if err := c.mutateCollectorSettings(context.Background(), func(tree map[string]any) (map[string]any, error) {
+		return collectorsettings.WriteRegion(tree, region, collectorsettings.Patch{Enabled: &enabled})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	resources.states[region] = store.CollectorResourcesProvisioning
+	record := store.CollectorRecord{
+		Key: store.CollectorKey{Region: region}, NetworkID: "vpc-first", Kind: collectorKind,
+		Mode: spec.ModeAutomatic, Origin: "odigos",
+	}
+	resources.records[region] = record
+	if c.canDiscardCollectorState(region, &record, store.CollectorResourcesProvisioning, true) {
+		t.Fatal("first-pass row was eligible for local-only removal")
+	}
+	result, err := c.TeardownManagedCollector(context.Background(), region)
+	if err != nil || !result.Deleted || !reflect.DeepEqual(deployer.tornDown, []string{"vpc-first"}) {
+		t.Fatalf("first-pass teardown = %+v, %v, provider calls=%v", result, err, deployer.tornDown)
+	}
+}
+
+func (d *retryingMigrationDeployer) TeardownCollector(_ context.Context, network api.CollectorNetwork) error {
+	d.attempts++
+	if d.attempts == 1 {
+		return api.ErrCollectorTeardownRetry
+	}
+	return d.resources.DeleteManagedCollector(context.Background(), store.CollectorKey{Region: network.Region})
+}
+
+func TestAutomaticNetworkMoveRetriesUntilOldStackIsGone(t *testing.T) {
+	const region = "eu-west-1"
+	c := newTestCoordinator(t)
+	c.cfg.Capabilities = automaticCaps()
+	resources := newMemoryCollectorResourceStore()
+	c.collectorResources = resources
+	deployer := &retryingMigrationDeployer{recorder: newRecorder(), resources: resources}
+	c.provider = collectorProvider{deployers: map[string]api.CollectorDeployer{collectorKind: deployer}}
+	oldNetwork, newNetwork := "vpc-old", "vpc-new"
+	if err := c.mutateCollectorSettings(context.Background(), func(tree map[string]any) (map[string]any, error) {
+		return collectorsettings.WriteRegion(tree, region, collectorsettings.Patch{HostNetworkID: &oldNetwork})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	resources.states[region], resources.details[region] = store.CollectorResourcesMoving, newNetwork
+	resources.records[region] = store.CollectorRecord{Key: store.CollectorKey{Region: region}, Kind: collectorKind,
+		Mode: spec.ModeAutomatic, Origin: "odigos", NetworkID: oldNetwork, WorkloadRef: "service-old"}
+	c.retryCollectorTeardowns(context.Background())
+	if resources.states[region] != store.CollectorResourcesMoving || c.CollectorSettings().Region(region).HostNetworkID != oldNetwork {
+		t.Fatalf("migration moved before AWS release: state=%s", resources.states[region])
+	}
+	c.retryCollectorTeardowns(context.Background())
+	if resources.states[region] != store.CollectorResourcesNotCreated || c.CollectorSettings().Region(region).HostNetworkID != newNetwork {
+		t.Fatalf("migration did not reach target: state=%s network=%s", resources.states[region], c.CollectorSettings().Region(region).HostNetworkID)
+	}
+}
+
 func newMemoryCollectorResourceStore() *memoryCollectorResourceStore {
-	return &memoryCollectorResourceStore{states: map[string]store.CollectorResourceState{}, records: map[string]store.CollectorRecord{}}
+	return &memoryCollectorResourceStore{states: map[string]store.CollectorResourceState{}, details: map[string]string{}, updated: map[string]time.Time{}, records: map[string]store.CollectorRecord{}}
+}
+
+func (m *memoryCollectorResourceStore) CollectorResourceStateUpdatedAt(_ context.Context, region string) (time.Time, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.updated[region], nil
+}
+
+func (m *memoryCollectorResourceStore) CollectorResourceStateDetail(_ context.Context, region string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.details[region], nil
 }
 
 func (m *memoryCollectorResourceStore) GetCollectorResourceState(_ context.Context, region string) (store.CollectorResourceState, bool, error) {
@@ -43,10 +287,12 @@ func (m *memoryCollectorResourceStore) ListCollectorResourceStates(context.Conte
 	return out, nil
 }
 
-func (m *memoryCollectorResourceStore) SetCollectorResourceState(_ context.Context, region string, state store.CollectorResourceState, _ string) error {
+func (m *memoryCollectorResourceStore) SetCollectorResourceState(_ context.Context, region string, state store.CollectorResourceState, detail string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.states[region] = state
+	m.details[region] = detail
+	m.updated[region] = time.Now()
 	return nil
 }
 
@@ -58,6 +304,21 @@ func (m *memoryCollectorResourceStore) GetManagedCollector(_ context.Context, ke
 		return store.CollectorRecord{}, store.ErrCollectorNotFound
 	}
 	return rec, nil
+}
+
+func (m *memoryCollectorResourceStore) UpsertManagedCollector(_ context.Context, key store.CollectorKey, networkID, kind, mode, origin string, adoptedAt *time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	rec := m.records[key.Region]
+	rec.Key, rec.NetworkID, rec.Kind, rec.Mode = key, networkID, kind, mode
+	if rec.Origin == "" {
+		rec.Origin = origin
+	}
+	if rec.AdoptedAt == nil {
+		rec.AdoptedAt = adoptedAt
+	}
+	m.records[key.Region] = rec
+	return nil
 }
 
 func (m *memoryCollectorResourceStore) ListManagedCollectors(context.Context) ([]store.CollectorRecord, error) {
@@ -117,6 +378,35 @@ func TestUnprovisionedCollectorTeardownRemovesDesiredAndRecordedState(t *testing
 		if resources.states[region] != store.CollectorResourcesDestroyed {
 			t.Fatalf("recorded=%v: resource state = %s", recorded, resources.states[region])
 		}
+	}
+}
+
+func TestManualCollectorTeardownRetainsInfrastructure(t *testing.T) {
+	c := newTestCoordinator(t)
+	c.cfg.Capabilities = spec.Capabilities{Collectors: []spec.CollectorCapability{{Type: "test.collector", Management: true}}}
+	c.provider = collectorProvider{}
+	resources := newMemoryCollectorResourceStore()
+	c.collectorResources = resources
+	region := "eu-west-1"
+	resources.records[region] = store.CollectorRecord{
+		Key: store.CollectorKey{Region: region}, Mode: spec.ModeManual, Origin: "customer",
+		WorkloadRef: "arn:customer:service", FrontendRef: "arn:customer:nlb",
+	}
+	enabled := true
+	if err := c.mutateCollectorSettings(context.Background(), func(tree map[string]any) (map[string]any, error) {
+		return collectorsettings.WriteRegion(tree, region, collectorsettings.Patch{Enabled: &enabled})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := c.TeardownManagedCollector(context.Background(), region)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Deleted || len(got.Retained) != 2 {
+		t.Fatalf("manual teardown = %+v, want declaration removed and two retained refs", got)
+	}
+	if _, err := resources.GetManagedCollector(context.Background(), store.CollectorKey{Region: region}); err != store.ErrCollectorNotFound {
+		t.Fatalf("manual row still present: %v", err)
 	}
 }
 

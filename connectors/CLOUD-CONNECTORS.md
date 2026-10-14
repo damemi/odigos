@@ -555,6 +555,21 @@ Example CRs: `connectors/examples/`.
 During UI work, `central-ui` can pin ui-kit via **yalc** (local link) instead of npm version.
 Do not commit yalc pins — bump `@odigos/ui-kit` version for merge.
 
+### agents-api local iteration
+
+Run this once from `connectors/` to resolve all four Go modules against a sibling
+`agents-api` checkout during development (the resulting `go.work` is ignored):
+
+```bash
+go work init . ./base ./providers/aws ./providers/gcp ./providers/azure ../../agents-api/go/server
+```
+
+The committed Go modules pin the exact agents-api commit for portable builds. Its
+Go pseudo-version starts with `v0.23.1` because the `v0.25.0` release tag is on
+a separate release branch; replacing the pin with that tag drops the newer
+Managed Collector revoke and retention API. Central UI can consume the same
+checkout's generated TypeScript client through yalc.
+
 ### Verify a healthy connector
 
 ```bash

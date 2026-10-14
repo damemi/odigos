@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -187,6 +188,44 @@ func TestProvisionEndToEnd(t *testing.T) {
 				t.Errorf("secret %q description contains an AWS-invalid character %U", name, r)
 			}
 		}
+	}
+}
+
+func TestFirstCloudWriteKeepsCollectorRowForTeardown(t *testing.T) {
+	clients, records := newFakeClients(), newFakeStore()
+	clients.secrets.createErr = errors.New("secret creation denied after log group creation")
+	p := testProvisioner(clients, records, testLicense)
+	shared, err := p.EnsureShared(context.Background(), sharedInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = p.EnsureNetwork(context.Background(), NetworkInput{
+		Key: testKey(), HostNetworkID: testNetwork, Kind: testKind, Mode: spec.ModeAutomatic,
+		Shared: shared, RetentionDays: 7,
+		ExecutionRoleARN: "arn:aws:iam::" + testAccount + ":role/OdigosCollectorExecutionRole",
+	})
+	if err == nil {
+		t.Fatal("expected the post-create secret failure")
+	}
+	row, err := records.GetManagedCollector(context.Background(), testKey())
+	if err != nil || row.NetworkID != testNetwork || row.Origin != "odigos" {
+		t.Fatalf("created log group without a durable Collector row: %+v, %v", row, err)
+	}
+	if _, ok := clients.logs.groups[LogGroupName(testConnector)]; !ok {
+		t.Fatal("test did not reach the cloud creation step")
+	}
+}
+
+func TestSecretReferencesAreCheckpointedBeforeCredentialIssuance(t *testing.T) {
+	clients, records := newFakeClients(), newFakeStore()
+	p := testProvisioner(clients, records, testLicense)
+	provisionOnce(t, p, sharedInput())
+	row, err := records.GetManagedCollector(context.Background(), testKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if row.LicenseSecretRef == "" || row.CredentialRef == "" {
+		t.Fatalf("created secrets were not checkpointed: %+v", row)
 	}
 }
 

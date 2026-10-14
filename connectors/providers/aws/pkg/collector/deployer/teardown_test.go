@@ -54,16 +54,17 @@ func newTeardownScenario() *teardownScenario {
 	sg := clients.ec2.groups[testNetwork+"/"+SecurityGroupName(testNetwork)]
 	store := newFakeTeardownStore().
 		withRecord(basestore.CollectorRecord{
-			Key:           testKey(),
-			NetworkID:     testNetwork,
-			Kind:          testKind,
-			Mode:          spec.ModeAutomatic,
-			Origin:        "odigos",
-			CollectorID:   testCollectorID,
-			CredentialRef: clients.secrets.secrets[CredentialSecretName(testConnector, testRegion)].arn,
-			WorkloadRef:   clients.ecs.serviceARN(ServiceName(testRegion)),
-			RuntimeRef:    clusterARN,
-			FrontendRef:   clients.elb.arnOf(LoadBalancerName(testNetwork)),
+			Key:              testKey(),
+			NetworkID:        testNetwork,
+			Kind:             testKind,
+			Mode:             spec.ModeAutomatic,
+			Origin:           "odigos",
+			CollectorID:      testCollectorID,
+			CredentialRef:    clients.secrets.secrets[CredentialSecretName(testConnector, testRegion)].arn,
+			LicenseSecretRef: clients.secrets.secrets[LicenseSecretName(testConnector, testRegion)].arn,
+			WorkloadRef:      clients.ecs.serviceARN(ServiceName(testRegion)),
+			RuntimeRef:       clusterARN,
+			FrontendRef:      clients.elb.arnOf(LoadBalancerName(testNetwork)),
 			BackendRefs: []string{
 				clients.elb.arnOf(TargetGroupName(testNetwork, 4317)),
 				clients.elb.arnOf(TargetGroupName(testNetwork, 4318)),
@@ -84,6 +85,46 @@ func newTeardownScenario() *teardownScenario {
 			Partition: "aws",
 			AccountID: testAccount,
 		},
+	}
+}
+
+func TestTeardownOfFirstPassRowRemovesOwnedLogGroup(t *testing.T) {
+	clients := newFakeTeardownClients()
+	arn := logGroupARN("aws", testRegion, testAccount, LogGroupName(testConnector))
+	clients.logs.withGroup(arn, ourTags(""))
+	records := newFakeTeardownStore().withRecord(basestore.CollectorRecord{
+		Key: testKey(), NetworkID: testNetwork, Kind: testKind,
+		Mode: spec.ModeAutomatic, Origin: "odigos",
+	})
+	result, err := Teardown(context.Background(), clients, records, TeardownInput{
+		Key: testKey(), NetworkID: testNetwork, Mode: spec.ModeAutomatic,
+		Identity: testIdentity(), Partition: "aws", AccountID: testAccount,
+	})
+	if err != nil || !result.RecordRemoved || countPrefix(clients.logs.calls, "DeleteLogGroup:"+LogGroupName(testConnector)) != 1 {
+		t.Fatalf("first-pass log group teardown = %+v, %v, calls=%v", result, err, clients.logs.calls)
+	}
+}
+
+func TestUncheckpointedOwnedSecretRetainsFirstPassRow(t *testing.T) {
+	clients := newFakeTeardownClients()
+	name := LicenseSecretName(testConnector, testRegion)
+	clients.secrets.withSecret(name, ourTags(""), true)
+	records := newFakeTeardownStore().withRecord(basestore.CollectorRecord{
+		Key: testKey(), NetworkID: testNetwork, Kind: testKind,
+		Mode: spec.ModeAutomatic, Origin: "odigos",
+	})
+	result, err := Teardown(context.Background(), clients, records, TeardownInput{
+		Key: testKey(), NetworkID: testNetwork, Mode: spec.ModeAutomatic,
+		Identity: testIdentity(), Partition: "aws", AccountID: testAccount,
+	})
+	if err != nil || result.RecordRemoved || len(leakedObjects(result.Kept)) != 1 {
+		t.Fatalf("uncheckpointed secret was discarded: %+v, %v", result, err)
+	}
+	if _, err := records.GetManagedCollector(context.Background(), testKey()); err != nil {
+		t.Fatalf("recovery row was lost: %v", err)
+	}
+	if _, ok := clients.secrets.secrets[name]; !ok {
+		t.Fatal("secret without a recorded ref was deleted")
 	}
 }
 
@@ -391,11 +432,15 @@ func TestAForeignObjectIsRefusedLoudly(t *testing.T) {
 	foreign := baseapi.CollectorManagedTags("other-connector", "uid-other", testRegion, testNetwork)
 	clusterARN := s.store.rows[testKey()].RuntimeRef
 	s.clients.ecs.withService(clusterARN, ServiceName(testRegion), foreign, nil)
+	s.clients.ecs.serviceTasks[serviceKey(clusterARN, ServiceName(testRegion))] = []string{"arn:aws:ecs:task/foreign"}
 
 	result := s.run(t)
 
 	if removed(result, "ECS service") {
 		t.Fatal("another connector's service was deleted")
+	}
+	if countPrefix(s.clients.ecs.calls, "StopTask:") != 0 {
+		t.Fatal("another connector's task was stopped")
 	}
 	kept := keptOf(t, result, "ECS service")
 	if !strings.Contains(kept.Reason, "different connector") {
@@ -457,8 +502,8 @@ func TestTheRecordIsDeletedLastAndOnlyWhenNothingIsLeft(t *testing.T) {
 		t.Fatal("the record was deleted while the security group was still standing")
 	}
 	problem := problemWith(t, result.Problems, ProblemTeardownIncomplete)
-	if problem.Severity != collectorstatus.SeverityError {
-		t.Errorf("severity = %q, want Error", problem.Severity)
+	if problem.Severity != collectorstatus.SeverityPending {
+		t.Errorf("severity = %q, want Pending", problem.Severity)
 	}
 	// Everything else still went. A dependency AWS has not released must not cost the rest of the
 	// teardown, or a fleet would be removed one object per pass.
@@ -471,6 +516,57 @@ func TestTheRecordIsDeletedLastAndOnlyWhenNothingIsLeft(t *testing.T) {
 	second := s.run(t)
 	if !second.RecordRemoved {
 		t.Errorf("the second pass did not finish the teardown: kept %v", second.Kept)
+	}
+}
+
+func TestTeardownStopsTasksAndWaitsForDrainingService(t *testing.T) {
+	s := newTeardownScenario()
+	cluster := "arn:aws:ecs:" + testRegion + ":" + testAccount + ":cluster/" + ClusterName()
+	name := ServiceName(testRegion)
+	key := serviceKey(cluster, name)
+	s.clients.ecs.serviceTasks[key] = []string{"arn:aws:ecs:task/collector-1", "arn:aws:ecs:task/collector-2"}
+	s.clients.ec2.deleteErr = &smithyAPIError{code: "DependencyViolation"}
+
+	first, err := Teardown(context.Background(), s.clients, s.store, s.in)
+	if !errors.Is(err, baseapi.ErrCollectorTeardownRetry) || first.RecordRemoved {
+		t.Fatalf("service with running tasks was reported complete: result=%+v err=%v", first, err)
+	}
+	if countPrefix(s.clients.ecs.calls, "StopTask:") != 2 {
+		t.Fatalf("Collector tasks were not stopped: %v", s.clients.ecs.calls)
+	}
+	if got := aws.ToString(s.clients.ecs.services[key].Status); got != "DRAINING" {
+		t.Fatalf("service status = %q, want DRAINING", got)
+	}
+
+	// ECS may leave the service DRAINING after its tasks have stopped. That service still holds
+	// teardown authority, even if all the other resources disappeared in the first pass.
+	s.clients.ec2.deleteErr = nil
+	second, err := Teardown(context.Background(), s.clients, s.store, s.in)
+	if !errors.Is(err, baseapi.ErrCollectorTeardownRetry) || second.RecordRemoved {
+		t.Fatalf("DRAINING service was reported complete: result=%+v err=%v", second, err)
+	}
+	if countPrefix(s.clients.ecs.calls, "DeleteService:") != 1 {
+		t.Fatalf("DRAINING service should not be deleted again: %v", s.clients.ecs.calls)
+	}
+
+	delete(s.clients.ecs.services, key) // ECS finishes draining and reports the service absent.
+	third := s.run(t)
+	if !third.RecordRemoved {
+		t.Fatal("teardown did not finish after the service became inactive")
+	}
+}
+
+func TestTeardownDependencyDelayDoesNotHideAnotherFailure(t *testing.T) {
+	s := newTeardownScenario()
+	s.clients.ec2.deleteErr = &smithyAPIError{code: "DependencyViolation"}
+	s.clients.secrets.deleteErr = errors.New("secret deletion denied")
+
+	result, err := Teardown(context.Background(), s.clients, s.store, s.in)
+	if err == nil || errors.Is(err, baseapi.ErrCollectorTeardownRetry) {
+		t.Fatalf("mixed teardown failure was classified as retry-only: %v", err)
+	}
+	if problem := problemWith(t, result.Problems, ProblemTeardownIncomplete); problem.Severity != collectorstatus.SeverityError {
+		t.Fatalf("mixed teardown severity = %q, want Error", problem.Severity)
 	}
 }
 

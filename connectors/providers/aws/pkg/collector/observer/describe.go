@@ -12,6 +12,7 @@ import (
 	elb "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	elbtypes "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/deployer"
 )
@@ -23,6 +24,7 @@ import (
 // here is a Describe or a List, and readonly_test.go fails the build's tests if a verb that writes
 // appears in this package at all.
 type ECSReader interface {
+	ListClusters(ctx context.Context, in *ecs.ListClustersInput, opts ...func(*ecs.Options)) (*ecs.ListClustersOutput, error)
 	DescribeServices(ctx context.Context, in *ecs.DescribeServicesInput, opts ...func(*ecs.Options)) (*ecs.DescribeServicesOutput, error)
 	DescribeTaskDefinition(ctx context.Context, in *ecs.DescribeTaskDefinitionInput, opts ...func(*ecs.Options)) (*ecs.DescribeTaskDefinitionOutput, error)
 	ListTasks(ctx context.Context, in *ecs.ListTasksInput, opts ...func(*ecs.Options)) (*ecs.ListTasksOutput, error)
@@ -34,6 +36,7 @@ type ELBReader interface {
 	DescribeTargetGroups(ctx context.Context, in *elb.DescribeTargetGroupsInput, opts ...func(*elb.Options)) (*elb.DescribeTargetGroupsOutput, error)
 	DescribeTargetHealth(ctx context.Context, in *elb.DescribeTargetHealthInput, opts ...func(*elb.Options)) (*elb.DescribeTargetHealthOutput, error)
 	DescribeLoadBalancers(ctx context.Context, in *elb.DescribeLoadBalancersInput, opts ...func(*elb.Options)) (*elb.DescribeLoadBalancersOutput, error)
+	DescribeListeners(ctx context.Context, in *elb.DescribeListenersInput, opts ...func(*elb.Options)) (*elb.DescribeListenersOutput, error)
 }
 
 // ObserveInput is what one read pass needs to know.
@@ -176,7 +179,12 @@ func describeRevision(ctx context.Context, api ECSReader, arn string) (Revision,
 		Memory: aws.ToString(td.Memory),
 	}
 	if td.RuntimePlatform != nil {
-		revision.Architecture = string(td.RuntimePlatform.CpuArchitecture)
+		switch td.RuntimePlatform.CpuArchitecture {
+		case ecstypes.CPUArchitectureX8664:
+			revision.Architecture = string(collectorimage.ArchAMD64)
+		case ecstypes.CPUArchitectureArm64:
+			revision.Architecture = string(collectorimage.ArchARM64)
+		}
 	}
 	for _, container := range td.ContainerDefinitions {
 		if aws.ToString(container.Name) != deployer.CollectorContainerName {
@@ -188,6 +196,16 @@ func describeRevision(ctx context.Context, api ECSReader, arn string) (Revision,
 		revision.Image = aws.ToString(container.Image)
 		revision.Digest, revision.Tag = splitImageRef(revision.Image)
 		revision.Environment = environmentMap(container.Environment)
+		if container.RepositoryCredentials != nil {
+			revision.RepositoryCredentialsRef = aws.ToString(container.RepositoryCredentials.CredentialsParameter)
+		}
+		revision.Secrets = make(map[string]string, len(container.Secrets))
+		for _, secret := range container.Secrets {
+			revision.Secrets[aws.ToString(secret.Name)] = aws.ToString(secret.ValueFrom)
+		}
+		if container.LogConfiguration != nil {
+			revision.LogGroup = container.LogConfiguration.Options["awslogs-group"]
+		}
 	}
 	return revision, nil
 }
@@ -320,10 +338,11 @@ func describeIngress(ctx context.Context, api ELBReader, attachments []ecstypes.
 			return nil, LoadBalancer{}, fmt.Errorf("describe the health of target group %s: %w", arn, err)
 		}
 		groups = append(groups, TargetGroup{
-			ARN:     arn,
-			Name:    aws.ToString(group.TargetGroupName),
-			Port:    port,
-			Targets: targetsOf(health.TargetHealthDescriptions),
+			ARN:             arn,
+			Name:            aws.ToString(group.TargetGroupName),
+			Port:            port,
+			HealthCheckPort: aws.ToString(group.HealthCheckPort),
+			Targets:         targetsOf(health.TargetHealthDescriptions),
 		})
 	}
 	// In data-port order, so two passes describe the same Collector in the same order and the recorded
@@ -347,6 +366,19 @@ func describeIngress(ctx context.Context, api ELBReader, attachments []ecstypes.
 			ARN:     aws.ToString(lb.LoadBalancerArn),
 			DNSName: aws.ToString(lb.DNSName),
 			Scheme:  string(lb.Scheme),
+		}
+		listeners, err := api.DescribeListeners(ctx, &elb.DescribeListenersInput{LoadBalancerArn: lb.LoadBalancerArn})
+		if err != nil {
+			return groups, LoadBalancer{}, fmt.Errorf("describe load balancer listeners: %w", err)
+		}
+		out.ListenerTargets = make(map[int]string, len(listeners.Listeners))
+		for _, listener := range listeners.Listeners {
+			for _, action := range listener.DefaultActions {
+				if action.Type == elbtypes.ActionTypeEnumForward {
+					out.ListenerTargets[int(aws.ToInt32(listener.Port))] = aws.ToString(action.TargetGroupArn)
+					break
+				}
+			}
 		}
 		if lb.State != nil {
 			out.State = string(lb.State.Code)

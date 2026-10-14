@@ -5,6 +5,9 @@ import (
 	"fmt"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
+	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
 // IssueManagedCollectorCredential delegates the one-time manual-mode secret issuance to the provider,
@@ -20,4 +23,32 @@ func (c *Coordinator) IssueManagedCollectorCredential(ctx context.Context, input
 	}
 	c.TriggerCollectorReconcile()
 	return issued, nil
+}
+
+// RevokeManagedCollectorCredential invalidates one manually issued credential.
+// The region lookup fences the operation to this connector's Collector identity.
+func (c *Coordinator) RevokeManagedCollectorCredential(ctx context.Context, region, credentialID string) error {
+	if c.store == nil {
+		return fmt.Errorf("Collector credential store is unavailable")
+	}
+	rec, err := c.collectorResourceStore().GetManagedCollector(ctx, store.CollectorKey{Region: region})
+	if err != nil {
+		return err
+	}
+	if rec.Mode != spec.ModeManual || rec.CollectorID == "" {
+		return fmt.Errorf("region %s has no manually managed Collector credential", region)
+	}
+	if credentialID == "" {
+		return fmt.Errorf("credentialId is required")
+	}
+	if err := c.store.RevokeCollectorCredential(ctx, rec.CollectorID, credentialID, collectorcredential.ReasonRotation, collectorcredential.ActorCentral); err != nil {
+		return err
+	}
+	if rec.ActiveCredentialID == credentialID {
+		if _, err := c.store.ClearCollectorCredential(ctx, rec.CollectorID); err != nil {
+			return err
+		}
+	}
+	c.TriggerCollectorReconcile()
+	return nil
 }

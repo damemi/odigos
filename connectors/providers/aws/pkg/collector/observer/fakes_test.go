@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -141,6 +142,7 @@ func (f *fakeECS) withService(mutate func(*ecstypes.Service)) *fakeECS {
 		mutate(svc)
 	}
 	f.services[serviceKey(deployer.ClusterName(), aws.ToString(svc.ServiceName))] = svc
+	f.services[serviceKey(aws.ToString(svc.ClusterArn), aws.ToString(svc.ServiceName))] = svc
 	f.withRevision(aws.ToString(svc.TaskDefinition), nil)
 	return f
 }
@@ -200,6 +202,20 @@ func (f *fakeECS) DescribeServices(_ context.Context, in *ecs.DescribeServicesIn
 		out.Services = append(out.Services, described)
 	}
 	return &out, nil
+}
+
+func (f *fakeECS) ListClusters(_ context.Context, _ *ecs.ListClustersInput, _ ...func(*ecs.Options)) (*ecs.ListClustersOutput, error) {
+	f.calls = append(f.calls, "ListClusters")
+	seen := map[string]bool{}
+	for _, service := range f.services {
+		seen[aws.ToString(service.ClusterArn)] = true
+	}
+	var clusters []string
+	for arn := range seen {
+		clusters = append(clusters, arn)
+	}
+	sort.Strings(clusters)
+	return &ecs.ListClustersOutput{ClusterArns: clusters}, nil
 }
 
 func hasServiceField(fields []ecstypes.ServiceField, want ecstypes.ServiceField) bool {
@@ -265,9 +281,10 @@ func ecsTags(tags map[string]string) []ecstypes.Tag {
 
 // fakeELB is the read-only Elastic Load Balancing surface.
 type fakeELB struct {
-	groups  map[string]elbtypes.TargetGroup
-	health  map[string][]elbtypes.TargetHealthDescription
-	loadBal map[string]elbtypes.LoadBalancer
+	groups    map[string]elbtypes.TargetGroup
+	health    map[string][]elbtypes.TargetHealthDescription
+	loadBal   map[string]elbtypes.LoadBalancer
+	listeners []elbtypes.Listener
 
 	calls []string
 
@@ -290,6 +307,7 @@ func (f *fakeELB) withHealthyIngress() *fakeELB {
 	for _, port := range []int{4317, 4318} {
 		f.withTargetGroup(port)
 		f.withTargets(port, target("10.0.0.1", targetHealthy, "", ""), target("10.0.1.1", targetHealthy, "", ""))
+		f.listeners = append(f.listeners, elbtypes.Listener{Port: aws.Int32(int32(port)), DefaultActions: []elbtypes.Action{{Type: elbtypes.ActionTypeEnumForward, TargetGroupArn: aws.String(targetGroupARN(port))}}})
 	}
 	return f
 }
@@ -363,6 +381,11 @@ func (f *fakeELB) DescribeLoadBalancers(_ context.Context, in *elb.DescribeLoadB
 		}
 	}
 	return &out, nil
+}
+
+func (f *fakeELB) DescribeListeners(_ context.Context, _ *elb.DescribeListenersInput, _ ...func(*elb.Options)) (*elb.DescribeListenersOutput, error) {
+	f.calls = append(f.calls, "DescribeListeners")
+	return &elb.DescribeListenersOutput{Listeners: f.listeners}, nil
 }
 
 // --- clients, store and planner ---

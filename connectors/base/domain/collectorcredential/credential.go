@@ -168,6 +168,7 @@ const (
 	ReasonCompromise         Reason = "compromise"
 	ReasonConnectorRecreated Reason = "connector-recreated"
 	ReasonCapabilityRemoved  Reason = "capability-removed"
+	ReasonNetworkChanged     Reason = "network-changed"
 )
 
 // Record is one row of `collector_credentials`: everything the connector keeps about a credential,
@@ -200,6 +201,14 @@ type Record struct {
 // Live reports whether the gateway should still accept this credential. Superseded counts — the
 // rotation window exists so the outgoing credential keeps working while old tasks drain.
 func (r Record) Live() bool { return r.State == StateActive || r.State == StateSuperseded }
+
+// SupersededCanRevoke requires proof that the replacement connected, is still
+// live, and has had time to replace tasks that used the outgoing secret.
+func SupersededCanRevoke(outgoing, replacement Record, now time.Time, grace time.Duration) bool {
+	return outgoing.State == StateSuperseded && outgoing.SupersededBy == replacement.CredentialID &&
+		replacement.Live() && replacement.ActivatedAt != nil &&
+		!now.Before(replacement.ActivatedAt.Add(grace))
+}
 
 var legalTransitions = map[State][]State{
 	StatePending:    {StateActive, StateRevoked},

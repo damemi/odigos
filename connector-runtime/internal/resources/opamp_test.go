@@ -232,7 +232,7 @@ func TestGatewayInAnotherNamespaceIsScoped(t *testing.T) {
 //
 // A pod with no NetworkPolicy accepts everything. The moment one selects it, every port not explicitly
 // allowed is DENIED. A policy that mentioned only 4320 would therefore take out the connector's GraphQL
-// endpoint, its odictl endpoint, and — on CNIs that police node-to-pod traffic — its own readiness and
+// endpoint and — on CNIs that police node-to-pod traffic — its own readiness and
 // liveness probes. The connector would go NotReady for a feature that has nothing to do with either.
 func TestPolicyRepermitsEverythingItWouldOtherwiseDeny(t *testing.T) {
 	cr := connector(capabilityFromField)
@@ -245,8 +245,15 @@ func TestPolicyRepermitsEverythingItWouldOtherwiseDeny(t *testing.T) {
 		}
 	}
 
-	// Every port the container declares must be allowed by some rule, or the policy silently closes it.
+	// Only the query endpoint and OpAMP need pod-network access. The admin CLI
+	// binds to loopback and is intentionally denied to other pods.
 	for name, port := range portNames(BuildDeployment(cr, params()).Spec.Template.Spec.Containers[0].Ports) {
+		if port == CLIPort {
+			if allowed[port] {
+				t.Error("the admin CLI is reachable through the pod network")
+			}
+			continue
+		}
 		if !allowed[port] {
 			t.Errorf("container port %s (%d) is not allowed by any rule, so this policy closes it", name, port)
 		}

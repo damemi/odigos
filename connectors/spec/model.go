@@ -99,7 +99,9 @@ type SetupArtifact struct {
 	// Title / Description are for the UI header.
 	Title       string `yaml:"title"`
 	Description string `yaml:"description"`
-	// Steps: ordered instructions above the code snippet (create-role section).
+	// Steps: ordered instructions above the code snippet (create-role section, Collector setup). The
+	// Collector setup guide renders `backticked` spans in Description and Steps as inline code; other
+	// sections show them literally.
 	Steps []string `yaml:"steps"`
 	// Prerequisites: "Before you deploy" caveats for instrumentation artifacts. Empty on onboarding.
 	Prerequisites []string `yaml:"prerequisites"`
@@ -166,18 +168,30 @@ func artifactsForLanguage(arts []SetupArtifact, language string) []SetupArtifact
 	return out
 }
 
-// collectorSectionPrefix namespaces managed-Collector deployment instructions in Setup.Artifacts,
-// one section per type — same uninterpreted-passthrough reason as instrumentationSectionPrefix.
+// collectorSectionPrefix namespaces managed-Collector setup instructions in Setup.Artifacts.
+// A mode's base section is its overview; method-specific prerequisite sections append :aws-cli or
+// :cloudformation. The UI reads the suffixes and labels from the catalog.
 const collectorSectionPrefix = "collector:"
 
 // CollectorSection is the Setup.Artifacts section for one Collector type
 // (e.g. "collector:aws.fargate-collector").
 func CollectorSection(typeName string) string { return collectorSectionPrefix + typeName }
 
-// CollectorArtifacts returns every manual-mode deployment instruction for one Collector type.
-// Language-neutral by construction — a Collector has no runtime language.
+// CollectorModeSection selects the setup steps for one deployment mode.
+func CollectorModeSection(typeName, mode string) string {
+	return CollectorSection(typeName) + ":" + mode
+}
+
+// CollectorArtifactsForMode returns the ordered overview steps for one mode.
+func (s CloudConnectorSpec) CollectorArtifactsForMode(typeName, mode string) []SetupArtifact {
+	return s.SetupArtifactsForSection(CollectorModeSection(typeName, mode))
+}
+
+// CollectorArtifacts returns all Collector setup instructions for one type.
+// Callers that display a flow should use CollectorArtifactsForMode.
 func (s CloudConnectorSpec) CollectorArtifacts(typeName string) []SetupArtifact {
-	return s.SetupArtifactsForSection(CollectorSection(typeName))
+	out := s.CollectorArtifactsForMode(typeName, ModeAutomatic)
+	return append(out, s.CollectorArtifactsForMode(typeName, ModeManual)...)
 }
 
 // WorkloadDomain: Discovery enumerates; Instrumentation instruments in place.
@@ -200,6 +214,25 @@ type ComputePlatformDomain struct {
 type CollectorDomain struct {
 	Management Feature `yaml:"management"`
 	Deployment Feature `yaml:"deployment"`
+	// Instructions are provider-authored regional deployment documents. The connector
+	// fills runtime values, but the copyable IaC and guidance live in the spec.
+	Instructions CollectorInstructions `yaml:"instructions"`
+}
+
+type CollectorInstructions struct {
+	Notes     []string                       `yaml:"notes"`
+	Documents []CollectorInstructionDocument `yaml:"documents"`
+}
+
+type CollectorInstructionDocument struct {
+	ID           string   `yaml:"id"`
+	Variant      string   `yaml:"variant"`
+	VariantLabel string   `yaml:"variantLabel"`
+	Title        string   `yaml:"title"`
+	Description  string   `yaml:"description"`
+	Format       string   `yaml:"format"`
+	Steps        []string `yaml:"steps"`
+	Template     string   `yaml:"template"`
 }
 
 // Instrumentation modes: WHO applies instrumentation. DERIVED from capability booleans
@@ -801,7 +834,7 @@ func (s CloudConnectorSpec) ActiveDiscoveryTypes(caps Capabilities) []Type {
 
 // RequiredPermissions: de-duplicated permission strings for the given capabilities — auth
 // baseline, active discovery baselines/types, plus mutation-gated instrumentation/installation/
-// deployment. Used by test-connection and provider probes.
+// Collector deployment. Used by test-connection and provider probes.
 func (s CloudConnectorSpec) RequiredPermissions(caps Capabilities) []string {
 	seen := map[string]bool{}
 	var out []string
@@ -841,13 +874,22 @@ func (s CloudConnectorSpec) RequiredPermissions(caps Capabilities) []string {
 		add(t.Permissions)
 	}
 
-	// Collector permissions, including the management baseline, belong to its
-	// customer-provisioned role. They are never added to the connector's base identity.
+	// Collector management reads are required in manual and automatic mode. Deployment
+	// writes are required only in automatic mode, exactly like instrumentation.
+	if len(s.CollectorTypes(caps)) > 0 {
+		add(s.Collectors.Management.Permissions)
+	}
+	for _, t := range s.CollectorTypes(caps) {
+		add(t.Permissions)
+	}
+	for _, t := range s.ActiveCollectorDeploymentTypes(caps) {
+		add(t.Permissions)
+	}
 	return out
 }
 
-// CollectorRolePermissions lists the provider API actions carried by the customer-provisioned
-// Collector role. Management reads apply in both modes; deployment writes apply only in automatic mode.
+// CollectorRolePermissions returns the Collector subset for setup artifacts and legacy callers.
+// These actions are granted to the connector's existing identity, not a second role.
 func (s CloudConnectorSpec) CollectorRolePermissions(caps Capabilities) []string {
 	seen := map[string]bool{}
 	var out []string

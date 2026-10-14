@@ -27,6 +27,7 @@ func TestValidateRejectsUnusableValues(t *testing.T) {
 		// a hostname the customer owns fails verification on every export.
 		{"certificate mode without hostname", Patch{TLS: &TransportPatch{Mode: s("loadBalancer")}}},
 		{"negative fallback prefix", Patch{Ingress: &IngressPatch{MinFallbackPrefixLength: i(-1)}}},
+		{"negative idle deletion", Patch{Retention: &RetentionPatch{IdleDeleteAfterHours: i(-1)}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -34,6 +35,17 @@ func TestValidateRejectsUnusableValues(t *testing.T) {
 				t.Fatal("accepted a value the deployer could not use")
 			}
 		})
+	}
+}
+
+func TestRetentionPatchIsSparse(t *testing.T) {
+	entry := map[string]any{KeyRetention: map[string]any{
+		KeyIdleScaleToZeroAfterHours: 6, KeyIdleDeleteAfterHours: 48,
+	}}
+	got := Patch{Retention: &RetentionPatch{IdleDeleteAfterHours: i(24)}}.MergeInto(entry)
+	retention := got[KeyRetention].(map[string]any)
+	if retention[KeyIdleScaleToZeroAfterHours] != 6 || retention[KeyIdleDeleteAfterHours] != 24 {
+		t.Fatalf("retention patch = %v", retention)
 	}
 }
 

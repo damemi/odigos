@@ -12,6 +12,7 @@ import (
 	logstypes "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
+	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	elb "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
@@ -36,8 +37,42 @@ func (f *fakeECS) DeleteService(_ context.Context, in *ecs.DeleteServiceInput, _
 	if f.deleteServiceErr != nil {
 		return nil, f.deleteServiceErr
 	}
-	delete(f.services, serviceKey(cluster, name))
+	key := serviceKey(cluster, name)
+	if len(f.serviceTasks[key]) > 0 {
+		f.services[key].Status = aws.String("DRAINING")
+	} else {
+		delete(f.services, key)
+	}
 	return &ecs.DeleteServiceOutput{}, nil
+}
+
+func (f *fakeECS) ListTasks(_ context.Context, in *ecs.ListTasksInput, _ ...func(*ecs.Options)) (*ecs.ListTasksOutput, error) {
+	cluster, name := aws.ToString(in.Cluster), aws.ToString(in.ServiceName)
+	f.calls = append(f.calls, "ListTasks:"+name)
+	if in.DesiredStatus != ecstypes.DesiredStatusRunning {
+		return &ecs.ListTasksOutput{}, nil
+	}
+	return &ecs.ListTasksOutput{TaskArns: append([]string(nil), f.serviceTasks[serviceKey(cluster, name)]...)}, nil
+}
+
+func (f *fakeECS) StopTask(_ context.Context, in *ecs.StopTaskInput, _ ...func(*ecs.Options)) (*ecs.StopTaskOutput, error) {
+	cluster, task := aws.ToString(in.Cluster), aws.ToString(in.Task)
+	f.calls = append(f.calls, "StopTask:"+task)
+	if f.stopTaskErr != nil {
+		return nil, f.stopTaskErr
+	}
+	for key, tasks := range f.serviceTasks {
+		if len(key) <= len(cluster) || key[:len(cluster)+1] != cluster+"/" {
+			continue
+		}
+		for i, arn := range tasks {
+			if arn == task {
+				f.serviceTasks[key] = append(tasks[:i], tasks[i+1:]...)
+				return &ecs.StopTaskOutput{}, nil
+			}
+		}
+	}
+	return &ecs.StopTaskOutput{}, nil
 }
 
 // --- ELBv2 ---

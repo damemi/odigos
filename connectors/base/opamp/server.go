@@ -250,17 +250,24 @@ func (s *Server) onConnecting(r *http.Request) types.ConnectionResponse {
 	return types.ConnectionResponse{
 		Accept: true,
 		ConnectionCallbacks: types.ConnectionCallbacks{
-			OnConnected:       func(ctx context.Context, conn types.Connection) { s.track(conn, sess) },
+			OnConnected:       func(ctx context.Context, conn types.Connection) { s.track(ctx, conn, sess) },
 			OnMessage:         s.onMessage,
 			OnConnectionClose: s.untrack,
 		},
 	}
 }
 
-func (s *Server) track(conn types.Connection, sess *session) {
+func (s *Server) track(ctx context.Context, conn types.Connection, sess *session) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.sessions[conn] = sess
+	s.mu.Unlock()
+	if credentials, ok := s.Collectors.(interface {
+		RecordCollectorCredentialConnected(context.Context, string, string, time.Time) error
+	}); ok {
+		if err := credentials.RecordCollectorCredentialConnected(ctx, sess.identity.Binding.CollectorID, sess.identity.CredentialID, sess.connectedAt); err != nil {
+			opampLog.Error("recording Collector credential connection failed", "credential_id", sess.identity.CredentialID, "error", err)
+		}
+	}
 
 	opampLog.Info("managed Collector connected",
 		"collector_id", sess.identity.Binding.CollectorID,

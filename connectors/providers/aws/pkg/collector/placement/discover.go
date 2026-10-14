@@ -142,6 +142,7 @@ func describeSubnets(ctx context.Context, api EC2Reader, region string, tables [
 				Region:           region,
 				ID:               id,
 				VPCID:            vpcID,
+				CIDRBlock:        aws.ToString(s.CidrBlock),
 				AvailabilityZone: aws.ToString(s.AvailabilityZone),
 				AvailableIPs:     aws.ToInt32(s.AvailableIpAddressCount),
 				Egress:           subnetEgress(id, vpcID, tables),

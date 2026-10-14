@@ -20,11 +20,15 @@ import (
 type regionalRouteResolver struct{ provider *Provider }
 
 func (r regionalRouteResolver) ResolveFargateRoutes(ctx context.Context, services []workloadstore.ECSService) (map[string]domaindest.Routing, error) {
+	return r.resolveFargateRoutes(ctx, services, true)
+}
+
+func (r regionalRouteResolver) resolveFargateRoutes(ctx context.Context, services []workloadstore.ECSService, recordAnnouncement bool) (map[string]domaindest.Routing, error) {
 	workloads := make([]networkedWorkload, 0, len(services))
 	for _, svc := range services {
 		workloads = append(workloads, fargateNetworkedWorkload(svc))
 	}
-	return r.resolveRoutes(ctx, workloads, "Fargate")
+	return r.resolveRoutes(ctx, workloads, "Fargate", recordAnnouncement)
 }
 
 // fargateNetworkedWorkload is the service as the route resolver sees it. Its failure is the CUTOVER failure,
@@ -40,11 +44,15 @@ func fargateNetworkedWorkload(svc workloadstore.ECSService) networkedWorkload {
 // and rollout gate as Fargate. A Lambda with no VPC is deliberately represented with an empty network;
 // the destination resolver then keeps it on the global OTLP terminal and explains why.
 func (r regionalRouteResolver) ResolveLambdaRoutes(ctx context.Context, functions []workloadstore.LambdaFunction) (map[string]domaindest.Routing, error) {
+	return r.resolveLambdaRoutes(ctx, functions, true)
+}
+
+func (r regionalRouteResolver) resolveLambdaRoutes(ctx context.Context, functions []workloadstore.LambdaFunction, recordAnnouncement bool) (map[string]domaindest.Routing, error) {
 	workloads := make([]networkedWorkload, 0, len(functions))
 	for _, fn := range functions {
 		workloads = append(workloads, lambdaNetworkedWorkload(fn))
 	}
-	return r.resolveRoutes(ctx, workloads, "Lambda")
+	return r.resolveRoutes(ctx, workloads, "Lambda", recordAnnouncement)
 }
 
 // lambdaNetworkedWorkload is the function as the route resolver sees it, cutover failure included — without
@@ -69,7 +77,7 @@ type collectorRouteTarget struct {
 	ports                   []int32
 }
 
-func (r regionalRouteResolver) resolveRoutes(ctx context.Context, workloads []networkedWorkload, kind string) (map[string]domaindest.Routing, error) {
+func (r regionalRouteResolver) resolveRoutes(ctx context.Context, workloads []networkedWorkload, kind string, recordAnnouncement bool) (map[string]domaindest.Routing, error) {
 	out := make(map[string]domaindest.Routing, len(workloads))
 	if len(workloads) == 0 {
 		return out, nil
@@ -87,9 +95,11 @@ func (r regionalRouteResolver) resolveRoutes(ctx context.Context, workloads []ne
 		return nil, err
 	}
 	markedRegions := map[string]bool{}
+	markerUpdatedAt := map[string]time.Time{}
 	for _, dest := range destinations {
 		if !dest.Disabled && domaindest.IsManagedCollectorType(dest.Type) {
 			markedRegions[dest.Region] = true
+			markerUpdatedAt[dest.Region] = dest.UpdatedAt
 		}
 	}
 	needsRegionalTopology := false
@@ -125,7 +135,9 @@ func (r regionalRouteResolver) resolveRoutes(ctx context.Context, workloads []ne
 	}
 	settings := collectorsettings.Read(p.cfgMgr.Effective())
 	collectors := make(map[string]collectorRouteTarget, len(records))
+	firstReadyAt := make(map[string]*time.Time, len(records))
 	for _, rec := range records {
+		firstReadyAt[rec.Key.Region] = rec.FirstReadyAt
 		groups := append([]string{}, settings.Region(rec.Key.Region).SecurityGroupIDs...)
 		if rec.IngressRef != "" {
 			groups = append(groups, rec.IngressRef)
@@ -152,8 +164,8 @@ func (r regionalRouteResolver) resolveRoutes(ctx context.Context, workloads []ne
 					switch plan.Topology.Reachability(w.Region, collector.network, w.Region, network, collector.subnets, w.Subnets) {
 					case placement.ReachabilityReachable:
 						// VPC routing is accepted only after the actual Collector SG admits this
-						// workload's ENI SG on every published OTLP receiver port.
-						reachability = collectorIngressReachability(plan.Topology, w.Region, collector.network, collector.securityGroups, network, w.SecurityGroups, collector.ports)
+						// workload's ENI SG or every selected subnet CIDR on each published OTLP port.
+						reachability = collectorIngressReachability(plan.Topology, w.Region, collector.network, collector.securityGroups, network, w.Subnets, w.SecurityGroups, collector.ports)
 					case placement.ReachabilityUnreachable:
 						reachability = domaindest.ReachabilityUnreachable
 					}
@@ -181,12 +193,46 @@ func (r regionalRouteResolver) resolveRoutes(ctx context.Context, workloads []ne
 		}
 	}
 	batchSizes := make(map[string]int, len(candidates))
+	batchBlocked := make(map[string]bool, len(candidates))
 	for _, c := range candidates {
+		if !c.Instrumented {
+			continue
+		}
 		if _, ok := batchSizes[c.Region]; !ok {
-			batchSizes[c.Region] = settings.Region(c.Region).Network.RolloutBatchSize
+			quota := p.collectorBatchQuota(ctx, kind, settings.Region(c.Region).Network.RolloutBatchSize)
+			batchSizes[c.Region] = quota
+			batchBlocked[c.Region] = quota == 0
 		}
 	}
-	return selectCollectorRoutes(collectorRouteSelectionInput{Direct: direct, Desired: out, Candidates: candidates, BatchSizes: batchSizes}), nil
+	announcing := make(map[string]bool, len(batchSizes))
+	if direct.Found {
+		for region := range batchSizes {
+			readyAt := firstReadyAt[region]
+			if readyAt == nil {
+				continue
+			}
+			if recordAnnouncement {
+				announcing[region], err = p.bstore.EnsureCollectorCutoverAnnouncement(ctx, region, markerUpdatedAt[region], *readyAt)
+				if err != nil {
+					return nil, fmt.Errorf("announce Collector cutover in %s: %w", region, err)
+				}
+			} else {
+				announcement, readErr := p.bstore.GetCollectorCutoverAnnouncement(ctx, region)
+				if readErr != nil {
+					return nil, fmt.Errorf("read Collector cutover announcement in %s: %w", region, readErr)
+				}
+				if announcement != nil && announcement.Matches(markerUpdatedAt[region], *readyAt) {
+					announcing[region] = announcement.Announcing
+				} else {
+					// A plan query must not write state. Show the route that the first
+					// actual reconcile pass will use: direct during its warning window.
+					announcing[region] = true
+				}
+			}
+		}
+	}
+	return selectCollectorRoutes(collectorRouteSelectionInput{Direct: direct, Desired: out, Candidates: candidates,
+		BatchSizes: batchSizes, BatchBlocked: batchBlocked, Announcing: announcing}), nil
 }
 
 // unreachableCollectorNote gives the workload's network and the selected Collector host network to the
@@ -219,10 +265,10 @@ func lambdaRoutingNote(r domaindest.Routing) domaindest.Routing {
 }
 
 func collectorIngressReachability(topology placement.Topology, region, collectorVPC string, collectorSecurityGroups []string,
-	sourceVPC string, sourceSecurityGroups []string, ports []int32) domaindest.Reachability {
+	sourceVPC string, sourceSubnetIDs, sourceSecurityGroups []string, ports []int32) domaindest.Reachability {
 	unknown := false
 	for _, collectorSecurityGroup := range collectorSecurityGroups {
-		switch topology.CollectorIngressReachabilityForPorts(region, collectorVPC, collectorSecurityGroup, sourceVPC, sourceSecurityGroups, ports) {
+		switch topology.CollectorIngressReachabilityForWorkload(region, collectorVPC, collectorSecurityGroup, sourceVPC, sourceSubnetIDs, sourceSecurityGroups, ports) {
 		case placement.ReachabilityReachable:
 			return domaindest.ReachabilityReachable
 		case placement.ReachabilityUnknown:
@@ -248,10 +294,12 @@ type collectorRouteCandidate struct {
 }
 
 type collectorRouteSelectionInput struct {
-	Direct     domaindest.Routing
-	Desired    map[string]domaindest.Routing
-	Candidates []collectorRouteCandidate
-	BatchSizes map[string]int
+	Direct       domaindest.Routing
+	Desired      map[string]domaindest.Routing
+	Candidates   []collectorRouteCandidate
+	BatchSizes   map[string]int
+	BatchBlocked map[string]bool
+	Announcing   map[string]bool
 }
 
 // selectCollectorRoutes applies readiness-gated, batched first cutover while preserving immediate direct
@@ -270,9 +318,10 @@ func selectCollectorRoutes(in collectorRouteSelectionInput) map[string]domaindes
 		}
 		byRegion[candidate.Region] = append(byRegion[candidate.Region], candidate)
 	}
-	// Without a global terminal there is no safe direct route to hold a workload on
-	// while a batch rolls out. The Collector route is already readiness and
-	// reachability gated by ResolveRoutingForRegion, so apply every eligible route.
+	// A ready, reachable regional Collector is a valid route even without a global
+	// terminal. In that case there is no direct route for an announcement window or
+	// a batched rollout, so use the resolved Collector route immediately. Workloads
+	// whose Collector route is unavailable retain their routing error.
 	if !in.Direct.Found {
 		return out
 	}
@@ -284,10 +333,14 @@ func selectCollectorRoutes(in collectorRouteSelectionInput) map[string]domaindes
 				FailedAt: candidate.FailedAt,
 			})
 		}
-		decision := collectorcutover.Decide(collectorcutover.Input{
-			Region: region, Enabled: true, Deployed: true, EverReady: true,
-			Workloads: facts, BatchSize: in.BatchSizes[region],
-		})
+		announcing := in.Announcing[region]
+		decision := collectorcutover.Decision{}
+		if !in.BatchBlocked[region] {
+			decision = collectorcutover.Decide(collectorcutover.Input{
+				Region: region, Enabled: true, Deployed: true, EverReady: !announcing, ReadyNow: true,
+				Workloads: facts, BatchSize: in.BatchSizes[region],
+			})
+		}
 		admitted := make(map[string]bool, len(decision.Admit))
 		for _, ref := range decision.Admit {
 			admitted[ref] = true
@@ -347,7 +400,7 @@ func (p *Provider) ResolveWorkloadRouting(ctx context.Context, w baseapi.Discove
 		if target == nil {
 			return domaindest.Routing{}, true, fmt.Errorf("Lambda function %q was not found in %s", w.ServiceName, w.Region)
 		}
-		routes, err := resolver.ResolveLambdaRoutes(ctx, functions)
+		routes, err := resolver.resolveLambdaRoutes(ctx, functions, false)
 		if err != nil {
 			return domaindest.Routing{}, true, err
 		}
@@ -372,7 +425,7 @@ func (p *Provider) ResolveWorkloadRouting(ctx context.Context, w baseapi.Discove
 	if target == nil {
 		return domaindest.Routing{}, true, fmt.Errorf("Fargate service %q was not found in %s", w.ServiceName, w.Region)
 	}
-	routes, err := resolver.ResolveFargateRoutes(ctx, services)
+	routes, err := resolver.resolveFargateRoutes(ctx, services, false)
 	if err != nil {
 		return domaindest.Routing{}, true, err
 	}
