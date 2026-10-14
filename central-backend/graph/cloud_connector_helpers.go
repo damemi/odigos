@@ -14,10 +14,9 @@ const (
 	featureInstrumentation  = "instrumentation"
 	featureComputePlatforms = "computePlatforms"
 	featureGateway          = "gateway"
-	// The managed-Collector domain. Emitting these does NOT change any policy the UI renders today:
-	// ui-kit aggregates permissions only for feature keys listed in the selected access level's
-	// featureKeys allowlist, and these two are in none of them. That is deliberate — the key has to
-	// exist in this API before ui-kit can reference it, so this is the half that can land first.
+	// Collector mode selects management reads in manual and automatic mode, and
+	// deployment writes only in automatic mode. ui-kit adds these feature keys to
+	// the connector identity's policy preview for the selected mode.
 	featureCollectorManagement = "collectorManagement"
 	featureCollectorDeployment = "collectorDeployment"
 )
@@ -99,11 +98,8 @@ func cloudConnectorAuthMethods(methods []spec.AuthMethod) []*model.CloudConnecto
 // customer's policy while the domain was being declared, and it is why forwarding them is a deliberate
 // step rather than a side effect.
 //
-// A managed Collector needs the customer to grant permissions Odigos cannot infer, so the two features
-// have to be reachable by the client that renders the policy. Rendering them is still ui-kit's call: it
-// aggregates only the feature keys in the selected access level's allowlist, and until it adds these
-// two, a customer enabling a Collector is shown a policy that omits every Collector permission and the
-// deployer fails authorization on its first write.
+// A managed Collector needs mode-scoped permissions on the existing connector identity. Both features
+// reach the client that renders the policy so it can include reads for manual mode and writes for auto.
 func cloudConnectorFeatures(s spec.CloudConnectorSpec) []*model.CloudConnectorFeature {
 	return []*model.CloudConnectorFeature{
 		cloudConnectorFeatureFromSpec(featureDiscovery, s.Workloads.Discovery),

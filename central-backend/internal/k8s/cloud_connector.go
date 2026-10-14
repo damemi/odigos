@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -85,6 +86,25 @@ func (c *Client) ListCloudConnectors(ctx context.Context, namespace string) ([]c
 		return nil, fmt.Errorf("failed to list OdigosCloudConnectors in namespace %s: %w", namespace, err)
 	}
 	return list.Items, nil
+}
+
+// UpdateCloudConnectorCollectors changes only the Collector allow-list. An
+// allocated empty slice explicitly clears the previous selection.
+func (c *Client) UpdateCloudConnectorCollectors(ctx context.Context, namespace, name string, collectors []cloudconnectorsv1.CloudConnectorCollectorCapability) error {
+	if c.Ctrl == nil {
+		return fmt.Errorf("controller-runtime client is not initialized")
+	}
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var cc cloudconnectorsv1.OdigosCloudConnector
+		if err := c.Ctrl.Get(ctx, ctrlclient.ObjectKey{Namespace: namespace, Name: name}, &cc); err != nil {
+			return err
+		}
+		cc.Spec.Collectors = append(make([]cloudconnectorsv1.CloudConnectorCollectorCapability, 0), collectors...)
+		// The compatibility annotation is consulted when spec.collectors is empty.
+		// Clear it as part of an explicit edit so Off cannot revive an old mode.
+		delete(cc.Annotations, "odigos.io/collectors-capability")
+		return c.Ctrl.Update(ctx, &cc)
+	})
 }
 
 // DeleteCloudConnector deletes an OdigosCloudConnector CR by name.

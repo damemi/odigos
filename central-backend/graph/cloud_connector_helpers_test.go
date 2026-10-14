@@ -1,11 +1,49 @@
 package graph
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
+
+// The Collector drawer reads these sections from cloudConnectorProviders. Keep the
+// catalog boundary covered so a spec step cannot disappear or lose its snippet
+// during the backend-to-UI mapping.
+func TestAWSCollectorStepsReachProviderCatalog(t *testing.T) {
+	declared := spec.MustGet("aws")
+	provider := cloudConnectorProviderFromSpec(declared)
+	if provider.Setup == nil {
+		t.Fatal("AWS setup artifacts were not exposed to the UI")
+	}
+	for _, mode := range []string{spec.ModeAutomatic, spec.ModeManual} {
+		for _, method := range []string{"", ":aws-cli", ":cloudformation"} {
+			section := spec.CollectorModeSection("aws.fargate-collector", mode) + method
+			want := declared.SetupArtifactsForSection(section)
+			if len(want) == 0 {
+				t.Fatalf("aws.yaml declares no Collector steps for %s", section)
+			}
+			got := make([]*model.CloudConnectorSetupArtifact, 0, len(want))
+			for _, artifact := range provider.Setup.Artifacts {
+				if artifact.Section == section {
+					got = append(got, artifact)
+				}
+			}
+			if len(got) != len(want) {
+				t.Fatalf("%s Collector steps in UI catalog = %d, want %d", section, len(got), len(want))
+			}
+			for i, artifact := range got {
+				if artifact.ID != want[i].ID || artifact.Title != want[i].Title || artifact.Description != want[i].Description ||
+					artifact.VariantLabel != want[i].VariantLabel || artifact.Format != want[i].Format || artifact.Template != want[i].Template ||
+					artifact.ItemTemplate != want[i].ItemTemplate || artifact.ItemSeparator != want[i].ItemSeparator ||
+					!reflect.DeepEqual(artifact.Steps, nonNilStrings(want[i].Steps)) {
+					t.Errorf("%s Collector step %d lost spec content: got %#v, want %#v", section, i, artifact, want[i])
+				}
+			}
+		}
+	}
+}
 
 // TestCloudConnectorFieldsCarryShowInUi guards the boundary that made `showInUi: false` inert: the flag
 // is declared in the provider YAML and honored by the create-connector drawer, but the only thing joining

@@ -65,6 +65,7 @@ export const GET_CLOUD_CONNECTOR_PROVIDERS = gql`
           section
           variant
           variantLabel
+          language
           title
           description
           steps

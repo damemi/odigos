@@ -43,6 +43,13 @@ type CloudConnectorCapabilityInput struct {
 	ComputePlatforms bool   `json:"computePlatforms"`
 }
 
+type CloudConnectorCollectorCapability struct {
+	Type       string `json:"type"`
+	Management bool   `json:"management"`
+	Deployment bool   `json:"deployment"`
+	Mode       string `json:"mode"`
+}
+
 type CloudConnectorCollectorCapabilityInput struct {
 	Type       string `json:"type"`
 	Management bool   `json:"management"`
@@ -132,17 +139,18 @@ type ClusterSnapshot struct {
 }
 
 type ComputePlatform struct {
-	ID                   string                `json:"id"`
-	Name                 string                `json:"name"`
-	OdigosVersion        string                `json:"odigosVersion"`
-	GraphqlSchemaVersion *string               `json:"graphqlSchemaVersion,omitempty"`
-	Type                 string                `json:"type"`
-	Status               string                `json:"status"`
-	ConnectedAt          *int                  `json:"connectedAt,omitempty"`
-	LastSeenAt           *int                  `json:"lastSeenAt,omitempty"`
-	Users                []*User               `json:"users"`
-	Teams                []*Team               `json:"teams"`
-	Stats                *ComputePlatformStats `json:"stats,omitempty"`
+	ID                   string                               `json:"id"`
+	Name                 string                               `json:"name"`
+	OdigosVersion        string                               `json:"odigosVersion"`
+	GraphqlSchemaVersion *string                              `json:"graphqlSchemaVersion,omitempty"`
+	Type                 string                               `json:"type"`
+	Status               string                               `json:"status"`
+	ConnectedAt          *int                                 `json:"connectedAt,omitempty"`
+	LastSeenAt           *int                                 `json:"lastSeenAt,omitempty"`
+	Users                []*User                              `json:"users"`
+	Teams                []*Team                              `json:"teams"`
+	Stats                *ComputePlatformStats                `json:"stats,omitempty"`
+	Collectors           []*CloudConnectorCollectorCapability `json:"collectors"`
 }
 
 type ComputePlatformStats struct {

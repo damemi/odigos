@@ -53,6 +53,8 @@ type ComputePlatform {
   # Workload statistics from the latest snapshot or compact agent summary.
   # Null until the platform reports statistics.
   stats: ComputePlatformStats
+  # Collector capability selected on this cloud connector CR. Empty on other platforms.
+  collectors: [CloudConnectorCollectorCapability!]!
 }
 
 type ComputePlatformStats {

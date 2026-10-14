@@ -9,6 +9,12 @@ export const GET_COMPUTE_PLATFORMS = gql`
       graphqlSchemaVersion
       type
       status
+      collectors {
+        type
+        management
+        deployment
+        mode
+      }
       connectedAt
       lastSeenAt
       stats {

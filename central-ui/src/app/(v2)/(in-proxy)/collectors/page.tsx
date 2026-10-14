@@ -6,9 +6,9 @@ import { PlatformType } from '@odigos/ui-kit/types';
 import { ManagedCollectors, PipelineCollectors } from '@odigos/ui-kit/containers';
 
 export default function Page() {
-  const { platformType, proxyName } = useProxy();
+  const { platformType, proxyName, proxyID } = useProxy();
 
-  if (platformType === PlatformType.Connector) return <ManagedCollectors connectorName={proxyName} />;
+  if (platformType === PlatformType.Connector) return <ManagedCollectors connectorName={proxyName} connectorId={proxyID} />;
 
   return (
     <PipelineCollectors

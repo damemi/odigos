@@ -95,6 +95,27 @@ func (svc *CloudConnectorService) ListConnectors(ctx context.Context) ([]cloudco
 	return svc.k8sClient.ListCloudConnectors(ctx, svc.namespace)
 }
 
+// UpdateCollectors selects the Collector mode without touching connector
+// credentials or workload capabilities. The CR update triggers reconciliation.
+func (svc *CloudConnectorService) UpdateCollectors(ctx context.Context, connectorUID string, collectors []cloudconnectorsv1.CloudConnectorCollectorCapability) error {
+	if connectorUID == "" {
+		return fmt.Errorf("connector id is required")
+	}
+	connectors, err := svc.ListConnectors(ctx)
+	if err != nil {
+		return err
+	}
+	for _, connector := range connectors {
+		if string(connector.UID) == connectorUID {
+			if connector.Spec.Provider != "aws" && len(collectors) > 0 {
+				return fmt.Errorf("regional Collector is supported only for AWS connectors")
+			}
+			return svc.k8sClient.UpdateCloudConnectorCollectors(ctx, svc.namespace, connector.Name, collectors)
+		}
+	}
+	return fmt.Errorf("cloud connector %s not found", connectorUID)
+}
+
 // DeleteConnector removes the OdigosCloudConnector CR (and its credentials
 // Secret) identified by the connection id used in computePlatforms — the CR
 // UID. The connector-runtime finalizer tears down the Deployment after the CR

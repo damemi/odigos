@@ -48,6 +48,7 @@ import { ErrorLink } from '@apollo/client/link/error';
 import { useUserStore, useProxyStore } from '@/store';
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { mapManagedCollectorInstructions, mapManagedCollectorReport } from '@/graphql/remote/managed-collector';
+import { REVOKE_MANAGED_COLLECTOR_CREDENTIAL } from '@/graphql/remote/managed-collector-credentials';
 import { vmQuery, type VmSelect } from '@/graphql/remote/vm-dialect';
 import { safeJsonParse, trimVersion } from '@odigos/ui-kit/functions';
 import { supportsWorkloadReportRegion } from '@/graphql/remote/utils';
@@ -188,6 +189,11 @@ import {
   type ManagedCollectorMetricsVars,
   type ManagedCollectorRegionVars,
   type ManagedCollectorReport,
+  type ManagedCollectorSetupDrafts,
+  type IssueManagedCollectorCredentialVars,
+  type IssuedManagedCollectorCredential,
+  type RevokeManagedCollectorCredentialVars,
+  type RevokedManagedCollectorCredential,
   type UpdateManagedCollectorVars,
   type GetWorkloadsByIdsData,
   type GetWorkloadsByIdsVars,
@@ -271,6 +277,8 @@ import {
   DELETE_PROXY_CONNECTION,
   DELETE_CLOUD_CONNECTOR,
   CREATE_CLOUD_CONNECTOR,
+  TEST_CLOUD_CONNECTOR_CONNECTION,
+  UPDATE_CLOUD_CONNECTOR_COLLECTORS,
   GET_CLOUD_CONNECTOR_PROVIDERS,
   GET_ALL_CLUSTER_SNAPSHOTS,
   GET_CLUSTER_SNAPSHOT,
@@ -1457,8 +1465,8 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
       return env?.collectorPod ?? env?.extendedPodInfo;
     }),
 
-    // Managed collectors (agents-api v0.25.0+): deploymentRoleRef / executionRoleArn are
-    // in the frozen dialect, so documents resolve via the normal versioned registry.
+    // Managed collectors use the versioned registry. The legacy deploymentRoleRef
+    // field remains on the wire while older GraphQL clients still require it.
     // Mutation variables are the form payload unchanged.
     GET_MANAGED_COLLECTOR_REPORTS: wrapVersioned<ManagedCollectorReport[], ManagedCollectorListVars>({}, undefined, undefined, {
       select: (d) => d.GetManagedCollectorReportsDocument,
@@ -1468,6 +1476,15 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
     GET_MANAGED_COLLECTOR_REPORT: wrapVersioned<ManagedCollectorReport | null, ManagedCollectorRegionVars>({}, undefined, undefined, {
       select: (d) => d.GetManagedCollectorReportDocument,
       transformResult: (data) => mapManagedCollectorReport((data as GetManagedCollectorReportQuery | null)?.managedCollectorReport) ?? null,
+    }),
+    GET_MANAGED_COLLECTOR_SETUP_DRAFTS: wrapVersioned<ManagedCollectorSetupDrafts, undefined>({}, undefined, undefined, {
+      select: (d) => d.GetConfigDocument,
+      transformResult: (data) => ((data as { config?: { collectorSetupDrafts?: ManagedCollectorSetupDrafts } } | null)?.config?.collectorSetupDrafts ?? {}),
+    }),
+    SAVE_MANAGED_COLLECTOR_SETUP_DRAFTS: wrapVersioned<ManagedCollectorSetupDrafts, { drafts: ManagedCollectorSetupDrafts }>({}, undefined, undefined, {
+      select: (d) => d.UpdateConfigDocument,
+      transformVariables: (vars) => ({ input: { config: { collectorSetupDrafts: vars.drafts } } }),
+      transformResult: (data) => ((data as { updateConfig?: { config?: { collectorSetupDrafts?: ManagedCollectorSetupDrafts } } } | null)?.updateConfig?.config?.collectorSetupDrafts ?? {}),
     }),
     GET_MANAGED_COLLECTOR_INSTRUCTIONS: wrapVersioned<ManagedCollectorInstructions | null, ManagedCollectorRegionVars>({}, undefined, undefined, {
       select: (d) => d.GetManagedCollectorInstructionsDocument,
@@ -1497,6 +1514,17 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
     DELETE_MANAGED_COLLECTOR: wrapVersioned<DeleteManagedCollectorResult, DeleteManagedCollectorVars>({}, undefined, undefined, {
       select: (d) => d.TeardownManagedCollectorDocument,
       transformResult: (data) => (data as TeardownManagedCollectorMutation | null)?.teardownManagedCollector,
+    }),
+    ISSUE_MANAGED_COLLECTOR_CREDENTIAL: {
+      ...wrapVersioned<IssuedManagedCollectorCredential, IssueManagedCollectorCredentialVars>({}, undefined, undefined, {
+        select: (d) => d.IssueManagedCollectorCredentialDocument,
+        transformResult: (data) => (data as { issueManagedCollectorCredential?: IssuedManagedCollectorCredential } | null)?.issueManagedCollectorCredential,
+      }),
+      noCache: true,
+    },
+    REVOKE_MANAGED_COLLECTOR_CREDENTIAL: wrapVersioned<RevokedManagedCollectorCredential, RevokeManagedCollectorCredentialVars>({}, undefined, undefined, {
+      select: (d) => d.IssueManagedCollectorCredentialDocument && REVOKE_MANAGED_COLLECTOR_CREDENTIAL,
+      transformResult: (data) => (data as { revokeManagedCollectorCredential?: RevokedManagedCollectorCredential } | null)?.revokeManagedCollectorCredential,
     }),
     CREATE_MANAGED_COLLECTOR_DESTINATION: wrapVersioned<ManagedCollectorDestination, ManagedCollectorDestinationInput>({}, undefined, undefined, {
       select: (d) => d.CreateManagedCollectorDestinationDocument,
@@ -1590,6 +1618,14 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
     CREATE_CLOUD_CONNECTOR: {
       document: CREATE_CLOUD_CONNECTOR as DocumentNode,
       transformResult: (raw) => (raw as { createCloudConnector?: CloudConnectorCreateResult } | null | undefined)?.createCloudConnector,
+    },
+    TEST_CLOUD_CONNECTOR_CONNECTION: {
+      document: TEST_CLOUD_CONNECTOR_CONNECTION as DocumentNode,
+      transformResult: (raw) => (raw as { testCloudConnectorConnection?: import('@odigos/ui-kit/types').CloudConnectorTestResult } | null | undefined)?.testCloudConnectorConnection,
+    },
+    UPDATE_CLOUD_CONNECTOR_COLLECTORS: {
+      document: UPDATE_CLOUD_CONNECTOR_COLLECTORS as DocumentNode,
+      transformResult: (raw) => (raw as { updateCloudConnectorCollectors?: ConnectionCrudResult } | null | undefined)?.updateCloudConnectorCollectors,
     },
     // PLAT-1316: variables must be `{ proxyID }`, never `{ id }`.
     DELETE_PROXY_CONNECTION: {

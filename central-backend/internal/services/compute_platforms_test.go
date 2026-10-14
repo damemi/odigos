@@ -11,7 +11,21 @@ import (
 	"github.com/odigos-io/central-backend/internal/logger"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
 	"github.com/odigos-io/central-backend/internal/snapshotsummary"
+	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 )
+
+func TestCloudConnectorCollectorModes(t *testing.T) {
+	got := cloudConnectorCollectors([]cloudconnectorsv1.CloudConnectorCollectorCapability{
+		{Type: "manual", Management: true},
+		{Type: "automatic", Management: true, Deployment: true},
+	})
+	if len(got) != 2 || got[0].Mode != "manual" || got[1].Mode != "automatic" {
+		t.Fatalf("collector capabilities = %+v", got)
+	}
+	if got[0].Deployment || !got[1].Deployment {
+		t.Fatalf("deployment flags lost: %+v", got)
+	}
+}
 
 type fakeProxyMetaReader struct {
 	values redisclient.RedisHashFieldValuesByKey

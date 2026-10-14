@@ -64,6 +64,13 @@ type ComplexityRoot struct {
 		ID          func(childComplexity int) int
 	}
 
+	CloudConnectorCollectorCapability struct {
+		Deployment func(childComplexity int) int
+		Management func(childComplexity int) int
+		Mode       func(childComplexity int) int
+		Type       func(childComplexity int) int
+	}
+
 	CloudConnectorFeature struct {
 		Description func(childComplexity int) int
 		DisplayName func(childComplexity int) int
@@ -147,6 +154,7 @@ type ComplexityRoot struct {
 	}
 
 	ComputePlatform struct {
+		Collectors           func(childComplexity int) int
 		ConnectedAt          func(childComplexity int) int
 		GraphqlSchemaVersion func(childComplexity int) int
 		ID                   func(childComplexity int) int
@@ -228,25 +236,26 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		CreateCloudConnector         func(childComplexity int, input model.CreateCloudConnectorInput) int
-		CreateGroupRoleMapping       func(childComplexity int, input model.WriteGroupRoleMappingInput) int
-		CreateTeam                   func(childComplexity int, input model.WriteTeamInput) int
-		CreateUser                   func(childComplexity int, input model.WriteUserInput) int
-		DeleteCloudConnector         func(childComplexity int, connectorID string) int
-		DeleteGroupRoleMapping       func(childComplexity int, providerID model.AuthProviderID, id string) int
-		DeleteProxyConnection        func(childComplexity int, proxyID string) int
-		DeleteTeam                   func(childComplexity int, teamID string) int
-		DeleteUser                   func(childComplexity int, userID string) int
-		EnsureOidcIdentityProvider   func(childComplexity int, input model.OidcIdentityProviderInput) int
-		EnsureSamlIdentityProvider   func(childComplexity int, input model.SamlIdentityProviderInput) int
-		SetInitialPassword           func(childComplexity int, email string, password string) int
-		SignIn                       func(childComplexity int, email *string, password *string, code *string) int
-		TestCloudConnectorConnection func(childComplexity int, input model.TestCloudConnectorConnectionInput) int
-		UpdateComputePlatform        func(childComplexity int, id string, input model.WriteComputePlatformInput) int
-		UpdateGroupRoleMapping       func(childComplexity int, id string, input model.WriteGroupRoleMappingInput) int
-		UpdateTeam                   func(childComplexity int, teamID string, input model.WriteTeamInput) int
-		UpdateUser                   func(childComplexity int, userID string, input model.WriteUserInput) int
-		VerifyToken                  func(childComplexity int, token string) int
+		CreateCloudConnector           func(childComplexity int, input model.CreateCloudConnectorInput) int
+		CreateGroupRoleMapping         func(childComplexity int, input model.WriteGroupRoleMappingInput) int
+		CreateTeam                     func(childComplexity int, input model.WriteTeamInput) int
+		CreateUser                     func(childComplexity int, input model.WriteUserInput) int
+		DeleteCloudConnector           func(childComplexity int, connectorID string) int
+		DeleteGroupRoleMapping         func(childComplexity int, providerID model.AuthProviderID, id string) int
+		DeleteProxyConnection          func(childComplexity int, proxyID string) int
+		DeleteTeam                     func(childComplexity int, teamID string) int
+		DeleteUser                     func(childComplexity int, userID string) int
+		EnsureOidcIdentityProvider     func(childComplexity int, input model.OidcIdentityProviderInput) int
+		EnsureSamlIdentityProvider     func(childComplexity int, input model.SamlIdentityProviderInput) int
+		SetInitialPassword             func(childComplexity int, email string, password string) int
+		SignIn                         func(childComplexity int, email *string, password *string, code *string) int
+		TestCloudConnectorConnection   func(childComplexity int, input model.TestCloudConnectorConnectionInput) int
+		UpdateCloudConnectorCollectors func(childComplexity int, connectorID string, collectors []*model.CloudConnectorCollectorCapabilityInput) int
+		UpdateComputePlatform          func(childComplexity int, id string, input model.WriteComputePlatformInput) int
+		UpdateGroupRoleMapping         func(childComplexity int, id string, input model.WriteGroupRoleMappingInput) int
+		UpdateTeam                     func(childComplexity int, teamID string, input model.WriteTeamInput) int
+		UpdateUser                     func(childComplexity int, userID string, input model.WriteUserInput) int
+		VerifyToken                    func(childComplexity int, token string) int
 	}
 
 	NamespaceSnapshot struct {
@@ -354,6 +363,7 @@ type MutationResolver interface {
 	DeleteProxyConnection(ctx context.Context, proxyID string) (*model.GeneralResult, error)
 	TestCloudConnectorConnection(ctx context.Context, input model.TestCloudConnectorConnectionInput) (*model.CloudConnectorTestResult, error)
 	CreateCloudConnector(ctx context.Context, input model.CreateCloudConnectorInput) (*model.CreateCloudConnectorResult, error)
+	UpdateCloudConnectorCollectors(ctx context.Context, connectorID string, collectors []*model.CloudConnectorCollectorCapabilityInput) (*model.GeneralResult, error)
 	DeleteCloudConnector(ctx context.Context, connectorID string) (*model.GeneralResult, error)
 }
 type QueryResolver interface {
@@ -486,6 +496,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CloudConnectorAuthMethod.ID(childComplexity), true
+
+	case "CloudConnectorCollectorCapability.deployment":
+		if e.ComplexityRoot.CloudConnectorCollectorCapability.Deployment == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorCollectorCapability.Deployment(childComplexity), true
+	case "CloudConnectorCollectorCapability.management":
+		if e.ComplexityRoot.CloudConnectorCollectorCapability.Management == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorCollectorCapability.Management(childComplexity), true
+	case "CloudConnectorCollectorCapability.mode":
+		if e.ComplexityRoot.CloudConnectorCollectorCapability.Mode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorCollectorCapability.Mode(childComplexity), true
+	case "CloudConnectorCollectorCapability.type":
+		if e.ComplexityRoot.CloudConnectorCollectorCapability.Type == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorCollectorCapability.Type(childComplexity), true
 
 	case "CloudConnectorFeature.description":
 		if e.ComplexityRoot.CloudConnectorFeature.Description == nil {
@@ -826,6 +861,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.ClusterSnapshot.Timestamp(childComplexity), true
 
+	case "ComputePlatform.collectors":
+		if e.ComplexityRoot.ComputePlatform.Collectors == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ComputePlatform.Collectors(childComplexity), true
 	case "ComputePlatform.connectedAt":
 		if e.ComplexityRoot.ComputePlatform.ConnectedAt == nil {
 			break
@@ -1279,6 +1320,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.TestCloudConnectorConnection(childComplexity, args["input"].(model.TestCloudConnectorConnectionInput)), true
+	case "Mutation.updateCloudConnectorCollectors":
+		if e.ComplexityRoot.Mutation.UpdateCloudConnectorCollectors == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateCloudConnectorCollectors_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdateCloudConnectorCollectors(childComplexity, args["connectorId"].(string), args["collectors"].([]*model.CloudConnectorCollectorCapabilityInput)), true
 	case "Mutation.updateComputePlatform":
 		if e.ComplexityRoot.Mutation.UpdateComputePlatform == nil {
 			break
@@ -1874,6 +1926,20 @@ func (ec *executionContext) childFields_CloudConnectorAuthMethod(ctx context.Con
 	return nil, fmt.Errorf("no field named %q was found under type CloudConnectorAuthMethod", field.Name)
 }
 
+func (ec *executionContext) childFields_CloudConnectorCollectorCapability(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "type":
+		return ec.fieldContext_CloudConnectorCollectorCapability_type(ctx, field)
+	case "management":
+		return ec.fieldContext_CloudConnectorCollectorCapability_management(ctx, field)
+	case "deployment":
+		return ec.fieldContext_CloudConnectorCollectorCapability_deployment(ctx, field)
+	case "mode":
+		return ec.fieldContext_CloudConnectorCollectorCapability_mode(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CloudConnectorCollectorCapability", field.Name)
+}
+
 func (ec *executionContext) childFields_CloudConnectorFeature(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "key":
@@ -2062,6 +2128,8 @@ func (ec *executionContext) childFields_ComputePlatform(ctx context.Context, fie
 		return ec.fieldContext_ComputePlatform_teams(ctx, field)
 	case "stats":
 		return ec.fieldContext_ComputePlatform_stats(ctx, field)
+	case "collectors":
+		return ec.fieldContext_ComputePlatform_collectors(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ComputePlatform", field.Name)
 }
@@ -2665,6 +2733,28 @@ func (ec *executionContext) field_Mutation_testCloudConnectorConnection_args(ctx
 		return nil, err
 	}
 	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_updateCloudConnectorCollectors_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "connectorId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["connectorId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "collectors",
+		func(ctx context.Context, v any) ([]*model.CloudConnectorCollectorCapabilityInput, error) {
+			return ec.unmarshalNCloudConnectorCollectorCapabilityInput2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCollectorCapabilityInputᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["collectors"] = arg1
 	return args, nil
 }
 
@@ -3378,6 +3468,98 @@ func (ec *executionContext) fieldContext_CloudConnectorAuthMethod_fields(_ conte
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _CloudConnectorCollectorCapability_type(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorCollectorCapability) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorCollectorCapability_type(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Type, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorCollectorCapability_type(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CloudConnectorCollectorCapability", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CloudConnectorCollectorCapability_management(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorCollectorCapability) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorCollectorCapability_management(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Management, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorCollectorCapability_management(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CloudConnectorCollectorCapability", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _CloudConnectorCollectorCapability_deployment(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorCollectorCapability) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorCollectorCapability_deployment(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Deployment, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorCollectorCapability_deployment(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CloudConnectorCollectorCapability", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
+func (ec *executionContext) _CloudConnectorCollectorCapability_mode(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorCollectorCapability) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorCollectorCapability_mode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Mode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorCollectorCapability_mode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CloudConnectorCollectorCapability", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _CloudConnectorFeature_key(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorFeature) (ret graphql.Marshaler) {
@@ -4992,6 +5174,38 @@ func (ec *executionContext) fieldContext_ComputePlatform_stats(_ context.Context
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_ComputePlatformStats(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ComputePlatform_collectors(ctx context.Context, field graphql.CollectedField, obj *model.ComputePlatform) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ComputePlatform_collectors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Collectors, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*model.CloudConnectorCollectorCapability) graphql.Marshaler {
+			return ec.marshalNCloudConnectorCollectorCapability2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCollectorCapabilityᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ComputePlatform_collectors(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ComputePlatform",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CloudConnectorCollectorCapability(ctx, field)
 		},
 	}
 	return fc, nil
@@ -6670,6 +6884,50 @@ func (ec *executionContext) fieldContext_Mutation_createCloudConnector(ctx conte
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_createCloudConnector_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateCloudConnectorCollectors(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_updateCloudConnectorCollectors(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpdateCloudConnectorCollectors(ctx, fc.Args["connectorId"].(string), fc.Args["collectors"].([]*model.CloudConnectorCollectorCapabilityInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.GeneralResult) graphql.Marshaler {
+			return ec.marshalNGeneralResult2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐGeneralResult(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_updateCloudConnectorCollectors(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_GeneralResult(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateCloudConnectorCollectors_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -10209,6 +10467,59 @@ func (ec *executionContext) _CloudConnectorAuthMethod(ctx context.Context, sel a
 	return out
 }
 
+var cloudConnectorCollectorCapabilityImplementors = []string{"CloudConnectorCollectorCapability"}
+
+func (ec *executionContext) _CloudConnectorCollectorCapability(ctx context.Context, sel ast.SelectionSet, obj *model.CloudConnectorCollectorCapability) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, cloudConnectorCollectorCapabilityImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CloudConnectorCollectorCapability")
+		case "type":
+			out.Values[i] = ec._CloudConnectorCollectorCapability_type(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "management":
+			out.Values[i] = ec._CloudConnectorCollectorCapability_management(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deployment":
+			out.Values[i] = ec._CloudConnectorCollectorCapability_deployment(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mode":
+			out.Values[i] = ec._CloudConnectorCollectorCapability_mode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var cloudConnectorFeatureImplementors = []string{"CloudConnectorFeature"}
 
 func (ec *executionContext) _CloudConnectorFeature(ctx context.Context, sel ast.SelectionSet, obj *model.CloudConnectorFeature) graphql.Marshaler {
@@ -10846,6 +11157,11 @@ func (ec *executionContext) _ComputePlatform(ctx context.Context, sel ast.Select
 		case "stats":
 			out.Values[i] = ec._ComputePlatform_stats(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "collectors":
+			out.Values[i] = ec._ComputePlatform_collectors(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		default:
@@ -11526,6 +11842,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "createCloudConnector":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createCloudConnector(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateCloudConnectorCollectors":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateCloudConnectorCollectors(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -12956,6 +13279,46 @@ func (ec *executionContext) unmarshalNCloudConnectorCapabilityInput2ᚕᚖgithub
 func (ec *executionContext) unmarshalNCloudConnectorCapabilityInput2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCapabilityInput(ctx context.Context, v any) (*model.CloudConnectorCapabilityInput, error) {
 	res, err := ec.unmarshalInputCloudConnectorCapabilityInput(ctx, v)
 	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNCloudConnectorCollectorCapability2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCollectorCapabilityᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.CloudConnectorCollectorCapability) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCloudConnectorCollectorCapability2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCollectorCapability(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCloudConnectorCollectorCapability2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCollectorCapability(ctx context.Context, sel ast.SelectionSet, v *model.CloudConnectorCollectorCapability) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CloudConnectorCollectorCapability(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNCloudConnectorCollectorCapabilityInput2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCollectorCapabilityInputᚄ(ctx context.Context, v any) ([]*model.CloudConnectorCollectorCapabilityInput, error) {
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]*model.CloudConnectorCollectorCapabilityInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNCloudConnectorCollectorCapabilityInput2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCollectorCapabilityInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
 }
 
 func (ec *executionContext) unmarshalNCloudConnectorCollectorCapabilityInput2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCollectorCapabilityInput(ctx context.Context, v any) (*model.CloudConnectorCollectorCapabilityInput, error) {

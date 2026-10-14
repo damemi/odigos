@@ -45,6 +45,15 @@ export const CREATE_CLOUD_CONNECTOR = gql`
   }
 `;
 
+export const UPDATE_CLOUD_CONNECTOR_COLLECTORS = gql`
+  mutation UpdateCloudConnectorCollectors($connectorId: String!, $collectors: [CloudConnectorCollectorCapabilityInput!]!) {
+    updateCloudConnectorCollectors(connectorId: $connectorId, collectors: $collectors) {
+      success
+      error
+    }
+  }
+`;
+
 // Deletes an OdigosCloudConnector CR (and credentials Secret) by the connection
 // id used in computePlatforms (the CR UID). Also clears Redis proxy metadata.
 export const DELETE_CLOUD_CONNECTOR = gql`

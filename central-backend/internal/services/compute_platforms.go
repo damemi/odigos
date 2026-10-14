@@ -121,6 +121,7 @@ func appendCloudConnectors(ctx context.Context, cpMap map[string]*model.ComputeP
 	}
 	for i := range connectors {
 		cc := connectors[i]
+		collectors := cloudConnectorCollectors(cc.Spec.Collectors)
 		name := cc.Spec.DisplayName
 		if name == "" {
 			name = cc.Name
@@ -138,6 +139,7 @@ func appendCloudConnectors(ctx context.Context, cpMap map[string]*model.ComputeP
 		if existing, ok := cpMap[routableID]; ok {
 			existing.Type = string(consts.PlatformTypeConnector)
 			existing.Name = name
+			existing.Collectors = collectors
 			continue
 		}
 
@@ -149,8 +151,25 @@ func appendCloudConnectors(ctx context.Context, cpMap map[string]*model.ComputeP
 			Status:        mapCloudConnectorPhase(cc.Status.Phase),
 			Users:         []*model.User{},
 			Teams:         []*model.Team{},
+			Collectors:    collectors,
 		}
 	}
+}
+
+func cloudConnectorCollectors(in []cloudconnectorsv1.CloudConnectorCollectorCapability) []*model.CloudConnectorCollectorCapability {
+	out := make([]*model.CloudConnectorCollectorCapability, 0, len(in))
+	for _, c := range in {
+		mode := ""
+		if c.Deployment {
+			mode = "automatic"
+		} else if c.Management {
+			mode = "manual"
+		}
+		out = append(out, &model.CloudConnectorCollectorCapability{
+			Type: c.Type, Management: c.Management, Deployment: c.Deployment, Mode: mode,
+		})
+	}
+	return out
 }
 
 // cloudConnectorVersion reports the connector runtime version from the CR status.
@@ -222,6 +241,7 @@ func buildComputePlatformsFromProxyConnections(
 			Status:               string(meta.Status),
 			Users:                []*model.User{},
 			Teams:                []*model.Team{},
+			Collectors:           []*model.CloudConnectorCollectorCapability{},
 		}
 	}
 	return cpMap
@@ -271,6 +291,7 @@ func ensureComputePlatformExists(cpMap map[string]*model.ComputePlatform, id str
 		Status:        string(consts.StatusDisconnected),
 		Users:         []*model.User{},
 		Teams:         []*model.Team{},
+		Collectors:    []*model.CloudConnectorCollectorCapability{},
 	}
 	cpMap[id] = cp
 	return cp
@@ -279,6 +300,9 @@ func ensureComputePlatformExists(cpMap map[string]*model.ComputePlatform, id str
 func toComputePlatformsSlice(cpMap map[string]*model.ComputePlatform) []*model.ComputePlatform {
 	cps := make([]*model.ComputePlatform, 0, len(cpMap))
 	for _, cp := range cpMap {
+		if cp.Collectors == nil {
+			cp.Collectors = []*model.CloudConnectorCollectorCapability{}
+		}
 		cps = append(cps, cp)
 	}
 	// Go map iteration order is randomized, so sort to keep the connection list

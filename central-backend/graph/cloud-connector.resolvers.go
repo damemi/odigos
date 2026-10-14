@@ -48,9 +48,9 @@ func (r *mutationResolver) TestCloudConnectorConnection(ctx context.Context, inp
 // credentials and, only if every check passes, creates the credentials Secret +
 // OdigosCloudConnector CR in the central cluster. On verification failure nothing
 // is persisted and the checks are returned so the UI can render the failure state.
-// Visible to any signed-in user.
+// Restricted to an admin because it persists credentials and capabilities.
 func (r *mutationResolver) CreateCloudConnector(ctx context.Context, input model.CreateCloudConnectorInput) (*model.CreateCloudConnectorResult, error) {
-	if err := utils.RequireAuth(ctx); err != nil {
+	if err := utils.RequireAdmin(ctx); err != nil {
 		return nil, err
 	}
 
@@ -108,6 +108,30 @@ func (r *mutationResolver) CreateCloudConnector(ctx context.Context, input model
 		ConnectorID: connectorID,
 		Test:        cloudConnectorTestResult(res),
 	}, nil
+}
+
+// UpdateCloudConnectorCollectors is the resolver for the updateCloudConnectorCollectors field.
+func (r *mutationResolver) UpdateCloudConnectorCollectors(ctx context.Context, connectorID string, collectors []*model.CloudConnectorCollectorCapabilityInput) (*model.GeneralResult, error) {
+	if err := utils.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
+	if r.CloudConnectorService == nil {
+		return nil, fmt.Errorf("cloud connector service is not available")
+	}
+	selected := collectorCapabilitiesFromInput(collectors)
+	if err := (spec.Capabilities{Collectors: selected}).Validate(); err != nil {
+		return nil, err
+	}
+	for _, collector := range selected {
+		if collector.Type != "aws.fargate-collector" {
+			return nil, fmt.Errorf("unsupported collector capability %q", collector.Type)
+		}
+	}
+	if err := r.CloudConnectorService.UpdateCollectors(ctx, connectorID, crdCollectorCapabilities(selected)); err != nil {
+		message := err.Error()
+		return &model.GeneralResult{Success: false, Error: &message}, nil
+	}
+	return &model.GeneralResult{Success: true}, nil
 }
 
 // DeleteCloudConnector deletes the OdigosCloudConnector CR (and credentials

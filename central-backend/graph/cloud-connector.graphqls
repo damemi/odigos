@@ -134,6 +134,14 @@ input CloudConnectorCollectorCapabilityInput {
   deployment: Boolean!
 }
 
+type CloudConnectorCollectorCapability {
+  type: String!
+  management: Boolean!
+  deployment: Boolean!
+  # automatic, manual, or empty when disabled.
+  mode: String!
+}
+
 input TestCloudConnectorConnectionInput {
   # Provider key, e.g. "aws".
   provider: String!
@@ -173,6 +181,10 @@ extend type Mutation {
   createCloudConnector(
     input: CreateCloudConnectorInput!
   ): CreateCloudConnectorResult!
+
+  # Changes the selected regional Collector mode. An empty list turns it off.
+  # Updating the CR spec causes the connector deployment to reconcile.
+  updateCloudConnectorCollectors(connectorId: String!, collectors: [CloudConnectorCollectorCapabilityInput!]!): GeneralResult!
 
   # Deletes an OdigosCloudConnector CR (and its credentials Secret) identified by
   # the connection id used in computePlatforms (the CR UID). Also clears any
