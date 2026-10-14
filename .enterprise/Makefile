@@ -444,8 +444,8 @@ ensure-kind:
 .PHONY: connector-dev-up
 connector-dev-up: ensure-kind
 	@test -n "$(ONPREM_TOKEN)" || { echo "❌ Set ONPREM_TOKEN=<your odigos enterprise token> (and GITHUB_TOKEN for central image builds)."; exit 1; }
-	make build-connector-stack TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
-	make load-connector-stack-to-kind TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	make build-connector-stack -j$(nproc) TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	make load-connector-stack-to-kind -j$(nproc) TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 	@managed_endpoint="$(MANAGED_COLLECTOR_ENDPOINT)"; \
 		if [ -n "$$managed_endpoint" ]; then \
 			case "$$managed_endpoint" in \
