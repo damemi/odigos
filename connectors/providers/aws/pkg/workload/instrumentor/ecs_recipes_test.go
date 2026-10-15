@@ -169,3 +169,18 @@ func TestCoverableAndNormalize(t *testing.T) {
 		t.Errorf("the undetermined reason must not claim a detection, got %q", undetected)
 	}
 }
+
+func TestDotNetRecipeMatchesSelfContainedAgent(t *testing.T) {
+	rec := testRecipe(t, LangDotNet, "")
+	for _, name := range []string{"DOTNET_ADDITIONAL_DEPS", "DOTNET_SHARED_STORE"} {
+		if value, ok := rec.staticEnv[name]; ok {
+			t.Errorf("obsolete %s=%s", name, value)
+		}
+	}
+	if rec.staticEnv["DOTNET_STARTUP_HOOKS"] != "/var/odigos/dotnet/net/OpenTelemetry.AutoInstrumentation.StartupHook.dll" {
+		t.Fatal("missing startup hook")
+	}
+	if rec.staticEnv["CORECLR_PROFILER_PATH"] != "/var/odigos/dotnet/linux-glibc/OpenTelemetry.AutoInstrumentation.Native.so" {
+		t.Fatal("missing native profiler")
+	}
+}

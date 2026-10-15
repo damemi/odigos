@@ -2,6 +2,8 @@ package instrumentor
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -280,5 +282,55 @@ func TestJavaHandlerWrapperFollowsTheSourceOverride(t *testing.T) {
 		if !isOdigosExecWrapper(w) {
 			t.Errorf("%s is not recognized as an Odigos wrapper", w)
 		}
+	}
+}
+
+// Every connector version publishes under the same layer name, so discovery alone cannot tell this build's
+// layer from the one an earlier release left behind. Reusing whatever is there is what kept an instrumented
+// account on its first layer forever; the published description's digest is what tells them apart.
+func TestBundledLayerIsReusedOnlyWhenItIsTheSameZip(t *testing.T) {
+	dir := t.TempDir()
+	zip := filepath.Join(dir, "java", "x86_64", "layer.zip")
+	if err := os.MkdirAll(filepath.Dir(zip), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(zip, []byte("javaagent 2.32.0"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := NewManagedLayerResolver(nil, dir)
+
+	bundled := r.bundledDescription("java", "x86_64")
+	if want := bundledLayerDescription("java", "x86_64", []byte("javaagent 2.32.0")); bundled != want {
+		t.Fatalf("bundledDescription = %q, want %q", bundled, want)
+	}
+
+	cases := []struct {
+		name        string
+		description string
+		want        bool
+	}{
+		{"published from this zip", bundled, true},
+		{"pre-digest connector release", "Odigos OpenTelemetry layer for java/x86_64", false},
+		{"earlier artifacts release", bundledLayerDescription("java", "x86_64", []byte("javaagent 2.30.0")), false},
+		{"published by a SAR or CDK stack", "odigos v0.0.15 java/x86_64 sha256:0123456789abcdef", false},
+	}
+	for _, tc := range cases {
+		found := discoveredLayer{arn: "arn:aws:lambda:us-east-1:000000000000:layer:odigos-otel-java-x86_64:3", description: tc.description}
+		if got := reusableLayer(found, bundled); got != tc.want {
+			t.Errorf("%s: reusable = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+
+	// No staged zip means nothing could be published in its place, so whatever the account holds is kept.
+	if d := r.bundledDescription("python", "arm64"); d != "" {
+		t.Fatalf("bundledDescription for an unstaged zip = %q, want empty", d)
+	}
+	if !reusableLayer(discoveredLayer{description: "anything"}, "") {
+		t.Error("a discovered layer was refused with no bundled zip to replace it")
+	}
+
+	// Lambda caps a layer version's Description at 256 characters.
+	if d := bundledLayerDescription("nodejs", "x86_64", []byte("x")); len(d) > 256 {
+		t.Errorf("description is %d characters, over Lambda's 256 limit: %q", len(d), d)
 	}
 }

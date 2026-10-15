@@ -160,6 +160,13 @@ func (r *recipes) recipeFor(lang, runtimeVersion string) (agentRecipe, error) {
 	if err != nil {
 		return agentRecipe{}, fmt.Errorf("render %s env: %w", name, err)
 	}
+	// The bundled .NET auto-instrumentation 1.17 is self-contained under net/ and no
+	// longer ships AdditionalDeps/ or store/. The OSS recipe still names those
+	// legacy paths; keep the Fargate recipe aligned with the bundled 1.17 agent.
+	if lang == LangDotNet {
+		delete(staticEnv, "DOTNET_ADDITIONAL_DEPS")
+		delete(staticEnv, "DOTNET_SHARED_STORE")
+	}
 	rec := agentRecipe{
 		lang:         lang,
 		staticEnv:    staticEnv,

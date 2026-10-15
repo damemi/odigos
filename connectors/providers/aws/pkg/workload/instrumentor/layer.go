@@ -16,6 +16,8 @@ package instrumentor
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -178,14 +180,30 @@ func NewAccountLayerResolver(cache *awsclient.Cache) *AccountLayerResolver {
 }
 
 func (r *AccountLayerResolver) Resolve(ctx context.Context, region, runtime, arch string) (string, error) {
+	found, err := r.latest(ctx, region, runtime, arch)
+	if err != nil {
+		return "", err
+	}
+	return found.arn, nil
+}
+
+// discoveredLayer is the newest version of our layer the account holds for a runtime/arch, with the
+// Description it was published under. The description is what tells ManagedLayerResolver whether that
+// version carries the bytes this connector build bundles (see bundledDescription).
+type discoveredLayer struct {
+	arn         string
+	description string
+}
+
+func (r *AccountLayerResolver) latest(ctx context.Context, region, runtime, arch string) (discoveredLayer, error) {
 	lang := LanguageFromRuntime(runtime)
 	if lang == "" {
-		return "", fmt.Errorf("%w: unsupported runtime %q", ErrLayerUnavailable, runtime)
+		return discoveredLayer{}, fmt.Errorf("%w: unsupported runtime %q", ErrLayerUnavailable, runtime)
 	}
 	wantName := publishedLayerName(lang, arch)
 	cfg, err := r.cache.Config(ctx, region)
 	if err != nil {
-		return "", err
+		return discoveredLayer{}, err
 	}
 	in := &lambda.ListLayersInput{}
 	if runtime != "" {
@@ -200,7 +218,7 @@ func (r *AccountLayerResolver) Resolve(ctx context.Context, region, runtime, arc
 	for {
 		out, err := client.ListLayers(ctx, in)
 		if err != nil {
-			return "", fmt.Errorf("list layers (region=%s runtime=%s arch=%s): %w", region, runtime, arch, err)
+			return discoveredLayer{}, fmt.Errorf("list layers (region=%s runtime=%s arch=%s): %w", region, runtime, arch, err)
 		}
 		for _, l := range out.Layers {
 			if l.LatestMatchingVersion == nil {
@@ -211,7 +229,7 @@ func (r *AccountLayerResolver) Resolve(ctx context.Context, region, runtime, arc
 				continue
 			}
 			if arn := aws.ToString(l.LatestMatchingVersion.LayerVersionArn); arn != "" {
-				return arn, nil
+				return discoveredLayer{arn: arn, description: aws.ToString(l.LatestMatchingVersion.Description)}, nil
 			}
 		}
 		if out.NextMarker == nil {
@@ -219,7 +237,7 @@ func (r *AccountLayerResolver) Resolve(ctx context.Context, region, runtime, arc
 		}
 		in.Marker = out.NextMarker
 	}
-	return "", fmt.Errorf("%w: region=%s runtime=%s arch=%s (no odigos-published layer %q found in account)", ErrLayerUnavailable, region, runtime, arch, wantName)
+	return discoveredLayer{}, fmt.Errorf("%w: region=%s runtime=%s arch=%s (no odigos-published layer %q found in account)", ErrLayerUnavailable, region, runtime, arch, wantName)
 }
 
 // MatchesInstrumentationLayerARN reports whether arn refers to a layer THIS connector published. It is
@@ -524,13 +542,20 @@ func LanguageFromRuntime(runtime string) string {
 // account via lambda:PublishLayerVersion, then uses that. This is the "check if a suitable layer exists,
 // else upload ours" path. Published/discovered ARNs are cached per region/language/arch for the process
 // lifetime so publishing happens at most once.
+//
+// A discovered layer is reused only when it carries the bytes this connector build bundles. Discovery is by
+// name, and every connector version publishes under the same name, so without that check an account a
+// previous connector version instrumented would keep its old layer for good: the key is in use, so it is
+// never an orphan, so it is never refreshed — and bumping ARTIFACTS_VERSION would change nothing for the
+// customers it was meant for.
 type ManagedLayerResolver struct {
-	cache     *awsclient.Cache
-	layerDir  string
-	discover  *AccountLayerResolver
-	mu        sync.Mutex
-	arns      map[string]string // region/lang/arch -> arn (discovered or published)
-	published map[string]string // region/lang/arch -> arn, only layers WE published (GC candidates)
+	cache        *awsclient.Cache
+	layerDir     string
+	discover     *AccountLayerResolver
+	mu           sync.Mutex
+	arns         map[string]string // region/lang/arch -> arn (discovered or published)
+	published    map[string]string // region/lang/arch -> arn, only layers WE published (GC candidates)
+	descriptions map[string]string // lang/arch -> bundledDescription, memoized (hashing a ~45MB zip)
 }
 
 // NewManagedLayerResolver builds the discover-or-publish resolver. An empty layerDir uses DefaultLayerDir.
@@ -539,11 +564,12 @@ func NewManagedLayerResolver(cache *awsclient.Cache, layerDir string) *ManagedLa
 		layerDir = DefaultLayerDir
 	}
 	return &ManagedLayerResolver{
-		cache:     cache,
-		layerDir:  layerDir,
-		discover:  NewAccountLayerResolver(cache),
-		arns:      make(map[string]string),
-		published: make(map[string]string),
+		cache:        cache,
+		layerDir:     layerDir,
+		discover:     NewAccountLayerResolver(cache),
+		arns:         make(map[string]string),
+		published:    make(map[string]string),
+		descriptions: make(map[string]string),
 	}
 }
 
@@ -565,12 +591,22 @@ func (r *ManagedLayerResolver) Resolve(ctx context.Context, region, runtime, arc
 	//    (AccountLayerResolver matches only our published-layer name, never a customer/public layer).
 	//    Record it as a GC candidate so it is reclaimed when its last Lambda is uninstrumented (orphaned
 	//    ones are deleted+republished earlier, in RefreshOrphan).
-	if arn, err := r.discover.Resolve(ctx, region, runtime, arch); err == nil {
-		r.mu.Lock()
-		r.arns[key] = arn
-		r.published[key] = arn
-		r.mu.Unlock()
-		return arn, nil
+	//
+	//    Only if it is the layer this build bundles, though. A version published by an earlier connector
+	//    release — or under a CDK/SAR description — falls through to step 2, which publishes the current
+	//    zip as a new version of the same layer name; instrument then swaps every function onto it
+	//    (normalizeInstrumentationLayers keeps one version per name). The superseded version is left in
+	//    place: functions still reference it until that swap lands.
+	if found, err := r.discover.latest(ctx, region, runtime, arch); err == nil {
+		if reusableLayer(found, r.bundledDescription(lang, arch)) {
+			r.mu.Lock()
+			r.arns[key] = found.arn
+			r.published[key] = found.arn
+			r.mu.Unlock()
+			return found.arn, nil
+		}
+		log.Info("odigos lambda layer in account is not the bundled version; publishing the current one",
+			"arn", found.arn, "description", found.description, "key", key)
 	}
 	// 2. Publish our bundled layer into the account.
 	arn, err := r.publish(ctx, region, lang, arch)
@@ -684,9 +720,13 @@ func (r *ManagedLayerResolver) publish(ctx context.Context, region, lang, arch s
 		return "", err
 	}
 	name := publishedLayerName(lang, arch)
+	description := bundledLayerDescription(lang, arch, content)
+	r.mu.Lock()
+	r.descriptions[lang+"/"+arch] = description
+	r.mu.Unlock()
 	out, err := lambda.NewFromConfig(cfg).PublishLayerVersion(ctx, &lambda.PublishLayerVersionInput{
 		LayerName:               aws.String(name),
-		Description:             aws.String("Odigos OpenTelemetry layer for " + lang + "/" + arch),
+		Description:             aws.String(description),
 		Content:                 &lambdatypes.LayerVersionContentInput{ZipFile: content},
 		CompatibleRuntimes:      compatibleRuntimes(lang),
 		CompatibleArchitectures: []lambdatypes.Architecture{lambdatypes.Architecture(arch)},
@@ -695,6 +735,46 @@ func (r *ManagedLayerResolver) publish(ctx context.Context, region, lang, arch s
 		return "", fmt.Errorf("publish layer %s in %s: %w", name, region, err)
 	}
 	return aws.ToString(out.LayerVersionArn), nil
+}
+
+// bundledLayerDescription is the Description the connector publishes a bundled layer under: the layer's
+// purpose, then the leading 16 hex digits of the zip's sha256. The digest is the point — it is how a later
+// Resolve, from this or any other connector build, tells whether a discovered version carries the bytes it
+// bundles. A version number would not do: LambdaLayerDir can point at any zips, and a rebuilt zip of the same
+// release must still count as the same layer (aws-connector-artifacts builds them reproducibly for exactly
+// that reason).
+func bundledLayerDescription(lang, arch string, content []byte) string {
+	sum := sha256.Sum256(content)
+	return "Odigos OpenTelemetry layer for " + lang + "/" + arch + " sha256:" + hex.EncodeToString(sum[:])[:16]
+}
+
+// bundledDescription returns bundledLayerDescription for the zip staged at <layerDir>/<lang>/<arch>, or ""
+// when there is none to read. Memoized: the zip does not change while the process runs.
+func (r *ManagedLayerResolver) bundledDescription(lang, arch string) string {
+	key := lang + "/" + arch
+	r.mu.Lock()
+	if d, ok := r.descriptions[key]; ok {
+		r.mu.Unlock()
+		return d
+	}
+	r.mu.Unlock()
+	content, err := os.ReadFile(filepath.Join(r.layerDir, lang, arch, "layer.zip"))
+	if err != nil {
+		return ""
+	}
+	d := bundledLayerDescription(lang, arch, content)
+	r.mu.Lock()
+	r.descriptions[key] = d
+	r.mu.Unlock()
+	return d
+}
+
+// reusableLayer reports whether a discovered layer version can be attached as it is. It can when it was
+// published from the zip this build bundles. It also can when there is no bundled zip to compare against
+// (bundled == ""): publishing needs that zip too, so replacing the version is impossible, and reusing it is
+// what every connector did before this check existed.
+func reusableLayer(found discoveredLayer, bundled string) bool {
+	return bundled == "" || found.description == bundled
 }
 
 // compatibleRuntimes is the runtime set the published layer advertises. Built from strings to avoid coupling

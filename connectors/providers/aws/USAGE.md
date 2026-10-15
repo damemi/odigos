@@ -184,7 +184,7 @@ Volumes:
   - Name: odigos-agent          # ephemeral-storage bind mount, scoped to the task
 ContainerDefinitions:
   - Name: odigos-agent
-    Image: "registry.odigos.io/odigos-fargate-agents:v0.0.15"
+    Image: "registry.odigos.io/odigos-fargate-agents:v0.0.16"
     Essential: false            # required: SUCCESS below is only valid against a non-essential container
     Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
     MountPoints:
@@ -252,7 +252,7 @@ import { OdigosFargateInstrumentation, OdigosFargateLanguage } from '@odigos/aws
 const odigos = new OdigosFargateInstrumentation(this, 'Odigos', {
   destination: { httpEndpoint: 'https://otlp.example.com:4318' },
   // Optional — the package already defaults to its own release's bundle, and records it (see below).
-  agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.15',
+  agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.16',
 });
 
 odigos.instrument({
@@ -388,7 +388,7 @@ running there — it's pulled by real Fargate *tasks*, at task-start time, strai
 in `ODIGOS_FARGATE_AGENTS_IMAGE`. So "local" here means: build it locally, push it somewhere your test
 Fargate tasks can actually reach (your own ECR repo, a private registry with a public endpoint, etc.),
 then point the connector at that tag instead of the compiled-in default
-(`registry.odigos.io/odigos-fargate-agents:v0.0.15`, see `config.DefaultFargateAgentsImage`):
+(`registry.odigos.io/odigos-fargate-agents:v0.0.16`, see `config.DefaultFargateAgentsImage`):
 
 ```bash
 ODIGOS_FARGATE_AGENTS_IMAGE=<your-registry>/odigos-fargate-agents:dev
