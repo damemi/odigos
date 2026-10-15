@@ -1849,9 +1849,11 @@ setup:
       steps:
         - Add the layer to your function's layers list — keep the ones already there.
         - Add the environment variables to environment.variables.
+        - The default Java agent uses /opt/otel-javaagent-handler; lightweight wrapper mode uses /opt/otel-handler and its event-specific variants.
         - Replace every <ANGLE_BRACKETED> value.
         - Behind the AWS Lambda Web Adapter, follow the web-server activation at the end instead — it swaps the wrapper for JAVA_TOOL_OPTIONS.
       prerequisites:
+        - "Java distro defaults to java-lambda-otel-agent (/opt/otel-javaagent-handler). For lightweight mode choose java-lambda-otel-wrapper, java-lambda-otel-proxy-wrapper, java-lambda-otel-sqs-wrapper or java-lambda-otel-stream-wrapper to match the event interface."
         - >-
           Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
@@ -1868,7 +1870,7 @@ setup:
               # The Java layer's own wrapper script: it instruments the handler invocation. The script name
               # is language-specific, and a name the layer does not ship fails the function at cold start with
               # "does not exist".
-              AWS_LAMBDA_EXEC_WRAPPER = "/opt/otel-handler"
+              AWS_LAMBDA_EXEC_WRAPPER = "<JAVA_LAMBDA_EXEC_WRAPPER>"
               OTEL_SERVICE_NAME       = "<ODIGOS_SOURCE_NAME>"
               # The in-Lambda collector's entire configuration. Substitute the two placeholders and change
               # nothing else — Odigos compares the whole value. The space after every colon is required.
@@ -1913,6 +1915,7 @@ setup:
         - Replace every <ANGLE_BRACKETED> value.
         - Behind the AWS Lambda Web Adapter, follow the web-server activation at the end instead — it swaps the wrapper for JAVA_TOOL_OPTIONS.
       prerequisites:
+        - "Java distro defaults to java-lambda-otel-agent (/opt/otel-javaagent-handler). For lightweight mode choose java-lambda-otel-wrapper, java-lambda-otel-proxy-wrapper, java-lambda-otel-sqs-wrapper or java-lambda-otel-stream-wrapper to match the event interface."
         - >-
           Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
@@ -1926,7 +1929,7 @@ setup:
             # The Java layer's own wrapper script: it instruments the handler invocation. The script name
             # is language-specific, and a name the layer does not ship fails the function at cold start with
             # "does not exist".
-            AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-handler"
+            AWS_LAMBDA_EXEC_WRAPPER: "<JAVA_LAMBDA_EXEC_WRAPPER>"
             OTEL_SERVICE_NAME: "<ODIGOS_SOURCE_NAME>"
             # The in-Lambda collector's entire configuration. Substitute the two placeholders and change
             # nothing else — Odigos compares the whole value. The space after every colon is required.
@@ -1965,13 +1968,14 @@ setup:
         - Run the script. It merges the OpenTelemetry layer into the function's existing layers.
         - Re-run it after any deploy that resets the function configuration.
       prerequisites:
+        - "Java distro defaults to java-lambda-otel-agent (/opt/otel-javaagent-handler). For lightweight mode choose java-lambda-otel-wrapper, java-lambda-otel-proxy-wrapper, java-lambda-otel-sqs-wrapper or java-lambda-otel-stream-wrapper to match the event interface."
         - >-
           Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         FUNCTION="<YOUR_FUNCTION_NAME>"
         LAYER="<OTEL_LAYER_ARN>"
         # The Java layer's wrapper script. A name the layer does not ship fails the function at cold start.
-        WRAPPER="/opt/otel-handler"
+        WRAPPER="<JAVA_LAMBDA_EXEC_WRAPPER>"
 
         # The environment goes through a JSON file rather than the Variables={...} shorthand: the collector
         # configuration contains commas and braces, which that shorthand cannot represent.
@@ -2041,13 +2045,14 @@ setup:
         - Add one OdigosLambdaInstrumentation per function, passing serviceName explicitly.
         - Run cdk diff to check the layer and the variables, then cdk deploy. Your function code is untouched, so this is a configuration-only update.
       prerequisites:
+        - "Java distro defaults to java-lambda-otel-agent (/opt/otel-javaagent-handler). For lightweight mode choose java-lambda-otel-wrapper, java-lambda-otel-proxy-wrapper, java-lambda-otel-sqs-wrapper or java-lambda-otel-stream-wrapper to match the event interface."
         - >-
           Make sure Odigos Lambda layers are preloaded into your AWS account (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
         npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
 
         WHAT THE CONSTRUCT DOES for a Java function. It attaches the Java layer for the function's
-        architecture, sets AWS_LAMBDA_EXEC_WRAPPER to /opt/otel-handler, sets OTEL_SERVICE_NAME, renders
+        architecture, sets AWS_LAMBDA_EXEC_WRAPPER to <JAVA_LAMBDA_EXEC_WRAPPER>, sets OTEL_SERVICE_NAME, renders
         OPENTELEMETRY_COLLECTOR_CONFIG_URI — the same renderer this connector uses, so the value matches byte for
         byte — and writes ODIGOS_IAC recording the layer it attached, which is what makes Odigos report the
         function as instrumented rather than as awaiting your deployment. Nothing below has to be added by hand.
@@ -2070,6 +2075,7 @@ setup:
             // httpEndpoint: 'https://...'    // instead of endpoint, for an OTLP/HTTP destination
             // headers: { authorization: 'Bearer ...' },  // see the credential warning below
           },
+          distro: '<LAMBDA_OTEL_DISTRO>',
           serviceName: '<ODIGOS_SOURCE_NAME>',
           functions: [fn],
         });
@@ -2101,7 +2107,7 @@ setup:
         read its layerVersionArn, or read the nested application's LayerVersionArn output directly.
 
         HANDLER vs WEB-SERVER. The default mode is HANDLER, which sets AWS_LAMBDA_EXEC_WRAPPER to
-        /opt/otel-handler. A function behind the AWS Lambda Web Adapter needs
+        <JAVA_LAMBDA_EXEC_WRAPPER>. A function behind the AWS Lambda Web Adapter needs
         mode: OdigosInstrumentationMode.WEB_SERVER, which leaves the wrapper to the adapter and loads the agent
         through JAVA_TOOL_OPTIONS instead:
 
@@ -2111,9 +2117,14 @@ setup:
         read an environment variable back, and the construct's value is APPENDED to it, joined by a space, so without it yours is
         replaced. Applying HANDLER to a web-adapter function stops it serving.
 
-        javaHandlerDistro selects the wrapper script for your handler interface. The default suits a
-        RequestHandler; a RequestStreamHandler needs OdigosJavaHandlerDistro.OTEL_STREAM_HANDLER, and the
-        default BREAKS it rather than producing thinner spans — the two interfaces have different signatures.
+        Java defaults to java-lambda-otel-agent. Its /opt/otel-javaagent-handler startup script loads the full
+        agent and an SDK-free Lambda lifecycle bridge supporting RequestHandler (including Function URL maps)
+        and RequestStreamHandler. Invocation and client spans share one SDK and are flushed before freezing.
+        For lightweight instrumentation, select distro: 'java-lambda-otel-wrapper' for generic handlers,
+        'java-lambda-otel-proxy-wrapper' for REST API proxy events, 'java-lambda-otel-sqs-wrapper' for SQS
+        or 'java-lambda-otel-stream-wrapper' for RequestStreamHandler. Each distro resolves its own startup script.
+        The deprecated javaHandlerDistro option still selects the corresponding lightweight wrapper.
+        Full-agent mode does not initialize the lightweight wrapper SDK.
 
         Signals: destination.traces / metrics / logs default to true. Setting one false drops that pipeline
         from the configuration AND sets that signal's OTEL_TRACES_EXPORTER / OTEL_METRICS_EXPORTER /
@@ -3046,7 +3057,7 @@ setup:
             {
               # --- the agent-staging container: it copies the Java agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.16"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.17"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
               mountPoints = [{
@@ -3120,7 +3131,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.16"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.17"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
@@ -3196,7 +3207,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.16',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.17',
         });
 
         odigos.instrument({
@@ -3251,7 +3262,7 @@ setup:
             {
               # --- the agent-staging container: it copies the Python agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.16"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.17"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python"]
               mountPoints = [{
@@ -3326,7 +3337,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.16"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.17"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python"]
@@ -3404,7 +3415,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.16',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.17',
         });
 
         odigos.instrument({
@@ -3460,7 +3471,7 @@ setup:
             {
               # --- the agent-staging container: it copies the Node.js agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.16"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.17"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs"]
               mountPoints = [{
@@ -3534,7 +3545,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.16"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.17"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs"]
@@ -3610,7 +3621,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.16',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.17',
         });
 
         odigos.instrument({
@@ -3665,7 +3676,7 @@ setup:
             {
               # --- the agent-staging container: it copies the .NET agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.16"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.17"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet"]
               mountPoints = [{
@@ -3741,7 +3752,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.16"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.17"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet"]
@@ -3824,7 +3835,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.16',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.17',
         });
 
         odigos.instrument({
@@ -3882,7 +3893,7 @@ setup:
             {
               # --- the agent-staging container: it copies the PHP agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.16"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.17"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/php /var/odigos/php"]
               mountPoints = [{
@@ -3956,7 +3967,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.16"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.17"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/php /var/odigos/php"]
@@ -4036,7 +4047,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.16',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.17',
         });
 
         odigos.instrument({
@@ -4093,7 +4104,7 @@ setup:
             {
               # --- the agent-staging container: it copies the Ruby agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.16"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.17"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/ruby /var/odigos/ruby"]
               mountPoints = [{
@@ -4167,7 +4178,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.16"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.17"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/ruby /var/odigos/ruby"]
@@ -4247,7 +4258,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.16',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.17',
         });
 
         odigos.instrument({

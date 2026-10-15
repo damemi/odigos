@@ -58,14 +58,16 @@ const (
 	envLegacyOTLPHeaders  = "OTEL_EXPORTER_OTLP_HEADERS"
 
 	// AWS_LAMBDA_EXEC_WRAPPER values provided by the OpenTelemetry Lambda layers. The wrapper script is
-	// LANGUAGE-SPECIFIC: Python ships /opt/otel-instrument; Node.js, Java and Ruby ship /opt/otel-handler.
+	// LANGUAGE-SPECIFIC: Python uses /opt/otel-instrument; Node.js and Ruby use /opt/otel-handler.
+	// Java defaults to the full-agent bridge at /opt/otel-javaagent-handler.
 	// Setting the wrong one (e.g. /opt/otel-instrument on a Java function) makes the layer bootstrap fail
 	// at cold start with "/opt/otel-instrument: does not exist" and the function errors out. Use
 	// execWrapperForRuntime, never a single hardcoded value.
 	execWrapperInstrument = "/opt/otel-instrument" // python
-	execWrapperHandler    = "/opt/otel-handler"    // nodejs, java, ruby
+	execWrapperAgent      = "/opt/otel-javaagent-handler"
+	execWrapperHandler    = "/opt/otel-handler" // nodejs, java, ruby
 
-	// The Java layer ships FOUR wrapper scripts, one per handler interface, and picking the wrong one is not
+	// The lightweight Java SDK ships four handler adapters. Picking the wrong one is not
 	// a matter of richer or poorer spans. otel-handler installs TracingRequestWrapper, which implements
 	// RequestHandler; a function implementing RequestStreamHandler has a different signature entirely, so
 	// wrapping it that way breaks the invocation. otel-proxy-handler and otel-sqs-handler are the enriched
@@ -331,13 +333,16 @@ var JavaHandlerDistros = map[string]string{
 	"otel-stream-handler": execWrapperStreamHandler,
 }
 
-// javaHandlerWrapperFor resolves a source's distro override to a Java wrapper script. An empty override
-// keeps otel-handler, which is what an unconfigured source has always got; an unrecognized one returns ""
-// so the caller refuses rather than silently falling back — silently falling back is the behavior that
-// leaves a stream-handler function broken, which is what this override exists to fix.
+// javaHandlerWrapperFor selects the full-agent lifecycle bridge by default, or one of the
+// lightweight SDK's explicit handler adapters. Unknown choices are refused by the resolver.
 func javaHandlerWrapperFor(distro string) string {
-	if distro == "" {
-		return execWrapperHandler
+	if distro == "" || distro == JavaAgentDistro {
+		return execWrapperAgent
+	}
+	for _, d := range lambdaRecipes() {
+		if d.Language == "java" && d.Name == distro {
+			return d.ExecWrapper
+		}
 	}
 	return JavaHandlerDistros[distro]
 }
@@ -365,7 +370,9 @@ func execWrapperForLanguage(lang string) string {
 	switch lang {
 	case "python":
 		return execWrapperInstrument
-	case "nodejs", "java", "ruby":
+	case "java":
+		return execWrapperAgent
+	case "nodejs", "ruby":
 		return execWrapperHandler
 	default:
 		return ""
@@ -380,7 +387,7 @@ func execWrapperForLanguage(lang string) string {
 // ours, or rollback would leave the wrapper behind and ownership detection would read it as a customer's.
 func isOdigosExecWrapper(v string) bool {
 	switch v {
-	case execWrapperInstrument, execWrapperHandler, execWrapperProxyHandler, execWrapperSqsHandler, execWrapperStreamHandler:
+	case execWrapperInstrument, execWrapperAgent, execWrapperHandler, execWrapperProxyHandler, execWrapperSqsHandler, execWrapperStreamHandler:
 		return true
 	}
 	return false
@@ -778,8 +785,10 @@ func reusableLayer(found discoveredLayer, bundled string) bool {
 }
 
 // compatibleRuntimes is the runtime set the published layer advertises. Built from strings to avoid coupling
-// to specific SDK enum constants, but kept in step with them — every value below exists in
-// lambdatypes.Runtime, and the list is every non-retired version of each language AWS currently offers.
+// to specific SDK enum constants, and the list is every non-retired version of each language AWS currently
+// offers. That runs ahead of the pinned SDK's lambdatypes.Runtime: the Amazon Linux 2023 Java identifiers
+// (java8.al2023, java11.al2023, java17.al2023) are newer than its enum, which is fine — the enum is a client
+// convenience and Lambda validates the value server-side.
 //
 // A missing entry is not cosmetic. AWS does not enforce CompatibleRuntimes when a layer is attached, so
 // instrumentation still works; what breaks is DISCOVERY. AccountLayerResolver finds a previously-published
@@ -798,7 +807,7 @@ func compatibleRuntimes(lang string) []lambdatypes.Runtime {
 	case "nodejs":
 		names = []string{"nodejs18.x", "nodejs20.x", "nodejs22.x", "nodejs24.x"}
 	case "java":
-		names = []string{"java8.al2", "java11", "java17", "java21", "java25"}
+		names = []string{"java8.al2", "java8.al2023", "java11", "java11.al2023", "java17", "java17.al2023", "java21", "java25"}
 	case "ruby":
 		names = []string{"ruby3.2", "ruby3.3", "ruby3.4", "ruby4.0"}
 	}
@@ -808,3 +817,6 @@ func compatibleRuntimes(lang string) []lambdatypes.Runtime {
 	}
 	return out
 }
+
+// UsesLambdaWebAdapter exposes activation detection to the capability catalog.
+func UsesLambdaWebAdapter(layers []string) bool { return usesLambdaWebAdapter(layers) }

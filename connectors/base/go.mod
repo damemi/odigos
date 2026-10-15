@@ -9,7 +9,7 @@ require (
 	github.com/coder/websocket v1.8.15
 	github.com/go-playground/validator/v10 v10.30.3
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/odigos-io/agents-api/go/server v0.26.0
+	github.com/odigos-io/agents-api/go/server v0.28.0
 	github.com/odigos-io/odigos-enterprise/connectors v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/common v1.29.0
 	github.com/odigos-io/odigos/destinations v1.29.0

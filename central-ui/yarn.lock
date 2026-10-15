@@ -656,10 +656,10 @@
   resolved "https://registry.yarnpkg.com/@nolyfill/is-core-module/-/is-core-module-1.0.39.tgz#3dc35ba0f1e66b403c00b39344f870298ebb1c8e"
   integrity sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==
 
-"@odigos/ui-kit@0.0.314":
-  version "0.0.314"
-  resolved "https://registry.yarnpkg.com/@odigos/ui-kit/-/ui-kit-0.0.314.tgz#6116c81efed658a0bc6c2cb7bb656aa5b42500f2"
-  integrity sha512-UNRYCKjTMChK1vJ75mp3i4Rd0tqi3iYexsMS+LuYG/TIGJnICfjo1fqf/qk/HgC6A+jvjcIA4sCXFcgT2cR7ow==
+"@odigos/ui-kit@0.0.315":
+  version "0.0.315"
+  resolved "https://registry.npmjs.org/@odigos/ui-kit/-/ui-kit-0.0.315.tgz#87d7c7315f001a9e258fa8bf2486e3bfcef959a4"
+  integrity sha512-nCv4OvWiFpxZAGA0XQeAfz5Sey5ucrlRQHUQBQtyxL/gygX1G8OjVqt3OJRkYe/kuQri8YA76av4HGxJf3A3bw==
   dependencies:
     "@xyflow/react" "^12.11.6"
     elkjs "^0.12.0"
@@ -673,10 +673,10 @@
     virtua "^0.51.0"
     zustand "^5.0.15"
 
-"@odigos/vmagent-api-apollo-client@0.27.0":
-  version "0.27.0"
-  resolved "https://registry.yarnpkg.com/@odigos/vmagent-api-apollo-client/-/vmagent-api-apollo-client-0.27.0.tgz#63c6988fa47300460a50546a8fa68c1131da6a08"
-  integrity sha512-AOyJzYTVfc80Z9Jn1ESBcbLK26zh0mDlC7pZ+dYrn89xqibQ/ZCI76CouJjuO747bS5pBJUhI89TZxgyNsxH/w==
+"@odigos/vmagent-api-apollo-client@0.28.0":
+  version "0.28.0"
+  resolved "https://registry.npmjs.org/@odigos/vmagent-api-apollo-client/-/vmagent-api-apollo-client-0.28.0.tgz#8f87fc3897c6cb778b5816f61e61a6e429375af8"
+  integrity sha512-r/HPOdNDpX2nTmsIPvsR1/S4O3RjG/z/WpGk9XXLRiCb/YbU+Dx6DjofdHMLLKyUzc6RtnNPN52cIUJLijPxqQ==
   dependencies:
     "@apollo/client" "^3.13.8"
     graphql "^16.11.0"

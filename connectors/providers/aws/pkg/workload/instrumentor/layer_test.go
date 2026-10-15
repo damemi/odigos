@@ -42,10 +42,11 @@ func TestPublicLayerResolverIsRegional(t *testing.T) {
 
 func TestLanguageFromRuntime(t *testing.T) {
 	cases := map[string]string{
-		"python3.12": "python",
-		"nodejs20.x": "nodejs",
-		"java17":     "java",
-		"ruby3.3":    "ruby",
+		"python3.12":    "python",
+		"nodejs20.x":    "nodejs",
+		"java17":        "java",
+		"java17.al2023": "java",
+		"ruby3.3":       "ruby",
 		// No opentelemetry-lambda layer exists for these -> unsupported.
 		"dotnet8": "",
 		"go1.x":   "",
@@ -64,8 +65,8 @@ func TestExecWrapperForRuntime(t *testing.T) {
 	cases := map[string]string{
 		"python3.12": execWrapperInstrument,
 		"nodejs20.x": execWrapperHandler,
-		"java17":     execWrapperHandler,
-		"java21":     execWrapperHandler,
+		"java17":     execWrapperAgent,
+		"java21":     execWrapperAgent,
 		"ruby3.3":    execWrapperHandler,
 		"dotnet8":    "", // unsupported -> no wrapper
 		"go1.x":      "", // unsupported -> no wrapper
@@ -254,7 +255,7 @@ func TestRemoveLoaderValue(t *testing.T) {
 // breaks the invocation outright.
 func TestJavaHandlerWrapperFollowsTheSourceOverride(t *testing.T) {
 	cases := map[string]string{
-		"":                    execWrapperHandler, // unconfigured source keeps the long-standing default
+		"":                    execWrapperAgent, // unconfigured sources get full automatic instrumentation
 		"otel-handler":        execWrapperHandler,
 		"otel-proxy-handler":  execWrapperProxyHandler,
 		"otel-sqs-handler":    execWrapperSqsHandler,
@@ -332,5 +333,29 @@ func TestBundledLayerIsReusedOnlyWhenItIsTheSameZip(t *testing.T) {
 	// Lambda caps a layer version's Description at 256 characters.
 	if d := bundledLayerDescription("nodejs", "x86_64", []byte("x")); len(d) > 256 {
 		t.Errorf("description is %d characters, over Lambda's 256 limit: %q", len(d), d)
+	}
+}
+
+// A runtime the published layer does not advertise cannot discover it (lambda:ListLayers filters by runtime),
+// so the connector would publish a duplicate. The Amazon Linux 2023 Java runtimes are newer than the pinned
+// SDK's enum, which is exactly how they could be missed.
+func TestCompatibleRuntimesAdvertiseAL2023Java(t *testing.T) {
+	advertised := map[string]bool{}
+	for _, rt := range compatibleRuntimes("java") {
+		advertised[string(rt)] = true
+	}
+	for _, rt := range []string{"java8.al2023", "java11.al2023", "java17.al2023"} {
+		if !advertised[rt] {
+			t.Errorf("the java layer does not advertise %s", rt)
+		}
+		if LanguageFromRuntime(rt) != "java" {
+			t.Errorf("LanguageFromRuntime(%q) = %q, want java", rt, LanguageFromRuntime(rt))
+		}
+	}
+	// PublishLayerVersion rejects more than 15 compatible runtimes.
+	for _, lang := range []string{"python", "nodejs", "java", "ruby"} {
+		if n := len(compatibleRuntimes(lang)); n > 15 {
+			t.Errorf("%s advertises %d runtimes; Lambda allows at most 15", lang, n)
+		}
 	}
 }

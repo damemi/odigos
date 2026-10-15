@@ -30,7 +30,7 @@ var runLog = connlog.Subsystem("runtime")
 // version makes Central select the v0.23 dialect, which has no Managed
 // Collector setup operations even though this runtime serves them. Advance
 // this value with the agents-api schema snapshot used by this connector.
-const connectorGraphQLSchemaVersion = "v0.25.0"
+const connectorGraphQLSchemaVersion = "v0.28.0"
 
 // Run boots a connector runtime around the given provider and blocks until ctx is cancelled (or the
 // GraphQL server errors). The caller owns the store's lifecycle (opens it, defers Close). It fails fast

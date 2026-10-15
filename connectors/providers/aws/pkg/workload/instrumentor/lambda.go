@@ -439,13 +439,12 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 	if lang == "" {
 		return fmt.Errorf("%w %q: Odigos has no OpenTelemetry instrumentation for this Lambda language", ErrUnsupportedRuntime, fn.Runtime)
 	}
-	// A distro override naming a wrapper the Java layer does not ship is refused rather than ignored.
-	// Falling back to otel-handler is exactly the behavior this override exists to correct, and doing it
-	// silently would leave a customer who asked for the stream wrapper with a broken function and a report
-	// that says everything is fine.
-	if lang == "java" && javaHandlerWrapperFor(src.distro) == "" {
-		return fmt.Errorf("%w: distro override %q names no OpenTelemetry Java Lambda wrapper (valid values: %s)",
-			ErrUnsupportedInstrumentation, src.distro, strings.Join(sortedMapKeys(JavaHandlerDistros), ", "))
+	activation := ActivationHandler
+	if usesLambdaWebAdapter(fn.Layers) {
+		activation = ActivationWebServer
+	}
+	if _, err := ResolveLambdaDistro(lang, activation, src.distro); err != nil {
+		return fmt.Errorf("%w: %v", ErrUnsupportedInstrumentation, err)
 	}
 	debug := i.debug()
 	// Render the collector's configuration before touching AWS. A destination the collector cannot be

@@ -659,7 +659,7 @@ func TestInstrumentationArtifactsAreServedPerLanguage(t *testing.T) {
 		typeName, lang, wantIn string
 	}{
 		{"aws.lambda", "python", "/opt/otel-instrument"},
-		{"aws.lambda", "java", "/opt/otel-handler"},
+		{"aws.lambda", "java", "<JAVA_LAMBDA_EXEC_WRAPPER>"},
 		{"aws.lambda", "ruby", "/opt/otel-handler"},
 		{"aws.lambda", "nodejs", "--import /opt/init.mjs"},
 		{"aws.fargate-task", "ruby", "RUBYOPT"},

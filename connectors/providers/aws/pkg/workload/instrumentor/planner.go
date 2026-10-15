@@ -50,13 +50,21 @@ func (p *LambdaPlanner) PlanFor(ctx context.Context, w baseapi.DiscoveredWorkloa
 	if usesLambdaWebAdapter(fn.Layers) {
 		activation = ActivationWebServer
 	}
-	pl, err := DesiredLambdaPlan(lang, activation)
+	pl, err := DesiredLambdaPlanForDistro(lang, activation, w.Overrides.OtelDistroName)
 	if err != nil {
 		return nil, err
 	}
 	resolved := p.resolveLayer(ctx, fn)
 	if resolved == nil {
 		resolved = map[string]string{}
+	}
+	if lang == "java" {
+		d, err := ResolveLambdaDistro(lang, activation, w.Overrides.OtelDistroName)
+		if err != nil {
+			return nil, err
+		}
+		resolved["<JAVA_LAMBDA_EXEC_WRAPPER>"] = javaHandlerWrapperFor(d.Name)
+		resolved["<LAMBDA_OTEL_DISTRO>"] = d.Name
 	}
 	resolved[plan.PlaceholderPackageVersion] = config.CDKPackageVersion()
 	return &baseapi.PlannedInstrumentation{Plan: pl, Resolved: resolved}, nil

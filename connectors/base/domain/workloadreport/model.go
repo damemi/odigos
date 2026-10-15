@@ -49,6 +49,14 @@ func ToModel(w api.DiscoveredWorkload) *model.WorkloadReport {
 		desired.SdkType = &sdk
 	}
 
+	desired.OtelDistroName = strPtrOrNil(w.EffectiveDistro)
+	desired.InstrumentationVersion = strPtrOrNil(w.InstrumentationVersion)
+	if w.AvailableDistros != nil {
+		desired.AvailableDistros = make([]*model.InstrumentationDistribution, 0, len(w.AvailableDistros))
+		for _, d := range w.AvailableDistros {
+			desired.AvailableDistros = append(desired.AvailableDistros, &model.InstrumentationDistribution{Name: d.Name, DisplayName: d.DisplayName, Language: d.Language, Version: d.Version, IsDefault: d.IsDefault})
+		}
+	}
 	progress := &model.WorkloadProgressReport{Stage: stageFor(w)}
 	var issues []*model.WorkloadIssue
 	// Source-matched but this workload's instrumentation type is declared in the spec yet not built in

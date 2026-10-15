@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 	domainsrc "github.com/odigos-io/odigos-enterprise/connectors/base/domain/source"
 	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
@@ -93,6 +94,11 @@ func (c *Coordinator) createWorkloadSource(ctx context.Context, src domainsrc.So
 		apiLog.Warn("create source workload not found", "name", src.Name, "service", src.Name, "kind", src.Kind)
 		return fmt.Errorf("createSource: discovered workload not found for service=%s kind=%s", src.Name, src.Kind)
 	}
+	if provider, ok := c.provider.(api.InstrumentationProvider); ok {
+		if err := provider.ValidateSourceInstrumentation(ctx, src, w); err != nil {
+			return err
+		}
+	}
 	src.ExternalResourceID = w.ExternalID
 	src.Region = w.Region
 	if err := c.store.UpsertSource(ctx, src); err != nil {
@@ -156,6 +162,15 @@ func (c *Coordinator) UpdateSource(ctx context.Context, src domainsrc.Source) er
 	}
 	if src.ServiceName == "" {
 		src.ServiceName = current.ServiceName
+	}
+	if provider, ok := c.provider.(api.InstrumentationProvider); ok && !slices.Contains(c.computePlatformKinds, src.Kind) {
+		w, err := c.provider.LookupWorkload(ctx, src.Name, src.Kind, src.Region)
+		if err != nil {
+			return err
+		}
+		if err := provider.ValidateSourceInstrumentation(ctx, src, w); err != nil {
+			return err
+		}
 	}
 	// With identity now keyed on the stable external_resource_id (preserved from the current row above), a
 	// service_name/region/enabled change is an in-place update — no move. Only a changed kind (or, in

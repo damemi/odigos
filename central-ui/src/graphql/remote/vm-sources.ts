@@ -55,7 +55,7 @@ const mapVmSourceConfig = (s: VmSource, region: string | null | undefined): VmSo
   };
 
   const hasRuntime = !!(runtime?.language || runtime?.version);
-  const hasDistro = !!distro?.otelDistroName;
+  const hasDistro = !!distroOverride.otelDistroName;
 
   // Remember the config as read — including when nothing is configured, so that a
   // cleared override stays cleared instead of being replayed from a stale entry.
@@ -199,7 +199,9 @@ export const patchVmSourceQuery = (printedQuery: string, ctx: OperationContext):
 };
 
 /** `patchQuery` for the combined sources + workloadReports reads. */
-export const patchVmSourcesWithReportsQuery = (printedQuery: string, ctx: OperationContext): string => withWorkloadReportDetails(patchVmSourceQuery(printedQuery, ctx), ctx);
+export const patchVmSourcesWithReportsQuery = (printedQuery: string, ctx: OperationContext): string => {
+  return withWorkloadReportDetails(patchVmSourceQuery(printedQuery, ctx), ctx);
+};
 
 /**
  * Apply a runtime/distro patch to one container's entry, preserving the rest.

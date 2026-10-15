@@ -1,0 +1,66 @@
+[
+  {
+    "name": "java-lambda-otel-agent",
+    "displayName": "Java Lambda OpenTelemetry agent",
+    "language": "java",
+    "isDefault": true,
+    "execWrapper": "/opt/otel-javaagent-handler",
+    "version": "2.32.0"
+  },
+  {
+    "name": "java-lambda-otel-wrapper",
+    "displayName": "Java Lambda OpenTelemetry generic handler",
+    "language": "java",
+    "isDefault": false,
+    "execWrapper": "/opt/otel-handler",
+    "version": "0.21.0"
+  },
+  {
+    "name": "java-lambda-otel-proxy-wrapper",
+    "displayName": "Java Lambda OpenTelemetry API Gateway proxy handler",
+    "language": "java",
+    "isDefault": false,
+    "execWrapper": "/opt/otel-proxy-handler",
+    "version": "0.21.0"
+  },
+  {
+    "name": "java-lambda-otel-sqs-wrapper",
+    "displayName": "Java Lambda OpenTelemetry SQS event handler",
+    "language": "java",
+    "isDefault": false,
+    "execWrapper": "/opt/otel-sqs-handler",
+    "version": "0.21.0"
+  },
+  {
+    "name": "java-lambda-otel-stream-wrapper",
+    "displayName": "Java Lambda OpenTelemetry stream handler",
+    "language": "java",
+    "isDefault": false,
+    "execWrapper": "/opt/otel-stream-handler",
+    "version": "0.21.0"
+  },
+  {
+    "name": "nodejs-lambda-otel",
+    "displayName": "Node.js Lambda OpenTelemetry",
+    "language": "nodejs",
+    "isDefault": true,
+    "execWrapper": "/opt/otel-handler",
+    "version": "0.23.0"
+  },
+  {
+    "name": "python-lambda-otel",
+    "displayName": "Python Lambda OpenTelemetry",
+    "language": "python",
+    "isDefault": true,
+    "execWrapper": "/opt/otel-instrument",
+    "version": "0.21.0"
+  },
+  {
+    "name": "ruby-lambda-otel",
+    "displayName": "Ruby Lambda OpenTelemetry",
+    "language": "ruby",
+    "isDefault": true,
+    "execWrapper": "/opt/otel-handler",
+    "version": "0.14.0"
+  }
+]

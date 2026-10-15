@@ -999,7 +999,13 @@ func (c *Coordinator) enrichWithSources(ctx context.Context, workloads []api.Dis
 	if err != nil {
 		return nil, err
 	}
-	return enrichWorkloads(workloads, sources), nil
+	workloads = enrichWorkloads(workloads, sources)
+	if provider, ok := c.provider.(api.InstrumentationProvider); ok {
+		for i := range workloads {
+			provider.DescribeInstrumentation(ctx, &workloads[i])
+		}
+	}
+	return workloads, nil
 }
 
 // enrichComputePlatformsWithSources annotates discovered compute platforms with assignment state from source-intent rows.

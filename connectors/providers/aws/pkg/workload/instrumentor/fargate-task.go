@@ -772,7 +772,12 @@ func (i *ecsInspector) recordContainers(ctx context.Context, td *ecstypes.TaskDe
 			row.RuntimeLanguage, row.RuntimeVersion = t.runtime.language, t.runtime.version
 			row.Eligible = true
 			row.Instrumented = owned[idx]
-			row.Distro = t.recipe.lang
+			for _, d := range FargateDistros() {
+				if d.Language == t.recipe.lang {
+					row.Distro = d.Name
+					break
+				}
+			}
 		case excluded[name] != "":
 			row.ExcludedReason = excluded[name]
 		case !row.Essential:

@@ -44,6 +44,9 @@ export const supportsDestinationRegion = (schemaVersion: string): boolean => atL
 // rejects the whole query on one unknown field.
 export const supportsTypedContainerDetails = (schemaVersion: string): boolean => atLeastMinor(schemaVersion, 18);
 
+// Provider-specific instrumentation catalogs and Java handler adapters (agents-api v0.28.0).
+export const supportsInstrumentationDistributions = (schemaVersion: string): boolean => atLeastMinor(schemaVersion, 28);
+
 // Destination.disabled (pause export without delete) landed in agents-api v0.24.0.
 // Older schemas reject the field on reads and on create/update inputs.
 // Unparseable versions are treated as current: omitting the field on a local

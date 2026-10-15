@@ -3,7 +3,7 @@ import type { GetWorkloadReportsQuery } from '@odigos/vmagent-api-apollo-client'
 import type { OperationContext } from '@odigos/ui-kit/contexts';
 import { DesiredStateProgress, ProgrammingLanguages, type InstrumentationReport, type OtelDistroName, type Workload } from '@odigos/ui-kit/types';
 import { dialectVersion, vmQuery } from '@/graphql/remote/vm-dialect';
-import { rememberWorkloadRegion, supportsTypedContainerDetails, supportsWorkloadReportRegion, withFragmentSelections, type VmContainerOverride, type VmSourceConfig } from '@/graphql/remote/utils';
+import { rememberWorkloadRegion, supportsTypedContainerDetails, supportsInstrumentationDistributions, supportsWorkloadReportRegion, withFragmentSelections, withFieldSelections, type VmContainerOverride, type VmSourceConfig } from '@/graphql/remote/utils';
 
 /** One `WorkloadReport.details.containers` row (agents-api v0.18.0+). */
 interface VmWorkloadDetailsContainer {
@@ -26,7 +26,9 @@ interface VmWorkloadDetailsContainer {
   excludedReason?: string | null;
 }
 
-export type VmWorkloadReport = GetWorkloadReportsQuery['workloadReports'][number];
+export type VmWorkloadReport = GetWorkloadReportsQuery['workloadReports'][number] & {
+  desired?: Pick<InstrumentationReport, 'otelDistroName' | 'instrumentationVersion' | 'availableDistros'> | null;
+};
 
 /**
  * Pull the container layer out of the kind-union `details` block.
@@ -221,6 +223,9 @@ const mapReportToInstrumentation = (report: VmWorkloadReport): InstrumentationRe
     // until the customer deployed.
     mode: report.desired?.mode ?? null,
     sdkType: report.desired?.sdkType ?? null,
+    otelDistroName: report.desired?.otelDistroName,
+    instrumentationVersion: report.desired?.instrumentationVersion,
+    availableDistros: report.desired?.availableDistros,
     progressStage: report.progress?.stage ?? null,
     progressMessage: report.progress?.message ?? null,
     waitingFor: report.progress?.waitingFor ?? null,
@@ -585,6 +590,9 @@ const WORKLOAD_DETAILS_SELECTIONS = `
  * which never resolves an agents-api document at all.
  */
 export const withWorkloadReportDetails = (printedQuery: string, ctx: OperationContext): string => {
+  if (supportsInstrumentationDistributions(dialectVersion(ctx))) {
+    printedQuery = withFieldSelections(printedQuery, 'desired', 'otelDistroName instrumentationVersion availableDistros { name displayName language version isDefault }');
+  }
   if (!supportsTypedContainerDetails(dialectVersion(ctx))) return printedQuery;
   return withFragmentSelections(printedQuery, 'WorkloadReport', WORKLOAD_DETAILS_SELECTIONS);
 };

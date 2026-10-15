@@ -21,6 +21,34 @@ type DistroOverride struct {
 	OtelDistroName string `json:"otel_distro_name,omitempty" validate:"omitempty"`
 }
 
+// UnmarshalJSON migrates connector-local selections written before each Java adapter had a distro name.
+// The legacy field is intentionally absent from GraphQL and from newly persisted configuration.
+func (d *DistroOverride) UnmarshalJSON(data []byte) error {
+	var stored struct {
+		Name    string `json:"otel_distro_name"`
+		Wrapper string `json:"handler_wrapper"`
+	}
+	if err := json.Unmarshal(data, &stored); err != nil {
+		return err
+	}
+	name := stored.Name
+	if (name == "java-lambda-otel-wrapper" || name == "") && stored.Wrapper != "" {
+		name = stored.Wrapper
+	}
+	switch name {
+	case "otel-handler":
+		name = "java-lambda-otel-wrapper"
+	case "otel-proxy-handler":
+		name = "java-lambda-otel-proxy-wrapper"
+	case "otel-sqs-handler":
+		name = "java-lambda-otel-sqs-wrapper"
+	case "otel-stream-handler":
+		name = "java-lambda-otel-stream-wrapper"
+	}
+	d.OtelDistroName = name
+	return nil
+}
+
 // ContainerOverride narrows the source's overrides to one container of a container-shaped workload.
 // Containers are identified by name — the only sub-workload key that survives a redeploy, unlike a
 // task ARN or a PID. Containers not listed keep the workload-level behavior.

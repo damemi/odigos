@@ -119,6 +119,9 @@ type WorkloadDetails struct {
 
 // DiscoveredWorkload is a discovered cloud resource, reported to Central as a WorkloadReport.
 type DiscoveredWorkload struct {
+	AvailableDistros       []InstrumentationDistro
+	EffectiveDistro        string
+	InstrumentationVersion string
 	// ServiceName + Kind + Region form the WorkloadReport composite key (Region is empty for
 	// region-less platforms).
 	ServiceName string

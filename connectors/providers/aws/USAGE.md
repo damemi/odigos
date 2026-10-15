@@ -184,7 +184,7 @@ Volumes:
   - Name: odigos-agent          # ephemeral-storage bind mount, scoped to the task
 ContainerDefinitions:
   - Name: odigos-agent
-    Image: "registry.odigos.io/odigos-fargate-agents:v0.0.16"
+    Image: "registry.odigos.io/odigos-fargate-agents:v0.0.17"
     Essential: false            # required: SUCCESS below is only valid against a non-essential container
     Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
     MountPoints:
@@ -252,7 +252,7 @@ import { OdigosFargateInstrumentation, OdigosFargateLanguage } from '@odigos/aws
 const odigos = new OdigosFargateInstrumentation(this, 'Odigos', {
   destination: { httpEndpoint: 'https://otlp.example.com:4318' },
   // Optional — the package already defaults to its own release's bundle, and records it (see below).
-  agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.16',
+  agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.17',
 });
 
 odigos.instrument({
@@ -388,7 +388,7 @@ running there — it's pulled by real Fargate *tasks*, at task-start time, strai
 in `ODIGOS_FARGATE_AGENTS_IMAGE`. So "local" here means: build it locally, push it somewhere your test
 Fargate tasks can actually reach (your own ECR repo, a private registry with a public endpoint, etc.),
 then point the connector at that tag instead of the compiled-in default
-(`registry.odigos.io/odigos-fargate-agents:v0.0.16`, see `config.DefaultFargateAgentsImage`):
+(`registry.odigos.io/odigos-fargate-agents:v0.0.17`, see `config.DefaultFargateAgentsImage`):
 
 ```bash
 ODIGOS_FARGATE_AGENTS_IMAGE=<your-registry>/odigos-fargate-agents:dev
@@ -441,3 +441,28 @@ version check entirely, which is the point of having one.
 | Auth methods, discovery/instrumentation types, per-language IaC artifacts | `odigos-enterprise/connectors/spec/data/aws.yaml` |
 | Example connector CR | `odigos-enterprise/connectors/examples/aws-connector.yaml` |
 | Lambda layers, Fargate agents bundle, SAR templates, CDK packages, release pipeline | [`odigos-io/aws-connector-artifacts`](https://github.com/odigos-io/aws-connector-artifacts) |
+
+### Developing SDK selections across local checkouts
+
+The SDK catalog and Java adapter metadata use the next agents-api schema (`v0.28.0`). To test
+uncommitted changes, copy `go.work.example` to `go.work` in the enterprise repository root. The workspace
+uses the sibling `../agents-api/go/server` module instead of the published dependency. Generate the
+server and both clients in agents-api after changing its schema/operations.
+
+Build the local artifact bundle and connector without publishing either dependency:
+
+```sh
+make -C ../aws-connector-artifacts build-lambda-agents REGISTRY=odigos-local TAG=dev
+python3 ../aws-connector-artifacts/scripts/sync-connector-distros.py .
+LAMBDA_AGENTS_IMAGE=odigos-local/odigos-lambda-agents:dev \
+  bash connectors/providers/aws/build-local.sh
+```
+
+`AGENTS_API_SRC`, `CONNECTOR_IMAGE`, and `TARGETARCH` can override the sibling checkout, output image,
+and Linux architecture. The script creates an isolated temporary Go workspace and leaves module pins
+unchanged. For a release, publish agents-api first and advance the connector's `go/server` dependency;
+publish the matching artifacts/CDK package and UI-kit before advancing their consumer pins.
+
+For Central UI development, build `../ui-kit` and copy its `lib` directory into
+`central-ui/node_modules/@odigos/ui-kit/lib`, then build Central UI. The adapter patches the new selections
+only for schema `v0.28.0` or newer, so older agents continue using their frozen GraphQL dialects.
