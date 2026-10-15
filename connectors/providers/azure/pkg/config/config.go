@@ -58,6 +58,10 @@ func FromEnv() (Config, error) {
 		agentImage = DefaultAgentImage
 	}
 
+	if err := bc.ResolveBootstrapRegion("azure"); err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		Config:         bc,
 		SubscriptionID: os.Getenv("ODIGOS_AZURE_SUBSCRIPTION_ID"),

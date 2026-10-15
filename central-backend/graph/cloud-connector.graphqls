@@ -6,6 +6,7 @@ type CloudConnectorProvider {
   provider: String!
   displayName: String!
   connectorFields: [CloudConnectorField!]!
+  bootstrapRegion: CloudConnectorBootstrapRegion!
   auth: CloudConnectorAuth!
   features: [CloudConnectorFeature!]!
   # Declarative onboarding artifacts (e.g. the IAM policy preview). Provider-owned
@@ -15,6 +16,11 @@ type CloudConnectorProvider {
 
 # Provider-defined onboarding artifacts, grouped so the schema can grow more setup
 # metadata without a breaking change. Mirrors connectors/spec.Setup.
+type CloudConnectorBootstrapRegion {
+  defaultRegion: String!
+  supportedRegions: [String!]!
+}
+
 type CloudConnectorSetup {
   # Optional step-2 subtitle (provider-owned copy under "Setup credentials").
   subtitle: String!
@@ -150,6 +156,7 @@ input TestCloudConnectorConnectionInput {
   credentials: JSON!
   # Account boundary id validated against the resolved identity ("" to skip).
   expectedAccountId: String!
+  bootstrapRegion: String
   capabilities: [CloudConnectorCapabilityInput!]!
   collectors: [CloudConnectorCollectorCapabilityInput!]
 }
@@ -202,6 +209,7 @@ input CreateCloudConnectorInput {
   credentials: JSON!
   # Account boundary id; "" -> use the identity resolved during verification.
   expectedAccountId: String!
+  bootstrapRegion: String
   capabilities: [CloudConnectorCapabilityInput!]!
   collectors: [CloudConnectorCollectorCapabilityInput!]
 }

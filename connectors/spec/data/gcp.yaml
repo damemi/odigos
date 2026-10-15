@@ -5,6 +5,11 @@ displayName: Google Cloud Platform
 # The connector scans every location/zone in the project via location wildcards (parent
 # ".../locations/-"), so there is no location selection field.
 connector:
+  # Fixed placeholder until regional bootstrap is implemented for this provider.
+  bootstrapRegion:
+    defaultRegion: us-central1
+    supportedRegions:
+      - us-central1
   fields:
     - name: projectId
       displayName: GCP Project ID

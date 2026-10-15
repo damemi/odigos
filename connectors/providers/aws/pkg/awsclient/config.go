@@ -22,8 +22,7 @@ import (
 
 var log = connlog.Subsystem("aws-client")
 
-// DefaultRegion is used for partition-wide calls (region enumeration); always enabled in the
-// commercial partition.
+// DefaultRegion preserves bootstrap behavior for connectors without an explicit region.
 const DefaultRegion = "us-east-1"
 
 // ConfigSource is the small AWS configuration surface used by Collector clients.
@@ -77,14 +76,20 @@ func EnabledRegions(ctx context.Context, cfg aws.Config) ([]string, error) {
 // repeated AssumeRole calls while still refreshing expiring credentials. Safe for concurrent use and
 // shared by detectors and instrumentors.
 type Cache struct {
-	creds    config.Credentials
-	mu       sync.Mutex
-	byRegion map[string]aws.Config
-	regions  []string
+	bootstrapRegion string
+	creds           config.Credentials
+	mu              sync.Mutex
+	byRegion        map[string]aws.Config
+	regions         []string
 }
 
 // NewCache builds a config cache over the runtime credentials.
-func NewCache(creds config.Credentials) *Cache { return &Cache{creds: creds} }
+func NewCache(creds config.Credentials, bootstrapRegion string) *Cache {
+	if bootstrapRegion == "" {
+		bootstrapRegion = DefaultRegion
+	}
+	return &Cache{creds: creds, bootstrapRegion: bootstrapRegion}
+}
 
 // Config returns (and memoizes) the aws.Config for a region.
 func (c *Cache) Config(ctx context.Context, region string) (aws.Config, error) {
@@ -116,7 +121,7 @@ func (c *Cache) VerifyAccount(ctx context.Context, expectedAccountID string) err
 	if expectedAccountID == "" {
 		return fmt.Errorf("no AWS account id configured (ODIGOS_AWS_ACCOUNT_ID); cannot enforce the connector account boundary")
 	}
-	cfg, err := c.Config(ctx, DefaultRegion)
+	cfg, err := c.Config(ctx, c.bootstrapRegion)
 	if err != nil {
 		return fmt.Errorf("resolve aws config for account identity check: %w", err)
 	}
@@ -140,7 +145,7 @@ func (c *Cache) EnabledRegions(ctx context.Context) ([]string, error) {
 	if cached != nil {
 		return cached, nil
 	}
-	base, err := c.Config(ctx, DefaultRegion)
+	base, err := c.Config(ctx, c.bootstrapRegion)
 	if err != nil {
 		return nil, err
 	}

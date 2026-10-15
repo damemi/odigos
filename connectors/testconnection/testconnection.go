@@ -12,6 +12,8 @@ import (
 type Input struct {
 	// Provider selects the registered Tester (e.g. "aws"). Required.
 	Provider string
+	// BootstrapRegion controls initial identity and region enumeration calls.
+	BootstrapRegion string
 	// Credentials holds the in-memory credentials under test, keyed by the provider spec's auth field
 	// names (auth.methods[].fields[].name — e.g. "accessKeyId", "roleArn"). Provider-agnostic: the
 	// tester reads the keys it understands and auto-resolves the auth method by which keys are present.
@@ -21,7 +23,7 @@ type Input struct {
 	ExpectedAccountID string
 	// Capabilities is the customer's per-type allow-list, split by domain (workloads/computePlatforms).
 	// The tester probes only the active discovery types and validates exactly their required permissions.
-	// All regions enabled in the account are scanned — there is no region input.
+	// All regions enabled in the account are scanned, independently of the bootstrap region.
 	Capabilities spec.Capabilities
 }
 
@@ -47,5 +49,10 @@ func Run(ctx context.Context, in Input) (*Result, error) {
 	if !ok {
 		return nil, fmt.Errorf("unsupported connector provider %q", in.Provider)
 	}
+	region, err := spec.MustGet(in.Provider).Connector.BootstrapRegion.Resolve(in.BootstrapRegion)
+	if err != nil {
+		return nil, err
+	}
+	in.BootstrapRegion = region
 	return t.Test(ctx, in)
 }

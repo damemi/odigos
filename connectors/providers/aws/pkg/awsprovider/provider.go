@@ -65,7 +65,7 @@ type Provider struct {
 // instrumentation is self-sufficient (discover-or-publish a managed OTel layer); an explicit ARN table
 // overrides it.
 func New(cfg config.Config, cfgMgr *baseconfig.Manager, base *basestore.Store, workloadStore *workloadstore.Store, computePlatformStore *computeplatformstore.Store) *Provider {
-	cache := awsclient.NewCache(cfg.Credentials)
+	cache := awsclient.NewCache(cfg.Credentials, cfg.BootstrapRegion)
 	var layers workloadinstrumentor.LayerResolver = workloadinstrumentor.NewManagedLayerResolver(cache, cfg.LambdaLayerDir)
 	if len(cfg.LambdaLayerARNs) > 0 {
 		layers = workloadinstrumentor.NewPublicLayerResolver(cfg.LambdaLayerARNs)

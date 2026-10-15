@@ -36,6 +36,7 @@ func (r *mutationResolver) TestCloudConnectorConnection(ctx context.Context, inp
 		Provider:          input.Provider,
 		Credentials:       credentialsFromMap(input.Credentials),
 		ExpectedAccountID: input.ExpectedAccountID,
+		BootstrapRegion:   bootstrapRegionValue(input.BootstrapRegion),
 		Capabilities:      capabilities,
 	})
 	if err != nil {
@@ -64,6 +65,7 @@ func (r *mutationResolver) CreateCloudConnector(ctx context.Context, input model
 		Provider:          input.Provider,
 		Credentials:       creds,
 		ExpectedAccountID: input.ExpectedAccountID,
+		BootstrapRegion:   bootstrapRegionValue(input.BootstrapRegion),
 		Capabilities:      capabilities,
 	})
 	if err != nil {
@@ -88,11 +90,16 @@ func (r *mutationResolver) CreateCloudConnector(ctx context.Context, input model
 		accountID = res.AccountID
 	}
 
+	bootstrapRegion, err := spec.MustGet(input.Provider).Connector.BootstrapRegion.Resolve(bootstrapRegionValue(input.BootstrapRegion))
+	if err != nil {
+		return nil, err
+	}
 	workloads, computePlatforms := crdCapabilitiesFromInput(input.Provider, input.Capabilities)
 	connectorID, err := r.CloudConnectorService.CreateConnector(ctx, services.CreateConnectorParams{
 		Provider:           input.Provider,
 		DisplayName:        input.DisplayName,
 		AccountID:          accountID,
+		BootstrapRegion:    bootstrapRegion,
 		AccountDisplayName: input.DisplayName,
 		Workloads:          workloads,
 		ComputePlatforms:   computePlatforms,

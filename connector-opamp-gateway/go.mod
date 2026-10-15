@@ -12,7 +12,7 @@ require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/odigos-io/odigos-enterprise/connectors v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos-enterprise/connectors/base v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/api v1.36.0-pre9.0.20260903115356-b9930ee30945
+	github.com/odigos-io/odigos/api v1.39.0-pre1.0.20261015141927-6c6f37530030
 	k8s.io/api v0.37.0
 	k8s.io/apimachinery v0.37.0
 	k8s.io/client-go v0.37.0

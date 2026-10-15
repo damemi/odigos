@@ -9,6 +9,10 @@ export const GET_CLOUD_CONNECTOR_PROVIDERS = gql`
     cloudConnectorProviders {
       provider
       displayName
+      bootstrapRegion {
+        defaultRegion
+        supportedRegions
+      }
       connectorFields {
         name
         displayName

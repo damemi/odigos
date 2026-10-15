@@ -43,3 +43,31 @@ func TestPlatformIDFromCR(t *testing.T) {
 		}
 	})
 }
+
+func TestBootstrapRegionFromEnv(t *testing.T) {
+	t.Setenv("ODIGOS_CONNECTOR_NAME", "aws-prod")
+	t.Setenv("DATABASE_URL", "postgres://db/odigos_central")
+	for _, region := range []string{"", "eu-west-1", "invalid"} {
+		t.Run(region, func(t *testing.T) {
+			t.Setenv("ODIGOS_BOOTSTRAP_REGION", region)
+			cfg, err := FromEnv()
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = cfg.ResolveBootstrapRegion("aws")
+			if region == "invalid" {
+				if err == nil {
+					t.Fatal("invalid region accepted")
+				}
+				return
+			}
+			want := region
+			if want == "" {
+				want = "us-east-1"
+			}
+			if err != nil || cfg.BootstrapRegion != want {
+				t.Fatalf("bootstrap region = %q, %v", cfg.BootstrapRegion, err)
+			}
+		})
+	}
+}

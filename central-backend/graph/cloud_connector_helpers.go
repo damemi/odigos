@@ -36,6 +36,7 @@ func cloudConnectorProviderFromSpec(s spec.CloudConnectorSpec) *model.CloudConne
 		Provider:        s.Provider,
 		DisplayName:     s.DisplayName,
 		ConnectorFields: cloudConnectorFields(s.Connector.Fields),
+		BootstrapRegion: &model.CloudConnectorBootstrapRegion{DefaultRegion: s.Connector.BootstrapRegion.DefaultRegion, SupportedRegions: nonNilStrings(s.Connector.BootstrapRegion.SupportedRegions)},
 		Auth: &model.CloudConnectorAuth{
 			Permissions:   nonNilStrings(s.Auth.Permissions),
 			DefaultMethod: s.Auth.DefaultMethod,
@@ -348,4 +349,11 @@ func cloudConnectorTestResult(res *testconnection.Result) *model.CloudConnectorT
 		})
 	}
 	return out
+}
+
+func bootstrapRegionValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }

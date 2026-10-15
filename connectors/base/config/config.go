@@ -36,6 +36,8 @@ type Config struct {
 	PlatformIDFromCR bool
 	// Provider is the provider key; informational.
 	Provider string
+	// BootstrapRegion controls initial API calls, independently of discovery scope.
+	BootstrapRegion string
 	// AccountID is the provider account boundary this connector owns (AWS account, GCP project, Azure
 	// subscription). Part of every managed-Collector credential binding, so the connector can check that
 	// a routed connection belongs to its own account.
@@ -91,6 +93,7 @@ func FromEnv() (Config, error) {
 	c := Config{
 		ConnectorName:     os.Getenv("ODIGOS_CONNECTOR_NAME"),
 		Provider:          os.Getenv("ODIGOS_PROVIDER"),
+		BootstrapRegion:   os.Getenv("ODIGOS_BOOTSTRAP_REGION"),
 		Schema:            os.Getenv("ODIGOS_DB_SCHEMA"),
 		DatabaseURL:       os.Getenv("DATABASE_URL"),
 		GraphQLAddr:       GetenvDefault("ODIGOS_GQL_ADDR", ":8080"),
@@ -157,4 +160,18 @@ func GetenvDefault(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// ResolveBootstrapRegion applies provider defaults and validates the non-secret bootstrap setting.
+func (c *Config) ResolveBootstrapRegion(provider string) error {
+	providerSpec, ok := spec.Get(provider)
+	if !ok {
+		return fmt.Errorf("unsupported connector provider %q", provider)
+	}
+	region, err := providerSpec.Connector.BootstrapRegion.Resolve(c.BootstrapRegion)
+	if err != nil {
+		return err
+	}
+	c.BootstrapRegion = region
+	return nil
 }

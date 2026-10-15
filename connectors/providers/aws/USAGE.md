@@ -27,6 +27,14 @@ short:
 | **Workloads** | `aws.lambda`, `aws.fargate-task` | Directly instrumentable. Discovered, then optionally instrumented in place. |
 | **Compute platforms** | `aws.ecs-cluster`, `aws.fargate-cluster`, `aws.eks`, `aws.ec2` | Coverage/grouping and (eventually) separate-agent install. Not instrumentable directly. |
 
+The creation flow's **Show advanced fields → Bootstrap region** selects the region used for initial
+STS identity/role-assumption and EC2 region-enumeration calls. It is persisted as
+`spec.bootstrapRegion` and passed to the runtime as `ODIGOS_BOOTSTRAP_REGION`. Omitting it keeps
+`us-east-1`. Choose an enabled commercial AWS region that the credentials can access.
+
+This setting does not restrict discovery to that region. Discovery and connection checks still scan
+all enabled account regions, so IAM policies must allow the selected capabilities in those regions.
+
 ## 2. Automatic vs. manual (IaC) — the two flows
 
 Every workload type is independently switched between two modes, driven by two booleans on the connector

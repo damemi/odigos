@@ -205,6 +205,7 @@ func BuildDeployment(cr *cloudconnectorsv1.OdigosCloudConnector, p DeploymentPar
 		// two clusters that each name their connector the same do not collide on one routing entry.
 		{Name: "ODIGOS_CONNECTOR_ID", Value: string(cr.UID)},
 		{Name: "ODIGOS_PROVIDER", Value: cr.Spec.Provider},
+		{Name: "ODIGOS_BOOTSTRAP_REGION", Value: cr.Spec.BootstrapRegion},
 		{Name: "ODIGOS_LOG_LEVEL", Value: "debug"},
 		{Name: "ODIGOS_DB_SCHEMA", Value: p.SchemaName},
 		{Name: "ODIGOS_EXPECTED_SCHEMA_VERSION", Value: p.SchemaVersion},

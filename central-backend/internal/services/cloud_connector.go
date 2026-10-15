@@ -26,6 +26,7 @@ type CreateConnectorParams struct {
 	Provider           string
 	DisplayName        string
 	AccountID          string
+	BootstrapRegion    string
 	AccountDisplayName string
 	Workloads          []cloudconnectorsv1.CloudConnectorWorkloadCapability
 	ComputePlatforms   []cloudconnectorsv1.CloudConnectorComputePlatformCapability
@@ -65,8 +66,9 @@ func (svc *CloudConnectorService) CreateConnector(ctx context.Context, params Cr
 			Namespace: svc.namespace,
 		},
 		Spec: cloudconnectorsv1.OdigosCloudConnectorSpec{
-			Provider:    params.Provider,
-			DisplayName: params.DisplayName,
+			Provider:        params.Provider,
+			BootstrapRegion: params.BootstrapRegion,
+			DisplayName:     params.DisplayName,
 			Account: cloudconnectorsv1.CloudConnectorAccount{
 				ID:          params.AccountID,
 				DisplayName: params.AccountDisplayName,

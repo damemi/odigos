@@ -95,6 +95,10 @@ func FromEnv() (Config, error) {
 		bc.Schema = cpg.SchemaAWS
 	}
 
+	if err := bc.ResolveBootstrapRegion("aws"); err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		Config:    bc,
 		AccountID: os.Getenv("ODIGOS_AWS_ACCOUNT_ID"),

@@ -120,6 +120,7 @@ func TestBuildDeploymentCredentialEnvFromSpec(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "prod", Namespace: "odigos-central"},
 		Spec: cloudconnectorsv1.OdigosCloudConnectorSpec{
 			Provider:             "aws",
+			BootstrapRegion:      "eu-west-1",
 			Account:              cloudconnectorsv1.CloudConnectorAccount{ID: "123456789012"},
 			CredentialsSecretRef: cloudconnectorsv1.CloudConnectorCredentialsSecretRef{Name: "prod-creds"},
 			Workloads: []cloudconnectorsv1.CloudConnectorWorkloadCapability{
@@ -163,6 +164,9 @@ func TestBuildDeploymentCredentialEnvFromSpec(t *testing.T) {
 
 	// Capabilities are stamped as JSON, split by domain (workloads/computePlatforms); regions and
 	// permission mode are gone.
+	if plain["ODIGOS_BOOTSTRAP_REGION"] != "eu-west-1" {
+		t.Fatalf("bootstrap region not forwarded: %q", plain["ODIGOS_BOOTSTRAP_REGION"])
+	}
 	caps := plain["ODIGOS_CAPABILITIES"]
 	for _, want := range []string{`"workloads":`, `"computePlatforms":`, `"type":"` + awsTypeLambda + `"`, `"type":"` + awsTypeECSCluster + `"`, `"discovery":true`} {
 		if !strings.Contains(caps, want) {

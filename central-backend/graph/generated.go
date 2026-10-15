@@ -64,6 +64,11 @@ type ComplexityRoot struct {
 		ID          func(childComplexity int) int
 	}
 
+	CloudConnectorBootstrapRegion struct {
+		DefaultRegion    func(childComplexity int) int
+		SupportedRegions func(childComplexity int) int
+	}
+
 	CloudConnectorCollectorCapability struct {
 		Deployment func(childComplexity int) int
 		Management func(childComplexity int) int
@@ -95,6 +100,7 @@ type ComplexityRoot struct {
 
 	CloudConnectorProvider struct {
 		Auth            func(childComplexity int) int
+		BootstrapRegion func(childComplexity int) int
 		ConnectorFields func(childComplexity int) int
 		DisplayName     func(childComplexity int) int
 		Features        func(childComplexity int) int
@@ -497,6 +503,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CloudConnectorAuthMethod.ID(childComplexity), true
 
+	case "CloudConnectorBootstrapRegion.defaultRegion":
+		if e.ComplexityRoot.CloudConnectorBootstrapRegion.DefaultRegion == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorBootstrapRegion.DefaultRegion(childComplexity), true
+	case "CloudConnectorBootstrapRegion.supportedRegions":
+		if e.ComplexityRoot.CloudConnectorBootstrapRegion.SupportedRegions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorBootstrapRegion.SupportedRegions(childComplexity), true
+
 	case "CloudConnectorCollectorCapability.deployment":
 		if e.ComplexityRoot.CloudConnectorCollectorCapability.Deployment == nil {
 			break
@@ -626,6 +645,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CloudConnectorProvider.Auth(childComplexity), true
+	case "CloudConnectorProvider.bootstrapRegion":
+		if e.ComplexityRoot.CloudConnectorProvider.BootstrapRegion == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CloudConnectorProvider.BootstrapRegion(childComplexity), true
 	case "CloudConnectorProvider.connectorFields":
 		if e.ComplexityRoot.CloudConnectorProvider.ConnectorFields == nil {
 			break
@@ -1926,6 +1951,16 @@ func (ec *executionContext) childFields_CloudConnectorAuthMethod(ctx context.Con
 	return nil, fmt.Errorf("no field named %q was found under type CloudConnectorAuthMethod", field.Name)
 }
 
+func (ec *executionContext) childFields_CloudConnectorBootstrapRegion(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "defaultRegion":
+		return ec.fieldContext_CloudConnectorBootstrapRegion_defaultRegion(ctx, field)
+	case "supportedRegions":
+		return ec.fieldContext_CloudConnectorBootstrapRegion_supportedRegions(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CloudConnectorBootstrapRegion", field.Name)
+}
+
 func (ec *executionContext) childFields_CloudConnectorCollectorCapability(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "type":
@@ -1992,6 +2027,8 @@ func (ec *executionContext) childFields_CloudConnectorProvider(ctx context.Conte
 		return ec.fieldContext_CloudConnectorProvider_displayName(ctx, field)
 	case "connectorFields":
 		return ec.fieldContext_CloudConnectorProvider_connectorFields(ctx, field)
+	case "bootstrapRegion":
+		return ec.fieldContext_CloudConnectorProvider_bootstrapRegion(ctx, field)
 	case "auth":
 		return ec.fieldContext_CloudConnectorProvider_auth(ctx, field)
 	case "features":
@@ -3470,6 +3507,52 @@ func (ec *executionContext) fieldContext_CloudConnectorAuthMethod_fields(_ conte
 	return fc, nil
 }
 
+func (ec *executionContext) _CloudConnectorBootstrapRegion_defaultRegion(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorBootstrapRegion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorBootstrapRegion_defaultRegion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DefaultRegion, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorBootstrapRegion_defaultRegion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CloudConnectorBootstrapRegion", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
+func (ec *executionContext) _CloudConnectorBootstrapRegion_supportedRegions(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorBootstrapRegion) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorBootstrapRegion_supportedRegions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SupportedRegions, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorBootstrapRegion_supportedRegions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CloudConnectorBootstrapRegion", field, false, false, errors.New("field of type String does not have child fields"))
+}
+
 func (ec *executionContext) _CloudConnectorCollectorCapability_type(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorCollectorCapability) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -4012,6 +4095,38 @@ func (ec *executionContext) fieldContext_CloudConnectorProvider_connectorFields(
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_CloudConnectorField(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CloudConnectorProvider_bootstrapRegion(ctx context.Context, field graphql.CollectedField, obj *model.CloudConnectorProvider) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CloudConnectorProvider_bootstrapRegion(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.BootstrapRegion, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *model.CloudConnectorBootstrapRegion) graphql.Marshaler {
+			return ec.marshalNCloudConnectorBootstrapRegion2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorBootstrapRegion(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CloudConnectorProvider_bootstrapRegion(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CloudConnectorProvider",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CloudConnectorBootstrapRegion(ctx, field)
 		},
 	}
 	return fc, nil
@@ -9734,7 +9849,7 @@ func (ec *executionContext) unmarshalInputCreateCloudConnectorInput(ctx context.
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"provider", "displayName", "credentials", "expectedAccountId", "capabilities", "collectors"}
+	fieldsInOrder := [...]string{"provider", "displayName", "credentials", "expectedAccountId", "bootstrapRegion", "capabilities", "collectors"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -9769,6 +9884,13 @@ func (ec *executionContext) unmarshalInputCreateCloudConnectorInput(ctx context.
 				return it, err
 			}
 			it.ExpectedAccountID = data
+		case "bootstrapRegion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("bootstrapRegion"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.BootstrapRegion = data
 		case "capabilities":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("capabilities"))
 			data, err := ec.unmarshalNCloudConnectorCapabilityInput2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCapabilityInputᚄ(ctx, v)
@@ -9959,7 +10081,7 @@ func (ec *executionContext) unmarshalInputTestCloudConnectorConnectionInput(ctx 
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"provider", "credentials", "expectedAccountId", "capabilities", "collectors"}
+	fieldsInOrder := [...]string{"provider", "credentials", "expectedAccountId", "bootstrapRegion", "capabilities", "collectors"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -9987,6 +10109,13 @@ func (ec *executionContext) unmarshalInputTestCloudConnectorConnectionInput(ctx 
 				return it, err
 			}
 			it.ExpectedAccountID = data
+		case "bootstrapRegion":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("bootstrapRegion"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.BootstrapRegion = data
 		case "capabilities":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("capabilities"))
 			data, err := ec.unmarshalNCloudConnectorCapabilityInput2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCapabilityInputᚄ(ctx, v)
@@ -10467,6 +10596,49 @@ func (ec *executionContext) _CloudConnectorAuthMethod(ctx context.Context, sel a
 	return out
 }
 
+var cloudConnectorBootstrapRegionImplementors = []string{"CloudConnectorBootstrapRegion"}
+
+func (ec *executionContext) _CloudConnectorBootstrapRegion(ctx context.Context, sel ast.SelectionSet, obj *model.CloudConnectorBootstrapRegion) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, cloudConnectorBootstrapRegionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferredFieldSet := graphql.NewFieldSet(nil)
+	deferLabelToView := make(map[string]*graphql.FieldSetView)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CloudConnectorBootstrapRegion")
+		case "defaultRegion":
+			out.Values[i] = ec._CloudConnectorBootstrapRegion_defaultRegion(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "supportedRegions":
+			out.Values[i] = ec._CloudConnectorBootstrapRegion_supportedRegions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.Deferred, int32(min(len(deferLabelToView), math.MaxInt32)))
+
+	ec.ProcessDeferredGroup(graphql.DeferredGroup{
+		Defers:   deferLabelToView,
+		Path:     graphql.GetPath(ctx),
+		FieldSet: deferredFieldSet,
+		Context:  ctx,
+	})
+
+	return out
+}
+
 var cloudConnectorCollectorCapabilityImplementors = []string{"CloudConnectorCollectorCapability"}
 
 func (ec *executionContext) _CloudConnectorCollectorCapability(ctx context.Context, sel ast.SelectionSet, obj *model.CloudConnectorCollectorCapability) graphql.Marshaler {
@@ -10690,6 +10862,11 @@ func (ec *executionContext) _CloudConnectorProvider(ctx context.Context, sel ast
 			}
 		case "connectorFields":
 			out.Values[i] = ec._CloudConnectorProvider_connectorFields(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "bootstrapRegion":
+			out.Values[i] = ec._CloudConnectorProvider_bootstrapRegion(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -13260,6 +13437,16 @@ func (ec *executionContext) marshalNCloudConnectorAuthMethod2ᚖgithubᚗcomᚋo
 		return graphql.Null
 	}
 	return ec._CloudConnectorAuthMethod(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCloudConnectorBootstrapRegion2ᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorBootstrapRegion(ctx context.Context, sel ast.SelectionSet, v *model.CloudConnectorBootstrapRegion) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._CloudConnectorBootstrapRegion(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNCloudConnectorCapabilityInput2ᚕᚖgithubᚗcomᚋodigosᚑioᚋcentralᚑbackendᚋgraphᚋmodelᚐCloudConnectorCapabilityInputᚄ(ctx context.Context, v any) ([]*model.CloudConnectorCapabilityInput, error) {

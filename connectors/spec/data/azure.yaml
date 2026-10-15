@@ -5,6 +5,11 @@ displayName: Microsoft Azure
 # One connector instance owns one Azure subscription. Detectors enumerate resources across the
 # subscription (no resource-group selection field).
 connector:
+  # Fixed placeholder until regional bootstrap is implemented for this provider.
+  bootstrapRegion:
+    defaultRegion: eastus
+    supportedRegions:
+      - eastus
   fields:
     - name: subscriptionId
       displayName: Azure Subscription ID

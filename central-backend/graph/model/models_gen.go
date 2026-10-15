@@ -36,6 +36,11 @@ type CloudConnectorAuthMethod struct {
 	Fields      []*CloudConnectorField `json:"fields"`
 }
 
+type CloudConnectorBootstrapRegion struct {
+	DefaultRegion    string   `json:"defaultRegion"`
+	SupportedRegions []string `json:"supportedRegions"`
+}
+
 type CloudConnectorCapabilityInput struct {
 	Type             string `json:"type"`
 	Discovery        bool   `json:"discovery"`
@@ -79,12 +84,13 @@ type CloudConnectorField struct {
 }
 
 type CloudConnectorProvider struct {
-	Provider        string                   `json:"provider"`
-	DisplayName     string                   `json:"displayName"`
-	ConnectorFields []*CloudConnectorField   `json:"connectorFields"`
-	Auth            *CloudConnectorAuth      `json:"auth"`
-	Features        []*CloudConnectorFeature `json:"features"`
-	Setup           *CloudConnectorSetup     `json:"setup"`
+	Provider        string                         `json:"provider"`
+	DisplayName     string                         `json:"displayName"`
+	ConnectorFields []*CloudConnectorField         `json:"connectorFields"`
+	BootstrapRegion *CloudConnectorBootstrapRegion `json:"bootstrapRegion"`
+	Auth            *CloudConnectorAuth            `json:"auth"`
+	Features        []*CloudConnectorFeature       `json:"features"`
+	Setup           *CloudConnectorSetup           `json:"setup"`
 }
 
 type CloudConnectorSetup struct {
@@ -168,6 +174,7 @@ type CreateCloudConnectorInput struct {
 	DisplayName       string                                    `json:"displayName"`
 	Credentials       map[string]any                            `json:"credentials"`
 	ExpectedAccountID string                                    `json:"expectedAccountId"`
+	BootstrapRegion   *string                                   `json:"bootstrapRegion,omitempty"`
 	Capabilities      []*CloudConnectorCapabilityInput          `json:"capabilities"`
 	Collectors        []*CloudConnectorCollectorCapabilityInput `json:"collectors,omitempty"`
 }
@@ -301,6 +308,7 @@ type TestCloudConnectorConnectionInput struct {
 	Provider          string                                    `json:"provider"`
 	Credentials       map[string]any                            `json:"credentials"`
 	ExpectedAccountID string                                    `json:"expectedAccountId"`
+	BootstrapRegion   *string                                   `json:"bootstrapRegion,omitempty"`
 	Capabilities      []*CloudConnectorCapabilityInput          `json:"capabilities"`
 	Collectors        []*CloudConnectorCollectorCapabilityInput `json:"collectors,omitempty"`
 }

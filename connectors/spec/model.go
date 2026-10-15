@@ -581,7 +581,8 @@ func (c Capabilities) computePlatformInstallation() map[string]bool {
 
 // ConnectorConfig is non-auth connector configuration surfaced in the onboarding UI.
 type ConnectorConfig struct {
-	Fields []Field `yaml:"fields"`
+	BootstrapRegion BootstrapRegionConfig `yaml:"bootstrapRegion"`
+	Fields          []Field               `yaml:"fields"`
 }
 
 // AuthConfig holds authentication permission probes and supported methods.

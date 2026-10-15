@@ -19,10 +19,6 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
-// defaultRegion is used for partition-wide calls (identity, region enumeration); always enabled in the
-// commercial partition.
-const defaultRegion = "us-east-1"
-
 // Discovery type names, matching the discovery types declared in connectors/spec/data/aws.yaml.
 // The three ECS types share the same discovery probe (ecs:ListClusters), so the tester reports a single
 // ECS discovery check when any is enabled.
@@ -79,7 +75,11 @@ func (awsTester) Test(ctx context.Context, in Input) (*Result, error) {
 		return res, nil
 	}
 
-	base, err := buildConfig(ctx, defaultRegion, in.Credentials, chain)
+	region, err := awsSpec.Connector.BootstrapRegion.Resolve(in.BootstrapRegion)
+	if err != nil {
+		return nil, err
+	}
+	base, err := buildConfig(ctx, region, in.Credentials, chain)
 	if err != nil {
 		res.add(CheckResult{
 			Name: CheckAuthIdentity, DisplayName: "Authentication", Passed: false,

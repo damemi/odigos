@@ -268,3 +268,16 @@ func TestProvidersWithoutCollectorsEmitAnEmptyFeature(t *testing.T) {
 		}
 	}
 }
+
+func TestCloudConnectorBootstrapRegionCatalog(t *testing.T) {
+	got := cloudConnectorProviderFromSpec(spec.MustGet("aws"))
+	if got.BootstrapRegion == nil || got.BootstrapRegion.DefaultRegion != "us-east-1" {
+		t.Fatalf("missing bootstrap region catalog: %+v", got.BootstrapRegion)
+	}
+	for _, region := range got.BootstrapRegion.SupportedRegions {
+		if region == "eu-west-1" {
+			return
+		}
+	}
+	t.Fatal("AWS region missing from catalog")
+}

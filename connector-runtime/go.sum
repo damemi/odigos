@@ -99,6 +99,10 @@ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/odigos-io/odigos/api v1.38.0-pre6.0.20260928080535-8bac5275eabf h1:ARkqi2LwLjETlAaInQy4PUpMp8Ws75qtISSkPlOBlWE=
 github.com/odigos-io/odigos/api v1.38.0-pre6.0.20260928080535-8bac5275eabf/go.mod h1:Z3/Pmo5vZq4SNRoRHwhqqUdzOsox81z5WdEWecuarxw=
+github.com/odigos-io/odigos/api v1.39.0-pre1.0.20261015133301-b42c2f7520d4 h1:60xf6aPagZluMLTSa0mt/3oAoOWCYQGy8zTOAo55Alw=
+github.com/odigos-io/odigos/api v1.39.0-pre1.0.20261015133301-b42c2f7520d4/go.mod h1:Z3/Pmo5vZq4SNRoRHwhqqUdzOsox81z5WdEWecuarxw=
+github.com/odigos-io/odigos/api v1.39.0-pre1.0.20261015141927-6c6f37530030 h1:d8kZUT1f4ckNBHflREG/VY2mPwqzrIBRDnSpoIUMAh4=
+github.com/odigos-io/odigos/api v1.39.0-pre1.0.20261015141927-6c6f37530030/go.mod h1:Z3/Pmo5vZq4SNRoRHwhqqUdzOsox81z5WdEWecuarxw=
 github.com/onsi/ginkgo/v2 v2.27.2 h1:LzwLj0b89qtIy6SSASkzlNvX6WktqurSHwkk2ipF/Ns=
 github.com/onsi/ginkgo/v2 v2.27.2/go.mod h1:ArE1D/XhNXBXCBkKOLkbsb2c81dQHCRcF5zwn/ykDRo=
 github.com/onsi/gomega v1.38.2 h1:eZCjf2xjZAqe+LeWvKb5weQ+NcPwX84kqJ0cZNxok2A=

@@ -66,6 +66,10 @@ func FromEnv() (Config, error) {
 		agentImage = DefaultAgentImage
 	}
 
+	if err := bc.ResolveBootstrapRegion("gcp"); err != nil {
+		return Config{}, err
+	}
+
 	return Config{
 		Config:    bc,
 		ProjectID: os.Getenv("ODIGOS_GCP_PROJECT_ID"),
