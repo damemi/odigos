@@ -1,0 +1,8 @@
+go 1.26.2
+
+use (
+    ../agents-api/go/server
+    ./connectors
+    ./connectors/base
+    ./connectors/providers/aws
+)
