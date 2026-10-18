@@ -237,7 +237,7 @@ func (o *ECSFargateObserver) observeService(ctx context.Context, client *ecs.Cli
 		o.clearTerminal(ctx, svc)
 	}
 	if ev.obs.Conformance == baseapi.ConformanceConformant {
-		if err := o.store.SetECSServiceRouting(ctx, svc.ClusterARN, svc.ServiceName, string(routing.Via), workloadRoutingNote(routing)); err != nil {
+		if err := o.store.SetECSServiceRouting(ctx, svc.ClusterARN, svc.ServiceName, string(routing.Via), fargateSignalRoutingNote(routing, targets)); err != nil {
 			observeLog.Warn("set observed fargate route failed", "service", svc.ServiceName, "error", err)
 		}
 	}
@@ -408,14 +408,7 @@ func ecsOwnedDiff(td *ecstypes.TaskDefinition, ownedIdx []int, targets []contain
 				containerName(&td.ContainerDefinitions[idx]))
 		}
 		ownedTargets = append(ownedTargets, t)
-		// Judge this container against the signals it ACTUALLY exports rather than the destination's full set
-		// — the asymmetry narrowExportToContainerSignals explains. It has to happen per container and here,
-		// because the destination is task-wide while the narrower choice is a per-container one: a task
-		// definition holding six applications may legitimately have each of them export a different subset,
-		// and this is the only point where a container's env and its desired export target are both in scope.
-		judged := t
-		judged.export = narrowExportToContainerSignals(t.export, containerEnvMap(&td.ContainerDefinitions[idx]))
-		add(containerDiff(&td.ContainerDefinitions[idx], judged, serviceName, svc.Region, debug))
+		add(containerDiff(&td.ContainerDefinitions[idx], t, serviceName, svc.Region, debug))
 	}
 	// The sidecar command stages the union of the AGENTS THE OWNED CONTAINERS NEED, so it is compared against
 	// the owned set for the same reason the containers are: a language the customer chose not to instrument
@@ -429,32 +422,6 @@ func ecsOwnedDiff(td *ecstypes.TaskDefinition, ownedIdx []int, targets []contain
 	return diff, ""
 }
 
-// narrowExportToContainerSignals returns a container's desired export target restricted to the signals the
-// container is actually configured to produce, making the Fargate export check ASYMMETRIC in exactly the way
-// the Lambda one is: exporting FEWER signals than the destination accepts is conformant, exporting one the
-// destination does NOT accept is drift. The rule lives in narrowedSignals and is shared with Lambda, so the two
-// platforms cannot drift into two definitions of drift — a Fargate task exporting traces-only against a
-// traces+metrics+logs destination used to be reported as decayed here while the identical Lambda function was
-// reported conformant.
-//
-// Only the three signal flags move. The endpoint and the protocol are carried through untouched, and that is
-// deliberate rather than incidental: those two are the pairing that fails at runtime as an opaque connection
-// reset (an HTTP request to a gRPC listener), so they stay an EXACT comparison in containerDiff. Expressing the
-// relaxation as a narrower target rather than as a looser comparison is what keeps them exact by construction —
-// containerDiff is untouched, and there is no branch there that could be reached with a relaxed endpoint.
-//
-// It is applied by the OBSERVER only, and never by the mutating path's alreadyInstrumented. When Odigos owns a
-// task definition it writes the export env itself and must converge it to the destination's full signal set;
-// tolerating a subset there would let a task keep exporting less than Odigos asked for, forever, with nothing
-// left to report it. In manual mode the customer's task definition is the author, and a narrower choice in it is
-// a decision to respect.
-func narrowExportToContainerSignals(export ecsExportTarget, env map[string]string) ecsExportTarget {
-	export.traces, export.metrics, export.logs = narrowedSignals(env, export.traces, export.metrics, export.logs)
-	return export
-}
-
-// describeTaskDefinition reads the task definition a service currently runs. Tags are deliberately NOT
-// requested: they exist to be round-tripped into RegisterTaskDefinition, and this path never registers anything.
 func (o *ECSFargateObserver) describeTaskDefinition(ctx context.Context, client *ecs.Client, live *ecstypes.Service) (*ecstypes.TaskDefinition, error) {
 	out, err := client.DescribeTaskDefinition(ctx, &ecs.DescribeTaskDefinitionInput{TaskDefinition: live.TaskDefinition})
 	if err != nil {

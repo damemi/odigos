@@ -4,9 +4,10 @@ import "strings"
 
 // Telemetry signal keys as stored on a Destination (match the GraphQL TelemetrySignal enum).
 const (
-	SignalTraces  = "TRACES"
-	SignalMetrics = "METRICS"
-	SignalLogs    = "LOGS"
+	SignalTraces   = "TRACES"
+	SignalMetrics  = "METRICS"
+	SignalLogs     = "LOGS"
+	SignalProfiles = "PROFILES"
 )
 
 // OTLP destination config keys (the otlp / otlphttp destination types' non-secret fields).
@@ -37,6 +38,7 @@ type OTLPTarget struct {
 	Traces       bool
 	Metrics      bool
 	Logs         bool
+	Profiles     bool
 }
 
 // ResolveOTLPTarget picks the first usable OTLP destination — one carrying a gRPC endpoint (type otlp)
@@ -62,17 +64,11 @@ func ResolveOTLPTarget(dests []Destination) (OTLPTarget, bool) {
 			Insecure:     configString(d.Config, configOTLPGRPCTLSEnabled) != "true",
 			HTTPEndpoint: normalizeOTLPHTTPEndpoint(httpEP),
 		}
-		for _, s := range d.Signals {
-			switch strings.ToUpper(s) {
-			case SignalTraces:
-				t.Traces = true
-			case SignalMetrics:
-				t.Metrics = true
-			case SignalLogs:
-				t.Logs = true
-			}
-		}
-		if !t.Traces && !t.Metrics && !t.Logs {
+		signals := targetForSignals(d.Signals)
+		t.Traces, t.Metrics, t.Logs, t.Profiles = signals.Traces, signals.Metrics, signals.Logs, signals.Profiles
+		// Preserve the legacy fallback only for an unspecified selection. In
+		// particular, a profiles-only destination must never turn tracing on.
+		if len(d.Signals) == 0 {
 			t.Traces = true
 		}
 		return t, true

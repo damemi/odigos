@@ -132,6 +132,11 @@ func desiredHandlerEnv(lang string) []plan.EnvVar {
 		// "does not exist", so it is never a single hardcoded value.
 		{Name: store.EnvExecWrapper, Value: execWrapperForLanguage(lang), Merge: plan.MergeSet},
 	}
+	for key, value := range (domaindest.OTLPTarget{Logs: true}).LambdaSignalActivation(lang) {
+		if key != EnvTracesExporter && key != EnvMetricsExporter && key != EnvLogsExporter {
+			env = append(env, plan.EnvVar{Name: key, Value: value, Merge: plan.MergeSet})
+		}
+	}
 	return append(env, sharedLambdaEnv()...)
 }
 
@@ -163,35 +168,27 @@ func desiredWebServerEnv(lang string) ([]plan.EnvVar, error) {
 		// carrying a stale Odigos wrapper from an earlier mis-instrumentation stays broken.
 		{Name: store.EnvExecWrapper, Merge: plan.MergeRemove},
 	}
-	for k, v := range webServerExtraEnv(lang) {
-		env = append(env, plan.EnvVar{Name: k, Value: v, Merge: plan.MergeSet})
+
+	for key, value := range (domaindest.OTLPTarget{Logs: true}).LambdaSignalActivation(lang) {
+		if key != EnvTracesExporter && key != EnvMetricsExporter && key != EnvLogsExporter {
+			env = append(env, plan.EnvVar{Name: key, Value: value, Merge: plan.MergeSet})
+		}
 	}
 	return append(env, sharedLambdaEnv()...), nil
 }
 
-// sharedLambdaEnv is the export + identity configuration both activations set.
-//
-// Note what is absent: OTEL_EXPORTER_OTLP_ENDPOINT. The layer's auto-instrumentation exports to the in-Lambda
-// collector on localhost, which forwards to the destination asynchronously — so the invocation is never
-// blocked on a remote endpoint. Pointing the SDK straight at the destination is what older connector versions
-// did, and it is why those two variables are removals here rather than omissions: instrumentationDiff reports
-// their presence as legacyExportVars.
-//
-// Note also what became removals: the three OTEL_*_EXPORTER variables, and the ODIGOS_OTLP_* pair. "otlp" is
-// already every SDK's default, so setting it restated the default three times per function; and the collector
-// is now configured by one inline document rather than by two odigos-namespaced variables it had to indirect
-// through. A customer who applied a previous version of this plan has both, so both are stated as removals
-// rather than dropped — an unmentioned variable is one nobody is told to clean up.
+// sharedLambdaEnv is the common export and identity configuration. The static
+// example enables all three signals; callers must set unwanted exporters to none
+// and remove the corresponding collector pipelines.
 func sharedLambdaEnv() []plan.EnvVar {
-	return []plan.EnvVar{
+	env := []plan.EnvVar{
 		{Name: EnvServiceName, Value: plan.PlaceholderServiceName, Merge: plan.MergeSet},
 		{Name: EnvCollectorConfigURI, Value: lambdaCollectorConfigTemplate(), Merge: plan.MergeSet},
 
-		// Absent means "the SDK default", which is what an accepted signal wants. The note explains the one
-		// case that needs a value: "none", for a signal the destination does not accept.
-		{Name: EnvTracesExporter, Merge: plan.MergeRemove},
-		{Name: EnvMetricsExporter, Merge: plan.MergeRemove},
-		{Name: EnvLogsExporter, Merge: plan.MergeRemove},
+		// Enabled exporters must be explicit; defaults vary between SDKs.
+		{Name: EnvTracesExporter, Value: exporterOTLP, Merge: plan.MergeSet},
+		{Name: EnvMetricsExporter, Value: exporterOTLP, Merge: plan.MergeSet},
+		{Name: EnvLogsExporter, Value: exporterOTLP, Merge: plan.MergeSet},
 
 		{Name: EnvCollectorEndpoint, Merge: plan.MergeRemove},
 		{Name: EnvCollectorInsecure, Merge: plan.MergeRemove},
@@ -201,6 +198,10 @@ func sharedLambdaEnv() []plan.EnvVar {
 		// its own value is reported as drifted. See the note.
 		{Name: EnvOtelLogLevel, Merge: plan.MergeRemove},
 	}
+	for _, key := range domaindest.SignalTransportOverrides() {
+		env = append(env, plan.EnvVar{Name: key, Merge: plan.MergeRemove})
+	}
+	return env
 }
 
 // lambdaCollectorConfigTemplate is the collector configuration a manual-mode customer applies, produced by

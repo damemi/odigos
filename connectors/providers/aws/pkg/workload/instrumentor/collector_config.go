@@ -55,6 +55,9 @@ func renderCollectorConfig(dest domaindest.OTLPTarget, headers map[string]string
 	}
 	pipelines := renderPipelines(dest, exporterNameFor(dest))
 	if pipelines == "" {
+		if dest.Profiles {
+			return "", fmt.Errorf("destination selects only profiles: the bundled Lambda layer cannot generate or forward OTLP profiles")
+		}
 		return "", fmt.Errorf("destination accepts no telemetry signals, so the collector would have no pipeline to build")
 	}
 
@@ -144,7 +147,7 @@ func renderHeaders(headers map[string]string) string {
 
 // renderPipelines builds a pipeline only for the signals the destination accepts. A signal with no pipeline
 // is refused at the receiver, which is the behavior we want: the SDK is told not to produce it either (see
-// exporterOverrideFor), and the two together mean an unaccepted signal is never generated, never exported,
+// applySignalExporters), and the two together mean an unaccepted signal is never generated, never exported,
 // and never a per-batch error against a backend that does not implement it.
 func renderPipelines(dest domaindest.OTLPTarget, exporterName string) string {
 	var parts []string

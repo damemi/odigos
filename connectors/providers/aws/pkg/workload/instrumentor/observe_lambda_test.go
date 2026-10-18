@@ -38,9 +38,13 @@ func conformantEnv() map[string]string {
 		store.EnvOdigosManaged: `{"v":1,"layer":"` + observedLayerARN + `"}`,
 		EnvServiceName:         "checkout",
 		EnvCollectorConfigURI:  observeCollectorCfg(),
-		EnvMetricsExporter:     exporterNone,
-		EnvLogsExporter:        exporterNone,
-		store.EnvExecWrapper:   execWrapperInstrument,
+		EnvTracesExporter:      exporterOTLP,
+		"OTEL_SDK_DISABLED":    "false",
+		EnvOtlpProtocol:        otlpProtocolHTTP,
+		"OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED": "false",
+		EnvMetricsExporter:   exporterNone,
+		EnvLogsExporter:      exporterNone,
+		store.EnvExecWrapper: execWrapperInstrument,
 	}
 }
 
@@ -211,10 +215,13 @@ func TestInstrumentationDiffWebServerMode(t *testing.T) {
 			store.EnvOdigosManaged: `{"v":1,"layer":"` + observedLayerARN + `"}`,
 			EnvServiceName:         "web",
 			EnvCollectorConfigURI:  observeCollectorCfg(),
-			EnvMetricsExporter:     exporterNone,
-			EnvLogsExporter:        exporterNone,
-			EnvPythonPath:          pythonInstrPath,
+			EnvTracesExporter:      exporterOTLP,
+			"OTEL_SDK_DISABLED":    "false",
 			EnvOtlpProtocol:        otlpProtocolHTTP,
+			"OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED": "false",
+			EnvMetricsExporter: exporterNone,
+			EnvLogsExporter:    exporterNone,
+			EnvPythonPath:      pythonInstrPath,
 		}
 	}
 	if !usesLambdaWebAdapter(layers) {
@@ -234,8 +241,8 @@ func TestInstrumentationDiffWebServerMode(t *testing.T) {
 	// Python's HTTP protocol pin removed: the loader is there but the SDK cannot export.
 	env = base()
 	delete(env, EnvOtlpProtocol)
-	if got := instrumentationDiff(true, fn, env, layers, observedLayerARN, observeDest, false, "web", observeCollectorCfg(), ""); !sameSet(got, []string{componentAgentLoaderConfig}) {
-		t.Errorf("missing protocol pin: diff = %v, want [%s]", got, componentAgentLoaderConfig)
+	if got := instrumentationDiff(true, fn, env, layers, observedLayerARN, observeDest, false, "web", observeCollectorCfg(), ""); !sameSet(got, []string{componentCollectorExport}) {
+		t.Errorf("missing protocol pin: diff = %v, want [%s]", got, componentCollectorExport)
 	}
 
 	// A handler-mode function must NOT be judged by web-server rules either: the exec wrapper is what it needs.
@@ -338,16 +345,8 @@ func TestLayerVerdictHonoursThePinnedVersion(t *testing.T) {
 	}
 }
 
-// TestExportedSignalsAreJudgedAsymmetrically pins the DIRECTION of the export-signal check, which is the whole
-// rule: a manually-instrumented function may export FEWER signals than its destination accepts, but never one
-// the destination does not accept.
-//
-// Both halves matter and they are not symmetric. Sending less than the destination could take is a legitimate
-// choice a customer's deployment definition is entitled to make, and reporting it as drift told them to "re-apply
-// the instrumentation" over a decision they made deliberately. Sending MORE is the harmful direction: the signal
-// has no pipeline to be received on, so every batch is refused and the in-Lambda collector retries it on an
-// exponential backoff inside billed duration.
-func TestExportedSignalsAreJudgedAsymmetrically(t *testing.T) {
+// Manual and managed instrumentation must match the full destination signal set.
+func TestExportedSignalsMustMatchDestination(t *testing.T) {
 	type sig struct{ traces, metrics, logs bool }
 
 	for _, c := range []struct {
@@ -357,8 +356,8 @@ func TestExportedSignalsAreJudgedAsymmetrically(t *testing.T) {
 		want  []string
 	}{
 		{"exact match", sig{true, false, false}, sig{true, false, false}, nil},
-		{"traces-only against an all-signal destination", sig{true, false, false}, sig{true, true, true}, nil},
-		{"traces+metrics against an all-signal destination", sig{true, true, false}, sig{true, true, true}, nil},
+		{"traces-only against an all-signal destination", sig{true, false, false}, sig{true, true, true}, []string{componentCollectorExport}},
+		{"traces+metrics against an all-signal destination", sig{true, true, false}, sig{true, true, true}, []string{componentCollectorExport}},
 		{"all three against an all-signal destination", sig{true, true, true}, sig{true, true, true}, nil},
 		// The harmful direction — a signal with no pipeline at the far end.
 		{"exports metrics and logs the destination refuses", sig{true, true, true}, sig{true, false, false}, []string{componentCollectorExport}},
@@ -383,6 +382,7 @@ func TestExportedSignalsAreJudgedAsymmetrically(t *testing.T) {
 				EnvCollectorConfigURI:  liveCfg,
 				store.EnvExecWrapper:   execWrapperInstrument,
 			}
+			applySignalActivation(env, liveDest, "python")
 			if !c.instr.traces {
 				env[EnvTracesExporter] = exporterNone
 			}
@@ -413,36 +413,6 @@ func TestExportedSignalsAreJudgedAsymmetrically(t *testing.T) {
 				t.Errorf("missing = %v, want %v", obs.Missing, c.want)
 			}
 		})
-	}
-}
-
-// TestNarrowingNeverWidensTheDestination guards the one way narrowToExportedSignals could do damage: it must
-// only ever REMOVE signals. If it could add one, a function would be judged against — and reported conformant
-// for — exporting a signal its destination cannot receive, which is the exact failure the asymmetry exists to
-// catch.
-func TestNarrowingNeverWidensTheDestination(t *testing.T) {
-	for _, dest := range []domaindest.OTLPTarget{
-		{Traces: true}, {Traces: true, Metrics: true}, {Traces: true, Metrics: true, Logs: true},
-		{Metrics: true}, {Logs: true},
-	} {
-		for _, env := range []map[string]string{
-			{},
-			{EnvTracesExporter: exporterNone},
-			{EnvMetricsExporter: exporterNone},
-			{EnvLogsExporter: exporterNone},
-			{EnvTracesExporter: exporterNone, EnvMetricsExporter: exporterNone},
-			{EnvTracesExporter: exporterNone, EnvMetricsExporter: exporterNone, EnvLogsExporter: exporterNone},
-		} {
-			got := narrowToExportedSignals(dest, env)
-			if got.Traces && !dest.Traces || got.Metrics && !dest.Metrics || got.Logs && !dest.Logs {
-				t.Errorf("narrowing widened the destination: dest=%+v env=%v -> %+v", dest, env, got)
-			}
-			// Everything that is not a signal must survive untouched, or the byte comparison downstream would be
-			// judging the function against a destination it was never pointed at.
-			if got.Endpoint != dest.Endpoint || got.HTTPEndpoint != dest.HTTPEndpoint || got.Insecure != dest.Insecure {
-				t.Errorf("narrowing altered the transport: %+v -> %+v", dest, got)
-			}
-		}
 	}
 }
 

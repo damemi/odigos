@@ -302,6 +302,14 @@ func (i *ECSFargateInstrumentor) Reconcile(ctx context.Context) error {
 }
 
 func workloadRoutingNote(routing domaindest.Routing) *baseapi.WorkloadRoutingNote {
+	if routing.Target.Profiles && routing.Outcome != domaindest.RoutingError {
+		note := routing.Target.CollectionSummary()
+		if routing.Note != "" {
+			note += " " + routing.Note
+		}
+		return &baseapi.WorkloadRoutingNote{Code: "collected-signals", Message: note, Transient: false}
+	}
+
 	if routing.Outcome == domaindest.RoutingError || routing.Reason == domaindest.ReasonRouted || routing.Note == "" {
 		return nil
 	}
@@ -384,7 +392,7 @@ func (i *ECSFargateInstrumentor) instrument(ctx context.Context, svc store.ECSSe
 			log.Warn("set fargate instrumented flag failed", "service", svc.ServiceName, "error", err)
 		}
 		i.clearECSPhase(ctx, svc)
-		if err := i.store.SetECSServiceRouting(ctx, svc.ClusterARN, svc.ServiceName, string(routing.Via), workloadRoutingNote(routing)); err != nil {
+		if err := i.store.SetECSServiceRouting(ctx, svc.ClusterARN, svc.ServiceName, string(routing.Via), fargateSignalRoutingNote(routing, targets)); err != nil {
 			log.Warn("set converged fargate route failed", "service", svc.ServiceName, "error", err)
 		}
 		return nil
@@ -438,7 +446,7 @@ func (i *ECSFargateInstrumentor) instrument(ctx context.Context, svc store.ECSSe
 	if err := i.store.SetECSServiceOdigosTaskDefinition(ctx, svc.ClusterARN, svc.ServiceName, newARN); err != nil {
 		log.Warn("set fargate odigos task definition failed", "service", svc.ServiceName, "error", err)
 	}
-	if err := i.store.SetECSServiceRouting(ctx, svc.ClusterARN, svc.ServiceName, string(routing.Via), workloadRoutingNote(routing)); err != nil {
+	if err := i.store.SetECSServiceRouting(ctx, svc.ClusterARN, svc.ServiceName, string(routing.Via), fargateSignalRoutingNote(routing, targets)); err != nil {
 		log.Warn("set fargate route failed", "service", svc.ServiceName, "error", err)
 	}
 	return nil

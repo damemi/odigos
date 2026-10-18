@@ -299,15 +299,14 @@ func TestInstrumentedLayerKeys(t *testing.T) {
 }
 
 // A traces-only destination (e.g. Jaeger) must disable metric/log export, or the collector hard-fails with
-// "Unimplemented ... MetricsService" on every batch. A SUPPORTED signal is left unset instead of being
-// pinned to "otlp", which is already the SDK default for all three.
+// "Unimplemented ... MetricsService" on every batch. Enabled signals are explicitly set to otlp.
 func TestApplyCollectorExportSignals(t *testing.T) {
 	tracesOnly := domaindest.OTLPTarget{Endpoint: "collector:4317", Insecure: true, Traces: true}
 	tracesCfg := mustRenderCollectorConfig(t, tracesOnly)
 	env := map[string]string{}
 	applyCollectorExport(env, tracesOnly, tracesCfg)
-	if _, ok := env[EnvTracesExporter]; ok {
-		t.Errorf("a supported signal must not restate the SDK default, got %q", env[EnvTracesExporter])
+	if env[EnvTracesExporter] != exporterOTLP {
+		t.Errorf("a supported signal must explicitly select otlp, got %q", env[EnvTracesExporter])
 	}
 	if env[EnvMetricsExporter] != exporterNone || env[EnvLogsExporter] != exporterNone {
 		t.Errorf("metrics/logs must be none for a traces-only destination: metrics=%q logs=%q", env[EnvMetricsExporter], env[EnvLogsExporter])
@@ -326,11 +325,11 @@ func TestApplyCollectorExportSignals(t *testing.T) {
 		t.Error("skip-check must detect that the destination now supports metrics/logs and re-instrument")
 	}
 	applyCollectorExport(env, full, fullCfg)
-	if _, ok := env[EnvMetricsExporter]; ok {
-		t.Errorf("metrics override must be removed once the destination accepts metrics: %v", env)
+	if env[EnvMetricsExporter] != exporterOTLP {
+		t.Errorf("metrics must select otlp once the destination accepts metrics: %v", env)
 	}
-	if _, ok := env[EnvLogsExporter]; ok {
-		t.Errorf("logs override must be removed once the destination accepts logs: %v", env)
+	if env[EnvLogsExporter] != exporterOTLP {
+		t.Errorf("logs must select otlp once the destination accepts logs: %v", env)
 	}
 }
 
@@ -457,6 +456,7 @@ func TestInstrumentedAsDesiredUsesReportedServiceName(t *testing.T) {
 	}
 	layers := []string{layerARN}
 
+	applySignalActivation(env, dest, "python")
 	if !inst.instrumentedAsDesired(false, fn, env, layers, layerARN, dest, false, "custom-service", cfg, "") {
 		t.Error("expected converged with custom reported service name")
 	}

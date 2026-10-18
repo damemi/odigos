@@ -1910,6 +1910,11 @@ setup:
               # "does not exist".
               AWS_LAMBDA_EXEC_WRAPPER = "<JAVA_LAMBDA_EXEC_WRAPPER>"
               OTEL_SERVICE_NAME       = "<ODIGOS_SOURCE_NAME>"
+              OTEL_SDK_DISABLED = "false"
+              OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"
+              OTEL_TRACES_EXPORTER = "otlp"
+              OTEL_METRICS_EXPORTER = "otlp"
+              OTEL_LOGS_EXPORTER = "otlp"
               # The in-Lambda collector's entire configuration. Substitute the two placeholders and change
               # nothing else — Odigos compares the whole value. The space after every colon is required.
               # The value, unescaped, is exactly:
@@ -1924,7 +1929,7 @@ setup:
               # enabled and against unset otherwise, so leave it unset unless debug telemetry is on — in which case
               # it must be exactly "debug".
               #
-              # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be UNSET for a signal your
+              # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be "otlp" for a signal your
               # destination accepts, and "none" for one it does not (also delete that signal's pipeline above).
             }
           }
@@ -1937,6 +1942,13 @@ setup:
         #
         #   JAVA_TOOL_OPTIONS = trimspace("${var.java_tool_options} -javaagent:/opt/opentelemetry-javaagent.jar")
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-lambda-cloudformation-java
       section: instrumentation:aws.lambda
       language: java
@@ -1969,6 +1981,11 @@ setup:
             # "does not exist".
             AWS_LAMBDA_EXEC_WRAPPER: "<JAVA_LAMBDA_EXEC_WRAPPER>"
             OTEL_SERVICE_NAME: "<ODIGOS_SOURCE_NAME>"
+            OTEL_SDK_DISABLED: "false"
+            OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+            OTEL_TRACES_EXPORTER: "otlp"
+            OTEL_METRICS_EXPORTER: "otlp"
+            OTEL_LOGS_EXPORTER: "otlp"
             # The in-Lambda collector's entire configuration. Substitute the two placeholders and change
             # nothing else — Odigos compares the whole value. The space after every colon is required.
             OPENTELEMETRY_COLLECTOR_CONFIG_URI: 'yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: "<OTLP_ENDPOINT>", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}'
@@ -1980,7 +1997,7 @@ setup:
             # enabled and against unset otherwise, so leave it unset unless debug telemetry is on — in which case
             # it must be exactly "debug".
             #
-            # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be UNSET for a signal your
+            # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be "otlp" for a signal your
             # destination accepts, and "none" for one it does not (also delete that signal's pipeline above).
 
         # WEB-SERVER ACTIVATION (AWS Lambda Web Adapter). The adapter owns AWS_LAMBDA_EXEC_WRAPPER: remove it
@@ -1990,6 +2007,13 @@ setup:
         #
         #   JAVA_TOOL_OPTIONS: "<YOUR_EXISTING_VALUE> -javaagent:/opt/opentelemetry-javaagent.jar"
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-lambda-aws-cli-java
       section: instrumentation:aws.lambda
       language: java
@@ -2031,6 +2055,11 @@ setup:
             "ODIGOS_IAC": "{\"v\":1,\"layer\":\"<OTEL_LAYER_ARN>\"}",
             "AWS_LAMBDA_EXEC_WRAPPER": "<WRAPPER>",
             "OTEL_SERVICE_NAME": "<ODIGOS_SOURCE_NAME>",
+            "OTEL_SDK_DISABLED": "false",
+            "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+            "OTEL_TRACES_EXPORTER": "otlp",
+            "OTEL_METRICS_EXPORTER": "otlp",
+            "OTEL_LOGS_EXPORTER": "otlp",
             "OPENTELEMETRY_COLLECTOR_CONFIG_URI": "yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: \"localhost:4317\"}, http: {endpoint: \"localhost:4318\"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: \"<OTLP_ENDPOINT>\", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}"
           }
         }
@@ -2057,7 +2086,7 @@ setup:
         # enabled and against unset otherwise, so leave it unset unless debug telemetry is on — in which case
         # it must be exactly "debug".
         #
-        # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be UNSET for a signal your
+        # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be "otlp" for a signal your
         # destination accepts, and "none" for one it does not (also delete that signal's pipeline above).
 
         # WEB-SERVER ACTIVATION (AWS Lambda Web Adapter). The adapter owns AWS_LAMBDA_EXEC_WRAPPER, so drop
@@ -2068,6 +2097,13 @@ setup:
         # JAVA_TOOL_OPTIONS is APPENDED — your value first, then ours, joined by a space.
         # --environment replaces the whole map, so include the value the function already had in it.
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-lambda-cdk-java
       section: instrumentation:aws.lambda
       language: java
@@ -2106,6 +2142,8 @@ setup:
         // left unset it falls back to the CDK CONSTRUCT ID rather than the deployed function name —
         // lambda.Function.functionName resolves to a CloudFormation Ref even when you set it explicitly, so
         // the package cannot read it. OTEL_SERVICE_NAME must match the workload's name in Odigos, so pass it.
+        // OTEL_SDK_DISABLED = false
+        // OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
         new OdigosLambdaInstrumentation(this, 'OdigosApi', {
           destination: {
             endpoint: '<OTLP_ENDPOINT>',      // OTLP/gRPC as host:port, no scheme
@@ -2164,11 +2202,10 @@ setup:
         The deprecated javaHandlerDistro option still selects the corresponding lightweight wrapper.
         Full-agent mode does not initialize the lightweight wrapper SDK.
 
-        Signals: destination.traces / metrics / logs default to true. Setting one false drops that pipeline
+        Signals: destination.traces defaults to true; metrics and logs default to false. Setting one false drops that pipeline
         from the configuration AND sets that signal's OTEL_TRACES_EXPORTER / OTEL_METRICS_EXPORTER /
         OTEL_LOGS_EXPORTER to "none" — which is exactly what this connector expects for a signal your
-        destination does not accept. Leave a signal enabled and its variable stays unset, because "otlp" is
-        already the SDK default. Turning all three off throws at synth.
+        destination does not accept. An enabled signal explicitly sets its exporter variable to "otlp". Turning all three off throws at synth.
 
         MUST NOT be set (Odigos compares each against unset, so a leftover value is reported as drift). The
         construct sets none of them; this list matters if an earlier attempt did:
@@ -2181,6 +2218,13 @@ setup:
         destination with all three signals on — this is what Odigos compares the live variable against:
           yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: "<OTLP_ENDPOINT>", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}
 
+        // Remove per-signal overrides so every signal follows this destination:
+        //   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        //   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        //   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-lambda-terraform-nodejs
       section: instrumentation:aws.lambda
       language: nodejs
@@ -2215,6 +2259,12 @@ setup:
               # "does not exist".
               AWS_LAMBDA_EXEC_WRAPPER = "/opt/otel-handler"
               OTEL_SERVICE_NAME       = "<ODIGOS_SOURCE_NAME>"
+              OTEL_SDK_DISABLED = "false"
+              OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"
+              OTEL_NODE_ENABLED_INSTRUMENTATIONS = "amqplib,bunyan,cassandra-driver,connect,dataloader,dns,express,fs,graphql,grpc,hapi,http,ioredis,kafkajs,knex,koa,memcached,mongodb,mongoose,mysql,mysql2,nestjs-core,net,pg,pino,redis,restify,socket.io,undici,winston"
+              OTEL_TRACES_EXPORTER = "otlp"
+              OTEL_METRICS_EXPORTER = "otlp"
+              OTEL_LOGS_EXPORTER = "otlp"
               # The in-Lambda collector's entire configuration. Substitute the two placeholders and change
               # nothing else — Odigos compares the whole value. The space after every colon is required.
               # The value, unescaped, is exactly:
@@ -2229,7 +2279,7 @@ setup:
               # enabled and against unset otherwise, so leave it unset unless debug telemetry is on — in which case
               # it must be exactly "debug".
               #
-              # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be UNSET for a signal your
+              # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be "otlp" for a signal your
               # destination accepts, and "none" for one it does not (also delete that signal's pipeline above).
             }
           }
@@ -2242,6 +2292,13 @@ setup:
         #
         #   NODE_OPTIONS = trimspace("${var.node_options} --import /opt/init.mjs")
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-lambda-cloudformation-nodejs
       section: instrumentation:aws.lambda
       language: nodejs
@@ -2273,6 +2330,12 @@ setup:
             # "does not exist".
             AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-handler"
             OTEL_SERVICE_NAME: "<ODIGOS_SOURCE_NAME>"
+            OTEL_SDK_DISABLED: "false"
+            OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+            OTEL_NODE_ENABLED_INSTRUMENTATIONS: "amqplib,bunyan,cassandra-driver,connect,dataloader,dns,express,fs,graphql,grpc,hapi,http,ioredis,kafkajs,knex,koa,memcached,mongodb,mongoose,mysql,mysql2,nestjs-core,net,pg,pino,redis,restify,socket.io,undici,winston"
+            OTEL_TRACES_EXPORTER: "otlp"
+            OTEL_METRICS_EXPORTER: "otlp"
+            OTEL_LOGS_EXPORTER: "otlp"
             # The in-Lambda collector's entire configuration. Substitute the two placeholders and change
             # nothing else — Odigos compares the whole value. The space after every colon is required.
             OPENTELEMETRY_COLLECTOR_CONFIG_URI: 'yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: "<OTLP_ENDPOINT>", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}'
@@ -2284,7 +2347,7 @@ setup:
             # enabled and against unset otherwise, so leave it unset unless debug telemetry is on — in which case
             # it must be exactly "debug".
             #
-            # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be UNSET for a signal your
+            # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be "otlp" for a signal your
             # destination accepts, and "none" for one it does not (also delete that signal's pipeline above).
 
         # WEB-SERVER ACTIVATION (AWS Lambda Web Adapter). The adapter owns AWS_LAMBDA_EXEC_WRAPPER: remove it
@@ -2294,6 +2357,13 @@ setup:
         #
         #   NODE_OPTIONS: "<YOUR_EXISTING_VALUE> --import /opt/init.mjs"
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-lambda-aws-cli-nodejs
       section: instrumentation:aws.lambda
       language: nodejs
@@ -2334,6 +2404,12 @@ setup:
             "ODIGOS_IAC": "{\"v\":1,\"layer\":\"<OTEL_LAYER_ARN>\"}",
             "AWS_LAMBDA_EXEC_WRAPPER": "<WRAPPER>",
             "OTEL_SERVICE_NAME": "<ODIGOS_SOURCE_NAME>",
+            "OTEL_SDK_DISABLED": "false",
+            "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+            "OTEL_NODE_ENABLED_INSTRUMENTATIONS": "amqplib,bunyan,cassandra-driver,connect,dataloader,dns,express,fs,graphql,grpc,hapi,http,ioredis,kafkajs,knex,koa,memcached,mongodb,mongoose,mysql,mysql2,nestjs-core,net,pg,pino,redis,restify,socket.io,undici,winston",
+            "OTEL_TRACES_EXPORTER": "otlp",
+            "OTEL_METRICS_EXPORTER": "otlp",
+            "OTEL_LOGS_EXPORTER": "otlp",
             "OPENTELEMETRY_COLLECTOR_CONFIG_URI": "yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: \"localhost:4317\"}, http: {endpoint: \"localhost:4318\"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: \"<OTLP_ENDPOINT>\", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}"
           }
         }
@@ -2360,7 +2436,7 @@ setup:
         # enabled and against unset otherwise, so leave it unset unless debug telemetry is on — in which case
         # it must be exactly "debug".
         #
-        # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be UNSET for a signal your
+        # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be "otlp" for a signal your
         # destination accepts, and "none" for one it does not (also delete that signal's pipeline above).
 
         # WEB-SERVER ACTIVATION (AWS Lambda Web Adapter). The adapter owns AWS_LAMBDA_EXEC_WRAPPER, so drop
@@ -2371,6 +2447,13 @@ setup:
         # NODE_OPTIONS is APPENDED — your value first, then ours, joined by a space.
         # --environment replaces the whole map, so include the value the function already had in it.
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-lambda-cdk-nodejs
       section: instrumentation:aws.lambda
       language: nodejs
@@ -2408,6 +2491,9 @@ setup:
         // left unset it falls back to the CDK CONSTRUCT ID rather than the deployed function name —
         // lambda.Function.functionName resolves to a CloudFormation Ref even when you set it explicitly, so
         // the package cannot read it. OTEL_SERVICE_NAME must match the workload's name in Odigos, so pass it.
+        // OTEL_SDK_DISABLED = false
+        // OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+        // OTEL_NODE_ENABLED_INSTRUMENTATIONS = amqplib,bunyan,cassandra-driver,connect,dataloader,dns,express,fs,graphql,grpc,hapi,http,ioredis,kafkajs,knex,koa,memcached,mongodb,mongoose,mysql,mysql2,nestjs-core,net,pg,pino,redis,restify,socket.io,undici,winston
         new OdigosLambdaInstrumentation(this, 'OdigosApi', {
           destination: {
             endpoint: '<OTLP_ENDPOINT>',      // OTLP/gRPC as host:port, no scheme
@@ -2456,11 +2542,10 @@ setup:
         read an environment variable back, and the construct's value is APPENDED to it, joined by a space, so without it yours is
         replaced. Applying HANDLER to a web-adapter function stops it serving.
 
-        Signals: destination.traces / metrics / logs default to true. Setting one false drops that pipeline
+        Signals: destination.traces defaults to true; metrics and logs default to false. Setting one false drops that pipeline
         from the configuration AND sets that signal's OTEL_TRACES_EXPORTER / OTEL_METRICS_EXPORTER /
         OTEL_LOGS_EXPORTER to "none" — which is exactly what this connector expects for a signal your
-        destination does not accept. Leave a signal enabled and its variable stays unset, because "otlp" is
-        already the SDK default. Turning all three off throws at synth.
+        destination does not accept. An enabled signal explicitly sets its exporter variable to "otlp". Turning all three off throws at synth.
 
         MUST NOT be set (Odigos compares each against unset, so a leftover value is reported as drift). The
         construct sets none of them; this list matters if an earlier attempt did:
@@ -2473,6 +2558,13 @@ setup:
         destination with all three signals on — this is what Odigos compares the live variable against:
           yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: "<OTLP_ENDPOINT>", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}
 
+        // Remove per-signal overrides so every signal follows this destination:
+        //   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        //   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        //   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-lambda-terraform-python
       section: instrumentation:aws.lambda
       language: python
@@ -2507,6 +2599,12 @@ setup:
               # "does not exist".
               AWS_LAMBDA_EXEC_WRAPPER = "/opt/otel-instrument"
               OTEL_SERVICE_NAME       = "<ODIGOS_SOURCE_NAME>"
+              OTEL_SDK_DISABLED = "false"
+              OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"
+              OTEL_TRACES_EXPORTER = "otlp"
+              OTEL_METRICS_EXPORTER = "otlp"
+              OTEL_LOGS_EXPORTER = "otlp"
+              OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED = "true"
               # The in-Lambda collector's entire configuration. Substitute the two placeholders and change
               # nothing else — Odigos compares the whole value. The space after every colon is required.
               # The value, unescaped, is exactly:
@@ -2521,7 +2619,7 @@ setup:
               # enabled and against unset otherwise, so leave it unset unless debug telemetry is on — in which case
               # it must be exactly "debug".
               #
-              # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be UNSET for a signal your
+              # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be "otlp" for a signal your
               # destination accepts, and "none" for one it does not (also delete that signal's pipeline above).
             }
           }
@@ -2539,6 +2637,13 @@ setup:
         # OTEL_EXPORTER_OTLP_PROTOCOL is pinned because the Python layer bundles only the HTTP OTLP exporter; the SDK
         # would otherwise default to gRPC and fail to load it.
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-lambda-cloudformation-python
       section: instrumentation:aws.lambda
       language: python
@@ -2570,6 +2675,12 @@ setup:
             # "does not exist".
             AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument"
             OTEL_SERVICE_NAME: "<ODIGOS_SOURCE_NAME>"
+            OTEL_SDK_DISABLED: "false"
+            OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+            OTEL_TRACES_EXPORTER: "otlp"
+            OTEL_METRICS_EXPORTER: "otlp"
+            OTEL_LOGS_EXPORTER: "otlp"
+            OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED: "true"
             # The in-Lambda collector's entire configuration. Substitute the two placeholders and change
             # nothing else — Odigos compares the whole value. The space after every colon is required.
             OPENTELEMETRY_COLLECTOR_CONFIG_URI: 'yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: "<OTLP_ENDPOINT>", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}'
@@ -2581,7 +2692,7 @@ setup:
             # enabled and against unset otherwise, so leave it unset unless debug telemetry is on — in which case
             # it must be exactly "debug".
             #
-            # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be UNSET for a signal your
+            # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be "otlp" for a signal your
             # destination accepts, and "none" for one it does not (also delete that signal's pipeline above).
 
         # WEB-SERVER ACTIVATION (AWS Lambda Web Adapter). The adapter owns AWS_LAMBDA_EXEC_WRAPPER: remove it
@@ -2592,6 +2703,13 @@ setup:
         #   PYTHONPATH: "/opt/python:/opt/python/opentelemetry/instrumentation/auto_instrumentation:/var/task:/var/task/site-packages:<YOUR_EXISTING_VALUE>"
         #   OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-lambda-aws-cli-python
       section: instrumentation:aws.lambda
       language: python
@@ -2632,6 +2750,12 @@ setup:
             "ODIGOS_IAC": "{\"v\":1,\"layer\":\"<OTEL_LAYER_ARN>\"}",
             "AWS_LAMBDA_EXEC_WRAPPER": "<WRAPPER>",
             "OTEL_SERVICE_NAME": "<ODIGOS_SOURCE_NAME>",
+            "OTEL_SDK_DISABLED": "false",
+            "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+            "OTEL_TRACES_EXPORTER": "otlp",
+            "OTEL_METRICS_EXPORTER": "otlp",
+            "OTEL_LOGS_EXPORTER": "otlp",
+            "OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED": "true",
             "OPENTELEMETRY_COLLECTOR_CONFIG_URI": "yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: \"localhost:4317\"}, http: {endpoint: \"localhost:4318\"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: \"<OTLP_ENDPOINT>\", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}"
           }
         }
@@ -2658,7 +2782,7 @@ setup:
         # enabled and against unset otherwise, so leave it unset unless debug telemetry is on — in which case
         # it must be exactly "debug".
         #
-        # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be UNSET for a signal your
+        # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be "otlp" for a signal your
         # destination accepts, and "none" for one it does not (also delete that signal's pipeline above).
 
         # WEB-SERVER ACTIVATION (AWS Lambda Web Adapter). The adapter owns AWS_LAMBDA_EXEC_WRAPPER, so drop
@@ -2671,6 +2795,13 @@ setup:
         # auto-instrumentation resolving your application's packages first and loading nothing.
         # --environment replaces the whole map, so include the value the function already had in it.
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-lambda-cdk-python
       section: instrumentation:aws.lambda
       language: python
@@ -2693,6 +2824,7 @@ setup:
 
         WHAT THE CONSTRUCT DOES for a Python function. It attaches the Python layer for the function's
         architecture, sets AWS_LAMBDA_EXEC_WRAPPER to /opt/otel-instrument, sets OTEL_SERVICE_NAME, renders
+        // OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED = true when destination.logs is enabled.
         OPENTELEMETRY_COLLECTOR_CONFIG_URI — the same renderer this connector uses, so the value matches byte for
         byte — and writes ODIGOS_IAC recording the layer it attached, which is what makes Odigos report the
         function as instrumented rather than as awaiting your deployment. Nothing below has to be added by hand.
@@ -2708,6 +2840,9 @@ setup:
         // left unset it falls back to the CDK CONSTRUCT ID rather than the deployed function name —
         // lambda.Function.functionName resolves to a CloudFormation Ref even when you set it explicitly, so
         // the package cannot read it. OTEL_SERVICE_NAME must match the workload's name in Odigos, so pass it.
+        // OTEL_SDK_DISABLED = false
+        // OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
+        // OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED = true when destination.logs is enabled.
         new OdigosLambdaInstrumentation(this, 'OdigosApi', {
           destination: {
             endpoint: '<OTLP_ENDPOINT>',      // OTLP/gRPC as host:port, no scheme
@@ -2757,11 +2892,10 @@ setup:
         read an environment variable back, and the construct's value is PREPENDED to it (the layer's packages must resolve first), so without it yours is
         replaced. Applying HANDLER to a web-adapter function stops it serving.
 
-        Signals: destination.traces / metrics / logs default to true. Setting one false drops that pipeline
+        Signals: destination.traces defaults to true; metrics and logs default to false. Setting one false drops that pipeline
         from the configuration AND sets that signal's OTEL_TRACES_EXPORTER / OTEL_METRICS_EXPORTER /
         OTEL_LOGS_EXPORTER to "none" — which is exactly what this connector expects for a signal your
-        destination does not accept. Leave a signal enabled and its variable stays unset, because "otlp" is
-        already the SDK default. Turning all three off throws at synth.
+        destination does not accept. An enabled signal explicitly sets its exporter variable to "otlp". Turning all three off throws at synth.
 
         MUST NOT be set (Odigos compares each against unset, so a leftover value is reported as drift). The
         construct sets none of them; this list matters if an earlier attempt did:
@@ -2774,6 +2908,13 @@ setup:
         destination with all three signals on — this is what Odigos compares the live variable against:
           yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: "<OTLP_ENDPOINT>", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}
 
+        // Remove per-signal overrides so every signal follows this destination:
+        //   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        //   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        //   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-lambda-terraform-ruby
       section: instrumentation:aws.lambda
       language: ruby
@@ -2807,6 +2948,11 @@ setup:
               # "does not exist".
               AWS_LAMBDA_EXEC_WRAPPER = "/opt/otel-handler"
               OTEL_SERVICE_NAME       = "<ODIGOS_SOURCE_NAME>"
+              OTEL_SDK_DISABLED = "false"
+              OTEL_EXPORTER_OTLP_PROTOCOL = "http/protobuf"
+              OTEL_TRACES_EXPORTER = "otlp"
+              OTEL_METRICS_EXPORTER = "otlp"
+              OTEL_LOGS_EXPORTER = "otlp"
               # The in-Lambda collector's entire configuration. Substitute the two placeholders and change
               # nothing else — Odigos compares the whole value. The space after every colon is required.
               # The value, unescaped, is exactly:
@@ -2821,7 +2967,7 @@ setup:
               # enabled and against unset otherwise, so leave it unset unless debug telemetry is on — in which case
               # it must be exactly "debug".
               #
-              # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be UNSET for a signal your
+              # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be "otlp" for a signal your
               # destination accepts, and "none" for one it does not (also delete that signal's pipeline above).
             }
           }
@@ -2837,6 +2983,13 @@ setup:
         # another language's loader here either — the adapter already owns AWS_LAMBDA_EXEC_WRAPPER, and setting
         # it on such a function stops it serving.
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-lambda-cloudformation-ruby
       section: instrumentation:aws.lambda
       language: ruby
@@ -2867,6 +3020,11 @@ setup:
             # "does not exist".
             AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-handler"
             OTEL_SERVICE_NAME: "<ODIGOS_SOURCE_NAME>"
+            OTEL_SDK_DISABLED: "false"
+            OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+            OTEL_TRACES_EXPORTER: "otlp"
+            OTEL_METRICS_EXPORTER: "otlp"
+            OTEL_LOGS_EXPORTER: "otlp"
             # The in-Lambda collector's entire configuration. Substitute the two placeholders and change
             # nothing else — Odigos compares the whole value. The space after every colon is required.
             OPENTELEMETRY_COLLECTOR_CONFIG_URI: 'yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: "<OTLP_ENDPOINT>", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}'
@@ -2878,7 +3036,7 @@ setup:
             # enabled and against unset otherwise, so leave it unset unless debug telemetry is on — in which case
             # it must be exactly "debug".
             #
-            # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be UNSET for a signal your
+            # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be "otlp" for a signal your
             # destination accepts, and "none" for one it does not (also delete that signal's pipeline above).
 
         # THERE IS NO WEB-SERVER ACTIVATION FOR RUBY. The other runtimes can be instrumented behind the AWS
@@ -2891,6 +3049,13 @@ setup:
         # another language's loader here either — the adapter already owns AWS_LAMBDA_EXEC_WRAPPER, and setting
         # it on such a function stops it serving.
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-lambda-aws-cli-ruby
       section: instrumentation:aws.lambda
       language: ruby
@@ -2931,6 +3096,11 @@ setup:
             "ODIGOS_IAC": "{\"v\":1,\"layer\":\"<OTEL_LAYER_ARN>\"}",
             "AWS_LAMBDA_EXEC_WRAPPER": "<WRAPPER>",
             "OTEL_SERVICE_NAME": "<ODIGOS_SOURCE_NAME>",
+            "OTEL_SDK_DISABLED": "false",
+            "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+            "OTEL_TRACES_EXPORTER": "otlp",
+            "OTEL_METRICS_EXPORTER": "otlp",
+            "OTEL_LOGS_EXPORTER": "otlp",
             "OPENTELEMETRY_COLLECTOR_CONFIG_URI": "yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: \"localhost:4317\"}, http: {endpoint: \"localhost:4318\"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: \"<OTLP_ENDPOINT>\", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}"
           }
         }
@@ -2957,7 +3127,7 @@ setup:
         # enabled and against unset otherwise, so leave it unset unless debug telemetry is on — in which case
         # it must be exactly "debug".
         #
-        # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be UNSET for a signal your
+        # OTEL_TRACES_EXPORTER, OTEL_METRICS_EXPORTER and OTEL_LOGS_EXPORTER must be "otlp" for a signal your
         # destination accepts, and "none" for one it does not (also delete that signal's pipeline above).
 
         # THERE IS NO WEB-SERVER ACTIVATION FOR RUBY. The other runtimes can be instrumented behind the AWS
@@ -2970,6 +3140,13 @@ setup:
         # another language's loader here either — the adapter already owns AWS_LAMBDA_EXEC_WRAPPER, and setting
         # it on such a function stops it serving.
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-lambda-cdk-ruby
       section: instrumentation:aws.lambda
       language: ruby
@@ -3007,6 +3184,8 @@ setup:
         // left unset it falls back to the CDK CONSTRUCT ID rather than the deployed function name —
         // lambda.Function.functionName resolves to a CloudFormation Ref even when you set it explicitly, so
         // the package cannot read it. OTEL_SERVICE_NAME must match the workload's name in Odigos, so pass it.
+        // OTEL_SDK_DISABLED = false
+        // OTEL_EXPORTER_OTLP_PROTOCOL = http/protobuf
         new OdigosLambdaInstrumentation(this, 'OdigosApi', {
           destination: {
             endpoint: '<OTLP_ENDPOINT>',      // OTLP/gRPC as host:port, no scheme
@@ -3049,11 +3228,10 @@ setup:
         Ruby function behind the AWS Lambda Web Adapter cannot be instrumented, and the construct throws rather
         than attaching an activation that would stop the function serving.
 
-        Signals: destination.traces / metrics / logs default to true. Setting one false drops that pipeline
+        Signals: destination.traces defaults to true; metrics and logs default to false. Setting one false drops that pipeline
         from the configuration AND sets that signal's OTEL_TRACES_EXPORTER / OTEL_METRICS_EXPORTER /
         OTEL_LOGS_EXPORTER to "none" — which is exactly what this connector expects for a signal your
-        destination does not accept. Leave a signal enabled and its variable stays unset, because "otlp" is
-        already the SDK default. Turning all three off throws at synth.
+        destination does not accept. An enabled signal explicitly sets its exporter variable to "otlp". Turning all three off throws at synth.
 
         MUST NOT be set (Odigos compares each against unset, so a leftover value is reported as drift). The
         construct sets none of them; this list matters if an earlier attempt did:
@@ -3066,6 +3244,13 @@ setup:
         destination with all three signals on — this is what Odigos compares the live variable against:
           yaml:{receivers: {otlp: {protocols: {grpc: {endpoint: "localhost:4317"}, http: {endpoint: "localhost:4318"}}}}, processors: {memory_limiter: {check_interval: 1s, limit_percentage: 50, spike_limit_percentage: 20}, batch: {send_batch_size: 512, timeout: 200ms}, decouple: null}, exporters: {otlp: {endpoint: "<OTLP_ENDPOINT>", tls: {insecure: <OTLP_INSECURE>}}}, service: {telemetry: {metrics: {level: none}}, pipelines: {traces: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, metrics: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}, logs: {receivers: [otlp], processors: [memory_limiter, batch, decouple], exporters: [otlp]}}}}
 
+        // Remove per-signal overrides so every signal follows this destination:
+        //   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        //   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        //   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-terraform-java
       section: instrumentation:aws.fargate-task
       language: java
@@ -3134,6 +3319,7 @@ setup:
                 { name = "OTEL_TRACES_EXPORTER", value = "otlp" },
                 { name = "OTEL_METRICS_EXPORTER", value = "otlp" },
                 { name = "OTEL_LOGS_EXPORTER", value = "otlp" },
+                { name = "OTEL_SDK_DISABLED", value = "false" },
 
                 # --- Java activation ---
                 # Keep whatever the container already carries and add ours after it, joined by a space.
@@ -3146,6 +3332,13 @@ setup:
           ])
         }
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-cloudformation-java
       section: instrumentation:aws.fargate-task
       language: java
@@ -3210,12 +3403,21 @@ setup:
                 Value: "otlp"
               - Name: OTEL_LOGS_EXPORTER
                 Value: "otlp"
+              - Name: OTEL_SDK_DISABLED
+                Value: "false"
               # --- Java activation ---
               # APPEND — CloudFormation cannot read a variable back; fold your value in by hand.
               - Name: JAVA_TOOL_OPTIONS
                 Value: "<YOUR_EXISTING_VALUE> -javaagent:/var/odigos/java/javaagent.jar"
               # Do NOT set OTEL_LOG_LEVEL: compared against unset, so a value is reported as drift.
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-cdk-java
       section: instrumentation:aws.fargate-task
       language: java
@@ -3268,9 +3470,17 @@ setup:
           OTEL_TRACES_EXPORTER        = otlp
           OTEL_METRICS_EXPORTER       = otlp
           OTEL_LOGS_EXPORTER          = otlp
+          OTEL_SDK_DISABLED = false
           JAVA_TOOL_OPTIONS           = <existing> -javaagent:/var/odigos/java/javaagent.jar
               # APPEND — joined by a space
 
+        // Remove per-signal overrides so every signal follows this destination:
+        //   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        //   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        //   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-terraform-python
       section: instrumentation:aws.fargate-task
       language: python
@@ -3339,6 +3549,8 @@ setup:
                 { name = "OTEL_TRACES_EXPORTER", value = "otlp" },
                 { name = "OTEL_METRICS_EXPORTER", value = "otlp" },
                 { name = "OTEL_LOGS_EXPORTER", value = "otlp" },
+                { name = "OTEL_SDK_DISABLED", value = "false" },
+                { name = "OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED", value = "true" },
 
                 # --- Python activation ---
                 { name = "OTEL_PYTHON_CONFIGURATOR", value = "odigos-python-configurator" },
@@ -3352,6 +3564,13 @@ setup:
           ])
         }
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-cloudformation-python
       section: instrumentation:aws.fargate-task
       language: python
@@ -3416,6 +3635,10 @@ setup:
                 Value: "otlp"
               - Name: OTEL_LOGS_EXPORTER
                 Value: "otlp"
+              - Name: OTEL_SDK_DISABLED
+                Value: "false"
+              - Name: OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED
+                Value: "true"
               # --- Python activation ---
               - Name: OTEL_PYTHON_CONFIGURATOR
                 Value: "odigos-python-configurator"
@@ -3424,6 +3647,13 @@ setup:
                 Value: "<YOUR_EXISTING_VALUE>:/var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation"
               # Do NOT set OTEL_LOG_LEVEL: compared against unset, so a value is reported as drift.
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-cdk-python
       section: instrumentation:aws.fargate-task
       language: python
@@ -3476,10 +3706,19 @@ setup:
           OTEL_TRACES_EXPORTER        = otlp
           OTEL_METRICS_EXPORTER       = otlp
           OTEL_LOGS_EXPORTER          = otlp
+          OTEL_SDK_DISABLED = false
+          OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED = true
           OTEL_PYTHON_CONFIGURATOR    = odigos-python-configurator
           PYTHONPATH                  = <existing>:/var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation
               # APPEND — joined by :
 
+        // Remove per-signal overrides so every signal follows this destination:
+        //   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        //   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        //   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-terraform-nodejs
       section: instrumentation:aws.fargate-task
       language: nodejs
@@ -3548,6 +3787,7 @@ setup:
                 { name = "OTEL_TRACES_EXPORTER", value = "otlp" },
                 { name = "OTEL_METRICS_EXPORTER", value = "otlp" },
                 { name = "OTEL_LOGS_EXPORTER", value = "otlp" },
+                { name = "OTEL_SDK_DISABLED", value = "false" },
 
                 # --- Node.js activation ---
                 # Keep whatever the container already carries and add ours after it, joined by a space.
@@ -3560,6 +3800,13 @@ setup:
           ])
         }
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-cloudformation-nodejs
       section: instrumentation:aws.fargate-task
       language: nodejs
@@ -3624,12 +3871,21 @@ setup:
                 Value: "otlp"
               - Name: OTEL_LOGS_EXPORTER
                 Value: "otlp"
+              - Name: OTEL_SDK_DISABLED
+                Value: "false"
               # --- Node.js activation ---
               # APPEND — CloudFormation cannot read a variable back; fold your value in by hand.
               - Name: NODE_OPTIONS
                 Value: "<YOUR_EXISTING_VALUE> --require /var/odigos/nodejs/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js"
               # Do NOT set OTEL_LOG_LEVEL: compared against unset, so a value is reported as drift.
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-cdk-nodejs
       section: instrumentation:aws.fargate-task
       language: nodejs
@@ -3682,9 +3938,17 @@ setup:
           OTEL_TRACES_EXPORTER        = otlp
           OTEL_METRICS_EXPORTER       = otlp
           OTEL_LOGS_EXPORTER          = otlp
+          OTEL_SDK_DISABLED = false
           NODE_OPTIONS                = <existing> --require /var/odigos/nodejs/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js
               # APPEND — joined by a space
 
+        // Remove per-signal overrides so every signal follows this destination:
+        //   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        //   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        //   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-terraform-dotnet
       section: instrumentation:aws.fargate-task
       language: dotnet
@@ -3753,6 +4017,7 @@ setup:
                 { name = "OTEL_TRACES_EXPORTER", value = "otlp" },
                 { name = "OTEL_METRICS_EXPORTER", value = "otlp" },
                 { name = "OTEL_LOGS_EXPORTER", value = "otlp" },
+                { name = "OTEL_SDK_DISABLED", value = "false" },
 
                 # --- .NET activation ---
                 { name = "CORECLR_ENABLE_PROFILING", value = "1" },
@@ -3767,6 +4032,13 @@ setup:
           ])
         }
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-cloudformation-dotnet
       section: instrumentation:aws.fargate-task
       language: dotnet
@@ -3831,6 +4103,8 @@ setup:
                 Value: "otlp"
               - Name: OTEL_LOGS_EXPORTER
                 Value: "otlp"
+              - Name: OTEL_SDK_DISABLED
+                Value: "false"
               # --- .NET activation ---
               - Name: CORECLR_ENABLE_PROFILING
                 Value: "1"
@@ -3844,6 +4118,13 @@ setup:
                 Value: "/var/odigos/dotnet/net/OpenTelemetry.AutoInstrumentation.StartupHook.dll"
               # Do NOT set OTEL_LOG_LEVEL: compared against unset, so a value is reported as drift.
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-cdk-dotnet
       section: instrumentation:aws.fargate-task
       language: dotnet
@@ -3896,12 +4177,20 @@ setup:
           OTEL_TRACES_EXPORTER        = otlp
           OTEL_METRICS_EXPORTER       = otlp
           OTEL_LOGS_EXPORTER          = otlp
+          OTEL_SDK_DISABLED = false
           CORECLR_ENABLE_PROFILING    = 1
           CORECLR_PROFILER            = {918728DD-259F-4A6A-AC2B-B85E1B658318}
           CORECLR_PROFILER_PATH       = /var/odigos/dotnet/linux-glibc/OpenTelemetry.AutoInstrumentation.Native.so
           OTEL_DOTNET_AUTO_HOME       = /var/odigos/dotnet
           DOTNET_STARTUP_HOOKS        = /var/odigos/dotnet/net/OpenTelemetry.AutoInstrumentation.StartupHook.dll
 
+        // Remove per-signal overrides so every signal follows this destination:
+        //   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        //   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        //   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-terraform-php
       section: instrumentation:aws.fargate-task
       language: php
@@ -3970,6 +4259,7 @@ setup:
                 { name = "OTEL_TRACES_EXPORTER", value = "otlp" },
                 { name = "OTEL_METRICS_EXPORTER", value = "otlp" },
                 { name = "OTEL_LOGS_EXPORTER", value = "otlp" },
+                { name = "OTEL_SDK_DISABLED", value = "false" },
 
                 # --- PHP activation ---
                 { name = "PHP_INI_SCAN_DIR", value = ":/var/odigos/php/<RUNTIME_VERSION>" },
@@ -3982,6 +4272,13 @@ setup:
           ])
         }
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-cloudformation-php
       section: instrumentation:aws.fargate-task
       language: php
@@ -4046,6 +4343,8 @@ setup:
                 Value: "otlp"
               - Name: OTEL_LOGS_EXPORTER
                 Value: "otlp"
+              - Name: OTEL_SDK_DISABLED
+                Value: "false"
               # --- PHP activation ---
               - Name: PHP_INI_SCAN_DIR
                 Value: ":/var/odigos/php/<RUNTIME_VERSION>"
@@ -4055,6 +4354,13 @@ setup:
                 Value: "tracecontext,baggage"
               # Do NOT set OTEL_LOG_LEVEL: compared against unset, so a value is reported as drift.
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-cdk-php
       section: instrumentation:aws.fargate-task
       language: php
@@ -4109,10 +4415,18 @@ setup:
           OTEL_TRACES_EXPORTER        = otlp
           OTEL_METRICS_EXPORTER       = otlp
           OTEL_LOGS_EXPORTER          = otlp
+          OTEL_SDK_DISABLED = false
           PHP_INI_SCAN_DIR            = :/var/odigos/php/<RUNTIME_VERSION>
           OTEL_PHP_AUTOLOAD_ENABLED   = true
           OTEL_PROPAGATORS            = tracecontext,baggage
 
+        // Remove per-signal overrides so every signal follows this destination:
+        //   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        //   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        //   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-terraform-ruby
       section: instrumentation:aws.fargate-task
       language: ruby
@@ -4181,6 +4495,7 @@ setup:
                 { name = "OTEL_TRACES_EXPORTER", value = "otlp" },
                 { name = "OTEL_METRICS_EXPORTER", value = "otlp" },
                 { name = "OTEL_LOGS_EXPORTER", value = "otlp" },
+                { name = "OTEL_SDK_DISABLED", value = "false" },
 
                 # --- Ruby activation ---
                 { name = "RUBYOPT", value = "-r/var/odigos/ruby/<RUNTIME_VERSION>/index.rb" },
@@ -4193,6 +4508,13 @@ setup:
           ])
         }
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-cloudformation-ruby
       section: instrumentation:aws.fargate-task
       language: ruby
@@ -4257,6 +4579,8 @@ setup:
                 Value: "otlp"
               - Name: OTEL_LOGS_EXPORTER
                 Value: "otlp"
+              - Name: OTEL_SDK_DISABLED
+                Value: "false"
               # --- Ruby activation ---
               - Name: RUBYOPT
                 Value: "-r/var/odigos/ruby/<RUNTIME_VERSION>/index.rb"
@@ -4266,6 +4590,13 @@ setup:
                 Value: "tracecontext,baggage"
               # Do NOT set OTEL_LOG_LEVEL: compared against unset, so a value is reported as drift.
 
+        # Remove per-signal overrides so every signal follows this destination:
+        #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        #   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
     - id: instrument-fargate-cdk-ruby
       section: instrumentation:aws.fargate-task
       language: ruby
@@ -4320,9 +4651,18 @@ setup:
           OTEL_TRACES_EXPORTER        = otlp
           OTEL_METRICS_EXPORTER       = otlp
           OTEL_LOGS_EXPORTER          = otlp
+          OTEL_SDK_DISABLED = false
           RUBYOPT                     = -r/var/odigos/ruby/<RUNTIME_VERSION>/index.rb
           ODIGOS_GEM_PATH             = /var/odigos/ruby/<RUNTIME_VERSION>/bundle
           OTEL_PROPAGATORS            = tracecontext,baggage
+
+        // Remove per-signal overrides so every signal follows this destination:
+        //   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT  OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_TRACES_HEADERS  OTEL_EXPORTER_OTLP_TRACES_INSECURE
+        //   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT  OTEL_EXPORTER_OTLP_METRICS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_METRICS_HEADERS  OTEL_EXPORTER_OTLP_METRICS_INSECURE
+        //   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
+        //   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
 
 # gateway: connector-wide regional Collector wiring; not part of either domain. Fargate services and
 # VPC-attached Lambda functions are routed here when a same-region marker exists and the host/consumer

@@ -2,6 +2,7 @@ package instrumentor
 
 import (
 	"fmt"
+	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 	"sort"
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
@@ -121,6 +122,11 @@ func desiredFargateEnv(recipe agentRecipe) []plan.EnvVar {
 		// Explicit removal: containerDiff expects this gone unless debug-telemetry is on.
 		{Name: EnvOtelLogLevel, Merge: plan.MergeRemove},
 	}
+	for key, value := range (domaindest.OTLPTarget{Traces: true, Metrics: true, Logs: true}).SignalActivation(recipe.lang) {
+		if key != EnvTracesExporter && key != EnvMetricsExporter && key != EnvLogsExporter {
+			env = append(env, plan.EnvVar{Name: key, Value: value, Merge: plan.MergeSet})
+		}
+	}
 	for k, v := range recipe.staticEnv {
 		env = append(env, plan.EnvVar{Name: k, Value: v, Merge: plan.MergeSet})
 	}
@@ -133,6 +139,9 @@ func desiredFargateEnv(recipe agentRecipe) []plan.EnvVar {
 			Merge:     plan.MergeAppend,
 			Separator: a.separator(),
 		})
+	}
+	for _, key := range domaindest.SignalTransportOverrides() {
+		env = append(env, plan.EnvVar{Name: key, Merge: plan.MergeRemove})
 	}
 	return env
 }

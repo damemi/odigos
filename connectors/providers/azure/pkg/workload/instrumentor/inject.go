@@ -167,10 +167,7 @@ func rollbackInstrumentation(app *armappcontainers.ContainerApp) bool {
 func appOwned(app *armappcontainers.ContainerApp) bool { return ownedContainer(app) != nil }
 
 func exporterFor(supported bool) string {
-	if supported {
-		return exporterOTLP
-	}
-	return exporterNone
+	return domaindest.ExporterFor(supported)
 }
 
 func otlpEndpointURL(dest domaindest.OTLPTarget) string {

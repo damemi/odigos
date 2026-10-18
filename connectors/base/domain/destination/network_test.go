@@ -249,3 +249,12 @@ func TestReadinessIsALatchNotAHealthCheck(t *testing.T) {
 		t.Errorf("a second resolution of the same state differed: %+v", again)
 	}
 }
+
+func TestProfilesIntentSurvivesRegionalRouting(t *testing.T) {
+	const region = "eu-west-1"
+	dests := []Destination{vendorDestination(SignalProfiles), marker(region)}
+	route := ResolveRoutingForRegion(dests, []CollectorTarget{regionalCollector(region, "vpc-host")}, region, "vpc-host", ReachabilityReachable)
+	if !route.Target.Profiles || route.Target.Traces {
+		t.Fatalf("routing changed profiles-only selection: %+v", route.Target)
+	}
+}

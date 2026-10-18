@@ -137,6 +137,7 @@ func ResolveRoutingForRegion(dests []Destination, collectors []CollectorTarget, 
 			Traces:       signals.Traces,
 			Metrics:      signals.Metrics,
 			Logs:         signals.Logs,
+			Profiles:     signals.Profiles,
 		},
 		Found:   true,
 		Via:     RouteCollector,
@@ -190,6 +191,8 @@ func targetForSignals(signals []string) OTLPTarget {
 			target.Metrics = true
 		case SignalLogs:
 			target.Logs = true
+		case SignalProfiles:
+			target.Profiles = true
 		}
 	}
 	return target

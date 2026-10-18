@@ -230,7 +230,7 @@ func (i *LambdaInstrumentor) Reconcile(ctx context.Context) error {
 			// Publish or clear the fallback explanation immediately, but retain the last applied Via until the
 			// configuration is confirmed or AWS accepts the update. A failed/deferred update must not claim a
 			// route that is not yet live.
-			if serr := i.store.SetLambdaRouting(ctx, fn.FunctionARN, fn.RoutingVia, workloadRoutingNote(routing)); serr != nil {
+			if serr := i.store.SetLambdaRouting(ctx, fn.FunctionARN, fn.RoutingVia, lambdaSignalRoutingNote(routing, fn.Runtime)); serr != nil {
 				log.Warn("set lambda routing note failed", "function", fn.FunctionName, "error", serr)
 			}
 			if err := i.instrument(ctx, fn, routing.Target, routing.Headers, enabled[fn.FunctionARN]); err != nil {
@@ -243,7 +243,7 @@ func (i *LambdaInstrumentor) Reconcile(ctx context.Context) error {
 				i.recordCutover(ctx, fn, routing, err)
 			} else {
 				_ = i.store.ClearLambdaInstrumentationError(ctx, fn.FunctionARN)
-				if serr := i.store.SetLambdaRouting(ctx, fn.FunctionARN, string(routing.Via), workloadRoutingNote(routing)); serr != nil {
+				if serr := i.store.SetLambdaRouting(ctx, fn.FunctionARN, string(routing.Via), lambdaSignalRoutingNote(routing, fn.Runtime)); serr != nil {
 					log.Warn("set lambda routing after converge failed", "function", fn.FunctionName, "error", serr)
 				}
 				i.recordCutover(ctx, fn, routing, nil)
@@ -422,10 +422,7 @@ type enabledLambdaSource struct {
 // per-signal support decision itself is connector-wide — resolved by the base from the destination's
 // signals (see base/domain/destination.ResolveOTLPTarget, exposed via store.OTLPExportTarget).
 func exporterFor(supported bool) string {
-	if supported {
-		return exporterOTLP
-	}
-	return exporterNone
+	return domaindest.ExporterFor(supported)
 }
 
 func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunction, dest domaindest.OTLPTarget, destHeaders map[string]string, src enabledLambdaSource) error {
@@ -609,6 +606,7 @@ func applyHandlerEnv(env map[string]string, runtime, distro, serviceName string,
 	env[store.EnvExecWrapper] = execWrapperForRuntime(runtime, distro)
 	env[EnvServiceName] = serviceName
 	applyCollectorExport(env, dest, collectorCfg)
+	applySignalActivation(env, dest, LanguageFromRuntime(runtime))
 	if debug {
 		env[EnvOtelLogLevel] = otelLogLevelDebug
 	} else {
@@ -641,6 +639,7 @@ func applyWebServerEnv(env map[string]string, manifest managedManifest, lang, se
 	}
 	env[EnvServiceName] = serviceName
 	applyCollectorExport(env, dest, collectorCfg)
+	applySignalActivation(env, dest, lang)
 	delete(env, envLegacyOTLPEndpoint)
 	delete(env, envLegacyOTLPHeaders)
 	delete(env, EnvOtelLogLevel)
@@ -655,39 +654,18 @@ func applyWebServerEnv(env map[string]string, manifest managedManifest, lang, se
 func applyCollectorExport(env map[string]string, dest domaindest.OTLPTarget, collectorCfg string) {
 	env[EnvCollectorConfigURI] = collectorCfg
 	applySignalExporters(env, dest)
+	for _, key := range domaindest.SignalTransportOverrides() {
+		delete(env, key)
+	}
 	delete(env, EnvCollectorEndpoint)
 	delete(env, EnvCollectorInsecure)
 }
 
-// applySignalExporters disables the signals the destination does not accept and says nothing about the ones
-// it does.
-//
-// Only the "none" side is written, because "otlp" is already every OpenTelemetry SDK's default for all three
-// signals — setting it restated the default in three variables on every function. The "none" side genuinely
-// earns its place: the rendered collector config builds no pipeline for an unaccepted signal, so a signal the
-// SDK still produced would be refused at the receiver on every batch.
+// applySignalExporters applies the base connector's explicit signal policy.
 func applySignalExporters(env map[string]string, dest domaindest.OTLPTarget) {
-	setOrDelete(env, EnvTracesExporter, exporterOverrideFor(dest.Traces))
-	setOrDelete(env, EnvMetricsExporter, exporterOverrideFor(dest.Metrics))
-	setOrDelete(env, EnvLogsExporter, exporterOverrideFor(dest.Logs))
-}
-
-// exporterOverrideFor returns the value a signal's OTEL_*_EXPORTER must hold: "none" to suppress a signal the
-// destination does not accept, or "" meaning the variable must be ABSENT because the SDK's own default is
-// already what we want.
-func exporterOverrideFor(supported bool) string {
-	if supported {
-		return ""
+	for key, value := range dest.SignalActivation("") {
+		env[key] = value
 	}
-	return exporterNone
-}
-
-func setOrDelete(env map[string]string, key, value string) {
-	if value == "" {
-		delete(env, key)
-		return
-	}
-	env[key] = value
 }
 
 // collectorExportAsDesired reports whether the rendered collector config and the per-signal exporter
@@ -705,9 +683,9 @@ func collectorExportAsDesired(env map[string]string, dest domaindest.OTLPTarget,
 		return false
 	}
 	return env[EnvCollectorConfigURI] == collectorCfg &&
-		env[EnvTracesExporter] == exporterOverrideFor(dest.Traces) &&
-		env[EnvMetricsExporter] == exporterOverrideFor(dest.Metrics) &&
-		env[EnvLogsExporter] == exporterOverrideFor(dest.Logs)
+		env[EnvTracesExporter] == exporterFor(dest.Traces) &&
+		env[EnvMetricsExporter] == exporterFor(dest.Metrics) &&
+		env[EnvLogsExporter] == exporterFor(dest.Logs)
 }
 
 // Local names for the components the diffs below report. They are ALIASES of the base's vocabulary
@@ -759,7 +737,7 @@ func instrumentationDiff(webServer bool, fn store.LambdaFunction, env map[string
 	if env[EnvServiceName] != reportedServiceName {
 		diff = append(diff, componentServiceName)
 	}
-	if !collectorExportAsDesired(env, dest, collectorCfg) {
+	if !collectorExportAsDesired(env, dest, collectorCfg) || !dest.LambdaSignalConfigurationMatches(env, LanguageFromRuntime(fn.Runtime)) {
 		diff = append(diff, componentCollectorExport)
 	}
 	// An empty desired ARN means the layer could not be resolved read-only. The caller decides what that
@@ -778,12 +756,6 @@ func instrumentationDiff(webServer bool, fn store.LambdaFunction, env map[string
 	}
 	if webServer {
 		lang := LanguageFromRuntime(fn.Runtime)
-		for k, v := range webServerExtraEnv(lang) {
-			if env[k] != v {
-				diff = append(diff, componentAgentLoaderConfig)
-				break
-			}
-		}
 		if !webServerLoaderApplied(lang, env) {
 			diff = append(diff, componentAgentLoader)
 		}
@@ -985,9 +957,10 @@ func remove(xs []string, x string) []string {
 // non-nil entry is the customer's prior value (rollback restores it verbatim). This is the persisted
 // "previous config" that lets rollback be non-destructive.
 type managedManifest struct {
-	Version int                `json:"v"`
-	Layer   string             `json:"layer,omitempty"`
-	PrevEnv map[string]*string `json:"prevEnv,omitempty"`
+	Version   int                `json:"v"`
+	Layer     string             `json:"layer,omitempty"`
+	PrevEnv   map[string]*string `json:"prevEnv,omitempty"`
+	SignalEnv map[string]string  `json:"signalEnv,omitempty"`
 }
 
 const managedManifestVersion = 1
@@ -996,7 +969,7 @@ const managedManifestVersion = 1
 // web-server modes). Their prior values are snapshotted on first instrument so rollback restores the
 // function exactly — including append-style vars (JAVA_TOOL_OPTIONS/NODE_OPTIONS/PYTHONPATH), where the
 // snapshot is the customer's original value that rollback puts back verbatim.
-var odigosEnvKeys = []string{
+var odigosEnvKeys = append([]string{
 	store.EnvExecWrapper, EnvServiceName, EnvCollectorConfigURI, EnvOtelLogLevel,
 	// No longer set (the inline collector config replaced them) but still snapshotted and stripped, so a
 	// function instrumented by an earlier version is restored cleanly rather than left carrying them.
@@ -1004,7 +977,10 @@ var odigosEnvKeys = []string{
 	envLegacyOTLPEndpoint, envLegacyOTLPHeaders,
 	EnvJavaToolOptions, EnvNodeOptions, EnvPythonPath, EnvOtlpProtocol,
 	EnvTracesExporter, EnvMetricsExporter, EnvLogsExporter,
-}
+	"OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED",
+	"OTEL_SDK_DISABLED",
+	"OTEL_NODE_ENABLED_INSTRUMENTATIONS",
+}, domaindest.SignalTransportOverrides()...)
 
 // buildManifest snapshots the pre-Odigos config for the keys we change and records the layer we attach.
 // A re-instrument reuses the snapshot already stored in the marker so our own values are never recorded
@@ -1012,6 +988,14 @@ var odigosEnvKeys = []string{
 func buildManifest(env map[string]string, layerARN string) managedManifest {
 	if existing, ok := parseManifest(env[store.EnvOdigosManaged]); ok {
 		existing.Layer = layerARN
+		if existing.PrevEnv == nil {
+			existing.PrevEnv = map[string]*string{}
+		}
+		for _, key := range odigosEnvKeys {
+			if _, tracked := existing.PrevEnv[key]; !tracked {
+				existing.PrevEnv[key] = priorValue(key, env)
+			}
+		}
 		return existing
 	}
 	prev := make(map[string]*string, len(odigosEnvKeys))
@@ -1065,17 +1049,8 @@ func (i *LambdaInstrumentor) desiredSharedEnv(webServer bool, runtime, serviceNa
 		// reconcileCustomerEdits tell their value apart from ours and restore it on rollback.
 		EnvCollectorConfigURI: collectorCfg,
 	}
-	// Only the signals we actually override are listed. A supported signal has no variable of ours to
-	// confuse with a customer's, so including it would make reconcileCustomerEdits capture the customer's
-	// value as if we had overwritten something.
-	for key, v := range map[string]string{
-		EnvTracesExporter:  exporterOverrideFor(dest.Traces),
-		EnvMetricsExporter: exporterOverrideFor(dest.Metrics),
-		EnvLogsExporter:    exporterOverrideFor(dest.Logs),
-	} {
-		if v != "" {
-			d[key] = v
-		}
+	for key, value := range dest.LambdaSignalActivation(LanguageFromRuntime(runtime)) {
+		d[key] = value
 	}
 	// Handler mode is the only mode that sets a log level; applyWebServerEnv always deletes it.
 	if debug && !webServer {
@@ -1109,8 +1084,23 @@ func reconcileCustomerEdits(m *managedManifest, liveEnv, desired map[string]stri
 		if prev, ok := m.PrevEnv[key]; ok && prev != nil && *prev == live {
 			continue // already recorded as the customer's value
 		}
+		if m.SignalEnv[key] == live {
+			continue
+		}
+		// Older manifests did not record the previous selectors. Both standardized
+		// values were connector-owned, so do not turn a signal transition into a
+		// customer override in the rollback snapshot.
+		if len(m.SignalEnv) == 0 && (key == EnvTracesExporter || key == EnvMetricsExporter || key == EnvLogsExporter) && (live == exporterOTLP || live == exporterNone) {
+			continue
+		}
 		v := live
 		m.PrevEnv[key] = &v
+	}
+	m.SignalEnv = map[string]string{}
+	for _, key := range []string{EnvTracesExporter, EnvMetricsExporter, EnvLogsExporter, "OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED"} {
+		if value, ok := desired[key]; ok {
+			m.SignalEnv[key] = value
+		}
 	}
 }
 

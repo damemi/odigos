@@ -153,7 +153,7 @@ func (o *LambdaObserver) Observe(ctx context.Context) error {
 			}
 			// Publish or clear the fallback explanation while keeping the last applied route. The route is
 			// advanced only after a settled live configuration conforms to the desired target below.
-			if serr := o.store.SetLambdaRouting(ctx, fn.FunctionARN, fn.RoutingVia, workloadRoutingNote(routing)); serr != nil {
+			if serr := o.store.SetLambdaRouting(ctx, fn.FunctionARN, fn.RoutingVia, lambdaSignalRoutingNote(routing, fn.Runtime)); serr != nil {
 				observeLog.Warn("set lambda routing note failed", "function", fn.FunctionName, "error", serr)
 			}
 			cur, ok := live[fn.FunctionARN]
@@ -171,7 +171,7 @@ func (o *LambdaObserver) Observe(ctx context.Context) error {
 					}
 				}
 				if obs.Conformance == baseapi.ConformanceConformant {
-					if serr := o.store.SetLambdaRouting(ctx, fn.FunctionARN, string(routing.Via), workloadRoutingNote(routing)); serr != nil {
+					if serr := o.store.SetLambdaRouting(ctx, fn.FunctionARN, string(routing.Via), lambdaSignalRoutingNote(routing, fn.Runtime)); serr != nil {
 						observeLog.Warn("set lambda routing after conformance failed", "function", fn.FunctionName, "error", serr)
 					}
 				}
@@ -217,15 +217,10 @@ func (o *LambdaObserver) observation(ctx context.Context, fn store.LambdaFunctio
 	pinnedLayerARN := recordedLayer(env)
 	debug := o.debug()
 
-	// Judge the export configuration against the signals this function actually exports, not against the full
-	// set the destination accepts — see narrowToExportedSignals. Illegal narrowing leaves dest untouched, so the
-	// comparison below reports it.
-	judgedDest := narrowToExportedSignals(dest, env)
-
 	// A destination the collector cannot be configured for is a configuration problem, not function drift:
 	// there is no desired state to judge this function against, so say that rather than reporting every
 	// marked function as Partial because the connector cannot describe what it wants.
-	collectorCfg, cfgErr := renderCollectorConfig(judgedDest, destHeaders)
+	collectorCfg, cfgErr := renderCollectorConfig(dest, destHeaders)
 	if cfgErr != nil {
 		obs.Conformance = fn.Observation.Conformance
 		obs.Missing = fn.Observation.Missing
@@ -235,7 +230,7 @@ func (o *LambdaObserver) observation(ctx context.Context, fn store.LambdaFunctio
 	}
 	obs.DesiredPrint = desiredPrint(webServer, fn, pinnedLayerARN, debug, reportedServiceName, collectorCfg, src.distro)
 
-	diff := instrumentationDiff(webServer, fn, env, layers, pinnedLayerARN, judgedDest, debug, reportedServiceName, collectorCfg, src.distro)
+	diff := instrumentationDiff(webServer, fn, env, layers, pinnedLayerARN, dest, debug, reportedServiceName, collectorCfg, src.distro)
 	// An unpinned marker (a customer's own IaC, or an Odigos artifact predating the recorded layer) leaves NO
 	// version to hold the function to, so the check falls back from identity to signature: an Odigos layer is
 	// attached, or none is.

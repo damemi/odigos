@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
 
@@ -59,6 +60,10 @@ func ecsManagedEnvKeys(recipe agentRecipe) []string {
 		EnvTracesExporter, EnvMetricsExporter, EnvLogsExporter,
 		EnvOtelLogLevel,
 	}
+	keys = append(keys, domaindest.SignalTransportOverrides()...)
+	for k := range (domaindest.OTLPTarget{}).SignalActivation(recipe.lang) {
+		keys = append(keys, k)
+	}
 	for k := range recipe.staticEnv {
 		keys = append(keys, k)
 	}
@@ -74,6 +79,14 @@ func ecsManagedEnvKeys(recipe agentRecipe) []string {
 func buildECSManifest(env map[string]string, existingMarker string, recipe agentRecipe) ecsManagedManifest {
 	if existing, ok := parseECSManifest(existingMarker); ok {
 		existing.Language = recipe.lang
+		if existing.PrevEnv == nil {
+			existing.PrevEnv = map[string]*string{}
+		}
+		for _, key := range ecsManagedEnvKeys(recipe) {
+			if _, tracked := existing.PrevEnv[key]; !tracked {
+				existing.PrevEnv[key] = ecsPriorValue(key, env)
+			}
+		}
 		return existing
 	}
 	prev := make(map[string]*string)

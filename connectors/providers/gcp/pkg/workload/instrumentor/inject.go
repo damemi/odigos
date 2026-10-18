@@ -208,10 +208,7 @@ func serviceOwned(svc *runpb.Service) bool { return ownedContainer(svc) != nil }
 // --- helpers ---
 
 func exporterFor(supported bool) string {
-	if supported {
-		return exporterOTLP
-	}
-	return exporterNone
+	return domaindest.ExporterFor(supported)
 }
 
 // otlpEndpointURL turns the connector's OTLP export target (host:port from the destination) into a URL

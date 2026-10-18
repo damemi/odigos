@@ -11,6 +11,7 @@ import (
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
 
@@ -48,6 +49,10 @@ type ecsExportTarget struct {
 	traces   bool
 	metrics  bool
 	logs     bool
+}
+
+func (t ecsExportTarget) signals() domaindest.OTLPTarget {
+	return domaindest.OTLPTarget{Traces: t.traces, Metrics: t.metrics, Logs: t.logs}
 }
 
 // containerTarget is one container the reconcile instruments, with all per-container wiring already
@@ -142,9 +147,12 @@ func instrumentContainer(app *ecstypes.ContainerDefinition, t containerTarget, s
 		deleteContainerEnv(app, envOTLPHeaders)
 	}
 	setContainerEnv(app, EnvOtlpProtocol, t.export.protocol)
-	setContainerEnv(app, EnvTracesExporter, exporterFor(t.export.traces))
-	setContainerEnv(app, EnvMetricsExporter, exporterFor(t.export.metrics))
-	setContainerEnv(app, EnvLogsExporter, exporterFor(t.export.logs))
+	for key, value := range t.export.signals().SignalActivation(t.recipe.lang) {
+		setContainerEnv(app, key, value)
+	}
+	for _, key := range domaindest.SignalTransportOverrides() {
+		deleteContainerEnv(app, key)
+	}
 	if debug {
 		setContainerEnv(app, EnvOtelLogLevel, otelLogLevelDebug)
 	} else {
@@ -359,9 +367,7 @@ func containerDiff(app *ecstypes.ContainerDefinition, t containerTarget, service
 	if env[envOTLPEndpoint] != t.export.endpoint ||
 		env[envOTLPHeaders] != otlpHeadersEnv(t.export.headers) ||
 		env[EnvOtlpProtocol] != t.export.protocol ||
-		env[EnvTracesExporter] != exporterFor(t.export.traces) ||
-		env[EnvMetricsExporter] != exporterFor(t.export.metrics) ||
-		env[EnvLogsExporter] != exporterFor(t.export.logs) {
+		!t.export.signals().SignalConfigurationMatches(env, t.recipe.lang) {
 		diff = append(diff, componentCollectorExport)
 	}
 	wantLogLevel := ""

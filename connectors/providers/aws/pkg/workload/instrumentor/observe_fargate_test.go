@@ -8,7 +8,6 @@ import (
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
 
@@ -471,18 +470,8 @@ func judgeSignals(t *testing.T, instr, dest signalSet) (td *ecstypes.TaskDefinit
 	return td, targets, diff
 }
 
-// TestFargateExportedSignalsAreJudgedAsymmetrically pins the DIRECTION of the export-signal check on Fargate,
-// which is now the same rule Lambda applies: a manually-instrumented task may export FEWER signals than its
-// destination accepts, but never one the destination does not accept.
-//
-// Both halves matter and they are not symmetric. Sending less than the destination could take is a legitimate
-// choice a customer's task definition is entitled to make, and reporting it as drift told them to re-apply
-// instrumentation over a decision they made deliberately. Sending MORE is the harmful direction: the signal has
-// no pipeline at the far end, so every batch is refused and retried on a backoff.
-//
-// Each case also asserts the MUTATING path is unaffected — see the comment on that assertion, which is the
-// constraint that makes this relaxation safe rather than a hole.
-func TestFargateExportedSignalsAreJudgedAsymmetrically(t *testing.T) {
+// Fargate follows the same exact signal policy as Lambda.
+func TestFargateExportedSignalsMustMatchDestination(t *testing.T) {
 	for _, c := range []struct {
 		name  string
 		instr signalSet
@@ -492,10 +481,10 @@ func TestFargateExportedSignalsAreJudgedAsymmetrically(t *testing.T) {
 		{"exact match on traces only", signalSet{true, false, false}, signalSet{true, false, false}, nil},
 		{"exact match on all three", signalSet{true, true, true}, signalSet{true, true, true}, nil},
 		// The false alarm this change removes: the exact shape Lambda already reports as conformant.
-		{"traces-only against an all-signal destination", signalSet{true, false, false}, signalSet{true, true, true}, nil},
-		{"traces+metrics against an all-signal destination", signalSet{true, true, false}, signalSet{true, true, true}, nil},
-		{"logs-only against an all-signal destination", signalSet{false, false, true}, signalSet{true, true, true}, nil},
-		{"traces-only against a traces+logs destination", signalSet{true, false, false}, signalSet{true, false, true}, nil},
+		{"traces-only against an all-signal destination", signalSet{true, false, false}, signalSet{true, true, true}, []string{componentCollectorExport}},
+		{"traces+metrics against an all-signal destination", signalSet{true, true, false}, signalSet{true, true, true}, []string{componentCollectorExport}},
+		{"logs-only against an all-signal destination", signalSet{false, false, true}, signalSet{true, true, true}, []string{componentCollectorExport}},
+		{"traces-only against a traces+logs destination", signalSet{true, false, false}, signalSet{true, false, true}, []string{componentCollectorExport}},
 		// The harmful direction — a signal with no pipeline at the far end.
 		{"exports metrics and logs the destination refuses", signalSet{true, true, true}, signalSet{true, false, false}, []string{componentCollectorExport}},
 		{"exports logs the destination refuses", signalSet{true, false, true}, signalSet{true, true, false}, []string{componentCollectorExport}},
@@ -524,15 +513,9 @@ func TestFargateExportedSignalsAreJudgedAsymmetrically(t *testing.T) {
 	}
 }
 
-// TestNarrowingKeepsTheTransportExact guards the half of the export check that did NOT become tolerant. The
-// signals and the transport shared one condition before this change, so relaxing the whole thing was the easy
-// mistake — and an endpoint or protocol Odigos never pointed the task at fails at runtime as a connection reset
-// that points nowhere near its cause, which is precisely what a conformance verdict has to catch.
-//
-// Each case starts from a container whose signals are a legitimate strict subset, so the only thing that can
-// produce a verdict is the transport.
-func TestNarrowingKeepsTheTransportExact(t *testing.T) {
-	subset, allSignals := signalSet{true, false, false}, signalSet{true, true, true}
+// Signal policy checks must also enforce the destination transport.
+func TestSignalPolicyKeepsTheTransportExact(t *testing.T) {
+	subset, allSignals := signalSet{true, true, true}, signalSet{true, true, true}
 	if _, _, diff := judgeSignals(t, subset, allSignals); len(diff) != 0 {
 		t.Fatalf("test setup: the subset baseline must be conformant, got %v — every case below would be vacuous", diff)
 	}
@@ -568,51 +551,6 @@ func TestNarrowingKeepsTheTransportExact(t *testing.T) {
 				t.Errorf("diff = %v, want %v: narrowing the signals must not relax the transport", got, []string{componentCollectorExport})
 			}
 		})
-	}
-}
-
-// TestNarrowingTheContainerExportNeverWidensIt guards the one way the narrowing could do damage — it must only
-// ever REMOVE signals. If it could add one, a container would be judged against, and reported conformant for,
-// exporting a signal its destination cannot receive: the exact failure the asymmetry exists to catch.
-//
-// It also asserts the two platforms reach the SAME verdict for the same inputs, which is the point of sharing
-// narrowedSignals. Two platforms disagreeing about what drift means is what this change set out to fix, and
-// nothing but a test keeps them from diverging again.
-func TestNarrowingTheContainerExportNeverWidensIt(t *testing.T) {
-	for _, export := range []ecsExportTarget{
-		exportWithSignals(true, false, false),
-		exportWithSignals(true, true, false),
-		exportWithSignals(true, true, true),
-		exportWithSignals(false, true, false),
-		exportWithSignals(false, false, true),
-	} {
-		for _, env := range []map[string]string{
-			{},
-			{EnvTracesExporter: exporterOTLP, EnvMetricsExporter: exporterOTLP, EnvLogsExporter: exporterOTLP},
-			{EnvTracesExporter: exporterNone},
-			{EnvMetricsExporter: exporterNone},
-			{EnvLogsExporter: exporterNone},
-			{EnvTracesExporter: exporterNone, EnvMetricsExporter: exporterNone},
-			{EnvTracesExporter: exporterNone, EnvMetricsExporter: exporterNone, EnvLogsExporter: exporterNone},
-		} {
-			got := narrowExportToContainerSignals(export, env)
-			if got.traces && !export.traces || got.metrics && !export.metrics || got.logs && !export.logs {
-				t.Errorf("narrowing widened the export: export=%+v env=%v -> %+v", export, env, got)
-			}
-			// Everything that is not a signal must survive untouched, or containerDiff — which still compares
-			// these exactly — would be judging the container against a transport it was never pointed at.
-			if got.endpoint != export.endpoint || got.protocol != export.protocol {
-				t.Errorf("narrowing altered the transport: %+v -> %+v", export, got)
-			}
-
-			lambda := narrowToExportedSignals(domaindest.OTLPTarget{
-				Traces: export.traces, Metrics: export.metrics, Logs: export.logs,
-			}, env)
-			if lambda.Traces != got.traces || lambda.Metrics != got.metrics || lambda.Logs != got.logs {
-				t.Errorf("Fargate and Lambda disagree for export=%+v env=%v: fargate=(%v,%v,%v) lambda=(%v,%v,%v)",
-					export, env, got.traces, got.metrics, got.logs, lambda.Traces, lambda.Metrics, lambda.Logs)
-			}
-		}
 	}
 }
 
