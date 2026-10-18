@@ -17,11 +17,20 @@ func (p *Provider) DescribeInstrumentation(ctx context.Context, w *baseapi.Disco
 	w.AvailableDistros = []baseapi.InstrumentationDistro{}
 	if w.Kind == "aws.lambda" {
 		activation := ins.ActivationHandler
-		if fn, ok, _ := p.workloadStdb.GetLambdaFunction(ctx, w.ExternalID); ok && ins.UsesLambdaWebAdapter(fn.Layers) {
-			activation = ins.ActivationWebServer
+		runtime := ""
+		if fn, ok, _ := p.workloadStdb.GetLambdaFunction(ctx, w.ExternalID); ok {
+			runtime = fn.Runtime
+			language = ins.LanguageFromRuntime(runtime)
+			if ins.UsesLambdaWebAdapter(fn.Layers) {
+				activation = ins.ActivationWebServer
+			}
 		}
-		w.AvailableDistros = ins.LambdaDistros(language, activation)
-		if d, err := ins.ResolveLambdaDistro(language, activation, w.Overrides.OtelDistroName); err == nil {
+		for _, d := range ins.LambdaDistros(language, activation) {
+			if runtime == "" || ins.ValidateLambdaDistroRuntime(runtime, activation, d.Name) == nil {
+				w.AvailableDistros = append(w.AvailableDistros, d)
+			}
+		}
+		if d, err := ins.ResolveLambdaDistro(language, activation, w.Overrides.OtelDistroName); err == nil && (runtime == "" || ins.ValidateLambdaDistroRuntime(runtime, activation, d.Name) == nil) {
 			w.EffectiveDistro, w.InstrumentationVersion = d.Name, d.Version
 		}
 	} else if w.Kind == "aws.fargate-task" {
@@ -56,15 +65,20 @@ func (p *Provider) ValidateSourceInstrumentation(ctx context.Context, src source
 		// LookupWorkload returns identity only. Read the stored AWS runtime rather than relying on
 		// fields populated by the workload-report listing path.
 		language := w.RuntimeLanguage
+		runtime := ""
 		if fn, ok, err := p.workloadStdb.GetLambdaFunction(ctx, w.ExternalID); err != nil {
 			return err
 		} else if ok {
 			language = ins.LanguageFromRuntime(fn.Runtime)
+			runtime = fn.Runtime
 			if ins.UsesLambdaWebAdapter(fn.Layers) {
 				activation = ins.ActivationWebServer
 			}
 		}
 		_, err := ins.ResolveLambdaDistro(language, activation, src.Config.DistroOverride.OtelDistroName)
+		if runtime != "" {
+			err = ins.ValidateLambdaDistroRuntime(runtime, activation, src.Config.DistroOverride.OtelDistroName)
+		}
 		if language == "" && src.Config.DistroOverride.OtelDistroName == "" {
 			return nil
 		}

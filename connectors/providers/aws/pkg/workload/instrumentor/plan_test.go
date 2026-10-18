@@ -359,18 +359,13 @@ func TestFargateArtifactsWireTheMarkerToTheIaCVariable(t *testing.T) {
 	}
 }
 
-func TestLambdaArtifactsWireTheMarkerToTheIaCVariable(t *testing.T) {
-	artifacts := awsInstrumentationArtifacts(t, "aws.lambda")
-	for _, lang := range []string{"java", "nodejs", "python", "ruby"} {
-		byLang := map[string]plan.Artifact{}
-		for id, a := range artifacts {
-			if a.Language == lang {
-				byLang[id] = a
-			}
+func TestLambdaArtifactsUseAttributionTags(t *testing.T) {
+	for id, artifact := range awsInstrumentationArtifacts(t, "aws.lambda") {
+		if !strings.Contains(artifact.Body, store.TagLambdaIaC) || !strings.Contains(artifact.Body, store.TagLambdaSDK) {
+			t.Fatalf("%s omits attribution tags", id)
 		}
-		problems := plan.MarkerAttachmentProblems(byLang, lambdaIaCMarkerValue(), store.EnvOdigosIaC, store.EnvOdigosManaged)
-		if len(problems) > 0 {
-			t.Errorf("%s: %s", lang, strings.Join(problems, "\n  - "))
+		if strings.Contains(artifact.Body, store.EnvOdigosManaged+" =") || strings.Contains(artifact.Body, `"`+store.EnvOdigosManaged+`":`) || strings.Contains(artifact.Body, store.EnvOdigosIaC+" =") || strings.Contains(artifact.Body, `"`+store.EnvOdigosIaC+`":`) {
+			t.Fatalf("%s still publishes an environment marker", id)
 		}
 	}
 }
@@ -659,9 +654,9 @@ func TestInstrumentationArtifactsAreServedPerLanguage(t *testing.T) {
 		typeName, lang, wantIn string
 	}{
 		{"aws.lambda", "python", "/opt/otel-instrument"},
-		{"aws.lambda", "java", "<JAVA_LAMBDA_EXEC_WRAPPER>"},
+		{"aws.lambda", "java", "/opt/otel-javaagent-handler"},
 		{"aws.lambda", "ruby", "/opt/otel-handler"},
-		{"aws.lambda", "nodejs", "--import /opt/init.mjs"},
+		{"aws.lambda", "nodejs", "/opt/otel-handler"},
 		{"aws.fargate-task", "ruby", "RUBYOPT"},
 		{"aws.fargate-task", "php", "PHP_INI_SCAN_DIR"},
 		{"aws.fargate-task", "dotnet", "CORECLR_PROFILER_PATH"},
@@ -675,7 +670,11 @@ func TestInstrumentationArtifactsAreServedPerLanguage(t *testing.T) {
 			if a.Language != tc.lang {
 				t.Errorf("%s/%s was served artifact %q, which serves %q", tc.typeName, tc.lang, a.ID, a.Language)
 			}
-			if !strings.Contains(a.Template, tc.wantIn) {
+			content := a.Template
+			if tc.typeName == "aws.lambda" {
+				content = plan.Substitute(content, lambdaSnippetReplacements(tc.lang, ""))
+			}
+			if !strings.Contains(content, tc.wantIn) {
 				t.Errorf("%s/%s artifact %q omits %q, which this language needs", tc.typeName, tc.lang, a.ID, tc.wantIn)
 			}
 		}
@@ -819,7 +818,19 @@ func awsInstrumentationArtifacts(t *testing.T, typeName string) map[string]plan.
 	}
 	out := make(map[string]plan.Artifact, len(arts))
 	for _, a := range arts {
-		out[a.ID] = plan.Artifact{Language: a.Language, Body: a.Template}
+		body := a.Template
+		if typeName == "aws.lambda" {
+			for k, v := range lambdaSnippetReplacements(a.Language, "") {
+				if k == "<ODIGOS_LAMBDA_CONFIG>" {
+					continue
+				}
+				body = strings.ReplaceAll(body, k, v)
+			}
+			for k, v := range lambdaLayerSnippetReplacements(a.Language, "", "", "") {
+				body = strings.ReplaceAll(body, k, v)
+			}
+		}
+		out[a.ID] = plan.Artifact{Language: a.Language, Body: body}
 	}
 	return out
 }

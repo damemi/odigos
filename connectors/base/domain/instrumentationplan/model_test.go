@@ -295,3 +295,14 @@ func TestDocumentsAreNeverEmpty(t *testing.T) {
 		t.Fatal("no documents were served for a plan the connector fully knows")
 	}
 }
+
+func TestToModelSubstitutesDocumentMetadata(t *testing.T) {
+	res := stagedResult()
+	res.Artifacts[0].Title = "Instrument <SDK_NAME>"
+	res.Artifacts[0].Description = "Use <SDK_NAME> for <ODIGOS_SOURCE_NAME>."
+	res.Resolved["<SDK_NAME>"] = "ADOT"
+	got := ToModel(res, testNow).Documents[0]
+	if got.Title != "Instrument ADOT" || got.Description != "Use ADOT for checkout." {
+		t.Fatalf("document metadata was not rendered: %s / %s", got.Title, got.Description)
+	}
+}

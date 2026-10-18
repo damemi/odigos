@@ -103,7 +103,14 @@ func discoverLambda(ctx context.Context, cfg aws.Config, region string, tags map
 			return nil, err
 		}
 		for _, fn := range page.Functions {
-			env := envVariables(fn.Environment)
+			listedTags, err := client.ListTags(ctx, &lambda.ListTagsInput{Resource: fn.FunctionArn})
+			if err != nil {
+				return nil, fmt.Errorf("read Lambda ownership tags for %s: %w", aws.ToString(fn.FunctionName), err)
+			}
+			if !tagsMatchAll(listedTags.Tags, tags) {
+				continue
+			}
+			env := store.LambdaAttributionEnvironment(envVariables(fn.Environment), listedTags.Tags)
 			out = append(out, store.LambdaFunction{
 				Region:                region,
 				FunctionARN:           aws.ToString(fn.FunctionArn),
@@ -113,7 +120,7 @@ func discoverLambda(ctx context.Context, cfg aws.Config, region string, tags map
 				RoleARN:               aws.ToString(fn.Role),
 				TracingMode:           tracingMode(fn.TracingConfig),
 				Instrumented:          store.OdigosInstrumented(env),
-				InstrumentationOrigin: store.OdigosInstrumentationOrigin(env),
+				InstrumentationOrigin: lambdaAttributionOrigin(env, listedTags.Tags),
 				// ListFunctions already returns the attached layers and the function's lifecycle state, and
 				// all three were being discarded. They are what separate the three situations a marker alone
 				// cannot tell apart: instrumented, half-instrumented (marker kept, layer detached), and
@@ -128,22 +135,16 @@ func discoverLambda(ctx context.Context, cfg aws.Config, region string, tags map
 				SubnetIDs:        vpcSubnets(fn.VpcConfig),
 				SecurityGroupIDs: vpcSecurityGroups(fn.VpcConfig),
 				Metadata: map[string]any{
-					"handler":    aws.ToString(fn.Handler),
-					"memorySize": aws.ToInt32(fn.MemorySize),
-					"timeout":    aws.ToInt32(fn.Timeout),
-					"version":    aws.ToString(fn.Version),
+					"odigos_tags": store.LambdaOwnershipTags(listedTags.Tags),
+					"handler":     aws.ToString(fn.Handler),
+					"memorySize":  aws.ToInt32(fn.MemorySize),
+					"timeout":     aws.ToInt32(fn.Timeout),
+					"version":     aws.ToString(fn.Version),
 				},
 			})
 		}
 	}
-	if len(tags) > 0 {
-		out, err := filterLambdaByTags(ctx, client, out, tags)
-		if err != nil {
-			return nil, err
-		}
-		log.Info("lambda discovery complete", "region", region, "discovered", len(out), "tag_filtered", true)
-		return out, nil
-	}
+
 	log.Info("lambda discovery complete", "region", region, "count", len(out))
 	return out, nil
 }
@@ -231,4 +232,11 @@ func layerARNs(layers []lambdatypes.Layer) []string {
 		}
 	}
 	return out
+}
+
+func lambdaAttributionOrigin(env, tags map[string]string) string {
+	if tags[store.TagLambdaPending] != "" || tags[store.TagLambdaManaged] != "" {
+		return "connector"
+	}
+	return store.OdigosInstrumentationOrigin(env)
 }

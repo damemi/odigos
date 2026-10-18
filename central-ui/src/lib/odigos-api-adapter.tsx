@@ -435,6 +435,10 @@ const resolveProxyID = (ctx: OperationContext): string | undefined => ctx.proxyI
 // alias collapses to `OperationContext` and the casts below become no-ops.
 type ProxyOperationContext = OperationContext & { schemaVersion?: string };
 
+// ui-kit exposes the reset input through its operation slot but does not re-export
+// its named variables type. Derive it here so the adapter follows that contract.
+type ResetLocalUiConfigVars = NonNullable<OdigosApiOperations['RESET_LOCAL_UI_CONFIG_TO_FACTORY_DEFAULTS']> extends Operation<ResetLocalUiConfigResult, infer TVars> ? TVars : never;
+
 // Version used to pick the GraphQL document/dialect bucket. VM proxies use the
 // reported schema version; everything else falls back to the agent version
 // (k8s never sets `schemaVersion`, so this equals `ctx.version` there).
@@ -1362,7 +1366,7 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
     GET_CONFIG_YAMLS: wrapVersioned<GetConfigYamlsData, undefined>(GET_CONFIG_YAMLS),
     UPDATE_REMOTE_CONFIG: withRemoteConfigVars(wrapVersioned<UpdateRemoteConfigResult, UpdateRemoteConfigVars>(UPDATE_REMOTE_CONFIG)),
     UPDATE_LOCAL_UI_CONFIG: wrapVersioned<UpdateLocalUiConfigResult, UpdateLocalUiConfigVars>(UPDATE_LOCAL_UI_CONFIG),
-    RESET_LOCAL_UI_CONFIG_TO_FACTORY_DEFAULTS: wrapVersioned<ResetLocalUiConfigResult, undefined>(RESET_LOCAL_UI_CONFIG_TO_FACTORY_DEFAULTS),
+    RESET_LOCAL_UI_CONFIG_TO_FACTORY_DEFAULTS: wrapVersioned<ResetLocalUiConfigResult, ResetLocalUiConfigVars>(RESET_LOCAL_UI_CONFIG_TO_FACTORY_DEFAULTS),
 
     // describe
     GET_DESCRIBE_ODIGOS: wrapVersioned<DescribeOdigosData, undefined>(GET_DESCRIBE_ODIGOS),

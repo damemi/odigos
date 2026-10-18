@@ -14,7 +14,7 @@ func applySignalActivation(env map[string]string, dest domaindest.OTLPTarget, la
 func lambdaSignalRoutingNote(routing domaindest.Routing, runtime string) *baseapi.WorkloadRoutingNote {
 	language := LanguageFromRuntime(runtime)
 	if (routing.Target.Profiles || language == LangRuby && (routing.Target.Metrics || routing.Target.Logs)) && routing.Outcome != domaindest.RoutingError {
-		note := routing.Target.CollectionSummary(language)
+		note := routing.Target.LambdaCollectionSummary(language)
 		if routing.Note != "" {
 			note += " " + routing.Note
 		}

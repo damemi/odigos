@@ -198,7 +198,9 @@ type discoveredLayer struct {
 }
 
 func (r *AccountLayerResolver) latest(ctx context.Context, region, runtime, arch string) (discoveredLayer, error) {
-	lang := LanguageFromRuntime(runtime)
+	return r.latestArtifact(ctx, region, runtime, arch, LanguageFromRuntime(runtime))
+}
+func (r *AccountLayerResolver) latestArtifact(ctx context.Context, region, runtime, arch, lang string) (discoveredLayer, error) {
 	if lang == "" {
 		return discoveredLayer{}, fmt.Errorf("%w: unsupported runtime %q", ErrLayerUnavailable, runtime)
 	}
@@ -262,7 +264,7 @@ func normalizeInstrumentationLayers(layers []string, desiredARN string) []string
 			out = append(out, arn)
 			continue
 		}
-		if hasDesired && name == desiredName {
+		if hasDesired && (name == desiredName || (store.IsOdigosLayerName(name) && store.IsOdigosLayerName(desiredName))) {
 			continue
 		}
 		if seen[name] {
@@ -302,10 +304,24 @@ func NewPublicLayerResolver(arns map[string]string) *PublicLayerResolver {
 	return &PublicLayerResolver{ARNs: arns}
 }
 
-func (r *PublicLayerResolver) Resolve(_ context.Context, region, runtime, arch string) (string, error) {
-	lang := LanguageFromRuntime(runtime)
+func (r *PublicLayerResolver) Resolve(ctx context.Context, region, runtime, arch string) (string, error) {
+	return r.ResolveDistro(ctx, region, runtime, arch, "")
+}
+func (r *PublicLayerResolver) DiscoverDistro(ctx context.Context, region, runtime, arch, distro string) (string, error) {
+	return r.ResolveDistro(ctx, region, runtime, arch, distro)
+}
+func (r *PublicLayerResolver) ResolveDistro(_ context.Context, region, runtime, arch, distro string) (string, error) {
+	if err := ValidateLambdaDistroRuntime(runtime, ActivationHandler, distro); err != nil {
+		return "", fmt.Errorf("%w: %v", ErrLayerUnavailable, err)
+	}
+	return r.resolveArtifact(region, lambdaArtifact(runtime, distro), arch)
+}
+func (r *PublicLayerResolver) ResolveCollector(_ context.Context, region, runtime, arch string, _ bool) (string, error) {
+	return r.resolveArtifact(region, "adot-collector", arch)
+}
+func (r *PublicLayerResolver) resolveArtifact(region, lang, arch string) (string, error) {
 	if lang == "" {
-		return "", fmt.Errorf("%w: unsupported runtime %q", ErrLayerUnavailable, runtime)
+		return "", fmt.Errorf("%w: unsupported Lambda language %q", ErrLayerUnavailable, lang)
 	}
 	for _, key := range []string{
 		layerKey(region, lang, arch),
@@ -356,6 +372,9 @@ func javaHandlerWrapperFor(distro string) string {
 // exactly one wrapper, so an override there would be a choice between one option.
 func execWrapperForRuntime(runtime, distro string) string {
 	lang := LanguageFromRuntime(runtime)
+	if d := recipeFor(lang, distro); d.Artifact != "" {
+		return d.ExecWrapper
+	}
 	if lang == "java" {
 		return javaHandlerWrapperFor(distro)
 	}
@@ -387,8 +406,13 @@ func execWrapperForLanguage(lang string) string {
 // ours, or rollback would leave the wrapper behind and ownership detection would read it as a customer's.
 func isOdigosExecWrapper(v string) bool {
 	switch v {
-	case execWrapperInstrument, execWrapperAgent, execWrapperHandler, execWrapperProxyHandler, execWrapperSqsHandler, execWrapperStreamHandler:
+	case lambdaWebServerWrapper, execWrapperInstrument, execWrapperAgent, execWrapperHandler, execWrapperProxyHandler, execWrapperSqsHandler, execWrapperStreamHandler:
 		return true
+	}
+	for _, recipe := range lambdaRecipes() {
+		if v == recipe.ExecWrapper {
+			return true
+		}
 	}
 	return false
 }
@@ -581,7 +605,26 @@ func NewManagedLayerResolver(cache *awsclient.Cache, layerDir string) *ManagedLa
 }
 
 func (r *ManagedLayerResolver) Resolve(ctx context.Context, region, runtime, arch string) (string, error) {
-	lang := LanguageFromRuntime(runtime)
+	return r.ResolveDistro(ctx, region, runtime, arch, "")
+}
+func (r *ManagedLayerResolver) DiscoverDistro(ctx context.Context, region, runtime, arch, distro string) (string, error) {
+	found, err := r.discover.latestArtifact(ctx, region, runtime, arch, lambdaArtifact(runtime, distro))
+	return found.arn, err
+}
+func (r *ManagedLayerResolver) ResolveDistro(ctx context.Context, region, runtime, arch, distro string) (string, error) {
+	if err := ValidateLambdaDistroRuntime(runtime, ActivationHandler, distro); err != nil {
+		return "", err
+	}
+	return r.resolveArtifact(ctx, region, runtime, arch, lambdaArtifact(runtime, distro))
+}
+func (r *ManagedLayerResolver) ResolveCollector(ctx context.Context, region, runtime, arch string, readOnly bool) (string, error) {
+	if readOnly {
+		found, err := r.discover.latestArtifact(ctx, region, runtime, arch, "adot-collector")
+		return found.arn, err
+	}
+	return r.resolveArtifact(ctx, region, runtime, arch, "adot-collector")
+}
+func (r *ManagedLayerResolver) resolveArtifact(ctx context.Context, region, runtime, arch, lang string) (string, error) {
 	if lang == "" {
 		return "", fmt.Errorf("%w: unsupported runtime %q", ErrLayerUnavailable, runtime)
 	}
@@ -604,7 +647,7 @@ func (r *ManagedLayerResolver) Resolve(ctx context.Context, region, runtime, arc
 	//    zip as a new version of the same layer name; instrument then swaps every function onto it
 	//    (normalizeInstrumentationLayers keeps one version per name). The superseded version is left in
 	//    place: functions still reference it until that swap lands.
-	if found, err := r.discover.latest(ctx, region, runtime, arch); err == nil {
+	if found, err := r.discover.latestArtifact(ctx, region, runtime, arch, lang); err == nil {
 		if reusableLayer(found, r.bundledDescription(lang, arch)) {
 			r.mu.Lock()
 			r.arns[key] = found.arn
@@ -800,6 +843,28 @@ func reusableLayer(found discoveredLayer, bundled string) bool {
 // routes java8.al2 and ruby4.0 to a language, and the layer has to be discoverable for the runtimes the
 // connector will in fact try to instrument.
 func compatibleRuntimes(lang string) []lambdatypes.Runtime {
+	if lang == "adot-collector" {
+		seen := map[string]bool{}
+		out := []lambdatypes.Runtime{}
+		for _, d := range lambdaRecipes() {
+			for _, runtime := range d.CompatibleRuntimes {
+				if !seen[runtime] {
+					out = append(out, lambdatypes.Runtime(runtime))
+					seen[runtime] = true
+				}
+			}
+		}
+		return out
+	}
+	for _, d := range lambdaRecipes() {
+		if d.Artifact == lang && len(d.CompatibleRuntimes) > 0 {
+			out := []lambdatypes.Runtime{}
+			for _, runtime := range d.CompatibleRuntimes {
+				out = append(out, lambdatypes.Runtime(runtime))
+			}
+			return out
+		}
+	}
 	var names []string
 	switch lang {
 	case "python":

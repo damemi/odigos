@@ -121,3 +121,12 @@ func (t OTLPTarget) CollectionSummary(languages ...string) string {
 	}
 	return "Collecting " + strings.Join(signals[:len(signals)-1], ", ") + " and " + signals[len(signals)-1]
 }
+
+// LambdaCollectionSummary includes collector-side function logs for SDKs that cannot
+// bridge logging frameworks themselves. Ruby still has no SDK metrics producer.
+func (t OTLPTarget) LambdaCollectionSummary(language string) string {
+	if language == "ruby" {
+		t.Metrics = false
+	}
+	return t.CollectionSummary()
+}

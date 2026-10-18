@@ -110,7 +110,7 @@ func DesiredLambdaPlans() ([]plan.Plan, error) {
 					continue
 				}
 			}
-			p, err := DesiredLambdaPlan(lang, act)
+			p, err := DesiredLambdaPlanForDistro(lang, act, "")
 			if err != nil {
 				return nil, err
 			}

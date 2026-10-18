@@ -274,8 +274,10 @@ func TestEligibleLayerKeysPerLanguage(t *testing.T) {
 	if got["eu-west-1/nodejs/arm64"] {
 		t.Error("nodejs layer has an enabled source, must not be GC-eligible")
 	}
-	if len(got) != 1 {
-		t.Errorf("expected exactly one eligible key, got %v", got)
+	// Unused ADOT SDK and collector families are also eligible; the resolver only
+	// deletes versions it published, never unrelated account layers.
+	if len(got) != 6 {
+		t.Errorf("expected six unused SDK/collector keys, got %v", got)
 	}
 }
 

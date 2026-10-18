@@ -753,7 +753,7 @@ func (p Plan) validatePayload(f Fragment, label string, add func(string, ...any)
 		if f.Layer.ARN == "" && f.Layer.Placeholder == "" {
 			add("%s: layer declares neither an ARN nor a placeholder, so it would render as a blank", label)
 		}
-		claim(f.Anchor.String(), "layer")
+		claim(f.Anchor.String(), f.Layer.ARN+f.Layer.Placeholder)
 	default:
 		add("%s: unknown fragment kind %q", label, f.Kind)
 	}

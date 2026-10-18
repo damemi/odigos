@@ -201,6 +201,16 @@ func (o *LambdaObserver) observation(ctx context.Context, fn store.LambdaFunctio
 
 	env := currentEnv(cur.Environment)
 	layers := layerARNs(cur.Layers)
+	if o.cache != nil && o.store != nil {
+		cfg, err := o.cache.Config(ctx, fn.Region)
+		if err == nil {
+			reader := &LambdaInstrumentor{snapshots: o.store}
+			_, err = reader.readLambdaTags(ctx, lambda.NewFromConfig(cfg), fn, env, layers)
+		}
+		if err != nil {
+			return store.LambdaObservation{Conformance: fn.Observation.Conformance, Missing: fn.Observation.Missing, Since: fn.Observation.Since, Error: fmt.Sprintf("read Lambda attribution: %v", err)}, true
+		}
+	}
 	obs := store.LambdaObservation{ObservedPrint: observedPrint(env, layers)}
 
 	// No ownership marker means nothing on this function is attributable to Odigos — including a customer's
@@ -385,6 +395,7 @@ func desiredPrint(webServer bool, fn store.LambdaFunction, layerARN string, debu
 		// otel-stream-handler changes what the function must carry, and a print that ignored it would report
 		// "nothing has moved" on exactly the change the customer just made.
 		"wrapper=" + execWrapperForRuntime(fn.Runtime, distro),
+		"distro=" + recipeFor(LanguageFromRuntime(fn.Runtime), distro).Name,
 		"debug=" + strconv.FormatBool(debug),
 	})
 }

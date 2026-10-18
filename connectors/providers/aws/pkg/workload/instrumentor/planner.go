@@ -1,9 +1,14 @@
 package instrumentor
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/config"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
@@ -15,8 +20,14 @@ import (
 // neither publishes a layer: this runs on the GraphQL read path, and NonPublishingLayerARN exists precisely so
 // a read path can answer "which layer would you attach" without attaching one.
 type LambdaPlanner struct {
-	store  *store.Store
+	store  lambdaPlanStore
 	layers LayerResolver
+}
+
+type lambdaPlanStore interface {
+	GetLambdaFunction(context.Context, string) (*store.LambdaFunction, bool, error)
+	OTLPExportTarget(context.Context) (domaindest.OTLPTarget, bool, error)
+	OTLPExportHeaders(context.Context) (map[string]string, error)
 }
 
 // NewLambdaPlanner builds the planner.
@@ -50,21 +61,68 @@ func (p *LambdaPlanner) PlanFor(ctx context.Context, w baseapi.DiscoveredWorkloa
 	if usesLambdaWebAdapter(fn.Layers) {
 		activation = ActivationWebServer
 	}
-	pl, err := DesiredLambdaPlanForDistro(lang, activation, w.Overrides.OtelDistroName)
+	if err := ValidateLambdaDistroRuntime(fn.Runtime, activation, w.Overrides.OtelDistroName); err != nil {
+		return nil, err
+	}
+	d, err := ResolveLambdaDistro(lang, activation, w.Overrides.OtelDistroName)
 	if err != nil {
 		return nil, err
 	}
-	resolved := p.resolveLayer(ctx, fn)
+	distro := d.Name
+	pl, err := DesiredLambdaPlanForDistro(lang, activation, distro)
+	if err != nil {
+		return nil, err
+	}
+	resolved := p.resolveLayerForDistro(ctx, fn, distro)
 	if resolved == nil {
 		resolved = map[string]string{}
 	}
-	if lang == "java" {
-		d, err := ResolveLambdaDistro(lang, activation, w.Overrides.OtelDistroName)
+	if arn, err := resolveLambdaCollector(ctx, p.layers, *fn, distro, true); err == nil && arn != "" {
+		resolved["<OTEL_COLLECTOR_LAYER_ARN>"] = arn
+	}
+	for k, v := range lambdaSnippetReplacements(lang, distro) {
+		resolved[k] = v
+	}
+	for k, v := range lambdaLayerSnippetReplacements(lang, distro, resolved[PlaceholderLayerARN], resolved["<OTEL_COLLECTOR_LAYER_ARN>"]) {
+		resolved[k] = v
+	}
+	if target, ok, err := p.store.OTLPExportTarget(ctx); err != nil {
+		return nil, err
+	} else if ok {
+		headers, err := p.store.OTLPExportHeaders(ctx)
 		if err != nil {
 			return nil, err
 		}
-		resolved["<JAVA_LAMBDA_EXEC_WRAPPER>"] = javaHandlerWrapperFor(d.Name)
-		resolved["<LAMBDA_OTEL_DISTRO>"] = d.Name
+		service := w.ReportedServiceName()
+		if service == "" {
+			service = fn.FunctionName
+		}
+		c := lambdaBootstrapConfig{Version: 1, Service: service, Signals: signalMask(target), Endpoint: target.Endpoint, Insecure: target.Insecure, Headers: headers, ApplicationSignals: recipeFor(lang, distro).ApplicationSignals}
+		c.FunctionLogs = target.Logs && activation != ActivationWebServer && lambdaFunctionLogs(lang, recipeFor(lang, distro).ExecWrapper)
+		if c.Endpoint == "" {
+			c.Endpoint = target.HTTPEndpoint
+			c.HTTP = true
+			c.Insecure = false
+		}
+		if activation == ActivationWebServer {
+			wrapper := "<ORIGINAL_EXEC_WRAPPER>"
+			c.WebWrapper = &wrapper
+		}
+		raw, err := json.Marshal(c)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range lambdaConfigSnippetValues(string(raw)) {
+			resolved[k] = v
+		}
+		resolved["<LAMBDA_CDK_DESTINATION>"] = lambdaCDKDestination(target, headers)
+	}
+	if activation == ActivationWebServer {
+		resolved["<LAMBDA_EXEC_WRAPPER>"] = lambdaWebServerWrapper
+		resolved["<JAVA_LAMBDA_EXEC_WRAPPER>"] = lambdaWebServerWrapper
+		resolved["<LAMBDA_CDK_MODE>"] = "mode: OdigosInstrumentationMode.WEB_SERVER,"
+		resolved["<LAMBDA_CDK_IMPORT>"] = "OdigosLambdaInstrumentation, OdigosInstrumentationMode"
+		resolved["<LAMBDA_SDK_INSTRUCTIONS>"] = "The selected SDK is loaded by /opt/odigos-webserver. Configuration field w preserves the function's original execution wrapper."
 	}
 	resolved[plan.PlaceholderPackageVersion] = config.CDKPackageVersion()
 	return &baseapi.PlannedInstrumentation{Plan: pl, Resolved: resolved}, nil
@@ -80,10 +138,13 @@ func (p *LambdaPlanner) PlanFor(ctx context.Context, w baseapi.DiscoveredWorkloa
 // An unresolvable layer leaves the placeholder unresolved rather than erroring: no Odigos layer is published
 // yet for any region, so this is the common case, and the artifacts' notes already say where to get the value.
 func (p *LambdaPlanner) resolveLayer(ctx context.Context, fn *store.LambdaFunction) map[string]string {
-	if arn := store.OdigosLayerARN(fn.Layers); arn != "" {
+	return p.resolveLayerForDistro(ctx, fn, "")
+}
+func (p *LambdaPlanner) resolveLayerForDistro(ctx context.Context, fn *store.LambdaFunction, distro string) map[string]string {
+	if arn := store.OdigosLayerARN(fn.Layers); arn != "" && layerMatchesDistro(arn, fn.Runtime, firstArch(fn.Architecture), distro) {
 		return map[string]string{PlaceholderLayerARN: arn}
 	}
-	arn, err := NonPublishingLayerARN(ctx, p.layers, fn.Region, fn.Runtime, firstArch(fn.Architecture))
+	arn, err := resolveLambdaLayer(ctx, p.layers, fn.Region, fn.Runtime, firstArch(fn.Architecture), distro, true)
 	if err != nil || arn == "" {
 		return nil
 	}
@@ -222,4 +283,91 @@ func soleInstrumentableContainer(w baseapi.DiscoveredWorkload) string {
 		found = c.Name
 	}
 	return found
+}
+
+func lambdaSnippetReplacements(lang, distro string) map[string]string {
+	resolved := map[string]string{}
+	d := recipeFor(lang, distro)
+	resolved["<LAMBDA_EXEC_WRAPPER>"] = d.ExecWrapper
+	resolved["<JAVA_LAMBDA_EXEC_WRAPPER>"] = d.ExecWrapper
+	resolved["<LAMBDA_OTEL_DISTRO>"] = d.Name
+	resolved["<LAMBDA_DISTRO_DESCRIPTION>"] = fmt.Sprintf("%s (%s). Collector pipelines and SDK defaults are expanded from compact configuration at startup.", d.DisplayName, d.Version)
+	resolved["<LAMBDA_SDK_INSTRUCTIONS>"] = "The selected SDK is loaded by " + d.ExecWrapper + "."
+	resolved["<LAMBDA_CDK_MODE>"] = "// Handler mode"
+	resolved["<LAMBDA_CDK_IMPORT>"] = "OdigosLambdaInstrumentation"
+	resolved["<LAMBDA_CDK_DESTINATION>"] = "{ endpoint: '<OTLP_ENDPOINT>', insecure: <OTLP_INSECURE>, traces: true, metrics: true, logs: true }"
+	resolved["<LAMBDA_DISTRO_PREREQUISITES>"] = "Use the layer matching the selected upstream SDK, region and architecture."
+	if d.Artifact != "" {
+		resolved["<LAMBDA_DISTRO_PREREQUISITES>"] = "ADOT requires two layer slots: attach the matching ADOT SDK and collector layers, replacing previous Odigos SDK/collector layers. Handler mode only."
+		if d.ApplicationSignals {
+			resolved["<LAMBDA_DISTRO_PREREQUISITES>"] += " Before deploying, enable CloudWatch Application Signals service discovery in this account and region and grant the function execution role CloudWatchLambdaApplicationSignalsExecutionRolePolicy (or equivalent permissions). Enable destination traces. AWS also receives service telemetry."
+		}
+	}
+	c := lambdaBootstrapConfig{Version: 1, Service: plan.PlaceholderServiceName, Signals: 7, Endpoint: plan.PlaceholderOTLPEndpoint, ApplicationSignals: d.ApplicationSignals}
+	c.FunctionLogs = lambdaFunctionLogs(lang, d.ExecWrapper)
+	raw, _ := json.Marshal(c)
+	text := strings.TrimSuffix(string(raw), "}") + `,"i":<OTLP_INSECURE>}`
+	for k, v := range lambdaConfigSnippetValues(text) {
+		resolved[k] = v
+	}
+	return resolved
+}
+
+func lambdaCDKDestination(target domaindest.OTLPTarget, headers map[string]string) string {
+	destination := map[string]any{"traces": target.Traces, "metrics": target.Metrics, "logs": target.Logs}
+	if target.Endpoint != "" {
+		destination["endpoint"] = target.Endpoint
+		destination["insecure"] = target.Insecure
+	} else {
+		destination["httpEndpoint"] = target.HTTPEndpoint
+	}
+	if len(headers) != 0 {
+		destination["headers"] = headers
+	}
+	return snippetJSON(destination)
+}
+
+func lambdaLayerSnippetReplacements(language, distro, layer, collector string) map[string]string {
+	if layer == "" {
+		layer = PlaceholderLayerARN
+	}
+	arns := []string{layer}
+	marker := baseapi.IaCMarker{Version: baseapi.IaCMarkerVersion, Layer: layer}
+	if recipeFor(language, distro).Artifact != "" {
+		if collector == "" {
+			collector = "<OTEL_COLLECTOR_LAYER_ARN>"
+		}
+		arns = append(arns, collector)
+		marker.CollectorLayer = collector
+	}
+	encoded := snippetJSON(marker)
+	quoted := snippetJSON(encoded)
+	values := []string{}
+	for _, arn := range arns {
+		values = append(values, snippetJSON(arn))
+	}
+	tags := map[string]string{store.TagLambdaIaC: "v1", store.TagLambdaSDK: layer}
+	tf := []string{fmt.Sprintf("%q = %q", store.TagLambdaIaC, "v1"), fmt.Sprintf("%q = %s", store.TagLambdaSDK, snippetJSON(layer))}
+	cf := []string{fmt.Sprintf("- { Key: %s, Value: %s }", snippetJSON(store.TagLambdaIaC), snippetJSON("v1")), fmt.Sprintf("- { Key: %s, Value: %s }", snippetJSON(store.TagLambdaSDK), snippetJSON(layer))}
+	if len(arns) > 1 {
+		tags[store.TagLambdaCollector] = collector
+		tf = append(tf, fmt.Sprintf("%q = %s", store.TagLambdaCollector, snippetJSON(collector)))
+		cf = append(cf, fmt.Sprintf("- { Key: %s, Value: %s }", snippetJSON(store.TagLambdaCollector), snippetJSON(collector)))
+	}
+	return map[string]string{"<LAMBDA_LAYER_ARNS_JSON>": strings.Join(values, ", "), "<LAMBDA_LAYER_ARNS_SHELL>": strings.Join(values, " "), "<LAMBDA_IAC_MARKER>": string(encoded), "<LAMBDA_IAC_MARKER_QUOTED>": string(quoted), "<LAMBDA_TAGS_TERRAFORM>": strings.Join(tf, "\n            "), "<LAMBDA_TAGS_CLOUDFORMATION>": strings.Join(cf, "\n          "), "<LAMBDA_TAGS_JSON>": snippetJSON(tags)}
+}
+
+// Keep angle-bracket placeholders readable for the UI renderer; json.Marshal's
+// HTML escaping otherwise hides unresolved ARNs as literal Unicode escapes.
+func snippetJSON(value any) string {
+	var b bytes.Buffer
+	encoder := json.NewEncoder(&b)
+	encoder.SetEscapeHTML(false)
+	_ = encoder.Encode(value)
+	return strings.TrimSuffix(b.String(), "\n")
+}
+
+func lambdaConfigSnippetValues(raw string) map[string]string {
+	quoted, _ := json.Marshal(raw)
+	return map[string]string{"<ODIGOS_LAMBDA_CONFIG>": raw, "<LAMBDA_CONFIG_QUOTED>": string(quoted)}
 }

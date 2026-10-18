@@ -179,7 +179,7 @@ pkg/computeplatform/
 | `ODIGOS_DB_SCHEMA` | no (`connector_aws`) | Provider schema |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` | no | Static credentials |
 | `ODIGOS_AWS_ROLE_ARN` / `ODIGOS_AWS_EXTERNAL_ID` | no | AssumeRole (else IRSA / default chain) |
-| `ODIGOS_FARGATE_AGENTS_IMAGE` | no (`registry.odigos.io/odigos-fargate-agents:v0.1.0`) | Fargate agents bundle the sidecar stages from |
+| `ODIGOS_FARGATE_AGENTS_IMAGE` | no (`registry.odigos.io/odigos-fargate-agents:v0.0.18`) | Fargate agents bundle the sidecar stages from |
 | `ODIGOS_ECS_AGENT_IMAGE` | no | odigos-ecs-agent (EC2 cluster eBPF daemon) image — a different artifact |
 | `ODIGOS_AWS_LAMBDA_LAYER_ARNS` / `ODIGOS_AWS_LAMBDA_LAYER_DIR` | no | Lambda layer table / staging dir overrides |
 | `ODIGOS_GQL_ADDR` | no (`:8080`) | GraphQL/health listen address |

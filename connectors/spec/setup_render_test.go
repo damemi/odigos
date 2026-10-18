@@ -98,6 +98,11 @@ func TestSetupArtifactsRender(t *testing.T) {
 				}
 
 				got := renderSetupArtifact(a, permissions, vars)
+				// Distro-specific structured blocks are resolved by the provider planner before the
+				// UI substitutes setup tokens. Representative upstream blocks must be valid YAML.
+				got = strings.ReplaceAll(got, "<LAMBDA_DISTRO_ENV_CLOUDFORMATION>", `OTEL_SDK_DISABLED: "false"`)
+				got = strings.ReplaceAll(got, "<LAMBDA_TAGS_CLOUDFORMATION>", `- { Key: "odigos:iac", Value: "v1" }`)
+				got = strings.ReplaceAll(got, "<LAMBDA_LAYER_ARNS_JSON>", `"arn:aws:lambda:us-east-1:123456789012:layer:example:1"`)
 
 				if tok := setupTokenRe.FindString(got); tok != "" {
 					t.Errorf("rendered output still contains %s:\n%s", tok, got)

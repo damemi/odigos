@@ -360,3 +360,17 @@ func TestValidateRejectsAPlaceholderThatAppearsNowhere(t *testing.T) {
 		t.Errorf("error should say the token is unused, got: %v", err)
 	}
 }
+
+func TestMultipleDistinctLambdaLayers(t *testing.T) {
+	p := Plan{Type: "aws.lambda", Mode: ModeLayer, Fragments: []Fragment{
+		{Anchor: Anchor{Scope: ScopeWorkload, Field: FieldLayers}, Kind: KindLayer, Layer: &Layer{ARN: "arn:aws:lambda:us-east-1:123456789012:layer:sdk:1"}},
+		{Anchor: Anchor{Scope: ScopeWorkload, Field: FieldLayers}, Kind: KindLayer, Layer: &Layer{ARN: "arn:aws:lambda:us-east-1:123456789012:layer:collector:1"}},
+	}}
+	if err := p.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	p.Fragments[1].Layer = p.Fragments[0].Layer
+	if err := p.Validate(); err == nil {
+		t.Fatal("duplicate layer accepted")
+	}
+}

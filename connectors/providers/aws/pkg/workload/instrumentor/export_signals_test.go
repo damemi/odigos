@@ -27,8 +27,15 @@ func TestDestinationSignalsConvergeAcrossTransitions(t *testing.T) {
 
 func TestCollectionSummaryListsSupportedSignals(t *testing.T) {
 	routing := domaindest.Routing{Found: true, Outcome: domaindest.RoutingDirect, Target: domaindest.OTLPTarget{Traces: true, Metrics: true, Logs: true}}
-	for _, note := range []*baseapi.WorkloadRoutingNote{lambdaSignalRoutingNote(routing, "ruby3.3"), fargateSignalRoutingNote(routing, []containerTarget{{recipe: agentRecipe{lang: LangRuby}}})} {
-		if note == nil || note.Code != "collected-signals" || note.Transient || note.Message != "Collecting traces" {
+	for _, c := range []struct {
+		note *baseapi.WorkloadRoutingNote
+		want string
+	}{
+		{lambdaSignalRoutingNote(routing, "ruby3.3"), "Collecting logs and traces"},
+		{fargateSignalRoutingNote(routing, []containerTarget{{recipe: agentRecipe{lang: LangRuby}}}), "Collecting traces"},
+	} {
+		note := c.note
+		if note == nil || note.Code != "collected-signals" || note.Transient || note.Message != c.want {
 			t.Fatalf("unsupported Ruby signals not reported: %+v", note)
 		}
 	}

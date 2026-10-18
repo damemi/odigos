@@ -284,7 +284,7 @@ func metaJSON(m map[string]any) (string, error) {
 // discovery owns keeps a new key by any other writer preserved by default, which is the safe direction to be
 // wrong in.
 var lambdaDiscoveryMetadataKeys = []string{
-	"instrumented", "instrumentation_origin", "handler", "memorySize", "timeout", "version", "state", "last_update_status",
+	"instrumented", "instrumentation_origin", "odigos_tags", "handler", "memorySize", "timeout", "version", "state", "last_update_status",
 	// The VpcConfig keys have to be in this list, not merely written: detaching a function from its VPC
 	// removes VpcConfig entirely, and a stale vpc_id left behind by an overlay would keep grouping the
 	// function onto a network it no longer runs on — pointing it at a Collector it can no longer reach.

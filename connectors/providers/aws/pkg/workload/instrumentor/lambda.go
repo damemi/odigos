@@ -2,6 +2,7 @@ package instrumentor
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -60,9 +61,10 @@ const maxLambdaLayers = 5
 // instrumented but no longer have an enabled source. It is idempotent: live AWS config is the source of
 // truth, so re-running is a no-op once converged.
 type LambdaInstrumentor struct {
-	store  *store.Store
-	cache  *awsclient.Cache
-	layers LayerResolver
+	store     *store.Store
+	snapshots lambdaSnapshotStore
+	cache     *awsclient.Cache
+	layers    LayerResolver
 	// routes resolves the effective destination for every enabled function in one pass. AWS supplies the
 	// regional implementation; nil preserves the connector-wide direct destination for tests and callers
 	// that do not expose managed Collectors.
@@ -86,7 +88,7 @@ func NewLambda(st *store.Store, cache *awsclient.Cache, layers LayerResolver, de
 	if len(routes) > 0 {
 		routeResolver = routes[0]
 	}
-	return &LambdaInstrumentor{store: st, cache: cache, layers: layers, debug: debug, routes: routeResolver}
+	return &LambdaInstrumentor{store: st, snapshots: st, cache: cache, layers: layers, debug: debug, routes: routeResolver}
 }
 
 // EnsurePrerequisite implements base.Prerequisite: Lambda instrumentation needs an OTel layer, so this
@@ -136,7 +138,8 @@ func (i *LambdaInstrumentor) EnsurePrerequisite(ctx context.Context) error {
 
 	var needed, ensured int
 	for _, fn := range functions {
-		if _, want := enabled[fn.FunctionARN]; !want {
+		src, want := enabled[fn.FunctionARN]
+		if !want {
 			continue
 		}
 		if !haveGlobalDestination {
@@ -146,13 +149,13 @@ func (i *LambdaInstrumentor) EnsurePrerequisite(ctx context.Context) error {
 			}
 		}
 		needed++
-		if key := fnLayerKey(fn); canRefresh && key != "" && !inUse[key] && !refreshed[key] {
+		if key := fnLayerKey(fn); canRefresh && recipeFor(LanguageFromRuntime(fn.Runtime), src.distro).Artifact == "" && key != "" && !inUse[key] && !refreshed[key] {
 			refreshed[key] = true
 			if err := refresher.RefreshOrphan(ctx, fn.Region, fn.Runtime, firstArch(fn.Architecture)); err != nil {
 				log.Warn("orphaned odigos layer refresh failed", "function", fn.FunctionName, "region", fn.Region, "error", err)
 			}
 		}
-		if _, err := i.layers.Resolve(ctx, fn.Region, fn.Runtime, firstArch(fn.Architecture)); err != nil {
+		if _, err := resolveLambdaLayer(ctx, i.layers, fn.Region, fn.Runtime, firstArch(fn.Architecture), src.distro, false); err != nil {
 			log.Warn("lambda layer prerequisite unresolved", "function", fn.FunctionName, "region", fn.Region, "error", err)
 			continue
 		}
@@ -250,12 +253,13 @@ func (i *LambdaInstrumentor) Reconcile(ctx context.Context) error {
 			}
 			continue
 		}
-		// Not enabled: only functions the inventory flags as instrumented can need rollback. Discovery
-		// derives that flag from the function env (via ListFunctions), so a never-instrumented function
+		// Not enabled: applied instrumentation or a pending snapshot can need rollback. A pending
+		// snapshot may precede a failed write, or an accepted write interrupted before tag promotion.
+		// A never-instrumented function
 		// needs no per-cycle GetFunctionConfiguration — skipping it avoids an N+1 control-plane GET across
 		// the whole account every reconcile, which shares (and can throttle) the customer's own Lambda
 		// control-plane quota. rollback does its own GET + ownership gate, so we don't pre-check live state.
-		if !fn.Instrumented {
+		if !fn.Instrumented && !store.LambdaHasPendingInstrumentation(fn) {
 			continue
 		}
 		if err := i.rollback(ctx, fn); err != nil {
@@ -311,25 +315,45 @@ func fnLayerKey(fn store.LambdaFunction) string {
 // be reclaimed. Granularity is per language+arch so one language's layer is freed even while another
 // language is still instrumented in the same region.
 func eligibleLayerKeys(enabled map[string]enabledLambdaSource, functions []store.LambdaFunction) map[string]bool {
-	all := map[string]bool{}
-	used := map[string]bool{}
+	all, used := map[string]bool{}, map[string]bool{}
 	for _, fn := range functions {
-		key := fnLayerKey(fn)
-		if key == "" {
+		language := LanguageFromRuntime(fn.Runtime)
+		if language == "" {
 			continue
 		}
-		all[key] = true
-		if _, want := enabled[fn.FunctionARN]; want {
-			used[key] = true
+		arch := firstArch(fn.Architecture)
+		families := []string{language}
+		if language == "java" || language == "python" || language == "nodejs" {
+			families = append(families, "adot-"+language, "adot-collector")
+		}
+		for _, family := range families {
+			all[layerKey(fn.Region, family, arch)] = true
+		}
+		if src, want := enabled[fn.FunctionARN]; want {
+			family := lambdaArtifact(fn.Runtime, src.distro)
+			used[layerKey(fn.Region, family, arch)] = true
+			if family != language {
+				used[layerKey(fn.Region, "adot-collector", arch)] = true
+			}
 		}
 		if fn.Instrumented {
-			used[key] = true
+			// Inventory can lag a successful update: retain the upstream family too until
+			// discovery has recorded the exact SDK and collector layers now in use.
+			used[layerKey(fn.Region, language, arch)] = true
+			for _, arn := range fn.Layers {
+				name, _, ok := store.ParseLayerVersionARN(arn)
+				for _, family := range families {
+					if ok && name == publishedLayerName(family, arch) {
+						used[layerKey(fn.Region, family, arch)] = true
+					}
+				}
+			}
 		}
 	}
 	out := map[string]bool{}
-	for k := range all {
-		if !used[k] {
-			out[k] = true
+	for key := range all {
+		if !used[key] {
+			out[key] = true
 		}
 	}
 	return out
@@ -440,8 +464,11 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 	if usesLambdaWebAdapter(fn.Layers) {
 		activation = ActivationWebServer
 	}
-	if _, err := ResolveLambdaDistro(lang, activation, src.distro); err != nil {
+	if err := ValidateLambdaDistroRuntime(fn.Runtime, activation, src.distro); err != nil {
 		return fmt.Errorf("%w: %v", ErrUnsupportedInstrumentation, err)
+	}
+	if recipeFor(lang, src.distro).ApplicationSignals && !dest.Traces {
+		return fmt.Errorf("ADOT + Application Signals requires traces to be enabled for the destination")
 	}
 	debug := i.debug()
 	// Render the collector's configuration before touching AWS. A destination the collector cannot be
@@ -459,7 +486,11 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 	if !fn.Instrumented {
 		i.setPhase(ctx, fn, store.PhaseVerifying)
 	}
-	layerARN, err := i.layers.Resolve(ctx, fn.Region, fn.Runtime, firstArch(fn.Architecture))
+	layerARN, err := resolveLambdaLayer(ctx, i.layers, fn.Region, fn.Runtime, firstArch(fn.Architecture), src.distro, false)
+	if err != nil {
+		return err
+	}
+	collectorLayerARN, err := resolveLambdaCollector(ctx, i.layers, fn, src.distro, false)
 	if err != nil {
 		return err
 	}
@@ -484,6 +515,22 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 
 		env := currentEnv(cur.Environment)
 		layers := layerARNs(cur.Layers)
+		tags, err := i.readLambdaTags(ctx, client, fn, env, layers)
+		if err != nil {
+			return err
+		}
+
+		if raw := env[store.EnvOdigosManaged]; raw != "" {
+			m, ok := parseManifest(raw)
+			if !ok {
+				return fmt.Errorf("invalid Lambda ownership marker; refusing to modify the function")
+			}
+			if m.SnapshotID != "" {
+				if _, err := i.loadManifest(ctx, fn.FunctionARN, m); err != nil {
+					return err
+				}
+			}
+		}
 
 		// Two instrumentation modes:
 		//   web-server: the function runs behind the AWS Lambda Web Adapter (a web server, not a Lambda
@@ -512,7 +559,12 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 		// Already instrumented as desired for this mode AND settled (updateInProgress was checked above) —
 		// the function has fully converged. Mark instrumented and clear the in-flight phase so the report
 		// shows the terminal Instrumented state. Skipping the update also avoids churning a new version.
-		if i.instrumentedAsDesired(webServer, fn, env, layers, layerARN, dest, debug, reportedServiceName, collectorCfg, src.distro) {
+		if (tags[store.TagLambdaManaged] != "" || tags[store.TagLambdaPending] != "") && env[store.EnvOdigosManaged] != "" && lambdaConfigFromEnvironment(env) != "" && recordedCollectorLayer(env) == collectorLayerARN && i.instrumentedAsDesired(webServer, fn, env, layers, layerARN, dest, debug, reportedServiceName, collectorCfg, src.distro) {
+			if reference, ok := parseManifest(env[store.EnvOdigosManaged]); ok && reference.SnapshotID != "" && (tags[store.TagLambdaPending] != "" || tags[store.TagLambdaSDK] != reference.Layer || tags[store.TagLambdaCollector] != reference.CollectorLayer) {
+				if err := i.promoteLambdaTags(ctx, client, fn.FunctionARN, reference); err != nil {
+					return err
+				}
+			}
 			if err := i.store.SetLambdaInstrumented(ctx, fn.FunctionARN, true); err != nil {
 				log.Warn("set lambda instrumented flag failed", "function", fn.FunctionName, "region", fn.Region, "error", err)
 			}
@@ -525,6 +577,9 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 		// with an opaque InvalidParameterValueException we would retry forever. Reported as an Error workload
 		// state (see ErrMaxLayersReached) so the operator knows to free a layer slot.
 		normalized := normalizeInstrumentationLayers(layers, layerARN)
+		if collectorLayerARN != "" {
+			normalized = append(normalized, collectorLayerARN)
+		}
 		if len(normalized) > maxLambdaLayers {
 			return fmt.Errorf("%w: attaching the Odigos instrumentation layer would give %q %d layers, exceeding the AWS maximum of %d (remove an unused layer to enable instrumentation)",
 				ErrMaxLayersReached, fn.FunctionName, len(normalized), maxLambdaLayers)
@@ -532,28 +587,70 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 
 		// Snapshot what we are about to change BEFORE mutating env, so rollback can restore the function to its
 		// pre-Odigos state. A re-instrument reuses the snapshot recorded in the marker so it is never clobbered.
-		manifest := buildManifest(env, layerARN)
+		snapshotEnv := cloneLambdaEnv(env)
+		if m, ok := parseManifest(env[store.EnvOdigosManaged]); ok && m.SnapshotID != "" {
+			hydrated, err := i.loadManifest(ctx, fn.FunctionARN, m)
+			if err != nil {
+				return err
+			}
+			snapshotEnv[store.EnvOdigosManaged], err = marshalManifest(hydrated)
+			if err != nil {
+				return err
+			}
+		}
+		manifest := buildManifest(snapshotEnv, layerARN)
+		if manifest.PrevTags == nil {
+			manifest.PrevTags = snapshotPriorTags(tags)
+			preserveInitialLambdaWrapper(&manifest, env)
+			preserveIaCOriginal(&manifest, env, tags, layers)
+		}
+		manifest.CollectorLayer = collectorLayerARN
 		// Capture any customer edit to a shared, instrumentor-owned env key made AFTER the snapshot was first
 		// taken, so a value the customer set post-instrument is restored (not deleted) on rollback.
-		reconcileCustomerEdits(&manifest, env, i.desiredSharedEnv(webServer, fn.Runtime, reportedServiceName, dest, debug, collectorCfg))
+		reconcileCustomerEdits(&manifest, env, desiredLambdaSharedEnv(i, webServer, fn.Runtime, src.distro, reportedServiceName, dest, debug, collectorCfg))
+		if lambdaConfigFromEnvironment(env) != "" {
+			// Compact instrumentation owns only its configuration and exec wrapper. Refresh all
+			// other saved values from AWS so customer edits remain untouched during reconciliation.
+			for _, key := range odigosEnvKeys {
+				if key != store.EnvExecWrapper && key != EnvLambdaConfig {
+					manifest.PrevEnv[key] = priorValue(key, env)
+				}
+			}
+		}
 
 		if webServer {
 			applyWebServerEnv(env, manifest, lang, reportedServiceName, dest, collectorCfg)
 		} else {
 			applyHandlerEnv(env, fn.Runtime, src.distro, reportedServiceName, dest, debug, collectorCfg)
 		}
+		if err := compactLambdaEnvironment(env, manifest, webServer, fn.Runtime, src.distro, reportedServiceName, dest, destHeaders, debug); err != nil {
+			return err
+		}
 		layers = normalized
 
 		// Stamp the ownership marker + change snapshot last, over the now-mutated env.
-		marker, err := marshalManifest(manifest)
+		manifest.Config = nil
+		delete(env, store.EnvOdigosManaged)
+		delete(env, store.EnvOdigosIaC)
+		manifest.AppliedFingerprint = lambdaAppliedFingerprint(env, layers)
+		marker, err := i.persistManifest(ctx, fn.FunctionARN, manifest)
 		if err != nil {
 			return err
 		}
-		env[store.EnvOdigosManaged] = marker
+		reference, ok := parseManifest(marker)
+		if !ok {
+			return fmt.Errorf("invalid persisted Lambda snapshot reference")
+		}
+		if err := validateLambdaEnvSize(env); err != nil {
+			return err
+		}
 
+		if err := validateLambdaTagCapacity(tags, collectorLayerARN != ""); err != nil {
+			return err
+		}
 		i.setPhase(ctx, fn, store.PhaseInstrumenting)
-		log.Info("instrumenting lambda", "function", fn.FunctionName, "region", fn.Region, "layer", layerARN, "mode", instrumentMode(webServer))
-		if _, err = client.UpdateFunctionConfiguration(ctx, lambdaConfigUpdateInput(fn.FunctionARN, layers, env, cur.RevisionId)); err != nil {
+		applied, err := i.updateTaggedLambdaConfiguration(ctx, client, lambdaConfigUpdateInput(fn.FunctionARN, layers, env, cur.RevisionId), tags, reference.SnapshotID)
+		if err != nil {
 			if revisionConflict(err) && attempt+1 < maxConfigUpdateAttempts {
 				log.Debug("lambda config changed since read; retrying instrumentation", "function", fn.FunctionName, "region", fn.Region, "attempt", attempt+1)
 				continue
@@ -564,6 +661,13 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 			}
 			return err
 		}
+		if !applied {
+			// TagResource changes RevisionId. Re-read the entire configuration and rebuild the
+			// merge, rather than attaching a fresh revision to potentially stale customer values.
+			continue
+		}
+		log.Info("instrumented lambda; waiting for configuration to settle", "function", fn.FunctionName, "region", fn.Region, "layer", layerARN, "mode", instrumentMode(webServer))
+		// Promotion waits until the next settled read confirms AWS applied this configuration.
 		// Write the live flag through immediately so a reconcile before the next discovery cycle sees the
 		// function as instrumented (keeps rollback-on-disable prompt). The phase is left at "Instrumenting":
 		// the config change is still settling asynchronously in Lambda, and leaving the phase set makes that
@@ -607,6 +711,7 @@ func applyHandlerEnv(env map[string]string, runtime, distro, serviceName string,
 	env[EnvServiceName] = serviceName
 	applyCollectorExport(env, dest, collectorCfg)
 	applySignalActivation(env, dest, LanguageFromRuntime(runtime))
+	applyLambdaDistributionEnv(env, LanguageFromRuntime(runtime), distro)
 	if debug {
 		env[EnvOtelLogLevel] = otelLogLevelDebug
 	} else {
@@ -640,6 +745,7 @@ func applyWebServerEnv(env map[string]string, manifest managedManifest, lang, se
 	env[EnvServiceName] = serviceName
 	applyCollectorExport(env, dest, collectorCfg)
 	applySignalActivation(env, dest, lang)
+	applyLambdaDistributionEnv(env, lang, "")
 	delete(env, envLegacyOTLPEndpoint)
 	delete(env, envLegacyOTLPHeaders)
 	delete(env, EnvOtelLogLevel)
@@ -730,6 +836,33 @@ func instrumentationDiff(webServer bool, fn store.LambdaFunction, env map[string
 	if !store.OdigosInstrumented(env) {
 		return []string{componentOwnershipMarker}
 	}
+
+	if raw := lambdaConfigFromEnvironment(env); raw != "" {
+		c, err := parseLambdaConfig(raw)
+		expectedService := reportedServiceName
+		if expectedService == "" {
+			expectedService = fn.FunctionName
+		}
+		if err != nil || c.Service != expectedService || c.Signals != signalMask(dest) || c.Debug != (debug && !webServer) || c.ApplicationSignals != recipeFor(LanguageFromRuntime(fn.Runtime), distro).ApplicationSignals || c.FunctionLogs != (dest.Logs && !webServer && lambdaFunctionLogs(LanguageFromRuntime(fn.Runtime), execWrapperForRuntime(fn.Runtime, distro))) || (c.WebWrapper != nil) != webServer {
+			return []string{componentCollectorExport}
+		}
+		cfg, err := renderCollectorConfig(c.target(), c.Headers)
+		if err != nil || cfg != collectorCfg {
+			return []string{componentCollectorExport}
+		}
+		expectedWrapper := execWrapperForRuntime(fn.Runtime, distro)
+		if webServer {
+			expectedWrapper = lambdaWebServerWrapper
+		}
+		if env[store.EnvExecWrapper] != expectedWrapper {
+			return []string{componentExecWrapper}
+		}
+		virtual, err := expandedLambdaEnvironment(env, fn.Runtime, distro)
+		if err != nil {
+			return []string{componentCollectorExport}
+		}
+		return instrumentationDiff(webServer, fn, virtual, layers, layerARN, dest, debug, reportedServiceName, collectorCfg, distro)
+	}
 	var diff []string
 	if reportedServiceName == "" {
 		reportedServiceName = fn.FunctionName
@@ -737,14 +870,23 @@ func instrumentationDiff(webServer bool, fn store.LambdaFunction, env map[string
 	if env[EnvServiceName] != reportedServiceName {
 		diff = append(diff, componentServiceName)
 	}
-	if !collectorExportAsDesired(env, dest, collectorCfg) || !dest.LambdaSignalConfigurationMatches(env, LanguageFromRuntime(fn.Runtime)) {
+	if !collectorExportAsDesired(env, dest, collectorCfg) || !lambdaSignalConfigurationMatches(env, dest, LanguageFromRuntime(fn.Runtime), distro) {
 		diff = append(diff, componentCollectorExport)
 	}
 	// An empty desired ARN means the layer could not be resolved read-only. The caller decides what that
 	// means (the observer records it as an observation limitation); claiming the layer is missing on the
 	// strength of not having looked it up would be manufactured drift.
-	if layerARN != "" && !contains(layers, layerARN) {
+	if layerARN != "" && (!contains(layers, layerARN) || !layerFamilyMatches(layerARN, fn.Runtime, firstArch(fn.Architecture), distro)) {
 		diff = append(diff, componentInstrumentationLayer)
+	}
+	if recipeFor(LanguageFromRuntime(fn.Runtime), distro).Artifact != "" {
+		if collector := recordedCollectorLayer(env); collector != "" {
+			if !contains(layers, collector) || !isCollectorLayer(collector, firstArch(fn.Architecture)) {
+				diff = append(diff, componentInstrumentationLayer)
+			}
+		} else if !hasCollectorLayer(layers, firstArch(fn.Architecture)) {
+			diff = append(diff, componentInstrumentationLayer)
+		}
 	}
 	if hasDuplicateLayerVersions(layers) {
 		diff = append(diff, componentLayerVersionConflict)
@@ -799,12 +941,26 @@ func (i *LambdaInstrumentor) rollback(ctx context.Context, fn store.LambdaFuncti
 
 		env := currentEnv(cur.Environment)
 		layers := layerARNs(cur.Layers)
+		tags, err := i.readLambdaTags(ctx, client, fn, env, layers)
+		if err != nil {
+			return err
+		}
 
 		// Ownership gate: only roll back instrumentation we can attribute to ourselves. A function we never
 		// instrumented (e.g. a customer's own OpenTelemetry/ADOT setup) is left completely untouched — we never
 		// strip a layer or env var by name-matching. Still correct a possibly-stale inventory flag.
+		if raw := env[store.EnvOdigosManaged]; raw != "" {
+			if _, ok := parseManifest(raw); !ok {
+				return fmt.Errorf("invalid Lambda ownership marker; refusing rollback")
+			}
+		}
 		manifest, owned := i.ownership(ctx, fn, env)
 		if !owned {
+			if tags[store.TagLambdaPending] != "" {
+				if _, err := client.UntagResource(ctx, &lambda.UntagResourceInput{Resource: aws.String(fn.FunctionARN), TagKeys: []string{store.TagLambdaPending}}); err != nil {
+					return err
+				}
+			}
 			// Sync the flag to what is actually on the function rather than to false. A function carrying only
 			// the IaC marker IS instrumented — by the customer's own deployment — and is simply not ours to
 			// roll back; writing false there would contradict discovery and be flipped straight back on its
@@ -815,21 +971,36 @@ func (i *LambdaInstrumentor) rollback(ctx context.Context, fn store.LambdaFuncti
 			return nil
 		}
 
-		// Restore the function to its pre-Odigos state from the recorded snapshot: delete keys we added (prior
-		// value absent) and restore the exact customer values we overwrote.
-		for k, prev := range manifest.PrevEnv {
-			if prev == nil {
-				delete(env, k)
-			} else {
-				env[k] = *prev
+		if manifest.SnapshotID != "" {
+			manifest, err = i.loadManifest(ctx, fn.FunctionARN, manifest)
+			if err != nil {
+				return err
 			}
 		}
-		delete(env, store.EnvOdigosManaged)
+		// Restore the function to its pre-Odigos state from the recorded snapshot: delete keys we added (prior
+		// value absent) and restore the exact customer values we overwrote.
+		restoreLambdaEnvironment(env, manifest)
+
 		// Remove only the exact layer we attached — never an unrelated (customer) layer.
 		if manifest.Layer != "" {
 			layers = remove(layers, manifest.Layer)
+			if manifest.CollectorLayer != "" {
+				layers = remove(layers, manifest.CollectorLayer)
+			}
 		}
 
+		for _, arn := range manifest.PriorLayers {
+			if !contains(layers, arn) {
+				layers = append(layers, arn)
+			}
+		}
+		if len(layers) > maxLambdaLayers {
+			return fmt.Errorf("restoring original Lambda layers exceeds AWS's %d-layer limit", maxLambdaLayers)
+		}
+
+		if err := validateLambdaEnvSize(env); err != nil {
+			return err
+		}
 		log.Info("rolling back lambda instrumentation", "function", fn.FunctionName, "region", fn.Region)
 		if _, err = client.UpdateFunctionConfiguration(ctx, lambdaConfigUpdateInput(fn.FunctionARN, layers, env, cur.RevisionId)); err != nil {
 			if revisionConflict(err) && attempt+1 < maxConfigUpdateAttempts {
@@ -842,9 +1013,12 @@ func (i *LambdaInstrumentor) rollback(ctx context.Context, fn store.LambdaFuncti
 			}
 			return err
 		}
+		if err := restoreLambdaTags(ctx, client, fn.FunctionARN, manifest.PrevTags); err != nil {
+			return fmt.Errorf("restore Lambda ownership tags: %w", err)
+		}
 		// Write the live flag through immediately (mirror of instrument): the next reconcile sees the
 		// function as uninstrumented without waiting for the next discovery cycle.
-		if err := i.store.SetLambdaInstrumented(ctx, fn.FunctionARN, false); err != nil {
+		if err := i.store.SetLambdaInstrumented(ctx, fn.FunctionARN, manifest.PrevTags[store.TagLambdaIaC] != nil); err != nil {
 			log.Warn("set lambda instrumented flag failed", "function", fn.FunctionName, "region", fn.Region, "error", err)
 		}
 		if err := i.store.SetLambdaRouting(ctx, fn.FunctionARN, "", nil); err != nil {
@@ -951,16 +1125,23 @@ func remove(xs []string, x string) []string {
 	return out
 }
 
-// managedManifest is the JSON payload stored in the EnvOdigosManaged env var. Layer is the exact
+// managedManifest is the private rollback payload (legacy v1 markers stored it inline).
+// A v2 Lambda marker stores only SnapshotID and layer ownership. Layer is the exact
 // layer-version ARN we attached (empty if none). PrevEnv maps every env key we set or deleted to the
 // value it had before we touched it: a nil entry means the key was absent (rollback deletes it), a
 // non-nil entry is the customer's prior value (rollback restores it verbatim). This is the persisted
 // "previous config" that lets rollback be non-destructive.
 type managedManifest struct {
-	Version   int                `json:"v"`
-	Layer     string             `json:"layer,omitempty"`
-	PrevEnv   map[string]*string `json:"prevEnv,omitempty"`
-	SignalEnv map[string]string  `json:"signalEnv,omitempty"`
+	Version            int                    `json:"v"`
+	SnapshotID         string                 `json:"snapshot,omitempty"`
+	Config             *lambdaBootstrapConfig `json:"c,omitempty"`
+	AppliedFingerprint string                 `json:"appliedFingerprint,omitempty"`
+	PrevTags           map[string]*string     `json:"prevTags,omitempty"`
+	PriorLayers        []string               `json:"priorLayers,omitempty"`
+	Layer              string                 `json:"layer,omitempty"`
+	CollectorLayer     string                 `json:"collectorLayer,omitempty"`
+	PrevEnv            map[string]*string     `json:"prevEnv,omitempty"`
+	SignalEnv          map[string]string      `json:"signalEnv,omitempty"`
 }
 
 const managedManifestVersion = 1
@@ -970,7 +1151,7 @@ const managedManifestVersion = 1
 // function exactly — including append-style vars (JAVA_TOOL_OPTIONS/NODE_OPTIONS/PYTHONPATH), where the
 // snapshot is the customer's original value that rollback puts back verbatim.
 var odigosEnvKeys = append([]string{
-	store.EnvExecWrapper, EnvServiceName, EnvCollectorConfigURI, EnvOtelLogLevel,
+	store.EnvExecWrapper, EnvLambdaConfig, EnvServiceName, EnvCollectorConfigURI, EnvOtelLogLevel,
 	// No longer set (the inline collector config replaced them) but still snapshotted and stripped, so a
 	// function instrumented by an earlier version is restored cleanly rather than left carrying them.
 	EnvCollectorEndpoint, EnvCollectorInsecure,
@@ -980,7 +1161,7 @@ var odigosEnvKeys = append([]string{
 	"OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED",
 	"OTEL_SDK_DISABLED",
 	"OTEL_NODE_ENABLED_INSTRUMENTATIONS",
-}, domaindest.SignalTransportOverrides()...)
+}, append(domaindest.SignalTransportOverrides(), lambdaDistributionKeys()...)...)
 
 // buildManifest snapshots the pre-Odigos config for the keys we change and records the layer we attach.
 // A re-instrument reuses the snapshot already stored in the marker so our own values are never recorded
@@ -1084,7 +1265,12 @@ func reconcileCustomerEdits(m *managedManifest, liveEnv, desired map[string]stri
 		if prev, ok := m.PrevEnv[key]; ok && prev != nil && *prev == live {
 			continue // already recorded as the customer's value
 		}
-		if m.SignalEnv[key] == live {
+		if m.SignalEnv[key] == live || m.SignalEnv[key] == managedEnvValue(live) {
+			continue
+		}
+		// Legacy inline markers did not record the applied collector config hash. Preserve
+		// their original snapshot when migrating a connector-rendered collector document.
+		if key == EnvCollectorConfigURI && m.SignalEnv[key] == "" && strings.HasPrefix(live, "yaml:{receivers: {otlp: {protocols: ") && strings.Contains(live, collectorProcessors) {
 			continue
 		}
 		// Older manifests did not record the previous selectors. Both standardized
@@ -1097,10 +1283,8 @@ func reconcileCustomerEdits(m *managedManifest, liveEnv, desired map[string]stri
 		m.PrevEnv[key] = &v
 	}
 	m.SignalEnv = map[string]string{}
-	for _, key := range []string{EnvTracesExporter, EnvMetricsExporter, EnvLogsExporter, "OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED"} {
-		if value, ok := desired[key]; ok {
-			m.SignalEnv[key] = value
-		}
+	for key, value := range desired {
+		m.SignalEnv[key] = managedEnvValue(value)
 	}
 }
 
@@ -1136,6 +1320,12 @@ func parseManifest(s string) (managedManifest, bool) {
 	}
 	var m managedManifest
 	if err := json.Unmarshal([]byte(s), &m); err != nil {
+		return managedManifest{}, false
+	}
+	if m.Version != 1 && m.Version != 2 {
+		return managedManifest{}, false
+	}
+	if m.Version == 2 && m.SnapshotID == "" {
 		return managedManifest{}, false
 	}
 	return m, true
@@ -1222,4 +1412,21 @@ func hasDuplicateLayerVersions(layers []string) bool {
 		seen[name] = true
 	}
 	return false
+}
+
+func desiredLambdaSharedEnv(i *LambdaInstrumentor, webServer bool, runtime, distro, serviceName string, dest domaindest.OTLPTarget, debug bool, collectorCfg string) map[string]string {
+	env := i.desiredSharedEnv(webServer, runtime, serviceName, dest, debug, collectorCfg)
+	if !webServer {
+		applyLambdaDistributionEnv(env, LanguageFromRuntime(runtime), distro)
+	}
+	return env
+}
+
+// Ownership needs equality, not a second copy of long instrumentation lists in
+// Lambda's 4 KiB environment. Existing literal values remain readable on upgrade.
+func managedEnvValue(value string) string {
+	if len(value) <= 128 {
+		return value
+	}
+	return fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(value)))
 }

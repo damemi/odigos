@@ -28,6 +28,9 @@ const IaCMarkerVersion = 1
 // ships today, so a new release is not reported as drift until the customer re-applies. Unrecorded
 // layer → incomplete check, not a wrong verdict (manual mode must not look layers up).
 //
+// CollectorLayer — optional (Lambda ADOT only). The separately attached collector version,
+// pinned independently of the language SDK so manual deployments retain their applied version.
+//
 // Image — optional (staged-agent platforms). The agents-bundle image the artifact staged the agent files
 // from: the Fargate counterpart of Layer, with the same rule and for the same reason. Conformance holds
 // the workload to the image RECORDED here rather than to the one this connector build happens to pin, so
@@ -40,12 +43,13 @@ const IaCMarkerVersion = 1
 // the desired state itself. Only ECS Fargate reads it today; Cloud Run / Container Apps key off
 // presence. Missing language → skip the cross-check (omission is not drift).
 type IaCMarker struct {
-	Version  int    `json:"v"`
-	Source   string `json:"source,omitempty"`
-	Release  string `json:"version,omitempty"`
-	Layer    string `json:"layer,omitempty"`
-	Image    string `json:"image,omitempty"`
-	Language string `json:"lang,omitempty"`
+	Version        int    `json:"v"`
+	Source         string `json:"source,omitempty"`
+	Release        string `json:"version,omitempty"`
+	Layer          string `json:"layer,omitempty"`
+	CollectorLayer string `json:"collectorLayer,omitempty"`
+	Image          string `json:"image,omitempty"`
+	Language       string `json:"lang,omitempty"`
 }
 
 // ParseIaCMarker decodes the marker's payload, reporting false for an absent or malformed value.
