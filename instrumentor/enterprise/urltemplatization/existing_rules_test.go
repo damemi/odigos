@@ -15,8 +15,10 @@ func TestCollectTemplatesFromIC_PrefersCollectorConfig(t *testing.T) {
 			WorkloadCollectorConfig: []commonapi.ContainerCollectorConfig{
 				{
 					ContainerName: "app",
-					UrlTemplatization: &actionsapi.UrlTemplatizationConfig{
-						Templates: []string{"/users/{id}"},
+					SourceCollectorConfig: commonapi.SourceCollectorConfig{
+						UrlTemplatization: &actionsapi.UrlTemplatizationConfig{
+							Templates: []string{"/users/{id}"},
+						},
 					},
 				},
 			},

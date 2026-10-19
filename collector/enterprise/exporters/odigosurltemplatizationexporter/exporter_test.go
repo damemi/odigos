@@ -30,7 +30,7 @@ type stubOdigosConfigExtension struct {
 	err   error
 }
 
-func (s *stubOdigosConfigExtension) GetFromResource(pcommon.Resource) (*api.ContainerCollectorConfig, bool) {
+func (s *stubOdigosConfigExtension) GetFromResource(pcommon.Resource) (*api.SourceCollectorConfig, bool) {
 	return nil, false
 }
 func (s *stubOdigosConfigExtension) IsActiveSource(pcommon.Resource) bool { return true }
