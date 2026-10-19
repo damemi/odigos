@@ -246,6 +246,10 @@ func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instru
 		return err
 	}
 
+	if err := g.inst.ApplyDynamicConfig(dynamic.Payload(javaPayloadConfig(containerConfig))); err != nil {
+		return err
+	}
+
 	kafkaBodyEnabled := false
 	if containerConfig.Traces != nil && containerConfig.Traces.PayloadCollection != nil && containerConfig.Traces.PayloadCollection.Messaging != nil {
 		kafkaBodyEnabled = true
@@ -340,4 +344,25 @@ func createJVMMetricsConfig(config *common.MetricsSourceAgentJavaRuntimeMetricsC
 	}
 
 	return jvmConfig
+}
+
+func javaPayloadConfig(c *odigosv1.ContainerAgentConfig) dynamic.PayloadConfig {
+	var cfg dynamic.PayloadConfig
+	if c.Traces == nil || c.Traces.PayloadCollection == nil {
+		return cfg
+	}
+	pc := c.Traces.PayloadCollection
+	if pc.HttpRequest != nil {
+		cfg.HTTPRequest = &dynamic.HTTPPayloadSettings{Enabled: true}
+	}
+	if pc.HttpResponse != nil {
+		cfg.HTTPResponse = &dynamic.HTTPPayloadSettings{Enabled: true}
+	}
+	if pc.DbQuery != nil {
+		cfg.DbQuery = &dynamic.DbQuerySettings{Enabled: true}
+	}
+	if pc.Messaging != nil {
+		cfg.Messaging = &dynamic.MessagingSettings{Enabled: true}
+	}
+	return cfg
 }
