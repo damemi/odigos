@@ -210,7 +210,7 @@ func TestADOTCLISnippetsMatchInjectedEnvironment(t *testing.T) {
 				if err := json.Unmarshal([]byte(strings.ReplaceAll(lambdaConfigFromEnvironment(document.Variables), "<OTLP_INSECURE>", "false")), &compact); err != nil {
 					t.Fatal(err)
 				}
-				if (compact["a"] == true) != (suffix != "") {
+				if (compact["applicationSignals"] == true) != (suffix != "") {
 					t.Fatal("wrong AWS preset in compact configuration")
 				}
 				if document.Variables[store.EnvOdigosIaC] != "" || document.Variables[store.EnvOdigosManaged] != "" {

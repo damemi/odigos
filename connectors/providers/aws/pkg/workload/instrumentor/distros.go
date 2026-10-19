@@ -90,7 +90,7 @@ func DesiredLambdaPlanForDistro(lang, activation, name string) (plan.Plan, error
 		p.Placeholders = append(p.Placeholders, plan.Placeholder{Token: "<OTEL_COLLECTOR_LAYER_ARN>", Description: "The Odigos ADOT collector layer version ARN for the same region and architecture. Attach it alongside the ADOT SDK layer."})
 		p.Notes = append(p.Notes, "Use the matching ADOT layer, replacing any previous Odigos SDK layer. ADOT supports handler mode only.")
 		if recipe.ApplicationSignals {
-			p.Notes = append(p.Notes, "Application Signals additionally sends service telemetry to AWS. Enable Application Signals service discovery once in this account and region, and grant the function execution role CloudWatchLambdaApplicationSignalsExecutionRolePolicy. The selected destination must enable traces.")
+			p.Notes = append(p.Notes, "Application Signals additionally sends service telemetry to AWS. For this manual deployment, enable Application Signals service discovery and grant the existing CloudWatchLambdaApplicationSignalsExecutionRolePolicy to the function execution role. The selected destination must enable traces and metrics.")
 		}
 	}
 	wrapper := recipeFor(lang, d.Name).ExecWrapper
@@ -113,7 +113,7 @@ func DesiredLambdaPlanForDistro(lang, activation, name string) (plan.Plan, error
 	}
 	p.Placeholders = filteredPlaceholders
 	p.Placeholders = append(p.Placeholders, plan.Placeholder{Token: "<ODIGOS_LAMBDA_CONFIG>", Description: "Compact destination and SDK settings. The layer builds collector pipelines and process environment at startup."})
-	p.Notes = append(p.Notes, "Add Lambda tags odigos:iac=v1 and odigos:sdk-layer=<OTEL_LAYER_ARN>. ADOT also requires an odigos:collector-layer tag matching the attached collector ARN. Keep customer SDK environment variables unchanged. The Odigos layer applies its SDK settings only at process startup. For Web Adapter activation, use the Odigos web-server wrapper and record the original execution wrapper in configuration field w.")
+	p.Notes = append(p.Notes, "Add Lambda tags odigos:iac=v1 and odigos:sdk-layer=<OTEL_LAYER_ARN>. ADOT also requires an odigos:collector-layer tag matching the attached collector ARN. Keep customer SDK environment variables unchanged. The Odigos layer applies its SDK settings only at process startup. For Web Adapter activation, use the Odigos web-server wrapper and record the original execution wrapper in configuration field webWrapper.")
 	p.Sort()
 	return p, p.Validate()
 }

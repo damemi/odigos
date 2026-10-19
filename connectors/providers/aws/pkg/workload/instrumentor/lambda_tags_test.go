@@ -70,7 +70,7 @@ func TestTaggedLambdaUpdateRereadsAfterTaggingAndPreservesRevisionGuard(t *testi
 		t.Fatal(err)
 	}
 	wantEnv := currentEnv(cur.Environment)
-	wantEnv[EnvLambdaConfig] = `{"v":1}`
+	wantEnv[EnvLambdaConfig] = `{"version":2}`
 	fresh := lambdaConfigUpdateInput(arn, []string{"layer"}, wantEnv, cur.RevisionId)
 	applied, err = i.updateTaggedLambdaConfiguration(ctx, client, fresh, tags, "snapshot")
 	if err != nil || !applied || tagWrites != 1 || updates != 1 || !reflect.DeepEqual(appliedEnv, wantEnv) {
@@ -116,7 +116,7 @@ func TestLambdaTagTransitionSurvivesFailedUpdateAndRestart(t *testing.T) {
 	i := &LambdaInstrumentor{snapshots: db}
 	fn := store.LambdaFunction{FunctionARN: "arn:aws:lambda:us-east-1:123456789012:function:sample"}
 	original := map[string]string{"CUSTOMER": "original"}
-	updated := map[string]string{"CUSTOMER": "original", EnvLambdaConfig: `{"v":1,"s":"service","t":7,"e":"collector:4317"}`, store.EnvExecWrapper: "/opt/otel-handler"}
+	updated := map[string]string{"CUSTOMER": "original", EnvLambdaConfig: `{"version":2,"service":"service","signals":["traces","metrics","logs"],"endpoint":"collector:4317"}`, store.EnvExecWrapper: "/opt/otel-handler"}
 	sdk := "arn:aws:lambda:us-east-1:123456789012:layer:odigos-otel-nodejs-x86_64:2"
 	m := buildManifest(original, sdk)
 	m.PrevTags = snapshotPriorTags(tags)
@@ -211,7 +211,7 @@ func TestLambdaTagCapacityAndFingerprint(t *testing.T) {
 func TestTakingOverIaCPreservesOriginalLayerAndWrapper(t *testing.T) {
 	sdk := "arn:aws:lambda:us-east-1:123456789012:layer:odigos-otel-nodejs-x86_64:1"
 	tags := map[string]string{store.TagLambdaIaC: "v1", store.TagLambdaSDK: sdk}
-	env := store.LambdaAttributionEnvironment(map[string]string{store.EnvExecWrapper: "/opt/otel-handler", EnvLambdaConfig: `{"v":1,"s":"customer","t":1,"e":"customer:4317"}`}, tags)
+	env := store.LambdaAttributionEnvironment(map[string]string{store.EnvExecWrapper: "/opt/otel-handler", EnvLambdaConfig: `{"version":2,"service":"customer","signals":["traces"],"endpoint":"customer:4317"}`}, tags)
 	m := buildManifest(env, "new-sdk")
 	m.PrevTags = snapshotPriorTags(tags)
 	preserveIaCOriginal(&m, env, tags, []string{sdk})

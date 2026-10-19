@@ -231,6 +231,9 @@ func (o *LambdaObserver) observation(ctx context.Context, fn store.LambdaFunctio
 	// there is no desired state to judge this function against, so say that rather than reporting every
 	// marked function as Partial because the connector cannot describe what it wants.
 	collectorCfg, cfgErr := renderCollectorConfig(dest, destHeaders)
+	if cfgErr == nil {
+		cfgErr = validateLambdaApplicationSignalsTarget(LanguageFromRuntime(fn.Runtime), src.distro, dest)
+	}
 	if cfgErr != nil {
 		obs.Conformance = fn.Observation.Conformance
 		obs.Missing = fn.Observation.Missing

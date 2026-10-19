@@ -185,7 +185,7 @@ func TestAllLambdaPlansUseCompactEnvironment(t *testing.T) {
 func TestEveryLambdaDistroCompactEnvironmentAndCustomerIsolation(t *testing.T) {
 	for _, recipe := range lambdaRecipes() {
 		for mask := 1; mask < 8; mask++ {
-			if recipe.ApplicationSignals && mask&1 == 0 {
+			if recipe.ApplicationSignals && mask&3 != 3 {
 				continue
 			}
 			t.Run(recipe.Name+string(rune('0'+mask)), func(t *testing.T) {
@@ -215,7 +215,7 @@ func TestEveryLambdaDistroCompactEnvironmentAndCustomerIsolation(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if c.Signals != mask || c.Service != "service" || c.ApplicationSignals != recipe.ApplicationSignals || !c.HTTP {
+				if int(c.Signals) != mask || c.Service != "service" || c.ApplicationSignals != recipe.ApplicationSignals || !c.HTTP {
 					t.Fatal("wrong compact settings")
 				}
 				if c.FunctionLogs != (target.Logs && lambdaFunctionLogs(recipe.Language, recipe.ExecWrapper)) {
@@ -247,7 +247,7 @@ func TestCompactRollbackPreservesCustomerEdits(t *testing.T) {
 	m.AppliedFingerprint = "compact-protocol"
 	env := cloneLambdaEnv(original)
 	env[store.EnvExecWrapper] = "/opt/otel-handler"
-	env[EnvLambdaConfig] = `{"v":1,"s":"ours","t":7,"e":"collector:4317"}`
+	env[EnvLambdaConfig] = `{"version":2,"service":"ours","signals":["traces","metrics","logs"],"endpoint":"collector:4317"}`
 	env[EnvServiceName] = "customer-changed-service"
 	env[EnvCollectorConfigURI] = "customer-changed-collector"
 	env["OTEL_NODE_ENABLED_INSTRUMENTATIONS"] = "customer-changed-instrumentations"

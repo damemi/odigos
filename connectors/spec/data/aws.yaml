@@ -206,6 +206,15 @@ workloads:
           - lambda:ListLayers
           - lambda:PublishLayerVersion
           - lambda:DeleteLayerVersion
+          # Used only by the ADOT + Application Signals preset. Attach the existing
+          # CloudWatchLambdaApplicationSignalsExecutionRolePolicy; never create policies.
+          - iam:GetPolicy
+          - iam:ListAttachedRolePolicies
+          - iam:AttachRolePolicy
+          - iam:GetRole
+          - application-signals:StartDiscovery
+          - iam:CreateServiceLinkedRole
+          - cloudtrail:CreateServiceLinkedChannel
       - name: aws.fargate-task
         displayName: Amazon ECS (Fargate task)
         description: >-
@@ -997,6 +1006,24 @@ setup:
                 {{permissions}}
               ],
               "Resource": "*"
+            },
+            {
+              "Sid": "DenyUnrelatedPolicyAttachments",
+              "Effect": "Deny",
+              "Action": "iam:AttachRolePolicy",
+              "Resource": "*",
+              "Condition": {
+                "ArnNotLike": { "iam:PolicyARN": "arn:*:iam::aws:policy/CloudWatchLambdaApplicationSignalsExecutionRolePolicy" }
+              }
+            },
+            {
+              "Sid": "DenyUnrelatedServiceLinkedRoles",
+              "Effect": "Deny",
+              "Action": "iam:CreateServiceLinkedRole",
+              "Resource": "*",
+              "Condition": {
+                "StringNotEquals": { "iam:AWSServiceName": "application-signals.cloudwatch.amazonaws.com" }
+              }
             }
           ]
         }
@@ -1623,6 +1650,20 @@ setup:
                         Resource: "*"
                         Action:
                           {{permissions}}
+                      - Sid: DenyUnrelatedPolicyAttachments
+                        Effect: Deny
+                        Action: [iam:AttachRolePolicy]
+                        Resource: "*"
+                        Condition:
+                          ArnNotLike:
+                            iam:PolicyARN: "arn:*:iam::aws:policy/CloudWatchLambdaApplicationSignalsExecutionRolePolicy"
+                      - Sid: DenyUnrelatedServiceLinkedRoles
+                        Effect: Deny
+                        Action: [iam:CreateServiceLinkedRole]
+                        Resource: "*"
+                        Condition:
+                          StringNotEquals:
+                            iam:AWSServiceName: application-signals.cloudwatch.amazonaws.com
 
         Outputs:
           RoleArn:
@@ -1686,6 +1727,28 @@ setup:
             actions = [
               {{permissions}}
             ]
+          }
+          statement {
+            sid       = "DenyUnrelatedPolicyAttachments"
+            effect    = "Deny"
+            resources = ["*"]
+            actions   = ["iam:AttachRolePolicy"]
+            condition {
+              test     = "ArnNotLike"
+              variable = "iam:PolicyARN"
+              values   = ["arn:*:iam::aws:policy/CloudWatchLambdaApplicationSignalsExecutionRolePolicy"]
+            }
+          }
+          statement {
+            sid       = "DenyUnrelatedServiceLinkedRoles"
+            effect    = "Deny"
+            resources = ["*"]
+            actions   = ["iam:CreateServiceLinkedRole"]
+            condition {
+              test     = "StringNotEquals"
+              variable = "iam:AWSServiceName"
+              values   = ["application-signals.cloudwatch.amazonaws.com"]
+            }
           }
         }
 
@@ -2491,7 +2554,7 @@ setup:
             {
               # --- the agent-staging container: it copies the Java agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.18"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.19"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
               mountPoints = [{
@@ -2573,7 +2636,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.18"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.19"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
@@ -2658,7 +2721,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.18',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.19',
         });
 
         odigos.instrument({
@@ -2721,7 +2784,7 @@ setup:
             {
               # --- the agent-staging container: it copies the Python agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.18"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.19"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python"]
               mountPoints = [{
@@ -2805,7 +2868,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.18"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.19"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python"]
@@ -2894,7 +2957,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.18',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.19',
         });
 
         odigos.instrument({
@@ -2959,7 +3022,7 @@ setup:
             {
               # --- the agent-staging container: it copies the Node.js agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.18"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.19"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs"]
               mountPoints = [{
@@ -3041,7 +3104,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.18"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.19"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs"]
@@ -3126,7 +3189,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.18',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.19',
         });
 
         odigos.instrument({
@@ -3189,7 +3252,7 @@ setup:
             {
               # --- the agent-staging container: it copies the .NET agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.18"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.19"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet"]
               mountPoints = [{
@@ -3273,7 +3336,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.18"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.19"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet"]
@@ -3365,7 +3428,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.18',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.19',
         });
 
         odigos.instrument({
@@ -3431,7 +3494,7 @@ setup:
             {
               # --- the agent-staging container: it copies the PHP agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.18"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.19"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/php /var/odigos/php"]
               mountPoints = [{
@@ -3513,7 +3576,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.18"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.19"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/php /var/odigos/php"]
@@ -3602,7 +3665,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.18',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.19',
         });
 
         odigos.instrument({
@@ -3667,7 +3730,7 @@ setup:
             {
               # --- the agent-staging container: it copies the Ruby agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.18"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.19"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/ruby /var/odigos/ruby"]
               mountPoints = [{
@@ -3749,7 +3812,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.18"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.19"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/ruby /var/odigos/ruby"]
@@ -3838,7 +3901,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.18',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.19',
         });
 
         odigos.instrument({

@@ -21,7 +21,7 @@ func (s instructionStore) GetLambdaFunction(context.Context, string) (*store.Lam
 	return &s.fn, true, nil
 }
 func (instructionStore) OTLPExportTarget(context.Context) (domaindest.OTLPTarget, bool, error) {
-	return domaindest.OTLPTarget{HTTPEndpoint: "https://telemetry.example.com", Traces: true, Logs: true}, true, nil
+	return domaindest.OTLPTarget{HTTPEndpoint: "https://telemetry.example.com", Traces: true, Metrics: true, Logs: true}, true, nil
 }
 func (instructionStore) OTLPExportHeaders(context.Context) (map[string]string, error) {
 	return map[string]string{"test-header": "test-value"}, nil
@@ -71,14 +71,14 @@ func TestLambdaInstructionsFollowSelectedDistro(t *testing.T) {
 			if err = json.Unmarshal([]byte(values["<ODIGOS_LAMBDA_CONFIG>"]), &config); err != nil {
 				t.Fatal(err)
 			}
-			if config.Signals != 5 || !config.HTTP || config.ApplicationSignals != recipe.ApplicationSignals || config.FunctionLogs != lambdaFunctionLogs(recipe.Language, recipe.ExecWrapper) {
+			if config.Signals != 7 || !config.HTTP || config.ApplicationSignals != recipe.ApplicationSignals || config.FunctionLogs != lambdaFunctionLogs(recipe.Language, recipe.ExecWrapper) {
 				t.Fatalf("wrong selected config: %+v", config)
 			}
 			var destination map[string]any
 			if err = json.Unmarshal([]byte(values["<LAMBDA_CDK_DESTINATION>"]), &destination); err != nil {
 				t.Fatal(err)
 			}
-			if destination["httpEndpoint"] != "https://telemetry.example.com" || destination["metrics"] != false || destination["logs"] != true || destination["headers"].(map[string]any)["test-header"] != "test-value" {
+			if destination["httpEndpoint"] != "https://telemetry.example.com" || destination["metrics"] != true || destination["logs"] != true || destination["headers"].(map[string]any)["test-header"] != "test-value" {
 				t.Fatalf("CDK does not match destination: %v", destination)
 			}
 			arts := []baseapi.InstrumentationArtifact{}

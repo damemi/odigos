@@ -467,8 +467,8 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 	if err := ValidateLambdaDistroRuntime(fn.Runtime, activation, src.distro); err != nil {
 		return fmt.Errorf("%w: %v", ErrUnsupportedInstrumentation, err)
 	}
-	if recipeFor(lang, src.distro).ApplicationSignals && !dest.Traces {
-		return fmt.Errorf("ADOT + Application Signals requires traces to be enabled for the destination")
+	if err := validateLambdaApplicationSignalsTarget(lang, src.distro, dest); err != nil {
+		return err
 	}
 	debug := i.debug()
 	// Render the collector's configuration before touching AWS. A destination the collector cannot be
@@ -556,9 +556,14 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 			return fmt.Errorf("%w: %s", ErrUnsupportedInstrumentation, reason)
 		}
 
-		// Already instrumented as desired for this mode AND settled (updateInProgress was checked above) —
-		// the function has fully converged. Mark instrumented and clear the in-flight phase so the report
-		// shows the terminal Instrumented state. Skipping the update also avoids churning a new version.
+		// Recheck AWS prerequisites even when the function's layers and environment
+		// already match, so a removed policy attachment is repaired automatically.
+		if recipeFor(lang, src.distro).ApplicationSignals {
+			if err := i.ensureApplicationSignals(ctx, fn.Region, aws.ToString(cur.Role)); err != nil {
+				return err
+			}
+		}
+		// Already instrumented and settled: mark converged without churning a version.
 		if (tags[store.TagLambdaManaged] != "" || tags[store.TagLambdaPending] != "") && env[store.EnvOdigosManaged] != "" && lambdaConfigFromEnvironment(env) != "" && recordedCollectorLayer(env) == collectorLayerARN && i.instrumentedAsDesired(webServer, fn, env, layers, layerARN, dest, debug, reportedServiceName, collectorCfg, src.distro) {
 			if reference, ok := parseManifest(env[store.EnvOdigosManaged]); ok && reference.SnapshotID != "" && (tags[store.TagLambdaPending] != "" || tags[store.TagLambdaSDK] != reference.Layer || tags[store.TagLambdaCollector] != reference.CollectorLayer) {
 				if err := i.promoteLambdaTags(ctx, client, fn.FunctionARN, reference); err != nil {

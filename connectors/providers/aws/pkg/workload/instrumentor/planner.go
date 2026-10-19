@@ -89,6 +89,9 @@ func (p *LambdaPlanner) PlanFor(ctx context.Context, w baseapi.DiscoveredWorkloa
 	if target, ok, err := p.store.OTLPExportTarget(ctx); err != nil {
 		return nil, err
 	} else if ok {
+		if err := validateLambdaApplicationSignalsTarget(lang, distro, target); err != nil {
+			return nil, err
+		}
 		headers, err := p.store.OTLPExportHeaders(ctx)
 		if err != nil {
 			return nil, err
@@ -97,7 +100,7 @@ func (p *LambdaPlanner) PlanFor(ctx context.Context, w baseapi.DiscoveredWorkloa
 		if service == "" {
 			service = fn.FunctionName
 		}
-		c := lambdaBootstrapConfig{Version: 1, Service: service, Signals: signalMask(target), Endpoint: target.Endpoint, Insecure: target.Insecure, Headers: headers, ApplicationSignals: recipeFor(lang, distro).ApplicationSignals}
+		c := lambdaBootstrapConfig{Version: lambdaConfigVersion, Service: service, Signals: signalMask(target), Endpoint: target.Endpoint, Insecure: target.Insecure, Headers: headers, ApplicationSignals: recipeFor(lang, distro).ApplicationSignals}
 		c.FunctionLogs = target.Logs && activation != ActivationWebServer && lambdaFunctionLogs(lang, recipeFor(lang, distro).ExecWrapper)
 		if c.Endpoint == "" {
 			c.Endpoint = target.HTTPEndpoint
@@ -122,7 +125,7 @@ func (p *LambdaPlanner) PlanFor(ctx context.Context, w baseapi.DiscoveredWorkloa
 		resolved["<JAVA_LAMBDA_EXEC_WRAPPER>"] = lambdaWebServerWrapper
 		resolved["<LAMBDA_CDK_MODE>"] = "mode: OdigosInstrumentationMode.WEB_SERVER,"
 		resolved["<LAMBDA_CDK_IMPORT>"] = "OdigosLambdaInstrumentation, OdigosInstrumentationMode"
-		resolved["<LAMBDA_SDK_INSTRUCTIONS>"] = "The selected SDK is loaded by /opt/odigos-webserver. Configuration field w preserves the function's original execution wrapper."
+		resolved["<LAMBDA_SDK_INSTRUCTIONS>"] = "The selected SDK is loaded by /opt/odigos-webserver. Configuration field webWrapper preserves the function's original execution wrapper."
 	}
 	resolved[plan.PlaceholderPackageVersion] = config.CDKPackageVersion()
 	return &baseapi.PlannedInstrumentation{Plan: pl, Resolved: resolved}, nil
@@ -300,13 +303,13 @@ func lambdaSnippetReplacements(lang, distro string) map[string]string {
 	if d.Artifact != "" {
 		resolved["<LAMBDA_DISTRO_PREREQUISITES>"] = "ADOT requires two layer slots: attach the matching ADOT SDK and collector layers, replacing previous Odigos SDK/collector layers. Handler mode only."
 		if d.ApplicationSignals {
-			resolved["<LAMBDA_DISTRO_PREREQUISITES>"] += " Before deploying, enable CloudWatch Application Signals service discovery in this account and region and grant the function execution role CloudWatchLambdaApplicationSignalsExecutionRolePolicy (or equivalent permissions). Enable destination traces. AWS also receives service telemetry."
+			resolved["<LAMBDA_DISTRO_PREREQUISITES>"] += " Enable destination traces and metrics. Automatic mode attaches the existing CloudWatchLambdaApplicationSignalsExecutionRolePolicy and enables Application Signals discovery. For manual deployment, configure that policy and discovery first. AWS also receives service telemetry."
 		}
 	}
-	c := lambdaBootstrapConfig{Version: 1, Service: plan.PlaceholderServiceName, Signals: 7, Endpoint: plan.PlaceholderOTLPEndpoint, ApplicationSignals: d.ApplicationSignals}
+	c := lambdaBootstrapConfig{Version: lambdaConfigVersion, Service: plan.PlaceholderServiceName, Signals: 7, Endpoint: plan.PlaceholderOTLPEndpoint, ApplicationSignals: d.ApplicationSignals}
 	c.FunctionLogs = lambdaFunctionLogs(lang, d.ExecWrapper)
 	raw, _ := json.Marshal(c)
-	text := strings.TrimSuffix(string(raw), "}") + `,"i":<OTLP_INSECURE>}`
+	text := strings.TrimSuffix(string(raw), "}") + `,"insecure":<OTLP_INSECURE>}`
 	for k, v := range lambdaConfigSnippetValues(text) {
 		resolved[k] = v
 	}
