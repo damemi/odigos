@@ -99,7 +99,9 @@ type Finding struct {
 	Labels        map[string]string `json:"labels,omitempty"`
 }
 
-func toPayload(ev notify.Event, now time.Time) Payload {
+// ToPayload builds the public JSON document for ev; other JSON sinks reuse it
+// so every backend sees the same schema.
+func ToPayload(ev notify.Event, now time.Time) Payload {
 	return Payload{
 		EventID:   ev.ID(),
 		EventType: "finding." + string(ev.Action),
@@ -119,7 +121,7 @@ func (s *sink) Deliver(ctx context.Context, events []notify.Event, _ notify.Exte
 	now := time.Now()
 	out := make([]notify.DeliveryResult, len(events))
 	for i, ev := range events {
-		p := toPayload(ev, now)
+		p := ToPayload(ev, now)
 		status, err := s.post(ctx, p, p.EventID, p.EventType)
 		out[i] = notify.DeliveryResult{FindingKey: ev.Key, HTTPStatus: status, Err: err}
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/insights/internal/notify"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/notify/sinks/alertmanager"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/notify/sinks/slack"
+	"github.com/odigos-io/odigos-enterprise/insights/internal/notify/sinks/splunk"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/notify/sinks/webhook"
 )
 
@@ -16,5 +17,6 @@ func NewRegistry(deps notify.Deps) *notify.Registry {
 	r.Register(alertmanager.Descriptor, alertmanager.New)
 	r.Register(webhook.Descriptor, webhook.New)
 	r.Register(slack.Descriptor, slack.New)
+	r.Register(splunk.Descriptor, splunk.New)
 	return r
 }

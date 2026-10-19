@@ -76,7 +76,7 @@ tags:
     description: Engine-wide operational settings and storage health.
   - name: integrations
     description: >
-      Delivery of findings to external backends (Alertmanager, Slack, webhooks).
+      Delivery of findings to external backends (Alertmanager, Slack, Splunk, webhooks).
       `GET /integrations/catalog` describes every supported backend and the
       form to configure it, so clients render integration editors generically.
       A finding is delivered to every integration whose filters (kinds,
