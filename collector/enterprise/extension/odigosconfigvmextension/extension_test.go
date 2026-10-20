@@ -45,6 +45,14 @@ func (r *recordingCallback) piiMasking(t *testing.T) *actions.PiiMaskingConfig {
 	return cfg.PiiMasking
 }
 
+func (r *recordingCallback) urlTemplatization(t *testing.T) *actions.UrlTemplatizationConfig {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cfg, ok := r.last[globalKey]
+	require.True(t, ok, "OnSet was not called for the global key")
+	return cfg.UrlTemplatization
+}
+
 func writeFile(t *testing.T, dir, name, content string) {
 	t.Helper()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644))
@@ -95,9 +103,7 @@ config:
   type: urlTemplatization
   signals: [TRACES]
   config:
-    templatizationRulesGroups:
-      - templatizationRules:
-          - template: /api/{id}
+    templatizationRules: ["/api/{id}"]
 `)
 	writeFile(t, dir, "broken.yaml", "- name: [unclosed")
 	writeFile(t, dir, "pii-dup.yaml.dup", piiActionCreditCard)
@@ -120,6 +126,165 @@ func TestLoadWithoutPiiMaskingActionsReturnsNil(t *testing.T) {
 	require.NoError(t, err)
 	cfg := buildCollectorConfig(zap.NewNop(), actionsByType)
 	assert.Nil(t, cfg.PiiMasking)
+}
+
+const urlActionUsers = `
+- name: url-users
+  type: urlTemplatization
+  signals: [TRACES]
+  config:
+    templatizationRules: ["/users/{id}", "/orders/{id}"]
+`
+
+func TestLoadMergesUrlTemplatizationActions(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "url-users.yaml", urlActionUsers)
+	writeFile(t, dir, "url-more.yaml", `
+- name: url-more
+  type: urlTemplatization
+  signals: [TRACES]
+  config:
+    templatizationRules: ["/users/{id}", "/carts/{id}"]
+    default:
+      skipPolicy:
+        skipHttpStatusCodes: [404]
+- name: url-skip
+  type: urlTemplatization
+  signals: [TRACES]
+  config:
+    default:
+      skipPolicy:
+        skipHttpStatusCodes: [401, 404]
+- name: url-disabled
+  type: urlTemplatization
+  disabled: true
+  signals: [TRACES]
+  config:
+    templatizationRules: ["/ignored/{id}"]
+    default:
+      disabled: true
+`)
+	writeFile(t, dir, "pii-cards.yaml", piiActionCreditCard)
+
+	actionsByType, err := loadActions(zap.NewNop(), dir)
+	require.NoError(t, err)
+	cfg := buildCollectorConfig(zap.NewNop(), actionsByType)
+
+	got := cfg.UrlTemplatization
+	require.NotNil(t, got)
+	assert.Equal(t, []string{"/carts/{id}", "/orders/{id}", "/users/{id}"}, got.Templates)
+	require.NotNil(t, got.Default)
+	require.NotNil(t, got.Default.SkipPolicy)
+	assert.Equal(t, []int{401, 404}, got.Default.SkipPolicy.SkipHttpStatusCodes)
+	require.NotNil(t, cfg.PiiMasking)
+}
+
+func TestMergeUrlTemplatizationConfigs(t *testing.T) {
+	t.Run("no actions", func(t *testing.T) {
+		assert.Nil(t, mergeUrlTemplatizationConfigs(nil))
+	})
+
+	t.Run("default templatization enabled when unset", func(t *testing.T) {
+		got := mergeUrlTemplatizationConfigs([]actions.UrlTemplatizationConfig{{Templates: []string{"/a/{id}"}}})
+		require.NotNil(t, got)
+		assert.Equal(t, &actions.DefaultTemplatizationConfig{}, got.Default)
+	})
+
+	t.Run("disabled wins over skip policy", func(t *testing.T) {
+		got := mergeUrlTemplatizationConfigs([]actions.UrlTemplatizationConfig{
+			{Templates: []string{"/a/{id}"}, Default: &actions.DefaultTemplatizationConfig{SkipPolicy: &actions.DefaultTemplatizationSkipPolicyConfig{SkipForNonSuccessCodes: true}}},
+			{Default: &actions.DefaultTemplatizationConfig{Disabled: true}},
+		})
+		require.NotNil(t, got)
+		assert.Equal(t, []string{"/a/{id}"}, got.Templates)
+		assert.Nil(t, got.Default)
+	})
+
+	t.Run("skip non success codes wins over status codes list", func(t *testing.T) {
+		got := mergeUrlTemplatizationConfigs([]actions.UrlTemplatizationConfig{
+			{Default: &actions.DefaultTemplatizationConfig{SkipPolicy: &actions.DefaultTemplatizationSkipPolicyConfig{SkipHttpStatusCodes: []int{404}}}},
+			{Default: &actions.DefaultTemplatizationConfig{SkipPolicy: &actions.DefaultTemplatizationSkipPolicyConfig{SkipForNonSuccessCodes: true}}},
+		})
+		require.NotNil(t, got)
+		assert.Equal(t, &actions.DefaultTemplatizationSkipPolicyConfig{SkipForNonSuccessCodes: true}, got.Default.SkipPolicy)
+	})
+}
+
+func TestLoadWithoutUrlTemplatizationActionsReturnsNil(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "pii-cards.yaml", piiActionCreditCard)
+
+	actionsByType, err := loadActions(zap.NewNop(), dir)
+	require.NoError(t, err)
+	cfg := buildCollectorConfig(zap.NewNop(), actionsByType)
+	assert.Nil(t, cfg.UrlTemplatization)
+}
+
+func TestUrlTemplatizationChangesArePushedToCallbacks(t *testing.T) {
+	dir := t.TempDir()
+	ext := startExtension(t, dir)
+
+	cb := newRecordingCallback()
+	ext.RegisterWorkloadConfigCacheCallback(cb)
+	assert.Nil(t, cb.urlTemplatization(t))
+
+	writeFile(t, dir, "url-users.yaml", urlActionUsers)
+	require.Eventually(t, func() bool {
+		cfg := cb.urlTemplatization(t)
+		return cfg != nil && len(cfg.Templates) == 2
+	}, 5*time.Second, 50*time.Millisecond)
+
+	require.NoError(t, os.Remove(filepath.Join(dir, "url-users.yaml")))
+	require.Eventually(t, func() bool {
+		return cb.urlTemplatization(t) == nil
+	}, 5*time.Second, 50*time.Millisecond)
+}
+
+func TestLoadMergesDbActions(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "db.yaml", `
+- name: db-literals
+  type: dbQueryTemplatization
+  signals: [TRACES]
+  config:
+    templatizeLiterals: true
+- name: db-casts
+  type: dbQueryTemplatization
+  signals: [TRACES]
+  config:
+    removePostgresCastOperator: true
+- name: db-infer
+  type: inferDbAttributes
+  signals: [TRACES]
+`)
+
+	actionsByType, err := loadActions(zap.NewNop(), dir)
+	require.NoError(t, err)
+	cfg := buildCollectorConfig(zap.NewNop(), actionsByType)
+
+	assert.Equal(t, &actions.DbQueryTemplatizationConfig{TemplatizeLiterals: true, RemovePostgresCastOperator: true}, cfg.DbQueryTemplatization)
+	assert.Equal(t, &actions.InferDbAttributesConfig{}, cfg.InferDbAttributes)
+}
+
+func TestLoadWithoutEnabledDbActionsReturnsNil(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "db.yaml", `
+- name: db-no-options
+  type: dbQueryTemplatization
+  signals: [TRACES]
+  config: {}
+- name: db-infer-disabled
+  type: inferDbAttributes
+  disabled: true
+  signals: [TRACES]
+`)
+
+	actionsByType, err := loadActions(zap.NewNop(), dir)
+	require.NoError(t, err)
+	cfg := buildCollectorConfig(zap.NewNop(), actionsByType)
+
+	assert.Nil(t, cfg.DbQueryTemplatization)
+	assert.Nil(t, cfg.InferDbAttributes)
 }
 
 func TestRegisterDeliversCurrentConfigAndEveryResourceMapsToGlobalKey(t *testing.T) {

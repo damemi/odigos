@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261019180635-ad4c88beb48f
+	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261020111437-15a37689ec31
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/component v1.65.0
 	go.opentelemetry.io/collector/component/componenttest v0.159.0

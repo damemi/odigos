@@ -1,0 +1,6 @@
+- name: db-query-templatization
+  type: dbQueryTemplatization
+  signals:
+    - TRACES
+  config:
+    templatizeLiterals: true

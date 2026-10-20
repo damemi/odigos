@@ -31,7 +31,10 @@ type collectorConfigBuilder func(logger *zap.Logger, actions []action, cfg *comm
 // collectorConfigBuilders maps each supported vm-agent action type (it must match the type vm-agent
 // writes to actions.d) to its builder. Supporting a new action type means adding an entry here.
 var collectorConfigBuilders = map[string]collectorConfigBuilder{
-	"piiMasking": buildPiiMasking,
+	"piiMasking":            buildPiiMasking,
+	"urlTemplatization":     buildUrlTemplatization,
+	"dbQueryTemplatization": buildDbQueryTemplatization,
+	"inferDbAttributes":     buildInferDbAttributes,
 }
 
 // loadActions reads the enabled actions in dir whose type has a builder, grouped by type. Files that

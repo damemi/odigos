@@ -508,7 +508,7 @@ require (
 	github.com/odigos-io/go-rtml v0.0.1 // indirect
 	github.com/odigos-io/odigos-enterprise/common-enterprise v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000 // indirect
-	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261019180635-ad4c88beb48f // indirect
+	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261020111437-15a37689ec31 // indirect
 	github.com/oklog/ulid/v2 v2.1.2 // indirect
 	github.com/open-telemetry/opamp-go v0.23.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding v0.159.0 // indirect
@@ -835,7 +835,7 @@ replace github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector =
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector => github.com/odigos-io/odigos/collector/connectors/servicegraphconnector v1.39.0-pre3.0.20261019175154-00f7ee5fdf91
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261019180635-ad4c88beb48f
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261020111437-15a37689ec31
 
 replace go.opentelemetry.io/collector/config/configgrpc => github.com/odigos-io/odigos/collector/config/configgrpc v1.39.0-pre3.0.20261019175154-00f7ee5fdf91
 
