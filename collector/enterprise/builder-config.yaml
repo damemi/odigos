@@ -22,6 +22,7 @@ extensions:
   - gomod: github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v0.159.0
   # Enterprise-only: verifies the Odigos on-prem token at startup and on expiry.
   - gomod: github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension v0.0.0-00010101000000-000000000000
+  - gomod: github.com/odigos-io/odigos-enterprise/collector/extension/odigosconfigvmextension v0.0.0-00010101000000-000000000000
 
 exporters:
   - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.159.0
@@ -164,6 +165,7 @@ replaces:
   - github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor => ../processors/odigossymbolizeprocessor
   - github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver => ../receivers/odigosebpfreceiver
   - github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension => ../extension/odigosenterpriseauthextension
+  - github.com/odigos-io/odigos-enterprise/collector/extension/odigosconfigvmextension => ../extension/odigosconfigvmextension
   - github.com/odigos-io/odigos-enterprise/collector/exporters/odigosurltemplatizationexporter => ../exporters/odigosurltemplatizationexporter
   # odigosauth lives at the enterprise repo root, copied into the build context by the Dockerfile.
   - github.com/odigos-io/odigos-enterprise/odigosauth => ../../odigosauth
@@ -174,7 +176,7 @@ replaces:
   - github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector => github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v1.39.0-pre3.0.20261019175154-00f7ee5fdf91
   - github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector => github.com/odigos-io/odigos/collector/connectors/servicegraphconnector v1.39.0-pre3.0.20261019175154-00f7ee5fdf91
   # Past the tag: odigoscapabilitiesextension needs common/capabilities, added after v1.34.0-pre3.
-  - github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261019175154-00f7ee5fdf91
+  - github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261019180635-ad4c88beb48f
   - go.opentelemetry.io/collector/config/configgrpc => github.com/odigos-io/odigos/collector/config/configgrpc v1.39.0-pre3.0.20261019175154-00f7ee5fdf91
   - github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension => github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v1.39.0-pre3.0.20261019175154-00f7ee5fdf91
   # Same commit as common above; this module has no published tag yet.

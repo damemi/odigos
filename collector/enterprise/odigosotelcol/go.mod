@@ -6,6 +6,7 @@ go 1.26.4
 
 require (
 	github.com/odigos-io/odigos-enterprise/collector/exporters/odigosurltemplatizationexporter v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos-enterprise/collector/extension/odigosconfigvmextension v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor v0.0.0-00010101000000-000000000000
@@ -507,7 +508,7 @@ require (
 	github.com/odigos-io/go-rtml v0.0.1 // indirect
 	github.com/odigos-io/odigos-enterprise/common-enterprise v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000 // indirect
-	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261019175154-00f7ee5fdf91 // indirect
+	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261019180635-ad4c88beb48f // indirect
 	github.com/oklog/ulid/v2 v2.1.2 // indirect
 	github.com/open-telemetry/opamp-go v0.23.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding v0.159.0 // indirect
@@ -820,6 +821,8 @@ replace github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfrec
 
 replace github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension => ../extension/odigosenterpriseauthextension
 
+replace github.com/odigos-io/odigos-enterprise/collector/extension/odigosconfigvmextension => ../extension/odigosconfigvmextension
+
 replace github.com/odigos-io/odigos-enterprise/collector/exporters/odigosurltemplatizationexporter => ../exporters/odigosurltemplatizationexporter
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../../odigosauth
@@ -832,7 +835,7 @@ replace github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector =
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector => github.com/odigos-io/odigos/collector/connectors/servicegraphconnector v1.39.0-pre3.0.20261019175154-00f7ee5fdf91
 
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261019175154-00f7ee5fdf91
+replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261019180635-ad4c88beb48f
 
 replace go.opentelemetry.io/collector/config/configgrpc => github.com/odigos-io/odigos/collector/config/configgrpc v1.39.0-pre3.0.20261019175154-00f7ee5fdf91
 

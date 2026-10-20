@@ -1035,8 +1035,8 @@ github.com/odigos-io/odigos/collector/processors/odigosurltemplateprocessor v1.3
 github.com/odigos-io/odigos/collector/processors/odigosurltemplateprocessor v1.39.0-pre3.0.20261019175154-00f7ee5fdf91/go.mod h1:3ycoufjuelnl91OgK7Kl8mzXC8rlSZNdGsU85JL+Ymc=
 github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v1.39.0-pre3.0.20261019175154-00f7ee5fdf91 h1:L2iIxgO2W0DwDPygKkrHUTPFLZTK2vig91dbDWbZXUg=
 github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider v1.39.0-pre3.0.20261019175154-00f7ee5fdf91/go.mod h1:JEZDKeKktKLl4QpG6X2HdW/YbftGo9HXWkXJ/FKQfoY=
-github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261019175154-00f7ee5fdf91 h1:wjzilkpXwGt7Zz0x3zFsf+vr+zNMyyiLsBCYdOrgWRc=
-github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261019175154-00f7ee5fdf91/go.mod h1:0e23PSV0c4cAR13QAPG4pRa2AaREPkls0F2Zj9emwXI=
+github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261019180635-ad4c88beb48f h1:i6M4gWbibMjN5BU36sFd2eDbmLdm8SH1pXZKEG40pDc=
+github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261019180635-ad4c88beb48f/go.mod h1:0e23PSV0c4cAR13QAPG4pRa2AaREPkls0F2Zj9emwXI=
 github.com/oklog/ulid/v2 v2.1.2 h1:IEclFb9JNvzYA6MW2SCxbLzcHTVsfqm3PrqGQJH5zec=
 github.com/oklog/ulid/v2 v2.1.2/go.mod h1:rcEKHmBBKfef9DhnvX7y1HZBYxjXb0cP5ExxNsTT1QQ=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
