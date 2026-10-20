@@ -1,0 +1,19 @@
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationRule
+metadata:
+  name: kernel-traces-rule
+  namespace: odigos-test
+spec:
+  ruleName: kernel-traces
+  scopes:
+    sources:
+      - namespace: default
+        kind: Deployment
+        name: membership
+      - namespace: default
+        kind: Deployment
+        name: frontend
+  kernelTraces:
+    filesystem: {}
+    subprocesses:
+      recordCommandArgs: true

@@ -519,12 +519,12 @@ jobs:
           - kube-version: "1.32"
             kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
             test-scenario: "control-plane"
-          # log-correlation: eBPF log capture is a property of the odiglet and the kernel it runs
-          # on rather than of the kubernetes version, so one version is enough and the matrix does
-          # not need three more jobs for it.
+          # instrumentation-rules: eBPF log capture and kernel traces are properties of the odiglet and
+          # the kernel it runs on rather than of the kubernetes version, so one version is enough and
+          # the matrix does not need three more jobs for it.
           - kube-version: "1.32"
             kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
-            test-scenario: "log-correlation"
+            test-scenario: "instrumentation-rules"
           # important-customers: one entry per customer, only runs on release PRs (release-bot-* → releases/*).
           # To add a customer: duplicate an entry below and set customer to the slug defined in
           # tests/e2e/important-customers/customers.sh (e.g. greatwall).

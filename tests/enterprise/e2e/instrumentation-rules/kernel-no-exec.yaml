@@ -1,0 +1,28 @@
+apiVersion: e2e.tests.odigos.io/v1
+kind: TraceTest
+description: |
+  This test verifies that once subprocesses is removed from the kernel traces rule, a request still
+  gets the file spans of membership (Go) and frontend (Java), and no exec spans.
+query: |
+  length([?(
+    span.serviceName == 'membership' &&
+    span.name == 'syscall openat' &&
+    span.spanAttributes."file.path" == '/etc/odigos-demo/membership-tiers.json'
+  )]) > `0`
+
+  &&
+
+  length([?(
+    span.serviceName == 'frontend' &&
+    span.name == 'syscall openat' &&
+    span.spanAttributes."file.path" == '/etc/odigos-demo/return-policy.txt'
+  )]) > `0`
+
+  &&
+
+  length([?(
+    (span.serviceName == 'membership' || span.serviceName == 'frontend') &&
+    starts_with(span.name, 'exec ')
+  )]) == `0`
+expected:
+  minimum: 1

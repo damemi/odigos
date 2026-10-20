@@ -1,15 +1,18 @@
 apiVersion: chainsaw.kyverno.io/v1alpha1
 kind: Test
 metadata:
-  name: log-correlation
+  name: instrumentation-rules
 spec:
   description: |
-    This e2e test verifies eBPF log capture: log lines written by instrumented processes are
-    delivered to the destination carrying the trace context of the request that produced them.
+    This e2e test verifies instrumentation rules that odiglet implements in eBPF for every language.
 
-    Only the Go and Java eBPF distros provision the correlation maps the capture depends on, so correlation
-    is asserted for membership (Go) and frontend (Java); inventory (Python) and coupon (Node) are
-    only checked for arriving logs.
+    eBPF log capture: log lines written by instrumented processes are delivered to the destination
+    carrying the trace context of the request that produced them. Only the Go and Java eBPF distros
+    provision the correlation maps the capture depends on, so correlation is asserted for membership
+    (Go) and frontend (Java); inventory (Python) and coupon (Node) are only checked for arriving logs.
+
+    Kernel traces: file and subprocess spans are added under the span membership (Go) and frontend
+    (Java) are serving, and follow the rule as it is enabled and changed on running processes.
   skipDelete: true
   steps:
     - name: Prepare destination
@@ -187,8 +190,9 @@ spec:
               echo "Captured logs currently in the trace db:"
               kubectl get --raw /api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/logs | jq -c '.[] | {serviceName, bodyText, traceId, spanId}'
         - podLogs:
-            name: odiglet
+            selector: app.kubernetes.io/name=odiglet
             namespace: odigos-test
+            tail: 200
 
     - name: Verify Log Correlation - Go Resolves To A Real Span
       try:
@@ -197,8 +201,9 @@ spec:
               bash ../../common/scripts/assert_log_trace_correlation.sh membership "isMember called" "/isMember"
       catch:
         - podLogs:
-            name: odiglet
+            selector: app.kubernetes.io/name=odiglet
             namespace: odigos-test
+            tail: 200
 
     # Java resolves trace context by linux thread id where Go resolves it by goroutine, so this is
     # a different half of the capture rather than a second example of the same one.
@@ -225,8 +230,9 @@ spec:
               echo "Captured logs currently in the trace db:"
               kubectl get --raw /api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/logs | jq -c '.[] | {serviceName, bodyText, traceId, spanId}'
         - podLogs:
-            name: odiglet
+            selector: app.kubernetes.io/name=odiglet
             namespace: odigos-test
+            tail: 200
 
     - name: Verify Log Correlation - Java Resolves To A Real Span
       try:
@@ -235,8 +241,9 @@ spec:
               bash ../../common/scripts/assert_log_trace_correlation.sh frontend "Buying product with id" "/buy"
       catch:
         - podLogs:
-            name: odiglet
+            selector: app.kubernetes.io/name=odiglet
             namespace: odigos-test
+            tail: 200
 
     # Capture is language-agnostic; Python and Node logs arrive without trace context.
     - name: Verify Logs Captured - Python And Node
@@ -257,5 +264,91 @@ spec:
               echo "Captured logs currently in the trace db:"
               kubectl get --raw /api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/logs | jq -c '.[] | {serviceName, bodyText, traceId, spanId}'
         - podLogs:
-            name: odiglet
+            selector: app.kubernetes.io/name=odiglet
             namespace: odigos-test
+            tail: 200
+
+    # applied after the apps are instrumented, so the rule reaches the running processes as a config
+    # update rather than with their first load.
+    - name: Enable Kernel Traces
+      try:
+        - apply:
+            file: kernel-rule.yaml
+
+    # odiglet applies the rule asynchronously, so a request sent right after it can still run without
+    # kernel traces. Traffic is repeated until both languages report them.
+    - name: Verify Kernel Traces
+      try:
+        - script:
+            timeout: 3m
+            content: |
+              job=https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
+              script=$(mktemp)
+              trap 'rm -f "$script"' EXIT
+              curl -sSL --retry 5 --retry-delay 5 -o "$script" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh
+
+              until bash "$script" kernel-go.yaml && bash "$script" kernel-java.yaml; do
+                kubectl apply -f "$job"
+                kubectl wait --for=condition=complete -f "$job" --timeout=1m
+                kubectl delete -f "$job"
+                sleep 5
+              done
+
+              # the other services served the same requests, so they would have kernel spans by now
+              bash "$script" kernel-scope.yaml
+      catch:
+        - script:
+            content: |
+              echo "Kernel spans of membership and frontend currently in the trace db:"
+              kubectl get --raw "/api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/spans" \
+                | jq -c '.[] | select((.serviceName == "membership" or .serviceName == "frontend") and (.name | test("^(syscall|exec) "))) | {serviceName, name, traceId, parentSpanId, spanAttributes}'
+        - podLogs:
+            selector: app.kubernetes.io/name=odiglet
+            namespace: odigos-test
+            tail: 200
+
+    - name: Disable Subprocess Traces
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              kubectl patch instrumentationrule kernel-traces-rule -n odigos-test --type=json \
+                -p '[{"op": "remove", "path": "/spec/kernelTraces/subprocesses"}]'
+
+              until [ -z "$(kubectl get instrumentationconfig deployment-membership deployment-frontend -n default \
+                -o jsonpath='{.items[*].spec.containers[*].traces.kernelTraces.subprocesses}')" ]; do
+                sleep 1
+              done
+
+    # Clearing leaves only traces of requests sent after it. Spans that arrive late for earlier requests
+    # lack their parents, so trace queries skip them.
+    - name: Verify Exec Spans Stop
+      try:
+        - script:
+            timeout: 3m
+            content: |
+              job=https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
+              script=$(mktemp)
+              curl -sSL --retry 5 --retry-delay 5 -o "$script" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh
+
+              # odiglet applies the rule change a little after the instrumentation configs show it
+              until
+                kubectl get --raw /api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/clear >/dev/null
+                kubectl apply -f "$job"
+                kubectl wait --for=condition=complete -f "$job" --timeout=1m
+                kubectl delete -f "$job"
+                # spans of one request can reach the trace db in separate batches
+                sleep 5
+                bash "$script" kernel-no-exec.yaml
+              do :; done
+
+              rm -f "$script"
+      catch:
+        - script:
+            content: |
+              kubectl get instrumentationconfig deployment-membership deployment-frontend -n default \
+                -o jsonpath='{range .items[*]}{.metadata.name}: {.spec.containers[*].traces.kernelTraces}{"\n"}{end}'
+        - podLogs:
+            selector: app.kubernetes.io/name=odiglet
+            namespace: odigos-test
+            tail: 200
