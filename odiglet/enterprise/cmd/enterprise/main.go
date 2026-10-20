@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
 	_ "net/http/pprof"
 	"os"
 	"strconv"
@@ -18,9 +19,11 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 
+	"github.com/odigos-io/ebpf-core/pkg/instrumentors/kernel"
 	coreotel "github.com/odigos-io/ebpf-core/pkg/otel"
 	"github.com/odigos-io/ebpf-core/pkg/wasp"
 	enterprisedistros "github.com/odigos-io/odigos-enterprise/distros"
+	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/kernelobservability"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/logcapture"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/sdks"
 	"github.com/odigos-io/odigos-enterprise/odigosauth"
@@ -141,6 +144,19 @@ func main() {
 		}
 	}()
 
+	// No eBPF object is loaded here: the kernel instrumentation loads its programs and maps when the
+	// first process whose workload enables kernel traces is loaded by its generic factory.
+	kernelObservability, err := kernel.NewInstrumentation(tracesConsumer, kernel.WithLogger(slog.New(commonlogger.NewSlogHandler("kernelobservability"))))
+	if err != nil {
+		logger.Error("failed to create the kernel instrumentation", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := kernelObservability.Close(); err != nil {
+			logger.Error("failed to close the kernel instrumentation", "error", err)
+		}
+	}()
+
 	// The same story for agent emitted metrics: one OTLP/gRPC metrics exporter for the
 	// whole odiglet, with each instrumented process stacking its own pdata pipeline on
 	// top of it so it keeps its own process Resource. It is drained on odiglet shutdown.
@@ -182,7 +198,8 @@ func main() {
 		// path and never reports its status. (OBI's generic factories are wired centrally in
 		// odiglet.New.)
 		GenericFactories: map[string]commonInstrumentation.Factory{
-			logcapture.FactoryName: logcapture.NewFactory(),
+			logcapture.FactoryName:          logcapture.NewFactory(),
+			kernelobservability.FactoryName: kernelobservability.NewFactory(kernelObservability),
 		},
 		DistributionGetter:         enterpriseDistrosProvider.Getter,
 		OdigletHealthProbeBindPort: healthProbeBindPort,
