@@ -115,17 +115,14 @@ func (p *JavaExtensionOtelEbpfSdk) ApplyConfig(ctx context.Context, conf instrum
 		return fmt.Errorf("invalid config type, expected *odigosv1.ContainerAgentConfig, got %T", conf)
 	}
 
-	if containerConfig.Traces != nil && containerConfig.Traces.CustomInstrumentations != nil && containerConfig.Traces.CustomInstrumentations.Java != nil {
-		var probes []dynamic.CustomProbe
+	var probes []dynamic.CustomProbe
+	if containerConfig.Traces != nil && containerConfig.Traces.CustomInstrumentations != nil {
 		for _, probe := range containerConfig.Traces.CustomInstrumentations.Java {
-			probes = append(probes, dynamic.CustomProbe{
-				ClassName:  probe.ClassName,
-				MethodName: probe.MethodName,
-			})
+			probes = append(probes, dynamic.CustomProbe{ClassName: probe.ClassName, MethodName: probe.MethodName})
 		}
-		if err := p.inst.ApplyDynamicConfig(dynamic.CustomInstrumentation(probes)); err != nil {
-			return err
-		}
+	}
+	if err := p.inst.ApplyDynamicConfig(dynamic.CustomInstrumentation(probes)); err != nil {
+		return err
 	}
 
 	if err := p.inst.ApplyDynamicConfig(dynamic.JVMMetricsProbe(jvmMetricsConfig(containerConfig))); err != nil {

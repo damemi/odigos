@@ -229,17 +229,14 @@ func (g *JavaOtelEbpfSdkEnterprise) ApplyConfig(ctx context.Context, conf instru
 		return err
 	}
 
-	if containerConfig.Traces != nil && containerConfig.Traces.CustomInstrumentations != nil && containerConfig.Traces.CustomInstrumentations.Java != nil {
-		var probes []dynamic.CustomProbe
+	var probes []dynamic.CustomProbe
+	if containerConfig.Traces != nil && containerConfig.Traces.CustomInstrumentations != nil {
 		for _, probe := range containerConfig.Traces.CustomInstrumentations.Java {
-			probes = append(probes, dynamic.CustomProbe{
-				ClassName:  probe.ClassName,
-				MethodName: probe.MethodName,
-			})
+			probes = append(probes, dynamic.CustomProbe{ClassName: probe.ClassName, MethodName: probe.MethodName})
 		}
-		if err := g.inst.ApplyDynamicConfig(dynamic.CustomInstrumentation(probes)); err != nil {
-			return err
-		}
+	}
+	if err := g.inst.ApplyDynamicConfig(dynamic.CustomInstrumentation(probes)); err != nil {
+		return err
 	}
 
 	if err := g.inst.ApplyDynamicConfig(dynamic.JVMMetricsProbe(jvmMetricsConfig(containerConfig))); err != nil {
