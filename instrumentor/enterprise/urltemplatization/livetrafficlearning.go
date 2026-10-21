@@ -5,42 +5,34 @@ import (
 	"time"
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
-	"github.com/odigos-io/odigos/common"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/common/urltemplate"
 	"github.com/odigos-io/odigos/k8sutils/pkg/env"
-	"github.com/odigos-io/odigos/k8sutils/pkg/utils"
 	"github.com/redis/go-redis/v9"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	commonurltemplatization "github.com/odigos-io/odigos-enterprise/common-enterprise/urltemplatization"
+	learning "github.com/odigos-io/odigos-enterprise/common-enterprise/urltemplatization/learning"
 )
 
-const (
-	defaultLiveTrafficLearningInterval = 30 * time.Second
-
-	scanCount = 100
-)
-
-// liveTrafficLearningParams holds resolved settings from effective config.
-type liveTrafficLearningParams struct {
-	interval time.Duration
-}
+const scanCount = 100
 
 // LiveTrafficLearningJob periodically garbage-collects unmatched path examples
-// in odigos-cache (Redis) that already match an accepted URL templatization rule.
+// that already match an accepted rule, then learns URL templatization rule
+// suggestions from the remaining path counts in odigos-cache (Redis).
 // Registered as a controller-runtime Runnable so it participates in manager
 // lifecycle and leader election.
 //
-// Rule learning / automatic Actions are intentionally out of scope for this job
-// for now; this runnable only reclaims Redis quota for paths covered by existing rules.
+// When automaticRules is enabled, this job computes and logs suggested
+// templates. Creating Actions from those suggestions is intentionally out of
+// scope here.
 type LiveTrafficLearningJob struct {
 	// CacheEndpoint is the Redis address (host:port). Empty uses
 	// k8sconsts.OdigosCacheEndpoint for the current Odigos namespace.
 	CacheEndpoint string
 
-	// Client is used to load existing rules and read learningInterval from
+	// Client is used to load existing rules and read learning settings from
 	// effective config. Expected to be the manager's cached client.
 	Client client.Client
 
@@ -62,7 +54,7 @@ func (j *LiveTrafficLearningJob) Start(ctx context.Context) error {
 
 	logger := commonlogger.LoggerCompat().With("subsystem", "url-templatization-live-traffic-learning")
 
-	logger.Info("starting URL templatization live traffic path-example GC job", "cacheEndpoint", endpoint)
+	logger.Info("starting URL templatization live traffic learning job", "cacheEndpoint", endpoint)
 
 	j.rdb = redis.NewClient(&redis.Options{
 		Addr:                  endpoint,
@@ -80,12 +72,12 @@ func (j *LiveTrafficLearningJob) Start(ctx context.Context) error {
 
 	for {
 		if err := ctx.Err(); err != nil {
-			logger.Info("URL templatization live traffic path-example GC job stopped")
+			logger.Info("URL templatization live traffic learning job stopped")
 			return nil
 		}
 
 		params := j.loadLearningParams(ctx)
-		j.processUnmatchedPathKeys(ctx)
+		j.processUnmatchedPathKeys(ctx, params)
 
 		timer := time.NewTimer(params.interval)
 		select {
@@ -95,51 +87,16 @@ func (j *LiveTrafficLearningJob) Start(ctx context.Context) error {
 			if !timer.Stop() {
 				<-timer.C
 			}
-			logger.Info("URL templatization live traffic path-example GC job stopped")
+			logger.Info("URL templatization live traffic learning job stopped")
 			return nil
 		case <-timer.C:
 		}
 	}
 }
 
-func (j *LiveTrafficLearningJob) loadLearningParams(ctx context.Context) liveTrafficLearningParams {
-	params := liveTrafficLearningParams{
-		interval: defaultLiveTrafficLearningInterval,
-	}
-	if j.Client == nil {
-		return params
-	}
-	cfg, err := utils.GetCurrentOdigosConfiguration(ctx, j.Client)
-	if err != nil {
-		return params
-	}
-	if d := learningIntervalFromConfig(&cfg); d > 0 {
-		params.interval = d
-	}
-	return params
-}
-
-func learningIntervalFromConfig(cfg *common.OdigosConfiguration) time.Duration {
-	if cfg == nil ||
-		cfg.CardinalityControl == nil ||
-		cfg.CardinalityControl.UrlTemplatization == nil ||
-		cfg.CardinalityControl.UrlTemplatization.LiveTrafficLearning == nil {
-		return 0
-	}
-	raw := cfg.CardinalityControl.UrlTemplatization.LiveTrafficLearning.LearningInterval
-	if raw == "" {
-		return 0
-	}
-	d, err := time.ParseDuration(raw)
-	if err != nil || d <= 0 {
-		return 0
-	}
-	return d
-}
-
-// processUnmatchedPathKeys iterates all unmatched-path Redis keys and runs the
-// per-key steps on each one.
-func (j *LiveTrafficLearningJob) processUnmatchedPathKeys(ctx context.Context) {
+// processUnmatchedPathKeys iterates all unmatched-path Redis keys, garbage-collects
+// paths covered by existing rules, then learns suggestions from what remains.
+func (j *LiveTrafficLearningJob) processUnmatchedPathKeys(ctx context.Context, params liveTrafficLearningParams) {
 	logger := commonlogger.LoggerCompat().With("subsystem", "url-templatization-live-traffic-learning")
 
 	existingRulesByWorkload := make(map[string]map[int][]urltemplate.PathRule)
@@ -176,7 +133,33 @@ func (j *LiveTrafficLearningJob) processUnmatchedPathKeys(ctx context.Context) {
 				existingRulesByWorkload[wk] = existingRules
 			}
 
+			rawPathCount := len(fields)
+			// Always GC matched paths, even when automatic rules / learning are off.
 			j.gcMatchedPaths(ctx, logger, key, fields, existingRules)
+
+			if !params.automaticRulesEnabled || len(fields) == 0 {
+				continue
+			}
+
+			trie := learning.BuildPathTrie(fields)
+			rules := learning.FindLiveTrafficLearningRules(trie, params.LiveTrafficLearningParams)
+			if len(rules) == 0 {
+				continue
+			}
+
+			templates := make([]string, len(rules))
+			for i, rule := range rules {
+				templates[i] = rule.Template
+			}
+			logger.Info("learned URL templatization rule suggestions",
+				"key", key,
+				"workload", wk,
+				"pathCount", len(fields),
+				"filteredOut", rawPathCount-len(fields),
+				"totalObservations", trie.Root.TotalObservations,
+				"suggestedRules", len(rules),
+				"templates", templates,
+			)
 		}
 
 		cursor = next

@@ -15,8 +15,10 @@ COPY ./common-enterprise/ /go/src/common-enterprise
 WORKDIR /go/src/collector
 
 # download dependencies before branching out to cross-compile for better caching
-RUN --mount=type=cache,target=/go/pkg/mod \
+RUN --mount=type=secret,id=github_token \
+    --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
+    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
     cd odigosotelcol && go mod download
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
@@ -24,8 +26,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 ARG TARGETARCH
 ARG RHEL=false
-RUN --mount=type=cache,target=/go/pkg/mod \
+RUN --mount=type=secret,id=github_token \
+    --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
+    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
     CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH make build-odigoscol
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
