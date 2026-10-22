@@ -24,9 +24,9 @@ const scanCount = 100
 // Registered as a controller-runtime Runnable so it participates in manager
 // lifecycle and leader election.
 //
-// When automaticRules is enabled, this job computes and logs suggested
-// templates. Creating Actions from those suggestions is intentionally out of
-// scope here.
+// When automaticRules is enabled, this job learns suggested templates and
+// persists them on a URL templatization Action per namespace. Each workload
+// gets a rule scoped to that workload, with only the templates learned for it.
 type LiveTrafficLearningJob struct {
 	// CacheEndpoint is the Redis address (host:port). Empty uses
 	// k8sconsts.OdigosCacheEndpoint for the current Odigos namespace.
@@ -36,7 +36,23 @@ type LiveTrafficLearningJob struct {
 	// effective config. Expected to be the manager's cached client.
 	Client client.Client
 
+	// logger is set by NewLiveTrafficLearningJob and is non-nil for the job's lifetime.
+	logger *commonlogger.OdigosLogger
+
 	rdb *redis.Client
+}
+
+// NewLiveTrafficLearningJob returns a job that learns URL templates from live traffic.
+// logger must be non-nil; a nil logger panics. The subsystem is attached here so
+// callers do not repeat it.
+func NewLiveTrafficLearningJob(c client.Client, logger *commonlogger.OdigosLogger) *LiveTrafficLearningJob {
+	if logger == nil {
+		panic("url templatization live traffic learning job requires a logger")
+	}
+	return &LiveTrafficLearningJob{
+		Client: c,
+		logger: logger.With("subsystem", "url-templatization-live-traffic-learning"),
+	}
 }
 
 var _ manager.Runnable = (*LiveTrafficLearningJob)(nil)
@@ -52,9 +68,7 @@ func (j *LiveTrafficLearningJob) Start(ctx context.Context) error {
 		endpoint = k8sconsts.OdigosCacheEndpoint(env.GetCurrentNamespace())
 	}
 
-	logger := commonlogger.LoggerCompat().With("subsystem", "url-templatization-live-traffic-learning")
-
-	logger.Info("starting URL templatization live traffic learning job", "cacheEndpoint", endpoint)
+	j.logger.Info("starting URL templatization live traffic learning job", "cacheEndpoint", endpoint)
 
 	j.rdb = redis.NewClient(&redis.Options{
 		Addr:                  endpoint,
@@ -65,19 +79,23 @@ func (j *LiveTrafficLearningJob) Start(ctx context.Context) error {
 	})
 	defer func() {
 		if err := j.rdb.Close(); err != nil {
-			logger.Error("failed to close redis client", "err", err)
+			j.logger.Error("failed to close redis client", "err", err)
 		}
 		j.rdb = nil
 	}()
 
 	for {
 		if err := ctx.Err(); err != nil {
-			logger.Info("URL templatization live traffic learning job stopped")
+			j.logger.Info("URL templatization live traffic learning job stopped")
 			return nil
 		}
 
 		params := j.loadLearningParams(ctx)
-		j.processUnmatchedPathKeys(ctx, params)
+		learnedByWorkload := j.processUnmatchedPathKeys(ctx, params)
+		err := j.persistLearnedRules(ctx, learnedByWorkload)
+		if err != nil {
+			j.logger.Error("failed to persist learned URL templatization rules", "err", err)
+		}
 
 		timer := time.NewTimer(params.interval)
 		select {
@@ -87,7 +105,7 @@ func (j *LiveTrafficLearningJob) Start(ctx context.Context) error {
 			if !timer.Stop() {
 				<-timer.C
 			}
-			logger.Info("URL templatization live traffic learning job stopped")
+			j.logger.Info("URL templatization live traffic learning job stopped")
 			return nil
 		case <-timer.C:
 		}
@@ -96,29 +114,29 @@ func (j *LiveTrafficLearningJob) Start(ctx context.Context) error {
 
 // processUnmatchedPathKeys iterates all unmatched-path Redis keys, garbage-collects
 // paths covered by existing rules, then learns suggestions from what remains.
-func (j *LiveTrafficLearningJob) processUnmatchedPathKeys(ctx context.Context, params liveTrafficLearningParams) {
-	logger := commonlogger.LoggerCompat().With("subsystem", "url-templatization-live-traffic-learning")
-
+// Learned rules from every key of a workload are returned together, keyed by that workload.
+func (j *LiveTrafficLearningJob) processUnmatchedPathKeys(ctx context.Context, params liveTrafficLearningParams) map[k8sconsts.PodWorkload][]learning.LearnedRule {
 	existingRulesByWorkload := make(map[string]map[int][]urltemplate.PathRule)
+	learnedByWorkload := make(map[k8sconsts.PodWorkload][]learning.LearnedRule)
 
 	var cursor uint64
 	for {
 		keys, next, err := j.rdb.Scan(ctx, cursor, commonurltemplatization.UnmatchedPathsRedisKeyPattern, scanCount).Result()
 		if err != nil {
-			logger.Error("failed to scan unmatched path keys", "err", err)
-			return
+			j.logger.Error("failed to scan unmatched path keys", "err", err)
+			return learnedByWorkload
 		}
 
 		for _, key := range keys {
 			meta, err := parseUnmatchedRedisKey(key)
 			if err != nil {
-				logger.Error("failed to parse unmatched redis key", "key", key, "err", err)
+				j.logger.Error("failed to parse unmatched redis key", "key", key, "err", err)
 				continue
 			}
 
 			fields, err := j.rdb.HGetAll(ctx, key).Result()
 			if err != nil {
-				logger.Error("failed to fetch paths for key", "key", key, "err", err)
+				j.logger.Error("failed to fetch paths for key", "key", key, "err", err)
 				continue
 			}
 
@@ -127,7 +145,7 @@ func (j *LiveTrafficLearningJob) processUnmatchedPathKeys(ctx context.Context, p
 			if !ok {
 				existingRules, err = loadExistingPathRules(ctx, j.Client, meta.Workload)
 				if err != nil {
-					logger.Error("failed to load existing templatization rules", "workload", wk, "err", err)
+					j.logger.Error("failed to load existing templatization rules", "workload", wk, "err", err)
 					existingRules = nil
 				}
 				existingRulesByWorkload[wk] = existingRules
@@ -135,7 +153,7 @@ func (j *LiveTrafficLearningJob) processUnmatchedPathKeys(ctx context.Context, p
 
 			rawPathCount := len(fields)
 			// Always GC matched paths, even when automatic rules / learning are off.
-			j.gcMatchedPaths(ctx, logger, key, fields, existingRules)
+			j.gcMatchedPaths(ctx, key, fields, existingRules)
 
 			if !params.automaticRulesEnabled || len(fields) == 0 {
 				continue
@@ -151,7 +169,7 @@ func (j *LiveTrafficLearningJob) processUnmatchedPathKeys(ctx context.Context, p
 			for i, rule := range rules {
 				templates[i] = rule.Template
 			}
-			logger.Info("learned URL templatization rule suggestions",
+			j.logger.Info("learned URL templatization rule suggestions",
 				"key", key,
 				"workload", wk,
 				"pathCount", len(fields),
@@ -160,6 +178,7 @@ func (j *LiveTrafficLearningJob) processUnmatchedPathKeys(ctx context.Context, p
 				"suggestedRules", len(rules),
 				"templates", templates,
 			)
+			learnedByWorkload[meta.Workload] = append(learnedByWorkload[meta.Workload], rules...)
 		}
 
 		cursor = next
@@ -167,4 +186,5 @@ func (j *LiveTrafficLearningJob) processUnmatchedPathKeys(ctx context.Context, p
 			break
 		}
 	}
+	return learnedByWorkload
 }

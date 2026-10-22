@@ -60,7 +60,7 @@ func main() {
 	var runnables []func(mgr manager.Manager) manager.Runnable
 	if os.Getenv(k8sconsts.UrlTemplatizationLiveTrafficLearningEnvVar) != "" {
 		runnables = append(runnables, func(mgr manager.Manager) manager.Runnable {
-			return &urltemplatization.LiveTrafficLearningJob{Client: mgr.GetClient()}
+			return urltemplatization.NewLiveTrafficLearningJob(mgr.GetClient(), commonlogger.LoggerCompat())
 		})
 	}
 
