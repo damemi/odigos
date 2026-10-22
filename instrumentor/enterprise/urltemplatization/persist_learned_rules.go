@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
@@ -146,26 +147,31 @@ func (j *LiveTrafficLearningJob) workloadRule(workload k8sconsts.PodWorkload, le
 func documentedTemplate(rule learning.LearnedRule) actions.UrlTemplatizationDocumentedTemplate {
 	return actions.UrlTemplatizationDocumentedTemplate{
 		Template: rule.Template,
+		Examples: rule.Examples,
 		Notes:    strings.TrimSpace(rule.Reason),
 	}
 }
 
 func (j *LiveTrafficLearningJob) appendMissingDocumentedTemplates(workload k8sconsts.PodWorkload, existing []actions.UrlTemplatizationDocumentedTemplate, add []learning.LearnedRule) ([]actions.UrlTemplatizationDocumentedTemplate, bool) {
-	seen := make(map[string]struct{}, len(existing))
-	for _, documented := range existing {
-		seen[documented.Template] = struct{}{}
+	indexByTemplate := make(map[string]int, len(existing))
+	for i, documented := range existing {
+		indexByTemplate[documented.Template] = i
 	}
 	changed := false
 	skipped := 0
 	for _, rule := range add {
-		if _, ok := seen[rule.Template]; ok {
+		if i, ok := indexByTemplate[rule.Template]; ok {
+			if len(rule.Examples) > 0 && !slices.Equal(existing[i].Examples, rule.Examples) {
+				existing[i].Examples = rule.Examples
+				changed = true
+			}
 			continue
 		}
 		if len(existing) >= maxDocumentedTemplatesPerScope {
 			skipped++
 			continue
 		}
-		seen[rule.Template] = struct{}{}
+		indexByTemplate[rule.Template] = len(existing)
 		existing = append(existing, documentedTemplate(rule))
 		changed = true
 	}

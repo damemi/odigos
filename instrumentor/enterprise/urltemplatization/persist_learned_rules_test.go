@@ -2,6 +2,7 @@ package urltemplatization
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
@@ -50,5 +51,33 @@ func TestAppendMissingDocumentedTemplates_CapsAt200(t *testing.T) {
 	})
 	if !changed || len(got) != maxDocumentedTemplatesPerScope || got[len(got)-1].Template != "/new/{id}" {
 		t.Fatalf("changed=%v templates=%d last=%q", changed, len(got), got[len(got)-1].Template)
+	}
+}
+
+func TestAppendMissingDocumentedTemplates_WritesExamples(t *testing.T) {
+	checkout := k8sconsts.PodWorkload{Namespace: "payments", Kind: k8sconsts.WorkloadKindDeployment, Name: "checkout"}
+	job := NewLiveTrafficLearningJob(nil, commonlogger.LoggerCompat())
+	learned := []learning.LearnedRule{{
+		Template: "/users/{id}",
+		Reason:   "learned from traffic",
+		Examples: []string{"/users/1", "/users/2"},
+	}}
+
+	got, changed := job.appendMissingDocumentedTemplates(checkout, nil, learned)
+	if !changed || len(got) != 1 || got[0].Notes != "learned from traffic" || !slices.Equal(got[0].Examples, learned[0].Examples) {
+		t.Fatalf("created template = %+v changed=%v", got, changed)
+	}
+
+	again, changed := job.appendMissingDocumentedTemplates(checkout, []actions.UrlTemplatizationDocumentedTemplate{{
+		Template: "/users/{id}",
+		Notes:    "learned from traffic",
+	}}, learned)
+	if !changed || !slices.Equal(again[0].Examples, learned[0].Examples) || again[0].Notes != "learned from traffic" {
+		t.Fatalf("updated template = %+v changed=%v", again, changed)
+	}
+
+	_, changed = job.appendMissingDocumentedTemplates(checkout, again, learned)
+	if changed {
+		t.Fatal("unchanged examples marked the rule changed")
 	}
 }
