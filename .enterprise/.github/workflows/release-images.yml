@@ -305,8 +305,6 @@ jobs:
             ghcr.io/odigos-io/odigos-enterprise-${{ matrix.service }}:${{ env.ODIGOS_TAG }}
           build-args: |
             ${{ matrix.ld-flags && format('LD_FLAGS={0}', matrix.ld-flags) || '' }}
-            ${{ matrix.service == 'connector-runtime' && format('COLLECTOR_TAG={0}', env.ODIGOS_TAG) || '' }}
-            ${{ matrix.service == 'connector-runtime' && 'COLLECTOR_REGISTRY=us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-collector' || '' }}
           platforms: linux/amd64,linux/arm64
           provenance: false
           secrets: |
@@ -432,4 +430,3 @@ jobs:
           success-description: ${{ steps.skip-cli.outputs.skip == 'true' && 'All odigos enterprise components published to registry. CLI GitHub release already has assets; skipped duplicate CLI trigger' || 'All odigos enterprise components published to registry. Triggered CLI release in Odigos Main Repo' }}
           failure-description: "ERROR: failed to trigger CLI release in Odigos Main Repo"
           tag: ${{ steps.release-tag.outputs.tag }}
-

@@ -122,14 +122,6 @@ build-agents:
 ############################################
 ODIGOS_CONTEXT ?= ../odigos
 
-# The tag/registry of the managed-Collector image connector-runtime pins to at build time (see
-# connectors/base/domain/collectorimage.Released). Independent of TAG/ORG, not aliases for them: Collector
-# and connector-runtime are normally released together so these default to this build's own TAG/ORG, but
-# connector-runtime should be pinnable to a different (e.g. already-released) Collector build without
-# retagging every other image in the build.
-COLLECTOR_TAG ?= $(TAG)
-COLLECTOR_REGISTRY ?= $(ORG)/odigos-enterprise-collector$(IMG_SUFFIX)
-
 .PHONY: build-connector-runtime
 build-connector-runtime:
 	@if [ -z "$(GITHUB_TOKEN)" ]; then \
@@ -142,8 +134,6 @@ build-connector-runtime:
 		--build-context odigos=$(ODIGOS_CONTEXT) \
 		--secret id=github_token,env=GITHUB_TOKEN \
 		--build-arg LD_FLAGS="$(LD_FLAGS)" \
-		--build-arg COLLECTOR_TAG="$(COLLECTOR_TAG)" \
-		--build-arg COLLECTOR_REGISTRY="$(COLLECTOR_REGISTRY)" \
 		. $(NO_CACHE)
 
 # connector-opamp-gateway is the public OpAMP endpoint the managed-Collector fleet connects back to.
@@ -291,8 +281,6 @@ push-connector-runtime:
 		--build-context odigos=$(ODIGOS_CONTEXT) \
 		--secret id=github_token,env=GITHUB_TOKEN \
 		--build-arg LD_FLAGS="$(LD_FLAGS)" \
-		--build-arg COLLECTOR_TAG="$(COLLECTOR_TAG)" \
-		--build-arg COLLECTOR_REGISTRY="$(COLLECTOR_REGISTRY)" \
 		--push \
 		. $(NO_CACHE)
 
@@ -436,6 +424,8 @@ ONPREM_TOKEN ?=
 #   make connector-dev-up TAG=dev ONPREM_TOKEN=$$ODIGOS_ONPREM_TOKEN \
 #     MANAGED_COLLECTOR_ENDPOINT=wss://abc123.ngrok.app/v1/opamp
 MANAGED_COLLECTOR_ENDPOINT ?=
+ODIGOS_HELM_REPO ?= https://odigos-io.github.io/odigos/
+ODIGOS_CENTRAL_CHART ?= odigos/odigos-central
 
 .PHONY: ensure-kind
 ensure-kind:
@@ -459,6 +449,41 @@ connector-dev-up: ensure-kind
 			--set cloudConnectors.managedCollectors.enabled=$(if $(strip $(MANAGED_COLLECTOR_ENDPOINT)),true,false) \
 			--set-literal cloudConnectors.managedCollectors.externalEndpoint="$$managed_endpoint"
 	@echo "✅ Stack up in namespace $(ODIGOS_CENTRAL_NS) (central-ui + central-backend + connector-runtime + postgres$(if $(strip $(MANAGED_COLLECTOR_ENDPOINT)), + OpAMP gateway,))."
+	@echo "   central-ui:        kubectl -n $(ODIGOS_CENTRAL_NS) port-forward svc/central-ui 3000:3000  # http://localhost:3000"
+	@echo "   apply a connector: kubectl apply -f <your-OdigosCloudConnector>.yaml -n $(ODIGOS_CENTRAL_NS)"
+	@echo "   discovered data:   kubectl -n $(ODIGOS_CENTRAL_NS) port-forward svc/<connector-workload> 9090:8080  # then POST /graphql"
+ifeq ($(strip $(MANAGED_COLLECTOR_ENDPOINT)),)
+	@echo "   managed Collectors: OFF (no MANAGED_COLLECTOR_ENDPOINT). Re-run with a publicly reachable"
+	@echo "                       wss:// address in front of the gateway to enable them."
+else
+	@echo "   opamp gateway:     $(MANAGED_COLLECTOR_ENDPOINT) -> svc/connector-opamp-gateway:8080"
+	@echo "   grant a connector: kubectl patch odigoscloudconnector <name> -n $(ODIGOS_CENTRAL_NS) --type=merge \\"
+	@echo "                        -p '{\"spec\":{\"collectors\":[{\"type\":\"aws.fargate-collector\",\"management\":true,\"deployment\":true}]}}'"
+endif
+
+# Install the cloud-connectors stack from a released odigos-central chart rather than locally built
+# images. VERSION is both the released chart version and the enterprise image tag (for example,
+# make connector-release-up VERSION=v1.0.0 ONPREM_TOKEN=$$ODIGOS_ONPREM_TOKEN).
+# Set ORG to use a mirrored enterprise image registry.
+.PHONY: connector-release-up
+connector-release-up: ensure-kind
+	@test -n "$(VERSION)" || { echo "❌ Set VERSION=<released Odigos version>."; exit 1; }
+	@test -n "$(ONPREM_TOKEN)" || { echo "❌ Set ONPREM_TOKEN=<your odigos enterprise token>."; exit 1; }
+	helm repo add odigos $(ODIGOS_HELM_REPO) --force-update
+	helm repo update odigos
+	@managed_endpoint="$(MANAGED_COLLECTOR_ENDPOINT)"; \
+		if [ -n "$$managed_endpoint" ]; then \
+			case "$$managed_endpoint" in \
+				*/v1/opamp) ;; \
+				*/) managed_endpoint="$${managed_endpoint}v1/opamp" ;; \
+				*) managed_endpoint="$$managed_endpoint/v1/opamp" ;; \
+			esac; \
+		fi; \
+		helm upgrade --install odigos-central $(ODIGOS_CENTRAL_CHART) --version $(VERSION) -n $(ODIGOS_CENTRAL_NS) --create-namespace \
+			--set imagePrefix=$(ORG) --set image.tag=$(VERSION) --set onPremToken=$(ONPREM_TOKEN) --set cloudConnectors.enabled=true \
+			--set cloudConnectors.managedCollectors.enabled=$(if $(strip $(MANAGED_COLLECTOR_ENDPOINT)),true,false) \
+			--set-literal cloudConnectors.managedCollectors.externalEndpoint="$$managed_endpoint"
+	@echo "✅ Released stack $(VERSION) installed in namespace $(ODIGOS_CENTRAL_NS) (central-ui + central-backend + connector-runtime + postgres$(if $(strip $(MANAGED_COLLECTOR_ENDPOINT)), + OpAMP gateway,))."
 	@echo "   central-ui:        kubectl -n $(ODIGOS_CENTRAL_NS) port-forward svc/central-ui 3000:3000  # http://localhost:3000"
 	@echo "   apply a connector: kubectl apply -f <your-OdigosCloudConnector>.yaml -n $(ODIGOS_CENTRAL_NS)"
 	@echo "   discovered data:   kubectl -n $(ODIGOS_CENTRAL_NS) port-forward svc/<connector-workload> 9090:8080  # then POST /graphql"
