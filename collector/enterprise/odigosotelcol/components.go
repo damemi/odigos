@@ -75,6 +75,7 @@ import (
 	odigoscapabilitiesextension "github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension"
 	odigosenterpriseauthextension "github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension"
 	odigosconfigvmextension "github.com/odigos-io/odigos-enterprise/collector/extension/odigosconfigvmextension"
+	odigosconfigconnectorextension "github.com/odigos-io/odigos-enterprise/collector/extension/odigosconfigconnectorextension"
 	odigostailsamplingprocessor "github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor"
 	odigostracestateprocessor "github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor"
 	odigosconditionalattributes "odigosconditionalattributes"
@@ -157,6 +158,7 @@ func components() (otelcol.Factories, error) {
 		odigoscapabilitiesextension.NewFactory(),
 		odigosenterpriseauthextension.NewFactory(),
 		odigosconfigvmextension.NewFactory(),
+		odigosconfigconnectorextension.NewFactory(),
 	)
 	if err != nil {
 		return otelcol.Factories{}, err
@@ -176,6 +178,7 @@ func components() (otelcol.Factories, error) {
 		odigoscapabilitiesextension.NewFactory().Type(): "github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v0.159.0",
 		odigosenterpriseauthextension.NewFactory().Type(): "github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension v0.0.0-00010101000000-000000000000",
 		odigosconfigvmextension.NewFactory().Type(): "github.com/odigos-io/odigos-enterprise/collector/extension/odigosconfigvmextension v0.0.0-00010101000000-000000000000",
+		odigosconfigconnectorextension.NewFactory().Type(): "github.com/odigos-io/odigos-enterprise/collector/extension/odigosconfigconnectorextension v0.0.0-00010101000000-000000000000",
 	})
 
 	factories.Receivers, err = otelcol.MakeFactoryMap[receiver.Factory](

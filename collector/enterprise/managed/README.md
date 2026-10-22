@@ -58,6 +58,22 @@ Collector; a startup failure automatically restores the persisted last-known-goo
 On first boot without Central or cached state, `fallback.yaml` starts an inert no-op Collector that
 does not listen for or export customer telemetry.
 
+The managed Supervisor is pinned independently of the Collector core. Its minimum version is
+**v0.160.0**, which fixes upstream
+[opentelemetry-collector-contrib#50153](https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/50153).
+Earlier versions validated the candidate with the running `effective.yaml` loaded after it. The old
+pipeline lists could overwrite new receiver/exporter lists during validation, rejecting a valid
+Span Metrics action or hiding an invalid configuration. Keep validation and rollback enabled; do not
+work around the bug by disabling them. Updating this dependency requires rebuilding the Collector
+image because `/odigosopampsupervisor` ships inside it; restarting the cloud connector alone cannot
+replace that executable.
+
+`collector/cmd/odigosopampsupervisor/validation_test.go` guards the candidate-only validation command.
+With `ODIGOS_TEST_COLLECTOR` pointing to a real Collector executable, it also verifies the precise
+Span Metrics graph and rejects an invalid receiver update. The integration test applies a Span
+Metrics update through the same Commander used by the Supervisor and verifies both original trace
+export and derived `traces.span.metrics.calls` export using only synthetic data and loopback endpoints.
+
 ## Cold-start configuration
 
 `ODIGOS_COLLECTOR_BOOTSTRAP_CONFIG` closes the one gap the inert fallback leaves: a task replaced onto

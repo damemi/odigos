@@ -33,7 +33,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
-	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261019175154-00f7ee5fdf91 // indirect
+	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261022102751-2dd0dd117ac9 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/featuregate v1.67.0 // indirect
 	go.opentelemetry.io/collector/internal/componentalias v0.159.0 // indirect
@@ -49,7 +49,6 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
-	sigs.k8s.io/controller-runtime v0.23.3 // indirect
 )
 
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../../../odigosauth

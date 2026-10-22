@@ -23,12 +23,10 @@ require (
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
-	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261019175154-00f7ee5fdf91 // indirect
+	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261022102751-2dd0dd117ac9 // indirect
 	go.opentelemetry.io/collector/internal/componentalias v0.159.0 // indirect
 	go.uber.org/zap/exp v0.3.0 // indirect
-	golang.org/x/mod v0.35.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
-	sigs.k8s.io/controller-runtime v0.23.3 // indirect
 )
 
 require (

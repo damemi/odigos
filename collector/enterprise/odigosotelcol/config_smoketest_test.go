@@ -78,6 +78,8 @@ func TestEnterpriseOnlyComponentsAreRegistered(t *testing.T) {
 
 	assert.Contains(t, factories.Extensions, component.MustNewType("odigos_enterprise_auth"))
 	assert.Contains(t, factories.Extensions, component.MustNewType("opamp"))
+	assert.Contains(t, factories.Extensions, component.MustNewType("odigos_config_connector"))
+	assert.Contains(t, factories.Extensions, component.MustNewType("odigos_config_vm"))
 	assert.Contains(t, factories.Receivers, component.MustNewType("nop"))
 	assert.Contains(t, factories.Receivers, component.MustNewType("odigosebpf"))
 }

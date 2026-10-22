@@ -24,7 +24,7 @@ require (
 	go.uber.org/zap v1.28.0
 )
 
-require github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261019175154-00f7ee5fdf91 // indirect
+require github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261022102751-2dd0dd117ac9 // indirect
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -57,7 +57,6 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
-	sigs.k8s.io/controller-runtime v0.23.3 // indirect
 )
 
 replace github.com/odigos-io/odigos-enterprise/common-enterprise => ../../../common-enterprise
