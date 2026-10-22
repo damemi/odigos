@@ -1,0 +1,126 @@
+/* Handwritten styles for the docs search dialog and account controls. */
+.odigos-docs-search {
+  color: inherit;
+  background: #f5f5f5;
+  border: 1px solid #cad2db;
+  border-radius: 12px;
+  width: min(680px, calc(100vw - 32px));
+  max-height: 80vh;
+  padding: 24px;
+  margin: 12vh auto auto;
+  font-family: inherit;
+}
+.dark .odigos-docs-search {
+  background: #151515;
+  color: #e5e7eb;
+  border-color: #3c4651;
+}
+.odigos-docs-search::backdrop {
+  background: rgba(10, 20, 30, 0.55);
+}
+.odigos-docs-search > form {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+.odigos-docs-search h2 {
+  font-size: 20px;
+  font-weight: 600;
+}
+.odigos-docs-search button {
+  border: 0;
+  background: none;
+  color: #30638e;
+  cursor: pointer;
+  font: inherit;
+}
+.dark .odigos-docs-search button {
+  color: #c0e0de;
+}
+.odigos-docs-search label {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.odigos-docs-search input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  background: transparent;
+  border: 1px solid #9ca3af;
+  border-radius: 6px;
+  font: inherit;
+  color: inherit;
+}
+.odigos-docs-results {
+  margin-top: 16px;
+  overflow: auto;
+  max-height: 48vh;
+}
+.odigos-docs-results a {
+  display: block;
+  padding: 12px 8px;
+  color: #30638e;
+  border-bottom: 1px solid #cad2db;
+  font-size: 14px;
+}
+.dark .odigos-docs-results a {
+  color: #c0e0de;
+  border-color: #3c4651;
+}
+#odigos-docs-tools {
+  position: fixed;
+  right: 20px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  background: #f5f5f5;
+  border: 1px solid #cad2db;
+  border-radius: 8px;
+  z-index: 40;
+  font:
+    13px/1.4 ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+.dark #odigos-docs-tools {
+  background: #151515;
+  border-color: #3c4651;
+}
+#odigos-docs-tools form {
+  margin: 0;
+}
+#odigos-docs-tools button {
+  background: transparent;
+  border: 0;
+  color: #30638e;
+  cursor: pointer;
+  font: inherit;
+}
+.dark #odigos-docs-tools button {
+  color: #c0e0de;
+}
+.odigos-docs-search :focus-visible,
+#odigos-docs-tools :focus-visible {
+  outline: 2px solid #30638e;
+  outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .odigos-docs-search {
+    padding: 18px;
+  }
+  #odigos-docs-tools {
+    bottom: 10px;
+    right: 10px;
+  }
+}
+
+/* The static export retains Mintlify's draggable local compilation indicator. */
+div[role='status'][class*='--duration-long'] {
+  display: none !important;
+}
