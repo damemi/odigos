@@ -1,6 +1,7 @@
 package awsprovider
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,10 +11,64 @@ import (
 	"gopkg.in/yaml.v3"
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	baseconfig "github.com/odigos-io/odigos-enterprise/connectors/base/config"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
+	providerconfig "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/config"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 
 	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
 )
+
+func TestCollectorInstructionsUseTheInstallationAndRegionalImage(t *testing.T) {
+	pin, err := collectorimage.FromReference("registry.example.com/collector:v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, override := range []bool{false, true} {
+		defaults := baseconfig.Defaults()
+		region := map[string]any{"networkId": "vpc-123"}
+		want := "registry.example.com/collector:v1"
+		if override {
+			region["image"] = map[string]any{"registry": "mirror.example.com", "tag": "v2"}
+			want = "mirror.example.com/collector:v2"
+		}
+		defaults["collector"] = map[string]any{"regions": map[string]any{"us-east-1": region}}
+		p := &Provider{
+			cfg:    providerconfig.Config{Config: baseconfig.Config{CollectorImage: pin, PlatformIDFromCR: true, PlatformID: "test-uid", ConnectorName: "test"}},
+			cfgMgr: baseconfig.NewManager(nil, defaults),
+		}
+		instructions, err := p.ManagedCollectorInstructions(context.Background(), "us-east-1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if instructions == nil {
+			t.Fatal("no regional instructions")
+		}
+		var rendered string
+		for _, doc := range instructions.Documents {
+			rendered += doc.Content
+		}
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("instructions omitted configured image %s", want)
+		}
+	}
+}
+
+func TestPublicECRInstructionsOmitOnlyTheRegistryCredentials(t *testing.T) {
+	for _, document := range spec.MustGet("aws").Collectors.Instructions.Documents {
+		values := collectorInstructionValues("us-east-1", "vpc-123", "connector", "uid", "https://opamp.example", "public.ecr.aws/example/collector:v2", "1024", "2048", "X86_64", 2, collectorsettings.ResolvedScaling{Mode: collectorsettings.ScalingManual, DesiredCount: 2}, false, "sg-123")
+		rendered, err := renderCollectorDocument(document, values)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(strings.ToLower(rendered.Content), "repositorycredentials") {
+			t.Fatalf("%s sends registry credentials to public ECR", document.Variant)
+		}
+		if !strings.Contains(rendered.Content, "ODIGOS_ONPREM_TOKEN") {
+			t.Fatalf("%s lost the runtime license", document.Variant)
+		}
+	}
+}
 
 func TestManualCollectorAWSCLIDocumentIsDirectAndRunnableShell(t *testing.T) {
 	for _, tc := range []struct {

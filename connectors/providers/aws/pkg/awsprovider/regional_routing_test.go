@@ -8,6 +8,7 @@ import (
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/placement"
 	awstypes "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/types"
 	workloadstore "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
 )
@@ -38,6 +39,33 @@ func TestSelectCollectorRoutesAdmitsReadyRegionalCollector(t *testing.T) {
 	})
 	if got := routes[ref]; got.Via != domaindest.RouteCollector || got.Network != "vpc-host" {
 		t.Fatalf("route = %+v, want Collector route through the ready regional target", got)
+	}
+}
+
+func TestCollectorRoutingRequiresBothWorkloadAndNLBTargetAdmission(t *testing.T) {
+	const region = "us-east-1"
+	group := placement.SecurityGroup{Region: region, ID: "sg-collector", VPCID: "vpc-host", Ingress: []placement.SecurityGroupRule{
+		{Protocol: "tcp", FromPort: 4317, ToPort: 4318, PortsKnown: true, SourceSecurityGroupIDs: []string{"sg-app"}},
+		{Protocol: "tcp", FromPort: 13133, ToPort: 13133, PortsKnown: true, SourceSecurityGroupIDs: []string{"sg-collector"}},
+	}}
+	route := func() domaindest.Reachability {
+		topo := placement.NewTopologyWithSecurityGroups([]string{region}, []placement.VPC{
+			{Region: region, ID: "vpc-host"}, {Region: region, ID: "vpc-app"},
+		}, nil, []placement.Peering{{ID: "pcx-test", VPC1: "vpc-host", VPC2: "vpc-app", Region1: region, Region2: region}}, []placement.SecurityGroup{
+			group, {Region: region, ID: "sg-app", VPCID: "vpc-app"},
+		})
+		return collectorIngressReachability(topo, region, "vpc-host", []string{"sg-collector"}, "vpc-app", nil, []string{"sg-app"}, []int32{4317, 4318})
+	}
+	if got := route(); got != domaindest.ReachabilityUnreachable {
+		t.Fatalf("health-only backend admission = %s, want unreachable", got)
+	}
+	group.Ingress = append(group.Ingress, placement.SecurityGroupRule{Protocol: "tcp", FromPort: 4317, ToPort: 4317, PortsKnown: true, SourceSecurityGroupIDs: []string{"sg-collector"}})
+	if got := route(); got != domaindest.ReachabilityUnreachable {
+		t.Fatalf("missing HTTP backend admission = %s, want unreachable", got)
+	}
+	group.Ingress = append(group.Ingress, placement.SecurityGroupRule{Protocol: "tcp", FromPort: 4318, ToPort: 4318, PortsKnown: true, SourceSecurityGroupIDs: []string{"sg-collector"}})
+	if got := route(); got != domaindest.ReachabilityReachable {
+		t.Fatalf("both hops admitted = %s, want reachable", got)
 	}
 }
 

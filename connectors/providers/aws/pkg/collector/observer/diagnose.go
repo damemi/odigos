@@ -116,11 +116,19 @@ func manualTaskDefinitionProblems(in DiagnosisInput) []collectorstatus.Problem {
 		problems = append(problems, collectorstatus.Problem{Code: ProblemTaskDefinitionInvalid,
 			Severity: collectorstatus.SeverityError, Message: message})
 	}
-	if revision.RepositoryCredentialsRef == "" {
+	publicECR := collectorimage.IsPublicECR(revision.Image)
+	if !publicECR && revision.RepositoryCredentialsRef == "" {
 		add("the customer-owned Collector task definition must set repositoryCredentials to the licence secret ARN so ECS can pull the private image")
 	}
-	if got := revision.Secrets[collectorimage.EnvOnPremToken]; got == "" ||
-		!strings.HasPrefix(got, revision.RepositoryCredentialsRef+":password::") {
+	if publicECR && revision.RepositoryCredentialsRef != "" {
+		add("the customer-owned Collector task definition must omit repositoryCredentials for an anonymous public ECR image pull")
+	}
+	license := revision.Secrets[collectorimage.EnvOnPremToken]
+	validLicense := license != "" && strings.HasPrefix(license, revision.RepositoryCredentialsRef+":password::")
+	if publicECR {
+		validLicense = strings.HasPrefix(license, "arn:") && strings.HasSuffix(license, ":password::")
+	}
+	if !validLicense {
 		add("the customer-owned Collector task definition must read ODIGOS_ONPREM_TOKEN from the licence secret's password JSON key")
 	}
 	if got := revision.Secrets[collectorimage.EnvOpAMPAuthorization]; got == "" {
@@ -551,24 +559,33 @@ func driftProblems(in DiagnosisInput) []collectorstatus.Problem {
 		})
 	}
 
-	// Image drift, in BOTH modes, on the DIGEST. A drift check against a tag can only ever report that
-	// the tag still matches, and in manual mode this is the check that catches a customer who
-	// applied a previous release's artifact — nothing converges a manual deployment, so nothing else
-	// would.
-	if in.Pin.Digest != "" && o.Revision.Digest != "" && o.Revision.Digest != in.Pin.Digest {
+	// Both modes compare the configured reference. A digest additionally verifies immutable identity;
+	// tag-only selections detect version changes, not a registry retagging the same version.
+	selection := in.Settings.Image
+	if len(selection) == 0 && in.Settings.ImageRepositoryOverride != "" {
+		selection = collectorimage.Selection{"repository": in.Settings.ImageRepositoryOverride}
+	}
+	pin, imageErr := collectorimage.Configure(in.Pin, collectorimage.CloudAWS, selection)
+	var expectedImage collectorimage.Resolution
+	if imageErr == nil {
+		expectedImage, imageErr = collectorimage.Resolve(pin, collectorimage.CloudAWS, collectorimage.Arch(in.Settings.Arch), collectorimage.Override{})
+	}
+	if imageErr != nil {
+		problems = append(problems, collectorstatus.Problem{Code: ProblemImageDrift, Severity: collectorstatus.SeverityError, Message: fmt.Sprintf("cannot resolve configured Collector image: %v", imageErr)})
+	} else if (o.Revision.Image != "" && o.Revision.Image != expectedImage.Ref) ||
+		(pin.Digest != "" && o.Revision.Digest != "" && o.Revision.Digest != pin.Digest) ||
+		(pin.Digest == "" && o.Revision.Tag != "" && o.Revision.Tag != pin.Tag) {
 		severity, remedy := collectorstatus.SeverityPending,
 			"the next converge pass registers a revision on the expected build"
 		if in.Mode == spec.ModeManual {
 			severity = collectorstatus.SeverityDegraded
 			remedy = "nothing converges a manual deployment, so re-apply the published artifacts for this " +
-				"network — they carry the digest verbatim for exactly this reason"
+				"region with the newly configured image"
 		}
 		problems = append(problems, collectorstatus.Problem{
 			Code:     ProblemImageDrift,
 			Severity: severity,
-			Message: fmt.Sprintf("the Collector on %s is running image digest %s and this connector expects "+
-				"%s (%s); %s", network, shortDigest(o.Revision.Digest), shortDigest(in.Pin.Digest),
-				collectorimage.Describe(in.Pin, collectorimage.CloudAWS), remedy),
+			Message:  fmt.Sprintf("the Collector on %s is running %s (digest %s) and the installation/runtime settings expect %s; %s", network, o.Revision.Image, shortDigest(o.Revision.Digest), expectedImage.Ref, remedy),
 		})
 	}
 	return problems

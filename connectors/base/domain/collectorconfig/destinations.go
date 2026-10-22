@@ -19,10 +19,7 @@ import (
 // does not ship (collector/builder-config.yaml). A document naming one is refused by the Collector as a
 // whole, so these are neither offered nor accepted. TestEveryCatalogTypeRendersCompiledInComponents keeps
 // this list honest in both directions.
-var unavailableTypes = map[common.DestinationType]string{
-	// The SAPM exporter was removed upstream; Splunk Observability is reached through splunkotlp.
-	"splunk": "renders the sapm exporter, which the managed Collector image does not include",
-}
+var unavailableTypes = map[common.DestinationType]string{}
 
 // SupportsType reports whether a managed Collector can export to a destination type: it has an Odigos
 // exporter configurer, and everything that configurer renders is compiled into the image.
@@ -202,6 +199,7 @@ func renderOne(configers map[common.DestinationType]odigosconfig.Configer, d des
 	replacements := make(map[string]string, len(secretFields))
 	for field := range secretFields {
 		replacements["${"+field+"}"] = escapeExpansion(secrets[field])
+		replacements["${"+odigosconfig.SecretEnvVarName(field, d.Name)+"}"] = escapeExpansion(secrets[field])
 	}
 	for _, section := range []*odigosconfig.GenericMap{
 		&scratch.Receivers, &scratch.Exporters, &scratch.Processors, &scratch.Extensions, &scratch.Connectors,
@@ -294,10 +292,17 @@ func substitute(section odigosconfig.GenericMap, replacements map[string]string)
 func replaceInValue(v any, replacements map[string]string) any {
 	switch t := v.(type) {
 	case string:
-		for ref, value := range replacements {
-			t = strings.ReplaceAll(t, ref, value)
+		keys := make([]string, 0, len(replacements))
+		for ref := range replacements {
+			keys = append(keys, ref)
 		}
-		return t
+		sort.Strings(keys)
+		pairs := make([]string, 0, 2*len(keys))
+		for _, ref := range keys {
+			pairs = append(pairs, ref, replacements[ref])
+		}
+		// Replace once: a literal placeholder inside a credential must not resolve another secret.
+		return strings.NewReplacer(pairs...).Replace(t)
 	case map[string]any:
 		for k, item := range t {
 			t[k] = replaceInValue(item, replacements)

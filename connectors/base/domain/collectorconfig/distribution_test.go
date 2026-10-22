@@ -8,6 +8,7 @@ import (
 	odigosconfig "github.com/odigos-io/odigos/common/config"
 	odigosdest "github.com/odigos-io/odigos/destinations"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoraction"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
 )
 
@@ -59,6 +60,9 @@ func TestRenderedDocumentNamesNothingUnexpected(t *testing.T) {
 		input(func(in *Input) {
 			in.Destinations[0].Type = "otlphttp"
 			in.Destinations[0].Config = map[string]any{"OTLP_HTTP_ENDPOINT": "https://otlp.vendor.example.com"}
+		}),
+		input(func(in *Input) {
+			in.Actions = []collectoraction.Action{action(t, "latency", collectoraction.TypeSpanMetrics, []string{"TRACES"}, map[string]any{})}
 		}),
 	}
 	for _, in := range inputs {
@@ -152,6 +156,7 @@ var componentModules = map[string]string{
 	"otlp_grpc":    "otlpexporter",
 	"otlp_http":    "otlphttpexporter",
 	"oauth2client": "oauth2clientauthextension",
+	"spanmetrics":  "spanmetricsconnector",
 }
 
 func assertCompiledIn(t *testing.T, manifest, destType, doc string) {

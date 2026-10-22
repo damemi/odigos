@@ -17,8 +17,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
-// testPin is a resolvable pin. The compiled-in Released pin has an empty digest until the first managed
-// release is cut, so a test that used it would only ever exercise the refusal.
+// testPin is an installation-selected digest, independent of any published image.
 func testPin() collectorimage.Pin {
 	return collectorimage.Pin{
 		Digest: "sha256:" + strings.Repeat("a", 64),
@@ -223,8 +222,7 @@ func TestTheArchitectureContractIsHonoured(t *testing.T) {
 	})
 }
 
-// TestNoPinnedImageRefusesRatherThanDeploying keeps the fail-closed behavior independently of the
-// production Released pin. A future build or test fixture that loses its pin must not deploy a tag.
+// An installation without an image must fail closed rather than choose an implicit latest.
 func TestNoPinnedImageRefusesRatherThanDeploying(t *testing.T) {
 	in := taskDefinitionInput()
 	in.Pin = collectorimage.Pin{}
@@ -253,9 +251,7 @@ func TestARepositoryOverrideKeepsTheDigest(t *testing.T) {
 		t.Errorf("image = %q, want %q", rendered.Containers[0].Image, want)
 	}
 
-	// And the pin itself is untouched. In production every network is handed the SAME compiled-in
-	// collectorimage.Released value, so a repository map mutated in place for one network would change
-	// the image of every other network in the account — including ones with no override at all.
+	// Every region shares the installation selection; an override must not mutate it for others.
 	shared := testPin()
 	withOverride := taskDefinitionInput()
 	withOverride.Pin = shared
@@ -271,6 +267,48 @@ func TestARepositoryOverrideKeepsTheDigest(t *testing.T) {
 	}
 	if shared.Repositories[collectorimage.CloudAWS] != testPin().Repositories[collectorimage.CloudAWS] {
 		t.Errorf("the pin's repository map was mutated in place: %v", shared.Repositories)
+	}
+}
+
+func TestRuntimeImageChangeChangesTaskDefinitionFingerprint(t *testing.T) {
+	in := taskDefinitionInput()
+	before, problems := RenderTaskDefinition(in)
+	if collectorstatus.HasError(problems) {
+		t.Fatal(problems)
+	}
+	in.Image = collectorimage.Selection{"registry": "mirror.example.com", "tag": "v2.0.0"}
+	after, problems := RenderTaskDefinition(in)
+	if collectorstatus.HasError(problems) {
+		t.Fatal(problems)
+	}
+	if got := after.Containers[0].Image; got != "mirror.example.com/odigos-io/odigos-enterprise-collector:v2.0.0" {
+		t.Fatalf("image = %q", got)
+	}
+	if before.Fingerprint() == after.Fingerprint() {
+		t.Fatal("image change must register a new task definition")
+	}
+}
+
+func TestPublicECRPullIsAnonymousButRuntimeLicenseIsStillDelivered(t *testing.T) {
+	in := taskDefinitionInput()
+	in.Image = collectorimage.Selection{"reference": "public.ecr.aws/example/collector:v2"}
+	got, problems := RenderTaskDefinition(in)
+	if collectorstatus.HasError(problems) {
+		t.Fatal(problems)
+	}
+	container := got.Containers[0]
+	if container.RepositoryCredentialsRef != "" {
+		t.Fatal("public ECR must not receive Odigos registry credentials")
+	}
+	if container.Secrets[collectorimage.EnvOnPremToken] != in.Delivery.LicenseSecretRef+":password::" {
+		t.Fatal("anonymous image pull must still deliver the runtime license")
+	}
+	if container.Secrets[collectorimage.EnvOpAMPAuthorization] != in.Delivery.CredentialSecretRef {
+		t.Fatal("anonymous image pull lost OpAMP authentication")
+	}
+	registered := registerInput(got, nil)
+	if registered.ContainerDefinitions[0].RepositoryCredentials != nil {
+		t.Fatal("ECS API must omit repositoryCredentials for public ECR")
 	}
 }
 

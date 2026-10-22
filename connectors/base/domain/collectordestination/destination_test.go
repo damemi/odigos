@@ -40,13 +40,6 @@ func TestValidate(t *testing.T) {
 		"no signals":   {func(d *destination.Destination) { d.Signals = nil }, "at least one signal"},
 		"profiles":     {func(d *destination.Destination) { d.Signals = []string{"PROFILES"} }, "not exported"},
 		"unknown type": {func(d *destination.Destination) { d.Type = "no-such-vendor" }, "not available"},
-		"type the image cannot run": {
-			func(d *destination.Destination) {
-				d.Type = "splunk"
-				d.Config = map[string]any{"SPLUNK_REALM": "us0", "SPLUNK_ACCESS_TOKEN": "t"}
-				d.Signals = []string{"TRACES"}
-			}, "not available",
-		},
 		"missing required field": {
 			func(d *destination.Destination) { d.Config = map[string]any{} }, "OTLP_GRPC_ENDPOINT",
 		},
@@ -90,12 +83,12 @@ func TestTypes(t *testing.T) {
 			t.Errorf("types are not ordered: %s before %s", types[i-1].Type, dt.Type)
 		}
 	}
-	for _, want := range []string{"otlp", "otlphttp", "datadog", "honeycomb", "s3"} {
+	for _, want := range []string{"otlp", "otlphttp", "datadog", "honeycomb", "s3", "splunk"} {
 		if !seen[want] {
 			t.Errorf("catalog is missing %s", want)
 		}
 	}
-	for _, excluded := range []string{"splunk", "pyroscope", destination.CatalogTypeManagedCollector} {
+	for _, excluded := range []string{"pyroscope", destination.CatalogTypeManagedCollector} {
 		if seen[excluded] {
 			t.Errorf("catalog offers %s, which a managed Collector cannot export to", excluded)
 		}

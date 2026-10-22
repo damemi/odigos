@@ -1,18 +1,19 @@
-import { ActionType as KitActionType, type SignalType, type ActionTypeOption, type ActionYamlProperties, type GetActionTypesResult, type FieldTypes } from '@odigos/ui-kit/types';
+import { ActionType as KitActionType, FieldTypes, SignalType, type ActionTypeOption, type ActionYamlProperties, type GetActionTypesResult } from '@odigos/ui-kit/types';
 
 // Maps the agents-api `actionTypes` catalog into the ui-kit's GET_ACTION_TYPES
 // result shape. Mirrors `mapVmDestinationTypesToCategories`.
 //
-// The agents-api action surface only models the action types a VM agent can run
-// (currently URL templatization). Its catalog `type` strings use the agents-api
-// enum spelling (e.g. `urlTemplatization`), which we translate to the kit's
-// `ActionType`. Catalog entries the kit can't represent are dropped so they
-// never appear in the action picker.
+// Catalog type strings use agents-api enum spellings, translated to UI kit names.
 
-// Intentionally typed as a plain record (not Record<string, KitActionType>) so a
-// VM catalog type with no kit equivalent maps to `undefined` and is filtered out.
 const VM_TO_KIT_ACTION_TYPE: { [vmType: string]: KitActionType } = {
   urlTemplatization: KitActionType.URLTemplatization,
+  processorAddition: KitActionType.ProcessorAddition,
+  spanMetrics: KitActionType.SpanMetrics,
+  dbQueryTemplatization: KitActionType.DbQueryTemplatization,
+  inferDbAttributes: KitActionType.InferDbAttributes,
+  extractAttribute: KitActionType.ExtractAttribute,
+  deleteAttribute: KitActionType.DeleteAttributes,
+  renameAttribute: KitActionType.RenameAttributes,
 };
 
 // Raw (untyped) shape of the agents-api `actionTypes` query. We avoid importing a
@@ -44,6 +45,43 @@ const toCatalogField = (f: RawActionField): ActionYamlProperties => ({
   renderCondition: f.renderCondition ? [f.renderCondition] : undefined,
 });
 
+// The connector and VM agent both publish this catalog. Keep a local fallback
+// for the two non-URL types while an already-connected proxy is catching up to
+// a new catalog response: unlike falling back to the general k8s action list,
+// these fields and signals exactly match the agents-api contracts.
+const COLLECTOR_ACTION_FALLBACKS: ActionTypeOption[] = [
+  {
+    type: KitActionType.ProcessorAddition,
+    displayName: 'Processor Addition',
+    description: 'Add an approved OpenTelemetry processor to this collector.',
+    allowedSignals: [SignalType.Traces, SignalType.Metrics, SignalType.Logs],
+    docsUrl: '',
+    fields: [
+      { name: 'processorType', displayName: 'Processor type', componentType: FieldTypes.Dropdown, componentProperties: '{"options":[{"id":"attributes","label":"Attributes"},{"id":"filter","label":"Filter"},{"id":"transform","label":"Transform"},{"id":"resource","label":"Resource"},{"id":"groupbyattrs","label":"Group by attributes"},{"id":"span","label":"Span"},{"id":"redaction","label":"Redaction"},{"id":"probabilistic_sampler","label":"Probabilistic sampler"},{"id":"metricstransform","label":"Metrics transform"},{"id":"cumulativetodelta","label":"Cumulative to delta"},{"id":"deltatorate","label":"Delta to rate"},{"id":"metricsgeneration","label":"Metrics generation"},{"id":"odigosextractattribute","label":"Extract attribute"}]}', initialValue: 'attributes' },
+      { name: 'processorName', displayName: 'Processor name', componentType: FieldTypes.Input, componentProperties: '{"placeholder":"Instance name (required for resource)"}' },
+      { name: 'processorConfig', displayName: 'Processor configuration (JSON)', componentType: FieldTypes.TextArea, componentProperties: '{"placeholder":"{}","required":true}', initialValue: '{}' },
+    ],
+  },
+  {
+    type: KitActionType.SpanMetrics,
+    displayName: 'Span Metrics',
+    description: 'Generate metrics from traces received by this collector.',
+    allowedSignals: [SignalType.Traces],
+    docsUrl: '',
+    fields: [
+      { name: 'spanMetricsDisabled', displayName: 'Disable span metrics', componentType: FieldTypes.Toggle, initialValue: 'false' },
+      { name: 'interval', displayName: 'Interval', componentType: FieldTypes.Input, componentProperties: '{"placeholder":"e.g. 15s"}' },
+      { name: 'metricsExpiration', displayName: 'Metrics expiration', componentType: FieldTypes.Input, componentProperties: '{"placeholder":"e.g. 5m"}' },
+      { name: 'additionalDimensions', displayName: 'Additional dimensions', componentType: FieldTypes.MultiInput, componentProperties: '{"placeholder":"e.g. service.namespace"}' },
+      { name: 'histogramDisabled', displayName: 'Disable latency histogram', componentType: FieldTypes.Toggle, initialValue: 'false' },
+      { name: 'explicitHistogramBuckets', displayName: 'Explicit histogram buckets', componentType: FieldTypes.MultiInput, componentProperties: '{"placeholder":"e.g. 100ms"}' },
+      { name: 'resourceMetricsKeyAttributes', displayName: 'Resource metric key attributes', componentType: FieldTypes.MultiInput, componentProperties: '{"placeholder":"e.g. service.name"}' },
+      { name: 'includedProcessInDimensions', displayName: 'Include process in dimensions', componentType: FieldTypes.Toggle, initialValue: 'false' },
+      { name: 'excludedResourceAttributes', displayName: 'Excluded resource attributes', componentType: FieldTypes.MultiInput, componentProperties: '{"placeholder":"e.g. process.command_line"}' },
+    ],
+  },
+];
+
 export const mapVmActionTypesToOptions = (data: unknown): GetActionTypesResult => {
   const items = (data as { actionTypes?: RawActionTypeOption[] } | null | undefined)?.actionTypes ?? [];
 
@@ -65,5 +103,5 @@ export const mapVmActionTypesToOptions = (data: unknown): GetActionTypesResult =
     })
     .filter((a): a is ActionTypeOption => a !== null);
 
-  return { actionTypes };
+  return { actionTypes: [...actionTypes, ...COLLECTOR_ACTION_FALLBACKS.filter((fallback) => !actionTypes.some((item) => item.type === fallback.type))] };
 };

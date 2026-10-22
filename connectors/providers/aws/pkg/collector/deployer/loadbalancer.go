@@ -22,20 +22,9 @@ import (
 
 // Target group attributes, and the first of them is the one this whole design rests on.
 const (
-	// attrPreserveClientIP makes the target see the SENDING WORKLOAD's address rather than the load
-	// balancer's, which is what lets the tier-1 rules work at all.
-	//
-	// AWS defaults it to DISABLED for an `ip` target group on TCP or TLS — read that again, because it
-	// is the trap. With it disabled, traffic reaching a Collector task arrives from the load balancer's
-	// own network interfaces, so a rule admitting the WORKLOADS' security groups matches nothing: every
-	// workload's telemetry is dropped by the group Odigos just wrote, and the Collector reports healthy
-	// throughout. Enabling it makes the source address the workload's, so EC2 resolves it to the
-	// workload's interface and the group reference matches.
-	//
-	// The alternative — a self-referencing rule on 4317/4318 so the load balancer's own interfaces are
-	// admitted — is deliberately NOT taken: it would be an authorization rule this package invented,
-	// and puts every one of those in collectoringress.Resolve so no provider can widen the
-	// boundary on its own.
+	// Preserve the workload address for telemetry and diagnostics. SG admission
+	// is separate: the NLB admits workload groups, and targets admit the NLB group
+	// on data ports even with client IP preservation enabled.
 	attrPreserveClientIP = "preserve_client_ip.enabled"
 	// attrCrossZone spreads a network's telemetry across every zone the Collector runs in. Off by
 	// default on a Network Load Balancer, so a zone holding no task would blackhole the share of

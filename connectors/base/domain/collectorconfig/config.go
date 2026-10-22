@@ -15,9 +15,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoraction"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
@@ -61,6 +63,10 @@ type Input struct {
 	// Collector is not gated on having a destination, and one that is running and reachable is
 	// what lets a destination be added later as a configuration push instead of a redeployment.
 	Destinations []destination.Destination
+	// Actions are the enabled or disabled definitions owned by this regional
+	// Collector. They are rendered here, rather than in the OpAMP server, so the
+	// remote and cold-start configurations are identical.
+	Actions []collectoraction.Action
 	// Region the Collector runs in, inserted as cloud.region on telemetry that does not carry one.
 	// Empty omits the resource processor entirely.
 	Region string
@@ -112,7 +118,19 @@ func Render(in Input) (Document, []collectorstatus.Problem) {
 		return Document{}, problems
 	}
 
-	pipelines := renderPipelines(in, dests)
+	actions, actionProblems := renderActions(in.Actions)
+	problems = append(problems, actionProblems...)
+	if !hasMetricsDestination(dests) && len(actions.spanMetrics) != 0 {
+		for _, name := range actions.spanMetrics {
+			problems = append(problems, collectorstatus.Problem{
+				Code:     "CollectorActionNoMetricsDestination",
+				Severity: collectorstatus.SeverityDegraded,
+				Message:  fmt.Sprintf("Span Metrics action %q is waiting for an active metrics destination; it is not applied so traces continue to their existing destinations", name),
+			})
+		}
+		actions.withoutSpanMetrics()
+	}
+	pipelines := renderPipelines(in, dests, actions)
 	if len(pipelines) == 0 {
 		// Unreachable — no rendered destination falls back to nop on every signal — and checked anyway:
 		// a Collector with no pipeline accepts telemetry on its receivers and drops it silently, which
@@ -127,7 +145,7 @@ func Render(in Input) (Document, []collectorstatus.Problem) {
 
 	doc := document{
 		Receivers:  mergeComponents(receivers, dests.receivers),
-		Processors: mergeComponents(renderProcessors(in, memory), dests.processors),
+		Processors: mergeComponents(mergeComponents(renderProcessors(in, memory), actions.processors), dests.processors),
 		Exporters:  renderExporters(dests),
 		Extensions: mergeComponents(map[string]any{
 			// The load balancer's target health check. Bound wide because the check arrives from
@@ -135,12 +153,15 @@ func Render(in Input) (Document, []collectorstatus.Problem) {
 			extensionHealthCheck: map[string]any{
 				"endpoint": listenOn(collectoringress.PortHealth),
 			},
-		}, dests.extensions),
-		Connectors: dests.connectors,
+		}, mergeComponents(dests.extensions, actions.extensions)),
+		Connectors: mergeComponents(actions.connectors, dests.connectors),
 		Service: service{
 			Extensions: append([]string{extensionHealthCheck}, dests.serviceExtensions...),
 			Pipelines:  pipelines,
 		},
+	}
+	if len(actions.extensions) != 0 {
+		doc.Service.Extensions = append(doc.Service.Extensions, managedActionExtension)
 	}
 
 	out, err := yaml.Marshal(doc)
@@ -297,37 +318,68 @@ func renderExporters(dests renderedDestinations) map[string]any {
 // A configurer declares a pipeline only for a signal its destination takes, and that is the point: a
 // signal a destination cannot take would be received, batched, and fail on export — repeatedly, at
 // volume, against a backend that will never accept it.
-func renderPipelines(in Input, dests renderedDestinations) map[string]pipeline {
+func renderPipelines(in Input, dests renderedDestinations, actions renderedActions) map[string]pipeline {
 	own := processorNames(in)
 	pipelines := map[string]pipeline{}
 	if len(dests.entry) == 0 {
 		for _, signal := range []string{"traces", "metrics", "logs"} {
 			pipelines[signal] = pipeline{
 				Receivers:  []string{receiverOTLP},
-				Processors: own,
+				Processors: withActionProcessors(own, actions.perSignal[signal]),
 				Exporters:  []string{exporterNop},
 			}
 		}
-		return pipelines
-	}
-
-	for name, p := range dests.entry {
-		receivers := []string{receiverOTLP}
-		for _, r := range p.Receivers {
-			if r != receiverOTLP {
-				receivers = append(receivers, r)
+	} else {
+		for name, p := range dests.entry {
+			receivers := []string{receiverOTLP}
+			for _, r := range p.Receivers {
+				if r != receiverOTLP {
+					receivers = append(receivers, r)
+				}
 			}
+			signal := strings.SplitN(name, "/", 2)[0]
+			if signal == "metrics" {
+				receivers = append(receivers, actions.metricReceivers...)
+			}
+			pipelines[name] = pipeline{Receivers: receivers, Processors: withDestinationProcessors(withActionProcessors(own, actions.perSignal[signal]), p.Processors), Exporters: p.Exporters}
 		}
-		pipelines[name] = pipeline{
-			Receivers:  receivers,
-			Processors: withDestinationProcessors(own, p.Processors),
-			Exporters:  p.Exporters,
+		for name, p := range dests.internal {
+			pipelines[name] = pipeline{Receivers: p.Receivers, Processors: p.Processors, Exporters: p.Exporters}
 		}
 	}
-	for name, p := range dests.internal {
-		pipelines[name] = pipeline{Receivers: p.Receivers, Processors: p.Processors, Exporters: p.Exporters}
+	if len(actions.traceExporters) != 0 {
+		// Receive each span once, independently of how many trace destinations
+		// consume it. Attaching this exporter to every destination duplicates
+		// generated metrics, and misses traces with a metrics-only destination.
+		pipelines["traces/spanmetrics-input"] = pipeline{
+			Receivers:  []string{receiverOTLP},
+			Processors: withActionProcessors(own, actions.perSignal["traces"]),
+			Exporters:  actions.traceExporters,
+		}
+	}
+	for name, p := range actions.internal {
+		pipelines[name] = p
 	}
 	return pipelines
+}
+
+func hasMetricsDestination(dests renderedDestinations) bool {
+	for name, p := range dests.entry {
+		if strings.HasPrefix(name, "metrics/") && len(p.Exporters) != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func withActionProcessors(own, actions []string) []string {
+	if len(actions) == 0 {
+		return own
+	}
+	out := make([]string, 0, len(own)+len(actions))
+	out = append(out, own[:len(own)-1]...)
+	out = append(out, actions...)
+	return append(out, own[len(own)-1])
 }
 
 // withDestinationProcessors places a destination's own processors after the Collector's and before

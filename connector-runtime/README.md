@@ -199,9 +199,64 @@ internal/heartbeat/reader.go                  # best-effort pgx read of runtime_
 | `CONNECTOR_AZURE_IMAGE` | — | Image stamped onto Azure connector Deployments (overridable per-CR via `spec.runtime.image`) |
 | `CONNECTOR_AWS_FARGATE_AGENTS_IMAGE` | — | Optional override of the odigos-fargate-agents bundle, stamped as `ODIGOS_FARGATE_AGENTS_IMAGE` onto AWS connector Deployments (empty keeps the connector's compiled-in default) |
 | `CONNECTOR_OPAMP_ENDPOINT` | — | Public endpoint managed Collectors connect back to, stamped as `ODIGOS_OPAMP_ENDPOINT`. See below; empty disables managed-Collector deployment |
+| `CONNECTOR_COLLECTOR_IMAGE` | — | Installation-selected managed Collector image, stamped as `ODIGOS_COLLECTOR_IMAGE`. Must include a tag or digest. No compiled-in fallback. |
 | `CONNECTOR_OPAMP_GATEWAY_NAMESPACE` | *(the connector's own)* | Where `connector-opamp-gateway` pods run, for the NetworkPolicy that admits them. Set only when the gateway runs in another namespace |
 
 Flags: `--leader-elect`, `--metrics-bind-address` (`:8080`), `--health-probe-bind-address` (`:8081`).
+
+The Central chart deploys this controller as one replica with a `Recreate` strategy. Leader election
+is disabled in that deployment, so a rolling update could temporarily run two controllers with
+different installation defaults. Both would apply the same connector Deployment, repeatedly
+replacing its pods and racing Collector image selection. Keep the controller rollout non-overlapping;
+one replica alone does not prevent rolling-update surge. Provider connector Deployments independently
+use `Recreate` because their cloud reconciliation is also single-writer.
+
+When upgrading an existing installation with server-side apply, Kubernetes may retain the defaulted
+`rollingUpdate` field from the old Deployment and reject the strategy change. Before upgrading that
+installation, migrate the strategy atomically (this does not change the pod template):
+
+```sh
+kubectl -n odigos-central patch deployment connector-runtime --type=merge \
+  --patch '{"spec":{"strategy":{"type":"Recreate","rollingUpdate":null}}}'
+```
+
+### Managed Collector image selection
+
+The central Helm chart supplies the image through `cloudConnectors.managedCollectors.collectorImage`.
+Its registry follows `imagePrefix` (normally `registry.odigos.io`) and its tag follows `image.tag` or
+the chart's AppVersion. Override `registry`, `repository`, `tag`, or `digest` independently; a digest
+wins over a tag. Set `reference` to supply the complete reference instead. This is separate from
+`cloudConnectors.managedCollectors.image`, which selects the OpAMP gateway image.
+
+Without reinstalling, update the existing connector config API at `collector.defaults.image` for all
+regions or `collector.regions.<region>.image` for one region. Both accept `reference`, `registry`,
+`repository` (a complete repository without a tag/digest), `tag`, and `digest`. The legacy
+`repositoryOverride` alias remains supported. For example:
+
+```yaml
+collector:
+  defaults:
+    image:
+      registry: mirror.example.com
+      tag: v1.2.3
+  regions:
+    us-east-1:
+      image:
+        reference: mirror.example.com/custom/collector:v1.2.4
+```
+
+Runtime settings override the installation selection; regional settings override defaults. Setting
+a tag clears an inherited digest, while an explicit digest takes precedence over that tag. A regional
+`reference` replaces inherited image overrides. Clear runtime overrides to return to the installation
+selection. Runtime updates are persisted and picked up on reconciliation. Automatic mode registers a
+new task revision and rolls the Collector; manual/IaC mode reports image drift and renders updated
+instructions, without changing customer resources. Tag-only selections detect tag changes, not a
+registry republishing different bytes under the same tag; use a digest for immutable deployments.
+
+For ECR Public, set `reference` to `public.ecr.aws/<alias>/<repository>:<tag>` (or `@sha256:<digest>`).
+The ECS definition omits registry credentials for that hostname and pulls anonymously. The Odigos
+license and OpAMP secrets are still required at runtime. Collector subnets need outbound HTTPS to
+ECR Public; a private ECR VPC endpoint alone does not provide that internet access.
 
 ## Build
 

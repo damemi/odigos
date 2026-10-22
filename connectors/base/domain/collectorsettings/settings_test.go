@@ -20,6 +20,25 @@ func TestDefaultsAreDisabledAndRegional(t *testing.T) {
 	}
 }
 
+func TestRegionalImageOverridesGlobalDefaults(t *testing.T) {
+	s := Read(map[string]any{Key: map[string]any{
+		KeyDefaults: map[string]any{KeyImage: map[string]any{"registry": "mirror.example.com", "digest": "sha256:default"}},
+		KeyRegions: map[string]any{
+			"us-east-1": map[string]any{KeyImage: map[string]any{"tag": "v2"}},
+			"us-west-2": map[string]any{KeyImage: map[string]any{"reference": "other.example.com/collector:v3"}},
+		},
+	}})
+	if got := s.Region("us-east-1").Image; got["tag"] != "v2" || got["registry"] != "mirror.example.com" || got["digest"] != nil {
+		t.Fatalf("tag selection = %#v", got)
+	}
+	if got := s.Region("us-west-2").Image; len(got) != 1 || got["reference"] != "other.example.com/collector:v3" {
+		t.Fatalf("reference selection = %#v", got)
+	}
+	if got := s.Region("eu-west-1").Image; got["digest"] != "sha256:default" {
+		t.Fatalf("inherited selection = %#v", got)
+	}
+}
+
 func TestRegionInheritsDefaultsAndAppliesOverrides(t *testing.T) {
 	s := Read(map[string]any{Key: map[string]any{
 		KeyEnabled: true,

@@ -342,6 +342,10 @@ func (m *memoryCollectorResourceStore) DeleteCollectorDestinationsForRegion(cont
 	return nil
 }
 
+func (m *memoryCollectorResourceStore) DeleteCollectorActionsForRegion(context.Context, string) error {
+	return nil
+}
+
 func TestUnprovisionedCollectorTeardownRemovesDesiredAndRecordedState(t *testing.T) {
 	for _, recorded := range []bool{false, true} {
 		c := newTestCoordinator(t)

@@ -146,6 +146,25 @@ func TestHealthCheckIsAdmittedFromTheCollectorsOwnGroup(t *testing.T) {
 	}
 }
 
+func TestConvergenceRetainsBothNLBBackendAndWorkloadRules(t *testing.T) {
+	api := newFakeEC2SG()
+	decision := awsingress.Resolve(awsingress.Input{Sources: []awsingress.Source{{Name: "api", SecurityGroupIDs: []string{"sg-app"}}}})
+	for pass := 0; pass < 2; pass++ {
+		group, problems, err := EnsureSecurityGroup(context.Background(), api, securityGroupInput(decision.Rules))
+		if err != nil || len(problems) != 0 {
+			t.Fatalf("pass %d: %v / %v", pass, err, problems)
+		}
+		for _, port := range []string{"4317", "4318"} {
+			for _, source := range []string{"sg-app", group.ID} {
+				key := "tcp/" + port + "-" + port + "/sg:" + source
+				if !containsString(api.ingressKeys(group.ID), key) {
+					t.Fatalf("pass %d removed required ingress %s", pass, key)
+				}
+			}
+		}
+	}
+}
+
 // TestNoUnauthorizedIngressReachesTheTask — the third acceptance criterion. The group must contain
 // exactly the desired set and nothing else, because the OTLP ports carry no authentication and anything
 // that can write to them forwards under the customer's destination credential.

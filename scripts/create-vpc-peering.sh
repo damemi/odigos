@@ -11,7 +11,8 @@ set -euo pipefail
 #   - In EVERY route table of each VPC, a route via that peering to every associated CIDR of the other.
 #     ECS may place a task in any subnet, so one routed subnet does not prove the path.
 #   - The Collector security group admitting the workloads on TCP 4317 (OTLP gRPC) and 4318 (OTLP
-#     HTTP), and itself on TCP 13133 (the internal NLB's health check). 13134 is never exposed.
+#     HTTP), and itself on 4317/4318 (NLB forwarding) and 13133 (NLB health checks).
+#     13134 is never exposed.
 #
 # Collector security groups: one tagged odigos-managed=true is converged by the connector, which adds
 # the workloads' groups itself and revokes any rule added by hand, so it is reported and left alone. A
@@ -31,6 +32,8 @@ set -euo pipefail
 # Example:
 #   ./create-vpc-peering.sh vpc-aaa vpc-bbb us-east-2 --workload-sg sg-0123
 #
+# Peering-specific SG rules are marked for cleanup by delete-vpc-peering.sh.
+# Shared NLB/self-health rules survive deletion because other VPCs may use them.
 # If the region is omitted, uses AWS_REGION / AWS_DEFAULT_REGION. Safe to re-run.
 
 USAGE="Usage: $0 <collector-vpc-id> <workload-vpc-id> [region] [--collector-sg <sg-id>]... [--workload-sg <sg-id>]..."
@@ -287,6 +290,7 @@ ensure_collector_sg() {
 
     if [[ "$MANAGED" == "true" ]]; then
         echo "  $SG: Odigos-managed; the connector converges its rules and revokes manual ones, skipping"
+        echo "    It must admit workload -> NLB and NLB -> Collector on 4317/4318."
         ODIGOS_MANAGED=1
         return
     fi
@@ -295,16 +299,23 @@ ensure_collector_sg() {
         if [[ ${#WORKLOAD_SGS[@]} -gt 0 ]]; then
             for SRC in "${WORKLOAD_SGS[@]}"; do
                 authorize ingress "$SG" \
-                    "[{\"IpProtocol\":\"tcp\",\"FromPort\":$PORT,\"ToPort\":$PORT,\"UserIdGroupPairs\":[{\"GroupId\":\"$SRC\"}]}]" \
+                    "[{\"IpProtocol\":\"tcp\",\"FromPort\":$PORT,\"ToPort\":$PORT,\"UserIdGroupPairs\":[{\"GroupId\":\"$SRC\",\"Description\":\"odigos-vpc-peering:$PCX_ID\"}]}]" \
                     "$SG <- $SRC tcp/$PORT"
             done
         else
             for CIDR in $WORKLOAD_CIDRS; do
                 authorize ingress "$SG" \
-                    "[{\"IpProtocol\":\"tcp\",\"FromPort\":$PORT,\"ToPort\":$PORT,\"IpRanges\":[{\"CidrIp\":\"$CIDR\"}]}]" \
+                    "[{\"IpProtocol\":\"tcp\",\"FromPort\":$PORT,\"ToPort\":$PORT,\"IpRanges\":[{\"CidrIp\":\"$CIDR\",\"Description\":\"odigos-vpc-peering:$PCX_ID\"}]}]" \
                     "$SG <- $CIDR tcp/$PORT"
             done
         fi
+    done
+
+    # Shared backend permissions belong to the Collector, not this peering.
+    for PORT in 4317 4318; do
+        authorize ingress "$SG" \
+            "[{\"IpProtocol\":\"tcp\",\"FromPort\":$PORT,\"ToPort\":$PORT,\"UserIdGroupPairs\":[{\"GroupId\":\"$SG\",\"Description\":\"Odigos NLB to Collector telemetry\"}]}]" \
+            "$SG <- self tcp/$PORT (NLB forwarding)"
     done
 
     authorize ingress "$SG" \
@@ -358,7 +369,7 @@ ensure_workload_egress() {
     for PORT in 4317 4318; do
         for CIDR in $COLLECTOR_CIDRS; do
             authorize egress "$SG" \
-                "[{\"IpProtocol\":\"tcp\",\"FromPort\":$PORT,\"ToPort\":$PORT,\"IpRanges\":[{\"CidrIp\":\"$CIDR\"}]}]" \
+                "[{\"IpProtocol\":\"tcp\",\"FromPort\":$PORT,\"ToPort\":$PORT,\"IpRanges\":[{\"CidrIp\":\"$CIDR\",\"Description\":\"odigos-vpc-peering:$PCX_ID\"}]}]" \
                 "$SG -> $CIDR tcp/$PORT"
         done
     done
@@ -380,7 +391,10 @@ echo "=================================="
 
 if [[ "$ODIGOS_MANAGED" -eq 1 ]]; then
     echo
-    echo "Odigos admits each workload's security groups on its own. If they do not resolve, its"
+    echo "Odigos must reconcile workload ingress and NLB-to-Collector ingress on 4317/4318."
+    echo "If targets are healthy but OTLP times out, check that the Collector SG admits itself on both ports."
+    echo "An older connector missing those rules needs an update; manual additions will be revoked."
+    echo "If workload security groups do not resolve, its"
     echo "VPC-CIDR fallback admits only the collector VPC's blocks, never a peered range; set"
     echo "  collector.regions.$REGION.ingress.additionalCidrs: [$(echo $WORKLOAD_CIDRS | sed 's/ /, /g')]"
 fi
@@ -392,4 +406,4 @@ if [[ "$FAILURES" -gt 0 ]]; then
 fi
 
 echo
-echo "VPC peering ready for the managed Collector."
+echo "VPC peering and routes are ready. Verify Collector ingress separately."

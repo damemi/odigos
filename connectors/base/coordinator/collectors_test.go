@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/config"
@@ -539,5 +540,70 @@ func TestCollectorSettingsAreReadLive(t *testing.T) {
 	}
 	if got := settings.Region("us-east-1").Memory; got != "4096" {
 		t.Errorf("memory = %q, want the live override", got)
+	}
+}
+
+func TestCollectorRouteChanged(t *testing.T) {
+	ready := time.Now()
+	cases := []struct {
+		name   string
+		before store.CollectorRecord
+		after  store.CollectorRecord
+		want   bool
+	}{
+		{name: "unchanged route", before: store.CollectorRecord{EndpointHTTP: "http://old:4318", FirstReadyAt: &ready}, after: store.CollectorRecord{EndpointHTTP: "http://old:4318", FirstReadyAt: &ready}},
+		{name: "first ready makes existing endpoint actionable", before: store.CollectorRecord{EndpointHTTP: "http://collector:4318"}, after: store.CollectorRecord{EndpointHTTP: "http://collector:4318", FirstReadyAt: &ready}, want: true},
+		{name: "new HTTP endpoint", before: store.CollectorRecord{EndpointHTTP: "http://old:4318", FirstReadyAt: &ready}, after: store.CollectorRecord{EndpointHTTP: "http://new:4318", FirstReadyAt: &ready}, want: true},
+		{name: "new gRPC endpoint", before: store.CollectorRecord{EndpointGRPC: "old:4317", FirstReadyAt: &ready}, after: store.CollectorRecord{EndpointGRPC: "new:4317", FirstReadyAt: &ready}, want: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := collectorRouteChanged(tc.before, tc.after); got != tc.want {
+				t.Errorf("collectorRouteChanged = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+type routingRefreshProvider struct {
+	collectorProvider
+	refresh func() error
+}
+
+func (p routingRefreshProvider) RefreshCollectorRouting(context.Context) error { return p.refresh() }
+
+func TestCollectorPassRefreshesIngressBeforeRetryingWorkloads(t *testing.T) {
+	for _, manual := range []bool{false, true} {
+		t.Run(map[bool]string{false: "automatic", true: "manual"}[manual], func(t *testing.T) {
+			caps := automaticCaps()
+			if manual {
+				caps = manualCaps()
+			}
+			rec := newRecorder("vpc-host")
+			c := collectorCoordinator(t, caps, enabledConfig(nil), rec)
+			refreshed := false
+			c.provider = routingRefreshProvider{
+				collectorProvider: c.provider.(collectorProvider),
+				refresh: func() error {
+					observed, converged, _ := rec.calls()
+					if len(observed) != 1 || (!manual && len(converged) != 1) || (manual && len(converged) != 0) {
+						t.Fatalf("routing refreshed before Collector handling: observed %v converged %v", observed, converged)
+					}
+					if len(c.reconcileTrigger) != 0 || len(c.observeTrigger) != 0 {
+						t.Fatal("workloads were queued before ingress was read back")
+					}
+					refreshed = true
+					return nil
+				},
+			}
+			observers, deployers := c.activeCollectorHandlers(c.provider.(api.CollectorProvider))
+			c.runCollectorReconcile(context.Background(), observers, deployers)
+			if !refreshed || len(c.reconcileTrigger) != 1 || len(c.observeTrigger) != 1 {
+				t.Fatal("Collector pass did not refresh routing and queue both workload paths")
+			}
+			if len(c.collectorTrigger) != 0 {
+				t.Fatal("Collector pass queued itself, creating a reconciliation feedback loop")
+			}
+		})
 	}
 }

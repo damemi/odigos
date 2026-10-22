@@ -106,6 +106,7 @@ func (c *Coordinator) createWorkloadSource(ctx context.Context, src domainsrc.So
 		return err
 	}
 	apiLog.Info("create source complete", "name", src.Name, "external_id", src.ExternalResourceID)
+	c.TriggerCollectorReconcile()
 	c.triggerReconcile()
 	return nil
 }
@@ -189,6 +190,7 @@ func (c *Coordinator) UpdateSource(ctx context.Context, src domainsrc.Source) er
 		return err
 	}
 	apiLog.Info("update source complete", "name", src.Name)
+	c.TriggerCollectorReconcile()
 	c.triggerReconcile()
 	return nil
 }
@@ -212,6 +214,7 @@ func (c *Coordinator) DeleteSource(ctx context.Context, name, kind, region strin
 		return err
 	}
 	apiLog.Info("delete source complete", "name", name, "kind", current.Kind, "service", current.ServiceName, "region", current.Region)
+	c.TriggerCollectorReconcile()
 	c.triggerReconcile()
 	return nil
 }
@@ -263,7 +266,8 @@ func (c *Coordinator) CreateDestination(ctx context.Context, dest domaindest.Des
 		return err
 	}
 	apiLog.Info("create destination complete", "name", dest.Name)
-	c.triggerReconcile()
+	c.TriggerCollectorReconcile()
+	c.triggerWorkloadValidation()
 	return nil
 }
 
@@ -278,7 +282,8 @@ func (c *Coordinator) UpdateDestination(ctx context.Context, dest domaindest.Des
 		return err
 	}
 	apiLog.Info("update destination complete", "name", dest.Name)
-	c.triggerReconcile()
+	c.TriggerCollectorReconcile()
+	c.triggerWorkloadValidation()
 	return nil
 }
 
@@ -317,8 +322,30 @@ func (c *Coordinator) DeleteDestination(ctx context.Context, name string) error 
 		return err
 	}
 	apiLog.Info("delete destination complete", "name", name)
-	c.triggerReconcile()
+	c.TriggerCollectorReconcile()
+	c.triggerWorkloadValidation()
 	return nil
+}
+
+// RevalidateWorkloads asks both sides of the workload contract to re-evaluate their
+// current route. Automatic workloads converge a changed endpoint; manual (IaC)
+// workloads are read back and report collectorExport drift instead. It is intentionally
+// asynchronous: destination operations must not wait for every cloud workload to roll.
+//
+// Destination tests use this too. A successful test can make a previously unavailable
+// managed-Collector destination actionable, and a re-test is an explicit request to
+// re-evaluate the route rather than wait for the periodic discovery interval.
+func (c *Coordinator) RevalidateWorkloads(_ context.Context) error {
+	// Refresh topology and converge sender admission too: a workload-only retry
+	// would reuse the cached evidence that caused the unreachable verdict.
+	c.TriggerCollectorReconcile()
+	c.triggerWorkloadValidation()
+	return nil
+}
+
+func (c *Coordinator) triggerWorkloadValidation() {
+	c.triggerReconcile()
+	c.triggerObserve()
 }
 
 func (c *Coordinator) DestinationCatalog() domaindest.Catalog {

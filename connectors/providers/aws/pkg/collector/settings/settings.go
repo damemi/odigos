@@ -3,8 +3,11 @@
 // values AWS meaning.
 package collectorsettings
 
-import base "github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
-import "github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
+import (
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
+	base "github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
+)
 
 const (
 	Key              = base.Key
@@ -59,6 +62,7 @@ type Network struct {
 	Retention               Retention
 	Arch                    string
 	ImageRepositoryOverride string
+	Image                   collectorimage.Selection
 	EndpointOverride        string
 	TLS                     collectoringress.TransportConfig
 	Ingress                 collectoringress.Config
@@ -76,7 +80,7 @@ func (n Network) Base() base.Network {
 		Enabled: n.Enabled, DeploymentRoleRef: n.DeploymentRoleRef, Provider: n.Provider, CPU: n.CPU, Memory: n.Memory,
 		LogRetentionDays: n.LogRetentionDays, Scaling: n.Scaling,
 		RolloutBatchSize: n.RolloutBatchSize, Retention: n.Retention,
-		Arch: n.Arch, ImageRepositoryOverride: n.ImageRepositoryOverride,
+		Arch: n.Arch, ImageRepositoryOverride: n.ImageRepositoryOverride, Image: n.Image,
 		EndpointOverride: n.EndpointOverride, TLS: n.TLS, Ingress: n.Ingress,
 	}
 }
@@ -165,6 +169,7 @@ func network(in base.Network) Network {
 		Retention:               in.Retention,
 		Arch:                    in.Arch,
 		ImageRepositoryOverride: in.ImageRepositoryOverride,
+		Image:                   in.Image,
 		EndpointOverride:        in.EndpointOverride,
 		TLS:                     in.TLS,
 		Ingress:                 in.Ingress,

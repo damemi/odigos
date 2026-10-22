@@ -97,7 +97,7 @@ func TestDefaultArch(t *testing.T) {
 	if err != nil || unset != explicit {
 		t.Errorf("unset = %q, %s = %q", unset, DefaultArch, explicit)
 	}
-	if !Released.Supports(DefaultArch) {
+	if !p.Supports(DefaultArch) {
 		t.Errorf("the released pin does not carry the default architecture %s", DefaultArch)
 	}
 }
@@ -111,10 +111,10 @@ func TestValidateCatchesMalformedPins(t *testing.T) {
 		mut  func(*Pin)
 		want string
 	}{
-		{"no digest", func(p *Pin) { p.Digest = "" }, "pins nothing"},
+		{"no version", func(p *Pin) { p.Digest = ""; p.Tag = "" }, "pins nothing"},
 		{"short digest", func(p *Pin) { p.Digest = "sha256:1111" }, "not a full sha256"},
 		{"tag instead of digest", func(p *Pin) { p.Digest = "v1.36.0" }, "not a full sha256"},
-		{"no tag", func(p *Pin) { p.Tag = "" }, "no tag"},
+		{"invalid tag", func(p *Pin) { p.Tag = "bad tag" }, "invalid tag"},
 		{"no platforms", func(p *Pin) { p.Platforms = nil }, "no platforms"},
 		{"unknown platform", func(p *Pin) { p.Platforms = []Arch{"s390x"} }, "unknown platform"},
 		{"missing a cloud", func(p *Pin) { delete(p.Repositories, CloudAzure) }, "no repository for azure"},
@@ -176,23 +176,25 @@ func TestCloudRunPullableSources(t *testing.T) {
 	}
 }
 
-// TestReleasedPinIsRunnable prevents a connector release from shipping with the placeholder pin. The
-// deployer correctly fails closed without one, but that still means it can provision no Collector.
-func TestReleasedPinIsRunnable(t *testing.T) {
-	if problems := Released.Validate(); len(problems) != 0 {
-		t.Fatalf("the released pin is invalid: %v", problems)
+func TestConfiguredPinIsRunnable(t *testing.T) {
+	configured, err := FromReference("us-central1-docker.pkg.dev/odigos-cloud/components/collector@" + digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if problems := configured.Validate(); len(problems) != 0 {
+		t.Fatalf("the configured pin is invalid: %v", problems)
 	}
 	for _, cloud := range []Cloud{CloudAWS, CloudAzure, CloudGCP} {
 		for _, arch := range []Arch{ArchAMD64, ArchARM64} {
-			res, err := Resolve(Released, cloud, arch, Override{})
+			res, err := Resolve(configured, cloud, arch, Override{})
 			if err != nil {
 				t.Errorf("Resolve(%s, %s): %v", cloud, arch, err)
-			} else if !strings.HasSuffix(res.Ref, "@"+Released.Digest) {
+			} else if !strings.HasSuffix(res.Ref, "@"+configured.Digest) {
 				t.Errorf("Resolve(%s, %s) = %q, want the released digest", cloud, arch, res.Ref)
 			}
 		}
 	}
-	if repo := Released.Repositories[CloudGCP]; !cloudRunPullable(repo) {
+	if repo := configured.Repositories[CloudGCP]; !cloudRunPullable(repo) {
 		t.Errorf("the released GCP repository %q is not pullable by Cloud Run", repo)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoraction"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcutover"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectordestination"
@@ -861,6 +862,9 @@ func (c *Coordinator) removeCollectorLocalState(ctx context.Context, region stri
 	if err := c.collectorResourceStore().DeleteCollectorDestinationsForRegion(ctx, region); err != nil {
 		return err
 	}
+	if err := c.collectorResourceStore().DeleteCollectorActionsForRegion(ctx, region); err != nil {
+		return fmt.Errorf("deleting Collector actions: %w", err)
+	}
 	if recorded {
 		if err := c.collectorResourceStore().DeleteManagedCollector(ctx, store.CollectorKey{Region: region}); err != nil {
 			return err
@@ -974,6 +978,72 @@ func (c *Coordinator) UpdateManagedCollectorDestination(ctx context.Context, des
 func (c *Coordinator) DeleteManagedCollectorDestination(ctx context.Context, region, name string) (bool, error) {
 	apiLog.Info("delete collector destination", "region", region, "name", name)
 	deleted, err := c.store.DeleteCollectorDestination(ctx, region, name)
+	if err != nil {
+		return false, err
+	}
+	if deleted {
+		c.TriggerCollectorReconcile()
+	}
+	return deleted, nil
+}
+
+// ManagedCollectorActions returns the actions owned by one regional Collector.
+func (c *Coordinator) ManagedCollectorActions(ctx context.Context, region string) ([]collectoraction.Action, error) {
+	return c.store.ListCollectorActions(ctx, region)
+}
+
+// AllManagedCollectorActions is the connector-wide read used by the shared
+// Action query when Central has not selected a Collector region. Definitions
+// remain region-owned; this is only a read projection for generic clients.
+func (c *Coordinator) AllManagedCollectorActions(ctx context.Context) ([]collectoraction.Action, error) {
+	return c.store.ListAllCollectorActions(ctx)
+}
+
+func (c *Coordinator) ManagedCollectorAction(ctx context.Context, region, name string) (*collectoraction.Action, error) {
+	return c.store.GetCollectorAction(ctx, region, name)
+}
+
+func (c *Coordinator) CreateManagedCollectorAction(ctx context.Context, action collectoraction.Action) error {
+	if err := collectoraction.Validate(action); err != nil {
+		return fmt.Errorf("createAction: %w", err)
+	}
+	if err := c.requireCollector(ctx, action.Region, "createAction"); err != nil {
+		return err
+	}
+	existing, err := c.store.GetCollectorAction(ctx, action.Region, action.Name)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		return fmt.Errorf("createAction: region %s already has an action named %q", action.Region, action.Name)
+	}
+	if err := c.store.UpsertCollectorAction(ctx, action); err != nil {
+		return err
+	}
+	c.TriggerCollectorReconcile()
+	return nil
+}
+
+func (c *Coordinator) UpdateManagedCollectorAction(ctx context.Context, action collectoraction.Action) error {
+	if err := collectoraction.Validate(action); err != nil {
+		return fmt.Errorf("updateAction: %w", err)
+	}
+	existing, err := c.store.GetCollectorAction(ctx, action.Region, action.Name)
+	if err != nil {
+		return err
+	}
+	if existing == nil {
+		return fmt.Errorf("updateAction: region %s has no action named %q", action.Region, action.Name)
+	}
+	if err := c.store.UpsertCollectorAction(ctx, action); err != nil {
+		return err
+	}
+	c.TriggerCollectorReconcile()
+	return nil
+}
+
+func (c *Coordinator) DeleteManagedCollectorAction(ctx context.Context, region, name string) (bool, error) {
+	deleted, err := c.store.DeleteCollectorAction(ctx, region, name)
 	if err != nil {
 		return false, err
 	}

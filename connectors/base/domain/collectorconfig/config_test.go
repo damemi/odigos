@@ -450,6 +450,19 @@ func TestSecretFieldsAreResolvedPerDestination(t *testing.T) {
 	}
 }
 
+func TestCredentialSubstitutionDoesNotExpandOtherCredentials(t *testing.T) {
+	replacements := map[string]string{
+		"${TOKEN}":                  "$${OTHER}",
+		"${ODIGOS_DEST_team_TOKEN}": "$${OTHER}",
+		"${OTHER}":                  "another-secret",
+	}
+	for _, input := range []string{"${TOKEN}", "${ODIGOS_DEST_team_TOKEN}"} {
+		if got := replaceInValue(input, replacements); got != "$${OTHER}" {
+			t.Fatalf("credential %s was recursively substituted: %v", input, got)
+		}
+	}
+}
+
 // TestValuesCannotExpandTheCollectorsEnvironment: the Collector expands every ${...} in its configuration,
 // and its task environment holds the OpAMP credential. A value that could name a variable would have the
 // Collector send it wherever the destination points, so every value the customer gave is escaped.

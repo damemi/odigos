@@ -70,7 +70,8 @@ type Config struct {
 	// FargateAgentsImage optionally overrides the odigos-fargate-agents bundle the AWS connector's ECS
 	// Fargate instrumentor stages agents from (stamped as ODIGOS_FARGATE_AGENTS_IMAGE on AWS connector
 	// pods). Empty keeps the connector's compiled-in default.
-	FargateAgentsImage string
+	FargateAgentsImage    string
+	ManagedCollectorImage string
 	// CentralBackendURL is passed to connector pods so they dial Central for the agents-api WebSocket.
 	CentralBackendURL string
 	// OpAMPEndpoint is the public endpoint managed Collectors connect back to, from the odigos-central
@@ -212,16 +213,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	schemaName := "connector_" + cr.Spec.Provider
 	params := resources.DeploymentParams{
-		Namespace:          cr.Namespace,
-		WorkloadName:       resources.WorkloadName(cr.Spec.Provider, cr.Name),
-		Image:              image,
-		DBSecretName:       r.Config.DBSecretName,
-		DBSecretKey:        r.Config.DBSecretKey,
-		SchemaName:         schemaName,
-		SchemaVersion:      cpg.ExpectedSchemaVersions[schemaName],
-		CentralBackendURL:  r.Config.CentralBackendURL,
-		FargateAgentsImage: r.Config.FargateAgentsImage,
-		OpAMPEndpoint:      opampEndpoint,
+		Namespace:             cr.Namespace,
+		WorkloadName:          resources.WorkloadName(cr.Spec.Provider, cr.Name),
+		Image:                 image,
+		DBSecretName:          r.Config.DBSecretName,
+		DBSecretKey:           r.Config.DBSecretKey,
+		SchemaName:            schemaName,
+		SchemaVersion:         cpg.ExpectedSchemaVersions[schemaName],
+		CentralBackendURL:     r.Config.CentralBackendURL,
+		FargateAgentsImage:    r.Config.FargateAgentsImage,
+		ManagedCollectorImage: r.Config.ManagedCollectorImage,
+		OpAMPEndpoint:         opampEndpoint,
 	}
 
 	if err := r.ensureService(ctx, &cr, params); err != nil {

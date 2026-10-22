@@ -61,7 +61,7 @@ import { normalizeActionForWire, parseRenamesString } from '@/lib/action-form-no
 import { mapVmInstrumentationInstructions, vmInstrumentationInstructionsVariables } from '@/graphql/remote/vm-instrumentation-instructions';
 import { PlatformType, Tier, type Action, type CloudConnectorCreateResult, type CloudConnectorProvider, type Connection } from '@odigos/ui-kit/types';
 import { mapVmClearProfileCache, mapVmEnableSourceProfiling, mapVmHotFunctions, mapVmProfilingSlots, mapVmSourceProfile, vmProfilingService } from '@/graphql/remote/vm-profiling';
-import { mapVmActions, vmCreateActionResult, vmCreateActionVariables, vmDeleteActionResult, vmDeleteActionVariables, vmUpdateActionResult, vmUpdateActionVariables } from '@/graphql/remote/vm-actions';
+import { mapVmActions, patchVmActionsQuery, vmCreateActionResult, vmCreateActionVariables, vmDeleteActionResult, vmDeleteActionVariables, vmUpdateActionResult, vmUpdateActionVariables } from '@/graphql/remote/vm-actions';
 import {
   buildVmPersistSources,
   buildVmSourcesWithReportsQuery,
@@ -1064,7 +1064,8 @@ const withActionRenames = <TData, TVars>(op: Operation<TData, TVars>): Operation
   transformVariables: op.transformVariables
     ? (vars, ctx) => {
         const hasAction = !!vars && typeof vars === 'object' && 'action' in (vars as object) && !!(vars as { action?: unknown }).action;
-        const next = hasAction ? (normalizeActionForWire(vars as { action?: { fields?: Record<string, unknown> } }) as TVars) : vars;
+        // Kubernetes takes a JSON string; agents-api takes typed rename entries.
+        const next = hasAction && !isAgentsApiPlatform(ctx) ? (normalizeActionForWire(vars as { action?: { fields?: Record<string, unknown> } }) as TVars) : vars;
         return op.transformVariables!(next, ctx);
       }
     : undefined,
@@ -1233,13 +1234,11 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
     // actions. Catalog form payloads (row-array `renames`, ExtractAttribute UI-only /
     // empty optional fields) are normalized for the wire, and stringified `renames`
     // are parsed back so the kit's object shape survives the proxy round-trip.
-    // VM: only URL templatization maps across both surfaces — VM-only action types
-    // (processorAddition / spanMetrics) are filtered out of reads and the k8s-only
-    // kit types have no VM equivalent (see vm-actions). `renames` is a k8s-only
-    // RenameAttribute concern, so `withActionRenames` is a no-op on VM.
+    // agents-api actions use typed configurations; k8s retains its JSON-string rename contract.
     GET_ACTIONS: withActionRenames(
       wrapVersioned<GetActionsData, undefined>(GET_ACTIONS, undefined, undefined, {
         select: (d) => d.GetActionsDocument,
+        patchQuery: patchVmActionsQuery,
         transformResult: (data) => mapVmActions(data as GetActionsQuery),
       }),
     ),

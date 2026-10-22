@@ -545,7 +545,7 @@ collectors:
                   - Name: collector
                     Image: {{.Image}}
                     Essential: true
-                    RepositoryCredentials: { CredentialsParameter: !Ref LicenseSecretArn }
+          {{if not .PublicECRImage}}          RepositoryCredentials: { CredentialsParameter: !Ref LicenseSecretArn }{{end}}
                     Command: [/odigosopampsupervisor, --config=/etc/odigos/managed-collector/supervisor.yaml]
                     PortMappings: [{ContainerPort: 4317}, {ContainerPort: 4318}, {ContainerPort: 13133}, {ContainerPort: 13134}]
                     Environment:
@@ -687,7 +687,7 @@ collectors:
           jq -n --arg family "$TASK_FAMILY" --arg cpu "$CPU" --arg memory "$MEMORY" --arg arch "$ARCH" --arg role "$EXECUTION_ROLE_ARN" --arg image "$IMAGE" --arg license "$LICENSE_SECRET_ARN" --arg credential "$CREDENTIAL_SECRET_ARN" --arg region "$REGION" --arg connector "$CONNECTOR_NAME" --arg connectorId "$CONNECTOR_ID" --arg endpoint "$OPAMP_ENDPOINT" --arg logGroup "$LOG_GROUP" '{
             family:$family,cpu:$cpu,memory:$memory,networkMode:"awsvpc",requiresCompatibilities:["FARGATE"],executionRoleArn:$role,
             runtimePlatform:{operatingSystemFamily:"LINUX",cpuArchitecture:$arch},
-            containerDefinitions:[{name:"collector",image:$image,essential:true,repositoryCredentials:{credentialsParameter:$license},
+            containerDefinitions:[{name:"collector",image:$image,essential:true,{{if not .PublicECRImage}}repositoryCredentials:{credentialsParameter:$license},{{end}}
               command:["/odigosopampsupervisor","--config=/etc/odigos/managed-collector/supervisor.yaml"],
               portMappings:([4317,4318,13133,13134]|map({containerPort:.})),
               environment:[{name:"ODIGOS_CLOUD_PROVIDER",value:"aws"},{name:"ODIGOS_CLOUD_CONNECTOR_ID",value:$connectorId},{name:"ODIGOS_OPAMP_ENDPOINT",value:$endpoint}],
@@ -839,7 +839,7 @@ collectors:
               name = "collector"
               image = {{quote .Image}}
               essential = true
-              repositoryCredentials = { credentialsParameter = data.aws_secretsmanager_secret.license.arn }
+          {{if not .PublicECRImage}}    repositoryCredentials = { credentialsParameter = data.aws_secretsmanager_secret.license.arn }{{end}}
               command = ["/odigosopampsupervisor", "--config=/etc/odigos/managed-collector/supervisor.yaml"]
               portMappings = [for p in [4317, 4318, 13133, 13134] : { containerPort = p }]
               environment = [{ name = "ODIGOS_CLOUD_PROVIDER", value = "aws" }, { name = "ODIGOS_CLOUD_CONNECTOR_ID", value = {{quote .ConnectorID}} }, { name = "ODIGOS_OPAMP_ENDPOINT", value = {{quote .OpAMPEndpoint}} }]

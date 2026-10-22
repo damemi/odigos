@@ -97,8 +97,17 @@ func (a *DestinationAPI) DeleteDestination(ctx context.Context, input model.Dele
 	return domaindest.ToDeletePayload(input.Name, true), nil
 }
 
-func (a *DestinationAPI) TestConnectionForDestination(_ context.Context, input model.TestConnectionDestinationInput) (*model.TestConnectionResponse, error) {
+func (a *DestinationAPI) TestConnectionForDestination(ctx context.Context, input model.TestConnectionDestinationInput) (*model.TestConnectionResponse, error) {
 	destinationAPILog.Debug("test destination connection not implemented", "type", input.Type)
+	// Retesting a destination is also an explicit request to reconsider routing.
+	// In particular, a managed-Collector marker may have become usable since the
+	// last pass. Automatic workloads will converge their export endpoint; manual
+	// workloads will be observed and surface collectorExport drift instead.
+	if revalidator, ok := a.Central.(interface{ RevalidateWorkloads(context.Context) error }); ok {
+		if err := revalidator.RevalidateWorkloads(ctx); err != nil {
+			return nil, fmt.Errorf("queue workload route validation: %w", err)
+		}
+	}
 	destType := input.Type
 	return &model.TestConnectionResponse{
 		DestinationType: &destType,

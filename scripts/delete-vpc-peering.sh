@@ -1,18 +1,46 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+usage() {
+    echo "Usage: $0 [region | --region <region> | --all-regions]"
+    echo "  No argument or --all-regions: discover peerings in all enabled regions."
+    echo "  A region or --region <region>: discover peerings only in that region."
+    echo "  Deletion still requires selecting a peering and typing DELETE."
+}
+
+SCAN_REGION=""
+case "${1:-}" in
+    -h|--help) usage; exit 0 ;;
+    ""|--all-regions)
+        if [[ $# -gt 1 ]]; then usage >&2; exit 1; fi
+        ;;
+    --region)
+        if [[ $# -ne 2 || -z "${2:-}" || "${2:-}" == -* ]]; then usage >&2; exit 1; fi
+        SCAN_REGION="$2"
+        ;;
+    -*) usage >&2; exit 1 ;;
+    *)
+        if [[ $# -ne 1 ]]; then usage >&2; exit 1; fi
+        SCAN_REGION="$1"
+        ;;
+esac
+
 command -v aws >/dev/null || { echo "AWS CLI required"; exit 1; }
 command -v jq >/dev/null || { echo "jq required"; exit 1; }
 
 DEFAULT_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-us-east-1}}"
 
-echo "Discovering VPC peering connections across AWS regions..."
+if [[ -n "$SCAN_REGION" ]]; then
+    REGIONS="$SCAN_REGION"
+    echo "Discovering VPC peering connections in $SCAN_REGION..."
+else
+    echo "Discovering VPC peering connections across AWS regions..."
+    REGIONS=$(aws ec2 describe-regions \
+        --region "$DEFAULT_REGION" \
+        --query 'Regions[].RegionName' \
+        --output text)
+fi
 echo
-
-REGIONS=$(aws ec2 describe-regions \
-    --region "$DEFAULT_REGION" \
-    --query 'Regions[].RegionName' \
-    --output text)
 
 TMP=$(mktemp)
 trap 'rm -f "$TMP"' EXIT
@@ -162,6 +190,37 @@ remove_routes() {
     done
 }
 
+# Remove only peering-specific rules created by create-vpc-peering.sh. Unmarked
+# permissions and shared NLB/self-health permissions may serve other workloads.
+# The connector owns Odigos-managed groups, so those are never changed here.
+remove_security_group_rules() {
+    local RULE_REGION="$1" RULE_VPC="$2"
+    local PEERING_GROUPS_JSON GROUP_ID RULES RULE_ID DIRECTION
+    PEERING_GROUPS_JSON=$(aws ec2 describe-security-groups \
+        --region "$RULE_REGION" --filters "Name=vpc-id,Values=$RULE_VPC" --output json)
+    while IFS= read -r GROUP_ID; do
+        [[ -z "$GROUP_ID" ]] && continue
+        RULES=$(aws ec2 describe-security-group-rules \
+            --region "$RULE_REGION" --filters "Name=group-id,Values=$GROUP_ID" --output json)
+        while IFS=$'\t' read -r DIRECTION RULE_ID; do
+            [[ -z "$RULE_ID" ]] && continue
+            echo "  Removing $GROUP_ID $DIRECTION rule $RULE_ID for $PCX_ID"
+            aws ec2 "revoke-security-group-$DIRECTION" \
+                --region "$RULE_REGION" --group-id "$GROUP_ID" \
+                --security-group-rule-ids "$RULE_ID" >/dev/null
+        done < <(echo "$RULES" | jq -r --arg owner "odigos-vpc-peering:$PCX_ID" '
+            .SecurityGroupRules[] | select(.Description == $owner)
+            | [(if .IsEgress then "egress" else "ingress" end), .SecurityGroupRuleId] | @tsv')
+    done < <(echo "$PEERING_GROUPS_JSON" | jq -r '
+        .SecurityGroups[]
+        | select(any(.Tags[]?; .Key == "odigos-managed" and .Value == "true") | not)
+        | .GroupId')
+}
+
+echo "Removing script-owned security-group rules for $PCX_ID..."
+remove_security_group_rules "$REGION1" "$VPC1"
+remove_security_group_rules "$REGION2" "$VPC2"
+
 remove_routes "$REGION1" "$VPC1"
 remove_routes "$REGION2" "$VPC2"
 
@@ -176,4 +235,5 @@ echo
 echo "=================================="
 echo "VPC Peering deleted!"
 echo "Peering ID: $PCX_ID"
+echo "Shared NLB/self-health, unmarked legacy, and Odigos-managed SG rules were preserved."
 echo "=================================="

@@ -71,6 +71,8 @@ type Config struct {
 	// Empty means managed-Collector deployment is off — collectorgateway.CheckEndpoint reports why, and
 	// only for a connector that was actually allowed to manage one.
 	OpAMPEndpoint string
+	// CollectorImage is selected by Helm/install, not by the connector binary's release.
+	CollectorImage collectorimage.Pin
 	// OnPremToken is this install's enterprise licence token — the same odigos-pro value every other
 	// enterprise component here uses. A managed Collector needs one to start at all
 	// (odigosenterpriseauthextension refuses without it), and settles whose
@@ -104,6 +106,13 @@ func FromEnv() (Config, error) {
 		OpAMPEndpoint:     os.Getenv(opamp.EnvEndpoint),
 		// Wrapped at the boundary, which is the only place it is ever a bare string.
 		OnPremToken: collectorcredential.NewSecret(os.Getenv(collectorimage.EnvOnPremToken)),
+	}
+	if ref := os.Getenv(collectorimage.EnvImage); ref != "" {
+		var err error
+		c.CollectorImage, err = collectorimage.FromReference(ref)
+		if err != nil {
+			return c, fmt.Errorf("%s: %w", collectorimage.EnvImage, err)
+		}
 	}
 	// Operational tunables (discovery/heartbeat/reconcile intervals, shutdown timeout, discovery tags) are
 	// NOT read here — they are DB-backed and served live by config.Manager, tunable via the agents-api

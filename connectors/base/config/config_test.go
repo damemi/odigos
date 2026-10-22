@@ -2,6 +2,32 @@ package config
 
 import "testing"
 
+func TestCollectorImageComesFromInstallation(t *testing.T) {
+	t.Setenv("ODIGOS_CONNECTOR_NAME", "aws-prod")
+	t.Setenv("DATABASE_URL", "postgres://db/odigos_central")
+	for _, ref := range []string{"", "registry.example.com/collector:v2", "registry.example.com/collector"} {
+		t.Run(ref, func(t *testing.T) {
+			t.Setenv("ODIGOS_COLLECTOR_IMAGE", ref)
+			got, err := FromEnv()
+			if ref == "registry.example.com/collector" {
+				if err == nil {
+					t.Fatal("accepted unversioned image")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if ref == "" && (got.CollectorImage.Tag != "" || got.CollectorImage.Digest != "") {
+				t.Fatal("unset env must not silently select a compiled image")
+			}
+			if ref != "" && got.CollectorImage.Tag != "v2" {
+				t.Fatalf("image = %+v", got.CollectorImage)
+			}
+		})
+	}
+}
+
 // TestPlatformIDFromCR is a safety flag, not a convenience one.
 //
 // PlatformID falls back to ConnectorName so local runs and older controllers still have a routing id.

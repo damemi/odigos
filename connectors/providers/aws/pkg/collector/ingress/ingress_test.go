@@ -375,11 +375,12 @@ func TestNoRoutedWorkloadsHonorExplicitIngress(t *testing.T) {
 func TestPortsAdmitted(t *testing.T) {
 	d := Resolve(Input{Sources: []Source{src("api", "sg-1")}, Config: allowFallback()})
 	var health int
+	selfPorts := map[int]bool{}
 	for _, r := range d.Rules {
 		switch r.Port {
 		case PortOTLPGRPC, PortOTLPHTTP:
 			if r.Self {
-				t.Errorf("data port %d admitted from the Collector's own group", r.Port)
+				selfPorts[r.Port] = true
 			}
 		case PortHealth:
 			health++
@@ -392,6 +393,11 @@ func TestPortsAdmitted(t *testing.T) {
 	}
 	if health != 1 {
 		t.Errorf("health rules = %d, want exactly one self-referencing rule", health)
+	}
+	for _, port := range DataPorts() {
+		if !selfPorts[port] {
+			t.Errorf("NLB-to-Collector data port %d is not admitted from the shared group", port)
+		}
 	}
 	for _, r := range d.Rules {
 		if r.Port == PortSupervisorHealth {

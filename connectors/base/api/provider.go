@@ -178,6 +178,13 @@ type CollectorProvider interface {
 	CollectorDeployers() map[string]CollectorDeployer
 }
 
+// CollectorRoutingRefresher refreshes read-only routing evidence after a Collector pass.
+// A provider that caches ingress during placement must read it back after convergence
+// before workloads use that snapshot. Implementations must not mutate cloud resources.
+type CollectorRoutingRefresher interface {
+	RefreshCollectorRouting(context.Context) error
+}
+
 // CollectorRegionalSettingsValidator checks provider resources before a regional
 // declaration is persisted. The patch is sparse on update; providers combine it
 // with current settings before validating.

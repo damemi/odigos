@@ -33,6 +33,11 @@ export const supportsWorkloadReportRegion = (schemaVersion: string): boolean => 
 // it on reads, so the destination adapter only selects it from v0.16.0 onward.
 export const supportsDestinationRegion = (schemaVersion: string): boolean => atLeastMinor(schemaVersion, 16);
 
+// Action.region is required by cloud connectors so the shared actions surface
+// can target one managed Collector. It landed with the managed-collector action
+// schema consumed by connector builds reporting v0.28.0.
+export const supportsActionRegion = (schemaVersion: string): boolean => atLeastMinor(schemaVersion, 28);
+
 // agents-api v0.18.0 typed the kind-specific blocks that used to have nowhere to
 // live: `WorkloadReport.details` (an ECS task's container layer, replacing the
 // deprecated untyped `metadata: JSON`) and `Source.config.ecs` / `.docker`

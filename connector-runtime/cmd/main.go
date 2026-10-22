@@ -83,7 +83,8 @@ func main() {
 		CentralBackendURL: getenvDefault("CONNECTOR_CENTRAL_BACKEND_URL", "http://central-backend:8081"),
 		// Optional override for the Fargate agents bundle staged by the AWS connector's ECS instrumentor;
 		// empty keeps the connector's compiled-in default (registry.odigos.io/odigos-fargate-agents).
-		FargateAgentsImage: os.Getenv("CONNECTOR_AWS_FARGATE_AGENTS_IMAGE"),
+		FargateAgentsImage:    os.Getenv("CONNECTOR_AWS_FARGATE_AGENTS_IMAGE"),
+		ManagedCollectorImage: os.Getenv("CONNECTOR_COLLECTOR_IMAGE"),
 		// Per environment, from cloudConnectors.managedCollectors.externalEndpoint in the odigos-central
 		// chart. Deliberately not defaulted: there is no address that is right for an unknown Central
 		// installation, and a wrong default would point every Collector in a customer's cloud account at

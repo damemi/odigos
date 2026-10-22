@@ -49,10 +49,14 @@ func (p *Provider) ManagedCollectorInstructions(ctx context.Context, region stri
 		imageArch = collectorimage.Arch(regional.Arch)
 	}
 	// Values that are deliberately supplied as parameters are credentials and deployment choices that
-	// manual mode must never mint or mutate. The image is the released digest used by automatic mode.
-	image, err := collectorimage.Resolve(collectorimage.Released, collectorimage.CloudAWS, imageArch, collectorimage.Override{})
+	// manual mode must never mint or mutate. The image selection is shared with automatic mode.
+	pin, err := collectorimage.Configure(p.cfg.CollectorImage, collectorimage.CloudAWS, regional.Image)
 	if err != nil {
-		return nil, fmt.Errorf("resolve released AWS collector image: %w", err)
+		return nil, fmt.Errorf("resolve configured AWS collector image: %w", err)
+	}
+	image, err := collectorimage.Resolve(pin, collectorimage.CloudAWS, imageArch, collectorimage.Override{})
+	if err != nil {
+		return nil, fmt.Errorf("resolve configured AWS collector image: %w", err)
 	}
 	hostNetwork := configuredString(regions[region], "networkId")
 	if surface := p.collectors(); surface != nil {
@@ -213,7 +217,8 @@ func collectorInstructionValues(region, network, connector, connectorID, opampEn
 		"LicenseSecretName":   fmt.Sprintf("odigos/collector/%s/%s/license", connector, region),
 		"ConnectorName":       connector, "ConnectorID": connectorID, "OpAMPEndpoint": opampEndpoint,
 		"Image": image, "CPU": cpu, "Memory": memory, "Arch": arch,
-		"DesiredCount": desired, "AssignPublicIP": assignPublic, "PublicIPString": publicIP,
+		"PublicECRImage": collectorimage.IsPublicECR(image),
+		"DesiredCount":   desired, "AssignPublicIP": assignPublic, "PublicIPString": publicIP,
 		"TaskDefinitionFamily": deployer.TaskDefinitionFamily(region),
 		"ServiceName":          deployer.ServiceName(region), "LoadBalancerName": deployer.LoadBalancerName(network),
 		"TargetGroupGRPC":  deployer.TargetGroupName(network, 4317),

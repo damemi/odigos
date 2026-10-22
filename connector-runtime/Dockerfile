@@ -11,8 +11,6 @@ ENV GOWORK=off
 ARG TARGETARCH
 ARG LD_FLAGS
 
-ARG COLLECTOR_TAG
-ARG COLLECTOR_REGISTRY
 WORKDIR /workspace
 COPY connector-runtime/ connector-runtime/
 COPY connectors/ connectors/
@@ -30,9 +28,7 @@ RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/go/pkg \
     if [ -s /run/secrets/github_token ]; then git config --global url."https://$(cat /run/secrets/github_token):x-oauth-basic@github.com/".insteadOf "https://github.com/"; fi && \
     CGO_ENABLED=0 GOARCH=$TARGETARCH \
-    go build -ldflags="${LD_FLAGS} \
-      -X github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage.stampedTag=${COLLECTOR_TAG} \
-      -X github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage.stampedRegistry=${COLLECTOR_REGISTRY}" \
+    go build -ldflags="${LD_FLAGS}" \
     -a -o /out/connector-runtime ./cmd
 
 FROM gcr.io/distroless/static:nonroot

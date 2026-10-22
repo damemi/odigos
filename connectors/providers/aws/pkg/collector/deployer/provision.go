@@ -641,8 +641,7 @@ type WorkloadInput struct {
 	Settings collectorsettings.Network
 	// OpAMPEndpoint is the public endpoint the Collector dials back to.
 	OpAMPEndpoint string
-	// Pin is the image this connector build deploys. Supplied rather than read from the package so a
-	// test can pin a digest without the compiled-in one being resolvable.
+	// Pin is the installation-selected image, before regional runtime overrides.
 	Pin collectorimage.Pin
 }
 
@@ -724,6 +723,7 @@ func (p *Provisioner) EnsureWorkload(ctx context.Context, in WorkloadInput) (Wor
 		CPU:                     in.Settings.CPU,
 		Memory:                  in.Settings.Memory,
 		ImageRepositoryOverride: in.Settings.ImageRepositoryOverride,
+		Image:                   in.Settings.Image,
 	})
 	out.TaskDefinition = definition
 	out.Problems = append(out.Problems, definition.Problems...)

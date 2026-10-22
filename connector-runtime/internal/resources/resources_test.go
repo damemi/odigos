@@ -43,6 +43,31 @@ func TestSanitize(t *testing.T) {
 	}
 }
 
+func TestInstallationCollectorImageIsStampedOnlyForManagedCollectors(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		for _, image := range []string{"", "registry.example.com/collector:v2"} {
+			cr := crFor("prod", "aws", nil)
+			if enabled {
+				cr.Spec.Collectors = []cloudconnectorsv1.CloudConnectorCollectorCapability{{Type: collectorType, Management: true}}
+			}
+			dep := BuildDeployment(cr, DeploymentParams{ManagedCollectorImage: image})
+			var got string
+			for _, env := range dep.Spec.Template.Spec.Containers[0].Env {
+				if env.Name == "ODIGOS_COLLECTOR_IMAGE" {
+					got = env.Value
+				}
+			}
+			want := ""
+			if enabled {
+				want = image
+			}
+			if got != want {
+				t.Fatalf("enabled=%v image=%q: stamped %q, want %q", enabled, image, got, want)
+			}
+		}
+	}
+}
+
 func crFor(name, provider string, replicas *int32) *cloudconnectorsv1.OdigosCloudConnector {
 	return &cloudconnectorsv1.OdigosCloudConnector{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "odigos-system"},

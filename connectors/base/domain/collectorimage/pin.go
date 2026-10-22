@@ -3,11 +3,8 @@
 //
 // Pure domain: no store, provider SDK, or registry calls.
 //
-// The shared contract is the digest, not the reference. Automatic and manual mode assert the same
-// digest so each cloud can pull from a registry it accepts without forking identity.
-//
-// Cloud Run only accepts Artifact Registry, public Docker Hub, and GHCR. Odigos already publishes to
-// Artifact Registry, so GCP uses that ref; ECS and Container Apps can pull from any registry.
+// The installation supplies a versioned reference; runtime settings may override it. Automatic and
+// manual mode resolve the same selection. Cloud-specific pull restrictions still apply.
 //
 // Registry authentication and runtime enterprise authorization are separate steps. The same
 // ODIGOS_ONPREM_TOKEN may serve as the registry password, but a provider must supply it as image-pull
@@ -20,6 +17,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/google/go-containerregistry/pkg/name"
 )
 
 // Cloud is a target platform for a managed Collector.
@@ -46,102 +45,41 @@ const DefaultArch = ArchAMD64
 // digestPattern matches a full sha256 OCI digest. Truncated digests are rejected.
 var digestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
-// Pin is an immutable reference to one released Collector image: digest, per-cloud repos, platforms
-// in the manifest list, and human-facing tag.
-//
-// Compiled into the connector (not configured) so a published artifact and a deployed Collector
-// always resolve to the same bytes. The tag and registry are stamped in at build time (see
-// stampedTag) rather than hand-pasted into this file per release; the digest stays a literal — see
-// releasedDigest.
+// Pin is the installation-selected image, optionally overridden by runtime settings.
+// A digest takes precedence over a tag; no image version is compiled into the connector.
 type Pin struct {
 	// Digest is the manifest-list digest. Pinning a per-platform digest would break other arches.
 	Digest string
-	// Tag is human-readable only; runtimes resolve by Digest.
+	// Tag selects the release when Digest is empty.
 	Tag string
-	// Repositories is the bare repo each cloud pulls from (no tag/digest). Resolve appends the digest.
+	// Repositories is the bare repo each cloud pulls from (no tag/digest).
 	Repositories map[Cloud]string
 	// Platforms are the arches the manifest list at Digest carries. Declared so unsupported arch is
 	// refused without a registry call.
 	Platforms []Arch
 }
 
-// releasedDigest is the manifest-list digest of the Collector image this connector build deploys.
-//
-// Bumped by hand in a reviewed change whenever a new Collector image is actually released, exactly like
-// config.DefaultFargateAgentsImage. It stays a source literal rather than a build-stamped value like
-// stampedTag/stampedRegistry below: those two just name where and under what tag the already-built image
-// lives (true for the whole release, mechanical to pass through), but the digest IS the image identity —
-// stamping it the same way would let a build-arg typo silently re-pin every deployment to a different
-// image with no review catching it.
-const releasedDigest = "sha256:49b74d617355abc189e19e1d724f6fe2b6205796f83b4d55c657a32c2b68c410"
-
-// stampedTag and stampedRegistry are the tag and registry the release Collector image was actually
-// pushed under, injected at build time via:
-//
-//	-ldflags "-X .../collectorimage.stampedTag=v1.38.0 \
-//	          -X .../collectorimage.stampedRegistry=registry.odigos.io/odigos-enterprise-collector"
-//
-// from the same TAG/ORG the Makefile and release-images.yml build every other image in this repo with
-// (see build-connector-runtime) — so these two no longer have to be hand-pasted into this file per
-// release the way releasedDigest still is.
-//
-// Unstamped (a local `go build`/`go test`/`go run`, or an IDE run — nothing sets ldflags there),
-// Released falls back to fallbackTag/fallbackRegistry below: the last connector release reviewed into
-// this file, kept as a pair (never mixing a stamped tag with the fallback registry or vice versa) so
-// local dev and this package's own tests build and pass without needing the release pipeline's ldflags.
-var (
-	stampedTag      string
-	stampedRegistry string
-)
-
-// Released is the pin this connector build deploys: releasedDigest plus the build-stamped tag/registry
-// when present, otherwise the fallback pair. See stampedTag above for how the stamping works.
-var Released = buildReleased()
-
-func buildReleased() Pin {
-	tag, registry := stampedTag, stampedRegistry
-	if tag == "" || registry == "" {
-		tag, registry = fallbackTag, fallbackRegistry
-	}
-	return Pin{
-		Digest: releasedDigest,
-		Tag:    tag,
-		Repositories: map[Cloud]string{
-			CloudAWS:   registry,
-			CloudAzure: registry,
-			CloudGCP:   "us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-collector",
-		},
-		Platforms: []Arch{ArchAMD64, ArchARM64},
-	}
-}
-
-// fallbackTag and fallbackRegistry are Released's tag/registry when the build did not stamp them in —
-// see stampedTag. TestReleasedPinIsRunnable guards that this pair, combined with releasedDigest, is
-// still a runnable pin.
-const (
-	fallbackTag = "v1.38.0-pre1"
-	// Public Artifact Registry for all clouds: GHCR needs credentials, Docker Hub rate-limits anonymous
-	// pulls at shared NAT when scaling out. Cloud Run accepts Artifact Registry (and public Docker
-	// Hub/GHCR); use AR directly.
-	fallbackRegistry = "registry.odigos.io/odigos-enterprise-collector"
-)
-
 // Override customizes resolution for one deployment. Zero value: pull Pin.Repositories[cloud]
 // anonymously.
 type Override struct {
-	// Registry, if set, replaces Pin.Repositories[cloud]. Bare repo only; Resolve still appends Digest.
+	// Registry, if set, replaces Pin.Repositories[cloud]. Bare repo only.
 	Registry string
 	// PullSecretRef is an opaque provider credential reference (imagePullSecrets name, ECS secret ARN,
 	// etc.). Carried through; never resolved here.
 	PullSecretRef string
 }
 
-// Resolution is the digest-pinned ref a provider deploys, plus an optional pull credential.
+// Resolution is the configured versioned ref a provider deploys, plus an optional pull credential.
 type Resolution struct {
-	// Ref is repo@digest.
+	// Ref is repo@digest or repo:tag.
 	Ref string
 	// PullSecretRef is Override.PullSecretRef unchanged. Empty means anonymous pull.
 	PullSecretRef string
+}
+
+// IsPublicECR identifies the anonymous-pull endpoint, not an AWS private ECR repository.
+func IsPublicECR(reference string) bool {
+	return strings.HasPrefix(reference, "public.ecr.aws/")
 }
 
 // Supports reports whether the pinned manifest list carries an architecture.
@@ -157,13 +95,15 @@ func (p Pin) Supports(a Arch) bool {
 // Validate reports structural problems with a pin. Intended for tests so a bad pin cannot ship.
 func (p Pin) Validate() []string {
 	var problems []string
-	if p.Digest == "" {
-		problems = append(problems, "no digest: the image identity is the digest, so a pin without one pins nothing")
-	} else if !digestPattern.MatchString(p.Digest) {
+	if p.Digest == "" && p.Tag == "" {
+		problems = append(problems, "no tag or digest: this pins nothing")
+	} else if p.Digest != "" && !digestPattern.MatchString(p.Digest) {
 		problems = append(problems, fmt.Sprintf("digest %q is not a full sha256 OCI digest", p.Digest))
 	}
-	if p.Tag == "" {
-		problems = append(problems, "no tag: a status message and a published document both need something a human can read")
+	if p.Tag != "" {
+		if _, err := name.NewTag("example.com/collector:" + p.Tag); err != nil {
+			problems = append(problems, fmt.Sprintf("invalid tag %q", p.Tag))
+		}
 	}
 	if len(p.Platforms) == 0 {
 		problems = append(problems, "no platforms declared, so every architecture would be refused")
@@ -195,8 +135,11 @@ func (p Pin) Validate() []string {
 
 // malformedRepo reports why a repository is not a bare repo (no tag, digest, or space), or "" if ok.
 func malformedRepo(repo string) string {
-	if strings.ContainsAny(repo, "@: ") {
-		return "carries a tag, digest or space; Resolve appends the digest"
+	if strings.ContainsAny(repo, "@ \t\r\n") || strings.LastIndex(repo, ":") > strings.LastIndex(repo, "/") {
+		return "carries a tag, digest or space; use a bare repository"
+	}
+	if _, err := name.NewRepository(repo); err != nil {
+		return fmt.Sprintf("is not a valid image repository: %v", err)
 	}
 	return ""
 }
@@ -223,11 +166,13 @@ func firstSegment(repo string) string {
 	return repo
 }
 
-// Resolve returns the digest-pinned ref (and optional pull credential) for a cloud, or why it cannot.
-// Always uses repo@digest — tags are mutable and are not image identity, including for registry overrides.
+// Resolve uses an explicitly configured digest when present, otherwise the selected release tag.
 func Resolve(p Pin, c Cloud, a Arch, o Override) (Resolution, error) {
-	if p.Digest == "" {
-		return Resolution{}, fmt.Errorf("no managed-Collector image is pinned in this connector build, so no Collector can be deployed")
+	if p.Digest == "" && p.Tag == "" {
+		return Resolution{}, fmt.Errorf("no managed-Collector image is configured; set cloudConnectors.managedCollectors.collectorImage in Helm or collector.defaults.image at runtime")
+	}
+	if p.Digest != "" && !digestPattern.MatchString(p.Digest) {
+		return Resolution{}, fmt.Errorf("digest %q is not a full sha256 OCI digest", p.Digest)
 	}
 	if a == "" {
 		a = DefaultArch
@@ -246,12 +191,22 @@ func Resolve(p Pin, c Cloud, a Arch, o Override) (Resolution, error) {
 			return Resolution{}, fmt.Errorf("registry override for %s (%q) %s", c, repo, problem)
 		}
 	}
+	if problem := malformedRepo(repo); problem != "" {
+		return Resolution{}, fmt.Errorf("repository for %s (%q) %s", c, repo, problem)
+	}
 	if c == CloudGCP && !cloudRunPullable(repo) {
 		return Resolution{}, fmt.Errorf(
 			"registry for gcp (%q) is not a source Cloud Run can pull from: it accepts Artifact Registry, "+
 				"public Docker Hub and public GHCR, and a pull credential does not change that", repo)
 	}
-	return Resolution{Ref: repo + "@" + p.Digest, PullSecretRef: o.PullSecretRef}, nil
+	ref := repo + "@" + p.Digest
+	if p.Digest == "" {
+		ref = repo + ":" + p.Tag
+	}
+	if _, err := name.ParseReference(ref); err != nil {
+		return Resolution{}, fmt.Errorf("invalid Collector image %q: %w", ref, err)
+	}
+	return Resolution{Ref: ref, PullSecretRef: o.PullSecretRef}, nil
 }
 
 func joinArch(as []Arch) string {
@@ -262,10 +217,13 @@ func joinArch(as []Arch) string {
 	return strings.Join(out, " and ")
 }
 
-// Describe renders the pin for status: tag plus a short digest prefix, never a bare tag alone.
+// Describe renders the selected tag or a short digest prefix for status.
 func Describe(p Pin, c Cloud) string {
 	if p.Digest == "" {
-		return "no image pinned"
+		if p.Tag == "" {
+			return "no image configured"
+		}
+		return fmt.Sprintf("%s from %s", p.Tag, firstSegment(p.Repositories[c]))
 	}
 	short := p.Digest
 	if len(short) > 19 {

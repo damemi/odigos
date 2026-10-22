@@ -2,9 +2,12 @@ package placement
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
+
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorplacement"
 	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
@@ -126,6 +129,49 @@ func (r *Resolver) Plan() (Plan, uint64, bool) {
 		return Plan{}, 0, false
 	}
 	return *r.plan, r.generation, true
+}
+
+// RefreshSecurityGroups reads back the part of the topology that Collector
+// convergence changes. Routes and placement remain those of the current pass;
+// only AWS-observed ingress can make a workload eligible for instrumentation.
+func (r *Resolver) RefreshSecurityGroups(ctx context.Context) error {
+	return r.refreshSecurityGroups(ctx, func(ctx context.Context, region string) ([]SecurityGroup, error) {
+		cfg, err := r.Cache.Config(ctx, region)
+		if err != nil {
+			return nil, err
+		}
+		return describeSecurityGroups(ctx, ec2.NewFromConfig(cfg), region)
+	})
+}
+
+func (r *Resolver) refreshSecurityGroups(ctx context.Context, read func(context.Context, string) ([]SecurityGroup, error)) error {
+	plan, generation, ok := r.Plan()
+	if !ok {
+		return nil
+	}
+	groups := make(map[string]SecurityGroup)
+	var errs []error
+	for _, region := range plan.Topology.Regions() {
+		regional, err := read(ctx, region)
+		if err != nil {
+			// Do not retain a previous allow rule when current admission cannot be
+			// verified. Missing evidence keeps routing unknown until a later pass.
+			errs = append(errs, fmt.Errorf("refresh security groups in %s: %w", region, err))
+			continue
+		}
+		for _, group := range regional {
+			groups[group.ID] = group
+		}
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.generation == generation {
+		// Publish a new snapshot; observers may still be reading the old maps.
+		updated := *r.plan
+		updated.Topology.securityGroups = groups
+		r.plan = &updated
+	}
+	return errors.Join(errs...)
 }
 
 // idleNetworks are the networks with a recorded Collector that this plan does not place one on.

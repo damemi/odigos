@@ -256,19 +256,16 @@ func (r *queryResolver) ManagedCollectorInstructions(ctx context.Context, region
 		Mode:              result.Mode, Documents: documents, Notes: result.Notes, UpdatedAt: result.UpdatedAt.UTC().Format(time.RFC3339)}, nil
 }
 
-// --- Unsupported queries ---
+// --- Actions ---
 
-func (r *queryResolver) ActionTypes(context.Context) ([]*model.ActionTypeOption, error) {
-	logUnsupported("actionTypes")
-	return nil, nil
+func (r *queryResolver) ActionTypes(ctx context.Context) ([]*model.ActionTypeOption, error) {
+	return (&gqlapi.CollectorActionAPI{Central: r.Central}).ActionTypes(ctx)
 }
-func (r *queryResolver) Action(context.Context, string) (model.Action, error) {
-	logUnsupported("action")
-	return nil, nil
+func (r *queryResolver) Action(ctx context.Context, name string, region *string) (model.Action, error) {
+	return (&gqlapi.CollectorActionAPI{Central: r.Central}).Action(ctx, name, region)
 }
-func (r *queryResolver) Actions(context.Context) ([]model.Action, error) {
-	logUnsupported("actions")
-	return nil, nil
+func (r *queryResolver) Actions(ctx context.Context, region *string) ([]model.Action, error) {
+	return (&gqlapi.CollectorActionAPI{Central: r.Central}).Actions(ctx, region)
 }
 func (r *queryResolver) Config(ctx context.Context) (map[string]any, error) {
 	return r.Central.Config(ctx)
@@ -413,17 +410,14 @@ func (r *mutationResolver) UpdateOnPremLicense(context.Context, string) (bool, e
 	return false, nil
 }
 
-func (r *mutationResolver) CreateAction(context.Context, model.CreateActionInput) (model.Action, error) {
-	logUnsupported("createAction")
-	return nil, nil
+func (r *mutationResolver) CreateAction(ctx context.Context, input model.CreateActionInput) (model.Action, error) {
+	return (&gqlapi.CollectorActionAPI{Central: r.Central}).Create(ctx, input)
 }
-func (r *mutationResolver) UpdateAction(context.Context, model.UpdateActionInput) (model.Action, error) {
-	logUnsupported("updateAction")
-	return nil, nil
+func (r *mutationResolver) UpdateAction(ctx context.Context, input model.UpdateActionInput) (model.Action, error) {
+	return (&gqlapi.CollectorActionAPI{Central: r.Central}).Update(ctx, input)
 }
-func (r *mutationResolver) DeleteAction(context.Context, model.DeleteActionInput) (*model.DeleteActionPayload, error) {
-	logUnsupported("deleteAction")
-	return nil, nil
+func (r *mutationResolver) DeleteAction(ctx context.Context, input model.DeleteActionInput) (*model.DeleteActionPayload, error) {
+	return (&gqlapi.CollectorActionAPI{Central: r.Central}).Delete(ctx, input)
 }
 func (r *mutationResolver) UpdateConfig(ctx context.Context, input model.UpdateConfigInput) (*model.UpdateConfigPayload, error) {
 	eff, err := r.Central.UpdateConfig(ctx, input.Config)

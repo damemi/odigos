@@ -45,6 +45,7 @@ type collectorResourceStore interface {
 	ListManagedCollectors(context.Context) ([]store.CollectorRecord, error)
 	DeleteManagedCollector(context.Context, store.CollectorKey) error
 	DeleteCollectorDestinationsForRegion(context.Context, string) error
+	DeleteCollectorActionsForRegion(context.Context, string) error
 }
 
 func (c *Coordinator) collectorResourceStore() collectorResourceStore {
@@ -183,6 +184,15 @@ func (c *Coordinator) runCollectorReconcile(ctx context.Context, observers map[s
 	for _, target := range targets {
 		c.reconcileCollector(ctx, target, settings)
 	}
+	if refresher, ok := c.provider.(api.CollectorRoutingRefresher); ok {
+		if err := refresher.RefreshCollectorRouting(ctx); err != nil {
+			coordLog.Warn("refreshing Collector routing evidence failed", "error", err)
+		}
+	}
+	// The pass may have discovered a new peering or admitted new workload identities
+	// without changing the endpoint. Retry automatic workloads and observe manual
+	// workloads now, using the post-convergence evidence rather than another timer.
+	c.triggerWorkloadValidation()
 }
 
 func (c *Coordinator) revokeRemovedCapabilityCredentials(ctx context.Context) {
@@ -386,6 +396,14 @@ func (c *Coordinator) reconcileCollector(ctx context.Context, target collectorTa
 		}
 	}()
 
+	// Capture the route before observation. The observer is the writer of the discovered NLB endpoint and
+	// first-ready latch; either changing makes every workload's desired collectorExport different. That
+	// transition must wake workload validation now, not wait for another discovery period.
+	before, beforeErr := c.collectorResourceStore().GetManagedCollector(ctx, store.CollectorKey{Region: target.network.Region})
+	if beforeErr != nil && !errors.Is(beforeErr, store.ErrCollectorNotFound) {
+		coordLog.Warn("reading Collector route before observation failed", "region", target.network.Region, "error", beforeErr)
+	}
+
 	// Observation first, and unconditionally. It is the only thing that happens in manual mode, and in
 	// automatic mode it is how the converge below learns what already exists.
 	if err := target.observer.ObserveCollector(ctx, target.network); err != nil {
@@ -394,6 +412,14 @@ func (c *Coordinator) reconcileCollector(ctx context.Context, target collectorTa
 			"type", target.network.Kind, "error", err)
 		// Not returned on: a converge pass that has to create everything from scratch is still better
 		// than no pass, and the deployer reads its own state anyway.
+	}
+	if after, err := c.collectorResourceStore().GetManagedCollector(ctx, store.CollectorKey{Region: target.network.Region}); err != nil {
+		if !errors.Is(err, store.ErrCollectorNotFound) {
+			coordLog.Warn("reading Collector route after observation failed", "region", target.network.Region, "error", err)
+		}
+	} else if collectorRouteChanged(before, after) {
+		coordLog.Info("Collector route changed; validating workload exports", "region", target.network.Region)
+		c.triggerWorkloadValidation()
 	}
 
 	if target.deployer == nil {
@@ -469,6 +495,16 @@ func (c *Coordinator) reconcileCollector(ctx context.Context, target collectorTa
 			"network", target.network.NetworkID, "region", target.network.Region,
 			"type", target.network.Kind, "error", convergeErr)
 	}
+}
+
+// collectorRouteChanged identifies the two transitions that change what a workload
+// should export to: a different published OTLP endpoint, or the first time the
+// Collector has been Ready. The latter is a route change even when its endpoint was
+// discovered earlier, because the cutover gate deliberately waits for first-ready.
+func collectorRouteChanged(before, after store.CollectorRecord) bool {
+	return before.EndpointGRPC != after.EndpointGRPC ||
+		before.EndpointHTTP != after.EndpointHTTP ||
+		(before.FirstReadyAt == nil && after.FirstReadyAt != nil)
 }
 
 func collectorResourceStateDetail(state store.CollectorResourceState) string {

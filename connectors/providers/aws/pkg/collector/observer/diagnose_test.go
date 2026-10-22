@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorreport"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
@@ -484,6 +485,21 @@ func TestManualTaskDefinitionRequiresPrivateImageAndSecretWiring(t *testing.T) {
 	}
 }
 
+func TestManualPublicECRTaskStillRequiresRuntimeLicenseButNotRegistryCredentials(t *testing.T) {
+	in := healthy(func(in *DiagnosisInput) {
+		in.Mode = spec.ModeManual
+		in.Observation.Revision.Image = "public.ecr.aws/example/collector:v2"
+		in.Observation.Revision.RepositoryCredentialsRef = ""
+	})
+	if got := manualTaskDefinitionProblems(in); len(got) != 0 {
+		t.Fatalf("anonymous public ECR pull rejected: %+v", got)
+	}
+	delete(in.Observation.Revision.Secrets, collectorimage.EnvOnPremToken)
+	if got := manualTaskDefinitionProblems(in); len(got) != 1 || !strings.Contains(got[0].Message, "ODIGOS_ONPREM_TOKEN") {
+		t.Fatalf("missing runtime license not reported: %+v", got)
+	}
+}
+
 func TestManualSecurityGroupRequiresSelfHealthIngress(t *testing.T) {
 	observer := &Observer{Mode: spec.ModeManual, plan: &placement.Plan{Topology: placement.NewTopologyWithSecurityGroups(
 		[]string{testRegion}, []placement.VPC{{Region: testRegion, ID: testVPC}}, nil, nil,
@@ -659,11 +675,35 @@ func TestImageDriftIsMatchedOnTheDigestInBothModes(t *testing.T) {
 	})); hasProblem(got.Problems, ProblemImageDrift) {
 		t.Error("drift reported on a matching digest with a different tag")
 	}
-	// And a build with no pin compares against nothing rather than reporting everything as drifted.
+	// A tag-only installation is valid, but an older digest-only task needs redeployment.
 	if got := Diagnose(healthy(func(in *DiagnosisInput) {
 		in.Pin.Digest = ""
-	})); hasProblem(got.Problems, ProblemImageDrift) {
-		t.Error("drift reported by a connector build with no image pinned")
+	})); !hasProblem(got.Problems, ProblemImageDrift) {
+		t.Error("switching from digest to tag did not report image drift")
+	}
+}
+
+func TestRuntimeImageDriftInBothModes(t *testing.T) {
+	for _, mode := range []string{spec.ModeAutomatic, spec.ModeManual} {
+		t.Run(string(mode), func(t *testing.T) {
+			in := healthy(func(in *DiagnosisInput) {
+				in.Mode = mode
+				in.Settings.Image = collectorimage.Selection{"registry": "mirror.example.com", "tag": "v2.0.0"}
+			})
+			got := problemWith(t, Diagnose(in).Problems, ProblemImageDrift)
+			wantSeverity := collectorstatus.SeverityPending
+			if mode == spec.ModeManual {
+				wantSeverity = collectorstatus.SeverityDegraded
+			}
+			if got.Severity != wantSeverity || !strings.Contains(got.Message, "mirror.example.com/odigos-io/odigos-enterprise-collector:v2.0.0") {
+				t.Fatalf("runtime image drift = %+v", got)
+			}
+			in.Observation.Revision.Image = "mirror.example.com/odigos-io/odigos-enterprise-collector:v2.0.0"
+			in.Observation.Revision.Tag = "v2.0.0"
+			if hasProblem(Diagnose(in).Problems, ProblemImageDrift) {
+				t.Fatal("matching runtime image still reported as drifted")
+			}
+		})
 	}
 }
 

@@ -142,3 +142,53 @@ func TestThePlanIsServedRatherThanReResolved(t *testing.T) {
 		t.Errorf("reading the plan advanced the generation from %d to %d", generation, second)
 	}
 }
+
+func TestIngressRefreshMakesPeeredWorkloadReachableWithoutAnotherPlacementPass(t *testing.T) {
+	topo := peeredTopology(
+		[]Route{{DestinationCIDR: "10.1.0.0/16", PeeringID: "pcx-1"}},
+		[]Route{{DestinationCIDR: "10.0.0.0/16", PeeringID: "pcx-1"}},
+	)
+	collector := SecurityGroup{Region: "eu-west-1", ID: "sg-collector", VPCID: "vpc-host"}
+	source := SecurityGroup{Region: "eu-west-1", ID: "sg-app", VPCID: "vpc-consumer"}
+	topo.securityGroups[collector.ID], topo.securityGroups[source.ID] = collector, source
+	initial := Plan{Topology: topo}
+	r := &Resolver{plan: &initial, generation: 7}
+	admission := func(p Plan) Reachability {
+		return p.Topology.CollectorIngressReachability("eu-west-1", "vpc-host", "sg-collector", "vpc-consumer", []string{"sg-app"})
+	}
+	if admission(initial) != ReachabilityUnreachable {
+		t.Fatal("workload was admitted before its ingress rule existed")
+	}
+	collector.Ingress = []SecurityGroupRule{{
+		Protocol: "tcp", FromPort: 4317, ToPort: 4318, PortsKnown: true, SourceSecurityGroupIDs: []string{"sg-app"},
+	}}
+	err := r.refreshSecurityGroups(context.Background(), func(_ context.Context, region string) ([]SecurityGroup, error) {
+		if region != "eu-west-1" {
+			t.Fatalf("unexpected region %s", region)
+		}
+		return []SecurityGroup{collector, source}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, generation, _ := r.Plan()
+	if generation != 7 || admission(updated) != ReachabilityReachable {
+		t.Fatal("AWS-confirmed ingress did not become usable in the same placement pass")
+	}
+	if admission(initial) != ReachabilityUnreachable {
+		t.Fatal("refresh mutated a snapshot still held by an observer")
+	}
+	if !updated.Topology.CanReach("eu-west-1", "vpc-host", "eu-west-1", "vpc-consumer", []string{"subnet-host"}, []string{"subnet-consumer"}) {
+		t.Fatal("ingress refresh lost the verified peering routes")
+	}
+	boom := errors.New("AWS read failed")
+	if err := r.refreshSecurityGroups(context.Background(), func(context.Context, string) ([]SecurityGroup, error) {
+		return nil, boom
+	}); !errors.Is(err, boom) {
+		t.Fatalf("refresh error = %v", err)
+	}
+	unverified, _, _ := r.Plan()
+	if admission(unverified) != ReachabilityUnknown {
+		t.Fatal("failed read retained stale admission instead of unknown reachability")
+	}
+}

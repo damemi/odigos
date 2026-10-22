@@ -6,7 +6,6 @@ import (
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorconfig"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorownership"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/opamp"
@@ -31,9 +30,10 @@ import (
 const collectorType = "aws.fargate-collector"
 
 var (
-	_ baseapi.CollectorProvider = (*Provider)(nil)
-	_ deployer.Plans            = (*placement.Resolver)(nil)
-	_ observer.Planner          = (*placement.Resolver)(nil)
+	_ baseapi.CollectorProvider         = (*Provider)(nil)
+	_ baseapi.CollectorRoutingRefresher = (*Provider)(nil)
+	_ deployer.Plans                    = (*placement.Resolver)(nil)
+	_ observer.Planner                  = (*placement.Resolver)(nil)
 	// opamp.Desired is asserted here rather than left to a type switch at startup, because both places
 	// that look for it degrade QUIETLY when it is absent: base.Run logs a warning and starts no OpAMP
 	// server, and the coordinator refuses to wire any deployer. A signature that drifted would turn the
@@ -63,6 +63,15 @@ func (p *Provider) CollectorDeployers() map[string]baseapi.CollectorDeployer {
 	return map[string]baseapi.CollectorDeployer{collectorType: c.deployer}
 }
 
+// RefreshCollectorRouting reads back ingress after the deployer has admitted the
+// enabled workloads. Placement's earlier snapshot cannot prove its own writes.
+func (p *Provider) RefreshCollectorRouting(ctx context.Context) error {
+	if c := p.collectors(); c != nil {
+		return c.resolver.RefreshSecurityGroups(ctx)
+	}
+	return nil
+}
+
 // DesiredConfig implements opamp.Desired: what this Collector should be running.
 //
 // Rendered from this Collector's own destinations and this network's settings, and rendered HERE rather
@@ -88,12 +97,17 @@ func (p *Provider) DesiredConfig(ctx context.Context, key basestore.CollectorKey
 		return collectorconfig.Document{}, fmt.Errorf("listing destinations for the Collector in %s: %w",
 			key.Region, err)
 	}
+	actions, err := p.bstore.ListCollectorActions(ctx, key.Region)
+	if err != nil {
+		return collectorconfig.Document{}, fmt.Errorf("listing actions for the Collector in %s: %w", key.Region, err)
+	}
 
 	document, problems := collectorconfig.Render(collectorconfig.Input{
 		// Empty is legal and renders an export-less document rather than nothing: a Collector is not
 		// gated on having a destination, which is what lets one be added later as a configuration push
 		// instead of a redeployment.
 		Destinations: destinations,
+		Actions:      actions,
 		Region:       key.Region,
 		MemoryMiB:    memory,
 		TLSMode:      settings.TLS.Mode,
@@ -174,7 +188,7 @@ func (p *Provider) collectors() *collectorSurface {
 				Kind:              collectorType,
 				Mode:              mode,
 				OpAMPEndpoint:     p.cfg.OpAMPEndpoint,
-				Pin:               collectorimage.Released,
+				Pin:               p.cfg.CollectorImage,
 				HeartbeatInterval: p.cfgMgr.Settings().HeartbeatInterval,
 				Settings:          settings,
 				Regions:           p.cache.EnabledRegions,
@@ -191,7 +205,7 @@ func (p *Provider) collectors() *collectorSurface {
 				Mode:          mode,
 				Settings:      settings,
 				OpAMPEndpoint: p.cfg.OpAMPEndpoint,
-				Pin:           collectorimage.Released,
+				Pin:           p.cfg.CollectorImage,
 				Desired:       p.DesiredConfig,
 			},
 		}

@@ -163,8 +163,14 @@ func Resolve(in Input) Decision {
 		d.Deploy = true
 	}
 
-	// AWS's NLB and Collector tasks share the Collector security group. This provider-owned rule is
-	// deliberately absent from the shared ingress contract.
+	// Client SG references admit senders to the NLB; targets must also admit
+	// the NLB's group on the data ports. Preserving client IP does not preserve
+	// the client's SG identity through the NLB. Both hops share this group.
+	if d.Tier != TierNone {
+		for _, port := range DataPorts() {
+			d.Rules = append(d.Rules, Rule{Port: port, Self: true})
+		}
+	}
 	d.Rules = append(d.Rules, Rule{Port: PortHealth, Self: true})
 	return d
 }

@@ -242,7 +242,7 @@ func unreachableCollectorNote(routing domaindest.Routing, workloadVPC, collector
 		return routing.Note
 	}
 	if workloadVPC != collectorVPC {
-		return fmt.Sprintf("Workload VPC %s cannot reach the regional Collector in VPC %s. Configure active same-region VPC peering and reciprocal routes for the workload and Collector subnets, or place the Collector in the workload VPC. %s",
+		return fmt.Sprintf("Workload VPC %s cannot reach the regional Collector in VPC %s. Verify active same-region VPC peering, reciprocal routes, workload ingress to the NLB, and NLB security-group ingress to Collector tasks on every published OTLP port. %s",
 			workloadVPC, collectorVPC, routing.Note)
 	}
 	return fmt.Sprintf("Workload VPC %s shares the Collector VPC, but the Collector ingress security group does not admit this workload on every published OTLP port. %s", workloadVPC, routing.Note)
@@ -268,6 +268,13 @@ func collectorIngressReachability(topology placement.Topology, region, collector
 	sourceVPC string, sourceSubnetIDs, sourceSecurityGroups []string, ports []int32) domaindest.Reachability {
 	unknown := false
 	for _, collectorSecurityGroup := range collectorSecurityGroups {
+		switch topology.CollectorSecurityGroupAllowsSelfPorts(region, collectorVPC, collectorSecurityGroup, ports) {
+		case placement.ReachabilityUnknown:
+			unknown = true
+			continue
+		case placement.ReachabilityUnreachable:
+			continue
+		}
 		switch topology.CollectorIngressReachabilityForWorkload(region, collectorVPC, collectorSecurityGroup, sourceVPC, sourceSubnetIDs, sourceSecurityGroups, ports) {
 		case placement.ReachabilityReachable:
 			return domaindest.ReachabilityReachable

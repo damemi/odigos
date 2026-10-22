@@ -11,6 +11,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoraction"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectormetrics"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorreport"
@@ -431,6 +432,11 @@ type CentralInterface interface {
 	CreateManagedCollectorDestination(ctx context.Context, dest domaindest.Destination) error
 	UpdateManagedCollectorDestination(ctx context.Context, dest domaindest.Destination) error
 	DeleteManagedCollectorDestination(ctx context.Context, region, name string) (bool, error)
+	ManagedCollectorActions(ctx context.Context, region string) ([]collectoraction.Action, error)
+	ManagedCollectorAction(ctx context.Context, region, name string) (*collectoraction.Action, error)
+	CreateManagedCollectorAction(ctx context.Context, action collectoraction.Action) error
+	UpdateManagedCollectorAction(ctx context.Context, action collectoraction.Action) error
+	DeleteManagedCollectorAction(ctx context.Context, region, name string) (bool, error)
 	// ManagedCollectorMetrics returns the Collector's counters. A refresh waits briefly for a new
 	// periodic own-metrics report; found=false means it has never reported any.
 	ManagedCollectorMetrics(ctx context.Context, region string, refresh bool) (collectormetrics.Record, bool, error)

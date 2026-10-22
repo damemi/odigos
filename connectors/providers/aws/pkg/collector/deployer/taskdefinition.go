@@ -93,6 +93,7 @@ type TaskDefinitionInput struct {
 	CPU                     string
 	Memory                  string
 	ImageRepositoryOverride string
+	Image                   collectorimage.Selection
 }
 
 // TaskDefinition is the revision a service should run.
@@ -222,7 +223,11 @@ func RenderTaskDefinition(in TaskDefinitionInput) (TaskDefinitionSpec, []collect
 	if arch == "" {
 		arch = collectorimage.DefaultArch
 	}
-	image, err := collectorimage.Resolve(imagePin(in), collectorimage.CloudAWS, arch, collectorimage.Override{})
+	pin, err := imagePin(in)
+	var image collectorimage.Resolution
+	if err == nil {
+		image, err = collectorimage.Resolve(pin, collectorimage.CloudAWS, arch, collectorimage.Override{})
+	}
 	if err != nil {
 		problems = append(problems, collectorstatus.Problem{
 			Code:     ProblemImageUnavailable,
@@ -271,6 +276,10 @@ func RenderTaskDefinition(in TaskDefinitionInput) (TaskDefinitionSpec, []collect
 		return TaskDefinitionSpec{}, problems
 	}
 
+	repositoryCredentials := in.Delivery.LicenseSecretRef
+	if collectorimage.IsPublicECR(image.Ref) {
+		repositoryCredentials = ""
+	}
 	return TaskDefinitionSpec{
 		Family:       TaskDefinitionFamily(in.Region),
 		CPU:          cpu,
@@ -287,7 +296,7 @@ func RenderTaskDefinition(in TaskDefinitionInput) (TaskDefinitionSpec, []collect
 		Containers: []ContainerSpec{{
 			Name:                     CollectorContainerName,
 			Image:                    image.Ref,
-			RepositoryCredentialsRef: in.Delivery.LicenseSecretRef,
+			RepositoryCredentialsRef: repositoryCredentials,
 			Essential:                true,
 			Command:                  []string{supervisorBinary, supervisorConfigFlag},
 			Ports:                    collectorPorts(),
@@ -360,19 +369,13 @@ func collectorPorts() []int {
 	}
 }
 
-// imagePin applies a network's repository override to the compiled-in pin.
-//
-// The DIGEST is untouched, which is the whole contract: an override says where to pull the bytes from —
-// an ECR pull-through cache, a private mirror — and the bytes still have to be the ones this connector
-// build was released against. A copy, because the compiled-in pin is a package-level value and mutating
-// its map would change every other network's image.
-func imagePin(in TaskDefinitionInput) collectorimage.Pin {
-	if in.ImageRepositoryOverride == "" {
-		return in.Pin
+// imagePin applies regional runtime overrides without mutating the installation selection.
+func imagePin(in TaskDefinitionInput) (collectorimage.Pin, error) {
+	selection := in.Image
+	if len(selection) == 0 && in.ImageRepositoryOverride != "" {
+		selection = collectorimage.Selection{"repository": in.ImageRepositoryOverride}
 	}
-	pin := in.Pin
-	pin.Repositories = map[collectorimage.Cloud]string{collectorimage.CloudAWS: in.ImageRepositoryOverride}
-	return pin
+	return collectorimage.Configure(in.Pin, collectorimage.CloudAWS, selection)
 }
 
 // EnsureTaskDefinition converges one network's task definition family.

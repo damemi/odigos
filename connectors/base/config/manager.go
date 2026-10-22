@@ -8,6 +8,7 @@ import (
 
 	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
 )
 
@@ -224,12 +225,35 @@ func validate(eff map[string]any) error {
 			return err
 		}
 	}
-	// Shape only. collectorsettings.Read is deliberately forgiving about individual fields — one
+	// collectorsettings.Read is deliberately forgiving about individual fields — one
 	// mistyped value on one network must not stop a connector reconciling anything — so the gross
 	// error is caught here, at write time, where there is somebody to tell.
 	if v, ok := eff[collectorsettings.Key]; ok {
-		if _, isMap := v.(map[string]any); !isMap {
-			return fmt.Errorf("config %q must be an object with enabled/defaults/networks", collectorsettings.Key)
+		collector, isMap := v.(map[string]any)
+		if !isMap {
+			return fmt.Errorf("config %q must be an object with enabled/defaults/regions", collectorsettings.Key)
+		}
+		validateImage := func(value any) error {
+			settings, _ := value.(map[string]any)
+			if raw, exists := settings[collectorsettings.KeyImage]; exists {
+				image, ok := raw.(map[string]any)
+				if !ok {
+					return fmt.Errorf("collector image must be an object")
+				}
+				return collectorimage.Selection(image).Validate()
+			}
+			return nil
+		}
+		if err := validateImage(collector[collectorsettings.KeyDefaults]); err != nil {
+			return err
+		}
+		for _, key := range []string{collectorsettings.KeyRegions, "networks"} {
+			entries, _ := collector[key].(map[string]any)
+			for region, value := range entries {
+				if err := validateImage(value); err != nil {
+					return fmt.Errorf("collector.%s.%s.image: %w", key, region, err)
+				}
+			}
 		}
 	}
 	return nil

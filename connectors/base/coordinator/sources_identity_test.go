@@ -1,8 +1,10 @@
 package coordinator
 
 import (
+	"context"
 	"testing"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/base/config"
 	domainsrc "github.com/odigos-io/odigos-enterprise/connectors/base/domain/source"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
 )
@@ -50,5 +52,27 @@ func TestSourceIdentityChanged(t *testing.T) {
 				t.Errorf("sourceIdentityChanged = %v, want %v", got, tc.moved)
 			}
 		})
+	}
+}
+
+func TestRevalidateWorkloadsTriggersAutomaticAndManualPaths(t *testing.T) {
+	c := New(config.Config{}, config.NewManager(&memoryConfigStore{}, config.Defaults()), nil, fakeProvider{})
+	if err := c.RevalidateWorkloads(context.Background()); err != nil {
+		t.Fatalf("RevalidateWorkloads: %v", err)
+	}
+	select {
+	case <-c.reconcileTrigger:
+	default:
+		t.Error("automatic reconciliation was not queued")
+	}
+	select {
+	case <-c.observeTrigger:
+	default:
+		t.Error("manual-mode observation was not queued")
+	}
+	select {
+	case <-c.collectorTrigger:
+	default:
+		t.Error("Collector topology and ingress reconciliation was not queued")
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
 )
 
@@ -152,9 +153,10 @@ type Network struct {
 	// Both halves default to keeping it, which is why nothing about it appears in Defaults().
 	Retention Retention
 
-	// Arch and ImageRepositoryOverride select the image. The digest is unaffected by either.
+	// Image overrides the installation selection. ImageRepositoryOverride is the legacy alias.
 	Arch                    string
 	ImageRepositoryOverride string
+	Image                   collectorimage.Selection
 
 	// EndpointOverride replaces the Odigos-created load balancer: when set, Odigos creates none and
 	// publishes what the customer pointed at.
@@ -266,6 +268,7 @@ func readNetwork(entry map[string]any, base Network) Network {
 	out.LogRetentionDays = intOf(entry, KeyLogRetentionDays, base.LogRetentionDays)
 	out.Arch = stringOf(entry, KeyArch, base.Arch)
 	out.ImageRepositoryOverride = stringOf(mapOf(entry, KeyImage), KeyRepoOverride, base.ImageRepositoryOverride)
+	out.Image = collectorimage.Overlay(base.Image, collectorimage.Selection(mapOf(entry, KeyImage)))
 	out.EndpointOverride = stringOf(entry, KeyEndpointOverride, base.EndpointOverride)
 
 	scaling := mapOf(entry, KeyScaling)

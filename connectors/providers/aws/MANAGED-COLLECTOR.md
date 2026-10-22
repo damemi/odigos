@@ -368,6 +368,21 @@ To move an automatically deployed Collector to another VPC, update only `network
 
 `managedCollectorMetrics.live` has a different meaning from the report's `liveness`: with `refresh:false` it is always `false` because the query returns the stored metrics snapshot. Use `refresh:true` to wait up to five seconds for a new periodic snapshot; `live:true` means one arrived during that query. A `null` counter means that metric was absent from the Collector's own telemetry, not that its value was zero. CPU, memory, and uptime can be present while receiver/exporter counters are absent, for example before any traffic reaches a pipeline. If they stay absent after traffic is sent, inspect the applied Collector configuration and the workload-to-NLB path.
 
+### Inspect the actual pipeline
+
+Use **View pipeline** on the Collector page. **Currently running** requests full state over each
+connected Collector's OpAMP session and displays its effective YAML with the report time and instance
+UID. **New configuration** renders the current connector intent using the same path as OpAMP pushes;
+it is not evidence that the Collector accepted it. **Rejected** shows that generated document and the
+validation error only when the Collector rejected that exact hash. Credentials are redacted before
+the configuration reaches the browser; the displayed hash identifies the original unredacted YAML.
+
+The versioned `managedCollectorConfigurations(region: String!)` query backs this view. No configuration
+snapshot table or database history is used. Reports are held only for active OpAMP connections and
+discarded at disconnect. A refresh waits up to three seconds for a full-state response, falling back
+to that connection's last report with its original timestamp. If no effective configuration was
+reported, the running view is unavailable rather than substituting the new configuration.
+
 ## 9. Configure export and route workloads
 
 A running Collector is only an ingress endpoint until you configure where it exports. A regional Collector destination is the downstream exporter; a connector destination of type odigos-managed-collector is the separate marker that routes workloads to that Collector. With no downstream destination, the Collector accepts signals into nop pipelines and discards them. Configure export before enabling workload routing.

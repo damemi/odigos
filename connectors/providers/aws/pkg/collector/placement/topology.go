@@ -564,28 +564,38 @@ func (t Topology) CollectorSecurityGroupAllowsOTLP(region, collectorVPC, collect
 // CollectorSecurityGroupAllowsSelfHealth checks the manual artifact's NLB/task
 // shared security-group contract for the Collector health endpoint.
 func (t Topology) CollectorSecurityGroupAllowsSelfHealth(region, vpcID, securityGroupID string) Reachability {
+	return t.CollectorSecurityGroupAllowsSelfPorts(region, vpcID, securityGroupID, []int32{13133})
+}
+
+// CollectorSecurityGroupAllowsSelfPorts verifies the NLB-to-target hop.
+func (t Topology) CollectorSecurityGroupAllowsSelfPorts(region, vpcID, securityGroupID string, ports []int32) Reachability {
 	group, ok := t.securityGroups[securityGroupID]
 	if !ok || group.Region != region || group.VPCID != vpcID {
 		return ReachabilityUnknown
 	}
-	unknown := false
-	for _, rule := range group.Ingress {
-		if rule.Incomplete {
-			unknown = true
-		}
-		if !securityGroupRuleAllowsPort(rule, 13133) {
-			continue
-		}
-		for _, source := range rule.SourceSecurityGroupIDs {
-			if source == securityGroupID {
-				return ReachabilityReachable
+	for _, port := range ports {
+		unknown, admitted := false, false
+		for _, rule := range group.Ingress {
+			if rule.Incomplete {
+				unknown = true
+			}
+			if !securityGroupRuleAllowsPort(rule, port) {
+				continue
+			}
+			for _, source := range rule.SourceSecurityGroupIDs {
+				if source == securityGroupID {
+					admitted = true
+				}
 			}
 		}
+		if !admitted {
+			if unknown {
+				return ReachabilityUnknown
+			}
+			return ReachabilityUnreachable
+		}
 	}
-	if unknown {
-		return ReachabilityUnknown
-	}
-	return ReachabilityUnreachable
+	return ReachabilityReachable
 }
 
 func securityGroupRuleAllowsPort(rule SecurityGroupRule, port int32) bool {

@@ -393,6 +393,9 @@ func (c *Coordinator) runDiscovery(ctx context.Context, domain string, dets []na
 		"duration", time.Since(start).Round(time.Millisecond),
 	)
 	c.discoveryReady.Store(true)
+	// Newly discovered subnet/security-group identities are inputs to Collector
+	// ingress. Refresh that plan alongside workload convergence.
+	c.TriggerCollectorReconcile()
 	// Converge immediately on what discovery just observed — a newly discovered workload matching an
 	// enabled source, a workload that drifted (lost instrumentation), or one that disappeared — rather than
 	// waiting for the next reconcile ticker. Coalesced, so back-to-back cycles don't pile up.
