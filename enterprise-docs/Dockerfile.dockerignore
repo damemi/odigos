@@ -1,0 +1,11 @@
+**
+!docs/
+!docs/**
+!odigosauth/
+!odigosauth/**
+docs/node_modules/
+docs/build/
+docs/.build-source/
+docs/export.zip
+docs/deploy/
+**/*_test.go

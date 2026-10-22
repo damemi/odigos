@@ -1,0 +1,19 @@
+# Generated output and dependencies retain their tool's formatting.
+node_modules/
+build/
+.build-source/
+export.zip
+pnpm-lock.yaml
+
+# Prose, shared snippets, and imported visual assets are outside this code check.
+oss/
+enterprise/
+central/
+vmagent/
+cloud-connectors/
+snippets/
+images/
+logo/
+**/*.md
+**/*.mdx
+**/*.svg

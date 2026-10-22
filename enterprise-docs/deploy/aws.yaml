@@ -1,0 +1,224 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Odigos Enterprise documentation on Lambda and CloudFront. Deploy in us-east-1 for the ACM certificate.
+Parameters:
+  ImageUri:
+    Type: String
+    Description: Immutable ECR image URI built from docs/Dockerfile for linux/amd64, in this region.
+  DomainName:
+    Type: String
+    Default: enterprise.docs.odigos.io
+  ParentHostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: Existing public Route 53 parent zone; only a new enterprise NS delegation is added here.
+  MaxConcurrency:
+    Type: Number
+    Default: 100
+    MinValue: 1
+    Description: Reserved Lambda concurrency for parallel page assets; size from observed bursts and account quotas.
+  SessionKeyVersion:
+    Type: String
+    Default: '1'
+    Description: Increment after rotating the session secret to refresh the Lambda environment.
+Resources:
+  DocsZone:
+    Type: AWS::Route53::HostedZone
+    # Preserve the zone and ACM validation record for explicit teardown.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Name: !Ref DomainName
+      HostedZoneConfig:
+        Comment: Dedicated DNS for protected Odigos Enterprise documentation.
+  ParentDelegation:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref ParentHostedZoneId
+      Name: !Ref DomainName
+      Type: NS
+      TTL: 300
+      ResourceRecords: !GetAtt DocsZone.NameServers
+  SessionKey:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: Enterprise docs session signing key, separate from the enterprise license signing key.
+      GenerateSecretString:
+        PasswordLength: 64
+        ExcludePunctuation: true
+        IncludeSpace: false
+  CertificateAuthorityAuthorization:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref DocsZone
+      Name: !Ref DomainName
+      Type: CAA
+      TTL: 300
+      ResourceRecords:
+        - '0 issue "amazon.com"'
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    # docs.odigos.io is a CNAME to Vercel, whose inherited CAA policy excludes
+    # Amazon. Authorize ACM only on the new enterprise hostname before issuance.
+    DependsOn: [CertificateAuthorityAuthorization, ParentDelegation]
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref DocsZone
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: WriteDocsLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !GetAtt LogGroup.Arn
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
+  DocsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      PackageType: Image
+      Architectures: [x86_64]
+      Code:
+        ImageUri: !Ref ImageUri
+      Role: !GetAtt ExecutionRole.Arn
+      MemorySize: 512
+      Timeout: 30
+      ReservedConcurrentExecutions: !Ref MaxConcurrency
+      LoggingConfig:
+        LogGroup: !Ref LogGroup
+      Environment:
+        Variables:
+          DOCS_ORIGIN: !Sub 'https://${DomainName}'
+          # Alphanumeric output of length 64 is valid base64 (48 random bytes).
+          DOCS_SESSION_KEY_BASE64: !Sub '{{resolve:secretsmanager:${SessionKey}:SecretString}}'
+          DOCS_SESSION_KEY_VERSION: !Ref SessionKeyVersion
+  FunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt DocsFunction.Arn
+      AuthType: NONE
+      InvokeMode: RESPONSE_STREAM
+  FunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DocsFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'
+      FunctionUrlAuthType: NONE
+  FunctionInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DocsFunction
+      Action: lambda:InvokeFunction
+      Principal: '*'
+      InvokedViaFunctionUrl: true
+  NoCache:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub '${AWS::StackName}-no-cache'
+        MinTTL: 0
+        DefaultTTL: 0
+        MaxTTL: 0
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingGzip: false
+          CookiesConfig:
+            CookieBehavior: none
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: none
+  ForwardSession:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Name: !Sub '${AWS::StackName}-session'
+        CookiesConfig:
+          CookieBehavior: whitelist
+          Cookies: [__Host-odigos-docs]
+        HeadersConfig:
+          HeaderBehavior: whitelist
+          Headers: [Origin, Sec-Fetch-Site, Sec-Fetch-Dest, Accept, Content-Type]
+        QueryStringsConfig:
+          QueryStringBehavior: all
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Aliases: [!Ref DomainName]
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_100
+        Origins:
+          - Id: docs-lambda
+            DomainName: !Select [2, !Split ['/', !GetAtt FunctionUrl.FunctionUrl]]
+            CustomOriginConfig:
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+        DefaultCacheBehavior:
+          TargetOriginId: docs-lambda
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          CachePolicyId: !Ref NoCache
+          OriginRequestPolicyId: !Ref ForwardSession
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 500
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 502
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 503
+            ErrorCachingMinTTL: 0
+        ViewerCertificate:
+          AcmCertificateArn: !Ref Certificate
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+  DNS:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneId: !Ref DocsZone
+      RecordSets:
+        - Name: !Ref DomainName
+          Type: A
+          AliasTarget:
+            DNSName: !GetAtt Distribution.DomainName
+            HostedZoneId: Z2FDTNDATAQYW2
+        - Name: !Ref DomainName
+          Type: AAAA
+          AliasTarget:
+            DNSName: !GetAtt Distribution.DomainName
+            HostedZoneId: Z2FDTNDATAQYW2
+Outputs:
+  DocsHostedZoneId:
+    Value: !Ref DocsZone
+  DocsURL:
+    Value: !Sub 'https://${DomainName}'
+  FunctionName:
+    Value: !Ref DocsFunction
+  DistributionId:
+    Value: !Ref Distribution
+  SessionSecretArn:
+    Value: !Ref SessionKey
