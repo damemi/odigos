@@ -2,6 +2,7 @@ package learning
 
 import (
 	"math"
+	"reflect"
 	"testing"
 
 	"github.com/odigos-io/odigos-enterprise/common-enterprise/urltemplatization/model"
@@ -53,6 +54,86 @@ func TestBuildPathTrie(t *testing.T) {
 	}
 	if trie.Root.TemplateProbability != 0 {
 		t.Fatalf("root templateProbability=%v, want 0", trie.Root.TemplateProbability)
+	}
+}
+
+func TestTerminalRuleCopiesExamplePaths(t *testing.T) {
+	rule, ok := terminalRule(&PathTrieNode{
+		Terminal:                 true,
+		TerminalObservationCount: 101,
+		TerminalExamplePaths: examplePaths{
+			"/users/2": nil,
+			"/users/1": nil,
+			"/users/9": nil,
+			"/users/4": nil,
+			"/users/3": nil,
+			"/users/8": nil,
+		},
+	}, []Segment{staticSegment("users")}, resolvedLearningParams{minObservationsForRule: 100})
+	if !ok {
+		t.Fatal("expected a terminal rule")
+	}
+	want := []string{"/users/1", "/users/2", "/users/3", "/users/4", "/users/8"}
+	if !reflect.DeepEqual(rule.Examples, want) {
+		t.Fatalf("examples=%v, want %v", rule.Examples, want)
+	}
+}
+
+func TestInsertStoresTerminalExamplePath(t *testing.T) {
+	trie := NewPathTrie()
+	trie.Insert("/users/1", 10)
+	trie.Insert("/users/1", 4)
+	trie.Insert("/users/1/orders", 3)
+
+	users := trie.Root.Children["users"]
+	if len(users.TerminalExamplePaths) != 0 {
+		t.Fatalf("users examples=%v, want none", users.TerminalExamplePaths)
+	}
+	one := users.Children["1"]
+	if got, want := one.TerminalExamplePaths, (examplePaths{"/users/1": nil}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("/users/1 examples=%v, want %v", got, want)
+	}
+	orders := one.Children["orders"]
+	if got, want := orders.TerminalExamplePaths, (examplePaths{"/users/1/orders": nil}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("/users/1/orders examples=%v, want %v", got, want)
+	}
+}
+
+func TestMergeChildrenTrieBalancesTerminalExamplePaths(t *testing.T) {
+	trie := NewPathTrie()
+	for _, id := range []string{"1", "2", "3", "4", "5", "6", "7", "8"} {
+		trie.Insert("/users/"+id, 1)
+		trie.Insert("/users/"+id+"/orders", 1)
+	}
+	// One sibling is only a prefix, so it must not contribute a terminal example.
+	trie.Insert("/users/9/profile", 1)
+
+	users := trie.Root.Children["users"]
+	merged := mergeChildrenTrie(sortedChildList(users), "{id}")
+	wantTerminal := examplePaths{
+		"/users/1": nil,
+		"/users/2": nil,
+		"/users/3": nil,
+		"/users/4": nil,
+		"/users/5": nil,
+	}
+	if !reflect.DeepEqual(merged.TerminalExamplePaths, wantTerminal) {
+		t.Fatalf("terminal examples=%v, want %v", merged.TerminalExamplePaths, wantTerminal)
+	}
+
+	orders := merged.Children["orders"]
+	wantOrders := examplePaths{
+		"/users/1/orders": nil,
+		"/users/2/orders": nil,
+		"/users/3/orders": nil,
+		"/users/4/orders": nil,
+		"/users/5/orders": nil,
+	}
+	if orders == nil || !reflect.DeepEqual(orders.TerminalExamplePaths, wantOrders) {
+		t.Fatalf("orders examples=%v, want %v", orders.TerminalExamplePaths, wantOrders)
+	}
+	if profile := merged.Children["profile"]; profile == nil || !reflect.DeepEqual(profile.TerminalExamplePaths, examplePaths{"/users/9/profile": nil}) {
+		t.Fatalf("profile examples=%v, want [/users/9/profile]", profile.TerminalExamplePaths)
 	}
 }
 

@@ -45,7 +45,13 @@ type LearnedRule struct {
 	// Reason is a human-readable explanation of why this rule was suggested.
 	Reason string `json:"reason,omitempty"`
 
+	// Examples are full endpoints observed for this template, up to 5.
+	Examples []string `json:"examples,omitempty"`
+
 	// Segments lists every path segment in this rule left to right, including
 	// static literals and dynamic (* / {name}) segments.
 	Segments []Segment `json:"segments,omitempty"`
 }
+
+// examplePaths is the set of full endpoints that end at one trie node, keyed by path.
+type examplePaths map[string]any

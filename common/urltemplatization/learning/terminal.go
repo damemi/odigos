@@ -1,6 +1,9 @@
 package learning
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 func terminalRule(node *PathTrieNode, segments []Segment, cfg resolvedLearningParams) (LearnedRule, bool) {
 	obs := node.TerminalObservationCount
@@ -11,8 +14,26 @@ func terminalRule(node *PathTrieNode, segments []Segment, cfg resolvedLearningPa
 	return LearnedRule{
 		Template: template,
 		Reason:   terminalReason(segments, template, obs, cfg.minObservationsForRule),
+		Examples: terminalExamplePaths(node.TerminalExamplePaths),
 		Segments: copySegments(segments),
 	}, true
+}
+
+// terminalExamplePaths returns the endpoint set as a sorted slice, capped at
+// maxTerminalExamplePaths, so persisted rules stay stable.
+func terminalExamplePaths(paths examplePaths) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(paths))
+	for path := range paths {
+		out = append(out, path)
+	}
+	sort.Strings(out)
+	if len(out) > maxTerminalExamplePaths {
+		out = out[:maxTerminalExamplePaths]
+	}
+	return out
 }
 
 // terminalReason describes a rule for traffic that terminates at template.
@@ -28,4 +49,49 @@ func terminalReason(segments []Segment, template string, obs, threshold int64) s
 		"%s %q observed %d times as a complete endpoint (threshold > %d)",
 		kind, template, obs, threshold,
 	)
+}
+
+// addTerminalExamplePath records path unless it is already present or the cap is full.
+// The set is created with room for maxTerminalExamplePaths.
+func addTerminalExamplePath(existing examplePaths, path string) examplePaths {
+	if _, ok := existing[path]; ok {
+		return existing
+	}
+	if len(existing) >= maxTerminalExamplePaths {
+		return existing
+	}
+	if existing == nil {
+		existing = make(examplePaths, maxTerminalExamplePaths)
+	}
+	existing[path] = nil
+	return existing
+}
+
+// mergeTerminalExamplePaths keeps up to maxTerminalExamplePaths endpoints.
+// It balances path examples from the available nodes.
+func mergeTerminalExamplePaths(examplesByNode []examplePaths) examplePaths {
+	out := make(examplePaths, maxTerminalExamplePaths)
+	for len(out) < maxTerminalExamplePaths {
+		added := false
+		for _, examples := range examplesByNode {
+			for example := range examples {
+				_, exists := out[example]
+				if !exists {
+					out[example] = nil
+					added = true
+					break
+				}
+			}
+			if len(out) == maxTerminalExamplePaths {
+				return out
+			}
+		}
+		if !added {
+			break
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
