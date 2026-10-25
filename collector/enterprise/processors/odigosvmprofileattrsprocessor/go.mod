@@ -24,7 +24,7 @@ require (
 	go.uber.org/zap v1.28.0
 )
 
-require github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261022113635-73efe7090756 // indirect
+require github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261025134630-23a4033ec76e // indirect
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
