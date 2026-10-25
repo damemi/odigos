@@ -1,0 +1,45 @@
+name: On-Prem Token Reminders STS smoke test
+
+# TEMPORARY (RUN-1330). Verifies, with the exact mechanism the real workflows will
+# use (ci-core/sts, identity only, policy in this repo), that the minted token can
+# read the "On-prem tokens" org project, resolve a private tracker issue, add it to
+# the project (idempotent) and write a date field. The date written is the value
+# the item already has, so nothing visible changes. Delete with its policy.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint a repo-scoped token with the smoke identity
+        id: sts
+        uses: odigos-io/ci-core/sts@main
+        with:
+          identity: onprem-token-reminders-smoke
+          output-git-config: "false"
+
+      - name: Use it against project 4
+        env:
+          GH_TOKEN: ${{ steps.sts.outputs.GH_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "== 1. read the org project and its fields (organization_projects) =="
+          gh api graphql -f o=odigos-io -F n=4 -f query='query($o:String!,$n:Int!){ organization(login:$o){ projectV2(number:$n){ id title fields(first:50){ nodes{ ... on ProjectV2Field{ id name } ... on ProjectV2SingleSelectField{ id name options{ id name } } } } } } }' > project.json
+          jq -r '.data.organization.projectV2 | "project: \(.title) (\(.id))", (.fields.nodes[] | select(.name=="Issued" or .name=="Expires" or .name=="Status") | "field: \(.name) \(.id) \(if .options then ([.options[].name] | join("/")) else "" end)")' project.json
+          PID=$(jq -r '.data.organization.projectV2.id' project.json)
+          FEXP=$(jq -r '.data.organization.projectV2.fields.nodes[] | select(.name=="Expires") | .id' project.json)
+          echo "== 2. resolve a private tracker issue (issues: read) =="
+          NODE=$(gh api graphql -f query='query{ repository(owner:"odigos-io",name:"odigos-enterprise"){ issue(number:4269){ id title } } }' -q '.data.repository.issue.id')
+          echo "issue #4269 node: ${NODE:0:6}… (T-Mobile tracker)"
+          echo "== 3. add it to the project (idempotent: returns the existing item) =="
+          ITEM=$(gh api graphql -f p="$PID" -f c="$NODE" -f query='mutation($p:ID!,$c:ID!){ addProjectV2ItemById(input:{projectId:$p,contentId:$c}){ item{ id } } }' -q '.data.addProjectV2ItemById.item.id')
+          echo "item: $ITEM"
+          echo "== 4. write Expires to the value it already has (2028-03-30) =="
+          gh api graphql -f p="$PID" -f i="$ITEM" -f f="$FEXP" -f d=2028-03-30 -f query='mutation($p:ID!,$i:ID!,$f:ID!,$d:Date!){ updateProjectV2ItemFieldValue(input:{projectId:$p,itemId:$i,fieldId:$f,value:{date:$d}}){ projectV2Item{ id } } }' -q '.data.updateProjectV2ItemFieldValue.projectV2Item.id'
+          echo "::notice::PASS: a repo-scoped octo-sts token from a policy in this repo can read and write the org project"
