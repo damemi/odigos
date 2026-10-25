@@ -139,17 +139,34 @@ jobs:
           path: onprem-token-generator/token.txt
           retention-days: 1
 
-      # Always records the token in a tracker issue (label onprem-token). With
-      # notify on it also hands Slack the reminders due within the next two days;
-      # the daily onprem-token-reminders workflow arms the rest the day before
-      # they fire. With notify off the reminders are muted. The reminder carries
-      # the token's metadata, never the token itself.
+      # Short-lived token that can write the "On-prem tokens" org project
+      # (organization_projects: write + issues: read), minted by octo-sts from
+      # .github/chainguard/onprem-token-reminders.sts.yaml in this repo; the
+      # default GITHUB_TOKEN cannot touch Projects v2. The board is optional: if
+      # this step fails the token is empty and the tool skips the board, saying
+      # so in the summary, and the next sweep syncs whatever missed it.
+      - name: Get a project token (octo-sts)
+        id: sts
+        continue-on-error: true
+        uses: odigos-io/ci-core/sts@main
+        with:
+          identity: onprem-token-reminders
+          output-git-config: "false"
+
+      # Always records the token in a tracker issue (label onprem-token) and puts
+      # it on the org project with its dates and Status (Active, or "Expires soon" within
+      # 30 days of expiry). With notify on it also hands Slack the reminders due
+      # within the next two days; the daily onprem-token-reminders workflow arms
+      # the rest the day before they fire. With notify off the reminders are
+      # muted. The reminder carries the token's metadata, never the token itself.
       - name: Register token and schedule Slack reminders
         working-directory: onprem-token-reminders
         env:
           NOTIFY: ${{ inputs.notify }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_ONPREM_TOKENS_BOT_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
+          PROJECT_TOKEN: ${{ steps.sts.outputs.GH_TOKEN }}
+          PROJECT_NUMBER: "4" # https://github.com/orgs/odigos-io/projects/4
           AUD: ${{ steps.details.outputs.aud }}
           IAT: ${{ steps.details.outputs.iat }}
           EXP: ${{ steps.details.outputs.exp }}

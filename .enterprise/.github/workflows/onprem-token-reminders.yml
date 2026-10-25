@@ -2,8 +2,9 @@ name: On-Prem Token Reminders
 
 # Daily sweep over the onprem-token tracker issues: hands Slack the reminders
 # due within the next two days, posts the ones a missed sweep left behind,
-# closes trackers of expired tokens and cancels reminders of trackers closed by
-# hand. See onprem-token-reminders/README.md.
+# closes trackers of expired tokens, cancels reminders of trackers closed by
+# hand, and moves tokens within 30 days of expiry to Status "Expires soon" on the
+# "On-prem tokens" org project. See onprem-token-reminders/README.md.
 
 on:
   schedule:
@@ -18,6 +19,7 @@ on:
 permissions:
   contents: read
   issues: write
+  id-token: write # octo-sts token for the org project
 
 concurrency:
   group: onprem-token-reminders
@@ -42,9 +44,25 @@ jobs:
           go-version-file: onprem-token-reminders/go.mod
           cache-dependency-path: onprem-token-reminders/go.sum
 
+      # Short-lived token that can write the "On-prem tokens" org project
+      # (organization_projects: write + issues: read), minted by octo-sts from
+      # .github/chainguard/onprem-token-reminders.sts.yaml in this repo; the
+      # default GITHUB_TOKEN cannot touch Projects v2. The board is optional: if
+      # this step fails the token is empty and the tool skips the board, saying
+      # so in the summary, and the next sweep syncs whatever missed it.
+      - name: Get a project token (octo-sts)
+        id: sts
+        continue-on-error: true
+        uses: odigos-io/ci-core/sts@main
+        with:
+          identity: onprem-token-reminders
+          output-git-config: "false"
+
       - name: Sweep trackers
         working-directory: onprem-token-reminders
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_ONPREM_TOKENS_BOT_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
+          PROJECT_TOKEN: ${{ steps.sts.outputs.GH_TOKEN }}
+          PROJECT_NUMBER: "4" # https://github.com/orgs/odigos-io/projects/4
         run: go run . sweep
