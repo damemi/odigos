@@ -13,6 +13,7 @@ Keeps Slack informed about expiring on-prem tokens. Two commands, no dependencie
 - **The tracker is a GitHub issue per token**, labelled `onprem-token`, created in this repository. Its body shows the token's metadata and carries the machine state in an HTML comment (`<!-- onprem-token-state … -->`). Do not edit that block by hand.
 - **Reminders:** 24 hours and 1 hour before `exp`. Each is `pending` (not due soon), `scheduled` (Slack holds it, id recorded), `sent` (its time passed while pending because a sweep was missed, so the sweep posted it directly), `skipped` (already past when the token was registered, or the token expired), `cancelled`, or `muted` (issued with `notify` off: the token is tracked on the board but never announced).
 - **Closing a tracker issue by hand** (token rotated early, customer gone) makes the next sweep delete the reminders Slack still holds.
+- **The board.** Trackers join the org project [On-prem tokens](https://github.com/orgs/odigos-io/projects/4) through its label rule; the tool fills `Issued` and `Expires` and keeps `Status` in step: `Active` while more than 30 days remain, `Expires soon` once a token is within 30 days of expiry (flipped by the daily sweep), `Expired` set by the project's own close rule. Writing Projects v2 fields needs `organization_projects: write`, so both workflows mint a short-lived token through `ci-core/sts` (identity `onprem-token-reminders`, policy `.github/chainguard/onprem-token-reminders.sts.yaml` in this repo; the org permission rides along on the repo-scoped token). That step is `continue-on-error`: without `PROJECT_TOKEN` the board is skipped and the summary says so, and the next sweep syncs any tracker that never reached the board.
 - **Messages never contain the token.** They carry audience, expiry, profiles, who issued it, the run and the tracker issue.
 - **Fail-closed:** a missing secret or an unreadable expiry fails the step; the sweep processes every tracker before reporting the first error.
 
@@ -27,6 +28,7 @@ Keeps Slack informed about expiring on-prem tokens. Two commands, no dependencie
 | `TRACKER_LABEL` | both | Defaults to `onprem-token` (created on first use) |
 | `AUD`, `IAT`, `EXP`, `PROFILES`, `ISSUED_BY`, `RUN_URL` | `register` | Token metadata; `IAT` and `EXP` are the unix issue and expiry times decoded from the JWT (`IAT` falls back to the run time) |
 | `NOTIFY` | `register` | `false` mutes the reminders; anything else schedules them. The tracker is created either way |
+| `PROJECT_TOKEN`, `PROJECT_NUMBER`, `PROJECT_OWNER` | both | Board access: an octo-sts token with `organization_projects: write`, the project number, and its owner (defaults to the repository owner). Unset token = board skipped |
 
 ## Development
 

@@ -127,7 +127,7 @@ func (g *fakeGitHub) render(is *fakeIssue) map[string]any {
 	for _, l := range is.Labels {
 		labels = append(labels, map[string]any{"name": l})
 	}
-	m := map[string]any{"number": is.Number, "html_url": is.HTMLURL, "title": is.Title, "body": is.Body, "state": is.State, "labels": labels}
+	m := map[string]any{"number": is.Number, "node_id": "NODE_" + strconv.Itoa(is.Number), "html_url": is.HTMLURL, "title": is.Title, "body": is.Body, "state": is.State, "labels": labels}
 	if is.IsPR {
 		m["pull_request"] = map[string]any{"url": "x"}
 	}
@@ -215,12 +215,13 @@ func (g *fakeGitHub) handler(t *testing.T) http.Handler {
 // ---------------------------------------------------------------- harness
 
 type harness struct {
-	slack  *fakeSlack
-	gh     *fakeGitHub
-	slackS *httptest.Server
-	ghS    *httptest.Server
-	slept  []time.Duration
-	now    time.Time
+	slack    *fakeSlack
+	gh       *fakeGitHub
+	slackS   *httptest.Server
+	ghS      *httptest.Server
+	slept    []time.Duration
+	now      time.Time
+	boardURL string // set by withBoard; empty means no board
 }
 
 func newHarness(t *testing.T) *harness {
@@ -233,11 +234,15 @@ func newHarness(t *testing.T) *harness {
 }
 
 func (h *harness) cfg(command string) config {
-	return config{
+	cfg := config{
 		command: command, notify: true, slackToken: "xoxb-test", slackChannel: "C123",
 		githubToken: "ghs-test", githubAPI: h.ghS.URL, repo: "o/r", label: "onprem-token",
 		audience: "Acme", issuedBy: "aviad", runURL: "https://gh.test/run/1",
 	}
+	if h.boardURL != "" {
+		cfg.projectToken, cfg.projectNumber, cfg.projectOwner, cfg.graphqlAPI = "ghs-project", 4, "o", h.boardURL
+	}
+	return cfg
 }
 
 func (h *harness) run(cfg config) (string, error) {

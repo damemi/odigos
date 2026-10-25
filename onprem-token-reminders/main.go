@@ -72,6 +72,9 @@ type tracker struct {
 	RunURL    string     `json:"run_url"`
 	Channel   string     `json:"channel"`
 	Reminders []reminder `json:"reminders"`
+	// BoardStatus is the Status last written to the project, so the sweep only
+	// writes when a token crosses into Soon.
+	BoardStatus string `json:"board_status,omitempty"`
 }
 
 type config struct {
@@ -84,6 +87,12 @@ type config struct {
 	repo         string
 	label        string
 	summaryPath  string
+
+	// board (optional): a token that can write the org project, and its number
+	projectToken  string
+	projectNumber int
+	projectOwner  string
+	graphqlAPI    string
 
 	// register only
 	audience string
@@ -112,6 +121,9 @@ func main() {
 		repo:         os.Getenv("GITHUB_REPOSITORY"),
 		label:        envOr("TRACKER_LABEL", "onprem-token"),
 		summaryPath:  os.Getenv("GITHUB_STEP_SUMMARY"),
+		projectToken: os.Getenv("PROJECT_TOKEN"),
+		projectOwner: envOr("PROJECT_OWNER", strings.SplitN(os.Getenv("GITHUB_REPOSITORY")+"/", "/", 2)[0]),
+		graphqlAPI:   envOr("GITHUB_GRAPHQL_URL", "https://api.github.com/graphql"),
 		audience:     os.Getenv("AUD"),
 		notify:       os.Getenv("NOTIFY") != "false", // the tracker always exists; this only decides reminders
 		iat:          os.Getenv("IAT"),
@@ -119,6 +131,12 @@ func main() {
 		profiles:     os.Getenv("PROFILES"),
 		issuedBy:     os.Getenv("ISSUED_BY"),
 		runURL:       os.Getenv("RUN_URL"),
+	}
+	if n := os.Getenv("PROJECT_NUMBER"); n != "" {
+		if cfg.projectNumber, _ = strconv.Atoi(n); cfg.projectNumber <= 0 {
+			fmt.Fprintf(os.Stderr, "::error::PROJECT_NUMBER must be a positive integer, got %q\n", n)
+			os.Exit(1)
+		}
 	}
 	d := deps{now: time.Now, sleep: time.Sleep, http: &http.Client{Timeout: 30 * time.Second}}
 	summary, err := run(cfg, d, "https://slack.com/api")
@@ -181,11 +199,15 @@ func run(cfg config, d deps, slackAPI string) (string, error) {
 	}
 	slack := &slackClient{base: slackAPI, token: cfg.slackToken, channel: cfg.slackChannel, mentions: cfg.mentions, http: d.http, sleep: d.sleep}
 	gh := &githubClient{base: strings.TrimRight(cfg.githubAPI, "/"), token: cfg.githubToken, repo: cfg.repo, http: d.http}
+	var board *boardClient
+	if cfg.projectToken != "" && cfg.projectNumber > 0 {
+		board = &boardClient{api: cfg.graphqlAPI, token: cfg.projectToken, owner: cfg.projectOwner, number: cfg.projectNumber, http: d.http}
+	}
 	switch cfg.command {
 	case "register":
-		return register(cfg, d, slack, gh)
+		return register(cfg, d, slack, gh, board)
 	case "sweep":
-		return sweep(cfg, d, slack, gh)
+		return sweep(cfg, d, slack, gh, board)
 	default:
 		return "", fmt.Errorf("usage: onprem-token-reminders register|sweep (got %q)", cfg.command)
 	}
@@ -193,7 +215,7 @@ func run(cfg config, d deps, slackAPI string) (string, error) {
 
 // ---------------------------------------------------------------- register
 
-func register(cfg config, d deps, slack *slackClient, gh *githubClient) (string, error) {
+func register(cfg config, d deps, slack *slackClient, gh *githubClient, board *boardClient) (string, error) {
 	if cfg.audience == "" {
 		return "", errors.New("AUD is empty")
 	}
@@ -232,6 +254,12 @@ func register(cfg config, d deps, slack *slackClient, gh *githubClient) (string,
 	}
 
 	changed, lines, newIDs, errs := armReminders(&t, issue, now, slack)
+	if synced, line, err := syncBoard(board, issue, &t, now); err != nil {
+		errs = append(errs, err)
+	} else if line != "" {
+		changed = changed || synced
+		lines = append(lines, line)
+	}
 	if changed {
 		if err := gh.updateIssue(issue.Number, map[string]any{"body": renderBody(t)}); err != nil {
 			errs = append(errs, err, rollback(slack, newIDs))
@@ -294,6 +322,24 @@ func armReminders(t *tracker, issue *issue, now time.Time, slack *slackClient) (
 	return changed, lines, newIDs, errs
 }
 
+// syncBoard writes the tracker's dates and Status to the project when the
+// board is configured and the Status it should carry differs from the one last
+// written. It reports whether the tracker state changed and a summary line.
+func syncBoard(board *boardClient, is *issue, t *tracker, now time.Time) (changed bool, line string, err error) {
+	if !board.enabled() {
+		return false, "- board: not configured (PROJECT_TOKEN or PROJECT_NUMBER unset), skipped", nil
+	}
+	want := boardStatus(*t, now)
+	if want == "" || want == t.BoardStatus {
+		return false, "", nil
+	}
+	if err := board.sync(is.NodeID, *t, want); err != nil {
+		return false, "", err
+	}
+	t.BoardStatus = want
+	return true, fmt.Sprintf("- board: %s (expires %s)", want, humanTime(t.Exp)), nil
+}
+
 // rollback deletes Slack messages scheduled in a run whose state could not be
 // recorded. It returns a combined error so the failure stays visible.
 func rollback(slack *slackClient, ids []string) error {
@@ -311,7 +357,7 @@ func rollback(slack *slackClient, ids []string) error {
 
 // ---------------------------------------------------------------- sweep
 
-func sweep(cfg config, d deps, slack *slackClient, gh *githubClient) (string, error) {
+func sweep(cfg config, d deps, slack *slackClient, gh *githubClient, board *boardClient) (string, error) {
 	now := d.now()
 	var lines []string
 	var errs []error
@@ -328,6 +374,12 @@ func sweep(cfg config, d deps, slack *slackClient, gh *githubClient) (string, er
 		}
 		changed, rl, newIDs, rerrs := armReminders(t, is, now, slack)
 		errs = append(errs, rerrs...)
+		if synced, line, err := syncBoard(board, is, t, now); err != nil {
+			errs = append(errs, err)
+		} else if synced {
+			changed = true
+			rl = append(rl, line)
+		}
 		expired := time.Unix(t.Exp, 0).Before(now)
 		if changed || expired {
 			patch := map[string]any{"body": renderBody(*t)}
@@ -574,6 +626,7 @@ func (s *slackClient) call(method string, body map[string]any) (map[string]any, 
 
 type issue struct {
 	Number  int    `json:"number"`
+	NodeID  string `json:"node_id"`
 	HTMLURL string `json:"html_url"`
 	Body    string `json:"body"`
 	State   string `json:"state"`
