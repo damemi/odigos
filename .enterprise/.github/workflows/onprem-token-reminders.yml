@@ -1,0 +1,50 @@
+name: On-Prem Token Reminders
+
+# Daily sweep over the onprem-token tracker issues: hands Slack the reminders
+# due within the next two days, posts the ones a missed sweep left behind,
+# closes trackers of expired tokens and cancels reminders of trackers closed by
+# hand. See onprem-token-reminders/README.md.
+
+on:
+  schedule:
+    # Once a day, 06:17 UTC. Reminders are handed to Slack only when due within
+    # the next 48 hours, so a daily pass is enough: it arms tomorrow's reminders
+    # today, and the 48h window leaves a full day of slack for a late or missed
+    # run before anything is overdue. The odd minute avoids GitHub's busy
+    # on-the-hour cron slots, where scheduled runs are delayed most.
+    - cron: "17 6 * * *"
+  workflow_dispatch: # run a sweep by hand, same behaviour
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: onprem-token-reminders
+  cancel-in-progress: false
+
+env:
+  SLACK_CHANNEL_ID: C0CC0GN01JM # #odigos-onprem-tokens-tracker
+  SLACK_MENTIONS: U08CUJYCXUY,U0A0SAD7CLS # tagged on every reminder: Will Searle, Ray Mileo
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: onprem-token-reminders/go.mod
+          cache-dependency-path: onprem-token-reminders/go.sum
+
+      - name: Sweep trackers
+        working-directory: onprem-token-reminders
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_ONPREM_TOKENS_BOT_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: go run . sweep
