@@ -1,22 +1,24 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { useTheme } from 'styled-components';
 import { AccountMenu } from './account-menu';
 import { StatusType } from '@odigos/ui-kit/types';
-import { TerminalIcon } from '@odigos/ui-kit/icons';
 import { useOdigos } from '@odigos/ui-kit/contexts';
-import { Tooltip } from '@odigos/ui-kit/components';
 import { StatusKeys, useStatusStore } from '../store';
 import { FORM_ALERTS } from '@odigos/ui-kit/constants';
 import { SystemDrawer } from '@odigos/ui-kit/containers';
-import { VmDiagnoseDrawer } from '@/components/vm-diagnose-drawer';
 import { useConfig, useHealth, useProxy } from '@/hooks';
 import { OdigosLogoTextByTier } from '@odigos/ui-kit/snippets';
+import { VmDiagnoseDrawer } from '@/components/vm-diagnose-drawer';
+import { ExclamationTriangleIcon, TerminalIcon } from '@odigos/ui-kit/icons';
+import { ButtonVariants, Tooltip, WarningModal } from '@odigos/ui-kit/components';
 import { IconButton, Badge as V2Badge, Header as V2Header } from '@odigos/ui-kit/components';
 
 export const OverviewHeader = () => {
   useHealth();
 
+  const theme = useTheme();
   const { isVm } = useOdigos();
   const { isReadonly } = useConfig();
   const { proxyID, proxyName } = useProxy();
@@ -80,10 +82,21 @@ export const OverviewHeader = () => {
   return (
     <>
       <V2Header left={left} right={right} />
-      {isVm ? (
-        <VmDiagnoseDrawer isOpen={isSystemDrawerOpen} onClose={toggleSystemDrawer} />
-      ) : (
-        <SystemDrawer key='system-overview' isOpen={isSystemDrawerOpen} onClose={toggleSystemDrawer} />
+      {isVm ? <VmDiagnoseDrawer isOpen={isSystemDrawerOpen} onClose={toggleSystemDrawer} /> : <SystemDrawer key='system-overview' isOpen={isSystemDrawerOpen} onClose={toggleSystemDrawer} />}
+
+      {tokenStatus && !tokenStatus.modalDismissed && (
+        <WarningModal
+          isOpen
+          onClose={() => useStatusStore.getState().dismissModal(StatusKeys.Token)}
+          visual={() => <ExclamationTriangleIcon size={50} fill={tokenStatus.status === StatusType.Warning ? theme.v2.colors.yellow[500] : theme.v2.colors.red[500]} />}
+          title={tokenStatus.status === StatusType.Warning ? 'Token about to expire' : 'Token expired'}
+          description={tokenStatus.label?.toString() || ''}
+          denyButton={{
+            label: 'Dismiss',
+            variant: ButtonVariants.Secondary,
+            onClick: () => useStatusStore.getState().dismissModal(StatusKeys.Token),
+          }}
+        />
       )}
     </>
   );

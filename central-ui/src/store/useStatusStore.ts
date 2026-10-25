@@ -9,6 +9,7 @@ export enum StatusKeys {
 
 export interface StatusValues extends BadgeProps {
   tooltip?: string;
+  modalDismissed?: boolean;
 }
 
 interface StoreValues {
@@ -19,6 +20,7 @@ interface StoreValues {
 
 interface StoreSetters {
   setStatusStore: (k: keyof StoreValues, v?: StatusValues) => void;
+  dismissModal: (k: keyof StoreValues) => void;
 }
 
 export const useStatusStore = create<StoreValues & StoreSetters>((set) => ({
@@ -27,4 +29,12 @@ export const useStatusStore = create<StoreValues & StoreSetters>((set) => ({
   [StatusKeys.Instrumentation]: undefined,
 
   setStatusStore: (k, v) => set({ [k]: v }),
+  dismissModal: (k) => {
+    set((state) => ({
+      [k]: {
+        ...state[k],
+        modalDismissed: true,
+      },
+    }));
+  },
 }));
