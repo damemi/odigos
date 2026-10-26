@@ -127,7 +127,7 @@ const pass = (message) => console.log('PASS: ' + message);
   });
   for (const route of [
     '/enterprise/overview',
-    '/oss/overview',
+    '/central/overview',
     '/docs-runtime.js',
     '/pagefind/pagefind.js',
     '/images/enterprise',
@@ -190,9 +190,9 @@ const pass = (message) => console.log('PASS: ' + message);
   await result.click();
   await page.waitForURL(destination);
   await page.goto(origin + '/cli/odigos_sources?from=ci');
-  assert(page.url().endsWith('/oss/cli/odigos_sources?from=ci'));
-  await page.goto(origin + '/oss/overview', { waitUntil: 'networkidle' });
-  assert(page.url().startsWith(origin + '/oss/overview'));
+  assert(page.url().endsWith('/enterprise/cli/odigos_sources?from=ci'));
+  await page.goto(origin + '/central/overview', { waitUntil: 'networkidle' });
+  assert(page.url().startsWith(origin + '/central/overview'));
   assert(await page.locator('#content-area').isVisible());
   await page.goto(origin + '/enterprise/overview', { waitUntil: 'networkidle' });
   await page.locator('[data-component-part=products-selector-trigger]').click();
@@ -209,7 +209,7 @@ const pass = (message) => console.log('PASS: ' + message);
   await page.waitForURL('**/login?redirect=**', { timeout: 20000 });
   for (const route of [
     '/enterprise/overview',
-    '/oss/overview',
+    '/central/overview',
     '/docs-runtime.js',
     '/pagefind/pagefind.js',
     '/llms.txt',

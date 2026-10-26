@@ -9,7 +9,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 process.chdir(root);
 const source = path.join(root, '.build-source');
 const output = path.join(root, 'build');
-const products = ['oss', 'enterprise', 'central', 'vmagent', 'cloud-connectors'].filter((name) =>
+const products = ['enterprise', 'central', 'vmagent', 'cloud-connectors'].filter((name) =>
   fs.existsSync(path.join(root, name)),
 );
 const archive = path.join(source, 'export.zip');
@@ -45,7 +45,7 @@ for (const entry of zip.getEntries()) {
   const isAsset =
     name.startsWith('_next/static/') ||
     ['images', 'logo', 'favicons'].includes(segments[0]) ||
-    /^snippets\/shared\/backends\/images\/[^/]+\.(png|svg|jpg|jpeg|webp|gif)$/.test(name);
+    /^snippets\/enterprise\/backends\/images\/[^/]+\.(png|svg|jpg|jpeg|webp|gif)$/.test(name);
   if (entry.isDirectory || (!isPage && !isAsset)) continue;
   const target = path.join(output, name);
   fs.mkdirSync(path.dirname(target), { recursive: true });

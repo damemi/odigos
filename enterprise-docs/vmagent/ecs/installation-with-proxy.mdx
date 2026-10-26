@@ -4,10 +4,6 @@ sidebarTitle: "Multi Node"
 description: "Deploy the Odigos ECS Agent daemon plus the cluster-scoped ECS Proxy, so a multi-node ECS cluster appears in Odigos Central as a single platform with aggregated workloads."
 ---
 
-import EnterpriseVMAgent from '/snippets/enterprise/vmagent/enterprise-vm-agent.mdx'
-
-<EnterpriseVMAgent />
-
 This deployment runs the agent daemon on every container instance **plus one
 `odigos-ecs-proxy` task per cluster**. The agents dial the proxy instead of
 Central, so the proxy is the cluster's single upstream connection and the whole

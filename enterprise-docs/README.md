@@ -1,6 +1,6 @@
 # Odigos Enterprise documentation
 
-Source for **https://enterprise.docs.odigos.io**. This protected site starts with the complete documentation from `odigos/docs`: Open Source, Enterprise Kubernetes, Central, VM Agent, and cloud connectors. The public site at https://docs.odigos.io retains the same complete page set. Edition-specific page moves and removals will happen in separate migration PRs; this PR establishes hosting and authentication without classifying or removing pages.
+Source for **https://enterprise.docs.odigos.io**. This protected site documents Enterprise Kubernetes, Odigos Central, VM Agent, and Cloud Connectors. The public site at https://docs.odigos.io documents the Kubernetes Agent Open Source edition, plus overview pages for Odigos Central, the VM Agent, Cloud Connectors, the Enterprise MCP server, and continuous profiling.
 
 Both sites use the same Mintlify theme, MDX components, logos, and navigation conventions. This site uses [Mintlify's offline export](https://www.mintlify.com/docs/deploy/export) and a Go authentication server, so a Mintlify Enterprise subscription is not required. Pagefind provides search from the protected build; no hosted search index contains this site's content.
 
@@ -19,7 +19,7 @@ pnpm build
 
 `pnpm dev` is an **unauthenticated local authoring preview**; do not expose it publicly. The production image serves only the compiled `build/` through `odigosauth/cmd/docs-server`. The build copies MDX into an isolated staging directory before export, excludes raw sources and the export's example server, checks every page is exported, expands legacy redirects, and creates a local search index. Internet access is required during export to obtain the Mintlify renderer; runtime serving does not require a Mintlify account or API. The existing theme still references public font and icon CDNs.
 
-Add each new page to `docs.json`. Use a hidden group for reference pages that should be reachable but absent from the sidebar. The build fails if any documentation page is missing from the export. Both Kubernetes edition tabs and all product navigation remain available locally on this site. Keep the link between the public and protected sites visible.
+Add each new page to `docs.json`. Use a hidden group for reference pages that should be reachable but absent from the sidebar. The build fails if any documentation page is missing from the export. Enterprise Kubernetes, Central, VM Agent, and Cloud Connectors stay in this site's navigation. Keep the link to the public docs visible.
 
 `node scripts/build.mjs --reuse-export` rebuilds search and browser assets from the previous export for local iteration. Do not use it after editing MDX or in CI/release builds.
 
@@ -31,11 +31,9 @@ Generated site files live in `build/`, `.build-source/`, and `export.zip`, all i
 
 Run `pnpm format` to format the handwritten JavaScript, CSS, Go HTML template, and configuration files with Prettier. Use `black --config docs/pyproject.toml docs/deploy docs/scripts` from the repository root for Python (Black 26.5.1), and `gofmt` for Go. The workflow checks formatting before deployment. Formatting is scoped to application code and configuration; generated documentation snippets retain their generator's output.
 
-### Shared and generated documentation
+### Generated documentation
 
-`snippets/shared` is a snapshot of common documentation from `odigos/docs`, not a runtime dependency on the public site. Both edition wrappers and all shared snippets are copied here. During the transition, review common prose changes in both repos. Future migration PRs can change page ownership and navigation explicitly.
-
-The public repo remains the source of generated CLI, CRD, destination, instrumentation, and RBAC snippets. Run its existing generators first (`make cli-docs`, `cd api && make docgen`, `make rbac-docs`, and the scripts in `odigos/docs`). Copy changed generated files into this repo's matching `snippets/shared` paths and review the diff. Keep both edition wrappers and all product snippets until the migration PRs change them. Run both sites' checks after syncing. Neither site excludes pages based on edition.
+CLI, CRD, destination, instrumentation, and RBAC snippets are generated in the public `odigos` repository under `snippets/oss`. Run `make cli-docs`, `cd api && make docgen`, `make rbac-docs`, and `cd docs && python sync-dest-doc.py` there first. Copy changed files into this repo's matching `snippets/enterprise` paths and review the diff. Pyroscope stays in this repo only. The OBI guide exists here and on the public site. Run this site's checks after syncing.
 
 ## Authentication
 

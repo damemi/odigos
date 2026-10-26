@@ -4,10 +4,6 @@ sidebarTitle: "Configuration Reference"
 description: "Every environment variable of the Odigos ECS Agent and ECS Proxy, how platform names are derived, and where configuration is persisted."
 ---
 
-import EnterpriseVMAgent from '/snippets/enterprise/vmagent/enterprise-vm-agent.mdx'
-
-<EnterpriseVMAgent />
-
 On ECS the **task definition is the configuration surface**. On a fresh
 container instance it is the only input the agent has, so the Central endpoint
 and any other defaults travel inside it — nothing depends on service discovery
@@ -128,7 +124,7 @@ missed.
 | Host processes and `systemd` services on the container instance | **Ignored.** Unlike the [VM Agent](/vmagent/setup/installation) and [Docker deployment](/vmagent/setup/docker), the ECS distribution only classifies ECS tasks. |
 | Task restarts | **Never.** All instrumentation is direct attach; ECS owns the container lifecycle, so the agent does not restart, recreate, or modify tasks. |
 | Java, Go, C++ | Their dynamic eBPF SDKs (Java via dynamic attach). |
-| Python, Node.js, .NET, PHP, Ruby, others | Covered by [OBI](/oss/instrumentations/obi), which also attaches with no restart. Restart-based environment injection is intentionally not used on ECS. |
+| Python, Node.js, .NET, PHP, Ruby, others | Covered by [OBI](/enterprise/instrumentations/obi), which also attaches with no restart. Restart-based environment injection is intentionally not used on ECS. |
 
 The agent's own binaries, the `amazon-ecs-agent`, the SSM agent, and `awsvpc`
 pause containers are excluded from instrumentation automatically.
