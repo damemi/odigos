@@ -294,7 +294,7 @@ provider-agnostic.
 | CRD YAML (Helm)           | `helm/odigos-central/templates/crds/odigoscloudconnectors.yaml`              |
 | Feature gate + values     | `helm/odigos-central/values.yaml` → `cloudConnectors.*`                      |
 | Connector infra templates | `helm/odigos-central/templates/connectors/`                                  |
-| API docs                  | `docs/snippets/shared/api-reference/cloud-connectors.odigos.io.v1alpha1.mdx` |
+| API docs                  | `docs/snippets/enterprise/api-reference/cloud-connectors.odigos.io.v1alpha1.mdx` |
 
 **Helm gate:** `cloudConnectors.enabled: true` (default `false`) installs:
 
