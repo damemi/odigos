@@ -135,7 +135,7 @@ func workloadOnlyScope(scopes *k8sconsts.SourcesScopes, workload k8sconsts.PodWo
 }
 
 func (j *LiveTrafficLearningJob) workloadRule(workload k8sconsts.PodWorkload, learned []learning.LearnedRule) actions.UrlTemplatizationRule {
-	documented, _ := j.appendMissingDocumentedTemplates(workload, nil, learned)
+	documented, _ := j.mergeLearnedTemplates(workload, nil, learned)
 	return actions.UrlTemplatizationRule{
 		Scopes: &k8sconsts.SourcesScopes{
 			Sources: []k8sconsts.PodWorkload{workload},
@@ -152,14 +152,23 @@ func documentedTemplate(rule learning.LearnedRule) actions.UrlTemplatizationDocu
 	}
 }
 
-func (j *LiveTrafficLearningJob) appendMissingDocumentedTemplates(workload k8sconsts.PodWorkload, existing []actions.UrlTemplatizationDocumentedTemplate, add []learning.LearnedRule) ([]actions.UrlTemplatizationDocumentedTemplate, bool) {
+// mergeLearnedTemplates applies learned templates onto existing. Redundant
+// templates are dropped (see redundantTemplates), examples on a matching stored
+// template are updated, and templates that are not already stored are added.
+func (j *LiveTrafficLearningJob) mergeLearnedTemplates(workload k8sconsts.PodWorkload, existing []actions.UrlTemplatizationDocumentedTemplate, add []learning.LearnedRule) ([]actions.UrlTemplatizationDocumentedTemplate, bool) {
+	allRules := knownTemplateStrings(existing, add)
+	redundant := redundantTemplates(allRules)
+	existing, changed := j.removeRedundantTemplates(workload, existing, redundant)
+
 	indexByTemplate := make(map[string]int, len(existing))
 	for i, documented := range existing {
 		indexByTemplate[documented.Template] = i
 	}
-	changed := false
 	skipped := 0
 	for _, rule := range add {
+		if _, ok := redundant[rule.Template]; ok {
+			continue
+		}
 		if i, ok := indexByTemplate[rule.Template]; ok {
 			if len(rule.Examples) > 0 && !slices.Equal(existing[i].Examples, rule.Examples) {
 				existing[i].Examples = rule.Examples
@@ -187,6 +196,31 @@ func (j *LiveTrafficLearningJob) appendMissingDocumentedTemplates(workload k8sco
 	return existing, changed
 }
 
+// removeRedundantTemplates returns a copy of existing without the redundant templates,
+// and reports whether any were removed. existing is not modified.
+func (j *LiveTrafficLearningJob) removeRedundantTemplates(workload k8sconsts.PodWorkload, existing []actions.UrlTemplatizationDocumentedTemplate, redundant map[string]any) ([]actions.UrlTemplatizationDocumentedTemplate, bool) {
+	var removed []string
+	kept := slices.DeleteFunc(slices.Clone(existing), func(documented actions.UrlTemplatizationDocumentedTemplate) bool {
+		_, drop := redundant[documented.Template]
+		if drop {
+			removed = append(removed, documented.Template)
+		}
+		return drop
+	})
+	if len(removed) == 0 {
+		return kept, false
+	}
+
+	j.logger.Info("removed redundant URL templatization templates",
+		"namespace", workload.Namespace,
+		"workload", workload.Name,
+		"kind", workload.Kind,
+		"count", len(removed),
+		"templates", removed,
+	)
+	return kept, true
+}
+
 // applyLearnedRules adds each workload's templates onto its existing rule, or appends a new rule.
 // It reports whether the action changed.
 func (j *LiveTrafficLearningJob) applyLearnedRules(action *odigosv1.Action, byWorkload map[k8sconsts.PodWorkload][]learning.LearnedRule) bool {
@@ -194,7 +228,7 @@ func (j *LiveTrafficLearningJob) applyLearnedRules(action *odigosv1.Action, byWo
 	for workload, learned := range byWorkload {
 		existingRule := findWorkloadRule(action, workload)
 		if existingRule != nil {
-			updated, ruleChanged := j.appendMissingDocumentedTemplates(workload, existingRule.DocumentedTemplates, learned)
+			updated, ruleChanged := j.mergeLearnedTemplates(workload, existingRule.DocumentedTemplates, learned)
 			if !ruleChanged {
 				continue
 			}

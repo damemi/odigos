@@ -32,20 +32,20 @@ func TestTemplatesByNamespace(t *testing.T) {
 	}
 }
 
-func TestAppendMissingDocumentedTemplates_CapsAt200(t *testing.T) {
+func TestMergeLearnedTemplates_CapsAt200(t *testing.T) {
 	checkout := k8sconsts.PodWorkload{Namespace: "payments", Kind: k8sconsts.WorkloadKindDeployment, Name: "checkout"}
 	existing := make([]actions.UrlTemplatizationDocumentedTemplate, maxDocumentedTemplatesPerScope)
 	for i := range existing {
 		existing[i] = actions.UrlTemplatizationDocumentedTemplate{Template: fmt.Sprintf("/existing/%d", i)}
 	}
 	job := NewLiveTrafficLearningJob(nil, commonlogger.LoggerCompat())
-	got, changed := job.appendMissingDocumentedTemplates(checkout, existing, []learning.LearnedRule{{Template: "/new/{id}"}})
+	got, changed := job.mergeLearnedTemplates(checkout, existing, []learning.LearnedRule{{Template: "/new/{id}"}})
 	if changed || len(got) != maxDocumentedTemplatesPerScope {
 		t.Fatalf("changed=%v len=%d", changed, len(got))
 	}
 
 	existing = existing[:maxDocumentedTemplatesPerScope-1]
-	got, changed = job.appendMissingDocumentedTemplates(checkout, existing, []learning.LearnedRule{
+	got, changed = job.mergeLearnedTemplates(checkout, existing, []learning.LearnedRule{
 		{Template: "/new/{id}"},
 		{Template: "/extra/{id}"},
 	})
@@ -54,7 +54,7 @@ func TestAppendMissingDocumentedTemplates_CapsAt200(t *testing.T) {
 	}
 }
 
-func TestAppendMissingDocumentedTemplates_WritesExamples(t *testing.T) {
+func TestMergeLearnedTemplates_WritesExamples(t *testing.T) {
 	checkout := k8sconsts.PodWorkload{Namespace: "payments", Kind: k8sconsts.WorkloadKindDeployment, Name: "checkout"}
 	job := NewLiveTrafficLearningJob(nil, commonlogger.LoggerCompat())
 	learned := []learning.LearnedRule{{
@@ -63,12 +63,12 @@ func TestAppendMissingDocumentedTemplates_WritesExamples(t *testing.T) {
 		Examples: []string{"/users/1", "/users/2"},
 	}}
 
-	got, changed := job.appendMissingDocumentedTemplates(checkout, nil, learned)
+	got, changed := job.mergeLearnedTemplates(checkout, nil, learned)
 	if !changed || len(got) != 1 || got[0].Notes != "learned from traffic" || !slices.Equal(got[0].Examples, learned[0].Examples) {
 		t.Fatalf("created template = %+v changed=%v", got, changed)
 	}
 
-	again, changed := job.appendMissingDocumentedTemplates(checkout, []actions.UrlTemplatizationDocumentedTemplate{{
+	again, changed := job.mergeLearnedTemplates(checkout, []actions.UrlTemplatizationDocumentedTemplate{{
 		Template: "/users/{id}",
 		Notes:    "learned from traffic",
 	}}, learned)
@@ -76,7 +76,7 @@ func TestAppendMissingDocumentedTemplates_WritesExamples(t *testing.T) {
 		t.Fatalf("updated template = %+v changed=%v", again, changed)
 	}
 
-	_, changed = job.appendMissingDocumentedTemplates(checkout, again, learned)
+	_, changed = job.mergeLearnedTemplates(checkout, again, learned)
 	if changed {
 		t.Fatal("unchanged examples marked the rule changed")
 	}
