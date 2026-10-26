@@ -4,10 +4,6 @@ sidebarTitle: "Single Node"
 description: "Deploy the Odigos ECS Agent as a daemon service. Every container instance runs one agent that connects directly to Odigos Central — no extra AWS resources."
 ---
 
-import EnterpriseVMAgent from '/snippets/enterprise/vmagent/enterprise-vm-agent.mdx'
-
-<EnterpriseVMAgent />
-
 This is the default and simplest ECS deployment: **one agent task per EC2
 container instance**, each connecting **directly** to Odigos Central. No proxy,
 no load balancer, no service discovery.

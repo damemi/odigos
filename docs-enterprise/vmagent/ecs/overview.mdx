@@ -4,10 +4,6 @@ sidebarTitle: "Overview"
 description: "Instrument Amazon ECS tasks with eBPF using the Odigos ECS Agent — the VM Agent packaged as an ECS daemon service. No task restarts, no application changes."
 ---
 
-import EnterpriseVMAgent from '/snippets/enterprise/vmagent/enterprise-vm-agent.mdx'
-
-<EnterpriseVMAgent />
-
 The **Odigos ECS Agent** is the same agent as the [VM Agent](/vmagent/overview),
 packaged as a container image and deployed as an ECS **daemon service** — one
 agent task on every EC2 container instance in the cluster.
@@ -55,7 +51,7 @@ node) or **through the proxy** (multi node) — see
   [Docker deployment](/vmagent/setup/docker)).
 - **Instrumentation** — Java, Go, and C++ attach through their dynamic eBPF
   SDKs. Every other language is covered by
-  [OBI](/oss/instrumentations/obi), which also attaches with no restart.
+  [OBI](/enterprise/instrumentations/obi), which also attaches with no restart.
   Restart-based instrumentation (Python/Node.js/.NET environment injection) is
   intentionally not used on ECS, since ECS owns the container lifecycle.
 - **Export** — the collector runs inside the agent container with host

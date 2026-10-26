@@ -60,7 +60,7 @@ def verify_public_boundary(origin):
     for path, expected in [
         ("/login", 200),
         ("/enterprise/overview", 401),
-        ("/oss/overview", 401),
+        ("/central/overview", 401),
         ("/docs-runtime.js", 401),
         ("/pagefind/pagefind.js", 401),
         ("/llms.txt", 401),

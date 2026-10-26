@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const config = JSON.parse(fs.readFileSync(path.join(root, 'docs.json')));
 const requireExport = process.argv.includes('--export');
-const products = ['oss', 'enterprise', 'central', 'vmagent', 'cloud-connectors'].filter((name) =>
+const products = ['enterprise', 'central', 'vmagent', 'cloud-connectors'].filter((name) =>
   fs.existsSync(path.join(root, name)),
 );
 const errors = [];
