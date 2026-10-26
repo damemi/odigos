@@ -13,7 +13,7 @@ func terminalRule(node *PathTrieNode, segments []Segment, cfg resolvedLearningPa
 	template := templateFromSegments(segments)
 	return LearnedRule{
 		Template: template,
-		Reason:   terminalReason(segments, template, obs, cfg.minObservationsForRule),
+		Reason:   terminalReason(node.TerminalPathCount, obs, segments),
 		Examples: terminalExamplePaths(node.TerminalExamplePaths),
 		Segments: copySegments(segments),
 	}, true
@@ -36,18 +36,21 @@ func terminalExamplePaths(paths examplePaths) []string {
 	return out
 }
 
-// terminalReason describes a rule for traffic that terminates at template.
-func terminalReason(segments []Segment, template string, obs, threshold int64) string {
-	kind := "literal path"
-	for _, seg := range segments {
-		if seg.Type != SegmentTypeStatic {
-			kind = "templated path"
-			break
-		}
+// terminalReason describes why a template was learned.
+// paths is the number of distinct URLs merged into this template; obs is their
+// combined request count.
+func terminalReason(paths, obs int64, segments []Segment) string {
+	requests := "requests"
+	if obs == 1 {
+		requests = "request"
+	}
+	urls := "different URLs"
+	if paths == 1 {
+		urls = "URL"
 	}
 	return fmt.Sprintf(
-		"%s %q observed %d times as a complete endpoint (threshold > %d)",
-		kind, template, obs, threshold,
+		"Learned the template %s from live traffic, based on %d %s from %d %s",
+		templateFromSegments(segments), obs, requests, paths, urls,
 	)
 }
 

@@ -43,7 +43,7 @@ func TestLowProbabilityWildcardModerateBeforeTemplate(t *testing.T) {
 	assertTemplates(t, templatesOf(rules), []string{"/items/*"})
 	assertSegments(t, rules[0].Segments, []wantSegment{
 		{typ: learning.SegmentTypeStatic, name: "items"},
-		{typ: learning.SegmentTypeWildcard, certainty: learning.RuleCertaintyModerate},
+		{typ: learning.SegmentTypeWildcard},
 	})
 }
 
@@ -54,7 +54,7 @@ func TestLowProbabilityTemplatesAt50Children(t *testing.T) {
 	assertTemplates(t, templatesOf(rules), []string{"/users/{id}"})
 	assertSegments(t, rules[0].Segments, []wantSegment{
 		{typ: learning.SegmentTypeStatic, name: "users"},
-		{typ: learning.SegmentTypeTemplate, name: "id", certainty: learning.RuleCertaintyHigh, minExamples: 5},
+		{typ: learning.SegmentTypeTemplate, name: "id", minExamples: 5},
 	})
 }
 
@@ -65,7 +65,7 @@ func TestCertainProbabilityTemplatesAtMinCardinality(t *testing.T) {
 	assertTemplates(t, templatesOf(rules), []string{"/users/{id}"})
 	assertSegments(t, rules[0].Segments, []wantSegment{
 		{typ: learning.SegmentTypeStatic, name: "users"},
-		{typ: learning.SegmentTypeTemplate, name: "id", certainty: learning.RuleCertaintyHigh, minExamples: 5},
+		{typ: learning.SegmentTypeTemplate, name: "id", minExamples: 5},
 	})
 }
 
@@ -76,6 +76,6 @@ func TestCertainProbabilityWildcardHighBelowTemplate(t *testing.T) {
 	assertTemplates(t, templatesOf(rules), []string{"/items/*"})
 	assertSegments(t, rules[0].Segments, []wantSegment{
 		{typ: learning.SegmentTypeStatic, name: "items"},
-		{typ: learning.SegmentTypeWildcard, certainty: learning.RuleCertaintyHigh},
+		{typ: learning.SegmentTypeWildcard},
 	})
 }

@@ -29,9 +29,17 @@ type PathTrieNode struct {
 	// Merges take turns across the source nodes so one node cannot fill the set.
 	TerminalExamplePaths examplePaths
 
-	// TerminalObservationCount is the observation count for the endpoint that ends
-	// at this node when Terminal is true. Zero when Terminal is false.
+	// TerminalObservationCount is the observation count for endpoints that end
+	// at this node when Terminal is true. Merges sum the counts. Zero when Terminal is false.
 	TerminalObservationCount int64
+
+	// TerminalPathCount is how many distinct endpoints end at this node.
+	// A newly observed terminal path starts at 1, and inserting that same path
+	// again does not increase it. The count is greater than 1 only after sibling
+	// nodes are merged into one wildcard (*) or templated ({name}) segment,
+	// which sums the endpoints collapsed into that segment.
+	// Zero when Terminal is false.
+	TerminalPathCount int64
 
 	// TotalObservations is the sum of observation counts for all terminal endpoints
 	// under this node (including this node when Terminal is true).
@@ -60,8 +68,9 @@ func NewPathTrie() *PathTrie {
 
 // Insert walks path segment-by-segment, creating nodes as needed, and marks
 // the final segment as terminal with the given observation count.
-// If the same path is inserted again, observation counts are summed.
-// The endpoint is recorded on that terminal node, up to maxTerminalExamplePaths.
+// If the same path is inserted again, observation counts are summed and the
+// distinct-path count stays 1. The endpoint is recorded on that terminal node,
+// up to maxTerminalExamplePaths.
 // TotalObservations is updated on the terminal node and all ancestors.
 func (t *PathTrie) Insert(path string, count int64) {
 	segments, _ := urltemplate.SplitPath(path)
@@ -83,6 +92,9 @@ func (t *PathTrie) Insert(path string, count int64) {
 			node.TemplateProbability, prevObservations,
 			model.Probability(segments, i), count,
 		)
+	}
+	if !node.Terminal {
+		node.TerminalPathCount = 1
 	}
 	node.Terminal = true
 	node.TerminalObservationCount += count
@@ -113,8 +125,8 @@ func weightedTemplateProbability(probA float64, obsA int64, probB float64, obsB 
 }
 
 // mergeChildrenTrie collapses sibling child subtrees into one node named
-// segmentName (e.g. "*" or "{id}"), summing terminal/total observations and merging
-// grandchild paths that share the same segment.
+// segmentName (e.g. "*" or "{id}"), summing terminal path counts, terminal and
+// total observations, and merging grandchild paths that share the same segment.
 func mergeChildrenTrie(children []*PathTrieNode, segmentName string) *PathTrieNode {
 	merged := mergeNodeList(children)
 	merged.Segment = segmentName
@@ -139,6 +151,7 @@ func mergeNodeList(nodes []*PathTrieNode) *PathTrieNode {
 	for _, n := range nodes {
 		if n.Terminal {
 			out.Terminal = true
+			out.TerminalPathCount += n.TerminalPathCount
 			out.TerminalObservationCount += n.TerminalObservationCount
 			if len(n.TerminalExamplePaths) > 0 {
 				examplesByNode = append(examplesByNode, n.TerminalExamplePaths)
@@ -169,6 +182,7 @@ func cloneNode(n *PathTrieNode) *PathTrieNode {
 		Children:                 make(map[string]*PathTrieNode, len(n.Children)),
 		Terminal:                 n.Terminal,
 		TerminalExamplePaths:     maps.Clone(n.TerminalExamplePaths),
+		TerminalPathCount:        n.TerminalPathCount,
 		TerminalObservationCount: n.TerminalObservationCount,
 		TotalObservations:        n.TotalObservations,
 		TemplateProbability:      n.TemplateProbability,

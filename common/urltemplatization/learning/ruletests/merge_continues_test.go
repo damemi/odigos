@@ -16,7 +16,7 @@ func TestMergeContinuesIntoStaticSuffix(t *testing.T) {
 	assertTemplates(t, templatesOf(rules), []string{"/users/{id}/orders"})
 	assertSegments(t, rules[0].Segments, []wantSegment{
 		{typ: learning.SegmentTypeStatic, name: "users"},
-		{typ: learning.SegmentTypeTemplate, name: "id", certainty: learning.RuleCertaintyHigh},
+		{typ: learning.SegmentTypeTemplate, name: "id"},
 		{typ: learning.SegmentTypeStatic, name: "orders"},
 	})
 }

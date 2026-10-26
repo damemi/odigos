@@ -1,13 +1,5 @@
 package learning
 
-// RuleCertainty describes how confident live traffic learning is in a path segment.
-type RuleCertainty string
-
-const (
-	RuleCertaintyHigh     RuleCertainty = "High"
-	RuleCertaintyModerate RuleCertainty = "Moderate"
-)
-
 // SegmentType is the kind of one path segment in a learned rule.
 type SegmentType string
 
@@ -28,9 +20,12 @@ type Segment struct {
 	// Template (e.g. "id" for "{id}"), and empty for Wildcard.
 	Name string `json:"name,omitempty"`
 
-	// Certainty indicates how confident live traffic learning is in a dynamic
-	// segment. For static segments this is High (the literal was observed).
-	Certainty RuleCertainty `json:"certainty"`
+	// TemplateProbability is the URL-model probability, from 0 to 1, that this
+	// segment is a parameter. 0 means the model is very certain it is not a
+	// template. 1 means it is very certain this segment is a template.
+	// A merged wildcard or {name} segment uses the observation-weighted average
+	// of the values that were collapsed into it.
+	TemplateProbability float64 `json:"templateProbability"`
 
 	// Examples are concrete path-segment values observed for a dynamic segment.
 	// Empty for static segments. Learning keeps up to 5 examples.

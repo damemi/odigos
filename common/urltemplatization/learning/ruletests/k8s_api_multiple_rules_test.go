@@ -98,17 +98,17 @@ func TestK8sAPIMultipleRuleKinds(t *testing.T) {
 		{typ: learning.SegmentTypeStatic, name: "api"},
 		{typ: learning.SegmentTypeStatic, name: "v1"},
 		{typ: learning.SegmentTypeStatic, name: "namespaces"},
-		{typ: learning.SegmentTypeTemplate, name: "id", certainty: learning.RuleCertaintyHigh},
+		{typ: learning.SegmentTypeTemplate, name: "id"},
 		{typ: learning.SegmentTypeStatic, name: "pods"},
-		{typ: learning.SegmentTypeTemplate, name: "id", certainty: learning.RuleCertaintyHigh},
+		{typ: learning.SegmentTypeTemplate, name: "id"},
 	})
 	assertSegments(t, byTemplate["/api/v1/namespaces/{id}/pods/{id}/log"].Segments, []wantSegment{
 		{typ: learning.SegmentTypeStatic, name: "api"},
 		{typ: learning.SegmentTypeStatic, name: "v1"},
 		{typ: learning.SegmentTypeStatic, name: "namespaces"},
-		{typ: learning.SegmentTypeTemplate, name: "id", certainty: learning.RuleCertaintyHigh},
+		{typ: learning.SegmentTypeTemplate, name: "id"},
 		{typ: learning.SegmentTypeStatic, name: "pods"},
-		{typ: learning.SegmentTypeTemplate, name: "id", certainty: learning.RuleCertaintyHigh},
+		{typ: learning.SegmentTypeTemplate, name: "id"},
 		{typ: learning.SegmentTypeStatic, name: "log"},
 	})
 	assertSegments(t, byTemplate["/apis/apps/v1/namespaces/{id}/deployments/{id}"].Segments, []wantSegment{
@@ -116,15 +116,15 @@ func TestK8sAPIMultipleRuleKinds(t *testing.T) {
 		{typ: learning.SegmentTypeStatic, name: "apps"},
 		{typ: learning.SegmentTypeStatic, name: "v1"},
 		{typ: learning.SegmentTypeStatic, name: "namespaces"},
-		{typ: learning.SegmentTypeTemplate, name: "id", certainty: learning.RuleCertaintyHigh},
+		{typ: learning.SegmentTypeTemplate, name: "id"},
 		{typ: learning.SegmentTypeStatic, name: "deployments"},
-		{typ: learning.SegmentTypeTemplate, name: "id", certainty: learning.RuleCertaintyHigh},
+		{typ: learning.SegmentTypeTemplate, name: "id"},
 	})
 	assertSegments(t, byTemplate["/apis/rbac.authorization.k8s.io/v1/clusterroles/*"].Segments, []wantSegment{
 		{typ: learning.SegmentTypeStatic, name: "apis"},
 		{typ: learning.SegmentTypeStatic, name: "rbac.authorization.k8s.io"},
 		{typ: learning.SegmentTypeStatic, name: "v1"},
 		{typ: learning.SegmentTypeStatic, name: "clusterroles"},
-		{typ: learning.SegmentTypeWildcard, certainty: learning.RuleCertaintyModerate},
+		{typ: learning.SegmentTypeWildcard},
 	})
 }

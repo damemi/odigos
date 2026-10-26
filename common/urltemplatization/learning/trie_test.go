@@ -1,6 +1,7 @@
 package learning
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"testing"
@@ -32,8 +33,8 @@ func TestBuildPathTrie(t *testing.T) {
 	if one == nil || !one.Terminal {
 		t.Fatal("expected /users/1 to be terminal")
 	}
-	if one.TerminalObservationCount != 10 {
-		t.Fatalf("/users/1 obs=%d, want 10", one.TerminalObservationCount)
+	if one.TerminalPathCount != 1 || one.TerminalObservationCount != 10 {
+		t.Fatalf("/users/1 paths=%d obs=%d, want 1 and 10", one.TerminalPathCount, one.TerminalObservationCount)
 	}
 	if one.TotalObservations != 13 {
 		t.Fatalf("/users/1 totalObservations=%d, want 13", one.TotalObservations)
@@ -69,7 +70,7 @@ func TestTerminalRuleCopiesExamplePaths(t *testing.T) {
 			"/users/3": nil,
 			"/users/8": nil,
 		},
-	}, []Segment{staticSegment("users")}, resolvedLearningParams{minObservationsForRule: 100})
+	}, []Segment{staticSegment("users", 0)}, resolvedLearningParams{minObservationsForRule: 100})
 	if !ok {
 		t.Fatal("expected a terminal rule")
 	}
@@ -90,6 +91,9 @@ func TestInsertStoresTerminalExamplePath(t *testing.T) {
 		t.Fatalf("users examples=%v, want none", users.TerminalExamplePaths)
 	}
 	one := users.Children["1"]
+	if one.TerminalPathCount != 1 || one.TerminalObservationCount != 14 {
+		t.Fatalf("/users/1 paths=%d obs=%d, want 1 and 14", one.TerminalPathCount, one.TerminalObservationCount)
+	}
 	if got, want := one.TerminalExamplePaths, (examplePaths{"/users/1": nil}); !reflect.DeepEqual(got, want) {
 		t.Fatalf("/users/1 examples=%v, want %v", got, want)
 	}
@@ -117,6 +121,9 @@ func TestMergeChildrenTrieBalancesTerminalExamplePaths(t *testing.T) {
 		"/users/4": nil,
 		"/users/5": nil,
 	}
+	if merged.TerminalPathCount != 8 || merged.TerminalObservationCount != 8 {
+		t.Fatalf("merged paths=%d obs=%d, want 8 and 8", merged.TerminalPathCount, merged.TerminalObservationCount)
+	}
 	if !reflect.DeepEqual(merged.TerminalExamplePaths, wantTerminal) {
 		t.Fatalf("terminal examples=%v, want %v", merged.TerminalExamplePaths, wantTerminal)
 	}
@@ -134,6 +141,100 @@ func TestMergeChildrenTrieBalancesTerminalExamplePaths(t *testing.T) {
 	}
 	if profile := merged.Children["profile"]; profile == nil || !reflect.DeepEqual(profile.TerminalExamplePaths, examplePaths{"/users/9/profile": nil}) {
 		t.Fatalf("profile examples=%v, want [/users/9/profile]", profile.TerminalExamplePaths)
+	}
+}
+
+func TestMergeTerminalPathCountSumsDistinctPathsAndObservations(t *testing.T) {
+	trie := NewPathTrie()
+	trie.Insert("/foo/bar", 10)
+	trie.Insert("/foo/baz", 50)
+
+	foo := trie.Root.Children["foo"]
+	merged := mergeChildrenTrie(sortedChildList(foo), "id")
+	if merged.TerminalPathCount != 2 || merged.TerminalObservationCount != 60 {
+		t.Fatalf("merged paths=%d obs=%d, want 2 and 60", merged.TerminalPathCount, merged.TerminalObservationCount)
+	}
+
+	rule, ok := terminalRule(merged, []Segment{
+		staticSegment("foo", 0),
+		{Type: SegmentTypeTemplate, Name: "id"},
+	}, resolvedLearningParams{})
+	if !ok {
+		t.Fatal("expected a terminal rule")
+	}
+	want := `Learned the template /foo/{id} from live traffic, based on 60 requests from 2 different URLs`
+	if rule.Reason != want {
+		t.Fatalf("reason=%q, want %q", rule.Reason, want)
+	}
+}
+
+func TestAnnotateDynamicReasonIdentifiesRepeatedWildcards(t *testing.T) {
+	segments := []Segment{
+		staticSegment("api", 0),
+		staticSegment("v1", 0),
+		{Type: SegmentTypeWildcard},
+		{Type: SegmentTypeWildcard},
+		staticSegment("pods", 0),
+	}
+	reason := annotateDynamicReason("learned", segments, 3, 9)
+	reason = annotateDynamicReason(reason, segments, 2, 14)
+	want := `learned; 9 distinct values found for "*" in "/api/v1/*/*" (0% probability of being a template) and merged to the same wildcard segment; 14 distinct values found for "*" in "/api/v1/*" (0% probability of being a template) and merged to the same wildcard segment`
+	if reason != want {
+		t.Fatalf("reason=%q, want %q", reason, want)
+	}
+}
+
+func TestAnnotateDynamicReasonLeavesSingleWildcardUnqualified(t *testing.T) {
+	segments := []Segment{
+		staticSegment("api", 0),
+		staticSegment("v1", 0),
+		{Type: SegmentTypeWildcard},
+	}
+	got := annotateDynamicReason("learned", segments, 2, 14)
+	want := `learned; 14 distinct values found for "*" (0% probability of being a template) and merged to the same wildcard segment`
+	if got != want {
+		t.Fatalf("reason=%q, want %q", got, want)
+	}
+}
+
+func TestLearnedSegmentsRecordTemplateProbability(t *testing.T) {
+	trie := BuildPathTrie(map[string]string{
+		"/users/101": "40",
+		"/users/202": "40",
+		"/users/303": "40",
+	})
+	rules := FindLiveTrafficLearningRules(trie, LiveTrafficLearningParams{})
+	if len(rules) != 1 || len(rules[0].Segments) != 2 {
+		t.Fatalf("rules=%+v, want one /users/{id} rule", rules)
+	}
+	users := trie.Root.Children["users"]
+	if math.Abs(rules[0].Segments[0].TemplateProbability-users.TemplateProbability) > 1e-12 {
+		t.Fatalf("users probability=%v, want %v", rules[0].Segments[0].TemplateProbability, users.TemplateProbability)
+	}
+	merged := mergeChildrenTrie(sortedChildList(users), "id")
+	if math.Abs(rules[0].Segments[1].TemplateProbability-merged.TemplateProbability) > 1e-12 {
+		t.Fatalf("{id} probability=%v, want %v", rules[0].Segments[1].TemplateProbability, merged.TemplateProbability)
+	}
+}
+
+func TestRecurseEachMentionsStaticChoice(t *testing.T) {
+	trie := BuildPathTrie(map[string]string{
+		"/a/x": "101",
+		"/a/y": "101",
+		"/a/z": "101",
+	})
+	rules := FindLiveTrafficLearningRules(trie, LiveTrafficLearningParams{})
+	got := map[string]string{}
+	for _, rule := range rules {
+		got[rule.Template] = rule.Reason
+	}
+	a := trie.Root.Children["a"]
+	want := fmt.Sprintf(
+		`Learned the template /a/x from live traffic, based on 101 requests from 1 URL. Static segment "x" was kept because only 2 other values were observed (%s), and a rule was created for each option`,
+		templateProbabilityClause(a.Children["x"].TemplateProbability),
+	)
+	if got["/a/x"] != want {
+		t.Fatalf("reason=%q, want %q", got["/a/x"], want)
 	}
 }
 

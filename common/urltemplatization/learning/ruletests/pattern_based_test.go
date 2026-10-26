@@ -15,7 +15,7 @@ func TestNumericChildrenTemplatedAsID(t *testing.T) {
 	assertTemplates(t, templatesOf(rules), []string{"/users/{id}"})
 	assertSegments(t, rules[0].Segments, []wantSegment{
 		{typ: learning.SegmentTypeStatic, name: "users"},
-		{typ: learning.SegmentTypeTemplate, name: "id", certainty: learning.RuleCertaintyHigh},
+		{typ: learning.SegmentTypeTemplate, name: "id"},
 	})
 }
 
@@ -28,7 +28,7 @@ func TestDateChildrenTemplatedAsDate(t *testing.T) {
 	assertTemplates(t, templatesOf(rules), []string{"/reports/{date}"})
 	assertSegments(t, rules[0].Segments, []wantSegment{
 		{typ: learning.SegmentTypeStatic, name: "reports"},
-		{typ: learning.SegmentTypeTemplate, name: "date", certainty: learning.RuleCertaintyHigh},
+		{typ: learning.SegmentTypeTemplate, name: "date"},
 	})
 }
 
@@ -39,7 +39,7 @@ func TestSinglePatternMatchingChildTemplatedAsID(t *testing.T) {
 	assertTemplates(t, templatesOf(rules), []string{"/users/{id}"})
 	assertSegments(t, rules[0].Segments, []wantSegment{
 		{typ: learning.SegmentTypeStatic, name: "users"},
-		{typ: learning.SegmentTypeTemplate, name: "id", certainty: learning.RuleCertaintyHigh},
+		{typ: learning.SegmentTypeTemplate, name: "id"},
 	})
 }
 

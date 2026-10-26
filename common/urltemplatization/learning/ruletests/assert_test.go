@@ -29,7 +29,6 @@ func assertTemplates(t *testing.T, got, want []string) {
 type wantSegment struct {
 	typ         learning.SegmentType
 	name        string
-	certainty   learning.RuleCertainty
 	minExamples int
 }
 
@@ -44,15 +43,6 @@ func assertSegments(t *testing.T, got []learning.Segment, want []wantSegment) {
 		}
 		if got[i].Name != want[i].name {
 			t.Fatalf("segments[%d].Name=%q, want %q (full=%+v)", i, got[i].Name, want[i].name, got)
-		}
-		if want[i].typ != learning.SegmentTypeStatic {
-			certainty := want[i].certainty
-			if certainty == "" {
-				certainty = learning.RuleCertaintyHigh
-			}
-			if got[i].Certainty != certainty {
-				t.Fatalf("segments[%d].Certainty=%q, want %q", i, got[i].Certainty, certainty)
-			}
 		}
 		if want[i].minExamples > 0 && len(got[i].Examples) != want[i].minExamples {
 			t.Fatalf("segments[%d].Examples=%d, want %d", i, len(got[i].Examples), want[i].minExamples)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 
 	"github.com/odigos-io/odigos/common/urltemplate"
 )
@@ -18,7 +19,7 @@ const (
 // walkNode. Unset params use package defaults; see LiveTrafficLearningParams.
 //
 // Input:  PathTrie from Redis unmatched-path hashes (path → count), plus params.
-// Output: []LearnedRule (Template, Reason, Segments/certainty).
+// Output: []LearnedRule (Template, Reason, Segments).
 func FindLiveTrafficLearningRules(trie *PathTrie, params LiveTrafficLearningParams) []LearnedRule {
 	if trie == nil || trie.Root == nil {
 		return nil
@@ -27,7 +28,7 @@ func FindLiveTrafficLearningRules(trie *PathTrie, params LiveTrafficLearningPara
 	cfg := params.withDefaults()
 	var rules []LearnedRule
 	for _, entry := range sortedChildList(trie.Root) {
-		segments := []Segment{staticSegment(entry.Segment)}
+		segments := []Segment{staticSegment(entry.Segment, entry.TemplateProbability)}
 		childRules := walkNode(entry, segments, cfg)
 		if len(childRules) > 0 {
 			rules = append(rules, childRules...)
@@ -86,7 +87,7 @@ func walkChildren(node *PathTrieNode, segments []Segment, cfg resolvedLearningPa
 	// #2 Pattern-based templatization: all children match the same id/date/email pattern.
 	patternName, ok := childrenPatternBasedTemplateName(children)
 	if ok {
-		next := appendSegment(segments, SegmentTypeTemplate, patternName, children, RuleCertaintyHigh, cfg.maxTemplatedExamples)
+		next := appendSegment(segments, SegmentTypeTemplate, patternName, children, cfg.maxTemplatedExamples)
 		return walkMergedChildren(children, next, cfg, patternName)
 	}
 
@@ -97,18 +98,24 @@ func walkChildren(node *PathTrieNode, segments []Segment, cfg resolvedLearningPa
 	case n <= bands.wildcardAt:
 		var rules []LearnedRule
 		for _, child := range children {
-			childStaticSegment := appendStaticSegment(segments, child.Segment)
+			childStaticSegment := appendStaticSegment(segments, child)
 			childRules := walkNode(child, childStaticSegment, cfg)
+			if n > 1 {
+				at := len(childStaticSegment) - 1
+				for i := range childRules {
+					childRules[i].Reason = annotateRecurseReason(childRules[i].Reason, childRules[i].Segments, at, n-1)
+				}
+			}
 			rules = append(rules, childRules...)
 		}
 		return rules
 
 	case n < bands.templateAt:
-		next := appendSegment(segments, SegmentTypeWildcard, "", children, RuleCertaintyHigh, cfg.maxTemplatedExamples)
+		next := appendSegment(segments, SegmentTypeWildcard, "", children, cfg.maxTemplatedExamples)
 		return walkMergedChildren(children, next, cfg, wildcardSegmentName)
 
 	default:
-		next := appendSegment(segments, SegmentTypeTemplate, templatedSegmentName, children, RuleCertaintyHigh, cfg.maxTemplatedExamples)
+		next := appendSegment(segments, SegmentTypeTemplate, templatedSegmentName, children, cfg.maxTemplatedExamples)
 		return walkMergedChildren(children, next, cfg, templatedSegmentName)
 	}
 }
@@ -143,7 +150,8 @@ func cardinalityThresholdsFor(children []*PathTrieNode, cfg resolvedLearningPara
 
 // walkMergedChildren collapses siblings into one dynamic segment and continues
 // learning under that merged node. segments must already include the new segment.
-// segmentName is used for trie merge and reason text ("*", "id", "date", …).
+// segmentName is the merged trie segment ("*", "id", "date", …). The reason
+// clause is taken from the segment already appended to segments.
 func walkMergedChildren(
 	children []*PathTrieNode,
 	segments []Segment,
@@ -151,9 +159,10 @@ func walkMergedChildren(
 	segmentName string,
 ) []LearnedRule {
 	merged := mergeChildrenTrie(children, segmentName)
+	segments[len(segments)-1].TemplateProbability = merged.TemplateProbability
 	rules := walkNode(merged, segments, cfg)
 	for i := range rules {
-		rules[i].Reason = annotateDynamicReason(rules[i].Reason, segmentName, len(children))
+		rules[i].Reason = annotateDynamicReason(rules[i].Reason, rules[i].Segments, len(segments)-1, len(children))
 	}
 	return rules
 }
@@ -177,14 +186,77 @@ func childrenPatternBasedTemplateName(children []*PathTrieNode) (string, bool) {
 	return first, true
 }
 
-func annotateDynamicReason(reason, segmentName string, childCount int) string {
-	kind := "templated segment"
-	display := "{" + segmentName + "}"
-	if segmentName == wildcardSegmentName {
-		kind = "wildcard segment"
-		display = segmentName
+// annotateDynamicReason appends how many distinct values were merged into one
+// wildcard or template parameter. at is the index of that segment in the rule.
+// When the same wildcard or {name} appears more than once, the path through
+// this occurrence is included so the clause identifies which one it is.
+func annotateDynamicReason(reason string, ruleSegments []Segment, at int, childCount int) string {
+	seg := ruleSegments[at]
+	name := "{" + seg.Name + "}"
+	segmentKind := "template"
+	if seg.Type == SegmentTypeWildcard {
+		name = wildcardSegmentName
+		segmentKind = "wildcard"
 	}
-	return fmt.Sprintf("%s; %s %q from %d distinct child values", reason, kind, display, childCount)
+	where := fmt.Sprintf("%q", name)
+	if repeatedDynamicSegment(ruleSegments, seg) {
+		where = fmt.Sprintf("%q in %q", name, templateFromSegments(ruleSegments[:at+1]))
+	}
+	values := "values"
+	if childCount == 1 {
+		values = "value"
+	}
+	return fmt.Sprintf(
+		"%s; %d distinct %s found for %s (%s) and merged to the same %s segment",
+		reason, childCount, values, where, templateProbabilityClause(seg.TemplateProbability), segmentKind,
+	)
+}
+
+// annotateRecurseReason records that this static value was kept on its own
+// because several sibling values were observed and each received a rule.
+// otherCount is the number of sibling values besides this one.
+func annotateRecurseReason(reason string, ruleSegments []Segment, at int, otherCount int) string {
+	value := ruleSegments[at].Name
+	where := fmt.Sprintf("%q", value)
+	if repeatedStaticSegment(ruleSegments, value) {
+		where = fmt.Sprintf("%q in %q", value, templateFromSegments(ruleSegments[:at+1]))
+	}
+	observed := "other values were"
+	if otherCount == 1 {
+		observed = "other value was"
+	}
+	return fmt.Sprintf(
+		"%s. Static segment %s was kept because only %d %s observed (%s), and a rule was created for each option",
+		reason, where, otherCount, observed, templateProbabilityClause(ruleSegments[at].TemplateProbability),
+	)
+}
+
+// templateProbabilityClause states the model's estimate that this segment is a template.
+func templateProbabilityClause(probability float64) string {
+	text := strconv.FormatFloat(probability*100, 'f', 0, 64)
+	return text + "% probability of being a template"
+}
+
+func repeatedStaticSegment(segments []Segment, value string) bool {
+	n := 0
+	for _, seg := range segments {
+		if seg.Type == SegmentTypeStatic && seg.Name == value {
+			n++
+		}
+	}
+	return n > 1
+}
+
+// repeatedDynamicSegment reports whether seg's wildcard or {name} appears more
+// than once in the rule.
+func repeatedDynamicSegment(segments []Segment, seg Segment) bool {
+	n := 0
+	for _, other := range segments {
+		if other.Type == seg.Type && other.Name == seg.Name {
+			n++
+		}
+	}
+	return n > 1
 }
 
 // appendSegment appends a dynamic Wildcard or Template segment.
@@ -194,7 +266,6 @@ func appendSegment(
 	typ SegmentType,
 	name string,
 	children []*PathTrieNode,
-	certainty RuleCertainty,
 	maxExamples int,
 ) []Segment {
 	examples := make([]string, 0, len(children))
@@ -206,10 +277,9 @@ func appendSegment(
 	out := make([]Segment, len(segments), len(segments)+1)
 	copy(out, segments)
 	out = append(out, Segment{
-		Type:      typ,
-		Name:      name,
-		Certainty: certainty,
-		Examples:  examples,
+		Type:     typ,
+		Name:     name,
+		Examples: examples,
 	})
 	return out
 }

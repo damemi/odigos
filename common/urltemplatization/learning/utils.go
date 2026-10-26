@@ -38,18 +38,18 @@ func sortedChildList(n *PathTrieNode) []*PathTrieNode {
 	return out
 }
 
-func staticSegment(literal string) Segment {
+func staticSegment(literal string, templateProbability float64) Segment {
 	return Segment{
-		Type:      SegmentTypeStatic,
-		Name:      literal,
-		Certainty: RuleCertaintyHigh,
+		Type:                SegmentTypeStatic,
+		Name:                literal,
+		TemplateProbability: templateProbability,
 	}
 }
 
-func appendStaticSegment(segments []Segment, literal string) []Segment {
+func appendStaticSegment(segments []Segment, node *PathTrieNode) []Segment {
 	out := make([]Segment, len(segments), len(segments)+1)
 	copy(out, segments)
-	return append(out, staticSegment(literal))
+	return append(out, staticSegment(node.Segment, node.TemplateProbability))
 }
 
 // templateFromSegments rebuilds the Template path string from the walk's segments
