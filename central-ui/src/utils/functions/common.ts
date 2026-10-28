@@ -4,13 +4,12 @@ import { TagVariants } from '@odigos/ui-kit/components';
 import { Role, type ComputePlatform, type VersionedRemoteFetch } from '@/types';
 import { PlatformType, StatusType } from '@odigos/ui-kit/types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function stripNullFields<T>(obj: T): T {
   if (obj === null || obj === undefined) return obj;
   if (Array.isArray(obj)) return obj.map(stripNullFields) as T;
   if (typeof obj === 'object') {
     const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj as Record<string, any>)) {
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
       if (value !== null && value !== undefined) {
         result[key] = stripNullFields(value);
       }

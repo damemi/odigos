@@ -9,9 +9,9 @@ const load = (file, dependencies = {}) => {
   const js = ts.transpileModule(readFileSync(new URL(file, import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  const module = { exports: {} };
-  new Function('require', 'module', 'exports', js)((id) => dependencies[id] ?? require(id), module, module.exports);
-  return module.exports;
+  const mod = { exports: {} };
+  new Function('require', 'module', 'exports', js)((id) => dependencies[id] ?? require(id), mod, mod.exports);
+  return mod.exports;
 };
 
 const reports = load('../src/graphql/remote/managed-collector.ts');

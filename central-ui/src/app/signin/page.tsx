@@ -90,6 +90,8 @@ export default function Page() {
     if (!provider?.defaultLoginType) return;
 
     autoSsoStarted.current = true;
+    // Starting the resumed SSO flow on mount is the point of this effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void handleProviderClick(providerId, provider.defaultLoginType);
   }, [systemConfigLoading, authCode]);
 

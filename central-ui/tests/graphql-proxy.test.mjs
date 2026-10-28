@@ -5,9 +5,9 @@ import ts from 'typescript';
 
 const source = readFileSync(new URL('../src/lib/graphql-proxy.ts', import.meta.url), 'utf8');
 const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-const module = { exports: {} };
-new Function('module', 'exports', js)(module, module.exports);
-const { proxyGraphQL, GRAPHQL_PROXY_TIMEOUT_MS } = module.exports;
+const cjsModule = { exports: {} };
+new Function('module', 'exports', js)(cjsModule, cjsModule.exports);
+const { proxyGraphQL, GRAPHQL_PROXY_TIMEOUT_MS } = cjsModule.exports;
 const request = () => new Request('http://localhost/graphql', { method: 'POST', headers: { authorization: 'Bearer test-token', 'content-type': 'application/json' }, body: JSON.stringify({ query: 'mutation CreateCloudConnector { createCloudConnector { created } }' }) });
 
 test('proxy preserves backend GraphQL diagnostics, status and authentication', async () => {

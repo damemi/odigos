@@ -19,9 +19,9 @@ const load = (file, dependencies = {}) => {
   const js = ts.transpileModule(readFileSync(new URL(file, import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  const module = { exports: {} };
-  new Function('require', 'module', 'exports', js)((id) => dependencies[id] ?? require(id), module, module.exports);
-  return module.exports;
+  const cjsModule = { exports: {} };
+  new Function('require', 'module', 'exports', js)((id) => dependencies[id] ?? require(id), cjsModule, cjsModule.exports);
+  return cjsModule.exports;
 };
 const { getVersionedQuery } = load('../src/utils/functions/common.ts', {
   '@odigos/ui-kit/functions': { trimVersion },

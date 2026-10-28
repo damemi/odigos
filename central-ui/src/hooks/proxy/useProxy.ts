@@ -46,6 +46,8 @@ export const useProxy = (): UseProxy => {
   const [proxyStoreHydrated, setProxyStoreHydrated] = useState(() => useProxyStore.persist.hasHydrated());
   useEffect(() => {
     const unsub = useProxyStore.persist.onFinishHydration(() => setProxyStoreHydrated(true));
+    // Re-check after subscribing: hydration may have finished between the initial render and this effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProxyStoreHydrated(useProxyStore.persist.hasHydrated());
     return unsub;
   }, []);
