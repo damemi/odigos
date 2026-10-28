@@ -3,7 +3,7 @@ import { useUserStore } from '@/store';
 import type { FetchedConfig } from '@odigos/ui-kit/types';
 import { useApiQuery } from '@odigos/ui-kit/contexts';
 
-export const useConfig = (): { config: FetchedConfig; isReadonly: boolean } => {
+export const useConfig = (): { config: Partial<FetchedConfig> | undefined; isReadonly: boolean } => {
   const { user, canEdit } = useUserStore();
   const { data: config } = useApiQuery('GET_CONFIG');
 

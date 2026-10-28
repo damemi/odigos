@@ -13,17 +13,9 @@ export const GET_CONFIG: VersionedRemoteFetch = {
     }
   }`,
   },
-  [PlatformType.Vm]: {
-    'v0.1': `
-  query GetConfig {
-    config {
-      tier
-      readonly
-      installationMethod
-      installationStatus
-    }
-  }`,
-  },
+  // No VM bucket: on agents-api `config` is a JSON scalar, so a sub-selection fails.
+  // VM agents resolve `GetConfigDocument` from the dialect registry instead (see the
+  // VmSpec on GET_CONFIG in odigos-api-adapter).
 };
 
 export const GET_EFFECTIVE_CONFIG: VersionedRemoteFetch = {

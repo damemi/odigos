@@ -699,6 +699,23 @@ const wrapRemote = <TData, TVars>(versioned: VersionedRemoteFetch, extract?: (en
   };
 };
 
+// `central.ui_mode: readonly` in a VM agent's effective config locks it for non-editors.
+const isVmReadonlyConfig = (config: unknown): boolean => {
+  if (!config || typeof config !== 'object') return false;
+  const central = (config as { central?: unknown }).central;
+  if (!central || typeof central !== 'object') return false;
+  return (central as { ui_mode?: unknown }).ui_mode === 'readonly';
+};
+
+// The kit's domain hooks short-circuit mutations on `ctx.isReadonly`, but a few
+// mutations (profiling enable / cache clear) call the operation directly. The
+// kit runner refuses an op whose `canRun` is false, so gating it here keeps a
+// read-only agent from being written to even if a control is still clickable.
+const blockWhenReadonly = <TData, TVars>(op: Operation<TData, TVars>): Operation<TData, TVars> => ({
+  ...op,
+  canRun: (ctx) => !ctx.isReadonly && (op.canRun ? op.canRun(ctx) : true),
+});
+
 // ---------------------------------------------------------------------------
 // Legacy (< v1.20) proxy support.
 //
@@ -1353,7 +1370,13 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
     }),
 
     // config
-    GET_CONFIG: wrapVersioned<FetchedConfig, undefined>(GET_CONFIG, (d) => (d as { config?: FetchedConfig })?.config),
+    // VM agents have no typed config: read `central.ui_mode` from the effective agent config
+    // (JSON). Anything missing or unexpected, as on older agents, is not read-only.
+    GET_CONFIG: wrapVersioned<FetchedConfig, undefined>(GET_CONFIG, (d) => (d as { config?: FetchedConfig })?.config, undefined, {
+      select: (d) => d.GetConfigDocument,
+      // The slot is typed `FetchedConfig`, but VM agents only report `readonly`; the sole reader (`useConfig`) types it `Partial` and ConfigSync optional-chains every other field.
+      transformResult: (data) => ({ readonly: isVmReadonlyConfig((data as { config?: unknown } | null | undefined)?.config) }) as FetchedConfig,
+    }),
     // Wire returns `{ effectiveConfig: { … } }`; the kit's slot is the
     // bare `EffectiveConfig`. Walk the envelope here.
     GET_EFFECTIVE_CONFIG: wrapVersioned<EffectiveConfig, { id?: string }>(
@@ -1431,15 +1454,12 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
         transformResult: (data) => mapVmSourceProfile(data),
       },
     ),
-    ENABLE_SOURCE_PROFILING: wrapVersioned<EnableProfilingResult, SourceProfilingVars>(
-      ENABLE_SOURCE_PROFILING,
-      (d) => (d as { enableSourceProfiling?: EnableProfilingResult })?.enableSourceProfiling,
-      undefined,
-      {
+    ENABLE_SOURCE_PROFILING: blockWhenReadonly(
+      wrapVersioned<EnableProfilingResult, SourceProfilingVars>(ENABLE_SOURCE_PROFILING, (d) => (d as { enableSourceProfiling?: EnableProfilingResult })?.enableSourceProfiling, undefined, {
         select: (d) => d.EnableSourceProfilingDocument,
         transformVariables: (vars) => ({ service: vmProfilingService(vars) }),
         transformResult: (data) => mapVmEnableSourceProfiling(data),
-      },
+      }),
     ),
     // VM agents-api hot functions (secondary; flame path above is the primary Central UI).
     GET_PROFILE_HOT_FUNCTIONS: wrapVersioned<HotFunctionsResult, GetProfileHotFunctionsVars | undefined>(GET_PROFILE_HOT_FUNCTIONS, undefined, undefined, {
@@ -1447,10 +1467,12 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
       transformVariables: (vars) => ({ topN: vars?.topN ?? null }),
       transformResult: (data) => mapVmHotFunctions(data),
     }),
-    CLEAR_PROFILE_CACHE: wrapVersioned<boolean, undefined>(CLEAR_PROFILE_CACHE, undefined, undefined, {
-      select: (d) => d.ClearProfileCacheDocument ?? d.ClearProfileCacheV2Document,
-      transformResult: (data) => mapVmClearProfileCache(data),
-    }),
+    CLEAR_PROFILE_CACHE: blockWhenReadonly(
+      wrapVersioned<boolean, undefined>(CLEAR_PROFILE_CACHE, undefined, undefined, {
+        select: (d) => d.ClearProfileCacheDocument ?? d.ClearProfileCacheV2Document,
+        transformResult: (data) => mapVmClearProfileCache(data),
+      }),
+    ),
 
     // pipeline collectors — bare-shape slots. The backend's GraphQL
     // field names predate the kit's normalization: the gateway is
