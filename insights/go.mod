@@ -8,7 +8,7 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/google/uuid v1.6.0
 	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261025134630-23a4033ec76e
+	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261028115437-24b2dbbc28c5
 	github.com/prometheus/client_golang v1.23.2
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/proto/otlp v1.5.0
