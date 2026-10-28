@@ -93,8 +93,8 @@ auth:
     - id: assume-role
       displayName: Assume IAM role
       description: >-
-        Assumes a cross-account role after establishing base credentials via workload identity or
-        static keys.
+        Provision a scoped IAM role and caller credentials permitted to assume it.
+        Enter the caller credentials, Role ARN and External ID below.
       baseMethods:
         - workload-identity
         - static-keys
@@ -104,20 +104,20 @@ auth:
           componentType: input
           required: true
           showInUi: true
-          tooltip: ARN of the cross-account role Odigos assumes.
+          tooltip: ARN of the IAM role the connector assumes in the selected AWS account.
           envVar: ODIGOS_AWS_ROLE_ARN
         # Optional at the protocol level (a trust policy without an ExternalId condition is assumable
         # without one), but every create-role artifact below builds a trust policy that REQUIRES it.
         # Set this before copying a setup snippet: a trust policy generated with an empty external id
         # can never be satisfied, because the connector omits ExternalId entirely when the value is
-        # blank — the role would be permanently unassumable.
+        # blank — the role cannot be assumed until its trust policy and supplied External ID agree.
         - name: externalId
           displayName: External ID
           componentType: input
           required: false
           showInUi: true
           tooltip: >-
-            A secret string Odigos presents when assuming the role; the trust policy in the setup
+            A customer-specific identifier Odigos presents when assuming the role; the trust policy in the setup
             snippets enforces it. Strongly recommended — set it before copying the snippet, since a
             role created with a blank external ID cannot be assumed.
           envVar: ODIGOS_AWS_EXTERNAL_ID
@@ -519,6 +519,8 @@ collectors:
           - "Run `LICENSE_SECRET_ARN=$(aws secretsmanager describe-secret --region {{.Region}} --secret-id {{quote .LicenseSecretName}} --query ARN --output text) && aws cloudformation deploy --region {{.Region}} --stack-name odigos-collector-{{.ConnectorName}}-{{.Region}} --template-file odigos-collector-regional.yaml --parameter-overrides LicenseSecretArn=\"${LICENSE_SECRET_ARN}\"` after creating the licence secret. All other required stack parameters have defaults from this Collector configuration."
           - "If Collector scaling is automatic, pre-create the ECS Application Auto Scaling service-linked role or give the stack principal `iam:CreateServiceLinkedRole` for its first use in this account."
           - "Use the existing cluster, /odigos/collector/{{.ConnectorName}} log group, security group and subnets in {{.Network}}. The connector discovers the NLB endpoint; do not set endpointOverride."
+          - "After deployment, verify the ECS service with `aws ecs describe-services --region {{.Region}} --cluster {{.ClusterRef}} --services odigos-collector-{{.Region}} --query 'services[].{Status:status,Desired:desiredCount,Running:runningCount,Pending:pendingCount}' --output table`, then wait for the Collector to report Healthy in Odigos."
+          - "When adding a routing destination, replace <WORKLOAD_SECURITY_GROUP_ID> with the sender group and allow ingress using `aws ec2 authorize-security-group-ingress --region {{.Region}} --group-id {{.SecurityGroupID}} --protocol tcp --port 4317 --source-group \"<WORKLOAD_SECURITY_GROUP_ID>\"` and `aws ec2 authorize-security-group-ingress --region {{.Region}} --group-id {{.SecurityGroupID}} --protocol tcp --port 4318 --source-group \"<WORKLOAD_SECURITY_GROUP_ID>\"`. Repeat for each sender group; an existing identical rule needs no change. Preserve your workload egress, routes and subnet ACLs."
         template: |
           AWSTemplateFormatVersion: '2010-09-09'
           Description: Customer-owned Odigos regional Collector for {{.Region}}
@@ -645,6 +647,8 @@ collectors:
           - "Run with a principal allowed to create ECS, NLB and autoscaling resources. The connector's manual-mode AWS permissions remain read-only."
           - "If Collector scaling is automatic, pre-create the ECS Application Auto Scaling service-linked role or give this provisioning principal `iam:CreateServiceLinkedRole` for its first use in this account."
           - "Keep the identity and odigos-iac tags; do not add odigos-managed. Re-running this script reuses the named load balancer, target groups, listeners and ECS service, then updates the service to the new task definition."
+          - "After deployment, verify the ECS service with `aws ecs describe-services --region {{.Region}} --cluster {{.ClusterRef}} --services odigos-collector-{{.Region}} --query 'services[].{Status:status,Desired:desiredCount,Running:runningCount,Pending:pendingCount}' --output table`, then wait for the Collector to report Healthy in Odigos."
+          - "When adding a routing destination, replace <WORKLOAD_SECURITY_GROUP_ID> with the sender group and allow ingress using `aws ec2 authorize-security-group-ingress --region {{.Region}} --group-id {{.SecurityGroupID}} --protocol tcp --port 4317 --source-group \"<WORKLOAD_SECURITY_GROUP_ID>\"` and `aws ec2 authorize-security-group-ingress --region {{.Region}} --group-id {{.SecurityGroupID}} --protocol tcp --port 4318 --source-group \"<WORKLOAD_SECURITY_GROUP_ID>\"`. Repeat for each sender group; an existing identical rule needs no change. Preserve your workload egress, routes and subnet ACLs."
         template: |-
           #!/usr/bin/env bash
           (
@@ -768,16 +772,24 @@ collectors:
 
       - id: aws-fargate-collector-terraform
         variant: "terraform"
-        variantLabel: "Terraform"
+        variantLabel: "Terraform / OpenTofu"
         title: "Deploy the regional Collector"
         description: "Apply this customer-owned ECS Fargate service in {{.Region}}."
         format: "hcl"
         steps:
+          - "Save the configuration as `odigos-collector.tf` in a dedicated regional workspace. It selects AWS region {{.Region}} and uses your existing provider authentication."
+          - "Run `terraform init`, `terraform plan -out=odigos-collector.tfplan`, then `terraform apply odigos-collector.tfplan` after reviewing the plan. For OpenTofu use `tofu init`, `tofu plan -out=odigos-collector.tfplan`, and `tofu apply odigos-collector.tfplan`."
+          - "Read the deployed endpoints with `terraform output -raw otlp_grpc_endpoint` and `terraform output -raw otlp_http_endpoint` (OpenTofu: `tofu output -raw otlp_grpc_endpoint` and `tofu output -raw otlp_http_endpoint`). Odigos discovers them from the tagged load balancer; do not paste these endpoints into the OpAMP credential field."
           - "Apply with your own IaC principal. The connector observes the finished Collector using its configured AWS credentials."
           - "Create the credential secret first and put the one-time Bearer header returned by the authenticated admin API into it. The licence secret must contain JSON with username odigos and password equal to your on-prem token."
           - "Set the log group to /odigos/collector/{{.ConnectorName}} and place both secrets under odigos/collector/{{.ConnectorName}}/. The connector discovers the NLB endpoint; do not set endpointOverride. Keep odigos-iac and the identity tags; do not add odigos-managed."
           - "Use aws_appautoscaling_target and target tracking policies if collector.regions.{{.Region}}.scaling.mode is auto; otherwise set desired_count to its configured manual value."
+          - "After deployment, verify the ECS service with `aws ecs describe-services --region {{.Region}} --cluster {{.ClusterRef}} --services odigos-collector-{{.Region}} --query 'services[].{Status:status,Desired:desiredCount,Running:runningCount,Pending:pendingCount}' --output table`, then wait for the Collector to report Healthy in Odigos."
+          - "When adding a routing destination, replace <WORKLOAD_SECURITY_GROUP_ID> with the sender group and allow ingress using `aws ec2 authorize-security-group-ingress --region {{.Region}} --group-id {{.SecurityGroupID}} --protocol tcp --port 4317 --source-group \"<WORKLOAD_SECURITY_GROUP_ID>\"` and `aws ec2 authorize-security-group-ingress --region {{.Region}} --group-id {{.SecurityGroupID}} --protocol tcp --port 4318 --source-group \"<WORKLOAD_SECURITY_GROUP_ID>\"`. Repeat for each sender group; an existing identical rule needs no change. Preserve your workload egress, routes and subnet ACLs."
         template: |-
+          provider "aws" {
+            region = {{quote .Region}}
+          }
           variable "cluster_arn" {
             type = string
             default = {{quote .ClusterRef}}
@@ -982,20 +994,13 @@ collectors:
 setup:
   subtitle: Apply the selected IAM policy in your AWS account.
   artifacts:
-    # KNOWN GAP — unscoped iam:PassRole. Fargate instrumentation needs iam:PassRole, and the comment on
-    # that permission (and test-connection's remediation text) both say to scope it with
-    # iam:PassedToService=ecs-tasks.amazonaws.com. This template cannot express that: the renderer
-    # expands {{permissions}} into one Action list, with no way to split a permission into its own
-    # statement or attach a per-permission Condition. Fixing it properly needs a renderer/model change
-    # (e.g. permission groups, each with its own Resource/Condition) in ui-kit + spec. Until then the
-    # generated policy grants iam:PassRole on "*", which is broader than what Odigos actually needs —
-    # call this out for customers who review the policy before applying it.
+    # PassRole is limited by explicit resource and service denies in every policy format.
     - id: policy-preview
       section: permissions
       title: Policy preview
       description: >-
         The IAM policy Odigos needs for the selected access level. The AWS CLI and IAM-user setup
-        methods expect this saved as odigos-policy.json.
+        methods embed this policy in their setup script. PassRole is restricted to the explicitly supplied task/execution role ARNs and ECS tasks service.
       format: json
       itemTemplate: '"{{permission}}"'
       itemSeparator: ",\n"
@@ -1010,6 +1015,25 @@ setup:
                 {{permissions}}
               ],
               "Resource": "*"
+            },
+            {
+              "Sid": "RestrictPassRoleService",
+              "Effect": "Deny",
+              "Action": "iam:PassRole",
+              "Resource": "*",
+              "Condition": { "StringNotEquals": { "iam:PassedToService": "ecs-tasks.amazonaws.com" } }
+            },
+            {
+              "Sid": "RestrictPassRoleResources",
+              "Effect": "Deny",
+              "Action": "iam:PassRole",
+              "NotResource": {{passRoleResources}}
+            },
+            {
+              "Sid": "RestrictApplicationSignalsRoles",
+              "Effect": "Deny",
+              "Action": "iam:AttachRolePolicy",
+              "NotResource": {{applicationSignalsRoleResources}}
             },
             {
               "Sid": "DenyUnrelatedPolicyAttachments",
@@ -1048,8 +1072,8 @@ setup:
       format: yaml
       steps:
         - Save the template below as `odigos-collector-execution-role.yaml`.
-        - Deploy it once in the Collector account with `ConnectorName` set to the exact connector name used in Odigos. IAM roles are account-wide; do not deploy a second stack for another region.
-        - Copy the `ExecutionRoleArn` stack output into the task execution role ARN field below before continuing.
+        - 'Run `aws cloudformation deploy --stack-name odigos-collector-{{connectorName}}-execution --template-file odigos-collector-execution-role.yaml --capabilities CAPABILITY_IAM --parameter-overrides ConnectorName={{connectorName}}` once in the Collector account. IAM roles are account-wide; reuse the role in other regions.'
+        - 'In the same account and stack region, run `aws cloudformation describe-stacks --stack-name odigos-collector-{{connectorName}}-execution --query "Stacks[0].Outputs[?OutputKey==''ExecutionRoleArn''].OutputValue | [0]" --output text` and paste the output into Task execution role ARN. You can also copy ExecutionRoleArn from the stack Outputs tab.'
         - >-
           On the connector identity in automatic mode, allow `iam:PassRole` only for the output ARN and add the condition
           `iam:PassedToService = ecs-tasks.amazonaws.com`. Do not grant `CreateRole`, `PutRolePolicy`,
@@ -1193,8 +1217,8 @@ setup:
       format: yaml
       steps:
         - Save the template below as `odigos-collector-execution-role.yaml`.
-        - Deploy it once in the Collector account with `ConnectorName` set to this connector's exact name. IAM roles are account-wide; do not deploy a second stack for another region.
-        - Copy the `ExecutionRoleArn` stack output into the task execution role ARN field below before continuing.
+        - 'Run `aws cloudformation deploy --stack-name odigos-collector-{{connectorName}}-execution --template-file odigos-collector-execution-role.yaml --capabilities CAPABILITY_IAM --parameter-overrides ConnectorName={{connectorName}}` once in the Collector account. IAM roles are account-wide; reuse the role in other regions.'
+        - 'In the same account and stack region, run `aws cloudformation describe-stacks --stack-name odigos-collector-{{connectorName}}-execution --query "Stacks[0].Outputs[?OutputKey==''ExecutionRoleArn''].OutputValue | [0]" --output text` and paste the output into Task execution role ARN. You can also copy ExecutionRoleArn from the stack Outputs tab.'
       template: *collector-execution-role
 
     - id: collector-manual-region
@@ -1269,32 +1293,54 @@ setup:
 
     - id: collector-manual-security-group
       section: collector:aws.fargate-collector:manual
-      title: Create the Collector security group
-      description: Create the group in the chosen VPC. Allow 13133 from itself for target health and outbound task traffic.
-      format: text
-      template: |-
-        Create a security group in {{networkId}}.
-        Allow TCP 13133 from the Collector group itself.
-        Permit outbound registry, Secrets Manager, OpAMP and exporter traffic.
+      title: Create the Collector security group and log group
+      description: Create or reuse the dedicated group and scoped log group. The NLB and tasks share this group; allow self traffic on OTLP 4317/4318 and health port 13133. Add workload-source ingress when routing telemetry after deployment.
+      format: shell
+      steps:
+        - Run this complete block in the selected account and region. It reuses the named group and log group, adds missing self-ingress rules and sets log retention to 30 days.
+        - Copy the printed SecurityGroupId for the later security group field. Application VPCs, subnets and outbound routes must already exist.
+      template: &collector-prerequisites-cli |-
+        (
+        REGION={{region}}
+        VPC_ID={{networkId}}
+        SG_NAME=odigos-collector-{{connectorName}}
+        LOG_GROUP=/odigos/collector/{{connectorName}}
+        COLLECTOR_SG=$(aws ec2 describe-security-groups --region "$REGION" --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=$SG_NAME" --query 'SecurityGroups[0].GroupId' --output text) || exit 1
+        case "$COLLECTOR_SG" in
+          ''|None) COLLECTOR_SG=$(aws ec2 create-security-group --region "$REGION" --vpc-id "$VPC_ID" --group-name "$SG_NAME" --description 'Customer-owned Odigos Collector' --query GroupId --output text) || exit 1 ;;
+        esac
+        for PORT in 4317 4318 13133; do
+          SELF_GROUPS=$(aws ec2 describe-security-groups --region "$REGION" --group-ids "$COLLECTOR_SG" --query "SecurityGroups[0].IpPermissions[?IpProtocol=='tcp' && FromPort==\`$PORT\` && ToPort==\`$PORT\`].UserIdGroupPairs[].GroupId" --output text) || exit 1
+          if ! printf '%s\n' "$SELF_GROUPS" | tr '\t' '\n' | grep -Fxq "$COLLECTOR_SG"; then
+            aws ec2 authorize-security-group-ingress --region "$REGION" --group-id "$COLLECTOR_SG" --ip-permissions "IpProtocol=tcp,FromPort=$PORT,ToPort=$PORT,UserIdGroupPairs=[{GroupId=$COLLECTOR_SG}]" || exit 1
+          fi
+        done
+        LOG_GROUPS=$(aws logs describe-log-groups --region "$REGION" --log-group-name-prefix "$LOG_GROUP" --query 'logGroups[].logGroupName' --output text) || exit 1
+        if ! printf '%s\n' "$LOG_GROUPS" | tr '\t' '\n' | grep -Fxq "$LOG_GROUP"; then
+          aws logs create-log-group --region "$REGION" --log-group-name "$LOG_GROUP" || exit 1
+        fi
+        aws logs put-retention-policy --region "$REGION" --log-group-name "$LOG_GROUP" --retention-in-days 30 || exit 1
+        printf 'SecurityGroupId=%s\n' "$COLLECTOR_SG"
+        )
 
     - id: collector-manual-log-group
       section: collector:aws.fargate-collector:manual
-      title: Create the scoped log group
-      description: The name must match the execution role's log permissions.
+      title: Verify the scoped log group
+      description: The prerequisite script created the log group and set its retention. Confirm the name matches the execution role's log permissions.
       format: shell
       template: |-
-        aws logs create-log-group --region {{region}} --log-group-name /odigos/collector/{{connectorName}}
-        aws logs put-retention-policy --region {{region}} --log-group-name /odigos/collector/{{connectorName}} --retention-in-days 30
+        aws logs describe-log-groups --region {{region}} --log-group-name-prefix /odigos/collector/{{connectorName}} --query "logGroups[?logGroupName=='/odigos/collector/{{connectorName}}'].{Name:logGroupName,RetentionDays:retentionInDays}" --output table
 
     - id: collector-manual-security-group-id
       section: collector:aws.fargate-collector:manual
       title: Record the Collector security group ID
-      description: >-
-        Copy the sg-... GroupId created in the selected VPC, not a security group ARN. The
-        customer-owned ECS service and internal load balancer must use this same group. Odigos
-        validates the ID and fills it into the generated deployment instructions.
-      format: text
-      template: 'Paste the SecurityGroupId printed by the AWS CLI command or prerequisite stack output into the field below.'
+      description: Paste the sg-... GroupId from the preceding script or stack output below. The customer-owned ECS service and internal load balancer must use this same group. The command updates to the entered ID so you can verify its VPC and self-ingress before saving.
+      format: shell
+      steps:
+        - Enter the printed SecurityGroupId below, then run this lookup. Confirm it is in the selected VPC and allows self traffic on TCP 4317, 4318 and 13133.
+        - Workload access is configured when routing telemetry after installation; it is not required just to start a healthy Collector.
+      template: |-
+        aws ec2 describe-security-groups --region {{region}} --group-ids "{{securityGroupId}}" --query 'SecurityGroups[].{ID:GroupId,VPC:VpcId,Ingress:IpPermissions}' --output json
 
     - id: collector-manual-declare
       section: collector:aws.fargate-collector:manual
@@ -1313,6 +1359,8 @@ setup:
       title: Create or reuse the credential secret
       description: Use the existing secret if present. Save the complete suffixed ARN; the connector does not write its value.
       format: shell
+      steps:
+        - 'If you need the ARN again, run `aws secretsmanager describe-secret --region {{region}} --secret-id odigos/collector/{{connectorName}}/{{region}}/credential --query ARN --output text`. Paste the complete suffixed ARN into the credential panel; never use the license secret here.'
       template: |-
         (
         SECRET_NAME=odigos/collector/{{connectorName}}/{{region}}/credential
@@ -1353,8 +1401,25 @@ setup:
       title: Store the registry licence JSON
       description: The task execution role reads this secret for image pull and the `password` field for `ODIGOS_ONPREM_TOKEN`.
       format: shell
+      steps:
+        - Replace <ON_PREM_TOKEN> in the JSON file with your token, preserving valid JSON. The block creates a missing secret or updates its value when it already exists.
+        - Keep the printed license ARN for the deployment. It is separate from the OpAMP credential secret. Remove the local JSON file after storing it, according to your credential-file retention policy.
       template: |-
-        aws secretsmanager create-secret --region {{region}} --name odigos/collector/{{connectorName}}/{{region}}/license --secret-string '{"username":"odigos","password":"<ON_PREM_TOKEN>"}'
+        (
+        cat > odigos-collector-license.json <<'JSON'
+        {"username":"odigos","password":"<ON_PREM_TOKEN>"}
+        JSON
+        SECRET_NAME=odigos/collector/{{connectorName}}/{{region}}/license
+        if SECRET_ARN=$(aws secretsmanager describe-secret --region {{region}} --secret-id "$SECRET_NAME" --query ARN --output text 2>&1); then
+          aws secretsmanager put-secret-value --region {{region}} --secret-id "$SECRET_ARN" --secret-string file://odigos-collector-license.json || exit 1
+          printf '%s\n' "$SECRET_ARN"
+        else
+          case "$SECRET_ARN" in
+            *ResourceNotFoundException*) aws secretsmanager create-secret --region {{region}} --name "$SECRET_NAME" --secret-string file://odigos-collector-license.json --query ARN --output text || exit 1 ;;
+            *) printf '%s\n' "$SECRET_ARN" >&2; exit 1 ;;
+          esac
+        fi
+        )
 
     - id: collector-manual-apply
       section: collector:aws.fargate-collector:manual
@@ -1455,6 +1520,8 @@ setup:
         create roles. Reuse the printed execution role ARN in every region of this account; IAM roles
         are account-wide. Add `kms:Decrypt` if the Collector secrets use a customer-managed key.
       format: shell
+      steps:
+        - 'After the script succeeds, run `aws iam get-role --role-name "odigos-collector-{{connectorName}}-execution" --query Role.Arn --output text` and paste the output into Task execution role ARN. Reuse this account-wide role for other regions.'
       template: &collector-execution-role-cli |-
         (
         ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text) || exit 1
@@ -1484,7 +1551,7 @@ setup:
       steps:
         - Save as `odigos-collector-execution-role.yaml`.
         - 'Run `aws cloudformation deploy --stack-name odigos-collector-{{connectorName}}-execution --template-file odigos-collector-execution-role.yaml --capabilities CAPABILITY_IAM --parameter-overrides ConnectorName={{connectorName}}` once with your provisioning credentials. Do not deploy another copy in a second region.'
-        - Copy `ExecutionRoleArn` from the stack Outputs into the field below.
+        - 'In the same account and stack region, run `aws cloudformation describe-stacks --stack-name odigos-collector-{{connectorName}}-execution --query "Stacks[0].Outputs[?OutputKey==''ExecutionRoleArn''].OutputValue | [0]" --output text` and paste the output into Task execution role ARN.'
       template: *collector-execution-role
 
     - id: collector-manual-cli-execution-role
@@ -1496,6 +1563,8 @@ setup:
         create roles. Reuse the printed execution role ARN in every region of this account; IAM roles
         are account-wide. Add `kms:Decrypt` if the Collector secrets use a customer-managed key.
       format: shell
+      steps:
+        - 'After the script succeeds, run `aws iam get-role --role-name "odigos-collector-{{connectorName}}-execution" --query Role.Arn --output text` and paste the output into Task execution role ARN. Reuse this account-wide role for other regions.'
       template: *collector-execution-role-cli
 
     - id: collector-manual-cli-security-logs
@@ -1505,27 +1574,7 @@ setup:
       format: shell
       steps:
         - Run the commands with your provisioning credentials, then copy the printed SecurityGroupId into the later security group ID field.
-      template: |-
-        (
-        REGION={{region}}
-        VPC_ID={{networkId}}
-        SG_NAME=odigos-collector-{{connectorName}}
-        LOG_GROUP=/odigos/collector/{{connectorName}}
-        COLLECTOR_SG=$(aws ec2 describe-security-groups --region "$REGION" --filters "Name=vpc-id,Values=$VPC_ID" "Name=group-name,Values=$SG_NAME" --query 'SecurityGroups[0].GroupId' --output text) || exit 1
-        case "$COLLECTOR_SG" in
-          ''|None) COLLECTOR_SG=$(aws ec2 create-security-group --region "$REGION" --vpc-id "$VPC_ID" --group-name "$SG_NAME" --description 'Customer-owned Odigos Collector' --query GroupId --output text) || exit 1 ;;
-        esac
-        SELF_HEALTH_GROUPS=$(aws ec2 describe-security-groups --region "$REGION" --group-ids "$COLLECTOR_SG" --query 'SecurityGroups[0].IpPermissions[?IpProtocol==`"tcp"` && FromPort==`13133` && ToPort==`13133`].UserIdGroupPairs[].GroupId' --output text) || exit 1
-        if ! printf '%s\n' "$SELF_HEALTH_GROUPS" | tr '\t' '\n' | grep -Fxq "$COLLECTOR_SG"; then
-          aws ec2 authorize-security-group-ingress --region "$REGION" --group-id "$COLLECTOR_SG" --ip-permissions "IpProtocol=tcp,FromPort=13133,ToPort=13133,UserIdGroupPairs=[{GroupId=$COLLECTOR_SG}]" || exit 1
-        fi
-        LOG_GROUPS=$(aws logs describe-log-groups --region "$REGION" --log-group-name-prefix "$LOG_GROUP" --query 'logGroups[].logGroupName' --output text) || exit 1
-        if ! printf '%s\n' "$LOG_GROUPS" | tr '\t' '\n' | grep -Fxq "$LOG_GROUP"; then
-          aws logs create-log-group --region "$REGION" --log-group-name "$LOG_GROUP" || exit 1
-        fi
-        aws logs put-retention-policy --region "$REGION" --log-group-name "$LOG_GROUP" --retention-in-days 30 || exit 1
-        printf 'SecurityGroupId=%s\n' "$COLLECTOR_SG"
-        )
+      template: *collector-prerequisites-cli
 
     - id: collector-manual-cfn-execution-role
       section: collector:aws.fargate-collector:manual:cloudformation
@@ -1539,13 +1588,13 @@ setup:
       steps:
         - Save as `odigos-collector-execution-role.yaml`.
         - 'Run `aws cloudformation deploy --stack-name odigos-collector-{{connectorName}}-execution --template-file odigos-collector-execution-role.yaml --capabilities CAPABILITY_IAM --parameter-overrides ConnectorName={{connectorName}}` once with your provisioning credentials. Do not deploy another copy in a second region.'
-        - Copy `ExecutionRoleArn` from the stack Outputs into the field below.
+        - 'In the same account and stack region, run `aws cloudformation describe-stacks --stack-name odigos-collector-{{connectorName}}-execution --query "Stacks[0].Outputs[?OutputKey==''ExecutionRoleArn''].OutputValue | [0]" --output text` and paste the output into Task execution role ARN.'
       template: *collector-execution-role
 
     - id: collector-manual-cfn-security-logs
       section: collector:aws.fargate-collector:manual:cloudformation
       title: Create the security group and log group
-      description: Save as `odigos-collector-prerequisites.yaml`; the stack creates the group in the selected VPC and its log group.
+      description: Save as `odigos-collector-prerequisites.yaml`; the stack creates the scoped log group and a security group allowing OTLP 4317/4318 and health 13133 from itself. The deployment instructions cover workload access when routing telemetry.
       format: yaml
       template: |-
         AWSTemplateFormatVersion: '2010-09-09'
@@ -1561,6 +1610,12 @@ setup:
           CollectorHealthIngress:
             Type: AWS::EC2::SecurityGroupIngress
             Properties: { GroupId: !Ref CollectorGroup, IpProtocol: tcp, FromPort: 13133, ToPort: 13133, SourceSecurityGroupId: !Ref CollectorGroup }
+          CollectorGrpcIngress:
+            Type: AWS::EC2::SecurityGroupIngress
+            Properties: { GroupId: !Ref CollectorGroup, IpProtocol: tcp, FromPort: 4317, ToPort: 4317, SourceSecurityGroupId: !Ref CollectorGroup }
+          CollectorHttpIngress:
+            Type: AWS::EC2::SecurityGroupIngress
+            Properties: { GroupId: !Ref CollectorGroup, IpProtocol: tcp, FromPort: 4318, ToPort: 4318, SourceSecurityGroupId: !Ref CollectorGroup }
           CollectorLogs:
             Type: AWS::Logs::LogGroup
             Properties: { LogGroupName: !Sub '/odigos/collector/${ConnectorName}', RetentionInDays: 30 }
@@ -1575,6 +1630,7 @@ setup:
       format: shell
       steps:
         - Deploy the prerequisite stack, then copy its SecurityGroupId output into the later security group ID field.
+        - 'Query the group ID using `aws cloudformation describe-stacks --region {{region}} --stack-name odigos-collector-{{connectorName}}-prerequisites --query "Stacks[0].Outputs[?OutputKey==''SecurityGroupId''].OutputValue | [0]" --output text` and paste it into the next field.'
       template: |-
         (
         aws cloudformation deploy --region {{region}} --stack-name odigos-collector-{{connectorName}}-prerequisites --template-file odigos-collector-prerequisites.yaml --parameter-overrides VpcId={{networkId}} ConnectorName={{connectorName}} || exit 1
@@ -1585,18 +1641,10 @@ setup:
     # variant's steps + template are rendered; scalar tokens like {{externalId}} come from the form.
     #
     # Every variant must be self-contained and runnable as shown: the snippet either IS the artifact
-    # the steps tell the user to apply, or it references a file the steps told them to save. The one
-    # cross-artifact reference allowed is the policy preview above, saved as odigos-policy.json — the
-    # steps always say so explicitly (mirrors the gcp.yaml convention).
+    # the steps tell the user to apply, or it references a file the steps told them to save.
+    # CLI scripts embed the final scoped policy preview and write odigos-policy.json themselves.
     #
-    # TRUST PRINCIPAL: every trust policy below names arn:aws:iam::{{accountId}}:root — the account the
-    # customer entered in the AWS Account ID field, which is the account these snippets are applied to and
-    # the account the connector's own base identity lives in (the IAM user the iam-user variant creates, or
-    # the IRSA role of the Central pod running in it). It MUST stay a {{accountId}} token: a hardcoded
-    # account renders the same literal for every customer, so the role is assumable only by that account
-    # and never by the Central deployment that has to assume it — sts:AssumeRole then fails with
-    # AccessDenied for everyone. Cross-account Central (Central in account A managing account B) is not
-    # expressible with today's single account field; it needs its own trusted-principal field.
+    # TRUST PRINCIPAL: every trust policy uses the explicit source principal ARN.
     - id: create-role-cloudformation
       section: create-role
       variant: cloudformation
@@ -1609,12 +1657,15 @@ setup:
       itemTemplate: '- {{permission}}'
       itemSeparator: "\n"
       steps:
-        - Fill in the AWS Account ID and an External ID first — both are baked into the template's trust policy.
+        - Complete the source identity setup first. Confirm the target AWS Account ID, connector role name and External ID above; the trust policy already contains the chosen source principal.
         - Save the template below as odigos-connector.yaml.
         - "Console: open CloudFormation → Create stack → With new resources → Upload a template file."
-        - "CLI: aws cloudformation deploy --stack-name odigos-connector --template-file odigos-connector.yaml --capabilities CAPABILITY_NAMED_IAM"
+        - "CLI: `aws cloudformation deploy --stack-name {{stackName}} --template-file odigos-connector.yaml --capabilities CAPABILITY_NAMED_IAM --parameter-overrides OdigosExternalId={{externalId}}`"
         - Acknowledge that the stack creates a named IAM resource, then deploy it.
         - Open the stack's Outputs tab and copy the RoleArn value into the field below.
+        - >-
+          Or query the deployed stack in the same AWS account and region:
+          `aws cloudformation describe-stacks --stack-name {{stackName}} --query "Stacks[0].Outputs[?OutputKey=='RoleArn'].OutputValue | [0]" --output text`.
       template: |-
         AWSTemplateFormatVersion: "2010-09-09"
         Description: IAM role assumed by the Odigos cloud connector.
@@ -1622,7 +1673,9 @@ setup:
         Parameters:
           OdigosExternalId:
             Type: String
-            MinLength: 1
+            MinLength: 2
+            MaxLength: 1224
+            AllowedPattern: "[A-Za-z0-9+=,.@:/-]+"
             Description: >-
               External ID Odigos presents when assuming this role. Pre-filled from the Odigos setup
               form; the stack will not deploy while it is empty.
@@ -1632,14 +1685,14 @@ setup:
           OdigosConnectorRole:
             Type: AWS::IAM::Role
             Properties:
-              RoleName: OdigosConnectorRole
+              RoleName: "{{roleName}}"
               Description: Lets Odigos Central discover and instrument workloads in this account.
               AssumeRolePolicyDocument:
                 Version: "2012-10-17"
                 Statement:
                   - Effect: Allow
                     Principal:
-                      AWS: arn:aws:iam::{{accountId}}:root
+                      AWS: {{trustedPrincipalArn}}
                     Action: sts:AssumeRole
                     Condition:
                       StringEquals:
@@ -1654,6 +1707,21 @@ setup:
                         Resource: "*"
                         Action:
                           {{permissions}}
+                      - Sid: RestrictPassRoleService
+                        Effect: Deny
+                        Action: [iam:PassRole]
+                        Resource: "*"
+                        Condition:
+                          StringNotEquals:
+                            iam:PassedToService: ecs-tasks.amazonaws.com
+                      - Sid: RestrictPassRoleResources
+                        Effect: Deny
+                        Action: [iam:PassRole]
+                        NotResource: {{passRoleResources}}
+                      - Sid: RestrictApplicationSignalsRoles
+                        Effect: Deny
+                        Action: [iam:AttachRolePolicy]
+                        NotResource: {{applicationSignalsRoleResources}}
                       - Sid: DenyUnrelatedPolicyAttachments
                         Effect: Deny
                         Action: [iam:AttachRolePolicy]
@@ -1677,7 +1745,7 @@ setup:
     - id: create-role-terraform
       section: create-role
       variant: terraform
-      variantLabel: Terraform
+      variantLabel: Terraform / OpenTofu
       title: Create IAM role
       description: >-
         Provision the IAM role as code. The configuration below is complete — drop it into your
@@ -1686,11 +1754,16 @@ setup:
       itemTemplate: '"{{permission}}"'
       itemSeparator: ",\n"
       steps:
-        - Fill in the AWS Account ID and an External ID first — the account is the trust principal, the external ID becomes the variable default.
+        - Complete the source identity setup first, then confirm the target AWS account, connector role name and External ID. The chosen source principal is already included in this trust policy.
         - Save the configuration below as odigos-connector.tf in your Terraform workspace.
-        - Run terraform init, then terraform apply and confirm the plan.
-        - Run terraform output -raw role_arn and paste the value into the field below.
+        - Run `terraform init` and `terraform apply`, or `tofu init` and `tofu apply`, using your existing AWS provider authentication. Review and confirm the plan.
+        - Run `terraform output -raw role_arn` (or `tofu output -raw role_arn`) and paste the value into the field below.
+        - Use a dedicated IAM workspace for this panel. The AWS provider below uses us-east-1 for account-wide IAM and your existing authentication. When merging into a configured workspace, keep its provider block instead of adding a second one.
       template: |-
+        provider "aws" {
+          region = "us-east-1"
+        }
+
         # odigos-connector.tf — requires the hashicorp/aws provider.
 
         variable "odigos_external_id" {
@@ -1699,7 +1772,7 @@ setup:
           default     = "{{externalId}}"
 
           validation {
-            condition     = length(var.odigos_external_id) > 0
+            condition     = length(var.odigos_external_id) >= 2 && length(var.odigos_external_id) <= 1224 && can(regex("^[A-Za-z0-9+=,.@:/-]+$", var.odigos_external_id))
             error_message = "Set an external ID: the connector role's trust policy requires one."
           }
         }
@@ -1711,7 +1784,7 @@ setup:
 
             principals {
               type        = "AWS"
-              identifiers = ["arn:aws:iam::{{accountId}}:root"]
+              identifiers = ["{{trustedPrincipalArn}}"]
             }
 
             condition {
@@ -1731,6 +1804,29 @@ setup:
             actions = [
               {{permissions}}
             ]
+          }
+          statement {
+            sid = "RestrictPassRoleService"
+            effect = "Deny"
+            actions = ["iam:PassRole"]
+            resources = ["*"]
+            condition {
+              test = "StringNotEquals"
+              variable = "iam:PassedToService"
+              values = ["ecs-tasks.amazonaws.com"]
+            }
+          }
+          statement {
+            sid = "RestrictPassRoleResources"
+            effect = "Deny"
+            actions = ["iam:PassRole"]
+            not_resources = {{passRoleResources}}
+          }
+          statement {
+            sid = "RestrictApplicationSignalsRoles"
+            effect = "Deny"
+            actions = ["iam:AttachRolePolicy"]
+            not_resources = {{applicationSignalsRoleResources}}
           }
           statement {
             sid       = "DenyUnrelatedPolicyAttachments"
@@ -1756,8 +1852,15 @@ setup:
           }
         }
 
+        data "aws_caller_identity" "odigos_target" {}
         resource "aws_iam_role" "odigos_connector" {
-          name               = "OdigosConnectorRole"
+          lifecycle {
+            precondition {
+              condition = data.aws_caller_identity.odigos_target.account_id == "{{accountId}}"
+              error_message = "Use the target AWS account for this workspace."
+            }
+          }
+          name               = "{{roleName}}"
           description        = "Lets Odigos Central discover and instrument workloads in this account."
           assume_role_policy = data.aws_iam_policy_document.odigos_trust.json
         }
@@ -1782,14 +1885,23 @@ setup:
         attaches the permissions policy, and prints the Role ARN.
       format: shell
       steps:
-        - Fill in the AWS Account ID and an External ID first — the script embeds both in the trust policy.
-        - Save the policy preview from the previous step as odigos-policy.json in your working directory.
-        - Make sure the AWS CLI is configured for the target account (aws configure).
+        - Complete the source identity setup first, then confirm the target AWS Account ID, connector role name and External ID. The script already contains the chosen source principal.
+        - The script writes the complete scoped permissions policy to odigos-policy.json before making changes.
+        - Run with your existing authenticated AWS session in the target account, with permission to manage the IAM resources below.
         - Run the script below.
-        - Copy the Role ARN it prints into the field below.
+        - 'After setup succeeds, run `aws iam get-role --role-name "{{roleName}}" --query Role.Arn --output text` in the target account and paste that output into IAM Role ARN below. This queries the target connector role, not the caller user.'
+        - Keep the same External ID that was used when creating the trust policy. The caller access key belongs in Caller credentials; the target role ARN belongs in Role credentials.
       template: |-
+        (
+        set -eu
         export ODIGOS_EXTERNAL_ID="{{externalId}}"
-        [ -n "$ODIGOS_EXTERNAL_ID" ] || echo "WARNING: no external ID set — the role will not be assumable."
+        ROLE_NAME="{{roleName}}"
+        test -n "$ODIGOS_EXTERNAL_ID" || { echo "Set the External ID before running setup." >&2; exit 1; }
+        test "$(aws sts get-caller-identity --query Account --output text)" = "{{accountId}}" || { echo "AWS CLI must use the target account." >&2; exit 1; }
+
+        cat > odigos-policy.json <<'ODIGOS_POLICY'
+        {{policyJson}}
+        ODIGOS_POLICY
 
         cat > odigos-trust-policy.json <<EOF
         {
@@ -1797,7 +1909,7 @@ setup:
           "Statement": [
             {
               "Effect": "Allow",
-              "Principal": { "AWS": "arn:aws:iam::{{accountId}}:root" },
+              "Principal": { "AWS": "{{trustedPrincipalArn}}" },
               "Action": "sts:AssumeRole",
               "Condition": {
                 "StringEquals": { "sts:ExternalId": "${ODIGOS_EXTERNAL_ID}" }
@@ -1807,44 +1919,49 @@ setup:
         }
         EOF
 
-        aws iam create-role \
-          --role-name OdigosConnectorRole \
-          --description "Lets Odigos Central discover and instrument workloads in this account." \
-          --assume-role-policy-document file://odigos-trust-policy.json
+        if aws iam get-role --role-name "$ROLE_NAME" >/dev/null 2>&1; then
+          aws iam update-assume-role-policy --role-name "$ROLE_NAME" --policy-document file://odigos-trust-policy.json
+        else
+          aws iam create-role --role-name "$ROLE_NAME" --description "Odigos cloud connector" --assume-role-policy-document file://odigos-trust-policy.json
+        fi
 
         aws iam put-role-policy \
-          --role-name OdigosConnectorRole \
+          --role-name "$ROLE_NAME" \
           --policy-name OdigosCloudConnector \
           --policy-document file://odigos-policy.json
 
+        aws iam get-role-policy --role-name "$ROLE_NAME" --policy-name OdigosCloudConnector
+
         aws iam get-role \
-          --role-name OdigosConnectorRole \
+          --role-name "$ROLE_NAME" \
           --query 'Role.Arn' \
           --output text
+        )
 
     - id: create-role-manual
       section: create-role
       variant: manual
-      variantLabel: Manual
+      variantLabel: AWS Console
       title: Create IAM role
       description: >-
         Create the IAM role by hand in the AWS Console using the trust policy below, then return the
         Role ARN.
       format: json
       steps:
-        - Fill in the AWS Account ID and an External ID first — both are interpolated into the trust policy.
+        - Complete the source identity setup above and confirm the External ID. The trust policy below already includes the chosen source principal.
         - Open the AWS Console → IAM → Roles → Create role.
         - Select Custom trust policy and paste the policy below.
-        - On the next screen, attach the permissions policy from the previous step.
-        - Name the role OdigosConnectorRole and create it.
+        - First create a customer-managed IAM policy from the policy preview JSON (IAM → Policies → Create policy → JSON). Then select that policy on the role permissions screen.
+        - Name the role using the role name entered above and create it.
         - Open the role summary and copy the Role ARN into the field below.
+        - 'Alternatively, query the target role with `aws iam get-role --role-name "{{roleName}}" --query Role.Arn --output text` and paste the output into IAM Role ARN below.'
       template: |-
         {
           "Version": "2012-10-17",
           "Statement": [
             {
               "Effect": "Allow",
-              "Principal": { "AWS": "arn:aws:iam::{{accountId}}:root" },
+              "Principal": { "AWS": "{{trustedPrincipalArn}}" },
               "Action": "sts:AssumeRole",
               "Condition": {
                 "StringEquals": { "sts:ExternalId": "{{externalId}}" }
@@ -1859,30 +1976,595 @@ setup:
     - id: create-user-aws-cli
       section: create-role
       variant: iam-user
-      variantLabel: IAM user (access keys)
+      variantLabel: AWS CLI
       title: Create IAM user
       description: >-
         For the access-keys authentication method. Creates a programmatic-only IAM user with the
         permissions policy attached, and prints an access key pair to paste below.
       format: shell
       steps:
-        - Save the policy preview from the previous step as odigos-policy.json in your working directory.
-        - Make sure the AWS CLI is configured for the target account (aws configure).
+        - The script writes the complete scoped permissions policy to odigos-policy.json before making changes.
+        - Run with your existing authenticated AWS session in the target account, with permission to manage the IAM resources below.
         - Run the script below.
         - Copy AccessKeyId and SecretAccessKey from the output into the fields below.
         - Store the secret key somewhere safe — AWS will not show it again.
       template: |-
-        aws iam create-user --user-name odigos-connector
+        (
+        set -eu
+        USER_NAME="{{roleName}}"
+        test "$(aws sts get-caller-identity --query Account --output text)" = "{{accountId}}" || { echo "AWS CLI must use the target account." >&2; exit 1; }
+        cat > odigos-policy.json <<'ODIGOS_POLICY'
+        {{policyJson}}
+        ODIGOS_POLICY
+        aws iam get-user --user-name "$USER_NAME" >/dev/null 2>&1 || aws iam create-user --user-name "$USER_NAME"
+        POLICY_ARN="arn:aws:iam::{{accountId}}:policy/$USER_NAME"
+        if aws iam get-policy --policy-arn "$POLICY_ARN" >/dev/null 2>&1; then
+          echo "Policy already exists. Review it and create a new default policy version if permissions changed before creating credentials." >&2
+          exit 1
+        fi
+        aws iam create-policy --policy-name "$USER_NAME" --policy-document file://odigos-policy.json
+        aws iam attach-user-policy --user-name "$USER_NAME" --policy-arn "$POLICY_ARN"
+        aws iam create-access-key --user-name "$USER_NAME" --query 'AccessKey.{AccessKeyId:AccessKeyId,SecretAccessKey:SecretAccessKey}' --output table
+        )
 
-        aws iam put-user-policy \
-          --user-name odigos-connector \
-          --policy-name OdigosCloudConnector \
-          --policy-document file://odigos-policy.json
+    - id: create-user-cloudformation
+      section: create-role
+      variant: iam-user-cloudformation
+      variantLabel: CloudFormation
+      title: Create IAM user
+      description: Create a dedicated IAM user and managed permissions policy with CloudFormation, then issue its access key.
+      format: json
+      steps:
+        - Use your existing authenticated session in the target AWS account. Save this template as odigos-user.json.
+        - 'Run `aws cloudformation deploy --stack-name {{stackName}} --template-file odigos-user.json --capabilities CAPABILITY_NAMED_IAM`, or upload the template in the CloudFormation console.'
+        - 'After the stack succeeds, run `aws iam create-access-key --user-name "{{roleName}}" --query AccessKey --output json`. Alternatively, open IAM → Users → {{roleName}} → Security credentials → Create access key.'
+        - Paste AccessKeyId and SecretAccessKey into Odigos. The secret is shown only when the key is created; it is deliberately absent from stack outputs.
+      template: |-
+        {
+          "AWSTemplateFormatVersion": "2010-09-09",
+          "Description": "Dedicated IAM user for the Odigos connector. Issue an access key after deployment.",
+          "Resources": {
+            "OdigosConnectorUser": {
+              "Type": "AWS::IAM::User",
+              "Properties": { "UserName": "{{roleName}}" }
+            },
+            "OdigosConnectorPolicy": {
+              "Type": "AWS::IAM::ManagedPolicy",
+              "Properties": {
+                "Description": "Odigos connector permissions",
+                "Users": [{ "Ref": "OdigosConnectorUser" }],
+                "PolicyDocument": {{policyJson}}
+              }
+            }
+          },
+          "Outputs": {
+            "UserName": { "Value": { "Ref": "OdigosConnectorUser" } }
+          }
+        }
 
-        aws iam create-access-key \
-          --user-name odigos-connector \
-          --query 'AccessKey.{AccessKeyId:AccessKeyId,SecretAccessKey:SecretAccessKey}' \
-          --output table
+    - id: create-user-terraform
+      section: create-role
+      variant: iam-user-terraform
+      variantLabel: Terraform / OpenTofu
+      title: Create IAM user and access key
+      description: Provision a dedicated IAM user, managed permissions policy and access key using your existing authenticated AWS provider.
+      format: shell
+      steps:
+        - Save this configuration as odigos-user.tf in your AWS Terraform or OpenTofu workspace.
+        - Run `terraform init` and `terraform apply`, or `tofu init` and `tofu apply`. Review and confirm the plan.
+        - 'Run `terraform output -raw access_key_id` and `terraform output -raw secret_access_key` (OpenTofu: `tofu output -raw access_key_id` and `tofu output -raw secret_access_key`), then paste both values into Odigos.'
+        - The secret output is marked sensitive but is stored in state. Protect your state backend and keep state files out of source control.
+        - Use a dedicated IAM workspace for this panel. The AWS provider below uses us-east-1 for account-wide IAM and your existing authentication. When merging into a configured workspace, keep its provider block instead of adding a second one.
+      template: |-
+        provider "aws" {
+          region = "us-east-1"
+        }
+
+        data "aws_caller_identity" "odigos_target" {}
+        resource "aws_iam_user" "odigos_connector" {
+          lifecycle {
+            precondition {
+              condition = data.aws_caller_identity.odigos_target.account_id == "{{accountId}}"
+              error_message = "Use the target AWS account for this workspace."
+            }
+          }
+          name = "{{roleName}}"
+        }
+
+        resource "aws_iam_policy" "odigos_connector" {
+          name = "{{roleName}}"
+          policy = <<-ODIGOS_POLICY
+        {{policyJson}}
+        ODIGOS_POLICY
+        }
+
+        resource "aws_iam_user_policy_attachment" "odigos_connector" {
+          user       = aws_iam_user.odigos_connector.name
+          policy_arn = aws_iam_policy.odigos_connector.arn
+        }
+
+        resource "aws_iam_access_key" "odigos_connector" {
+          user = aws_iam_user.odigos_connector.name
+          depends_on = [aws_iam_user_policy_attachment.odigos_connector]
+        }
+
+        output "access_key_id" {
+          value     = aws_iam_access_key.odigos_connector.id
+          sensitive = true
+        }
+
+        output "secret_access_key" {
+          value     = aws_iam_access_key.odigos_connector.secret
+          sensitive = true
+        }
+
+    - id: create-user-console
+      section: create-role
+      variant: iam-user-manual
+      variantLabel: AWS Console
+      title: Create IAM user
+      description: Create a programmatic IAM user and attach the permissions policy below using the AWS Console.
+      format: json
+      steps:
+        - In the target AWS account, open IAM → Policies → Create policy → JSON. Paste this policy and save it with a distinct connector policy name.
+        - 'Open IAM → Users → Create user. Set the user name to {{roleName}} and leave console access disabled.'
+        - Choose Attach policies directly, select the policy you just created, and create the user.
+        - Open the user → Security credentials → Create access key. Choose Application running outside AWS, acknowledge the recommendation if prompted, and create the key.
+        - Paste Access Key ID and Secret Access Key into Odigos. Save the secret now; AWS will not show it again.
+      template: |-
+        {{policyJson}}
+
+    - id: workload-policy-aws-cli
+      section: create-role
+      variant: workload-aws-cli
+      variantLabel: AWS CLI
+      title: Grant permissions to the workload role
+      description: Attach the connector permissions to your existing workload IAM role. This does not create access keys or change its trust policy.
+      format: shell
+      steps:
+        - Enter the existing workload role name above. Run these commands with your existing authenticated session in the target account.
+        - Configure workload identity for both Central backend and connector pods using this role. Use an existing trust binding or follow the workload identity deployment instructions.
+        - Return to Odigos and verify. No credentials need to be pasted for this authentication method.
+      template: |-
+        (
+        set -eu
+        test "$(aws sts get-caller-identity --query Account --output text)" = "{{accountId}}" || { echo "AWS CLI must use the target account." >&2; exit 1; }
+        cat > odigos-policy.json <<'ODIGOS_POLICY'
+        {{policyJson}}
+        ODIGOS_POLICY
+        aws iam put-role-policy --role-name "{{roleName}}" --policy-name OdigosCloudConnector --policy-document file://odigos-policy.json
+        )
+
+    - id: workload-policy-cloudformation
+      section: create-role
+      variant: workload-cloudformation
+      variantLabel: CloudFormation
+      title: Grant permissions to the workload role
+      description: Attach a managed policy to your existing workload IAM role. The role and its workload identity trust binding must already exist.
+      format: json
+      steps:
+        - Enter the existing workload role name above and save this template as odigos-workload-policy.json.
+        - 'Use your existing AWS session to run `aws cloudformation deploy --stack-name {{stackName}} --template-file odigos-workload-policy.json --capabilities CAPABILITY_IAM`, or upload the template in CloudFormation.'
+        - Configure workload identity for both Central backend and connector pods using this role, then verify in Odigos. No access keys are created.
+      template: |-
+        {
+          "AWSTemplateFormatVersion": "2010-09-09",
+          "Resources": {
+            "OdigosConnectorPolicy": {
+              "Type": "AWS::IAM::ManagedPolicy",
+              "Properties": {
+                "Roles": ["{{roleName}}"],
+                "PolicyDocument": {{policyJson}}
+              }
+            }
+          }
+        }
+
+    - id: workload-policy-terraform
+      section: create-role
+      variant: workload-terraform
+      variantLabel: Terraform / OpenTofu
+      title: Grant permissions to the workload role
+      description: Attach the policy to your existing workload IAM role. Manage its workload identity trust binding in your existing deployment configuration.
+      format: shell
+      steps:
+        - Enter the existing workload role name above. Save this configuration as odigos-workload-policy.tf in your authenticated AWS workspace.
+        - Run `terraform init` and `terraform apply`, or `tofu init` and `tofu apply`. Review and confirm the plan.
+        - Configure both Central backend and connector pods to use this workload role, then verify in Odigos. No access keys are created.
+        - Use a dedicated IAM workspace for this panel. The AWS provider below uses us-east-1 for account-wide IAM and your existing authentication. When merging into a configured workspace, keep its provider block instead of adding a second one.
+      template: |-
+        provider "aws" {
+          region = "us-east-1"
+        }
+
+        resource "aws_iam_role_policy" "odigos_connector" {
+          name = "OdigosCloudConnector"
+          role = "{{roleName}}"
+          policy = <<-ODIGOS_POLICY
+        {{policyJson}}
+        ODIGOS_POLICY
+        }
+
+    - id: workload-policy-console
+      section: create-role
+      variant: workload-manual
+      variantLabel: AWS Console
+      title: Grant permissions to the workload role
+      description: Add the connector permissions to your existing workload IAM role without changing its trust policy.
+      format: json
+      steps:
+        - Enter the existing workload role name above. In the target account, open IAM → Roles and select that role.
+        - Open Permissions → Add permissions → Create inline policy → JSON. Paste this policy and save it as OdigosCloudConnector.
+        - Configure workload identity for both Central backend and connector pods using this role, then verify in Odigos. No access keys are created.
+      template: |-
+        {{policyJson}}
+
+    - id: source-user-aws-cli
+      section: source-user
+      variant: aws-cli
+      title: "Create the source IAM user and access key"
+      description: "Creates a dedicated user for Odigos authentication. The user can only assume the target connector role."
+      format: "shell"
+      steps:
+        - "Create this source identity first, using your existing authenticated AWS session in source account {{sourceAccountId}}. It receives only permission to assume the connector role, with the matching External ID."
+        - "Then create the target connector role in account {{accountId}} using the next panel. Its trusted principal ARN is already filled from the source account and user name."
+        - "Run the complete script below. A user with this name must not already exist; choose Use existing caller credentials if it does."
+        - "Copy AccessKeyId and SecretAccessKey into the Caller credentials fields in Enter connector credentials. The target Role ARN and External ID belong to the separate connector role."
+        - 'To confirm the caller principal after creation, run `aws iam get-user --user-name "{{sourceName}}" --query User.Arn --output text` in the caller account. It must match the trusted principal in the next panel.'
+        - The script creates and prints an access key once. Save both key values before proceeding; an existing secret access key cannot be queried later. Do not rerun key creation just to look up an ARN.
+      template: |-
+        (
+        set -eu
+        SOURCE_USER="{{sourceName}}"
+        test "$(aws sts get-caller-identity --query Account --output text)" = "{{sourceAccountId}}" || { echo "Use the source AWS account for this panel." >&2; exit 1; }
+        if aws iam get-user --user-name "$SOURCE_USER" >/dev/null 2>&1; then
+          echo "Source user already exists. Choose Use existing caller credentials, or use a new source name." >&2
+          exit 1
+        fi
+        cat > odigos-source-assume-policy.json <<'ODIGOS_SOURCE_POLICY'
+        {{sourcePolicyJson}}
+        ODIGOS_SOURCE_POLICY
+        aws iam create-user --user-name "$SOURCE_USER"
+        aws iam put-user-policy --user-name "$SOURCE_USER" --policy-name "{{sourcePolicyName}}" --policy-document file://odigos-source-assume-policy.json
+        aws iam create-access-key --user-name "$SOURCE_USER" --query 'AccessKey.{AccessKeyId:AccessKeyId,SecretAccessKey:SecretAccessKey}' --output table
+        aws iam get-user --user-name "$SOURCE_USER" --query User.Arn --output text
+        )
+
+    - id: source-user-cloudformation
+      section: source-user
+      variant: cloudformation
+      title: "Create the source IAM user"
+      description: "Creates the user and its scoped AssumeRole permission. Issue an access key after stack creation."
+      format: "json"
+      steps:
+        - "Create this source identity first, using your existing authenticated AWS session in source account {{sourceAccountId}}. It receives only permission to assume the connector role, with the matching External ID."
+        - "Then create the target connector role in account {{accountId}} using the next panel. Its trusted principal ARN is already filled from the source account and user name."
+        - "Save the template as odigos-source-user.json and deploy in the source account: `aws cloudformation deploy --stack-name {{stackName}}-source --template-file odigos-source-user.json --capabilities CAPABILITY_NAMED_IAM`."
+        - "After the stack succeeds, run `aws iam create-access-key --user-name \"{{sourceName}}\" --query AccessKey --output json`, or use IAM \u2192 Users \u2192 {{sourceName}} \u2192 Security credentials \u2192 Create access key."
+        - "Paste that AccessKeyId and SecretAccessKey into the final source credential fields. The secret is not stored in stack outputs."
+        - 'To confirm the caller principal, run `aws cloudformation describe-stacks --stack-name {{stackName}}-source --query "Stacks[0].Outputs[?OutputKey==''SourcePrincipalArn''].OutputValue | [0]" --output text` in the caller stack account and region. It must match the trusted principal in the target-role template.'
+      template: |-
+        {
+          "AWSTemplateFormatVersion": "2010-09-09",
+          "Resources": {
+            "OdigosSourceUser": {
+              "Type": "AWS::IAM::User",
+              "Properties": {
+                "UserName": "{{sourceName}}",
+                "Policies": [{ "PolicyName": "{{sourcePolicyName}}", "PolicyDocument": {{sourcePolicyJson}} }]
+              }
+            }
+          },
+          "Outputs": {
+            "SourcePrincipalArn": { "Value": { "Fn::GetAtt": ["OdigosSourceUser", "Arn"] } },
+            "SourceUserName": { "Value": { "Ref": "OdigosSourceUser" } }
+          }
+        }
+
+    - id: source-user-terraform
+      section: source-user
+      variant: terraform
+      title: "Create the source IAM user and access key"
+      description: "Creates a dedicated source user, scoped AssumeRole permission and credentials for Odigos."
+      format: "shell"
+      steps:
+        - "Create this source identity first, using your existing authenticated AWS session in source account {{sourceAccountId}}. It receives only permission to assume the connector role, with the matching External ID."
+        - "Then create the target connector role in account {{accountId}} using the next panel. Its trusted principal ARN is already filled from the source account and user name."
+        - "Save as odigos-source.tf in a separate source-account workspace using your existing AWS provider authentication. Run `terraform init` and `terraform apply`, or `tofu init` and `tofu apply`."
+        - "Run `terraform output -raw source_access_key_id` and `terraform output -raw source_secret_access_key` (OpenTofu: `tofu output -raw source_access_key_id` and `tofu output -raw source_secret_access_key`). Paste these into the final source credential fields."
+        - "The secret is marked sensitive but remains in state. Protect the source workspace state backend and keep it out of source control."
+        - 'Confirm the caller principal using `terraform output -raw source_principal_arn` (or `tofu output -raw source_principal_arn`) in the caller workspace. Use the separate target-role workspace for `role_arn`.'
+        - Use a dedicated IAM workspace for this panel. The AWS provider below uses us-east-1 for account-wide IAM and your existing authentication. When merging into a configured workspace, keep its provider block instead of adding a second one.
+      template: |-
+        provider "aws" {
+          region = "us-east-1"
+        }
+
+        data "aws_caller_identity" "odigos_source" {}
+        resource "aws_iam_user" "odigos_source" {
+          name = "{{sourceName}}"
+          lifecycle {
+            precondition {
+              condition = data.aws_caller_identity.odigos_source.account_id == "{{sourceAccountId}}"
+              error_message = "Use the source AWS account for this workspace."
+            }
+          }
+        }
+        resource "aws_iam_user_policy" "odigos_source" {
+          name = "{{sourcePolicyName}}"
+          user = aws_iam_user.odigos_source.name
+          policy = <<-SOURCE_POLICY
+        {{sourcePolicyJson}}
+        SOURCE_POLICY
+        }
+        resource "aws_iam_access_key" "odigos_source" {
+          user = aws_iam_user.odigos_source.name
+          depends_on = [aws_iam_user_policy.odigos_source]
+        }
+        output "source_principal_arn" { value = aws_iam_user.odigos_source.arn }
+        output "source_access_key_id" {
+          value = aws_iam_access_key.odigos_source.id
+          sensitive = true
+        }
+        output "source_secret_access_key" {
+          value = aws_iam_access_key.odigos_source.secret
+          sensitive = true
+        }
+
+    - id: source-user-manual
+      section: source-user
+      variant: manual
+      title: "Create the source IAM user and access key"
+      description: "Create a programmatic user whose only permission is to assume the connector role."
+      format: "json"
+      steps:
+        - "Create this source identity first, using your existing authenticated AWS session in source account {{sourceAccountId}}. It receives only permission to assume the connector role, with the matching External ID."
+        - "Then create the target connector role in account {{accountId}} using the next panel. Its trusted principal ARN is already filled from the source account and user name."
+        - "In IAM \u2192 Users \u2192 Create user, enter {{sourceName}} and leave console access disabled. Create the user without granting other permissions."
+        - "Open the user \u2192 Permissions \u2192 Add permissions \u2192 Create inline policy \u2192 JSON. Paste the policy below and save it as {{sourcePolicyName}}."
+        - "Open Security credentials \u2192 Create access key \u2192 Application running outside AWS. Create the key and paste both values into the final source credential fields."
+      template: |-
+        {{sourcePolicyJson}}
+
+    - id: source-irsa-aws-cli
+      section: source-irsa
+      variant: aws-cli
+      title: "Create the EKS source workload role"
+      description: "Creates the role used by the Odigos pods and grants permission to assume the target connector role."
+      format: "shell"
+      steps:
+        - "Create this source workload role first in source account {{sourceAccountId}}, using your existing AWS session. Its OIDC trust is limited to the two Odigos service accounts in namespace {{centralNamespace}}."
+        - "If the EKS cluster has no IAM OIDC provider for this issuer, select Create provider above. If it already exists, keep Use existing provider."
+        - "For an installation that already uses workload identity, choose Use existing caller credentials instead of replacing its role. A new source role here is for initial Central setup."
+        - "Run the complete script. It creates the IAM OIDC provider when requested, writes both policies, and creates the source role. Existing source role names are rejected."
+        - "Continue to Configure Odigos workload identity below, then create the target connector role in the final role panel."
+      template: |-
+        (
+        set -eu
+        test "$(aws sts get-caller-identity --query Account --output text)" = "{{sourceAccountId}}" || { echo "Use the source AWS account for this panel." >&2; exit 1; }
+        SOURCE_ROLE="{{sourceName}}"
+        if aws iam get-role --role-name "$SOURCE_ROLE" >/dev/null 2>&1; then
+          echo "Source role already exists. Choose Use existing caller credentials, or use a new source name." >&2
+          exit 1
+        fi
+        OIDC_PROVIDER_ARN="arn:aws:iam::{{sourceAccountId}}:oidc-provider/{{oidcIssuer}}"
+        if aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$OIDC_PROVIDER_ARN" >/dev/null 2>&1; then
+          aws iam add-client-id-to-open-id-connect-provider --open-id-connect-provider-arn "$OIDC_PROVIDER_ARN" --client-id sts.amazonaws.com
+        elif test "{{createOidcProvider}}" = "true"; then
+          aws iam create-open-id-connect-provider --url "https://{{oidcIssuer}}" --client-id-list sts.amazonaws.com
+        else
+          echo "IAM OIDC provider is missing. Select Create provider above, then copy this script again." >&2
+          exit 1
+        fi
+        cat > odigos-source-trust.json <<'SOURCE_TRUST'
+        {{sourceTrustJson}}
+        SOURCE_TRUST
+        cat > odigos-source-assume-policy.json <<'SOURCE_POLICY'
+        {{sourcePolicyJson}}
+        SOURCE_POLICY
+        aws iam create-role --role-name "$SOURCE_ROLE" --assume-role-policy-document file://odigos-source-trust.json
+        aws iam put-role-policy --role-name "$SOURCE_ROLE" --policy-name "{{sourcePolicyName}}" --policy-document file://odigos-source-assume-policy.json
+        aws iam get-role --role-name "$SOURCE_ROLE" --query Role.Arn --output text
+        )
+
+    - id: source-irsa-cloudformation
+      section: source-irsa
+      variant: cloudformation
+      title: "Create the EKS source workload role"
+      description: "Creates the source role and, when selected, the EKS IAM OIDC provider."
+      format: "json"
+      steps:
+        - "Create this source workload role first in source account {{sourceAccountId}}, using your existing AWS session. Its OIDC trust is limited to the two Odigos service accounts in namespace {{centralNamespace}}."
+        - "If the EKS cluster has no IAM OIDC provider for this issuer, select Create provider above. If it already exists, keep Use existing provider."
+        - "For an installation that already uses workload identity, choose Use existing caller credentials instead of replacing its role. A new source role here is for initial Central setup."
+        - "Save as odigos-source-role.json. Deploy in the source account: `aws cloudformation deploy --stack-name {{stackName}}-source --template-file odigos-source-role.json --capabilities CAPABILITY_NAMED_IAM --parameter-overrides CreateOIDCProvider={{createOidcProvider}}`."
+        - "After success, the SourcePrincipalArn output matches the principal already filled into the target role trust policy. Continue to Configure Odigos workload identity below."
+      template: |-
+        {
+          "AWSTemplateFormatVersion": "2010-09-09",
+          "Parameters": { "CreateOIDCProvider": { "Type": "String", "AllowedValues": ["true", "false"], "Default": "{{createOidcProvider}}" } },
+          "Conditions": { "CreateOIDCProvider": { "Fn::Equals": [{ "Ref": "CreateOIDCProvider" }, "true"] } },
+          "Resources": {
+            "OdigosOIDCProvider": {
+              "Type": "AWS::IAM::OIDCProvider",
+              "Condition": "CreateOIDCProvider",
+              "Properties": { "Url": "https://{{oidcIssuer}}", "ClientIdList": ["sts.amazonaws.com"] }
+            },
+            "OdigosSourceRole": {
+              "Type": "AWS::IAM::Role",
+              "Properties": {
+                "RoleName": "{{sourceName}}",
+                "AssumeRolePolicyDocument": {{sourceTrustCloudFormationJson}},
+                "Policies": [{ "PolicyName": "{{sourcePolicyName}}", "PolicyDocument": {{sourcePolicyJson}} }]
+              }
+            }
+          },
+          "Outputs": { "SourcePrincipalArn": { "Value": { "Fn::GetAtt": ["OdigosSourceRole", "Arn"] } } }
+        }
+
+    - id: source-irsa-terraform
+      section: source-irsa
+      variant: terraform
+      title: "Create the EKS source workload role"
+      description: "Creates the source role and optional OIDC provider using your authenticated source-account AWS provider."
+      format: "shell"
+      steps:
+        - "Create this source workload role first in source account {{sourceAccountId}}, using your existing AWS session. Its OIDC trust is limited to the two Odigos service accounts in namespace {{centralNamespace}}."
+        - "If the EKS cluster has no IAM OIDC provider for this issuer, select Create provider above. If it already exists, keep Use existing provider."
+        - "For an installation that already uses workload identity, choose Use existing caller credentials instead of replacing its role. A new source role here is for initial Central setup."
+        - "Save as odigos-source.tf in a separate source-account workspace. Run `terraform init` and `terraform apply`, or `tofu init` and `tofu apply`. Apply this before the target connector role."
+        - "Use the source_principal_arn output to confirm the source role, then continue to Configure Odigos workload identity below."
+        - Use a dedicated IAM workspace for this panel. The AWS provider below uses us-east-1 for account-wide IAM and your existing authentication. When merging into a configured workspace, keep its provider block instead of adding a second one.
+      template: |-
+        provider "aws" {
+          region = "us-east-1"
+        }
+
+        data "aws_caller_identity" "odigos_source" {}
+        resource "aws_iam_openid_connect_provider" "odigos_source" {
+          count = {{createOidcProvider}} ? 1 : 0
+          url = "https://{{oidcIssuer}}"
+          client_id_list = ["sts.amazonaws.com"]
+        }
+        resource "aws_iam_role" "odigos_source" {
+          name = "{{sourceName}}"
+          assume_role_policy = <<-SOURCE_TRUST
+        {{sourceTrustJson}}
+        SOURCE_TRUST
+          depends_on = [aws_iam_openid_connect_provider.odigos_source]
+          lifecycle {
+            precondition {
+              condition = data.aws_caller_identity.odigos_source.account_id == "{{sourceAccountId}}"
+              error_message = "Use the source AWS account for this workspace."
+            }
+          }
+        }
+        resource "aws_iam_role_policy" "odigos_source" {
+          name = "{{sourcePolicyName}}"
+          role = aws_iam_role.odigos_source.id
+          policy = <<-SOURCE_POLICY
+        {{sourcePolicyJson}}
+        SOURCE_POLICY
+        }
+        output "source_principal_arn" { value = aws_iam_role.odigos_source.arn }
+
+    - id: source-irsa-manual
+      section: source-irsa
+      variant: manual
+      title: "Create the EKS source workload role"
+      description: "Create the OIDC trust and source IAM role before creating the connector target role."
+      format: "json"
+      steps:
+        - "Create this source workload role first in source account {{sourceAccountId}}, using your existing AWS session. Its OIDC trust is limited to the two Odigos service accounts in namespace {{centralNamespace}}."
+        - "If the EKS cluster has no IAM OIDC provider for this issuer, select Create provider above. If it already exists, keep Use existing provider."
+        - "For an installation that already uses workload identity, choose Use existing caller credentials instead of replacing its role. A new source role here is for initial Central setup."
+        - "In IAM \u2192 Identity providers, select the provider for https://{{oidcIssuer}} and verify its audience includes sts.amazonaws.com. If missing, Add provider \u2192 OpenID Connect with this URL and audience."
+        - "Open IAM \u2192 Roles \u2192 Create role \u2192 Custom trust policy. Paste the policy below, skip broad permission policies, name the role {{sourceName}}, and create it."
+        - "The following Configure Odigos workload identity panel provides the scoped AssumeRole policy to add to this source role, as well as the Helm settings for the pods."
+      template: |-
+        {{sourceTrustJson}}
+
+    - id: source-irsa-binding
+      section: source-irsa
+      title: "Configure Odigos workload identity"
+      description: "Finish source-role permissions and bind Central backend and AWS connector pods to the source role."
+      format: "yaml"
+      steps:
+        - "In your existing Central Helm values, set cloudConnectors.aws.workloadIdentity.roleArn to {{trustedPrincipalArn}} and cloudConnectors.aws.workloadIdentity.serviceAccountName to odigos-aws-connectors. Apply using your existing release, namespace {{centralNamespace}}, and installed chart version. The chart annotates central-backend and creates the connector service account."
+        - "After the Helm update, restart the pods so EKS injects workload credentials: `kubectl rollout restart deployment/central-backend deployment/connector-runtime --namespace {{centralNamespace}}`. The runtime assigns odigos-aws-connectors to the AWS connector pods."
+        - "Now create the target connector role below in account {{accountId}}. In Enter connector credentials, provide its Role ARN and matching External ID. No access keys are required."
+      template: |-
+        cloudConnectors:
+          aws:
+            workloadIdentity:
+              roleArn: "{{trustedPrincipalArn}}"
+              serviceAccountName: odigos-aws-connectors
+
+    - id: source-existing-aws-cli
+      section: source-existing
+      variant: aws-cli
+      title: "Authorize the existing source identity"
+      description: "Grant only the permission needed to assume this connector role."
+      format: "shell"
+      steps:
+        - "Use your existing authenticated AWS session in source account {{sourceAccountId}} to grant the existing identity permission to assume the target role. This does not create credentials or replace its trust policy."
+        - "Keep Odigos configured with this existing identity. Create the target connector role in account {{accountId}} using the next panel, then enter its Role ARN and External ID."
+        - "Run this complete script before creating the target role."
+      template: |-
+        (
+        set -eu
+        test "$(aws sts get-caller-identity --query Account --output text)" = "{{sourceAccountId}}" || { echo "Use the source AWS account for this panel." >&2; exit 1; }
+        cat > odigos-source-assume-policy.json <<'SOURCE_POLICY'
+        {{sourcePolicyJson}}
+        SOURCE_POLICY
+        aws iam put-{{sourcePolicyIdentityProperty}}-policy --{{sourcePolicyIdentityProperty}}-name "{{sourceName}}" --policy-name "{{sourcePolicyName}}" --policy-document file://odigos-source-assume-policy.json
+        )
+
+    - id: source-existing-cloudformation
+      section: source-existing
+      variant: cloudformation
+      title: "Authorize the existing source identity"
+      description: "Attach a scoped managed policy to the existing role or user."
+      format: "json"
+      steps:
+        - "Use your existing authenticated AWS session in source account {{sourceAccountId}} to grant the existing identity permission to assume the target role. This does not create credentials or replace its trust policy."
+        - "Keep Odigos configured with this existing identity. Create the target connector role in account {{accountId}} using the next panel, then enter its Role ARN and External ID."
+        - "Save as odigos-source-policy.json and deploy in the source account: `aws cloudformation deploy --stack-name {{stackName}}-source --template-file odigos-source-policy.json --capabilities CAPABILITY_IAM`."
+      template: |-
+        {
+          "AWSTemplateFormatVersion": "2010-09-09",
+          "Resources": {
+            "OdigosSourcePolicy": {
+              "Type": "AWS::IAM::ManagedPolicy",
+              "Properties": { {{sourceAttachmentJson}}, "PolicyDocument": {{sourcePolicyJson}} }
+            }
+          }
+        }
+
+    - id: source-existing-terraform
+      section: source-existing
+      variant: terraform
+      title: "Authorize the existing source identity"
+      description: "Add a scoped inline policy without taking ownership of the existing identity."
+      format: "shell"
+      steps:
+        - "Use your existing authenticated AWS session in source account {{sourceAccountId}} to grant the existing identity permission to assume the target role. This does not create credentials or replace its trust policy."
+        - "Keep Odigos configured with this existing identity. Create the target connector role in account {{accountId}} using the next panel, then enter its Role ARN and External ID."
+        - "Save as odigos-source-policy.tf in your source-account workspace. Run `terraform init` and `terraform apply`, or `tofu init` and `tofu apply`."
+        - Use a dedicated IAM workspace for this panel. The AWS provider below uses us-east-1 for account-wide IAM and your existing authentication. When merging into a configured workspace, keep its provider block instead of adding a second one.
+      template: |-
+        provider "aws" {
+          region = "us-east-1"
+        }
+
+        data "aws_caller_identity" "odigos_source" {}
+        resource "{{sourcePolicyResourceType}}" "odigos_source" {
+          name = "{{sourcePolicyName}}"
+          {{sourcePolicyIdentityProperty}} = "{{sourceName}}"
+          policy = <<-SOURCE_POLICY
+        {{sourcePolicyJson}}
+        SOURCE_POLICY
+          lifecycle {
+            precondition {
+              condition = data.aws_caller_identity.odigos_source.account_id == "{{sourceAccountId}}"
+              error_message = "Use the source AWS account for this workspace."
+            }
+          }
+        }
+
+    - id: source-existing-manual
+      section: source-existing
+      variant: manual
+      title: "Authorize the existing source identity"
+      description: "Add the permission needed to assume this connector role."
+      format: "json"
+      steps:
+        - "Use your existing authenticated AWS session in source account {{sourceAccountId}} to grant the existing identity permission to assume the target role. This does not create credentials or replace its trust policy."
+        - "Keep Odigos configured with this existing identity. Create the target connector role in account {{accountId}} using the next panel, then enter its Role ARN and External ID."
+        - "In IAM \u2192 Roles or IAM \u2192 Users, open {{sourceName}} \u2192 Permissions \u2192 Add permissions \u2192 Create inline policy \u2192 JSON. Paste this policy and save it as {{sourcePolicyName}}."
+      template: |-
+        {{sourcePolicyJson}}
+
 
     # credentials section metadata: title/description for the final "enter credentials" panel.
     # Template is unused; fields come from auth.methods[].fields + connector.fields. Method-neutral
@@ -1892,9 +2574,8 @@ setup:
       section: credentials
       title: Enter connector credentials
       description: >-
-        Paste the Role ARN generated above, plus the External ID you used in its trust policy. For the
-        access-keys method, paste the access key pair instead. Using pod / workload identity (IRSA)?
-        Leave these fields empty.
+        For Assume IAM role, enter the caller credentials, Role ARN and matching External ID.
+        For Access keys, enter the access key pair with the selected permissions attached.
       format: text
       template: ""
 
@@ -1954,17 +2635,19 @@ setup:
         - Keep unrelated layers and customer environment variables; replace previous Odigos SDK/collector layers.
         - Set the wrapper and compact configuration; record attribution with Lambda resource tags.
         - Replace every <ANGLE_BRACKETED> value.
+        - 'Merge this fragment into the function in its existing workspace, review `terraform plan`, then run `terraform apply` (OpenTofu: `tofu plan` and `tofu apply`). Do not replace the rest of the function resource with this fragment.'
+        - Verify the function update succeeds and invoke it. If traffic uses published versions or aliases, publish an updated instrumented version and update all relevant aliases and weighted traffic targets; changing $LATEST does not modify existing published versions.
       prerequisites:
         - "<LAMBDA_DISTRO_PREREQUISITES>"
-        - "Ensure Odigos Lambda layers are preloaded: https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+        - "Use preloaded Lambda layers v0.0.19 or newer: https://docs.odigos.io/cloud-connectors/aws/workloads/lambda/preload"
         - "Use newly built layers that contain the compact configuration launcher. SDK defaults and collector pipelines are expanded only at process startup."
-        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field w (empty when none). ADOT supports handler mode only."
+        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field webWrapper (empty when none). ADOT supports handler mode only."
       template: |-
         # Compact settings: <ODIGOS_LAMBDA_CONFIG>
         # <LAMBDA_SDK_INSTRUCTIONS>
         resource "aws_lambda_function" "app" {
           # ... existing configuration ...
-          layers = concat(var.existing_layers, [<LAMBDA_LAYER_ARNS_JSON>])
+          layers = distinct(concat([for arn in var.existing_layers : arn if !can(regex(":layer:odigos-otel-", arn))], [<LAMBDA_LAYER_ARNS_JSON>]))
           tags = merge(var.existing_tags, {
             <LAMBDA_TAGS_TERRAFORM>
           })
@@ -1975,7 +2658,7 @@ setup:
             })
           }
         }
-        # Web Adapter: use /opt/odigos-webserver and set configuration field w to the original wrapper.
+        # Web Adapter: use /opt/odigos-webserver and set configuration field webWrapper to the original wrapper.
 
     - id: instrument-lambda-cloudformation-java
       section: instrumentation:aws.lambda
@@ -1990,11 +2673,13 @@ setup:
         - Keep unrelated layers and customer environment variables; replace previous Odigos SDK/collector layers.
         - Set the wrapper and compact configuration; record attribution with Lambda resource tags.
         - Replace every <ANGLE_BRACKETED> value.
+        - Merge this fragment into the existing function resource in its application template. Create and review a CloudFormation change set, then update that application stack; this fragment is not a standalone stack.
+        - Verify the function update succeeds and invoke it. If traffic uses published versions or aliases, publish an updated instrumented version and update all relevant aliases and weighted traffic targets; changing $LATEST does not modify existing published versions.
       prerequisites:
         - "<LAMBDA_DISTRO_PREREQUISITES>"
-        - "Ensure Odigos Lambda layers are preloaded: https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+        - "Use preloaded Lambda layers v0.0.19 or newer: https://docs.odigos.io/cloud-connectors/aws/workloads/lambda/preload"
         - "Use newly built layers that contain the compact configuration launcher. SDK defaults and collector pipelines are expanded only at process startup."
-        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field w (empty when none). ADOT supports handler mode only."
+        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field webWrapper (empty when none). ADOT supports handler mode only."
       template: |-
         # Compact settings: <ODIGOS_LAMBDA_CONFIG>
         # <LAMBDA_SDK_INSTRUCTIONS>
@@ -2006,7 +2691,7 @@ setup:
           Variables:
             AWS_LAMBDA_EXEC_WRAPPER: "<JAVA_LAMBDA_EXEC_WRAPPER>"
             ODIGOS_LAMBDA_CONFIG: <LAMBDA_CONFIG_QUOTED>
-        # Web Adapter: use /opt/odigos-webserver and set configuration field w to the original wrapper.
+        # Web Adapter: use /opt/odigos-webserver and set configuration field webWrapper to the original wrapper.
 
     - id: instrument-lambda-aws-cli-java
       section: instrumentation:aws.lambda
@@ -2021,17 +2706,21 @@ setup:
         - Keep unrelated layers and customer environment variables; replace previous Odigos SDK/collector layers.
         - Set the wrapper and compact configuration; record attribution with Lambda resource tags.
         - Replace every <ANGLE_BRACKETED> value.
+        - Run the complete script with AWS CLI and jq installed. It waits for the function configuration update before applying tags.
+        - Verify the function update succeeds and invoke it. If traffic uses published versions or aliases, publish an updated instrumented version and update all relevant aliases and weighted traffic targets; changing $LATEST does not modify existing published versions.
       prerequisites:
         - "<LAMBDA_DISTRO_PREREQUISITES>"
-        - "Ensure Odigos Lambda layers are preloaded: https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+        - "Use preloaded Lambda layers v0.0.19 or newer: https://docs.odigos.io/cloud-connectors/aws/workloads/lambda/preload"
         - "Use newly built layers that contain the compact configuration launcher. SDK defaults and collector pipelines are expanded only at process startup."
-        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field w (empty when none). ADOT supports handler mode only."
+        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field webWrapper (empty when none). ADOT supports handler mode only."
       template: |-
         # Compact settings: <ODIGOS_LAMBDA_CONFIG>
         # <LAMBDA_SDK_INSTRUCTIONS>
         FUNCTION="<FUNCTION_NAME>"
         REGION="<REGION>"
         WRAPPER="<JAVA_LAMBDA_EXEC_WRAPPER>"
+        set -eu
+        # Compatible with bash and zsh; AWS CLI and jq are required.
         # This JSON document contains only Odigos additions. Merge it with the live environment.
         cat > odigos-env.json <<'JSON'
         {
@@ -2043,15 +2732,14 @@ setup:
         JSON
         aws lambda get-function-configuration --function-name "$FUNCTION" --region "$REGION" > current.json
         jq -s --arg wrapper "$WRAPPER" '{Variables: ((.[0].Environment.Variables // {}) + .[1].Variables + {AWS_LAMBDA_EXEC_WRAPPER: $wrapper} | del(.ODIGOS_MANAGED, .ODIGOS_IAC))}' current.json odigos-env.json > merged-env.json
-        EXISTING=$(jq -r '.Layers[]?.Arn | select(contains(":layer:odigos-otel-") | not)' current.json | tr '\n' ' ')
-        aws lambda update-function-configuration --function-name "$FUNCTION" --region "$REGION" \
-          --layers $EXISTING <LAMBDA_LAYER_ARNS_SHELL> \
-          --environment file://merged-env.json
+        jq --argjson layers '[<LAMBDA_LAYER_ARNS_JSON>]' --slurpfile env merged-env.json '{FunctionName: .FunctionArn, RevisionId: .RevisionId, Layers: ([.Layers[]?.Arn | select(contains(":layer:odigos-otel-") | not)] + $layers | unique), Environment: $env[0]}' current.json > odigos-update.json
+        aws lambda update-function-configuration --region "$REGION" --cli-input-json file://odigos-update.json
+        aws lambda wait function-updated-v2 --region "$REGION" --function-name "$FUNCTION"
         cat > odigos-tags.json <<'JSON'
         <LAMBDA_TAGS_JSON>
         JSON
         aws lambda tag-resource --region "$REGION" --resource "$(jq -r .FunctionArn current.json)" --tags file://odigos-tags.json
-        # Web Adapter: use /opt/odigos-webserver and set configuration field w to the original wrapper.
+        # Web Adapter: use /opt/odigos-webserver and set configuration field webWrapper to the original wrapper.
 
     - id: instrument-lambda-cdk-java
       section: instrumentation:aws.lambda
@@ -2066,17 +2754,19 @@ setup:
         - Keep unrelated layers and customer environment variables; replace previous Odigos SDK/collector layers.
         - Set the wrapper and compact configuration; record attribution with Lambda resource tags.
         - Replace every <ANGLE_BRACKETED> value.
+        - 'Install the pinned construct with `npm install @odigos/aws-cdk@<PACKAGE_VERSION>`, add the snippet to your existing CDK stack, review `cdk diff`, then run `cdk deploy`.'
+        - Verify the function update succeeds and invoke it. If traffic uses published versions or aliases, publish an updated instrumented version and update all relevant aliases and weighted traffic targets; changing $LATEST does not modify existing published versions.
       prerequisites:
         - "<LAMBDA_DISTRO_PREREQUISITES>"
-        - "Ensure Odigos Lambda layers are preloaded: https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+        - "Use preloaded Lambda layers v0.0.19 or newer: https://docs.odigos.io/cloud-connectors/aws/workloads/lambda/preload"
         - "Use newly built layers that contain the compact configuration launcher. SDK defaults and collector pipelines are expanded only at process startup."
-        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field w (empty when none). ADOT supports handler mode only."
+        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field webWrapper (empty when none). ADOT supports handler mode only."
       template: |-
         // Compact settings: <ODIGOS_LAMBDA_CONFIG>
         // <LAMBDA_SDK_INSTRUCTIONS>
         // Attribution tags: odigos:iac=v1, odigos:sdk-layer; ADOT also records odigos:collector-layer.
         // The construct saves AWS_LAMBDA_EXEC_WRAPPER and ODIGOS_LAMBDA_CONFIG only; attribution is recorded in Lambda resource tags.
-        // Web Adapter uses /opt/odigos-webserver, preserving the original wrapper inside configuration field w.
+        // Web Adapter uses /opt/odigos-webserver, preserving the original wrapper inside configuration field webWrapper.
         import { <LAMBDA_CDK_IMPORT> } from '@odigos/aws-cdk';
         new OdigosLambdaInstrumentation(this, 'Odigos', {
           functions: [fn],
@@ -2101,17 +2791,19 @@ setup:
         - Keep unrelated layers and customer environment variables; replace previous Odigos SDK/collector layers.
         - Set the wrapper and compact configuration; record attribution with Lambda resource tags.
         - Replace every <ANGLE_BRACKETED> value.
+        - 'Merge this fragment into the function in its existing workspace, review `terraform plan`, then run `terraform apply` (OpenTofu: `tofu plan` and `tofu apply`). Do not replace the rest of the function resource with this fragment.'
+        - Verify the function update succeeds and invoke it. If traffic uses published versions or aliases, publish an updated instrumented version and update all relevant aliases and weighted traffic targets; changing $LATEST does not modify existing published versions.
       prerequisites:
         - "<LAMBDA_DISTRO_PREREQUISITES>"
-        - "Ensure Odigos Lambda layers are preloaded: https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+        - "Use preloaded Lambda layers v0.0.19 or newer: https://docs.odigos.io/cloud-connectors/aws/workloads/lambda/preload"
         - "Use newly built layers that contain the compact configuration launcher. SDK defaults and collector pipelines are expanded only at process startup."
-        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field w (empty when none). ADOT supports handler mode only."
+        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field webWrapper (empty when none). ADOT supports handler mode only."
       template: |-
         # Compact settings: <ODIGOS_LAMBDA_CONFIG>
         # <LAMBDA_SDK_INSTRUCTIONS>
         resource "aws_lambda_function" "app" {
           # ... existing configuration ...
-          layers = concat(var.existing_layers, [<LAMBDA_LAYER_ARNS_JSON>])
+          layers = distinct(concat([for arn in var.existing_layers : arn if !can(regex(":layer:odigos-otel-", arn))], [<LAMBDA_LAYER_ARNS_JSON>]))
           tags = merge(var.existing_tags, {
             <LAMBDA_TAGS_TERRAFORM>
           })
@@ -2122,7 +2814,7 @@ setup:
             })
           }
         }
-        # Web Adapter: use /opt/odigos-webserver and set configuration field w to the original wrapper.
+        # Web Adapter: use /opt/odigos-webserver and set configuration field webWrapper to the original wrapper.
 
     - id: instrument-lambda-cloudformation-nodejs
       section: instrumentation:aws.lambda
@@ -2137,11 +2829,13 @@ setup:
         - Keep unrelated layers and customer environment variables; replace previous Odigos SDK/collector layers.
         - Set the wrapper and compact configuration; record attribution with Lambda resource tags.
         - Replace every <ANGLE_BRACKETED> value.
+        - Merge this fragment into the existing function resource in its application template. Create and review a CloudFormation change set, then update that application stack; this fragment is not a standalone stack.
+        - Verify the function update succeeds and invoke it. If traffic uses published versions or aliases, publish an updated instrumented version and update all relevant aliases and weighted traffic targets; changing $LATEST does not modify existing published versions.
       prerequisites:
         - "<LAMBDA_DISTRO_PREREQUISITES>"
-        - "Ensure Odigos Lambda layers are preloaded: https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+        - "Use preloaded Lambda layers v0.0.19 or newer: https://docs.odigos.io/cloud-connectors/aws/workloads/lambda/preload"
         - "Use newly built layers that contain the compact configuration launcher. SDK defaults and collector pipelines are expanded only at process startup."
-        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field w (empty when none). ADOT supports handler mode only."
+        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field webWrapper (empty when none). ADOT supports handler mode only."
       template: |-
         # Compact settings: <ODIGOS_LAMBDA_CONFIG>
         # <LAMBDA_SDK_INSTRUCTIONS>
@@ -2153,7 +2847,7 @@ setup:
           Variables:
             AWS_LAMBDA_EXEC_WRAPPER: "<LAMBDA_EXEC_WRAPPER>"
             ODIGOS_LAMBDA_CONFIG: <LAMBDA_CONFIG_QUOTED>
-        # Web Adapter: use /opt/odigos-webserver and set configuration field w to the original wrapper.
+        # Web Adapter: use /opt/odigos-webserver and set configuration field webWrapper to the original wrapper.
 
     - id: instrument-lambda-aws-cli-nodejs
       section: instrumentation:aws.lambda
@@ -2168,17 +2862,21 @@ setup:
         - Keep unrelated layers and customer environment variables; replace previous Odigos SDK/collector layers.
         - Set the wrapper and compact configuration; record attribution with Lambda resource tags.
         - Replace every <ANGLE_BRACKETED> value.
+        - Run the complete script with AWS CLI and jq installed. It waits for the function configuration update before applying tags.
+        - Verify the function update succeeds and invoke it. If traffic uses published versions or aliases, publish an updated instrumented version and update all relevant aliases and weighted traffic targets; changing $LATEST does not modify existing published versions.
       prerequisites:
         - "<LAMBDA_DISTRO_PREREQUISITES>"
-        - "Ensure Odigos Lambda layers are preloaded: https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+        - "Use preloaded Lambda layers v0.0.19 or newer: https://docs.odigos.io/cloud-connectors/aws/workloads/lambda/preload"
         - "Use newly built layers that contain the compact configuration launcher. SDK defaults and collector pipelines are expanded only at process startup."
-        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field w (empty when none). ADOT supports handler mode only."
+        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field webWrapper (empty when none). ADOT supports handler mode only."
       template: |-
         # Compact settings: <ODIGOS_LAMBDA_CONFIG>
         # <LAMBDA_SDK_INSTRUCTIONS>
         FUNCTION="<FUNCTION_NAME>"
         REGION="<REGION>"
         WRAPPER="<LAMBDA_EXEC_WRAPPER>"
+        set -eu
+        # Compatible with bash and zsh; AWS CLI and jq are required.
         # This JSON document contains only Odigos additions. Merge it with the live environment.
         cat > odigos-env.json <<'JSON'
         {
@@ -2190,15 +2888,14 @@ setup:
         JSON
         aws lambda get-function-configuration --function-name "$FUNCTION" --region "$REGION" > current.json
         jq -s --arg wrapper "$WRAPPER" '{Variables: ((.[0].Environment.Variables // {}) + .[1].Variables + {AWS_LAMBDA_EXEC_WRAPPER: $wrapper} | del(.ODIGOS_MANAGED, .ODIGOS_IAC))}' current.json odigos-env.json > merged-env.json
-        EXISTING=$(jq -r '.Layers[]?.Arn | select(contains(":layer:odigos-otel-") | not)' current.json | tr '\n' ' ')
-        aws lambda update-function-configuration --function-name "$FUNCTION" --region "$REGION" \
-          --layers $EXISTING <LAMBDA_LAYER_ARNS_SHELL> \
-          --environment file://merged-env.json
+        jq --argjson layers '[<LAMBDA_LAYER_ARNS_JSON>]' --slurpfile env merged-env.json '{FunctionName: .FunctionArn, RevisionId: .RevisionId, Layers: ([.Layers[]?.Arn | select(contains(":layer:odigos-otel-") | not)] + $layers | unique), Environment: $env[0]}' current.json > odigos-update.json
+        aws lambda update-function-configuration --region "$REGION" --cli-input-json file://odigos-update.json
+        aws lambda wait function-updated-v2 --region "$REGION" --function-name "$FUNCTION"
         cat > odigos-tags.json <<'JSON'
         <LAMBDA_TAGS_JSON>
         JSON
         aws lambda tag-resource --region "$REGION" --resource "$(jq -r .FunctionArn current.json)" --tags file://odigos-tags.json
-        # Web Adapter: use /opt/odigos-webserver and set configuration field w to the original wrapper.
+        # Web Adapter: use /opt/odigos-webserver and set configuration field webWrapper to the original wrapper.
 
     - id: instrument-lambda-cdk-nodejs
       section: instrumentation:aws.lambda
@@ -2213,17 +2910,19 @@ setup:
         - Keep unrelated layers and customer environment variables; replace previous Odigos SDK/collector layers.
         - Set the wrapper and compact configuration; record attribution with Lambda resource tags.
         - Replace every <ANGLE_BRACKETED> value.
+        - 'Install the pinned construct with `npm install @odigos/aws-cdk@<PACKAGE_VERSION>`, add the snippet to your existing CDK stack, review `cdk diff`, then run `cdk deploy`.'
+        - Verify the function update succeeds and invoke it. If traffic uses published versions or aliases, publish an updated instrumented version and update all relevant aliases and weighted traffic targets; changing $LATEST does not modify existing published versions.
       prerequisites:
         - "<LAMBDA_DISTRO_PREREQUISITES>"
-        - "Ensure Odigos Lambda layers are preloaded: https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+        - "Use preloaded Lambda layers v0.0.19 or newer: https://docs.odigos.io/cloud-connectors/aws/workloads/lambda/preload"
         - "Use newly built layers that contain the compact configuration launcher. SDK defaults and collector pipelines are expanded only at process startup."
-        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field w (empty when none). ADOT supports handler mode only."
+        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field webWrapper (empty when none). ADOT supports handler mode only."
       template: |-
         // Compact settings: <ODIGOS_LAMBDA_CONFIG>
         // <LAMBDA_SDK_INSTRUCTIONS>
         // Attribution tags: odigos:iac=v1, odigos:sdk-layer; ADOT also records odigos:collector-layer.
         // The construct saves AWS_LAMBDA_EXEC_WRAPPER and ODIGOS_LAMBDA_CONFIG only; attribution is recorded in Lambda resource tags.
-        // Web Adapter uses /opt/odigos-webserver, preserving the original wrapper inside configuration field w.
+        // Web Adapter uses /opt/odigos-webserver, preserving the original wrapper inside configuration field webWrapper.
         import { <LAMBDA_CDK_IMPORT> } from '@odigos/aws-cdk';
         new OdigosLambdaInstrumentation(this, 'Odigos', {
           functions: [fn],
@@ -2248,17 +2947,19 @@ setup:
         - Keep unrelated layers and customer environment variables; replace previous Odigos SDK/collector layers.
         - Set the wrapper and compact configuration; record attribution with Lambda resource tags.
         - Replace every <ANGLE_BRACKETED> value.
+        - 'Merge this fragment into the function in its existing workspace, review `terraform plan`, then run `terraform apply` (OpenTofu: `tofu plan` and `tofu apply`). Do not replace the rest of the function resource with this fragment.'
+        - Verify the function update succeeds and invoke it. If traffic uses published versions or aliases, publish an updated instrumented version and update all relevant aliases and weighted traffic targets; changing $LATEST does not modify existing published versions.
       prerequisites:
         - "<LAMBDA_DISTRO_PREREQUISITES>"
-        - "Ensure Odigos Lambda layers are preloaded: https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+        - "Use preloaded Lambda layers v0.0.19 or newer: https://docs.odigos.io/cloud-connectors/aws/workloads/lambda/preload"
         - "Use newly built layers that contain the compact configuration launcher. SDK defaults and collector pipelines are expanded only at process startup."
-        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field w (empty when none). ADOT supports handler mode only."
+        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field webWrapper (empty when none). ADOT supports handler mode only."
       template: |-
         # Compact settings: <ODIGOS_LAMBDA_CONFIG>
         # <LAMBDA_SDK_INSTRUCTIONS>
         resource "aws_lambda_function" "app" {
           # ... existing configuration ...
-          layers = concat(var.existing_layers, [<LAMBDA_LAYER_ARNS_JSON>])
+          layers = distinct(concat([for arn in var.existing_layers : arn if !can(regex(":layer:odigos-otel-", arn))], [<LAMBDA_LAYER_ARNS_JSON>]))
           tags = merge(var.existing_tags, {
             <LAMBDA_TAGS_TERRAFORM>
           })
@@ -2269,7 +2970,7 @@ setup:
             })
           }
         }
-        # Web Adapter: use /opt/odigos-webserver and set configuration field w to the original wrapper.
+        # Web Adapter: use /opt/odigos-webserver and set configuration field webWrapper to the original wrapper.
 
     - id: instrument-lambda-cloudformation-python
       section: instrumentation:aws.lambda
@@ -2284,11 +2985,13 @@ setup:
         - Keep unrelated layers and customer environment variables; replace previous Odigos SDK/collector layers.
         - Set the wrapper and compact configuration; record attribution with Lambda resource tags.
         - Replace every <ANGLE_BRACKETED> value.
+        - Merge this fragment into the existing function resource in its application template. Create and review a CloudFormation change set, then update that application stack; this fragment is not a standalone stack.
+        - Verify the function update succeeds and invoke it. If traffic uses published versions or aliases, publish an updated instrumented version and update all relevant aliases and weighted traffic targets; changing $LATEST does not modify existing published versions.
       prerequisites:
         - "<LAMBDA_DISTRO_PREREQUISITES>"
-        - "Ensure Odigos Lambda layers are preloaded: https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+        - "Use preloaded Lambda layers v0.0.19 or newer: https://docs.odigos.io/cloud-connectors/aws/workloads/lambda/preload"
         - "Use newly built layers that contain the compact configuration launcher. SDK defaults and collector pipelines are expanded only at process startup."
-        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field w (empty when none). ADOT supports handler mode only."
+        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field webWrapper (empty when none). ADOT supports handler mode only."
       template: |-
         # Compact settings: <ODIGOS_LAMBDA_CONFIG>
         # <LAMBDA_SDK_INSTRUCTIONS>
@@ -2300,7 +3003,7 @@ setup:
           Variables:
             AWS_LAMBDA_EXEC_WRAPPER: "/opt/otel-instrument"
             ODIGOS_LAMBDA_CONFIG: <LAMBDA_CONFIG_QUOTED>
-        # Web Adapter: use /opt/odigos-webserver and set configuration field w to the original wrapper.
+        # Web Adapter: use /opt/odigos-webserver and set configuration field webWrapper to the original wrapper.
 
     - id: instrument-lambda-aws-cli-python
       section: instrumentation:aws.lambda
@@ -2315,17 +3018,21 @@ setup:
         - Keep unrelated layers and customer environment variables; replace previous Odigos SDK/collector layers.
         - Set the wrapper and compact configuration; record attribution with Lambda resource tags.
         - Replace every <ANGLE_BRACKETED> value.
+        - Run the complete script with AWS CLI and jq installed. It waits for the function configuration update before applying tags.
+        - Verify the function update succeeds and invoke it. If traffic uses published versions or aliases, publish an updated instrumented version and update all relevant aliases and weighted traffic targets; changing $LATEST does not modify existing published versions.
       prerequisites:
         - "<LAMBDA_DISTRO_PREREQUISITES>"
-        - "Ensure Odigos Lambda layers are preloaded: https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+        - "Use preloaded Lambda layers v0.0.19 or newer: https://docs.odigos.io/cloud-connectors/aws/workloads/lambda/preload"
         - "Use newly built layers that contain the compact configuration launcher. SDK defaults and collector pipelines are expanded only at process startup."
-        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field w (empty when none). ADOT supports handler mode only."
+        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field webWrapper (empty when none). ADOT supports handler mode only."
       template: |-
         # Compact settings: <ODIGOS_LAMBDA_CONFIG>
         # <LAMBDA_SDK_INSTRUCTIONS>
         FUNCTION="<FUNCTION_NAME>"
         REGION="<REGION>"
         WRAPPER="/opt/otel-instrument"
+        set -eu
+        # Compatible with bash and zsh; AWS CLI and jq are required.
         # This JSON document contains only Odigos additions. Merge it with the live environment.
         cat > odigos-env.json <<'JSON'
         {
@@ -2337,15 +3044,14 @@ setup:
         JSON
         aws lambda get-function-configuration --function-name "$FUNCTION" --region "$REGION" > current.json
         jq -s --arg wrapper "$WRAPPER" '{Variables: ((.[0].Environment.Variables // {}) + .[1].Variables + {AWS_LAMBDA_EXEC_WRAPPER: $wrapper} | del(.ODIGOS_MANAGED, .ODIGOS_IAC))}' current.json odigos-env.json > merged-env.json
-        EXISTING=$(jq -r '.Layers[]?.Arn | select(contains(":layer:odigos-otel-") | not)' current.json | tr '\n' ' ')
-        aws lambda update-function-configuration --function-name "$FUNCTION" --region "$REGION" \
-          --layers $EXISTING <LAMBDA_LAYER_ARNS_SHELL> \
-          --environment file://merged-env.json
+        jq --argjson layers '[<LAMBDA_LAYER_ARNS_JSON>]' --slurpfile env merged-env.json '{FunctionName: .FunctionArn, RevisionId: .RevisionId, Layers: ([.Layers[]?.Arn | select(contains(":layer:odigos-otel-") | not)] + $layers | unique), Environment: $env[0]}' current.json > odigos-update.json
+        aws lambda update-function-configuration --region "$REGION" --cli-input-json file://odigos-update.json
+        aws lambda wait function-updated-v2 --region "$REGION" --function-name "$FUNCTION"
         cat > odigos-tags.json <<'JSON'
         <LAMBDA_TAGS_JSON>
         JSON
         aws lambda tag-resource --region "$REGION" --resource "$(jq -r .FunctionArn current.json)" --tags file://odigos-tags.json
-        # Web Adapter: use /opt/odigos-webserver and set configuration field w to the original wrapper.
+        # Web Adapter: use /opt/odigos-webserver and set configuration field webWrapper to the original wrapper.
 
     - id: instrument-lambda-cdk-python
       section: instrumentation:aws.lambda
@@ -2360,17 +3066,19 @@ setup:
         - Keep unrelated layers and customer environment variables; replace previous Odigos SDK/collector layers.
         - Set the wrapper and compact configuration; record attribution with Lambda resource tags.
         - Replace every <ANGLE_BRACKETED> value.
+        - 'Install the pinned construct with `npm install @odigos/aws-cdk@<PACKAGE_VERSION>`, add the snippet to your existing CDK stack, review `cdk diff`, then run `cdk deploy`.'
+        - Verify the function update succeeds and invoke it. If traffic uses published versions or aliases, publish an updated instrumented version and update all relevant aliases and weighted traffic targets; changing $LATEST does not modify existing published versions.
       prerequisites:
         - "<LAMBDA_DISTRO_PREREQUISITES>"
-        - "Ensure Odigos Lambda layers are preloaded: https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+        - "Use preloaded Lambda layers v0.0.19 or newer: https://docs.odigos.io/cloud-connectors/aws/workloads/lambda/preload"
         - "Use newly built layers that contain the compact configuration launcher. SDK defaults and collector pipelines are expanded only at process startup."
-        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field w (empty when none). ADOT supports handler mode only."
+        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field webWrapper (empty when none). ADOT supports handler mode only."
       template: |-
         // Compact settings: <ODIGOS_LAMBDA_CONFIG>
         // <LAMBDA_SDK_INSTRUCTIONS>
         // Attribution tags: odigos:iac=v1, odigos:sdk-layer; ADOT also records odigos:collector-layer.
         // The construct saves AWS_LAMBDA_EXEC_WRAPPER and ODIGOS_LAMBDA_CONFIG only; attribution is recorded in Lambda resource tags.
-        // Web Adapter uses /opt/odigos-webserver, preserving the original wrapper inside configuration field w.
+        // Web Adapter uses /opt/odigos-webserver, preserving the original wrapper inside configuration field webWrapper.
         import { <LAMBDA_CDK_IMPORT> } from '@odigos/aws-cdk';
         new OdigosLambdaInstrumentation(this, 'Odigos', {
           functions: [fn],
@@ -2395,17 +3103,19 @@ setup:
         - Keep unrelated layers and customer environment variables; replace previous Odigos SDK/collector layers.
         - Set the wrapper and compact configuration; record attribution with Lambda resource tags.
         - Replace every <ANGLE_BRACKETED> value.
+        - 'Merge this fragment into the function in its existing workspace, review `terraform plan`, then run `terraform apply` (OpenTofu: `tofu plan` and `tofu apply`). Do not replace the rest of the function resource with this fragment.'
+        - Verify the function update succeeds and invoke it. If traffic uses published versions or aliases, publish an updated instrumented version and update all relevant aliases and weighted traffic targets; changing $LATEST does not modify existing published versions.
       prerequisites:
         - "<LAMBDA_DISTRO_PREREQUISITES>"
-        - "Ensure Odigos Lambda layers are preloaded: https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+        - "Use preloaded Lambda layers v0.0.19 or newer: https://docs.odigos.io/cloud-connectors/aws/workloads/lambda/preload"
         - "Use newly built layers that contain the compact configuration launcher. SDK defaults and collector pipelines are expanded only at process startup."
-        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field w (empty when none). ADOT supports handler mode only."
+        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field webWrapper (empty when none). ADOT supports handler mode only."
       template: |-
         # Compact settings: <ODIGOS_LAMBDA_CONFIG>
         # The SDK entry point is /opt/otel-handler.
         resource "aws_lambda_function" "app" {
           # ... existing configuration ...
-          layers = concat(var.existing_layers, [<LAMBDA_LAYER_ARNS_JSON>])
+          layers = distinct(concat([for arn in var.existing_layers : arn if !can(regex(":layer:odigos-otel-", arn))], [<LAMBDA_LAYER_ARNS_JSON>]))
           tags = merge(var.existing_tags, {
             <LAMBDA_TAGS_TERRAFORM>
           })
@@ -2416,7 +3126,7 @@ setup:
             })
           }
         }
-        # Web Adapter: use /opt/odigos-webserver and set configuration field w to the original wrapper.
+        # Web Adapter: use /opt/odigos-webserver and set configuration field webWrapper to the original wrapper.
 
     - id: instrument-lambda-cloudformation-ruby
       section: instrumentation:aws.lambda
@@ -2431,11 +3141,13 @@ setup:
         - Keep unrelated layers and customer environment variables; replace previous Odigos SDK/collector layers.
         - Set the wrapper and compact configuration; record attribution with Lambda resource tags.
         - Replace every <ANGLE_BRACKETED> value.
+        - Merge this fragment into the existing function resource in its application template. Create and review a CloudFormation change set, then update that application stack; this fragment is not a standalone stack.
+        - Verify the function update succeeds and invoke it. If traffic uses published versions or aliases, publish an updated instrumented version and update all relevant aliases and weighted traffic targets; changing $LATEST does not modify existing published versions.
       prerequisites:
         - "<LAMBDA_DISTRO_PREREQUISITES>"
-        - "Ensure Odigos Lambda layers are preloaded: https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+        - "Use preloaded Lambda layers v0.0.19 or newer: https://docs.odigos.io/cloud-connectors/aws/workloads/lambda/preload"
         - "Use newly built layers that contain the compact configuration launcher. SDK defaults and collector pipelines are expanded only at process startup."
-        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field w (empty when none). ADOT supports handler mode only."
+        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field webWrapper (empty when none). ADOT supports handler mode only."
       template: |-
         # Compact settings: <ODIGOS_LAMBDA_CONFIG>
         # The SDK entry point is /opt/otel-handler.
@@ -2447,7 +3159,7 @@ setup:
           Variables:
             AWS_LAMBDA_EXEC_WRAPPER: "<LAMBDA_EXEC_WRAPPER>"
             ODIGOS_LAMBDA_CONFIG: <LAMBDA_CONFIG_QUOTED>
-        # Web Adapter: use /opt/odigos-webserver and set configuration field w to the original wrapper.
+        # Web Adapter: use /opt/odigos-webserver and set configuration field webWrapper to the original wrapper.
 
     - id: instrument-lambda-aws-cli-ruby
       section: instrumentation:aws.lambda
@@ -2462,17 +3174,21 @@ setup:
         - Keep unrelated layers and customer environment variables; replace previous Odigos SDK/collector layers.
         - Set the wrapper and compact configuration; record attribution with Lambda resource tags.
         - Replace every <ANGLE_BRACKETED> value.
+        - Run the complete script with AWS CLI and jq installed. It waits for the function configuration update before applying tags.
+        - Verify the function update succeeds and invoke it. If traffic uses published versions or aliases, publish an updated instrumented version and update all relevant aliases and weighted traffic targets; changing $LATEST does not modify existing published versions.
       prerequisites:
         - "<LAMBDA_DISTRO_PREREQUISITES>"
-        - "Ensure Odigos Lambda layers are preloaded: https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+        - "Use preloaded Lambda layers v0.0.19 or newer: https://docs.odigos.io/cloud-connectors/aws/workloads/lambda/preload"
         - "Use newly built layers that contain the compact configuration launcher. SDK defaults and collector pipelines are expanded only at process startup."
-        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field w (empty when none). ADOT supports handler mode only."
+        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field webWrapper (empty when none). ADOT supports handler mode only."
       template: |-
         # Compact settings: <ODIGOS_LAMBDA_CONFIG>
         # The SDK entry point is /opt/otel-handler.
         FUNCTION="<FUNCTION_NAME>"
         REGION="<REGION>"
         WRAPPER="<LAMBDA_EXEC_WRAPPER>"
+        set -eu
+        # Compatible with bash and zsh; AWS CLI and jq are required.
         # This JSON document contains only Odigos additions. Merge it with the live environment.
         cat > odigos-env.json <<'JSON'
         {
@@ -2484,15 +3200,14 @@ setup:
         JSON
         aws lambda get-function-configuration --function-name "$FUNCTION" --region "$REGION" > current.json
         jq -s --arg wrapper "$WRAPPER" '{Variables: ((.[0].Environment.Variables // {}) + .[1].Variables + {AWS_LAMBDA_EXEC_WRAPPER: $wrapper} | del(.ODIGOS_MANAGED, .ODIGOS_IAC))}' current.json odigos-env.json > merged-env.json
-        EXISTING=$(jq -r '.Layers[]?.Arn | select(contains(":layer:odigos-otel-") | not)' current.json | tr '\n' ' ')
-        aws lambda update-function-configuration --function-name "$FUNCTION" --region "$REGION" \
-          --layers $EXISTING <LAMBDA_LAYER_ARNS_SHELL> \
-          --environment file://merged-env.json
+        jq --argjson layers '[<LAMBDA_LAYER_ARNS_JSON>]' --slurpfile env merged-env.json '{FunctionName: .FunctionArn, RevisionId: .RevisionId, Layers: ([.Layers[]?.Arn | select(contains(":layer:odigos-otel-") | not)] + $layers | unique), Environment: $env[0]}' current.json > odigos-update.json
+        aws lambda update-function-configuration --region "$REGION" --cli-input-json file://odigos-update.json
+        aws lambda wait function-updated-v2 --region "$REGION" --function-name "$FUNCTION"
         cat > odigos-tags.json <<'JSON'
         <LAMBDA_TAGS_JSON>
         JSON
         aws lambda tag-resource --region "$REGION" --resource "$(jq -r .FunctionArn current.json)" --tags file://odigos-tags.json
-        # Web Adapter: use /opt/odigos-webserver and set configuration field w to the original wrapper.
+        # Web Adapter: use /opt/odigos-webserver and set configuration field webWrapper to the original wrapper.
 
     - id: instrument-lambda-cdk-ruby
       section: instrumentation:aws.lambda
@@ -2507,17 +3222,19 @@ setup:
         - Keep unrelated layers and customer environment variables; replace previous Odigos SDK/collector layers.
         - Set the wrapper and compact configuration; record attribution with Lambda resource tags.
         - Replace every <ANGLE_BRACKETED> value.
+        - 'Install the pinned construct with `npm install @odigos/aws-cdk@<PACKAGE_VERSION>`, add the snippet to your existing CDK stack, review `cdk diff`, then run `cdk deploy`.'
+        - Verify the function update succeeds and invoke it. If traffic uses published versions or aliases, publish an updated instrumented version and update all relevant aliases and weighted traffic targets; changing $LATEST does not modify existing published versions.
       prerequisites:
         - "<LAMBDA_DISTRO_PREREQUISITES>"
-        - "Ensure Odigos Lambda layers are preloaded: https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+        - "Use preloaded Lambda layers v0.0.19 or newer: https://docs.odigos.io/cloud-connectors/aws/workloads/lambda/preload"
         - "Use newly built layers that contain the compact configuration launcher. SDK defaults and collector pipelines are expanded only at process startup."
-        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field w (empty when none). ADOT supports handler mode only."
+        - "For AWS Lambda Web Adapter, select /opt/odigos-webserver and put the original AWS_LAMBDA_EXEC_WRAPPER in configuration field webWrapper (empty when none). ADOT supports handler mode only."
       template: |-
         // Compact settings: <ODIGOS_LAMBDA_CONFIG>
         // The SDK entry point is /opt/otel-handler.
         // Attribution tags: odigos:iac=v1, odigos:sdk-layer; ADOT also records odigos:collector-layer.
         // The construct saves AWS_LAMBDA_EXEC_WRAPPER and ODIGOS_LAMBDA_CONFIG only; attribution is recorded in Lambda resource tags.
-        // Web Adapter uses /opt/odigos-webserver, preserving the original wrapper inside configuration field w.
+        // Web Adapter uses /opt/odigos-webserver, preserving the original wrapper inside configuration field webWrapper.
         import { <LAMBDA_CDK_IMPORT> } from '@odigos/aws-cdk';
         new OdigosLambdaInstrumentation(this, 'Odigos', {
           functions: [fn],
@@ -2542,6 +3259,7 @@ setup:
         - Add the volume and the odigos-agent container to your task definition.
         - Add the mount, dependency and environment to each application container.
         - Apply, then roll the service onto the new revision.
+        - 'Merge the fragment into your existing task definition and ensure the service references its new revision. Review `terraform plan` and run `terraform apply` (OpenTofu: `tofu plan` and `tofu apply`). Preserve the rest of your application configuration.'
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
@@ -2630,6 +3348,7 @@ setup:
         - Merge Volumes and the odigos-agent entry into your task definition.
         - Add the mount, dependency and environment to each application container.
         - Deploy, then roll the service onto the new revision.
+        - Merge this fragment into the existing application task definition, review the application stack change set, and deploy it through its owner. The fragment is not a standalone stack; the service must reference the updated task definition.
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
@@ -2707,15 +3426,13 @@ setup:
         https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
       format: text
       steps:
-        - Install @odigos/aws-cdk (pin the exact version).
-        - Create one OdigosFargateInstrumentation and call instrument() once per container.
-        - cdk diff, then cdk deploy — the service must roll onto the new revision.
+        - 'From the CDK project, run `npm install @odigos/aws-cdk@<PACKAGE_VERSION>`. Paste only the TypeScript below into your stack.'
+        - Create one OdigosFargateInstrumentation and call `instrument()` once per container.
+        - '`cdk diff`, then `cdk deploy` — the service must roll onto the new revision.'
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
-        npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
-
         import { OdigosFargateInstrumentation, OdigosFargateLanguage } from '@odigos/aws-cdk';
 
         const odigos = new OdigosFargateInstrumentation(this, 'Odigos', {
@@ -2772,6 +3489,7 @@ setup:
         - Add the volume and the odigos-agent container to your task definition.
         - Add the mount, dependency and environment to each application container.
         - Apply, then roll the service onto the new revision.
+        - 'Merge the fragment into your existing task definition and ensure the service references its new revision. Review `terraform plan` and run `terraform apply` (OpenTofu: `tofu plan` and `tofu apply`). Preserve the rest of your application configuration.'
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
@@ -2862,6 +3580,7 @@ setup:
         - Merge Volumes and the odigos-agent entry into your task definition.
         - Add the mount, dependency and environment to each application container.
         - Deploy, then roll the service onto the new revision.
+        - Merge this fragment into the existing application task definition, review the application stack change set, and deploy it through its owner. The fragment is not a standalone stack; the service must reference the updated task definition.
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
@@ -2943,15 +3662,13 @@ setup:
         https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
       format: text
       steps:
-        - Install @odigos/aws-cdk (pin the exact version).
-        - Create one OdigosFargateInstrumentation and call instrument() once per container.
-        - cdk diff, then cdk deploy — the service must roll onto the new revision.
+        - 'From the CDK project, run `npm install @odigos/aws-cdk@<PACKAGE_VERSION>`. Paste only the TypeScript below into your stack.'
+        - Create one OdigosFargateInstrumentation and call `instrument()` once per container.
+        - '`cdk diff`, then `cdk deploy` — the service must roll onto the new revision.'
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
-        npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
-
         import { OdigosFargateInstrumentation, OdigosFargateLanguage } from '@odigos/aws-cdk';
 
         const odigos = new OdigosFargateInstrumentation(this, 'Odigos', {
@@ -3010,6 +3727,7 @@ setup:
         - Add the volume and the odigos-agent container to your task definition.
         - Add the mount, dependency and environment to each application container.
         - Apply, then roll the service onto the new revision.
+        - 'Merge the fragment into your existing task definition and ensure the service references its new revision. Review `terraform plan` and run `terraform apply` (OpenTofu: `tofu plan` and `tofu apply`). Preserve the rest of your application configuration.'
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
@@ -3098,6 +3816,7 @@ setup:
         - Merge Volumes and the odigos-agent entry into your task definition.
         - Add the mount, dependency and environment to each application container.
         - Deploy, then roll the service onto the new revision.
+        - Merge this fragment into the existing application task definition, review the application stack change set, and deploy it through its owner. The fragment is not a standalone stack; the service must reference the updated task definition.
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
@@ -3175,15 +3894,13 @@ setup:
         https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
       format: text
       steps:
-        - Install @odigos/aws-cdk (pin the exact version).
-        - Create one OdigosFargateInstrumentation and call instrument() once per container.
-        - cdk diff, then cdk deploy — the service must roll onto the new revision.
+        - 'From the CDK project, run `npm install @odigos/aws-cdk@<PACKAGE_VERSION>`. Paste only the TypeScript below into your stack.'
+        - Create one OdigosFargateInstrumentation and call `instrument()` once per container.
+        - '`cdk diff`, then `cdk deploy` — the service must roll onto the new revision.'
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
-        npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
-
         import { OdigosFargateInstrumentation, OdigosFargateLanguage } from '@odigos/aws-cdk';
 
         const odigos = new OdigosFargateInstrumentation(this, 'Odigos', {
@@ -3240,6 +3957,7 @@ setup:
         - Add the volume and the odigos-agent container to your task definition.
         - Add the mount, dependency and environment to each application container.
         - Apply, then roll the service onto the new revision.
+        - 'Merge the fragment into your existing task definition and ensure the service references its new revision. Review `terraform plan` and run `terraform apply` (OpenTofu: `tofu plan` and `tofu apply`). Preserve the rest of your application configuration.'
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
@@ -3330,6 +4048,7 @@ setup:
         - Merge Volumes and the odigos-agent entry into your task definition.
         - Add the mount, dependency and environment to each application container.
         - Deploy, then roll the service onto the new revision.
+        - Merge this fragment into the existing application task definition, review the application stack change set, and deploy it through its owner. The fragment is not a standalone stack; the service must reference the updated task definition.
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
@@ -3414,15 +4133,13 @@ setup:
         https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
       format: text
       steps:
-        - Install @odigos/aws-cdk (pin the exact version).
-        - Create one OdigosFargateInstrumentation and call instrument() once per container.
-        - cdk diff, then cdk deploy — the service must roll onto the new revision.
+        - 'From the CDK project, run `npm install @odigos/aws-cdk@<PACKAGE_VERSION>`. Paste only the TypeScript below into your stack.'
+        - Create one OdigosFargateInstrumentation and call `instrument()` once per container.
+        - '`cdk diff`, then `cdk deploy` — the service must roll onto the new revision.'
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
-        npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
-
         import { OdigosFargateInstrumentation, OdigosFargateLanguage } from '@odigos/aws-cdk';
 
         const odigos = new OdigosFargateInstrumentation(this, 'Odigos', {
@@ -3482,6 +4199,7 @@ setup:
         - Add the volume and the odigos-agent container to your task definition.
         - Add the mount, dependency and environment to each application container.
         - Apply, then roll the service onto the new revision.
+        - 'Merge the fragment into your existing task definition and ensure the service references its new revision. Review `terraform plan` and run `terraform apply` (OpenTofu: `tofu plan` and `tofu apply`). Preserve the rest of your application configuration.'
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
@@ -3570,6 +4288,7 @@ setup:
         - Merge Volumes and the odigos-agent entry into your task definition.
         - Add the mount, dependency and environment to each application container.
         - Deploy, then roll the service onto the new revision.
+        - Merge this fragment into the existing application task definition, review the application stack change set, and deploy it through its owner. The fragment is not a standalone stack; the service must reference the updated task definition.
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
@@ -3650,16 +4369,14 @@ setup:
         https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
       format: text
       steps:
-        - Install @odigos/aws-cdk (pin the exact version).
-        - Create one OdigosFargateInstrumentation and call instrument() once per container.
+        - 'From the CDK project, run `npm install @odigos/aws-cdk@<PACKAGE_VERSION>`. Paste only the TypeScript below into your stack.'
+        - Create one OdigosFargateInstrumentation and call `instrument()` once per container.
         - Pass runtimeVersion as the app major.minor — the PHP agent is per runtime version.
-        - cdk diff, then cdk deploy — the service must roll onto the new revision.
+        - '`cdk diff`, then `cdk deploy` — the service must roll onto the new revision.'
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
-        npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
-
         import { OdigosFargateInstrumentation, OdigosFargateLanguage } from '@odigos/aws-cdk';
 
         const odigos = new OdigosFargateInstrumentation(this, 'Odigos', {
@@ -3718,6 +4435,7 @@ setup:
         - Add the volume and the odigos-agent container to your task definition.
         - Add the mount, dependency and environment to each application container.
         - Apply, then roll the service onto the new revision.
+        - 'Merge the fragment into your existing task definition and ensure the service references its new revision. Review `terraform plan` and run `terraform apply` (OpenTofu: `tofu plan` and `tofu apply`). Preserve the rest of your application configuration.'
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
@@ -3806,6 +4524,7 @@ setup:
         - Merge Volumes and the odigos-agent entry into your task definition.
         - Add the mount, dependency and environment to each application container.
         - Deploy, then roll the service onto the new revision.
+        - Merge this fragment into the existing application task definition, review the application stack change set, and deploy it through its owner. The fragment is not a standalone stack; the service must reference the updated task definition.
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
@@ -3886,16 +4605,14 @@ setup:
         https://docs.odigos.io/cloud-connectors/aws/cdk/fargate
       format: text
       steps:
-        - Install @odigos/aws-cdk (pin the exact version).
-        - Create one OdigosFargateInstrumentation and call instrument() once per container.
+        - 'From the CDK project, run `npm install @odigos/aws-cdk@<PACKAGE_VERSION>`. Paste only the TypeScript below into your stack.'
+        - Create one OdigosFargateInstrumentation and call `instrument()` once per container.
         - Pass runtimeVersion as the app major.minor — the Ruby agent is per runtime version.
-        - cdk diff, then cdk deploy — the service must roll onto the new revision.
+        - '`cdk diff`, then `cdk deploy` — the service must roll onto the new revision.'
       prerequisites:
         - >-
           Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector).
       template: |-
-        npm install @odigos/aws-cdk@<PACKAGE_VERSION>    # Python CDK: pip install odigos-aws-cdk==<PACKAGE_VERSION>
-
         import { OdigosFargateInstrumentation, OdigosFargateLanguage } from '@odigos/aws-cdk';
 
         const odigos = new OdigosFargateInstrumentation(this, 'Odigos', {

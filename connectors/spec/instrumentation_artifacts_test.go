@@ -133,7 +133,7 @@ func TestAzureInstrumentationArtifactsDeclarePrerequisites(t *testing.T) {
 }
 
 func TestLambdaInstrumentationArtifactsRequirePreloadedLayers(t *testing.T) {
-	const want = "https://docs.odigos.io/cloud-connectors/add-connectors/add-aws-connector"
+	const want = "https://docs.odigos.io/cloud-connectors/aws/workloads/lambda/preload"
 	for _, a := range MustGet("aws").InstrumentationArtifacts("aws.lambda") {
 		if len(a.Prerequisites) == 0 {
 			t.Errorf("%s: no prerequisites", a.ID)

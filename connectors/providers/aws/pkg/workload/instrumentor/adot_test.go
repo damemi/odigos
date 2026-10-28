@@ -219,7 +219,7 @@ func TestADOTCLISnippetsMatchInjectedEnvironment(t *testing.T) {
 				if !strings.Contains(body, `"odigos:sdk-layer":"sdk-layer"`) || !strings.Contains(body, `"odigos:collector-layer":"collector-layer"`) {
 					t.Fatal("CLI does not tag both attached layers")
 				}
-				if !strings.Contains(body, `--layers $EXISTING "sdk-layer" "collector-layer"`) {
+				if !strings.Contains(body, `--argjson layers '["sdk-layer", "collector-layer"]'`) {
 					t.Fatal("CLI does not attach both layers")
 				}
 				if document.Variables[store.EnvExecWrapper] != "<WRAPPER>" {

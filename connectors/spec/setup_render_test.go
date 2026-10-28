@@ -29,6 +29,36 @@ var setupTokenRe = regexp.MustCompile(`\{\{(\w+)\}\}`)
 // omitted YAML value arrives as "" and joins every permission onto one line. That is a real failure
 // mode, not a hypothetical, so the helper reproduces it rather than papering over it.
 func renderSetupArtifact(a SetupArtifact, permissions []string, vars map[string]string) string {
+	values := map[string]string{"roleName": "OdigosConnectorRole", "trustedPrincipalArn": "arn:aws:iam::111111111111:role/Central", "passRoleResources": `["arn:aws:iam::210987654321:role/TaskExecution"]`, "applicationSignalsRoleResources": `["arn:aws:iam::210987654321:role/LambdaExecution"]`}
+	for k, v := range vars {
+		values[k] = v
+	}
+	if !json.Valid([]byte(values["applicationSignalsRoleResources"])) {
+		values["applicationSignalsRoleResources"] = `["arn:aws:iam::210987654321:role/LambdaExecution"]`
+	}
+	if !json.Valid([]byte(values["passRoleResources"])) {
+		values["passRoleResources"] = `["arn:aws:iam::210987654321:role/TaskExecution"]`
+	}
+	if strings.Contains(a.Template, "{{policyJson}}") {
+		for _, preview := range MustGet("aws").SetupArtifactsForSection("permissions") {
+			if preview.ID == "policy-preview" {
+				values["policyJson"] = renderSetupArtifact(preview, permissions, values)
+			}
+		}
+	}
+	for key, fallback := range map[string]string{
+		"sourcePolicyJson":              `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sts:AssumeRole","Resource":"arn:aws:iam::210987654321:role/Connector"}]}`,
+		"sourceTrustJson":               `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sts:AssumeRoleWithWebIdentity","Principal":{"Federated":"arn:aws:iam::111111111111:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE"}}]}`,
+		"sourceTrustCloudFormationJson": `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"sts:AssumeRoleWithWebIdentity","Principal":{"Federated":{"Fn::If":["CreateOIDCProvider",{"Ref":"OdigosOIDCProvider"},"arn:aws:iam::111111111111:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLE"]}}}]}`,
+	} {
+		if !json.Valid([]byte(values[key])) {
+			values[key] = fallback
+		}
+	}
+	if !json.Valid([]byte("{" + values["sourceAttachmentJson"] + "}")) {
+		values["sourceAttachmentJson"] = `"Roles":["OdigosSource"]`
+	}
+	vars = values
 	out := a.Template
 
 	lines := strings.Split(out, "\n")
@@ -290,7 +320,58 @@ func TestAWSManualTrustPolicyRenders(t *testing.T) {
 	// The principal has to be the account the customer typed into the form. Asserting only the
 	// arn:aws:iam:: prefix let a literal account sit here undetected, which is how every customer came
 	// to be handed a trust policy naming an account that was not theirs.
-	if got, want := st.Principal["AWS"], "arn:aws:iam::210987654321:root"; got != want {
+	if got, want := st.Principal["AWS"], "arn:aws:iam::111111111111:role/Central"; got != want {
 		t.Errorf("trust principal = %q, want %q (the substituted form account)", got, want)
+	}
+}
+
+func TestAWSAccessKeyCloudFormationUsesManagedPolicyWithoutSecretOutputs(t *testing.T) {
+	for _, a := range MustGet("aws").SetupArtifactsForSection("create-role") {
+		if a.ID != "create-user-cloudformation" {
+			continue
+		}
+		rendered := renderSetupArtifact(a, []string{"lambda:ListFunctions"}, nil)
+		var doc struct {
+			Resources map[string]struct {
+				Type       string
+				Properties map[string]any
+			}
+			Outputs map[string]any
+		}
+		if err := json.Unmarshal([]byte(rendered), &doc); err != nil {
+			t.Fatal(err)
+		}
+		if doc.Resources["OdigosConnectorUser"].Type != "AWS::IAM::User" || doc.Resources["OdigosConnectorPolicy"].Type != "AWS::IAM::ManagedPolicy" {
+			t.Fatal("user setup must attach managed policy, not the undersized IAM user inline policy")
+		}
+		if doc.Resources["OdigosConnectorPolicy"].Properties["PolicyDocument"] == nil {
+			t.Fatal("policy is absent")
+		}
+		for _, r := range doc.Resources {
+			if r.Type == "AWS::IAM::AccessKey" {
+				t.Fatal("secret must not appear in stack outputs; instructions issue the key after deployment")
+			}
+		}
+		if !strings.Contains(strings.Join(a.Steps, " "), "aws iam create-access-key") {
+			t.Fatal("missing key issuance step")
+		}
+		return
+	}
+	t.Fatal("missing access key CloudFormation artifact")
+}
+
+func TestAWSSetupTerraformRegularExpressionsUseValidRE2(t *testing.T) {
+	// Terraform and OpenTofu use RE2, whose counted repetitions cannot exceed 1000.
+	// Check actual template expressions so otherwise valid external IDs stay usable.
+	pattern := regexp.MustCompile(`regex\("([^"]+)"`)
+	for _, a := range MustGet("aws").SetupArtifactsForSection("create-role") {
+		if !strings.Contains(a.Variant, "terraform") {
+			continue
+		}
+		for _, match := range pattern.FindAllStringSubmatch(a.Template, -1) {
+			if _, err := regexp.Compile(match[1]); err != nil {
+				t.Errorf("%s has invalid RE2 expression: %v", a.ID, err)
+			}
+		}
 	}
 }

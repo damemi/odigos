@@ -172,7 +172,7 @@ setup:
           "DataActions": [],
           "NotDataActions": [],
           "AssignableScopes": [
-            "/subscriptions/"
+            "/subscriptions/{{subscriptionId}}"
           ]
         }
 
@@ -467,7 +467,7 @@ setup:
       steps:
         - Export the live app definition.
         - Merge the volume, the odigos-agent init container and your container's mount/env into it, as shown.
-        - Apply it with az containerapp update --yaml.
+        - Apply it with `az containerapp update --yaml`.
         - Move ingress traffic to the new revision if you run in Multiple-revision mode.
       prerequisites:
         - >-
@@ -790,7 +790,7 @@ setup:
       steps:
         - Export the live app definition.
         - Merge the volume, the odigos-agent init container and your container's mount/env into it, as shown.
-        - Apply it with az containerapp update --yaml.
+        - Apply it with `az containerapp update --yaml`.
         - Move ingress traffic to the new revision if you run in Multiple-revision mode.
       prerequisites:
         - >-
@@ -1109,7 +1109,7 @@ setup:
       steps:
         - Export the live app definition.
         - Merge the volume, the odigos-agent init container and your container's mount/env into it, as shown.
-        - Apply it with az containerapp update --yaml.
+        - Apply it with `az containerapp update --yaml`.
         - Move ingress traffic to the new revision if you run in Multiple-revision mode.
       prerequisites:
         - >-
@@ -1458,7 +1458,7 @@ setup:
       steps:
         - Export the live app definition.
         - Merge the volume, the odigos-agent init container and your container's mount/env into it, as shown.
-        - Apply it with az containerapp update --yaml.
+        - Apply it with `az containerapp update --yaml`.
         - Move ingress traffic to the new revision if you run in Multiple-revision mode.
       prerequisites:
         - >-

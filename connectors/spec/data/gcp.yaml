@@ -147,7 +147,7 @@ computePlatforms:
 # preview always matches what test-connection validates. Provider-owned: GCP renders a custom IAM role
 # definition (the YAML `gcloud iam roles create --file=` consumes); the shared UI renderer stays agnostic.
 # create-role variants drive step-2 "Choose setup method" + create instructions. Save the policy-preview
-# YAML from step 1 as odigos-connector-role.yaml — gcloud/terraform consume that file for the custom role.
+# policy document is embedded in the gcloud and Terraform artifacts; no separate file is needed.
 setup:
   subtitle: Configure the Google Cloud project and the identity Odigos uses to access it.
   artifacts:
@@ -173,17 +173,20 @@ setup:
       variantLabel: gcloud
       title: Create service account & role
       description: >-
-        Create a service account, a project-level custom role from the policy preview, bind the role,
-        and download a JSON key to paste below.
+        Create a service account and a project-level custom role, then bind the role. A JSON key is created only for service-account-key authentication.
       format: shell
       steps:
-        - Save the policy preview from the previous step as odigos-connector-role.yaml in your working directory.
+        - The script writes odigos-connector-role.yaml with the selected permissions; no separate policy file is required.
         - Set PROJECT_ID (pre-filled below from the project id you entered) and authenticate the gcloud CLI.
         - Run the script to enable APIs, create the service account, create the custom role, and bind it.
-        - For the service-account-key auth method, create a JSON key and paste its contents below.
+        - "{{keyInstructions}}"
         - For workload identity, skip the key step and bind the Kubernetes service account instead (see GCP docs).
       template: |-
+        set -eu
         export PROJECT_ID="{{projectId}}"
+        cat > odigos-connector-role.yaml <<'ODIGOS_POLICY'
+        {{policyDocument}}
+        ODIGOS_POLICY
         gcloud config set project "$PROJECT_ID"
 
         gcloud services enable \
@@ -203,9 +206,13 @@ setup:
           --member="serviceAccount:${SA_EMAIL}" \
           --role="projects/${PROJECT_ID}/roles/odigosCloudConnector"
 
-        gcloud iam service-accounts keys create ./odigos-connector-key.json \
-          --iam-account="$SA_EMAIL"
-        cat ./odigos-connector-key.json
+        if {{createKey}}; then
+          gcloud iam service-accounts keys create ./odigos-connector-key.json \
+            --iam-account="$SA_EMAIL"
+          cat ./odigos-connector-key.json
+        else
+          echo "Configure workload identity for Central backend and connector pods; no JSON key was created."
+        fi
 
     - id: create-role-terraform
       section: create-role
@@ -213,16 +220,15 @@ setup:
       variantLabel: Terraform
       title: Create service account & role
       description: >-
-        Provision the service account, custom role, IAM binding, and key as code. The custom role
-        permissions are loaded from the policy-preview YAML file.
+        Provision the service account, custom role and IAM binding as code. Key creation is enabled only for service-account-key authentication. The selected custom role permissions are embedded in the configuration.
       format: shell
       steps:
-        - Save the policy preview from the previous step as odigos-connector-role.yaml next to your Terraform files.
+        - The configuration includes the selected permissions; no separate policy file is required.
         - Add the configuration below (or an equivalent module) and set project_id if needed.
-        - Run terraform init, then terraform apply.
-        - Read the credentials_json output and paste it below (service-account-key auth).
+        - Run `terraform init`, then `terraform apply`.
+        - "{{keyInstructions}}"
       template: |-
-        # Save as main.tf (policy preview must be odigos-connector-role.yaml alongside it).
+        # Save as main.tf. The permissions policy is embedded below.
         terraform {
           required_providers {
             google = { source = "hashicorp/google" }
@@ -235,7 +241,10 @@ setup:
         }
 
         locals {
-          role = yamldecode(file("odigos-connector-role.yaml"))
+          role = yamldecode(<<-ODIGOS_POLICY
+        {{policyDocument}}
+        ODIGOS_POLICY
+          )
         }
 
         resource "google_service_account" "odigos" {
@@ -259,11 +268,12 @@ setup:
         }
 
         resource "google_service_account_key" "odigos" {
+          count = {{createKey}} ? 1 : 0
           service_account_id = google_service_account.odigos.name
         }
 
         output "credentials_json" {
-          value     = base64decode(google_service_account_key.odigos.private_key)
+          value     = try(base64decode(google_service_account_key.odigos[0].private_key), null)
           sensitive = true
         }
 
@@ -276,8 +286,7 @@ setup:
       variantLabel: Console
       title: Create service account & role
       description: >-
-        Create the service account, custom role, and project IAM binding in the Google Cloud Console,
-        then download a JSON key to paste below.
+        Create the service account, custom role and project IAM binding in the Google Cloud Console. Follow the instructions for your selected authentication method.
       format: yaml
       itemTemplate: '- {{permission}}'
       itemSeparator: "\n"
@@ -286,8 +295,8 @@ setup:
         - Title it OdigosCloudConnector and paste or add every permission from the YAML below.
         - Open IAM & Admin → Service Accounts → Create service account (e.g. odigos-connector).
         - Grant that service account the custom role on the project (IAM → Grant access).
-        - Open the service account → Keys → Add key → Create new key → JSON.
-        - Paste the downloaded JSON key below.
+        - "{{keyInstructions}}"
+        - For key authentication, paste the JSON key below. For workload identity, configure federation for both Central backend and connector pods.
       template: |-
         # Bind this role to serviceAccount:odigos-connector@{{projectId}}.iam.gserviceaccount.com
         title: OdigosCloudConnector
@@ -531,9 +540,9 @@ setup:
         is.
       format: shell
       steps:
-        - Export the live service - gcloud run services describe SERVICE --region REGION --format export > service.yaml
+        - Export the live service - `gcloud run services describe SERVICE --region REGION --format export > service.yaml`
         - Merge the volume, the odigos-agent container and your container's mount/dependency/env into it, as shown.
-        - Apply it - gcloud run services replace service.yaml --region REGION
+        - Apply it - `gcloud run services replace service.yaml --region REGION`
         - Check that traffic is serving the new revision.
       prerequisites:
         - >-
@@ -774,9 +783,9 @@ setup:
         is.
       format: shell
       steps:
-        - Export the live service - gcloud run services describe SERVICE --region REGION --format export > service.yaml
+        - Export the live service - `gcloud run services describe SERVICE --region REGION --format export > service.yaml`
         - Merge the volume, the odigos-agent container and your container's mount/dependency/env into it, as shown.
-        - Apply it - gcloud run services replace service.yaml --region REGION
+        - Apply it - `gcloud run services replace service.yaml --region REGION`
         - Check that traffic is serving the new revision.
       prerequisites:
         - >-
@@ -1013,9 +1022,9 @@ setup:
         is.
       format: shell
       steps:
-        - Export the live service - gcloud run services describe SERVICE --region REGION --format export > service.yaml
+        - Export the live service - `gcloud run services describe SERVICE --region REGION --format export > service.yaml`
         - Merge the volume, the odigos-agent container and your container's mount/dependency/env into it, as shown.
-        - Apply it - gcloud run services replace service.yaml --region REGION
+        - Apply it - `gcloud run services replace service.yaml --region REGION`
         - Check that traffic is serving the new revision.
       prerequisites:
         - >-
@@ -1279,9 +1288,9 @@ setup:
         is.
       format: shell
       steps:
-        - Export the live service - gcloud run services describe SERVICE --region REGION --format export > service.yaml
+        - Export the live service - `gcloud run services describe SERVICE --region REGION --format export > service.yaml`
         - Merge the volume, the odigos-agent container and your container's mount/dependency/env into it, as shown.
-        - Apply it - gcloud run services replace service.yaml --region REGION
+        - Apply it - `gcloud run services replace service.yaml --region REGION`
         - Check that traffic is serving the new revision.
       prerequisites:
         - >-

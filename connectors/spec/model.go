@@ -99,9 +99,9 @@ type SetupArtifact struct {
 	// Title / Description are for the UI header.
 	Title       string `yaml:"title"`
 	Description string `yaml:"description"`
-	// Steps: ordered instructions above the code snippet (create-role section, Collector setup). The
-	// Collector setup guide renders `backticked` spans in Description and Steps as inline code; other
-	// sections show them literally.
+	// Steps: ordered instructions above the code snippet. Mark commands and literal snippets in
+	// Description, Steps and Prerequisites with backticks so the UI renders them as copyable code.
+	// Use double backticks around a snippet containing a literal backtick; exclude sentence punctuation.
 	Steps []string `yaml:"steps"`
 	// Prerequisites: "Before you deploy" caveats for instrumentation artifacts. Empty on onboarding.
 	Prerequisites []string `yaml:"prerequisites"`

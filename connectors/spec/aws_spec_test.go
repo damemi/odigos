@@ -272,7 +272,7 @@ func TestAWSCreateRoleArtifacts(t *testing.T) {
 	}
 
 	arts := s.SetupArtifactsForSection("create-role")
-	wantVariants := []string{"cloudformation", "terraform", "aws-cli", "manual", "iam-user"}
+	wantVariants := []string{"cloudformation", "terraform", "aws-cli", "manual", "iam-user", "iam-user-cloudformation", "iam-user-terraform", "iam-user-manual", "workload-aws-cli", "workload-cloudformation", "workload-terraform", "workload-manual"}
 	if len(arts) != len(wantVariants) {
 		t.Fatalf("create-role setup artifacts = %d, want %d (%v)", len(arts), len(wantVariants), wantVariants)
 	}
@@ -321,8 +321,8 @@ func TestAWSCreateRoleArtifacts(t *testing.T) {
 		if !strings.Contains(tmpl, "{{externalId}}") {
 			t.Errorf("%s create-role template should carry {{externalId}}, got:\n%s", variant, tmpl)
 		}
-		if !strings.Contains(tmpl, "arn:aws:iam::{{accountId}}:root") {
-			t.Errorf("%s create-role template should name arn:aws:iam::{{accountId}}:root as the trust principal, got:\n%s", variant, tmpl)
+		if !strings.Contains(tmpl, "{{trustedPrincipalArn}}") {
+			t.Errorf("%s create-role template should name {{trustedPrincipalArn}} as the trust principal, got:\n%s", variant, tmpl)
 		}
 		if m := hardcodedAccountRe.FindString(tmpl); m != "" {
 			t.Errorf("%s create-role template hardcodes the account in %q; use {{accountId}}", variant, m)
