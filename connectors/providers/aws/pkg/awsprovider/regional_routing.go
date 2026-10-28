@@ -161,7 +161,7 @@ func (r regionalRouteResolver) resolveRoutes(ctx context.Context, workloads []ne
 		if network != "" {
 			if collector, exists := collectors[w.Region]; exists {
 				if plan.Networks.ServedBy(w.Region, network) == collector.network {
-					switch plan.Topology.Reachability(w.Region, collector.network, w.Region, network, collector.subnets, w.Subnets) {
+					switch plan.Topology.ReachabilityForPorts(w.Region, collector.network, w.Region, network, collector.subnets, w.Subnets, collector.ports) {
 					case placement.ReachabilityReachable:
 						// VPC routing is accepted only after the actual Collector SG admits this
 						// workload's ENI SG or every selected subnet CIDR on each published OTLP port.

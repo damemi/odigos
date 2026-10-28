@@ -574,7 +574,7 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 				log.Warn("set lambda instrumented flag failed", "function", fn.FunctionName, "region", fn.Region, "error", err)
 			}
 			i.clearPhase(ctx, fn)
-			return nil
+			return validateLambdaAliasCoverage(ctx, client, fn.FunctionARN, env, layers)
 		}
 
 		// Determine the final layer set up front and refuse BEFORE mutating anything if attaching our layer

@@ -75,6 +75,16 @@ func DiscoverRegion(ctx context.Context, api EC2Reader, region string) (Topology
 	if err != nil {
 		return Topology{}, fmt.Errorf("describe vpcs: %w", err)
 	}
+	if reader, ok := api.(vpcDNSReader); ok {
+		for idx := range vpcs {
+			out, err := reader.DescribeVpcAttribute(ctx, &ec2.DescribeVpcAttributeInput{VpcId: aws.String(vpcs[idx].ID), Attribute: ec2types.VpcAttributeNameEnableDnsSupport})
+			if err != nil {
+				return Topology{}, fmt.Errorf("describe VPC DNS support: %w", err)
+			}
+			vpcs[idx].DNSKnown = true
+			vpcs[idx].DNSSupport = out.EnableDnsSupport != nil && aws.ToBool(out.EnableDnsSupport.Value)
+		}
+	}
 	tables, err := describeRouteTables(ctx, api)
 	if err != nil {
 		return Topology{}, fmt.Errorf("describe route tables: %w", err)
@@ -90,6 +100,11 @@ func DiscoverRegion(ctx context.Context, api EC2Reader, region string) (Topology
 	securityGroups, err := describeSecurityGroups(ctx, api, region)
 	if err != nil {
 		return Topology{}, fmt.Errorf("describe security groups: %w", err)
+	}
+	if reader, ok := api.(networkACLReader); ok {
+		if err := discoverNetworkACLs(ctx, reader, subnets); err != nil {
+			return Topology{}, err
+		}
 	}
 	log.Info("collector placement topology scanned", "region", region, "vpcs", len(vpcs), "subnets", len(subnets), "peerings", len(peerings), "security_groups", len(securityGroups))
 	return NewTopologyWithSecurityGroups([]string{region}, vpcs, subnets, peerings, securityGroups), nil
@@ -211,7 +226,7 @@ func describeSecurityGroups(ctx context.Context, api EC2Reader, region string) (
 			if id == "" || vpcID == "" {
 				continue
 			}
-			out = append(out, SecurityGroup{Region: region, ID: id, VPCID: vpcID, Ingress: securityGroupIngress(group.IpPermissions)})
+			out = append(out, SecurityGroup{Region: region, ID: id, VPCID: vpcID, Ingress: securityGroupIngress(group.IpPermissions), EgressKnown: true, Egress: securityGroupIngress(group.IpPermissionsEgress)})
 		}
 	}
 	return out, nil

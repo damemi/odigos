@@ -364,6 +364,7 @@ func TestTheFargateSizeMatrixIsEnforced(t *testing.T) {
 		// The step above 4096 CPU is not 1 GiB: 4 GiB at 8192 and 8 GiB at 16384.
 		{"8192", "16384"}, {"8192", "20480"}, {"8192", "61440"},
 		{"16384", "32768"}, {"16384", "40960"}, {"16384", "122880"},
+		{"32768", "61440"}, {"32768", "122880"}, {"32768", "249856"},
 	}
 	for _, pair := range valid {
 		if problems := checkFargateSize(testRegion, pair[0], pair[1]); len(problems) > 0 {
@@ -379,6 +380,7 @@ func TestTheFargateSizeMatrixIsEnforced(t *testing.T) {
 		{"1024", "9216"},   // above the maximum for that CPU
 		{"8192", "17408"},  // a 1 GiB step, but 8192 CPU moves in 4 GiB
 		{"16384", "36864"}, // a 4 GiB step, but 16384 CPU moves in 8 GiB
+		{"32768", "65536"}, // 32 vCPU accepts discrete memory sizes
 		{"768", "2048"},    // not a Fargate CPU size at all
 		{"1", "2"},
 		{"", "2048"},

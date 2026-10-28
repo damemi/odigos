@@ -171,6 +171,9 @@ func NewECSFargatePlanner(image string) *ECSFargatePlanner { return &ECSFargateP
 func (p *ECSFargatePlanner) PlanFor(_ context.Context, w baseapi.DiscoveredWorkload) (*baseapi.PlannedInstrumentation, error) {
 	lang, version := fargatePlanRuntime(w)
 	if lang == "" || !CoverableLanguage(lang) {
+		if w.Details != nil && w.Overrides.RuntimeLanguage == "" {
+			return p.multiContainerPlan(w)
+		}
 		// Go and every other eBPF-only runtime lands here, and so does a workload whose language could not be
 		// determined. Both are already reported with the reason and the remedy (a runtime override), and
 		// neither has instructions that would work.
@@ -196,6 +199,64 @@ func (p *ECSFargatePlanner) PlanFor(_ context.Context, w baseapi.DiscoveredWorkl
 		resolved[plan.PlaceholderContainer] = name
 	}
 	return &baseapi.PlannedInstrumentation{Plan: pl, Resolved: resolved}, nil
+}
+
+func (p *ECSFargatePlanner) multiContainerPlan(w baseapi.DiscoveredWorkload) (*baseapi.PlannedInstrumentation, error) {
+	combined := plan.Plan{Type: "aws.fargate-task", Mode: plan.ModeStagedAgent}
+	var targets []containerTarget
+	for _, container := range w.Details.Containers {
+		if !container.Eligible {
+			continue
+		}
+		lang, version := normalizeLanguage(container.OverrideLanguage), container.OverrideVersion
+		if lang == "" {
+			lang, version = normalizeLanguage(container.RuntimeLanguage), container.RuntimeVersion
+		}
+		if !CoverableLanguage(lang) {
+			continue
+		}
+		if version == "" {
+			version = plan.PlaceholderRuntimeVersion
+		}
+		one, err := DesiredFargatePlan(lang, p.image, version)
+		if err != nil {
+			return nil, err
+		}
+		recipe, err := planRecipes.recipeFor(lang, version)
+		if err != nil {
+			return nil, err
+		}
+		targets = append(targets, containerTarget{name: container.Name, recipe: recipe})
+		for _, fragment := range one.Fragments {
+			if fragment.Anchor.Scope == plan.ScopeWorkload {
+				if len(targets) == 1 {
+					combined.Fragments = append(combined.Fragments, fragment)
+				}
+				continue
+			}
+			fragment.Anchor.Container = container.Name
+			combined.Fragments = append(combined.Fragments, fragment)
+		}
+	}
+	if len(targets) == 0 {
+		return nil, nil
+	}
+	for idx := range combined.Fragments {
+		if helper := combined.Fragments[idx].Helper; helper != nil {
+			helper.Command = sidecarCommand(unionAgentDirs(targets))
+		}
+	}
+	for _, placeholder := range fargatePlaceholders(combined) {
+		if plan.UsesPlaceholder(combined, placeholder.Token) {
+			combined.Placeholders = append(combined.Placeholders, placeholder)
+		}
+	}
+	combined.Notes = []string{"Apply every named container's environment and mount. Share the single staging container and volume across all languages; deploy a new task definition revision and roll the ECS service."}
+	combined.Sort()
+	if err := combined.Validate(); err != nil {
+		return nil, err
+	}
+	return &baseapi.PlannedInstrumentation{Plan: combined, Resolved: map[string]string{plan.PlaceholderPackageVersion: config.CDKPackageVersion()}}, nil
 }
 
 // fargatePlanRuntime resolves the language and version to plan for, override first — matching

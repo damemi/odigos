@@ -41,6 +41,8 @@ type resolvedRuntime struct {
 	language   string
 	version    string
 	confidence detectionConfidence
+	imageEnv   map[string]string
+	musl       bool
 }
 
 // resolveECSRuntime resolves the workload language and runtime major.minor version, strongest signal
@@ -113,7 +115,13 @@ func resolveECSRuntime(ctx context.Context, images ImageInspector, overrideLang,
 	if version == "" {
 		version = runtimeVersionFromImageTag(signals.image)
 	}
-	return resolvedRuntime{language: lang, version: version, confidence: confidence}
+	var imageEnv map[string]string
+	musl := strings.Contains(strings.ToLower(signals.image), "alpine") || strings.Contains(strings.ToLower(signals.image), "musl")
+	if cfg != nil {
+		imageEnv = envSliceToMap(cfg.Env)
+		musl = musl || strings.Contains(strings.ToLower(cfg.Labels["org.opencontainers.image.base.name"]), "alpine")
+	}
+	return resolvedRuntime{language: lang, version: version, confidence: confidence, imageEnv: imageEnv, musl: musl}
 }
 
 func ecsContainerEnv(c *ecstypes.ContainerDefinition) map[string]string {

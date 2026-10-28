@@ -25,9 +25,10 @@ const ecsManagedManifestVersion = 1
 // managed key set. The sidecar container, shared volume, mount point and container dependency we add are
 // removed on rollback by their well-known Odigos names, so they are not recorded here.
 type ecsManagedManifest struct {
-	Version  int                `json:"v"`
-	Language string             `json:"lang"`
-	PrevEnv  map[string]*string `json:"prevEnv,omitempty"`
+	Version   int                `json:"v"`
+	Language  string             `json:"lang"`
+	PrevEnv   map[string]*string `json:"prevEnv,omitempty"`
+	LoaderEnv map[string]string  `json:"loaderEnv,omitempty"`
 }
 
 func marshalECSManifest(m ecsManagedManifest) (string, error) {
@@ -130,7 +131,8 @@ type ecsMarker struct {
 	// could only restate the pin or contradict it. See desiredAgentsImage.
 	Image string
 	// PrevEnv is the rollback snapshot, and it exists ONLY on a Managed marker.
-	PrevEnv map[string]*string
+	PrevEnv   map[string]*string
+	LoaderEnv map[string]string
 }
 
 // readECSMarker resolves a container's Odigos attribution, reporting false when neither marker is present.
@@ -140,7 +142,7 @@ type ecsMarker struct {
 // connector's to describe, whatever an earlier manual application also left behind.
 func readECSMarker(env map[string]string) (ecsMarker, bool) {
 	if m, ok := parseECSManifest(env[store.EnvOdigosManaged]); ok {
-		return ecsMarker{Managed: true, Language: m.Language, PrevEnv: m.PrevEnv}, true
+		return ecsMarker{Managed: true, Language: m.Language, PrevEnv: m.PrevEnv, LoaderEnv: m.LoaderEnv}, true
 	}
 	if m, ok := baseapi.ParseIaCMarker(env[store.EnvOdigosIaC]); ok {
 		return ecsMarker{Language: m.Language, Image: m.Image}, true
@@ -159,6 +161,9 @@ func ecsPriorEnv(m ecsManagedManifest, key string) string {
 // markerPriorEnv is ecsPriorEnv over a resolved marker. An IaC marker carries no snapshot, so this returns ""
 // for one — which is correct rather than lossy: the manual-mode loader check never asks for a prior value.
 func markerPriorEnv(m ecsMarker, key string) string {
+	if m.PrevEnv[key] == nil {
+		return m.LoaderEnv[key]
+	}
 	return priorEnvFrom(m.PrevEnv, key)
 }
 

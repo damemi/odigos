@@ -575,6 +575,14 @@ func (i *ecsInspector) selectTargets(ctx context.Context, td *ecstypes.TaskDefin
 		if ov := src.containerOverride(name); ov != nil {
 			ovLang, ovVer = ov.RuntimeOverride.Language, ov.RuntimeOverride.Version
 		}
+		if len(candidates) == 1 {
+			if ovLang == "" {
+				ovLang = src.language
+			}
+			if ovVer == "" {
+				ovVer = src.version
+			}
+		}
 		// An owned container remembers the language we injected into it, which is more precise than
 		// the workload-level stored runtime once a task holds several languages — and more reliable,
 		// since our own injected env can otherwise confuse re-detection.
@@ -615,6 +623,15 @@ func (i *ecsInspector) selectTargets(ctx context.Context, td *ecstypes.TaskDefin
 			excluded[c.name] = fmt.Sprintf("detected %s only from a weaker signal than another container in this task; name it in a container override to instrument it anyway", c.rt.language)
 			continue
 		}
+		if len(coverable) == 1 {
+			if ov := src.containerOverride(c.name); ov == nil || (ov.RuntimeOverride.Language == "" && ov.RuntimeOverride.Version == "") {
+				c.rt = resolveECSRuntime(ctx, i.images, src.language, src.version, c.rt.language, c.rt.version, &td.ContainerDefinitions[c.idx])
+			}
+		}
+		if c.rt.language == LangDotNet && c.rt.musl {
+			excluded[c.name] = "the .NET Fargate profiler requires glibc; Alpine/musl images are unsupported"
+			continue
+		}
 		recipe, err := i.recipes.recipeFor(c.rt.language, c.rt.version)
 		if err != nil {
 			if errors.Is(err, errNeedsRuntimeVersion) {
@@ -647,7 +664,7 @@ func (i *ecsInspector) selectTargets(ctx context.Context, td *ecstypes.TaskDefin
 			if refined, err := i.retarget(ctx, td, *t, src.language, src.version, dest); err == nil {
 				*t = refined
 			} else {
-				log.Debug("workload-level runtime override could not be applied", "container", t.name, "error", err)
+				return nil, excluded, fmt.Errorf("apply runtime override for %s: %w", t.name, err)
 			}
 		}
 	}

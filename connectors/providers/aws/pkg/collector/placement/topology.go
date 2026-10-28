@@ -64,8 +64,10 @@ func (e Egress) Routes() bool { return e != EgressNone }
 
 // VPC is one network a Collector could be placed in.
 type VPC struct {
-	Region string
-	ID     string
+	DNSKnown   bool
+	DNSSupport bool
+	Region     string
+	ID         string
 	// CIDRBlocks are the VPC's IPv4 blocks, primary first as EC2 returns them. Carried because
 	// ingress fallback authorizes senders by the network's CIDR when their security groups are not
 	// resolvable, and because the fallback's width guard is checked against these.
@@ -93,6 +95,8 @@ type Route struct {
 
 // Subnet is one subnet, with the two facts that decide whether a Collector can run in it.
 type Subnet struct {
+	ACLKnown         bool
+	ACLRules         []ACLRule
 	Region           string
 	ID               string
 	VPCID            string
@@ -115,10 +119,12 @@ type Subnet struct {
 // an OTLP port. Group IDs are account-unique, but VPC and region stay attached so a missing or cross-region
 // reference cannot accidentally be treated as proof.
 type SecurityGroup struct {
-	Region  string
-	ID      string
-	VPCID   string
-	Ingress []SecurityGroupRule
+	Region      string
+	ID          string
+	VPCID       string
+	Ingress     []SecurityGroupRule
+	EgressKnown bool
+	Egress      []SecurityGroupRule
 }
 
 // SecurityGroupRule is one inbound EC2 security-group permission. PortsKnown distinguishes a malformed or
@@ -375,13 +381,24 @@ const (
 )
 
 // Reachability proves whether selected subnets in two VPCs can communicate through an active,
-// same-region direct peering. It intentionally does not inspect security groups or network ACLs: those
-// are converged separately, and this proof is only the AWS topology facts Odigos can observe.
+// same-region direct peering, including DNS support and the ordered network ACLs.
+// Security-group admission and egress are checked separately.
 func (t Topology) Reachability(hostRegion, hostVPC, consumerRegion, consumerVPC string, hostSubnetIDs, consumerSubnetIDs []string) Reachability {
+	return t.ReachabilityForPorts(hostRegion, hostVPC, consumerRegion, consumerVPC, hostSubnetIDs, consumerSubnetIDs, []int32{4317, 4318})
+}
+
+// ReachabilityForPorts checks only the receivers published by the selected Collector.
+func (t Topology) ReachabilityForPorts(hostRegion, hostVPC, consumerRegion, consumerVPC string, hostSubnetIDs, consumerSubnetIDs []string, ports []int32) Reachability {
+	if !t.aclPathAllowed(hostSubnetIDs, consumerSubnetIDs, ports) {
+		return ReachabilityUnreachable
+	}
 	host, hostOK := t.vpcs[hostVPC]
 	consumer, consumerOK := t.vpcs[consumerVPC]
 	if !hostOK || !consumerOK {
 		return ReachabilityUnknown
+	}
+	if (consumer.DNSKnown && !consumer.DNSSupport) || (host.DNSKnown && !host.DNSSupport) {
+		return ReachabilityUnreachable
 	}
 	if hostRegion == "" {
 		hostRegion = host.Region
@@ -483,6 +500,9 @@ func (t Topology) CollectorIngressReachabilityForWorkload(region, collectorVPC, 
 
 	unknown := sourceGroupsUnknown
 	for _, port := range ports {
+		if !t.workloadEgressAllowed(sourceSecurityGroups, collectorSecurityGroup, host.CIDRBlocks, port) {
+			return ReachabilityUnreachable
+		}
 		admitted := false
 		cidrCovered := make(map[string]bool, len(sourceSubnetIDs))
 		cidrUnknown := false

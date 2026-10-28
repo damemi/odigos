@@ -81,10 +81,10 @@ the stable identity: external id `cluster_arn/service_name`). Enabling a source 
 
 | Language | Activation | Export protocol | Notes |
 | --- | --- | --- | --- |
-| Java | `JAVA_TOOL_OPTIONS` (append) | gRPC | |
-| Python | `PYTHONPATH` (append) | gRPC | |
-| Node.js | `NODE_OPTIONS --require` (append) | gRPC | upstream auto-instrumentations-node |
-| .NET | `CORECLR_*` / `DOTNET_*` (static) | gRPC | glibc images only (Alpine/musl unsupported in v1) |
+| Java | `JAVA_TOOL_OPTIONS` (append) | HTTP preferred; gRPC fallback | |
+| Python | `PYTHONPATH` (append) | HTTP preferred; gRPC fallback | |
+| Node.js | `NODE_OPTIONS --require` (append) | HTTP preferred; gRPC fallback | upstream auto-instrumentations-node |
+| .NET | `CORECLR_*` / `DOTNET_*` (static) | HTTP preferred; gRPC fallback | glibc images only (Alpine/musl unsupported in v1) |
 | PHP | `PHP_INI_SCAN_DIR` + `OTEL_PHP_AUTOLOAD_ENABLED` | **http/protobuf only** | needs runtime major.minor (see below) |
 | Ruby | `RUBYOPT` + `ODIGOS_GEM_PATH` | **http/protobuf only** | needs runtime major.minor (see below) |
 | Go / anything eBPF | — | — | impossible on Fargate (no privileged containers); reported Unsupported |
@@ -111,8 +111,9 @@ In a proxy+app pair (nginx in front of PHP-FPM, Envoy in front of a service) the
 is the *proxy*, which has no agent, so choosing by ingress would instrument the wrong one. Detections
 are ranked by confidence, so a container that merely mentions a runtime in its command text — an nginx
 config naming `index.php` — loses to one with a real signal (buildpack metadata, a runtime version env
-var, an interpreter executable). A task definition with no instrumentable container, or with several
-equally-strong ones, reports Unsupported naming what each container resolved to rather than guessing.
+var, an interpreter executable). Every equally strong, supported application is instrumented using one shared staging container.
+A task with no supported application reports Unsupported with each detection; per-container overrides
+can resolve ambiguous or opaque images.
 
 ### Not instrumentable (reported Unsupported)
 
@@ -121,9 +122,10 @@ equally-strong ones, reports Unsupported naming what each container resolved to 
 - Services with **CODE_DEPLOY / EXTERNAL deployment controllers** (`UpdateService` may not change their
   task definition).
 - **Windows** task definitions (the agents bundle is Linux-only; amd64 + arm64/Graviton are supported).
-- Multi-container task definitions with **no single identifiable app container** (multiple essential
-  containers and not exactly one with port mappings), task definitions already at the **10-container
-  limit**, or ones delivering a managed env var via **ECS `secrets`**.
+- Task definitions with **no identifiable application container**, task definitions already at the
+  **10-container limit**, or ones delivering a managed variable through **ECS `secrets`**. Multiple
+  applications and mixed languages are supported; use per-container overrides to resolve ambiguity.
+- Environment files must be inlined into the task definition and removed before automatic injection; their hidden loader and per-signal settings cannot be verified.
 
 ### Network prerequisites (reachability matters)
 
@@ -264,3 +266,5 @@ cd ~/code/vm-agent/cmd/odictl && go run .
 
 Sources, destinations, workload/compute-platform reports, discovery and health views are backed by the
 connector; actions, rules, config and profiling are not implemented.
+
+AWS installation and instrumentation instructions are maintained under `docs/cloud-connectors/`. Both Central backend and AWS connector pods must have the configured workload identity. Automatic Lambda status includes alias/canary coverage; publishing versions and moving aliases remains the deployment pipeline's responsibility.

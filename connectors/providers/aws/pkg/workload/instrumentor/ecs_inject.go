@@ -127,7 +127,19 @@ func applyInstrumentation(td *ecstypes.TaskDefinition, targets []containerTarget
 // instrumentContainer applies one target's wiring to its container.
 func instrumentContainer(app *ecstypes.ContainerDefinition, t containerTarget, serviceName, region string, debug bool) error {
 	env := containerEnvMap(app)
+	for _, key := range domaindest.SignalTransportOverrides() {
+		if t.runtime.imageEnv[key] != "" {
+			return fmt.Errorf("%w: container %s defines %s in its image; remove image-level per-signal transport overrides before instrumentation", ErrUnsupportedInstrumentation, t.name, key)
+		}
+	}
+	if len(app.EnvironmentFiles) > 0 {
+		return fmt.Errorf("%w: container %s uses environment files whose loader and per-signal settings cannot be verified; inline the environment in the task definition and remove environmentFiles before instrumentation", ErrUnsupportedInstrumentation, t.name)
+	}
+
 	manifest := buildECSManifest(env, env[store.EnvOdigosManaged], t.recipe)
+	if manifest.LoaderEnv == nil {
+		manifest.LoaderEnv = map[string]string{}
+	}
 
 	for k, v := range t.recipe.staticEnv {
 		setContainerEnv(app, k, v)
@@ -135,7 +147,16 @@ func instrumentContainer(app *ecstypes.ContainerDefinition, t containerTarget, s
 	for _, a := range t.recipe.appendEnv {
 		// Rebuild from the customer's ORIGINAL value (snapshot), not the current one, so a re-instrument
 		// never accumulates our value.
-		setContainerEnv(app, a.name, a.evaluate(ecsPriorEnv(manifest, a.name)))
+		original := ecsPriorEnv(manifest, a.name)
+		if manifest.PrevEnv[a.name] == nil {
+			if inherited, known := t.runtime.imageEnv[a.name]; known {
+				original = inherited
+			} else {
+				original = manifest.LoaderEnv[a.name]
+			}
+			manifest.LoaderEnv[a.name] = original
+		}
+		setContainerEnv(app, a.name, a.evaluate(original))
 	}
 
 	setContainerEnv(app, EnvServiceName, serviceName)

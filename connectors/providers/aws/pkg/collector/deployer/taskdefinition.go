@@ -606,6 +606,7 @@ var fargateSizes = []fargateSize{
 	{cpu: 4096, min: 8192, max: 30720, step: 1024},
 	{cpu: 8192, min: 16384, max: 61440, step: 4096},
 	{cpu: 16384, min: 32768, max: 122880, step: 8192},
+	{cpu: 32768, values: []int{61440, 122880, 249856}},
 }
 
 // checkFargateSize reports a cpu/memory pair Fargate does not offer.

@@ -257,6 +257,17 @@ func (o *LambdaObserver) observation(ctx context.Context, fn store.LambdaFunctio
 		diff = append(diff, componentInstrumentationLayer)
 	}
 	if len(diff) == 0 {
+		if o.cache != nil {
+			cfg, err := o.cache.Config(ctx, fn.Region)
+			if err == nil {
+				err = validateLambdaAliasCoverage(ctx, lambda.NewFromConfig(cfg), fn.FunctionARN, env, layers)
+			}
+			if err != nil {
+				obs.Conformance = baseapi.ConformancePartial
+				obs.Error = err.Error()
+				return obs, true
+			}
+		}
 		obs.Conformance = baseapi.ConformanceConformant
 		return obs, true
 	}
